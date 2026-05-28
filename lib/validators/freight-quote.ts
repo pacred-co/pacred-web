@@ -5,6 +5,12 @@
  */
 
 import { z } from "zod";
+import { isInt32OverflowSuspect } from "./safe-numeric";
+
+function notInt32(n: number): boolean {
+  return !isInt32OverflowSuspect(n);
+}
+const INT32_MSG = { message: "int32_overflow_suspected — กรุณาตรวจค่าตัวเลขที่กรอก" };
 
 export const QUOTE_STATUSES = [
   "draft", "pending_approval", "approved",
@@ -59,7 +65,7 @@ export const createFreightQuoteSchema = z.object({
   incoterm:               z.enum(INCOTERMS).optional(),
   currency:               z.enum(["THB", "USD"]).optional().default("THB"),
 
-  vat_pct:                z.number().min(0).max(30).optional().default(7.00),
+  vat_pct:                z.number().refine(notInt32, INT32_MSG).min(0).max(30).optional().default(7.00),
   valid_until:            z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   notes:                  z.string().trim().max(2000).optional(),
 });
@@ -79,7 +85,7 @@ export const updateFreightQuoteSchema = z.object({
   port_discharge:         z.string().trim().max(100).optional().nullable(),
   place_delivery:         z.string().trim().max(100).optional().nullable(),
   incoterm:               z.enum(INCOTERMS).optional().nullable(),
-  vat_pct:                z.number().min(0).max(30).optional(),
+  vat_pct:                z.number().refine(notInt32, INT32_MSG).min(0).max(30).optional(),
   valid_until:            z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   notes:                  z.string().trim().max(2000).optional().nullable(),
 });
@@ -93,9 +99,9 @@ export const createQuoteItemSchema = z.object({
   freight_quote_id: z.string().uuid(),
   position:         z.number().int().min(1).max(999).optional(),
   description:      z.string().trim().min(1).max(500),
-  quantity:         z.number().positive().max(999_999),
+  quantity:         z.number().refine(notInt32, INT32_MSG).positive().max(999_999),
   unit:             z.enum(QUOTE_UNITS).default("JOB"),
-  unit_price_thb:   z.number().min(0).max(999_999.99),
+  unit_price_thb:   z.number().refine(notInt32, INT32_MSG).min(0).max(999_999.99),
   note:             z.string().trim().max(500).optional(),
 });
 export type CreateQuoteItemInput = z.infer<typeof createQuoteItemSchema>;
@@ -103,9 +109,9 @@ export type CreateQuoteItemInput = z.infer<typeof createQuoteItemSchema>;
 export const updateQuoteItemSchema = z.object({
   id:             z.string().uuid(),
   description:    z.string().trim().min(1).max(500).optional(),
-  quantity:       z.number().positive().max(999_999).optional(),
+  quantity:       z.number().refine(notInt32, INT32_MSG).positive().max(999_999).optional(),
   unit:           z.enum(QUOTE_UNITS).optional(),
-  unit_price_thb: z.number().min(0).max(999_999.99).optional(),
+  unit_price_thb: z.number().refine(notInt32, INT32_MSG).min(0).max(999_999.99).optional(),
   note:           z.string().trim().max(500).optional().nullable(),
 });
 export type UpdateQuoteItemInput = z.infer<typeof updateQuoteItemSchema>;

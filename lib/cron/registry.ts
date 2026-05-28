@@ -78,6 +78,31 @@ export const CRON_REGISTRY: readonly CronEntry[] = [
     description:   "ส่ง broadcasts ที่ scheduled_for <= now() แบบ idempotent",
     scheduleLabel: "ทุก 5 นาที",
   },
+  // Sprint-11 P2.3.C — register the CargoThai sync cron so it appears on
+  // the cron-health page (was previously surfaced as "orphan" with logs
+  // but no registry row). The LINE Notify dispatcher entry was REMOVED
+  // 2026-05-26 along with the cron route — notify-bot.line.me EOL'd
+  // 2025-03-31, replacement via Messaging API in lib/notifications/.
+  {
+    path:          "/api/cron/cargothai-sync",
+    schedule:      "30 19 * * *",
+    label:         "Sync ตู้/forwarder จาก CargoThai",
+    description:   "ดึง tb_tmp_forwarder_cargothai สดจาก partner API + reconcile กับ forwarders ใน Pacred",
+    scheduleLabel: "ทุกวัน 02:30 ICT (19:30 UTC ก่อนหน้า)",
+  },
+  // Gap #1 foundation 2026-05-27 — CTT warehouse Google Sheet pull
+  // (pilot for the 4-sheet sync: CTT / MX / MK / Sang). Runs in DRY-RUN
+  // until ก๊อต provisions GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON +
+  // GOOGLE_SHEETS_CTT_ID + the per-sheet column-mapping is finalized.
+  // Adapter: lib/integrations/google-sheets/ctt-adapter.ts. The other
+  // 3 sheets (MX/MK/Sang) get their own crons after CTT verifies live.
+  {
+    path:          "/api/cron/sheets-sync-ctt",
+    schedule:      "0 * * * *",
+    label:         "Sync sheet CTT warehouse",
+    description:   "ดึง row ใหม่จาก Google Sheet ของคลัง CTT → tb_forwarder + แจ้งทีม ops (DRY-RUN จนกว่า ก๊อต wire credentials)",
+    scheduleLabel: "ทุก 1 ชม.",
+  },
 ] as const;
 
 /** Look up a registry entry by path; returns null if unknown (means

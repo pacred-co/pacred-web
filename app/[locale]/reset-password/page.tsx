@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/get-user";
 import { NavBar } from "@/components/sections/navbar";
-import { Footer } from "@/components/sections/footer";
 import { ResetPasswordForm } from "./reset-password-form";
 
 export default async function ResetPasswordPage() {
@@ -19,7 +18,6 @@ export default async function ResetPasswordPage() {
           <ResetPasswordForm email={user.email ?? null} />
         </div>
       </main>
-      <Footer />
     </>
   );
 }

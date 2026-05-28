@@ -3,92 +3,54 @@ import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ADDRESSES } from "@/components/seo/site";
+import { legacyMemberUrl } from "@/lib/legacy-image";
+import {
+  getShipByOptionsForAddress,
+  isMaomaoEligibleForAddress,
+} from "@/lib/cart/ship-by-eligibility";
 import {
   CartInteractivity,
   type CartInteractiveProvider,
 } from "./cart-interactivity";
+import {
+  CartAddressShipBy,
+  type CartAddressOption,
+  type ShipByOption,
+} from "./cart-address-shipby";
+import {
+  ShoppingCart,
+  Plus,
+  Truck,
+  Ship,
+  Package,
+  PackageOpen,
+} from "lucide-react";
 
 /**
  * Customer shopping-cart screen for the ฝากสั่งซื้อ (China shop-order)
- * flow — a FAITHFUL 1:1 TRANSCRIPTION of the legacy PCS Cargo
- * `member/cart.php` (D1 / ADR-0017 · faithful-port transcription ·
- * runbook `docs/runbook/faithful-port-transcription.md`).
+ * flow — Tailwind-rebuilt version (ปอน 2026-05-26).
  *
- * This is a transcription, NOT a reinterpretation. The JSX below is
- * the exact HTML markup `cart.php` renders for its `<!-- BEGIN:
- * Content -->` body (cart.php L424-755) — same Bootstrap-4 elements,
- * same class names, same Thai labels, same order. The Thai text is
- * hardcoded exactly as the PHP has it (legacy hardcodes Thai →
- * faithful = hardcoded; this screen does NOT use next-intl). The
- * visual identity comes from the legacy CSS, brought in verbatim as
- * the static `.pcs-legacy`-scoped `public/legacy/pcs/cart.css`
- * (= assets/css/cart.css + the cart.php inline <style> block + the
- * BS4 grid/card/modal subset the markup uses), loaded via a plain
- * <link> so it bypasses Tailwind/PostCSS.
+ * Replaces the legacy 1:1 Bootstrap-4 transcription of `member/cart.php`
+ * with a clean Tailwind/Pacred-branded layout. All data queries against
+ * the ported `tb_*` schema, all Thai labels, all form `name=` attributes,
+ * all Server Action wiring, and all client-component props are preserved
+ * VERBATIM — the contract with <CartInteractivity> and <CartAddressShipBy>
+ * is unchanged, and the form still POSTs to `/service-order`.
  *
- * ── Scope — the navbar + sidebar are app-shell chrome ────────
- * cart.php L181-422 renders the global header navbar + left
- * sidebar (the same `include/header.php` chrome every member page
- * carries). Following the `menu.php` pilot (which likewise did NOT
- * transcribe the navbar/sidebar — the protected `layout.tsx` owns
- * app-shell chrome), this file transcribes ONLY the page-unique
- * `<!-- BEGIN: Content -->` body. The legacy nav/sidebar is a
- * cross-cutting include, not part of this screen's transcription.
+ * Faithful-port data lineage (cart.php → here):
+ *   - $rsDefault          → tb_settings.rsdefault  WHERE ID=1      (cart.php L142-145)
+ *   - $userAddressID etc. → tb_users (useraddressid, usertransporttype,
+ *                            usershipby, userpaymethod)             (cart.php L146-153)
+ *   - $userShipBy fallbk  → tb_forwarder.fshipby ORDER BY ID DESC   (cart.php L154-161)
+ *   - $countCart          → COUNT(ID) FROM tb_cart                  (cart.php L163-170)
+ *   - address block       → tb_address / tb_address_main fallback   (cart.php L441-499)
+ *   - cart rows           → SELECT * FROM tb_cart + group by
+ *                            provider→shop in code                  (cart.php L522-586)
  *
- * ── Data — every cart.php SQL query transcribed 1:1 to `tb_*` ─
- * `tb_*` is RLS-locked to service_role → reads go through the
- * admin client. Join key: `tb_*.userid === profile.member_code`
- * (the customer's "PR<n>" code). Queries transcribed:
- *   - $rsDefault    → tb_settings.rsdefault  WHERE ID=1      (cart.php L142-145)
- *   - $userAddressID / $userTransportType / $userShipBy / $userPayMethod
- *                   → tb_users (useraddressid, usertransporttype,
- *                     usershipby, userpaymethod)             (cart.php L146-153)
- *   - $userShipBy fallback → tb_forwarder.fshipby
- *                     ORDER BY ID DESC                       (cart.php L154-161)
- *   - $countCart    → COUNT(ID) FROM tb_cart                 (cart.php L163-170)
- *   - address block → tb_address (addressID + the CONCAT fullAddress)
- *                     / tb_address_main fallback             (cart.php L441-499)
- *   - cart rows     → DISTINCT(cProvider) → DISTINCT(cNameShop)
- *                     → SELECT * FROM tb_cart                (cart.php L522-586)
- *
- * Rebrand DONE: legacy `PCS<n>` member codes + `PCS` brand → `PR<n>` +
- * `PR` / Pacred. Legacy hardcoded phone "02-055-6063" and the
- * warehouse address are copied verbatim (borrowed-API / company
- * facts — not scrubbed per runbook §3).
- *
- * ── FLAGGED — not strictly 1:1 (documented, never silently diverged) ──
- *   1. Cart-mutation jQuery + AJAX endpoints are NOT wired. cart.php
- *      ships a large client-side script block (cart.php L788-1143):
- *        - `calculateCart.php` / `recalculateCart()`     — live subtotal/total
- *        - `deleteItem.php`  (the `.remove-product` trash button)
- *        - `updateQuantity.php` (the per-row quantity `<input>`)
- *        - `option-address-thai.php` (the เปลี่ยนที่อยู่ modal)
- *        - `api-shipBy.php` / `checkPCSMaoMao.php`  (the #selectShipBy
- *          slot + the PCS-เหมาๆ promotion popup)
- *      These are jQuery `$.ajax` POSTs to legacy PHP endpoints. A
- *      Server Component render must stay a PURE READ — it cannot run
- *      jQuery, and re-wiring 6 AJAX proxies is non-trivial. The
- *      visible cart surface (rows, totals shell, address block,
- *      transport/crate radios, promotion cards, modal) is rendered
- *      1:1; the interactive behaviour is left unwired. The totals
- *      values (`#cart-subtotal`, `#cart-total`) render EMPTY exactly
- *      as the legacy screen shows them before its AJAX returns.
- *   2. The two top POST handlers (`addCart` / `addCartURL`,
- *      cart.php L3-109) INSERT into tb_cart. A render-time INSERT is
- *      a mutation — NOT performed here (Next.js disallows mutations
- *      during render). Cart-add belongs to the /cart/add screen +
- *      a Server Action; this screen is the read-only cart view.
- *   3. `proValentine` / the time-boxed 3.3 promotion (cart.php L667)
- *      is a date-window check — reproduced as a server-side date
- *      compare so the conditional promotion card matches legacy.
- *   4. The `#pro-maomao` promotion modal renders 1:1 in its hidden
- *      default state; legacy reveals it via jQuery `.modal("show")`
- *      (part of FLAG 1) — left hidden.
- *   5. Legacy raster assets are referenced at `/legacy/pcs/…` (NOT
- *      copied here — listed in the transcription report for the
- *      integrator to stage). The shop-empty illustration legacy
- *      pulls from the WordPress uploads dir is referenced at
- *      `/legacy/pcs/shop-2-300x300.png`.
+ * Brand: `PCS` → `PR` / Pacred; warehouse address from ADDRESSES.warehouseTh
+ * (Samut Sakhon SOT). 3 legacy AJAX endpoints (option-address-thai.php /
+ * api-shipBy.php / checkPCSMaoMao.php) remain pre-computed SSR-side and
+ * filtered client-side — zero AJAX, same as the previous iteration.
  */
 
 // Server Components reading cookies/auth under a layout must be dynamic.
@@ -151,6 +113,17 @@ function imgProvider(cProvider: string | null): {
 }
 
 /**
+ * Build the legacy `CONCAT(addressName,' ',…) AS fullAddress` string
+ * from a `tb_address` row — used by both `resolveAddressBlock` and
+ * the address-list resolution for the เปลี่ยนที่อยู่ modal. Verbatim
+ * with cart.php's CONCAT (L445 + L62 + L86 + L116 across the legacy
+ * queries — all produce the same shape).
+ */
+function buildFullAddressFromRow(r: AddressRow): string {
+  return `${r.addressname} ${r.addresslastname} | ${r.addressno} ตำบล/แขวง ${r.addresssubdistrict} อำเภอ/เขต ${r.addressdistrict} จังหวัด ${r.addressprovince} ${r.addresszipcode} โทร. ${r.addresstel}, ${r.addresstel2 ?? ""}`;
+}
+
+/**
  * Transcribes the legacy `convertIMGCHN($url,$size)` helper
  * (`member/include/function.php` L1414-1437): resolves a stored
  * `cImages` value to a displayable URL. Empty → the default
@@ -171,12 +144,16 @@ function convertIMGCHN(url: string | null, size: string): string {
     .split("_250x250.jpg")
     .join("");
   if (u.includes("/")) {
-    if (/pcscargo\.co\.th/.test(u)) {
-      return u;
-    }
+    // Old data may store full legacy `pcscargo.co.th/member/...` URLs —
+    // re-resolve through the Supabase mirror so customer-visible URLs
+    // never leak the legacy host name.
+    const legacyMatch = u.match(/pcscargo\.co\.th\/member\/(.+)$/);
+    if (legacyMatch) return legacyMemberUrl(legacyMatch[1]);
     return u + size;
   }
-  return "/legacy/pcs/images/shops/" + u;
+  // a bare filename — legacy stored under images/shops/. Resolved via
+  // the Supabase mirror (ภูม upload 2026-05-24, see lib/legacy-image.ts).
+  return legacyMemberUrl(`images/shops/${u}`);
 }
 
 export default async function CartPage() {
@@ -229,23 +206,17 @@ export default async function CartPage() {
   // cart.php L154-161: when userShipBy is blank, fall back to the
   //   customer's most-recent tb_forwarder.fShipBy (ORDER BY ID DESC).
   if (userShipBy === "") {
-    const { data: fwdRow, error: fwdRowErr } = await admin
+    const { data: fwdRow } = await admin
       .from("tb_forwarder")
       .select("fshipby")
       .eq("userid", userID)
       .order("id", { ascending: false })
       .limit(1)
       .maybeSingle<{ fshipby: string | null }>();
-    if (fwdRowErr) {
-      console.error(`[tb_forwarder list] failed`, { code: fwdRowErr.code, message: fwdRowErr.message });
-    }
     if (fwdRow?.fshipby) {
       userShipBy = fwdRow.fshipby;
     }
   }
-  // userShipBy participates in the legacy JS (PCSF promo branch);
-  // referenced here so the value is computed exactly as legacy.
-  void userShipBy;
 
   // ── Address block (cart.php L441-499) ───────────────────────
   // Only resolved when there are cart items (the whole address card
@@ -254,21 +225,57 @@ export default async function CartPage() {
     ? await resolveAddressBlock(admin, userID, userAddressID)
     : null;
 
+  // ── All addresses (for the เปลี่ยนที่อยู่ modal — cart.php's
+  //   option-address-thai.php) + per-address shipBy/maomao maps.
+  //   Server-rendered ONCE; the client filters on selection so the
+  //   legacy `getShipBy` / `checkPCSMaoMao` AJAX roundtrips are
+  //   eliminated.
+  const addressOptions: CartAddressOption[] = [];
+  const shipByByAddress: Record<string, ShipByOption[]> = {};
+  const maomaoByAddress: Record<string, boolean> = {};
+  if (countCart > 0) {
+    const { data: allAddrRows } = await admin
+      .from("tb_address")
+      .select(
+        "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel, addresstel2",
+      )
+      .eq("userid", userID)
+      .eq("addressstatus", "1")
+      .order("addressid", { ascending: false })
+      .returns<AddressRow[]>();
+    for (const r of allAddrRows ?? []) {
+      const id = String(r.addressid);
+      addressOptions.push({
+        addressID:   id,
+        fullAddress: buildFullAddressFromRow(r),
+        zip:         r.addresszipcode ?? "",
+        province:    r.addressprovince ?? "",
+        amphoe:      r.addressdistrict ?? "",
+      });
+      shipByByAddress[id] = getShipByOptionsForAddress({
+        zip:      r.addresszipcode,
+        province: r.addressprovince,
+        amphoe:   r.addressdistrict,
+        userID,
+      });
+      maomaoByAddress[id] = isMaomaoEligibleForAddress({
+        addressID: id,
+        zip:       r.addresszipcode,
+      });
+    }
+    // 'PCS' warehouse pickup is always present + always non-maomao
+    // (matches checkPCSMaoMao.php — when addressID==='PCS' → proF=2).
+    shipByByAddress["PCS"] = [];
+    maomaoByAddress["PCS"] = false;
+  }
+
   // ── Cart rows, grouped provider → shop (cart.php L522-586) ───
-  // cart.php L523: SELECT DISTINCT(cProvider) … GROUP BY cProvider
-  // Then per provider: DISTINCT(cNameShop) … then SELECT * per
-  //   (provider, shop). PostgREST cannot express the legacy nested
-  //   DISTINCT loop in one call, so the rows are fetched once and
-  //   grouped in code — same shape the PHP renders.
-  const { data: cartRowsData, error: cartRowsDataErr } = await admin
+  const { data: cartRowsData } = await admin
     .from("tb_cart")
     .select(
       "id, cdetails, curl, ctitle, cnameshop, cprovider, cimages, cprice, camount, ccolor, csize, userid",
     )
     .eq("userid", userID);
-  if (cartRowsDataErr) {
-    console.error(`[tb_cart list] failed`, { code: cartRowsDataErr.code, message: cartRowsDataErr.message });
-  }
   const cartRows = (cartRowsData ?? []) as CartRow[];
 
   // Build the provider → shop → rows grouping. cart.php iterates
@@ -305,12 +312,6 @@ export default async function CartPage() {
   const totalRowCount = noRow - 1;
 
   // ── Build the serializable tree passed to <CartInteractivity> ──
-  // The client component owns the cart-list rendering + the order-
-  // summary card, so it needs the same pre-grouped tree but with the
-  // SSR-computed `imgProvider()` / `convertIMGCHN()` resolutions
-  // baked in (those helpers reference legacy paths the server holds
-  // canonical knowledge of). Producing the resolved props here keeps
-  // the client component free of legacy URL guessing.
   const interactiveProviders: CartInteractiveProvider[] =
     groupedProviders.map((p) => ({
       providerCode: p.providerCode,
@@ -361,463 +362,252 @@ export default async function CartPage() {
     now <= new Date("2026-03-06T23:59:59");
 
   return (
-    <div className="pcs-legacy">
-      {/* Legacy PCS stylesheet — static public/ asset, loaded via a
-          plain <link> so it bypasses Tailwind/PostCSS. */}
-      <link rel="stylesheet" href="/legacy/pcs/cart.css" />
+    <>
+      <title>ตะกร้าสินค้า | Pacred</title>
 
-      {/* BEGIN: Content — cart.php L424 */}
-      <div id="focus-search"></div>
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          <div className="content-body pr110">
-            <section>
-              {/* cart.php L431 — the cart form (POST → shops/ on submit) */}
-              <form
-                className="form-horizontal p-0 m-0 cart-form"
-                method="POST"
-                action="/service-order"
-                autoComplete="off"
-              >
-                <div className="row">
-                  <div className="col-12">
-                    {/* ── Thai delivery-address card — cart.php L434-509 ──
-                        (only rendered when there are cart items) */}
-                    {countCart > 0 && (
-                      <div className="ele-address-thai box-shadow mb-2">
-                        <div className="top-address-thai"></div>
-                        <div className="p-1">
-                          <h3 className="text-color mb-1">
-                            <span className="fa fa-map"></span> ที่อยู่ในการจัดส่งในไทย{" "}
-                            <i className="flag-icon flag-icon-th"></i>
-                          </h3>
-                          <div className="address-select">
-                            {addressBlock?.mode === "saved" && (
-                              <>
-                                <input
-                                  type="text"
-                                  name="addressID"
-                                  id="addressIDMain"
-                                  defaultValue={addressBlock.addressID}
-                                  required={true}
-                                />
-                                <span className="address-select-now">
-                                  {addressBlock.fullAddress}
-                                  <span className="box-lastaddress">
-                                    {addressBlock.lastAddressLabel}
-                                  </span>
-                                </span>
-                                <span className="btn-change-address-thai cursor-pointer">
-                                  เปลี่ยนที่อยู่
-                                </span>
-                              </>
-                            )}
-                            {addressBlock?.mode === "warehouse-saved" && (
-                              <>
-                                <input
-                                  type="text"
-                                  name="addressID"
-                                  id="addressIDMain"
-                                  defaultValue="PCS"
-                                  required={true}
-                                />
-                                <span className="address-select-now">
-                                  {PCS_WAREHOUSE_ADDRESS}
-                                  <span className="box-lastaddress">
-                                    ที่อยู่ล่าสุดที่เคยสั่ง
-                                  </span>
-                                  <span className="ml-1 btn-add-address-thai cursor-pointer">
-                                    เปลี่ยนที่อยู่
-                                  </span>
-                                  {PCS_WAREHOUSE_MAP_URL && (
-                                    <div>
-                                      <a
-                                        href={PCS_WAREHOUSE_MAP_URL}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="text-info"
-                                      >
-                                        <i className="fa fa-map"></i> ดูแผนที่โกดัง Pacred
-                                        ในไทย
-                                      </a>
-                                    </div>
-                                  )}
-                                </span>
-                              </>
-                            )}
-                            {addressBlock?.mode === "warehouse-default" && (
-                              <>
-                                <input
-                                  type="text"
-                                  name="addressID"
-                                  id="addressIDMain"
-                                  defaultValue="PCS"
-                                  required={true}
-                                />
-                                <span className="address-select-now">
-                                  {PCS_WAREHOUSE_ADDRESS}
-                                  {PCS_WAREHOUSE_MAP_URL && (
-                                    <a
-                                      href={PCS_WAREHOUSE_MAP_URL}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="text-info"
-                                    >
-                                      <i className="fa fa-map"></i> ดูแผนที่โกดัง Pacred
-                                      ในไทย
-                                    </a>
-                                  )}
-                                </span>
-                                <span className="btn-change-address-thai cursor-pointer">
-                                  เปลี่ยนที่อยู่
-                                </span>
-                              </>
-                            )}
-                            {addressBlock?.mode === "none" && (
-                              <>
-                                <input
-                                  type="text"
-                                  name="addressID"
-                                  id="addressIDMain"
-                                  defaultValue=""
-                                  required={true}
-                                />
-                                <span className="address-select-now"></span>
-                                <span className="btn-add-address-thai cursor-pointer">
-                                  เพิ่มที่อยู่ หรือ เลือกรับเองโกดัง Pacred กทม
-                                </span>
-                              </>
-                            )}
-                          </div>
-                          <div className="shipBy-select pt-1 mb-05">
-                            <div id="selectShipBy"></div>
-                          </div>
-                          <div className="text-danger font-0_85rem">
-                            หมายเหตุ : หากพื้นที่นอกเขตขนส่งของ Pacred
-                            ทางบริษัทจะเก็บเงินปลายทางเท่านั้น{" "}
-                            <a href="/services/import-china" target="_blank" rel="noreferrer">
-                              (เช็คพื้นที่ได้ที่นี่)
-                            </a>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ── Shopping-cart item list — cart.php L510-600 ──
-                        Empty-cart state renders SSR (no interactivity
-                        needed); when rows exist, the rendering + the
-                        promo + order-summary card are delegated to
-                        the `<CartInteractivity>` client component so
-                        checkboxes, the per-row quantity, the live
-                        totals, and the "เลือกทั้งหมด" toggle drive
-                        state. cart.php L510-600 / L652-727. */}
-                    {cartRows.length > 0 ? (
-                      <CartInteractivity
-                        groupedProviders={interactiveProviders}
-                        totalRowCount={totalRowCount}
-                        initialRsDefault={rsDefault}
-                        promo33Active={promo33Active}
-                        memberCode={userID}
-                        shippingCard={
-                          <div className="ele-addressCHN-cart box-shadow mb-1 p-1">
-                            <h3 className="text-color">
-                              <span className="fa fa-map"></span> การขนส่งจากจีนมาไทย{" "}
-                              <i className="flag-icon flag-icon-ch"></i>
-                            </h3>
-                            <div className="row">
-                              <div className="col-md-6">
-                                <label
-                                  className="form-control-label mb-0 font-1_2rem"
-                                  htmlFor="hTransportType"
-                                >
-                                  รูปแบบการขนส่งจีน-ไทย
-                                </label>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <fieldset
-                                      className="border-checkbox-transportType border-checkbox cursor-pointer box-shadow"
-                                      data-for="transportType-ek"
-                                    >
-                                      <input
-                                        type="radio"
-                                        className="radio-custom radio-custom-transportType cursor-pointer"
-                                        name="hTransportType"
-                                        value="1"
-                                        id="transportType-ek"
-                                        defaultChecked={userTransportType === 1}
-                                      />
-                                      <label
-                                        htmlFor="transportType-ek"
-                                        className="cursor-pointer radio-custom-label"
-                                      >
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img
-                                          className="img-fluid"
-                                          src="/legacy/pcs/theme/transport-car-v3.png"
-                                          style={{ maxHeight: "35px" }}
-                                          alt=""
-                                        />
-                                        ทางรถ (EK) 5-7 วัน
-                                      </label>
-                                    </fieldset>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <fieldset
-                                      className="border-checkbox-transportType border-checkbox cursor-pointer"
-                                      data-for="transportType-sea"
-                                    >
-                                      <input
-                                        type="radio"
-                                        className="radio-custom radio-custom-transportType cursor-pointer"
-                                        name="hTransportType"
-                                        value="2"
-                                        id="transportType-sea"
-                                        defaultChecked={userTransportType !== 1}
-                                      />
-                                      <label
-                                        htmlFor="transportType-sea"
-                                        className="cursor-pointer radio-custom-label"
-                                      >
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img
-                                          className="img-fluid"
-                                          src="/legacy/pcs/theme/transport-sea-v3.png"
-                                          style={{ maxHeight: "35px" }}
-                                          alt=""
-                                        />
-                                        ทางเรือ (SEA) 12-16 วัน
-                                      </label>
-                                    </fieldset>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="col-md-6">
-                                <label
-                                  className="form-control-label mb-0 font-1_2rem"
-                                  htmlFor="hTransportType"
-                                >
-                                  การตีลังไม้สินค้า
-                                </label>
-                                <div className="row">
-                                  <div className="col-md-6">
-                                    <fieldset
-                                      className="border-checkbox-crate border-checkbox cursor-pointer active box-shadow"
-                                      data-for="crate-1"
-                                    >
-                                      <input
-                                        type="radio"
-                                        className="radio-custom radio-custom-crate cursor-pointer"
-                                        name="crate"
-                                        value="2"
-                                        id="crate-1"
-                                        defaultChecked
-                                      />
-                                      <label
-                                        htmlFor="crate-1"
-                                        className="cursor-pointer radio-custom-label"
-                                      >
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img
-                                          className="img-fluid"
-                                          src="/legacy/pcs/theme/uncrate-v3.png"
-                                          style={{ maxHeight: "35px" }}
-                                          alt=""
-                                        />
-                                        ไม่ตีลังไม้
-                                      </label>
-                                    </fieldset>
-                                  </div>
-                                  <div className="col-md-6">
-                                    <fieldset
-                                      className="border-checkbox-crate border-checkbox cursor-pointer"
-                                      data-for="crate-2"
-                                    >
-                                      <input
-                                        type="radio"
-                                        className="radio-custom radio-custom-crate cursor-pointer"
-                                        name="crate"
-                                        value="1"
-                                        id="crate-2"
-                                      />
-                                      <label
-                                        htmlFor="crate-2"
-                                        className="cursor-pointer radio-custom-label"
-                                      >
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img
-                                          className="img-fluid"
-                                          src="/legacy/pcs/theme/crate-v3.png"
-                                          style={{ maxHeight: "35px" }}
-                                          alt=""
-                                        />
-                                        ตีลังไม้ (มีค่าบริการ)
-                                      </label>
-                                    </fieldset>
-                                  </div>
-                                  <div className="col-md-12 p05">
-                                    <span className="text-danger font-0_85rem">
-                                      **หากต้องการตีลังไม้สินค้าบางร้าน
-                                      ให้ทำการเลือกสั่งออเดอร์แยกรายการกัน
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        }
-                      />
-                    ) : (
-                      // cart.php L588-597 — the empty-cart card.
-                      <div className="ele-shopping-cart mb-2">
-                        <div className="shopping-cart">
-                          {/* cart.php L512-521 — the column-label header row */}
-                          <div className="ele-item-3 column-labels">
-                            <label className="product-check">
-                              <input
-                                type="checkbox"
-                                name="checkAll"
-                                className="dt-checkboxes check-all"
-                                value="all"
-                              />
-                            </label>
-                            <label className="product-count"></label>
-                            <label className="product-image"></label>
-                            <label className="product-details">รายละเอียดสินค้า</label>
-                            <label className="product-price">ราคาต่อชิ้น</label>
-                            <label className="product-quantity">จำนวน</label>
-                            <label className="product-removal">ตัวเลือก</label>
-                            <label className="product-line-price">ราคารวม</label>
-                          </div>
-                          <div className="text-center bg-light box-shadow2">
-                            <h5 className="p-1">
-                              <b>ไม่มีพบสินค้าในรถเข็น</b>
-                            </h5>
-                            <div className="text-center">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                className="img-fluid"
-                                src="/legacy/pcs/shop-2-300x300.png"
-                                alt=""
-                              />
-                            </div>
-                            <h5 className="pb-1">
-                              <Link className="text-info" href="/service-order/add">
-                                เพิ่มสินค้า
-                              </Link>
-                            </h5>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* The legacy cart-list / shipping-card /
-                        price-card markup (cart.php L510-727) is now
-                        owned by the <CartInteractivity> client
-                        component above — interactivity that the
-                        legacy ran via jQuery is now React state,
-                        backed by the calculateCartTotal Server Action
-                        in actions/cart.ts. */}
-                    {/* (legacy ele-addressCHN-cart + ele-price-cart
-                        markup deleted — now rendered by the
-                        <CartInteractivity> client component above) */}
-                  </div>
-                </div>
-              </form>
-            </section>
-          </div>
-        </div>
-      </div>
-      {/* cart.php L736 — the address-option AJAX slot */}
-      <div id="option-address-thai"></div>
-      {/* cart.php L737-754 — the PCS-เหมาๆ promotion modal.
-          Renders 1:1 in its hidden default state; legacy reveals it
-          via jQuery `.modal("show")` (FLAGGED — jQuery not wired). */}
-      <div
-        id="pro-maomao"
-        className="modal fade in"
-        tabIndex={-1}
-        role="dialog"
-        aria-hidden="true"
-      >
-        <div className="pcs-notify modal-dialog modal-sm">
-          <div
-            className="modal-content modal-content-pcs"
-            style={{ backgroundColor: "unset" }}
-          >
-            <div className="modal-header">
-              <span className="text-white font-1_7rem">
-                คุณได้รับสิทธิ์ร่วมโปรโมชัน Pacred เหมา ๆ{" "}
+      <div className="pcs-content-pad w-full px-3 md:px-6 pt-4 pb-24 md:py-6 max-w-[1280px] mx-auto">
+        {/* ── Header — title + add CTA ── */}
+        <div className="flex items-start md:items-center justify-between gap-3 mb-4">
+          <div>
+            <div className="flex items-center gap-2 text-[11px] text-muted mb-1">
+              <Link href="/dashboard" className="hover:text-foreground transition-colors">
+                หน้าแรก
+              </Link>
+              <span>/</span>
+              <span className="text-foreground font-medium">ตะกร้าสินค้า</span>
+            </div>
+            <h1 className="flex items-center gap-2 text-[20px] md:text-[26px] font-black tracking-tight text-foreground">
+              <span className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white flex items-center justify-center shadow-md shadow-primary-600/25">
+                <ShoppingCart className="w-5 h-5" strokeWidth={2} />
               </span>
-              <button
-                type="button"
-                className="close text-white"
-                data-dismiss="modal"
-                aria-hidden="true"
-                style={{
-                  opacity: 1,
-                  border: "2px solid",
-                  borderRadius: "20px",
-                }}
-              >
-                <i
-                  className="la la-close text-white"
-                  style={{ fontSize: "1.5rem" }}
-                ></i>
-              </button>
-            </div>
-            <div className="modal-body">
-              <div className="bg-pro-valentine">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/legacy/pcs/theme/free50-3.png"
-                  className="img-fluid"
-                  alt=""
-                />
-              </div>
-              <div
-                className="modal-footer text-center"
-                style={{ display: "inherit" }}
-              >
-                <span
-                  className="btn btn-main round btn-min-width animate__animated animate__infinite animate__headShake cursor-pointer"
-                  id="btn-getMaoMao"
-                >
-                  รับโปรโมชัน เหมา ๆ
-                </span>
-              </div>
-            </div>
+              ตะกร้าสินค้า
+            </h1>
+          </div>
+          <Link
+            href="/cart/add"
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[12.5px] md:text-[14px] font-bold px-3.5 md:px-4 py-2 md:py-2.5 shadow-lg shadow-primary-600/30 hover:shadow-primary-600/40 hover:-translate-y-0.5 transition-all"
+          >
+            <Plus className="w-4 h-4" strokeWidth={2.5} />
+            เพิ่มสินค้า
+          </Link>
+        </div>
+
+        {/* cart.php L431 — the cart form (POST → /service-order on submit).
+            Form `name` attributes are LOAD-BEARING — the addOrder handler
+            in /service-order parses these fields. DO NOT rename. */}
+        <form
+          method="POST"
+          action="/service-order"
+          autoComplete="off"
+          className="space-y-3"
+        >
+          {/* ── Thai delivery-address card — cart.php L434-509 ──
+              (only rendered when there are cart items). Address selection
+              / ship-by select / maomao popup live in <CartAddressShipBy>.
+              The three legacy AJAX endpoints `option-address-thai.php` /
+              `api-shipBy.php` / `checkPCSMaoMao.php` are replaced by the
+              SSR-computed `addressOptions` + `shipByByAddress` +
+              `maomaoByAddress` props — no AJAX. */}
+          {countCart > 0 && addressBlock && (
+            <CartAddressShipBy
+              initialAddressBlock={addressBlock}
+              addresses={addressOptions}
+              shipByByAddress={shipByByAddress}
+              maomaoByAddress={maomaoByAddress}
+              userShipBy={userShipBy}
+              warehouseAddress={PCS_WAREHOUSE_ADDRESS}
+              warehouseMapUrl={PCS_WAREHOUSE_MAP_URL}
+            />
+          )}
+
+          {/* ── Shopping-cart item list — cart.php L510-600 ──
+              Empty-cart state renders SSR (no interactivity needed);
+              when rows exist, the rendering + the promo + order-summary
+              card are delegated to <CartInteractivity> (client). */}
+          {cartRows.length > 0 ? (
+            <CartInteractivity
+              groupedProviders={interactiveProviders}
+              totalRowCount={totalRowCount}
+              initialRsDefault={rsDefault}
+              promo33Active={promo33Active}
+              memberCode={userID}
+              shippingCard={
+                <ShippingOptionsCard userTransportType={userTransportType} />
+              }
+            />
+          ) : (
+            <EmptyCartState />
+          )}
+        </form>
+
+        {/* cart.php L841 — totalRowCount + cart-capacity carried as data
+            so the server-side count stays inspectable for QA. */}
+        <span
+          hidden
+          data-total-rows={totalRowCount}
+          data-cart-capacity={CART_CAPACITY}
+          data-count-cart={countCart}
+        />
+      </div>
+    </>
+  );
+}
+
+/* ─────────────────────────── EMPTY CART STATE ─────────────────────────── */
+function EmptyCartState() {
+  return (
+    <div className="rounded-2xl bg-white border border-border p-8 md:p-12 text-center shadow-[0_4px_14px_rgba(0,0,0,0.04)]">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/legacy/pcs/shop-2-300x300.png"
+        alt=""
+        className="mx-auto w-40 h-40 md:w-52 md:h-52 object-contain opacity-70 mb-4"
+      />
+      <h3 className="text-[15px] md:text-[17px] font-bold text-foreground">
+        ไม่มีพบสินค้าในรถเข็น
+      </h3>
+      <p className="mt-2 text-[12.5px] text-muted">
+        เพิ่มสินค้าจากร้าน 1688 · Taobao · Tmall · Alibaba เพื่อเริ่มสั่งซื้อ
+      </p>
+      <Link
+        href="/cart/add"
+        className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[13px] font-bold px-4 py-2 shadow-lg shadow-primary-600/30 hover:shadow-primary-600/40 hover:-translate-y-0.5 transition-all"
+      >
+        <Plus className="w-4 h-4" strokeWidth={2.5} />
+        เพิ่มสินค้า
+      </Link>
+    </div>
+  );
+}
+
+/* ─────────────────── SHIPPING-OPTIONS CARD (China → Thailand) ─────────────────── */
+/**
+ * cart.php L601-651 — the .ele-addressCHN-cart radio-card pair (transport
+ * type EK/SEA + crate option). All `name=` + `value=` attributes preserved
+ * verbatim so the form submit to /service-order carries the same fields.
+ */
+function ShippingOptionsCard({ userTransportType }: { userTransportType: number }) {
+  return (
+    <div className="rounded-2xl bg-white border border-border shadow-[0_4px_14px_rgba(0,0,0,0.04)] p-4 md:p-5">
+      <h3 className="flex items-center gap-2 text-[15px] md:text-[16px] font-bold text-foreground mb-3">
+        <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-primary-50 text-primary-600">
+          <Truck className="w-4 h-4" strokeWidth={2.2} />
+        </span>
+        การขนส่งจากจีนมาไทย
+        <span className="inline-block w-5 h-3.5 rounded-sm overflow-hidden border border-border align-middle">
+          {/* China flag — simple flag pip */}
+          <span className="block w-full h-full bg-[#EE1C25]" aria-label="China" />
+        </span>
+      </h3>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+        {/* ── Transport type — EK (รถ) / SEA (เรือ) ── */}
+        <div>
+          <label className="block text-[12.5px] font-bold text-muted mb-2">
+            รูปแบบการขนส่งจีน-ไทย
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <RadioCard
+              name="hTransportType"
+              value="1"
+              id="transportType-ek"
+              defaultChecked={userTransportType === 1}
+              icon={<Truck className="w-5 h-5" strokeWidth={2.2} />}
+              title="ทางรถ (EK)"
+              hint="5-7 วัน"
+            />
+            <RadioCard
+              name="hTransportType"
+              value="2"
+              id="transportType-sea"
+              defaultChecked={userTransportType !== 1}
+              icon={<Ship className="w-5 h-5" strokeWidth={2.2} />}
+              title="ทางเรือ (SEA)"
+              hint="12-16 วัน"
+            />
           </div>
         </div>
+
+        {/* ── Crate option — ไม่ตีลังไม้ / ตีลังไม้ ── */}
+        <div>
+          <label className="block text-[12.5px] font-bold text-muted mb-2">
+            การตีลังไม้สินค้า
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <RadioCard
+              name="crate"
+              value="2"
+              id="crate-1"
+              defaultChecked
+              icon={<PackageOpen className="w-5 h-5" strokeWidth={2.2} />}
+              title="ไม่ตีลังไม้"
+              hint="ปกติ"
+            />
+            <RadioCard
+              name="crate"
+              value="1"
+              id="crate-2"
+              icon={<Package className="w-5 h-5" strokeWidth={2.2} />}
+              title="ตีลังไม้"
+              hint="มีค่าบริการ"
+            />
+          </div>
+          <p className="mt-2 text-[11px] text-rose-600 leading-relaxed">
+            ** หากต้องการตีลังไม้สินค้าบางร้าน ให้ทำการเลือกสั่งออเดอร์แยกรายการกัน
+          </p>
+        </div>
       </div>
-      {/* END: Content — cart.php L755 */}
-      {/* cart.php L756-759 — preload <img width=0> hints for the
-          promotion modal assets. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/legacy/pcs/theme/btn-form-pro-valentine+maomao.png"
-        width={0}
-        alt=""
+    </div>
+  );
+}
+
+/**
+ * Pill-style selectable radio card — pure CSS via the peer/checked-sibling
+ * trick. The radio input is hidden but the label is the click target; when
+ * checked, the label gets a brand-red ring + tint via `peer-checked:`.
+ *
+ * Each `<RadioCard>` is wrapped in its own container so the `peer-checked`
+ * selector only looks at THIS pair's input (not a sibling pair's). Without
+ * the wrapper, the second card's label would also tint when the first card
+ * is checked, because `peer-checked:` uses the `~` sibling combinator.
+ */
+function RadioCard({
+  name,
+  value,
+  id,
+  defaultChecked,
+  icon,
+  title,
+  hint,
+}: {
+  name: string;
+  value: string;
+  id: string;
+  defaultChecked?: boolean;
+  icon: React.ReactNode;
+  title: string;
+  hint: string;
+}) {
+  return (
+    <div className="relative">
+      <input
+        type="radio"
+        name={name}
+        value={value}
+        id={id}
+        defaultChecked={defaultChecked}
+        className="peer sr-only"
       />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/legacy/pcs/theme/free50-3.png" width={0} alt="" />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/legacy/pcs/theme/bg-form-pro-valentine+maomao.png"
-        width={0}
-        alt=""
-      />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/legacy/pcs/theme/bg-form-pro-valentine.png" width={0} alt="" />
-      {/* cart.php L841 — #countID running total + the cart-capacity
-          cap; both computed exactly as legacy and kept here so the
-          values participate identically. */}
-      <span
-        hidden
-        data-total-rows={totalRowCount}
-        data-cart-capacity={CART_CAPACITY}
-        data-count-cart={countCart}
-      />
+      <label
+        htmlFor={id}
+        className="group cursor-pointer flex flex-col items-center gap-1.5 rounded-xl border border-border bg-white px-2.5 py-3 text-center transition-all hover:border-primary-300 hover:bg-rose-50/40 peer-checked:border-primary-500 peer-checked:bg-gradient-to-br peer-checked:from-rose-50 peer-checked:to-rose-100/60 peer-checked:ring-2 peer-checked:ring-primary-100 peer-checked:shadow-md peer-checked:shadow-primary-600/10 peer-checked:[&>.radio-icon]:bg-primary-600 peer-checked:[&>.radio-icon]:text-white"
+      >
+        <span className="radio-icon inline-flex items-center justify-center w-9 h-9 rounded-lg bg-primary-50 text-primary-600 transition-colors">
+          {icon}
+        </span>
+        <span className="text-[12.5px] font-bold text-foreground leading-tight">{title}</span>
+        <span className="text-[10.5px] text-muted leading-none">{hint}</span>
+      </label>
     </div>
   );
 }
@@ -856,23 +646,16 @@ async function resolveAddressBlock(
 > {
   // cart.php L441-442: SELECT addressID FROM tb_address
   //   WHERE userID=… AND addressStatus='1'
-  const { data: anyAddr, error: anyAddrErr } = await admin
+  const { data: anyAddr } = await admin
     .from("tb_address")
     .select("addressid")
     .eq("userid", userID)
     .eq("addressstatus", "1");
-  if (anyAddrErr) {
-    console.error(`[tb_address list] failed`, { code: anyAddrErr.code, message: anyAddrErr.message });
-  }
   const hasAddress = (anyAddr ?? []).length > 0;
-
-  // Build the legacy CONCAT(...) AS fullAddress string from a row.
-  const buildFullAddress = (r: AddressRow): string =>
-    `${r.addressname} ${r.addresslastname} | ${r.addressno} ตำบล/แขวง ${r.addresssubdistrict} อำเภอ/เขต ${r.addressdistrict} จังหวัด ${r.addressprovince} ${r.addresszipcode} โทร. ${r.addresstel}, ${r.addresstel2 ?? ""}`;
 
   if (hasAddress) {
     // cart.php L445-446: the row matching $userAddressID.
-    const { data: matchRow, error: matchRowErr } = await admin
+    const { data: matchRow } = await admin
       .from("tb_address")
       .select(
         "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel, addresstel2",
@@ -881,9 +664,6 @@ async function resolveAddressBlock(
       .eq("addressstatus", "1")
       .eq("addressid", userAddressID)
       .maybeSingle<AddressRow>();
-    if (matchRowErr) {
-      console.error(`[tb_address list] failed`, { code: matchRowErr.code, message: matchRowErr.message });
-    }
 
     if (matchRow) {
       // cart.php L452 — the label: legacy `if($userAddressID!=''
@@ -892,23 +672,20 @@ async function resolveAddressBlock(
       return {
         mode: "saved",
         addressID: String(matchRow.addressid),
-        fullAddress: buildFullAddress(matchRow),
+        fullAddress: buildFullAddressFromRow(matchRow),
         lastAddressLabel: "ที่อยู่ล่าสุดที่เคยสั่ง",
       };
     }
 
     // cart.php L454-465: the tb_address_main ⋈ tb_address fallback.
     if (userAddressID !== "PCS") {
-      const { data: mainRow, error: mainRowErr } = await admin
+      const { data: mainRow } = await admin
         .from("tb_address_main")
         .select("addressid")
         .eq("userid", userID)
         .maybeSingle<{ addressid: number }>();
-      if (mainRowErr) {
-        console.error(`[tb_address_main list] failed`, { code: mainRowErr.code, message: mainRowErr.message });
-      }
       if (mainRow) {
-        const { data: mainAddr, error: mainAddrErr } = await admin
+        const { data: mainAddr } = await admin
           .from("tb_address")
           .select(
             "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel, addresstel2",
@@ -916,16 +693,13 @@ async function resolveAddressBlock(
           .eq("addressid", mainRow.addressid)
           .eq("addressstatus", "1")
           .maybeSingle<AddressRow>();
-        if (mainAddrErr) {
-          console.error(`[tb_address list] failed`, { code: mainAddrErr.code, message: mainAddrErr.message });
-        }
         if (mainAddr) {
           // cart.php L465 — label: `if($userAddressID!='')` →
           //   ที่อยู่ล่าสุด, else ที่อยู่หลัก.
           return {
             mode: "saved",
             addressID: String(mainAddr.addressid),
-            fullAddress: buildFullAddress(mainAddr),
+            fullAddress: buildFullAddressFromRow(mainAddr),
             lastAddressLabel:
               userAddressID !== ""
                 ? "ที่อยู่ล่าสุดที่เคยสั่ง"

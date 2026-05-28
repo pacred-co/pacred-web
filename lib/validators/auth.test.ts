@@ -107,11 +107,16 @@ assertOk  ("happy path (no email)",        registerPersonalSchema, validPersonal
 assertOk  ("with valid email",             registerPersonalSchema, { ...validPersonal, email: "x@pacred.co" });
 assertOk  ("empty email allowed",          registerPersonalSchema, { ...validPersonal, email: "" });
 assertOk  ("services array with values",   registerPersonalSchema, { ...validPersonal, services: ["import", "order"] });
+assertOk  ("with shopUser='1' (ซื้อไปใช้เอง)", registerPersonalSchema, { ...validPersonal, shopUser: "1" });
+assertOk  ("with shopUser='2' (ซื้อไปขาย)",   registerPersonalSchema, { ...validPersonal, shopUser: "2" });
+assertOk  ("shopUser null allowed (older clients)", registerPersonalSchema, { ...validPersonal, shopUser: null });
 assertFail("missing firstName",            registerPersonalSchema, { ...validPersonal, firstName: "" });
 assertFail("missing OTP",                  registerPersonalSchema, { ...validPersonal, otp: "" });
 assertFail("agreed=false (must accept TOS)", registerPersonalSchema, { ...validPersonal, agreed: false });
 assertFail("invalid email format",         registerPersonalSchema, { ...validPersonal, email: "not-an-email" });
 assertFail("invalid service ID",           registerPersonalSchema, { ...validPersonal, services: ["unknown_service"] });
+assertFail("invalid shopUser value '3'",   registerPersonalSchema, { ...validPersonal, shopUser: "3" });
+assertFail("invalid shopUser empty string",registerPersonalSchema, { ...validPersonal, shopUser: "" });
 
 // ────────────────────────────────────────────────────────────
 section("registerJuristicStep1Schema — abbreviated personal step");
@@ -120,8 +125,17 @@ section("registerJuristicStep1Schema — abbreviated personal step");
 assertOk  ("happy path",                   registerJuristicStep1Schema, {
   phone: "0812345678", password: "secret1", services: [], otp: "123456",
 });
+assertOk  ("with shopUser='1'",            registerJuristicStep1Schema, {
+  phone: "0812345678", password: "secret1", services: [], otp: "123456", shopUser: "1",
+});
+assertOk  ("with shopUser='2'",            registerJuristicStep1Schema, {
+  phone: "0812345678", password: "secret1", services: [], otp: "123456", shopUser: "2",
+});
 assertFail("password too short",           registerJuristicStep1Schema, {
   phone: "0812345678", password: "x", otp: "123456",
+});
+assertFail("invalid shopUser value",       registerJuristicStep1Schema, {
+  phone: "0812345678", password: "secret1", services: [], otp: "123456", shopUser: "0",
 });
 
 // ────────────────────────────────────────────────────────────

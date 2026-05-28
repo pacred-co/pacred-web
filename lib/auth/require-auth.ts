@@ -32,5 +32,12 @@ export async function requireAuth(opts?: {
 
 export async function requireGuest(): Promise<void> {
   const data = await getCurrentUserWithProfile();
-  if (data?.user) redirect("/");
+  // Mid-signup users have `status='incomplete'` — they ARE signed in
+  // (Step 1 of juristic register calls signInWithPassword to set the
+  // session needed for Step 2/3 RLS reads), but they must STAY on
+  // /register to finish uploading docs. Bouncing them to `/` here was
+  // the 2026-05-25 bug: every juristic signup stalled at `incomplete`
+  // with 0 documents because Next.js revalidated the layout after the
+  // cookie write and redirected before Step 2 could render.
+  if (data?.user && data.profile?.status !== "incomplete") redirect("/");
 }

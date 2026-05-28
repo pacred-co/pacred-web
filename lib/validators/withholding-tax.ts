@@ -16,6 +16,7 @@
  */
 
 import { z } from "zod";
+import { isInt32OverflowSuspect, MAX_THB_AMOUNT } from "./safe-numeric";
 
 /** Allowed WHT rates (percent). DB CHECK constraint mirrors this set. */
 export const WHT_RATES = [1, 1.5, 2, 3, 5] as const;
@@ -66,18 +67,28 @@ export const createWhtEntrySchema = z
     /**
      * The full invoice total (receipt gross). NEVER mutated downstream —
      * WHT does not reduce the printed receipt amount.
+     * V-E5 hardening: bounded + int32-overflow rejected.
      */
     gross_invoice_thb: z
       .number()
-      .positive("gross_invoice_thb ต้อง > 0"),
+      .refine((n) => !isInt32OverflowSuspect(n), {
+        message: "int32_overflow_suspected — กรุณาตรวจค่าตัวเลขที่กรอก",
+      })
+      .refine((n) => n > 0,            { message: "gross_invoice_thb ต้อง > 0" })
+      .refine((n) => n <= MAX_THB_AMOUNT, { message: `gross_invoice_thb เกินเพดาน (${MAX_THB_AMOUNT.toLocaleString()})` }),
 
     /**
      * The WHT-able service portion. Typically ≤ gross_invoice_thb (pass-through
      * costs like ค่าสินค้า excluded). Staff-confirmed in V1.
+     * V-E5 hardening: bounded + int32-overflow rejected.
      */
     wht_base_thb: z
       .number()
-      .positive("wht_base_thb ต้อง > 0"),
+      .refine((n) => !isInt32OverflowSuspect(n), {
+        message: "int32_overflow_suspected — กรุณาตรวจค่าตัวเลขที่กรอก",
+      })
+      .refine((n) => n > 0,            { message: "wht_base_thb ต้อง > 0" })
+      .refine((n) => n <= MAX_THB_AMOUNT, { message: `wht_base_thb เกินเพดาน (${MAX_THB_AMOUNT.toLocaleString()})` }),
 
     /** One of WHT_RATES. */
     wht_rate_pct: z

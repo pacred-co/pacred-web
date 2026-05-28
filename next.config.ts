@@ -40,10 +40,23 @@ const SECURITY_HEADERS = [
     key:   "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://hcaptcha.com https://*.hcaptcha.com",
-      "style-src 'self' 'unsafe-inline'",
+      // Analytics / ads pixels — keep this list in sync with the env-driven
+      // tracking pixels wired into <head> (Google Ads, GA4, Meta Pixel, MS
+      // Clarity, Cloudflare beacon, LINE Tag). Missing entries flood the
+      // browser console with CSP violations even though the page still works.
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://*.doubleclick.net https://googleads.g.doubleclick.net https://hcaptcha.com https://*.hcaptcha.com https://www.clarity.ms https://*.clarity.ms https://connect.facebook.net https://*.facebook.net https://static.cloudflareinsights.com https://*.line-scdn.net https://translate.google.com https://translate.googleapis.com",
+      // Legacy `member/include/header.php` references external stylesheets
+      // from Google Fonts (Prompt) + cdnjs (intl-tel-input + font-awesome
+      // icons). The protected-portal layout still <link>s them — until
+      // those references are removed (Phase C polish, post-1:1), allow
+      // their origins here so the browser stops console-spamming with
+      // CSP violations on every protected page.
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
       "img-src 'self' data: blob: https:",
-      "font-src 'self' data:",
+      // fonts.gstatic.com — Google Fonts serves CSS from googleapis but
+      // the actual woff/woff2 font files come from gstatic. translate.googleapis.com
+      // serves the Google Translate widget's font assets.
+      "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com",
       "connect-src 'self' https: wss:",
       "frame-src 'self' https://www.google.com https://hcaptcha.com https://*.hcaptcha.com https://www.youtube.com https://www.youtube-nocookie.com",
       "frame-ancestors 'self'",
@@ -59,16 +72,29 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname),
   },
-  // Next 16 Server Actions default body limit = 1 MB. Admin file-upload forms
-  // accept up to 5 MB images (cover photos · slip uploads · driver photos —
-  // per per-form client-side validation), and phone-shot HEIC files routinely
-  // land at 8-12 MB. Bumping to 10 MB matches what the storage helper allows
-  // and prevents the silent "Body exceeded 1 MB limit" 500 ภูม hit on
-  // /admin/forwarders/new (2026-05-27 · pre-existing config gap since
-  // Wave 12-C built the cover-upload modal).
+  /**
+   * Server Actions default body limit (Next 16) = 1 MB.
+   *
+   * Bumped to 12 MB to cover ALL upload paths:
+   *   - Admin file-upload forms — cover photos · slip uploads · driver
+   *     photos. Per-form client-side validation caps at 5 MB but phone-
+   *     shot HEIC files routinely land at 8-12 MB. Fixed the silent
+   *     "Body exceeded 1 MB limit" 500 ภูม hit on /admin/forwarders/new
+   *     (2026-05-27 Wave 23 P0 · pre-existing config gap since Wave 12-C
+   *     built the cover-upload modal).
+   *   - Juristic register Step-3 uploads — ภพ20 + ใบรับรองบริษัท +
+   *     บัตรประชาชนกรรมการ (validator MAX_SIZE = 10 MB · see
+   *     actions/auth.ts `uploadJuristicDoc`). Without this limit, the
+   *     request body is blocked at the platform layer BEFORE the action
+   *     even runs — looked like "stuck on click" in prod (2026-05-25
+   *     P0 #4 survived the requireGuest() + resume-flow fixes).
+   *
+   * 12 MB chosen so both upload caps (5 MB + 10 MB) have safety margin
+   * for multipart overhead.
+   */
   experimental: {
     serverActions: {
-      bodySizeLimit: "10mb",
+      bodySizeLimit: "12mb",
     },
   },
   images: {

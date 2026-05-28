@@ -46,15 +46,15 @@ now** (deferred, *not cancelled*). Your work is **Phase B backend**.
 
 ## 🟢 Where the project is now
 
-- 🟢 **Phase A — DONE (data loaded).** Legacy `pcsc_main` is migrated into
-  Supabase **dev + prod**: 117 `tb_*` tables created, 114 business tables
-  loaded (~8,898 customers · orders · wallets · ตู้ · forwarders · receipts ·
-  the `userpass` login hashes), `PCS`→`PR` rebrand applied, RLS on. Migrations
-  `0081`-`0083` + `0087` on `dave`. **Phase B is fully GO** — merge `dave`,
-  build on the live schema + real data (develop against dev
-  `pprrlabgebrnocthwdmg`). The 3 oversized log tables (`tb_web_hs` ·
-  `tb_history_key` · `tb_history`) are created **empty** — backfilled after the
-  Supabase Pro upgrade; don't depend on their rows yet.
+- 🟢 **Phase A — ✅ FULLY DONE.** Legacy `pcsc_main` migrated into Supabase
+  **dev + prod**: **all 117 `tb_*` tables loaded** (~8,898 customers · orders ·
+  wallets · ตู้ · forwarders · receipts · the `userpass` login hashes),
+  `PCS`→`PR` rebrand applied, RLS on. Migrations `0081`-`0083` + `0087` on
+  `main`. **The 3 oversized log tables** (`tb_web_hs` · `tb_history_key` ·
+  `tb_history`) **are backfilled** post-ก๊อต's Supabase Pro upgrade — they hold
+  real rows now, depend on them. **Your customer image upload** to Supabase S3
+  production (`pcsracgo/public/member`) on 2026-05-24 closed Phase A storage
+  parity. Develop against dev `pprrlabgebrnocthwdmg`; prod is `yzljakczhwrpbxflnmco`.
 - 🟢 **Phase B — wave 1 integrated.** Customer 9-icon launchpad · customer
   order flow · **admin per-role RBAC sidebar + live-count badges** · **admin
   container `tb_cnt` payment ledger** · your legacy-auth bridge — all on
@@ -106,11 +106,15 @@ schema — your cargo-domain expertise is the QC the agents can't self-do.
    [`legacy-fidelity-check`](../../.claude/skills/legacy-fidelity-check/SKILL.md)
    skill; flag gaps to เดฟ.
 
-**Migration numbering:** files `0001`-`0087` exist (`0065` is a gap).
+**Migration numbering:** files `0001`-`0111` exist (`0065` is a gap).
 `0081`-`0083` = the Phase-A legacy schema; `0084`-`0086` = your booking/
-credit-note/chat batch (frozen for Phase C); `0087` = the
-`v_pcs_migration_status` security fix. Next free for new Phase-B work =
-**`0088`**. Sequencing → [`runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md) §9.
+credit-note/chat batch; `0087` = the `v_pcs_migration_status` security fix;
+`0089`-`0090` + `0095`-`0103` = member-code refinements (sequence drift /
+numeric-pad collisions); `0101` = LINE Notify per-user OAuth (Gap #3);
+`0104`-`0106` = shop-wallet + LINE Notify dispatch; `0108` = PCS legacy hot
+indexes (perf); `0109`-`0111` = payment slip / reconciliation / invoice
+adjustments. **Next free for new work = `0112`.** Sequencing →
+[`runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md) §9.
 
 **Your 6 Phase-B open questions — ✅ answered** (เดฟ · 2026-05-18) →
 [`research/poom-d1-open-questions.md`](../research/poom-d1-open-questions.md).

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { legacyMemberUrl } from "@/lib/legacy-image";
 import { resolveSalesAgent } from "../team-map";
 import { nameStatusUserPay, numberFormat } from "../helpers";
 
@@ -235,7 +236,7 @@ export default async function SalesHistoryPage() {
                                         {row.status === "3" && (
                                           <a
                                             className="image-popup-vertical-fit el-link"
-                                            href={`https://pcscargo.co.th/member/storage/slip/${row.imagesSlip ?? ""}`}
+                                            href={legacyMemberUrl(`storage/slip/${row.imagesSlip ?? ""}`)}
                                           >
                                             ดูสลิป
                                           </a>

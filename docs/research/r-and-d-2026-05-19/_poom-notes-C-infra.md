@@ -46,7 +46,7 @@ rule now, every Phase-B PR fights it. **Defer §3.3 to Phase C** (post-port).
 | §3.4 `partnerFetch()` wrapper | 🟢 During Phase-B | Hand-rolled, cheap, lifts all partner calls together. Day-1 dependency for MOMO sync. |
 | §3.3 admin-client triage + ESLint | ⚪ Phase-C | Conflicts with the coexistence pattern (§1). Park it. |
 | §3.12 RLS integration tests | 🟡 During Phase-B (week 3) | The pre-D1 W-1 keystone is on `profiles`/`wallet_transactions`/etc — NOT on `tb_*`. The RLS test harness needs to cover BOTH schemas during transition. |
-| §3.5 Storage lifecycle | 🟡 Before ก๊อต's legacy image fetch | ก๊อต has "fetch the customer image/file storage from แต้ม" on his ADR-0017 list. Lifecycle policy + cost cron MUST land before — else slips/forwarder-covers double overnight with no ceiling. |
+| §3.5 Storage lifecycle | 🟡 ASAP (the image fetch already happened) | ✅ Legacy image fetch DONE — ภูม uploaded `pcsracgo/public/member` to Supabase S3 prod 2026-05-24. Storage size already jumped; lifecycle policy + cost cron now needed *after the fact* (still in scope — slips/forwarder-covers will continue accumulating). |
 | §3.6 caching layer | ⚪ Phase-C | Public landing pages aren't on the Phase-B critical path. |
 | §3.7 SMS failover | ⚪ Phase-C | Not blocking; revisit if SMS budget tightens. |
 | §3.9 Webhook signature framework | 🟡 When MOMO webhook spec lands | Phase-C-ish but cheap to land. |

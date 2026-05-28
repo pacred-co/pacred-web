@@ -119,8 +119,8 @@ export async function updatePasswordAction(
   const pcsLogged = passTam(userPass2);
   await admin
     .from("tb_users")
-    .update({ userpass: userPass2, pcs_logged: pcsLogged })
-    .eq("userid", memberCode);
+    .update({ userPass: userPass2, pcs_logged: pcsLogged })
+    .eq("userID", memberCode);
 
   // account-settings.php L29 — $sweetalert = 'sPass'
   return { sweetalert: "sPass" };

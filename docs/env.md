@@ -283,6 +283,25 @@ You don't set these locally; in `.env.example` they have empty values + a commen
 
 ---
 
+## 9.6 Server Action encryption key 🔴 (set ONCE in Vercel, never rotate)
+
+| Var | Where set | What breaks if unset |
+|---|---|---|
+| `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` | Vercel project env (production + preview) | every deploy regenerates the key → all active customer tabs with mid-flow forms (juristic-register Step 2/3, address modals, etc.) get a "phantom hang" on submit because the client's encrypted action-ID was minted with the OLD key |
+
+**Generate once with:**
+```bash
+openssl rand -base64 32
+```
+
+Paste the resulting base64 string into Vercel → Project → Settings → Environment Variables → `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` (apply to Production + Preview). **Never change it after that** — rotating mid-life invalidates every customer's open tab the moment they next submit.
+
+**Why this matters:** Next.js encrypts each Server Action reference (`<form action={...}>` and `useTransition(() => action(...))`) with this key at build time. The client bundle carries that encrypted ID; the server decrypts it on receipt of the POST. Without a stable key, every deploy = new key = the client's old ID is gibberish to the new server. The server returns a 5xx that the client's `startTransition` swallows silently — leaving the button forever in `pending=true`.
+
+Captured 2026-05-25 P0 #5 — the [`/register` Step 2 hang](learnings/nextjs-16-quirks.md#2026-05-25-2nd---no-NEXT_SERVER_ACTIONS_ENCRYPTION_KEY--every-deploy-breaks-active-tabs) right after the P0 #4 deploy fits this exactly. Hard-refresh is the user-side workaround; setting this env is the systemic fix.
+
+---
+
 ## 10. Yuan Rate Fallback ⚪
 
 | Var | Default |

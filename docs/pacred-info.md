@@ -3,7 +3,7 @@
 > **Authoritative copy** of company identity — legal name, tax ID, slogan, addresses, phones, emails, brand handles.
 > Code consumers (footer, invoice/receipt PDFs, JSON-LD, email signatures, FAQ) **MUST** import from [`components/seo/site.ts`](../components/seo/site.ts) — never hardcode.
 
-Last updated: 2026-05-17 evening (T-G3 3/5 DONE: bank ✅ · PromptPay ✅ · gateway ⚠️ Omise→Xendit+K-Biz+K-Shop change)
+Last updated: 2026-05-25 (post-org-shift roster — full per-department directory from เดฟ; correction: `066-131-0253` is **NOT** legacy — it's แนท's new Sales line. Retires `066-090-1217` (พลอย old CS) · `099-444-9978` (เรด้าห์ old) · `066-125-3007` (legacy "Sales primary"))
 
 ---
 
@@ -75,17 +75,49 @@ Last updated: 2026-05-17 evening (T-G3 3/5 DONE: bank ✅ · PromptPay ✅ · ga
 
 ## ☎️ Phones
 
+### Customer-facing constants (in `CONTACT`)
+
 | Purpose | Number (display) | Intl format | Code |
 |---|---|---|---|
 | **Company main** (footer / invoice / legal) | 02-421-3325 | +6624213325 | `CONTACT.phoneCompany(Display)` |
-| **Sales primary** (วิน) | 066-125-3007 | +66661253007 | `CONTACT.phoneSalesDisplay[0]` |
-| **Sales secondary** | 066-125-3006 | +66661253006 | `CONTACT.phoneSalesDisplay[1]` |
-| **Customer Service** (พลอย — CS+DOCS coordinated) | 066-090-1217 | +66660901217 | `CONTACT.phoneCs(Display)` |
-| **Default phone** (= sales primary, back-compat) | 066-125-3007 | +66661253007 | `CONTACT.phone(Display)` |
+| **Default phone** (= Sales primary = พี) | 061-779-9299 | +66617799299 | `CONTACT.phone(Display)` |
+| **Customer Service** (พลอย — CS+DOCS coordinated) | 062-603-4456 | +66626034456 | `CONTACT.phoneCs(Display)` |
+| **Sales reps array** (รวม 4 named) | `["061-779-9299","099-253-1415","066-125-3006","066-131-0253"]` | — | `CONTACT.phoneSalesDisplay` |
+
+### Full org directory (in `STAFF` — per department, snapshot 2026-05-25)
+
+| Dept | Person | Phone | Code |
+|---|---|---|---|
+| **Sales** | พี | 061-779-9299 | `STAFF.sales[0]` |
+| **Sales** | เรด้าห์ | 099-253-1415 | `STAFF.sales[1]` |
+| **Sales** | เมย์ | 066-125-3006 | `STAFF.sales[2]` |
+| **Sales** | แนท *(new line — old `02-421-3325` was just the company main)* | 066-131-0253 | `STAFF.sales[3]` |
+| **Pricing** | เว็บ | 062-602-8456 | `STAFF.pricing[0]` |
+| **Doc** | วิน *(was "Sales primary" pre-2026-05-25)* | 062-603-0456 | `STAFF.doc[0]` |
+| **Doc** | กริ้ง | 080-058-8746 | `STAFF.doc[1]` |
+| **Doc** | เวฟ | 062-603-8456 | `STAFF.doc[2]` |
+| **CS** | **พลอย** *(new line — old `066-090-1217` retired)* | **062-603-4456** | `STAFF.cs[0]` |
+| **CS** | อ้อน | 099-435-9535 | `STAFF.cs[1]` |
+| **Acc** | เจน | 081-160-9304 | `STAFF.acc[0]` |
+| **Acc** | ออม | 063-210-2537 | `STAFF.acc[1]` |
+| **Mkt** | เดฟ | — *(DM only — no direct line yet)* | `STAFF.mkt[0]` |
+| **Mkt** | ภูมิ | 092-131-3786 | `STAFF.mkt[1]` |
+| **Mkt** | ปอนด์ | 092-131-3788 | `STAFF.mkt[2]` |
+| **HR** | แวม | 066-131-4733 | `STAFF.hr[0]` |
+
+> **Pending HR confirm** (omitted from `STAFF` until names are known):
+> - Sales rep `099-234-5196`
+> - Pricing rep `080-030-4257`
 
 > **CS-DOCS workflow** (per เดฟ brief): CS รับสาย → ประสาน DOCS → DOCS คุย freight/carrier/customs → return CS → ลูกค้า. Both share `docs@pacred.co` inbox.
 
-> **Legacy numbers to scrub** (post-API-switchover): `066-131-0253` (old default) · `02-444-7046` (PCS Cargo legacy in PDF receipts + FAQ). Tracked in [`runbook/pcs-scrub-plan.md`](runbook/pcs-scrub-plan.md).
+> **Legacy numbers retired 2026-05-25 — do not reuse**:
+> - `066-090-1217` (พลอย CS — replaced by `062-603-4456`)
+> - `099-444-9978` (เรด้าห์ Sales — replaced by `099-253-1415`)
+> - `066-125-3007` (legacy "Sales primary" — not in new roster)
+> - `02-444-7046` (PCS Cargo holdover in PDF receipts + FAQ — tracked in [`runbook/pcs-scrub-plan.md`](runbook/pcs-scrub-plan.md))
+
+> **⚠️ `066-131-0253` correction (2026-05-25):** previously mislabeled as "legacy default"; it's actually **แนท's new Sales line**. Existing hardcodes across `warehouses/thailand` · `about` · `faq` · `footer` · `floating-tabs` · `clearance-promo` · `article-content` · `messages/*.json` are **still valid** — they happen to display แนท's line, not a stale legacy. The L-contact-refactor backlog migrates them to import from `STAFF.sales[3].phone` for SOT consistency.
 
 ---
 
@@ -132,15 +164,19 @@ Last updated: 2026-05-17 evening (T-G3 3/5 DONE: bank ✅ · PromptPay ✅ · ga
 
 ---
 
-## 🧑‍💼 Sales reps (current — 3 reps)
+## 🧑‍💼 Customer-facing sales carousel (5 cards as of 2026-05-25)
 
-> Per [`lib/booking-data.ts`](../lib/booking-data.ts) `SALES_CARDS_DATA`. All 3 currently route to main Pacred OA. Per-rep LINE channel = future enhancement (Phase I marketing).
+> Curated subset of `STAFF` shown on landing pages. Source-of-truth is [`components/sections/contact-sales.tsx`](../components/sections/contact-sales.tsx) `SALES`; mirrored by [`lib/booking-data.ts`](../lib/booking-data.ts) `SALES_CARDS_DATA` (5 reps · `personKey: 'win' | 'nat' | 'ploy' | 'redar' | 'pee'`) + the smaller 3-card variants (`sales-carousel.tsx` · `purchase-banner.tsx` · `clearance-banner.tsx` · `import-export-banner.tsx`) which show `วิน / แนท / พลอย`. All currently route to main Pacred OA; per-rep LINE channels = future enhancement (Phase C marketing).
 
-| Name | Phone | Slogan / specialty |
-|---|---|---|
-| **วิน** | 066-125-3007 | นำเข้าทุก Port ทุก Term ปิดดีลให้จบในที่เดียว |
-| **แนท** | 02-421-3325 *(uses company line — confirm with owner)* | นำเข้าสั่งซื้อจีน ทุกแพลตฟอร์ม ครบจบในที่เดียว |
-| **พลอย** | 066-090-1217 *(also CS lead)* | เคลียร์สินค้าติดด่าน เร็ว ปลอดภัย การันตีจบ |
+| Name | Dept (org) | Phone | Tagline (carousel role) |
+|---|---|---|---|
+| **วิน** | Doc | 062-603-0456 | Freight Specialist — นำเข้าทุก Port ทุก Term ปิดดีลให้จบในที่เดียว |
+| **แนท** | Sales | **066-131-0253** | China Cargo Expert — นำเข้าสั่งซื้อจีน ทุกแพลตฟอร์ม ครบจบในที่เดียว |
+| **พลอย** | CS | **062-603-4456** | Customs Specialist — เคลียร์สินค้าติดด่าน เร็ว ปลอดภัย การันตีจบ |
+| **เรดาห์** | Sales | **099-253-1415** | Air Freight Specialist — ไกลแค่ไหนก็เหมือนใกล้ ใส่ใจทุกรายละเอียด |
+| **พี** | Sales | 061-779-9299 | Payment Specialist — ส่งมอบความไว้วางใจ (ฝากโอนเงินจีน) |
+
+> The carousel role ("Freight Specialist" etc.) is presentation-only — the org dept ("Doc" / "CS") is the source of truth. วิน + พลอย still appear on customer surfaces because their pre-org-shift specialisms are still customer-facing (FCL/LCL clearance · customs door-clearance). When ad campaigns target a specialism, set `<ContactSales featuredName="…" />` accordingly (e.g. `featuredName="พลอย"` on `/customs-clearance-shipping-suvarnabhumi`).
 
 ---
 

@@ -65,8 +65,9 @@ type WithdrawalDetail = {
 };
 
 type ItemRow = {
-  id:                  string;
-  accrual_id:          string;
+  id:                       string;
+  commission_accrual_id:    string;
+  included_amount_thb:      number;
   accrual: {
     source_kind:        SourceKind;
     source_ref:         string;
@@ -116,8 +117,8 @@ export default async function MyWithdrawalDetailPage({
   const { data: itemsRaw, error: itemsRawErr } = await supabase
     .from("commission_withdrawal_items")
     .select(`
-      id, accrual_id,
-      accrual:commission_accruals!accrual_id (
+      id, commission_accrual_id, included_amount_thb,
+      accrual:commission_accruals!commission_accrual_id (
         source_kind, source_ref, base_thb, accrued_amount_thb, accrued_at
       )
     `)
@@ -232,7 +233,7 @@ export default async function MyWithdrawalDetailPage({
                     {it.accrual ? thb(Number(it.accrual.base_thb)) : "—"}
                   </td>
                   <td className="px-3 py-2 text-right font-mono text-xs font-bold">
-                    {it.accrual ? thb(Number(it.accrual.accrued_amount_thb)) : "—"}
+                    {thb(Number(it.included_amount_thb))}
                   </td>
                   <td className="px-3 py-2 text-xs text-muted">
                     {it.accrual ? new Date(it.accrual.accrued_at).toLocaleDateString("th-TH") : "—"}
@@ -252,6 +253,25 @@ export default async function MyWithdrawalDetailPage({
           <p className="text-[10px] text-muted">เก็บที่: <span className="font-mono">{w.slip_storage_path}</span></p>
         </section>
       )}
+
+      {/* PDF download */}
+      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
+        <h2 className="font-bold text-sm mb-2">📄 ใบสำคัญรับเงินค่าคอม</h2>
+        <a
+          href={`/api/commission-withdrawal/${w.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block rounded-lg bg-primary-600 px-4 py-2 text-xs font-bold text-white hover:bg-primary-700"
+        >
+          ⬇️ ดาวน์โหลด PDF
+          {Number(w.wht_amount_thb) > 0 && " (มีใบ 50 ทวิ)"}
+        </a>
+        <p className="mt-2 text-[10px] text-muted">
+          {Number(w.wht_amount_thb) > 0
+            ? "ใบสำคัญฯ มีแนบใบรับรองการหักภาษี ณ ที่จ่าย (50 ทวิ) ด้านในเอกสาร"
+            : "ยอดไม่ถึงเกณฑ์หัก ณ ที่จ่าย — ไม่มีใบ 50 ทวิ"}
+        </p>
+      </section>
 
       <p className="text-[10px] text-muted">
         💡 รายการนี้เป็น read-only — ติดต่อ super/accounting หากต้องการแก้ไข

@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { legacyMemberBase } from "@/lib/legacy-image";
 import { resolveSalesAgent } from "../../team-map";
 import { fStatusBadge, nameStatusUserPay, numberFormat } from "../../helpers";
 
@@ -234,9 +235,10 @@ export default async function SalesHistoryDetailPage({
     });
   }
 
-  // Legacy storage base — the slip / file links are absolute legacy
-  // URLs (faithful, scrub-safe per the runbook §9.2).
-  const STORAGE = "https://pcscargo.co.th/member/storage";
+  // Legacy `member/storage/` base — resolved via the Supabase mirror
+  // (ภูม upload 2026-05-24, see lib/legacy-image.ts). Customer-visible —
+  // NEVER hardcode pcscargo.co.th.
+  const STORAGE = `${legacyMemberBase()}/storage`;
 
   return (
     <div className="pcs-legacy">

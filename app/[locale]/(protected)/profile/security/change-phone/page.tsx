@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createClient } from "@/lib/supabase/server";
-import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { ChangePhoneForm } from "./change-phone-form";
 
@@ -51,7 +50,6 @@ export default async function ChangePhonePage() {
           )}
         </div>
       </main>
-      <Footer />
     </>
   );
 }

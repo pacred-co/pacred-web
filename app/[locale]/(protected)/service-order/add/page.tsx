@@ -1,7 +1,24 @@
 import { redirect } from "next/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 import { Link } from "@/i18n/navigation";
+import { legacyMemberUrl } from "@/lib/legacy-image";
+import {
+  BulkActionsProvider,
+  BulkCancelButton,
+  BulkPayBar,
+  RowCancelButton,
+  RowCheckbox,
+} from "./service-order-bulk-actions";
+// D1 fidelity §4 — the link-paste product search panel. Closes the
+// "shops.php had a paste-a-link search box; Pacred only had manual
+// entry" gap called out in docs/research/d1-fidelity-customer.md §4.
+// Rendered above the order list so the customer's first instinct on
+// arriving at /service-order/add is the legacy "paste a 1688/taobao
+// link" workflow, not the order-history table.
+import { LinkPasteSearch } from "./link-paste-search";
 
 /**
  * รายการฝากสั่งซื้อสินค้า — `/service-order/add` route.
@@ -84,17 +101,18 @@ function numberLimit(limit: number): string {
 
 // ── Legacy helper: statusOrderBadgeAll() — function.php L493-503.
 // The order-status badge + status icon (used in the "สถานะ" column).
-// The shop-N.png icons are referenced by the legacy absolute
-// https://pcscargo.co.th/... URL exactly as the legacy does.
+// The shop-N.png icons were legacy `pcscargo.co.th/member/assets/images/
+// icon/shop/`; now resolved via the Supabase mirror (ภูม upload 2026-05-24,
+// see lib/legacy-image.ts). Customer-visible — NEVER hardcode pcscargo.co.th.
 const SHOP_STATUS_BADGE: Record<
   string,
   { label: string; cls: string; icon?: string }
 > = {
-  "1": { label: "รอดำเนินการ", cls: "badge-warning", icon: "https://pcscargo.co.th/member/assets/images/icon/shop/shop-1.png" },
-  "2": { label: "รอชำระเงิน", cls: "badge-danger", icon: "https://pcscargo.co.th/member/assets/images/icon/shop/shop-2.png" },
-  "3": { label: "สั่งสินค้า", cls: "badge-info", icon: "https://pcscargo.co.th/member/assets/images/icon/shop/shop-3.png" },
-  "4": { label: "รอร้านจีนจัดส่ง", cls: "badge-primary", icon: "https://pcscargo.co.th/member/assets/images/icon/shop/shop-4.png" },
-  "5": { label: "สำเร็จ", cls: "badge-success", icon: "https://pcscargo.co.th/member/assets/images/icon/shop/shop-5.png" },
+  "1": { label: "รอดำเนินการ", cls: "badge-warning", icon: legacyMemberUrl("assets/images/icon/shop/shop-1.png") },
+  "2": { label: "รอชำระเงิน", cls: "badge-danger", icon: legacyMemberUrl("assets/images/icon/shop/shop-2.png") },
+  "3": { label: "สั่งสินค้า", cls: "badge-info", icon: legacyMemberUrl("assets/images/icon/shop/shop-3.png") },
+  "4": { label: "รอร้านจีนจัดส่ง", cls: "badge-primary", icon: legacyMemberUrl("assets/images/icon/shop/shop-4.png") },
+  "5": { label: "สำเร็จ", cls: "badge-success", icon: legacyMemberUrl("assets/images/icon/shop/shop-5.png") },
   "6": { label: "ยกเลิกออเดอร์", cls: "badge-danger" },
 };
 
@@ -229,7 +247,11 @@ export default async function ServiceOrderAddPage({
     if (status) qb = qb.eq("hstatus", status);
     return qb;
   };
-  const [cAll, cF1, cF2, cF3, cF4, cF5, cF6] = await Promise.all([
+  // tb_settings.rsdefault — the live yuan exchange rate. Fed into the
+  // LinkPasteSearch panel so the ฿ conversion next to the fetched
+  // product price matches what the rest of the page chrome shows.
+  // Wrapped into the same Promise.all so it's free latency-wise.
+  const [cAll, cF1, cF2, cF3, cF4, cF5, cF6, settingsRes] = await Promise.all([
     countQuery(),
     countQuery("1"),
     countQuery("2"),
@@ -237,6 +259,11 @@ export default async function ServiceOrderAddPage({
     countQuery("4"),
     countQuery("5"),
     countQuery("6"),
+    admin
+      .from("tb_settings")
+      .select("rsdefault")
+      .eq("id", 1)
+      .maybeSingle<{ rsdefault: number | string | null }>(),
   ]);
   const countStatusAll = cAll.count ?? 0;
   const countStatusF1 = cF1.count ?? 0;
@@ -245,6 +272,11 @@ export default async function ServiceOrderAddPage({
   const countStatusF4 = cF4.count ?? 0;
   const countStatusF5 = cF5.count ?? 0;
   const countStatusF6 = cF6.count ?? 0;
+  // 5.0 fallback matches the legacy `$rsDefault=5.0` default
+  // (calculateCart.php L86 + several other call sites) when the
+  // tb_settings row is missing / corrupt — keeps the converter
+  // still rendering a sensible ฿ estimate instead of 0.00.
+  const rsDefault = Number(settingsRes.data?.rsdefault ?? 5.0);
 
   // header.php L102 — $countShops2 = orders with hStatus=2 (รอชำระเงิน).
   // Drives the b-pay bottom bar visibility.
@@ -286,6 +318,25 @@ export default async function ServiceOrderAddPage({
       (promoRows ?? []).map((p: { promoid: number; hno: string }) => [p.hno, p.promoid]),
     );
   }
+
+  // ── Multi-select interaction support (wired to actions/service-order.ts) ──
+  // Pre-compute per-row totals + the wallet-balance precheck so the
+  // client-side b-pay bar can show a live total + a fail-fast shortfall
+  // banner without an extra round-trip. The matching server-side checks
+  // re-verify ownership / balance inside payServiceOrderFromWallet, so
+  // these numbers are display-only (not the security boundary).
+  const totalsMap = new Map<string, number>(
+    rows.map((r) => [
+      r.hno,
+      (Number(r.htotalpricechn ?? 0) + Number(r.hshippingchn ?? 0)) *
+        Number(r.hrate ?? 0) +
+        Number(r.hshippingservice ?? 0),
+    ]),
+  );
+  const payableHNos = rows.filter((r) => r.hstatus === "2").map((r) => r.hno);
+  const supabaseRLS = await createClient();
+  const walletBalance =
+    (await getWalletAvailableBalance(supabaseRLS, data.user.id)) ?? 0;
 
   return (
     <div className="pcs-legacy">
@@ -330,6 +381,19 @@ export default async function ServiceOrderAddPage({
               </div>
             ) : (
               <section>
+                {/* D1 fidelity §4 — link-paste product search.
+                    Placed ABOVE the order list because the legacy
+                    `shops.php` led with this exact box and the iconic
+                    PCS workflow is "paste link → see product → add to
+                    cart". The order-list (below) is what the customer
+                    sees AFTER they've placed orders.  See
+                    docs/research/d1-fidelity-customer.md §4 +
+                    actions/product-search.ts header. */}
+                <div className="row">
+                  <div className="col-md-12 col-sm-12">
+                    <LinkPasteSearch rsDefault={rsDefault} />
+                  </div>
+                </div>
                 <div className="row">
                   <div className="col-md-12 col-sm-12">
                     <div className="card border-black">
@@ -441,15 +505,26 @@ export default async function ServiceOrderAddPage({
                           </div>
                           <div className="hr-dashed"></div>
 
-                          {/* shops.php L898-1058 — the order table / empty state */}
+                          {/* shops.php L898-1081 — the order table + b-pay bar.
+                              Wrapped in <BulkActionsProvider> so row checkboxes,
+                              the bulk-cancel button, and the b-pay bottom bar
+                              share selection state (matches the legacy
+                              DataTables + jQuery wiring at L1101-1367 — one
+                              global $('.dt-checkboxes') namespace). */}
+                          <BulkActionsProvider
+                            payableHNos={payableHNos}
+                            totals={totalsMap}
+                          >
                           <div className="p-1 p-m-0">
                             {/* shops.php L899 — <form action="printShop/" method="GET">.
                                 printShop is now transcribed to the Pacred
                                 route /service-order/print; the form posts
-                                there (method=GET, default-locale path).
-                                TODO(server-action): wire the multi-select
-                                checkbox shim so id[] is collected before
-                                submission (legacy L1240-1253). */}
+                                there (method=GET, default-locale path). The
+                                bulk-cancel + bulk-pay interactions wire up
+                                via the wrapping <BulkActionsProvider>; the
+                                form retains the print-receipt / print-invoice
+                                submit buttons (no checkbox shim needed for
+                                those — they submit the q filter). */}
                             <form id="frm-example" action="/service-order/print" method="GET">
                               {countStatusAll > 0 ? (
                                 rows.length > 0 ? (
@@ -460,13 +535,11 @@ export default async function ServiceOrderAddPage({
                                       </div>
                                     )}
                                     <div className="text-center text-md-left">
-                                      <button
-                                        type="button"
-                                        className="btn btn-sm btn-danger waves-effect round"
-                                        id="selectCancel"
-                                      >
-                                        ยกเลิกออเดอร์รายการที่เลือก
-                                      </button>
+                                      <BulkCancelButton
+                                        cancellableHNos={rows
+                                          .filter((r) => Number(r.hstatus) <= 2)
+                                          .map((r) => r.hno)}
+                                      />
                                     </div>
                                     <div className="table-responsive pt-1 p-1">
                                       <table
@@ -475,6 +548,12 @@ export default async function ServiceOrderAddPage({
                                       >
                                         <thead className="">
                                           <tr className="text-center bg-danger2">
+                                            {/* Checkbox column — legacy DataTables
+                                                auto-added it via the responsive
+                                                plugin (L1189+). Visible only for
+                                                rows where bulk-cancel or bulk-pay
+                                                applies (hstatus <= 2). */}
+                                            <th className="all" style={{ width: "32px" }}></th>
                                             <th className="all add-text-all">ID</th>
                                             <th className="none">วันที่สร้าง</th>
                                             <th className="none">ออเดอร์เลขที่</th>
@@ -503,7 +582,7 @@ export default async function ServiceOrderAddPage({
                                                 .replace("_250x250.jpg", "");
                                               hCover = cleaned + "_150x150.jpg";
                                             } else if (cover !== "") {
-                                              hCover = "https://pcscargo.co.th/member/images/shops/" + cover;
+                                              hCover = legacyMemberUrl(`images/shops/${cover}`);
                                             } else {
                                               hCover = "/legacy/pcs/shops/default.png";
                                             }
@@ -515,6 +594,16 @@ export default async function ServiceOrderAddPage({
                                                   ? { className: "bg-danger2 anchor", id: row.hno }
                                                   : {})}
                                               >
+                                                {/* col 0 — row checkbox (legacy
+                                                    DataTables auto-injected; gated
+                                                    on hstatus<=2 — the legacy
+                                                    bulk-cancel + bulk-pay scope). */}
+                                                <td className="text-center" style={{ width: "32px" }}>
+                                                  <RowCheckbox
+                                                    hNo={row.hno}
+                                                    selectable={Number(row.hstatus) <= 2}
+                                                  />
+                                                </td>
                                                 {/* col 1 — ID */}
                                                 <td className="text-center tr1 notranslate">{row.hno}</td>
                                                 {/* col 2 — วันที่สร้าง */}
@@ -533,8 +622,9 @@ export default async function ServiceOrderAddPage({
                                                     href={`/service-order/${row.hno}`}
                                                     className="text-info"
                                                   >
-                                                    {row.hno} <ProBadge promoId={promoId} />
-                                                  </Link>
+                                                    {row.hno}
+                                                  </Link>{" "}
+                                                  <ProBadge promoId={promoId} />
                                                 </td>
                                                 {/* col 4 — ข้อมูลสินค้า */}
                                                 <td>
@@ -547,8 +637,9 @@ export default async function ServiceOrderAddPage({
                                                       href={`/service-order/${row.hno}`}
                                                       className="text-info"
                                                     >
-                                                      {row.hno} <ProBadge promoId={promoId} />
-                                                    </Link>
+                                                      {row.hno}
+                                                    </Link>{" "}
+                                                    <ProBadge promoId={promoId} />
                                                     <br />
                                                     สถานะ : <StatusBadgeAllM hStatus={row.hstatus} />
                                                     <br />
@@ -594,15 +685,11 @@ export default async function ServiceOrderAddPage({
                                                 {/* col 7 — ตัวเลือก */}
                                                 <td className="text-center">
                                                   {Number(row.hstatus) <= 2 && (
-                                                    // shops.php L1005 — onclick deleteOrder(hNo).
-                                                    // TODO(server-action): port AJAX cancelOrder.php
-                                                    // → actions/orders.ts::cancelServiceOrder, then
-                                                    // re-attach via a "use client" row-shim.
-                                                    <a href="javascript:void(0)">
-                                                      <p className="btn font-12 btn-danger btn-rounded btn-sm">
-                                                        ยกเลิกออเดอร์
-                                                      </p>
-                                                    </a>
+                                                    // shops.php L1005 — onclick deleteOrder(hNo)
+                                                    // → AJAX cancelOrder.php. Now wired to
+                                                    // actions/service-order.ts::cancelServiceOrder
+                                                    // via the <RowCancelButton> client shim.
+                                                    <RowCancelButton hNo={row.hno} />
                                                   )}
                                                   <Link href={`/service-order/${row.hno}`}>
                                                     <p className="btn font-12 btn-outline-success btn-rounded btn-sm">
@@ -717,52 +804,22 @@ export default async function ServiceOrderAddPage({
                           </div>
 
                           {/* shops.php L1059-1081 — the b-pay bottom bar.
-                              TODO(server-action): wire #select → AJAX
-                              getListPay.php → actions/orders.ts::startPayFlow
-                              + #selectCancel → getList.php →
-                              actions/orders.ts::cancelServiceOrders, then
-                              re-attach calPrice.php live-total via a
-                              "use client" shim. */}
+                              `#select` → legacy AJAX getListPay.php →
+                              POST `paymentOrder` (L246-438). Now wired to
+                              actions/service-order.ts::payServiceOrderFromWallet
+                              via the <BulkPayBar> client shim (wallet-
+                              sufficient branch, matches legacy L281-326);
+                              the legacy slip-upload top-up branch (L328-430)
+                              is out of scope on this view — customers with
+                              insufficient balance see an inline shortfall
+                              banner pointing at the wallet top-up flow,
+                              same as `pay-from-wallet-button.tsx`. */}
                           <div className="p-1 p-m-0">
                             {countShops2 > 0 && (q === "" || q === "2") && (
-                              <div
-                                className="b-pay"
-                                style={{ position: "fixed", bottom: "20px", zIndex: 999 }}
-                              >
-                                <div className="row">
-                                  <div className="col-md-6 offset-md-3" style={{ marginLeft: "9%" }}>
-                                    <div className="row">
-                                      <div className="col-3 p-05 text-center">
-                                        <input
-                                          type="checkbox"
-                                          className="dt-checkboxes check-all c6"
-                                          defaultChecked
-                                        />
-                                        <br />
-                                        เลือกทั้งหมด
-                                      </div>
-                                      <div className="col-6 p-05">
-                                        จำนวนรายการ : <span className="countPay">00</span>
-                                        <br />
-                                        <b>
-                                          ยอดชำระรวม : <span className="text-danger price-all">00000</span> บ.
-                                        </b>
-                                      </div>
-                                      <div className="col-3 p-05 text-right">
-                                        <button
-                                          type="button"
-                                          className="btn btn-color-main waves-effect round animate__animated animate__infinite animate__headShake"
-                                          id="select"
-                                        >
-                                          ชำระเงิน
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
+                              <BulkPayBar walletBalance={walletBalance} />
                             )}
                           </div>
+                          </BulkActionsProvider>
                         </div>
                       </div>
                     </div>
@@ -788,10 +845,12 @@ export default async function ServiceOrderAddPage({
  * `tb_promotion.promoid` for that order. The legacy `switch` has cases
  * 1-77 (no case 53) + a `default:` of empty — reproduced 1:1.
  *
- * Branding `PCS` → `PR` kept: the legacy promo links resolve from
- * `basePath.'../'` = `https://pcscargo.co.th/` — absolute marketing-site
- * URLs, kept verbatim (interim brand split — runbook §3 gates the
- * rename; not scrubbed here).
+ * Branding `PCS` → `PR`: the legacy promo links resolved from
+ * `basePath.'../'` = `https://pcscargo.co.th/<slug>` — REWRITTEN to the
+ * Pacred `/services/import-china?ref=<slug>` landing per pcs-scrub-plan
+ * so the customer stays inside Pacred. Original slug is preserved as
+ * the `?ref=` query string for analytics + future Pacred-hosted promo
+ * page resolution.
  */
 function ProBadge({ promoId }: { promoId: number | undefined }) {
   if (promoId == null) return null;
@@ -805,8 +864,12 @@ function ProBadge({ promoId }: { promoId: number | undefined }) {
     6: "Pro 6.6",
   };
   // function.php L1108-1177 — cases 7-77 (no 53) are LINKED badges.
-  // basePath.'../' resolves to https://pcscargo.co.th/.
-  const B = "https://pcscargo.co.th/";
+  // Legacy `basePath.'../'` resolved to `https://pcscargo.co.th/` —
+  // REWRITTEN to the Pacred /services/import-china landing per
+  // pcs-scrub-plan so the customer stays inside Pacred. The original
+  // promo slug is preserved as a `?ref=` query string for analytics +
+  // future Pacred-hosted promo page resolution.
+  const B = "/services/import-china?ref=";
   const LINKED: Record<number, { label: string; title: string; href: string }> = {
     7: { label: "Pro 6.25", title: "เรท 5.39 และ ขนส่ง 5%", href: `${B}โปรโมชัน-6-25` },
     8: { label: "Pro 7.7", title: "เรท 5.42", href: `${B}โปรโมชัน-7-7` },
@@ -887,7 +950,7 @@ function ProBadge({ promoId }: { promoId: number | undefined }) {
   const linked = LINKED[promoId];
   if (linked) {
     return (
-      <a href={linked.href} target="_blank">
+      <a href={linked.href} target="_blank" rel="noopener noreferrer">
         <span className="badge badge-vip badge-pill" title={linked.title}>
           {linked.label}
         </span>

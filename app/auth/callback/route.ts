@@ -12,7 +12,11 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const next = url.searchParams.get("next") ?? "/";
+  // Default post-OAuth destination = the customer portal launchpad, NOT the
+  // public marketing home. Migrated PCS customers + new OAuth users expect to
+  // land somewhere that says "you're signed in" — `/` is anonymous-looking.
+  // Per d1-fidelity-customer.md §2.
+  const next = url.searchParams.get("next") ?? "/dashboard";
   const errorParam = url.searchParams.get("error");
 
   if (errorParam) {

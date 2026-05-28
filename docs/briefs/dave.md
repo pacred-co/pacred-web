@@ -38,10 +38,14 @@ enhancements (the old Tier roadmap, *deferred not cancelled*).
 
 ## 🟢 Where the project is now
 
-- 🟢 **Phase A** — legacy `pcsc_main` (117 tables · 8,898 customers) business
-  data **LOADED to dev + prod Supabase**; migrations `0081`-`0083` + `0087` on
-  `dave`. *Remaining:* 3 oversized log tables + customer images — backfill
-  after the Supabase Pro upgrade (imminent).
+- 🟢 **Phase A — ✅ DONE.** Legacy `pcsc_main` (117 tables · 8,898 customers)
+  **fully loaded on dev + prod Supabase**; migrations `0081`-`0083` + `0087` on
+  `main`. Supabase Pro upgrade done (ก๊อต) → **all 117 tables including the 3
+  log tables backfilled post-Pro**; **customer image + storage files uploaded
+  to Supabase S3 production** by ภูม 2026-05-24 (`pcsracgo/public/member`).
+  Auth bridge live. *Remaining (internal, not a legacy gap):* resolve
+  rebuilt-era vs `tb_*` table-naming conflicts on prod — see CLAUDE.md §"What
+  changed 2026-05-24".
 - 🟢 **Phase B** — **wave 1 done + integrated**: customer 9-icon launchpad ·
   customer order flow · admin per-role RBAC sidebar + badges · admin container
   `tb_cnt` payment ledger · ภูม's legacy-auth bridge. Wave 1 is a *first pass* —
@@ -53,19 +57,19 @@ enhancements (the old Tier roadmap, *deferred not cancelled*).
 You're the **1:1 customer-backend lead + ปอน integrator**. ก๊อต takes the admin 1:1 lane. ภูม keeps V3 alive on Poom-pacred (UNLOCKED 2026-05-24). Concretely you:
 
 - **Own customer-portal `(protected)/*` 1:1 fidelity** — 15/24 screens transcribed; ~9 remaining (login/register fidelity check, forgot-password, regis-tam, line-notify, etc.). Drive these to done.
-- **Wire missing customer-side integrations** — TAMIT verification, LINE Notify per-user OAuth (gaps #3 + #5 in deep audit).
+- ~~**Wire missing customer-side integrations**~~ ✅ Gaps #3 (LINE Notify → LIFF + Messaging API replacement) + #5 (TAMIT was DBD lookup misroute — switched to internal `/api/dbd/[taxId]`) both closed 2026-05-27. Gap #1 (Google Sheets sync) foundation also shipped — CTT pilot DRY-RUN + Sheets v4 client + migration `0112` + cron `/api/cron/sheets-sync-ctt`; ก๊อต provisions credentials + sheet column mapping to go live.
 - **Integrate ปอน's frontend** — merge `podeng` into `dave-pacred`, run `pnpm verify`, smoke-test, push to main.
 - **Coordinate with ก๊อต** on the admin lane — agree on which routes are 1:1-ported (ก๊อต) vs V3-enhanced (ภูม merges later from Poom-pacred).
-- **Phase A close-out** — wait for ก๊อต's Supabase Pro upgrade, then backfill 3 log tables + customer images (need REALSHITDATAPCS.rar extraction).
+- ~~**Phase A close-out**~~ ✅ Phase A DONE — Pro upgrade done, 3 log tables backfilled, customer images uploaded to Supabase S3 prod by ภูม 2026-05-24, REALSHITDATAPCS.rar extracted. Only remaining: resolve prod table-naming conflicts (rebuilt-era vs `tb_*` — joint with ภูม).
 
 ## 🟡 Your pickup list (priority order, post-reset)
 
 1. **Verify the just-merged podeng work** on `dave-pacred` — `pnpm lint && pnpm build`, smoke `/dashboard` + `/wallet` + `/service-order` for the chrome rebuild side-effects, then push to main if clean. (Just merged: `d7b1758` containing `5097a2b` home polish + `fbb63fe` chrome rebuild in Tailwind.)
-2. **Gap #5 — TAMIT integration stub** — port `member/regis-tam.php` flow (~1 day · S effort). Replace the DBD/RD stub.
-3. **Gap #3 — LINE Notify per-user OAuth** — port `member/line-notify.php` + `member/api/linenotify/callback/` to Next.js Route Handlers + dispatcher cron (~3-5 days · M effort). Customer-visible.
+2. ~~**Gap #5 — TAMIT integration stub**~~ ✅ **CLOSED 2026-05-27.** The "TAMIT" label was a misnomer — `regis-tam.php` is the Thai juristic (นิติบุคคล) registration flow, already shipped as Pacred's `/register` juristic tab + `actions/auth.ts registerJuristicStep1/saveJuristicStep2/...`. The real residual gap was the **DBD tax-ID lookup was hitting `opendata.dbd.go.th/api/v1/*` directly from the client** — those endpoints were retired 2026-05-17 so every juristic signup landed in the "unavailable" branch + filled manually. Fixed by switching `register-client.tsx fetchCompany()` to call Pacred's own `/api/dbd/[taxId]` route handler, which uses the CURRENT CKAN 2.10 `datastore_search` endpoint with the WAF-bypass User-Agent + Thai-field-name encoding. Personal accounts collect no Thai national ID (legacy didn't either) — no separate ID-verification flow to port.
+3. ~~**Gap #3 — LINE Notify per-user OAuth**~~ ✅ **CLOSED via replacement** — LINE Notify service EOL'd 2025-03-31 (notify-bot.line.me end-of-service). Original port shipped then reverted (`6e852795`/`67fc018e`); replaced by **LIFF + LINE Messaging API per-user** in `af4bebe9` (task L). Live surfaces: `/line-settings` page (LIFF connect) + `actions/line-settings.ts` (linkLineAccount/disconnectLineAccount) + push via `lib/notifications/sendNotification`. Customer flow: add Pacred LINE OA friend → /line-settings → LIFF auth → `profiles.line_user_id` set → Messaging API push. Orphaned `profiles.line_notify_*` columns (migration 0101) + `notifications.delivered_line_notify_at` (0106) safe to drop in a future cleanup migration (low priority — no code reads them).
 4. **Customer screens still NOT 1:1 transcribed** — login/register fidelity check (need post-OTP-emergency verification), forgot-password, wallet-normal/wallet-credit split if owner wants legacy two-page UX.
 5. **Coordinate ก๊อต admin lane kickoff** — pick from `poom-save-point-2026-05-19-night.md` §10 top-5 admin pilots (index.php dashboard, users-search, forwarder.php, wallet family).
-6. **Phase A close-out** — once ก๊อต upgrades Supabase Pro + extracts customer images, backfill 3 log tables + reconcile 117/117 tables.
+6. **Resolve prod table-naming conflicts** (internal cleanup) — rebuilt-era vs legacy `tb_*` schemas on `yzljakczhwrpbxflnmco` need a coexistence/cleanup plan. Joint with ภูม. *(Replaces the old Phase-A close-out item — Phase A is now DONE.)*
 7. **Retire pre-D1 scaffolding** — `0067_pcs_customer_migration.sql` + `actions/admin/pcs-migration.ts` + `u2-1-pcs-customer-migration.md` superseded by Phase A. Decide when rebuilt `profiles`-era schema retires.
 
 ## ✋ Non-collision rule
@@ -100,9 +104,9 @@ decision-heavy / partner / security items to ก๊อต — don't do everythin
 
 | Blocked on | Alternative work |
 |---|---|
-| ก๊อต's Supabase Pro upgrade not done → can't backfill | Phase B-0: fidelity-verify wave 1; sequence the next wave from the gap maps |
-| Waiting on แต้ม's customer image files | Backfill the 3 log tables once Pro is live; integrate staged `dave` Phase-B work |
-| No teammate push to integrate | Spawn the next Phase-B wave agent; retire the superseded `0067` scaffolding |
+| ก๊อต hasn't started admin 1:1 lane yet | Spawn the next Phase-B customer wave agent; advance gap #5 TAMIT regis-tam port; sequence the next wave from the gap maps |
+| ภูม busy on Poom-pacred V3 — no V3 PR to integrate | Phase-B customer-portal 1:1 transcription (the ~9 remaining screens); fidelity-verify wave 1 |
+| No teammate push to integrate | Spawn the next Phase-B wave agent; retire the superseded `0067` scaffolding; resolve the prod table-naming conflict |
 
 **Note back to ก๊อต when:** the owner sends creds, a partner needs a decision,
 or a security concern surfaces.

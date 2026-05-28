@@ -1,5 +1,17 @@
 # 🏠 ภูม — Save-point 2026-05-19 (B-auth shipped · Wave 1 merged + verified · → company machine)
 
+> ⚠️ **HISTORICAL SNAPSHOT (2026-05-19).** Status claims here are point-in-time
+> from that date. Notably SUPERSEDED as of 2026-05-24:
+> - "3 oversized log tables wait for the Pro upgrade" → ✅ Pro upgrade done,
+>   log tables backfilled.
+> - "Next free for new Phase-B work = `0088`" → actually `0112` now (Pacred
+>   shipped through `0111`).
+> - Draft `0088_pcs_profiles_backfill` / `0088_admin_role_triple` proposals
+>   here did not ship as `0088` (slot used / repurposed).
+>
+> Live status → [`docs/runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md)
+> + [`docs/UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) + role briefs.
+
 > **Save snapshot.** ภูม resuming on the company computer next session.
 > Full Phase-B plan + Wave-1 analysis + resume guide + handoff to เดฟ.
 > Previous: [`poom-save-point-2026-05-18-evening.md`](poom-save-point-2026-05-18-evening.md).

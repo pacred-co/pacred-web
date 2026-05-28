@@ -39,9 +39,9 @@ export interface SalesCardData extends Omit<SalesCard, 'slogan' | 'alt' | 'butto
 // personKey + same i18n key in `salesTeam.*`).
 export const SALES_CARDS_DATA: SalesCardData[] = [
   { personKey: 'win',   name: 'วิน',    phone: '062-603-0456', image: '/images/Character_Icon/win01.png',   link: LINE_OA.shortUrl },
-  { personKey: 'nat',   name: 'แนท',    phone: '02-421-3325',  image: '/images/pacred-logo-red.png',        link: LINE_OA.shortUrl },
-  { personKey: 'ploy',  name: 'พลอย',   phone: '066-090-1217', image: '/images/Character_Icon/ploy01.png',  link: LINE_OA.shortUrl },
-  { personKey: 'redar', name: 'เรดาห์', phone: '099-444-9978', image: '/images/Character_Icon/redar01.png', link: LINE_OA.shortUrl },
+  { personKey: 'nat',   name: 'แนท',    phone: '066-131-0253', image: '/images/pacred-logo-red.png',        link: LINE_OA.shortUrl },
+  { personKey: 'ploy',  name: 'พลอย',   phone: '062-603-4456', image: '/images/Character_Icon/ploy01.png',  link: LINE_OA.shortUrl },
+  { personKey: 'redar', name: 'เรดาห์', phone: '099-253-1415', image: '/images/Character_Icon/redar01.png', link: LINE_OA.shortUrl },
   { personKey: 'pee',   name: 'พี',     phone: '061-779-9299', image: '/images/Character_Icon/pee01.png',   link: LINE_OA.shortUrl },
 ];
 

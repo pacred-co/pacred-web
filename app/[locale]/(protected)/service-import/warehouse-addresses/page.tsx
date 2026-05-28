@@ -1,4 +1,3 @@
-import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { Home, ChevronRight, Warehouse, Info, ExternalLink } from "lucide-react";
@@ -127,7 +126,6 @@ export default async function WarehouseAddressesPage() {
           </div>
         </div>
       </main>
-      <Footer />
     </>
   );
 }

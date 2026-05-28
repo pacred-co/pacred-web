@@ -3,6 +3,7 @@ import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { BANK } from "@/components/seo/site";
+import { LegacyDepositForm } from "../wallet/deposit/legacy-deposit-form";
 
 /**
  * Customer "กระเป๋าสตางค์เครดิต" (credit wallet) screen — a FAITHFUL 1:1
@@ -65,9 +66,12 @@ import { BANK } from "@/components/seo/site";
  *
  * ── FLAGGED — not strictly 1:1 (documented, never silently diverged) ──
  *  1. wallet-credit.php L4-51 (the deposit POST handler — INSERT
- *     tb_wallet_hs + move_uploaded_file + LINE Notify) is a render-time
- *     write — NOT reproduced here (Server Components must stay pure).
- *     Belongs to a Server Action: TODO(server-action).
+ *     tb_wallet_hs + move_uploaded_file + LINE Notify) → wired via the
+ *     <LegacyDepositForm kind="credit" /> Client Component →
+ *     actions/wallet.ts::submitLegacyWalletDeposit (same INSERT into
+ *     tb_wallet_hs with `wusercredit='1'` so the row surfaces in the
+ *     credit-history tab, slip → `slips` bucket, LINE Notify replaced
+ *     by in-app notify because LINE Notify EOL'd Apr 2025).
  *  2. The #wallet-add deposit modal markup IS transcribed 1:1, but its
  *     jQuery behaviours (Bootstrap .modal('show') triggered by
  *     `?page=='add'`, dropify file input, PromptPay QR-code generation,
@@ -404,9 +408,11 @@ export default async function WalletCreditPage() {
                   dropify file input, PromptPay QR-code generation,
                   SweetAlert result popups) need client JS not present
                   here — the modal renders statically.
-                  TODO(server-action): wire the addData POST handler
-                  (L4-51) — INSERT tb_wallet_hs + move_uploaded_file +
-                  LINE Notify. */}
+                  The addData POST handler (wallet-credit.php L4-51) is
+                  wired via the <LegacyDepositForm kind="credit"/> Client
+                  Component → actions/wallet.ts::submitLegacyWalletDeposit
+                  (INSERT tb_wallet_hs with wusercredit='1' + slip upload
+                  to `slips` bucket + in-app notify). */}
               <div
                 id="wallet-add"
                 className="modal fade in"
@@ -494,114 +500,7 @@ export default async function WalletCreditPage() {
                           </div>
                         </div>
                       </div>
-                      <form
-                        className="form-horizontal"
-                        method="POST"
-                        action="/wallet-credit"
-                        autoComplete="off"
-                        encType="multipart/form-data"
-                      >
-                        <div className="form-group pt-1">
-                          <div className="">
-                            <label
-                              className="form-control-label"
-                              htmlFor="amount"
-                            >
-                              จำนวนเงิน (บาท)
-                            </label>
-                            <input
-                              className="form-control form-control-lg text-right"
-                              placeholder="00.00"
-                              name="amount"
-                              id="amount"
-                              type="number"
-                              min="0.01"
-                              max="1000000"
-                              step="0.01"
-                              required
-                            />
-                            <div className="text-center">
-                              <button
-                                type="button"
-                                className="btn btn-sm btn-outline-danger round m-1"
-                                id="myBtn"
-                              >
-                                สร้าง QR Code ชำระเงิน
-                              </button>
-                            </div>
-                          </div>
-                          <div className="mb-1 qrcodeMain text-center">
-                            <div
-                              id="qrcode"
-                              style={{
-                                textAlign: "center",
-                                width: "250px",
-                                height: "250px",
-                              }}
-                            ></div>
-                            <div style={{ textAlign: "center", marginTop: "10px" }}>
-                              เลขที่บัญชี : <span>{BANK.accountNumber}</span>
-                            </div>
-                            <div style={{ textAlign: "center" }}>
-                              พร้อมเพย์ :{" "}
-                              <span id="pp-id-show2">0-1055-64077-71-6</span>
-                            </div>
-                            <h5 className="text-center">
-                              บริษัท แพคเรด (ประเทศไทย) จำกัด
-                            </h5>
-                            <div
-                              id="amount-show"
-                              style={{ textAlign: "center" }}
-                            ></div>
-                            <div className="text-right">
-                              {/* Legacy linked out to pcscargo.co.th/การเติมเงิน/
-                                  — rewritten to internal /wallet/deposit so
-                                  the customer stays inside Pacred. */}
-                              <a
-                                href="/wallet/deposit"
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                ดูวิธีการเติมเงิน
-                              </a>
-                            </div>
-                          </div>
-                          <div className="mb-1">
-                            <label
-                              className="form-control-label"
-                              htmlFor="imagesSlip"
-                            >
-                              หลักฐานการโอน (สลิปรายการ)
-                            </label>
-                            <div className="fallback">
-                              <input
-                                type="file"
-                                name="imagesSlip"
-                                className="dropify"
-                                accept="image/*"
-                                data-max-file-size="9M"
-                                required
-                              />
-                            </div>
-                          </div>
-                          <div className="modal-footer">
-                            <button
-                              type="button"
-                              className="btn btn-outline-secondary round waves-effect"
-                              data-dismiss="modal"
-                            >
-                              ยกเลิก
-                            </button>
-                            <button
-                              type="submit"
-                              className="btn btn-outline-info round waves-effect submit-wait"
-                              name="addData"
-                            >
-                              เติมเงิน
-                            </button>
-                          </div>
-                        </div>
-                      </form>
+                      <LegacyDepositForm kind="credit" />
                     </div>
                   </div>
                 </div>

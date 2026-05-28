@@ -188,3 +188,70 @@ column-for-column. The data only *looked* discontinuous because the unstyled
 screens were unreadable. **Lesson:** before "reload the DB", probe it —
 `psql … -c "SELECT count(*), max(<date>) FROM <t>"` — the pgloader load may
 already be correct, and the real bug is elsewhere (here: the chrome layer).
+
+---
+
+## 2026-05-25 — V-A5 manual invoice adjustments — Pacred safety improvement over legacy (Agent L / Sprint-12 P2.6)
+
+**What:** PORT_PLAN Part V row V-A5 ("Manual adjustment line on an invoice (±amount, reason, audited) — ends the per-cent dev tickets") shipped via migration `0109_invoice_adjustments.sql` + `actions/admin/invoice-adjustments.ts`.
+
+**Legacy state:** `pcs-realshit/public_html/member/pcs-admin/include/pages/receipt.php` + `hs-forwarder-receipt.php` + `create-f-receipt.php` — the legacy receipt/invoice flow had **no clean adjustment line**; every per-cent correction (over-collected ฿50, manual waiver, late discount) required a developer to rewrite invoice totals by hand. The chat audit (`docs/audit/chat-analysis-2026-05-16.md`) records this as a recurring staff pain point.
+
+**Pacred V-A5 design — polymorphic over invoice kinds, signed amount, mandatory reason:**
+- `invoice_adjustments(id, target_type, target_id, profile_id, amount_thb, reason, status, added_by_admin, reversed_at, reversed_by_admin, reversal_reason, created_at)`
+- `target_type` ∈ `{'forwarder', 'service_order', 'freight_invoice'}` — one table covers all 3 invoice kinds Pacred currently issues
+- `amount_thb` is SIGNED — positive = surcharge added to invoice total, negative = discount/credit
+- `reason` is REQUIRED (min 3 chars + length check at DB level)
+- `status = active | reversed`; reversed rows stay visible for full audit history but are excluded from totals
+- View `invoice_adjustment_totals` (SECURITY INVOKER) gives a per-invoice scoped sum
+- RLS: customer reads own; admin = super OR accounting (money-touching per ADR-0005 K-7 — `ops` is intentionally excluded; ops has the U2-4 cost-adjustment path for post-delivery rebills)
+
+**Distinct from U2-4 `forwarder_cost_adjustments`:**
+- U2-4 = positive-only post-delivery fees (D/O · gateway · weight rebill · customs extra · other), forwarder-specific, with wallet auto-debit "mark paid" workflow
+- V-A5 = signed manual adjustments on ANY invoice kind, no wallet move (invoice-total only), free-form reason
+
+**If you ever need to add a 4th invoice kind:** extend the `target_type` CHECK constraint + add a branch in `resolveInvoiceTarget()` (`actions/admin/invoice-adjustments.ts`). The NotifyReferenceType union also needs the new kind if you want notification deep-linking by reference_type.
+
+---
+
+## [2026-05-26] `convertIMGCHN` port copied legacy nested image path but never created the directory
+
+**Context:** ปอน rebuilt `/cart` with Tailwind (commits `c8e06e92` + `fb7939f1`) and reported "รูปบางรูปหาย" — empty-image cart rows rendered a broken-image icon. Cherry-picked her commits cleanly, then chased the missing images.
+
+**Symptom:** The legacy `convertIMGCHN($url, $size)` helper (`member/include/function.php` L1414-1437) was transcribed verbatim into `app/[locale]/(protected)/cart/page.tsx`:
+
+```ts
+function convertIMGCHN(url: string | null, size: string): string {
+  if (!url || url === "") {
+    return "/legacy/pcs/images/shops/default.png";   // ← never existed
+  }
+  // ... split + clean URL ...
+  if (u.includes("/")) { return u + size; }
+  return "/legacy/pcs/images/shops/" + u;             // ← never existed
+}
+```
+
+But `public/legacy/pcs/` only had a `shops/` subdir (with logos + default.png) — there was NO `images/shops/` subdir. So:
+- Empty `cImages` → `/legacy/pcs/images/shops/default.png` → 404
+- Bare-filename `cImages` → `/legacy/pcs/images/shops/<file>` → 404
+
+The shop LOGOS (1688/taobao/tmall/nice) worked fine because `imgProvider()` (the OTHER helper, L35-44) correctly maps to `/legacy/pcs/shops/<logo>.png` (existing dir).
+
+**Root cause:** Legacy PHP's `basePath` for product images was `member/images/shops/` (separate from `member/shops/` which held the brand logos). The transcription kept the path string but the static-mount stager only copied `shops/` (logos), never `images/shops/` (product uploads). Pre-existing bug — predates ปอน's Tailwind rebuild (same paths in `a08e7290`) — surfaced visibly when her cleaner card markup let the broken icon stand out from the noisy Bootstrap markup it replaced.
+
+**Fix:** create `public/legacy/pcs/images/shops/` + copy `default.png` to it (commit `9646dbf7`). The bare-filename branch still 404s for legacy product uploads we don't host — same as legacy PCS behaviour for orphaned image filenames, so faithful to the port.
+
+**Why this matters next time:**
+- When transcribing a legacy helper VERBATIM, the path string is only half the work — the static-mount stager has to actually have the directory at the resolved path. Greppable check after any helper port:
+  ```bash
+  # for every path the helper can resolve to, the dir must exist in public/
+  grep -nE '"/legacy/[^"]+"' lib/ app/ | sort -u
+  ```
+- A bug like this stays INVISIBLE under noisy legacy Bootstrap markup (broken-image icon blends in). A clean Tailwind rebuild surfaces it because the missing image now stands out from the otherwise-clean card. **Surfacing a pre-existing bug ≠ regression** — when a teammate reports a visual bug right after their UI rebuild, check git history first before assuming they introduced it.
+- Helper-to-static-mount audit should be part of any "legacy file port" PR checklist. The faithful-port skill should add a "grep helper paths · ls every dir" gate.
+
+**Cross-links:**
+- Commit `9646dbf7` — the directory + default.png placeholder fix
+- `app/[locale]/(protected)/cart/page.tsx` L134-152 — the verbatim transcription
+- `member/include/function.php` L1414-1437 (legacy source) — original PHP helper
+- `imgProvider()` in same file L94-112 — the helper that got the path RIGHT (shop logos)

@@ -4,7 +4,6 @@ import { getMessages, getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { LocaleHtmlLang } from "@/components/locale-html-lang";
-import { FloatingTabs } from "@/components/sections/floating-tabs";
 import { JsonLd } from "@/components/seo/json-ld";
 import {
   localBusinessSchema,
@@ -127,8 +126,12 @@ export default async function LocaleLayout({
         websiteSchema(typedLocale),
         localBusinessSchema(typedLocale),
       ]} />
+      {/* `<FloatingTabs />` was previously mounted here, which leaked the
+          marketing mobile-CTA bar + LINE chat bubble into the customer
+          portal, admin, and auth pages. Moved to
+          `app/[locale]/(public)/layout.tsx` so it only renders on
+          public marketing routes. (Sprint-25, 2026-05-25.) */}
       {children}
-      <FloatingTabs />
     </NextIntlClientProvider>
   );
 }

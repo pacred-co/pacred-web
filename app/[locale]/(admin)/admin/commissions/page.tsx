@@ -179,6 +179,12 @@ export default async function AdminCommissionsPage({
             ระบบจ่ายค่าคอมล่ามจีน + Sales rep · workflow: pending → approved → paid (slip required)
           </p>
         </div>
+        <Link
+          href="/admin/commissions/tiers"
+          className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
+        >
+          ⚙️ จัดการอัตราค่าคอม (Tiers)
+        </Link>
       </header>
 
       {/* Pending accruals — top unpaid earners */}

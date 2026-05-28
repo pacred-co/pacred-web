@@ -60,12 +60,12 @@ export default async function AccountSettingsPage() {
   // account-settings screen consumes userName / userLastName / userPicture.
   const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
-    .select("username, userlastname, userpicture")
-    .eq("userid", memberCode)
+    .select("userName, userLastName, userPicture")
+    .eq("userID", memberCode)
     .maybeSingle<{
-      username: string | null;
-      userlastname: string | null;
-      userpicture: string | null;
+      userName: string | null;
+      userLastName: string | null;
+      userPicture: string | null;
     }>();
   if (userRowErr) {
     console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
@@ -74,7 +74,7 @@ export default async function AccountSettingsPage() {
   // $_SESSION['userName'] . ' ' . $_SESSION['userLastName']
   // (account-settings.php L72) — prefer the ported tb_users name,
   // fall back to the Pacred profile fields.
-  const legacyName = [userRow?.username, userRow?.userlastname]
+  const legacyName = [userRow?.userName, userRow?.userLastName]
     .filter((s): s is string => !!s && s.trim() !== "")
     .join(" ")
     .trim();
@@ -94,8 +94,8 @@ export default async function AccountSettingsPage() {
   // prefer the Pacred avatar_url when set.
   const userPicture =
     profile.avatar_url ||
-    (userRow?.userpicture
-      ? `/legacy/pcs/images/users/${userRow.userpicture}`
+    (userRow?.userPicture
+      ? `/legacy/pcs/images/users/${userRow.userPicture}`
       : "/legacy/pcs/images/users/user.jpg");
 
   return (

@@ -15,8 +15,8 @@ const LINE_URL = LINE_OA.shortUrl;
 
 const SALES = [
   { name: "วิน",  slogan: "นำเข้าทุก Port ทุก Term ปิดดีลให้จบในที่เดียว",       phone: "062-603-0456", image: "/images/Character_Icon/win01.png", useContain: false, alt: "เซลล์วิน Pacred",  button: "ทักวินเลย"  },
-  { name: "แนท",  slogan: "นำเข้าสั่งซื้อจีน ทุกแพลตฟอร์ม ครบจบในที่เดียว",       phone: "02-421-3325",  image: "/images/pacred-logo-red.png",     useContain: true,  alt: "เซลล์แนท Pacred",  button: "ทักแนทเลย"  },
-  { name: "พลอย", slogan: "เคลียร์สินค้าติดด่าน เร็ว ปลอดภัย การันตีจบ",          phone: "066-090-1217", image: "/images/Character_Icon/ploy01.png", useContain: false, alt: "เซลล์พลอย Pacred", button: "ทักพลอยเลย" },
+  { name: "แนท",  slogan: "นำเข้าสั่งซื้อจีน ทุกแพลตฟอร์ม ครบจบในที่เดียว",       phone: "066-131-0253", image: "/images/pacred-logo-red.png",     useContain: true,  alt: "เซลล์แนท Pacred",  button: "ทักแนทเลย"  },
+  { name: "พลอย", slogan: "เคลียร์สินค้าติดด่าน เร็ว ปลอดภัย การันตีจบ",          phone: "062-603-4456", image: "/images/Character_Icon/ploy01.png", useContain: false, alt: "เซลล์พลอย Pacred", button: "ทักพลอยเลย" },
 ];
 
 const FEATURES = [
@@ -145,7 +145,7 @@ export function ClearanceBanner() {
 
               {/* Contact phone */}
               <a
-                href="tel:0660901217"
+                href="tel:0626034456"
                 onClick={() => trackCtaClick("banner_phone", "home_clearance_banner", { surface: "inline_phone" })}
                 className="inline-flex items-center gap-1.5 text-white text-[11px] md:text-[13px] font-extrabold leading-[1.25] mb-2 md:mb-3 hover:text-yellow-200 transition-colors w-fit"
                 style={{ textShadow: FEATURE_TEXT_SHADOW }}
@@ -155,7 +155,7 @@ export function ClearanceBanner() {
                   strokeWidth={3}
                   style={{ filter: "drop-shadow(1px 1px 0 rgba(0,0,0,0.55))" }}
                 />
-                ติดต่อ: 066-090-1217
+                ติดต่อ: 062-603-4456
               </a>
 
               {/* Price + Buttons */}

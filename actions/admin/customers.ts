@@ -28,11 +28,7 @@ export async function editCustomer(input: EditCustomerInput): Promise<AdminActio
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before, error: beforeErr } = await admin.from("profiles").select("*").eq("id", id).maybeSingle();
-    if (beforeErr) {
-      console.error(`[profiles mutation lookup] failed`, { code: beforeErr.code, message: beforeErr.message });
-      return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
-    }
+    const { data: before } = await admin.from("profiles").select("*").eq("id", id).maybeSingle();
     if (!before) return { ok: false, error: "not_found" };
 
     const update: Record<string, unknown> = {};
@@ -117,28 +113,24 @@ export async function approveCustomer(id: string): Promise<AdminActionResult> {
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before, error: beforeErr } = await admin
+    const { data: before } = await admin
       .from("tb_users")
-      .select("userid, useractive, userstatus")
-      .eq("userid", id)
-      .maybeSingle<{ userid: string; useractive: string | null; userstatus: string | null }>();
-    if (beforeErr) {
-      console.error(`[tb_users mutation lookup] failed`, { code: beforeErr.code, message: beforeErr.message });
-      return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
-    }
+      .select("userID, userActive, userStatus")
+      .eq("userID", id)
+      .maybeSingle<{ userID: string; userActive: string | null; userStatus: string | null }>();
     if (!before) return { ok: false, error: "not_found" };
-    // No-op when already active (useractive='1' and not deleted).
-    if (before.useractive === "1" && before.userstatus !== "0") return { ok: true };
+    // No-op when already active (userActive='1' and not deleted).
+    if (before.userActive === "1" && before.userStatus !== "0") return { ok: true };
 
     const { error } = await admin
       .from("tb_users")
-      .update({ useractive: "1", userstatus: "1" })
-      .eq("userid", id);
+      .update({ userActive: "1", userStatus: "1" })
+      .eq("userID", id);
     if (error) return { ok: false, error: error.message };
 
     await logAdminAction(adminId, "customer.approve", "tb_users", id, {
-      before: { useractive: before.useractive, userstatus: before.userstatus },
-      after:  { useractive: "1", userstatus: "1" },
+      before: { userActive: before.userActive, userStatus: before.userStatus },
+      after:  { userActive: "1", userStatus: "1" },
     });
 
     // Note: customer notification deferred — migrated tb_users customers
@@ -187,29 +179,22 @@ export async function adminConvertToJuristic(
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: before, error: beforeErr } = await admin
+    const { data: before } = await admin
       .from("profiles")
       .select("id, account_type, member_code, first_name, last_name")
       .eq("id", d.profile_id)
       .maybeSingle<{ id: string; account_type: "personal" | "juristic"; member_code: string | null; first_name: string | null; last_name: string | null }>();
-    if (beforeErr) {
-      console.error(`[profiles mutation lookup] failed`, { code: beforeErr.code, message: beforeErr.message });
-      return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
-    }
     if (!before) return { ok: false, error: "not_found" };
     if (before.account_type === "juristic") return { ok: false, error: "already_juristic" };
 
     // Block duplicate tax_id collisions early — the partial unique index
     // on corporate(tax_id) only covers 'verified' rows, so we double-check.
-    const { data: clash, error: clashErr } = await admin
+    const { data: clash } = await admin
       .from("corporate")
       .select("profile_id")
       .eq("tax_id", d.tax_id)
       .neq("profile_id", d.profile_id)
       .maybeSingle();
-    if (clashErr) {
-      console.error(`[corporate list] failed`, { code: clashErr.code, message: clashErr.message });
-    }
     if (clash) return { ok: false, error: "tax_id_already_used" };
 
     // Step 1 — flip account_type so the corporate trigger lets the insert through
@@ -278,27 +263,23 @@ export async function suspendCustomer(id: string): Promise<AdminActionResult> {
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before, error: beforeErr } = await admin
+    const { data: before } = await admin
       .from("tb_users")
-      .select("userid, userstatus")
-      .eq("userid", id)
-      .maybeSingle<{ userid: string; userstatus: string | null }>();
-    if (beforeErr) {
-      console.error(`[tb_users mutation lookup] failed`, { code: beforeErr.code, message: beforeErr.message });
-      return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
-    }
+      .select("userID, userStatus")
+      .eq("userID", id)
+      .maybeSingle<{ userID: string; userStatus: string | null }>();
     if (!before) return { ok: false, error: "not_found" };
-    if (before.userstatus === "0") return { ok: true };  // no-op — already disabled
+    if (before.userStatus === "0") return { ok: true };  // no-op — already disabled
 
     const { error } = await admin
       .from("tb_users")
-      .update({ userstatus: "0" })
-      .eq("userid", id);
+      .update({ userStatus: "0" })
+      .eq("userID", id);
     if (error) return { ok: false, error: error.message };
 
     await logAdminAction(adminId, "customer.suspend", "tb_users", id, {
-      before: { userstatus: before.userstatus },
-      after:  { userstatus: "0" },
+      before: { userStatus: before.userStatus },
+      after:  { userStatus: "0" },
     });
 
     // Note: customer notification deferred — see approveCustomer comment.

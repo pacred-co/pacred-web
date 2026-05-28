@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireAuth } from "@/lib/auth/require-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
+import { MarkReceiptPrintedButton } from "@/components/freight/mark-receipt-printed-button";
 import { CONTACT, ADDRESSES, BANK, TAX_ID } from "@/components/seo/site";
 
 /**
@@ -78,8 +79,11 @@ import { CONTACT, ADDRESSES, BANK, TAX_ID } from "@/components/seo/site";
  * Component render MUST stay a pure read (runbook §9.4), so this
  * write is NOT performed here — it is a DEFERRED Server Action.
  *
- * TODO(server-action): port the `UPDATE tb_receipt SET statusPrint`
- *   mutation to actions/*.ts when reviewed by เดฟ.
+ * PORTED 2026-05-25 — `actions/freight.ts::markReceiptPrinted` runs the
+ *   UPDATE faithfully (statusprint='1' / adminidprint='ลูกค้า' /
+ *   rdateprint=NOW()) and is invoked from the on-screen
+ *   `<MarkReceiptPrintedButton>` next to the PrintButton — the customer
+ *   clicks it after the print dialogue finishes.
  *
  * ── Notes on faithful reproduction ───────────────────────────────
  *  - The WHT-1% block (invoiceF.php L376-390) only fires for a
@@ -371,8 +375,10 @@ export default async function FreightInvoicePage({
     const dateCreate = fmtDate(rowMain.rdate);
 
     // invoiceF.php L58 — the render-time UPDATE statusPrint='1' is
-    // DEFERRED (a render is a pure read; see the file header FLAG).
-    // TODO(server-action): port to actions/*.ts when reviewed by เดฟ.
+    // PORTED to actions/freight.ts::markReceiptPrinted and triggered by
+    // the on-screen `<MarkReceiptPrintedButton>` after the print
+    // dialogue closes (a Server Component render must stay a pure read —
+    // runbook §9.4 — so the mutation cannot run from here).
 
     // ── Customer-name resolution — invoiceF.php L62-114 ──
     let fName = `${rowMain.userid} ${rowMain.corporatename}`;
@@ -637,9 +643,13 @@ export default async function FreightInvoicePage({
 
       {/* On-screen print button — direct child of the overlay so
           `.print-fullscreen-overlay > .no-print { position: fixed }`
-          floats it top-right unscaled. */}
-      <div className="no-print">
+          floats it top-right unscaled. The "พิมพ์แล้ว" button next to it
+          wires the deferred legacy mutation (invoiceF.php L58 —
+          `UPDATE tb_receipt SET statusPrint='1', adminIDprint='ลูกค้า',
+          rDatePrint=NOW()`) via actions/freight.ts::markReceiptPrinted. */}
+      <div className="no-print flex items-start gap-2">
         <PrintButton />
+        <MarkReceiptPrintedButton rIds={docs.map((d) => d.rID)} />
       </div>
 
       <div className="pcs-legacy print-receipt-f">

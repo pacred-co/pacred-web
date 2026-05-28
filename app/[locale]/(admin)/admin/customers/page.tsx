@@ -281,6 +281,12 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
           >
             ⇄ ย้ายเซลล์ผู้ดูแล
           </Link>
+          <Link
+            href="/admin/customers/transfer-bulk"
+            className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-surface-alt inline-flex items-center gap-1.5"
+          >
+            ⇄ ย้ายเซลล์ (มีเหตุผล)
+          </Link>
         <form action="/admin/customers" className="flex gap-2">
           {group ? <input type="hidden" name="group" value={group} /> : null}
           <input

@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { getServiceOrder } from "@/actions/service-order";
 import { createClient } from "@/lib/supabase/server";
@@ -264,7 +263,6 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
           </aside>
         </div>
       </main>
-      <Footer />
     </>
   );
 }

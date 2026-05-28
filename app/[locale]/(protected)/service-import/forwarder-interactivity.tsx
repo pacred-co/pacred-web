@@ -10,41 +10,28 @@ import {
 import { ForwarderPayModal } from "./forwarder-pay-modal";
 
 /**
- * Client-side interactivity for `/service-import` — faithful port of
- * the jQuery block in `member/forwarder.php` L1273-1409 + the
- * `calPrice.php` AJAX recompute it drives (D1 / ADR-0017).
+ * Client-side interactivity for `/service-import` — Tailwind card-list
+ * rebuild (เดฟ 2026-05-27 — ปอน: "rebuild css เป็น tailwind ให้หน่อย").
+ * Was a faithful port of the jQuery + DataTables block in
+ * `member/forwarder.php` L1273-1409 rendered inside a `<table>`; now
+ * renders a stacked card list driven by the same per-row data + the
+ * same `calPrice.php` Server-Action recompute.
  *
- * The SSR page (`app/[locale]/(protected)/service-import/page.tsx`)
- * renders the static chrome (breadcrumbs, status-filter tabs, the
- * "เพิ่มรายการนำเข้า" button, the corporate-pending gate, both
- * modals + the "โปรเหมาๆ" / "รวมบิล" headShake strips). This
- * component takes the per-row serialised data + owns:
+ * Contract preserved (NO relations changed):
+ *   · `calculateForwarderTotal` Server Action still drives the live
+ *     "ยอดชำระรวม" recompute.
+ *   · `ForwarderPayModal` opens with the selected-id set on "ชำระเงิน".
+ *   · Initial-selection mirrors the legacy `initComplete` — rows where
+ *     `data-status='5'` or `data-credit='1'` are pre-checked.
+ *   · `<form id="frm-example2">` kept (some `.b-pay`-adjacent legacy
+ *     CSS rules target it) but `#myTable` `<table>` markup is GONE —
+ *     replaced by a flex-column card list.
+ *   · `#example-console-rows` debug div kept (was always empty, but
+ *     legacy code paths may reach for it).
  *
- *   - `<thead>` (the column header row) — legacy forwarder.php L599-621
- *   - `<tbody>` (one `<tr>` per row, first `<td>` adds the
- *     DataTables `.dt-checkboxes` overlay around the ID — legacy
- *     L1280-1336)
- *   - the "เลือกทั้งหมด" (.check-all) toggle in the bottom pay-bar
- *   - the live "จำนวนรายการ" / "ยอดชำระรวม" counters in the bottom
- *     pay-bar — legacy L840-862, driven by the `calPrice.php` AJAX
- *     replaced here by the `calculateForwarderTotal` Server Action.
- *   - the "ชำระเงิน" submit (disabled when nothing selected — legacy
- *     L1357 `rows_selected.join(',')`).
- *
- * The legacy CSS classes (.dt-checkboxes / .check-all / .b-pay /
- * .btn-pay-pc / .countPay / .price-all / etc.) are kept verbatim so
- * the static `/legacy/pcs/service-import.css` rules match 1:1.
- *
- * Cross-RSC contract — every prop is plain-serializable:
- *   - rowsData: ForwarderRowData[] (primitives only)
- *   - arrFidDriver: number[] (legacy Set normalised at page.tsx)
- *   - q / showPayBar / showPayStrip / showMaoStrip / columnCount
- *     are strings / booleans / numbers
- * NO functions cross the boundary (besides the `"use server"`
- * `calculateForwarderTotal` Server Action, which is the allowed
- * exception). This is the fix-pattern that replaces the previous
- * `renderRow={(rowId, checkbox) => …}` violation that caused the
- * `/service-import?q=5` 500 (RSC serialization error).
+ * Cross-RSC contract — every prop is plain-serializable; no function
+ * props cross the boundary except the `"use server"`
+ * `calculateForwarderTotal` Server Action.
  */
 
 // PHP `number_format($n, 2)` — 2 decimals, comma thousands separator.
@@ -56,28 +43,22 @@ function numberFormat2(n: number): string {
 }
 
 export type ForwarderInteractivityProps = {
-  /** Plain-object rows — already includes `totalPriceNet` +
-   *  `eligibleForPay` to avoid recomputing client-side. */
+  /** Plain-object rows (primitives only). */
   rowsData: ForwarderRow[];
   /** Plain Array — legacy `arrFidDriver` Set normalised. */
   arrFidDriver: number[];
-  /** Current `?q=` value — controls extra credit columns + helper
-   *  predicates. */
+  /** Current `?q=` value. */
   q: string;
-  /** Whether the customer is a juristic account — passed through to
-   *  the `<ForwarderPayModal>` (drives the 1% WHT line + KBank block,
-   *  legacy `userCompany==1`). */
+  /** Juristic flag — passed through to `<ForwarderPayModal>`. */
   isJuristic: boolean;
-  /** Whether to render the bottom pay-bar (legacy L841 condition). */
+  /** Render the bottom pay-bar (legacy L841 condition). */
   showPayBar: boolean;
-  /** Whether to render the "โปรเหมาๆ" headShake strip above the
-   *  table (legacy L600). */
+  /** Render the "โปรเหมาๆ" headShake strip (legacy L600). */
   showMaoStrip: boolean;
-  /** Whether to render the "รวมบิลจ่าย" headShake strip below the
-   *  table (legacy L831-836). */
+  /** Render the "รวมบิลจ่าย" headShake strip (legacy L831-836). */
   showPayStrip: boolean;
-  /** Column count — controls the colSpan of the empty-state row.
-   *  q=='c' adds 2 extra columns (วันที่ให้เครดิต / วันที่ครบกำหนด). */
+  /** Column count — kept in the API for compat; the card list doesn't
+   *  use it anymore. */
   columnCount: number;
 };
 
@@ -89,10 +70,10 @@ export function ForwarderInteractivity({
   showPayBar,
   showMaoStrip,
   showPayStrip,
-  columnCount,
+  // columnCount kept in the prop type for binary compat with page.tsx;
+  // the card list doesn't need it.
 }: ForwarderInteractivityProps) {
-  // Pre-compute per-row total + eligibility once (the row was
-  // serialised by the server, so the helper is deterministic).
+  // Pre-compute per-row total + eligibility once.
   const enrichedRows = useMemo(() => {
     return rowsData.map((row) => {
       const totalPriceNet = calPriceForwarderSumCompany(
@@ -112,9 +93,7 @@ export function ForwarderInteractivity({
     });
   }, [rowsData]);
 
-  // Eligible IDs — the legacy `initComplete` (forwarder.php L1298-1305)
-  // ticks the rows whose row has `data-status='5'`/`data-credit='1'`
-  // on first paint. We mirror that initial-selection behaviour.
+  // Eligible IDs — legacy `initComplete` (forwarder.php L1298-1305).
   const eligibleIds = useMemo(
     () => enrichedRows.filter((r) => r.eligibleForPay).map((r) => r.id),
     [enrichedRows],
@@ -124,12 +103,7 @@ export function ForwarderInteractivity({
     () => new Set(eligibleIds),
   );
 
-  // Optimistic total — sum the per-row net prices client-side
-  // immediately on toggle (matches legacy `calPrice.php` returning
-  // ~instantly because the server does the same arithmetic). The
-  // Server Action then replaces it with the canonical formatted
-  // total (which also applies the +50 ฿ PCSF flat fee + the -1%
-  // juristic discount the legacy `calPrice.php` applies).
+  // Optimistic total — sums per-row net prices immediately.
   const optimisticTotal = useMemo(() => {
     let sum = 0;
     for (const r of enrichedRows) {
@@ -171,15 +145,6 @@ export function ForwarderInteractivity({
     recompute(ns);
   }
 
-  // The legacy `<input id="select">` (forwarder.php L860) submits the
-  // selected ids to the bulk-bill payment flow — wired UNLESS empty.
-  // Pressing "ชำระเงิน" opens the `<ForwarderPayModal>` (`#list-payment2`
-  // — getListPayForwarder.php) with the selected rows' price data. The
-  // modal shows the itemized bill + PromptPay QR + slip upload and, on
-  // submit, records a pending-verification payment via the
-  // `submitForwarderPayment` Server Action — the faithful 1:1 of the
-  // legacy `paymentForwarderNew` POST handler. (This replaces the prior
-  // bridge that just `router.push`-ed to the first selected row.)
   const submitDisabled = selectedIds.size === 0;
   const [payModalOpen, setPayModalOpen] = useState(false);
   function handleBulkPay() {
@@ -187,8 +152,6 @@ export function ForwarderInteractivity({
     setPayModalOpen(true);
   }
 
-  // The selected rows' full price data — the `<ForwarderPayModal>`
-  // needs the primitive-only subset of rowsData the customer ticked.
   const selectedRows = useMemo(
     () => enrichedRows.filter((r) => selectedIds.has(r.id)),
     [enrichedRows, selectedIds],
@@ -196,178 +159,118 @@ export function ForwarderInteractivity({
   const allChecked =
     eligibleIds.length > 0 && selectedIds.size === eligibleIds.length;
 
-  // Display total — prefer server-formatted, fall back to optimistic
-  // (which doesn't include the +50 ฿ PCSF flat / -1% juristic yet,
-  // but renders immediately on toggle).
+  // Display total — prefer server-formatted, fall back to optimistic.
   const displayTotal =
     serverTotal !== null ? serverTotal : numberFormat2(optimisticTotal);
 
   return (
     <>
-      {/* ── (cond.) "โปรเหมาๆ" headShake strip — forwarder.php L600 ── */}
+      {/* ── (cond.) "โปรเหมาๆ" strip — forwarder.php L600. Tailwind
+              rebuild of the headShake legacy strip (animation kept by
+              `animate__animated animate__headShake` classes — vendor
+              CSS still loads it). ── */}
       {showMaoStrip && (
-        <div className="row">
-          <div className="col-md-6 offset-md-3">
-            <div className="p-1 bg-main text-center text-white animate__animated animate__infinite animate__headShake">
-              โปรเหมาๆ
-              <br />
-              “หากลูกค้าชำระค่าขนส่งในไทยก่อนเวลา 00.00 น. บริษัทฯ จะจัดส่งสินค้าให้ภายใน 1-3 วันทำการ นับจากวันที่ชำค่าขนส่ง”
+        <div className="my-3 mx-auto max-w-[640px]">
+          <div className="rounded-2xl bg-red-600 text-white text-center px-4 py-3 shadow-md shadow-red-600/20 animate__animated animate__infinite animate__headShake">
+            <div className="text-sm font-bold mb-1">โปรเหมาๆ</div>
+            <div className="text-[12px] leading-snug">
+              &ldquo;หากลูกค้าชำระค่าขนส่งในไทยก่อนเวลา 00.00 น. บริษัทฯ จะจัดส่งสินค้าให้ภายใน 1-3 วันทำการ นับจากวันที่ชำค่าขนส่ง&rdquo;
             </div>
           </div>
         </div>
       )}
 
-      {/* ── `#frm-example2` + #myTable — forwarder.php L595-825 ── */}
-      <form id="frm-example2">
-        <div className="table-responsive p-2">
-          <table
-            id="myTable"
-            className="table display table-bordered table-striped dataTable no-footer dtr-inline"
-          >
-            <thead>
-              <tr className="text-center bg-danger2">
-                <th className="all add-text-all">ID</th>
-                <th className="none">วันที่สร้าง</th>
-                <th className="all">รายละเอียด</th>
-                <th className="none">ค่าขนส่ง</th>
-                <th className="none">เลขแทรคกิ้งจีน</th>
-                <th className="none">เลขพัสดุ (ไทย)</th>
-                <th className="none">สถานะ</th>
-                {q === "c" && (
-                  <>
-                    <th className="bg-danger3">วันที่ให้เครดิต</th>
-                    <th className="bg-danger3">วันที่ครบกำหนด</th>
-                  </>
-                )}
-                <th className="none">ตัวเลือก</th>
-              </tr>
-            </thead>
-            <tbody>
-              {enrichedRows.length === 0 ? (
-                <tr>
-                  <td className="text-center" colSpan={columnCount}>
-                    <i>ไม่พบรายการ</i>
-                  </td>
-                </tr>
-              ) : (
-                enrichedRows.map((row) => {
-                  const isSelectable = row.eligibleForPay;
-                  const checked = selectedIds.has(row.id);
-                  return (
-                    <tr key={row.id}>
-                      {/* Legacy first-cell — DataTables targets:0
-                          overlays the row-select checkbox onto the
-                          ID cell (forwarder.php L1290-1295). 1:1: the
-                          checkbox + the legacy ID number share the
-                          first `<td>`. */}
-                      <td className="text-center tr1 cursor-pointer">
-                        {isSelectable ? (
-                          <>
-                            <input
-                              type="checkbox"
-                              className="dt-checkboxes"
-                              name="ID[]"
-                              value={row.id}
-                              checked={checked}
-                              onChange={(e) =>
-                                toggleRow(row.id, e.target.checked)
-                              }
-                            />
-                            <br />
-                          </>
-                        ) : null}
-                        {row.id}
-                      </td>
-                      {/* Remaining cells — rendered by the shared
-                          row-view (no `<tr>`, no leading ID `<td>`). */}
-                      <ForwarderRowView
-                        row={row}
-                        q={q}
-                        arrFidDriver={arrFidDriver}
-                        skipFirstCell
-                      />
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div id="example-console-rows"></div>
+      {/* ── Card list — `<form id="frm-example2">` kept so any legacy
+              CSS rule targeting the form id still applies. The legacy
+              `<table id="myTable">` is gone; rows are stacked cards. */}
+      <form id="frm-example2" className="space-y-3">
+        {enrichedRows.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border bg-white dark:bg-surface px-6 py-10 text-center text-muted">
+            <i className="text-sm">ไม่พบรายการ</i>
+          </div>
+        ) : (
+          enrichedRows.map((row) => (
+            <ForwarderRowView
+              key={row.id}
+              row={row}
+              q={q}
+              arrFidDriver={arrFidDriver}
+              selectable={row.eligibleForPay}
+              checked={selectedIds.has(row.id)}
+              onToggleCheck={toggleRow}
+            />
+          ))
+        )}
+        <div id="example-console-rows" />
       </form>
 
-      {/* ── (cond.) "รวมบิลจ่าย" headShake strip — forwarder.php L831-836 ── */}
+      {/* ── (cond.) "รวมบิลจ่าย" PCSF strip — forwarder.php L831-836 ── */}
       {showPayStrip && (
-        <div className="m-1 p-1 bg-main text-white animate__animated animate__infinite animate__headShake">
-          คุณมีรายการรอชำระเงินที่ใช้ Pacred เหมาๆ มากกว่า 1 รายการ การรวมบิลจ่ายจะช่วยให้คุณได้รับส่วนลด
+        <div className="my-3 rounded-2xl bg-red-600 text-white text-center px-4 py-3 shadow-md shadow-red-600/20 animate__animated animate__infinite animate__headShake">
+          <div className="text-xs md:text-sm leading-snug">
+            คุณมีรายการรอชำระเงินที่ใช้ Pacred เหมาๆ มากกว่า 1 รายการ
+            <br />
+            การรวมบิลจ่ายจะช่วยให้คุณได้รับส่วนลด
+          </div>
         </div>
       )}
 
-      {/* ── bottom fixed pay-bar — forwarder.php L840-862 ── */}
-      <div
-        className="p-1 p-m-0"
-        style={{
-          position: "fixed",
-          bottom: 0,
-          width: "80%",
-          zIndex: 999,
-        }}
-      >
-        {showPayBar && (
-          <div className="b-pay ">
-            <div className="row">
-              <div className="col-md-6 offset-md-3">
-                <div className="row">
-                  <div className="col-3 p-05 text-center">
-                    <input
-                      type="checkbox"
-                      className="dt-checkboxes check-all c6"
-                      checked={allChecked}
-                      onChange={(e) => toggleAll(e.target.checked)}
-                    />
-                    <br />
-                    เลือกทั้งหมด
-                  </div>
-                  <div className="col-6 p-05">
-                    จำนวนรายการ :{" "}
-                    <span className="countPay">{selectedIds.size}</span>
-                    <br />
-                    <b>
-                      ยอดชำระรวม :{" "}
-                      <span className="notranslate text-danger price-all">
-                        {displayTotal}
-                      </span>{" "}
-                      บ.
-                    </b>
-                  </div>
-                  <div
-                    className="col-3 p-05 text-right"
-                    style={{ marginLeft: "-25px" }}
-                  >
-                    <button
-                      type="button"
-                      className="btn btn-color-main waves-effect round animate__animated animate__infinite animate__headShake"
-                      id="select"
-                      disabled={submitDisabled}
-                      onClick={handleBulkPay}
-                    >
-                      ชำระเงิน
-                    </button>
-                  </div>
-                </div>
+      {/* ── Bottom pay-bar — forwarder.php L840-862. Tailwind rebuild:
+            ·  Mobile: lifts to bottom-[96px] to clear the FloatingTabs
+               bottom-nav (~88px tall) + the centred FAB that protrudes
+               ~20px above it; rounded top corners + backdrop-blur for a
+               floating-card look that doesn't touch the bottom-nav edge.
+            ·  Desktop: `md:bottom-0` flush to the viewport bottom edge
+               (FloatingTabs is a vertical bar on the right side at md+,
+               so there's nothing at the bottom to clear).
+            ·  Hidden on auth/admin via the route group. */}
+      {showPayBar && (
+        <div className="fixed left-2 right-2 md:left-0 md:right-0 z-[40] bottom-24 md:bottom-0 bg-white/95 dark:bg-surface/95 backdrop-blur-md border border-border md:border-0 md:border-t rounded-2xl md:rounded-none shadow-[0_-6px_24px_rgba(0,0,0,0.12)] md:shadow-[0_-6px_20px_rgba(0,0,0,0.08)] overflow-hidden">
+          <div className="max-w-[1280px] mx-auto flex items-center gap-2 md:gap-3 px-3 py-2 md:px-6 md:py-3 md:pl-[280px] md:pr-[88px]">
+            {/* Select-all — icon-only on tight viewports, label appears ≥360px */}
+            <label className="flex items-center gap-1.5 shrink-0 cursor-pointer">
+              <input
+                type="checkbox"
+                className="dt-checkboxes check-all w-4 h-4 rounded border-border accent-red-600 cursor-pointer"
+                checked={allChecked}
+                onChange={(e) => toggleAll(e.target.checked)}
+              />
+              <span className="text-[10.5px] md:text-xs text-muted whitespace-nowrap">ทั้งหมด</span>
+            </label>
+
+            {/* Total — stacked on mobile, inline on desktop */}
+            <div className="flex-1 min-w-0 leading-tight">
+              <div className="text-[10px] md:text-xs text-muted">
+                จำนวน <span className="countPay font-bold text-foreground notranslate">{selectedIds.size}</span> รายการ
+              </div>
+              <div className="font-bold text-foreground text-xs md:text-sm">
+                รวม{" "}
+                <span className="notranslate price-all text-red-600 text-base md:text-lg">
+                  {displayTotal}
+                </span>{" "}
+                <span className="text-[10px] md:text-xs text-muted font-normal">บ.</span>
               </div>
             </div>
-          </div>
-        )}
-      </div>
 
-      {/* ── `#list-payment2` multi-bill payment modal ──
-          getListPayForwarder.php — opened by the pay-bar "ชำระเงิน"
-          button. Renders the itemized bill + PromptPay QR + slip
-          upload; submit records a pending-verification payment.
-          `key` = the selected-id set, so the modal remounts fresh
-          (clearing slip / QR / done state) whenever the customer
-          changes the selection and reopens it. */}
+            {/* Pay button */}
+            <button
+              type="button"
+              id="select"
+              disabled={submitDisabled}
+              onClick={handleBulkPay}
+              className={`shrink-0 inline-flex items-center justify-center gap-1 rounded-full px-4 md:px-6 py-2 md:py-2.5 text-sm md:text-base font-bold transition-all ${
+                submitDisabled
+                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                  : "bg-red-600 text-white hover:bg-red-700 active:scale-[0.98] shadow-md shadow-red-600/30 animate__animated animate__infinite animate__headShake"
+              }`}
+            >
+              ชำระเงิน
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Multi-bill payment modal — opened by the pay-bar "ชำระเงิน". */}
       <ForwarderPayModal
         key={
           Array.from(selectedIds)

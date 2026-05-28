@@ -441,68 +441,374 @@ export default function Page() {
 
 ---
 
-## [2026-05-23] React 19 `react-hooks/purity` rejects raw `Date.now()` / `new Date()` in render bodies
+## [2026-05-25] Server Action cookie write → layout revalidation → `requireGuest()` kicks user out mid-multi-step-flow
 
-**Context:** Wave 10 Agent A built 5 new QA queue Server Component pages under `/admin/qa/<slug>`. Files compiled clean for `tsc` but `pnpm lint` errored on every page with `react-hooks/purity` violations. Agent had to do a second pass to wrap every time-getter in a helper before commit (`776ebc8`).
+**Context:** Every juristic register signup in PROD was stalling — 138 profiles with `status='incomplete'`, 0 rows in `documents` table, 0 corporate rows. Users said "พอกดอัพโหลด ภพ20+ใบรับรอง เด้งออก".
 
-**Symptom:** ESLint with `eslint-config-next` (Next 16 ships React 19 + `react-hooks/purity` rule on by default) flags:
-> `Date.now()` is a side-effectful call · the render must be a pure function of its props/state · move this to a helper or useMemo
+**Symptom:** User completes Step 1 of `/register` (juristic tab) → never reaches Step 2 → orphan auth.user + orphan profile row with `status='incomplete'` left in DB. Phone number permanently blocked from re-signup (auth.users unique constraint).
 
-Surfaces on:
-- `const cutoff = new Date(Date.now() - 86_400_000).toISOString();`
-- `const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);`
-- Anywhere inline `Date.now()` / `new Date()` lives in the JSX-returning function body.
+**Root cause — a 4-link chain:**
+1. `app/[locale]/(auth)/layout.tsx` calls `await requireGuest()` (redirects signed-in users to `/`).
+2. Step 1 server action `registerJuristicStep1()` calls `supabase.auth.signInWithPassword(...)` — needed because Step 2/3 use the user-context server client + RLS, not the admin client. This writes auth cookies.
+3. Next.js auto-revalidates the current path after ANY server action that mutates `cookies()` (which `signInWithPassword` does via `@supabase/ssr`). The `(auth)` layout re-runs.
+4. `requireGuest()` now sees a signed-in user → `redirect("/")`. User never sees Step 2.
 
-**Why it's a purity violation:** `Date.now()` is non-deterministic — call it twice and get different values. React 19 + Server Components compile render bodies as pure functions; non-determinism inside render undermines the React Compiler's memoization + the Server Component cache.
+The bug was latent for ~2 weeks because:
+- Personal signup doesn't sign-in until AFTER Step 1 completes successfully (no multi-step) — unaffected.
+- Local dev without strict revalidation timing rarely repro'd.
+- The redirect happened so fast users assumed "site is broken" not "I got logged out".
 
-**Root cause:** the React Compiler runs eagerly in Next 16 + the `react-hooks/purity` rule treats `Date.now()` / `new Date()` / `Math.random()` / `crypto.randomUUID()` as impure. Even read-only timestamp math counts.
-
-**Fix — wrap in a NAMED top-level helper function:**
-
+**Fix — make `requireGuest()` boundary-aware:**
 ```ts
-// ❌ Lint error
-export default async function MyPage() {
-  const cutoff = new Date(Date.now() - 86_400_000).toISOString();
-  const rows = await query.gte("created_at", cutoff);
-  // …
-}
-
-// ✅ Lint clean
-function nowMs(): number { return Date.now(); }
-function nowIso(): string { return new Date().toISOString(); }
-function isoDaysAgo(days: number): string {
-  const d = new Date(nowMs() - days * 86_400_000);
-  return d.toISOString();
-}
-function daysSince(iso: string): number {
-  return Math.floor((nowMs() - new Date(iso).getTime()) / 86_400_000);
-}
-
-export default async function MyPage() {
-  const cutoff = isoDaysAgo(1);
-  // …
+// lib/auth/require-auth.ts
+export async function requireGuest(): Promise<void> {
+  const data = await getCurrentUserWithProfile();
+  // Mid-signup users have status='incomplete' — they ARE signed in
+  // but must stay on /register to finish Step 2/3.
+  if (data?.user && data.profile?.status !== "incomplete") redirect("/");
 }
 ```
 
-The named helper hides the impurity behind a function call boundary — the rule trusts the helper to be the explicit non-pure leaf, not the render body.
+Verified end-to-end on dev server: signed-in `incomplete` → `/register` HTTP 200 · same user `active` → HTTP 307 → `/`.
 
 **Why this matters next time:**
-- ANY new page that computes "rows newer than X days" / "rows older than Y minutes" needs the helper pattern.
-- The lint error message points at the `Date.now()` line — easy fix once you know to wrap.
-- Affects mostly SLA-breach queue pages (where we compute the cutoff in render) + dashboard cards showing "X days ago" deltas. Less common in mutation flows where timestamps come from form input / DB columns.
-- Pattern source: existing fix in `app/[locale]/(admin)/admin/reports/credit-pending/page.tsx` + `customers/recently-active/page.tsx` (Wave 7.2). Mirror those when in doubt.
-
-**2026-05-27 update — shared helper module created.** After 5 QA SLA pages (`chn-wh-over-2d` · `transit-overdue` · `prepare-overdue` · `ownerless-goods` · `new-client-no-contact`) needed the same `Date.now()` / `new Date()` wrappers, the helpers moved out of per-file copies into [`lib/datetime-helpers.ts`](../../lib/datetime-helpers.ts) — the canonical home now. Import + use:
-```ts
-import { nowMs, cutoffIsoDaysAgo, nowDate } from "@/lib/datetime-helpers";
-const cutoff = cutoffIsoDaysAgo(7);   // ISO 7d-ago snapshot
-const now    = nowMs();                // ms snapshot for delta math
-const dt     = nowDate();              // Date instance when needed
-```
-Any new page that needs a "now / N-days-ago / N-minutes-ago" snapshot in render → import from there. Don't re-inline the wrapper; the lib lets us extend (e.g. `cutoffIsoMinutesAgo`, `daysSince`, `formatBkkDate`) in one place.
+- **Server Actions that write cookies trigger an automatic layout revalidation** on the current path. If your layout has any auth gate, it runs again — often within the same `startTransition`. Treat cookie mutations as "the layout will re-render with the new auth state in milliseconds".
+- **Multi-step forms that sign the user in mid-flow** must guard their layout against the freshly-signed-in state. Two patterns: (a) gate by `profile.status` (this fix), or (b) don't sign in until the FINAL step (refactor — personal signup does this).
+- **Symptom detection:** if a multi-step form yields ZERO completed signups but lots of `status='incomplete'` orphans, suspect a layout redirect mid-flow before assuming the form code is broken.
+- **Test harness:** can't repro with personal signup; need a juristic signup OR a script that signs in an `incomplete`-status user + curls the form route. The curl test confirmed both branches in <30s.
 
 **Cross-links:**
-- Commit `776ebc8` — Agent A's lint-fix pass on Wave 10 Group A
-- Commits `a285c90` + `3595d41` — sister Wave 10 work that didn't need the fix because they only read DB-supplied timestamps (no inline `Date.now()`)
-- 2026-05-27 Wave 23 cleanup — 5 QA pages refactored to import from shared `lib/datetime-helpers.ts` (closed 10 `react-hooks/purity` errors)
-- [React 19 `react-hooks/purity` rule docs](https://react.dev/reference/rules) (impure calls)
+- Commit `091380a2` — the 1-line `requireGuest()` fix
+- `app/[locale]/(auth)/layout.tsx` — the layout that calls `requireGuest()`
+- `actions/auth.ts:300-306` — Step 1 `signInWithPassword` call
+- `actions/auth.ts:380-425` — `uploadJuristicDoc()` that never ran in prod for 2 weeks
+- [`docs/learnings/supabase-rls-patterns.md`](supabase-rls-patterns.md) — RLS contexts (why Step 2/3 needs the user-context client)
+
+---
+
+## [2026-05-25 2nd] No `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` → every deploy breaks active tabs
+
+**Context:** Right after the P0 #4 deploy (bodySizeLimit + CSP expand · commit `f6c2ab1d`), a user mid-juristic-signup who had `/register` open in a tab from BEFORE the deploy tapped "ถัดไป" on Step 2. The form button spun forever. No error in console, no failing network call surfaced to the user — but `saveJuristicStep2` never ran on the server.
+
+**Symptom:** Server Action invocation hangs silently. Button shows `Loader2 animate-spin` indefinitely. No `setError` call. DevTools Network panel may show the POST but with no useful response, or nothing at all (depends on browser).
+
+**Root cause:** Server Actions in Next 15+ work by encrypting a reference to each action with a per-build key. The client bundle ships that encrypted ID; the server decrypts it on receipt to know WHICH action to run. **Without `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` set, Next.js generates a fresh random key on every build** — and Vercel rebuilds on every git push. So:
+
+1. User opens `/register` at deploy A → browser caches JS chunks with action IDs encrypted under key K_A.
+2. We push a fix → deploy B promoted on Vercel → server now decrypts with key K_B ≠ K_A.
+3. User's stale tab POSTs `Next-Action: <K_A-encrypted-id>` → server can't decrypt → returns an error that `useTransition` does NOT surface to the UI → `pending` stays `true`.
+
+The action wasn't called at all — but the client thinks it's still running.
+
+**Fix — set the key once and never rotate:**
+```bash
+openssl rand -base64 32
+# paste into Vercel → Project → Settings → Environment Variables
+#   NEXT_SERVER_ACTIONS_ENCRYPTION_KEY = <generated value>
+# apply to Production + Preview (NOT Development unless you want it stable across local restarts)
+```
+
+Once set, every deploy uses the SAME key → action IDs stay valid across deploys → users with open tabs from yesterday can still submit forms today.
+
+**User-side workaround when this happens:** Hard-refresh the tab (Ctrl+Shift+R / Cmd+Shift+R) to fetch fresh HTML + JS chunks with the new key.
+
+**Why this matters next time:**
+- This is **invisible** to the developer doing the deploy — every dev tab is fresh post-deploy. Only mid-flow customers feel it.
+- The longer-running the form, the worse — multi-step signups, large CSV uploads, anywhere `useTransition` wraps an action call.
+- Vercel does NOT auto-stabilize this key; setting the env var is a one-time action and easy to forget.
+- Validate by `curl -I https://yzljakczhwrpbxflnmco.supabase.co/auth/v1/health` (Supabase fast) + checking Vercel function logs for `Failed to decrypt action ID` near the user's hang time.
+
+**Cross-links:**
+- [`docs/env.md`](../env.md) §9.6 — operational instructions
+- [Next.js docs — Server Actions encryption key](https://nextjs.org/docs/app/api-reference/config/next-config-js/serverActions)
+- Vercel deploy `dpl_HB3MAU3TGBoFykvCLBPy1BHoTxQS` (the P0 #4 deploy that surfaced this)
+
+---
+
+## [2026-05-25 3rd] Server Action default body-size limit is **1 MB** — anything over is rejected at the platform layer SILENTLY
+
+**Context:** Juristic signup Step 3 has 3 file uploads (ภพ20 / company affidavit / national-ID card), each up to 10 MB per the action validator `MAX_SIZE`. Customers tapped "สมัครสมาชิก" → page just sat there. No error in browser console. No Sentry capture. No Vercel function log.
+
+**Symptom:** Server Action invocation silently does nothing. `useTransition` `pending` flips to `false` like the action returned — but the action body never ran, the validator never fired (so `file_too_large` error never surfaced), no DB row was written. The action's internal `console.error` for catch-blocks doesn't fire because the action body wasn't reached.
+
+**Root cause:** Next.js 16's default `experimental.serverActions.bodySizeLimit` is `'1 mb'`. The platform parses the multipart body BEFORE the action function runs; if the request body exceeds the limit, Next.js rejects it with an internal error that — depending on the deploy target — surfaces to the client as either a generic 413, a malformed response, or (on Vercel) a swallowed error that triggers React's transition-resolved branch without the expected return value. None of these surface to the user as an error UI.
+
+**The "empty table over time" fingerprint:** if a feature has shipped + users are visibly clicking through it + the corresponding DB table shows **zero rows after weeks of traffic**, the feature is silently broken at the platform layer. The earlier you query `select count(*) from <table>` against prod, the faster you diagnose. For juristic signup it was:
+```sql
+select count(*) from documents;   -- expected: hundreds, actual: 0 for 2 weeks
+```
+That single query collapsed a "weird intermittent register bug" into "it has literally NEVER worked in production."
+
+**Fix — raise the limit ABOVE the app-level validator:**
+```ts
+// next.config.ts
+const nextConfig: NextConfig = {
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "12mb",   // > MAX_SIZE (10 MB) so app-level errors surface cleanly
+    },
+  },
+  // ...
+};
+```
+
+The 2-MB headroom matters: if the limit equals MAX_SIZE, a file exactly at the boundary still trips the platform reject before the validator can return a friendly `file_too_large`. Always raise the platform limit a comfortable margin above the app limit.
+
+**Why this matters next time:**
+- The default 1 MB is hostile to **any** file upload feature — profile pictures, payment slips, freight docs, anything CSV-import-shaped. Audit every Server Action that takes a `FormData` with files and ensure the platform limit > validator limit + margin.
+- The bug is **invisible during local dev** unless you actually upload a file > 1 MB. Smoke tests with 5 KB stub PNGs pass; real customer uploads with 2-3 MB phone-camera scans fail.
+- A `console.error` inside the action's `catch (e)` block won't fire because the action body never ran. Don't trust action-internal observability — the rejection happens upstream of your code.
+- Diagnostic: `select count(*) from <feature-table> where created_at > '<deploy-date>'` is the cheapest, fastest "is this feature actually working in prod?" check there is. Run it weekly on launch-week features.
+
+**Cross-links:**
+- Commit `f6c2ab1d` — the next.config.ts change
+- [Next.js docs — `serverActions.bodySizeLimit`](https://nextjs.org/docs/app/api-reference/config/next-config-js/serverActions#bodysizelimit)
+- This entry is paired with the [`requireGuest()` cookie-revalidation entry above](#2026-05-25-server-action-cookie-write--layout-revalidation--requireguest-kicks-user-out-mid-multi-step-flow) — both were "juristic signup zero documents in prod" with different root causes; first fix exposed the second.
+
+---
+
+## [2026-05-25 4th] Multi-step signup resume pattern — async Server-Component wrapper, NOT client-side state recovery
+
+**Context:** After fixing requireGuest() (let mid-signup users stay on `/register`), users hit a NEW trap: the client form started at Step 1 of 3, asked for their phone again, and `registerJuristicStep1` rejected the now-duplicate phone with `signup_failed`. The user couldn't get past Step 1 of a flow they were already past.
+
+**Symptom:** Signed-in user with `status='incomplete'` lands on the multi-step signup page → form opens at Step 1 → all Step 1 fields are blank → submitting fails because the row already exists → user is locked out forever (phone uniqueness on `auth.users`).
+
+**Wrong fixes attempted (don't):**
+- ❌ `useEffect` on mount → fetch user state → setStep — causes a Step-1-flash before the effect resolves, plus a hydration mismatch warning.
+- ❌ URL `?step=2` param + client read — works for inbound deep links from `/complete-profile` but doesn't cover direct nav from a bookmark / hard refresh.
+- ❌ Move the multi-step state into URL search params — breaks back/forward, exposes incomplete-signup state in browser history.
+
+**Right fix — refactor page.tsx to an async Server Component that fetches the partial state and passes it down as props:**
+
+```tsx
+// app/[locale]/(auth)/register/page.tsx — Server Component
+export default async function RegisterPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const tabParam = params.tab === "juristic" ? "juristic" : "personal";
+
+  const data = await getCurrentUserWithProfile();
+
+  let juristicResume: RegisterResumeState | null = null;
+  let initialTab: TabId = tabParam;
+
+  if (
+    data?.user &&
+    data.profile?.status === "incomplete" &&
+    data.profile?.account_type === "juristic"
+  ) {
+    // Check Step 2 completion by querying the canonical row
+    const supabase = await createClient();
+    const { data: corp } = await supabase
+      .from("corporate")
+      .select("tax_id, company_name, company_address")
+      .eq("profile_id", data.user.id)
+      .maybeSingle();
+
+    juristicResume = {
+      step: corp ? 3 : 2,                          // skip to Step 3 if corporate already saved
+      taxId: corp?.tax_id ?? "",
+      companyName: corp?.company_name ?? "",
+      companyAddress: corp?.company_address ?? "",
+    };
+    initialTab = "juristic";
+  }
+
+  return <RegisterClient initialTab={initialTab} juristicResume={juristicResume} />;
+}
+
+// register-client.tsx — Client Component (rename of the original RegisterPage)
+"use client";
+export function RegisterClient({
+  initialTab = "personal",
+  juristicResume = null,
+}: { initialTab?: TabId; juristicResume?: RegisterResumeState | null }) {
+  const [tab, setTab] = useState<TabId>(initialTab);
+  // pass juristicResume down to <JuristicForm resume={juristicResume} />
+}
+
+function JuristicForm({ resume }: { resume: RegisterResumeState | null }) {
+  const [step, setStep] = useState<JuristicStep>(resume?.step ?? 1);
+  const [taxId, setTaxId] = useState(resume?.taxId ?? "");
+  // ...
+}
+```
+
+**Pattern characteristics:**
+- Server reads DB → decides initial state → no client-side flash, no hydration mismatch.
+- Client state still owns subsequent user input (the resume is just an initial value).
+- Guests (no session) and active users (status='active' redirected by requireGuest) pass through with `initialTab='personal'` + `juristicResume=null` → normal full-flow.
+- Detection key is the canonical row that the previous step writes (here: `corporate`). For any multi-step form, the table the FIRST step writes is your "did Step 1 complete?" signal; the table the LAST step writes is your "is this whole flow done?" signal.
+
+**When to reach for this:**
+- Multi-step auth flows where Step 1 already has DB side-effects (auth.users + profile row insert).
+- Anything where a customer can close the tab mid-flow and the app must let them resume without restarting.
+- KYC / verification workflows that span multiple sessions.
+
+**When NOT to use this:**
+- Single-step forms — overkill.
+- Forms where Step 1 is purely client-state (no DB write yet) — resume is automatic from state being preserved across navigation.
+
+**Cross-links:**
+- Commit `a8db8b2e` — the refactor
+- File: `app/[locale]/(auth)/register/page.tsx` (server wrapper, ~60 lines) + `register-client.tsx` (the original 1137-line client moved + propified)
+
+---
+
+## [2026-05-26] Route-group chrome leak — `<FloatingTabs />` in `[locale]/layout.tsx` rendered on every route
+
+**Context:** Sprint-25. The owner reviewed the customer portal + admin + auth pages and said *"footter หลุดเข้ามาเยอะอยู่นะ ในหลังบ้านอะ มันไม่ควรหลุดเข้ามานะ"* — the marketing LINE chat bubble + mobile CTA quick-tabs (`<FloatingTabs />`) and the big marketing `<Footer />` were rendering on protected portal pages, admin pages, and auth pages where they shouldn't appear. Commit `691940b`.
+
+**Symptom:** On `/dashboard`, `/service-order`, `/wallet`, `/admin/*`, `/login`, `/forgot-password`, `/complete-profile`, `/reset-password` etc., users saw at the bottom: (a) a floating LINE chat-bubble + mobile CTA quick-tabs (`<FloatingTabs />`), AND (b) the marketing Footer with all the sales contact info / social media / sitemap. Neither belongs on internal/transactional surfaces.
+
+**Root cause — two distinct leaks:**
+
+1. **`<FloatingTabs />` was mounted in `app/[locale]/layout.tsx`** — i.e. at the locale level, the parent of EVERY route group. The Next App Router renders the chain `[locale]/layout > (group)/layout > page` for every page, so any chrome component placed in the locale layout shows on every page under that locale. **Route groups don't isolate parent chrome** — they only nest their own. A common misconception is that "the `(public)` group is sandboxed from `(protected)`" — they're sandboxed for **layouts they declare**, but they all share whatever the locale layout renders.
+
+2. **`<Footer />` was hard-coded in 17 individual page files** — every protected page (`(protected)/notifications/page.tsx`, `(protected)/orders/page.tsx`, etc.), the auth `/forgot-password`, and the root-locale `/complete-profile` + `/reset-password` each ended with `<Footer />`. There was no architectural gate; each page author duplicated the import.
+
+**Fix (the route-group-as-chrome-scope pattern):**
+
+```tsx
+// app/[locale]/layout.tsx — REMOVE <FloatingTabs /> from here
+// ❌ Before: import { FloatingTabs } from "@/components/sections/floating-tabs";
+
+return (
+  <NextIntlClientProvider messages={clientMessages}>
+    <LocaleHtmlLang />
+    {/* ❌ Before: <FloatingTabs /> here = renders on EVERY locale route */}
+    {children}
+  </NextIntlClientProvider>
+);
+
+// app/[locale]/(public)/layout.tsx — NEW FILE, mount marketing chrome here
+import { FloatingTabs } from "@/components/sections/floating-tabs";
+
+export default function PublicLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      {children}
+      <FloatingTabs />
+    </>
+  );
+}
+```
+
+For `<Footer />` we deleted the 17 hard-coded imports + JSX usages from non-public pages. The marketing `(public)/page.tsx` etc. keep theirs — they're inside the right group. `(protected)/layout.tsx` keeps `<PcsFooterNav />` because that's the LEGACY mobile bottom-nav for the customer portal, a separate component from the marketing Footer, and it IS at the right layer.
+
+**Why this matters next time:**
+
+- **Rule: components that render visible chrome (header / footer / floating widgets / CTA bars) must live in a route-group layout, not in `[locale]/layout.tsx`** — unless they're truly global (the auth-aware `<NavBar />` is the canonical exception since it lives in every group's layout independently and is auth-aware).
+- **Early-warning sign:** if you're tempted to add `if (pathname.startsWith('/admin'))` or `if (!isPublicRoute)` inside a layout-level chrome component to "conditionally hide" — STOP. That's a smell that the component is mounted at the wrong layer. Move it down into the route group that actually wants it.
+- **Detection grep:** `grep -rn 'from "@/components/sections/footer"' app/\[locale\]` should show ONLY `(public)/*` matches. Anything else outside `(public)` is a leak.
+- **The hard-coded-per-page anti-pattern** (cause #2) is its own smell — when 17 files import the same chrome component at the bottom of their JSX, the chrome belongs in the layout, full stop. A single edit gates 17 pages.
+
+**Cross-links:**
+- Commit `691940b` — Sprint-25 fix (20 files changed, 32+/38−)
+- Files: `app/[locale]/layout.tsx`, NEW `app/[locale]/(public)/layout.tsx`, 17 page files (mostly `(protected)/*/page.tsx`)
+- Sibling rule (admin chrome): `app/[locale]/(admin)/layout.tsx` already mounts its own admin chrome at the group level — that's the correct pattern; the marketing-side just hadn't caught up.
+
+---
+
+## [2026-05-26] Customer-table mobile-collapse without DataTables-Responsive JS
+
+**Context:** Sprint-26. Owner: *"ทำ responsive mobile"*. On 4G mobile the customer's `/service-order` list (the ฝากสั่งซื้อสินค้า table) overflowed 360-390px viewports — Chinese product titles wrapped vertically character-by-character because each of 7 cols got squeezed to ~50px, and every row sprouted a "คลิกดูเพิ่มเติม" hint that promised an expand-on-tap which never fired. Commit `fd1ffd9`.
+
+**Symptom triad:**
+1. 7-column table, total intrinsic width ~570px, painting in full inside a 375px viewport with horizontal overflow.
+2. `<th class="none">` columns (date / orderno / status / price) still visible despite the class — that class is meant to mark "hideable on small screens".
+3. The legacy `.tr1::after { content: " \A คลิกดูเพิ่มเติม"; }` pseudo painted on every ID cell promising tap-to-expand, but tapping did nothing.
+
+**Root cause:** the legacy PHP page was built around the **DataTables-Responsive jQuery plugin** which, at runtime, would (a) read `<th class="none">` and hide those columns under the responsive breakpoint, (b) add a `+` widget bound to a click handler that expands the hidden cols inline below the row. Pacred is server-rendered + no jQuery → the plugin never runs. But the plugin's CSS shipped in 5 stylesheets (`shops.css`, `cart.css`, `service-import.css`, `payment.css`, `forwarder.css`) and those rules are now dead promises:
+
+- The `<th class="none">` class is a plain class with no default browser meaning → cols stay visible.
+- The `.tr1::after` content is decorative — without the JS handler, it's a misleading hint.
+
+**Fix — pure-CSS emulation in `legacy-overrides.css` §11 (the canonical D1 override sheet):**
+
+```css
+/* Kill the dead-promise hint globally — all 5 stylesheets shadow this. */
+.pcs-legacy .tr1::after,
+.pcs-legacy-body .tr1::after { content: none !important; }
+
+@media (max-width: 767.98px) {
+  /* Honour the `<th class="none">` semantic — the legacy markup is right,
+     the plugin just isn't there to enforce it. */
+  .pcs-legacy table.dataTable thead th.none { display: none !important; }
+
+  /* CSS can't reach a `td` from its `th` — there's no parent/sibling
+     selector that walks the column. So per-page modifier classes
+     (`.pcs-shops-page`) wrap the page and we spell out which td positions
+     correspond to the `th.none` cols on THAT page. shops.php has cols
+     2/3/5/6 = none; payment.php has cols 2/3/4/5 = none (different
+     mapping → different rule under a different modifier). */
+  .pcs-shops-page table#myTable tbody td:nth-child(2),
+  .pcs-shops-page table#myTable tbody td:nth-child(3),
+  .pcs-shops-page table#myTable tbody td:nth-child(5),
+  .pcs-shops-page table#myTable tbody td:nth-child(6) {
+    display: none !important;
+  }
+}
+```
+
+The page wrapper picks up the modifier: `<div className="pcs-legacy pcs-shops-page">`. Information isn't lost because each legacy page's "main column" (col 4 on shops.php) already has a `<div className="d-block d-sm-none">` block that duplicates date / orderno / status / price inline — that was the legacy's manual fallback for the collapsed-row "details" view, designed to be visible alongside whatever the plugin painted. With the cols collapsed, the inline block becomes the SOLE mobile renderer of that data → no duplicate.
+
+**Bonus fix in the same media query — the status-tab strip:**
+
+Legacy `style.css` line 1015 forces `.tab-sm-center { width: 50% }` at `<578px` — 7 status tabs into a 2-column grid leaves the 7th hanging on its own row. Override to single-row horizontal `scroll-snap-type: x mandatory; flex-wrap: nowrap; overflow-x: auto` — customer swipes through tabs (iOS Mail / Calendar pattern). Hides scrollbar via `scrollbar-width: none` + `::-webkit-scrollbar { display: none }`.
+
+**Why this matters next time:**
+
+- **When you port a legacy DataTables / Bootstrap-Responsive table** to React + SSR (no jQuery), the chain to look for is: `<table class="dataTable dtr-inline">`, `<th class="all|none">`, `.tr1::after { content: "...คลิกดูเพิ่มเติม" }`. ALL THREE are dead promises. Search legacy-overrides.css §11 for the canonical pure-CSS replacement.
+- **Selector limitation:** CSS can't say "td under a th with class X". You have two options: (a) add a class to each td server-side at render time (verbose markup), or (b) use a per-page modifier wrapper + spell out `td:nth-child(N)` positions. The codebase uses (b) for D1 because the legacy markup is unchanged.
+- **Faithful-port intent intact** — only the CSS layer changes. `<th class="none">`, `<th class="all">`, `class="tr1"`, the `.d-block.d-sm-none` mobile-summary block — all preserved 1:1 with the legacy PHP, so the next 1:1 audit (`legacy-fidelity-check` skill) still passes.
+- **Detection grep:** `grep -rn 'tr1::after' public/legacy` will find the 5 dead rules; `grep -rn '<th class="none"\|<th className="none"' app` will find the dataTables-Responsive-expecting markup. If either grep returns hits AND a customer reports a mobile overflow → you've hit this.
+
+**Cross-links:**
+- Commit `fd1ffd9` — Sprint-26
+- Files: `public/legacy/pcs/legacy-overrides.css` §11 + `public/legacy/pcs/shops.css` mobile media query + `app/[locale]/(protected)/service-order/page.tsx` (wrapper className gains `pcs-shops-page`)
+- Same pattern applies to `/service-payment` (cols 2/3/4/5 = none), `/service-import/pending` (cols 2/4/5/6 = none), `/wallet/history` — when those get the responsive treatment, add `.pcs-payment-page` / `.pcs-forwarder-page` / `.pcs-wallet-page` modifiers + per-page `td:nth-child` rules in legacy-overrides.css §11 (already comment-stubbed there).
+
+---
+
+## [2026-05-26] `export { x } from "./other"` inside a `"use server"` file BREAKS Next 16's Server-Action AST walker — module reports "no exports" at build
+
+**Context:** Task L (LIFF + Messaging API replacement). Refactored two LINE-related server actions from `actions/profile.ts` into a new dedicated `actions/line-settings.ts`. Tried the obvious clean re-export pattern in `actions/profile.ts`:
+
+```ts
+"use server";
+// ...
+export { linkLineAccount, disconnectLineAccount } from "./line-settings";
+```
+
+**Symptom:** `pnpm build` fails. The error is misleading: Next 16's Server-Action validator reports the *entire* `actions/profile.ts` module as having "no exports at all", which transitively breaks every other action exported from that file (`completeProfile`, `updateProfileField`, etc.) — the dormant `profile-form.tsx` (which imports half a dozen of them) explodes with "Module has no exported member" errors for actions that *are* defined inline in the same file.
+
+**Root cause:** Next 16's Server-Action handler walks the module's export *AST* (not the resolved JS exports) to register each `"use server"` function with the action-ID encryption table. Re-exports from another file aren't in the AST as function declarations; they're a `ExportNamedDeclaration` pointing at another module. The walker treats this as "this file has no inline server-action exports" and zeroes the registry for the file, which cascades into a confusing "missing exports" error elsewhere.
+
+**Fix — wrap, don't re-export:**
+```ts
+"use server";
+import {
+  linkLineAccount     as linkLineAccountImpl,
+  disconnectLineAccount as disconnectLineAccountImpl,
+} from "./line-settings";
+
+export async function linkLineAccount(lineUserId: string, displayName: string) {
+  return linkLineAccountImpl(lineUserId, displayName);
+}
+export async function disconnectLineAccount() {
+  return disconnectLineAccountImpl();
+}
+```
+
+The local `async function` declarations land as inline AST nodes, the walker sees them, the action-IDs register, and the body just delegates. ~4 extra lines per action.
+
+**Why this matters next time:**
+- Re-exports are the natural refactor move for splitting a fat action file. Next 16 makes them a bear trap.
+- The error message points at the *consumer* file ("missing export") not the *defining* file ("re-export rejected"). Looking at the consumer is a 30-minute dead end.
+- Same pitfall applies to `export * from "./other"` and `export { x as y } from "./other"` — anything where the AST node is a re-export.
+- Allowed: `import { x } from "./other"; export { x }` — that registers `x` as a local binding first; the walker treats it as an inline export. (Verified — `tsc` AND `next build` both accept this form.) But the wrapper pattern is clearer + lets you add cross-cutting concerns (logging, rate-limit, etc.) at the wrapper level.
+
+**Cross-links:**
+- Commit `af4bebe9` — task L, `actions/profile.ts` lines updated with the wrapper pattern
+- Adjacent files: `actions/line-settings.ts` (canonical home for the two LINE actions)
+- This is a documented Next.js issue: search GitHub for "use server re-export AST" — multiple maintainer comments confirm the wrapper is the intended pattern.

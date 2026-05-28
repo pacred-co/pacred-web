@@ -29,9 +29,9 @@
  * freight_f_no column, this action will block issuance on cert_status=
  * 'pending'. V1 has no WHT linkage on freight side (V-A6 was cargo-only).
  *
- * V-E10 QA gate: future hook — when freight_qa_inspections gets keyed via
- * freight_shipment_id (FK now in place since 0050), this action will call
- * isCargoShipmentQaPassed-equivalent and reject 'qa_not_passed'. V1 stub.
+ * V-E10 QA gate: WIRED — adminCreateFreightInvoice blocks draft creation
+ * when isFreightShipmentQaPassed() returns false (no acceptable outcome in
+ * {pass, fail_minor, waived} for the parent shipment). Error: 'qa_not_passed'.
  *
  * Idempotency: line_total = qty × unit_price_usd recomputed server-side.
  * Issuance is one-way (draft → issued); cancel writes a new audit row + UI
@@ -46,6 +46,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { isFreightShipmentQaPassed } from "./qa-inspections";
 import {
   createFreightInvoiceSchema, type CreateFreightInvoiceInput,
   addInvoiceLineSchema,       type AddInvoiceLineInput,
@@ -99,6 +100,14 @@ export async function adminCreateFreightInvoice(
     }
     if (existing) {
       return { ok: false, error: `existing_invoice:${existing.status}:${existing.id}` };
+    }
+
+    // V-E10 QA gate — block invoice creation when no acceptable QA outcome
+    // is recorded for the shipment. Accepted: {pass, fail_minor, waived}.
+    // fail_major or no inspection at all → 'qa_not_passed'.
+    const qaPassed = await isFreightShipmentQaPassed(d.freight_shipment_id);
+    if (!qaPassed) {
+      return { ok: false, error: "qa_not_passed" };
     }
 
     const { data: inserted, error: insErr } = await admin

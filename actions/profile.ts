@@ -46,10 +46,7 @@ export async function updateProfileBasic(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
-  }
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { error } = await supabase
@@ -96,21 +93,15 @@ export async function upsertCorporate(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
-  }
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // Guard at app layer too: corporate row requires account_type='juristic'
-  const { data: profile, error: profileErr } = await supabase
+  const { data: profile } = await supabase
     .from("profiles")
     .select("account_type")
     .eq("id", user.id)
     .maybeSingle<{ account_type: "personal" | "juristic" }>();
-  if (profileErr) {
-    console.error(`[profiles list] failed`, { code: profileErr.code, message: profileErr.message });
-  }
 
   if (!profile || profile.account_type !== "juristic") {
     return { ok: false, error: "account_not_juristic" };
@@ -157,10 +148,7 @@ export async function updateNotifyChannels(
   }
 
   const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
-  }
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { error } = await supabase
@@ -186,10 +174,7 @@ export async function updateAvatar(publicUrl: string): Promise<ActionResult> {
     return { ok: false, error: "invalid_url" };
   }
   const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
-  }
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { error } = await supabase
@@ -223,22 +208,15 @@ export async function completeProfile(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
-  }
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  const { data: existing, error: existingErr } = await supabase
+  const { data: existing } = await supabase
     .from("profiles")
     .select("status, account_type")
     .eq("id", user.id)
     .maybeSingle<{ status: "incomplete" | "active" | "suspended"; account_type: "personal" | "juristic" }>();
 
-  if (existingErr) {
-    console.error(`[profiles mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
-    return { ok: false, error: `db_error:${existingErr.code ?? "unknown"}` };
-  }
   if (!existing) return { ok: false, error: "profile_not_found" };
   if (existing.status === "suspended") return { ok: false, error: "account_suspended" };
   // Juristic must use the 3-step register flow — guard at server even if
@@ -276,96 +254,40 @@ export async function completeProfile(
 }
 
 // ────────────────────────────────────────────────────────────
-// LINE LINK / UNLINK — populate profiles.line_user_id (D-1-LIFF)
+// LINE LINK / UNLINK — compatibility shims (task L, 2026-05-26)
 //
-// Linking flow: customer opens /liff/link inside LINE OA chat (or browser),
-// the LIFF SDK exchanges the LINE login state for a profile { userId, ... },
-// the page POSTs userId here, and we persist it on the signed-in Pacred
-// profile.  Without this populator, every push to a customer is a silent
-// no-op because lib/notifications/index.ts gates `sendLinePush()` on
-// profile.line_user_id being non-null.
+// The canonical home for LINE-account linking is now actions/line-settings.ts
+// (linkLineAccount(lineUserId, displayName) / disconnectLineAccount). These
+// wrappers keep dormant callers (profile-form.tsx + any external import
+// of "@/actions/profile") working without behavioural change.
 //
-// Uniqueness: profiles_line_user_id_idx (0003_profiles_extended.sql) enforces
-// one Pacred profile per LINE userId — re-link from a second Pacred account
-// surfaces as `line_already_linked` so we never silently steal it.
+// Why wrappers instead of `export ... from "./line-settings"`:
+//   Next 16 "use server" files require each exported Server Action to be a
+//   locally-defined async function — a re-export breaks the whole module's
+//   export table during the Server-Action AST walk. Local async wrappers
+//   that delegate keep the export table intact while still routing all
+//   logic through the canonical module.
+//
+// Direct callers should migrate to actions/line-settings.ts so they get the
+// (lineUserId, displayName) signature explicitly.
 // ────────────────────────────────────────────────────────────
 
-// LINE userIds are exactly "U" + 32 lowercase hex chars (33 total).  Reject
-// anything else early so we never write garbage from a spoofed client.
-const LINE_USER_ID_RE = /^U[0-9a-f]{32}$/;
+import {
+  linkLineAccount as _linkLineAccount,
+  disconnectLineAccount as _disconnectLineAccount,
+} from "./line-settings";
 
-export async function linkLineAccount(lineUserId: string): Promise<ActionResult> {
-  // G-4 — impersonation is read-only; refuse customer-facing mutations.
-  const impErr = await assertNotImpersonating();
-  if (impErr) return impErr;
-
-  if (typeof lineUserId !== "string" || !LINE_USER_ID_RE.test(lineUserId)) {
-    return { ok: false, error: "invalid_line_user_id" };
-  }
-
-  const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
-  }
-  if (!user) return { ok: false, error: "not_signed_in" };
-
-  // If this LINE userId is already attached to a *different* Pacred account,
-  // fail loud rather than overwriting (the unique index would 23505 anyway,
-  // but the lookup gives us a friendlier error string).
-  const { data: existing, error: existingErr } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("line_user_id", lineUserId)
-    .maybeSingle<{ id: string }>();
-  if (existingErr) {
-    console.error(`[profiles list] failed`, { code: existingErr.code, message: existingErr.message });
-  }
-
-  if (existing && existing.id !== user.id) {
-    return { ok: false, error: "line_already_linked" };
-  }
-
-  const { error } = await supabase
-    .from("profiles")
-    .update({
-      line_user_id:   lineUserId,
-      line_linked_at: new Date().toISOString(),
-    })
-    .eq("id", user.id);
-
-  if (error) {
-    // Defensive — race could still trip the unique index between the lookup
-    // above and this update.
-    if (error.code === "23505") return { ok: false, error: "line_already_linked" };
-    return { ok: false, error: error.message };
-  }
-
-  revalidatePath("/profile");
-  return { ok: true };
+/** @deprecated Import from `@/actions/line-settings` instead — same signature, canonical home. */
+export async function linkLineAccount(
+  lineUserId: string,
+  displayName: string = "",
+): Promise<{ ok: true } | { ok: false; error: string; retryAfterSeconds?: number }> {
+  return _linkLineAccount(lineUserId, displayName);
 }
 
-export async function unlinkLine(): Promise<ActionResult> {
-  // G-4 — impersonation is read-only; refuse customer-facing mutations.
-  const impErr = await assertNotImpersonating();
-  if (impErr) return impErr;
-
-  const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
-  }
-  if (!user) return { ok: false, error: "not_signed_in" };
-
-  const { error } = await supabase
-    .from("profiles")
-    .update({ line_user_id: null, line_linked_at: null })
-    .eq("id", user.id);
-
-  if (error) return { ok: false, error: error.message };
-
-  revalidatePath("/profile");
-  return { ok: true };
+/** @deprecated Legacy alias of {@link disconnectLineAccount}. Import from `@/actions/line-settings`. */
+export async function unlinkLine(): Promise<{ ok: true } | { ok: false; error: string; retryAfterSeconds?: number }> {
+  return _disconnectLineAccount();
 }
 
 // ────────────────────────────────────────────────────────────
@@ -458,26 +380,23 @@ export async function checkEmailAvailability(
   //    by email value rather than by id — equivalent to the legacy semantics.
   let legacyQuery = admin
     .from("tb_users")
-    .select("userid")
-    .ilike("useremail", needle)
-    .neq("userstatus", "0")
+    .select("userID")
+    .ilike("userEmail", needle)
+    .neq("userStatus", "0")
     .limit(1);
   if (ownerId) {
     // Look up the caller's own email to exclude their legacy row (if any).
     // Cheap extra query but only on the profile-edit hot path.
-    const { data: ownProfile, error: ownProfileErr } = await admin
+    const { data: ownProfile } = await admin
       .from("profiles")
       .select("email")
       .eq("id", ownerId)
       .maybeSingle<{ email: string | null }>();
-    if (ownProfileErr) {
-      console.error(`[profiles list] failed`, { code: ownProfileErr.code, message: ownProfileErr.message });
-    }
     if (ownProfile?.email) {
-      legacyQuery = legacyQuery.neq("useremail", ownProfile.email);
+      legacyQuery = legacyQuery.neq("userEmail", ownProfile.email);
     }
   }
-  const { data: legacyHit, error: legacyErr } = await legacyQuery.maybeSingle<{ userid: string }>();
+  const { data: legacyHit, error: legacyErr } = await legacyQuery.maybeSingle<{ userID: string }>();
   if (legacyErr && legacyErr.code !== "PGRST116") {
     console.error("[profile/checkEmailAvailability] tb_users lookup failed:", legacyErr);
   }
@@ -530,30 +449,27 @@ export async function checkPhoneAvailability(
   }
   if (profileHit) return { available: false, reason: "taken" };
 
-  // 2. Legacy tb_users (Thai-local form, userstatus<>'0' = not deleted).
+  // 2. Legacy tb_users (Thai-local form, userStatus<>'0' = not deleted).
   let legacyQuery = admin
     .from("tb_users")
-    .select("userid")
-    .eq("usertel", local)
-    .neq("userstatus", "0")
+    .select("userID")
+    .eq("userTel", local)
+    .neq("userStatus", "0")
     .limit(1);
   if (ownerId) {
-    const { data: ownProfile, error: ownProfileErr } = await admin
+    const { data: ownProfile } = await admin
       .from("profiles")
       .select("phone")
       .eq("id", ownerId)
       .maybeSingle<{ phone: string | null }>();
-    if (ownProfileErr) {
-      console.error(`[profiles list] failed`, { code: ownProfileErr.code, message: ownProfileErr.message });
-    }
     if (ownProfile?.phone) {
       const ownLocal = ownProfile.phone.startsWith("+66")
         ? "0" + ownProfile.phone.slice(3)
         : ownProfile.phone;
-      legacyQuery = legacyQuery.neq("usertel", ownLocal);
+      legacyQuery = legacyQuery.neq("userTel", ownLocal);
     }
   }
-  const { data: legacyHit, error: legacyErr } = await legacyQuery.maybeSingle<{ userid: string }>();
+  const { data: legacyHit, error: legacyErr } = await legacyQuery.maybeSingle<{ userID: string }>();
   if (legacyErr && legacyErr.code !== "PGRST116") {
     console.error("[profile/checkPhoneAvailability] tb_users lookup failed:", legacyErr);
   }

@@ -41,8 +41,8 @@ Living doc — update each save-point. **Keep under 800 lines** (single-read bud
 This supersedes the "V2 = rebuilt owner-pleaser" framing of ADR-0010. The launch-era code (customer portal · 60+ admin routes · Tier 0/1/2) still exists, but the direction under it has changed — see §9.
 
 **Three phases (D1):**
-- **Phase A — Data migration.** Port the legacy `pcsc_main` (117 tables · ~8,898 customers · 3.78M rows) into Pacred's PostgreSQL/Supabase. `PCS<n>` → `PR<n>` keeping the exact running number; custom auth so customers sign in with their *existing* password (no reset).
-  *Status: 🟢 **business data loaded to dev + prod Supabase** (2026-05-19) — migrations `0081`-`0083` + `0087` applied; 114 of 117 tables reconcile MySQL ↔ Supabase exactly (8,898 customers · orders · wallets · ตู้); the 3 oversized log tables (779 MB) + customer image files wait for the imminent Supabase **Pro** upgrade (free tier caps at 500 MB).* Runbook: [`runbook/pcs-data-migration.md`](runbook/pcs-data-migration.md).
+- **Phase A — Data migration. ✅ DONE.** Ported the legacy `pcsc_main` (117 tables · ~8,898 customers · 3.78M rows) into Pacred's PostgreSQL/Supabase. `PCS<n>` → `PR<n>` keeping the exact running number; custom auth so customers sign in with their *existing* password (no reset).
+  *Status: 🟢 **complete.** Supabase Pro upgrade done (ก๊อต) · migrations `0081`-`0083` + `0087` applied to dev + prod; **all 117 tables loaded** (the 3 log tables `tb_web_hs`/`tb_history_key`/`tb_history` backfilled post-Pro); **customer image + storage files uploaded to Supabase S3 production** (`pcsracgo/public/member`) by ภูม 2026-05-24. Auth bridge live (`lib/auth/pcs-legacy-password.ts`).* Runbook: [`runbook/pcs-data-migration.md`](runbook/pcs-data-migration.md).
 - **Phase B — Workflow fidelity.** Rework the Pacred app — customer portal + admin back-office — so its menus, job statuses, container (ตู้) flow, and end-to-end logic-loop **match the legacy PCS system exactly**.
   *Status: 🟡 **wave 1 shipped + integrated on `dave`** — the 9-icon launchpad, order flow, admin per-role RBAC sidebar, container `tb_cnt` payment ledger, and the legacy-auth bridge. First-pass — **not yet fidelity-verified** against the legacy original (the `legacy-fidelity-check` gate). Subsequent waves continue: ภูม = backend onto the ported `tb_*` schema; ปอน = the customer-facing UI to the legacy look + flow.*
 - **Phase C — Pacred enhancements.** *Only after* the faithful port works, layer Pacred's own improvements. The old Tier 0/1/2/3 roadmap + the Phase-2 build queue (booking flow · customer-intelligence · internal-chat · disbursement · china-ops · platform-observability) + the 8-specialist R&D set are **deferred here — re-sequenced, not cancelled.**
@@ -207,16 +207,18 @@ This supersedes the "V2 = rebuilt owner-pleaser" framing of ADR-0010. The launch
 
 **Read this section through the D1 lens (§2).** The rebuilt-Pacred app *was* launched to production 2026-05-17 and that code still exists — but on 2026-05-18 the owner rejected the rebuilt direction. So "shipped" below means **"code that exists"**, not "the agreed direction". Under D1 the forward work is **Phase A → B → C**, and most of the rebuilt feature set will be reworked in Phase B to match the legacy PCS workflow.
 
-### 🟦 Phase A — Data migration (🟢 business data loaded to dev + prod)
+### 🟦 Phase A — Data migration (🟢 DONE — 117/117 tables loaded on prod · images on S3)
 
 Port the legacy `pcsc_main` MySQL DB into Pacred's PostgreSQL/Supabase. Runbook: [`runbook/pcs-data-migration.md`](runbook/pcs-data-migration.md).
 
-- ✅ **Schema → `0081`-`0083`** — 117 tables ported MySQL→PostgreSQL, faithful (legacy names/types/even typos kept; `tb_` prefix → no collision with Pacred's own tables). Committed to `dave` as `0081` schema · `0082` indexes · `0083` member-seq.
+- ✅ **Schema → `0081`-`0083`** — 117 tables ported MySQL→PostgreSQL, faithful (legacy names/types/even typos kept; `tb_` prefix → no collision with Pacred's own tables). Committed as `0081` schema · `0082` indexes · `0083` member-seq.
 - ✅ **Converter + dry-run** — 3,780,238 rows via pgloader; 2,297,341 `PCS→PR` member-code transforms (case-normalised — MySQL collation is case-insensitive); dry-run loaded into a throwaway PostgreSQL 17 — all 117 tables reconcile MySQL ↔ PostgreSQL exactly (0 load failures · 0 mismatches).
-- ✅ **Loaded to dev + prod Supabase (2026-05-19 · Option B)** — `0081`-`0083` + `0087` applied to both projects; the 230 MB of business data (114 tables — 8,898 customers · orders · wallets · ตู้ · forwarders · receipts) loaded; 114/114 business tables reconcile exactly; 8,898 `tb_users` rows with intact 79-char login hashes.
+- ✅ **Loaded to dev + prod Supabase** — `0081`-`0083` + `0087` applied to both projects; **all 117 tables loaded on prod**, incl. the 3 oversized history/log tables (`tb_web_hs` · `tb_history_key` · `tb_history`, 779 MB) backfilled after ก๊อต's Supabase **Pro upgrade**. 8,898 `tb_users` rows with intact 79-char login hashes.
+- ✅ **Customer images + storage files** — ภูม uploaded the legacy `pcsracgo/public/member` image + storage files into **Supabase S3 production** (2026-05-24). Phase A storage parity closed; no further legacy migration needed.
 - ✅ **Auth bridge** — `lib/auth/pcs-legacy-password.ts` verifies the legacy password hash — migrated customers sign in with their existing password, no reset.
-- ✅ **New-customer numbering** — `next_pr_member_code()` (`0083`) fills the lowest vacant `PR<n>` first, then increments past max.
-- ⏳ **Remaining — pending the Supabase Pro upgrade** — the 3 oversized history/log tables (`tb_web_hs` · `tb_history_key` · `tb_history`, 779 MB) are created empty; the free tier caps a DB at 500 MB and the full legacy data is 1.02 GB. After the imminent Pro upgrade the 3 log tables + the customer image/file storage (held by แต้ม) backfill to full fidelity. A fresh `pcsc_main` cutover dump from แต้ม reloads at final cutover.
+- ✅ **New-customer numbering** — refined through `0095`-`0103` after live use revealed sequence drift / numeric-pad collisions (lowest-vacant + min-3-digit pad + legacy-anchor restore). Current state: PR baseline + min-3-digit pad, cascade backfill safe.
+- ✅ **REALSHITDATAPCS.rar extracted** (2026-05-24) — full code-only snapshot at `/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/` (~25GB — `public_html/` + `backoffice.pcscargo.co.th/` + `pcs-seafreight.com/` + `sms/`); powers the 2026-05-24 deep audit.
+- ⚠️ **Remaining cleanup (internal — NOT a legacy gap):** the prod Supabase project (`yzljakczhwrpbxflnmco`) has internal table-naming conflicts between rebuilt-era and legacy `tb_*` schemas — our cleanup task, owners เดฟ + ภูม.
 - This supersedes the pre-D1 customers-only migration (`0067` · `u2-1-pcs-customer-migration.md` · `actions/admin/pcs-migration.ts`).
 
 ### 🟧 Phase B — Workflow fidelity (🟡 wave 1 shipped + integrated — first-pass)
@@ -224,6 +226,7 @@ Port the legacy `pcsc_main` MySQL DB into Pacred's PostgreSQL/Supabase. Runbook:
 Rework the customer portal + admin back-office so menus, job statuses, container (ตู้) flow, and the end-to-end logic-loop **match the legacy PCS system exactly** — zero retraining for staff or the ~8,898 customers. ภูม = backend onto the ported `tb_*` schema; ปอน = the customer-facing UI to the legacy look + flow.
 
 - ✅ **Wave 1 — shipped + integrated on `dave`** — the 9-icon launchpad (`pcs-icon-grid` · `pcs-launchpad-header`), the order flow, the admin per-role RBAC sidebar + menu-count badges, the container `tb_cnt` payment ledger (`/admin/accounting/container-payments`), and the legacy-auth bridge (`pcs-legacy-bridge.ts`). **First-pass — not yet fidelity-verified** against the legacy original; subsequent waves run the `legacy-fidelity-check` gate before shipping.
+- 🟢 **Post-launch hardening on `dave-pacred` → `main` (Sprint-23 to Sprint-26, 2026-05-25/26)** — incident-driven polish: (Sprint-23) `/forgot-password` forwards the `EMERGENCY_OTP_BYPASS` flag so customers don't wait for an SMS that never arrives during the ThaiBulkSMS outage; (Sprint-24) `/service-order` all 7 status tabs now highlight on URL match (only `q=2` worked before); (Sprint-25) marketing `<FloatingTabs />` + `<Footer />` gated to `(public)/layout.tsx` only — stripped from 17 protected/auth/transactional pages; (Sprint-26) `/service-order` mobile responsive — pure-CSS emulation of legacy DataTables-Responsive in `legacy-overrides.css §11` (kills the dead `.tr1::after` hint + collapses cols 2/3/5/6 + scroll-snap status tabs). Faithful-port intent intact — markup unchanged, only CSS + chrome-layout layers.
 - 🟡 **Subsequent waves** — drive off the fidelity audit in [`research/`](research/_index.md): `d1-phase-b-gap-map.md` (overview) + `d1-fidelity-customer.md` / `d1-fidelity-admin.md` / `d1-fidelity-workflow.md` (the per-screen / per-button / per-loop rework spec) + the cargo-ops decode ([`audit/cargo-ops-forensics-2026-05-16.md`](audit/cargo-ops-forensics-2026-05-16.md)).
 
 ### ⏸️ Phase C — Pacred enhancements (deferred — re-sequenced, not cancelled)
@@ -255,13 +258,14 @@ Decoded legacy systems + gap-hunts + audits. Under D1 the **legacy-decode + fide
 
 Under D1 the bar is no longer "did the rebuilt app launch" — it is **"is Pacred a faithful port of the legacy PCS Cargo system, so no one needs retraining?"** DoD per phase:
 
-**Phase A — data migration (🟢 business data loaded · log tables + files pending the Pro upgrade):**
+**Phase A — data migration (🟢 ✅ DONE):**
 - [x] All 117 `pcsc_main` tables ported to PostgreSQL — faithful schema (`0081`-`0083`)
 - [x] Converter handles all 3.78M rows · `PCS<n>`→`PR<n>` on member-code columns only
 - [x] Dry-run: 117/117 tables load clean · every row count reconciles MySQL ↔ PostgreSQL
 - [x] Auth bridge verifies the legacy password hash — customers sign in, no reset
-- [x] Business data loaded to dev + prod Supabase — 114/117 tables reconcile · 8,898 customers
-- [ ] Backfill the 3 oversized log tables + customer image files (gated on the Supabase Pro upgrade + แต้ม's image storage); reload from a fresh cutover dump at final cutover
+- [x] All 117 tables loaded on dev + prod Supabase (incl. the 3 log tables backfilled after the Pro upgrade) · 8,898 customers · orders · wallets · ตู้ reconciled
+- [x] Customer image + storage files uploaded to Supabase S3 production (ภูม 2026-05-24 — `pcsracgo/public/member`)
+- [ ] *Internal cleanup (not a legacy gap):* resolve the prod table-naming conflicts between rebuilt-era and legacy `tb_*` schemas
 
 **Phase B — workflow fidelity (🟡 wave 1 shipped — first-pass, not yet fidelity-verified):**
 - [x] Wave 1 — 9-icon launchpad · order flow · admin RBAC sidebar + badges · `tb_cnt` container ledger · legacy-auth bridge (shipped + integrated on `dave`)

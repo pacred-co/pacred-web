@@ -92,13 +92,15 @@ export function Partner() {
                 title={p.name}
                 className="group shrink-0 w-[170px] h-[80px] md:h-[88px] flex items-center justify-center p-3 transition-transform duration-300 hover:-translate-y-1"
               >
-                <Image
-                  src={`/images/partners/${p.file}`}
-                  alt={p.name}
-                  width={140}
-                  height={56}
-                  className="max-h-full max-w-full object-contain transition-all duration-300 grayscale-[0.5] opacity-75 group-hover:grayscale-0 group-hover:opacity-100 group-hover:scale-110"
-                />
+                <div className="relative w-full h-full">
+                  <Image
+                    src={`/images/partners/${p.file}`}
+                    alt={p.name}
+                    fill
+                    sizes="170px"
+                    className="object-contain transition-all duration-300 grayscale-[0.5] opacity-75 group-hover:grayscale-0 group-hover:opacity-100 group-hover:scale-110"
+                  />
+                </div>
               </a>
             ))}
           </div>

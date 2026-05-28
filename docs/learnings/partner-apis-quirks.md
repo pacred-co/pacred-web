@@ -1,53 +1,83 @@
 # Learnings — partner API quirks
 
-Topics: MOMO JMF (TH warehouse partner) · TAM (china-search interim) · ThaiBulkSMS (OTP) · LINE Messaging API + LIFF · PromptPay · DBD juristic lookup · RCGroup-TH.
+Topics: MOMO JMF (TH warehouse partner) · TAM (china-search interim) · ThaiBulkSMS (OTP) · LINE Messaging API + LIFF · PromptPay · DBD juristic lookup · RCGroup-TH · LINE Notify (EOL Mar 2025).
 
 > Append-only. Newest entry on top. Each entry: date · symptom · root cause · what to do.
 
 ---
 
-## 2026-05-27 · TAMIT-cloud product-detail endpoint bumped `/api-product` → `/api-product-2026`
+## 2026-05-27 · DBD lookup — Pacred has a working route handler; the client was bypassing it
 
-**Symptom:** `/admin/service-orders/cart/add` link-paste search (and the customer `/service-order/add` URL tab) silently degraded to `buildDemoDetail()` — no product card with image/title/price ever appeared, the user saw a generic "สินค้าจาก TAOBAO (รหัส ...)" placeholder. The `PACRED_TAMIT_DETAIL_URL=https://tamit-cloud.com/api-product` env var (and the matching default in `lib/china-search/index.ts`) was returning **404** from every `GET .../get/{1688|taobao}/?id=<id>`.
+**Symptom.** Every juristic signup landed in the "ระบบค้นหาไม่พร้อม — กรอกด้วยตนเอง" branch — customers always typed company info manually. d1-deep-audit-2026-05-24 listed this as Gap #5 "TAMIT (Thai ID) identity verification — none, DBD/RD stubbed but not equivalent."
 
-**Root cause:** Upstream rotated the API path to `/api-product-2026` (with the `-2026` suffix). The old `/api-product` namespace was retired. Our env value + library default were both still on the dead path because the rename happened upstream sometime in 2026 after we last verified.
+**Root cause** — two-layer confusion:
 
-**Confirmation against legacy PHP:** The authoritative file is `pcs-admin/include/functions.php` — lines 100 / 174 / 191 all use `https://tamit-cloud.com/api-product-2026/get/{1688|taobao}/?id=...`. The older `pcs-admin/search.php` still references the dead `/api-product` path because it predates the upstream rename. **Rule:** when a TAMIT call returns 404, always check `include/functions.php` first — it's the file the team keeps current.
+1. **`regis-tam.php` is NOT about Thai ID verification.** Despite the name's resemblance to Pacred's TAMIT product-search vendor (`tamit-cloud.com`), the legacy `member/regis-tam.php` is the **Thai juristic-person (นิติบุคคล) 3-step signup**. Per `docs/sprints/archive-a-to-n.md:190`: "regis-tam.php | นิติบุคคลไทย — 3-step | tb_corporate | ✅ ครบ". Already shipped in Pacred as `/register` juristic tab + `actions/auth.ts registerJuristicStep1/saveJuristicStep2/uploadJuristicDoc/completeJuristicRegistration`.
 
-**Fix:**
-```env
-# .env.local
-PACRED_TAMIT_DETAIL_URL=https://tamit-cloud.com/api-product-2026   # was /api-product
-```
-And in `lib/china-search/index.ts`:
-```ts
-const DEFAULT_TAMIT_DETAIL_URL = "https://tamit-cloud.com/api-product-2026";
-```
+2. **The client-side DBD lookup was hitting the retired endpoints.** `register-client.tsx fetchCompany()` called `opendata.dbd.go.th/api/v1/nameAndAddress` + `api/v1/juristicNameAll` directly from the browser. Per the 2026-05-17 entry below, those `api/v1/*` paths were retired (404 on every request) — but Pacred ALREADY had a working internal `app/api/dbd/[taxId]/route.ts` that hits the CURRENT CKAN 2.10 `datastore_search` endpoint with the WAF-bypass User-Agent + proper Thai-field-name encoding. The client just wasn't using it.
 
-**Verified working responses** (after the bump):
-- `GET /api-product-2026/get/1688/?id=808456582517` → `200 · {status:200, data:{id, title, mainImage, sku[], skuMap[], priceRanges, ...}}`
-- `GET /api-product-2026/get/taobao/?id=<id>` → may return `{status:204, ...}` for items not yet in cache. Our `convertProductUrlDetail` already handles status≠200 by falling through to `buildDemoDetail()` — no further change needed; the customer can fill price + qty manually as the legacy posture intended.
+**What to do.** Always check `app/api/*` first before adding a new external-API call from the client. The internal route may already do the right thing — and a server-side fetch is the only place you can set the User-Agent / proxy headers a WAF needs.
 
-**The OTHER TAMIT host is fine:** `https://tam-i-t.com/api/convert-link-china/...` (the short-URL cache for `m.tb.cn` / `qr.1688.com`) was NOT bumped — `PACRED_TAMIT_CACHE_URL` value is still correct. Only the product-detail host (`tamit-cloud.com`) had the path change.
+**Code.** `app/[locale]/(auth)/register/register-client.tsx fetchCompany()` now calls `/api/dbd/${encodeURIComponent(id)}` — single endpoint, normalised response shape (`{ name, address, subdistrict, district, province, postcode }`), explicit status-code handling (404 = not_found, 502 = upstream down → unavailable). No more 4-way field-name juggling (`juristic_name_th` vs `JuristicNameTH` vs `name_th` vs `CompanyName`).
 
-**Why this matters next time:** The TAMIT vendor (พี่แต้ม IT) bumps endpoints between versions without giving us a deprecation notice. If a TAMIT-backed flow degrades to demo mode and you can't reproduce a 200, **probe both legacy paths** (`api-product` vs `api-product-2026`) before assuming the host is dead. The host `tamit-cloud.com` is live — only the path moved.
+**Pattern rule.** When a partner API needs a User-Agent header, custom timeouts, or WAF-evasion tricks, do it server-side via a route handler. A `fetch()` from `"use client"` cannot set most WAF-relevant headers (the browser overrides them) and can never spoof a User-Agent — the WAF will always see the real browser UA.
 
-**Diagnostic one-liner to re-check next time:**
+**Anti-pattern caught.** d1-deep-audit-2026-05-24 Gap #5 was mislabelled "TAMIT (Thai ID) verification" because the legacy filename contains "tam". Future agents should NOT assume a partner-API integration is missing without first grepping `app/api/` for an existing internal route. Updated `dave.md` pickup #2 + `d1-deep-audit-2026-05-24.md` Gap #5 row + §1 + §2 + §4 Sprint 1 #4 to reflect ✅ DONE.
+
+---
+
+## 2026-05-26 · LINE Notify dead since 2025-03-31 — `notify-bot.line.me` is end-of-life
+
+**Symptom:** Spawned a parallel agent to "port LINE Notify per-user OAuth" per the d1-deep-audit Gap #3. Agent built the UI page + callback route + actions. All gates green. **Then a screenshot from `notify-bot.line.me` showed "End of service for LINE Notify"** — the service ended March 31, 2025. The whole feature was built on top of a dead API. Reverted as commit `2e099721`.
+
+**Root cause — TWO compounding failures:**
+
+1. **The brief mentioned EOL but framed it as a question:** the role brief literally said *"LINE Notify EOL April 2025 — port per-user OAuth OR migrate to LINE Messaging API model?"*. The agent (and I, as integrator) scoped the work as "port" without verifying the OAuth endpoint was still alive. Treating "EOL by X" as a routine question rather than a hard gate cost a full agent run + integration cycle + a revert commit.
+
+2. **No upstream alive-check before building integration code.** Pacred's other partner-API learnings (DBD, CKAN, MOMO JMF) all begin with a curl test or a manual probe. LINE Notify wasn't tested before the agent started — the OAuth flow was inferred from the legacy PHP source, which is from before the EOL announcement.
+
+**What to do — for any external-API integration, run a 30-second alive-check FIRST:**
+
 ```bash
-# Expect HTTP 200 + a `status:200` JSON payload
-curl -sI 'https://tamit-cloud.com/api-product-2026/get/1688/?id=808456582517' | head -1
-curl -s   'https://tamit-cloud.com/api-product-2026/get/1688/?id=808456582517' | head -c 200
-# If 404 → vendor bumped the path again. Grep `pcs-admin/include/functions.php` for the new one.
+# Smoke the OAuth-issuance endpoint
+curl -s -o /dev/null -w "%{http_code}\n" \
+  "https://notify-bot.line.me/oauth/authorize?scope=notify"
+# Expected: 200/302 from a live service.
+# Got 410 / a "service ended" HTML page → DEAD. Don't build.
 ```
 
-**Why this matters for the immortal scholar:** I spent ~45 min trying alternate URL variants (`tam-i-t.com/api-product`, scraping Taobao directly, hunting through dave-pacred for a different integration) before grepping the legacy PHP for "tam-i-t\|tamit" and discovering the `-2026` suffix in `include/functions.php`. **Next agent that hits this:** grep legacy PHP FIRST, before any probing.
+If the brief contains any of these phrases, treat them as **hard gates** until the upstream is verified alive:
+- "EOL by &lt;date&gt;"
+- "deprecated"
+- "sunset"
+- "no longer supported"
+- "we are regrettably discontinuing"
+
+**Replacement path (LIFF + Messaging API):**
+LINE itself directs developers to its **Messaging API** with a LINE Login channel + LIFF. Pacred already has both:
+- Messaging API channel `2009931373` (`@pacred` OA)
+- LINE Login channel `2010105778` + LIFF ID `2010105778-SaSkkGza`
+- `profiles.line_user_id` + `line_linked_at` columns ready (migration `0003_profiles_extended.sql`)
+- Unique index on `line_user_id` already in place
+- `LINE_PUSH_BYPASS=true` env flag for dev safety
+
+The replacement flow:
+1. Customer adds Pacred LINE OA as friend (QR / `https://lin.ee/Yg3fU0I`)
+2. Customer authenticates via LIFF — `/liff/link` page captures their `line_user_id`
+3. Pacred sends notifications via `Messaging API pushMessage(to=line_user_id, ...)`
+
+The Track 3 page + form code was a UI shell that could be adapted, but reverting was cleaner than salvaging — the OAuth half is fundamentally different.
+
+**Cleanup left for the L pickup (next session):**
+- `lib/notifications/line-notify.ts` — still talks to `notify-bot.line.me` (dead). Replace with `messaging-api.ts` or repurpose for Messaging API pushMessage.
+- `app/api/linenotify/callback/route.ts` — leftover from earlier work, also dead. Delete or replace with `/liff/link` flow.
+- Build `/liff/link` page that uses the LINE LIFF SDK.
 
 **Cross-links:**
-- `.env.local` line 59 — `PACRED_TAMIT_DETAIL_URL=https://tamit-cloud.com/api-product-2026`
-- [`lib/china-search/index.ts`](../../lib/china-search/index.ts) — `DEFAULT_TAMIT_DETAIL_URL` + the `convertProductUrlDetail` flow
-- Legacy authoritative file: `D:/REALSHITDATAPCS/pcsc/public_html/member/pcs-admin/include/functions.php` lines 100 / 174 / 191
-- [`docs/audit/php-pcscargo-integrations.md`](../audit/php-pcscargo-integrations.md) §3a — the audit that originally wired this
-- ภูม's quote that pointed me at the right answer (2026-05-27): *"แกมีไฟล์ทั้งหมดแล้วนะเว้ย ... ลองไปอ่านดูก่อน"* — the working files were already in our repo + on the Poom branch; the env var was the only thing stale
+- Revert commit `2e099721` — Track 3 backed out
+- Original Track 3 commit `350bf9be` — the dead-API integration (now reverted)
+- [`docs/env.md`](../env.md) §7 — LIFF + Messaging API credentials already set
+- [Migration `0003_profiles_extended.sql`](../../supabase/migrations/0003_profiles_extended.sql) — `line_user_id` column ready
 
 ---
 

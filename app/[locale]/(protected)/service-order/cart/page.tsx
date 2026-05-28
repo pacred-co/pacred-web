@@ -1,4 +1,3 @@
-import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { listCart } from "@/actions/cart";
@@ -80,7 +79,6 @@ export default async function ServiceOrderCartPage() {
           defaultAddress={defaultAddress}
         />
       </main>
-      <Footer />
     </>
   );
 }

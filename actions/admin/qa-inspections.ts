@@ -518,3 +518,27 @@ function sanitiseFilename(name: string): string {
     .replace(/[^A-Za-z0-9._-]/g, "_")
     .slice(0, 100);
 }
+
+/**
+ * Freight-side counterpart — returns true if a freight_shipment is cleared
+ * for billing per QA gate (same outcome set as the cargo helper).
+ *
+ * Consumed by adminCreateFreightInvoice (V-E1) to block draft invoice
+ * creation when no acceptable QA outcome is recorded for the shipment.
+ * The FK freight_qa_inspections.freight_shipment_id was wired in 0050.
+ */
+export async function isFreightShipmentQaPassed(
+  freight_shipment_id: string,
+): Promise<boolean> {
+  if (!freight_shipment_id) return false;
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("freight_qa_inspections")
+    .select("id, outcome")
+    .eq("freight_shipment_id", freight_shipment_id)
+    .in("outcome", ["pass", "fail_minor", "waived"])
+    .limit(1)
+    .maybeSingle<{ id: string; outcome: string }>();
+  if (error) return false;
+  return !!data;
+}

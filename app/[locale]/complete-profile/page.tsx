@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { NavBar } from "@/components/sections/navbar";
-import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { CompleteProfileForm } from "./complete-profile-form";
 
@@ -80,7 +79,6 @@ export default async function CompleteProfilePage() {
           )}
         </div>
       </main>
-      <Footer />
     </>
   );
 }

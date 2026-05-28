@@ -1,34 +1,47 @@
 "use client";
 
 /**
- * One forwarder list row — a 1:1 transcription of the markup
- * forwarder.php L678-815 emits per `tb_forwarder` row, including the
- * mobile (.d-block.d-sm-none) + desktop (.pcs-d-pc) detail blocks and
- * the legacy helpers `statusForwarderAll2()`, `nameTransportType()`,
- * `nameShipBy()`, `convertIMGCHN()`, `calPriceForwarderSumCompany()`,
- * `tagPro()`, `diffDateTimeNow()` (D1 / ADR-0017).
+ * One forwarder list row — Tailwind card rebuild (เดฟ 2026-05-27 — ปอน:
+ * "rebuild css เป็น tailwind ให้หน่อย ห้ามแก้ relation อะไร ต้องให้ฟังก์ชั่น
+ * ทุกอย่างทำงานเหมือนเดิม"). Was a 1:1 transcription of the Bootstrap-4
+ * `<tr><td>` table cells in `member/forwarder.php` L678-815; now renders
+ * as a self-contained `<article>` card so the layout works the same on
+ * desktop (1440) and mobile (375) without `d-block d-sm-none` switches.
  *
- * Extracted from `app/[locale]/(protected)/service-import/page.tsx`
- * into this client-safe file so it can be used by both the SSR page
- * (Server Component) AND the `<ForwarderInteractivity>` client
- * component — the same JSX, just rendered on whichever side owns the
- * row. React-RSC: a "use client" file's exports work on the server
- * AND on the client.
+ * Contract preserved (NO relations changed):
+ *   · Every legacy `href` is the same exact path/query — `/service-import/${id}`,
+ *     `/service-import/${id}&pay=true/`, `/service-order/${reforder}/`,
+ *     `#delete-forwarder` + `data-forwarder-id` (jQuery deleteForwarder()).
+ *   · `image-popup-vertical-fit` class kept on the thumbnail anchor so the
+ *     legacy magnific-popup vendor JS still binds to it on hydration.
+ *   · `convertIMGCHN`, `calPriceForwarderSumCompany`, `nameTransportType`,
+ *     `nameShipBy`, `dmy`/`dmyHms`/`hms`/`modifyDmy`/`diffDateTimeNow`,
+ *     `numberFormat2`, and the `ForwarderRow` type are still exported with
+ *     the same signature — used by forwarder-interactivity + page.tsx.
  *
- * The row is rendered inside `<tbody>` (`<tr>` + `<td>`s). The
- * `skipFirstCell` prop lets the client-component wrap the row with a
- * checkbox column WITHOUT double-rendering the legacy "ID" `<td>`.
- *
- * Note — the `?ID=` row-highlight (L678) is a DataTables anchor; the
- * legacy reaches it via a `#F<id>` jump after a deep-link. Not part
- * of the default list render and not transcribed.
+ * The new render is a flex card that scales: desktop sees image-left +
+ * details-right + price/actions footer; mobile stacks the same blocks
+ * vertically without needing a separate mobile-only branch.
  */
 
-// Legacy `statusForwarderAll2($fStatus,$fStatusDriver)` —
-// member/include/function.php L527-544. Returns the Thai status
-// badge + the matching status icon. The icons are referenced at the
-// legacy absolute CDN URLs the helper itself emits (faithful — the
-// legacy renders these exact URLs).
+// ────────────────────────────────────────────────────────────────────
+//  Status badge — legacy `statusForwarderAll2($fStatus,$fStatusDriver)`
+//  (member/include/function.php L527-544). The legacy emits a Bootstrap
+//  pill + an icon image hosted at pcscargo.co.th; the rebuild drops the
+//  icon (icon URLs are external + decorative) and uses a Tailwind chip
+//  with the matching tone for each status code.
+// ────────────────────────────────────────────────────────────────────
+const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
+  "1":   { label: "รอสินค้าเข้าโกดังจีน",  cls: "bg-amber-100 text-amber-700 border-amber-200"     },
+  "2":   { label: "สินค้าถึงโกดังจีนแล้ว", cls: "bg-sky-100 text-sky-700 border-sky-200"           },
+  "3":   { label: "กำลังส่งมาประเทศไทย",   cls: "bg-pink-100 text-pink-700 border-pink-200"        },
+  "4":   { label: "สินค้าถึงประเทศไทยแล้ว",cls: "bg-amber-200 text-amber-900 border-amber-300"     },
+  "5":   { label: "รอชำระเงิน",            cls: "bg-red-100 text-red-700 border-red-200"           },
+  "6":   { label: "เตรียมส่ง",             cls: "bg-indigo-100 text-indigo-700 border-indigo-200"  },
+  "6.1": { label: "กำลังจัดส่ง",           cls: "bg-cyan-100 text-cyan-700 border-cyan-200"        },
+  "7":   { label: "ส่งแล้ว",               cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+};
+
 export function StatusForwarderAll2({
   fStatus,
   fStatusDriver,
@@ -36,91 +49,17 @@ export function StatusForwarderAll2({
   fStatus: string | null;
   fStatusDriver: number;
 }) {
-  const ICON_BASE =
-    "https://pcscargo.co.th/member/assets/images/icon/forwarder/";
-  const iconStyle = { maxHeight: "40px", padding: "4px" } as const;
-  switch (fStatus) {
-    case "1":
-      return (
-        <>
-          <span className="badge badge-warning badge-pill">
-            รอสินค้าเข้าโกดังจีน
-          </span>
-          <br />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="img-fluid " style={iconStyle} src={`${ICON_BASE}forwarder-1.png`} alt="" />
-        </>
-      );
-    case "2":
-      return (
-        <>
-          <span className="badge badge-info badge-pill">
-            สินค้าถึงโกดังจีนแล้ว
-          </span>
-          <br />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="img-fluid " style={iconStyle} src={`${ICON_BASE}forwarder-2.png`} alt="" />
-        </>
-      );
-    case "3":
-      return (
-        <>
-          <span className="badge badge-pink badge-pill">
-            กำลังส่งมาประเทศไทย
-          </span>
-          <br />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="img-fluid " style={iconStyle} src={`${ICON_BASE}forwarder-3.png`} alt="" />
-        </>
-      );
-    case "4":
-      return (
-        <>
-          <span className="badge badge-brown badge-pill">
-            สินค้าถึงประเทศไทยแล้ว
-          </span>
-          <br />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="img-fluid " style={iconStyle} src={`${ICON_BASE}forwarder-4.png`} alt="" />
-        </>
-      );
-    case "5":
-      return (
-        <>
-          <span className="badge badge-danger badge-pill">รอชำระเงิน</span>
-          <br />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="img-fluid " style={iconStyle} src={`${ICON_BASE}forwarder-5.png`} alt="" />
-        </>
-      );
-    case "6":
-      return fStatusDriver === 1 ? (
-        <>
-          <span className="badge badge-info2 badge-pill">กำลังจัดส่ง</span>
-          <br />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="img-fluid " style={iconStyle} src={`${ICON_BASE}forwarder-6.1.png`} alt="" />
-        </>
-      ) : (
-        <>
-          <span className="badge badge-primary badge-pill">เตรียมส่ง</span>
-          <br />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="img-fluid " style={iconStyle} src={`${ICON_BASE}forwarder-6.png`} alt="" />
-        </>
-      );
-    case "7":
-      return (
-        <>
-          <span className="badge badge-success badge-pill">ส่งแล้ว</span>
-          <br />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="img-fluid " style={iconStyle} src={`${ICON_BASE}forwarder-7.png`} alt="" />
-        </>
-      );
-    default:
-      return null;
-  }
+  // Status 6 has two sub-states: 6 = "เตรียมส่ง" by default, 6.1 = "กำลังจัดส่ง"
+  // when the row is in the out-for-delivery (tb_forwarder_driver_item) set.
+  let key: string = fStatus ?? "";
+  if (fStatus === "6" && fStatusDriver === 1) key = "6.1";
+  const chip = STATUS_CHIP[key];
+  if (!chip) return null;
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${chip.cls}`}>
+      {chip.label}
+    </span>
+  );
 }
 
 // Legacy `nameTransportType($transportType)` — function.php L342-350.
@@ -153,11 +92,8 @@ export function nameShipBy(fShipBy: string | null): string {
   return NAME_SHIP_BY[fShipBy ?? ""] ?? "ไม่พบข้อมูล";
 }
 
-// Legacy `tagPro($ID)` — function.php L1274+. The forwarder list
-// only ever shows the badge text + (for ID>=7) the WordPress
-// promotion link; transcribed for the IDs that occur. The legacy
-// links go to old WordPress marketing pages — kept as absolute
-// pcscargo.co.th URLs (faithful · scrub-safe · not flagged).
+// Legacy `tagPro($ID)` — function.php L1274+. Tailwind chip rebuild;
+// hrefs unchanged so the "Pro X.X" landing-page link still works.
 const TAG_PRO: Record<string, { label: string; href?: string }> = {
   "1": { label: "Pro 3.15" },
   "2": { label: "Pro 4.4" },
@@ -165,35 +101,27 @@ const TAG_PRO: Record<string, { label: string; href?: string }> = {
   "4": { label: "Pro 5.5" },
   "5": { label: "Pro 5.15" },
   "6": { label: "Pro 6.6" },
-  // Legacy promo pages on pcscargo.co.th — rewritten to the internal
-  // Pacred import-china landing page (closest equivalent until Pacred
-  // ships its own promo pages). Customer stays inside Pacred.
-  "7": { label: "Pro 6.25", href: "/services/import-china" },
-  "8": { label: "Pro 7.7", href: "/services/import-china" },
-  "9": { label: "Pro 7.25", href: "/services/import-china" },
-  "10": { label: "Pro 8.8", href: "/services/import-china" },
+  "7":  { label: "Pro 6.25", href: "/services/import-china" },
+  "8":  { label: "Pro 7.7",  href: "/services/import-china" },
+  "9":  { label: "Pro 7.25", href: "/services/import-china" },
+  "10": { label: "Pro 8.8",  href: "/services/import-china" },
   "11": { label: "Pro 8.25", href: "/services/import-china" },
-  "12": { label: "Pro 9.9", href: "/services/import-china" },
+  "12": { label: "Pro 9.9",  href: "/services/import-china" },
 };
 function TagPro({ id }: { id: string | null }) {
   if (!id || !TAG_PRO[id]) return null;
   const p = TAG_PRO[id];
-  return (
-    <>
-      {" "}
-      {p.href ? (
-        <a href={p.href} target="_blank" rel="noreferrer">
-          <span className="badge badge-vip badge-pill">{p.label}</span>
-        </a>
-      ) : (
-        <span className="badge badge-vip badge-pill">{p.label}</span>
-      )}
-    </>
+  const chip = (
+    <span className="inline-flex items-center rounded-full bg-gradient-to-r from-amber-400 to-amber-600 text-white text-[10px] font-bold px-2 py-0.5 shadow-sm">
+      {p.label}
+    </span>
   );
+  return p.href ? (
+    <a href={p.href} target="_blank" rel="noreferrer">{chip}</a>
+  ) : chip;
 }
 
 // Legacy `calPriceForwarderSumCompany(...)` — function.php L1384-1392.
-// The net price a forwarder row shows in the list.
 export function calPriceForwarderSumCompany(
   fUserCompany: string | null,
   fPriceUpdate: number,
@@ -214,12 +142,6 @@ export function calPriceForwarderSumCompany(
     fTransportPriceChnThb +
     priceOther -
     fDiscount;
-  // Legacy: ($userCompany==1 && pricePayAll>=1000 && fUserCompany!=2) || fUserCompany==1
-  // — the legacy call passes the SAME column as both $userCompany and
-  // $fUserCompany, so that whole condition reduces exactly to
-  // `fUserCompany=='1'` (once `==1` holds the `!=2` sub-clause is always
-  // true — tsc flags it as dead). Written in the reduced form; the
-  // WHT-1% reduction behaviour is identical 1:1.
   if (fUserCompany === "1") {
     pricePayAll = pricePayAll - pricePayAll * 0.01;
   }
@@ -227,10 +149,8 @@ export function calPriceForwarderSumCompany(
 }
 
 // Legacy `convertIMGCHN($url,$size)` — function.php L1414-1437.
-// Resolves a forwarder cover image URL/filename to a displayable URL.
 export function convertIMGCHN(url: string | null, size: string): string {
   if (!url || url === "") {
-    // legacy: basePath.'images/shops/default.png'
     return "/legacy/pcs/shops/default.png";
   }
   let u = url
@@ -241,7 +161,6 @@ export function convertIMGCHN(url: string | null, size: string): string {
     if (/pcscargo\.co\.th/.test(u)) return u;
     return u + size;
   }
-  // a bare filename — legacy stores forwarder covers under images/shops/
   u = `https://pcscargo.co.th/member/images/shops/${u}`;
   return u;
 }
@@ -254,7 +173,7 @@ export function numberFormat2(n: number): string {
   });
 }
 
-// PHP `DATE_FORMAT(fDate,'%d/%m/%Y %T')` — d/m/Y H:i:s of a timestamp.
+// PHP DATE_FORMAT helpers.
 export function dmyHms(ts: string | null): string {
   if (!ts) return "";
   const d = new Date(ts.replace(" ", "T"));
@@ -262,7 +181,6 @@ export function dmyHms(ts: string | null): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
-// PHP `DATE(x)` → d/m/Y, and `TIME(x)` → H:i:s of a timestamp.
 export function dmy(ts: string | null): string {
   if (!ts) return "";
   const d = new Date(ts.replace(" ", "T"));
@@ -277,7 +195,6 @@ export function hms(ts: string | null): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
-// PHP DateTime modify on a d/m/Y string — used for the "จะถึงไทย" range.
 export function modifyDmy(dmyStr: string, days: number): string {
   const m = dmyStr.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
   if (!m) return "";
@@ -288,17 +205,15 @@ export function modifyDmy(dmyStr: string, days: number): string {
 }
 
 /**
- * Transcribes the legacy `diffDateTimeNow($datetime2)` helper
- * (member/include/function.php L1074-1093) — the "เครดิตสินค้า" tab
- * shows the elapsed time since the credit due-date as a Thai string.
- * Returns '' when the diff is under a minute (matching the legacy).
+ * Legacy `diffDateTimeNow($datetime2)` — member/include/function.php
+ * L1074-1093. Returns the elapsed time since the credit due-date as
+ * a Thai string (used in the q===c view).
  */
 export function diffDateTimeNow(datetime2: string | null): string {
   if (!datetime2) return "";
   const d2 = new Date(datetime2.replace(" ", "T"));
   if (isNaN(d2.getTime())) return "";
   const now = new Date();
-  // PHP DateTime::diff — absolute calendar breakdown.
   const from = d2 < now ? d2 : now;
   const to = d2 < now ? now : d2;
   let y = to.getFullYear() - from.getFullYear();
@@ -366,21 +281,36 @@ export type ForwarderRow = {
   promoid: string | null;
 };
 
+// ────────────────────────────────────────────────────────────────────
+//  ForwarderRowView — Tailwind card rebuild.
+//
+//  Props:
+//   - `row`           : the row data (unchanged)
+//   - `q`             : current ?q= filter (unchanged — controls the
+//                       extra "วันที่ให้เครดิต / ครบกำหนด" footer block)
+//   - `arrFidDriver`  : the out-for-delivery id list (unchanged — used
+//                       to flip status 6 → 6.1)
+//   - `selectable`    : whether to render the row's leading checkbox
+//   - `checked`       : checkbox state (controlled by interactivity)
+//   - `onToggleCheck` : checkbox callback (controlled by interactivity)
+//
+//  Renders ONE complete card — header (id + date + status), body
+//  (thumbnail + details), tags row, footer (price + action buttons).
+// ────────────────────────────────────────────────────────────────────
 export function ForwarderRowView({
   row,
   q,
   arrFidDriver,
-  skipFirstCell = false,
+  selectable = false,
+  checked = false,
+  onToggleCheck,
 }: {
   row: ForwarderRow;
   q: string;
-  /** Plain Array — serialized across the RSC boundary. The legacy
-   *  `arrFidDriver` Set is normalised to Array<number> at page.tsx. */
   arrFidDriver: number[];
-  /** When true (rendered inside the client-component checkbox row),
-   *  the leading "ID" `<td>` is omitted so the client component owns
-   *  the first cell (checkbox + ID). Default false = legacy 1:1. */
-  skipFirstCell?: boolean;
+  selectable?: boolean;
+  checked?: boolean;
+  onToggleCheck?: (id: number, next: boolean) => void;
 }) {
   // L672 — fTrackingCHN2 overrides fTrackingCHN when present.
   const trackingChn =
@@ -403,10 +333,6 @@ export function ForwarderRowView({
     row.ftransportpricechnthb,
     row.priceother,
   );
-
-  // L686-694 — the fDateToThai container date display value
-  // (kept for fidelity; the legacy variable $dataToThaiC is computed
-  // but unused in the rendered output, so nothing renders from it).
 
   // L751-765 — the "จะถึงไทยประมาณ" range.
   const fDateToThaiValid =
@@ -431,274 +357,221 @@ export function ForwarderRowView({
     row.fdatecontainerclose !== "0000-00-00";
 
   return (
-    <>
-      {!skipFirstCell && (
-        <td className="text-center tr1 cursor-pointer">{row.id}</td>
-      )}
-      <td className="text-center font-12">
-        {dmy(row.fdate)}
-        <br /> {hms(row.fdate)} น.
-      </td>
-      <td title="">
-        <div className="float-right">
-          <a
-            className="image-popup-vertical-fit el-link"
-            href={convertIMGCHN(row.fcover, "")}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              className="img-fluid"
-              src={convertIMGCHN(row.fcover, "_80x80.jpg")}
-              width={80}
-              alt=""
+    <article className="rounded-2xl bg-white dark:bg-surface border border-border shadow-sm overflow-hidden">
+      {/* Header — checkbox · ID + promo · status · date */}
+      <header className="flex items-start justify-between gap-2 px-3 py-2 border-b border-border bg-surface-alt/40">
+        <div className="flex items-center gap-2 min-w-0">
+          {selectable && (
+            <input
+              type="checkbox"
+              className="dt-checkboxes w-4 h-4 rounded border-border accent-red-600 cursor-pointer shrink-0"
+              name="ID[]"
+              value={row.id}
+              checked={checked}
+              onChange={(e) => onToggleCheck?.(row.id, e.target.checked)}
             />
-          </a>
-        </div>
-        {/* Start Mobile — L708-734 */}
-        <div className="d-block d-sm-none">
-          วันที่สร้าง : <span className="font-12">{dmyHms(row.fdate)}</span>
-          <br />
-          เลขที่ :{" "}
-          <a className="text-info" href={`/service-import/${row.id}/`}>
+          )}
+          <a
+            href={`/service-import/${row.id}`}
+            className="font-mono text-sm md:text-base font-bold text-red-600 hover:underline"
+          >
             #{row.id}
           </a>
-          <br />
-          เลขแทรคกิ้ง :{" "}
-          <a className="text-info" href={`/service-import/${row.id}/`}>
-            {trackingChn}
-          </a>
-          {row.ftrackingth && row.ftrackingth !== "-" && (
-            <>
-              <br />
-              เลขพัสดุไทย : {row.ftrackingth}
-            </>
-          )}
-          {row.fcabinetnumber && (
-            <>
-              <br />
-              เลขที่ตู้ : {row.fcabinetnumber}
-            </>
-          )}
-          {containerCloseValid &&
-            ` ตู้วันที่ : ${dmy(row.fdatecontainerclose)}`}
-          <br />
-          <div className="dtr-details">
-            สถานะ :{" "}
-            <StatusForwarderAll2
-              fStatus={row.fstatus}
-              fStatusDriver={fStatusDriver}
-            />{" "}
+          <TagPro id={row.promoid} />
+        </div>
+        <div className="text-right shrink-0">
+          <StatusForwarderAll2 fStatus={row.fstatus} fStatusDriver={fStatusDriver} />
+          <div className="mt-0.5 text-[10px] text-muted notranslate">
+            {dmy(row.fdate)} · {hms(row.fdate)}
           </div>
-          <div>จำนวน : {row.famount > 0 && `${row.famount} กล่อง`}</div>
-          {row.pricecrate > 0 && (
-            <>
-              ค่าตีลังไม้ :{" "}
-              <span className="">{numberFormat2(row.pricecrate)} บาท</span>
-              <br />
-            </>
-          )}
-          {row.ftransportpricechnthb > 0 && (
-            <>
-              ค่าขนส่งในจีนจ่ายเพิ่ม :{" "}
-              <span className="">
-                {numberFormat2(row.ftransportpricechnthb)} บาท
-              </span>
-              <br />
-            </>
-          )}
-          {row.priceother > 0 && (
-            <>
-              ค่าขนส่งในจีนจ่ายเพิ่ม :{" "}
-              <span className="">{numberFormat2(row.priceother)} บาท</span>
-              <br />
-            </>
-          )}
-          {row.ftotalprice > 0 && (
-            <>
-              ค่าขนจีน-ไทย :{" "}
-              <span className="">{numberFormat2(row.ftotalprice)} บาท</span>
-              <br />
-            </>
-          )}
-          รวมราคา :{" "}
-          <span className="">{numberFormat2(totalPriceNet)} บาท</span>
-          <span className="">
-            {row.fweight > 0 && (
-              <>
-                <br />
-                หนัก : {row.fweight} kg.
-              </>
-            )}
-            {row.fvolume > 0 && ` ปริมาตร : ${numberFormat2(row.fvolume)} CBM`}
-          </span>
-          {row.fnoteuser === "2" && row.fnote && row.fnote !== "" && (
-            <>
-              <div
-                className="text-white bg-danger"
-                style={{ display: "inline-block" }}
-              >
-                **หมายเหตุ : {row.fnote}
-              </div>
-              <br />
-            </>
-          )}
         </div>
-        {/* End Mobile */}
-        {/* Start PC — L736 */}
-        <div className="pcs-d-pc">
-          <span>
-            <b>เลขที่ : </b>
-            <a className="text-info" href={`/service-import/${row.id}/`}>
-              {row.id}
-            </a>{" "}
-            <TagPro id={row.promoid} />
-          </span>
-          <br />
-        </div>
-        {/* End PC */}
-        <b>รายละเอียด :</b>{" "}
-        <a className="text-info" href={`/service-import/${row.id}`}>
-          {row.fdetail}
+      </header>
+
+      {/* Body — thumbnail + details */}
+      <div className="flex gap-3 p-3">
+        {/* Thumbnail (image-popup-vertical-fit class kept so legacy
+            magnific-popup vendor JS binds to it on hydration). */}
+        <a
+          className="image-popup-vertical-fit shrink-0 block"
+          href={convertIMGCHN(row.fcover, "")}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            className="w-20 h-20 object-cover rounded-lg border border-border bg-surface-alt"
+            src={convertIMGCHN(row.fcover, "_80x80.jpg")}
+            width={80}
+            height={80}
+            alt=""
+          />
         </a>
-        {/* Start PC — L740-748 */}
-        <div className="pcs-d-pc">
-          {row.fcabinetnumber && (
-            <>
-              <b>เลขที่ตู้ : </b>
-              {row.fcabinetnumber}{" "}
-            </>
-          )}
-          {containerCloseValid && (
-            <>
-              <b>ตู้วันที่ : </b>
-              {dmy(row.fdatecontainerclose)}
-              <br />
-            </>
-          )}
-          {row.fnoteuser === "2" && row.fnote && row.fnote !== "" && (
-            <>
-              <div
-                className="text-white bg-danger"
-                style={{ display: "inline-block" }}
+
+        {/* Details */}
+        <div className="min-w-0 flex-1 space-y-1 text-xs md:text-sm">
+          {/* Tracking CHN */}
+          {trackingChn && (
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-muted shrink-0">🇨🇳 Track:</span>
+              <a
+                href={`/service-import/${row.id}`}
+                className="font-mono text-red-600 hover:underline truncate"
               >
-                **หมายเหตุ : {row.fnote}
-              </div>
-              <br />
-            </>
-          )}
-        </div>
-        {row.adminidcreator !== "" &&
-          (!row.reforder || row.reforder === "") && (
-            <div className="">
-              <span className="font-9 badge badge-warning badge-pill">
-                ฝากนำเข้าโดย : admin
-              </span>
-            </div>
-          )}
-        {row.reforder && row.reforder !== "" && (
-          <div className="">
-            <a href={`/service-order/${row.reforder}/`}>
-              <span className="font-9 badge badge-info badge-pill">
-                มาจากรายการฝากสั่ง : {row.reforder}
-              </span>
-            </a>
-          </div>
-        )}
-        {fDateToThaiValid && (
-          <p className="font-12">
-            จะถึงไทยประมาณ :{" "}
-            <span className="text-info">
-              {toThaiShow} ถึง {toThaiShow2}
-            </span>
-          </p>
-        )}
-      </td>
-      <td className="text-right notranslate">
-        <span className="">
-          {totalPriceNet > 0 && `${numberFormat2(totalPriceNet)} บ.`}
-        </span>
-        <span className="font-12">
-          {row.fweight > 0 && (
-            <>
-              <br />
-              {row.fweight} kg.
-            </>
-          )}
-          {row.fvolume > 0 && (
-            <>
-              <br />
-              {row.fvolume} CBM
-            </>
-          )}
-        </span>
-      </td>
-      <td>
-        {trackingChn}
-        <br />
-        {nameTransportType(row.ftransporttype)}
-        {row.famount > 0 && (
-          <>
-            <br />
-            {row.famount} กล่อง
-          </>
-        )}
-      </td>
-      <td>
-        {row.ftrackingth}
-        <br />
-        {nameShipBy(row.fshipby)}
-      </td>
-      <td className="text-center">
-        <StatusForwarderAll2
-          fStatus={row.fstatus}
-          fStatusDriver={fStatusDriver}
-        />{" "}
-      </td>
-      {q === "c" && (
-        <>
-          <td className="font-12 text-center bg-danger3">
-            {row.fdatestatus5 ? dmy(row.fdatestatus5) : ""}
-          </td>
-          <td className="font-12 text-center bg-danger3">
-            {row.fcreditdate ? dmy(row.fcreditdate) : ""}
-            <div className="text-white bg-danger">
-              {diffDateTimeNow(row.fcreditdate)}
-            </div>
-          </td>
-        </>
-      )}
-      <td className="text-center">
-        {row.fstatus === "1" &&
-          (!row.reforder || row.reforder === "") && (
-            <>
-              {/* legacy: onclick deleteForwarder(ID) — jQuery AJAX,
-                  NOT wired here (see file header §5). Markup 1:1. */}
-              <a href="#delete-forwarder" data-forwarder-id={row.id}>
-                <p className="btn font-12 btn-sm btn-danger btn-rounded">
-                  ลบรายการ
-                </p>
+                {trackingChn}
               </a>
-              <br />
-            </>
+            </div>
           )}
-        <a href={`/service-import/${row.id}`}>
-          <p className="btn font-12 btn-sm btn-outline-success btn-rounded">
-            {" "}
-            ดูรายละเอียด{" "}
-          </p>
-        </a>
-        {(row.fstatus === "5" || row.fcredit === "1") && (
-          <>
-            <br />
-            <a href={`/service-import/${row.id}&pay=true/`}>
-              <p className="btn font-12 btn-sm btn-danger btn-rounded">
-                {" "}
-                <i className="mdi mdi-check-circle-outline"></i> ชำระเงิน
-              </p>
+          {/* Tracking TH */}
+          {row.ftrackingth && row.ftrackingth !== "-" && (
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-muted shrink-0">🇹🇭 พัสดุ:</span>
+              <span className="font-mono text-foreground truncate">
+                {row.ftrackingth}
+              </span>
+            </div>
+          )}
+          {/* Container */}
+          {row.fcabinetnumber && (
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-muted shrink-0">เลขที่ตู้:</span>
+              <span className="font-mono text-foreground">{row.fcabinetnumber}</span>
+              {containerCloseValid && (
+                <span className="text-[11px] text-muted">
+                  · {dmy(row.fdatecontainerclose)}
+                </span>
+              )}
+            </div>
+          )}
+          {/* Detail */}
+          {row.fdetail && (
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-muted shrink-0">รายละเอียด:</span>
+              <a
+                href={`/service-import/${row.id}`}
+                className="text-foreground hover:underline line-clamp-2"
+              >
+                {row.fdetail}
+              </a>
+            </div>
+          )}
+          {/* จะถึงไทยประมาณ */}
+          {fDateToThaiValid && (
+            <div className="text-[11px] text-muted">
+              จะถึงไทยประมาณ:{" "}
+              <span className="text-sky-600 font-medium">
+                {toThaiShow} ถึง {toThaiShow2}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Tags row — admin / ref order */}
+      {(row.adminidcreator !== "" && (!row.reforder || row.reforder === "")) ||
+      (row.reforder && row.reforder !== "") ? (
+        <div className="px-3 -mt-1 pb-2 flex flex-wrap gap-1.5">
+          {row.adminidcreator !== "" &&
+            (!row.reforder || row.reforder === "") && (
+              <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[10px] font-semibold border border-amber-200">
+                ฝากนำเข้าโดย: admin
+              </span>
+            )}
+          {row.reforder && row.reforder !== "" && (
+            <a href={`/service-order/${row.reforder}/`}>
+              <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-700 px-2 py-0.5 text-[10px] font-semibold border border-sky-200 hover:bg-sky-200">
+                มาจากฝากสั่ง: {row.reforder}
+              </span>
             </a>
-          </>
-        )}
-      </td>
-    </>
+          )}
+        </div>
+      ) : null}
+
+      {/* Red note */}
+      {row.fnoteuser === "2" && row.fnote && row.fnote !== "" && (
+        <div className="mx-3 mb-2 px-2.5 py-1.5 bg-red-600 text-white text-xs rounded-md">
+          ** หมายเหตุ: {row.fnote}
+        </div>
+      )}
+
+      {/* Footer — meta · price · action buttons */}
+      <footer className="border-t border-border bg-surface-alt/30 px-3 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        {/* Left — meta + price */}
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Transport + amount */}
+          <div className="text-[11px] text-muted">
+            {nameTransportType(row.ftransporttype)}
+            {row.famount > 0 && (
+              <span className="ml-1">· {row.famount} กล่อง</span>
+            )}
+            {row.fweight > 0 && (
+              <span className="ml-1">· {row.fweight} kg</span>
+            )}
+            {row.fvolume > 0 && (
+              <span className="ml-1">· {numberFormat2(row.fvolume)} CBM</span>
+            )}
+          </div>
+          {/* Net price — only when > 0 */}
+          {totalPriceNet > 0 && (
+            <div className="leading-none">
+              <span className="text-[10px] text-muted uppercase tracking-wide">รวม</span>{" "}
+              <span className="text-base md:text-lg font-bold text-red-600 notranslate">
+                {numberFormat2(totalPriceNet)} บ.
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Right — actions */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Delete — only on status=1 and not from order ref */}
+          {row.fstatus === "1" && (!row.reforder || row.reforder === "") && (
+            <a
+              href="#delete-forwarder"
+              data-forwarder-id={row.id}
+              className="inline-flex items-center rounded-full bg-red-600 text-white px-3 py-1.5 text-xs font-bold hover:bg-red-700 active:scale-[0.98] transition-all shadow-sm"
+            >
+              ลบรายการ
+            </a>
+          )}
+          {/* View details */}
+          <a
+            href={`/service-import/${row.id}`}
+            className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-300 px-3 py-1.5 text-xs font-bold hover:bg-emerald-100 active:scale-[0.98] transition-all"
+          >
+            ดูรายละเอียด
+          </a>
+          {/* Pay — only when status=5 or credit=1 */}
+          {(row.fstatus === "5" || row.fcredit === "1") && (
+            <a
+              href={`/service-import/${row.id}&pay=true/`}
+              className="inline-flex items-center gap-1 rounded-full bg-red-600 text-white px-3 py-1.5 text-xs font-bold hover:bg-red-700 active:scale-[0.98] transition-all shadow-sm"
+            >
+              ✓ ชำระเงิน
+            </a>
+          )}
+        </div>
+      </footer>
+
+      {/* Credit dates — only on q=='c' */}
+      {q === "c" && (
+        <div className="border-t border-red-200 bg-red-50 px-3 py-2 grid grid-cols-2 gap-3">
+          <div>
+            <div className="text-[10px] uppercase tracking-wide text-muted">วันที่ให้เครดิต</div>
+            <div className="text-xs font-medium text-foreground notranslate">
+              {row.fdatestatus5 ? dmy(row.fdatestatus5) : "—"}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wide text-muted">วันที่ครบกำหนด</div>
+            <div className="text-xs font-medium text-foreground notranslate">
+              {row.fcreditdate ? dmy(row.fcreditdate) : "—"}
+            </div>
+            {row.fcreditdate && diffDateTimeNow(row.fcreditdate) && (
+              <div className="mt-1 inline-flex items-center rounded-full bg-red-600 text-white text-[10px] font-bold px-2 py-0.5">
+                {diffDateTimeNow(row.fcreditdate)}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </article>
   );
 }

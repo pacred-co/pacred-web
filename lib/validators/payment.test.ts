@@ -78,13 +78,25 @@ assertFail("yuan_amount missing",            yuanPaymentSchema, { ...validPaymen
 assertFail("yuan_amount string '1000'",      yuanPaymentSchema, { ...validPayment, yuan_amount: "1000" });
 
 // ────────────────────────────────────────────────────────────
-section("yuanPaymentSchema — exchange_rate bounds");
+section("yuanPaymentSchema — exchange_rate bounds [1-100] (V-E5)");
 // ────────────────────────────────────────────────────────────
+// V-E5 hardening (Sprint-14 Agent P, commit 845e788) — CNY→THB rate
+// is now bounded by `CNY_RATE_MIN=1` / `CNY_RATE_MAX=100` in
+// `lib/validators/payment.ts` to protect against the legacy
+// int32-overflow garbage + "เรทเบิ้ล" doubled-rate class of error.
+// Real-world CNY→THB sits ~4.9–5.1; the broad [1, 100] window keeps
+// the validator tolerant of historic + future swings while still
+// rejecting catastrophic typos like 0.0001 (missing decimal) or
+// 1000 (10x typo).
 
-assertOk  ("rate=0.0001 (positive)",         yuanPaymentSchema, { ...validPayment, exchange_rate: 0.0001 });
+assertOk  ("rate=1 (floor exact)",           yuanPaymentSchema, { ...validPayment, exchange_rate: 1 });
 assertOk  ("rate=5.1 (typical Thai)",        yuanPaymentSchema, { ...validPayment, exchange_rate: 5.1 });
-assertOk  ("rate=10 (no upper bound)",       yuanPaymentSchema, { ...validPayment, exchange_rate: 10 });
+assertOk  ("rate=100 (ceiling exact)",       yuanPaymentSchema, { ...validPayment, exchange_rate: 100 });
 
+assertFail("rate=0.0001 (below floor)",      yuanPaymentSchema, { ...validPayment, exchange_rate: 0.0001 });
+assertFail("rate=0.5 (below floor)",         yuanPaymentSchema, { ...validPayment, exchange_rate: 0.5 });
+assertFail("rate=101 (over ceiling)",        yuanPaymentSchema, { ...validPayment, exchange_rate: 101 });
+assertFail("rate=1000 (10x typo)",           yuanPaymentSchema, { ...validPayment, exchange_rate: 1000 });
 assertFail("rate=0 (not positive)",          yuanPaymentSchema, { ...validPayment, exchange_rate: 0 });
 assertFail("rate=-5 negative",               yuanPaymentSchema, { ...validPayment, exchange_rate: -5 });
 assertFail("rate missing",                   yuanPaymentSchema, { ...validPayment, exchange_rate: undefined });

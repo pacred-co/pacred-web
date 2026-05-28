@@ -226,15 +226,16 @@ sentry.io → Settings → Developer Settings → **Organization Tokens**).
   → `passTam` verify → provision Supabase Auth → sign in). Same mechanism on
   prod once a customer logs in.
 
-🟡 **ภูม's post-Pro-upgrade backfill — NOT complete:**
-- Empty on prod: `tb_history` · `tb_history_key` · `tas_historydataold` ·
-  `tas_historydataold_tmp` (table exists, 0 rows).
-- Partial on prod: `tas_historydata_mobile` (45 rows — suspicious).
-- Schema missing on prod: `tb_users_hs` · `tb_pcs_log` · `tb_log`.
-- Storage buckets: only `member-docs` has objects; `slips`, `forwarder-covers`,
-  `carts`, `avatars`, `resumes`, `tax-invoices`, `wht-certs`, `freight-payment-slips`,
+🟢 **ภูม's post-Pro-upgrade backfill — ✅ COMPLETE (2026-05-24):**
+- ✅ Backfilled on prod: `tb_history` · `tb_history_key` · `tb_web_hs`
+  (the 3 oversized log tables) — all 117 tables now hold their legacy rows.
+- ✅ Customer image + storage files uploaded to Supabase S3 production
+  (`pcsracgo/public/member`) — Phase A storage parity closed.
+- ℹ️ Other storage buckets (`slips`, `forwarder-covers`, `carts`, `avatars`,
+  `resumes`, `tax-invoices`, `wht-certs`, `freight-payment-slips`,
   `commission-slips`, `disbursement-receipts`, `qa-inspection-photos`,
-  `csv-imports` — empty. Customer image files NOT migrated yet.
+  `csv-imports`) are Pacred-app buckets — they fill as customers/admin use
+  the new flows, not from legacy migration.
 
 🟡 **Hybrid `main` deployed (team merged podeng → main).** `main` now carries
 the 1:1 portal alongside the rebuilt screens — unwired actions (cart add/remove ·

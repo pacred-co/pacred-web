@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ServiceImportAddForm } from "./service-import-add-form";
 
 /**
  * Customer "เพิ่มรายการนำเข้า" (forwarder add) screen — a FAITHFUL 1:1
@@ -51,9 +52,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *  1. forwarder.php L9-427 is a large POST handler — `save` (INSERT
  *     tb_forwarder + image upload via move_uploaded_file + LINE Notify)
  *     + `paymentForwarderNew` (multi-bill INSERT tb_wallet_hs + UPDATE
- *     tb_forwarder). Server Components MUST stay pure → these
- *     render-time writes are NOT reproduced; the form's submit action
- *     is UNWIRED (TODO(server-action)).
+ *     tb_forwarder). Server Components MUST stay pure → these render-
+ *     time writes are NOT reproduced. The `save` branch (the form on
+ *     this page) is wired via the <ServiceImportAddForm> Client
+ *     Component → createLegacyForwarder Server Action; the legacy
+ *     image upload (`fCover`) and LINE-Notify side-effect are
+ *     intentionally NOT ported (admin attaches photos in back-office).
+ *     `paymentForwarderNew` lives on /service-import (the list view).
  *  2. The full LIST view body that the legacy renders BEHIND the modal
  *     is the screen at `/service-import` — not re-rendered here to avoid
  *     duplication; this page is the modal itself. The legacy effectively
@@ -225,8 +230,11 @@ export default async function ServiceImportAddPage() {
               Transcribed 1:1 — same markup, same Thai labels, same Bootstrap-4
               classes. The Bootstrap-4 vendor JS in (protected)/layout.tsx
               opens the modal on the inline <script> below (mirrors
-              forwarder.php L1061-1069). TODO(server-action): wire the `save`
-              POST (L9-427) — INSERT tb_forwarder + image upload + LINE Notify. */}
+              forwarder.php L1061-1069). Form submit wired via
+              <ServiceImportAddForm> Client Component → createLegacyForwarder
+              Server Action (forwarder.php L9-160 `save` POST). Image upload
+              (legacy L102-144 `fCover`) is NOT yet ported — submit ignores
+              the file field; admin can attach photos via back-office. */}
           <div
             id="add-forwarder"
             className="modal fade in"
@@ -266,13 +274,7 @@ export default async function ServiceImportAddPage() {
                   </button>
                 </div>
                 <div className="modal-body header-from">
-                  <form
-                    className="form-horizontal"
-                    method="POST"
-                    action="/service-import"
-                    encType="multipart/form-data"
-                    autoComplete="off"
-                  >
+                  <ServiceImportAddForm>
                     <div className="form-group mb-0">
                       {/* L895-922 — ข้อมูลการฝากนำเข้า */}
                       <div className="ele-forwarder-detail">
@@ -591,7 +593,7 @@ export default async function ServiceImportAddPage() {
                                 <img
                                   data-for="input-12"
                                   className="img-fluid cursor-pointer card-promotion"
-                                  src="/images/customertheme/free50-3.png"
+                                  src="/legacy/pcs/theme/free50-3.png"
                                   alt=""
                                 />
                                 <br />
@@ -636,7 +638,7 @@ export default async function ServiceImportAddPage() {
                         </button>
                       </div>
                     </div>
-                  </form>
+                  </ServiceImportAddForm>
                 </div>
               </div>
             </div>
@@ -683,7 +685,7 @@ export default async function ServiceImportAddPage() {
                   <div className="bg-pro-valentine">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src="/images/customertheme/free50-3.png"
+                      src="/legacy/pcs/theme/free50-3.png"
                       className="img-fluid"
                       alt=""
                     />

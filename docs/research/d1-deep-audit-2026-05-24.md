@@ -15,13 +15,13 @@
 
 | # | Gap | Severity | Effort | Owner (owner-assigned 2026-05-24) | Status |
 |---|---|---|---|---|---|
-| 1 | **Google Sheets sync** (CTT/MX/MK/Sang shipping data) — legacy syncs daily | 🔴 HIGH | M | **เดฟ + ก๊อต + ภูม** (joint) | ❌ NONE |
+| 1 | **Google Sheets sync** (CTT/MX/MK/Sang shipping data) — legacy syncs daily | 🔴 HIGH | M | **เดฟ + ก๊อต + ภูม** (joint) | 🟡 **Foundation shipped 2026-05-27** — `lib/integrations/google-sheets/{client,ctt-adapter}.ts` + migration `0112` (the 3 missing `tb_notify_sheet_{mx,mk,sang}` cursor tables) + `/api/cron/sheets-sync-ctt` (DRY-RUN) + vercel.json + cron registry. **Open handoff (ก๊อต):** provision a Pacred Google Cloud service account + share the 4 sheets with it; set `GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON` + per-sheet `GOOGLE_SHEETS_*_ID`/`_RANGE` env vars; finalize the per-sheet column→`tb_forwarder` mapping (the adapter currently logs the new-rows count + sample without inserting). Once wired: copy CTT adapter to MX/MK/Sang. |
 | 2 | **JMF / TTP / CN forwarder partner APIs** | 🔴 HIGH | L | **ก๊อต** | 🔴 only MOMO JMF stubbed |
-| 3 | **LINE Notify per-user OAuth + cron push** (customer notifications) | 🟡 MED | M | **เดฟ** | ❌ admin-side LINE Messaging only |
-| 4 | **CargoThai (api.newcargothai.net) PO sync** | 🟡 MED | M | **เดฟ** | ❌ NONE |
-| 5 | **TAMIT (Thai ID) identity verification** | 🟡 MED | S | **เดฟ** | ❌ NONE (DBD/RD stubbed but not equivalent) |
+| 3 | **LINE Notify per-user OAuth + cron push** (customer notifications) | 🟡 MED | M | **เดฟ** | ✅ **CLOSED via replacement** — LINE Notify service EOL'd 2025-03-31; replaced by LIFF + LINE Messaging API per-user (`af4bebe9` task L). `/line-settings` page + `actions/line-settings.ts` + `lib/notifications/sendNotification` push. |
+| 4 | **CargoThai (api.newcargothai.net) PO sync** | 🟡 MED | M | **เดฟ** | 🟡 **Pull side ✅ shipped** — `/api/cron/cargothai-sync` daily 02:30 ICT + `lib/integrations/cargothai/client` + `actions/admin/cargothai-sync` + `/admin/cargothai` page. Currently disabled with `not_configured` reason until `PACRED_CARGOTHAI_TOKEN` env set. **Push side (Pacred POs → CargoThai) pending owner confirmation of active partnership** (lower priority — verify if still used per Sprint 3+). |
+| 5 | ~~**TAMIT (Thai ID) identity verification**~~ ✅ **CLOSED 2026-05-27** — gap was mislabelled. `regis-tam.php` is the Thai juristic-person 3-step signup, already shipped in `/register` (juristic tab). The residual DBD tax-ID lookup was hitting the retired `opendata.dbd.go.th/api/v1/*` endpoints → switched to Pacred's `/api/dbd/[taxId]` route handler (CKAN 2.10 + WAF bypass). Personal accounts have no Thai national ID field in legacy or Pacred — no separate ID-verification flow needed. | — | — | — | ✅ DONE |
 | 6 | **MOMO LCL sack tracking lookup** (newly discovered) | 🟡 MED | S | **ภูม** | ❌ NONE — port from backoffice.pcscargo.co.th |
-| 7 | **Barcode + Excel bulk import** (admin) | 🟡 MED | M | **เดฟ** | 🟡 partial admin barcode |
+| 7 | **Barcode + Excel bulk import** (admin) | 🟡 MED | M | **เดฟ** | ✅ **CLOSED via `310ea794` 2026-05-24** — Wave A (barcode `lookup` scan mode mirroring legacy `gateway.php?type=all`/`?type=from`) + Wave B (CSV bulk-update by tracking via migration `0107` + `confirmCsvImport` `forwarders_update_by_tracking` branch — header normalization for GuangZhou/Yiwu, EK/SEA, dd/mm/yyyy; cabinet_closed_date auto-bumps fStatus 1→2/1→3 per legacy). XLSX support deferred to demonstrated need (legacy help text recommends "CSV UTF-8" so CSV-only stays faithful). |
 | 8 | **40+ admin reports** | 🟡 MED | L | **เดฟ + ก๊อต + ภูม** (joint) | 🟡 framework partial |
 | 9 | **Customer image files migration** | ✅ DONE | — | **ภูม** | ✅ uploaded to Supabase S3 production 2026-05-24 |
 | 10 | **WordPress blog/news CMS** for public site | ⚪ LOW | M | **เดฟ + ปอน** | ❌ static-only (acceptable) |
@@ -36,11 +36,11 @@ S = ≤1 day · M = 2–5 days · L = ≥1 week
 ### What's in legacy that pacred-web doesn't have
 
 **External integrations missing (most critical):**
-- **Google Sheets sync** — `member/pcs-admin/api-sheets-{ctt,mx,mk,sang-2023}.php` + cron at `run-time/cttupdate/index.php`. Pulls shipping data from 4 different Google Sheets, dedupes against `tb_notify_sheet_*`, posts LINE Notify on new rows. Used daily by ops team.
+- **Google Sheets sync** — `member/pcs-admin/api-sheets-{ctt,mx,mk,sang-2023}.php` + cron at `run-time/cttupdate/index.php`. Pulls shipping data from 4 different Google Sheets, dedupes against `tb_notify_sheet_*`, posts LINE Notify on new rows. Used daily by ops team. **🟡 Foundation shipped 2026-05-27** (CTT pilot DRY-RUN — `lib/integrations/google-sheets/{client,ctt-adapter}.ts` + migration `0112` for the 3 missing dedupe tables + `/api/cron/sheets-sync-ctt` cron). Open handoff: ก๊อต provisions Pacred Google Cloud service account + the per-sheet column mapping; then MX/MK/Sang clone CTT adapter. LINE notify channel switches from dead LINE Notify → LINE Messaging API (Pacred OA).
 - **JMF / TTP / CN forwarder APIs** — `api-forwarder-{jmf,ttp,cn}.php`. Pulls partner forwarder quotes/availability/status. Pacred has only MOMO JMF wrapper (stubbed, API surface mismatch).
-- **LINE Notify (per-user OAuth)** — `member/line-notify.php` + `member/api/linenotify/callback/` + cron in `run-time/line/index.php`. Customer connects their personal LINE → receives notifications about their orders. Different from admin-side LINE Messaging API push (which we have).
+- ~~**LINE Notify (per-user OAuth)**~~ ✅ **CLOSED via replacement** — Legacy `member/line-notify.php` + `member/api/linenotify/callback/` + `run-time/line/index.php` cron. Original port attempted; LINE Notify service EOL'd 2025-03-31 → reverted. Replaced 2026-05-26 by **LIFF + LINE Messaging API per-user model** in commit `af4bebe9` (task L) — `/line-settings` page + `actions/line-settings.ts` + push via `lib/notifications/sendNotification`. Customer flow: add Pacred LINE OA friend → /line-settings → LIFF auth → `profiles.line_user_id` set → Messaging API push.
 - **CargoThai (api.newcargothai.net) PO sync** — `test-api/api-new.php` + `test-api/update-data-cargothai/index.php`. Two-way sync of Pacred POs with CargoThai partner system.
-- **TAMIT (Thai ID) verification** — `member/regis-tam.php`. Real-time Thai ID validation during signup/KYC.
+- ~~**TAMIT (Thai ID) verification**~~ ✅ **CLOSED 2026-05-27 — gap was mislabelled.** `regis-tam.php` is the Thai **juristic-person 3-step signup**, NOT a Thai national-ID verifier. Already shipped as Pacred's `/register` juristic tab + `actions/auth.ts registerJuristicStep1/saveJuristicStep2/uploadJuristicDoc/completeJuristicRegistration`. The residual DBD tax-ID lookup leak was fixed by switching `register-client.tsx fetchCompany()` from the retired `opendata.dbd.go.th/api/v1/*` direct call → Pacred's own `/api/dbd/[taxId]` (CKAN 2.10 + WAF bypass).
 - **PHPMailer SMTP** — covered (we use Resend). No port needed.
 
 **Newly-discovered subdomains (REALSHITDATAPCS.rar 2026-05-24):**
@@ -58,8 +58,8 @@ S = ≤1 day · M = 2–5 days · L = ≥1 week
 - Pacred has 7 Vercel crons (auto-cancel-orders, sales-daily-digest, refresh-active-customers, expire-probation, expire-driver-assignments, sms-balance-check, send-scheduled-broadcasts).
 - **Missing:** Google Sheets sync cron, LINE Notify dispatcher cron.
 
-**Customer image storage:**
-- The 37GB `REALSHITDATAPCS.rar` likely contains all customer-uploaded images (avatars, payment slips, document scans, forwarder photos). Not extracted yet (disk constraint — need ~50–80GB after extract).
+**Customer image storage: ✅ DONE.**
+- ภูม uploaded the legacy `pcsracgo/public/member` image + storage files directly into **Supabase S3 production** 2026-05-24. REALSHITDATAPCS.rar was also extracted (~25GB code-only at `/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/`) — powers this deep audit. Phase A storage parity closed; no further legacy image migration needed.
 
 ### What pacred-web has that legacy doesn't (kept-or-expanded)
 
@@ -83,7 +83,7 @@ These are flows the team uses daily but pacred-web can't currently service:
 - ❌ **Daily Google Sheets sync** — when ops imports shipping data from CTT/MX/MK/Sang sheets, our system has no entry point.
 - ❌ **JMF forwarder partner quote refresh** — partner sends new rates → we have nowhere to ingest.
 - ❌ **Customer connects personal LINE Notify** — UI link missing; customer-side notification chain dead.
-- ❌ **TAMIT ID verification on signup** — currently we accept Thai IDs without validating with the legacy verifier.
+- ✅ ~~**TAMIT ID verification on signup**~~ — **gap mislabelled, now closed 2026-05-27.** `regis-tam.php` was the Thai juristic-person 3-step signup (✅ ported in `/register` juristic tab). The DBD tax-ID lookup leak (dead `api/v1` direct call) was fixed by switching to the internal `/api/dbd/[taxId]` route (CKAN 2.10 + WAF bypass). Personal accounts never collected a Thai national ID in either legacy or Pacred.
 - ❌ **MOMO LCL sack tracking lookup** — admin can't query MOMO API to verify sack contents.
 
 These are flows that work but degraded (rebuilt-era differs from legacy):
@@ -150,16 +150,16 @@ These are flows that work but degraded (rebuilt-era differs from legacy):
 1. **Verify the merged podeng work** — เดฟ runs `pnpm verify` + smoke `/dashboard`, `/wallet`, `/service-order` on `dave-pacred` after the chrome rebuild
 2. **ก๊อต takes admin 1:1 lane** — pick 5 highest-impact admin screens from `poom-save-point-2026-05-19-night.md` §10 (start with `index.php` admin dashboard + `users-search` + `forwarder.php`)
 3. **Gap #6 — MOMO LCL tracking** — ก๊อต or ภูม does this (1 day, single endpoint)
-4. **Gap #5 — TAMIT integration stub** — เดฟ adds the API client + 1-screen integration
+4. ~~**Gap #5 — TAMIT integration stub**~~ ✅ DONE 2026-05-27 — `register-client.tsx fetchCompany()` switched from retired `opendata.dbd.go.th/api/v1/*` direct call → Pacred's own `/api/dbd/[taxId]` (CKAN 2.10 + WAF bypass).
 
 ### Sprint 2 (next week)
-5. **Gap #1 — Google Sheets sync cron** — Vercel cron + Sheets API client + dedupe logic + LINE Notify dispatcher
-6. **Gap #3 — LINE Notify per-user OAuth** — Next.js OAuth Route Handler + customer-portal connect button + dispatcher cron
+5. ~~**Gap #1 — Google Sheets sync cron**~~ 🟡 **Foundation shipped 2026-05-27** — Vercel cron `/api/cron/sheets-sync-ctt` (DRY-RUN) + `lib/integrations/google-sheets/client.ts` (Sheets v4 REST via google-auth-library JWT) + CTT pilot adapter + migration `0112` (3 missing `tb_notify_sheet_*` cursor tables) + LINE dispatcher switched from dead LINE Notify → Messaging API. Open: ก๊อต provisions Google Cloud creds + sheet column mapping; then clone CTT → MX/MK/Sang.
+6. ~~**Gap #3 — LINE Notify per-user OAuth**~~ ✅ DONE via LIFF + Messaging API replacement (`af4bebe9`, 2026-05-26)
 7. **Gap #2 (start) — JMF partner API** — fully wire the MOMO JMF client (currently stubbed)
 
 ### Sprint 3+ (ongoing)
 8. Sprint 1 of `Poom-pacred` V3 merges — ภูม picks which V3 features land first on main after 1:1 stable
-9. **Customer image migration** — ก๊อต provisions disk space, extracts `pcsc/img/` from REALSHITDATAPCS.rar, uploads to Supabase Storage
+9. ~~**Customer image migration**~~ ✅ DONE — ภูม uploaded `pcsracgo/public/member` to Supabase S3 production 2026-05-24
 10. **Gap #4 — CargoThai PO sync** — when partner relationship confirmed (lower priority — verify if still used)
 
 ---

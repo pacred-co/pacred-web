@@ -80,7 +80,7 @@ export default async function DashboardPage() {
   // until staff approve (legacy index.php L154-156).
   if (isJuristicPending) {
     return (
-      <div className="w-full px-[10px] md:pl-[280px] md:pr-[90px] py-3 md:py-5">
+      <div className="pcs-content-pad w-full px-[10px] py-3 md:py-5">
         <div className="max-w-[670px] mx-auto">
           <div className="rounded-2xl bg-primary-600 text-white px-6 py-8 text-center shadow-md">
             รอเจ้าหน้าที่ดำเนิน อนุมัติการเป็นนิติบุคคล ภายใน 24 ชม. (ยกเว้นวันอาทิตย์และวันหยุดนักขัตฤกษ์)
@@ -91,7 +91,7 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="w-full px-[10px] md:pl-[280px] md:pr-[90px] py-3 md:py-5">
+    <div className="pcs-content-pad w-full px-[10px] py-3 md:py-5">
       {/* Top section — 2/3 carousel + 1/3 side-banner stack (md+); banners
           hidden < sm to match legacy `d-none d-sm-block`. */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
@@ -100,11 +100,14 @@ export default async function DashboardPage() {
             {showMarchPromo && (
               <div>
                 <a href="#">
-                  <img
-                    className="w-full h-auto rounded-2xl shadow-md hover:shadow-xl hover:brightness-105 transition-all duration-300 cursor-pointer"
-                    src="https://pcscargo.co.th/wp-content/uploads/2026/03/3.3-06-2048x598.jpg"
-                    alt="โปรโมชัน"
-                  />
+                  {/* TODO(brand): legacy WordPress promo asset was
+                      https://pcscargo.co.th/wp-content/uploads/2026/03/3.3-06-2048x598.jpg
+                      — needs a Pacred-hosted replacement from ปอน before
+                      this March-3.3 window re-activates. Placeholder
+                      below avoids a brand-leaking URL in customer source. */}
+                  <div className="w-full aspect-[2048/598] rounded-2xl bg-surface-alt shadow-md flex items-center justify-center text-muted text-sm">
+                    โปรโมชัน 3.3 (รอ asset ใหม่จากทีม brand)
+                  </div>
                 </a>
               </div>
             )}
@@ -132,8 +135,11 @@ export default async function DashboardPage() {
               alt=""
             />
           </Link>
-          {/* Legacy linked to pcscargo.co.th/line-notify/ — rewritten internal. */}
-          <Link href="/line-notify" className="block group">
+          {/* Legacy linked to pcscargo.co.th/line-notify/ — Pacred replaced
+              that page with /line-settings (LIFF flow, task L 2026-05-26).
+              LINE Notify EOL'd 2025-03-31; the new page links via Messaging
+              API push. */}
+          <Link href="/line-settings" className="block group">
             <img
               className="w-full rounded-2xl shadow-md group-hover:shadow-xl group-hover:brightness-105 transition-all duration-300"
               src="/images/customertheme/line.png"

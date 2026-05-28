@@ -14,7 +14,6 @@
 
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { Footer } from "@/components/sections/footer";
 import { createClient } from "@/lib/supabase/server";
 import { getYuanPayment } from "@/actions/payment";
 import { getMyTaxInvoiceForOrder } from "@/actions/tax-invoices";
@@ -160,7 +159,6 @@ export default async function YuanPaymentDetailPage({
           </section>
         )}
       </main>
-      <Footer />
     </>
   );
 }

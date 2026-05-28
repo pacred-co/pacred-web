@@ -1,5 +1,4 @@
 import { getTranslations } from "next-intl/server";
-import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { listForwarders } from "@/actions/forwarder";
 import { ForwarderList } from "../forwarder-list";
@@ -28,7 +27,6 @@ export default async function ServiceImportPendingPage() {
 
         <ForwarderList items={items} />
       </main>
-      <Footer />
     </>
   );
 }

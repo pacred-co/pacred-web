@@ -1,4 +1,3 @@
-import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { getCurrentYuanRate } from "@/actions/payment";
 import { getWallet } from "@/actions/wallet";
@@ -60,7 +59,6 @@ export default async function ServicePaymentAddPage() {
           customerName={fullName}
         />
       </main>
-      <Footer />
     </>
   );
 }
