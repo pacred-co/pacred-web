@@ -4,23 +4,34 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
-import { CabinetListCell } from "./cabinet-list-cell";
+import { CntHsTable, type CntHsRow } from "./cnt-hs-table";
 
 /**
  * Admin > "รายการเบิกเงินค่าตู้" — container-payment (ตู้-ค่าจ่าย) ledger.
  *
- * Wave 23 P1 #11.a (2026-05-27 ค่ำ · Agent E): full Tailwind rewrite —
- * dropped `.pcs-legacy` scope + legacy Bootstrap-4 CSS includes
- * (`admin-base.css` + `cnt-hs.css`) per AGENTS.md §0a "steal the LOGIC +
- * apply OUR OWN polish" rule. The legacy chrome was a faithful-port
- * stepping stone (D1/ADR-0017); this is the post-port polish pass.
+ * Wave 24 ROW-COLOR-RESTORE (2026-05-28 ดึก · Agent P3): restored row tint
+ * per cntStatus + sortable column headers + orange summary band that the
+ * Wave 23 P1-11.a rewrite (cd21c4f0) had silently dropped. ภูม + พี่ป๊อป
+ * opened the page, couldn't read state from a row at-a-glance, found the
+ * ledger unusable. The fix:
+ *   - Row tint via canonical `CNTHS_ROW_TINT` (amber-200 unpaid · emerald-200
+ *     paid · red-200 rejected) — SOLID Tailwind, not `/30` opacity.
+ *   - Sortable headers via `ArrowUpDown` + client state on every data column.
+ *   - Orange summary band under thead — matches `report-cnt/cnt-list-table.tsx`
+ *     L188-198 pattern with total ฿ + N รายการ + N ตู้.
+ *   - Status chip palette swapped from washed `-100` tints to solid
+ *     `CNTSTATUS_CFG` chips so the chip reads in <1s.
  *
- * Includes Wave 23 P1 #9 fix: "ข้อมูลเพิ่มเติม" column's GZE/cabinet codes
- * used to overflow (long comma-joined list spilled across the row). Now
- * capped at 3 visible chips + "+N more" `<details>` toggle reveals the
- * rest in-row without a modal.
+ * AGENTS.md §0a clarification: chip-color + row-tint are LOGIC, not chrome.
+ * "Steal the LOGIC + apply OUR OWN polish" means cleaner typography, modern
+ * spacing — NOT stripping the visual state encoding that staff trained on.
+ * The earlier rewrite header (Wave 23 P1 #11.a) framed those affordances as
+ * "legacy chrome to drop"; that read §0a incorrectly. This commit corrects.
  *
- * Workflow / data unchanged from the faithful-port version:
+ * Wave 23 P1 #9 (kept): "ข้อมูลเพิ่มเติม" column's GZE/cabinet codes are
+ * capped via `<CabinetListCell>` (3 visible chips + dialog for the rest).
+ *
+ * Workflow / data unchanged:
  *   - Reads `tb_cnt` (ledger header) + `tb_cnt_item` (cabinet fan-out)
  *   - Status filter `?q=1` (รอดำเนินการ) / `?q=2` (สำเร็จแล้ว)
  *   - Free-text search across id / nameblank / noblank
@@ -34,26 +45,7 @@ import { CabinetListCell } from "./cabinet-list-cell";
 export const dynamic = "force-dynamic";
 
 // ============================================================================
-// Helpers
-// ============================================================================
-
-/** Legacy PHP `number_format($n, 2)` — produces "1,234.56" thousand-grouped. */
-function numberFormat2(n: number | string | null | undefined): string {
-  const v = typeof n === "string" ? Number(n) : (n ?? 0);
-  if (Number.isNaN(v)) return "0.00";
-  return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-/** Format a YYYY-MM-DD / ISO date into Thai short date. Returns "—" on failure. */
-function formatDate(raw: string | null | undefined): string {
-  if (!raw) return "—";
-  const d = new Date(raw);
-  if (Number.isNaN(d.getTime())) return raw;
-  return d.toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" });
-}
-
-// ============================================================================
-// Row shape — relevant subset of tb_cnt
+// Row shape — relevant subset of tb_cnt (server query · pre-CntHsRow shape)
 // ============================================================================
 
 type CntRow = {
@@ -76,6 +68,8 @@ const PAGE_SIZE = 200;
 
 // Wave 23 P1 #9 — cap visible GZE codes at 3, rest in <details>.
 // CABINET_VISIBLE moved into CabinetListCell client island (Wave 23 P1 #E).
+// Wave 24 ROW-COLOR-RESTORE — table chrome + sort + summary moved into
+// <CntHsTable> client wrapper (./cnt-hs-table.tsx).
 
 export default async function CntHsPage({
   searchParams,
@@ -158,6 +152,37 @@ export default async function CntHsPage({
   const count1 = count1Res.count ?? 0;
   const count2 = countAll - count1;
   const resultTotal = tableRes.count ?? rows.length;
+
+  // Wave 24 ROW-COLOR-RESTORE — pre-resolve cabinets server-side so the
+  // client wrapper gets a JSON-serializable shape (string[]). Prefer the
+  // normalized `tb_cnt_item` fan-out; fall back to parsing the legacy
+  // `tb_cnt.cntname` CSV when the fan-out is empty (legacy data often
+  // wrote the CSV but never populated tb_cnt_item — would show "—" if we
+  // relied on fan-out only).
+  const tableRows: CntHsRow[] = rows.map((row) => {
+    const fanOut = arrItem.get(row.ID) ?? [];
+    const cabinets =
+      fanOut.length > 0
+        ? fanOut
+        : (row.cntName ?? "")
+            .split(/[,\s]+/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+    return {
+      ID: row.ID,
+      cntName: row.cntName ?? "",
+      cntStatus: row.cntStatus ?? "1",
+      cntAmount: Number(row.cntAmount ?? 0),
+      cntImagesSlip: row.cntImagesSlip ?? "",
+      cntFile: row.cntFile ?? "",
+      date: row.date,
+      adminIDCreate: row.adminIDCreate ?? "",
+      nameBlank: row.nameBlank ?? "",
+      noBlank: row.noBlank ?? "",
+      nameAccount: row.nameAccount ?? "",
+      cabinets,
+    };
+  });
 
   const activeTab: "all" | "1" | "2" =
     sp.q === "1" ? "1" : sp.q === "2" ? "2" : "all";
@@ -269,153 +294,11 @@ export default async function CntHsPage({
 
         {/* Table card */}
         <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
-          {rows.length === 0 ? (
+          {tableRows.length === 0 ? (
             <p className="p-12 text-center text-sm text-muted">ไม่พบรายการเบิกเงินค่าตู้</p>
           ) : (
             <>
-              <p className="px-4 pt-3 text-[11px] text-muted">
-                <span className="opacity-70">เลื่อนซ้าย-ขวาเพื่อดูคอลัมน์ทั้งหมด</span>
-                <span className="ml-1">⇆</span>
-              </p>
-              <div className="overflow-x-auto scrollbar-x-visible">
-                <table className="w-full text-sm">
-                  <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
-                    <tr>
-                      <th className="px-4 py-3">ID</th>
-                      <th className="px-4 py-3">วันที่</th>
-                      <th className="px-4 py-3">หมายเลขตู้</th>
-                      <th className="px-4 py-3 text-right">จำนวนเงิน</th>
-                      <th className="px-4 py-3">ข้อมูลเพิ่มเติม</th>
-                      <th className="px-4 py-3 text-center">สลิป</th>
-                      <th className="px-4 py-3 text-center">หลักฐาน</th>
-                      <th className="px-4 py-3">ผู้ทำรายการ</th>
-                      <th className="px-4 py-3 text-center">สถานะ</th>
-                      <th className="px-4 py-3 text-right">ตัวเลือก</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row) => {
-                      // Prefer the normalized `tb_cnt_item` fan-out · fall back
-                      // to parsing the legacy `tb_cnt.cntname` CSV when the
-                      // fan-out is empty (legacy data often wrote the CSV but
-                      // never populated tb_cnt_item — would show "—" if we
-                      // relied on fan-out only). Either way the chip island
-                      // (CabinetListCell) gets a clean string[].
-                      const fanOut = arrItem.get(row.ID) ?? [];
-                      const cabinets =
-                        fanOut.length > 0
-                          ? fanOut
-                          : (row.cntName ?? "")
-                              .split(/[,\s]+/)
-                              .map((s) => s.trim())
-                              .filter(Boolean);
-                      const isPaid = row.cntStatus === "2";
-                      return (
-                        <tr key={row.ID} className="border-t border-border hover:bg-surface-alt/30">
-                          {/* 1 — ID */}
-                          <td className="px-4 py-3 font-mono text-xs">
-                            <Link
-                              href={`/admin/cnt-hs/${row.ID}`}
-                              className="text-primary-600 hover:underline"
-                            >
-                              #{row.ID}
-                            </Link>
-                          </td>
-                          {/* 2 — วันที่ */}
-                          <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
-                            {formatDate(row.date)}
-                          </td>
-                          {/* 3 — หมายเลขตู้ — Wave 23 P1 #E ภูม flag: drop the
-                              raw cntname CSV (which was bleeding into next row
-                              when a batch had 40+ cabinets) and use the
-                              CabinetListCell client island (3 chip preview +
-                              click-to-expand PacredDialog with copy-all). */}
-                          <td className="px-4 py-3 text-xs max-w-[280px] align-top">
-                            <CabinetListCell cntId={row.ID} cabinets={cabinets} />
-                          </td>
-                          {/* 4 — จำนวนเงิน */}
-                          <td className="px-4 py-3 text-right font-mono text-xs">
-                            ฿{numberFormat2(row.cntAmount)}
-                          </td>
-                          {/* 5 — ข้อมูลเพิ่มเติม */}
-                          <td className="px-4 py-3 text-xs max-w-[220px]">
-                            <div className="space-y-0.5">
-                              <div>
-                                <span className="text-muted">ธนาคาร:</span>{" "}
-                                <span className="font-medium">{row.nameBlank || "—"}</span>
-                              </div>
-                              <div>
-                                <span className="text-muted">เลขที่:</span>{" "}
-                                <span className="font-mono">{row.noBlank || "—"}</span>
-                              </div>
-                              <div className="truncate" title={row.nameAccount || ""}>
-                                <span className="text-muted">ชื่อ:</span>{" "}
-                                <span>{row.nameAccount || "—"}</span>
-                              </div>
-                            </div>
-                          </td>
-                          {/* 6 — สลิป */}
-                          <td className="px-4 py-3 text-center text-xs">
-                            {row.cntImagesSlip ? (
-                              <Link
-                                href={`/admin/cnt-hs/${row.ID}`}
-                                className="text-primary-600 hover:underline"
-                              >
-                                ดูสลิป
-                              </Link>
-                            ) : (
-                              <span className="text-muted">—</span>
-                            )}
-                          </td>
-                          {/* 7 — หลักฐาน */}
-                          <td className="px-4 py-3 text-center text-xs">
-                            {row.cntFile ? (
-                              <Link
-                                href={`/admin/cnt-hs/${row.ID}`}
-                                className="text-primary-600 hover:underline"
-                              >
-                                ดูไฟล์
-                              </Link>
-                            ) : (
-                              <Link
-                                href={`/admin/cnt-hs/${row.ID}`}
-                                className="text-amber-600 hover:underline"
-                              >
-                                เพิ่มไฟล์
-                              </Link>
-                            )}
-                          </td>
-                          {/* 8 — ผู้ทำรายการ */}
-                          <td className="px-4 py-3 text-xs font-mono text-muted">
-                            {row.adminIDCreate || "—"}
-                          </td>
-                          {/* 9 — สถานะ */}
-                          <td className="px-4 py-3 text-center">
-                            <span
-                              className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
-                                isPaid
-                                  ? "bg-green-50 text-green-700 border-green-200"
-                                  : "bg-amber-50 text-amber-700 border-amber-200"
-                              }`}
-                            >
-                              {isPaid ? "สำเร็จ" : "รอดำเนินการ"}
-                            </span>
-                          </td>
-                          {/* 10 — ตัวเลือก */}
-                          <td className="px-4 py-3 text-right">
-                            <Link
-                              href={`/admin/cnt-hs/${row.ID}`}
-                              className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
-                            >
-                              อัปเดต / ดูรายละเอียด
-                            </Link>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <CntHsTable rows={tableRows} />
 
               {/* Pagination */}
               {(hasPrev || hasNext) && (
