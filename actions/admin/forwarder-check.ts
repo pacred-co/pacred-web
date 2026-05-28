@@ -150,20 +150,51 @@ async function appendStatusLog(
 
 /** Compose the customer-facing SMS body. Legacy template was
  *    "คุณมีค่าขนส่งที่ต้องชำระ ดู->{url}"
- *  We surface the order id + total so the customer can match it against
- *  their LINE/email without opening the link first. */
+ *
+ *  Wave 27 / E2E LOOP FIX gap #5 (2026-05-29) — the URL now points at
+ *  the new customer-side invoice view `/service-import/<fid>/invoice`
+ *  (built same wave by Agent F4) so the customer can SEE their bill
+ *  before paying. The bare `/service-import/<fid>` detail page still
+ *  works as a fallback but the invoice surface carries the formal
+ *  ใบแจ้งหนี้ chrome + print/PDF button.
+ *
+ *  Char budget — ThaiBulkSMS encodes Thai as TIS-620 (1 SMS = 70 chars
+ *  · multi-part up to 153/segment). We aim for ≤155 chars TIS-620 so
+ *  the message ships in at most 3 segments. The Thai labels here
+ *  (~50 chars) + the URL (~50 chars) + amount/id (~20 chars) keeps
+ *  us comfortably inside the budget.
+ */
 function composeBillSms(opts: {
   userId: string;
   fid: number;
   amountThb: number;
   trackingChn: string | null;
 }): string {
-  const url = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://pacred.co"}/service-import/${opts.fid}`;
+  // Domain root — env override · falls back to bare "pacred.co.th" (no
+  // protocol) which gives us ~7 chars of head-room over "https://" + the
+  // domain is the launch property.
+  const envUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() ?? "";
+  // Strip trailing slash · drop protocol so the SMS body stays compact
+  // (most carriers auto-linkify bare domains). If the env wasn't set we
+  // emit the launch host directly.
+  const host = (envUrl !== "" ? envUrl : "pacred.co.th")
+    .replace(/^https?:\/\//, "")
+    .replace(/\/+$/, "");
+  const invoiceUrl = `${host}/service-import/${opts.fid}/invoice`;
   const amount = opts.amountThb.toLocaleString("th-TH", { minimumFractionDigits: 2 });
-  const trackingPart = opts.trackingChn ? ` ${opts.trackingChn}` : "";
-  // ThaiBulkSMS Standard limit = 160 chars Latin / 70 chars TIS-620. Keep
-  // the body tight so we don't get truncated mid-amount.
-  return `Pacred: ${opts.userId} บริการนำเข้า #${opts.fid}${trackingPart} ยอด ฿${amount} ชำระที่ ${url}`;
+  void opts.trackingChn; // kept for back-compat callers; tracking now lives on the invoice page
+  // Tight single-block message under 155 chars TIS-620 — every line
+  // is mandatory for the customer to act:
+  //   1. Sender identity + order id
+  //   2. Amount to pay (the most-read line)
+  //   3. Invoice link (the new gap #5 fix)
+  //   4. Wallet-pay CTA (the close-the-loop hint)
+  return (
+    `Pacred · ฝากนำเข้า ${opts.fid}\n` +
+    `ยอดที่ต้องชำระ: ฿${amount}\n` +
+    `ดูใบแจ้งหนี้: ${invoiceUrl}\n` +
+    `จ่ายจากกระเป๋าได้เลย`
+  );
 }
 
 /** Compose the LINE/email notification body. Longer than SMS — we can afford
