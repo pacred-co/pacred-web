@@ -344,20 +344,16 @@ const itemReportsAll: MenuItem = {
  *
  *  Component: components/admin/accounting-segment-pills.tsx
  */
-// Wave 28 (2026-05-29 · ภูม flagged): "ระบบบัญชี" was a single-leaf jumping
-// straight to /admin/accounting/cargo — staff couldn't find the cards on
-// /admin/accounting (incl. ใบแจ้งหนี้ฝากนำเข้า launch-critical). Expanded
-// into a dropdown surfacing the key leaves directly.
+// Wave 28 (2026-05-29 · ภูม flagged fix): landing changed from /cargo → root
+// /admin/accounting hub so staff sees the full top-menubar (รายรับ/รายจ่าย/
+// ผู้ติดต่อ/การเงิน/การบัญชี dropdowns) + the card grid. Invoice navigation
+// flows through the menubar "รายรับ → ใบแจ้งหนี้ → ฝากนำเข้า แบบเรทราคา /
+// ฝากนำเข้า แบบรายการ" leaves — wired to /admin/accounting/forwarder-invoice
+// in accounting-menubar.ts (Wave 28 leaf-href fix).
 const blockAccounting: MenuItem = {
   labelKey: "accounting.title",
+  href: "/admin/accounting",
   icon: "Landmark",
-  children: [
-    { labelKey: "accounting.hub",            href: "/admin/accounting",                  icon: "LayoutDashboard" },
-    { labelKey: "accounting.cargo",          href: "/admin/accounting/cargo",            icon: "Package" },
-    { labelKey: "accounting.forwarderInvoice", href: "/admin/accounting/forwarder-invoice", icon: "Receipt" },
-    { labelKey: "accounting.closing",        href: "/admin/accounting/closing",          icon: "FileText" },
-    { labelKey: "accounting.periods",        href: "/admin/accounting/periods",          icon: "ClipboardCheck" },
-  ],
 };
 
 /** legacy OOP/Cargo/menu-settings.php — ตั้งค่าระบบ Cargo

@@ -48,17 +48,32 @@ function quotationStatuses(typeSlug: string): MenubarItem[] {
 }
 
 // Used for invoice (5 statuses but slightly different labels — รอชำระเงิน / ชำระแล้ว / พ้นกำหนด).
+//
+// Wave 28 fix (2026-05-29 · ภูม flagged): the invoice → ฝากนำเข้า แบบเรทราคา /
+// ฝากนำเข้า แบบรายการ leaves now wire to the REAL Pacred page at
+// /admin/accounting/forwarder-invoice (tb_receipt-backed list + add/print) —
+// not the Wave 23 P0 catch-all stub. The page accepts ?status=pending/paid/
+// cancelled and /add for the create form. Other (type,service) combos still
+// fall through to the catch-all "🚧 Wave 24+" banner pending future ports.
 function invoiceStatuses(typeSlug: string): MenubarItem[] {
-  return SERVICES.map((s) => ({
-    label: s.label,
-    children: [
-      { label: "สร้าง",          href: `/admin/accounting/cargo/income/${typeSlug}/${s.slug}/new` },
-      { label: "รอชำระเงิน",     href: `/admin/accounting/cargo/income/${typeSlug}/${s.slug}?status=awaiting_payment` },
-      { label: "ชำระแล้ว",        href: `/admin/accounting/cargo/income/${typeSlug}/${s.slug}?status=paid` },
-      { label: "พ้นกำหนด",       href: `/admin/accounting/cargo/income/${typeSlug}/${s.slug}?status=expired` },
-      { label: "ดูทั้งหมด",       href: `/admin/accounting/cargo/income/${typeSlug}/${s.slug}` },
-    ],
-  }));
+  return SERVICES.map((s) => {
+    const isForwarderInvoice =
+      typeSlug === "invoice" && (s.slug === "forwarder-rate" || s.slug === "forwarder-item");
+    const base = isForwarderInvoice
+      ? "/admin/accounting/forwarder-invoice"
+      : `/admin/accounting/cargo/income/${typeSlug}/${s.slug}`;
+    const newPath = isForwarderInvoice ? `${base}/add` : `${base}/new`;
+    return {
+      label: s.label,
+      children: [
+        { label: "สร้าง",          href: newPath },
+        { label: "รอชำระเงิน",     href: `${base}?status=${isForwarderInvoice ? "pending" : "awaiting_payment"}` },
+        { label: "ชำระแล้ว",        href: `${base}?status=paid` },
+        { label: "พ้นกำหนด",       href: `${base}?status=${isForwarderInvoice ? "cancelled" : "expired"}` },
+        { label: "ดูทั้งหมด",       href: base },
+      ],
+    };
+  });
 }
 
 // Used for receipt (3 statuses — สร้าง / ชำระแล้ว / ดูทั้งหมด — legacy
