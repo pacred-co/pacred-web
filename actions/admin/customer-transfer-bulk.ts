@@ -75,6 +75,10 @@ export async function bulkTransferCustomersToSalesRep(
         .in("role", ["sales_admin", "super"])
         .eq("is_active", true)
         .maybeSingle();
+      if (targetErr) {
+        console.error(`[customer-transfer-bulk target lookup] failed`, { code: targetErr.code, message: targetErr.message });
+        return { ok: false, error: targetErr.message };
+      }
       if (!target) return { ok: false, error: "target_not_active_sales_admin" };
     }
 
@@ -88,6 +92,10 @@ export async function bulkTransferCustomersToSalesRep(
       .select("role")
       .eq("profile_id", adminId)
       .eq("is_active", true);
+    if (callerRolesErr) {
+      console.error(`[customer-transfer-bulk caller roles lookup] failed`, { code: callerRolesErr.code, message: callerRolesErr.message });
+      return { ok: false, error: callerRolesErr.message };
+    }
     const isSuper = (callerRoles ?? []).some((r) => r.role === "super");
 
     // Pull current sales_admin_id for the selected customers up-front —
@@ -99,6 +107,10 @@ export async function bulkTransferCustomersToSalesRep(
       .from("profiles")
       .select("id, sales_admin_id")
       .in("id", uniqueIds);
+    if (currentRowsErr) {
+      console.error(`[customer-transfer-bulk current rows lookup] failed`, { code: currentRowsErr.code, message: currentRowsErr.message });
+      return { ok: false, error: currentRowsErr.message };
+    }
     const currentRepById = new Map<string, string | null>(
       ((currentRows ?? []) as Array<{ id: string; sales_admin_id: string | null }>)
         .map((r) => [r.id, r.sales_admin_id]),

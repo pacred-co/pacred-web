@@ -58,6 +58,10 @@ export default async function AdminCommissionTiersPage() {
     .order("service_kind", { ascending: true })
     .order("created_at",   { ascending: false })
     .returns<Row[]>();
+  if (error) {
+    console.error(`[admin/commissions/tiers list] failed`, { code: error.code, message: error.message });
+    throw new Error(`commission_tiers list failed: ${error.message}`);
+  }
 
   const rows = data ?? [];
   const activeCount   = rows.filter((r) => r.is_active).length;

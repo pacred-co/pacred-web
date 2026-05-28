@@ -85,7 +85,11 @@ export async function GET(
 
   // ── 1. Auth + row visibility via RLS ──
   const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
+  const { data: { user }, error: userErr } = await supabase.auth.getUser();
+  if (userErr) {
+    console.error(`[commission-withdrawal/[id] getUser] failed`, { message: userErr.message });
+    return NextResponse.json({ error: "auth_failed" }, { status: 500 });
+  }
   if (!user) {
     return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
   }
@@ -100,6 +104,10 @@ export async function GET(
     `)
     .eq("id", id)
     .maybeSingle<WithdrawalRow>();
+  if (rowErr) {
+    console.error(`[commission-withdrawal/[id] row lookup] id=${id}`, { code: rowErr.code, message: rowErr.message });
+    return NextResponse.json({ error: rowErr.message }, { status: 500 });
+  }
 
   if (!row) {
     return NextResponse.json({ error: "not_found_or_unauthorised" }, { status: 404 });
@@ -108,13 +116,17 @@ export async function GET(
   // ── 2. Related data via admin client (row visibility already proved access) ──
   const admin = createAdminClient();
 
-  const { data: earnerRaw, error: earnerRawErr } = await admin
+  const { data: earnerRaw, error: earnerErr } = await admin
     .from("profiles")
     .select("member_code, first_name, last_name")
     .eq("id", row.earner_admin_id)
     .maybeSingle<EarnerProfile>();
+  if (earnerErr) {
+    // Soft-fail — earnerName falls back to '—' via the existing null-handling below.
+    console.error(`[commission-withdrawal/[id] earner lookup] id=${row.earner_admin_id}`, { code: earnerErr.code, message: earnerErr.message });
+  }
 
-  const { data: itemsRaw, error: itemsRawErr } = await admin
+  const { data: itemsRaw, error: itemsErr } = await admin
     .from("commission_withdrawal_items")
     .select(`
       id, included_amount_thb,
@@ -123,6 +135,10 @@ export async function GET(
       )
     `)
     .eq("commission_withdrawal_id", id);
+  if (itemsErr) {
+    console.error(`[commission-withdrawal/[id] items lookup] id=${id}`, { code: itemsErr.code, message: itemsErr.message });
+    return NextResponse.json({ error: itemsErr.message }, { status: 500 });
+  }
 
   const items = ((itemsRaw ?? []) as ItemDbRow[]).map((it, i) => {
     const acc = Array.isArray(it.accrual) ? it.accrual[0] ?? null : it.accrual;

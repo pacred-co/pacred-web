@@ -179,6 +179,12 @@ export async function bulkAssignDriver(
                | Array<{ first_name: string | null; last_name: string | null; member_code: string | null }>
                | null;
       }>();
+    if (driverErr) {
+      console.error(`[forwarders-bulk bulkAssignDriver] driver lookup failed`, {
+        code: driverErr.code, message: driverErr.message, driverAdminId: d.driverAdminId,
+      });
+      return { ok: false, error: `driver lookup failed: ${driverErr.message}` };
+    }
     if (!driver) {
       return { ok: false, error: "driverAdminId ไม่ใช่ driver ที่ active" };
     }
@@ -193,6 +199,13 @@ export async function bulkAssignDriver(
         .select("id, f_no, profile_id, status")
         .eq("f_no", fNo)
         .maybeSingle<{ id: string; f_no: string; profile_id: string; status: string }>();
+      if (forwarderErr) {
+        console.error(`[forwarders-bulk bulkAssignDriver] forwarder lookup failed`, {
+          code: forwarderErr.code, message: forwarderErr.message, fNo,
+        });
+        failed.push({ fNo, error: `lookup failed: ${forwarderErr.message}` });
+        continue;
+      }
       if (!forwarder) {
         failed.push({ fNo, error: "ไม่พบรายการ" });
         continue;
@@ -205,6 +218,13 @@ export async function bulkAssignDriver(
         .eq("forwarder_id", forwarder.id)
         .in("status", [1, 2])
         .maybeSingle<{ id: string; status: number }>();
+      if (existingErr) {
+        console.error(`[forwarders-bulk bulkAssignDriver] open-assignment lookup failed`, {
+          code: existingErr.code, message: existingErr.message, fNo, forwarderId: forwarder.id,
+        });
+        failed.push({ fNo, error: `assignment-check failed: ${existingErr.message}` });
+        continue;
+      }
       if (existing) {
         failed.push({
           fNo,
@@ -304,6 +324,13 @@ export async function bulkCancel(
         .select("id, f_no, profile_id, status, note_admin")
         .eq("f_no", fNo)
         .maybeSingle<{ id: string; f_no: string; profile_id: string; status: string; note_admin: string | null }>();
+      if (existingErr) {
+        console.error(`[forwarders-bulk bulkCancel] forwarder lookup failed`, {
+          code: existingErr.code, message: existingErr.message, fNo,
+        });
+        failed.push({ fNo, error: `lookup failed: ${existingErr.message}` });
+        continue;
+      }
       if (!existing) {
         failed.push({ fNo, error: "ไม่พบรายการ" });
         continue;

@@ -475,11 +475,15 @@ export default async function ServiceImportDetailPage({
   // ── forwarder.php L976-997 / L1953-2011 — address <select> options ──
   // Used by the inline "แก้ไข ที่อยู่จัดส่ง" form (update_fAddress POST).
   // Main address first (tb_address ⋈ tb_address_main), then the rest.
-  const { data: mainAddrRow, error: mainAddrRowErr } = await admin
+  const { data: mainAddrRow, error: mainAddrErr } = await admin
     .from("tb_address_main")
     .select("addressid")
     .eq("userid", memberCode)
     .maybeSingle<{ addressid: number | string | null }>();
+  if (mainAddrErr) {
+    // Soft-fail — empty mainAddressId falls through to plain ordering; legacy uses LEFT JOIN.
+    console.error(`[service-import/[fNo] tb_address_main lookup] memberCode=${memberCode}`, { code: mainAddrErr.code, message: mainAddrErr.message });
+  }
   const mainAddressId = mainAddrRow?.addressid ?? null;
   const { data: allAddrs, error: allAddrsErr } = await admin
     .from("tb_address")
@@ -488,6 +492,10 @@ export default async function ServiceImportDetailPage({
     )
     .eq("userid", memberCode)
     .eq("addressstatus", "1");
+  if (allAddrsErr) {
+    // Soft-fail — empty list renders an empty address picker; mirror's legacy behaviour when SELECT returns no rows.
+    console.error(`[service-import/[fNo] tb_address list] memberCode=${memberCode}`, { code: allAddrsErr.code, message: allAddrsErr.message });
+  }
   type AddressOption = {
     addressid: number | string;
     label: string;

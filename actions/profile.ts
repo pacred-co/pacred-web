@@ -46,11 +46,15 @@ export async function updateProfileBasic(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr) return { ok: false, error: authErr.message };
+  const { data: userData, error: getUserErr } = await supabase.auth.getUser();
+  if (getUserErr) {
+    console.error(`[profile updateProfileBasic] auth.getUser failed`, { message: getUserErr.message });
+    return { ok: false, error: "not_signed_in" };
+  }
+  const user = userData?.user;
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  const { error: updateErr } = await supabase
+  const { error } = await supabase
     .from("profiles")
     .update({
       first_name:     d.first_name,
@@ -70,7 +74,7 @@ export async function updateProfileBasic(
     })
     .eq("id", user.id);
 
-  if (updateErr) return { ok: false, error: updateErr.message };
+  if (error) return { ok: false, error: error.message };
 
   revalidatePath("/profile");
   revalidatePath("/dashboard");
@@ -94,8 +98,12 @@ export async function upsertCorporate(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr) return { ok: false, error: authErr.message };
+  const { data: userData, error: getUserErr } = await supabase.auth.getUser();
+  if (getUserErr) {
+    console.error(`[profile upsertCorporate] auth.getUser failed`, { message: getUserErr.message });
+    return { ok: false, error: "not_signed_in" };
+  }
+  const user = userData?.user;
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // Guard at app layer too: corporate row requires account_type='juristic'
@@ -104,13 +112,18 @@ export async function upsertCorporate(
     .select("account_type")
     .eq("id", user.id)
     .maybeSingle<{ account_type: "personal" | "juristic" }>();
+  if (profileErr) {
+    console.error(`[profile upsertCorporate] profiles lookup failed`, {
+      code: profileErr.code, message: profileErr.message, userId: user.id,
+    });
+    return { ok: false, error: `profile lookup failed: ${profileErr.message}` };
+  }
 
-  if (profileErr) return { ok: false, error: profileErr.message };
   if (!profile || profile.account_type !== "juristic") {
     return { ok: false, error: "account_not_juristic" };
   }
 
-  const { error: upsertErr } = await supabase
+  const { error } = await supabase
     .from("corporate")
     .upsert(
       {
@@ -123,7 +136,7 @@ export async function upsertCorporate(
       { onConflict: "profile_id", ignoreDuplicates: false },
     );
 
-  if (upsertErr) return { ok: false, error: upsertErr.message };
+  if (error) return { ok: false, error: error.message };
 
   // also mirror tax_id + company_name onto profiles for quick lookup
   await supabase
@@ -151,16 +164,20 @@ export async function updateNotifyChannels(
   }
 
   const supabase = await createClient();
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr) return { ok: false, error: authErr.message };
+  const { data: userData, error: getUserErr } = await supabase.auth.getUser();
+  if (getUserErr) {
+    console.error(`[profile updateNotifyChannels] auth.getUser failed`, { message: getUserErr.message });
+    return { ok: false, error: "not_signed_in" };
+  }
+  const user = userData?.user;
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  const { error: updateErr } = await supabase
+  const { error } = await supabase
     .from("profiles")
     .update({ notify_channels: parsed.data })
     .eq("id", user.id);
 
-  if (updateErr) return { ok: false, error: updateErr.message };
+  if (error) return { ok: false, error: error.message };
 
   revalidatePath("/profile");
   return { ok: true };
@@ -178,16 +195,20 @@ export async function updateAvatar(publicUrl: string): Promise<ActionResult> {
     return { ok: false, error: "invalid_url" };
   }
   const supabase = await createClient();
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr) return { ok: false, error: authErr.message };
+  const { data: userData, error: getUserErr } = await supabase.auth.getUser();
+  if (getUserErr) {
+    console.error(`[profile updateAvatar] auth.getUser failed`, { message: getUserErr.message });
+    return { ok: false, error: "not_signed_in" };
+  }
+  const user = userData?.user;
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  const { error: updateErr } = await supabase
+  const { error } = await supabase
     .from("profiles")
     .update({ avatar_url: publicUrl })
     .eq("id", user.id);
 
-  if (updateErr) return { ok: false, error: updateErr.message };
+  if (error) return { ok: false, error: error.message };
 
   revalidatePath("/profile");
   revalidatePath("/dashboard");
@@ -213,8 +234,12 @@ export async function completeProfile(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr) return { ok: false, error: authErr.message };
+  const { data: userData, error: getUserErr } = await supabase.auth.getUser();
+  if (getUserErr) {
+    console.error(`[profile completeProfile] auth.getUser failed`, { message: getUserErr.message });
+    return { ok: false, error: "not_signed_in" };
+  }
+  const user = userData?.user;
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { data: existing, error: existingErr } = await supabase
@@ -222,8 +247,13 @@ export async function completeProfile(
     .select("status, account_type")
     .eq("id", user.id)
     .maybeSingle<{ status: "incomplete" | "active" | "suspended"; account_type: "personal" | "juristic" }>();
+  if (existingErr) {
+    console.error(`[profile completeProfile] profiles lookup failed`, {
+      code: existingErr.code, message: existingErr.message, userId: user.id,
+    });
+    return { ok: false, error: `profile lookup failed: ${existingErr.message}` };
+  }
 
-  if (existingErr) return { ok: false, error: existingErr.message };
   if (!existing) return { ok: false, error: "profile_not_found" };
   if (existing.status === "suspended") return { ok: false, error: "account_suspended" };
   // Juristic must use the 3-step register flow — guard at server even if
@@ -235,7 +265,7 @@ export async function completeProfile(
   // V-G4.1 — accept the currently-active TOS version (DB-driven with
   // hardcoded fallback). Same behavior as TOS gate.
   const activeTos = await getActiveTosVersion("all");
-  const { error: updateErr } = await supabase
+  const { error } = await supabase
     .from("profiles")
     .update({
       first_name:           d.first_name,
@@ -249,11 +279,11 @@ export async function completeProfile(
     })
     .eq("id", user.id);
 
-  if (updateErr) {
-    if (updateErr.message?.includes("schema cache") || updateErr.message?.includes("tos_accepted")) {
+  if (error) {
+    if (error.message?.includes("schema cache") || error.message?.includes("tos_accepted")) {
       return { ok: false, error: "ระบบยังไม่พร้อม — โปรดให้แอดมินรัน migration 0006_tos_acceptance.sql ก่อน" };
     }
-    return { ok: false, error: updateErr.message };
+    return { ok: false, error: error.message };
   }
 
   revalidatePath("/", "layout");
@@ -399,6 +429,14 @@ export async function checkEmailAvailability(
       .select("email")
       .eq("id", ownerId)
       .maybeSingle<{ email: string | null }>();
+    if (ownProfileErr) {
+      // Non-fatal — log and fall through without the exclusion. Worst case the
+      // user gets a false "taken" on their own email; better than blocking the
+      // whole availability check over a transient lookup failure.
+      console.error(`[profile checkEmailAvailability] own-profile lookup failed`, {
+        code: ownProfileErr.code, message: ownProfileErr.message, ownerId,
+      });
+    }
     if (ownProfile?.email) {
       legacyQuery = legacyQuery.neq("userEmail", ownProfile.email);
     }
@@ -469,6 +507,13 @@ export async function checkPhoneAvailability(
       .select("phone")
       .eq("id", ownerId)
       .maybeSingle<{ phone: string | null }>();
+    if (ownProfileErr) {
+      // Non-fatal — log and fall through without the exclusion. Same rationale
+      // as the email-availability check above.
+      console.error(`[profile checkPhoneAvailability] own-profile lookup failed`, {
+        code: ownProfileErr.code, message: ownProfileErr.message, ownerId,
+      });
+    }
     if (ownProfile?.phone) {
       const ownLocal = ownProfile.phone.startsWith("+66")
         ? "0" + ownProfile.phone.slice(3)

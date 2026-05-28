@@ -106,11 +106,17 @@ export async function adminSetTbSettingsRates(
       // (mirrors lib/auth/require-admin.ts: profile_id + is_active=true).
       if (failures.length > 0 && d.force_override) {
         const adminCheck = createAdminClient();
-        const { data: rolesRows, error: rolesRowsErr } = await adminCheck
+        const { data: rolesRows, error: rolesErr } = await adminCheck
           .from("admins")
           .select("role")
           .eq("profile_id", adminId)
           .eq("is_active", true);
+        if (rolesErr) {
+          console.error(`[tb-settings adminSetTbSettingsRates] roles lookup failed`, {
+            code: rolesErr.code, message: rolesErr.message, adminId,
+          });
+          return { ok: false, error: `roles lookup failed: ${rolesErr.message}` };
+        }
         const roles = (rolesRows ?? []).map((r: { role: string }) => r.role);
         if (!roles.includes("super")) {
           return {
@@ -214,11 +220,17 @@ export async function adminSetTbRateCustomCbm(
       // super-only override (mirrors tb_settings flow above).
       if (outOfBand && d.force_override) {
         const adminCheck = createAdminClient();
-        const { data: rolesRows, error: rolesRowsErr } = await adminCheck
+        const { data: rolesRows, error: rolesErr } = await adminCheck
           .from("admins")
           .select("role")
           .eq("profile_id", adminId)
           .eq("is_active", true);
+        if (rolesErr) {
+          console.error(`[tb-settings adminSetTbRateCustomCbm] roles lookup failed`, {
+            code: rolesErr.code, message: rolesErr.message, adminId,
+          });
+          return { ok: false, error: `roles lookup failed: ${rolesErr.message}` };
+        }
         const roles = (rolesRows ?? []).map((r: { role: string }) => r.role);
         if (!roles.includes("super")) {
           return {
@@ -237,6 +249,12 @@ export async function adminSetTbRateCustomCbm(
         .eq("sourcewarehouse", d.sourcewarehouse)
         .eq("rproductstype",   d.rproductstype)
         .maybeSingle<{ id: number; rcbm: number }>();
+      if (existingErr) {
+        console.error(`[tb-settings adminSetTbRateCustomCbm] existing-rate lookup failed`, {
+          code: existingErr.code, message: existingErr.message, userid: d.userid,
+        });
+        return { ok: false, error: `lookup failed: ${existingErr.message}` };
+      }
 
       let id: number;
       if (existing) {

@@ -199,11 +199,17 @@ async function upsertContainerWithManifest(
   }
 
   // 3. Fetch container id (after upsert) for the per-shipment loop
-  const { data: containerRow, error: containerRowErr } = await admin
+  const { data: containerRow, error: containerErr } = await admin
     .from("cargo_containers")
     .select("id")
     .eq("code", c.code)
     .maybeSingle<{ id: string }>();
+  if (containerErr) {
+    logger.warn("momo-sync", "cargo_containers id lookup failed", {
+      code: c.code, reason: containerErr.message,
+    });
+    return counters;
+  }
   if (!containerRow) return counters;
 
   // 4. Manifest → shipments
@@ -248,6 +254,12 @@ async function resolveProfileId(
     .select("id")
     .eq("member_code", code)
     .maybeSingle<{ id: string }>();
+  if (error) {
+    logger.warn("momo-sync", "profiles member_code lookup failed", {
+      member_code: code, reason: error.message,
+    });
+    return null;
+  }
   return data?.id ?? null;
 }
 
@@ -333,10 +345,18 @@ async function appendTrackingIdempotent(
   if (events.length === 0) return 0;
 
   // Pull existing events for this shipment to dedupe against in-memory.
-  const { data: existingRaw, error: existingRawErr } = await admin
+  const { data: existingRaw, error: existingErr } = await admin
     .from("cargo_shipment_tracking")
     .select("scanned_at, event")
     .eq("cargo_shipment_id", shipmentId);
+  if (existingErr) {
+    logger.warn("momo-sync", "cargo_shipment_tracking dedupe lookup failed", {
+      shipmentId, reason: existingErr.message,
+    });
+    // Fall through with empty dedupe set — risks duplicate inserts, but the
+    // unique constraint on (cargo_shipment_id, scanned_at, event) will
+    // protect against actual duplicates. Worst case = noisier logs.
+  }
   type ExRow = { scanned_at: string; event: string };
   const existingKeys = new Set<string>(
     ((existingRaw ?? []) as ExRow[]).map((r) => `${r.scanned_at}|${r.event}`),

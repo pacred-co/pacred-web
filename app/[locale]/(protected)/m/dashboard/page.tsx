@@ -24,11 +24,16 @@ export default async function MobileDashboardPage() {
   const uid = profile.member_code ?? "";
 
   // wallet balance — tb_wallet.wallettotal (legacy header.php L86-92)
-  const { data: walletRow, error: walletRowErr } = await admin
+  const { data: walletRow, error: walletErr } = await admin
     .from("tb_wallet")
     .select("wallettotal")
     .eq("userid", uid)
     .maybeSingle<{ wallettotal: number | string | null }>();
+  if (walletErr) {
+    // Don't crash the dashboard for a wallet read — fall through to ฿0
+    // display so the customer can still navigate. Log loudly so we notice.
+    console.error(`[m/dashboard tb_wallet read] failed`, { code: walletErr.code, message: walletErr.message, uid });
+  }
 
   const walletTotal = Number(walletRow?.wallettotal ?? 0);
 
