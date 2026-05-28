@@ -272,7 +272,7 @@ export async function bridgeLegacyLogin(
   // the profile row now (the auth.users row exists → the profiles.ID→auth.users
   // FK is satisfiable). Idempotent — a no-op on every repeat login.
   // The ghost-customer fix per docs/research/wave-1-fidelity/_SYNTHESIS.md §8.
-  await ensureLegacyProfile(signInData.user.ID, row);
+  await ensureLegacyProfile(signInData.user.id, row);
 
   logger.info(SCOPE, "legacy customer signed in via PCS bridge", { userID: row.userID });
   return { ok: true };

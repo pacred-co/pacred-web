@@ -68,7 +68,7 @@ export async function updateProfileBasic(
       shop_user:      d.shop_user ?? false,
       note:           d.note ?? null,
     })
-    .eq("ID", user.ID);
+    .eq("id", user.id);
 
   if (updateErr) return { ok: false, error: updateErr.message };
 
@@ -102,7 +102,7 @@ export async function upsertCorporate(
   const { data: profile, error: profileErr } = await supabase
     .from("profiles")
     .select("account_type")
-    .eq("ID", user.ID)
+    .eq("id", user.id)
     .maybeSingle<{ account_type: "personal" | "juristic" }>();
 
   if (profileErr) return { ok: false, error: profileErr.message };
@@ -114,7 +114,7 @@ export async function upsertCorporate(
     .from("corporate")
     .upsert(
       {
-        profile_id:      user.ID,
+        profile_id:      user.id,
         tax_id:          d.tax_id,
         company_name:    d.company_name,
         company_address: d.company_address,
@@ -129,7 +129,7 @@ export async function upsertCorporate(
   await supabase
     .from("profiles")
     .update({ tax_id: d.tax_id, company_name: d.company_name })
-    .eq("ID", user.ID);
+    .eq("id", user.id);
 
   revalidatePath("/profile");
   return { ok: true };
@@ -158,7 +158,7 @@ export async function updateNotifyChannels(
   const { error: updateErr } = await supabase
     .from("profiles")
     .update({ notify_channels: parsed.data })
-    .eq("ID", user.ID);
+    .eq("id", user.id);
 
   if (updateErr) return { ok: false, error: updateErr.message };
 
@@ -185,7 +185,7 @@ export async function updateAvatar(publicUrl: string): Promise<ActionResult> {
   const { error: updateErr } = await supabase
     .from("profiles")
     .update({ avatar_url: publicUrl })
-    .eq("ID", user.ID);
+    .eq("id", user.id);
 
   if (updateErr) return { ok: false, error: updateErr.message };
 
@@ -220,7 +220,7 @@ export async function completeProfile(
   const { data: existing, error: existingErr } = await supabase
     .from("profiles")
     .select("status, account_type")
-    .eq("ID", user.ID)
+    .eq("id", user.id)
     .maybeSingle<{ status: "incomplete" | "active" | "suspended"; account_type: "personal" | "juristic" }>();
 
   if (existingErr) return { ok: false, error: existingErr.message };
@@ -247,7 +247,7 @@ export async function completeProfile(
       tos_accepted_at:      new Date().toISOString(),
       status:               "active",
     })
-    .eq("ID", user.ID);
+    .eq("id", user.id);
 
   if (updateErr) {
     if (updateErr.message?.includes("schema cache") || updateErr.message?.includes("tos_accepted")) {
@@ -367,11 +367,11 @@ export async function checkEmailAvailability(
   // 1. Rebuilt-era profiles — exclude the caller's own row when editing.
   let profilesQuery = admin
     .from("profiles")
-    .select("ID")
+    .select("id")
     .ilike("email", needle)
     .limit(1);
-  if (ownerId) profilesQuery = profilesQuery.neq("ID", ownerId);
-  const { data: profileHit, error: profileErr } = await profilesQuery.maybeSingle<{ ID: string }>();
+  if (ownerId) profilesQuery = profilesQuery.neq("id", ownerId);
+  const { data: profileHit, error: profileErr } = await profilesQuery.maybeSingle<{ id: string }>();
   if (profileErr && profileErr.code !== "PGRST116") {
     // PGRST116 = "no rows" when using .single(); .maybeSingle suppresses it
     // but be defensive. Any other error = treat as available (don't block
@@ -397,7 +397,7 @@ export async function checkEmailAvailability(
     const { data: ownProfile, error: ownProfileErr } = await admin
       .from("profiles")
       .select("email")
-      .eq("ID", ownerId)
+      .eq("id", ownerId)
       .maybeSingle<{ email: string | null }>();
     if (ownProfile?.email) {
       legacyQuery = legacyQuery.neq("userEmail", ownProfile.email);
@@ -446,11 +446,11 @@ export async function checkPhoneAvailability(
   // 1. Rebuilt-era profiles (E.164 form).
   let profilesQuery = admin
     .from("profiles")
-    .select("ID")
+    .select("id")
     .eq("phone", e164)
     .limit(1);
-  if (ownerId) profilesQuery = profilesQuery.neq("ID", ownerId);
-  const { data: profileHit, error: profileErr } = await profilesQuery.maybeSingle<{ ID: string }>();
+  if (ownerId) profilesQuery = profilesQuery.neq("id", ownerId);
+  const { data: profileHit, error: profileErr } = await profilesQuery.maybeSingle<{ id: string }>();
   if (profileErr && profileErr.code !== "PGRST116") {
     console.error("[profile/checkPhoneAvailability] profiles lookup failed:", profileErr);
   }
@@ -467,7 +467,7 @@ export async function checkPhoneAvailability(
     const { data: ownProfile, error: ownProfileErr } = await admin
       .from("profiles")
       .select("phone")
-      .eq("ID", ownerId)
+      .eq("id", ownerId)
       .maybeSingle<{ phone: string | null }>();
     if (ownProfile?.phone) {
       const ownLocal = ownProfile.phone.startsWith("+66")

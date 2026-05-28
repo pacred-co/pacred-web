@@ -115,10 +115,10 @@ export default async function AdminForwarderNewPage({
 
     if (userRow) {
       presetUser = {
-        userid:       userRow.userID,
-        username:     userRow.userName,
-        userlastname: userRow.userLastName,
-        usertel:      userRow.userTel,
+        userID:       userRow.userID,
+        userName:     userRow.userName,
+        userLastName: userRow.userLastName,
+        userTel:      userRow.userTel,
       };
       presetCoid = userRow.coID;
 

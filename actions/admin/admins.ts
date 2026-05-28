@@ -138,7 +138,7 @@ export async function adminAssignSalesRep(input: z.infer<typeof assignRepSchema>
     const { error } = await admin
       .from("profiles")
       .update({ sales_admin_id: parsed.data.sales_admin_id })
-      .eq("ID", parsed.data.customer_id);
+      .eq("id", parsed.data.customer_id);
     if (error) return { ok: false, error: error.message };
 
     await logAdminAction(adminId, "customer.assign_rep", "profile", parsed.data.customer_id, parsed.data);
@@ -180,9 +180,9 @@ export async function adminTransferSalesRep(input: TransferSalesRepInput): Promi
     const { data: before, error: beforeErr } = await admin
       .from("profiles")
       .select("id, member_code, first_name, last_name, company_name, account_type, sales_admin_id")
-      .eq("ID", d.customer_id)
+      .eq("id", d.customer_id)
       .maybeSingle<{
-        ID: string; member_code: string | null; first_name: string | null; last_name: string | null;
+        id: string; member_code: string | null; first_name: string | null; last_name: string | null;
         company_name: string | null; account_type: "personal" | "juristic"; sales_admin_id: string | null;
       }>();
 
@@ -200,7 +200,7 @@ export async function adminTransferSalesRep(input: TransferSalesRepInput): Promi
     const { error: updErr } = await admin
       .from("profiles")
       .update({ sales_admin_id: d.new_sales_admin_id })
-      .eq("ID", d.customer_id);
+      .eq("id", d.customer_id);
     if (updErr) return { ok: false, error: updErr.message };
 
     await logAdminAction(adminId, "customer.transfer_rep", "profile", d.customer_id, {
@@ -420,7 +420,7 @@ export async function adminBulkTransferSalesRep(
     const { error, count } = await admin
       .from("profiles")
       .update({ sales_admin_id: d.new_sales_admin_id }, { count: "exact" })
-      .in("ID", d.customer_ids);
+      .in("id", d.customer_ids);
     if (error) return { ok: false, error: error.message };
 
     await logAdminAction(adminId, "customer.bulk_transfer_rep", "profile", `${d.customer_ids.length}_customers`, {
@@ -531,7 +531,7 @@ export async function adminBulkTransferSalesRepTb(
       // silently update 0 rows; surface the bad list).
       const { data: validRows, error: readErr } = await admin
         .from("tb_users")
-        .select("userid, adminidsale")
+        .select("userID, adminIDSale")
         .in("userID", userIds);
       if (readErr) return { ok: false, error: readErr.message };
       const validIds = (validRows ?? []).map((r) => (r as { userID: string }).userID);
@@ -714,10 +714,10 @@ export async function adminCreateNew(
         // (use /edit if they meant to update an existing admin).
         return { ok: false, error: `auth.createUser: ${authErr.message}` };
       }
-      if (!authData?.user?.ID) {
+      if (!authData?.user?.id) {
         return { ok: false, error: "auth.createUser returned no user id" };
       }
-      const profileId = authData.user.ID;
+      const profileId = authData.user.id;
 
       // ── 2-4. Profile + admins + extras (rollback on failure) ──
       try {
@@ -728,7 +728,7 @@ export async function adminCreateNew(
         // - account_type: 'personal' (admins are individuals — juristic
         //   would force company-fields; not applicable here)
         const { error: profErr } = await admin.from("profiles").insert({
-          ID:            profileId,
+          id:            profileId,
           email:         d.email,
           first_name:    d.first_name,
           last_name:     d.last_name,
@@ -794,7 +794,7 @@ export async function adminCreateNew(
         const { data: created, error: readErr } = await admin
           .from("profiles")
           .select("member_code")
-          .eq("ID", profileId)
+          .eq("id", profileId)
           .maybeSingle<{ member_code: string | null }>();
         if (readErr) {
           // Non-fatal: the row was created, we just can't display the code.
@@ -883,7 +883,7 @@ export async function adminUpdateProfileFields(
       const { error: profErr } = await admin
         .from("profiles")
         .update(profileUpdate)
-        .eq("ID", d.profile_id);
+        .eq("id", d.profile_id);
       if (profErr) {
         console.error("[adminUpdateProfileFields profiles update]", {
           code: profErr.code, message: profErr.message,
@@ -1095,9 +1095,9 @@ export async function loadAdminForEdit(
         .select(
           "id, email, first_name, last_name, phone, avatar_url, birthday, sex, member_code, is_active",
         )
-        .eq("ID", profileId)
+        .eq("id", profileId)
         .maybeSingle<{
-          ID: string; email: string | null; first_name: string | null; last_name: string | null;
+          id: string; email: string | null; first_name: string | null; last_name: string | null;
           phone: string | null; avatar_url: string | null; birthday: string | null;
           sex: "male" | "female" | "other" | null; member_code: string | null; is_active: boolean;
         }>(),
@@ -1151,7 +1151,7 @@ export async function loadAdminForEdit(
       ok:   true,
       data: {
         row: {
-          profile_id:       p.ID,
+          profile_id:       p.id,
           email:            p.email,
           first_name:       p.first_name,
           last_name:        p.last_name,
