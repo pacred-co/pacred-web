@@ -209,7 +209,19 @@
       "Bash(curl -s -o /tmp/curl_out.html -w \"%{http_code}\\\\n\" \"http://localhost:3000/en/admin/customers/PR10691\")",
       "Bash(pnpm build *)",
       "Bash(NODE_OPTIONS=\"--max-old-space-size=8192\" pnpm build)",
-      "Bash(git cherry-pick *)"
+      "Bash(git cherry-pick *)",
+      "Bash(rtk ls *)",
+      "Bash(rtk read *)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('DEPS:'\\); [print\\(f'  {k}: {v}'\\) for k,v in d.get\\('dependencies',{}\\).items\\(\\)]; print\\('DEVDEPS:'\\); [print\\(f'  {k}: {v}'\\) for k,v in list\\(d.get\\('devDependencies',{}\\).items\\(\\)\\)[:15]]\")",
+      "Bash(rtk wc *)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(f'{k}: {v}'\\) for k,v in d.get\\('scripts',{}\\).items\\(\\)]\")",
+      "Bash(rtk find *)",
+      "Bash(xargs ls -la)",
+      "Bash(rtk grep *)",
+      "Bash(pnpm typecheck *)",
+      "Bash(node scripts/tsc-check.mjs)",
+      "Bash(node_modules/.bin/tsc --noEmit --skipLibCheck)",
+      "Bash(rtk du *)"
     ]
   }
 }

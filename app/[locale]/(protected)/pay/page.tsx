@@ -96,6 +96,7 @@ export default async function PayPage() {
   // `pay.php` reads no per-user data — the auth gate is the only thing
   // header.php contributes that survives into the transcription.
   await requireAuth();
+  const promptPayId = process.env.PROMPTPAY_ID ?? "";
 
   return (
     <div className="pcs-legacy">
@@ -161,7 +162,7 @@ export default async function PayPage() {
                                         type="number"
                                         inputMode="numeric"
                                         pattern="\d*"
-                                        defaultValue="0105564077716"
+                                        defaultValue={promptPayId}
                                         className="form-control"
                                         id="pp-id"
                                         placeholder="เบอร์มือถือ, รหัสประจำตัวประชาชน, TAX ID, e-Wallet"

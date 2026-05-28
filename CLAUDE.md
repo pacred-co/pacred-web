@@ -1,4 +1,5 @@
 @AGENTS.md
+@CLAUDE_TECHNICAL.md
 
 ---
 
@@ -950,7 +951,6 @@ Last updated: 2026-05-19 (D1 — Phase A data loaded to dev + prod · Phase B wa
 - Tailwind CSS v4 (`@theme inline` ใน [app/globals.css](app/globals.css) — ไม่มี tailwind.config.js)
 - ESLint 9 (flat config, eslint-config-next)
 - **next-intl** ^4.11.1 — i18n (th/en) แบบ namespace ใน [messages/](messages/)
-- **next-themes** ^0.4.6 — light/dark mode
 - **lucide-react** ^1.14.0 — icons (Lucide outline-style ทั้งโปรเจกต์)
 - Package manager: **pnpm**
 
