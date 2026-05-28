@@ -37,7 +37,7 @@ export default async function WarehouseAddressesPage() {
       blurb: "พื้นที่ขนส่งหลักของกวางโจว — รองรับสินค้าจาก 1688, Taobao, Tmall, Alibaba และโรงงานจีนโดยตรง",
       fields: [
         { key: "receiver",  label: "收货人姓名 (ผู้รับ)",  value: `${memberCode} / EK = รถ / SEA = เรือ`,            hint: "เลือก EK หรือ SEA ตามรูปแบบขนส่ง" },
-        { key: "address",   label: "详细地址 (ที่อยู่)",    value: "广州市白云区 江高镇沙溪东路18号66仓 (燕子情创园)" },
+        { key: "address",   label: "详细地址 (ที่อยู่)",    value: `广东省广州市白云区江高镇沙溪东路18号3-1号仓库, (${memberCode}/EK) 仓库` },
         { key: "zipcode",   label: "邮政编码 (ไปรษณีย์)", value: "510000" },
         { key: "phone",     label: "手机号码 (โทร)",      value: "+13168385163" },
       ],
