@@ -40,7 +40,8 @@ const rate = z
     message: "เรทราคาไม่ถูกต้อง",
   });
 
-export const customRateSchema = z.object({
+// INTERNAL — `"use server"` files may only export async functions.
+const customRateSchema = z.object({
   fCabinetNumber: z.string().trim().min(1, { message: "กรุณาระบุหมายเลขตู้" }).max(300),
   fProductsType1: rate,
   fProductsType2: rate,
@@ -259,7 +260,8 @@ export async function adminReportCntCustomRate(input: CustomRateInput): Promise<
 //   using the tb_settings default for this warehouse+transport.
 // ─────────────────────────────────────────────────────────────────────
 
-export const resetRateSchema = z.object({
+// INTERNAL — `"use server"` files may only export async functions.
+const resetRateSchema = z.object({
   fCabinetNumber: z.string().trim().min(1).max(300),
 });
 
@@ -349,7 +351,8 @@ export async function adminReportCntResetRate(fCabinetNumber: string): Promise<A
 //   for each selected fID. Skips IDs that already have a row.
 // ─────────────────────────────────────────────────────────────────────
 
-export const addCheckSchema = z.object({
+// INTERNAL — `"use server"` files may only export async functions.
+const addCheckSchema = z.object({
   fIDs: z
     .array(z.union([z.string(), z.number()]).transform((v) => Number(v)))
     .min(1, { message: "กรุณาเลือกอย่างน้อย 1 รายการ" })
