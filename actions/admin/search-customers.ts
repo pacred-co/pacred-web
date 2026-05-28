@@ -24,7 +24,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export interface CustomerPickerRow {
-  id: string;                // legacy `userid` (PR<n> member code) — what the picker yields
+  ID: string;                // legacy `userid` (PR<n> member code) — what the picker yields
   member_code: string | null;
   account_type: "personal" | "juristic" | null;
   status: string | null;
@@ -111,7 +111,7 @@ export async function adminSearchCustomers(
   }
 
   const rows: CustomerPickerRow[] = ((data ?? []) as LegacyUserRow[]).map((u) => ({
-    id:           u.userID,
+    ID:           u.userID,
     member_code:  u.userID,
     account_type: u.userCompany === "1" ? "juristic" : "personal",
     status:       deriveStatus(u),

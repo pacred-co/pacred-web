@@ -15,7 +15,7 @@
  *   5. on 'sPass' the page redirects to logout/.
  *
  * ⚠️ Faithful ≠ literal here. The legacy PCS system stores the password
- * ONLY in `tb_users.userpass`. Pacred's auth is SPLIT — Supabase Auth is
+ * ONLY in `tb_users.userPass`. Pacred's auth is SPLIT — Supabase Auth is
  * the live credential store, `tb_users` is the legacy-bridge mirror. A
  * literal port (write `tb_users` only) would DESYNC the two:
  *   - the new password would NOT sign the customer in — native Supabase
@@ -27,7 +27,7 @@
  *   - verifies the old password against Supabase Auth (the universal,
  *     live store — works for native AND migrated-then-bridged customers);
  *   - writes the new password to Supabase Auth (so it actually logs in);
- *   - best-effort mirrors it into `tb_users.userpass` + `pcs_logged` so
+ *   - best-effort mirrors it into `tb_users.userPass` + `pcs_logged` so
  *     the legacy bridge stays consistent (a no-op for native customers).
  * The `pass_tam()` hash is the existing `passTam()` primitive the login
  * bridge already uses (`lib/auth/pcs-legacy-password.ts`) — no new crypto.
@@ -103,7 +103,7 @@ export async function updatePasswordAction(
   // Supabase Auth — the live credential store (so the new password
   // actually signs the customer in on their next login).
   const { error: authErr } = await admin.auth.admin.updateUserById(
-    data.user.id,
+    data.user.ID,
     { password: password1 },
   );
   if (authErr) {

@@ -126,7 +126,7 @@ export async function bridgeLegacyLogin(
   const row = await findLegacyUser(identifier);
   if (!row) return { ok: false };
 
-  // userstatus: '1' = active, '0' = deleted account (legacy column comment).
+  // userStatus: '1' = active, '0' = deleted account (legacy column comment).
   if (row.userStatus !== "1") {
     logger.warn(SCOPE, "legacy login refused — inactive account", { userID: row.userID });
     return { ok: false };
@@ -187,7 +187,7 @@ export async function bridgeLegacyLogin(
   // one the customer just typed (already verified against the legacy hash).
   // Without this step, signInWithPassword would compare against the migration-
   // time placeholder and fail — making the entire bridge unusable for migrated
-  // customers. We find the existing user by joining through profiles.id and
+  // customers. We find the existing user by joining through profiles.ID and
   // force-set the password via the admin API.
   //
   // Note: createData here is `{ user: User | null }` not `null` — supabase-js
@@ -198,17 +198,17 @@ export async function bridgeLegacyLogin(
       userID: row.userID,
       reason: createErr.message,
     });
-    // Find the existing auth.users.id by joining through profiles.member_code:
-    // Phase-A migration created profiles.id = auth.users.id 1:1 for every
+    // Find the existing auth.users.ID by joining through profiles.member_code:
+    // Phase-A migration created profiles.ID = auth.users.ID 1:1 for every
     // legacy customer, so the profile row's UUID IS the auth user's UUID.
     // We avoid `.schema("auth").from("users")` because the auth schema is
     // not exposed via PostgREST by default in Supabase — that lookup would
     // silently return null and the password sync would never apply.
     const { data: existingProfile, error: profileLookupErr } = await admin
       .from("profiles")
-      .select("id")
+      .select("ID")
       .eq("member_code", row.userID)
-      .maybeSingle<{ id: string }>();
+      .maybeSingle<{ ID: string }>();
 
     if (profileLookupErr) {
       logger.warn(SCOPE, "profile lookup for password sync failed", {
@@ -217,7 +217,7 @@ export async function bridgeLegacyLogin(
       });
       return { ok: false };
     }
-    if (!existingProfile?.id) {
+    if (!existingProfile?.ID) {
       // No profile bridges this member_code to an auth user — bail. The
       // surface should be the "create new profile" branch below; we got
       // here because createUser said the email exists, which means there
@@ -228,7 +228,7 @@ export async function bridgeLegacyLogin(
       });
       return { ok: false };
     }
-    const { error: updErr } = await admin.auth.admin.updateUserById(existingProfile.id, {
+    const { error: updErr } = await admin.auth.admin.updateUserById(existingProfile.ID, {
       password,
       user_metadata: {
         legacy_user_id:     row.userID,
@@ -269,10 +269,10 @@ export async function bridgeLegacyLogin(
   // The migrated customer is authenticated — but the ~8,898 ported PCS
   // customers have no `profiles` row, so `getCurrentUserWithProfile()` would
   // return profile:null and the protected layout would bounce/crash. Create
-  // the profile row now (the auth.users row exists → the profiles.id→auth.users
+  // the profile row now (the auth.users row exists → the profiles.ID→auth.users
   // FK is satisfiable). Idempotent — a no-op on every repeat login.
   // The ghost-customer fix per docs/research/wave-1-fidelity/_SYNTHESIS.md §8.
-  await ensureLegacyProfile(signInData.user.id, row);
+  await ensureLegacyProfile(signInData.user.ID, row);
 
   logger.info(SCOPE, "legacy customer signed in via PCS bridge", { userID: row.userID });
   return { ok: true };
@@ -281,7 +281,7 @@ export async function bridgeLegacyLogin(
 /**
  * Create the `profiles` row for a migrated PCS customer on first legacy login.
  * Keyed by the auth.users id, carrying the legacy `member_code`
- * (= `tb_users.userid`) that every customer-side `tb_*` query joins on. Safe to
+ * (= `tb_users.userID`) that every customer-side `tb_*` query joins on. Safe to
  * call on every login — it no-ops once the row exists.
  */
 async function ensureLegacyProfile(authUserId: string, row: LegacyUser): Promise<void> {
@@ -289,7 +289,7 @@ async function ensureLegacyProfile(authUserId: string, row: LegacyUser): Promise
 
   const { data: existing, error: existingErr } = await admin
     .from("profiles")
-    .select("id")
+    .select("ID")
     .eq("member_code", row.userID)
     .maybeSingle();
   if (existingErr) {
@@ -299,7 +299,7 @@ async function ensureLegacyProfile(authUserId: string, row: LegacyUser): Promise
   if (existing) {
     // A different id = a pre-D1 `0067`-scaffold row already holds this
     // member_code (~6 customers, _SYNTHESIS §8.3) — leave it, log for เดฟ.
-    if (existing.id !== authUserId) {
+    if (existing.ID !== authUserId) {
       logger.warn(SCOPE, "member_code already bound to a different profile — manual reconcile", {
         userID: row.userID,
       });
@@ -309,7 +309,7 @@ async function ensureLegacyProfile(authUserId: string, row: LegacyUser): Promise
 
   const e164 = normalizePhone(row.userTel ?? "");
   const { error } = await admin.from("profiles").insert({
-    id: authUserId,
+    ID: authUserId,
     member_code: row.userID,
     first_name: row.userName,
     last_name: row.userLastName,
