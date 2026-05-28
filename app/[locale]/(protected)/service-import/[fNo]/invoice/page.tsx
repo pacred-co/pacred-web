@@ -462,9 +462,11 @@ export default async function ServiceImportInvoicePage({
               <div className="bg-gradient-to-r from-primary-50 to-white border-b border-slate-200 p-6 sm:p-8">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div>
-                    <h1 className="text-3xl font-black text-primary-700">Pacred</h1>
-                    <p className="text-xs text-slate-600 mt-1">บริษัท แพคเรด (ประเทศไทย) จำกัด</p>
-                    <p className="text-xs text-slate-600">{ADDRESSES.office.full}</p>
+                    {/* Wave 28 fix (2026-05-29 · ภูม flagged "ชื่อบริษัทคือ Pacred.co.th แก้ไขด้วย"):
+                        full legal company name promoted to <h1> (was brand only "Pacred"). */}
+                    <h1 className="text-2xl font-black text-primary-700">Pacred (Thailand) Co., Ltd.</h1>
+                    <p className="text-sm font-semibold text-slate-700 mt-0.5">บริษัท แพคเรด (ประเทศไทย) จำกัด</p>
+                    <p className="text-xs text-slate-600 mt-1">{ADDRESSES.office.full}</p>
                     <p className="text-xs text-slate-600">
                       เลขผู้เสียภาษี {TAX_ID} · โทร {CONTACT.phoneCompanyDisplay}
                     </p>

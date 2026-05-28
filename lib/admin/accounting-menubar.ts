@@ -63,8 +63,13 @@ function invoiceStatuses(typeSlug: string): MenubarItem[] {
       ? "/admin/accounting/forwarder-invoice"
       : `/admin/accounting/cargo/income/${typeSlug}/${s.slug}`;
     const newPath = isForwarderInvoice ? `${base}/add` : `${base}/new`;
+    // Wave 28 (2026-05-29 · ภูม flagged): add `href` on the parent service
+    // node so clicking "ฝากนำเข้า แบบเรทราคา" directly navigates to the list
+    // (was hover-only — nested 4-level cascade buggy in practice). Children
+    // still expand for the status filter drilldown.
     return {
       label: s.label,
+      href: base,
       children: [
         { label: "สร้าง",          href: newPath },
         { label: "รอชำระเงิน",     href: `${base}?status=${isForwarderInvoice ? "pending" : "awaiting_payment"}` },
