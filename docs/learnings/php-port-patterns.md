@@ -255,3 +255,54 @@ The shop LOGOS (1688/taobao/tmall/nice) worked fine because `imgProvider()` (the
 - `app/[locale]/(protected)/cart/page.tsx` L134-152 — the verbatim transcription
 - `member/include/function.php` L1414-1437 (legacy source) — original PHP helper
 - `imgProvider()` in same file L94-112 — the helper that got the path RIGHT (shop logos)
+
+## [2026-05-28] Schema casing drift — tb_cnt* uses camelCase quoted columns but action code writes lowercase keys (PostgREST hides it)
+
+**Context:** Wave 25 sandbox cleanup. ภูม ran DELETE SQL in Supabase Dashboard → `ERROR: 42703: column "cntid" does not exist · HINT: Perhaps you meant to reference the column "cntID"`.
+
+**Symptom:** raw SQL `WHERE cntid = ...` fails. But `actions/admin/cnt-payment.ts` writes `{ cntid: cntId }` via `.from("tb_cnt_item").insert(...)` and works fine — INSERT succeeds, action returns `{ ok: true }`.
+
+**Investigation:** column-casing survey reveals inconsistent casing within the same conceptual schema family:
+
+| Table | Casing |
+|---|---|
+| `tb_cnt` | ALL camelCase quoted (`cntID` · `cntName` · `cntStatus` · `cntAmount` · `nameBlank` · `noBlank` · `adminIDCreate` · only `date` is lowercase) |
+| `tb_cnt_item` | ALL camelCase (`fCabinetNumber` · `cntID`) |
+| `tb_cnt_pay_idorco` | ALL lowercase (`fidorco` · `fcabinetnumber`) |
+| `tb_cnt_pay_trackingchn` | ALL lowercase |
+| `tb_forwarder` | ALL lowercase (`fstatus` · `fdatestatus5` · `adminidupdate`) |
+| `tb_log_forwarder_status` | ALL lowercase |
+
+The legacy MySQL `pcsc_main` dump preserved identifiers as-is when imported — some had been declared with backtick-quoted camelCase in MySQL, others bare lowercase. Postgres stores quoted identifiers case-preserved + requires identical case to match.
+
+**The mystery — why does the action's INSERT work?** Supabase JS client / PostgREST appears to fuzzy-match column names case-insensitively when constructing the SQL. The INSERT `{ cntid: ... }` is silently rewritten to `INSERT INTO tb_cnt_item ("cntID") VALUES (...)`. This makes the casing inconsistency invisible to the REST-layer-only code path.
+
+**Why this matters next time:**
+- Any feature using **raw SQL** (Postgres RPC functions · psql migration scripts · pg-promise · direct PostgreSQL client) hits `column does not exist` errors.
+- Any **stored function / view / trigger** must use correct case (`"cntID"`).
+- A future grep-and-rewrite codemod that "normalizes" case could break things.
+- **Code in `actions/admin/cnt-payment.ts` is technically wrong** — relies on PostgREST's fuzzy match. Best practice: rewrite to use camelCase keys matching the schema (`"cntID"` not `cntid`).
+
+**Decision needed (carry to next session):**
+- **Option A** — rewrite action code to match schema (~2 hr audit + fix)
+- **Option B** — write migration to rename schema columns to lowercase consistently (~1 hr + apply prod · risk: consumers using camelCase break)
+- **Option C** — leave + add code comment + lint rule. Risk: any future raw-SQL/RPC writer hits trap.
+
+**Detection sweep (find every drifted table):**
+```sql
+SELECT table_name,
+       COUNT(*) FILTER (WHERE column_name = lower(column_name)) AS lowercase_cols,
+       COUNT(*) FILTER (WHERE column_name <> lower(column_name)) AS camelcase_cols
+FROM information_schema.columns
+WHERE table_schema = 'public' AND table_name LIKE 'tb_%'
+GROUP BY table_name
+HAVING COUNT(*) FILTER (WHERE column_name = lower(column_name)) > 0
+   AND COUNT(*) FILTER (WHERE column_name <> lower(column_name)) > 0
+ORDER BY table_name;
+```
+
+**Cross-links:**
+- Wave 25 save-point: [`docs/research/poom-save-point-2026-05-28-afternoon.md`](../research/poom-save-point-2026-05-28-afternoon.md) §4 B-5
+- Migration `0113_align_pilot_users_admin_co.sql` — ironically normalized tb_users/tb_admin/tb_co to camelCase but didn't sweep tb_cnt* which were already mixed. Future align migrations should pick a casing convention project-wide.
+- Action code that relies on PostgREST fuzzy-match: `actions/admin/cnt-payment.ts` lines 240-252 (tb_cnt INSERT), 391-392 (tb_cnt_item INSERT)
+

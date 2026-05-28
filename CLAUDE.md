@@ -2,6 +2,69 @@
 
 ---
 
+# 🌅 2026-05-28 afternoon — WAVE 25 SHIPPED · read FIRST (supersedes 2026-05-27 ค่ำ below)
+
+ภูม session **บ่ายวันนี้** — เริ่มเช้าด้วย sync `dave-pacred` (เพราะพี่เดฟแก้ Supabase เมื่อวาน · migration 0113 rename ~78 columns ตู้/admin/co lowercase → camelCase บน prod) → merge + sweep → fix tsc + lint → ภูม click-test เจอ P0 bug → ปิดแล้ว push เก็บงานให้พี่เดฟ review.
+
+**📦 8 commits today (push range `6ec9d7b..6d88c8e` on Poom-pacred):**
+
+| Commit | งาน |
+|---|---|
+| `aac4583` | Wave 25 #194 codemod (13 single-table tb_users/admin/co readers) |
+| `2f36711` | batch A (24 admin core pages camelCase) |
+| `546b528` | batch B (25 admin QA + forwarders + service-orders + cnt) |
+| `6bf00c5` | batch C (25 actions + lib + rates) |
+| `2db1c81` | batch D (27 customer-facing protected pages) |
+| `7779902` | post-cherry-pick repair · 31 tsc errors (profiles.id + auth.user.id over-rename) |
+| `0699fe3` | Wave 25 #195 · 61 §0c lint sweep (19 files) + tsconfig/package/.env verify-gate cleanups |
+| `6d88c8e` | Wave 25 #196 · **cnt-payment P0 bug fix** (demote 4 Zod schema exports from `"use server"`) |
+
+**🟢 Verify state (post-Wave 25 close):**
+- `pnpm verify` EXIT 0 (lint 0 errors · tsc 0 · ~280 tests · audits green)
+- Browser-verify 2 surfaces end-to-end success: `/admin/report-cnt` cnt-payment + `/admin/forwarder-check` bulk-bill
+- Schema casing drift discovered + documented (tb_cnt* camelCase quoted vs action lowercase keys · PostgREST fuzzy-matches but raw SQL/RPC future bug)
+
+**🔴 5 launch-blockers identified (ภูม สั่งวิเคราะห์ Phase 1 launch-readiness):**
+1. **B-1** SMS/LINE/Email ส่งจริงตอน admin test — ต้องเพิ่ม `NOTIFY_BYPASS` env (~1 ชม · Claude)
+2. **B-2** ROTATE S3 key `e913d7da34ca0089638f100afb74c972` (carry-over · ~5 นาที · ภูม)
+3. **B-3** 13 legacy admins recreate via `/admin/admins/new` (~45 นาที · ภูม)
+4. **B-4** Click-through audit ทุก mutation button ใน `/admin/*` (~90 ปุ่ม · ~5-7 ชม wallclock · 3-4 parallel agents)
+5. **B-5** Schema casing drift audit + fix (~2 ชม · Claude + agents)
+
+**🟡 Decision asks for ภูม / พี่เดฟ:**
+1. Schema drift fix: **A) rewrite code** to match schema camelCase OR **B) write migration** rename columns to lowercase
+2. Launch strategy: **soft-launch beta cohort** (50-100 คน) OR hard-launch
+3. Launch date — ถ้ามี hard date จะช่วยตัด P1/P2 ที่ slip
+
+**🎯 SOTs for resume — read in order:**
+1. 🌅 [`docs/research/poom-save-point-2026-05-28-afternoon.md`](docs/research/poom-save-point-2026-05-28-afternoon.md) — **this session's canonical resume** (8 commits · launch-blocker analysis · decision asks · 5 B-items + 5 S-items prioritized)
+2. 🌙 [`docs/research/poom-save-point-2026-05-27-night.md`](docs/research/poom-save-point-2026-05-27-night.md) — Wave 22+23 close-out yesterday
+3. 🔥 [`docs/research/admin-tech-debt-master-2026-05-27.md`](docs/research/admin-tech-debt-master-2026-05-27.md) — 19-item inventory (18 closed by Wave 23-24-25 · 1 deferred design call)
+4. 📋 NEW learnings (3 entries today):
+   - [`docs/learnings/nextjs-16-quirks.md`](docs/learnings/nextjs-16-quirks.md) [2026-05-28] — `"use server"` files reject ALL non-async-function value exports
+   - [`docs/learnings/php-port-patterns.md`](docs/learnings/php-port-patterns.md) [2026-05-28] — Schema casing drift (tb_cnt* camelCase quoted vs action lowercase)
+   - [`docs/learnings/verify-deep-flow.md`](docs/learnings/verify-deep-flow.md) [2026-05-28] — round-2 case study · cnt-payment click-through gap · hardened protocol added
+
+**🗺 Branch state (post-push · 2026-05-28 14:59):**
+
+| Branch | HEAD | สถานะ |
+|---|---|---|
+| `main` | `9c2571d` | production (ภูม Wave 20-25 ยัง merge) |
+| `Poom-pacred` | `6d88c8e` | **active · Wave 25 work landed · awaiting พี่เดฟ review** |
+| `dave-pacred` | `9c2571d` | customer-side (12 commits ahead Poom · ยังไม่ sync) |
+| Our worktree | `6d88c8e` | ✅ in sync 0/0 |
+
+**Resume command (next session):**
+```bash
+cd /c/Users/Admin/pacred-web/.claude/worktrees/adoring-chandrasekhar-0f8ad7
+git fetch origin --prune
+git rev-list --left-right --count HEAD...origin/Poom-pacred   # should be 0/0
+cat docs/research/poom-save-point-2026-05-28-afternoon.md     # canonical resume
+# Then: pick B-1..B-5 (launch blockers) per ภูม decision
+```
+
+---
+
 # 🌙 2026-05-27 ค่ำ — WAVE 22 + WAVE 23 P0 SHIPPED · read FIRST (supersedes 2026-05-26 ค่ำ below)
 
 ภูม mega-session วันนี้ — เช้า/บ่าย Wave 22 (perf root-cause + tb_admin merge) · ค่ำ ภูม flag 4 bugs → 3 audit agents → master tech-debt doc → Wave 23 P0 batch 1 ครบ 4 fixes. ภูม กลับบ้านจาก work computer → resume ที่บ้าน.
