@@ -2,7 +2,105 @@
 
 ---
 
-# 🌙 2026-05-28 ค่ำ — INTEGRATION COMPLETE · read FIRST (supersedes Wave 25 afternoon below)
+# 🌃 2026-05-28 ดึก — NEW BRANCH MODEL + ปอน MOMO LANDED · read FIRST (supersedes 2026-05-28 ค่ำ below)
+
+เดฟ session **ดึกวันนี้** — พี่เดฟอัพเดท branch ownership ใหม่ + ปอน push งาน MOMO API + TAMIT เสร็จเข้า podeng → เดฟ merge เข้า main + apply migration 0116 + sync InwPond007 ให้ตรง main.
+
+**🗺 BRANCH OWNERSHIP ใหม่ (2026-05-28 ดึก — read FIRST):**
+
+| Branch | คน | งาน |
+|---|---|---|
+| `main` | (ก๊อต/เดฟ gates) | production · Vercel auto-deploy |
+| `dave-pacred` | **เดฟ** | integrator → main (= main ตลอด) |
+| `InwPond007` | **ปอน หลัก** | website + customer member back-office · **ปอน main lane** |
+| `podeng` | **ปอน sub-task** | งาน MOMO API (เสร็จแล้ว · จะกลับมาทำ InwPond007 ต่อ) |
+| `Poom-pacred` | **ภูม** | admin lane · V3 enhancements |
+
+**📦 3 commits ดึกนี้ (push range `7a4a449d..05e7e30e` on main):**
+
+| Commit | งาน | Source |
+|---|---|---|
+| `91ddb369` | merge `origin/podeng` — ปอน MOMO + TAMIT (resolved 2 §0c conflicts in tracking-page.tsx) | ปอน → เดฟ |
+| `05e7e30e` | apply-pilot-migration.mjs → point at 0116 | เดฟ |
+| (migration `0116_momo_isolated_tables.sql` applied to prod in 152ms) | 4 NEW isolated tables · NO legacy touch | ปอน |
+
+**🟢 ปอน's MOMO Admin Sync — landed + applied to prod:**
+- `supabase/migrations/0116_momo_isolated_tables.sql` — 4 new tables (`momo_import_tracks` + `momo_container_closed` + `momo_sack_infos` + `momo_sync_logs`) · service_role-only RLS · NO FK to legacy · **applied to prod 2026-05-28 ดึก (152ms)**
+- `lib/integrations/momo-isolated/` — parallel client (NOT touching existing `momo-jmf/`) · 14 statuses × 3 phases · real-API verified live
+- `app/[locale]/(admin)/admin/api-forwarder-momo/sync/` — admin page · date range + sack lookup + 5 buttons + preview + DB snapshot + counter dashboard
+- `/api/admin/momo/{import-track,container-closed,sack-info,sync-preview,sync}` — admin-gated proxies
+- 14 new files / +2234 LOC · entirely isolated (zero risk to revenue path)
+
+**🟢 ปอน's TAMIT URL paste + SearchBar fix:**
+- SearchBar wrapped in `<form action="/search" method="GET">` — Enter + submit work now
+- `/service-import/table` legacy header restyle (matches legacy PCS · pink→orange gradient · 9 status pills)
+- `/search?url=…` MODE A URL-paste wired (best-effort — TAMIT vendor was down at push time)
+
+**🗺 Branch state (post-push · 2026-05-28 ดึก):**
+
+| Branch | HEAD | สถานะ |
+|---|---|---|
+| `main` | `05e7e30e` | **production · all today's work landed** |
+| `dave-pacred` | `05e7e30e` | = main |
+| `InwPond007` | `05e7e30e` | **force-synced to main** (ปอน's primary lane · clean base for next sprint) |
+| `podeng` | `d3898012` | 2 commits behind (cosmetic — sub-task done, can be deleted or kept for ref) |
+| `Poom-pacred` | `123a3409` | **13 commits behind** — ภูม ต้อง `git pull origin main` ก่อนงานใหม่ |
+
+**📋 สรุปงานต่อให้แต่ละคน (next-steps brief):**
+
+### 🟢 ปอน (lead: InwPond007)
+- ✅ งาน MOMO เสร็จแล้ว · landed บน main · prod applied
+- ✅ InwPond007 sync = main แล้ว — clean base
+- ▶️ ขั้นต่อไป: กลับมาทำ InwPond007 ตามที่บอก (website + customer member back-office)
+- 🟡 Pending verify: click-test `/admin/api-forwarder-momo/sync` ที่ prod หลัง Vercel rebuild (~3 นาที)
+- 🛠 Resume:
+  ```bash
+  cd <your-pacred-clone>
+  git checkout InwPond007
+  git pull origin InwPond007    # = main, includes MOMO + ภูม wave-25 + เดฟ surgical merges
+  ```
+
+### 🟢 ภูม (lead: Poom-pacred)
+- ✅ Wave-25 #194-#196 ของ ภูม ถูก surgical-merge เข้า main เรียบร้อย (per `docs/audit/poom-wave-25-merge-audit-2026-05-28.md`)
+- 🟠 Poom-pacred ตามหลัง main **13 commits** — pull ก่อนงานใหม่:
+  ```bash
+  git checkout Poom-pacred
+  git pull origin main          # absorb เดฟ's batch 2a + ปอน's MOMO + ปอน's LCL + fidelity fixes
+  git push origin Poom-pacred   # publish
+  ```
+- ▶️ ขั้นต่อไป (จาก ภูม's afternoon save-point):
+  - **B-1** NOTIFY_BYPASS env (1 ชม)
+  - **B-2** 🔴 ROTATE S3 key (5 นาที · ภูม) — carry-over
+  - **B-3** 13 legacy admins recreate via `/admin/admins/new` (45 นาที · ภูม)
+  - **B-4** Click-through audit ทุก mutation button (~90 ปุ่ม · 5-7 ชม)
+  - **B-5** Schema casing drift decision (Option A camelCase vs B revert · ~2 ชม)
+- 🟡 Heads-up: เดฟ pick Option A (camelCase) เพราะตรงกับ ก๊อต spec. tb_forwarder family (~177 renames) เป็นงาน batch 2b ที่รอ — ทำ page-by-page ดีกว่า big-bang
+
+### 🟢 เดฟ (lead: dave-pacred → main)
+- ✅ Integrator role done · all 3 lanes merged · build + lint green
+- ▶️ ขั้นต่อไป:
+  - Coordinate ก๊อต API switchover (PCS/TTP brand split per `docs/runbook/pcs-scrub-plan.md`)
+  - Pick up next camelCase batch (tb_forwarder ↑ or smaller — wallet/payment family ~60 renames)
+  - 4 LOAD-BEARING fidelity gaps (owner-decide)
+
+**🎯 SOTs for next session — read in order:**
+1. 🌃 **THIS top section** — new branch model + ปอน MOMO landed
+2. 🌙 `docs/audit/poom-wave-25-merge-audit-2026-05-28.md` — surgical-merge playbook (reference for future ภูม pulls)
+3. 📋 `docs/audit/fidelity-auth-screens-2026-05-28.md` — 4 LOAD-BEARING fidelity gaps pending owner
+4. 🌅 `docs/research/poom-save-point-2026-05-28-afternoon.md` — ภูม's 5 launch-blockers + decision asks
+
+**Resume command (next session):**
+```bash
+cd /c/Users/Admin/pacred-web/.claude/worktrees/hopeful-almeida-359e44
+git fetch origin --prune
+git rev-list --left-right --count HEAD...origin/main   # should be 0/0
+head -100 CLAUDE.md                                    # this top section
+# Pick from per-developer "ขั้นต่อไป" above
+```
+
+---
+
+# 🌙 2026-05-28 ค่ำ — INTEGRATION COMPLETE (mid-session · superseded by ดึก above)
 
 เดฟ session **ค่ำวันนี้** — รับงาน ภูม (Wave 25 #194-#196) + ปอน (LCL tracking pages c6ca71fb) มา **surgical-merge เข้า main** หลังจากปอน flag "หน้าของผมหายไปไหนหมด" + ภูม push 9 commits ใหม่ที่เดฟยังไม่ได้ merge.
 
