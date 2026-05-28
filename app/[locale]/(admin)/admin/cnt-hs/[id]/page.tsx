@@ -183,7 +183,7 @@ export default async function CntHsDetailPage({
       .limit(5000);
     if (fwRaw && fwRaw.length >= 5000) {
       console.warn(
-        `[cnt-hs/${id}] forwarder list hit 5000-row cap — per-cabinet ` +
+        `[cnt-hs/${cntId}] forwarder list hit 5000-row cap — per-cabinet ` +
         `pagination needed (Wave 24 #189 deferred). Cabinets: ${cabinetNumbers.length}.`,
       );
     }
