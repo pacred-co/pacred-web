@@ -407,7 +407,7 @@ export default async function ServiceImportPage({
       {/* Page content — Tailwind rebuild. Wrapped in `.pcs-content-pad` so
           the (protected) layout's desktop padding (sidebar clearance +
           FloatingTabs clearance) kicks in automatically. */}
-      <div className="pcs-content-pad w-full px-3 md:px-6 pt-3 pb-[200px] md:py-6 md:pb-24 max-w-[1280px] mx-auto">
+      <div className="pcs-content-pad w-full px-3 md:px-6 pt-3 pb-[200px] md:py-6 md:pb-24">
         {!showFullScreen ? (
           // Corporate-pending banner — forwarder.php L874
           <div className="mx-auto max-w-[670px] mt-16 md:mt-24 text-center">
