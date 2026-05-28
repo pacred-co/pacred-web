@@ -340,6 +340,9 @@ function PersonalForm({ recom }: { recom: string | null }) {
     });
     if (res.ok) {
       trackSignUp("personal");
+      // 2026-05-28 — hard navigation, same reason as the juristic flow
+      // (/dashboard fires 5 tb_* counts before rendering; soft-nav would
+      // leave the OTP screen visible during that load).
       // Return to a pending `?next=` (booking-calculator CTA) if present.
       // The protected layout still re-routes to /complete-profile when the
       // new profile needs it — so an order quote only survives for a
@@ -347,8 +350,7 @@ function PersonalForm({ recom }: { recom: string | null }) {
       // landing is `/dashboard` (customer portal launchpad), not `/`
       // (public marketing) — per d1-fidelity-customer.md §2 + 2026-05-26
       // brief fix A2: non-admin signups expect to see the signed-in shell.
-      router.replace(nextUrl ?? "/dashboard");
-      router.refresh();
+      window.location.replace(nextUrl ?? "/dashboard");
     } else {
       setError(ERR[res.error] ?? res.error);
       captchaRef.current?.reset();
@@ -763,14 +765,23 @@ function JuristicForm({
         const done = await completeJuristicRegistration();
         if (done.ok) {
           trackSignUp("juristic");
-          // Keep submitStage truthy through the navigation so the spinner
-          // text doesn't snap back to "สมัครสมาชิก" during the brief
-          // moment between resolve + route change.
-          // Return to a pending `?next=` (booking-calculator CTA) if present.
-          // Default to `/dashboard` (customer portal launchpad), NOT `/` —
-          // per d1-fidelity-customer.md §2 + 2026-05-26 brief fix A2.
-          router.replace(nextUrl ?? "/dashboard");
-          router.refresh();
+          // 2026-05-28 — HARD navigation instead of router.replace +
+          // router.refresh. The soft Next-router path kept the
+          // "กำลังบันทึก..." button visible until /dashboard's RSC payload
+          // arrived, and /dashboard fires 5 separate Supabase counts on
+          // `tb_*` tables before it renders (header.php parity), so on a
+          // fresh signup that's an additional 5-15 s of *the wrong UI*
+          // — the user already submitted, but the page still shows the
+          // submission spinner instead of a loading state for the new
+          // page. window.location.replace commits the URL change in the
+          // browser immediately and lets the browser's own loading bar
+          // take over.
+          //
+          // Return to a pending `?next=` (booking-calculator CTA) if
+          // present. Default to `/dashboard` (customer portal launchpad),
+          // NOT `/` — per d1-fidelity-customer.md §2 + 2026-05-26 brief
+          // fix A2.
+          window.location.replace(nextUrl ?? "/dashboard");
           return;
         }
         setError(ERR[done.error] ?? done.error);
