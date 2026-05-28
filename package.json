@@ -20,7 +20,8 @@
     "audit:images": "node scripts/audit-images.mjs",
     "audit:all": "pnpm audit:md && pnpm audit:env && pnpm audit:i18n",
     "check:connections": "node scripts/check-connections.mjs",
-    "verify": "pnpm lint && tsc --noEmit && pnpm test:unit && pnpm audit:all"
+    "typecheck": "node scripts/tsc-check.mjs",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test:unit && pnpm audit:all"
   },
   "dependencies": {
     "@hcaptcha/react-hcaptcha": "^2.0.2",
