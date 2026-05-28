@@ -3,6 +3,7 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { akucargoSearch } from "@/lib/china-search/akucargo";
 import type { AkucargoPlatform } from "@/lib/china-search/akucargo-helpers";
+import { convertProductUrlDetail, type ChinaProductDetail } from "@/lib/china-search";
 import { SearchRecents } from "./search-recents";
 import { SearchHistoryLogger } from "./search-history-logger";
 
@@ -184,10 +185,21 @@ export default async function SearchPage({
   // The convertURLChinna() MODE decision (see classifyUrl note).
   const dataRe = classifyUrl(getURL);
 
-  // ── MODE A — URL paste → skeleton product card ──────────────
+  // ── MODE A — URL paste → fetch TAMIT detail + render ────────
+  // Per ปอน 2026-05-28 ("ขอวิธีที่วางลิงก์แล้วเนื้อหามาแปลไทย
+  // แปลงค่าให้ครบ"): wire the TAMIT product-detail call that the
+  // legacy `dataAPI.php` did via jQuery AJAX. We now fetch it
+  // server-side (no client AJAX needed in RSC) and pass to UrlPasteMode.
   if (!dataRe.search) {
+    const detailResult = await convertProductUrlDetail(getURL);
+    const detail = detailResult.available ? detailResult.detail : null;
     return (
-      <UrlPasteMode srcWeb={dataRe.srcWeb} urlcut={dataRe.urlcut} rsDefault={rsDefault} />
+      <UrlPasteMode
+        srcWeb={dataRe.srcWeb}
+        urlcut={dataRe.urlcut}
+        rsDefault={rsDefault}
+        detail={detail}
+      />
     );
   }
 
@@ -570,11 +582,30 @@ function UrlPasteMode({
   srcWeb,
   urlcut,
   rsDefault,
+  detail,
 }: {
   srcWeb: string | null;
   urlcut: string;
   rsDefault: number;
+  detail: ChinaProductDetail | null;
 }) {
+  // Computed values from TAMIT detail (null when unavailable → render
+  // skeleton state, matching legacy pre-AJAX shimmer behaviour).
+  const title = detail?.title ?? "";
+  const priceCny = detail?.promo_price_cny ?? detail?.base_price_cny ?? 0;
+  const priceThb = priceCny * rsDefault;
+  const shopName = detail?.shop_name ?? "";
+  // Force https on image URLs. TAMIT/CDN sometimes return http:// and the
+  // strict CSP (`img-src 'self' data: blob: https:`) drops those silently
+  // → user sees broken image. Most China CDNs (alicdn / cbu01 / taobaocdn)
+  // serve identical assets over https, so the upgrade is safe.
+  const toHttps = (u: string | undefined): string | undefined =>
+    u ? u.replace(/^http:\/\//i, "https://") : u;
+  const mainImage = toHttps(detail?.main_image);
+  const thumbs = (detail?.images ?? []).slice(0, 3).map(toHttps).filter((u): u is string => !!u);
+  function fmt2(n: number): string {
+    return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
   return (
     <div className="pcs-legacy">
       <link rel="stylesheet" href="/legacy/pcs/search.css" />
@@ -630,28 +661,34 @@ function UrlPasteMode({
                       <div className="col-md-4 p-2 p-m-05-1">
                         <div className="main">
                           <div className="slider slider-for">
-                            <div className="pro-preload-effect procover"></div>
+                            {mainImage ? (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img
+                                src={mainImage}
+                                alt={title || "product"}
+                                className="procover"
+                                style={{ width: "100%", height: "auto", objectFit: "cover", borderRadius: "8px" }}
+                              />
+                            ) : (
+                              <div className="pro-preload-effect procover"></div>
+                            )}
                           </div>
                           <div className="slider slider-nav pcs-d-pc">
                             <div className="row pt-1">
-                              <div className="col-md-4 p-1">
-                                <div
-                                  className="pro-preload-effect"
-                                  style={{ height: "100px" }}
-                                ></div>
-                              </div>
-                              <div className="col-md-4 p-1">
-                                <div
-                                  className="pro-preload-effect"
-                                  style={{ height: "100px" }}
-                                ></div>
-                              </div>
-                              <div className="col-md-4 p-1">
-                                <div
-                                  className="pro-preload-effect"
-                                  style={{ height: "100px" }}
-                                ></div>
-                              </div>
+                              {[0, 1, 2].map((i) => (
+                                <div key={i} className="col-md-4 p-1">
+                                  {thumbs[i] ? (
+                                    /* eslint-disable-next-line @next/next/no-img-element */
+                                    <img
+                                      src={thumbs[i]}
+                                      alt=""
+                                      style={{ width: "100%", height: "100px", objectFit: "cover", borderRadius: "6px" }}
+                                    />
+                                  ) : (
+                                    <div className="pro-preload-effect" style={{ height: "100px" }}></div>
+                                  )}
+                                </div>
+                              ))}
                             </div>
                           </div>
                         </div>
@@ -673,11 +710,22 @@ function UrlPasteMode({
                         </span>
                         <h4 className="p-m-05 bg-white-m-b1 pb-1">
                           ชื่อสินค้า :{" "}
-                          <div className="title-pro pro-preload-effect"></div>
+                          {title ? (
+                            <span className="title-pro" style={{ fontWeight: 600 }}>{title}</span>
+                          ) : (
+                            <div className="title-pro pro-preload-effect"></div>
+                          )}
                         </h4>
                         <div className="price-s bg-main">
                           <span className="font-18">ราคาสินค้า : </span>
-                          <span className="display-7">¥</span>
+                          <span className="display-7">
+                            {priceCny > 0 ? `¥${fmt2(priceCny)}` : "¥"}
+                          </span>
+                          {priceCny > 0 && (
+                            <span className="font-14" style={{ marginLeft: "8px", opacity: 0.85 }}>
+                              ≈ <b>{fmt2(priceThb)}</b> ฿
+                            </span>
+                          )}
                         </div>
                         <div className="row p-m-0 pt-05">
                           <div className="col-md-6">
@@ -685,7 +733,11 @@ function UrlPasteMode({
                               <h4>
                                 ชื่อร้าน :{" "}
                                 <span id="nick">
-                                  <div className="nick-pro pro-preload-effect"></div>
+                                  {shopName ? (
+                                    <span style={{ fontWeight: 600 }}>{shopName}</span>
+                                  ) : (
+                                    <div className="nick-pro pro-preload-effect"></div>
+                                  )}
                                 </span>
                               </h4>
                             </div>
@@ -699,7 +751,7 @@ function UrlPasteMode({
                                 ลิงค์สินค้า :{" "}
                                 <a
                                   className="font-14"
-                                  href=""
+                                  href={urlcut}
                                   target="_blank"
                                   rel="noreferrer"
                                 >
@@ -711,23 +763,53 @@ function UrlPasteMode({
                             </div>
                           </div>
                         </div>
-                        <div className="pro-preload-effect"></div>
-                        <div className="pro-preload-effect"></div>
-                        <div className="pro-preload-effect"></div>
-                        <div className="pro-preload-effect"></div>
-                        <br />
-                        <div className="row">
-                          <div className="col-md-6">
-                            <div className="pro-preload-effect"></div>
-                            <div className="pro-preload-effect"></div>
-                            <div className="pro-preload-effect"></div>
+                        {/* SKU axis selectors — render TAMIT's `sku_axes` if
+                            available; otherwise show skeleton strips like
+                            the legacy pre-AJAX state. The full sku-picker
+                            with qty grid + price recompute lives at
+                            /service-order/add (the proper place to commit);
+                            here we just preview the option labels. */}
+                        {detail?.sku_axes && detail.sku_axes.length > 0 ? (
+                          <div className="p-m-05 bg-white-m-b1" style={{ marginTop: "8px" }}>
+                            {detail.sku_axes.map((axis, ai) => (
+                              <div key={ai} style={{ marginBottom: "8px" }}>
+                                <h5 style={{ marginBottom: "4px", fontSize: "13px", color: "#666" }}>
+                                  {axis.name}:
+                                </h5>
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                                  {axis.values.slice(0, 12).map((v, vi) => (
+                                    <span
+                                      key={vi}
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "4px",
+                                        padding: "4px 10px",
+                                        borderRadius: "999px",
+                                        border: "1px solid #e5e5e5",
+                                        fontSize: "12px",
+                                        background: "#fafafa",
+                                      }}
+                                    >
+                                      {v.image && (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={v.image} alt="" style={{ width: 18, height: 18, borderRadius: 4, objectFit: "cover" }} />
+                                      )}
+                                      {v.label}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                          <div className="col-md-6">
+                        ) : (
+                          <>
                             <div className="pro-preload-effect"></div>
                             <div className="pro-preload-effect"></div>
                             <div className="pro-preload-effect"></div>
-                          </div>
-                        </div>
+                            <div className="pro-preload-effect"></div>
+                          </>
+                        )}
                         <hr />
                         <div
                           className="border-total-product p-1 p-m-05 pay-c"
@@ -738,11 +820,11 @@ function UrlPasteMode({
                               <h4>ราคารวม</h4>
                             </div>
                             <div className="col-9 col-md-4 text-left text-md-right notranslate">
-                              <span id="CHNTotal">0.00</span>¥
+                              <span id="CHNTotal">{fmt2(priceCny)}</span>¥
                               <span className="">
                                 &nbsp;x {rsDefault}฿/¥ ={" "}
                                 <b id="THBtotal" className="text-danger">
-                                  0.00
+                                  {fmt2(priceThb)}
                                 </b>{" "}
                                 ฿
                               </span>
