@@ -66,7 +66,7 @@ export default async function TransferBulkPage({
   // List of active sales admins (filter dropdown source + target source).
   // Same query as /admin/customers/transfer-rep — keeping the shape
   // identical so a future refactor can share the rep selector component.
-  const { data: repsRaw } = await admin
+  const { data: repsRaw, error: repsRawErr } = await admin
     .from("admins")
     .select(`profile_id, role,
              profile:profiles!profile_id ( member_code, first_name, last_name, phone ),

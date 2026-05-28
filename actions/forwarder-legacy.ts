@@ -96,7 +96,7 @@ export async function createLegacyForwarder(
 
   // forwarder.php L18-20 — duplicate tracking guard
   // SELECT fTrackingCHN FROM tb_forwarder WHERE fTrackingCHN=… AND userID=…
-  const { data: dupRows } = await admin
+  const { data: dupRows, error: dupRowsErr } = await admin
     .from("tb_forwarder")
     .select("id")
     .eq("ftrackingchn", d.fTrackingCHN)
@@ -138,7 +138,7 @@ export async function createLegacyForwarder(
     addressZIPCode = "10160";
   } else {
     // L69-87 — copy from tb_address (userID-scoped + addressStatus='1')
-    const { data: addr } = await admin
+    const { data: addr, error: addrErr } = await admin
       .from("tb_address")
       .select("addressname, addresslastname, addresstel, addresstel2, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addressnote")
       .eq("addressid", d.addressID)
@@ -382,7 +382,7 @@ export async function updateLegacyForwarderAddress(
   const admin = createAdminClient();
 
   // forwarder.php L1623-1627 — read current fShipBy (PCS pickup blocks the change)
-  const { data: cur } = await admin
+  const { data: cur, error: curErr } = await admin
     .from("tb_forwarder")
     .select("fshipby")
     .eq("id", ID)
@@ -397,7 +397,7 @@ export async function updateLegacyForwarderAddress(
 
   // forwarder.php L1629-1648 — SELECT tb_address + UPDATE tb_forwarder
   // address columns from the picked address row.
-  const { data: addr } = await admin
+  const { data: addr, error: addrErr } = await admin
     .from("tb_address")
     .select("addressname, addresslastname, addresstel, addresstel2, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addressnote")
     .eq("addressid", addressID)

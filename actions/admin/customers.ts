@@ -28,7 +28,7 @@ export async function editCustomer(input: EditCustomerInput): Promise<AdminActio
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before } = await admin.from("profiles").select("*").eq("id", id).maybeSingle();
+    const { data: before, error: beforeErr } = await admin.from("profiles").select("*").eq("id", id).maybeSingle();
     if (!before) return { ok: false, error: "not_found" };
 
     const update: Record<string, unknown> = {};
@@ -113,7 +113,7 @@ export async function approveCustomer(id: string): Promise<AdminActionResult> {
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("tb_users")
       .select("userID, userActive, userStatus")
       .eq("userID", id)
@@ -179,7 +179,7 @@ export async function adminConvertToJuristic(
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("profiles")
       .select("id, account_type, member_code, first_name, last_name")
       .eq("id", d.profile_id)
@@ -189,7 +189,7 @@ export async function adminConvertToJuristic(
 
     // Block duplicate tax_id collisions early — the partial unique index
     // on corporate(tax_id) only covers 'verified' rows, so we double-check.
-    const { data: clash } = await admin
+    const { data: clash, error: clashErr } = await admin
       .from("corporate")
       .select("profile_id")
       .eq("tax_id", d.tax_id)
@@ -263,7 +263,7 @@ export async function suspendCustomer(id: string): Promise<AdminActionResult> {
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("tb_users")
       .select("userID, userStatus")
       .eq("userID", id)

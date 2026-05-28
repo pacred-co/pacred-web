@@ -134,7 +134,7 @@ export default async function ServiceOrderPage({
   const hNoAnchor = sp.hNo ?? "";
 
   // ── shops.php L756-758 — juristic-pending gate.
-  const { data: corpRows } = await admin
+  const { data: corpRows, error: corpRowsErr } = await admin
     .from("tb_corporate")
     .select("id")
     .eq("userid", userID)
@@ -189,7 +189,7 @@ export default async function ServiceOrderPage({
   const orderHnos = rows.map((r) => r.hno);
   let promoMap = new Map<string, number>();
   if (orderHnos.length > 0) {
-    const { data: promoRows } = await admin
+    const { data: promoRows, error: promoRowsErr } = await admin
       .from("tb_promotion")
       .select("promoid, hno")
       .in("hno", orderHnos);

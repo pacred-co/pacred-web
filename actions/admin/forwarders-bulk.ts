@@ -162,7 +162,7 @@ export async function bulkAssignDriver(
     // Verify driver eligibility ONCE up-front. A single bad driverAdminId
     // should fail the WHOLE batch (mirror legacy modal — the driver picker
     // gates the form submit), not produce N near-identical per-row errors.
-    const { data: driver } = await admin
+    const { data: driver, error: driverErr } = await admin
       .from("admins")
       .select(`
         profile_id, role, is_active,
@@ -188,7 +188,7 @@ export async function bulkAssignDriver(
 
     for (const fNo of d.forwarderIds) {
       // 1. forwarder lookup
-      const { data: forwarder } = await admin
+      const { data: forwarder, error: forwarderErr } = await admin
         .from("forwarders")
         .select("id, f_no, profile_id, status")
         .eq("f_no", fNo)
@@ -199,7 +199,7 @@ export async function bulkAssignDriver(
       }
 
       // 2. open-assignment guard (status 1 = assigned-waiting, 2 = accepted)
-      const { data: existing } = await admin
+      const { data: existing, error: existingErr } = await admin
         .from("forwarder_driver")
         .select("id, status")
         .eq("forwarder_id", forwarder.id)
@@ -299,7 +299,7 @@ export async function bulkCancel(
     const failed:    { fNo: string; error: string }[] = [];
 
     for (const fNo of d.forwarderIds) {
-      const { data: existing } = await admin
+      const { data: existing, error: existingErr } = await admin
         .from("forwarders")
         .select("id, f_no, profile_id, status, note_admin")
         .eq("f_no", fNo)

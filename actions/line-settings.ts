@@ -95,18 +95,26 @@ export async function linkLineAccount(
   if (blocked) return blocked;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr) return { ok: false, error: authErr.message };
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // Defensive pre-check — the unique partial index would 23505 anyway,
   // but the lookup gives us a friendlier error string so the UI can show
   // "ติดต่อแอดมิน" rather than a raw Postgres code.
-  const { data: existing } = await supabase
+  const { data: existing, error: existingErr } = await supabase
     .from("profiles")
     .select("id")
     .eq("line_user_id", lineUserId)
     .maybeSingle<{ id: string }>();
 
+  if (existingErr) {
+    logger.error("line-settings", "link pre-check select failed", existingErr, {
+      profileId:  redactId(user.id),
+      lineUserId: redactId(lineUserId),
+    });
+    return { ok: false, error: existingErr.message };
+  }
   if (existing && existing.id !== user.id) {
     return { ok: false, error: "already_linked_other_account" };
   }
@@ -114,7 +122,7 @@ export async function linkLineAccount(
   // Use the user-context client (not admin) — RLS will only let the user
   // update their OWN profile row, which is exactly the safety property
   // we want. No bypass needed here.
-  const { error } = await supabase
+  const { error: updateErr } = await supabase
     .from("profiles")
     .update({
       line_user_id:   lineUserId,
@@ -122,18 +130,18 @@ export async function linkLineAccount(
     })
     .eq("id", user.id);
 
-  if (error) {
+  if (updateErr) {
     // Race-safe — if a second customer linked the same LINE userId
     // between the lookup above and the UPDATE here, the unique partial
     // index will raise 23505. Map it to the friendly error.
-    if (error.code === "23505") {
+    if (updateErr.code === "23505") {
       return { ok: false, error: "already_linked_other_account" };
     }
-    logger.error("line-settings", "link update failed", error, {
+    logger.error("line-settings", "link update failed", updateErr, {
       profileId:  redactId(user.id),
       lineUserId: redactId(lineUserId),
     });
-    return { ok: false, error: error.message };
+    return { ok: false, error: updateErr.message };
   }
 
   // Best-effort welcome push — proves the integration to the customer
@@ -191,19 +199,20 @@ export async function disconnectLineAccount(): Promise<ActionResult> {
   if (blocked) return blocked;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr) return { ok: false, error: authErr.message };
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  const { error } = await supabase
+  const { error: updateErr } = await supabase
     .from("profiles")
     .update({ line_user_id: null, line_linked_at: null })
     .eq("id", user.id);
 
-  if (error) {
-    logger.error("line-settings", "disconnect update failed", error, {
+  if (updateErr) {
+    logger.error("line-settings", "disconnect update failed", updateErr, {
       profileId: redactId(user.id),
     });
-    return { ok: false, error: error.message };
+    return { ok: false, error: updateErr.message };
   }
 
   revalidatePath("/line-settings");

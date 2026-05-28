@@ -24,7 +24,7 @@ export default async function MobileDashboardPage() {
   const uid = profile.member_code ?? "";
 
   // wallet balance — tb_wallet.wallettotal (legacy header.php L86-92)
-  const { data: walletRow } = await admin
+  const { data: walletRow, error: walletRowErr } = await admin
     .from("tb_wallet")
     .select("wallettotal")
     .eq("userid", uid)

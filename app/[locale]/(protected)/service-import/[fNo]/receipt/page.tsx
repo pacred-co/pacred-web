@@ -137,7 +137,7 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
     status:     "active" | "reversed";
     created_at: string;
   };
-  const { data: invoiceAdjRaw } = await supabase
+  const { data: invoiceAdjRaw, error: invoiceAdjRawErr } = await supabase
     .from("invoice_adjustments")
     .select("id, amount_thb, reason, status, created_at")
     .eq("target_type", "forwarder")

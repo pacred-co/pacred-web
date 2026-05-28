@@ -106,7 +106,7 @@ export async function adminSetTbSettingsRates(
       // (mirrors lib/auth/require-admin.ts: profile_id + is_active=true).
       if (failures.length > 0 && d.force_override) {
         const adminCheck = createAdminClient();
-        const { data: rolesRows } = await adminCheck
+        const { data: rolesRows, error: rolesRowsErr } = await adminCheck
           .from("admins")
           .select("role")
           .eq("profile_id", adminId)
@@ -214,7 +214,7 @@ export async function adminSetTbRateCustomCbm(
       // super-only override (mirrors tb_settings flow above).
       if (outOfBand && d.force_override) {
         const adminCheck = createAdminClient();
-        const { data: rolesRows } = await adminCheck
+        const { data: rolesRows, error: rolesRowsErr } = await adminCheck
           .from("admins")
           .select("role")
           .eq("profile_id", adminId)
@@ -229,7 +229,7 @@ export async function adminSetTbRateCustomCbm(
       }
 
       const admin = createAdminClient();
-      const { data: existing } = await admin
+      const { data: existing, error: existingErr } = await admin
         .from("tb_rate_custom_cbm")
         .select("id, rcbm")
         .eq("userid",          d.userid)

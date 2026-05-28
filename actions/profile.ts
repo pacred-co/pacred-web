@@ -46,10 +46,11 @@ export async function updateProfileBasic(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr) return { ok: false, error: authErr.message };
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  const { error } = await supabase
+  const { error: updateErr } = await supabase
     .from("profiles")
     .update({
       first_name:     d.first_name,
@@ -69,7 +70,7 @@ export async function updateProfileBasic(
     })
     .eq("id", user.id);
 
-  if (error) return { ok: false, error: error.message };
+  if (updateErr) return { ok: false, error: updateErr.message };
 
   revalidatePath("/profile");
   revalidatePath("/dashboard");
@@ -93,21 +94,23 @@ export async function upsertCorporate(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr) return { ok: false, error: authErr.message };
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // Guard at app layer too: corporate row requires account_type='juristic'
-  const { data: profile } = await supabase
+  const { data: profile, error: profileErr } = await supabase
     .from("profiles")
     .select("account_type")
     .eq("id", user.id)
     .maybeSingle<{ account_type: "personal" | "juristic" }>();
 
+  if (profileErr) return { ok: false, error: profileErr.message };
   if (!profile || profile.account_type !== "juristic") {
     return { ok: false, error: "account_not_juristic" };
   }
 
-  const { error } = await supabase
+  const { error: upsertErr } = await supabase
     .from("corporate")
     .upsert(
       {
@@ -120,7 +123,7 @@ export async function upsertCorporate(
       { onConflict: "profile_id", ignoreDuplicates: false },
     );
 
-  if (error) return { ok: false, error: error.message };
+  if (upsertErr) return { ok: false, error: upsertErr.message };
 
   // also mirror tax_id + company_name onto profiles for quick lookup
   await supabase
@@ -148,15 +151,16 @@ export async function updateNotifyChannels(
   }
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr) return { ok: false, error: authErr.message };
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  const { error } = await supabase
+  const { error: updateErr } = await supabase
     .from("profiles")
     .update({ notify_channels: parsed.data })
     .eq("id", user.id);
 
-  if (error) return { ok: false, error: error.message };
+  if (updateErr) return { ok: false, error: updateErr.message };
 
   revalidatePath("/profile");
   return { ok: true };
@@ -174,15 +178,16 @@ export async function updateAvatar(publicUrl: string): Promise<ActionResult> {
     return { ok: false, error: "invalid_url" };
   }
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr) return { ok: false, error: authErr.message };
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  const { error } = await supabase
+  const { error: updateErr } = await supabase
     .from("profiles")
     .update({ avatar_url: publicUrl })
     .eq("id", user.id);
 
-  if (error) return { ok: false, error: error.message };
+  if (updateErr) return { ok: false, error: updateErr.message };
 
   revalidatePath("/profile");
   revalidatePath("/dashboard");
@@ -208,15 +213,17 @@ export async function completeProfile(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr) return { ok: false, error: authErr.message };
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  const { data: existing } = await supabase
+  const { data: existing, error: existingErr } = await supabase
     .from("profiles")
     .select("status, account_type")
     .eq("id", user.id)
     .maybeSingle<{ status: "incomplete" | "active" | "suspended"; account_type: "personal" | "juristic" }>();
 
+  if (existingErr) return { ok: false, error: existingErr.message };
   if (!existing) return { ok: false, error: "profile_not_found" };
   if (existing.status === "suspended") return { ok: false, error: "account_suspended" };
   // Juristic must use the 3-step register flow — guard at server even if
@@ -228,7 +235,7 @@ export async function completeProfile(
   // V-G4.1 — accept the currently-active TOS version (DB-driven with
   // hardcoded fallback). Same behavior as TOS gate.
   const activeTos = await getActiveTosVersion("all");
-  const { error } = await supabase
+  const { error: updateErr } = await supabase
     .from("profiles")
     .update({
       first_name:           d.first_name,
@@ -242,11 +249,11 @@ export async function completeProfile(
     })
     .eq("id", user.id);
 
-  if (error) {
-    if (error.message?.includes("schema cache") || error.message?.includes("tos_accepted")) {
+  if (updateErr) {
+    if (updateErr.message?.includes("schema cache") || updateErr.message?.includes("tos_accepted")) {
       return { ok: false, error: "ระบบยังไม่พร้อม — โปรดให้แอดมินรัน migration 0006_tos_acceptance.sql ก่อน" };
     }
-    return { ok: false, error: error.message };
+    return { ok: false, error: updateErr.message };
   }
 
   revalidatePath("/", "layout");
@@ -387,7 +394,7 @@ export async function checkEmailAvailability(
   if (ownerId) {
     // Look up the caller's own email to exclude their legacy row (if any).
     // Cheap extra query but only on the profile-edit hot path.
-    const { data: ownProfile } = await admin
+    const { data: ownProfile, error: ownProfileErr } = await admin
       .from("profiles")
       .select("email")
       .eq("id", ownerId)
@@ -457,7 +464,7 @@ export async function checkPhoneAvailability(
     .neq("userStatus", "0")
     .limit(1);
   if (ownerId) {
-    const { data: ownProfile } = await admin
+    const { data: ownProfile, error: ownProfileErr } = await admin
       .from("profiles")
       .select("phone")
       .eq("id", ownerId)

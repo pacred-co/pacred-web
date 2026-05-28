@@ -68,7 +68,7 @@ export async function bulkTransferCustomersToSalesRep(
     // Validate target rep up-front (single check, not per row) — same guard
     // as the existing bulk path. Saves N round-trips when the target is wrong.
     if (d.new_sales_admin_id) {
-      const { data: target } = await admin
+      const { data: target, error: targetErr } = await admin
         .from("admins")
         .select("profile_id, role, is_active")
         .eq("profile_id", d.new_sales_admin_id)
@@ -83,7 +83,7 @@ export async function bulkTransferCustomersToSalesRep(
     // caller. A super-admin bypasses this. We resolve the caller's
     // super-status by re-checking the admins table — `withAdmin` already
     // gated entry but didn't surface the role set into the action body.
-    const { data: callerRoles } = await admin
+    const { data: callerRoles, error: callerRolesErr } = await admin
       .from("admins")
       .select("role")
       .eq("profile_id", adminId)
@@ -95,7 +95,7 @@ export async function bulkTransferCustomersToSalesRep(
     // "already same rep" pre-check (the per-customer action will reject
     // these with "same_rep_no_change", but counting them on the failed
     // list before calling makes the summary cleaner).
-    const { data: currentRows } = await admin
+    const { data: currentRows, error: currentRowsErr } = await admin
       .from("profiles")
       .select("id, sales_admin_id")
       .in("id", uniqueIds);

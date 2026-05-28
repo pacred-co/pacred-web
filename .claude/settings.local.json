@@ -206,7 +206,9 @@
       "Bash(git -C ../../../ -c color.ui=never push origin Poom-pacred)",
       "Bash(wmic process *)",
       "Bash(curl -s -I \"http://localhost:3000/admin/customers/PR10691\")",
-      "Bash(curl -s -o /tmp/curl_out.html -w \"%{http_code}\\\\n\" \"http://localhost:3000/en/admin/customers/PR10691\")"
+      "Bash(curl -s -o /tmp/curl_out.html -w \"%{http_code}\\\\n\" \"http://localhost:3000/en/admin/customers/PR10691\")",
+      "Bash(pnpm build *)",
+      "Bash(NODE_OPTIONS=\"--max-old-space-size=8192\" pnpm build)"
     ]
   }
 }

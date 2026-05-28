@@ -85,12 +85,12 @@ export async function GET(
 
   // ── 1. Auth + row visibility via RLS ──
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
   }
 
-  const { data: row } = await supabase
+  const { data: row, error: rowErr } = await supabase
     .from("commission_withdrawals")
     .select(`
       id, withdrawal_no, status, earner_admin_id, role_kind, title,
@@ -108,13 +108,13 @@ export async function GET(
   // ── 2. Related data via admin client (row visibility already proved access) ──
   const admin = createAdminClient();
 
-  const { data: earnerRaw } = await admin
+  const { data: earnerRaw, error: earnerRawErr } = await admin
     .from("profiles")
     .select("member_code, first_name, last_name")
     .eq("id", row.earner_admin_id)
     .maybeSingle<EarnerProfile>();
 
-  const { data: itemsRaw } = await admin
+  const { data: itemsRaw, error: itemsRawErr } = await admin
     .from("commission_withdrawal_items")
     .select(`
       id, included_amount_thb,

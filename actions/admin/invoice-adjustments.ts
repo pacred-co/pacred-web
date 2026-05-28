@@ -60,7 +60,7 @@ async function resolveInvoiceTarget(
   | { ok: false; error: string }
 > {
   if (target_type === "forwarder") {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("forwarders")
       .select("profile_id, f_no")
       .eq("f_no", target_id)
@@ -78,7 +78,7 @@ async function resolveInvoiceTarget(
     };
   }
   if (target_type === "service_order") {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("service_orders")
       .select("profile_id, h_no")
       .eq("h_no", target_id)
@@ -96,7 +96,7 @@ async function resolveInvoiceTarget(
     };
   }
   // freight_invoice — target_id is the uuid
-  const { data } = await admin
+  const { data, error } = await admin
     .from("freight_invoices")
     .select("id, profile_id")
     .eq("id", target_id)
@@ -259,7 +259,7 @@ export async function reverseInvoiceAdjustment(
   return withAdmin(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: adj } = await admin
+    const { data: adj, error: adjErr } = await admin
       .from("invoice_adjustments")
       .select("id, target_type, target_id, profile_id, amount_thb, status")
       .eq("id", d.id)

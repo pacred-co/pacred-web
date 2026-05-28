@@ -63,7 +63,7 @@ export default async function RegisterPage({ searchParams }: PageProps) {
     // Check if Step 2 (corporate info) was saved. If yes → jump to Step 3.
     // If no → Step 2.
     const supabase = await createClient();
-    const { data: corp } = await supabase
+    const { data: corp, error: corpErr } = await supabase
       .from("corporate")
       .select("tax_id, company_name, company_address")
       .eq("profile_id", data.user.id)

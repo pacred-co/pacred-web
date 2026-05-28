@@ -206,7 +206,7 @@ export default async function CartPage() {
   // cart.php L154-161: when userShipBy is blank, fall back to the
   //   customer's most-recent tb_forwarder.fShipBy (ORDER BY ID DESC).
   if (userShipBy === "") {
-    const { data: fwdRow } = await admin
+    const { data: fwdRow, error: fwdRowErr } = await admin
       .from("tb_forwarder")
       .select("fshipby")
       .eq("userid", userID)
@@ -234,7 +234,7 @@ export default async function CartPage() {
   const shipByByAddress: Record<string, ShipByOption[]> = {};
   const maomaoByAddress: Record<string, boolean> = {};
   if (countCart > 0) {
-    const { data: allAddrRows } = await admin
+    const { data: allAddrRows, error: allAddrRowsErr } = await admin
       .from("tb_address")
       .select(
         "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel, addresstel2",
@@ -270,7 +270,7 @@ export default async function CartPage() {
   }
 
   // ── Cart rows, grouped provider → shop (cart.php L522-586) ───
-  const { data: cartRowsData } = await admin
+  const { data: cartRowsData, error: cartRowsDataErr } = await admin
     .from("tb_cart")
     .select(
       "id, cdetails, curl, ctitle, cnameshop, cprovider, cimages, cprice, camount, ccolor, csize, userid",
@@ -646,7 +646,7 @@ async function resolveAddressBlock(
 > {
   // cart.php L441-442: SELECT addressID FROM tb_address
   //   WHERE userID=… AND addressStatus='1'
-  const { data: anyAddr } = await admin
+  const { data: anyAddr, error: anyAddrErr } = await admin
     .from("tb_address")
     .select("addressid")
     .eq("userid", userID)
@@ -655,7 +655,7 @@ async function resolveAddressBlock(
 
   if (hasAddress) {
     // cart.php L445-446: the row matching $userAddressID.
-    const { data: matchRow } = await admin
+    const { data: matchRow, error: matchRowErr } = await admin
       .from("tb_address")
       .select(
         "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel, addresstel2",
@@ -679,13 +679,13 @@ async function resolveAddressBlock(
 
     // cart.php L454-465: the tb_address_main ⋈ tb_address fallback.
     if (userAddressID !== "PCS") {
-      const { data: mainRow } = await admin
+      const { data: mainRow, error: mainRowErr } = await admin
         .from("tb_address_main")
         .select("addressid")
         .eq("userid", userID)
         .maybeSingle<{ addressid: number }>();
       if (mainRow) {
-        const { data: mainAddr } = await admin
+        const { data: mainAddr, error: mainAddrErr } = await admin
           .from("tb_address")
           .select(
             "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel, addresstel2",

@@ -342,7 +342,7 @@ export async function markUnmatched(
   return withAdmin<{ wallet_tx_id: string }>(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: tx } = await admin
+    const { data: tx, error: txErr } = await admin
       .from("wallet_transactions")
       .select("id, profile_id, amount, kind, status, reconciliation_status")
       .eq("id", parsed.data.wallet_tx_id)

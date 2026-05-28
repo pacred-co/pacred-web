@@ -475,13 +475,13 @@ export default async function ServiceImportDetailPage({
   // ── forwarder.php L976-997 / L1953-2011 — address <select> options ──
   // Used by the inline "แก้ไข ที่อยู่จัดส่ง" form (update_fAddress POST).
   // Main address first (tb_address ⋈ tb_address_main), then the rest.
-  const { data: mainAddrRow } = await admin
+  const { data: mainAddrRow, error: mainAddrRowErr } = await admin
     .from("tb_address_main")
     .select("addressid")
     .eq("userid", memberCode)
     .maybeSingle<{ addressid: number | string | null }>();
   const mainAddressId = mainAddrRow?.addressid ?? null;
-  const { data: allAddrs } = await admin
+  const { data: allAddrs, error: allAddrsErr } = await admin
     .from("tb_address")
     .select(
       "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode",

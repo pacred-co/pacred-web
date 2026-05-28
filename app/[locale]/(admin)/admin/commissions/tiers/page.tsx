@@ -47,7 +47,7 @@ export default async function AdminCommissionTiersPage() {
   await requireAdmin(["super", "accounting"]);
 
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("commission_tiers")
     .select(`
       id, role_kind, service_kind, tier_name, rate_pct, flat_thb, min_base_thb,

@@ -199,7 +199,7 @@ async function upsertContainerWithManifest(
   }
 
   // 3. Fetch container id (after upsert) for the per-shipment loop
-  const { data: containerRow } = await admin
+  const { data: containerRow, error: containerRowErr } = await admin
     .from("cargo_containers")
     .select("id")
     .eq("code", c.code)
@@ -243,7 +243,7 @@ async function resolveProfileId(
 ): Promise<string | null> {
   const code = customerRef.trim().toUpperCase();
   if (!code) return null;
-  const { data } = await admin
+  const { data, error } = await admin
     .from("profiles")
     .select("id")
     .eq("member_code", code)
@@ -333,7 +333,7 @@ async function appendTrackingIdempotent(
   if (events.length === 0) return 0;
 
   // Pull existing events for this shipment to dedupe against in-memory.
-  const { data: existingRaw } = await admin
+  const { data: existingRaw, error: existingRawErr } = await admin
     .from("cargo_shipment_tracking")
     .select("scanned_at, event")
     .eq("cargo_shipment_id", shipmentId);

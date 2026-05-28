@@ -126,7 +126,7 @@ export default async function ProfilePage() {
   // from it. profile.php's modal SELECT (L144) additionally reads
   // userTel/userSex/userBirthday/userFacebook/userLineID — all on the
   // same tb_users row, so one read covers both.
-  const { data: userRow } = await admin
+  const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
     .select(
       "username, userlastname, useremail, usertel, userpicture, usersex, userbirthday, userfacebook, userlineid",
@@ -182,7 +182,7 @@ export default async function ProfilePage() {
   let fullAddress = "";
   const mainAddressId = addressMainRes.data?.addressid ?? null;
   if (mainAddressId != null) {
-    const { data: addrRow } = await admin
+    const { data: addrRow, error: addrRowErr } = await admin
       .from("tb_address")
       .select(
         "addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode",
