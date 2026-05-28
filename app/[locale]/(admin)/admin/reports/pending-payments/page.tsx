@@ -73,10 +73,10 @@ type RawWalletHs = {
 };
 
 type RawUser = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
 };
 
 type Row = RawWalletHs & {
@@ -167,12 +167,12 @@ export default async function PendingPaymentsReport({
   if (useridList.length > 0) {
     const { data: usersRaw, error: usersErr } = await admin
       .from("tb_users")
-      .select("userid,username,userlastname,usertel")
-      .in("userid", useridList);
+      .select("userID,userName,userLastName,userTel")
+      .in("userID", useridList);
     if (usersErr) {
       console.error(`[tb_users join] failed`, { code: usersErr.code, message: usersErr.message });
     } else {
-      userMap = new Map((usersRaw ?? []).map((u) => [u.userid, u as RawUser]));
+      userMap = new Map((usersRaw ?? []).map((u) => [u.userID, u as RawUser]));
     }
   }
 
@@ -183,8 +183,8 @@ export default async function PendingPaymentsReport({
       customer: r.userid
         ? {
             userid: r.userid,
-            name: u ? `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() : "",
-            phone: u?.usertel ?? "",
+            name: u ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() : "",
+            phone: u?.userTel ?? "",
           }
         : null,
     };

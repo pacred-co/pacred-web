@@ -96,10 +96,10 @@ type RawPayment = {
 };
 
 type RawUser = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
 };
 
 type Row = RawPayment & {
@@ -191,12 +191,12 @@ export default async function AdminReportPaymentPage({
   if (userIds.length > 0) {
     const { data: usersData, error: usersErr } = await admin
       .from("tb_users")
-      .select("userid, username, userlastname, usertel")
-      .in("userid", userIds);
+      .select("userID, userName, userLastName, userTel")
+      .in("userID", userIds);
     if (usersErr) {
       console.error(`[tb_users join] failed`, { code: usersErr.code, message: usersErr.message });
     } else {
-      for (const u of (usersData ?? []) as RawUser[]) userMap.set(u.userid, u);
+      for (const u of (usersData ?? []) as RawUser[]) userMap.set(u.userID, u);
     }
   }
 
@@ -206,8 +206,8 @@ export default async function AdminReportPaymentPage({
     return {
       ...p,
       customer: {
-        name: u ? `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() : "",
-        phone: u?.usertel ?? "",
+        name: u ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() : "",
+        phone: u?.userTel ?? "",
       },
     };
   });

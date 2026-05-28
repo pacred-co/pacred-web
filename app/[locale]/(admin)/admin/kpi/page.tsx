@@ -171,13 +171,13 @@ export default async function AdminKpiPage() {
       .gte("fdatestatus4", monthStart)
       .limit(50_000),
 
-    // Signups — legacy tb_users.userregistered. ~8,898 customers ported
-    // (vs ~3 rows on profiles). No `useractive`/`userstatus` filter — count
+    // Signups — legacy tb_users.userRegistered. ~8,898 customers ported
+    // (vs ~3 rows on profiles). No `userActive`/`userStatus` filter — count
     // all registrations in the window for consistency with admin/page.tsx.
-    admin.from("tb_users").select("id", { count: "exact", head: true }).gte("userregistered", monthStart),
-    admin.from("tb_users").select("id", { count: "exact", head: true }).gte("userregistered", todayStart),
-    admin.from("tb_users").select("id", { count: "exact", head: true }).gte("userregistered", prevMonthStart).lt("userregistered", prevMonthEnd),
-    admin.from("tb_users").select("id", { count: "exact", head: true }),
+    admin.from("tb_users").select("ID", { count: "exact", head: true }).gte("userRegistered", monthStart),
+    admin.from("tb_users").select("ID", { count: "exact", head: true }).gte("userRegistered", todayStart),
+    admin.from("tb_users").select("ID", { count: "exact", head: true }).gte("userRegistered", prevMonthStart).lt("userRegistered", prevMonthEnd),
+    admin.from("tb_users").select("ID", { count: "exact", head: true }),
 
     // Wallet top-up volume — legacy tb_wallet_hs. type='1' (เติมเงิน) +
     // status='2' (สำเร็จ). Date column = `date` (the work date), matches

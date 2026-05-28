@@ -28,18 +28,18 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { Link } from "@/i18n/navigation";
 
 type URow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usercompany: string | null;
-  useremail: string | null;
-  usertel: string | null;
-  useractive: string | null;
-  userregistered: string | null;
-  userlastlogin: string | null;   // ← correct column (legacy schema)
-  adminidsale: string | null;
-  usernote: string | null;
-  userpicture: string | null;     // Wave 13: legacy avatar filename (col is `userpicture` not `userimage` — fix Wave 19 BUG#1 2026-05-26)
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userCompany: string | null;
+  userEmail: string | null;
+  userTel: string | null;
+  userActive: string | null;
+  userRegistered: string | null;
+  userLastLogin: string | null;   // ← correct column (legacy schema)
+  adminIDSale: string | null;
+  userNote: string | null;
+  userPicture: string | null;     // Wave 13: legacy avatar filename (col is `userPicture` not `userimage` — fix Wave 19 BUG#1 2026-05-26)
 };
 
 type FRow = {
@@ -117,9 +117,9 @@ export async function renderLegacyCustomerView(id: string) {
   const { data: userRaw, error: userErr } = await admin
     .from("tb_users")
     .select(
-      "userid,username,userlastname,usercompany,useremail,usertel,useractive,userregistered,userlastlogin,adminidsale,usernote,userpicture",
+      "userID,userName,userLastName,userCompany,userEmail,userTel,userActive,userRegistered,userLastLogin,adminIDSale,userNote,userPicture",
     )
-    .eq("userid", id)
+    .eq("userID", id)
     .maybeSingle();
   if (userErr) {
     console.error("[legacy-view] tb_users query failed", {
@@ -140,7 +140,7 @@ export async function renderLegacyCustomerView(id: string) {
   // Bare filenames live under `member-docs/legacy-images/users/` after
   // backfill 06. Empty / null → null → header renders the initial-letter
   // fallback instead of the avatar.
-  const userImageUrl = await resolveLegacyUrl(u.userpicture, "profile");
+  const userImageUrl = await resolveLegacyUrl(u.userPicture, "profile");
 
   // Wallet balance + corporate + addresses + recent activity (parallel).
   // Wave 20 P0-1 (audit P0-1 · 2026-05-25 ค่ำ): the four extra reads (corp,
@@ -157,40 +157,40 @@ export async function renderLegacyCustomerView(id: string) {
     shopRes,
     yuanRes,
   ] = await Promise.all([
-    admin.from("tb_wallet").select("wallettotal").eq("userid", u.userid).maybeSingle(),
+    admin.from("tb_wallet").select("wallettotal").eq("userid", u.userID).maybeSingle(),
     admin
       .from("tb_corporate")
       .select("id, corporatename, corporatenumber, corporateaddress, corporatestatus")
-      .eq("userid", u.userid)
+      .eq("userid", u.userID)
       .maybeSingle(),
     admin
       .from("tb_address")
       .select("addressid, addressname, addresslastname, addresstel, addresstel2, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addressnote")
-      .eq("userid", u.userid)
+      .eq("userid", u.userID)
       .eq("addressstatus", "1")
       .order("addressid", { ascending: false })
       .limit(20),
     admin
       .from("tb_address_main")
       .select("addressid")
-      .eq("userid", u.userid)
+      .eq("userid", u.userID)
       .maybeSingle(),
     admin
       .from("tb_forwarder")
       .select("id,fdate,fidorco,fcabinetnumber,fstatus,ftotalprice")
-      .eq("userid", u.userid)
+      .eq("userid", u.userID)
       .order("fdate", { ascending: false })
       .limit(10),
     admin
       .from("tb_header_order")
       .select("id,hdate,hno,hstatus,htotalpriceuser,htitle")
-      .eq("userid", u.userid)
+      .eq("userid", u.userID)
       .order("hdate", { ascending: false })
       .limit(10),
     admin
       .from("tb_payment")
       .select("id,paydate,paystatus,payyuan,paythb")
-      .eq("userid", u.userid)
+      .eq("userid", u.userID)
       .order("paydate", { ascending: false })
       .limit(10),
   ]);
@@ -207,7 +207,7 @@ export async function renderLegacyCustomerView(id: string) {
   ] as const) {
     if (res.error) {
       console.error("[legacy-view] query failed", {
-        userid: u.userid,
+        userid: u.userID,
         table: label,
         code: res.error.code,
         message: res.error.message,
@@ -215,7 +215,7 @@ export async function renderLegacyCustomerView(id: string) {
         hint: res.error.hint,
       });
       throw new Error(
-        `legacy-view: failed to load ${label} for ${u.userid} — ${res.error.code ?? "unknown"}: ${res.error.message}`,
+        `legacy-view: failed to load ${label} for ${u.userID} — ${res.error.code ?? "unknown"}: ${res.error.message}`,
       );
     }
   }
@@ -227,9 +227,9 @@ export async function renderLegacyCustomerView(id: string) {
   const forwarderRows = forwarderRes.data;
   const shopRows = shopRes.data;
   const yuanRows = yuanRes.data;
-  const isJuristic = u.usercompany === "1";
-  const fullName = `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || "—";
-  const active = u.useractive ?? "1";
+  const isJuristic = u.userCompany === "1";
+  const fullName = `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—";
+  const active = u.userActive ?? "1";
   const statusCfg = STATUS_ACTIVE_CFG[active] ?? {
     label: `status ${active}`,
     cls: "bg-gray-100 text-gray-600 border-gray-200",
@@ -254,7 +254,7 @@ export async function renderLegacyCustomerView(id: string) {
             />
           ) : (
             <div className="w-14 h-14 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-bold text-lg border border-border shrink-0">
-              {(u.username ?? u.userid).trim().charAt(0).toUpperCase() || "?"}
+              {(u.userName ?? u.userID).trim().charAt(0).toUpperCase() || "?"}
             </div>
           )}
           <div>
@@ -262,13 +262,13 @@ export async function renderLegacyCustomerView(id: string) {
               ADMIN · ลูกค้า {isJuristic ? "นิติบุคคล" : "บุคคล"}
             </p>
             <div className="flex items-center gap-3 mt-1 flex-wrap">
-              <h1 className="text-2xl font-bold font-mono">{u.userid}</h1>
+              <h1 className="text-2xl font-bold font-mono">{u.userID}</h1>
               <span className={`rounded-full border px-3 py-1 text-xs font-medium ${statusCfg.cls}`}>
                 {statusCfg.label}
               </span>
-              {u.adminidsale ? (
+              {u.adminIDSale ? (
                 <span className="rounded-full border border-border bg-surface-alt px-3 py-1 text-xs font-mono">
-                  ดูแลโดย {u.adminidsale}
+                  ดูแลโดย {u.adminIDSale}
                 </span>
               ) : null}
             </div>
@@ -286,17 +286,17 @@ export async function renderLegacyCustomerView(id: string) {
       <div className="grid md:grid-cols-3 gap-4">
         <div className="md:col-span-2 rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3 text-sm">
           <KV label="ชื่อ" value={fullName} />
-          <KV label="โทรศัพท์" value={u.usertel ?? "-"} />
-          <KV label="อีเมล" value={u.useremail ?? "-"} />
+          <KV label="โทรศัพท์" value={u.userTel ?? "-"} />
+          <KV label="อีเมล" value={u.userEmail ?? "-"} />
           <KV
             label="สมัครเมื่อ"
-            value={u.userregistered ? new Date(u.userregistered).toLocaleString("th-TH") : "-"}
+            value={u.userRegistered ? new Date(u.userRegistered).toLocaleString("th-TH") : "-"}
           />
           <KV
             label="ล่าสุดล็อกอิน"
-            value={u.userlastlogin ? new Date(u.userlastlogin).toLocaleString("th-TH") : "-"}
+            value={u.userLastLogin ? new Date(u.userLastLogin).toLocaleString("th-TH") : "-"}
           />
-          {u.usernote ? <KV label="หมายเหตุ" value={u.usernote} /> : null}
+          {u.userNote ? <KV label="หมายเหตุ" value={u.userNote} /> : null}
         </div>
         <div className="rounded-2xl border border-border bg-primary-50 dark:bg-surface p-5 text-sm">
           <p className="text-xs font-semibold text-muted">ยอดกระเป๋า (THB)</p>
@@ -304,7 +304,7 @@ export async function renderLegacyCustomerView(id: string) {
             ฿{Number(wallet?.wallettotal ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </p>
           <Link
-            href={`/admin/wallet?userid=${encodeURIComponent(u.userid)}`}
+            href={`/admin/wallet?userid=${encodeURIComponent(u.userID)}`}
             className="mt-3 inline-block text-xs text-primary-600 hover:underline"
           >
             ดูประวัติ wallet →
@@ -387,7 +387,7 @@ export async function renderLegacyCustomerView(id: string) {
       </Section>
 
       {/* Recent forwarders */}
-      <Section title={`ฝากนำเข้าล่าสุด (${fws.length})`} viewAllHref={`/admin/forwarders?focus=search&q=${u.userid}`}>
+      <Section title={`ฝากนำเข้าล่าสุด (${fws.length})`} viewAllHref={`/admin/forwarders?focus=search&q=${u.userID}`}>
         {fws.length === 0 ? (
           <Empty>ยังไม่มีรายการฝากนำเข้า</Empty>
         ) : (
@@ -431,7 +431,7 @@ export async function renderLegacyCustomerView(id: string) {
       </Section>
 
       {/* Recent shop orders */}
-      <Section title={`ฝากสั่งล่าสุด (${hos.length})`} viewAllHref={`/admin/service-orders?q=${u.userid}`}>
+      <Section title={`ฝากสั่งล่าสุด (${hos.length})`} viewAllHref={`/admin/service-orders?q=${u.userID}`}>
         {hos.length === 0 ? (
           <Empty>ยังไม่มีรายการฝากสั่ง</Empty>
         ) : (
@@ -479,7 +479,7 @@ export async function renderLegacyCustomerView(id: string) {
       </Section>
 
       {/* Recent yuan payments */}
-      <Section title={`ฝากโอนหยวนล่าสุด (${pys.length})`} viewAllHref={`/admin/yuan-payments?q=${u.userid}`}>
+      <Section title={`ฝากโอนหยวนล่าสุด (${pys.length})`} viewAllHref={`/admin/yuan-payments?q=${u.userID}`}>
         {pys.length === 0 ? (
           <Empty>ยังไม่มีรายการฝากโอน</Empty>
         ) : (

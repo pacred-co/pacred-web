@@ -153,9 +153,9 @@ type RawWalletHs = {
 };
 
 type RawUser = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
 };
 
 type Row = RawHeaderOrder & {
@@ -275,13 +275,13 @@ export default async function AdminReportShopsProfitPayPage({
   if (userIds.length > 0) {
     const { data: usersData, error: usersErr } = await admin
       .from("tb_users")
-      .select("userid, username, userlastname")
-      .in("userid", userIds);
+      .select("userID, userName, userLastName")
+      .in("userID", userIds);
     if (usersErr) {
       // Soft-fail per §0c — stale customer name shouldn't 500 the report.
       console.error(`[tb_users join] soft-fail`, { code: usersErr.code, message: usersErr.message });
     } else {
-      for (const u of (usersData ?? []) as unknown as RawUser[]) userMap.set(u.userid, u);
+      for (const u of (usersData ?? []) as unknown as RawUser[]) userMap.set(u.userID, u);
     }
   }
 
@@ -307,7 +307,7 @@ export default async function AdminReportShopsProfitPayPage({
       pricePCS:  hasCost ? pricePCS : NaN,
       profit,
       vat,
-      customer:  u ? `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() : "",
+      customer:  u ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() : "",
     };
   });
 
