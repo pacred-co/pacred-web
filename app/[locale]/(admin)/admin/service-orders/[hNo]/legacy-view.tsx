@@ -81,11 +81,11 @@ type HRow = {
   crate: string | null;
 };
 type URow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
-  useremail: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
+  userEmail: string | null;
 };
 
 export async function renderLegacyServiceOrderView(hno: string) {
@@ -106,8 +106,8 @@ export async function renderLegacyServiceOrderView(hno: string) {
 
   const { data: userRaw, error: userRawErr } = await admin
     .from("tb_users")
-    .select("userid,username,userlastname,usertel,useremail")
-    .eq("userid", r.userid)
+    .select("userID,userName,userLastName,userTel,userEmail")
+    .eq("userID", r.userid)
     .maybeSingle();
   if (userRawErr) {
     console.error(`[tb_users list] failed`, { code: userRawErr.code, message: userRawErr.message });
@@ -129,7 +129,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
   }
   const spawnRows = buildSpawnRows(trackingItems ?? []);
 
-  const customerName = `${u?.username ?? ""} ${u?.userlastname ?? ""}`.trim() || "—";
+  const customerName = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || "—";
   const status = r.hstatus ?? "1";
   const transport = r.htransporttype ?? "";
   const addr = [
@@ -173,7 +173,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
 
       <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3 text-sm">
         <KV label="ลูกค้า" value={`${customerName} (${r.userid})`} />
-        <KV label="โทร · อีเมล" value={`${u?.usertel ?? "-"} · ${u?.useremail ?? "-"}`} />
+        <KV label="โทร · อีเมล" value={`${u?.userTel ?? "-"} · ${u?.userEmail ?? "-"}`} />
         <KV label="สินค้า" value={r.htitle ?? "-"} />
         <KV label="จำนวน" value={String(r.hcount ?? 0)} mono />
         <KV

@@ -48,10 +48,10 @@ type RawForwarder = {
 };
 
 type UserLite = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
 };
 
 export default async function ForwarderNotesPage({
@@ -100,12 +100,12 @@ export default async function ForwarderNotesPage({
   if (useridList.length > 0) {
     const { data: usersRaw, error: usersErr } = await admin
       .from("tb_users")
-      .select("userid, username, userlastname, usertel")
-      .in("userid", useridList);
+      .select("userID, userName, userLastName, userTel")
+      .in("userID", useridList);
     if (usersErr) {
       console.error(`[tb_users notes-join] failed`, { code: usersErr.code, message: usersErr.message });
     } else {
-      userMap = Object.fromEntries(((usersRaw ?? []) as UserLite[]).map((u) => [u.userid, u]));
+      userMap = Object.fromEntries(((usersRaw ?? []) as UserLite[]).map((u) => [u.userID, u]));
     }
   }
 
@@ -171,7 +171,7 @@ export default async function ForwarderNotesPage({
                 {rows.map((r) => {
                   const updated = r.fdateadminstatus ?? r.fdate;
                   const u = userMap[r.userid];
-                  const customerName = u ? `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() : "";
+                  const customerName = u ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() : "";
                   const displayFNo = r.fidorco ?? `#${r.id}`;
                   return (
                     <tr key={r.id} className="border-t border-border align-top">
@@ -182,7 +182,7 @@ export default async function ForwarderNotesPage({
                       <td className="px-4 py-3 text-xs">
                         <div className="font-mono font-semibold">{r.userid}</div>
                         <div className="text-muted">{customerName || "—"}</div>
-                        {u?.usertel && <div className="text-[10px] text-muted">{u.usertel}</div>}
+                        {u?.userTel && <div className="text-[10px] text-muted">{u.userTel}</div>}
                       </td>
                       <td className="px-4 py-3 text-xs">{legacyForwarderStatusThai(r.fstatus)}</td>
                       <td className="px-4 py-3 text-right font-mono text-xs">

@@ -387,13 +387,13 @@ export default async function AdminForwardersWarehouseHistoryPage({
   if (userIds.length > 0) {
     const { data: usersRows, error: usersErr } = await admin
       .from("tb_users")
-      .select("userid, coid")
-      .in("userid", userIds);
+      .select("userID, coID")
+      .in("userID", userIds);
     if (usersErr) {
       console.error(`[tb_users list] failed`, { code: usersErr.code, message: usersErr.message });
     }
-    for (const r of (usersRows ?? []) as Array<{ userid: string; coid: string | null }>) {
-      coidByUserId.set(r.userid, r.coid);
+    for (const r of (usersRows ?? []) as Array<{ userID: string; coID: string | null }>) {
+      coidByUserId.set(r.userID, r.coID);
     }
   }
 

@@ -123,15 +123,15 @@ export default async function AdminServiceOrdersPage({ searchParams }: { searchP
   if (useridList.length > 0) {
     const { data: usersRaw, error: usersErr } = await admin
       .from("tb_users")
-      .select("userid, username, userlastname, usertel")
-      .in("userid", useridList);
+      .select("userID, userName, userLastName, userTel")
+      .in("userID", useridList);
     if (usersErr) {
       console.error(`[tb_users list] failed`, { code: usersErr.code, message: usersErr.message });
     } else {
       userMap = Object.fromEntries(
         (usersRaw ?? []).map((u) => [
-          u.userid,
-          { username: u.username, userlastname: u.userlastname, usertel: u.usertel },
+          u.userID,
+          { username: u.userName, userlastname: u.userLastName, usertel: u.userTel },
         ]),
       );
     }

@@ -85,9 +85,9 @@ type FwRow = {
   userid: string | null;
 };
 type URow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
 };
 
 /**
@@ -199,12 +199,12 @@ export default async function CntHsDetailPage({
   if (userIds.length > 0) {
     const { data: usersRaw, error: usersRawErr } = await admin
       .from("tb_users")
-      .select("userid,username,userlastname")
-      .in("userid", userIds);
+      .select("userID,userName,userLastName")
+      .in("userID", userIds);
     if (usersRawErr) {
       console.error(`[tb_users list] failed`, { code: usersRawErr.code, message: usersRawErr.message });
     }
-    userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userid, u]));
+    userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
   }
 
   // Group forwarders by cabinet for the table layout
@@ -455,7 +455,7 @@ export default async function CntHsDetailPage({
                             href={`/admin/customers/${encodeURIComponent(f.userid)}`}
                             className="text-primary-600 hover:underline"
                           >
-                            {`${u?.username ?? ""} ${u?.userlastname ?? ""}`.trim() || f.userid}
+                            {`${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || f.userid}
                           </Link>
                         ) : (
                           "—"

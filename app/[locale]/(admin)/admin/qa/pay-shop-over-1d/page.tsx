@@ -46,10 +46,10 @@ type HRow = {
 };
 
 type URow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
 };
 
 /** ms since epoch · helper because Next 16 / React 19 `react-hooks/purity`
@@ -89,12 +89,12 @@ export default async function AdminQaPayShopOver1dPage() {
   if (userIds.length > 0) {
     const { data: usersRaw, error: usersRawErr } = await admin
       .from("tb_users")
-      .select("userid,username,userlastname,usertel")
-      .in("userid", userIds);
+      .select("userID,userName,userLastName,userTel")
+      .in("userID", userIds);
     if (usersRawErr) {
       console.error(`[tb_users list] failed`, { code: usersRawErr.code, message: usersRawErr.message });
     }
-    userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userid, u]));
+    userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
   }
 
   // Header breach count — covers the full SLA window (not just the 200 we fetch).
@@ -160,7 +160,7 @@ export default async function AdminQaPayShopOver1dPage() {
                 {rows.map((r) => {
                   const u = r.userid ? userMap.get(r.userid) : undefined;
                   const customerName = u
-                    ? `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || r.userid
+                    ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || r.userid
                     : r.userid ?? "—";
                   const ageDays = daysSince(r.hdate);
                   return (
@@ -180,7 +180,7 @@ export default async function AdminQaPayShopOver1dPage() {
                       <td className="px-3 py-3 text-xs">
                         <div className="font-mono">{r.userid ?? "—"}</div>
                         <div>{customerName}</div>
-                        {u?.usertel ? <div className="text-muted">{u.usertel}</div> : null}
+                        {u?.userTel ? <div className="text-muted">{u.userTel}</div> : null}
                       </td>
                       <td className="px-3 py-3 text-xs whitespace-nowrap">
                         {r.hdate
