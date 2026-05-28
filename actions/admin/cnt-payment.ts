@@ -75,7 +75,12 @@ function parseCabinetNumbersCsv(raw: string): string[] {
   return Array.from(new Set(tokens));
 }
 
-export const createCntPaymentSchema = z.object({
+// Schema is INTERNAL only — Next 16 `"use server"` files may only
+// export async functions, so a Zod-object export would crash the
+// route at request time ("A 'use server' file can only export async
+// functions, found object"). Type-only exports (CreateCntPaymentInput
+// below) are erased at runtime and remain safe.
+const createCntPaymentSchema = z.object({
   /** Cabinet numbers (`tb_forwarder.fcabinetnumber`) to pay for.
    *  Form callers may pass the raw comma-CSV; programmatic callers
    *  pass a clean string[]. */
