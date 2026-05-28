@@ -28,8 +28,14 @@ import {
   mapContainerClosedArray,
   mapSackInfoSingle,
   extractContainerClosedTracks,
+  extractImportTrackStatusDates,
+  extractContainerDetails,
+  extractSackTracks,
+  buildRawEventInput,
   type MomoInternalAdminRecord,
+  type MomoSourceEndpoint,
 } from "@/lib/integrations/momo-isolated";
+import { randomUUID } from "node:crypto";
 import { guardAdmin, errorStatus } from "../_shared";
 
 export const dynamic = "force-dynamic";
@@ -78,6 +84,36 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const me = await getCurrentUser();
 
+  // Migration 0120 — one sync_run_id groups all raw_events for this run.
+  const syncRunId = randomUUID();
+  const dateRangeStr = wantDateRange ? `${start}+${end}` : null;
+
+  // Buffer raw event rows during the run, flush at the end. Cheaper than
+  // many small inserts. Also lets us tolerate partial endpoint failures.
+  const rawEventBuffer: Array<Record<string, unknown>> = [];
+  function bufferRawEvent(endpoint: MomoSourceEndpoint, raw: unknown, sourceUrl: string | null) {
+    const ev = buildRawEventInput(endpoint, raw, {
+      sourceUrl,
+      sourceDateRange: dateRangeStr,
+      syncRunId,
+    });
+    rawEventBuffer.push({
+      source_endpoint:    ev.sourceEndpoint,
+      source_url:         ev.sourceUrl,
+      source_method:      ev.sourceMethod,
+      source_date_range:  ev.sourceDateRange,
+      momo_id:            ev.momoId,
+      momo_tracking_no:   ev.momoTrackingNo,
+      momo_container_ref: ev.momoContainerRef,
+      sack_no:            ev.sackNo,
+      cg_no:              ev.cgNo,
+      raw:                ev.raw as never,
+      raw_hash:           ev.rawHash,
+      received_at:        ev.receivedAt,
+      sync_run_id:        ev.syncRunId,
+    });
+  }
+
   const errors: SyncError[] = [];
   let importTrackCount    = 0;
   let containerClosedCount = 0;
@@ -88,10 +124,22 @@ export async function POST(request: Request) {
   // ── 1. import_track ──
   let importMapped: MomoInternalAdminRecord[] = [];
   if (wantDateRange) {
+    const itUrl = `/api/func/get/import/track/${dateRangeStr}`;
     const res = await getImportTrack(start as string, end as string);
     if (res.ok) {
       importMapped = mapImportTrackArray(res.data);
       importTrackCount = importMapped.length;
+
+      // Migration 0120 — buffer raw events for every received item.
+      // Unwrap {data:[...]} or array shape.
+      const itRawItems = Array.isArray(res.data)
+        ? res.data
+        : (res.data && typeof res.data === "object" && Array.isArray((res.data as { data?: unknown[] }).data)
+            ? (res.data as { data: unknown[] }).data
+            : []);
+      for (const item of itRawItems) {
+        bufferRawEvent("import_track", item, itUrl);
+      }
 
       const upRows = importMapped
         .filter((r) => r.trackingNo) // upsert requires the unique key
@@ -127,9 +175,10 @@ export async function POST(request: Request) {
           updated_at:          new Date().toISOString(),
         }));
       if (upRows.length > 0) {
-        const { error: upErr } = await admin
+        const { data: persisted, error: upErr } = await admin
           .from("momo_import_tracks")
-          .upsert(upRows, { onConflict: "momo_tracking_no" });
+          .upsert(upRows, { onConflict: "momo_tracking_no" })
+          .select("id, momo_tracking_no, raw");
         if (upErr) {
           failedCount += upRows.length;
           errors.push({
@@ -139,6 +188,48 @@ export async function POST(request: Request) {
           });
         } else {
           upsertedCount += upRows.length;
+
+          // Migration 0120 — explode raw.status_date into 6 rows per import_track.
+          const statusDateRows: Array<{
+            import_track_id:   string;
+            momo_tracking_no:  string;
+            status_key:        string;
+            status_value_raw:  string;
+            status_at:         string | null;
+            updated_at:        string;
+          }> = [];
+          const nowIso = new Date().toISOString();
+          for (const row of persisted ?? []) {
+            const parentId = (row as { id?: string }).id;
+            if (!parentId) continue;
+            const extracted = extractImportTrackStatusDates((row as { raw?: unknown }).raw);
+            for (const sd of extracted) {
+              statusDateRows.push({
+                import_track_id:  parentId,
+                momo_tracking_no: sd.trackingNo,
+                status_key:       sd.statusKey,
+                status_value_raw: sd.statusValueRaw,
+                status_at:        sd.statusAt,
+                updated_at:       nowIso,
+              });
+            }
+          }
+          if (statusDateRows.length > 0) {
+            const { error: sdErr } = await admin
+              .from("momo_import_track_status_dates")
+              .upsert(statusDateRows, {
+                onConflict: "import_track_id,status_key",
+              });
+            if (sdErr) {
+              errors.push({
+                scope:   "import_track_status_dates_upsert",
+                error:   "MOMO_DB_UPSERT_FAILED",
+                message: sdErr.message,
+              });
+            } else {
+              upsertedCount += statusDateRows.length;
+            }
+          }
         }
       }
     } else {
@@ -146,10 +237,21 @@ export async function POST(request: Request) {
     }
 
     // ── 2. container_closed ──
+    const ccUrl = `/api/func/get/container/closed/${dateRangeStr}`;
     const ccRes = await getContainerClosed(start as string, end as string);
     if (ccRes.ok) {
       const mapped = mapContainerClosedArray(ccRes.data);
       containerClosedCount = mapped.length;
+
+      // Migration 0120 — buffer raw events for every received container item.
+      const ccRawItems = Array.isArray(ccRes.data)
+        ? ccRes.data
+        : (ccRes.data && typeof ccRes.data === "object" && Array.isArray((ccRes.data as { data?: unknown[] }).data)
+            ? (ccRes.data as { data: unknown[] }).data
+            : []);
+      for (const item of ccRawItems) {
+        bufferRawEvent("container_closed", item, ccUrl);
+      }
 
       const upRows = mapped
         .filter((r) => r.containerNo)
@@ -253,6 +355,61 @@ export async function POST(request: Request) {
               upsertedCount += trackRows.length;
             }
           }
+
+          // Migration 0120 — explode raw.container_details into momo_container_details.
+          // One row per closed container with BL/vessel/ETD/ETA typed.
+          const detailRows: Array<{
+            container_closed_id:    string;
+            momo_container_ref:     string | null;
+            container_batch_no:     string | null;
+            real_container_no:      string | null;
+            bl_no:                  string | null;
+            vessel_no:              string | null;
+            estimate_date:          string | null;
+            etd_cn_kodang:          string | null;
+            eta_th_kodang:          string | null;
+            etd_immigration:        string | null;
+            eta_immigration:        string | null;
+            transshipment:          string | null;
+            raw_container_details:  unknown;
+            updated_at:             string;
+          }> = [];
+          for (const row of persisted ?? []) {
+            const parentId = (row as { id?: string }).id;
+            if (!parentId) continue;
+            const cd = extractContainerDetails((row as { raw?: unknown }).raw);
+            if (!cd) continue;
+            detailRows.push({
+              container_closed_id:    parentId,
+              momo_container_ref:     cd.momoContainerRef,
+              container_batch_no:     cd.containerBatchNo,
+              real_container_no:      cd.realContainerNo,
+              bl_no:                  cd.blNo,
+              vessel_no:              cd.vesselNo,
+              estimate_date:          cd.estimateDate,
+              etd_cn_kodang:          cd.etdCnKodang,
+              eta_th_kodang:          cd.etaThKodang,
+              etd_immigration:        cd.etdImmigration,
+              eta_immigration:        cd.etaImmigration,
+              transshipment:          cd.transshipment,
+              raw_container_details:  cd.rawContainerDetails,
+              updated_at:             nowIso,
+            });
+          }
+          if (detailRows.length > 0) {
+            const { error: cdErr } = await admin
+              .from("momo_container_details")
+              .upsert(detailRows, { onConflict: "container_closed_id" });
+            if (cdErr) {
+              errors.push({
+                scope:   "container_details_upsert",
+                error:   "MOMO_DB_UPSERT_FAILED",
+                message: cdErr.message,
+              });
+            } else {
+              upsertedCount += detailRows.length;
+            }
+          }
         }
       }
     } else {
@@ -262,11 +419,19 @@ export async function POST(request: Request) {
 
   // ── 3. sack_info ──
   if (sackNo) {
+    const siUrl = `/api/sack/get/info/${encodeURIComponent(sackNo)}`;
     const siRes = await getSackInfo(sackNo);
     if (siRes.ok) {
       const mapped = mapSackInfoSingle(siRes.data);
       const r = mapped[0];
       sackInfoCount = mapped.length;
+
+      // Migration 0120 — buffer raw event for the sack item.
+      // sack endpoint returns a single object — unwrap {data: {...}} if present.
+      const siBag = siRes.data && typeof siRes.data === "object"
+        ? (siRes.data as { data?: unknown }).data ?? siRes.data
+        : siRes.data;
+      bufferRawEvent("sack_info", siBag, siUrl);
       if (!r) {
         errors.push({
           scope:   "sack_info_parse",
@@ -299,9 +464,10 @@ export async function POST(request: Request) {
         last_synced_at:    new Date().toISOString(),
         updated_at:        new Date().toISOString(),
       };
-      const { error: upErr } = await admin
+      const { data: sackPersisted, error: upErr } = await admin
         .from("momo_sack_infos")
-        .upsert(row, { onConflict: "momo_sack_no" });
+        .upsert(row, { onConflict: "momo_sack_no" })
+        .select("id, momo_sack_no, raw");
       if (upErr) {
         failedCount += 1;
         errors.push({
@@ -311,10 +477,66 @@ export async function POST(request: Request) {
         });
       } else {
         upsertedCount += 1;
+
+        // Migration 0120 — explode raw.tracks[] into momo_sack_tracks.
+        const sackRow = (sackPersisted ?? [])[0] as
+          | { id?: string; momo_sack_no?: string; raw?: unknown }
+          | undefined;
+        const parentSackId = sackRow?.id;
+        const parentSackNo = sackRow?.momo_sack_no ?? row.momo_sack_no;
+        if (parentSackId) {
+          const extracted = extractSackTracks(sackRow?.raw ?? r.raw);
+          if (extracted.length > 0) {
+            const nowIso = new Date().toISOString();
+            const sackTrackRows = extracted.map((t) => ({
+              sack_info_id:     parentSackId,
+              sack_no:          parentSackNo,
+              momo_tracking_no: t.trackingNo,
+              weight_kg:        t.weightKg,
+              cbm:              t.cbm,
+              width:            t.width,
+              height:           t.height,
+              length:           t.length,
+              quantity:         t.quantity,
+              raw:              t.raw as never,
+              updated_at:       nowIso,
+            }));
+            const { error: stErr } = await admin
+              .from("momo_sack_tracks")
+              .upsert(sackTrackRows, {
+                onConflict: "sack_info_id,momo_tracking_no",
+              });
+            if (stErr) {
+              errors.push({
+                scope:   "sack_tracks_upsert",
+                error:   "MOMO_DB_UPSERT_FAILED",
+                message: stErr.message,
+              });
+            } else {
+              upsertedCount += sackTrackRows.length;
+            }
+          }
+        }
       }
       } // close `} else { ... ` opened earlier (if (!r) {...} else {...})
     } else {
       errors.push({ scope: "sack_info", error: siRes.error, message: siRes.message });
+    }
+  }
+
+  // ── Flush buffered raw events (Migration 0120) ──
+  // Insert-only audit log. Best-effort: failure here doesn't fail the
+  // whole sync (raw is also still in the main tables' `raw jsonb` cols).
+  if (rawEventBuffer.length > 0) {
+    const { error: rawErr } = await admin
+      .from("momo_raw_events")
+      .insert(rawEventBuffer);
+    if (rawErr) {
+      errors.push({
+        scope:   "raw_events_insert",
+        error:   "MOMO_DB_UPSERT_FAILED",
+        message: rawErr.message,
+      });
     }
   }
 

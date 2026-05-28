@@ -186,6 +186,85 @@ export type MomoContainerClosedTrack = {
   raw:               unknown;
 };
 
+// ════════════════════════════════════════════════════════════
+// Migration 0120 (Phase B) types — raw audit + detail explosion
+// ════════════════════════════════════════════════════════════
+
+/** Source endpoint that an audit row was sourced from. */
+export type MomoSourceEndpoint =
+  | "import_track"
+  | "container_closed"
+  | "sack_info";
+
+/**
+ * A raw-event audit row to insert into `momo_raw_events`. One row per
+ * MOMO item received, regardless of whether downstream mapping succeeded.
+ */
+export type MomoRawEventInput = {
+  sourceEndpoint:    MomoSourceEndpoint;
+  sourceUrl:         string | null;
+  sourceMethod:      string;
+  sourceDateRange:   string | null;     // e.g. "2026-05-27+2026-05-27"
+  momoId:            string | null;     // raw._id
+  momoTrackingNo:    string | null;     // denormalized lookup
+  momoContainerRef:  string | null;     // denormalized lookup
+  sackNo:            string | null;     // denormalized lookup
+  cgNo:              string | null;     // denormalized lookup
+  raw:               unknown;
+  rawHash:           string | null;     // not yet computed (reserved)
+  receivedAt:        string | null;     // ISO timestamptz parsed from raw.updated_date
+  syncRunId:         string | null;     // links to a sync invocation (uuid)
+};
+
+/** Phase-key enum from import_track.raw.status_date. */
+export type MomoImportTrackStatusKey =
+  | "waiting"
+  | "kodang"
+  | "mergebox"
+  | "wooden_create"
+  | "prepare_export"
+  | "exported";
+
+/** One row in momo_import_track_status_dates — one phase key per import_track. */
+export type MomoImportTrackStatusDateRow = {
+  importTrackId:     string;            // parent FK
+  trackingNo:        string;            // denormalized
+  statusKey:         MomoImportTrackStatusKey;
+  statusValueRaw:    string;            // "" or "YYYY-MM-DD HH:MM:SS"
+  statusAt:          string | null;     // ISO timestamptz (null if statusValueRaw is "")
+};
+
+/** Container-details record exploded from container_closed.raw.container_details. */
+export type MomoContainerDetailRow = {
+  containerClosedId:    string;
+  momoContainerRef:     string | null;
+  containerBatchNo:     string | null;
+  realContainerNo:      string | null;
+  blNo:                 string | null;
+  vesselNo:             string | null;
+  estimateDate:         string | null;     // ISO date "YYYY-MM-DD"
+  etdCnKodang:          string | null;     // ISO timestamptz
+  etaThKodang:          string | null;
+  etdImmigration:       string | null;
+  etaImmigration:       string | null;
+  transshipment:        string | null;
+  rawContainerDetails:  unknown;
+};
+
+/** One row from sack_info.raw.tracks[] (string or object element). */
+export type MomoSackTrackRow = {
+  sackInfoId:        string;
+  sackNo:            string;
+  trackingNo:        string;
+  weightKg:          number | null;
+  cbm:               number | null;
+  width:             number | null;
+  height:            number | null;
+  length:            number | null;
+  quantity:          number | null;
+  raw:               unknown;
+};
+
 // ── HTTP client result envelope ───────────────────────────────
 
 export type MomoErrorCode =

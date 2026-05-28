@@ -62,6 +62,12 @@ type BackfillResponse = {
   containerClosedScanned?:   number;
   containerClosedUpdated?:   number;
   containerTracksUpserted?:  number;
+  // Phase B counters:
+  statusDatesUpserted?:      number;
+  containerDetailsUpserted?: number;
+  sackInfosScanned?:         number;
+  sackTracksUpserted?:       number;
+  rawEventsInserted?:        number;
   errors?:                   Array<{ scope: string; message: string }>;
 };
 
@@ -248,15 +254,19 @@ export function MomoSyncClient({ initialDbRows }: { initialDbRows: {
         </div>
       </section>
 
-      {/* ── Phase A · Backfill ──────────────────────────────────────── */}
+      {/* ── Phase A+B · Backfill ────────────────────────────────────── */}
       <section className="rounded-2xl border border-violet-200 bg-violet-50/50 p-4 shadow-sm space-y-3">
         <div>
-          <h3 className="text-sm font-bold text-violet-900">🛠 Phase A · Backfill</h3>
+          <h3 className="text-sm font-bold text-violet-900">🛠 Phase A+B · Backfill</h3>
           <p className="text-xs text-violet-700 mt-1 leading-relaxed">
-            กรอก column ใหม่จาก raw เดิม + แตก <code className="rounded bg-violet-100 px-1">track_details[]</code> จาก{" "}
-            <code className="rounded bg-violet-100 px-1">momo_container_closed.raw</code> เข้า{" "}
-            <code className="rounded bg-violet-100 px-1">momo_container_closed_tracks</code>.{" "}
-            <strong>Idempotent</strong> — รันซ้ำได้ ไม่เพิ่มข้อมูลซ้ำ.
+            กรอก column ใหม่จาก raw เดิม + แตก{" "}
+            <code className="rounded bg-violet-100 px-1">track_details[]</code>,{" "}
+            <code className="rounded bg-violet-100 px-1">status_date</code>,{" "}
+            <code className="rounded bg-violet-100 px-1">container_details</code>,{" "}
+            <code className="rounded bg-violet-100 px-1">sack.tracks[]</code>{" "}
+            ออกเป็น table แยก + retroactive audit log ลง{" "}
+            <code className="rounded bg-violet-100 px-1">momo_raw_events</code>.{" "}
+            <strong>Idempotent</strong> — รันซ้ำได้ ไม่เพิ่มข้อมูลซ้ำ (raw_events insert-only).
           </p>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
@@ -266,7 +276,7 @@ export function MomoSyncClient({ initialDbRows }: { initialDbRows: {
             disabled={busy != null}
             className="rounded-lg border border-violet-400 bg-violet-600 px-3 py-2 text-xs font-bold text-white hover:bg-violet-700 disabled:opacity-50"
           >
-            {busy === "backfill" ? "กำลัง Backfill..." : "▶ รัน Backfill Phase A"}
+            {busy === "backfill" ? "กำลัง Backfill..." : "▶ รัน Backfill"}
           </button>
           {backfillResult && (
             <span className={`text-xs font-bold ${backfillResult.ok ? "text-emerald-700" : "text-red-700"}`}>
@@ -277,12 +287,27 @@ export function MomoSyncClient({ initialDbRows }: { initialDbRows: {
 
         {backfillResult && (
           <div className="space-y-2">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-xs">
-              <Stat label="IT scanned" value={backfillResult.importTracksScanned ?? 0} />
-              <Stat label="IT updated" value={backfillResult.importTracksUpdated ?? 0} tone="green" />
-              <Stat label="CC scanned" value={backfillResult.containerClosedScanned ?? 0} />
-              <Stat label="CC updated" value={backfillResult.containerClosedUpdated ?? 0} tone="green" />
-              <Stat label="Tracks upserted" value={backfillResult.containerTracksUpserted ?? 0} tone="green" />
+            {/* Phase A counters */}
+            <div>
+              <h4 className="text-[10px] font-bold uppercase text-violet-700 mb-1">Phase A — Naming + Tracks</h4>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-xs">
+                <Stat label="IT scanned" value={backfillResult.importTracksScanned ?? 0} />
+                <Stat label="IT ref filled" value={backfillResult.importTracksUpdated ?? 0} tone="green" />
+                <Stat label="CC scanned" value={backfillResult.containerClosedScanned ?? 0} />
+                <Stat label="CC refs filled" value={backfillResult.containerClosedUpdated ?? 0} tone="green" />
+                <Stat label="Tracks upserted" value={backfillResult.containerTracksUpserted ?? 0} tone="green" />
+              </div>
+            </div>
+            {/* Phase B counters */}
+            <div>
+              <h4 className="text-[10px] font-bold uppercase text-violet-700 mb-1">Phase B — Detail Explosion + Audit</h4>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-xs">
+                <Stat label="Status dates" value={backfillResult.statusDatesUpserted ?? 0} tone="green" />
+                <Stat label="CC details" value={backfillResult.containerDetailsUpserted ?? 0} tone="green" />
+                <Stat label="Sack scanned" value={backfillResult.sackInfosScanned ?? 0} />
+                <Stat label="Sack tracks" value={backfillResult.sackTracksUpserted ?? 0} tone="green" />
+                <Stat label="Raw events" value={backfillResult.rawEventsInserted ?? 0} tone="green" />
+              </div>
             </div>
             {backfillResult.errors && backfillResult.errors.length > 0 && (
               <details className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs">
