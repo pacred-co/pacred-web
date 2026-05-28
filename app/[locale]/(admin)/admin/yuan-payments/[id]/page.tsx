@@ -61,11 +61,11 @@ type PaymentRow = {
   imagesslipadmin: string | null;
 };
 type UserRow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
-  useremail: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
+  userEmail: string | null;
 };
 
 export default async function AdminYuanPaymentDetail({
@@ -95,15 +95,15 @@ export default async function AdminYuanPaymentDetail({
 
   const { data: userRaw, error: userRawErr } = await admin
     .from("tb_users")
-    .select("userid,username,userlastname,usertel,useremail")
-    .eq("userid", row.userid)
+    .select("userID,userName,userLastName,userTel,userEmail")
+    .eq("userID", row.userid)
     .maybeSingle();
   if (userRawErr) {
     console.error(`[tb_users list] failed`, { code: userRawErr.code, message: userRawErr.message });
   }
   const user = userRaw as unknown as UserRow | null;
 
-  const customerName = `${user?.username ?? ""} ${user?.userlastname ?? ""}`.trim() || "—";
+  const customerName = `${user?.userName ?? ""} ${user?.userLastName ?? ""}`.trim() || "—";
   const status = row.paystatus ?? "1";
   const paytype = row.paytype ?? "";
 
@@ -149,7 +149,7 @@ export default async function AdminYuanPaymentDetail({
 
       <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3 text-sm">
         <KV label="ลูกค้า" value={`${customerName} (${row.userid})`} />
-        <KV label="โทร · อีเมล" value={`${user?.usertel ?? "-"} · ${user?.useremail ?? "-"}`} />
+        <KV label="โทร · อีเมล" value={`${user?.userTel ?? "-"} · ${user?.userEmail ?? "-"}`} />
         <KV
           label="ยอดหยวน (¥)"
           value={`¥${Number(row.payyuan ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}

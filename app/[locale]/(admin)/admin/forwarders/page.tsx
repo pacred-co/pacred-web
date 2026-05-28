@@ -222,15 +222,15 @@ type RawForwarderRow = {
 };
 
 type RawUserRow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
   // Wave 18-B — VIP/SVIP/SaleAdmin chips on the customer cell
-  coid: string | null;            // 'PCS'/'STAR'/'DIAMOND'/'CROWN'/etc.
-  usercomparison: string | null;  // '1' = CPS (รคา่เทียบ)
-  usercompany: string | null;     // '1' = นิติบุคคล
-  adminidsale: string | null;     // sale rep code · '' = ไม่ระบุ
+  coID: string | null;            // 'PCS'/'STAR'/'DIAMOND'/'CROWN'/etc.
+  userComparison: string | null;  // '1' = CPS (รคา่เทียบ)
+  userCompany: string | null;     // '1' = นิติบุคคล
+  adminIDSale: string | null;     // sale rep code · '' = ไม่ระบุ
 };
 
 export type Row = {
@@ -427,9 +427,9 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
       admin
         .from("tb_users")
         .select(
-          "userid,username,userlastname,usertel,coid,usercomparison,usercompany,adminidsale",
+          "userID,userName,userLastName,userTel,coID,userComparison,userCompany,adminIDSale",
         )
-        .in("userid", uniqueUserIds),
+        .in("userID", uniqueUserIds),
       admin
         .from("tb_rate_custom_cbm")
         .select("userid")
@@ -440,7 +440,7 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
         .in("userid", uniqueUserIds),
     ]);
     usersByUserId = new Map(
-      ((userRowsRes.data ?? []) as unknown as RawUserRow[]).map((u) => [u.userid, u]),
+      ((userRowsRes.data ?? []) as unknown as RawUserRow[]).map((u) => [u.userID, u]),
     );
     svipUserIds = new Set(
       ((svipRowsRes.data ?? []) as unknown as { userid: string }[])
@@ -458,7 +458,7 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
   let rows: Row[] = raw.map((r) => {
     const user = usersByUserId.get(r.userid);
     const name = user
-      ? `${user.username ?? ""} ${user.userlastname ?? ""}`.trim()
+      ? `${user.userName ?? ""} ${user.userLastName ?? ""}`.trim()
       : "";
     // Wave 18-B — fpallet column is empty-string-by-default in legacy; treat
     // both null and "" as "no location set".
@@ -509,17 +509,17 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
       pallet,
       customer: user
         ? {
-            userid: user.userid,
+            userid: user.userID,
             name,
-            phone: user.usertel ?? "",
-            coid: user.coid ?? "",
-            is_svip: svipUserIds.has(user.userid),
-            is_corporate: corporateUserIds.has(user.userid),
-            is_comparison: user.usercomparison === "1",
-            is_juristic: user.usercompany === "1",
+            phone: user.userTel ?? "",
+            coid: user.coID ?? "",
+            is_svip: svipUserIds.has(user.userID),
+            is_corporate: corporateUserIds.has(user.userID),
+            is_comparison: user.userComparison === "1",
+            is_juristic: user.userCompany === "1",
             sale_admin:
-              user.adminidsale && user.adminidsale.trim() !== ""
-                ? user.adminidsale.trim()
+              user.adminIDSale && user.adminIDSale.trim() !== ""
+                ? user.adminIDSale.trim()
                 : null,
           }
         : null,

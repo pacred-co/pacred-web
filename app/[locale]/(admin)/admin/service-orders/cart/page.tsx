@@ -116,7 +116,7 @@ type CartRow = {
   userid: string;
 };
 
-type CoRow = { coid: string };
+type CoRow = { coID: string };
 type SP = { userID?: string };
 
 export default async function AdminCartPage({
@@ -134,13 +134,13 @@ export default async function AdminCartPage({
   if (user.email) {
     const { data: adminRow, error: adminRowErr } = await admin
       .from("tb_admin")
-      .select("adminid")
-      .eq("adminemail", user.email)
-      .maybeSingle<{ adminid: string }>();
+      .select("adminID")
+      .eq("adminEmail", user.email)
+      .maybeSingle<{ adminID: string }>();
     if (adminRowErr) {
       console.error(`[tb_admin lookup] failed`, { code: adminRowErr.code, message: adminRowErr.message });
     }
-    myLegacyAdminId = adminRow?.adminid ?? "";
+    myLegacyAdminId = adminRow?.adminID ?? "";
   }
 
   const viewingCustomer = sp.userID && sp.userID.trim() !== "";
@@ -196,8 +196,8 @@ export default async function AdminCartPage({
   // tb_co dropdown options.
   const { data: coData, error: coErr } = await admin
     .from("tb_co")
-    .select("coid")
-    .order("coid", { ascending: true });
+    .select("coID")
+    .order("coID", { ascending: true });
   if (coErr) {
     console.error(`[tb_co list] failed`, { code: coErr.code, message: coErr.message });
   }
@@ -456,8 +456,8 @@ export default async function AdminCartPage({
                       กรุณาเลือกประเภทสมาชิก...
                     </option>
                     {coRows.map((co) => (
-                      <option key={co.coid} value={co.coid}>
-                        {co.coid}
+                      <option key={co.coID} value={co.coID}>
+                        {co.coID}
                       </option>
                     ))}
                   </select>

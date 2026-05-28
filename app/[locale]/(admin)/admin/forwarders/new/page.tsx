@@ -46,6 +46,7 @@ export const dynamic = "force-dynamic";
 type SP = { q?: string };
 
 type CoidOption = { coid: string; coname: string };
+type CoidRow = { coID: string; coName: string };
 
 export default async function AdminForwarderNewPage({
   searchParams,
@@ -60,14 +61,17 @@ export default async function AdminForwarderNewPage({
   // ─── tb_co (member tiers) ────────────────────────────────────────────
   const { data: coRaw, error: coRawErr } = await admin
     .from("tb_co")
-    .select("coid, coname")
-    .eq("costatus", "1")
-    .order("coid", { ascending: true })
+    .select("coID, coName")
+    .eq("coStatus", "1")
+    .order("coID", { ascending: true })
     .limit(100);
   if (coRawErr) {
     console.error(`[tb_co list] failed`, { code: coRawErr.code, message: coRawErr.message });
   }
-  const coidList = (coRaw ?? []) as CoidOption[];
+  const coidList: CoidOption[] = ((coRaw ?? []) as unknown as CoidRow[]).map((c) => ({
+    coid: c.coID,
+    coname: c.coName,
+  }));
 
   // ─── tb_settings.freeShipping ───────────────────────────────────────
   // Legacy `optionHShipByCart()` prepends the "PCSF · เหมาๆ 50บ." option
@@ -93,23 +97,30 @@ export default async function AdminForwarderNewPage({
   const qRaw = (sp.q ?? "").trim();
   if (qRaw) {
     const candidate = qRaw.toUpperCase();
+    type UserRowShape = {
+      userID: string;
+      userName: string | null;
+      userLastName: string | null;
+      userTel: string | null;
+      coID: string | null;
+    };
     const { data: userRow, error: userRowErr } = await admin
       .from("tb_users")
-      .select("userid, username, userlastname, usertel, coid")
-      .eq("userid", candidate)
-      .maybeSingle<CustomerOption & { coid: string | null }>();
+      .select("userID, userName, userLastName, userTel, coID")
+      .eq("userID", candidate)
+      .maybeSingle<UserRowShape>();
     if (userRowErr) {
       console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
     }
 
     if (userRow) {
       presetUser = {
-        userid:       userRow.userid,
-        username:     userRow.username,
-        userlastname: userRow.userlastname,
-        usertel:      userRow.usertel,
+        userid:       userRow.userID,
+        username:     userRow.userName,
+        userlastname: userRow.userLastName,
+        usertel:      userRow.userTel,
       };
-      presetCoid = userRow.coid;
+      presetCoid = userRow.coID;
 
       // Preload addresses + main flag (mirrors fetchAddressesByUserid action).
       const [{ data: addrRows }, { data: mainRow }] = await Promise.all([
@@ -118,14 +129,14 @@ export default async function AdminForwarderNewPage({
           .select(
             "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel, addresstel2, addressnote",
           )
-          .eq("userid", userRow.userid)
+          .eq("userid", userRow.userID)
           .eq("addressstatus", "1")
           .order("addressid", { ascending: true })
           .limit(50),
         admin
           .from("tb_address_main")
           .select("addressid")
-          .eq("userid", userRow.userid)
+          .eq("userid", userRow.userID)
           .maybeSingle<{ addressid: number }>(),
       ]);
 
