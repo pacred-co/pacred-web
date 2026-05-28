@@ -632,39 +632,8 @@ function extensionSection(items: MenuItem[]): MenuSection {
  * `super` — the CEO sidebar (legacy CargoAndFreight/CEO/CEO.php), the
  * fullest menu. Canonical fixed section order.
  */
-// Wave 28 (2026-05-29 · ภูม flagged "ทางเข้าหาไม่เจอ"): 3 launch-critical
-// shortcuts. ภูม กดไล่ menubar 4-level dropdown แล้วเข้าไม่ถึง — direct
-// sidebar leaves are 1-click + always visible at top.
-const itemCustomersPendingShortcut: MenuItem = {
-  labelKey: "userCargo.pending",
-  href: "/admin/customers/pending",
-  icon: "Clock",
-  badge: "customerPending",
-};
-const itemForwarderInvoiceShortcut: MenuItem = {
-  labelKey: "accounting.forwarderInvoice",
-  href: "/admin/accounting/forwarder-invoice",
-  icon: "Receipt",
-};
-const itemBarcodeImportShortcut: MenuItem = {
-  labelKey: "barcode.recordIntake",
-  href: "/admin/barcode/driver/import",
-  icon: "ScanLine",
-};
-
 const menuSuper: MenuSection[] = [
   { header: "", items: [itemDashboard] },
-  {
-    // Wave 28 launch-critical quick-access — 3 1-click leaves for the E2E
-    // loop entry points + warehouse-scan workflow. Always at top so staff
-    // never need to drill through the 4-level top-menubar to reach them.
-    header: "🆕 ใช้งานหลัก",
-    items: [
-      itemCustomersPendingShortcut,
-      itemForwarderInvoiceShortcut,
-      itemBarcodeImportShortcut,
-    ],
-  },
   {
     // 2026-05-20 ค่ำ ภูม brief: Pacred = 1 company (not the legacy
     // 3-company split). Merged the prior "Cargo & Freight" + "Cargo"

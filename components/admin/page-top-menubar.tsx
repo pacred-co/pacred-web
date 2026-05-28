@@ -239,6 +239,7 @@ function NestedItem({
   activeHref?: string;
   onLeafClick: () => void;
 }) {
+  const [isPinned, setIsPinned] = useState(false);
   const hasChildren = !!item.children && item.children.length > 0;
   const isActive = !!item.href && item.href === activeHref;
 
@@ -261,9 +262,21 @@ function NestedItem({
   }
 
   // Parent — open cascading sub-menu to the right.
+  //
+  // Wave 28 fix (2026-05-29 · ภูม flagged "topmenubar buggy เข้าไม่ได้"):
+  // L1+ parents were hover-only — `group-hover/sub:block` CSS required real
+  // mouse hover in a precise area; cursor leaving the chain mid-flight closed
+  // the panel before the user could click a 3rd-level leaf. Added local
+  // click-pin state (like TopItem at L0): clicking a parent OPENS the panel
+  // and keeps it open until clicked again, until cursor exits the entire
+  // <li> subtree, or until a leaf is clicked. Hover still opens (backward
+  // compatible).
   return (
-    <li className="group/sub relative">
-      {/* Parent row — clickable if it has its own href, else inert header */}
+    <li
+      className="group/sub relative"
+      onMouseLeave={() => setIsPinned(false)}
+    >
+      {/* Parent row — clickable if it has its own href, else click toggles pin */}
       {item.href ? (
         <Link
           href={item.href}
@@ -277,7 +290,9 @@ function NestedItem({
       ) : (
         <button
           type="button"
+          onClick={() => setIsPinned((p) => !p)}
           aria-haspopup="true"
+          aria-expanded={isPinned}
           className="flex w-full items-center justify-between px-4 py-2 text-sm text-gray-800 hover:bg-primary-50 hover:text-primary-900"
         >
           <span>{item.label}</span>
@@ -285,12 +300,12 @@ function NestedItem({
         </button>
       )}
 
-      {/* Sub-dropdown — opens to the right on hover/focus. Depth-aware
+      {/* Sub-dropdown — opens to the right on hover OR click-pin. Depth-aware
           offset so deep cascades don't overlap their parents. */}
       <DropdownPanel
-        open={false}
+        open={isPinned}
         side="right"
-        className="hidden group-hover/sub:block group-focus-within/sub:block"
+        className={isPinned ? "block" : "hidden group-hover/sub:block group-focus-within/sub:block"}
         depth={depth}
       >
         {item.children!.map((child, idx) => (
@@ -299,7 +314,10 @@ function NestedItem({
             item={child}
             depth={depth + 1}
             activeHref={activeHref}
-            onLeafClick={onLeafClick}
+            onLeafClick={() => {
+              setIsPinned(false);
+              onLeafClick();
+            }}
           />
         ))}
       </DropdownPanel>
