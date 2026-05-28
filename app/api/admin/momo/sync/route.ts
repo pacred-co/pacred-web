@@ -120,6 +120,33 @@ export async function POST(request: Request) {
   // refresh snapshots for each touched tracking.
   const linkBuffer: Array<Record<string, unknown>> = [];
   const touchedTrackings = new Set<string>();
+
+  // Migration 0122 — per-item audit buffer. One row per phase action.
+  const runItemBuffer: Array<Record<string, unknown>> = [];
+  function bufferItem(args: {
+    endpoint:      string | null;
+    action:        string;
+    success:       boolean;
+    errorMessage?: string | null;
+    trackingNo?:   string | null;
+    containerRef?: string | null;
+    sackNo?:       string | null;
+    recordId?:     string | null;
+    raw?:          unknown;
+  }) {
+    runItemBuffer.push({
+      sync_run_id:        syncRunId,
+      source_endpoint:    args.endpoint,
+      source_record_id:   args.recordId ?? null,
+      momo_tracking_no:   args.trackingNo ?? null,
+      momo_container_ref: args.containerRef ?? null,
+      sack_no:            args.sackNo ?? null,
+      action:             args.action,
+      success:            args.success,
+      error_message:      args.errorMessage ?? null,
+      raw:                args.raw as never,
+    });
+  }
   function bufferLink(args: {
     trackingNo:        string;
     containerRef:      string | null;
@@ -673,14 +700,49 @@ export async function POST(request: Request) {
   // errors push but don't abort.
   for (const trackingNo of touchedTrackings) {
     try {
-      const { changed } = await refreshSnapshotForTracking(admin, trackingNo, syncRunId);
+      const { changed, derived } = await refreshSnapshotForTracking(admin, trackingNo, syncRunId);
       snapshotsRefreshedCount += 1;
       if (changed) snapshotsChangedCount += 1;
+      // Migration 0122 — record per-tracking snapshot refresh as an item.
+      bufferItem({
+        endpoint:    derived.sourceEndpoint,
+        action:      changed ? "refresh_snapshot_changed" : "refresh_snapshot_noop",
+        success:     true,
+        trackingNo,
+        containerRef: derived.momoContainerRef,
+        sackNo:       derived.sackNo,
+        raw:          {
+          currentPhase:      derived.currentPhase,
+          currentStatusCode: derived.currentStatusCode,
+          sourcePriority:    derived.sourcePriority,
+        },
+      });
     } catch (e) {
       errors.push({
         scope:   "snapshot_refresh",
         error:   "MOMO_DB_UPSERT_FAILED",
         message: `tracking ${trackingNo}: ${e instanceof Error ? e.message : "unknown error"}`,
+      });
+      bufferItem({
+        endpoint:     null,
+        action:       "refresh_snapshot",
+        success:      false,
+        errorMessage: e instanceof Error ? e.message : "unknown",
+        trackingNo,
+      });
+    }
+  }
+
+  // Migration 0122 — flush per-item audit (best-effort).
+  if (runItemBuffer.length > 0) {
+    const { error: itemErr } = await admin
+      .from("momo_sync_run_items")
+      .insert(runItemBuffer);
+    if (itemErr) {
+      errors.push({
+        scope:   "sync_run_items_insert",
+        error:   "MOMO_DB_UPSERT_FAILED",
+        message: itemErr.message,
       });
     }
   }
@@ -701,6 +763,8 @@ export async function POST(request: Request) {
     date_to:                end,
     sack_no:                sackNo || null,
     status,
+    // Migration 0122 — links momo_sync_logs ↔ raw_events ↔ sync_run_items.
+    sync_run_id:            syncRunId,
     import_track_count:     importTrackCount,
     container_closed_count: containerClosedCount,
     sack_info_count:        sackInfoCount,

@@ -111,6 +111,10 @@ export function MomoSyncClient({ initialDbRows }: { initialDbRows: {
   const [backfillResult, setBackfillResult] = useState<BackfillResponse | null>(null);
   const [rawOpen, setRawOpen] = useState<Record<string, boolean>>({});
 
+  // Phase D debug — tracking lookup state
+  const [debugTracking, setDebugTracking] = useState("");
+  const [debugResult, setDebugResult] = useState<Record<string, unknown> | null>(null);
+
   async function callApi(path: string, init?: RequestInit, label?: string) {
     setBusy(label ?? path);
     try {
@@ -154,6 +158,24 @@ export function MomoSyncClient({ initialDbRows }: { initialDbRows: {
       method: "POST",
       body: JSON.stringify({ start, end, sackNo: sackNo.trim() || undefined }),
     }, "sync");
+  }
+
+  async function onDebugLookup() {
+    const t = debugTracking.trim();
+    if (!t) return;
+    setBusy("debug");
+    setDebugResult(null);
+    try {
+      const r = await fetch(`/api/admin/momo/debug/tracking?n=${encodeURIComponent(t)}`, {
+        cache: "no-store",
+      });
+      const j = await r.json();
+      setDebugResult(j);
+    } catch (e) {
+      setDebugResult({ ok: false, error: "NETWORK_ERROR", message: e instanceof Error ? e.message : "fail" });
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function onBackfill() {
@@ -337,6 +359,41 @@ export function MomoSyncClient({ initialDbRows }: { initialDbRows: {
               </details>
             )}
           </div>
+        )}
+      </section>
+
+      {/* ── Phase D · Debug · Tracking Lookup ───────────────────────── */}
+      <section className="rounded-2xl border border-slate-300 bg-slate-50/70 p-4 shadow-sm space-y-3">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900">🔍 Debug · Tracking Lookup</h3>
+          <p className="text-xs text-slate-700 mt-1 leading-relaxed">
+            กรอก tracking → ดูทุกอย่างที่ระบบรู้ในตอนนี้: snapshot ปัจจุบัน · history · links · raw จากทุก endpoint · status_dates · container_closed parents · container_details · sack parents · raw_events ล่าสุด 50 รายการ.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 items-end">
+          <label className="block flex-1 min-w-[240px]">
+            <span className="text-xs font-semibold text-muted">Tracking no</span>
+            <input
+              type="text"
+              value={debugTracking}
+              onChange={(e) => setDebugTracking(e.target.value)}
+              placeholder="เช่น 1779529270"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono"
+              onKeyDown={(e) => { if (e.key === "Enter") onDebugLookup(); }}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={onDebugLookup}
+            disabled={busy != null || !debugTracking.trim()}
+            className="rounded-lg border border-slate-500 bg-slate-700 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800 disabled:opacity-50"
+          >
+            {busy === "debug" ? "กำลังค้น..." : "🔎 ค้นหา"}
+          </button>
+        </div>
+
+        {debugResult && (
+          <DebugResult result={debugResult} />
         )}
       </section>
 
@@ -557,6 +614,211 @@ function DbTable({ title, rows }: { title: string; rows: DbRow[] }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+// ── Phase D Debug result ──────────────────────────────────────
+
+type DebugSnapshot = {
+  current_phase?:        string | null;
+  current_status_code?:  string | null;
+  current_status_label?: string | null;
+  source_endpoint?:      string | null;
+  source_priority?:      number | null;
+  momo_container_ref?:   string | null;
+  container_batch_no?:   string | null;
+  real_container_no?:    string | null;
+  sack_no?:              string | null;
+  ship_by?:              string | null;
+  weight_kg?:            number | null;
+  cbm?:                  number | null;
+  estimate_date?:        string | null;
+  last_event_at?:        string | null;
+  mapping_notes?:        string | null;
+  raw_sources?:          Record<string, unknown> | null;
+};
+
+type DebugLink = {
+  source_endpoint?:    string | null;
+  source_table?:       string | null;
+  source_record_id?:   string | null;
+  matched_by?:         string | null;
+  momo_container_ref?: string | null;
+  real_container_no?:  string | null;
+  sack_no?:            string | null;
+};
+
+type DebugStatusDate = {
+  status_key?:       string | null;
+  status_value_raw?: string | null;
+  status_at?:        string | null;
+};
+
+type DebugHistory = {
+  changed_at?:       string | null;
+  old_status_code?:  string | null;
+  new_status_code?:  string | null;
+  new_status_label?: string | null;
+  source_endpoint?:  string | null;
+  matched_by?:       string | null;
+};
+
+type DebugResultShape = {
+  ok?:                    boolean;
+  error?:                 string;
+  message?:               string;
+  trackingNo?:            string;
+  snapshot?:              DebugSnapshot | null;
+  history?:               DebugHistory[];
+  links?:                 DebugLink[];
+  statusDates?:           DebugStatusDate[];
+  importTrack?:           Record<string, unknown> | null;
+  containerClosedTracks?: Array<Record<string, unknown>>;
+  containerClosedParents?: Array<Record<string, unknown>>;
+  containerDetails?:      Array<Record<string, unknown>>;
+  sackTracks?:            Array<Record<string, unknown>>;
+  sackInfos?:             Array<Record<string, unknown>>;
+  rawEvents?:             Array<Record<string, unknown>>;
+};
+
+function DebugResult({ result }: { result: Record<string, unknown> }) {
+  const r = result as DebugResultShape;
+  if (!r.ok) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-900">
+        <strong>{r.error}:</strong> {r.message}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Snapshot — the hero */}
+      <div className="rounded-lg border border-slate-300 bg-white p-3 text-xs">
+        <h4 className="text-xs font-bold mb-2">Current snapshot</h4>
+        {!r.snapshot ? (
+          <p className="text-muted italic">ยังไม่มี snapshot — รัน Backfill หรือ Sync ก่อน</p>
+        ) : (
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-1 font-mono">
+            <dt className="text-muted">tracking</dt>           <dd>{r.trackingNo}</dd>
+            <dt className="text-muted">phase</dt>              <dd><strong>{r.snapshot.current_phase ?? "—"}</strong></dd>
+            <dt className="text-muted">status code</dt>        <dd><strong>{r.snapshot.current_status_code ?? "—"}</strong></dd>
+            <dt className="text-muted">status label (TH)</dt>  <dd>{r.snapshot.current_status_label ?? "—"}</dd>
+            <dt className="text-muted">source endpoint</dt>    <dd>{r.snapshot.source_endpoint ?? "—"}</dd>
+            <dt className="text-muted">source priority</dt>    <dd>{r.snapshot.source_priority ?? "—"}</dd>
+            <dt className="text-muted">container ref</dt>      <dd>{r.snapshot.momo_container_ref ?? "—"}</dd>
+            <dt className="text-muted">batch no</dt>           <dd>{r.snapshot.container_batch_no ?? "—"}</dd>
+            <dt className="text-muted">real container no</dt>  <dd><strong>{r.snapshot.real_container_no ?? "—"}</strong></dd>
+            <dt className="text-muted">sack</dt>               <dd>{r.snapshot.sack_no ?? "—"}</dd>
+            <dt className="text-muted">ship_by</dt>            <dd>{r.snapshot.ship_by ?? "—"}</dd>
+            <dt className="text-muted">kg / cbm</dt>           <dd>{r.snapshot.weight_kg ?? "—"} / {r.snapshot.cbm ?? "—"}</dd>
+            <dt className="text-muted">estimate_date</dt>      <dd>{r.snapshot.estimate_date ?? "—"}</dd>
+            <dt className="text-muted">last_event_at</dt>      <dd>{r.snapshot.last_event_at ?? "—"}</dd>
+            <dt className="text-muted">mapping_notes</dt>      <dd className="col-span-1">{r.snapshot.mapping_notes ?? "—"}</dd>
+          </dl>
+        )}
+      </div>
+
+      {/* Links */}
+      <DebugSection title={`Links (${r.links?.length ?? 0})`}>
+        <table className="w-full text-xs">
+          <thead className="bg-slate-100"><tr>
+            <th className="text-left px-2 py-1">endpoint</th>
+            <th className="text-left px-2 py-1">source_table</th>
+            <th className="text-left px-2 py-1">matched_by</th>
+            <th className="text-left px-2 py-1">ref / real / sack</th>
+          </tr></thead>
+          <tbody>
+            {(r.links ?? []).map((l, i) => (
+              <tr key={i} className="border-b border-slate-200 font-mono">
+                <td className="px-2 py-1">{l.source_endpoint ?? "—"}</td>
+                <td className="px-2 py-1">{l.source_table ?? "—"}</td>
+                <td className="px-2 py-1">{l.matched_by ?? "—"}</td>
+                <td className="px-2 py-1">{l.momo_container_ref ?? "—"} / {l.real_container_no ?? "—"} / {l.sack_no ?? "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </DebugSection>
+
+      {/* Status-date timeline */}
+      <DebugSection title={`Status date timeline (${r.statusDates?.length ?? 0})`}>
+        <table className="w-full text-xs">
+          <thead className="bg-slate-100"><tr>
+            <th className="text-left px-2 py-1">phase key</th>
+            <th className="text-left px-2 py-1">raw value</th>
+            <th className="text-left px-2 py-1">parsed at</th>
+          </tr></thead>
+          <tbody>
+            {(r.statusDates ?? []).map((s, i) => (
+              <tr key={i} className="border-b border-slate-200 font-mono">
+                <td className="px-2 py-1">{s.status_key}</td>
+                <td className="px-2 py-1">{s.status_value_raw ?? ""}</td>
+                <td className="px-2 py-1">{s.status_at ?? <span className="text-muted">—</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </DebugSection>
+
+      {/* History */}
+      <DebugSection title={`History (${r.history?.length ?? 0})`}>
+        <table className="w-full text-xs">
+          <thead className="bg-slate-100"><tr>
+            <th className="text-left px-2 py-1">changed_at</th>
+            <th className="text-left px-2 py-1">old → new</th>
+            <th className="text-left px-2 py-1">source</th>
+            <th className="text-left px-2 py-1">matched_by</th>
+          </tr></thead>
+          <tbody>
+            {(r.history ?? []).map((h, i) => (
+              <tr key={i} className="border-b border-slate-200 font-mono">
+                <td className="px-2 py-1">{h.changed_at ?? "—"}</td>
+                <td className="px-2 py-1">{h.old_status_code ?? "∅"} → {h.new_status_code ?? "∅"}</td>
+                <td className="px-2 py-1">{h.source_endpoint ?? "—"}</td>
+                <td className="px-2 py-1">{h.matched_by ?? "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </DebugSection>
+
+      {/* Raw events */}
+      <DebugSection title={`Raw events (${r.rawEvents?.length ?? 0})`}>
+        <details className="text-xs">
+          <summary className="cursor-pointer text-sky-700">click to see JSON dump</summary>
+          <pre className="mt-2 max-h-80 overflow-auto rounded bg-slate-100 p-2 text-[10px] font-mono">
+            {JSON.stringify(r.rawEvents ?? [], null, 2)}
+          </pre>
+        </details>
+      </DebugSection>
+
+      {/* All other tables — collapsible JSON dumps for now */}
+      <DebugSection title="Source data (JSON)">
+        <details className="text-xs">
+          <summary className="cursor-pointer text-sky-700">expand</summary>
+          <pre className="mt-2 max-h-80 overflow-auto rounded bg-slate-100 p-2 text-[10px] font-mono">
+            {JSON.stringify({
+              importTrack:            r.importTrack,
+              containerClosedTracks:  r.containerClosedTracks,
+              containerClosedParents: r.containerClosedParents,
+              containerDetails:       r.containerDetails,
+              sackTracks:             r.sackTracks,
+              sackInfos:              r.sackInfos,
+            }, null, 2)}
+          </pre>
+        </details>
+      </DebugSection>
+    </div>
+  );
+}
+
+function DebugSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-slate-300 bg-white p-3">
+      <h4 className="text-xs font-bold mb-2">{title}</h4>
+      <div className="overflow-x-auto">{children}</div>
     </div>
   );
 }
