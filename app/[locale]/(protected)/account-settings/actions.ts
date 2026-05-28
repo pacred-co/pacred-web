@@ -103,7 +103,7 @@ export async function updatePasswordAction(
   // Supabase Auth — the live credential store (so the new password
   // actually signs the customer in on their next login).
   const { error: authErr } = await admin.auth.admin.updateUserById(
-    data.user.ID,
+    data.user.id,
     { password: password1 },
   );
   if (authErr) {

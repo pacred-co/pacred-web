@@ -125,7 +125,7 @@ export function CustomerPicker({
     setQuery("");
     setResults([]);
     setOpen(false);
-    onChange(row.id, row);
+    onChange(row.ID, row);
   }
 
   function clear() {
@@ -214,7 +214,7 @@ export function CustomerPicker({
                 const detail = formatRowDetail(r);
                 const isHighlighted = idx === highlightIdx;
                 return (
-                  <li key={r.id} role="option" aria-selected={isHighlighted}>
+                  <li key={r.ID} role="option" aria-selected={isHighlighted}>
                     <button
                       type="button"
                       onClick={() => pick(r)}

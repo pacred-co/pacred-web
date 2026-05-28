@@ -61,7 +61,7 @@ export default async function RecentlyActiveCustomersPage({
   let q = admin
     .from("tb_users")
     .select(
-      "userid,username,userlastname,usertel,useremail,usercompany,userlastlogin,userregistered,adminidsale",
+      "userID,userName,userLastName,userTel,userEmail,userCompany,userLastLogin,userRegistered,adminIDSale",
     )
     .order("userLastLogin", { ascending: false, nullsFirst: false })
     .limit(500);

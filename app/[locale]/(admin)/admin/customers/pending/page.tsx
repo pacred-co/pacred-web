@@ -42,7 +42,7 @@ export default async function AdminCustomersPendingPage() {
   const { data: customers, count, error: customersErr } = await admin
     .from("tb_users")
     .select(
-      "userid,username,userlastname,usertel,useremail,usercompany,userregistered,useractive",
+      "userID,userName,userLastName,userTel,userEmail,userCompany,userRegistered,userActive",
       { count: "exact" },
     )
     .eq("userActive", "0")

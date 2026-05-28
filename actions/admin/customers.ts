@@ -8,7 +8,7 @@ import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 
 const editCustomerSchema = z.object({
-  ID:              z.string().uuid(),
+  id:              z.string().uuid(),
   first_name:      z.string().trim().max(100).optional(),
   last_name:       z.string().trim().max(100).optional(),
   email:           z.string().trim().email().max(255).optional().or(z.literal("")),
@@ -28,7 +28,7 @@ export async function editCustomer(input: EditCustomerInput): Promise<AdminActio
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before } = await admin.from("profiles").select("*").eq("ID", id).maybeSingle();
+    const { data: before } = await admin.from("profiles").select("*").eq("id", id).maybeSingle();
     if (!before) return { ok: false, error: "not_found" };
 
     const update: Record<string, unknown> = {};
@@ -42,7 +42,7 @@ export async function editCustomer(input: EditCustomerInput): Promise<AdminActio
     if (fields.line_id        !== undefined) update.line_id        = fields.line_id;
     if (fields.recommended_by !== undefined) update.recommended_by = fields.recommended_by;
 
-    const { error } = await admin.from("profiles").update(update).eq("ID", id);
+    const { error } = await admin.from("profiles").update(update).eq("id", id);
     if (error) return { ok: false, error: error.message };
 
     await logAdminAction(adminId, "customer.edit", "profile", id, { before, after: update });
@@ -70,7 +70,7 @@ export async function verifyJuristic(input: z.infer<typeof verifyJuristicSchema>
       .eq("profile_id", parsed.data.profile_id);
     if (error) return { ok: false, error: error.message };
 
-    await admin.from("profiles").update({ status: "active" }).eq("ID", parsed.data.profile_id);
+    await admin.from("profiles").update({ status: "active" }).eq("id", parsed.data.profile_id);
     await logAdminAction(adminId, "juristic.verify", "corporate", parsed.data.profile_id, {});
     revalidatePath("/admin/juristic-check");
     revalidatePath(`/admin/customers/${parsed.data.profile_id}`);
@@ -108,7 +108,7 @@ export async function rejectJuristic(input: z.infer<typeof rejectJuristicSchema>
  * (deleted) account — `userstatus='0'` — is restored by setting it back
  * to `'1'`. Both flags are cleared so the derived status becomes active.
  */
-export async function approveCustomer(ID: string): Promise<AdminActionResult> {
+export async function approveCustomer(id: string): Promise<AdminActionResult> {
   if (!id || typeof id !== "string") return { ok: false, error: "invalid_input" };
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
@@ -258,7 +258,7 @@ export async function adminConvertToJuristic(
  * "suspended" state — a disabled account is `userstatus='0'`
  * (0=ลบบัญชี), which the re-pointed customer list renders as "ระงับ".
  */
-export async function suspendCustomer(ID: string): Promise<AdminActionResult> {
+export async function suspendCustomer(id: string): Promise<AdminActionResult> {
   if (!id || typeof id !== "string") return { ok: false, error: "invalid_input" };
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
