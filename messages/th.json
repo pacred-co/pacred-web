@@ -2771,8 +2771,12 @@
     },
     "accounting": {
       "title": "ระบบบัญชี",
+      "hub": "หน้าหลักบัญชี",
       "cargo": "Cargo",
-      "freight": "Freight"
+      "freight": "Freight",
+      "forwarderInvoice": "🆕 ใบแจ้งหนี้ฝากนำเข้า",
+      "closing": "ปิดงบรายเดือน",
+      "periods": "งวดบัญชี + กระทบยอด"
     },
     "manageCustomersAll": {
       "title": "ลูกค้าทั้งหมด"

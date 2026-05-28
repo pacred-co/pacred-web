@@ -17,6 +17,10 @@ import { ResetPwdButton } from "./reset-pwd-button";
 // ─────────────────────────────────────────────────────────────────────
 const CUSTOMERS_MENUBAR: MenubarItem[] = [
   { label: "หน้าหลัก", href: "/admin/customers" },
+  // Wave 28 (2026-05-29 · ภูม flagged): "รออนุมัติ" was buried 2-levels deep
+  // under "งาน" submenu — staff couldn't find new-signup queue. Promoted
+  // to a top-level tab since the E2E loop step 2 ("เซลรับลูกค้า") starts here.
+  { label: "🆕 รออนุมัติ",  href: "/admin/customers/pending" },
   {
     label: "ตามประเภท",
     children: [
@@ -32,7 +36,6 @@ const CUSTOMERS_MENUBAR: MenubarItem[] = [
   {
     label: "งาน",
     children: [
-      { label: "รออนุมัติ",          href: "/admin/customers/pending" },
       { label: "เคลื่อนไหวล่าสุด",   href: "/admin/customers/recently-active" },
       { label: "ย้ายเซลล์ดูแล",      href: "/admin/customers/transfer-rep" },
     ],

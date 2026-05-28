@@ -344,10 +344,20 @@ const itemReportsAll: MenuItem = {
  *
  *  Component: components/admin/accounting-segment-pills.tsx
  */
+// Wave 28 (2026-05-29 · ภูม flagged): "ระบบบัญชี" was a single-leaf jumping
+// straight to /admin/accounting/cargo — staff couldn't find the cards on
+// /admin/accounting (incl. ใบแจ้งหนี้ฝากนำเข้า launch-critical). Expanded
+// into a dropdown surfacing the key leaves directly.
 const blockAccounting: MenuItem = {
   labelKey: "accounting.title",
-  href: "/admin/accounting/cargo",
   icon: "Landmark",
+  children: [
+    { labelKey: "accounting.hub",            href: "/admin/accounting",                  icon: "LayoutDashboard" },
+    { labelKey: "accounting.cargo",          href: "/admin/accounting/cargo",            icon: "Package" },
+    { labelKey: "accounting.forwarderInvoice", href: "/admin/accounting/forwarder-invoice", icon: "Receipt" },
+    { labelKey: "accounting.closing",        href: "/admin/accounting/closing",          icon: "FileText" },
+    { labelKey: "accounting.periods",        href: "/admin/accounting/periods",          icon: "ClipboardCheck" },
+  ],
 };
 
 /** legacy OOP/Cargo/menu-settings.php — ตั้งค่าระบบ Cargo
@@ -815,8 +825,9 @@ const menuSalesAdmin: MenuSection[] = [
         children: [
           { labelKey: "userCargo.search",     href: "/admin/customers?focus=search", icon: "Search" },
           { labelKey: "userCargo.all",        href: "/admin/customers",             icon: "Users" },
-          // Phase 2 — customer approval queue is QA-like, soon-to-launch.
-          { labelKey: "userCargo.pending",    href: "/admin/customers/pending",     icon: "Clock", badge: "customerPending", phase: 2 },
+          // Wave 28 (2026-05-29 · ภูม flagged): phase:2 demoted — now launch-critical.
+          // E2E loop step 2 = sales picks up new customer · ALL admin roles must see this.
+          { labelKey: "userCargo.pending",    href: "/admin/customers/pending",     icon: "Clock", badge: "customerPending" },
           { labelKey: "userCargo.vip",        href: "/admin/customers?group=vip",   icon: "User" },
           { labelKey: "userCargo.corporate",  href: "/admin/customers?group=corporate", icon: "Building2", badge: "corporatePending" },
           { labelKey: "userCargo.recentlyActive", href: "/admin/customers/recently-active", icon: "Activity" },

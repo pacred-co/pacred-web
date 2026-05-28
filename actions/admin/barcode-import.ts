@@ -491,7 +491,15 @@ export async function adminBarcodeImportScan(
       revalidatePath("/admin/barcode/driver/import");
       revalidatePath("/admin/barcode/cargo/import");
       revalidatePath("/admin/forwarders/warehouse-history");
-      if (row) revalidatePath(`/admin/forwarders/${row.id}`);
+      // Wave 28 (2026-05-29 · audit fix): also revalidate cnt-list-table so the
+      // Wave 27 fstatus row-tint refreshes after a scan-driven 3→4 flip. Legacy
+      // PCS didn't auto-sync this either, but Pacred CAN — staff sees row color
+      // change to amber (ถึงไทย) when they navigate back without manual reload.
+      revalidatePath("/admin/report-cnt");
+      if (row) {
+        revalidatePath(`/admin/forwarders/${row.id}`);
+        if (row.fcabinetnumber) revalidatePath(`/admin/report-cnt/${row.fcabinetnumber}`);
+      }
 
       return {
         ok: true,

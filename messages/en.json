@@ -2771,8 +2771,12 @@
     },
     "accounting": {
       "title": "Accounting",
+      "hub": "Hub",
       "cargo": "Cargo",
-      "freight": "Freight"
+      "freight": "Freight",
+      "forwarderInvoice": "🆕 Forwarder Invoice",
+      "closing": "Monthly closing",
+      "periods": "Periods + Reconcile"
     },
     "manageCustomersAll": {
       "title": "All customers"
