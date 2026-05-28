@@ -933,3 +933,72 @@ Navigation still works — clicking the Link just triggers a regular request ins
 - [`app/[locale]/(protected)/layout.tsx`](../../app/[locale]/(protected)/layout.tsx) — the `CSS_BUNDLE` array that gets hoisted
 - [Next.js docs — Link prefetch](https://nextjs.org/docs/app/api-reference/components/link#prefetch)
 - [React 19 RFC — Stylesheet hoisting](https://react.dev/reference/react-dom/components/link) — the auto-preload behavior
+
+---
+
+## [2026-05-28] `"use server"` files reject every non-async-function value export — not just re-exports
+
+**Context:** Wave 25 click-through verify · ภูม กดปุ่ม "💸 ทำรายการเบิกเงินค่าตู้" บน `/admin/report-cnt` → modal เปิด → submit → "ขออภัย เกิดข้อผิดพลาด". Chrome dev "1 Issue" caught it.
+
+**Symptom:** `curl` smoke pass (route 200/307) · `pnpm verify` EXIT 0 · `pnpm build` clean. Crash surfaces ONLY when the user actually triggers the action and the server tries to load the module. Console:
+
+```
+Error: A "use server" file can only export async functions, found object.
+Read more: https://nextjs.org/docs/messages/invalid-use-server-value
+    The above error occurred in the <CntPaymentModal> component.
+    It was handled by the <ErrorBoundaryHandler> error boundary.
+```
+
+The Thai user-visible boundary message is the generic "Sorry, something went wrong" — totally indistinguishable from a DB error or RLS deny without opening dev console.
+
+**Root cause:** 4 action files in `actions/admin/*` had:
+
+```ts
+"use server";
+import { z } from "zod";
+
+export const createCntPaymentSchema = z.object({ ... });   // ← `z.object()` returns an OBJECT
+export type CreateCntPaymentInput = z.input<typeof createCntPaymentSchema>;
+
+export async function adminCreateCntPayment(input: CreateCntPaymentInput) { /* ... */ }
+```
+
+Next 16's `"use server"` validator walks the module's exports and **rejects ANY non-async-function value** — Zod object, plain object, primitive, array, class instance, you name it. The existing learning above (re-export AST walker) is a *subset* of this — re-exports were just one obvious case.
+
+**Fix:** demote `export const` → `const` for the schema (use only locally within the action) AND/OR move the schema to `lib/validators/<feature>.ts` and re-import. Type-only exports (`export type CreateCntPaymentInput = ...`) ARE safe because TypeScript types are erased at runtime — no value leaves the module.
+
+```ts
+"use server";
+import { z } from "zod";
+
+// INTERNAL — `"use server"` files may only export async functions.
+const createCntPaymentSchema = z.object({ ... });
+export type CreateCntPaymentInput = z.input<typeof createCntPaymentSchema>;  // type-only, safe
+
+export async function adminCreateCntPayment(input: CreateCntPaymentInput) { /* ... */ }
+```
+
+**Why this matters next time:**
+- The 4 affected files were authored across waves 1, 2, 16 — not a single sprint's mistake. The pattern is **easy to write by reflex** (every other Pacred validator file exports its schema) and **invisible until the action is triggered**.
+- The error message points at the modal component (consumer) not the action file (defining) — debugging the modal is a dead end.
+- `pnpm verify` + `pnpm build` + `curl smoke` ALL miss it. Only a real click-through catches it.
+- Other potential bear traps (NOT verified yet — audit when next encountered):
+  - `export const FOO = ['bar', 'baz'] as const` (array literal)
+  - `export const handler = withRateLimit(asyncFn)` (HOF wrapping — depends on return value)
+  - `export const enum X { ... }` (enum probably fine since it's a value-only at runtime — needs verify)
+  - `export default { ... }` (object as default — probably rejected, needs verify)
+
+**Detection sweep (run every wave close):**
+```bash
+for f in $(grep -lr '"use server"' actions/); do
+  hits=$(grep -nE "^export (const|let|var) [a-zA-Z_]+ *(:[^=]+)?= *(z\.|\{|\[|\"|new |Map\(|Set\(|null|true|false|[0-9])" "$f" | grep -vE "= async |= function ")
+  [ -n "$hits" ] && echo "=== $f ===" && echo "$hits"
+done
+```
+
+Ran on 2026-05-28 post-fix · returned 0 hits. Add to CI eventually as a lint rule (`pacred/use-server-async-only`).
+
+**Cross-links:**
+- Commit `6d88c8e` — Wave 25 #196 fix (4 files: `cnt-payment.ts` · `report-cnt-cost-update.ts` · `report-cnt-detail.ts` (3 schemas))
+- Reinforces [`verify-deep-flow.md`](verify-deep-flow.md) — smoke ≠ verified; you must click action buttons
+- Adjacent rule: AGENTS.md §0c (Supabase queries must destructure `error`) shares the same "silent at smoke, loud at runtime" anti-pattern lineage
