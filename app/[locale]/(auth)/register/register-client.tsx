@@ -545,6 +545,17 @@ function JuristicForm({
   const [agreed, setAgreed]         = useState(false);
 
   const [error, setError]           = useState<string | null>(null);
+  /**
+   * Step-3 progress label shown next to the spinner.
+   * - "uploading" — files in flight
+   * - "finalizing" — uploads done, profiles.status=active in flight
+   * - null — idle (button shows just "สมัครสมาชิก")
+   *
+   * 2026-05-28 — added because users on mobile mistake the spinner alone
+   * for "stuck" (3 photos × ~3-10 s each over 4G ≈ 10-30 s total). The
+   * status label confirms the upload is making progress.
+   */
+  const [submitStage, setSubmitStage] = useState<null | "uploading" | "finalizing">(null);
   const [pending, startTransition]  = useTransition();
   const taxTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const captchaRef = useRef<HCaptchaHandle>(null);
@@ -730,22 +741,52 @@ function JuristicForm({
     if (!docCompany) { setError("กรุณาแนบเอกสารรับรองบริษัท"); return; }
     if (!docID)      { setError("กรุณาแนบบัตรประชาชนกรรมการ"); return; }
     setError(null);
+    setSubmitStage("uploading");
     startTransition(async () => {
-      const r1 = await uploadOne(docCompany, "company_affidavit");
-      if (!r1.ok) { const e = (r1 as { error: string }).error; return setError(ERR[e] ?? e); }
-      const r2 = await uploadOne(docVAT, "vat");
-      if (!r2.ok) { const e = (r2 as { error: string }).error; return setError(ERR[e] ?? e); }
-      const r3 = await uploadOne(docID, "national_id");
-      if (!r3.ok) { const e = (r3 as { error: string }).error; return setError(ERR[e] ?? e); }
-      const done = await completeJuristicRegistration();
-      if (done.ok) {
-        trackSignUp("juristic");
-        // Return to a pending `?next=` (booking-calculator CTA) if present.
-        // Default to `/dashboard` (customer portal launchpad), NOT `/` —
-        // per d1-fidelity-customer.md §2 + 2026-05-26 brief fix A2.
-        router.replace(nextUrl ?? "/dashboard");
-        router.refresh();
-      } else setError(ERR[done.error] ?? done.error);
+      try {
+        // 2026-05-28 — parallelise the 3 uploads. The previous sequential
+        // chain was responsible for the "ไม่ไปต่อ" complaint on mobile:
+        // 3 iPhone JPEGs at ~3-10 s each = 10-30 s of pure spinner with
+        // no progress signal, easily mistaken for "stuck". Promise.all
+        // runs them concurrently → typical total drops to ~5-12 s and
+        // the new `submitStage` label keeps the user informed.
+        const [r1, r2, r3] = await Promise.all([
+          uploadOne(docCompany, "company_affidavit"),
+          uploadOne(docVAT, "vat"),
+          uploadOne(docID, "national_id"),
+        ]);
+        if (!r1.ok) { setError(ERR[(r1 as { error: string }).error] ?? (r1 as { error: string }).error); setSubmitStage(null); return; }
+        if (!r2.ok) { setError(ERR[(r2 as { error: string }).error] ?? (r2 as { error: string }).error); setSubmitStage(null); return; }
+        if (!r3.ok) { setError(ERR[(r3 as { error: string }).error] ?? (r3 as { error: string }).error); setSubmitStage(null); return; }
+
+        setSubmitStage("finalizing");
+        const done = await completeJuristicRegistration();
+        if (done.ok) {
+          trackSignUp("juristic");
+          // Keep submitStage truthy through the navigation so the spinner
+          // text doesn't snap back to "สมัครสมาชิก" during the brief
+          // moment between resolve + route change.
+          // Return to a pending `?next=` (booking-calculator CTA) if present.
+          // Default to `/dashboard` (customer portal launchpad), NOT `/` —
+          // per d1-fidelity-customer.md §2 + 2026-05-26 brief fix A2.
+          router.replace(nextUrl ?? "/dashboard");
+          router.refresh();
+          return;
+        }
+        setError(ERR[done.error] ?? done.error);
+        setSubmitStage(null);
+      } catch (err) {
+        // 2026-05-28 — surface any silent throw from the await chain.
+        // Without the try/catch a server-action exception (network drop,
+        // bodySizeLimit reject on a >12 MB file, a thrown rather than
+        // returned error inside the action) would leave the user staring
+        // at a perpetually-spinning button — the original "won't proceed"
+        // symptom. Now it falls through to a visible error + the button
+        // re-enables so they can retry.
+        console.error("juristic submit threw:", err);
+        setError(err instanceof Error ? `เกิดข้อผิดพลาด: ${err.message}` : "เกิดข้อผิดพลาดที่ไม่คาดคิด กรุณาลองใหม่");
+        setSubmitStage(null);
+      }
     });
   }
 
@@ -914,9 +955,25 @@ function JuristicForm({
           <AgreeRow checked={agreed} onChange={setAgreed} />
           {error && <ErrorBox msg={error} />}
 
+          {submitStage && (
+            <p
+              role="status"
+              aria-live="polite"
+              className="rounded-lg bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-center text-[12.5px] text-amber-700 dark:text-amber-300"
+            >
+              {submitStage === "uploading"
+                ? "⏳ กำลังอัปโหลดเอกสาร — ใช้เวลา 10-30 วินาที กรุณาอย่าปิดหน้านี้"
+                : "✅ อัปโหลดเสร็จ กำลังบันทึกข้อมูล..."}
+            </p>
+          )}
+
           <div className="flex gap-2.5">
             <BackBtn onClick={() => { setStep(2); setError(null); }}>ย้อนกลับ</BackBtn>
-            <SubmitBtn pending={pending} flex1>สมัครสมาชิก</SubmitBtn>
+            <SubmitBtn pending={pending} flex1>
+              {submitStage === "uploading" ? "กำลังอัปโหลด..."
+                : submitStage === "finalizing" ? "กำลังบันทึก..."
+                : "สมัครสมาชิก"}
+            </SubmitBtn>
           </div>
         </>
       )}
