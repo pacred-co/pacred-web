@@ -61,11 +61,11 @@ type CbmRow = Omit<KgRow, "rkg"> & {
   rcbm: number | null;
 };
 type URow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
-  coid: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
+  coID: string | null;
 };
 
 type SP = { userid?: string; q?: string };
@@ -160,12 +160,12 @@ export default async function CustomHsRatesPage({
   if (userIds.length > 0) {
     const { data: usersRaw, error: usersRawErr } = await admin
       .from("tb_users")
-      .select("userid,username,userlastname,usertel,coid")
-      .in("userid", userIds);
+      .select("userID,userName,userLastName,userTel,coID")
+      .in("userID", userIds);
     if (usersRawErr) {
       console.error(`[tb_users list] failed`, { code: usersRawErr.code, message: usersRawErr.message });
     }
-    userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userid, u]));
+    userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
   }
 
   // Drill-in: show full matrix for one customer (latest rates by joining children to their LATEST crhsid)
@@ -175,7 +175,7 @@ export default async function CustomHsRatesPage({
   let selectedCbm: CbmRow[] = [];
   if (selectedUserid) {
     const [{ data: u }, { data: k }, { data: c }] = await Promise.all([
-      admin.from("tb_users").select("userid,username,userlastname,usertel,coid").eq("userid", selectedUserid).maybeSingle(),
+      admin.from("tb_users").select("userID,userName,userLastName,userTel,coID").eq("userID", selectedUserid).maybeSingle(),
       admin.from("tb_hs_rate_custom_kg").select("id,userid,sourcewarehouse,rtransporttype,rproductstype,rkg,adminidupdate,crhsid").eq("userid", selectedUserid).order("crhsid", { ascending: false }).limit(500),
       admin.from("tb_hs_rate_custom_cbm").select("id,userid,sourcewarehouse,rtransporttype,rproductstype,rcbm,adminidupdate,crhsid").eq("userid", selectedUserid).order("crhsid", { ascending: false }).limit(500),
     ]);
@@ -246,13 +246,13 @@ export default async function CustomHsRatesPage({
                       <tr key={h.id} className="border-t border-border hover:bg-surface-alt/30">
                         <td className="px-3 py-2 font-mono">{h.userid}</td>
                         <td className="px-3 py-2">
-                          {`${u?.username ?? ""} ${u?.userlastname ?? ""}`.trim() || "—"}
+                          {`${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || "—"}
                         </td>
-                        <td className="px-3 py-2 text-muted">{u?.usertel ?? "—"}</td>
+                        <td className="px-3 py-2 text-muted">{u?.userTel ?? "—"}</td>
                         <td className="px-3 py-2 font-mono text-xs">
-                          {u?.coid ? (
+                          {u?.coID ? (
                             <span className="rounded-full bg-purple-50 border border-purple-200 text-purple-700 px-2 py-0.5">
-                              {u.coid}
+                              {u.coID}
                             </span>
                           ) : (
                             "—"
@@ -290,13 +290,13 @@ export default async function CustomHsRatesPage({
                 <span className="font-mono text-primary-600">{selectedUserid}</span>
                 {selectedUser && (
                   <span className="ml-2 text-sm text-muted font-normal">
-                    {`${selectedUser.username ?? ""} ${selectedUser.userlastname ?? ""}`.trim() || ""}
+                    {`${selectedUser.userName ?? ""} ${selectedUser.userLastName ?? ""}`.trim() || ""}
                   </span>
                 )}
               </h2>
-              {selectedUser?.coid && (
+              {selectedUser?.coID && (
                 <p className="text-xs text-muted mt-1">
-                  กลุ่ม VIP: <span className="font-mono">{selectedUser.coid}</span>{" "}
+                  กลุ่ม VIP: <span className="font-mono">{selectedUser.coID}</span>{" "}
                   (เรทนี้จะ override เรทของ tier)
                 </p>
               )}
@@ -320,7 +320,7 @@ export default async function CustomHsRatesPage({
           {selectedUser ? (
             <HsRateEditForm
               userid={selectedUserid}
-              customerLabel={`${selectedUserid} · ${`${selectedUser.username ?? ""} ${selectedUser.userlastname ?? ""}`.trim() || "—"}`}
+              customerLabel={`${selectedUserid} · ${`${selectedUser.userName ?? ""} ${selectedUser.userLastName ?? ""}`.trim() || "—"}`}
               cells={buildHsCellMatrix(selectedKg, selectedCbm)}
             />
           ) : (

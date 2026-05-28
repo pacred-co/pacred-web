@@ -16,7 +16,7 @@ import type {
 
 export type CarrierManualSearchParams = { q?: string };
 
-type CoidOption = { coid: string; coname: string };
+type CoidOption = { coID: string; coName: string };
 
 export type CarrierManualPageData = {
   coidList:        CoidOption[];
@@ -34,9 +34,9 @@ export async function loadCarrierManualPageData(
   // ─── tb_co (member tiers) ────────────────────────────────────────
   const { data: coRaw, error: coRawErr } = await admin
     .from("tb_co")
-    .select("coid, coname")
-    .eq("costatus", "1")
-    .order("coid", { ascending: true })
+    .select("coID, coName")
+    .eq("coStatus", "1")
+    .order("coID", { ascending: true })
     .limit(100);
   if (coRawErr) {
     console.error(`[tb_co list] failed`, { code: coRawErr.code, message: coRawErr.message });
@@ -64,21 +64,21 @@ export async function loadCarrierManualPageData(
     const candidate = qRaw.toUpperCase();
     const { data: userRow, error: userRowErr } = await admin
       .from("tb_users")
-      .select("userid, username, userlastname, usertel, coid")
-      .eq("userid", candidate)
-      .maybeSingle<CustomerOption & { coid: string | null }>();
+      .select("userID, userName, userLastName, userTel, coID")
+      .eq("userID", candidate)
+      .maybeSingle<CustomerOption & { coID: string | null }>();
     if (userRowErr) {
       console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
     }
 
     if (userRow) {
       presetUser = {
-        userid:       userRow.userid,
-        username:     userRow.username,
-        userlastname: userRow.userlastname,
-        usertel:      userRow.usertel,
+        userID:       userRow.userID,
+        userName:     userRow.userName,
+        userLastName: userRow.userLastName,
+        userTel:      userRow.userTel,
       };
-      presetCoid = userRow.coid;
+      presetCoid = userRow.coID;
 
       const [{ data: addrRows }, { data: mainRow }] = await Promise.all([
         admin
@@ -86,14 +86,14 @@ export async function loadCarrierManualPageData(
           .select(
             "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel, addresstel2, addressnote",
           )
-          .eq("userid", userRow.userid)
+          .eq("userid", userRow.userID)
           .eq("addressstatus", "1")
           .order("addressid", { ascending: true })
           .limit(50),
         admin
           .from("tb_address_main")
           .select("addressid")
-          .eq("userid", userRow.userid)
+          .eq("userid", userRow.userID)
           .maybeSingle<{ addressid: number }>(),
       ]);
 

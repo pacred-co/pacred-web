@@ -106,9 +106,9 @@ export async function adminCreateYuanPaymentManual(
       // Verify customer.
       const { data: customer, error: customerErr } = await admin
         .from("tb_users")
-        .select("userid, username, userlastname")
-        .eq("userid", d.userid.toUpperCase())
-        .maybeSingle<{ userid: string; username: string | null; userlastname: string | null }>();
+        .select("userID, userName, userLastName")
+        .eq("userID", d.userid.toUpperCase())
+        .maybeSingle<{ userID: string; userName: string | null; userLastName: string | null }>();
       if (customerErr) {
         console.error(`[tb_users mutation lookup] failed`, { code: customerErr.code, message: customerErr.message });
         return { ok: false, error: `db_error:${customerErr.code ?? "unknown"}` };
@@ -128,7 +128,7 @@ export async function adminCreateYuanPaymentManual(
       // imagesslip which is the customer's slip).
       let slipFilename = "";
       if (slipFile) {
-        const up = await uploadToBucket(slipFile, "slips", `admin/yuan-payment/${customer.userid}`);
+        const up = await uploadToBucket(slipFile, "slips", `admin/yuan-payment/${customer.userID}`);
         if (!up.ok) return { ok: false, error: `อัปโหลดสลิปไม่สำเร็จ: ${up.error}` };
         slipFilename = up.filename;
       }
@@ -149,7 +149,7 @@ export async function adminCreateYuanPaymentManual(
           paythbcost:        paythbcost,
           payprofitthb:      payprofitthb,
           paydateadmin:      nowIso,
-          userid:            customer.userid,
+          userid:            customer.userID,
           adminid:           legacyAdminId,
           adminidupdate:     legacyAdminId,
           payadminidcreator: legacyAdminId,
@@ -163,7 +163,7 @@ export async function adminCreateYuanPaymentManual(
       if (insErr || !row) return { ok: false, error: insErr?.message ?? "insert failed" };
 
       await logAdminAction(adminId, "tb_payment.manual_create", "tb_payment", String(row.id), {
-        userid: customer.userid,
+        userid: customer.userID,
         paytype: d.paytype,
         payyuan: d.payyuan,
         payrate: d.payrate,

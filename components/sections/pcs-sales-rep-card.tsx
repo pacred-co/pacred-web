@@ -32,33 +32,33 @@ export async function PcsSalesRepCard({ memberCode }: { memberCode: string | nul
     // 1. Find the customer's assigned sales rep id (legacy tb_users.adminidsale).
     const { data: userRow } = await admin
       .from("tb_users")
-      .select("adminidsale")
-      .eq("userid", memberCode)
-      .maybeSingle<{ adminidsale: string | null }>();
+      .select("adminIDSale")
+      .eq("userID", memberCode)
+      .maybeSingle<{ adminIDSale: string | null }>();
 
-    if (userRow?.adminidsale) {
+    if (userRow?.adminIDSale) {
       // 2. Resolve the rep display name + phone + photo from tb_admin.
-      //    NOTE: the legacy column is `admintel` (varchar(13)) — there is
+      //    NOTE: the legacy column is `adminTel` (varchar(13)) — there is
       //    no `adminphone` column.
       const { data: rep } = await admin
         .from("tb_admin")
-        .select("adminname, adminlastname, adminnickname, admintel, adminpicture")
-        .eq("adminid", userRow.adminidsale)
+        .select("adminName, adminLastName, adminNickname, adminTel, adminPicture")
+        .eq("adminID", userRow.adminIDSale)
         .maybeSingle<{
-          adminname: string | null;
-          adminlastname: string | null;
-          adminnickname: string | null;
-          admintel: string | null;
-          adminpicture: string | null;
+          adminName: string | null;
+          adminLastName: string | null;
+          adminNickname: string | null;
+          adminTel: string | null;
+          adminPicture: string | null;
         }>();
 
       if (rep) {
         // Legacy "เซลล์ <name>" uses the nickname when set, else first name.
         displayName =
-          (rep.adminnickname && rep.adminnickname.trim()) ||
-          `${rep.adminname ?? ""} ${rep.adminlastname ?? ""}`.trim();
-        phone = rep.admintel ?? null;
-        avatarFile = rep.adminpicture ?? null;
+          (rep.adminNickname && rep.adminNickname.trim()) ||
+          `${rep.adminName ?? ""} ${rep.adminLastName ?? ""}`.trim();
+        phone = rep.adminTel ?? null;
+        avatarFile = rep.adminPicture ?? null;
       }
     }
   }

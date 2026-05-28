@@ -256,26 +256,26 @@ export async function adminBulkApproveCustomers(
 
       const { data: rows, error: readErr } = await admin
         .from("tb_users")
-        .select("userid, useractive")
-        .in("userid", user_ids)
-        .eq("useractive", "0");
+        .select("userID, userActive")
+        .in("userID", user_ids)
+        .eq("userActive", "0");
       if (readErr) return { ok: false, error: readErr.message };
       if (!rows || rows.length === 0) {
         return { ok: false, error: "ไม่พบสมาชิกที่รออนุมัติ (อาจถูกอนุมัติไปแล้ว)" };
       }
 
-      const toApprove = rows.map((r) => (r as { userid: string }).userid);
+      const toApprove = rows.map((r) => (r as { userID: string }).userID);
       const nowIso = new Date().toISOString();
 
       const { error: updErr } = await admin
         .from("tb_users")
         .update({
-          useractive: "1",
+          userActive: "1",
           adminidupdate: adminId,
           userdateactive: nowIso,
         })
-        .in("userid", toApprove)
-        .eq("useractive", "0");
+        .in("userID", toApprove)
+        .eq("userActive", "0");
 
       if (updErr) {
         return { ok: false, error: updErr.message };

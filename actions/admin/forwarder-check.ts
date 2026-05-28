@@ -102,12 +102,12 @@ type ForwarderRow = {
 };
 
 type UserRow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
-  useremail: string | null;
-  userlinenotify: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
+  userEmail: string | null;
+  userLineNotify: string | null;
 };
 
 type BillResult = {
@@ -242,13 +242,13 @@ export async function adminCallPriceUser(
       const uniqueUserIds = Array.from(new Set(candidates.map((r) => r.userid).filter(Boolean)));
       const { data: userRows, error: userRowsErr } = await admin
         .from("tb_users")
-        .select("userid, username, userlastname, usertel, useremail, userlinenotify")
-        .in("userid", uniqueUserIds);
+        .select("userID, userName, userLastName, userTel, userEmail, userLineNotify")
+        .in("userID", uniqueUserIds);
       if (userRowsErr) {
         console.error(`[tb_users list] failed`, { code: userRowsErr.code, message: userRowsErr.message });
       }
       const usersById = new Map<string, UserRow>(
-        ((userRows ?? []) as unknown as UserRow[]).map((u) => [u.userid, u]),
+        ((userRows ?? []) as unknown as UserRow[]).map((u) => [u.userID, u]),
       );
 
       // 2b. Resolve tb_users.userid → profiles.id (uuid) in one round-trip.
@@ -309,9 +309,9 @@ export async function adminCallPriceUser(
 
         // 3b. Notify the customer (SMS now · LINE/email deferred).
         const user = usersById.get(row.userid);
-        if (user?.usertel) {
+        if (user?.userTel) {
           const sms = await sendSms(
-            user.usertel,
+            user.userTel,
             composeBillSms({
               userId:      row.userid,
               fid:         row.id,
@@ -327,7 +327,7 @@ export async function adminCallPriceUser(
             logger.warn("forwarder-check", "SMS failed", {
               fid:   row.id,
               userid: row.userid,
-              phone: redactPhone(user.usertel),
+              phone: redactPhone(user.userTel),
               error: sms.error,
             });
           }
@@ -378,7 +378,7 @@ export async function adminCallPriceUser(
             // failure, just unavailable for this channel.
             if (notif.deliveredLine) {
               result.line_sent++;
-            } else if (user?.useremail || user) {
+            } else if (user?.userEmail || user) {
               // Heuristic: count line_failed only when we'd expect LINE to
               // exist. line_user_id presence is the actual gate (set via
               // /liff/link). Without exposing it through sendNotification's
@@ -393,7 +393,7 @@ export async function adminCallPriceUser(
             // team knows to wire RESEND.
             if (notif.deliveredEmail) {
               result.email_sent++;
-            } else if (user?.useremail) {
+            } else if (user?.userEmail) {
               result.email_failed++;
             }
           } catch (e) {

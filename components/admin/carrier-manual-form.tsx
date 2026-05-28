@@ -34,7 +34,7 @@ import {
 import { adminCarrierManualInsert } from "@/actions/admin/carrier-manual";
 import { computeTransportPrice, type CarrierConfig } from "@/lib/carrier/registry";
 
-type CoidOption = { coid: string; coname: string };
+type CoidOption = { coID: string; coName: string };
 
 /** Shipping company options — same hardcoded list as `forwarders/new/form.tsx`
  *  (legacy `optionHShipByCart()` in pcs-admin/include/function.php L411-464).
@@ -113,8 +113,8 @@ const PRODUCTS_TYPE_OPTIONS = [
 
 function customerLabel(c: CustomerOption | null | undefined): string {
   if (!c) return "—";
-  const name = `${c.username ?? ""} ${c.userlastname ?? ""}`.trim();
-  return `${c.userid} · ${name || c.usertel || "(ไม่มีชื่อ)"}`;
+  const name = `${c.userName ?? ""} ${c.userLastName ?? ""}`.trim();
+  return `${c.userID} · ${name || c.userTel || "(ไม่มีชื่อ)"}`;
 }
 
 function addressFullLine(a: AddressOption): string {
@@ -146,7 +146,7 @@ export function CarrierManualForm({
     presetUser ? [presetUser] : [],
   );
   const [usersLoading, setUsersLoading] = useState(false);
-  const [userid, setUserid]           = useState<string>(presetUser?.userid ?? "");
+  const [userid, setUserid]           = useState<string>(presetUser?.userID ?? "");
   const [userFilter, setUserFilter]   = useState<string>("");
   const [userPickerOpen, setUserPickerOpen] = useState(false);
   const userPickerRef = useRef<HTMLDivElement | null>(null);
@@ -223,13 +223,13 @@ export function CarrierManualForm({
 
   // ─── when user picked → fetch their addresses ─────────────────
   async function onUserPick(picked: CustomerOption) {
-    setUserid(picked.userid);
+    setUserid(picked.userID);
     setUserFilter("");
     setUserPickerOpen(false);
     setFieldErrors((p) => { const n = new Set(p); n.delete("userid"); return n; });
 
     setAddressesLoading(true);
-    const res = await fetchAddressesByUserid(picked.userid);
+    const res = await fetchAddressesByUserid(picked.userID);
     setAddressesLoading(false);
     if (res.ok) {
       const list = res.data?.addresses ?? [];
@@ -247,13 +247,13 @@ export function CarrierManualForm({
     const q = userFilter.trim().toLowerCase();
     if (!q) return users;
     return users.filter((u) => {
-      const hay = `${u.userid} ${u.username ?? ""} ${u.userlastname ?? ""} ${u.usertel ?? ""}`.toLowerCase();
+      const hay = `${u.userID} ${u.userName ?? ""} ${u.userLastName ?? ""} ${u.userTel ?? ""}`.toLowerCase();
       return hay.includes(q);
     });
   }, [userFilter, users]);
 
   const selectedUser = useMemo(
-    () => users.find((u) => u.userid === userid) ?? (presetUser?.userid === userid ? presetUser : null),
+    () => users.find((u) => u.userID === userid) ?? (presetUser?.userID === userid ? presetUser : null),
     [userid, users, presetUser],
   );
 
@@ -387,8 +387,8 @@ export function CarrierManualForm({
             >
               <option value="">— กรุณาเลือก —</option>
               {coidList.map((c) => (
-                <option key={c.coid} value={c.coid}>
-                  {c.coid}{c.coname && c.coname !== c.coid ? ` · ${c.coname}` : ""}
+                <option key={c.coID} value={c.coID}>
+                  {c.coID}{c.coName && c.coName !== c.coID ? ` · ${c.coName}` : ""}
                 </option>
               ))}
             </select>
@@ -405,8 +405,8 @@ export function CarrierManualForm({
                   <div className="text-sm font-medium text-green-900 truncate">
                     ✓ {customerLabel(selectedUser)}
                   </div>
-                  {selectedUser.usertel && (
-                    <div className="text-xs text-green-700 mt-0.5">เบอร์ {selectedUser.usertel}</div>
+                  {selectedUser.userTel && (
+                    <div className="text-xs text-green-700 mt-0.5">เบอร์ {selectedUser.userTel}</div>
                   )}
                 </div>
                 <button
@@ -443,15 +443,15 @@ export function CarrierManualForm({
                     ) : (
                       filteredUsers.map((u) => (
                         <button
-                          key={u.userid}
+                          key={u.userID}
                           type="button"
                           onClick={() => onUserPick(u)}
                           className="block w-full px-3 py-2 text-left text-sm hover:bg-surface-alt"
                         >
-                          <span className="font-mono text-primary-600">{u.userid}</span>
+                          <span className="font-mono text-primary-600">{u.userID}</span>
                           <span className="mx-1.5 text-muted">·</span>
-                          <span>{`${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || "(ไม่มีชื่อ)"}</span>
-                          {u.usertel && <span className="ml-2 text-xs text-muted">{u.usertel}</span>}
+                          <span>{`${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "(ไม่มีชื่อ)"}</span>
+                          {u.userTel && <span className="ml-2 text-xs text-muted">{u.userTel}</span>}
                         </button>
                       ))
                     )}
