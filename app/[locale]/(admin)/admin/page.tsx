@@ -412,7 +412,7 @@ async function loadUsersByUserId(
     .select("userID,userName,userLastName,userTel")
     .in("userID", unique);
   if (error) {
-    console.error(`[tb_users list] failed`, { code: error.code, message: error.message });
+    console.warn(`[tb_users list] failed (soft-fail · returning empty map)`, error);
   }
   return new Map(((data ?? []) as unknown as RawUserRow[]).map((u) => [u.userID, u]));
 }
@@ -441,7 +441,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       q = tab === "topup" ? q.gt("amount", 0) : q.lt("amount", 0);
       const { data, error } = await q;
       if (error) {
-        console.error(`[tb_wallet_hs list] failed`, { code: error.code, message: error.message });
+        console.warn(`[tb_wallet_hs list] failed (soft-fail · returning empty rows)`, error);
       }
       const rows = (data ?? []) as unknown as RawWalletHsRow[];
       const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
@@ -478,7 +478,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
         .order("hdate", { ascending: false, nullsFirst: false })
         .limit(50);
       if (error) {
-        console.error(`[tb_header_order list] failed`, { code: error.code, message: error.message });
+        console.warn(`[tb_header_order list] failed (soft-fail · returning empty rows)`, error);
       }
       const rows = (data ?? []) as unknown as RawHeaderOrderRow[];
       const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
@@ -520,7 +520,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       else                            q = q.eq("fstatus", "6");
       const { data, error } = await q;
       if (error) {
-        console.error(`[tb_forwarder list] failed`, { code: error.code, message: error.message });
+        console.warn(`[tb_forwarder list] failed (soft-fail · returning empty rows)`, error);
       }
       const rows = (data ?? []) as unknown as RawForwarderRow[];
       const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
@@ -555,7 +555,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
         .order("paydate", { ascending: false, nullsFirst: false })
         .limit(50);
       if (error) {
-        console.error(`[tb_payment list] failed`, { code: error.code, message: error.message });
+        console.warn(`[tb_payment list] failed (soft-fail · returning empty rows)`, error);
       }
       const rows = (data ?? []) as unknown as RawPaymentRow[];
       const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
@@ -597,7 +597,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) {
-        console.error(`[sales_payouts list] failed`, { code: error.code, message: error.message });
+        console.warn(`[sales_payouts list] failed (soft-fail · returning empty rows)`, error);
       }
       return ((data ?? []) as RawPayoutRow[]).map((r) => {
         const p = pickProfile(r.profile);
@@ -626,7 +626,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
         .order("userRegistered", { ascending: false, nullsFirst: false })
         .limit(50);
       if (error) {
-        console.error(`[tb_users list] failed`, { code: error.code, message: error.message });
+        console.warn(`[tb_users list] failed (soft-fail · returning empty map)`, error);
       }
       const rows = (data ?? []) as unknown as RawUserListRow[];
       return rows.map((u) => ({
