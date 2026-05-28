@@ -32,6 +32,7 @@ import {
   extractContainerDetails,
   extractSackTracks,
   buildRawEventInput,
+  refreshSnapshotForTracking,
   type MomoInternalAdminRecord,
   type MomoSourceEndpoint,
 } from "@/lib/integrations/momo-isolated";
@@ -111,6 +112,41 @@ export async function POST(request: Request) {
       raw_hash:           ev.rawHash,
       received_at:        ev.receivedAt,
       sync_run_id:        ev.syncRunId,
+    });
+  }
+
+  // Migration 0121 — collect link rows + the set of trackings touched
+  // in this run. After all main upserts succeed, flush links then
+  // refresh snapshots for each touched tracking.
+  const linkBuffer: Array<Record<string, unknown>> = [];
+  const touchedTrackings = new Set<string>();
+  function bufferLink(args: {
+    trackingNo:        string;
+    containerRef:      string | null;
+    batchNo:           string | null;
+    realNo:            string | null;
+    sackNo:            string | null;
+    cgNo:              string | null;
+    sourceEndpoint:    MomoSourceEndpoint;
+    sourceTable:       string;
+    sourceRecordId:    string;
+    matchedBy:         string;
+  }) {
+    touchedTrackings.add(args.trackingNo);
+    const nowIso = new Date().toISOString();
+    linkBuffer.push({
+      momo_tracking_no:    args.trackingNo,
+      momo_container_ref:  args.containerRef,
+      container_batch_no:  args.batchNo,
+      real_container_no:   args.realNo,
+      sack_no:             args.sackNo,
+      cg_no:               args.cgNo,
+      source_endpoint:     args.sourceEndpoint,
+      source_table:        args.sourceTable,
+      source_record_id:    args.sourceRecordId,
+      matched_by:          args.matchedBy,
+      confidence:          "high",
+      updated_at:          nowIso,
     });
   }
 
@@ -230,6 +266,31 @@ export async function POST(request: Request) {
               upsertedCount += statusDateRows.length;
             }
           }
+
+          // Migration 0121 — buffer link rows for the persisted import_tracks.
+          for (const row of persisted ?? []) {
+            const r = row as {
+              id?: string;
+              momo_tracking_no?: string | null;
+              raw?: unknown;
+            };
+            if (!r.id || !r.momo_tracking_no) continue;
+            const rawBag = r.raw && typeof r.raw === "object" && !Array.isArray(r.raw)
+              ? (r.raw as Record<string, unknown>)
+              : null;
+            bufferLink({
+              trackingNo:     r.momo_tracking_no,
+              containerRef:   (rawBag?.container_no as string | undefined) ?? null,
+              batchNo:        null,
+              realNo:         null,
+              sackNo:         (rawBag?.sack_no as string | undefined) ?? null,
+              cgNo:           (rawBag?.CG_NO as string | undefined) ?? null,
+              sourceEndpoint: "import_track",
+              sourceTable:    "momo_import_tracks",
+              sourceRecordId: r.id,
+              matchedBy:      "import_track.tracking",
+            });
+          }
         }
       }
     } else {
@@ -340,11 +401,12 @@ export async function POST(request: Request) {
             }
           }
           if (trackRows.length > 0) {
-            const { error: trkErr } = await admin
+            const { data: persistedTracks, error: trkErr } = await admin
               .from("momo_container_closed_tracks")
               .upsert(trackRows, {
                 onConflict: "container_closed_id,momo_tracking_no",
-              });
+              })
+              .select("id, momo_tracking_no, momo_container_ref, container_batch_no, real_container_no");
             if (trkErr) {
               errors.push({
                 scope:   "container_closed_tracks_upsert",
@@ -353,6 +415,30 @@ export async function POST(request: Request) {
               });
             } else {
               upsertedCount += trackRows.length;
+
+              // Migration 0121 — link rows for each persisted container_closed_track.
+              for (const row of persistedTracks ?? []) {
+                const r = row as {
+                  id?:                  string;
+                  momo_tracking_no?:    string | null;
+                  momo_container_ref?:  string | null;
+                  container_batch_no?:  string | null;
+                  real_container_no?:   string | null;
+                };
+                if (!r.id || !r.momo_tracking_no) continue;
+                bufferLink({
+                  trackingNo:     r.momo_tracking_no,
+                  containerRef:   r.momo_container_ref ?? null,
+                  batchNo:        r.container_batch_no ?? null,
+                  realNo:         r.real_container_no ?? null,
+                  sackNo:         null,
+                  cgNo:           null,
+                  sourceEndpoint: "container_closed",
+                  sourceTable:    "momo_container_closed_tracks",
+                  sourceRecordId: r.id,
+                  matchedBy:      "container_closed.track_details.reTrack",
+                });
+              }
             }
           }
 
@@ -501,11 +587,12 @@ export async function POST(request: Request) {
               raw:              t.raw as never,
               updated_at:       nowIso,
             }));
-            const { error: stErr } = await admin
+            const { data: persistedSackTracks, error: stErr } = await admin
               .from("momo_sack_tracks")
               .upsert(sackTrackRows, {
                 onConflict: "sack_info_id,momo_tracking_no",
-              });
+              })
+              .select("id, sack_no, momo_tracking_no");
             if (stErr) {
               errors.push({
                 scope:   "sack_tracks_upsert",
@@ -514,6 +601,28 @@ export async function POST(request: Request) {
               });
             } else {
               upsertedCount += sackTrackRows.length;
+
+              // Migration 0121 — link rows for each persisted sack_track.
+              for (const row of persistedSackTracks ?? []) {
+                const r = row as {
+                  id?:               string;
+                  sack_no?:          string | null;
+                  momo_tracking_no?: string | null;
+                };
+                if (!r.id || !r.momo_tracking_no) continue;
+                bufferLink({
+                  trackingNo:     r.momo_tracking_no,
+                  containerRef:   null,
+                  batchNo:        null,
+                  realNo:         null,
+                  sackNo:         r.sack_no ?? null,
+                  cgNo:           null,
+                  sourceEndpoint: "sack_info",
+                  sourceTable:    "momo_sack_tracks",
+                  sourceRecordId: r.id,
+                  matchedBy:      "sack_info.tracks",
+                });
+              }
             }
           }
         }
@@ -536,6 +645,42 @@ export async function POST(request: Request) {
         scope:   "raw_events_insert",
         error:   "MOMO_DB_UPSERT_FAILED",
         message: rawErr.message,
+      });
+    }
+  }
+
+  // ── Flush links + refresh snapshots (Migration 0121) ──
+  let linksUpsertedCount = 0;
+  let snapshotsRefreshedCount = 0;
+  let snapshotsChangedCount = 0;
+  if (linkBuffer.length > 0) {
+    const { error: linkErr } = await admin
+      .from("momo_tracking_links")
+      .upsert(linkBuffer, {
+        onConflict: "momo_tracking_no,source_table,source_record_id",
+      });
+    if (linkErr) {
+      errors.push({
+        scope:   "tracking_links_upsert",
+        error:   "MOMO_DB_UPSERT_FAILED",
+        message: linkErr.message,
+      });
+    } else {
+      linksUpsertedCount = linkBuffer.length;
+    }
+  }
+  // Refresh snapshot per unique tracking. Best-effort: per-tracking
+  // errors push but don't abort.
+  for (const trackingNo of touchedTrackings) {
+    try {
+      const { changed } = await refreshSnapshotForTracking(admin, trackingNo, syncRunId);
+      snapshotsRefreshedCount += 1;
+      if (changed) snapshotsChangedCount += 1;
+    } catch (e) {
+      errors.push({
+        scope:   "snapshot_refresh",
+        error:   "MOMO_DB_UPSERT_FAILED",
+        message: `tracking ${trackingNo}: ${e instanceof Error ? e.message : "unknown error"}`,
       });
     }
   }
@@ -588,6 +733,7 @@ export async function POST(request: Request) {
     start:  start ?? null,
     end:    end ?? null,
     sackNo: sackNo || null,
+    syncRunId,
     importTrackCount,
     containerClosedCount,
     sackInfoCount,
@@ -595,6 +741,12 @@ export async function POST(request: Request) {
     unmappedCount,
     upsertedCount,
     failedCount,
+    // Migration 0121 — Phase C counters:
+    linksUpsertedCount,
+    snapshotsRefreshedCount,
+    snapshotsChangedCount,
+    rawEventsBufferedCount: rawEventBuffer.length,
+    touchedTrackings:       Array.from(touchedTrackings),
     errors,
   });
 }

@@ -68,6 +68,10 @@ type BackfillResponse = {
   sackInfosScanned?:         number;
   sackTracksUpserted?:       number;
   rawEventsInserted?:        number;
+  // Phase C counters:
+  linksUpserted?:            number;
+  snapshotsRefreshed?:       number;
+  snapshotsChanged?:         number;
   errors?:                   Array<{ scope: string; message: string }>;
 };
 
@@ -307,6 +311,15 @@ export function MomoSyncClient({ initialDbRows }: { initialDbRows: {
                 <Stat label="Sack scanned" value={backfillResult.sackInfosScanned ?? 0} />
                 <Stat label="Sack tracks" value={backfillResult.sackTracksUpserted ?? 0} tone="green" />
                 <Stat label="Raw events" value={backfillResult.rawEventsInserted ?? 0} tone="green" />
+              </div>
+            </div>
+            {/* Phase C counters */}
+            <div>
+              <h4 className="text-[10px] font-bold uppercase text-violet-700 mb-1">Phase C — Links + Snapshots</h4>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                <Stat label="Links upserted" value={backfillResult.linksUpserted ?? 0} tone="green" />
+                <Stat label="Snapshots refreshed" value={backfillResult.snapshotsRefreshed ?? 0} tone="green" />
+                <Stat label="Snapshots changed" value={backfillResult.snapshotsChanged ?? 0} tone="amber" />
               </div>
             </div>
             {backfillResult.errors && backfillResult.errors.length > 0 && (

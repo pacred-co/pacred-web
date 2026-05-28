@@ -25,6 +25,7 @@ import {
   extractImportTrackStatusDates,
   extractSackTracks,
   buildRawEventInput,
+  refreshSnapshotForTracking,
 } from "@/lib/integrations/momo-isolated";
 import { randomUUID } from "node:crypto";
 
@@ -42,6 +43,10 @@ export type MomoBackfillReport = {
   sackInfosScanned:           number;
   sackTracksUpserted:         number;
   rawEventsInserted:          number;
+  // Phase C — links + snapshots:
+  linksUpserted:              number;
+  snapshotsRefreshed:         number;
+  snapshotsChanged:           number;
   errors:                     Array<{ scope: string; message: string }>;
 };
 
@@ -94,8 +99,16 @@ export async function runMomoBackfill(): Promise<MomoBackfillReport> {
     sackInfosScanned:        0,
     sackTracksUpserted:      0,
     rawEventsInserted:       0,
+    linksUpserted:           0,
+    snapshotsRefreshed:      0,
+    snapshotsChanged:        0,
     errors: [],
   };
+
+  // Phase C — collect unique trackings touched + buffer link rows.
+  const touchedTrackings = new Set<string>();
+  const linkBuffer: Array<Record<string, unknown>> = [];
+  const nowIsoGlobal = new Date().toISOString();
 
   // ── Step 1: momo_import_tracks ──
   // (A) clone momo_container_no → momo_container_ref (Phase A)
@@ -131,7 +144,7 @@ export async function runMomoBackfill(): Promise<MomoBackfillReport> {
         }
       }
 
-      // (B) Status-date explosion + (C) raw event audit.
+      // (B) Status-date explosion + (C) raw event audit + (D) link rows.
       const statusDateRows: Array<{
         import_track_id:   string;
         momo_tracking_no:  string;
@@ -142,7 +155,8 @@ export async function runMomoBackfill(): Promise<MomoBackfillReport> {
       }> = [];
       const rawEventRows: Array<Record<string, unknown>> = [];
       for (const row of rows ?? []) {
-        const parentId = row.id as string | undefined;
+        const parentId   = row.id as string | undefined;
+        const trackingNo = row.momo_tracking_no as string | undefined;
         if (!parentId) continue;
         // (B)
         const extracted = extractImportTrackStatusDates(row.raw);
@@ -177,6 +191,27 @@ export async function runMomoBackfill(): Promise<MomoBackfillReport> {
           received_at:        ev.receivedAt,
           sync_run_id:        ev.syncRunId,
         });
+        // (D) Phase C link row for import_track.
+        if (trackingNo) {
+          touchedTrackings.add(trackingNo);
+          const rawBag = row.raw && typeof row.raw === "object" && !Array.isArray(row.raw)
+            ? (row.raw as Record<string, unknown>)
+            : null;
+          linkBuffer.push({
+            momo_tracking_no:    trackingNo,
+            momo_container_ref:  (rawBag?.container_no as string | undefined) ?? row.momo_container_ref ?? null,
+            container_batch_no:  null,
+            real_container_no:   null,
+            sack_no:             (rawBag?.sack_no as string | undefined) ?? null,
+            cg_no:               (rawBag?.CG_NO as string | undefined) ?? null,
+            source_endpoint:     "import_track",
+            source_table:        "momo_import_tracks",
+            source_record_id:    parentId,
+            matched_by:          "import_track.tracking",
+            confidence:          "high",
+            updated_at:          nowIsoGlobal,
+          });
+        }
       }
       // Apply in chunks.
       for (let i = 0; i < statusDateRows.length; i += 500) {
@@ -371,15 +406,17 @@ export async function runMomoBackfill(): Promise<MomoBackfillReport> {
         }
       }
 
-      // Apply track explode in chunks.
+      // Apply track explode in chunks. Use .select() so we get back the
+      // persisted ids → use them as source_record_id in link rows.
       for (let i = 0; i < trackRows.length; i += 500) {
         const chunk = trackRows.slice(i, i + 500);
-        const { error: trkErr } = await admin
+        const { data: persisted, error: trkErr } = await admin
           .from("momo_container_closed_tracks")
           .upsert(chunk, {
             onConflict: "container_closed_id,momo_tracking_no",
             ignoreDuplicates: false,
-          });
+          })
+          .select("id, momo_tracking_no, momo_container_ref, container_batch_no, real_container_no");
         if (trkErr) {
           report.errors.push({
             scope: "container_closed_tracks_upsert",
@@ -387,6 +424,32 @@ export async function runMomoBackfill(): Promise<MomoBackfillReport> {
           });
         } else {
           report.containerTracksUpserted += chunk.length;
+          // Phase C link rows from persisted track rows.
+          for (const row of persisted ?? []) {
+            const r = row as {
+              id?:                 string;
+              momo_tracking_no?:   string;
+              momo_container_ref?: string | null;
+              container_batch_no?: string | null;
+              real_container_no?:  string | null;
+            };
+            if (!r.id || !r.momo_tracking_no) continue;
+            touchedTrackings.add(r.momo_tracking_no);
+            linkBuffer.push({
+              momo_tracking_no:    r.momo_tracking_no,
+              momo_container_ref:  r.momo_container_ref ?? null,
+              container_batch_no:  r.container_batch_no ?? null,
+              real_container_no:   r.real_container_no ?? null,
+              sack_no:             null,
+              cg_no:                null,
+              source_endpoint:     "container_closed",
+              source_table:        "momo_container_closed_tracks",
+              source_record_id:    r.id,
+              matched_by:          "container_closed.track_details.reTrack",
+              confidence:          "high",
+              updated_at:          nowIsoGlobal,
+            });
+          }
         }
       }
 
@@ -495,9 +558,10 @@ export async function runMomoBackfill(): Promise<MomoBackfillReport> {
       }
       for (let i = 0; i < sackTrackRows.length; i += 500) {
         const chunk = sackTrackRows.slice(i, i + 500);
-        const { error: stErr } = await admin
+        const { data: persisted, error: stErr } = await admin
           .from("momo_sack_tracks")
-          .upsert(chunk, { onConflict: "sack_info_id,momo_tracking_no" });
+          .upsert(chunk, { onConflict: "sack_info_id,momo_tracking_no" })
+          .select("id, sack_no, momo_tracking_no");
         if (stErr) {
           report.errors.push({
             scope: "sack_tracks_upsert",
@@ -505,6 +569,30 @@ export async function runMomoBackfill(): Promise<MomoBackfillReport> {
           });
         } else {
           report.sackTracksUpserted += chunk.length;
+          // Phase C link rows from persisted sack track rows.
+          for (const row of persisted ?? []) {
+            const r = row as {
+              id?:               string;
+              sack_no?:          string;
+              momo_tracking_no?: string;
+            };
+            if (!r.id || !r.momo_tracking_no) continue;
+            touchedTrackings.add(r.momo_tracking_no);
+            linkBuffer.push({
+              momo_tracking_no:    r.momo_tracking_no,
+              momo_container_ref:  null,
+              container_batch_no:  null,
+              real_container_no:   null,
+              sack_no:             r.sack_no ?? null,
+              cg_no:               null,
+              source_endpoint:     "sack_info",
+              source_table:        "momo_sack_tracks",
+              source_record_id:    r.id,
+              matched_by:          "sack_info.tracks",
+              confidence:          "high",
+              updated_at:          nowIsoGlobal,
+            });
+          }
         }
       }
       for (let i = 0; i < sackRawEventRows.length; i += 500) {
@@ -521,6 +609,38 @@ export async function runMomoBackfill(): Promise<MomoBackfillReport> {
           report.rawEventsInserted += chunk.length;
         }
       }
+    }
+  }
+
+  // ── Phase C — flush link buffer + refresh snapshots ──
+  for (let i = 0; i < linkBuffer.length; i += 500) {
+    const chunk = linkBuffer.slice(i, i + 500);
+    const { error: linkErr } = await admin
+      .from("momo_tracking_links")
+      .upsert(chunk, {
+        onConflict: "momo_tracking_no,source_table,source_record_id",
+      });
+    if (linkErr) {
+      report.errors.push({
+        scope:   "tracking_links_upsert",
+        message: `chunk ${i}-${i + chunk.length}: ${linkErr.message}`,
+      });
+    } else {
+      report.linksUpserted += chunk.length;
+    }
+  }
+  // Recompute snapshot for every tracking we touched. Best-effort: a
+  // single failure pushes to errors but doesn't abort the loop.
+  for (const trackingNo of touchedTrackings) {
+    try {
+      const { changed } = await refreshSnapshotForTracking(admin, trackingNo, syncRunId);
+      report.snapshotsRefreshed += 1;
+      if (changed) report.snapshotsChanged += 1;
+    } catch (e) {
+      report.errors.push({
+        scope:   "snapshot_refresh",
+        message: `tracking ${trackingNo}: ${e instanceof Error ? e.message : "unknown"}`,
+      });
     }
   }
 

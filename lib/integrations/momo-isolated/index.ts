@@ -63,6 +63,20 @@ export type {
   MomoErrorCode,
 } from "./types";
 
+// Migration 0121 — Phase C status derivation (server-only).
+export {
+  deriveStatus,
+  loadSignalsForTracking,
+  refreshSnapshotForTracking,
+  DERIVED_STATUS_LABEL_TH,
+} from "./status-derivation";
+export type {
+  DerivedStatus,
+  DerivedStatusPhase,
+  DerivedStatusPriority,
+  DerivationSignals,
+} from "./status-derivation";
+
 export {
   MOMO_STATUS_BADGE,
   MOMO_STATUS_TH,
