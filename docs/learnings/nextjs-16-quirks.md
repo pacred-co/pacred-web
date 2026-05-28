@@ -1002,3 +1002,47 @@ Ran on 2026-05-28 post-fix · returned 0 hits. Add to CI eventually as a lint ru
 - Commit `6d88c8e` — Wave 25 #196 fix (4 files: `cnt-payment.ts` · `report-cnt-cost-update.ts` · `report-cnt-detail.ts` (3 schemas))
 - Reinforces [`verify-deep-flow.md`](verify-deep-flow.md) — smoke ≠ verified; you must click action buttons
 - Adjacent rule: AGENTS.md §0c (Supabase queries must destructure `error`) shares the same "silent at smoke, loud at runtime" anti-pattern lineage
+
+---
+
+## [2026-05-28] Chrome "1 Issue" in dev panel = Meta Pixel `fbevents.js` deprecation — NOT our code
+
+**Context:** ภูม browsed `/admin/api-forwarder-momo/review` (Wave 26 review-grid · new in commit b9d7385) and Chrome dev showed "1 Issue" indicator. Spent 10 minutes hunting hydration mismatches, missing `autocomplete` on form fields, deprecated API usage in `review-client.tsx`. None of those were the issue.
+
+**Symptom:** Chrome devtools "Issues" panel (separate from Console — that's why console shows clean) displays "1 Issue" badge on any admin page. The user reasonably assumes it's a bug in the page they just opened.
+
+**Root cause:** Meta (Facebook) Pixel script `connect.facebook.net/en_US/fbevents.js` uses the Chrome Attribution Reporting API, which Chrome has deprecated under the Privacy Sandbox plan. Meta hasn't updated their script. Every page that loads FB Pixel emits one `deprecation` report to `ReportingObserver` — which Chrome surfaces as "1 Issue" in the panel.
+
+The report body verbatim:
+```
+type:        "deprecation"
+message:     "Attribution Reporting is deprecated and will be removed. See https://goo.gle/ps-status for details."
+sourceFile:  "https://connect.facebook.net/en_US/fbevents.js"
+```
+
+**Why it appears on EVERY Pacred page:** `app/layout.tsx` includes `<FacebookPixelScript />` globally (per เดฟ's directive 2026-05-20 — hardcoded ID `27209891118650099` so paid FB/IG ads can track conversions on every page, not just specific ones). So `fbevents.js` loads on every page, deprecation fires on every page, "1 Issue" shows on every page.
+
+**Fix:** None on our side. Wait for Meta to update `fbevents.js`. The Pixel still tracks correctly — this is a deprecation **warning**, not an error. Customers and conversion tracking are unaffected.
+
+**How to identify it next time (60-second check):**
+```js
+// In Chrome devtools console on the affected page:
+(() => {
+  const reports = [];
+  const ob = new ReportingObserver((rs) => {
+    for (const r of rs) reports.push({ type: r.type, msg: r.body?.message, src: r.body?.sourceFile });
+  }, { buffered: true });
+  ob.observe();
+  setTimeout(() => console.table(reports), 800);
+})();
+```
+If you see `sourceFile` = `connect.facebook.net/...` → it's THIS issue, move on. If you see our own code path in `sourceFile` → real bug, fix it.
+
+**Why this matters next time:** When ภูม says "1 Issue on this new page", don't immediately assume the new code is broken. Run the ReportingObserver snippet first — half the time it's a third-party tracker (FB Pixel, GTM, Clarity) emitting deprecation noise. Console.log being clean while Issues panel shows count is the canonical fingerprint of this.
+
+**The trap I almost fell into:** I started reading `review-client.tsx` line-by-line looking for hydration mismatches in `new Date(c.committedAt).toLocaleString("th-TH")` (line 519). It looked plausible — server vs client locale formatting differs. But that would have shown as a hydration warning in **console**, not in Issues panel. The clue I missed: console was clean. Two different channels.
+
+**Cross-links:**
+- [`components/analytics/facebook-pixel-script.tsx`](../../components/analytics/facebook-pixel-script.tsx) — where Pixel loads
+- Chrome Privacy Sandbox status: https://goo.gle/ps-status
+- Adjacent (but distinct): the Date.now/new Date purity rule above — that one shows in console (lint + dev overlay), this one shows in Issues panel

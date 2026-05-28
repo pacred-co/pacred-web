@@ -140,6 +140,14 @@ export function ReviewGridClient({
   };
 
   // Single-row commit handler.
+  //
+  // Wrapped in try/catch/finally so an unhandled server-action throw
+  // (e.g., requireAdmin re-auth fail · Supabase network drop · withAdmin
+  // path that bubbles instead of returning {ok:false}) NEVER leaves the
+  // button stuck on "กำลัง...". The `finally` is the load-bearing line —
+  // without it the previous version froze the row indefinitely whenever
+  // the action rejected (since `setCommittingRow(null)` was after the
+  // `await` and never ran on throw).
   const commitOne = async (rowId: string) => {
     const f = formState[rowId];
     if (!f) return;
@@ -152,25 +160,38 @@ export function ReviewGridClient({
     };
 
     setCommittingRow(rowId);
-    const res = await commitMomoRowToForwarder(input);
-    setCommittingRow(null);
-
-    if (res.ok) {
+    try {
+      const res = await commitMomoRowToForwarder(input);
+      if (res.ok) {
+        setRowResults((m) => ({
+          ...m,
+          [rowId]: {
+            ok:          true,
+            message:     `สร้างสำเร็จ → tb_forwarder #${res.data?.forwarderId}`,
+            forwarderId: res.data?.forwarderId,
+          },
+        }));
+        // Reload server data so the row disappears from pending.
+        startTransition(() => router.refresh());
+      } else {
+        setRowResults((m) => ({
+          ...m,
+          [rowId]: { ok: false, message: res.error },
+        }));
+      }
+    } catch (err) {
+      console.error("[commitMomoRowToForwarder] threw", err);
       setRowResults((m) => ({
         ...m,
         [rowId]: {
-          ok:          true,
-          message:     `สร้างสำเร็จ → tb_forwarder #${res.data?.forwarderId}`,
-          forwarderId: res.data?.forwarderId,
+          ok:      false,
+          message: err instanceof Error
+            ? `Action error: ${err.message}`
+            : "Action error: unknown (ดู console)",
         },
       }));
-      // Reload server data so the row disappears from pending.
-      startTransition(() => router.refresh());
-    } else {
-      setRowResults((m) => ({
-        ...m,
-        [rowId]: { ok: false, message: res.error },
-      }));
+    } finally {
+      setCommittingRow(null);
     }
   };
 
@@ -202,7 +223,15 @@ export function ReviewGridClient({
     }
 
     setBulkRunning(true);
-    const res = await commitMomoRowsBatch({ rows: validRows });
+    let res;
+    try {
+      res = await commitMomoRowsBatch({ rows: validRows });
+    } catch (err) {
+      console.error("[commitMomoRowsBatch] threw", err);
+      alert(`bulk commit threw: ${err instanceof Error ? err.message : "unknown"}`);
+      setBulkRunning(false);
+      return;
+    }
     setBulkRunning(false);
 
     // TS narrowing — AdminActionResult is a discriminated union on `ok`.
