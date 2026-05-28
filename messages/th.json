@@ -374,15 +374,15 @@
   "login": {
     "title": "เข้าสู่ระบบ",
     "emailLabel": "เบอร์โทรศัพท์หรือรหัสสมาชิก",
-    "emailPlaceholder": "0812345678 หรือ PR001",
+    "emailPlaceholder": "เบอร์โทรศัพท์หรือรหัสสมาชิก",
     "passwordLabel": "รหัสผ่าน",
-    "passwordPlaceholder": "••••••••",
+    "passwordPlaceholder": "รหัสผ่านใหม่เพื่อเข้าสู่ระบบ 6-20 ตัวอักษร",
     "forgotPassword": "ลืมรหัสผ่าน?",
     "rememberMe": "จำฉันไว้ในระบบ",
     "submit": "เข้าสู่ระบบ",
     "orContinueWith": "หรือเข้าสู่ระบบด้วย",
-    "noAccount": "ยังไม่มีบัญชี?",
-    "registerLink": "สมัครสมาชิก",
+    "noAccount": "ยังไม่มีบัญชีผู้ใช้งาน?",
+    "registerLink": "สร้างบัญชี",
     "comingSoon": "เร็วๆ นี้"
   },
   "register": {

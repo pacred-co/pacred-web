@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ChevronDown, LayoutDashboard, LogOut, User as UserIcon } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
@@ -14,7 +15,6 @@ import { createClient } from "@/lib/supabase/client";
 import { NotificationBell } from "@/components/notification-bell";
 import { CartBadge } from "@/components/cart-badge";
 import { TopMenu, TopMenuMobile } from "@/components/sections/top-menu";
-import { SearchBar } from "@/components/sections/search-bar";
 
 type ProfileLite = {
   member_code: string | null;
@@ -24,6 +24,46 @@ type ProfileLite = {
   status: string | null;
 };
 
+/**
+ * Auth-state-aware Link prefetch gate.
+ *
+ * The `(protected)` customer-portal layout loads a 25+ stylesheet legacy-PCS
+ * CSS bundle via React-19 `<link rel="stylesheet">` hoisting (see
+ * `app/[locale]/(protected)/layout.tsx` CSS_BUNDLE). When NavBar renders on
+ * a non-protected route (auth pages like /register, public marketing like /)
+ * for an authenticated user, Next.js's default viewport-prefetch on its
+ * `<Link href="/dashboard">` / `<Link href="/profile">` etc. fetches the
+ * protected layout's RSC payload — React 19 then hoists every CSS URL in it
+ * as a `<link rel="preload">` on the CURRENT page. The browser then logs
+ * ~126 "preloaded but not used" warnings per page load on /register / /login
+ * / / and friends because nothing on these auth/public pages actually uses
+ * that CSS.
+ *
+ * Fix: when NavBar is rendered OUTSIDE the (protected) route group, disable
+ * prefetch on the protected-target Links. Navigation still works (it just
+ * triggers a normal request on click); inside (protected) the prefetch
+ * stays on so the back-office nav remains snappy. See
+ * docs/learnings/nextjs-16-quirks.md.
+ */
+function useProtectedLinkPrefetch(): false | undefined {
+  const pathname = usePathname();
+  // The (protected) route group renders at paths like /dashboard, /profile,
+  // /service-order/*, /service-import/*, /wallet, /cart, /notifications,
+  // /shipments, /sales, /refunds, /pay, /search, /map, /addresses,
+  // /china-address, /freight/*, /account-settings, /wallet-credit,
+  // /wallet-shop, /line-settings, /m/dashboard, etc. Locale prefix may
+  // precede them. The list mirrors the directories under
+  // `app/[locale]/(protected)/`. When pathname is OUTSIDE this set, we're
+  // on auth/public/admin — disable prefetch on protected Links so the
+  // protected layout's CSS bundle doesn't leak via prefetch.
+  if (!pathname) return false;
+  return /^(?:\/[a-z]{2})?\/(?:dashboard|profile|service-order|service-import|service-payment|wallet|wallet-credit|wallet-shop|cart|notifications|shipments|sales|refunds|pay|search|map|addresses|china-address|freight|account-settings|line-settings|m\/dashboard)(?:\/|$)/.test(
+    pathname,
+  )
+    ? undefined
+    : false;
+}
+
 export function NavBar() {
   const t = useTranslations("nav");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -31,6 +71,7 @@ export function NavBar() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<ProfileLite | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const protectedPrefetch = useProtectedLinkPrefetch();
 
   // Listen for open / toggle events fired by FloatingTabs
   useEffect(() => {
@@ -110,9 +151,9 @@ export function NavBar() {
           <div className="hidden xl:flex items-center gap-2 shrink-0">
             {authReady && user ? (
               <>
-                <CartBadge />
-                <NotificationBell />
-                <UserMenu user={user} profile={profile} />
+                <CartBadge prefetch={protectedPrefetch} />
+                <NotificationBell prefetch={protectedPrefetch} />
+                <UserMenu user={user} profile={profile} prefetch={protectedPrefetch} />
               </>
             ) : (
               <>
@@ -164,7 +205,7 @@ export function NavBar() {
             <TopMenuMobile onClose={() => setMenuOpen(false)} />
             <div className="my-2 border-t border-white/20" />
             {authReady && user ? (
-              <MobileUserMenu profile={profile} onClose={() => setMenuOpen(false)} />
+              <MobileUserMenu profile={profile} onClose={() => setMenuOpen(false)} prefetch={protectedPrefetch} />
             ) : (
               <div className="flex gap-2 px-1 pb-1">
                 <Link href="/login" className="flex-1" onClick={() => setMenuOpen(false)}>
@@ -183,7 +224,7 @@ export function NavBar() {
 }
 
 /* ─────────── User Menu (Desktop) ─────────── */
-function UserMenu({ user, profile }: { user: User; profile: ProfileLite | null }) {
+function UserMenu({ user, profile, prefetch }: { user: User; profile: ProfileLite | null; prefetch?: false }) {
   const t = useTranslations("nav");
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -218,7 +259,7 @@ function UserMenu({ user, profile }: { user: User; profile: ProfileLite | null }
 
       {open && (
         <div className="absolute right-0 top-full mt-2 w-60 overflow-hidden rounded-xl border border-border bg-white dark:bg-surface shadow-xl z-50">
-          <Link href="/profile" onClick={() => setOpen(false)}
+          <Link href="/profile" prefetch={prefetch} onClick={() => setOpen(false)}
             className="block border-b border-border px-4 py-3 transition hover:bg-surface dark:hover:bg-surface-alt">
             <p className="truncate text-sm font-semibold text-foreground">{displayName}</p>
             {profile?.member_code && (
@@ -232,7 +273,7 @@ function UserMenu({ user, profile }: { user: User; profile: ProfileLite | null }
               {t("completeProfile")}
             </Link>
           )}
-          <Link href="/dashboard" onClick={() => setOpen(false)}
+          <Link href="/dashboard" prefetch={prefetch} onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-surface dark:hover:bg-surface-alt">
             <LayoutDashboard className="h-4 w-4 text-muted" />
             {t("dashboard")}
@@ -251,14 +292,14 @@ function UserMenu({ user, profile }: { user: User; profile: ProfileLite | null }
 }
 
 /* ─────────── User Menu (Mobile) ─────────── */
-function MobileUserMenu({ profile, onClose }: { profile: ProfileLite | null; onClose: () => void }) {
+function MobileUserMenu({ profile, onClose, prefetch }: { profile: ProfileLite | null; onClose: () => void; prefetch?: false }) {
   const t = useTranslations("nav");
   return (
     <div className="px-1 pb-1">
       {profile?.member_code && (
         <p className="px-3 pb-2 font-mono text-xs text-white/70">{profile.member_code}</p>
       )}
-      <Link href="/dashboard" onClick={onClose}
+      <Link href="/dashboard" prefetch={prefetch} onClick={onClose}
         className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-white/90 hover:bg-white/10">
         <LayoutDashboard className="h-4 w-4" />
         {t("dashboard")}

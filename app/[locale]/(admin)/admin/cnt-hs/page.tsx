@@ -55,17 +55,17 @@ function formatDate(raw: string | null | undefined): string {
 // ============================================================================
 
 type CntRow = {
-  id: number;
-  cntname: string;
-  cntstatus: string;
-  cntamount: number;
-  cntimagesslip: string;
-  cntfile: string;
+  ID: number;
+  cntName: string;
+  cntStatus: string;
+  cntAmount: number;
+  cntImagesSlip: string;
+  cntFile: string;
   date: string | null;
-  adminidcreate: string;
-  nameblank: string;
-  noblank: string;
-  nameaccount: string;
+  adminIDCreate: string;
+  nameBlank: string;
+  noBlank: string;
+  nameAccount: string;
 };
 
 type SP = { q?: string; search?: string; offset?: string };
@@ -88,15 +88,15 @@ export default async function CntHsPage({
   // ── tb_cnt_item fan-out (cnt-hs.php L202-213) ───────────────────
   const { data: itemsData, error: itemsErr } = await admin
     .from("tb_cnt_item")
-    .select("cntid, fcabinetnumber");
+    .select("cntID, fCabinetNumber");
   if (itemsErr) {
     console.error(`[tb_cnt_item list] failed`, { code: itemsErr.code, message: itemsErr.message });
   }
   const arrItem = new Map<number, string[]>();
-  for (const r of (itemsData ?? []) as Array<{ cntid: number; fcabinetnumber: string }>) {
-    const arr = arrItem.get(r.cntid);
-    if (arr) arr.push(r.fcabinetnumber);
-    else arrItem.set(r.cntid, [r.fcabinetnumber]);
+  for (const r of (itemsData ?? []) as Array<{ cntID: number; fCabinetNumber: string }>) {
+    const arr = arrItem.get(r.cntID);
+    if (arr) arr.push(r.fCabinetNumber);
+    else arrItem.set(r.cntID, [r.fCabinetNumber]);
   }
 
   // ── pagination + search resolve ─────────────────────────────────
@@ -110,27 +110,29 @@ export default async function CntHsPage({
   let q = admin
     .from("tb_cnt")
     .select(
-      "id, cntname, cntstatus, cntamount, cntimagesslip, cntfile, date, " +
-        "adminidcreate, nameblank, noblank, nameaccount",
+      "ID, cntName, cntStatus, cntAmount, cntImagesSlip, cntFile, date, " +
+        "adminIDCreate, nameBlank, noBlank, nameAccount",
       { count: "exact" },
     )
     .order("date", { ascending: false, nullsFirst: false })
     .range(offset, offset + PAGE_SIZE - 1);
 
-  if (qIsStatus) q = q.eq("cntstatus", sp.q!);
+  if (qIsStatus) q = q.eq("cntStatus", sp.q!);
   if (search) {
     const safe = search.replace(/[(),]/g, " ");
     const pattern = `%${safe}%`;
+    // Note: PostgREST .or() string uses identifier names verbatim — quote
+    // camelCase columns so they aren't lowercased by the planner.
     q = q.or(
-      `id::text.ilike.${pattern},nameblank.ilike.${pattern},noblank.ilike.${pattern}`,
+      `"ID"::text.ilike.${pattern},"nameBlank".ilike.${pattern},"noBlank".ilike.${pattern}`,
     );
   }
 
   // ── status overview counts ──────────────────────────────────────
   const [tableRes, countAllRes, count1Res] = await Promise.all([
     q,
-    admin.from("tb_cnt").select("id", { count: "exact", head: true }),
-    admin.from("tb_cnt").select("id", { count: "exact", head: true }).eq("cntstatus", "1"),
+    admin.from("tb_cnt").select("ID", { count: "exact", head: true }),
+    admin.from("tb_cnt").select("ID", { count: "exact", head: true }).eq("cntStatus", "1"),
   ]);
 
   if (tableRes.error) {
@@ -273,24 +275,24 @@ export default async function CntHsPage({
                       // never populated tb_cnt_item — would show "—" if we
                       // relied on fan-out only). Either way the chip island
                       // (CabinetListCell) gets a clean string[].
-                      const fanOut = arrItem.get(row.id) ?? [];
+                      const fanOut = arrItem.get(row.ID) ?? [];
                       const cabinets =
                         fanOut.length > 0
                           ? fanOut
-                          : (row.cntname ?? "")
+                          : (row.cntName ?? "")
                               .split(/[,\s]+/)
                               .map((s) => s.trim())
                               .filter(Boolean);
-                      const isPaid = row.cntstatus === "2";
+                      const isPaid = row.cntStatus === "2";
                       return (
-                        <tr key={row.id} className="border-t border-border hover:bg-surface-alt/30">
+                        <tr key={row.ID} className="border-t border-border hover:bg-surface-alt/30">
                           {/* 1 — ID */}
                           <td className="px-4 py-3 font-mono text-xs">
                             <Link
-                              href={`/admin/cnt-hs/${row.id}`}
+                              href={`/admin/cnt-hs/${row.ID}`}
                               className="text-primary-600 hover:underline"
                             >
-                              #{row.id}
+                              #{row.ID}
                             </Link>
                           </td>
                           {/* 2 — วันที่ */}
@@ -303,34 +305,34 @@ export default async function CntHsPage({
                               CabinetListCell client island (3 chip preview +
                               click-to-expand PacredDialog with copy-all). */}
                           <td className="px-4 py-3 text-xs max-w-[280px] align-top">
-                            <CabinetListCell cntId={row.id} cabinets={cabinets} />
+                            <CabinetListCell cntId={row.ID} cabinets={cabinets} />
                           </td>
                           {/* 4 — จำนวนเงิน */}
                           <td className="px-4 py-3 text-right font-mono text-xs">
-                            ฿{numberFormat2(row.cntamount)}
+                            ฿{numberFormat2(row.cntAmount)}
                           </td>
                           {/* 5 — ข้อมูลเพิ่มเติม */}
                           <td className="px-4 py-3 text-xs max-w-[220px]">
                             <div className="space-y-0.5">
                               <div>
                                 <span className="text-muted">ธนาคาร:</span>{" "}
-                                <span className="font-medium">{row.nameblank || "—"}</span>
+                                <span className="font-medium">{row.nameBlank || "—"}</span>
                               </div>
                               <div>
                                 <span className="text-muted">เลขที่:</span>{" "}
-                                <span className="font-mono">{row.noblank || "—"}</span>
+                                <span className="font-mono">{row.noBlank || "—"}</span>
                               </div>
-                              <div className="truncate" title={row.nameaccount || ""}>
+                              <div className="truncate" title={row.nameAccount || ""}>
                                 <span className="text-muted">ชื่อ:</span>{" "}
-                                <span>{row.nameaccount || "—"}</span>
+                                <span>{row.nameAccount || "—"}</span>
                               </div>
                             </div>
                           </td>
                           {/* 6 — สลิป */}
                           <td className="px-4 py-3 text-center text-xs">
-                            {row.cntimagesslip ? (
+                            {row.cntImagesSlip ? (
                               <Link
-                                href={`/admin/cnt-hs/${row.id}`}
+                                href={`/admin/cnt-hs/${row.ID}`}
                                 className="text-primary-600 hover:underline"
                               >
                                 ดูสลิป
@@ -341,16 +343,16 @@ export default async function CntHsPage({
                           </td>
                           {/* 7 — หลักฐาน */}
                           <td className="px-4 py-3 text-center text-xs">
-                            {row.cntfile ? (
+                            {row.cntFile ? (
                               <Link
-                                href={`/admin/cnt-hs/${row.id}`}
+                                href={`/admin/cnt-hs/${row.ID}`}
                                 className="text-primary-600 hover:underline"
                               >
                                 ดูไฟล์
                               </Link>
                             ) : (
                               <Link
-                                href={`/admin/cnt-hs/${row.id}`}
+                                href={`/admin/cnt-hs/${row.ID}`}
                                 className="text-amber-600 hover:underline"
                               >
                                 เพิ่มไฟล์
@@ -359,7 +361,7 @@ export default async function CntHsPage({
                           </td>
                           {/* 8 — ผู้ทำรายการ */}
                           <td className="px-4 py-3 text-xs font-mono text-muted">
-                            {row.adminidcreate || "—"}
+                            {row.adminIDCreate || "—"}
                           </td>
                           {/* 9 — สถานะ */}
                           <td className="px-4 py-3 text-center">
@@ -376,7 +378,7 @@ export default async function CntHsPage({
                           {/* 10 — ตัวเลือก */}
                           <td className="px-4 py-3 text-right">
                             <Link
-                              href={`/admin/cnt-hs/${row.id}`}
+                              href={`/admin/cnt-hs/${row.ID}`}
                               className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
                             >
                               อัปเดต / ดูรายละเอียด

@@ -221,12 +221,12 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
   if (visibleCabs.length > 0) {
     const { data: paidRows, error: paidRowsErr } = await admin
       .from("tb_cnt_item")
-      .select("fcabinetnumber")
-      .in("fcabinetnumber", visibleCabs);
+      .select("fCabinetNumber")
+      .in("fCabinetNumber", visibleCabs);
     if (paidRowsErr) {
       console.error(`[tb_cnt_item list] failed`, { code: paidRowsErr.code, message: paidRowsErr.message });
     }
-    paidSet = new Set((paidRows ?? []).map((r) => r.fcabinetnumber as string));
+    paidSet = new Set((paidRows ?? []).map((r) => (r as { fCabinetNumber: string }).fCabinetNumber));
   }
 
   let grouped: Grouped[] = error || !rows ? [] : groupByContainer(rows as Row[], paidSet);

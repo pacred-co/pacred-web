@@ -65,9 +65,9 @@ type SearchParams = {
 // ────────────────────────────────────────────────────────────
 
 type CheckQueueRow = {
-  fid: number;
+  fID: number;
   date: string | null;
-  adminid: string | null;
+  adminID: string | null;
 };
 
 type ForwarderRawRow = {
@@ -155,14 +155,14 @@ export default async function AdminForwarderCheckPage({
   // DataTables `order: [[1, 'desc']]` which sorts on the date column).
   const queueRes = await admin
     .from("tb_check_forwarder")
-    .select("fid, date, adminid")
+    .select("fID, date, adminID")
     .order("date", { ascending: false, nullsFirst: false })
     .limit(500);
   const queue = (queueRes.data ?? []) as unknown as CheckQueueRow[];
   const queueByFid = new Map<number, CheckQueueRow>(
-    queue.map((q) => [q.fid, q]),
+    queue.map((q) => [q.fID, q]),
   );
-  const fids = queue.map((q) => q.fid);
+  const fids = queue.map((q) => q.fID);
 
   // Empty queue → render placeholder + skip the rest of the joins.
   // Otherwise we'd burn an extra 4 queries on an empty input.
@@ -344,7 +344,7 @@ export default async function AdminForwarderCheckPage({
       status: r.fstatus,
       promo_id: promoId,
       ship_service_fee: Number(r.fshippingservice ?? 0),
-      check_added_by: queueRow?.adminid ?? null,
+      check_added_by: queueRow?.adminID ?? null,
       check_added_at: queueRow?.date ?? null,
       note: r.fnote,
       cover_url: coverMap[String(r.id)] ?? null,

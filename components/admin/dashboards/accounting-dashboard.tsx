@@ -37,7 +37,7 @@ function thb(n: number): string {
 }
 
 function nowMsServer(): number {
-  // eslint-disable-next-line react-hooks/purity -- Server Component, renders fresh per request; Date.now() is intentional time-of-render snapshot.
+   
   return Date.now();
 }
 

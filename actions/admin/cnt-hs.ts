@@ -40,26 +40,26 @@ async function setCntStatus(cntId: number, newStatus: "2" | "3"): Promise<Result
     // or legacy PHP for those edge cases.
     const { data: cur, error: readErr } = await admin
       .from("tb_cnt")
-      .select("id,cntstatus")
-      .eq("id", cntId)
-      .maybeSingle<{ id: number; cntstatus: string | null }>();
+      .select("ID,cntStatus")
+      .eq("ID", cntId)
+      .maybeSingle<{ ID: number; cntStatus: string | null }>();
     if (readErr) return { ok: false, error: `Read failed: ${readErr.message}` };
     if (!cur) return { ok: false, error: `cnt #${cntId} not found` };
-    if (cur.cntstatus !== "1") {
+    if (cur.cntStatus !== "1") {
       return {
         ok: false,
-        error: `cnt #${cntId} อยู่ในสถานะ ${cur.cntstatus} ไม่สามารถเปลี่ยนผ่านหน้านี้ได้ (รอเฉพาะ cntstatus='1' = รอตรวจ)`,
+        error: `cnt #${cntId} อยู่ในสถานะ ${cur.cntStatus} ไม่สามารถเปลี่ยนผ่านหน้านี้ได้ (รอเฉพาะ cntStatus='1' = รอตรวจ)`,
       };
     }
 
     const { error: updErr } = await admin
       .from("tb_cnt")
       .update({
-        cntstatus: newStatus,
-        adminidupdate: safeLegacyAdminId(adminId, 30),
-        dateupdate: new Date().toISOString(),
+        cntStatus: newStatus,
+        adminIDUpdate: safeLegacyAdminId(adminId, 30),
+        dateUpdate: new Date().toISOString(),
       })
-      .eq("id", cntId);
+      .eq("ID", cntId);
     if (updErr) return { ok: false, error: `Update failed: ${updErr.message}` };
 
     revalidatePath(`/admin/cnt-hs/${cntId}`);
@@ -106,15 +106,15 @@ export async function adminUploadCntSlip(
       // Guard: only status='1' can be approved-via-slip-upload.
       const { data: cur, error: readErr } = await admin
         .from("tb_cnt")
-        .select("id,cntstatus")
-        .eq("id", cntId)
-        .maybeSingle<{ id: number; cntstatus: string | null }>();
+        .select("ID,cntStatus")
+        .eq("ID", cntId)
+        .maybeSingle<{ ID: number; cntStatus: string | null }>();
       if (readErr) return { ok: false, error: `Read failed: ${readErr.message}` };
       if (!cur) return { ok: false, error: `cnt #${cntId} not found` };
-      if (cur.cntstatus !== "1") {
+      if (cur.cntStatus !== "1") {
         return {
           ok: false,
-          error: `cnt #${cntId} อยู่ในสถานะ ${cur.cntstatus} ไม่สามารถอัปโหลดสลิปได้ (รอเฉพาะ cntstatus='1')`,
+          error: `cnt #${cntId} อยู่ในสถานะ ${cur.cntStatus} ไม่สามารถอัปโหลดสลิปได้ (รอเฉพาะ cntStatus='1')`,
         };
       }
 
@@ -126,12 +126,12 @@ export async function adminUploadCntSlip(
       const { error: updErr } = await admin
         .from("tb_cnt")
         .update({
-          cntimagesslip: up.filename,
-          cntstatus:     "2",
-          adminidupdate: safeLegacyAdminId(adminId, 30),
-          dateupdate:    new Date().toISOString(),
+          cntImagesSlip: up.filename,
+          cntStatus:     "2",
+          adminIDUpdate: safeLegacyAdminId(adminId, 30),
+          dateUpdate:    new Date().toISOString(),
         })
-        .eq("id", cntId);
+        .eq("ID", cntId);
       if (updErr) {
         return {
           ok: false,

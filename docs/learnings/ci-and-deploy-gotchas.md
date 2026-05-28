@@ -93,6 +93,44 @@ it's actually a WAF intercept the user can't fix.
 
 ---
 
+## [2026-05-27] PG RENAME COLUMN does NOT reach PL/pgSQL function bodies — re-declare every function that references the renamed columns in the SAME migration
+
+**Symptom (the second time it bit us, hours after shipping the camelCase pilot 0113).** /register both tabs (personal + juristic) returned `"บันทึกโปรไฟล์ไม่สำเร็จ"` even with `OTP_BYPASS=true`. The Pacred client showed the opaque `profile_failed` error code. Vercel function logs would have shown `column "userid" does not exist`.
+
+**Root cause.** `generate_member_code()` (a BEFORE INSERT trigger on `profiles`, fires on every signup) — defined across migrations 0083 → 0090 → 0095 → 0096 → 0097 → 0098 → 0099 → 0100 → 0103 (each `CREATE OR REPLACE FUNCTION` superseding) — referenced `tb_users.userid` (lowercase) to find the next vacant member code. The camelCase pilot (0113) renamed that column to `tb_users."userID"`. PostgreSQL RENAME COLUMN updates dependent indexes/FKs/views automatically BUT NOT PL/pgSQL function bodies — those are stored as text and not re-parsed on rename. Next signup → trigger runs → SQL inside `EXECUTE` looks for `userid` → column doesn't exist → trigger errors → profile INSERT fails → action returns `profile_failed` → client shows the opaque message.
+
+**What to do.** For any camelCase batch (or any RENAME COLUMN sweep), THE MIGRATION must also re-declare every function whose body references the renamed columns. Audit pattern:
+
+```
+# Find every function definition in the migration history
+grep -l "create or replace function" supabase/migrations/*.sql
+
+# Find functions that reference the table being renamed
+grep -l "tb_users" supabase/migrations/*.sql  # then narrow to function definitions
+
+# Read each function's body for lowercase identifiers that match the rename map
+```
+
+Then write the fix as part of the same migration (or a follow-up `0114_fix_<fn>_after_camelcase.sql`):
+
+```sql
+create or replace function public.<fn>() ...
+as $$
+  -- ... same logic, lowercase identifiers replaced with quoted "camelCase"
+$$;
+```
+
+**Anti-pattern.** Trusting PG to fix up dependent objects on RENAME COLUMN. It handles a lot (indexes, FKs, dependent generated columns, views referencing the column by name in the SELECT clause), but PL/pgSQL function bodies are out of scope — they're opaque text to the catalog. Same applies to:
+- RLS policy `USING (...)` / `WITH CHECK (...)` expressions stored as text
+- Materialized view definitions (re-run `REFRESH` after rename — actually breaks if the column was projected)
+- Stored procedure / CTE definitions
+
+For the camelCase pilot the surface to audit is small (most legacy `tb_*` tables have no triggers). For batches that touch tables with hot triggers (profile signup, audit log, etc.), AUDIT BEFORE you ship. See `memory/camelcase_pilot_in_progress.md` "How to apply" step 5.
+
+**Specific fix shipped (this case):** `supabase/migrations/0114_fix_member_code_function_after_camelcase.sql` — `CREATE OR REPLACE FUNCTION public.generate_member_code()` + `public.next_pr_member_code()` with `"userID"` (quoted, case-sensitive). Verified via `pg_get_functiondef('public.generate_member_code()'::regprocedure)`.
+
+---
+
 ## [2026-05-27] camelCase column-rename migration on a live Pacred-style DB needs lockstep deploy
 
 **Symptom.** ก๊อต's pacred-admin-next docs/database/ spec uses
@@ -713,3 +751,50 @@ Either repoint (if there's a replacement route) or remove the Link.
 - Commit `5bc98ec4` — repointed `/line-notify` → `/line-settings`
 - `app/[locale]/(protected)/dashboard/page.tsx` L135-142 — the offending Link
 - 2026-05-26 entry "Deletion sweep missed two consumers" — same pattern for `package.json` test-chain references
+
+---
+
+## [2026-05-28] CI `tsc --noEmit` OOMs at the default 2 GB heap once the type universe gets large enough
+
+**Symptom (GitHub Actions).** CI `verify` job's `Typecheck` step blows up with:
+
+```
+<--- Last few GCs --->
+[…]: Mark-Compact 2027.9 (2043.8) -> 2005.3 (2043.6) MB […]
+FATAL ERROR: Ineffective mark-compacts near heap limit
+Allocation failed - JavaScript heap out of memory
+[…]
+[ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL] Command was killed with SIGABRT (Aborted): tsc --noEmit
+Error: Process completed with exit code 1.
+```
+
+Build still passes locally — devs typically have `NODE_OPTIONS=--max-old-space-size=8192` (or higher) exported, masking the problem until CI catches up.
+
+**Root cause.** Node's V8 heap defaults to 2 GB. The Pacred codebase grew past that for tsc once these landed together:
+- camelCase batch 2a + ภูม's wave-25 #194-#196 sweep (~114 files × type-thicker camelCase signatures)
+- ปอน's MOMO isolated layer (+2 234 LOC · 4 new tables × type-rich Zod schemas + 14-status × 3-phase enum)
+- All the new legacy `tb_*` row types we hand-author in admin pages
+- Sentry + Supabase + react-pdf large type packages
+
+The bare `tsc --noEmit` invocation in the CI workflow (and in `package.json` `verify`) inherits Node's 2 GB default and OOMs.
+
+**Fix.**
+1. New wrapper `scripts/tsc-check.mjs` that sets `NODE_OPTIONS=--max-old-space-size=8192` (preserving any caller-supplied flags) and spawns the local `tsc --noEmit`. Cross-platform — works on Linux/Mac/Windows because the env-var is set via `process.env`, not a shell prefix.
+2. `package.json`:
+   - new `"typecheck": "node scripts/tsc-check.mjs"`
+   - `"verify"` now reads `pnpm typecheck` instead of raw `tsc --noEmit`
+3. `.github/workflows/ci.yml` Typecheck step → `run: pnpm typecheck`. Removed the inline `env: NODE_OPTIONS:` (the wrapper owns it now — single source of truth).
+4. **Build step still needs the bump too** — `next build` runs tsc internally during the type-check pass + during page generation. Kept `env: NODE_OPTIONS: "--max-old-space-size=8192"` on the Build step for now (could route it through the wrapper later if we add `pnpm build:safe`).
+
+**Why this matters next time:**
+- The 2 GB → 8 GB cliff is unavoidable as the codebase grows; **don't try to "fix" it by sharding tsconfigs unless someone is genuinely below 4 GB locally**. The heap bump is the right answer.
+- Override via env: `NODE_OPTIONS="--max-old-space-size=12288" pnpm typecheck` if 8 GB ever isn't enough.
+- Local devs who hit OOM running raw `pnpm exec tsc --noEmit` should switch to `pnpm typecheck`.
+- **Watch the build for slowness, not just memory** — once you cross ~6 GB resident set tsc starts spending significant time in GC even when it succeeds. That's a signal to actually audit type complexity (e.g. `lib/integrations/momo-isolated/types.ts` 14-status × 3-phase tuple was deliberately kept narrow to avoid a 14×3=42 × N projection blowup).
+
+**Cross-links:**
+- `scripts/tsc-check.mjs` — the wrapper
+- `package.json` `typecheck` + `verify` scripts
+- `.github/workflows/ci.yml` Typecheck step
+- 2026-05-21 entry: `googleapis` package crash (different cause — a single bad dep) but same OOM-shape symptom
+- Local-dev workaround that this supersedes: `NODE_OPTIONS=--max-old-space-size=8192 pnpm build`

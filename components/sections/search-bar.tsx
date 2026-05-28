@@ -96,7 +96,11 @@ export function SearchBar({ embedded = false, hideOnMobile = false, defaultColla
     <div className={rootClass}>
       <div className="mx-auto w-full max-w-[1440px] px-4 py-[10px] md:pl-[168px] md:pr-[56px]">
 
-        <div className="flex items-center gap-0">
+        {/* Form wrapper so Enter / submit-button routes to `/search?url=…`
+            — the input + buttons used to live in a bare <div>, so neither
+            keyboard-Enter nor the red search button did anything (ปอน
+            2026-05-28: "เอาลิงก์ไปวางแล้วไม่ติดอะ กดค้นแล้วไม่มา"). */}
+        <form action="/search" method="GET" className="flex items-center gap-0">
 
           {/* Search input + camera + button */}
           <div className="relative flex-1">
@@ -160,13 +164,14 @@ export function SearchBar({ embedded = false, hideOnMobile = false, defaultColla
             </button>
           )}
 
-        </div>
+        </form>
 
-        {/* Quick keywords — scrollable on mobile. Suppressed on the mobile
-            launchpad (/m/dashboard) per ปอน 2026-05-27 (see `isMobileLaunchpad`
-            above); shown on every other route. */}
+        {/* Quick keywords — desktop only. Hidden on mobile entirely per ปอน
+            2026-05-28 ("ในมือถือเอาไอ้คีย์เวิร์ดพวกนี้ออกให้หมดเลย"). Still
+            suppressed on the mobile launchpad (/m/dashboard) at every width
+            via `isMobileLaunchpad` above. */}
         {!isMobileLaunchpad && (
-          <div className="flex items-center md:justify-center overflow-x-auto md:flex-wrap gap-0 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="hidden md:flex items-center md:justify-center overflow-x-auto md:flex-wrap gap-0 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {quickKeys.map((kw, i) => (
               <Link
                 key={kw}

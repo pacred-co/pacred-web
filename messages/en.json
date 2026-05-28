@@ -374,15 +374,15 @@
   "login": {
     "title": "Sign In",
     "emailLabel": "Phone number or Member ID",
-    "emailPlaceholder": "0812345678 or PR001",
+    "emailPlaceholder": "Phone number or member code",
     "passwordLabel": "Password",
-    "passwordPlaceholder": "••••••••",
+    "passwordPlaceholder": "Password to sign in, 6-20 characters",
     "forgotPassword": "Forgot password?",
     "rememberMe": "Keep me signed in",
     "submit": "Sign In",
     "orContinueWith": "Or sign in with",
-    "noAccount": "Don't have an account?",
-    "registerLink": "Sign up",
+    "noAccount": "Don't have a user account?",
+    "registerLink": "Create account",
     "comingSoon": "COMING SOON"
   },
   "register": {

@@ -813,6 +813,129 @@ The local `async function` declarations land as inline AST nodes, the walker see
 - Adjacent files: `actions/line-settings.ts` (canonical home for the two LINE actions)
 - This is a documented Next.js issue: search GitHub for "use server re-export AST" — multiple maintainer comments confirm the wrapper is the intended pattern.
 
+---
+
+## [2026-05-28] `next/script strategy="afterInteractive"` does NOT preserve order across multiple `<Script>` tags — jQuery race kills the entire legacy chrome
+
+**Context:** The (protected) layout loads the legacy PCS Cargo `all-script.php` vendor bundle — `vendors.min.js` (jQuery 3.4.1 + Popper + Bootstrap-4, 537 KB) → `app-menu.min.js` (17 KB) → `app.min.js` (17 KB) → `tam-it.js` (8 KB) → `jquery.magnific-popup.min.js` → `meg.init.js`. They're rendered as a `.map()` of `<Script src=... strategy="afterInteractive" />` and a sibling comment in the source ("scripts in the same strategy execute in render order") asserted this preserved the chain. It does not.
+
+**Symptom (every protected page, console flood):**
+```
+tam-it.js:21               Uncaught ReferenceError: $ is not defined
+app.min.js:292             Uncaught ReferenceError: jQuery is not defined
+meg.init.js:2              Uncaught ReferenceError: $ is not defined
+jquery.magnific-popup.min.js:4   Uncaught TypeError: a is not a function
+app-menu.min.js:505        Uncaught ReferenceError: jQuery is not defined
+```
+The smaller files (`tam-it.js` 8 KB · `app.min.js` 17 KB · `meg.init.js` ~2 KB · plugin shim ~20 KB) finish downloading and execute BEFORE `vendors.min.js` (537 KB) is done, so they hit a jQuery-less window. Every legacy interaction — slick carousel, magnific popup, app menu, the `.tam-counter` ticker — silently dies.
+
+**Root cause:** `next/script strategy="afterInteractive"` inserts each script independently after page hydration (each one is its own `<script>` element appended to the DOM by the Script runtime). Independent insertions race. There is **no cross-script ordering contract** between sibling `<Script>` tags — the assumption that "render order = execute order" is wrong. The HTML spec's "in-order" list only applies to scripts created by `document.createElement` with `async = false` AND added before their predecessors finish — `next/script` doesn't compose that pattern across multiple Script instances.
+
+**Fix — one inline loader that creates the `<script>` elements in order with `async = false`:**
+```tsx
+<Script
+  id="legacy-js-bundle-loader"
+  strategy="afterInteractive"
+  dangerouslySetInnerHTML={{
+    __html: `
+      var basePath = '/legacy/pcs/';
+      (function () {
+        var sources = ${JSON.stringify(JS_BUNDLE)};
+        sources.forEach(function (src) {
+          if (document.querySelector('script[data-legacy-src="' + src + '"]')) return;
+          var s = document.createElement('script');
+          s.src = src;
+          s.async = false;          // ⚠️ critical — puts s on the in-order list
+          s.setAttribute('data-legacy-src', src);
+          document.head.appendChild(s);
+        });
+      })();
+    `,
+  }}
+/>
+```
+Per [HTML spec — script-loading "in-order" list](https://html.spec.whatwg.org/multipage/scripting.html#prepare-the-script-element): a script created by `document.createElement('script')` with `async = false` is appended to the "list of scripts that will execute in order as soon as possible". The browser fetches them in parallel BUT defers execution until each predecessor has executed. This is the pattern jQuery's own CDN loader (`<script src=jquery.js async=false>`) uses to chain its plugins.
+
+The `data-legacy-src` dedup guard handles client-side nav re-mounting the layout (which would otherwise inject the bundle twice and `vendors.min.js` would re-initialize jQuery + nuke event handlers bound after the first load).
+
+**Why this matters next time:**
+- The "scripts queue" assumption around `next/script` siblings is intuitive but wrong. The Next.js docs don't promise it; the Script source confirms each instance is independent.
+- The bug only surfaces when sizes are unbalanced enough for the race to lose. In dev you may get lucky (LAN cache, fast disk) and ship a layout that breaks under prod network conditions.
+- Fingerprint = **multiple distinct files** complaining about `$` / `jQuery` / "a is not a function" simultaneously. If only ONE legacy script is broken, suspect that one file. If the whole bundle is broken, suspect load-order.
+- The same applies to ANY dependent script chain (jQuery plugins, Bootstrap+Popper, GA+gtm-loader). Don't use `.map()` of `<Script>` for a chain — wrap the chain in a single loader.
+
+**Cross-links:**
+- `app/[locale]/(protected)/layout.tsx` — the loader implementation + the long explainer comment
+- `public/legacy/pcs/assets/js/vendors/js/vendors.min.js` — the 537 KB file that loses the race
+- 2026-05-28 fix commit (this entry)
+
+---
+
+## [2026-05-28] `<Link>` to a protected route from a non-protected page leaks the protected layout's CSS bundle as `<link rel="preload">` on the current page
+
+**Context:** Browser console flooded with ~126 warnings of the form `The resource https://pacred.co.th/legacy/pcs/menu.css was preloaded using link preload but not used within a few seconds from the window's load event.` on `/register` (and likely every auth/public route when an authenticated user — e.g. mid-signup juristic — is present). The list also included every other CSS in the protected `CSS_BUNDLE` plus the protected fonts.googleapis Prompt URL — none of which the auth page uses.
+
+**Symptom triad:**
+1. `/register` / `/login` / `/complete-profile` console floods with "preloaded but not used" warnings for every URL in `app/[locale]/(protected)/layout.tsx` `CSS_BUNDLE` (~25 stylesheets + Google Fonts).
+2. The warnings include resources the current page never references — `/legacy/pcs/menu.css`, `/legacy/pcs/cart.css`, `/images/customertheme/*.png`, etc. — they only live in the protected layout's render tree.
+3. Adding `prefetch={false}` to the offending Links eliminates the warnings without breaking any nav.
+
+**Root cause — Next.js `<Link>` viewport-prefetch × React 19 stylesheet hoisting:**
+1. Next.js App Router's `<Link>` defaults to `prefetch="auto"` (a.k.a. partial PPR prefetch in viewport). When `<Link href="/dashboard">` enters the viewport on a NON-protected page, Next.js fetches the RSC payload for `/dashboard`.
+2. The RSC payload renders `app/[locale]/(protected)/layout.tsx` server-side. That layout returns `<link rel="stylesheet" href="…">` × 25-plus tags (the legacy-PCS CSS bundle) plus a Google-Fonts stylesheet `<link>`.
+3. React 19 sees those `<link rel="stylesheet">` declarations in the RSC payload and **auto-hoists each as a `<link rel="preload" as="style">`** into the CURRENT page's `<head>` — even though that page (the auth/public page) never renders the protected layout.
+4. The browser preloads the 25+ stylesheets, none of them apply to the current page, and after a few seconds the spec emits the "preloaded but not used" warning per resource.
+
+**Where the protected Links live (on an authed user on a non-protected page):**
+- `components/sections/navbar.tsx` — `UserMenu` (`/profile`, `/dashboard`) + `MobileUserMenu` (`/dashboard`)
+- `components/cart-badge.tsx` — `<Link href="/service-order/cart">`
+- `components/notification-bell.tsx` — `<Link href="/notifications">`
+
+All four only render when `authReady && user` is truthy in NavBar — which happens on `/register` for the **mid-signup juristic-incomplete** edge case `requireGuest()` allows through, AND on the entire `(public)` route group whenever the customer happens to already be signed in.
+
+**Fix — `usePathname()`-driven prefetch gate inside NavBar:**
+```ts
+// components/sections/navbar.tsx
+function useProtectedLinkPrefetch(): false | undefined {
+  const pathname = usePathname();
+  if (!pathname) return false;
+  return /^(?:\/[a-z]{2})?\/(?:dashboard|profile|service-order|service-import|service-payment|wallet|wallet-credit|wallet-shop|cart|notifications|shipments|sales|refunds|pay|search|map|addresses|china-address|freight|account-settings|line-settings|m\/dashboard)(?:\/|$)/.test(pathname)
+    ? undefined   // inside (protected) — keep prefetch ON so back-office nav stays snappy
+    : false;      // outside (protected) — disable prefetch so the CSS bundle doesn't leak
+}
+
+// In NavBar JSX:
+const protectedPrefetch = useProtectedLinkPrefetch();
+// ...
+<CartBadge prefetch={protectedPrefetch} />
+<NotificationBell prefetch={protectedPrefetch} />
+<UserMenu prefetch={protectedPrefetch} ... />
+<MobileUserMenu prefetch={protectedPrefetch} ... />
+
+// And in those four files, the protected-target <Link> takes a prefetch prop:
+<Link href="/dashboard" prefetch={prefetch} ...>
+<Link href="/profile" prefetch={prefetch} ...>
+<Link href="/service-order/cart" prefetch={prefetch} ...>
+<Link href="/notifications" prefetch={prefetch} ...>
+```
+
+Navigation still works — clicking the Link just triggers a regular request instead of a viewport-warm prefetch. The trade-off is a tiny one-time wait when an authed user navigates from `/` to `/dashboard`, in exchange for eliminating ~126 console warnings (and ~25 useless stylesheet HTTP requests per page load) on every auth / public visit.
+
+**Why this matters next time:**
+- **The rule:** any `<Link>` from outside `(protected)` to a route inside `(protected)` should pass `prefetch={false}` — OR be conditionally rendered behind a `usePathname()` gate.
+- **Detection grep:** if `view-source:` of a non-protected URL shows `<link rel="preload" href="/legacy/pcs/*.css">` or `<link rel="preload" href="https://fonts.googleapis.com/css?family=Prompt">`, a Link in your chrome is warming the protected layout.
+- **The CSS bundle isn't the problem.** It's correctly scoped to `(protected)/layout.tsx`. The leak vector is the prefetch — fix at the Link, not by trimming the bundle.
+- **Same applies to admin chrome** — if `(admin)/layout.tsx` ever grows a similar bundle, the rule extends: any `<Link href="/admin/...">` from non-admin pages should be `prefetch={false}`.
+- **Why the warning is silent on protected pages:** when NavBar renders on `/dashboard`, the CSS bundle IS already loaded by the layout the user is sitting on; the prefetch of other protected routes just deduplicates against the in-use stylesheets, no preload warning.
+
+**Cross-links:**
+- 2026-05-28 fix commit (this entry) — files: `components/sections/navbar.tsx`, `components/cart-badge.tsx`, `components/notification-bell.tsx`
+- [`app/[locale]/(protected)/layout.tsx`](../../app/[locale]/(protected)/layout.tsx) — the `CSS_BUNDLE` array that gets hoisted
+- [Next.js docs — Link prefetch](https://nextjs.org/docs/app/api-reference/components/link#prefetch)
+- [React 19 RFC — Stylesheet hoisting](https://react.dev/reference/react-dom/components/link) — the auto-preload behavior
+
+---
+
 ## [2026-05-28] `"use server"` files reject every non-async-function value export — not just re-exports
 
 **Context:** Wave 25 click-through verify · ภูม กดปุ่ม "💸 ทำรายการเบิกเงินค่าตู้" บน `/admin/report-cnt` → modal เปิด → submit → "ขออภัย เกิดข้อผิดพลาด". Chrome dev "1 Issue" caught it.
@@ -879,4 +1002,3 @@ Ran on 2026-05-28 post-fix · returned 0 hits. Add to CI eventually as a lint ru
 - Commit `6d88c8e` — Wave 25 #196 fix (4 files: `cnt-payment.ts` · `report-cnt-cost-update.ts` · `report-cnt-detail.ts` (3 schemas))
 - Reinforces [`verify-deep-flow.md`](verify-deep-flow.md) — smoke ≠ verified; you must click action buttons
 - Adjacent rule: AGENTS.md §0c (Supabase queries must destructure `error`) shares the same "silent at smoke, loud at runtime" anti-pattern lineage
-

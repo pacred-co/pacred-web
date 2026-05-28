@@ -375,20 +375,20 @@ export async function adminReportCntAddCheck(fIDs: number[]): Promise<AdminActio
     // observable behaviour matches "the row is in the queue").
     const { data: existing, error: existingErr } = await admin
       .from("tb_check_forwarder")
-      .select("fid")
-      .in("fid", parsed.data.fIDs);
+      .select("fID")
+      .in("fID", parsed.data.fIDs);
     if (existingErr) {
       console.error(`[tb_check_forwarder list] failed`, { code: existingErr.code, message: existingErr.message });
     }
-    const seen = new Set((existing ?? []).map((r) => Number(r.fid)));
+    const seen = new Set((existing ?? []).map((r) => Number((r as { fID: number }).fID)));
 
     const toInsert = parsed.data.fIDs
       .filter((id) => !seen.has(id))
       .map((id) => ({
-        cfstatus: "1",
-        fid:      id,
+        cfStatus: "1",
+        fID:      id,
         date:     new Date().toISOString(),
-        adminid:  adminId.slice(0, 50),
+        adminID:  adminId.slice(0, 50),
       }));
 
     if (toInsert.length === 0) {
@@ -398,7 +398,7 @@ export async function adminReportCntAddCheck(fIDs: number[]): Promise<AdminActio
     const { error: insErr } = await admin.from("tb_check_forwarder").insert(toInsert);
     if (insErr) return { ok: false, error: insErr.message };
 
-    await logAdminAction(adminId, "report_cnt.add_check", "tb_check_forwarder", toInsert.map((r) => r.fid).join(","), {
+    await logAdminAction(adminId, "report_cnt.add_check", "tb_check_forwarder", toInsert.map((r) => r.fID).join(","), {
       inserted: toInsert.length,
       skipped:  parsed.data.fIDs.length - toInsert.length,
     });

@@ -210,12 +210,12 @@ export async function adminCreateCntPayment(
     // operator can fix the selection.
     const { data: existing, error: dupErr } = await admin
       .from("tb_cnt_item")
-      .select("id, fcabinetnumber, cntid")
-      .in("fcabinetnumber", cabinetNumbers);
+      .select("ID, fCabinetNumber, cntID")
+      .in("fCabinetNumber", cabinetNumbers);
     if (dupErr) return { ok: false, error: dupErr.message };
     if ((existing?.length ?? 0) > 0) {
       const dupList = (existing ?? [])
-        .map((r) => r.fcabinetnumber)
+        .map((r) => r.fCabinetNumber)
         .join(", ");
       return {
         ok: false,
@@ -242,25 +242,25 @@ export async function adminCreateCntPayment(
     const { data: cntRow, error: cntErr } = await admin
       .from("tb_cnt")
       .insert({
-        cntname:        cntNameCsv,
-        cntstatus:      "1",
-        cntamount:      cntAmount,
-        cntimagesslip:  "", // legacy slip column — unused on this entry path
+        cntName:        cntNameCsv,
+        cntStatus:      "1",
+        cntAmount:      cntAmount,
+        cntImagesSlip:  "", // legacy slip column — unused on this entry path
         date:           nowIso,
-        adminidcreate:  legacyAdminId,
-        nameblank:      nameBlank,
-        noblank:        noBlank,
-        nameaccount:    nameAccount,
-        cntfile:        "",
-        dateupdate:     null,
-        adminidupdate:  "",
+        adminIDCreate:  legacyAdminId,
+        nameBlank:      nameBlank,
+        noBlank:        noBlank,
+        nameAccount:    nameAccount,
+        cntFile:        "",
+        dateUpdate:     null,
+        adminIDUpdate:  "",
       })
-      .select("id")
-      .single<{ id: number }>();
+      .select("ID")
+      .single<{ ID: number }>();
     if (cntErr || !cntRow) {
       return { ok: false, error: cntErr?.message ?? "insert_failed" };
     }
-    const cntId = Number(cntRow.id);
+    const cntId = Number(cntRow.ID);
 
     // ── (d) Upload the PDF (if any) — report-cnt.php L24-39 + L45-47 ──
     // TODO: confirm `member-docs` bucket exists on prod — if it doesn't,
@@ -293,11 +293,11 @@ export async function adminCreateCntPayment(
         );
       } else {
         filePath = storagePath;
-        // Update cntfile column with the relative path.
+        // Update cntFile column with the relative path.
         const { error: updErr } = await admin
           .from("tb_cnt")
-          .update({ cntfile: storagePath })
-          .eq("id", cntId);
+          .update({ cntFile: storagePath })
+          .eq("ID", cntId);
         if (updErr) {
           // Audit only — the row is otherwise valid.
           await logAdminAction(
@@ -392,8 +392,8 @@ export async function adminCreateCntPayment(
     // The join table — its presence is what makes a cabinet show
     // "จ่ายแล้ว" on the report-cnt list.
     const itemRows = cabinetNumbers.map((cab) => ({
-      fcabinetnumber: cab,
-      cntid:          cntId,
+      fCabinetNumber: cab,
+      cntID:          cntId,
     }));
     const { error: itemErr } = await admin
       .from("tb_cnt_item")

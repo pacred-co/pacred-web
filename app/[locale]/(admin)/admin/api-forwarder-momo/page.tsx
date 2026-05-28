@@ -106,24 +106,30 @@ export default async function AdminApiForwarderMomoPage() {
           </div>
         </div>
 
-        {/* Deferred: updateAPI */}
-        <div className="rounded-2xl border border-border bg-surface-alt/30 p-5 opacity-75">
+        {/* Live (added 2026-05-28 per ปอน brief): MOMO Status Sync.
+            Isolated parallel path → writes to momo_* tables ONLY,
+            NEVER touches the legacy spine cargo_* / tb_*. */}
+        <Link
+          href="/admin/api-forwarder-momo/sync"
+          className="group rounded-2xl border-2 border-primary-300 bg-white p-5 shadow-sm hover:border-primary-500 hover:shadow-md transition"
+        >
           <div className="flex items-start gap-3">
-            <div className="rounded-xl bg-gray-100 p-3 text-gray-400">
+            <div className="rounded-xl bg-primary-50 p-3 text-primary-600 group-hover:bg-primary-100">
               <Database className="h-6 w-6" />
             </div>
             <div className="flex-1">
-              <h3 className="text-base font-bold text-foreground">ดึงข้อมูลจาก API</h3>
+              <h3 className="text-base font-bold text-foreground">ดึงสถานะ MOMO (Status Sync)</h3>
               <p className="mt-1 text-xs text-muted leading-relaxed">
-                เรียก API ปลายทาง (cargothai.tech) ดึงรายการใหม่เข้า{" "}
-                <code className="rounded bg-surface-alt px-1">tb_tmp_forwarder_*</code> · รอ admin confirm.
+                เรียก MOMO Cargo API → ดึง Import Track / Container Closed / Sack Info ตามช่วงวัน
+                · normalize + upsert ลง <code className="rounded bg-surface-alt px-1">momo_*</code> tables (isolated).
+                ไม่กระทบ <code className="rounded bg-surface-alt px-1">tb_*</code> เดิม.
               </p>
-              <span className="mt-3 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                Phase C — เลื่อน · ต้องการ token + retry design
+              <span className="mt-3 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
+                ✓ พร้อมใช้ (2026-05-28)
               </span>
             </div>
           </div>
-        </div>
+        </Link>
 
         {/* Deferred: APICheckSM */}
         <div className="rounded-2xl border border-border bg-surface-alt/30 p-5 opacity-75">

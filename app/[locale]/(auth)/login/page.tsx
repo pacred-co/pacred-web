@@ -123,9 +123,25 @@ export default function LoginPage() {
           </div>
 
           {/* Title */}
-          <h1 className="mb-8 text-center text-2xl font-bold text-foreground">
+          <h1 className="mb-2 text-center text-2xl font-bold text-foreground">
             {t("title")}
           </h1>
+
+          {/* Sign up link — positioned ABOVE the form (2026-05-28 fidelity
+              audit § Login/LAYOUT). Legacy login.php placed
+              "ยังไม่มีบัญชีผู้ใช้งาน? สร้างบัญชี" under the title; returning
+              PCS customers expect this position. Forwards `?next=` so a
+              guest who registers instead of logging in still returns to
+              their destination. */}
+          <p className="mb-6 text-center text-sm text-muted">
+            {t("noAccount")}{" "}
+            <Link
+              href={nextUrl ? { pathname: "/register", query: { next: nextUrl } } : "/register"}
+              className="font-semibold text-primary-600 hover:text-primary-700"
+            >
+              {t("registerLink")}
+            </Link>
+          </p>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -144,6 +160,7 @@ export default function LoginPage() {
                 onChange={(e) => setIdentifier(e.target.value)}
                 placeholder={t("emailPlaceholder")}
                 required
+                maxLength={20}
                 className={INPUT_BASE}
               />
             </div>
@@ -172,6 +189,8 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={t("passwordPlaceholder")}
                   required
+                  minLength={6}
+                  maxLength={20}
                   className={`${INPUT_BASE} pr-12`}
                 />
                 <button
@@ -292,17 +311,6 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Sign up link — forward `?next=` so a guest who registers
-              instead of logging in still returns to their destination. */}
-          <p className="mt-7 text-center text-sm text-muted">
-            {t("noAccount")}{" "}
-            <Link
-              href={nextUrl ? { pathname: "/register", query: { next: nextUrl } } : "/register"}
-              className="font-semibold text-primary-600 hover:text-primary-700"
-            >
-              {t("registerLink")}
-            </Link>
-          </p>
         </div>
       </main>
     </>

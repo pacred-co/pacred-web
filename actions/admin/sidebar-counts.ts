@@ -143,12 +143,13 @@ export async function getSidebarCounts(): Promise<BadgeCounts> {
       admin.from("platform_incidents").select("id", { count: "exact", head: true })
         .in("status", ["open", "acknowledged"]),
       // ── ค่าตู้รออนุมัติ (tb_cnt — B-6 shipped) ─────────────────────
-      // cntstatus = '1' = รอจ่ายเงิน (legacy varchar(1)). Wave-1 audit
+      // cntStatus = '1' = รอจ่ายเงิน (legacy varchar(1)). Wave-1 audit
       // (docs/research/wave-1-fidelity/audit-b6-container-payments.md)
       // flagged this badge was hardcoded to 0 — lifted post-audit so
       // the legacy 'cnt-hs ⑤' unpaid count actually lights.
-      admin.from("tb_cnt").select("id", { count: "exact", head: true })
-        .eq("cntstatus", "1"),
+      // Columns renamed to camelCase in migration 0115.
+      admin.from("tb_cnt").select("ID", { count: "exact", head: true })
+        .eq("cntStatus", "1"),
     ]);
 
     const wt = n(walletTopup);

@@ -229,16 +229,31 @@ export default async function ProtectedLayout({
           /forgot-password via its own isHidden check, so adding it here is safe. */}
       <FloatingTabs />
 
-      {/* 7. Legacy JS bundle — rendered last so the full chrome DOM exists when
-            it runs. jQuery → Popper → Bootstrap-4 (vendors.min.js) → the
+      {/* 7. Legacy JS bundle — rendered last so the full chrome DOM exists
+            when it runs. jQuery → Popper → Bootstrap-4 (vendors.min.js) → the
             Modern-Admin theme JS → SweetAlert → Magnific-Popup, in exact
-            all-script.php order. next/script strategy="afterInteractive"
-            queues each script via the DOM API (rather than rendering a
-            <script> element in the RSC payload that React 19 would flag as
-            "script tag inside component"), and scripts in the same strategy
-            execute in render order — preserving the chain legacy plugins
-            depend on. basePath inline-script is also routed through Script
-            so it shares the same queue and runs before any src below it. */}
+            all-script.php order.
+
+            ⚠️ 2026-05-28 — DO NOT render each entry as its own <Script>.
+            `next/script strategy="afterInteractive"` inserts each script
+            independently after hydration and the browser races them — the
+            smaller files (tam-it.js 8KB / app.min.js 17KB / meg.init.js)
+            finish + execute before vendors.min.js (537KB, contains jQuery
+            3.4.1) is done, so the dependent scripts hit
+              tam-it.js:21 Uncaught ReferenceError: $ is not defined
+              app.min.js:292 Uncaught ReferenceError: jQuery is not defined
+              meg.init.js:2 Uncaught ReferenceError: $ is not defined
+              jquery.magnific-popup.min.js:4 Uncaught TypeError: a is not a function
+              app-menu.min.js:505 Uncaught ReferenceError: jQuery is not defined
+            (the team comment that said scripts in the same strategy execute
+             in render order was wrong — they don't).
+
+            Fix: one inline loader that creates <script> elements with
+            `async = false`. Per HTML spec, JS-injected scripts with
+            async=false are added to the "in-order" list and execute in
+            DOM-insertion order — the same pattern jQuery's own CDN loader
+            uses. basePath is set inside the same loader so it's defined
+            before any src executes. */}
       {/* basePath = the legacy asset root. Legacy `app.min.js` L295-301 does
           `$.getScript(basePath+"assets/js/lang/X.js")` at runtime, so basePath
           must resolve to `/legacy/pcs/` (not `/`) — otherwise the language
@@ -248,13 +263,25 @@ export default async function ProtectedLayout({
           and the runtime JS only consumes basePath for ASSETS — so the asset
           root is the correct value. App-route links are hardcoded in JSX. */}
       <Script
-        id="legacy-base-path"
+        id="legacy-js-bundle-loader"
         strategy="afterInteractive"
-        dangerouslySetInnerHTML={{ __html: "var basePath='/legacy/pcs/';" }}
+        dangerouslySetInnerHTML={{
+          __html: `
+            var basePath = '/legacy/pcs/';
+            (function () {
+              var sources = ${JSON.stringify(JS_BUNDLE)};
+              sources.forEach(function (src) {
+                if (document.querySelector('script[data-legacy-src="' + src + '"]')) return;
+                var s = document.createElement('script');
+                s.src = src;
+                s.async = false;
+                s.setAttribute('data-legacy-src', src);
+                document.head.appendChild(s);
+              });
+            })();
+          `,
+        }}
       />
-      {JS_BUNDLE.map((src) => (
-        <Script key={src} id={`legacy-${src}`} src={src} strategy="afterInteractive" />
-      ))}
 
       {/* 8. Legacy chrome-init (post-hydration). Replays the two pieces of
             `all-script.php` L725-771 + `app.min.js` L239-273 that mutate the

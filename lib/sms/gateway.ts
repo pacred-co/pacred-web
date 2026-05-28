@@ -15,16 +15,28 @@ export interface SmsResult {
 }
 
 /**
- * Is the SMS dev-bypass in effect? `OTP_BYPASS=true` skips the real
- * ThaiBulkSMS send so local dev / Vercel preview don't burn credit.
+ * Is the SMS dev-bypass in effect? Two env flags can each trip it:
  *
- * HARD-DISABLED on Vercel production regardless of OTP_BYPASS: 2026-05-22 the
- * prod deployment was found running with OTP_BYPASS=true (the .env.example
- * default, copied into Vercel). With bypass on, `sendSms` returns a fake
- * { ok:true, messageId:"bypass" } and never calls ThaiBulkSMS — registration
- * "succeeds" but the OTP SMS never reaches the customer, and OTP verify
- * accepts ANY code (an account-takeover hole). A dev default must never
- * silently do that in production.
+ *   - `OTP_BYPASS=true`      — skips the real ThaiBulkSMS send (OTP-only path).
+ *                              Default `true` in `.env.example` so local dev
+ *                              and Vercel preview don't burn credit.
+ *   - `NOTIFY_BYPASS=true`   — UNIFIED admin-test guard (2026-05-28 B-1).
+ *                              When ภูม or staff click any mutation in
+ *                              `/admin/*` to test the system, SMS/LINE/Email
+ *                              should NOT fire to real customer phones /
+ *                              LINE OAs / inboxes. Setting NOTIFY_BYPASS=true
+ *                              short-circuits ALL THREE channels in one place.
+ *                              Read by:
+ *                                lib/sms/gateway.ts (this file · OTP + admin SMS)
+ *                                lib/notifications/index.ts (LINE + Email)
+ *
+ * BOTH are HARD-DISABLED on Vercel production regardless of the env value:
+ * 2026-05-22 the prod deployment was found running with OTP_BYPASS=true (the
+ * .env.example default, copied into Vercel). With bypass on, `sendSms` returns
+ * a fake { ok:true, messageId:"bypass" } and never calls ThaiBulkSMS —
+ * registration "succeeds" but the OTP SMS never reaches the customer, and
+ * OTP verify accepts ANY code (an account-takeover hole). A dev default must
+ * never silently do that in production.
  *
  * VERCEL_ENV is auto-set by Vercel ("production" only on the production
  * deployment); it is undefined under `pnpm dev`, so local dev still bypasses.
@@ -32,9 +44,13 @@ export interface SmsResult {
  * Re-added 2026-05-23 night — was lost in a merge between 6299e6c (added it)
  * and 580fc48 (force=corporate fix) when their gateway.ts versions clashed;
  * route.ts kept the import but gateway.ts lost the export → Vercel build broke.
+ *
+ * Augmented 2026-05-28 ดึก (B-1) — NOTIFY_BYPASS added as a unified switch
+ * across all three notification channels.
  */
 export function isSmsBypassed(): boolean {
-  return process.env.OTP_BYPASS === "true" && process.env.VERCEL_ENV !== "production";
+  if (process.env.VERCEL_ENV === "production") return false;
+  return process.env.OTP_BYPASS === "true" || process.env.NOTIFY_BYPASS === "true";
 }
 
 export async function sendSms(phone: string, message: string): Promise<SmsResult> {

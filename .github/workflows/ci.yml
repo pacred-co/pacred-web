@@ -57,7 +57,12 @@ jobs:
         run: pnpm lint
 
       - name: Typecheck
-        run: pnpm exec tsc --noEmit
+        # `pnpm typecheck` is `node scripts/tsc-check.mjs` which sets
+        # NODE_OPTIONS=--max-old-space-size=8192 cross-platform before
+        # exec'ing tsc. Default 2 GB heap OOMs since the camelCase
+        # batches (Wave 25 #194 + batch 2a) + ปอน's MOMO isolated layer
+        # landed — see docs/learnings/ci-and-deploy-gotchas.md.
+        run: pnpm typecheck
 
       - name: Unit tests
         run: pnpm test:unit
@@ -77,4 +82,7 @@ jobs:
         # placeholders at build time, and no route is statically rendered
         # in a way that needs a live DB. This is the closest CI gets to the
         # AGENTS.md §11 deploy gate without a prod environment.
+        # Same 8 GB heap as Typecheck — `next build` runs tsc internally.
         run: pnpm build
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"

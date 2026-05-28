@@ -182,14 +182,14 @@ export default async function AdminReportCntDetailPage({
   // ── 2) Container payment status ── (tb_cnt_item row presence)
   const { data: cntItemRow, error: cntItemRowErr } = await admin
     .from("tb_cnt_item")
-    .select("id, cntid")
-    .eq("fcabinetnumber", fCabinetNumber)
-    .maybeSingle<{ id: number; cntid: number | null }>();
+    .select("ID, cntID")
+    .eq("fCabinetNumber", fCabinetNumber)
+    .maybeSingle<{ ID: number; cntID: number | null }>();
   if (cntItemRowErr) {
     console.error(`[tb_cnt_item list] failed`, { code: cntItemRowErr.code, message: cntItemRowErr.message });
   }
   const cabinetIsPaid = Boolean(cntItemRow);
-  const paidCntId = cntItemRow?.cntid ?? null;
+  const paidCntId = cntItemRow?.cntID ?? null;
 
   // ── 3) tb_cost_container — per-container custom rate ──
   const { data: customRate, error: customRateErr } = await admin
@@ -300,17 +300,17 @@ export default async function AdminReportCntDetailPage({
   }
 
   // ── 9) tb_check_forwarder — "already in check queue" markers ──
-  const checkMap = new Map<number, { adminid: string; date: string | null }>();
+  const checkMap = new Map<number, { adminID: string; date: string | null }>();
   if (fIds.length > 0) {
     const { data: checks, error: checksErr } = await admin
       .from("tb_check_forwarder")
-      .select("fid, adminid, date")
-      .in("fid", fIds);
+      .select("fID, adminID, date")
+      .in("fID", fIds);
     if (checksErr) {
       console.error(`[tb_check_forwarder list] failed`, { code: checksErr.code, message: checksErr.message });
     }
-    for (const r of (checks ?? []) as Array<{ fid: number; adminid: string; date: string | null }>) {
-      checkMap.set(Number(r.fid), { adminid: r.adminid, date: r.date });
+    for (const r of (checks ?? []) as Array<{ fID: number; adminID: string; date: string | null }>) {
+      checkMap.set(Number(r.fID), { adminID: r.adminID, date: r.date });
     }
   }
 
@@ -393,7 +393,7 @@ export default async function AdminReportCntDetailPage({
       idCoDup: Boolean(r.fidorco && (idCoDupCount.get(r.fidorco) ?? 0) > 1),
       notCollectedFromCustomer: Number(r.fstatus ?? 0) < 5,
       inCheckQueue: checkMap.has(Number(r.id)),
-      checkAdminId: check?.adminid ?? null,
+      checkAdminId: check?.adminID ?? null,
       checkDate: check?.date ?? null,
     };
   });

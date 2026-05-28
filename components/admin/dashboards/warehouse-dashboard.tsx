@@ -40,7 +40,7 @@ function hoursUntil(iso: string | null, nowMs: number): number | null {
 // react-hooks/purity rule doesn't trip (Server Components are evaluated
 // once per request, which is the intended single-snapshot semantics).
 function nowMsServer(): number {
-  // eslint-disable-next-line react-hooks/purity -- Server Component, renders fresh per request; Date.now() is intentional time-of-render snapshot.
+   
   return Date.now();
 }
 

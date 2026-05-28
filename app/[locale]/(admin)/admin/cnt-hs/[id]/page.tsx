@@ -54,24 +54,24 @@ const STATUS_CLS: Record<string, string> = {
 };
 
 type CntRow = {
-  id: number;
-  cntname: string | null;
-  cntstatus: string | null;
-  cntamount: number | null;
-  cntimagesslip: string | null;
-  cntfile: string | null;
+  ID: number;
+  cntName: string | null;
+  cntStatus: string | null;
+  cntAmount: number | null;
+  cntImagesSlip: string | null;
+  cntFile: string | null;
   date: string | null;
-  adminidcreate: string | null;
-  nameblank: string | null;
-  noblank: string | null;
-  nameaccount: string | null;
-  dateupdate: string | null;
-  adminidupdate: string | null;
+  adminIDCreate: string | null;
+  nameBlank: string | null;
+  noBlank: string | null;
+  nameAccount: string | null;
+  dateUpdate: string | null;
+  adminIDUpdate: string | null;
 };
 type CntItemRow = {
-  id: number;
-  fcabinetnumber: string;
-  cntid: number;
+  ID: number;
+  fCabinetNumber: string;
+  cntID: number;
 };
 type FwRow = {
   id: number;
@@ -138,9 +138,9 @@ export default async function CntHsDetailPage({
   const { data: cntRaw, error: cntRawErr } = await admin
     .from("tb_cnt")
     .select(
-      "id,cntname,cntstatus,cntamount,cntimagesslip,cntfile,date,adminidcreate,nameblank,noblank,nameaccount,dateupdate,adminidupdate",
+      "ID,cntName,cntStatus,cntAmount,cntImagesSlip,cntFile,date,adminIDCreate,nameBlank,noBlank,nameAccount,dateUpdate,adminIDUpdate",
     )
-    .eq("id", cntId)
+    .eq("ID", cntId)
     .maybeSingle();
   if (cntRawErr) {
     console.error(`[tb_cnt lookup] failed`, { code: cntRawErr.code, message: cntRawErr.message, details: cntRawErr.details, hint: cntRawErr.hint });
@@ -152,13 +152,13 @@ export default async function CntHsDetailPage({
   // 2. Read linked cabinet items
   const { data: itemsRaw, error: itemsRawErr } = await admin
     .from("tb_cnt_item")
-    .select("id,fcabinetnumber,cntid")
-    .eq("cntid", cntId);
+    .select("ID,fCabinetNumber,cntID")
+    .eq("cntID", cntId);
   if (itemsRawErr) {
     console.error(`[tb_cnt_item list] failed`, { code: itemsRawErr.code, message: itemsRawErr.message });
   }
   const items = (itemsRaw ?? []) as unknown as CntItemRow[];
-  const cabinetNumbers = Array.from(new Set(items.map((i) => i.fcabinetnumber).filter(Boolean)));
+  const cabinetNumbers = Array.from(new Set(items.map((i) => i.fCabinetNumber).filter(Boolean)));
 
   // 3. Read forwarders for these cabinets (so admin sees the goods)
   //
@@ -215,13 +215,13 @@ export default async function CntHsDetailPage({
     fwByCabinet.set(f.fcabinetnumber, arr);
   }
 
-  const status = cnt.cntstatus ?? "1";
+  const status = cnt.cntStatus ?? "1";
   const canAct = status === "1" && (roles.includes("super") || roles.includes("accounting"));
 
   // Resolve slip + file URLs once on the server (signed-URL fetch is async
   // for admin-bucket uploads — must complete before render).
-  const slipResolved = cnt.cntimagesslip ? await slipUrl(cnt.cntimagesslip) : null;
-  const fileResolved = cnt.cntfile ? await slipUrl(cnt.cntfile) : null;
+  const slipResolved = cnt.cntImagesSlip ? await slipUrl(cnt.cntImagesSlip) : null;
+  const fileResolved = cnt.cntFile ? await slipUrl(cnt.cntFile) : null;
 
   // Sum across linked forwarders (sanity vs cnt.amount)
   const linkedTotal = forwarders.reduce((s, f) => s + Number(f.ftotalprice ?? 0), 0);
@@ -236,7 +236,7 @@ export default async function CntHsDetailPage({
             ADMIN · เบิกเงินค่าตู้
           </p>
           <div className="flex items-center gap-3 mt-1 flex-wrap">
-            <h1 className="text-2xl font-bold font-mono">#{cnt.id}</h1>
+            <h1 className="text-2xl font-bold font-mono">#{cnt.ID}</h1>
             <span
               className={`rounded-full border px-3 py-1 text-xs font-medium ${
                 STATUS_CLS[status] ?? "bg-gray-100 text-gray-600 border-gray-200"
@@ -261,7 +261,7 @@ export default async function CntHsDetailPage({
       <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3 text-sm">
         <KV
           label="ยอดเบิก (THB)"
-          value={`฿${Number(cnt.cntamount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+          value={`฿${Number(cnt.cntAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
           mono
         />
         <KV
@@ -270,11 +270,11 @@ export default async function CntHsDetailPage({
           mono
         />
         <KV label="วันที่สร้าง" value={cnt.date ? new Date(cnt.date).toLocaleString("th-TH") : "—"} />
-        <KV label="แอดมินผู้สร้าง" value={cnt.adminidcreate ?? "—"} mono />
-        {cnt.dateupdate && (
+        <KV label="แอดมินผู้สร้าง" value={cnt.adminIDCreate ?? "—"} mono />
+        {cnt.dateUpdate && (
           <KV
             label="แก้ไขล่าสุด"
-            value={`${new Date(cnt.dateupdate).toLocaleString("th-TH")} (${cnt.adminidupdate ?? "—"})`}
+            value={`${new Date(cnt.dateUpdate).toLocaleString("th-TH")} (${cnt.adminIDUpdate ?? "—"})`}
           />
         )}
       </div>
@@ -282,15 +282,15 @@ export default async function CntHsDetailPage({
       {/* Bank card */}
       <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3 text-sm">
         <p className="text-xs font-semibold text-muted">ปลายทางโอน</p>
-        <KV label="ธนาคาร" value={cnt.nameblank ?? "—"} />
-        <KV label="เลขที่บัญชี" value={cnt.noblank ?? "—"} mono />
-        <KV label="ชื่อบัญชี" value={cnt.nameaccount ?? "—"} />
+        <KV label="ธนาคาร" value={cnt.nameBlank ?? "—"} />
+        <KV label="เลขที่บัญชี" value={cnt.noBlank ?? "—"} mono />
+        <KV label="ชื่อบัญชี" value={cnt.nameAccount ?? "—"} />
       </div>
 
       {/* Slip + file viewer */}
-      {(cnt.cntimagesslip || cnt.cntfile) && (
+      {(cnt.cntImagesSlip || cnt.cntFile) && (
         <div className="grid sm:grid-cols-2 gap-4">
-          {cnt.cntimagesslip && (
+          {cnt.cntImagesSlip && (
             <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
               <p className="text-xs font-semibold text-muted mb-2">สลิปการโอน</p>
               {slipResolved ? (
@@ -300,7 +300,7 @@ export default async function CntHsDetailPage({
                   rel="noopener noreferrer"
                   className="inline-block rounded-md border border-border overflow-hidden hover:border-primary-500"
                 >
-                  {cnt.cntimagesslip.toLowerCase().endsWith(".pdf") ? (
+                  {cnt.cntImagesSlip.toLowerCase().endsWith(".pdf") ? (
                     <span className="inline-flex items-center gap-2 px-3 py-2 text-sm text-primary-700">
                       📄 เปิดสลิป PDF →
                     </span>
@@ -312,10 +312,10 @@ export default async function CntHsDetailPage({
               ) : (
                 <p className="text-xs text-muted italic">ไม่สามารถสร้างลิงก์สลิปได้</p>
               )}
-              <p className="text-[10px] text-muted mt-2 break-all">{cnt.cntimagesslip}</p>
+              <p className="text-[10px] text-muted mt-2 break-all">{cnt.cntImagesSlip}</p>
             </div>
           )}
-          {cnt.cntfile && (
+          {cnt.cntFile && (
             <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
               <p className="text-xs font-semibold text-muted mb-2">เอกสารแนบ (PDF)</p>
               {fileResolved ? (
@@ -330,7 +330,7 @@ export default async function CntHsDetailPage({
               ) : (
                 <p className="text-xs text-muted italic">ไม่สามารถสร้างลิงก์เอกสารได้</p>
               )}
-              <p className="text-[10px] text-muted mt-2 break-all">{cnt.cntfile}</p>
+              <p className="text-[10px] text-muted mt-2 break-all">{cnt.cntFile}</p>
             </div>
           )}
         </div>
@@ -349,13 +349,13 @@ export default async function CntHsDetailPage({
 
           {/* Slip-upload card — primary path mirrors legacy */}
           <div className="rounded-xl border border-border bg-white p-4">
-            <CntSlipUploadForm cntId={cnt.id} />
+            <CntSlipUploadForm cntId={cnt.ID} />
           </div>
 
           {/* Fallback: status-only mutation (no slip) */}
           <div className="rounded-xl border border-border bg-white/60 p-4 space-y-2">
             <p className="text-xs font-medium text-muted">หรือเปลี่ยนสถานะโดยไม่อัปโหลดสลิป</p>
-            <CntActionButtons cntId={cnt.id} />
+            <CntActionButtons cntId={cnt.ID} />
           </div>
         </div>
       )}
@@ -488,12 +488,12 @@ export default async function CntHsDetailPage({
       )}
 
       {/* cntname raw list (for searching specific cabinet) */}
-      {cnt.cntname && (
+      {cnt.cntName && (
         <details className="rounded-2xl border border-border bg-white dark:bg-surface p-5 text-sm">
           <summary className="cursor-pointer font-semibold text-muted">
             cntname raw (comma-separated · จาก legacy)
           </summary>
-          <p className="mt-3 font-mono text-[11px] break-words text-muted">{cnt.cntname}</p>
+          <p className="mt-3 font-mono text-[11px] break-words text-muted">{cnt.cntName}</p>
         </details>
       )}
     </main>

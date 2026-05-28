@@ -416,7 +416,7 @@ export async function adminCallPriceUser(
         const { error: delErr } = await admin
           .from("tb_check_forwarder")
           .delete()
-          .in("fid", successfulFids);
+          .in("fID", successfulFids);
         if (delErr) {
           // Not fatal — billing happened; the queue cleanup can be retried
           // by re-clicking. Surface as a warning in the result.
@@ -493,17 +493,17 @@ export async function adminRemoveFromCheckQueue(
       // Snapshot before delete so the audit log records what was removed.
       const { data: present, error: presentErr } = await admin
         .from("tb_check_forwarder")
-        .select("fid")
-        .in("fid", fids);
+        .select("fID")
+        .in("fID", fids);
       if (presentErr) {
         console.error(`[tb_check_forwarder list] failed`, { code: presentErr.code, message: presentErr.message });
       }
-      const presentFids = ((present ?? []) as Array<{ fid: number }>).map((r) => r.fid);
+      const presentFids = ((present ?? []) as Array<{ fID: number }>).map((r) => r.fID);
 
       const { error: delErr } = await admin
         .from("tb_check_forwarder")
         .delete()
-        .in("fid", fids);
+        .in("fID", fids);
       if (delErr) return { ok: false, error: delErr.message };
 
       await logAdminAction(

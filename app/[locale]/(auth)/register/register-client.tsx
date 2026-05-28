@@ -59,9 +59,13 @@ const ERR: Record<string, string> = {
   profile_failed: "บันทึกโปรไฟล์ไม่สำเร็จ",
   signin_failed: "เข้าสู่ระบบหลังสมัครไม่สำเร็จ",
   must_agree: "ต้องยอมรับข้อกำหนดก่อนสมัคร",
-  upload_failed: "อัปโหลดไฟล์ไม่สำเร็จ",
+  upload_failed: "อัปโหลดไฟล์ไม่สำเร็จ — ลองอีกครั้ง หรือ ตรวจสอบเครือข่าย",
+  doc_record_failed: "บันทึกข้อมูลเอกสารไม่สำเร็จ — แจ้งแอดมินหากเจอซ้ำ",
+  update_failed: "บันทึกข้อมูลไม่สำเร็จ — แจ้งแอดมินหากเจอซ้ำ",
   file_too_large: "ไฟล์ใหญ่เกิน 10 MB",
   invalid_mime: "รับเฉพาะ PDF / JPG / PNG",
+  invalid_doc_type: "ประเภทเอกสารไม่ถูกต้อง",
+  no_file: "ไม่พบไฟล์ที่อัปโหลด",
   not_signed_in: "เซสชันหมดอายุ กรุณา login ใหม่",
 };
 
@@ -191,32 +195,29 @@ export function RegisterClient({
 }) {
   const [tab, setTab] = useState<TabId>(initialTab);
 
-  // Lock body scroll on mobile while register is mounted. The NavBar's
-  // mobile-menu drawer is `position:fixed` with `translate-y-full` (closed),
-  // which the browser still counts toward `documentElement.scrollHeight` —
-  // causing a ~64px scrollable tail under the otherwise-pinned viewport-height
-  // form. Lock body+html overflow on mobile to make scroll truly impossible;
-  // restore on unmount so other pages keep their normal scroll behavior.
-  useEffect(() => {
-    const mql = window.matchMedia("(max-width: 767px)");
-    const apply = (lock: boolean) => {
-      document.documentElement.style.overflow = lock ? "hidden" : "";
-      document.body.style.overflow = lock ? "hidden" : "";
-    };
-    apply(mql.matches);
-    const onChange = (e: MediaQueryListEvent) => apply(e.matches);
-    mql.addEventListener("change", onChange);
-    return () => {
-      mql.removeEventListener("change", onChange);
-      apply(false);
-    };
-  }, []);
+  // 2026-05-28 — DROPPED the body-scroll-lock + pinned-viewport-height
+  // container. The old layout used `h-[calc(100dvh-56px)] flex flex-col`
+  // (pin form to exact viewport) + `overflow-hidden` on <main> + a JS
+  // body+html `overflow:hidden` lock on mobile, to suppress a ~64px
+  // phantom-scroll tail from the NavBar's drawer. But the consequence
+  // was: when popovers (ServiceChips / SourceChips / ShopUserSelect /
+  // OTP error banner) expand inside the form, the action area (which
+  // uses `mt-auto` to hug the bottom) gets pushed BELOW the visible
+  // viewport AND body scroll is locked — user physically cannot reach
+  // the "ขอรหัส OTP" / "สมัครสมาชิก" button on a phone (the user's
+  // 2026-05-28 complaint: "สไลลงไปกดปุ่ม บันทึกไม่ได้").
+  //
+  // Now: `min-h-[calc(...)]` so the container is at least one viewport
+  // tall (still looks like a full-screen card) but grows when content
+  // demands; `overflow-visible` lets the body scroll naturally; the
+  // phantom drawer tail is a cosmetic non-issue compared to a dead
+  // submit button. The NavBar drawer fix is tracked separately.
 
   return (
     <>
       <NavBar />
-      <main className="flex items-start justify-center bg-background px-4 pt-0 pb-0 md:py-3 overflow-hidden md:overflow-visible">
-        <div className="w-full max-w-[540px] h-[calc(100dvh-56px)] flex flex-col rounded-none border-0 bg-white p-3 shadow-[0_20px_50px_rgba(0,0,0,0.04)] dark:border-border dark:bg-surface sm:p-7 md:h-auto md:block md:rounded-[24px] md:border md:border-white/80">
+      <main className="flex items-start justify-center bg-background px-4 pt-0 pb-0 md:py-3">
+        <div className="w-full max-w-[540px] min-h-[calc(100dvh-56px)] rounded-none border-0 bg-white p-3 shadow-[0_20px_50px_rgba(0,0,0,0.04)] dark:border-border dark:bg-surface sm:p-7 md:min-h-0 md:h-auto md:rounded-[24px] md:border md:border-white/80">
 
           {/* Logo — wordmark (140×140 source w/ ~25% whitespace top+bottom); render at
               110px square + tight negative margins so title hugs the wordmark baseline.
@@ -339,6 +340,9 @@ function PersonalForm({ recom }: { recom: string | null }) {
     });
     if (res.ok) {
       trackSignUp("personal");
+      // 2026-05-28 — hard navigation, same reason as the juristic flow
+      // (/dashboard fires 5 tb_* counts before rendering; soft-nav would
+      // leave the OTP screen visible during that load).
       // Return to a pending `?next=` (booking-calculator CTA) if present.
       // The protected layout still re-routes to /complete-profile when the
       // new profile needs it — so an order quote only survives for a
@@ -346,8 +350,7 @@ function PersonalForm({ recom }: { recom: string | null }) {
       // landing is `/dashboard` (customer portal launchpad), not `/`
       // (public marketing) — per d1-fidelity-customer.md §2 + 2026-05-26
       // brief fix A2: non-admin signups expect to see the signed-in shell.
-      router.replace(nextUrl ?? "/dashboard");
-      router.refresh();
+      window.location.replace(nextUrl ?? "/dashboard");
     } else {
       setError(ERR[res.error] ?? res.error);
       captchaRef.current?.reset();
@@ -418,7 +421,7 @@ function PersonalForm({ recom }: { recom: string | null }) {
   }
 
   return (
-    <form onSubmit={handleRequestOtp} className="space-y-2.5 flex flex-1 flex-col min-h-0 md:block">
+    <form onSubmit={handleRequestOtp} className="space-y-2.5">
       {/* Name row */}
       <div className="flex gap-3">
         <FieldWrap label="ชื่อจริง">
@@ -474,11 +477,12 @@ function PersonalForm({ recom }: { recom: string | null }) {
         </IconInput>
       </FieldWrap>
 
-      {/* Action area — mt-auto pushes the submit button group to the BOTTOM
-          of the form on mobile (form is flex-1 inside full-viewport card),
-          so "ขอรหัส OTP" hugs the bottom edge with no empty space below.
-          Desktop reverts to normal stacked flow (md:block on form). */}
-      <div className="mt-auto space-y-2.5 pt-2">
+      {/* Action area — natural flow under the form fields. 2026-05-28: the
+          previous `mt-auto` (form-flex-1) layout pushed this group below
+          the viewport when a popover expanded, leaving the submit button
+          unreachable on phone. Container is now min-h instead of fixed-h,
+          so the body scrolls and the action area follows fields naturally. */}
+      <div className="space-y-2.5 pt-2">
         <AgreeRow checked={agreed} onChange={setAgreed} />
         {error && <ErrorBox msg={error} />}
         <HCaptchaInvisible ref={captchaRef} />
@@ -543,6 +547,17 @@ function JuristicForm({
   const [agreed, setAgreed]         = useState(false);
 
   const [error, setError]           = useState<string | null>(null);
+  /**
+   * Step-3 progress label shown next to the spinner.
+   * - "uploading" — files in flight
+   * - "finalizing" — uploads done, profiles.status=active in flight
+   * - null — idle (button shows just "สมัครสมาชิก")
+   *
+   * 2026-05-28 — added because users on mobile mistake the spinner alone
+   * for "stuck" (3 photos × ~3-10 s each over 4G ≈ 10-30 s total). The
+   * status label confirms the upload is making progress.
+   */
+  const [submitStage, setSubmitStage] = useState<null | "uploading" | "finalizing">(null);
   const [pending, startTransition]  = useTransition();
   const taxTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const captchaRef = useRef<HCaptchaHandle>(null);
@@ -728,22 +743,61 @@ function JuristicForm({
     if (!docCompany) { setError("กรุณาแนบเอกสารรับรองบริษัท"); return; }
     if (!docID)      { setError("กรุณาแนบบัตรประชาชนกรรมการ"); return; }
     setError(null);
+    setSubmitStage("uploading");
     startTransition(async () => {
-      const r1 = await uploadOne(docCompany, "company_affidavit");
-      if (!r1.ok) { const e = (r1 as { error: string }).error; return setError(ERR[e] ?? e); }
-      const r2 = await uploadOne(docVAT, "vat");
-      if (!r2.ok) { const e = (r2 as { error: string }).error; return setError(ERR[e] ?? e); }
-      const r3 = await uploadOne(docID, "national_id");
-      if (!r3.ok) { const e = (r3 as { error: string }).error; return setError(ERR[e] ?? e); }
-      const done = await completeJuristicRegistration();
-      if (done.ok) {
-        trackSignUp("juristic");
-        // Return to a pending `?next=` (booking-calculator CTA) if present.
-        // Default to `/dashboard` (customer portal launchpad), NOT `/` —
-        // per d1-fidelity-customer.md §2 + 2026-05-26 brief fix A2.
-        router.replace(nextUrl ?? "/dashboard");
-        router.refresh();
-      } else setError(ERR[done.error] ?? done.error);
+      try {
+        // 2026-05-28 — parallelise the 3 uploads. The previous sequential
+        // chain was responsible for the "ไม่ไปต่อ" complaint on mobile:
+        // 3 iPhone JPEGs at ~3-10 s each = 10-30 s of pure spinner with
+        // no progress signal, easily mistaken for "stuck". Promise.all
+        // runs them concurrently → typical total drops to ~5-12 s and
+        // the new `submitStage` label keeps the user informed.
+        const [r1, r2, r3] = await Promise.all([
+          uploadOne(docCompany, "company_affidavit"),
+          uploadOne(docVAT, "vat"),
+          uploadOne(docID, "national_id"),
+        ]);
+        if (!r1.ok) { setError(ERR[(r1 as { error: string }).error] ?? (r1 as { error: string }).error); setSubmitStage(null); return; }
+        if (!r2.ok) { setError(ERR[(r2 as { error: string }).error] ?? (r2 as { error: string }).error); setSubmitStage(null); return; }
+        if (!r3.ok) { setError(ERR[(r3 as { error: string }).error] ?? (r3 as { error: string }).error); setSubmitStage(null); return; }
+
+        setSubmitStage("finalizing");
+        const done = await completeJuristicRegistration();
+        if (done.ok) {
+          trackSignUp("juristic");
+          // 2026-05-28 — HARD navigation instead of router.replace +
+          // router.refresh. The soft Next-router path kept the
+          // "กำลังบันทึก..." button visible until /dashboard's RSC payload
+          // arrived, and /dashboard fires 5 separate Supabase counts on
+          // `tb_*` tables before it renders (header.php parity), so on a
+          // fresh signup that's an additional 5-15 s of *the wrong UI*
+          // — the user already submitted, but the page still shows the
+          // submission spinner instead of a loading state for the new
+          // page. window.location.replace commits the URL change in the
+          // browser immediately and lets the browser's own loading bar
+          // take over.
+          //
+          // Return to a pending `?next=` (booking-calculator CTA) if
+          // present. Default to `/dashboard` (customer portal launchpad),
+          // NOT `/` — per d1-fidelity-customer.md §2 + 2026-05-26 brief
+          // fix A2.
+          window.location.replace(nextUrl ?? "/dashboard");
+          return;
+        }
+        setError(ERR[done.error] ?? done.error);
+        setSubmitStage(null);
+      } catch (err) {
+        // 2026-05-28 — surface any silent throw from the await chain.
+        // Without the try/catch a server-action exception (network drop,
+        // bodySizeLimit reject on a >12 MB file, a thrown rather than
+        // returned error inside the action) would leave the user staring
+        // at a perpetually-spinning button — the original "won't proceed"
+        // symptom. Now it falls through to a visible error + the button
+        // re-enables so they can retry.
+        console.error("juristic submit threw:", err);
+        setError(err instanceof Error ? `เกิดข้อผิดพลาด: ${err.message}` : "เกิดข้อผิดพลาดที่ไม่คาดคิด กรุณาลองใหม่");
+        setSubmitStage(null);
+      }
     });
   }
 
@@ -912,9 +966,25 @@ function JuristicForm({
           <AgreeRow checked={agreed} onChange={setAgreed} />
           {error && <ErrorBox msg={error} />}
 
+          {submitStage && (
+            <p
+              role="status"
+              aria-live="polite"
+              className="rounded-lg bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-center text-[12.5px] text-amber-700 dark:text-amber-300"
+            >
+              {submitStage === "uploading"
+                ? "⏳ กำลังอัปโหลดเอกสาร — ใช้เวลา 10-30 วินาที กรุณาอย่าปิดหน้านี้"
+                : "✅ อัปโหลดเสร็จ กำลังบันทึกข้อมูล..."}
+            </p>
+          )}
+
           <div className="flex gap-2.5">
             <BackBtn onClick={() => { setStep(2); setError(null); }}>ย้อนกลับ</BackBtn>
-            <SubmitBtn pending={pending} flex1>สมัครสมาชิก</SubmitBtn>
+            <SubmitBtn pending={pending} flex1>
+              {submitStage === "uploading" ? "กำลังอัปโหลด..."
+                : submitStage === "finalizing" ? "กำลังบันทึก..."
+                : "สมัครสมาชิก"}
+            </SubmitBtn>
           </div>
         </>
       )}
@@ -1183,8 +1253,26 @@ function StepIndicator({ step }: { step: JuristicStep }) {
 }
 
 function ErrorBox({ msg }: { msg: string }) {
+  // 2026-05-28 — scroll the error into view + brief focus on mount.
+  // The juristic step-3 submit was reported as "won't proceed" — the
+  // action was returning an error but the ErrorBox renders ABOVE the
+  // submit button and on a long form the user was looking at the
+  // button and never saw the message appear. scrollIntoView with
+  // `block: 'center'` parks it in the middle of the viewport so it's
+  // impossible to miss.
+  const ref = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [msg]);
   return (
-    <p className="rounded-lg bg-red-50 dark:bg-red-900/20 px-3 py-2 text-sm text-red-600 dark:text-red-400">{msg}</p>
+    <p
+      ref={ref}
+      role="alert"
+      aria-live="assertive"
+      className="rounded-lg bg-red-50 dark:bg-red-900/20 px-3 py-2 text-sm text-red-600 dark:text-red-400"
+    >
+      {msg}
+    </p>
   );
 }
 

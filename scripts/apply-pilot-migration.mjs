@@ -21,7 +21,7 @@ const { Client } = pg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "..");
-const MIGRATION_PATH = resolve(REPO_ROOT, "supabase/migrations/0113_align_pilot_users_admin_co.sql");
+const MIGRATION_PATH = resolve(REPO_ROOT, "supabase/migrations/0117_momo_fix_upsert_constraints.sql");
 
 // Prod connection — Supabase direct DB (NOT pooler) so DDL works cleanly.
 const PROJECT_REF = "yzljakczhwrpbxflnmco";
@@ -54,14 +54,15 @@ try {
 
   // Verify a sample rename
   const verify = await client.query(`
-    SELECT column_name FROM information_schema.columns
-    WHERE table_schema='public' AND table_name='tb_users'
-    AND column_name IN ('userid', 'userID', 'userpass', 'userPass')
-    ORDER BY column_name
+    SELECT table_name, column_name FROM information_schema.columns
+    WHERE table_schema='public'
+    AND table_name IN ('tb_cnt', 'tb_cnt_item', 'tb_check_forwarder')
+    AND column_name IN ('id', 'ID', 'cntstatus', 'cntStatus', 'cntname', 'cntName', 'cfstatus', 'cfStatus', 'fcabinetnumber', 'fCabinetNumber')
+    ORDER BY table_name, column_name
   `);
-  console.log("Verify tb_users sample columns:");
+  console.log("Verify batch 2a sample columns:");
   for (const row of verify.rows) {
-    console.log(`  ${row.column_name}`);
+    console.log(`  ${row.table_name}.${row.column_name}`);
   }
 } catch (err) {
   console.error("MIGRATION FAILED:", err.message);

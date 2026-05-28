@@ -22,7 +22,22 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logger, redactId } from "@/lib/logger";
 import type { NotifyPayload } from "./types";
 
-const LINE_BYPASS = process.env.LINE_PUSH_BYPASS !== "false";  // default true (safe)
+/**
+ * Bypass gates — two env flags, AND production-hard-disable.
+ *
+ *   - `LINE_PUSH_BYPASS=false` → opt-IN real LINE push. Default (unset or
+ *     anything ≠ "false") = BYPASS (safe; no push). The existing dev gate.
+ *
+ *   - `NOTIFY_BYPASS=true` → UNIFIED admin-test guard (2026-05-28 B-1).
+ *     Forces bypass of BOTH LINE push AND email (and SMS via gateway.ts),
+ *     so admin staff testing mutations from `/admin/*` don't spam real
+ *     customer LINE OAs / inboxes / phones. Convenient single switch in
+ *     `.env.local`. Hard-disabled on Vercel production (defence in depth —
+ *     same pattern as OTP_BYPASS).
+ */
+const NOTIFY_BYPASS_ON =
+  process.env.NOTIFY_BYPASS === "true" && process.env.VERCEL_ENV !== "production";
+const LINE_BYPASS = NOTIFY_BYPASS_ON || process.env.LINE_PUSH_BYPASS !== "false";
 
 export async function sendNotification(
   profileId: string,
@@ -144,6 +159,15 @@ async function sendLinePush(lineUserId: string, payload: NotifyPayload): Promise
 //   sendEmail() short-circuits to false silently when no key.
 // ────────────────────────────────────────────────────────────
 async function sendEmail(toEmail: string, payload: NotifyPayload): Promise<boolean> {
+  // NOTIFY_BYPASS short-circuits real email sends — B-1 unified test guard.
+  // Hard-disabled on Vercel production via NOTIFY_BYPASS_ON above.
+  if (NOTIFY_BYPASS_ON) {
+    logger.info("notifications", "NOTIFY_BYPASS — would send email", {
+      to: toEmail.replace(/^(.).*@/, "$1***@"),
+      subject: payload.title,
+    });
+    return false;
+  }
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     logger.warn("notifications", "RESEND_API_KEY not set — skipping email");
