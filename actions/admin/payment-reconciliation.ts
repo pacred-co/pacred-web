@@ -342,7 +342,7 @@ export async function markUnmatched(
   return withAdmin<{ wallet_tx_id: string }>(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: tx } = await admin
+    const { data: tx, error: txErr } = await admin
       .from("wallet_transactions")
       .select("id, profile_id, amount, kind, status, reconciliation_status")
       .eq("id", parsed.data.wallet_tx_id)
@@ -350,6 +350,10 @@ export async function markUnmatched(
         id: string; profile_id: string; amount: number;
         kind: string; status: string; reconciliation_status: string | null;
       }>();
+    if (txErr) {
+      console.error(`[markUnmatched wallet_transactions read] failed`, { code: txErr.code, message: txErr.message, wallet_tx_id: parsed.data.wallet_tx_id });
+      return { ok: false, error: txErr.message };
+    }
     if (!tx) return { ok: false, error: "wallet_tx_not_found" };
     if (tx.reconciliation_status) {
       return {

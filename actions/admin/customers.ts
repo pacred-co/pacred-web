@@ -28,7 +28,11 @@ export async function editCustomer(input: EditCustomerInput): Promise<AdminActio
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before } = await admin.from("profiles").select("*").eq("id", id).maybeSingle();
+    const { data: before, error: beforeErr } = await admin.from("profiles").select("*").eq("id", id).maybeSingle();
+    if (beforeErr) {
+      console.error(`[editCustomer profiles read] failed`, { code: beforeErr.code, message: beforeErr.message, id });
+      return { ok: false, error: beforeErr.message };
+    }
     if (!before) return { ok: false, error: "not_found" };
 
     const update: Record<string, unknown> = {};
@@ -113,11 +117,15 @@ export async function approveCustomer(id: string): Promise<AdminActionResult> {
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("tb_users")
       .select("userID, userActive, userStatus")
       .eq("userID", id)
       .maybeSingle<{ userID: string; userActive: string | null; userStatus: string | null }>();
+    if (beforeErr) {
+      console.error(`[approveCustomer tb_users read] failed`, { code: beforeErr.code, message: beforeErr.message, id });
+      return { ok: false, error: beforeErr.message };
+    }
     if (!before) return { ok: false, error: "not_found" };
     // No-op when already active (userActive='1' and not deleted).
     if (before.userActive === "1" && before.userStatus !== "0") return { ok: true };
@@ -179,22 +187,30 @@ export async function adminConvertToJuristic(
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("profiles")
       .select("id, account_type, member_code, first_name, last_name")
       .eq("ID", d.profile_id)
       .maybeSingle<{ ID: string; account_type: "personal" | "juristic"; member_code: string | null; first_name: string | null; last_name: string | null }>();
+    if (beforeErr) {
+      console.error(`[adminConvertToJuristic profiles read] failed`, { code: beforeErr.code, message: beforeErr.message, profile_id: d.profile_id });
+      return { ok: false, error: beforeErr.message };
+    }
     if (!before) return { ok: false, error: "not_found" };
     if (before.account_type === "juristic") return { ok: false, error: "already_juristic" };
 
     // Block duplicate tax_id collisions early — the partial unique index
     // on corporate(tax_id) only covers 'verified' rows, so we double-check.
-    const { data: clash } = await admin
+    const { data: clash, error: clashErr } = await admin
       .from("corporate")
       .select("profile_id")
       .eq("tax_id", d.tax_id)
       .neq("profile_id", d.profile_id)
       .maybeSingle();
+    if (clashErr) {
+      console.error(`[adminConvertToJuristic corporate clash check] failed`, { code: clashErr.code, message: clashErr.message, tax_id: d.tax_id });
+      return { ok: false, error: clashErr.message };
+    }
     if (clash) return { ok: false, error: "tax_id_already_used" };
 
     // Step 1 — flip account_type so the corporate trigger lets the insert through
@@ -263,11 +279,15 @@ export async function suspendCustomer(id: string): Promise<AdminActionResult> {
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("tb_users")
       .select("userID, userStatus")
       .eq("userID", id)
       .maybeSingle<{ userID: string; userStatus: string | null }>();
+    if (beforeErr) {
+      console.error(`[suspendCustomer tb_users read] failed`, { code: beforeErr.code, message: beforeErr.message, id });
+      return { ok: false, error: beforeErr.message };
+    }
     if (!before) return { ok: false, error: "not_found" };
     if (before.userStatus === "0") return { ok: true };  // no-op — already disabled
 

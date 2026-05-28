@@ -126,7 +126,7 @@ export default async function ProfilePage() {
   // from it. profile.php's modal SELECT (L144) additionally reads
   // userTel/userSex/userBirthday/userFacebook/userLineID — all on the
   // same tb_users row, so one read covers both.
-  const { data: userRow } = await admin
+  const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
     .select(
       "userName, userLastName, userEmail, userTel, userPicture, userSex, userBirthday, userFacebook, userLineID",
@@ -143,6 +143,14 @@ export default async function ProfilePage() {
       userFacebook: string | null;
       userLineID: string | null;
     }>();
+  if (userRowErr) {
+    // Server page — surface real DB errors via throw (Next renders error
+    // boundary) instead of silently falling through to a "ยังไม่ระบุ" view.
+    console.error(`[profile/page] tb_users lookup failed`, {
+      code: userRowErr.code, message: userRowErr.message, memberCode,
+    });
+    throw new Error(`tb_users lookup failed: ${userRowErr.message}`);
+  }
 
   // header.php L86-92 — SELECT walletTotal FROM tb_wallet WHERE userID=…
   // header.php L100/104/105 — the three stat-card COUNT()s.
@@ -182,7 +190,7 @@ export default async function ProfilePage() {
   let fullAddress = "";
   const mainAddressId = addressMainRes.data?.addressid ?? null;
   if (mainAddressId != null) {
-    const { data: addrRow } = await admin
+    const { data: addrRow, error: addrErr } = await admin
       .from("tb_address")
       .select(
         "addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode",
@@ -197,6 +205,14 @@ export default async function ProfilePage() {
         addressprovince: string | null;
         addresszipcode: string | null;
       }>();
+    if (addrErr) {
+      // Non-fatal — address is a display nicety; log and fall through with
+      // empty fullAddress (the page already handles that case with a
+      // "กรุณาเพิ่มที่อยู่" prompt). Don't take the whole profile page down.
+      console.error(`[profile/page] tb_address lookup failed`, {
+        code: addrErr.code, message: addrErr.message, mainAddressId,
+      });
+    }
     if (addrRow) fullAddress = buildFullAddress(addrRow);
   }
 

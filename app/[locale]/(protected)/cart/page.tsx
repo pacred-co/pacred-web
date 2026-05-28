@@ -206,13 +206,17 @@ export default async function CartPage() {
   // cart.php L154-161: when userShipBy is blank, fall back to the
   //   customer's most-recent tb_forwarder.fShipBy (ORDER BY ID DESC).
   if (userShipBy === "") {
-    const { data: fwdRow } = await admin
+    const { data: fwdRow, error: fwdErr } = await admin
       .from("tb_forwarder")
       .select("fshipby")
       .eq("userid", userID)
       .order("id", { ascending: false })
       .limit(1)
       .maybeSingle<{ fshipby: string | null }>();
+    if (fwdErr) {
+      // Soft-fail — fallback lookup; legacy left userShipBy blank if missing.
+      console.error(`[cart fshipby fallback lookup] failed`, { code: fwdErr.code, message: fwdErr.message });
+    }
     if (fwdRow?.fshipby) {
       userShipBy = fwdRow.fshipby;
     }
@@ -234,7 +238,7 @@ export default async function CartPage() {
   const shipByByAddress: Record<string, ShipByOption[]> = {};
   const maomaoByAddress: Record<string, boolean> = {};
   if (countCart > 0) {
-    const { data: allAddrRows } = await admin
+    const { data: allAddrRows, error: allAddrErr } = await admin
       .from("tb_address")
       .select(
         "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel, addresstel2",
@@ -243,6 +247,10 @@ export default async function CartPage() {
       .eq("addressstatus", "1")
       .order("addressid", { ascending: false })
       .returns<AddressRow[]>();
+    if (allAddrErr) {
+      // Soft-fail — empty address list still renders the cart with the "เปลี่ยนที่อยู่" picker showing only PCS pickup.
+      console.error(`[cart address options list] failed`, { code: allAddrErr.code, message: allAddrErr.message });
+    }
     for (const r of allAddrRows ?? []) {
       const id = String(r.addressid);
       addressOptions.push({
@@ -270,12 +278,17 @@ export default async function CartPage() {
   }
 
   // ── Cart rows, grouped provider → shop (cart.php L522-586) ───
-  const { data: cartRowsData } = await admin
+  const { data: cartRowsData, error: cartRowsErr } = await admin
     .from("tb_cart")
     .select(
       "id, cdetails, curl, ctitle, cnameshop, cprovider, cimages, cprice, camount, ccolor, csize, userid",
     )
     .eq("userid", userID);
+  if (cartRowsErr) {
+    // Cart rows are the primary content — surface the real error instead of silently showing an empty cart.
+    console.error(`[cart rows list] failed`, { code: cartRowsErr.code, message: cartRowsErr.message });
+    throw new Error(`cart rows list failed: ${cartRowsErr.message}`);
+  }
   const cartRows = (cartRowsData ?? []) as CartRow[];
 
   // Build the provider → shop → rows grouping. cart.php iterates
@@ -646,16 +659,20 @@ async function resolveAddressBlock(
 > {
   // cart.php L441-442: SELECT addressID FROM tb_address
   //   WHERE userID=… AND addressStatus='1'
-  const { data: anyAddr } = await admin
+  const { data: anyAddr, error: anyAddrErr } = await admin
     .from("tb_address")
     .select("addressid")
     .eq("userid", userID)
     .eq("addressstatus", "1");
+  if (anyAddrErr) {
+    // Soft-fail — falls through to the "no address" branch, mirroring legacy when SELECT returns no rows.
+    console.error(`[cart resolveAddressBlock anyAddr lookup] failed`, { code: anyAddrErr.code, message: anyAddrErr.message });
+  }
   const hasAddress = (anyAddr ?? []).length > 0;
 
   if (hasAddress) {
     // cart.php L445-446: the row matching $userAddressID.
-    const { data: matchRow } = await admin
+    const { data: matchRow, error: matchRowErr } = await admin
       .from("tb_address")
       .select(
         "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel, addresstel2",
@@ -664,6 +681,10 @@ async function resolveAddressBlock(
       .eq("addressstatus", "1")
       .eq("addressid", userAddressID)
       .maybeSingle<AddressRow>();
+    if (matchRowErr) {
+      // Soft-fail — falls through to the tb_address_main / warehouse-default branches.
+      console.error(`[cart resolveAddressBlock match lookup] failed`, { code: matchRowErr.code, message: matchRowErr.message });
+    }
 
     if (matchRow) {
       // cart.php L452 — the label: legacy `if($userAddressID!=''
@@ -679,13 +700,17 @@ async function resolveAddressBlock(
 
     // cart.php L454-465: the tb_address_main ⋈ tb_address fallback.
     if (userAddressID !== "PCS") {
-      const { data: mainRow } = await admin
+      const { data: mainRow, error: mainRowErr } = await admin
         .from("tb_address_main")
         .select("addressid")
         .eq("userid", userID)
         .maybeSingle<{ addressid: number }>();
+      if (mainRowErr) {
+        // Soft-fail — falls through to the warehouse-default branch, mirroring legacy LEFT JOIN.
+        console.error(`[cart resolveAddressBlock main lookup] failed`, { code: mainRowErr.code, message: mainRowErr.message });
+      }
       if (mainRow) {
-        const { data: mainAddr } = await admin
+        const { data: mainAddr, error: mainAddrErr } = await admin
           .from("tb_address")
           .select(
             "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel, addresstel2",
@@ -693,6 +718,10 @@ async function resolveAddressBlock(
           .eq("addressid", mainRow.addressid)
           .eq("addressstatus", "1")
           .maybeSingle<AddressRow>();
+        if (mainAddrErr) {
+          // Soft-fail — falls through to the warehouse-default branch.
+          console.error(`[cart resolveAddressBlock main addr lookup] failed`, { code: mainAddrErr.code, message: mainAddrErr.message });
+        }
         if (mainAddr) {
           // cart.php L465 — label: `if($userAddressID!='')` →
           //   ที่อยู่ล่าสุด, else ที่อยู่หลัก.

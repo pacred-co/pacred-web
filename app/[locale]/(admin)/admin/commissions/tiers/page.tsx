@@ -47,7 +47,7 @@ export default async function AdminCommissionTiersPage() {
   await requireAdmin(["super", "accounting"]);
 
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("commission_tiers")
     .select(`
       id, role_kind, service_kind, tier_name, rate_pct, flat_thb, min_base_thb,
@@ -58,6 +58,10 @@ export default async function AdminCommissionTiersPage() {
     .order("service_kind", { ascending: true })
     .order("created_at",   { ascending: false })
     .returns<Row[]>();
+  if (error) {
+    console.error(`[admin/commissions/tiers list] failed`, { code: error.code, message: error.message });
+    throw new Error(`commission_tiers list failed: ${error.message}`);
+  }
 
   const rows = data ?? [];
   const activeCount   = rows.filter((r) => r.is_active).length;

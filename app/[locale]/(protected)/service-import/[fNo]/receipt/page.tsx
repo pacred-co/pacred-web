@@ -137,7 +137,7 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
     status:     "active" | "reversed";
     created_at: string;
   };
-  const { data: invoiceAdjRaw } = await supabase
+  const { data: invoiceAdjRaw, error: invoiceAdjErr } = await supabase
     .from("invoice_adjustments")
     .select("id, amount_thb, reason, status, created_at")
     .eq("target_type", "forwarder")
@@ -145,6 +145,9 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
     .eq("status",      "active")
     .order("created_at", { ascending: false })
     .returns<InvoiceAdjRow[]>();
+  if (invoiceAdjErr) {
+    console.error(`[receipt invoice_adjustments list] failed`, { code: invoiceAdjErr.code, message: invoiceAdjErr.message, fNo });
+  }
   const invoiceAdjustments = invoiceAdjRaw ?? [];
   const invoiceAdjTotal = invoiceAdjustments
     .reduce((sum, r) => sum + Number(r.amount_thb), 0);

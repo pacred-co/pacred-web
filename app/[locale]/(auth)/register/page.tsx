@@ -63,7 +63,7 @@ export default async function RegisterPage({ searchParams }: PageProps) {
     // Check if Step 2 (corporate info) was saved. If yes → jump to Step 3.
     // If no → Step 2.
     const supabase = await createClient();
-    const { data: corp } = await supabase
+    const { data: corp, error: corpErr } = await supabase
       .from("corporate")
       .select("tax_id, company_name, company_address")
       .eq("profile_id", data.user.id)
@@ -72,6 +72,15 @@ export default async function RegisterPage({ searchParams }: PageProps) {
         company_name: string | null;
         company_address: string | null;
       }>();
+    if (corpErr) {
+      // Server page — must not silently swallow DB errors as a 404/redirect.
+      // Throw so Next renders the real error boundary instead of dropping the
+      // user into a wrong-step resume state.
+      console.error(`[register/page] corporate lookup failed`, {
+        code: corpErr.code, message: corpErr.message, userId: data.user.id,
+      });
+      throw new Error(`corporate lookup failed: ${corpErr.message}`);
+    }
 
     juristicResume = {
       step: corp ? 3 : 2,

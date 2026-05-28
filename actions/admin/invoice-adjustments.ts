@@ -60,11 +60,15 @@ async function resolveInvoiceTarget(
   | { ok: false; error: string }
 > {
   if (target_type === "forwarder") {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("forwarders")
       .select("profile_id, f_no")
       .eq("f_no", target_id)
       .maybeSingle<{ profile_id: string; f_no: string }>();
+    if (error) {
+      console.error(`[invoice-adjustments resolveInvoiceTarget forwarder] failed`, { code: error.code, message: error.message });
+      return { ok: false, error: error.message };
+    }
     if (!data) return { ok: false, error: "forwarder_not_found" };
     return {
       ok: true,
@@ -78,11 +82,15 @@ async function resolveInvoiceTarget(
     };
   }
   if (target_type === "service_order") {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("service_orders")
       .select("profile_id, h_no")
       .eq("h_no", target_id)
       .maybeSingle<{ profile_id: string; h_no: string }>();
+    if (error) {
+      console.error(`[invoice-adjustments resolveInvoiceTarget service_order] failed`, { code: error.code, message: error.message });
+      return { ok: false, error: error.message };
+    }
     if (!data) return { ok: false, error: "service_order_not_found" };
     return {
       ok: true,
@@ -96,11 +104,15 @@ async function resolveInvoiceTarget(
     };
   }
   // freight_invoice — target_id is the uuid
-  const { data } = await admin
+  const { data, error } = await admin
     .from("freight_invoices")
     .select("id, profile_id")
     .eq("id", target_id)
     .maybeSingle<{ id: string; profile_id: string }>();
+  if (error) {
+    console.error(`[invoice-adjustments resolveInvoiceTarget freight_invoice] failed`, { code: error.code, message: error.message });
+    return { ok: false, error: error.message };
+  }
   if (!data) return { ok: false, error: "freight_invoice_not_found" };
   return {
     ok: true,
@@ -259,7 +271,7 @@ export async function reverseInvoiceAdjustment(
   return withAdmin(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: adj } = await admin
+    const { data: adj, error: adjErr } = await admin
       .from("invoice_adjustments")
       .select("id, target_type, target_id, profile_id, amount_thb, status")
       .eq("id", d.id)
@@ -271,6 +283,10 @@ export async function reverseInvoiceAdjustment(
         amount_thb:  number;
         status:      string;
       }>();
+    if (adjErr) {
+      console.error(`[invoice-adjustments reverse lookup] failed`, { code: adjErr.code, message: adjErr.message });
+      return { ok: false, error: adjErr.message };
+    }
     if (!adj)                       return { ok: false, error: "not_found" };
     if (adj.status === "reversed")  return { ok: false, error: "already_reversed" };
 
