@@ -33,6 +33,7 @@ import {
 } from "@/lib/validators/auth";
 import { requestOtp, verifyOtp } from "./otp";
 import { logger } from "@/lib/logger";
+import { insertLegacyTbUserRow } from "@/lib/auth/legacy-bridge-tb-users";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -211,19 +212,23 @@ export async function registerPersonal(
   //   "2" = ซื้อไปขาย   (resell)   → true
   // (`tb_users.shopuser` column comment in 0081 schema: '1=ซื้อไปใข้เอง'.)
   // Migrates onto profiles.shop_user (boolean, default false — 0003).
-  const { error: profileErr } = await admin.from("profiles").insert({
-    id: created.user.id,
-    account_type: "personal",
-    first_name: data.firstName,
-    last_name: data.lastName,
-    phone,
-    email: data.email && data.email.length > 0 ? data.email : null,
-    services: data.services,
-    how_know: data.howKnow ?? null,
-    ...(data.recom ? { customer_group: data.recom } : {}),
-    ...(data.shopUser ? { shop_user: data.shopUser === "2" } : {}),
-    status: "active",
-  });
+  const { data: profileRow, error: profileErr } = await admin
+    .from("profiles")
+    .insert({
+      id: created.user.id,
+      account_type: "personal",
+      first_name: data.firstName,
+      last_name: data.lastName,
+      phone,
+      email: data.email && data.email.length > 0 ? data.email : null,
+      services: data.services,
+      how_know: data.howKnow ?? null,
+      ...(data.recom ? { customer_group: data.recom } : {}),
+      ...(data.shopUser ? { shop_user: data.shopUser === "2" } : {}),
+      status: "active",
+    })
+    .select("member_code")
+    .single<{ member_code: string | null }>();
   if (profileErr) {
     // EMERGENCY 2026-05-23 — surface the real reason in Vercel logs (was
     // swallowed as the opaque "profile_failed") + DELETE the orphan
@@ -242,6 +247,31 @@ export async function registerPersonal(
       console.error("[auth/registerPersonal] orphan auth.user cleanup failed:", delErr);
     }
     return { ok: false, error: "profile_failed" };
+  }
+
+  // E2E loop fix · Agent F1 · 2026-05-29 (Gap #1) — mirror the new
+  // customer into legacy `tb_users` with userActive='0' so the admin
+  // approval queue (/admin/customers/pending) sees them. Without this,
+  // every Pacred-native signup was invisible to ops + never approved +
+  // never auto-assigned a sales rep. Best-effort: a failure here logs
+  // loud but does NOT roll back the profile (the customer is already
+  // signed up + can use the app; ops can manually backfill via SQL).
+  if (profileRow?.member_code) {
+    await insertLegacyTbUserRow(admin, {
+      memberCode:  profileRow.member_code,
+      phone,
+      email:       data.email && data.email.length > 0 ? data.email : null,
+      accountType: "personal",
+      firstName:   data.firstName,
+      lastName:    data.lastName,
+    });
+  } else {
+    logger.error(
+      "auth",
+      "registerPersonal: profile insert returned no member_code — skipping tb_users bridge",
+      undefined,
+      { userId: created.user.id },
+    );
   }
 
   // Sign in to set session cookies
@@ -296,16 +326,20 @@ export async function registerJuristicStep1(
   //
   // `shop_user` — legacy <select name="shopUser"> on register.php (see
   // registerPersonal above for the "1"/"2" → boolean mapping).
-  const { error: profileErr } = await admin.from("profiles").insert({
-    id: created.user.id,
-    account_type: "juristic",
-    phone,
-    services: data.services,
-    how_know: data.howKnow ?? null,
-    ...(data.recom ? { customer_group: data.recom } : {}),
-    ...(data.shopUser ? { shop_user: data.shopUser === "2" } : {}),
-    status: "incomplete",
-  });
+  const { data: profileRow, error: profileErr } = await admin
+    .from("profiles")
+    .insert({
+      id: created.user.id,
+      account_type: "juristic",
+      phone,
+      services: data.services,
+      how_know: data.howKnow ?? null,
+      ...(data.recom ? { customer_group: data.recom } : {}),
+      ...(data.shopUser ? { shop_user: data.shopUser === "2" } : {}),
+      status: "incomplete",
+    })
+    .select("member_code")
+    .single<{ member_code: string | null }>();
   if (profileErr) {
     // EMERGENCY 2026-05-23 — same handling as registerPersonal: surface
     // the reason in Vercel logs + delete the orphan auth.user.
@@ -320,6 +354,30 @@ export async function registerJuristicStep1(
       console.error("[auth/registerJuristicStep1] orphan auth.user cleanup failed:", delErr);
     }
     return { ok: false, error: "profile_failed" };
+  }
+
+  // E2E loop fix · Agent F1 · 2026-05-29 (Gap #1) — mirror new juristic
+  // signup into tb_users (userActive='0', userCompany='1'). For juristic
+  // step 1 the customer hasn't entered first/last/company name yet
+  // (step 2 collects it) — leave userName/userLastName empty for now.
+  // Wave-2 follow-up: hydrate userName/userLastName from corporate after
+  // step 2 if ops want richer pending-queue rows.
+  if (profileRow?.member_code) {
+    await insertLegacyTbUserRow(admin, {
+      memberCode:  profileRow.member_code,
+      phone,
+      email:       null,
+      accountType: "juristic",
+      firstName:   null,
+      lastName:    null,
+    });
+  } else {
+    logger.error(
+      "auth",
+      "registerJuristicStep1: profile insert returned no member_code — skipping tb_users bridge",
+      undefined,
+      { userId: created.user.id },
+    );
   }
 
   // Sign in (session needed for step 2/3 since they use server client + RLS)
