@@ -9,8 +9,18 @@ import { createClient } from "@/lib/supabase/client";
  * NavBar cart badge — fetches current user's cart_items count on mount
  * and listens for realtime INSERT/DELETE to keep the badge in sync.
  * Click → /service-order/cart.
+ *
+ * `prefetch` opt-out: when this badge is rendered on a non-protected page
+ * (e.g. an authed user landing on /register / / / etc.), Next.js's default
+ * viewport-prefetch on the `<Link href="/service-order/cart">` fetches the
+ * (protected) layout's RSC payload and React 19 hoists the protected CSS
+ * bundle as `<link rel="preload">` tags onto the current page — leading to
+ * the "preloaded but not used" console warning flood. The NavBar passes
+ * `prefetch={false}` in that case; on protected pages it's left
+ * undefined (Next.js default viewport prefetch) so back-office nav stays
+ * snappy. See docs/learnings/nextjs-16-quirks.md.
  */
-export function CartBadge() {
+export function CartBadge({ prefetch }: { prefetch?: false }) {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
@@ -59,6 +69,7 @@ export function CartBadge() {
   return (
     <Link
       href="/service-order/cart"
+      prefetch={prefetch}
       aria-label="Cart"
       className="relative inline-flex items-center justify-center w-9 h-9 rounded-lg text-white hover:bg-white/15 transition-colors"
     >

@@ -8,8 +8,14 @@ import { createClient } from "@/lib/supabase/client";
 /**
  * NavBar notification bell — fetches unread count on mount and listens
  * for realtime new-row INSERTs to bump the badge. Click → /notifications.
+ *
+ * `prefetch` opt-out: same rationale as CartBadge — the `<Link
+ * href="/notifications">` viewport-prefetch pulls in the (protected) layout
+ * RSC payload + its 25+ stylesheet bundle, which React 19 hoists as preload
+ * links onto whatever page NavBar is rendering on. The NavBar passes
+ * `prefetch={false}` when rendering outside the protected route group.
  */
-export function NotificationBell() {
+export function NotificationBell({ prefetch }: { prefetch?: false }) {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
@@ -60,6 +66,7 @@ export function NotificationBell() {
   return (
     <Link
       href="/notifications"
+      prefetch={prefetch}
       aria-label="Notifications"
       className="relative inline-flex items-center justify-center w-9 h-9 rounded-lg text-white hover:bg-white/15 transition-colors"
     >
