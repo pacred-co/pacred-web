@@ -48,7 +48,7 @@ export default async function AdminPcsContainerPaymentDetailPage({
     );
   }
   const p = res.data!;
-  const paid = p.cntstatus === PCS_CNT_STATUS.PAID;
+  const paid = p.cntStatus === PCS_CNT_STATUS.PAID;
 
   return (
     <main className="space-y-5 p-6 lg:p-8">
@@ -58,10 +58,10 @@ export default async function AdminPcsContainerPaymentDetailPage({
             ADMIN · ACCOUNTING
           </p>
           <h1 className="mt-1 font-mono text-2xl font-bold">
-            {p.cntname || `#${p.id}`}
+            {p.cntName || `#${p.ID}`}
           </h1>
           <p className="mt-1 text-sm text-muted">
-            {t("detailSubtitle")} · #{p.id}
+            {t("detailSubtitle")} · #{p.ID}
           </p>
         </div>
         <Link
@@ -79,7 +79,7 @@ export default async function AdminPcsContainerPaymentDetailPage({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-xs text-muted">{t("colAmount")}</p>
-                <p className="mt-0.5 font-mono text-2xl font-bold">{thb(p.cntamount)}</p>
+                <p className="mt-0.5 font-mono text-2xl font-bold">{thb(p.cntAmount)}</p>
               </div>
               <span
                 className={`rounded-full border px-3 py-1 text-xs font-medium ${
@@ -93,19 +93,19 @@ export default async function AdminPcsContainerPaymentDetailPage({
             </div>
             <div className="grid grid-cols-2 gap-y-2 border-t border-border pt-3 text-sm sm:grid-cols-3">
               <Cell label={t("colDate")} value={p.date ? new Date(p.date).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" }) : "—"} />
-              <Cell label={t("fieldUpdatedAt")} value={p.dateupdate ? new Date(p.dateupdate).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" }) : "—"} />
-              <Cell label={t("fieldCreatedBy")} value={p.adminidcreate || "—"} mono />
+              <Cell label={t("fieldUpdatedAt")} value={p.dateUpdate ? new Date(p.dateUpdate).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" }) : "—"} />
+              <Cell label={t("fieldCreatedBy")} value={p.adminIDCreate || "—"} mono />
             </div>
           </div>
 
           {/* Payee bank fields */}
-          {(p.nameblank || p.noblank || p.nameaccount) && (
+          {(p.nameBlank || p.noBlank || p.nameAccount) && (
             <div className="rounded-2xl border border-border bg-white p-5 shadow-sm dark:bg-surface">
               <h2 className="mb-2 text-sm font-bold">{t("payeeSection")}</h2>
               <dl className="grid grid-cols-1 gap-y-1.5 text-sm sm:grid-cols-3">
-                <Cell label={t("payeeBank")}      value={p.nameblank   || "—"} />
-                <Cell label={t("payeeAcctNo")}    value={p.noblank     || "—"} mono />
-                <Cell label={t("payeeAcctName")}  value={p.nameaccount || "—"} />
+                <Cell label={t("payeeBank")}      value={p.nameBlank   || "—"} />
+                <Cell label={t("payeeAcctNo")}    value={p.noBlank     || "—"} mono />
+                <Cell label={t("payeeAcctName")}  value={p.nameAccount || "—"} />
               </dl>
             </div>
           )}
@@ -137,20 +137,20 @@ export default async function AdminPcsContainerPaymentDetailPage({
         <aside className="space-y-4">
           <div className="space-y-3 rounded-2xl border border-border bg-white p-5 shadow-sm dark:bg-surface">
             <h2 className="text-sm font-bold">{t("statusPanelTitle")}</h2>
-            <PcsPaymentRowControls paymentId={p.id} currentStatus={p.cntstatus} />
+            <PcsPaymentRowControls paymentId={p.ID} currentStatus={p.cntStatus} />
           </div>
 
           <div className="space-y-3 rounded-2xl border border-border bg-white p-5 shadow-sm dark:bg-surface">
             <h2 className="text-sm font-bold">{t("fieldSlip")}</h2>
-            {p.cntimagesslip ? (
-              <PcsPaymentSlipViewer paymentId={p.id} kind="slip" />
+            {p.cntImagesSlip ? (
+              <PcsPaymentSlipViewer paymentId={p.ID} kind="slip" />
             ) : (
               <p className="text-xs text-muted">{t("slipMissing")}</p>
             )}
-            {p.cntfile && (
+            {p.cntFile && (
               <div className="border-t border-border pt-3">
                 <p className="mb-1 text-xs font-medium">{t("extraDoc")}</p>
-                <PcsPaymentSlipViewer paymentId={p.id} kind="doc" />
+                <PcsPaymentSlipViewer paymentId={p.ID} kind="doc" />
               </div>
             )}
           </div>

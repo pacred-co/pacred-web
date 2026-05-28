@@ -18,14 +18,14 @@
  *
  * Tables (migration 0081 — legacy schema, RLS-on / no policies, so only
  * the service-role admin client reaches them):
- *   tb_cnt                 — one row per container payment
- *   tb_cnt_item            — each fCabinetNumber string → cntID
- *   tb_cnt_pay_idorco      — PK/CO numbers (forwarders.f_no) covered
- *   tb_cnt_pay_trackingchn — China tracking numbers covered
+ *   tb_cnt                 — one row per container payment      [camelCase 0115]
+ *   tb_cnt_item            — each fCabinetNumber string → cntID [camelCase 0115]
+ *   tb_cnt_pay_idorco      — PK/CO numbers (forwarders.f_no) covered   [still lowercase — pending batch]
+ *   tb_cnt_pay_trackingchn — China tracking numbers covered            [still lowercase — pending batch]
  *
  * Legacy column quirks reproduced faithfully:
- *   - cntstatus  : varchar(1) — "1" = ยังไม่จ่ายเงิน, "2" = จ่ายเงินแล้ว
- *   - cntname    : varchar(1000) — comma-joined list of เลขตู้ strings
+ *   - cntStatus  : varchar(1) — "1" = ยังไม่จ่ายเงิน, "2" = จ่ายเงินแล้ว
+ *   - cntName    : varchar(1000) — comma-joined list of เลขตู้ strings
  *   - all the *NOT NULL* text columns default to "" (legacy used "" not NULL)
  *
  * RBAC: super + accounting (finance territory — ADR-0005 K-7 / W-1).
@@ -35,7 +35,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
-// Legacy cntstatus codes live in a plain module — a "use server" file
+// Legacy cntStatus codes live in a plain module — a "use server" file
 // may only export async functions, so the constant cannot live here.
 import { PCS_CNT_STATUS } from "@/app/[locale]/(admin)/admin/accounting/container-payments/constants";
 
@@ -46,37 +46,39 @@ const SLIP_MIMES = ["application/pdf", "image/jpeg", "image/jpg", "image/png"];
 // ────────────────────────────────────────────────────────────
 // Row shapes (legacy bigint PKs — these tables predate Pacred's
 // uuid convention; faithfulness means we keep them).
+// Property names match ก๊อต's pacred-admin-next/docs/database/
+// spec (camelCase, post-migration-0115).
 // ────────────────────────────────────────────────────────────
 
 export type PcsContainerPaymentRow = {
-  id:            number;
-  cntname:       string;   // เลขตู้ — comma-joined list
-  cntstatus:     string;   // "1" unpaid / "2" paid
-  cntamount:     number;
-  cntimagesslip: string;   // storage path of the China-side slip
-  cntfile:       string;   // optional extra doc (PDF)
+  ID:            number;
+  cntName:       string;   // เลขตู้ — comma-joined list
+  cntStatus:     string;   // "1" unpaid / "2" paid
+  cntAmount:     number;
+  cntImagesSlip: string;   // storage path of the China-side slip
+  cntFile:       string;   // optional extra doc (PDF)
   date:          string | null;
-  dateupdate:    string | null;
-  adminidcreate: string;
-  adminidupdate: string;
-  nameblank:     string;   // payee bank name
-  noblank:       string;   // payee account no.
-  nameaccount:   string;   // payee account holder
+  dateUpdate:    string | null;
+  adminIDCreate: string;
+  adminIDUpdate: string;
+  nameBlank:     string;   // payee bank name
+  noBlank:       string;   // payee account no.
+  nameAccount:   string;   // payee account holder
 };
 
 export type PcsContainerPaymentDetail = PcsContainerPaymentRow & {
-  cabinetNumbers: string[];   // tb_cnt_item.fcabinetnumber
-  idOrCo:         string[];   // tb_cnt_pay_idorco.fidorco (PK/CO numbers)
-  trackingChn:    string[];   // tb_cnt_pay_trackingchn.ftrackingchn
+  cabinetNumbers: string[];   // tb_cnt_item.fCabinetNumber
+  idOrCo:         string[];   // tb_cnt_pay_idorco.fidorco (PK/CO numbers)  [still lowercase]
+  trackingChn:    string[];   // tb_cnt_pay_trackingchn.ftrackingchn        [still lowercase]
 };
 
 // ────────────────────────────────────────────────────────────
-// LIST — the ledger view (keyed by cntname).
+// LIST — the ledger view (keyed by cntName).
 // ────────────────────────────────────────────────────────────
 
 const listSchema = z.object({
   status: z.enum(["all", "unpaid", "paid"]).default("all"),
-  q:      z.string().trim().max(200).optional(),   // matches cntname
+  q:      z.string().trim().max(200).optional(),   // matches cntName
   limit:  z.number().int().min(1).max(500).default(200),
 });
 
@@ -94,13 +96,13 @@ export async function listPcsContainerPayments(
 
       let query = admin
         .from("tb_cnt")
-        .select("id, cntname, cntstatus, cntamount, cntimagesslip, cntfile, date, dateupdate, adminidcreate, adminidupdate, nameblank, noblank, nameaccount")
-        .order("id", { ascending: false })
+        .select("ID, cntName, cntStatus, cntAmount, cntImagesSlip, cntFile, date, dateUpdate, adminIDCreate, adminIDUpdate, nameBlank, noBlank, nameAccount")
+        .order("ID", { ascending: false })
         .limit(f.limit);
 
-      if (f.status === "unpaid") query = query.eq("cntstatus", PCS_CNT_STATUS.UNPAID);
-      if (f.status === "paid")   query = query.eq("cntstatus", PCS_CNT_STATUS.PAID);
-      if (f.q)                   query = query.ilike("cntname", `%${f.q}%`);
+      if (f.status === "unpaid") query = query.eq("cntStatus", PCS_CNT_STATUS.UNPAID);
+      if (f.status === "paid")   query = query.eq("cntStatus", PCS_CNT_STATUS.PAID);
+      if (f.q)                   query = query.ilike("cntName", `%${f.q}%`);
 
       const { data, error } = await query;
       if (error) return { ok: false, error: error.message };
@@ -108,8 +110,8 @@ export async function listPcsContainerPayments(
       // Sidebar/header badge count = unpaid payments (legacy cnt-hs badge).
       const { count } = await admin
         .from("tb_cnt")
-        .select("id", { count: "exact", head: true })
-        .eq("cntstatus", PCS_CNT_STATUS.UNPAID);
+        .select("ID", { count: "exact", head: true })
+        .eq("cntStatus", PCS_CNT_STATUS.UNPAID);
 
       return {
         ok: true,
@@ -136,23 +138,26 @@ export async function getPcsContainerPaymentDetail(
 
     const { data: row, error } = await admin
       .from("tb_cnt")
-      .select("id, cntname, cntstatus, cntamount, cntimagesslip, cntfile, date, dateupdate, adminidcreate, adminidupdate, nameblank, noblank, nameaccount")
-      .eq("id", id)
+      .select("ID, cntName, cntStatus, cntAmount, cntImagesSlip, cntFile, date, dateUpdate, adminIDCreate, adminIDUpdate, nameBlank, noBlank, nameAccount")
+      .eq("ID", id)
       .maybeSingle<PcsContainerPaymentRow>();
     if (error) return { ok: false, error: error.message };
     if (!row)  return { ok: false, error: "not_found" };
 
     const [{ data: items }, { data: idorco }, { data: tracking }] = await Promise.all([
-      admin.from("tb_cnt_item").select("fcabinetnumber").eq("cntid", id),
-      admin.from("tb_cnt_pay_idorco").select("fidorco").eq("fcabinetnumber", row.cntname),
-      admin.from("tb_cnt_pay_trackingchn").select("ftrackingchn").eq("fcabinetnumber", row.cntname),
+      // tb_cnt_item — IN batch 2a, camelCase
+      admin.from("tb_cnt_item").select("fCabinetNumber").eq("cntID", id),
+      // tb_cnt_pay_idorco — NOT in batch 2a yet, columns stay lowercase
+      admin.from("tb_cnt_pay_idorco").select("fidorco").eq("fcabinetnumber", row.cntName),
+      // tb_cnt_pay_trackingchn — NOT in batch 2a yet, columns stay lowercase
+      admin.from("tb_cnt_pay_trackingchn").select("ftrackingchn").eq("fcabinetnumber", row.cntName),
     ]);
 
     return {
       ok: true,
       data: {
         ...normaliseRow(row),
-        cabinetNumbers: ((items ?? []) as { fcabinetnumber: string }[]).map((r) => r.fcabinetnumber),
+        cabinetNumbers: ((items ?? []) as { fCabinetNumber: string }[]).map((r) => r.fCabinetNumber),
         idOrCo:         ((idorco ?? []) as { fidorco: string }[]).map((r) => r.fidorco),
         trackingChn:    ((tracking ?? []) as { ftrackingchn: string }[]).map((r) => r.ftrackingchn),
       },
@@ -164,6 +169,9 @@ export async function getPcsContainerPaymentDetail(
 // DOUBLE-PAY GUARD — legacy report-cnt.php counts existing
 // tb_cnt_pay_trackingchn rows for the tracking numbers about to be
 // paid; if any already exist it warns "กำลังจะจ่ายซ้ำ".
+//
+// tb_cnt_pay_idorco + tb_cnt_pay_trackingchn are NOT in batch 2a,
+// so all column names below stay lowercase.
 // ────────────────────────────────────────────────────────────
 
 const dupSchema = z.object({
@@ -218,9 +226,9 @@ const createSchema = z.object({
   amount:          z.number().positive("ยอดเงินต้องมากกว่า 0").max(99_999_999.99),
   slip_path:       z.string().trim().min(1, "ต้องแนบสลิปการจ่ายเงิน").max(200),
   doc_path:        z.string().trim().max(200).optional(),
-  payee_bank:      z.string().trim().max(300).optional(),   // nameblank
-  payee_account_no:   z.string().trim().max(200).optional(), // noblank
-  payee_account_name: z.string().trim().max(300).optional(), // nameaccount
+  payee_bank:      z.string().trim().max(300).optional(),   // nameBlank
+  payee_account_no:   z.string().trim().max(200).optional(), // noBlank
+  payee_account_name: z.string().trim().max(300).optional(), // nameAccount
   id_or_co:        z.array(z.string().trim().min(1).max(30)).max(500).default([]),
   tracking_chn:    z.array(z.string().trim().min(1).max(50)).max(500).default([]),
   mark_paid:       z.boolean().default(false),
@@ -237,66 +245,68 @@ export async function adminCreatePcsContainerPayment(
   return withAdmin<{ id: number }>(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    // De-dup the cabinet list, then build cntname the legacy way: a
+    // De-dup the cabinet list, then build cntName the legacy way: a
     // comma-joined string of every เลขตู้ this payment covers.
     const cabinets = Array.from(new Set(d.cabinet_numbers.map((c) => c.trim()).filter(Boolean)));
-    const cntname  = cabinets.join(",");
+    const cntName  = cabinets.join(",");
     const nowIso   = new Date().toISOString();
 
     const { data: created, error: insErr } = await admin
       .from("tb_cnt")
       .insert({
-        cntname,
-        cntstatus:     d.mark_paid ? PCS_CNT_STATUS.PAID : PCS_CNT_STATUS.UNPAID,
-        cntamount:     d.amount,
-        cntimagesslip: d.slip_path,
-        cntfile:       d.doc_path ?? "",
+        cntName,
+        cntStatus:     d.mark_paid ? PCS_CNT_STATUS.PAID : PCS_CNT_STATUS.UNPAID,
+        cntAmount:     d.amount,
+        cntImagesSlip: d.slip_path,
+        cntFile:       d.doc_path ?? "",
         date:          nowIso,
-        dateupdate:    nowIso,
-        adminidcreate: adminId,
-        adminidupdate: adminId,
-        nameblank:     d.payee_bank ?? "",
-        noblank:       d.payee_account_no ?? "",
-        nameaccount:   d.payee_account_name ?? "",
+        dateUpdate:    nowIso,
+        adminIDCreate: adminId,
+        adminIDUpdate: adminId,
+        nameBlank:     d.payee_bank ?? "",
+        noBlank:       d.payee_account_no ?? "",
+        nameAccount:   d.payee_account_name ?? "",
       })
-      .select("id")
-      .single<{ id: number }>();
+      .select("ID")
+      .single<{ ID: number }>();
     if (insErr) return { ok: false, error: insErr.message };
 
-    const cntId = created.id;
+    const cntId = created.ID;
 
-    // Fan-out 1 — tb_cnt_item: one row per cabinet-number string.
+    // Fan-out 1 — tb_cnt_item: one row per cabinet-number string. IN batch 2a.
     if (cabinets.length > 0) {
       const { error: itemErr } = await admin
         .from("tb_cnt_item")
-        .insert(cabinets.map((fcabinetnumber) => ({ fcabinetnumber, cntid: cntId })));
+        .insert(cabinets.map((fCabinetNumber) => ({ fCabinetNumber, cntID: cntId })));
       if (itemErr) {
         // Best-effort rollback of the parent so we don't strand a
         // headerless payment — legacy PHP had no transaction either,
         // but Pacred should not leave inconsistent state.
-        await admin.from("tb_cnt").delete().eq("id", cntId);
+        await admin.from("tb_cnt").delete().eq("ID", cntId);
         return { ok: false, error: `บันทึกเลขตู้ไม่สำเร็จ: ${itemErr.message}` };
       }
     }
 
     // Fan-out 2 — tb_cnt_pay_idorco: the PK/CO numbers covered.
+    // NOT in batch 2a, columns stay lowercase.
     const idOrCo = dedupe(d.id_or_co);
     if (idOrCo.length > 0) {
       await admin
         .from("tb_cnt_pay_idorco")
-        .insert(idOrCo.map((fidorco) => ({ fidorco, fcabinetnumber: cntname })));
+        .insert(idOrCo.map((fidorco) => ({ fidorco, fcabinetnumber: cntName })));
     }
 
     // Fan-out 3 — tb_cnt_pay_trackingchn: the China tracking numbers.
+    // NOT in batch 2a, columns stay lowercase.
     const trackingChn = dedupe(d.tracking_chn);
     if (trackingChn.length > 0) {
       await admin
         .from("tb_cnt_pay_trackingchn")
-        .insert(trackingChn.map((ftrackingchn) => ({ ftrackingchn, fcabinetnumber: cntname })));
+        .insert(trackingChn.map((ftrackingchn) => ({ ftrackingchn, fcabinetnumber: cntName })));
     }
 
     await logAdminAction(adminId, "pcs_container_payment.create", "tb_cnt", String(cntId), {
-      cntname,
+      cntName,
       amount:        d.amount,
       cabinet_count: cabinets.length,
       idorco_count:  idOrCo.length,
@@ -310,7 +320,7 @@ export async function adminCreatePcsContainerPayment(
 }
 
 // ────────────────────────────────────────────────────────────
-// SET PAID / UNPAID — flips cntstatus. This IS the legacy "ตู้
+// SET PAID / UNPAID — flips cntStatus. This IS the legacy "ตู้
 // status" staff know — paid vs unpaid, not a logistics enum.
 // ────────────────────────────────────────────────────────────
 
@@ -331,25 +341,25 @@ export async function adminSetPcsContainerPaymentPaid(
 
     const { data: row } = await admin
       .from("tb_cnt")
-      .select("id, cntstatus, cntname")
-      .eq("id", d.id)
-      .maybeSingle<{ id: number; cntstatus: string; cntname: string }>();
+      .select("ID, cntStatus, cntName")
+      .eq("ID", d.id)
+      .maybeSingle<{ ID: number; cntStatus: string; cntName: string }>();
     if (!row) return { ok: false, error: "not_found" };
 
     const next = d.paid ? PCS_CNT_STATUS.PAID : PCS_CNT_STATUS.UNPAID;
-    if (row.cntstatus === next) {
+    if (row.cntStatus === next) {
       return { ok: false, error: d.paid ? "รายการนี้จ่ายเงินแล้ว" : "รายการนี้ยังไม่จ่ายอยู่แล้ว" };
     }
 
     const { error } = await admin
       .from("tb_cnt")
-      .update({ cntstatus: next, dateupdate: new Date().toISOString(), adminidupdate: adminId })
-      .eq("id", d.id);
+      .update({ cntStatus: next, dateUpdate: new Date().toISOString(), adminIDUpdate: adminId })
+      .eq("ID", d.id);
     if (error) return { ok: false, error: error.message };
 
     await logAdminAction(adminId, "pcs_container_payment.set_status", "tb_cnt", String(d.id), {
-      cntname: row.cntname,
-      from:    row.cntstatus,
+      cntName: row.cntName,
+      from:    row.cntStatus,
       to:      next,
     });
 
@@ -413,12 +423,12 @@ export async function adminGetPcsContainerPaymentSlipUrl(
       const admin = createAdminClient();
       const { data: row } = await admin
         .from("tb_cnt")
-        .select("id, cntimagesslip, cntfile")
-        .eq("id", parsed.data.id)
-        .maybeSingle<{ id: number; cntimagesslip: string; cntfile: string }>();
+        .select("ID, cntImagesSlip, cntFile")
+        .eq("ID", parsed.data.id)
+        .maybeSingle<{ ID: number; cntImagesSlip: string; cntFile: string }>();
       if (!row) return { ok: false, error: "not_found" };
 
-      const path = parsed.data.kind === "doc" ? row.cntfile : row.cntimagesslip;
+      const path = parsed.data.kind === "doc" ? row.cntFile : row.cntImagesSlip;
       if (!path) return { ok: true, data: { url: null, mime: null } };
 
       const { data: signed, error } = await admin.storage
@@ -444,16 +454,16 @@ export async function adminGetPcsContainerPaymentSlipUrl(
 function normaliseRow(r: PcsContainerPaymentRow): PcsContainerPaymentRow {
   return {
     ...r,
-    cntname:       r.cntname ?? "",
-    cntstatus:     r.cntstatus ?? PCS_CNT_STATUS.UNPAID,
-    cntamount:     Number(r.cntamount ?? 0),
-    cntimagesslip: r.cntimagesslip ?? "",
-    cntfile:       r.cntfile ?? "",
-    adminidcreate: r.adminidcreate ?? "",
-    adminidupdate: r.adminidupdate ?? "",
-    nameblank:     r.nameblank ?? "",
-    noblank:       r.noblank ?? "",
-    nameaccount:   r.nameaccount ?? "",
+    cntName:       r.cntName ?? "",
+    cntStatus:     r.cntStatus ?? PCS_CNT_STATUS.UNPAID,
+    cntAmount:     Number(r.cntAmount ?? 0),
+    cntImagesSlip: r.cntImagesSlip ?? "",
+    cntFile:       r.cntFile ?? "",
+    adminIDCreate: r.adminIDCreate ?? "",
+    adminIDUpdate: r.adminIDUpdate ?? "",
+    nameBlank:     r.nameBlank ?? "",
+    noBlank:       r.noBlank ?? "",
+    nameAccount:   r.nameAccount ?? "",
   };
 }
 

@@ -53,7 +53,7 @@ export default async function AdminPcsContainerPaymentsPage({
   const unpaidCount = res.ok ? res.data!.unpaidCount : 0;
   const error       = res.ok ? null : res.error;
 
-  const totalAmount = rows.reduce((acc, r) => acc + r.cntamount, 0);
+  const totalAmount = rows.reduce((acc, r) => acc + r.cntAmount, 0);
 
   return (
     <main className="space-y-5 p-6 lg:p-8">
@@ -108,20 +108,20 @@ export default async function AdminPcsContainerPaymentsPage({
                 </thead>
                 <tbody>
                   {rows.map((r) => {
-                    const paid = r.cntstatus === PCS_CNT_STATUS.PAID;
+                    const paid = r.cntStatus === PCS_CNT_STATUS.PAID;
                     return (
-                      <tr key={r.id} className="border-t border-border align-top">
+                      <tr key={r.ID} className="border-t border-border align-top">
                         <td className="px-4 py-3">
                           <Link
-                            href={`/admin/accounting/container-payments/${r.id}`}
+                            href={`/admin/accounting/container-payments/${r.ID}`}
                             className="font-mono text-xs text-primary-600 hover:underline"
                           >
-                            {r.cntname || `#${r.id}`}
+                            {r.cntName || `#${r.ID}`}
                           </Link>
-                          <p className="mt-0.5 text-[10px] text-muted">#{r.id}</p>
+                          <p className="mt-0.5 text-[10px] text-muted">#{r.ID}</p>
                         </td>
                         <td className="px-4 py-3 text-right font-mono text-xs">
-                          {thb(r.cntamount)}
+                          {thb(r.cntAmount)}
                         </td>
                         <td className="px-4 py-3">
                           <span
@@ -135,7 +135,7 @@ export default async function AdminPcsContainerPaymentsPage({
                           </span>
                         </td>
                         <td className="px-4 py-3 text-xs">
-                          {r.cntimagesslip
+                          {r.cntImagesSlip
                             ? <span className="text-green-700">{t("slipYes")}</span>
                             : <span className="text-muted">—</span>}
                         </td>
@@ -146,8 +146,8 @@ export default async function AdminPcsContainerPaymentsPage({
                         </td>
                         <td className="px-4 py-3">
                           <PcsPaymentRowControls
-                            paymentId={r.id}
-                            currentStatus={r.cntstatus}
+                            paymentId={r.ID}
+                            currentStatus={r.cntStatus}
                           />
                         </td>
                       </tr>

@@ -29,7 +29,25 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MAP_IN = REPO_ROOT / "scripts" / "_camelcase-map.json"
-PILOT_TABLES = ["tb_users", "tb_admin", "tb_co"]
+# Batch 2 (2026-05-28): forwarder family. Batch 1 (tb_users/tb_admin/tb_co)
+# is already renamed — its tables are no longer in the lowercase pool, so
+# they're not in PILOT_TABLES (no longer needs rewriting) AND NOT in
+# OTHER_TB_TABLES (the regex can't false-positive against camelCase forms).
+PILOT_TABLES = [
+    "tb_forwarder",
+    "tb_forwarder_item",
+    "tb_forwarder_img",
+    "tb_forwarder_driver",
+    "tb_forwarder_driver_item",
+    "tb_forwarder_import",
+    "tb_forwarder_import2",
+    "tb_forwarder_prepare",
+    "tb_forwarder_tran_th_h",
+    "tb_forwarder_tran_th_sub",
+    "tb_cnt",
+    "tb_cnt_item",
+    "tb_check_forwarder",
+]
 SEARCH_ROOTS = [
     REPO_ROOT / "actions",
     REPO_ROOT / "app" / "[locale]",
@@ -37,21 +55,22 @@ SEARCH_ROOTS = [
 ]
 SKIP_DIRS = {"node_modules", ".next", "dist", "build", ".turbo"}
 
-# Other tb_* tables — if a file ALSO queries these, the rename is unsafe
-# because columns like `id`/`adminid`/`userid` exist on them too (still
-# lowercase post-pilot). Skip those files; revisit when their tables are
-# in the next phase.
+# Other tb_* tables (still LOWERCASE — not in pilot, not yet renamed).
+# If a file ALSO queries these, the rename is unsafe because shared column
+# names (id/userid/adminid) exist on them too. Skip those files; revisit
+# when their tables are in a future batch.
+#
+# 2026-05-28 — dropped forwarder family (now in PILOT_TABLES) from this
+# list. tb_users / tb_admin / tb_co also dropped (already camelCase post
+# batch 1 — the regex literal "userid" can't match the live "userID").
 OTHER_TB_TABLES = [
     "tb_address", "tb_address_main", "tb_address_maomao_free",
     "tb_admin_address", "tb_api_china_hs", "tb_bill", "tb_bill_item",
-    "tb_cart", "tb_cash_back", "tb_cash_back_hs", "tb_check_forwarder",
-    "tb_cnt", "tb_cnt_item", "tb_cnt_pay_idorco", "tb_cnt_pay_trackingchn",
+    "tb_cart", "tb_cash_back", "tb_cash_back_hs",
+    "tb_cnt_pay_idorco", "tb_cnt_pay_trackingchn",
     "tb_contact_outsider", "tb_corporate", "tb_cost_container",
     "tb_credit", "tb_csvimport", "tb_customrate_hs", "tb_education_background",
-    "tb_farwarder_quotation", "tb_farwarder_quotation_item", "tb_forwarder",
-    "tb_forwarder_driver", "tb_forwarder_driver_item", "tb_forwarder_img",
-    "tb_forwarder_import", "tb_forwarder_import2", "tb_forwarder_item",
-    "tb_forwarder_prepare", "tb_forwarder_tran_th_h", "tb_forwarder_tran_th_sub",
+    "tb_farwarder_quotation", "tb_farwarder_quotation_item",
     "tb_header_order", "tb_history", "tb_history_key", "tb_hs_rate_custom_cbm",
     "tb_hs_rate_custom_kg", "tb_keyword_product", "tb_log_forwarder_status",
     "tb_notify", "tb_notify_read", "tb_notify_sheet_ctt", "tb_notify_wp",
