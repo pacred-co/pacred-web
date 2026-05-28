@@ -61,8 +61,13 @@ import { getCurrentUser } from "@/lib/auth/get-user";
 //   sidebar-menu.ts; the doc shows only `[Full Export Operations Access]`
 //   placeholders for items, NOT the actual sidebar trees. Real menus will
 //   be enumerated when พี่เดฟ extends the doc with per-role item lists.
+// 2026-05-28 ดึก (Wave 26 · ภูม decision #6) — `manager` split out of `super`
+// per `docs/research/legacy-deep-dive/_SYNTHESIS.md` §6 D6. Migration 0118
+// adds the role to the CHECK constraint. Manager has approval rights for
+// cnt-payment + cross-team supervision but NO role grants + NO billing config.
 export type AdminRole =
   | "super"
+  | "manager"               // Cargo Manager — approve cnt-payment · cross-team supervise (0118)
   | "ops"
   | "accounting"
   | "sales_admin"           // Cargo Sales Manager (#29) — Mgr tier, has approval
