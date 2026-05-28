@@ -1,0 +1,636 @@
+"use client";
+
+/**
+ * Client form for /admin/admins/new.
+ *
+ * Wave 22 Phase 3 (2026-05-27) — provision a fresh Pacred admin in one
+ * server-action call. Form sections:
+ *
+ *   1. Required (email · password · ชื่อ · นามสกุล · role)
+ *   2. Recommended HR (phone · nickname · company · employee_type ·
+ *      department · section · work email/phone · hired_at · avatar)
+ *   3. Advanced (collapsible: birthday · sex · legacy_admin_id ·
+ *      admin_note · contract_end_date)
+ *
+ * Avatar upload — we keep this MVP simple: paste a URL. File upload to
+ * Supabase Storage requires a dedicated upload action + bucket-write
+ * permission for admins (the `avatars` bucket RLS is per-user-folder
+ * `auth.uid()/`), which is an extra wave of work. ภูม can revisit.
+ *
+ * Per docs/learnings/pacred-design-philosophy.md — Tailwind chrome ·
+ * never Bootstrap-4 · live errors · suggestion-password button.
+ */
+
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { adminCreateNew } from "@/actions/admin/admins";
+import {
+  ADMIN_ROLES,
+  COMPANY_VALUES,
+  EMPLOYEE_TYPES,
+  SEX_VALUES,
+  suggestAdminPassword,
+  type AdminRoleEnum,
+} from "@/lib/validators/admin-form";
+
+// ─── role label map ────────────────────────────────────────────────────
+// Human-readable Thai labels keyed by the AdminRoleEnum values. Same
+// content as the legacy doc role list (lib/auth/require-admin.ts §"doc role").
+const ROLE_LABELS: Record<AdminRoleEnum, string> = {
+  super:                     "Super Admin (CEO/Manager/Tech)",
+  ops:                       "Ops (forwarder/บริการคลังจีน)",
+  accounting:                "Accounting (กระเป๋าเงิน/หยวน/payouts)",
+  sales_admin:               "Cargo Sales Manager (#29)",
+  sales:                     "Cargo Sales Staff (#30)",
+  qa:                        "QA & QC (#5)",
+  warehouse:                 "Warehouse staff",
+  driver:                    "Driver / รถส่งของ",
+  interpreter:               "Interpreter / ล่ามจีน",
+  freight_sales_manager:     "Freight Sales Manager (#16)",
+  freight_sales:             "Freight Sales (#17)",
+  freight_export_manager:    "Freight Export Manager (#18)",
+  freight_export_cs:         "Freight Export CS / Doc (#19)",
+  freight_export_doc:        "Freight Export Doc (#20)",
+  freight_export_clearance:  "Freight Export Clearance (#21)",
+  freight_clearance_both:    "Freight Clearance Import+Export (#22)",
+  freight_export_messenger:  "Freight Export Messenger (#23)",
+  freight_import_manager:    "Freight Import Manager (#24)",
+  freight_import_cs:         "Freight Import CS / Doc (#25)",
+  freight_import_doc:        "Freight Import Doc (#26)",
+  freight_import_clearance:  "Freight Import Clearance (#27)",
+  freight_import_messenger:  "Freight Import Messenger (#28)",
+};
+
+const COMPANY_LABELS: Record<(typeof COMPANY_VALUES)[number], string> = {
+  "pacred":         "Pacred (รวม)",
+  "pacred-cargo":   "Pacred Cargo (จีน)",
+  "pacred-freight": "Pacred Freight (international)",
+};
+
+const EMPLOYEE_TYPE_LABELS: Record<(typeof EMPLOYEE_TYPES)[number], string> = {
+  full_time:  "พนักงานประจำ",
+  probation:  "ทดลองงาน",
+  contract:   "สัญญาจ้าง",
+  daily:      "รายวัน",
+  intern:     "เด็กฝึกงาน / สหกิจ",
+  partner:    "พาร์ทเนอร์",
+};
+
+const SEX_LABELS: Record<(typeof SEX_VALUES)[number], string> = {
+  male:   "ชาย",
+  female: "หญิง",
+  other:  "อื่น ๆ",
+};
+
+export function AdminCreateNewForm({
+  legacyPreset,
+}: {
+  legacyPreset: string | null;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  // ─── required ────────────────────────────────────────────────────
+  const [email, setEmail]         = useState<string>("");
+  const [password, setPassword]   = useState<string>("");
+  const [firstName, setFirstName] = useState<string>("");
+  const [lastName, setLastName]   = useState<string>("");
+  const [role, setRole]           = useState<AdminRoleEnum>("ops");
+
+  // ─── recommended ─────────────────────────────────────────────────
+  const [phone, setPhone]               = useState<string>("");
+  const [nickname, setNickname]         = useState<string>("");
+  const [company, setCompany]           = useState<(typeof COMPANY_VALUES)[number]>("pacred");
+  const [employeeType, setEmployeeType] = useState<(typeof EMPLOYEE_TYPES)[number]>("full_time");
+  const [department, setDepartment]     = useState<string>("");
+  const [section, setSection]           = useState<string>("");
+  const [workEmail, setWorkEmail]       = useState<string>("");
+  const [workPhone, setWorkPhone]       = useState<string>("");
+  const [hiredAt, setHiredAt]           = useState<string>("");
+  const [avatarUrl, setAvatarUrl]       = useState<string>("");
+
+  // ─── advanced (collapsible) ──────────────────────────────────────
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(Boolean(legacyPreset));
+  const [birthday, setBirthday]         = useState<string>("");
+  const [sex, setSex]                   = useState<"" | (typeof SEX_VALUES)[number]>("");
+  const [legacyAdminId, setLegacyAdminId] = useState<string>(legacyPreset ?? "");
+  const [adminNote, setAdminNote]       = useState<string>("");
+  const [contractEndDate, setContractEndDate] = useState<string>("");
+
+  // ─── feedback ────────────────────────────────────────────────────
+  const [error, setError]     = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Set<string>>(new Set());
+
+  function clearFieldError(key: string) {
+    setFieldErrors((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+  }
+
+  function generatePassword() {
+    setPassword(suggestAdminPassword());
+    clearFieldError("password");
+  }
+
+  function resetForm() {
+    setEmail("");
+    setPassword("");
+    setFirstName("");
+    setLastName("");
+    setRole("ops");
+    setPhone("");
+    setNickname("");
+    setCompany("pacred");
+    setEmployeeType("full_time");
+    setDepartment("");
+    setSection("");
+    setWorkEmail("");
+    setWorkPhone("");
+    setHiredAt("");
+    setAvatarUrl("");
+    setBirthday("");
+    setSex("");
+    setLegacyAdminId(legacyPreset ?? "");
+    setAdminNote("");
+    setContractEndDate("");
+    setShowAdvanced(Boolean(legacyPreset));
+    setError(null);
+    setSuccess(null);
+    setFieldErrors(new Set());
+  }
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+
+    const errs = new Set<string>();
+    if (!email.trim())     errs.add("email");
+    if (!password)         errs.add("password");
+    if (password.length > 0 && password.length < 8) errs.add("password");
+    if (!firstName.trim()) errs.add("firstName");
+    if (!lastName.trim())  errs.add("lastName");
+    setFieldErrors(errs);
+    if (errs.size > 0) {
+      setError("กรอกข้อมูลให้ครบช่องที่ขีดเส้นแดง");
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await adminCreateNew({
+        email,
+        password,
+        first_name: firstName.trim(),
+        last_name:  lastName.trim(),
+        role,
+
+        phone:              phone.trim() || undefined,
+        nickname:           nickname.trim() || undefined,
+        company,
+        employee_type:      employeeType,
+        department:         department.trim() || undefined,
+        section:            section.trim() || undefined,
+        work_email:         workEmail.trim() || undefined,
+        work_phone:         workPhone.trim() || undefined,
+        hired_at:           hiredAt || undefined,
+        avatar_url:         avatarUrl.trim() || undefined,
+
+        birthday:           birthday || undefined,
+        sex:                sex || undefined,
+        legacy_admin_id:    legacyAdminId.trim() || undefined,
+        admin_note:         adminNote.trim() || undefined,
+        contract_end_date:  contractEndDate || undefined,
+      });
+
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+
+      const newId      = result.data?.profileId;
+      const memberCode = result.data?.member_code ?? "";
+      setSuccess(
+        `บันทึกสำเร็จ — สมาชิก ${memberCode || ""} (${firstName} ${lastName}) ` +
+        `${memberCode ? "· " : ""}กำลังพาไปหน้ารายชื่อ...`,
+      );
+      setTimeout(() => {
+        // Land on the list so ภูม can immediately verify the row
+        // appears + visit the detail to fill in any remaining HR data.
+        router.push(`/admin/admins?s=1${newId ? `#pr-${newId}` : ""}`);
+        router.refresh();
+      }, 1000);
+    });
+  }
+
+  const hasFieldError = (k: string) => fieldErrors.has(k);
+  const errCls = (k: string) =>
+    hasFieldError(k)
+      ? "border-red-400 ring-1 ring-red-200 focus:border-red-500 focus:ring-red-300"
+      : "border-border focus:border-primary-500 focus:ring-primary-200";
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-5">
+      {/* ─── Global toast feedback ────────────────────────────── */}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+          ⚠ {error}
+        </div>
+      )}
+      {success && (
+        <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
+          ✓ {success}
+        </div>
+      )}
+
+      {/* ─── 1. REQUIRED — login + identity ───────────────────── */}
+      <section className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+        <h2 className="mb-3 text-sm font-semibold tracking-wide text-foreground">
+          🔑 ข้อมูลเข้าระบบ + ตัวตน <span className="text-red-500">*</span>
+        </h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          {/* email */}
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">
+              อีเมล (ใช้ login) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); clearFieldError("email"); }}
+              maxLength={254}
+              placeholder="sales01@pacred.co"
+              disabled={pending}
+              autoComplete="off"
+              className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ${errCls("email")}`}
+              required
+            />
+            <p className="mt-1 text-[11px] text-muted">
+              ใช้ลง <code className="font-mono">auth.users</code> + <code className="font-mono">profiles.email</code>.
+              ไม่มีการส่งอีเมลยืนยัน.
+            </p>
+          </div>
+
+          {/* password + generate */}
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">
+              รหัสผ่าน <span className="text-red-500">*</span>{" "}
+              <span className="text-[10px] text-muted">(ขั้นต่ำ 8 ตัว)</span>
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); clearFieldError("password"); }}
+                maxLength={72}
+                placeholder="≥ 8 ตัวอักษร"
+                disabled={pending}
+                autoComplete="off"
+                className={`flex-1 rounded-xl border bg-white px-3 py-2.5 text-sm font-mono outline-none focus:ring-2 ${errCls("password")}`}
+                required
+              />
+              <button
+                type="button"
+                onClick={generatePassword}
+                disabled={pending}
+                className="rounded-xl border border-primary-300 bg-primary-50 px-3 py-2.5 text-xs text-primary-700 hover:bg-primary-100 whitespace-nowrap"
+                title="สุ่มรหัสผ่าน 12 ตัวอักษร"
+              >
+                🎲 สุ่ม
+              </button>
+            </div>
+            <p className="mt-1 text-[11px] text-muted">
+              ผู้สร้างจดไว้แล้วบอกพนักงานทาง phone/LINE — ระบบไม่ส่งทางเมล.
+            </p>
+          </div>
+
+          {/* first + last name */}
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">
+              ชื่อ <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={firstName}
+              onChange={(e) => { setFirstName(e.target.value); clearFieldError("firstName"); }}
+              maxLength={200}
+              placeholder="ชื่อจริง"
+              disabled={pending}
+              className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ${errCls("firstName")}`}
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">
+              นามสกุล <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={lastName}
+              onChange={(e) => { setLastName(e.target.value); clearFieldError("lastName"); }}
+              maxLength={200}
+              placeholder="นามสกุล"
+              disabled={pending}
+              className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ${errCls("lastName")}`}
+              required
+            />
+          </div>
+
+          {/* role */}
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-muted mb-1">
+              บทบาท (role) <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as AdminRoleEnum)}
+              disabled={pending}
+              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+              required
+            >
+              {ADMIN_ROLES.map((r) => (
+                <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-muted">
+              ดูคำแนะนำการเลือก role ที่ <code className="font-mono">docs/research/tb-admin-13-row-reference.md</code> §&ldquo;Suggested-role mapping logic&rdquo;.
+              เปลี่ยน role ภายหลังได้ที่หน้า /edit.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── 2. RECOMMENDED — HR card ─────────────────────────── */}
+      <section className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+        <h2 className="mb-3 text-sm font-semibold tracking-wide text-foreground">
+          📇 ข้อมูล HR (แนะนำให้กรอก)
+        </h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          {/* phone + nickname */}
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">เบอร์ส่วนตัว</label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              maxLength={50}
+              placeholder="0xx-xxx-xxxx"
+              disabled={pending}
+              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">
+              ชื่อเล่น (ใช้เป็น display name ในแชทลูกค้า)
+            </label>
+            <input
+              type="text"
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              maxLength={120}
+              placeholder="ชื่อเล่น"
+              disabled={pending}
+              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+            />
+          </div>
+
+          {/* company + employee_type */}
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">บริษัท</label>
+            <select
+              value={company}
+              onChange={(e) => setCompany(e.target.value as (typeof COMPANY_VALUES)[number])}
+              disabled={pending}
+              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+            >
+              {COMPANY_VALUES.map((c) => (
+                <option key={c} value={c}>{COMPANY_LABELS[c]}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">ประเภทพนักงาน</label>
+            <select
+              value={employeeType}
+              onChange={(e) => setEmployeeType(e.target.value as (typeof EMPLOYEE_TYPES)[number])}
+              disabled={pending}
+              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+            >
+              {EMPLOYEE_TYPES.map((t) => (
+                <option key={t} value={t}>{EMPLOYEE_TYPE_LABELS[t]}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* department + section */}
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">แผนก (department)</label>
+            <input
+              type="text"
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
+              maxLength={100}
+              placeholder="เช่น Sales Cargo / Accounting / ITDT"
+              disabled={pending}
+              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">ตำแหน่ง (section)</label>
+            <input
+              type="text"
+              value={section}
+              onChange={(e) => setSection(e.target.value)}
+              maxLength={100}
+              placeholder="เช่น Sales Manager / Driver / Warehouse"
+              disabled={pending}
+              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+            />
+          </div>
+
+          {/* work email + work phone */}
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">อีเมลบริษัท (work)</label>
+            <input
+              type="email"
+              value={workEmail}
+              onChange={(e) => setWorkEmail(e.target.value)}
+              maxLength={254}
+              placeholder="sales01.work@pacred.co"
+              disabled={pending}
+              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">เบอร์บริษัท (work)</label>
+            <input
+              type="tel"
+              value={workPhone}
+              onChange={(e) => setWorkPhone(e.target.value)}
+              maxLength={50}
+              placeholder="02-xxx-xxxx ต่อ xxx"
+              disabled={pending}
+              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+            />
+          </div>
+
+          {/* hired_at + avatar */}
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">วันที่เริ่มงาน (hired_at)</label>
+            <input
+              type="date"
+              value={hiredAt}
+              onChange={(e) => setHiredAt(e.target.value)}
+              disabled={pending}
+              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">
+              Avatar URL{" "}
+              <span className="text-[10px] text-muted">(วาง URL · file upload — Wave 23)</span>
+            </label>
+            <input
+              type="url"
+              value={avatarUrl}
+              onChange={(e) => setAvatarUrl(e.target.value)}
+              maxLength={512}
+              placeholder="https://… (ไม่บังคับ)"
+              disabled={pending}
+              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ─── 3. ADVANCED (collapsible) ─────────────────────────── */}
+      <section className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+        <button
+          type="button"
+          onClick={() => setShowAdvanced((v) => !v)}
+          className="flex items-center justify-between w-full text-left"
+        >
+          <h2 className="text-sm font-semibold tracking-wide text-foreground">
+            ⚙️ ฟิลด์เพิ่มเติม
+          </h2>
+          <span className="text-xs text-muted">
+            {showAdvanced ? "▼ ซ่อน" : "▶ เปิด"}
+          </span>
+        </button>
+
+        {showAdvanced && (
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">วันเกิด</label>
+              <input
+                type="date"
+                value={birthday}
+                onChange={(e) => setBirthday(e.target.value)}
+                disabled={pending}
+                className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">เพศ</label>
+              <select
+                value={sex}
+                onChange={(e) => setSex(e.target.value as "" | (typeof SEX_VALUES)[number])}
+                disabled={pending}
+                className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+              >
+                <option value="">— ไม่ระบุ —</option>
+                {SEX_VALUES.map((s) => (
+                  <option key={s} value={s}>{SEX_LABELS[s]}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-xs font-medium text-muted mb-1">
+                legacy_admin_id{" "}
+                <span className="text-[10px] text-muted">
+                  (กรอกเฉพาะตอน recreate 13 admin เก่า — empty สำหรับพนักงานใหม่)
+                </span>
+              </label>
+              <input
+                type="text"
+                value={legacyAdminId}
+                onChange={(e) => setLegacyAdminId(e.target.value)}
+                maxLength={64}
+                placeholder="legacy adminID เช่น admin_xxxx (ถ้า port มาจาก PCS เก่า)"
+                disabled={pending}
+                className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+              />
+              <p className="mt-1 text-[11px] text-muted">
+                เชื่อม <code className="font-mono">tb_users.adminidsale</code> เดิมเข้ากับ Pacred admin คนใหม่
+                — บังคับ unique. ดูชื่อ legacy ที่ <code className="font-mono">docs/research/tb-admin-13-row-reference.md</code>.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">
+                วันสิ้นสุดสัญญา (contract_end_date)
+              </label>
+              <input
+                type="date"
+                value={contractEndDate}
+                onChange={(e) => setContractEndDate(e.target.value)}
+                disabled={pending}
+                className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+              />
+              <p className="mt-1 text-[11px] text-muted">
+                สำหรับ employee_type = probation — cron เช็คใกล้หมดเวลาทดลองงาน.
+              </p>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-xs font-medium text-muted mb-1">
+                หมายเหตุ HR (ภายในเท่านั้น)
+              </label>
+              <textarea
+                value={adminNote}
+                onChange={(e) => setAdminNote(e.target.value)}
+                rows={3}
+                maxLength={2000}
+                placeholder="บันทึก HR เช่น &quot;ลาออกแล้วกลับมาใหม่ 2026-04&quot; / &quot;เคยเป็น sales01 ใน PCS เก่า&quot;"
+                disabled={pending}
+                className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+              />
+              <p className="mt-1 text-[11px] text-muted">{adminNote.length} / 2000</p>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* ─── STICKY ACTIONS ─────────────────────────────────────── */}
+      <div className="sticky bottom-0 -mx-4 lg:-mx-8 border-t border-border bg-white/95 px-4 lg:px-8 py-3 backdrop-blur z-10">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={resetForm}
+            disabled={pending}
+            className="rounded-xl border border-border bg-white px-4 py-2.5 text-sm hover:bg-surface-alt disabled:opacity-50"
+          >
+            รีเซ็ตฟอร์ม
+          </button>
+
+          <div className="flex items-center gap-3">
+            {fieldErrors.size > 0 && (
+              <span className="text-xs text-red-600">ยังขาด {fieldErrors.size} ช่อง</span>
+            )}
+            <button
+              type="submit"
+              disabled={pending || !email || !password || !firstName || !lastName}
+              className="rounded-xl bg-primary-500 px-6 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {pending ? "กำลังสร้าง..." : "✓ สร้าง Admin"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </form>
+  );
+}

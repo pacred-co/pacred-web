@@ -129,11 +129,14 @@ export const getCurrentUserWithProfile = cache(async () => {
   if (!user) return null;
 
   const supabase = await createClient();
-  const { data: profile } = await supabase
+  const { data: profile, error: profileErr } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .maybeSingle<Profile>();
+  if (profileErr) {
+    console.error(`[profiles list] failed`, { code: profileErr.code, message: profileErr.message });
+  }
 
   return { user, profile };
 });
@@ -201,11 +204,15 @@ export const getEffectiveUser = cache(async (): Promise<
 
   if (!impersonation) {
     // Plain self — read own profile via the RLS-scoped client.
-    const { data: profile } = await supabase
+    const { data: profile, error: profileErr } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", user.id)
       .maybeSingle<Profile>();
+    if (profileErr) {
+      console.error(`[profiles lookup] failed`, { code: profileErr.code, message: profileErr.message, details: profileErr.details, hint: profileErr.hint });
+      throw new Error(`Failed to load profiles (${profileErr.code ?? "unknown"}): ${profileErr.message}`);
+    }
     if (!profile) return null;
     return {
       profile: { ...profile, _impersonating: false } as EffectiveProfile,
@@ -218,7 +225,7 @@ export const getEffectiveUser = cache(async (): Promise<
   // direct access to a suspended profile that the customer themselves
   // would still see).
   const adminClient = createAdminClient();
-  const { data: targetProfile } = await adminClient
+  const { data: targetProfile, error: targetProfileErr } = await adminClient
     .from("profiles")
     .select("*")
     .eq("id", impersonation.target_profile_id)
@@ -227,13 +234,21 @@ export const getEffectiveUser = cache(async (): Promise<
   // If the target profile vanished mid-session (deleted, etc.), bail
   // cleanly — caller will see "not found" + we let the banner + cookie
   // get cleared on the next adminEndImpersonation tick.
+  if (targetProfileErr) {
+    console.error(`[profiles lookup] failed`, { code: targetProfileErr.code, message: targetProfileErr.message, details: targetProfileErr.details, hint: targetProfileErr.hint });
+    throw new Error(`Failed to load profiles (${targetProfileErr.code ?? "unknown"}): ${targetProfileErr.message}`);
+  }
   if (!targetProfile) {
     // No profile to return as — fall back to admin's own profile.
-    const { data: own } = await supabase
+    const { data: own, error: ownErr } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", user.id)
       .maybeSingle<Profile>();
+    if (ownErr) {
+      console.error(`[profiles lookup] failed`, { code: ownErr.code, message: ownErr.message, details: ownErr.details, hint: ownErr.hint });
+      throw new Error(`Failed to load profiles (${ownErr.code ?? "unknown"}): ${ownErr.message}`);
+    }
     if (!own) return null;
     return {
       profile: { ...own, _impersonating: false } as EffectiveProfile,

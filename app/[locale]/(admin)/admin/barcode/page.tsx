@@ -2,6 +2,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { ScanForm } from "./scan-form";
 
+/**
+ * Wave 16 P0-5 (2026-05-25) — schema-split reconciliation. Originally
+ * this page counted from the REBUILT `forwarders` table (English enum
+ * `arrived_thailand`/`out_for_delivery`/`delivered`), which after Phase A
+ * migration is near-empty on prod (admin entry goes to `tb_forwarder`
+ * via Wave 12-C). Cards always showed 0/0/0. Switched to `tb_forwarder`
+ * with legacy numeric `fstatus`: 4=ถึงไทย, 5/6=รอชำระ+เตรียมส่ง, 7=ส่งแล้ว.
+ */
 export default async function AdminBarcodePage() {
   const admin = createAdminClient();
   const today = new Date();
@@ -9,12 +17,12 @@ export default async function AdminBarcodePage() {
   const todayIso = today.toISOString();
 
   const [arrivedRes, outRes, deliveredRes] = await Promise.all([
-    admin.from("forwarders").select("id", { count: "exact", head: true })
-      .eq("status", "arrived_thailand").gte("date_arrived_thailand", todayIso),
-    admin.from("forwarders").select("id", { count: "exact", head: true })
-      .eq("status", "out_for_delivery"),
-    admin.from("forwarders").select("id", { count: "exact", head: true })
-      .eq("status", "delivered").gte("date_delivered", todayIso),
+    admin.from("tb_forwarder").select("id", { count: "exact", head: true })
+      .eq("fstatus", "4").gte("fdatestatus4", todayIso),
+    admin.from("tb_forwarder").select("id", { count: "exact", head: true })
+      .in("fstatus", ["5", "6", "6.1"]),
+    admin.from("tb_forwarder").select("id", { count: "exact", head: true })
+      .eq("fstatus", "7").gte("fdatestatus7", todayIso),
   ]);
 
   const arrivedToday   = arrivedRes.count   ?? 0;
@@ -26,7 +34,7 @@ export default async function AdminBarcodePage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · WAREHOUSE</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · WAREHOUSE</p>
           <h1 className="mt-1 text-2xl font-bold">สแกนรับเข้าโกดัง</h1>
           <p className="text-sm text-muted mt-0.5">
             สแกนบาร์โค้ดหรือ tracking เพื่ออัพเดทสถานะ

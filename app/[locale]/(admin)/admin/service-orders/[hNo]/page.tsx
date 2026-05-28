@@ -3,23 +3,29 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { AdminServiceOrderUpdateForm } from "./update-form";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
+import { renderLegacyServiceOrderView } from "./legacy-view";
+import SpawnForwarderForm, { type TrackingRow } from "./spawn-form";
+import { buildSpawnRows } from "./spawn-utils";
 
-const SHIPMENT_STATUS_LABEL: Record<string, string> = {
-  received_cn:         "รับเข้าโกดังจีน",
-  packed_cn:           "บรรจุแล้ว (จีน)",
-  sealed_in_container: "ปิดตู้แล้ว (จีน)",
-  in_transit:          "กำลังเดินทาง",
-  arrived_th:          "ถึงไทยแล้ว",
-  unloaded:            "ลงจากตู้ (ไทย)",
-  out_for_delivery:    "กำลังจัดส่ง",
-  delivered:           "ส่งสำเร็จ",
-};
+// Wave 3 cleanup (2026-05-20 ค่ำ): the "Cargo shipments (spine)" section
+// was removed when cargo_shipments/cargo_containers were retired under
+// D1 Option A. The container view lives at `/admin/report-cnt` (faithful
+// port of report-cnt.php) which reads tb_forwarder GROUP BY fCabinetNumber.
+//
+// Wave 7 (2026-05-21 night): added legacy fallback that reads `tb_header_order`
+// when the rebuilt `service_orders` row is missing. Pattern mirrors
+// `forwarders/[fNo]/page.tsx` legacy fallback. Without this fallback every
+// click from the /admin dashboard tabs + /admin/service-orders list 404'd
+// because the rebuilt schema is empty on prod (the real customer data lives
+// in `tb_header_order` after the D1 pivot).
+
+export const dynamic = "force-dynamic";
 
 export default async function AdminServiceOrderDetail({ params }: { params: Promise<{ hNo: string }> }) {
   const { hNo } = await params;
   const admin = createAdminClient();
 
-  const { data } = await admin
+  const { data, error } = await admin
     .from("service_orders")
     .select(`
       id, h_no, profile_id, status, title, item_count, total_thb, subtotal_cny, yuan_rate_locked,
@@ -33,7 +39,16 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
     .eq("h_no", hNo)
     .maybeSingle();
 
-  if (!data) notFound();
+  if (error) {
+    console.error(`[service_orders lookup] failed`, { code: error.code, message: error.message, details: error.details, hint: error.hint });
+    throw new Error(`Failed to load service_orders (${error.code ?? "unknown"}): ${error.message}`);
+  }
+  if (!data) {
+    // Wave 7 legacy fallback — read tb_header_order by hno
+    const legacy = await renderLegacyServiceOrderView(hNo);
+    if (legacy) return legacy;
+    notFound();
+  }
   type ProfileShape = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null; email: string | null; account_type: "personal" | "juristic" | null };
   const o = data as unknown as Omit<typeof data, "profile"> & { profile: ProfileShape | ProfileShape[] | null };
   const profile = Array.isArray(o.profile) ? o.profile[0] ?? null : o.profile;
@@ -43,40 +58,57 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
   // override panel so the displayed default matches the actual default.
   let corporateName: string | null = null;
   if (profile?.account_type === "juristic") {
-    const { data: corp } = await admin
+    const { data: corp, error: corpErr } = await admin
       .from("corporate")
       .select("company_name")
       .eq("profile_id", o.profile_id)
       .maybeSingle<{ company_name: string | null }>();
+    if (corpErr) {
+      console.error(`[corporate list] failed`, { code: corpErr.code, message: corpErr.message });
+    }
     corporateName = corp?.company_name ?? null;
   }
 
-  const { data: items } = await admin
+  const { data: items, error: itemsErr } = await admin
     .from("service_order_items")
     .select("id, provider, shop_name, title, price_cny, amount, url")
     .eq("service_order_id", o.id);
+  if (itemsErr) {
+    console.error(`[service_order_items list] failed`, { code: itemsErr.code, message: itemsErr.message });
+  }
 
-  // Surface cargo_shipments linked to this service-order (V-D2/D3 + V-C3 visibility)
-  const { data: shipmentsRaw } = await admin
-    .from("cargo_shipments")
-    .select(`
-      id, shipment_code, status, box_count, received_box_count, cargo_type, weight_kg, volume_cbm, created_at,
-      container:cargo_containers!cargo_container_id ( code, transport_mode, status, eta, close_at, carrier_container_no )
-    `)
-    .eq("service_order_h_no", o.h_no)
-    .order("created_at", { ascending: false });
-  type ContainerEmbed = { code: string | null; transport_mode: string | null; status: string; eta: string | null; close_at: string | null; carrier_container_no: string | null };
-  type RawShipment = { id: string; shipment_code: string; status: string; box_count: number; received_box_count: number; cargo_type: string | null; weight_kg: number | null; volume_cbm: number | null; created_at: string; container: ContainerEmbed | ContainerEmbed[] | null };
-  const shipments = ((shipmentsRaw ?? []) as RawShipment[]).map((s) => ({
-    ...s,
-    container: Array.isArray(s.container) ? (s.container[0] ?? null) : s.container,
-  }));
+  // Wave 21 P0 · Task #106 — load tb_order rows for the spawn form. We
+  // GROUP BY (cnameshop, cshippingnumber) so a single shop with 1 box gets
+  // 1 row, and a shop with N parcels (comma-sep cshippingnumber) gets
+  // displayed as N rows after expansion. Each row maps to ONE tb_forwarder
+  // candidate (refOrder=hNo + fTrackingCHN=<the one cTrackingNumber>).
+  // We also load header.hshipby + header.htransporttype as defaults.
+  const { data: trackingItems, error: trackingErr } = await admin
+    .from("tb_order")
+    .select("cnameshop, cshippingnumber, ctrackingnumber")
+    .eq("hno", o.h_no!)
+    .limit(200);
+  if (trackingErr) {
+    console.error(`[tb_order spawn list] failed`, { code: trackingErr.code, message: trackingErr.message });
+  }
+  const { data: legacyHeader, error: legacyHeaderErr } = await admin
+    .from("tb_header_order")
+    .select("hshipby, htransporttype")
+    .eq("hno", o.h_no!)
+    .maybeSingle<{ hshipby: string | null; htransporttype: string | null }>();
+  if (legacyHeaderErr) {
+    console.error(`[tb_header_order spawn-defaults lookup] failed`, {
+      code: legacyHeaderErr.code, message: legacyHeaderErr.message,
+    });
+  }
+
+  const spawnRows: TrackingRow[] = buildSpawnRows(trackingItems ?? []);
 
   return (
     <main className="p-6 lg:p-8 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · ฝากสั่ง</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ฝากสั่ง</p>
           <h1 className="mt-1 text-2xl font-bold font-mono">{o.h_no}</h1>
         </div>
         <Link href="/admin/service-orders" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
@@ -134,52 +166,9 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
             </div>
           </Section>
 
-          {/* Cargo shipments linked to this service-order */}
-          {shipments.length > 0 && (
-            <Section title={`📦 Cargo shipments (${shipments.length})`}>
-              <ul className="text-sm space-y-2">
-                {shipments.map((s) => (
-                  <li key={s.id} className="rounded-lg border border-border p-3 space-y-1">
-                    <div className="flex items-start justify-between flex-wrap gap-2">
-                      <div>
-                        <p className="font-mono text-xs font-medium">{s.shipment_code}</p>
-                        <p className="text-[10px] text-muted">
-                          {SHIPMENT_STATUS_LABEL[s.status] ?? s.status}
-                          {" · "}
-                          <span className={s.received_box_count >= s.box_count ? "text-green-700" : ""}>
-                            {s.received_box_count}/{s.box_count} กล่อง
-                          </span>
-                          {s.weight_kg != null && <> · {Number(s.weight_kg).toFixed(1)} kg</>}
-                        </p>
-                        {s.cargo_type && (
-                          <p className="text-[10px] text-blue-700">🏷️ {s.cargo_type}</p>
-                        )}
-                      </div>
-                      {s.container?.code ? (
-                        <Link
-                          href={`/admin/warehouse/containers/${s.container.code}`}
-                          className="rounded-lg border border-primary-200 bg-primary-50 px-2 py-1 text-[10px] text-primary-700 hover:bg-primary-100"
-                        >
-                          ↗ ตู้ <span className="font-mono">{s.container.code}</span>
-                        </Link>
-                      ) : (
-                        <span className="text-[10px] text-muted">ยังไม่ assign ตู้</span>
-                      )}
-                    </div>
-                    {s.container?.carrier_container_no && (
-                      <p className="text-[10px] text-muted">B/L: <span className="font-mono">{s.container.carrier_container_no}</span></p>
-                    )}
-                    {s.container?.eta && (
-                      <p className="text-[10px] text-muted">
-                        ETA {new Date(s.container.eta).toLocaleDateString("th-TH")}
-                        {s.container.close_at && <> · ตัดตู้ {new Date(s.container.close_at).toLocaleDateString("th-TH")}</>}
-                      </p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          )}
+          {/* Wave 3 cleanup: spine "Cargo shipments" section removed.
+              Container number is on `forwarders.cabinet_number` (per-forwarder);
+              for the full container view see /admin/report-cnt. */}
 
           {(o as { acknowledged_at: string | null }).acknowledged_at && (
             <Section title="✅ ลูกค้ายืนยันรับสินค้าแล้ว (U4-3a)">
@@ -199,6 +188,19 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
               <p className="text-sm whitespace-pre-wrap">{o.note_user}</p>
             </Section>
           )}
+
+          {/* Wave 21 P0 · Task #106 — shop→forwarder auto-spawn form.
+              Mirrors legacy `pcs-admin/include/pages/shops/update/update4.php`
+              L88-116 inline `<form>` (one per cTrackingNumber). Each "สร้าง
+              ฝากนำเข้า" press creates a tb_forwarder row with refOrder=hNo +
+              adminIDCreator=<staff>. Idempotent — re-submit returns existing
+              fNo via the (refOrder, fTrackingCHN) natural key. */}
+          <SpawnForwarderForm
+            hNo={o.h_no!}
+            rows={spawnRows}
+            defaultShipBy={legacyHeader?.hshipby ?? undefined}
+            defaultTransportType={legacyHeader?.htransporttype ?? undefined}
+          />
         </div>
 
         <aside className="space-y-4">
@@ -234,3 +236,4 @@ function Row({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+

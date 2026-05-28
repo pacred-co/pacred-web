@@ -78,7 +78,10 @@ export default async function AdminFreightShipmentsListPage({
       `job_no.ilike.%${q}%,container_code.ilike.%${q}%,carrier_container_no.ilike.%${q}%,bl_no.ilike.%${q}%`,
     );
   }
-  const { data: raw } = await query;
+  const { data: raw, error: rawErr } = await query;
+  if (rawErr) {
+    console.error(`[freight_shipments list] failed`, { code: rawErr.code, message: rawErr.message });
+  }
 
   type Profile = NonNullable<Row["profile"]>;
   const rows: Row[] = ((raw ?? []) as unknown as (Omit<Row, "profile"> & { profile: Profile | Profile[] | null })[]).map((r) => {
@@ -89,9 +92,12 @@ export default async function AdminFreightShipmentsListPage({
   // Counts per status.
   const counts: Record<FreightShipmentStatus, number> = {} as Record<FreightShipmentStatus, number>;
   for (const s of FREIGHT_SHIPMENT_STATUSES) counts[s] = 0;
-  const { data: countRows } = await admin
+  const { data: countRows, error: countRowsErr } = await admin
     .from("freight_shipments")
     .select("status");
+  if (countRowsErr) {
+    console.error(`[freight_shipments list] failed`, { code: countRowsErr.code, message: countRowsErr.message });
+  }
   for (const r of (countRows ?? []) as Array<{ status: FreightShipmentStatus }>) {
     counts[r.status] = (counts[r.status] ?? 0) + 1;
   }
@@ -100,7 +106,7 @@ export default async function AdminFreightShipmentsListPage({
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · FREIGHT</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · FREIGHT</p>
           <h1 className="mt-1 text-2xl font-bold">งานขนส่ง freight (shipments)</h1>
           <p className="text-xs text-muted mt-1">
             workflow: draft → ยืนยัน → ขนส่ง → ผ่านศุลฯ → ส่งมอบ · มาจาก quotation (V-E6) หรือสร้างตรง

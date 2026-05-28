@@ -88,7 +88,7 @@ export function ReportShell({
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">{eyebrow}</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">{eyebrow}</p>
           <h1 className="mt-1 text-2xl font-bold">{title}</h1>
           {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
         </div>

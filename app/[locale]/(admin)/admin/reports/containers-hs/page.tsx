@@ -50,7 +50,7 @@ export default async function ContainerHsReportPage({
   const admin = createAdminClient();
 
   // Fetch all lines + container created_at for date filter + hs description
-  const { data } = await admin
+  const { data, error } = await admin
     .from("container_hs_lines")
     .select(`
       hs_code, qty, weight_kg, value_thb, duty_pct_used,
@@ -58,6 +58,9 @@ export default async function ContainerHsReportPage({
       hs:hs_codes!hs_code ( description )
     `)
     .limit(10000);
+  if (error) {
+    console.error(`[container_hs_lines list] failed`, { code: error.code, message: error.message });
+  }
 
   const rowsRaw = ((data ?? []) as LineRow[]).map((l) => ({
     ...l,
@@ -113,7 +116,7 @@ export default async function ContainerHsReportPage({
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · REPORT</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · REPORT</p>
         <h1 className="mt-1 text-2xl font-bold">รายงาน HS code — สะสมจากทุก container</h1>
         <p className="mt-1 text-sm text-muted">
           กลุ่มตาม HS code · เรียงตามมูลค่ารวมจากมากสุด · กรองตามวันที่ container ถูกสร้าง

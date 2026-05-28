@@ -106,10 +106,13 @@ export default async function SalesHistoryPage() {
 
   // ── The payout-history query, transcribed 1:1 (L188) ──────────
   // SELECT … FROM tb_user_sales_admin_pay WHERE userIDMain=$userIDMain
-  const { data: payoutsRaw } = await admin
+  const { data: payoutsRaw, error: payoutsRawErr } = await admin
     .from("tb_user_sales_admin_pay")
     .select("id, status, date, imagesslip, amount, admincreate, useridmain")
     .eq("useridmain", userIDMain);
+  if (payoutsRawErr) {
+    console.error(`[tb_user_sales_admin_pay list] failed`, { code: payoutsRawErr.code, message: payoutsRawErr.message });
+  }
 
   const rows: PayoutRow[] = (
     (payoutsRaw ?? []) as unknown as {

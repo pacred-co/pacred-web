@@ -1,0 +1,110 @@
+/* =============================================================
+ * reports-system.css — legacy PCS Cargo
+ *                      `pcs-admin/report-system.php`
+ *                      page-specific stylesheet
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription — admin port of the
+ * "รายงานการเข้าถึงเว็บ" (system access report) — single page with
+ * a 10-column detail log + 6 chart cards (daily-views area chart,
+ * top-20 pages bar, slowest-20 pages bar, top-20 users bar,
+ * device pie, browser doughnut).
+ *
+ * Paired with the chrome bundle:
+ *   public/legacy/pcs/admin/admin-base.css
+ *
+ * Source — verbatim from report-system.php inline <style> block
+ * at L9-40 (table padding · DataTables search/length widget
+ * width · `.bg-color` / `.bg-color-select` green→blue gradients).
+ *
+ * Because the 6 chart cards in the legacy are Chart.js canvases
+ * and we don't ship Chart.js, we substitute a faithful fallback
+ * table inside each card. The wrapper height (320px from the
+ * legacy `<canvas height="320">`) is mirrored so the card column
+ * heights match the legacy page layout.
+ *
+ * Every selector is scoped under `.pcs-legacy`. The static-asset +
+ * <link rel="stylesheet"> loading rule (no `import`) applies —
+ * Tailwind v4 / PostCSS rejects verbatim legacy CSS (da4cd79).
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- report-system.php L9-15 inline <style> (verbatim) ---- */
+.pcs-legacy .table td {
+  padding: 0.25rem 0.5rem;
+}
+.pcs-legacy .table th {
+  padding: 0.5rem 0.5rem;
+}
+
+/* ---- report-system.php L16-27 inline <style> (verbatim) ---- */
+.pcs-legacy .dt-buttons {
+  width: 100%;
+  display: inline-block;
+}
+.pcs-legacy #myTable_filter {
+  display: inline-block;
+  width: 50%;
+}
+.pcs-legacy #myTable_length {
+  display: inline-block;
+  width: 50%;
+}
+
+/* ---- report-system.php L28-39 inline <style> (verbatim) ----
+ * The green→blue gradient used by the "card2" wrapper highlight
+ * + the active filter chip. */
+.pcs-legacy .bg-color {
+  background: #35b842;
+  background: -webkit-linear-gradient(to right, #27b836, #1f81b3);
+  background: linear-gradient(to right, #27b836, #1f81b3);
+  color: #fff;
+}
+.pcs-legacy .bg-color-select {
+  background: #35b842;
+  background: -webkit-linear-gradient(to right, #27b836, #1f81b3);
+  background: linear-gradient(to right, #27b836, #1f81b3);
+  color: #fff;
+}
+
+/* ---- Chart canvas fallback — sized to the legacy
+ * `<canvas height="320">` (report-system.php L243, L269, L306,
+ * L343, L380, L417). Each card body holds a fallback table
+ * the same height as the legacy chart. */
+.pcs-legacy .report-chart-fallback {
+  min-height: 320px;
+  width: 100%;
+  border: 1px solid #e0e0e0;
+  background: #fff;
+  padding: 0.5rem;
+  overflow: auto;
+}
+
+.pcs-legacy .report-chart-fallback table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.pcs-legacy .report-chart-fallback th,
+.pcs-legacy .report-chart-fallback td {
+  padding: 0.2rem 0.4rem;
+  text-align: right;
+  border-bottom: 1px solid #f3f3f3;
+}
+
+.pcs-legacy .report-chart-fallback th:first-child,
+.pcs-legacy .report-chart-fallback td:first-child {
+  text-align: left;
+}
+
+.pcs-legacy .report-chart-fallback th {
+  background: #f8f9fa;
+  font-weight: 600;
+}
+
+/* ---- The small "btn-color-main" — legacy theme primary button
+ * (the "ค้นหาข้อมูล" submit). report-system.php L104. The chrome
+ * already supplies it but we declare here so the static button
+ * uses the page-pilot's faithful colour identity. */

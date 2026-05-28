@@ -227,11 +227,14 @@ export default async function ServiceOrderAddPage({
   // corporate record is still pending (corporateStatus=1 → num_rows>0)
   // sees the "waiting for approval" message instead of the screen.
   //   SELECT ID FROM tb_corporate WHERE userID='$userID' AND corporateStatus=1
-  const { data: corpRows } = await admin
+  const { data: corpRows, error: corpRowsErr } = await admin
     .from("tb_corporate")
     .select("id")
     .eq("userid", userID)
     .eq("corporatestatus", "1");
+  if (corpRowsErr) {
+    console.error(`[tb_corporate list] failed`, { code: corpRowsErr.code, message: corpRowsErr.message });
+  }
   const corporatePending = (corpRows?.length ?? 0) > 0;
 
   // ── shops.php L784-839 — the 8 status counters (one COUNT per status).
@@ -292,7 +295,10 @@ export default async function ServiceOrderAddPage({
   if (["1", "2", "3", "4", "5", "6"].includes(q)) {
     listQuery = listQuery.eq("hstatus", q);
   }
-  const { data: rowsData } = await listQuery;
+  const { data: rowsData, error: rowsDataErr } = await listQuery;
+  if (rowsDataErr) {
+    console.error(`[tb_header_order list] failed`, { code: rowsDataErr.code, message: rowsDataErr.message });
+  }
   const rows: HeaderOrderRow[] = (rowsData ?? []) as HeaderOrderRow[];
 
   // ── shops.php L1095-1097 — chProhNo(): looks up tb_promotion for each
@@ -301,10 +307,13 @@ export default async function ServiceOrderAddPage({
   const orderHnos = rows.map((r) => r.hno);
   let promoMap = new Map<string, number>();
   if (orderHnos.length > 0) {
-    const { data: promoRows } = await admin
+    const { data: promoRows, error: promoRowsErr } = await admin
       .from("tb_promotion")
       .select("promoid, hno")
       .in("hno", orderHnos);
+    if (promoRowsErr) {
+      console.error(`[tb_promotion list] failed`, { code: promoRowsErr.code, message: promoRowsErr.message });
+    }
     promoMap = new Map(
       (promoRows ?? []).map((p: { promoid: number; hno: string }) => [p.hno, p.promoid]),
     );

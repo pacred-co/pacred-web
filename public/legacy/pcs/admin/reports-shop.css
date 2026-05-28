@@ -1,0 +1,124 @@
+/* =============================================================
+ * reports-shop.css — legacy PCS Cargo
+ *                    `pcs-admin/report-shops.php` (default view)
+ *                    page-specific stylesheet
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription — admin port of the
+ * "รายงานฝากสั่งซื้อสินค้า" view (period revenue graph + filtered
+ * order DataTable).
+ * Paired with the chrome bundle: public/legacy/pcs/admin/admin-base.css.
+ *
+ * Source — verbatim from `report-shops.php`. The legacy file has
+ * NO inline <style> block of its own — it pulls in three plugin
+ * stylesheets at L5-7:
+ *   - assets/plugins/datatables/css/dataTables.bootstrap4.css
+ *   - assets/plugins/datatables/css/responsive.dataTables.min.css
+ *   - assets/plugins/daterangepicker/daterangepicker.css
+ * and decorates the page through the chrome bundle. The page-
+ * specific styling that survives the transcription is the
+ * DataTables filter / length / buttons widget chrome plus an
+ * echarts container minimum height. The plugins themselves are
+ * NOT initialised in Pacred (no jQuery + no DataTables JS in the
+ * dependency tree), so the wrappers exist as static markup; the
+ * CSS below reproduces just enough of the plugin chrome so the
+ * page looks identical at rest.
+ *
+ * Every selector is scoped under `.pcs-legacy`. The static-asset
+ * + <link rel="stylesheet"> loading rule (no `import`) applies as
+ * in the customer + admin pilots — Tailwind v4 / PostCSS rejects
+ * verbatim legacy CSS (da4cd79).
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- L98 — the echarts container height (preserved so the
+ * placeholder line-chart frame keeps its legacy footprint even
+ * before echarts is wired). */
+.pcs-legacy #basic-line {
+  min-height: 400px;
+  width: 100%;
+}
+
+/* ---- DataTables Bootstrap-4 chrome (excerpt from
+ *      assets/plugins/datatables/css/dataTables.bootstrap4.css) ----
+ * The legacy table is decorated by DataTables. The full plugin is
+ * not initialised in Pacred (we render statically — same as
+ * warehouse-history + admin-table pilots). The page still uses the
+ * wrapper elements (`#myTable_filter`, `#myTable_length`,
+ * `.dt-buttons`) for the search + length widgets; reproduced here
+ * so the static filter chips above the table look identical. */
+.pcs-legacy .dataTables_wrapper {
+  position: relative;
+  clear: both;
+  margin-top: 0.5rem;
+}
+.pcs-legacy .dataTables_wrapper .dataTables_length label,
+.pcs-legacy .dataTables_wrapper .dataTables_filter label {
+  font-weight: 400;
+  display: inline-block;
+  margin-bottom: 0.5rem;
+}
+.pcs-legacy .dataTables_wrapper .dataTables_filter input {
+  margin-left: 0.5em;
+  border: 1px solid #babfc7;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+}
+.pcs-legacy .dataTables_wrapper .dataTables_length select {
+  border: 1px solid #babfc7;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+}
+.pcs-legacy table.dataTable.no-footer {
+  border-bottom: 1px solid #e3ebf3;
+}
+
+/* ---- DataTables export buttons (excerpt from
+ *      cdn.datatables.net/buttons/1.5.1/css/buttons.dataTables.css)
+ * The legacy report wires the copy/csv/excel/print buttons (L272-281)
+ * for CEO/Manager/QAAndQC/Accounting/ITDT/Marketing only — the
+ * Pacred markup keeps the same `.dt-buttons` wrapper so the spacing
+ * survives even though the buttons themselves are a follow-up. */
+.pcs-legacy .dt-buttons {
+  width: 50%;
+  display: inline-block;
+}
+.pcs-legacy #myTable_filter {
+  display: inline-block;
+  width: 50%;
+}
+.pcs-legacy #myTable_length {
+  display: inline-block;
+  width: 50%;
+}
+
+/* ---- Daterangepicker chrome (excerpt from
+ *      assets/plugins/daterangepicker/daterangepicker.css)
+ * The full daterangepicker JS is not initialised; the input is a
+ * plain <input type="text"> bearing the same `shawCalRanges` class.
+ * The widget's frame would only render once the JS attaches a
+ * popup, so the static rules below cover just the input cosmetics. */
+.pcs-legacy input.shawCalRanges {
+  cursor: pointer;
+  background-color: #fff;
+}
+
+/* ---- analytics-info wrapper (theme rule used by the graph card
+ * L97 — gives the chart breathing room inside the card body). */
+.pcs-legacy .analytics-info {
+  position: relative;
+  padding: 1rem 0;
+}
+
+/* ---- L37, L118 — the legacy icon sizing override (`font-size:
+ * 2.2rem`) is inlined in the JSX; the simple-line-icon font is
+ * not loaded so the `<span class="icon-basket-loaded">` collapses
+ * to a blank inline span. Reproduce a minimal inline-block so the
+ * heading spacing remains regardless. */
+.pcs-legacy [class^="icon-"],
+.pcs-legacy [class*=" icon-"] {
+  display: inline-block;
+  font-style: normal;
+  vertical-align: middle;
+}

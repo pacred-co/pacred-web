@@ -50,7 +50,7 @@ export function TosGate({ versionNo, title, bodyMd }: Props = {}) {
       <div className="max-w-2xl w-full max-h-[90vh] overflow-auto rounded-2xl bg-white dark:bg-surface shadow-2xl">
         <div className="p-6 sm:p-8 space-y-4">
           <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-500">
+            <p className="text-xs font-semibold tracking-widest text-primary-600">
               {t("kicker")}
             </p>
             <h2 className="mt-1 text-2xl font-bold text-foreground">

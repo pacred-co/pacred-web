@@ -32,11 +32,15 @@ export async function adminUpdateSalesPayout(input: AdminUpdateSalesPayoutInput)
 
   return withAdmin(["accounting","sales_admin"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: payout } = await admin
+    const { data: payout, error: payoutErr } = await admin
       .from("sales_payouts")
       .select("id, team_leader_id, amount_total, status, team_leader:team_leaders!team_leader_id ( profile_id )")
       .eq("id", d.id)
       .maybeSingle();
+    if (payoutErr) {
+      console.error(`[sales_payouts mutation lookup] failed`, { code: payoutErr.code, message: payoutErr.message });
+      return { ok: false, error: `db_error:${payoutErr.code ?? "unknown"}` };
+    }
     if (!payout) return { ok: false, error: "not_found" };
 
     type TL = { profile_id: string };

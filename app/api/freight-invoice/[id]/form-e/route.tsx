@@ -85,12 +85,15 @@ export async function GET(
 
   // Auth + RLS-scoped read.
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) {
     return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
   }
 
-  const { data: invoice } = await supabase
+  const { data: invoice, error: invoiceErr } = await supabase
     .from("freight_invoices")
     .select(`
       id, invoice_no, status, issued_at, created_at, freight_shipment_id,
@@ -103,34 +106,46 @@ export async function GET(
     `)
     .eq("id", id)
     .maybeSingle<InvoiceRow>();
+  if (invoiceErr) {
+    console.error(`[freight_invoices list] failed`, { code: invoiceErr.code, message: invoiceErr.message });
+  }
   if (!invoice) {
     return NextResponse.json({ error: "not_found_or_unauthorised" }, { status: 404 });
   }
 
   // Live fallback for drafts (snapshots null until issuance).
   const admin = createAdminClient();
-  const { data: shipment } = await admin
+  const { data: shipment, error: shipmentErr } = await admin
     .from("freight_shipments")
     .select("job_no, transport_mode, bl_no, vessel_voyage, port_loading, port_discharge, origin_country")
     .eq("id", invoice.freight_shipment_id)
     .maybeSingle<ShipmentRow>();
+  if (shipmentErr) {
+    console.error(`[freight_shipments list] failed`, { code: shipmentErr.code, message: shipmentErr.message });
+  }
   if (!shipment) {
     return NextResponse.json({ error: "shipment_missing" }, { status: 500 });
   }
 
-  const { data: parties } = await admin
+  const { data: parties, error: partiesErr } = await admin
     .from("freight_parties")
     .select("role, name, address, tax_id")
     .eq("freight_shipment_id", invoice.freight_shipment_id);
+  if (partiesErr) {
+    console.error(`[freight_parties list] failed`, { code: partiesErr.code, message: partiesErr.message });
+  }
   const partyList = (parties ?? []) as PartyRow[];
   const liveShipper   = partyList.find((p) => p.role === "shipper");
   const liveConsignee = partyList.find((p) => p.role === "consignee");
 
-  const { data: linesRaw } = await admin
+  const { data: linesRaw, error: linesRawErr } = await admin
     .from("freight_invoice_lines")
     .select("position, marks, description, qty, unit, cartons, gross_weight_kg, hs_code")
     .eq("freight_invoice_id", invoice.id)
     .order("position", { ascending: true });
+  if (linesRawErr) {
+    console.error(`[freight_invoice_lines list] failed`, { code: linesRawErr.code, message: linesRawErr.message });
+  }
   const lines = (linesRaw ?? []) as LineRow[];
 
   registerPdfFonts();

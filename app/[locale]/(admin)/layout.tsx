@@ -34,10 +34,17 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // app/globals.css `body { … }`. Outer wrapper + content panel both stay
   // transparent so the gradient shows through. The sidebar keeps its own
   // solid dark background for contrast.
+  // Layout fix 2026-05-25 (ภูม flagged): main wrapper was expanding beyond
+  // viewport because flex children default to `min-width:auto` (content-based).
+  // With wide intrinsic content (4-col stat cards + 14-tab strip), main grew
+  // > viewport-256px → stat cards + tabs clipped on the right at <1920px screens.
+  // Fix: add `min-w-0` so flex child can shrink, + `overflow-x-hidden` so any
+  // wider child clips cleanly instead of expanding main. Inner overflow-x-auto
+  // wrappers (tab strips, tables) now activate horizontal scroll correctly.
   return (
     <div className="min-h-screen flex text-foreground">
       <AdminSidebar roles={roles} counts={counts} adminLabel={adminLabel} />
-      <div className="flex-1 lg:ml-64 min-h-screen">
+      <div className="flex-1 lg:ml-64 min-h-screen min-w-0 overflow-x-hidden">
         {children}
       </div>
     </div>

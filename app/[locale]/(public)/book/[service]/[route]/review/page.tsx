@@ -85,9 +85,10 @@ export default async function BookingReviewPage({
   // Require auth — if a guest somehow reached this URL directly, push
   // them through `/book-start` so the carry contract stays one-pathed.
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) {
     redirect({
       href: {
@@ -110,7 +111,7 @@ export default async function BookingReviewPage({
   //     OR still unclaimed (profile_id === null) — exactly the carry
   //     scenario.
   const admin = createAdminClient();
-  const { data: draft } = await admin
+  const { data: draft, error: draftErr } = await admin
     .from("bookings")
     .select(
       "id, status, service_slug, route_slug, transport_mode, profile_id, " +
@@ -119,6 +120,9 @@ export default async function BookingReviewPage({
     )
     .eq("id", draftId)
     .maybeSingle<BookingDraftRow>();
+  if (draftErr) {
+    console.error(`[bookings list] failed`, { code: draftErr.code, message: draftErr.message });
+  }
 
   if (!draft) {
     redirect({ href: "/book", locale });
@@ -155,18 +159,24 @@ export default async function BookingReviewPage({
   }
 
   // Pull the picked options (line-items) for the read-only summary.
-  const { data: options } = await admin
+  const { data: options, error: optionsErr } = await admin
     .from("booking_options")
     .select("option_key, option_label, detail, quantity, line_amount")
     .eq("booking_id", draft.id)
     .order("position", { ascending: true });
+  if (optionsErr) {
+    console.error(`[booking_options list] failed`, { code: optionsErr.code, message: optionsErr.message });
+  }
 
   // Pre-fill the contact-block from the profile (editable on submit).
-  const { data: profile } = await admin
+  const { data: profile, error: profileErr } = await admin
     .from("profiles")
     .select("first_name, last_name, phone, line_id")
     .eq("id", user.id)
     .maybeSingle<ProfileRow>();
+  if (profileErr) {
+    console.error(`[profiles list] failed`, { code: profileErr.code, message: profileErr.message });
+  }
 
   const initialContactName =
     draft.contact_name ??
@@ -191,7 +201,7 @@ export default async function BookingReviewPage({
     <>
       <main className="mx-auto w-full max-w-[920px] px-4 py-10">
         {/* i18n-key: booking.review.kicker */}
-        <p className="text-xs font-semibold tracking-widest text-primary-500">
+        <p className="text-xs font-semibold tracking-widest text-primary-600">
           REVIEW · ตรวจสอบการจอง
         </p>
         {/* i18n-key: booking.review.title */}
@@ -339,7 +349,7 @@ function EstimatePanel({
   return (
     <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
       {/* i18n-key: booking.review.estimate.title */}
-      <p className="text-xs font-semibold tracking-widest text-primary-500">
+      <p className="text-xs font-semibold tracking-widest text-primary-600">
         ราคาประมาณการ
       </p>
 

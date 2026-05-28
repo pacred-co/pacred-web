@@ -1,0 +1,62 @@
+/* =============================================================
+ * warehouse-history.css — legacy PCS Cargo
+ *                          `pcs-admin/forwarder-import-warehouse.php`
+ *                          (default view) page-specific stylesheet
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription — admin port of the
+ * "ประวัติเข้าโกดังไทย" (warehouse barcode-scan event log) view.
+ * Paired with the chrome bundle: public/legacy/pcs/admin/admin-base.css.
+ *
+ * Source — verbatim from forwarder-import-warehouse.php L45-76 inline
+ * <style> block. Every selector is scoped under `.pcs-legacy` so the
+ * legacy Bootstrap-4 cannot leak into — or collide with — the rest of
+ * the Tailwind app, exactly as the cnt-hs + admin-table pilots did.
+ *
+ * The static-asset + <link rel="stylesheet"> loading rule (no
+ * `import`) applies — Tailwind v4 / PostCSS rejects verbatim
+ * legacy CSS (da4cd79).
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- L46-48 — active tab heading colour (the legacy red) ---- */
+.pcs-legacy .nav-link.active h4 { color: #cc3333 !important; }
+
+/* ---- L49-51 — slightly larger tab heading font ---- */
+.pcs-legacy .nav-link h4 { font-size: 1.1rem !important; }
+
+/* ---- L52-55 — badge spacing override ---- */
+.pcs-legacy .pcs-sm-badge {
+  margin-left: 0px;
+  margin-right: 0px;
+}
+
+/* ---- L56-59 — tighter tab padding for the report-top-menu ---- */
+.pcs-legacy .nav.nav-tabs.nav-underline .nav-item a.nav-link {
+  padding: 0.35rem 0.35rem;
+  font-size: 13.5px;
+}
+
+/* ---- L60-63 — orange/red gradient highlight for the
+ * "scanned-but-not-linked" rows (the orphan event-log entries). */
+.pcs-legacy .bg-color {
+  background: linear-gradient(to right, #ee7411 0%, #c24e4e 100%);
+  color: #fff;
+}
+
+/* ---- L64-66 — data-dense table padding (every cell tighter) ---- */
+.pcs-legacy .table td,
+.pcs-legacy .table th {
+  padding: 0.25rem 0.5rem;
+}
+
+/* ---- L67-69 — no margin on detail paragraphs ---- */
+.pcs-legacy p { margin-bottom: 0rem; }
+
+/* ---- L70-72 — clamp the address / detail cell width
+ * to keep the long Thai address from blowing up the table. */
+.pcs-legacy .max-w { max-width: 200px; }
+
+/* ---- L73-75 — keep links readable on the dupe-warning blue rows ---- */
+.pcs-legacy .bg-primary.text-white a { color: #fff !important; }

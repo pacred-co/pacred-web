@@ -27,10 +27,13 @@ export default async function PcsMigrationPage() {
   await requireAdmin(["super"]);
 
   const admin = createAdminClient();
-  const { data: status } = await admin
+  const { data: status, error: statusErr } = await admin
     .from("v_pcs_migration_status")
     .select("*")
     .maybeSingle<StatusRow>();
+  if (statusErr) {
+    console.error(`[v_pcs_migration_status list] failed`, { code: statusErr.code, message: statusErr.message });
+  }
 
   const seqOffsetOk = status ? status.member_code_seq_current > status.max_legacy_num_in_staging : true;
 
@@ -46,11 +49,11 @@ export default async function PcsMigrationPage() {
       </nav>
 
       <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-50 dark:bg-primary-900/20 text-primary-600">
           <Database className="h-6 w-6" />
         </div>
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · U2-1</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · U2-1</p>
           <h1 className="mt-1 text-xl sm:text-2xl font-bold">PCS → Pacred customer migration</h1>
           <p className="text-xs text-muted mt-0.5">
             One-shot backfill of legacy <code>tb_users</code> rows → Pacred <code>profiles</code>.

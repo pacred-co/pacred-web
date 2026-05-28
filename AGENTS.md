@@ -10,6 +10,86 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 > AGENTS.md is loaded into every Claude Code session via `@AGENTS.md` at the top of `CLAUDE.md`. Keep this file narrow: rules that change *how* agents behave, not project facts (facts live in CLAUDE.md / docs/).
 
+## 0a. Workflow vs UI — the design philosophy (read FIRST · 2026-05-23 added)
+
+**Legacy PCS Cargo = workflow source of truth. Our UI = our design — better than legacy.**
+
+We are NOT pixel-cloning the PHP. We are stealing the **logic** (data fields ·
+button behaviour · filters · permissions · status flows) and applying **our
+own polish** (Tailwind · Lucide icons · cleaner typography · responsive design ·
+better empty states). The owner's quote: *"เราแค่ copy ระบบการทำงาน ส่วนหน้าตา
+เราเอามาปรับให้สวยเอง"* (we copy the working system, polish the look ourselves).
+
+Before shipping any faithful-port page:
+1. **Open the legacy `.php`** under `C:\Users\Admin\Downloads\newrealdatapcs\newrealdatapcs\pcscargo\member\pcs-admin\` and list every data field + button + filter
+2. **Write the Pacred page with the SAME logic but our design** — never copy Bootstrap-4 markup verbatim
+3. **Browser-verify side-by-side** with the legacy (open the owner's screenshot OR render the PHP locally) — add anything legacy shows that we don't
+4. **Banner deferred features in the UI** ("Wave 12 ยังไม่เปิด — ใช้ legacy PHP ชั่วคราว") instead of silently linking to a redirect
+5. **Tell ภูม what's complete vs what's stubbed** when reporting wave completion — don't make ภูม discover gaps by clicking around
+6. **Ask before implementing if unsure** — "should the thumbnail link to full image or detail page?"
+
+**Anti-pattern (what NOT to do):** Ship a "faithful port" with the legacy's
+plain Bootstrap-4 chrome and defend it as "matches legacy". Wait for ภูม to
+flag mismatches instead of proactively comparing. Silently leave features
+unimplemented without bannering.
+
+Full reference + concrete examples: [`docs/learnings/pacred-design-philosophy.md`](docs/learnings/pacred-design-philosophy.md).
+
+---
+
+## 0b. Deep-audit from source — NEVER trust an HTML paste or screenshot (2026-05-25 added)
+
+When ภูม pastes a legacy HTML render, or shows a screenshot, or describes a workflow — the **source of truth is the legacy PHP file on disk**, not the rendered HTML. Every legacy `pcs-admin/*.php` is usually a multi-mode dispatcher (`switch ($_GET['page'])` · `if (isset($_GET['id']))` · `if (isset($_POST['*']))`); the HTML you see is ONE mode of N. The other modes are invisible until you `Read` the source.
+
+This rule exists because on 2026-05-25 I shipped a fidelity-comparison report that missed 2 huge legacy pages (`report-cnt.php?id=` mode-b + `forwarder-check.php`) because I compared against ภูม's pasted HTML instead of opening the PHP. ภูม said: *"โหนี่ขนาดมี source code ให้นายเลยนะ ไล่ deep audit เพิ่มด่วน — อยากส่งงานแล้วโดน Owner ไล่กลับบ้านหรือไง"*. Owner would have rejected the work.
+
+**Mandatory protocol when ภูม asks "does this match" or "is this faithful":**
+1. **Open the legacy PHP** under `D:\REALSHITDATAPCS\pcsc\public_html\member\pcs-admin\` (NOT `C:\Users\Admin\Downloads\newrealdatapcs\` — that's still an unextracted archive)
+2. **List every mode** the file dispatches (grep `$_GET` / `$_POST` / `switch (` / `include 'include/pages/`)
+3. **Enumerate every `include/pages/<dir>/*.php` sub-handler** — each is potentially a separate Pacred server action
+4. **Cross-reference Pacred** for every legacy artifact (`Glob app/[locale]/(admin)/admin/<feature>/**`)
+5. **Build the diff table** (legacy file · LOC · mode · pacred path · status ✅/⚠️/❌/🔧) BEFORE answering
+6. **Use parallel agents** when scope is wide (> 10 legacy files) — agent A enumerates legacy, agent B enumerates Pacred, you produce the diff
+
+Full lesson + concrete miss-case: [`docs/learnings/audit-discipline.md`](docs/learnings/audit-discipline.md).
+Executable form: [`.claude/skills/legacy-fidelity-check/SKILL.md`](.claude/skills/legacy-fidelity-check/SKILL.md).
+
+**Anti-patterns (what NOT to do):**
+- ❌ Comparing only to "what I see in the HTML" — HTML shows one mode
+- ❌ Defending a gap as "intentional Pacred UX divergence" without verifying Pacred has the feature at all
+- ❌ Trusting your own previous audit's framing — re-audit from source for any new question
+- ❌ Saying "~85% complete" without per-file accounting — measure or don't claim
+
+---
+
+## 0c. Verify-deep-flow — never claim "clean" without clicking the row (2026-05-25 ค่ำ added)
+
+A page returning HTTP 200 from `curl` is NOT proof it works. A list/table that renders 14 columns isn't done if column 14 is invisible behind a hidden Windows scrollbar. A detail page that says `export const dynamic = "force-dynamic"` and exists on disk isn't done if it 404s intermittently because of a silent Supabase query failure.
+
+This rule exists because on 2026-05-25 ค่ำ I reported Wave 18 as **"clean · no bugs · no dead flows"** after smoke-testing only the routes — and ภูม found 2 bugs within minutes: `/admin/customers` table cut off (scrollbar invisible on Windows Chrome) + `/admin/customers/PR10899` intermittent 404 (legacy-view.tsx silently swallowed db error). ภูม said: *"ทำไมไม่รีเช็คหรือไม่บอกภูมิว่าหน้าไหนยังไม่มี ... ภูมิต้องมาคอยหาเจอเอง ... แบบนี้มันเหมือนเราทำงานกันลวกๆไม่เรียบร้อยเลยนะ ... เราจะทำยังไงดีให้เราทั้งคู่และคอมที่ทำงานด้วย ไม่พลาด ไม่ตกหล่น"*. **2 bugs got past the gate because the gate only checked "does the URL respond 200" — not "does the user-visible flow work end-to-end".**
+
+**Mandatory protocol before claiming any list/table/detail page "clean" or "done":**
+
+1. **Route smoke (existing — necessary but NOT sufficient).** `curl` every new/changed route → 200/307. This catches `DYNAMIC_SERVER_USAGE` and dead routes; it does NOT catch UI clipping, silent db errors, or broken interactive flows.
+2. **Click-through the primary row action.** For every list/table page: open it in Chrome MCP, click the first row → verify the detail page renders (NOT 404, NOT 500, NOT spinner-forever). For each row-action button (edit · approve · suspend · view-as-customer · ดู · etc.): click → verify response (toast / navigation / state change). A 404 on row-click = the row's data field doesn't match the detail route's lookup column — that's a port bug, not a "row data missing" excuse.
+3. **Measure horizontal overflow + verify visible scrollbar.** For every wide table (≥ 8 columns), run in Chrome devtools / MCP eval: `document.querySelector('.overflow-x-auto').scrollWidth > document.querySelector('.overflow-x-auto').clientWidth`. If true → either columns fit at the tested viewport OR a visible scrollbar must be present. Windows Chrome hides scrollbars by default — use the `.scrollbar-x-visible` class (globals.css) or add a UI hint ("เลื่อนซ้าย-ขวา ⇆") so staff know to scroll.
+4. **Destructure `error` from EVERY Supabase query.** Never write `const { data } = await admin.from(...)`. Always `const { data, error } = ...`; on error → `console.error(...)` with the userid/query context AND `throw` (so Next renders a real error boundary, not a silent null → 404). The 2026-05-25 `/customers/PR10899` intermittent 404 was exactly this — `maybeSingle()` quietly returned `data=null` on a transient PgBouncer timeout, and `if (!data) return null` → `notFound()` → 404 for a row that exists.
+5. **State explicitly: verified vs not-yet-verified.** When reporting wave completion to ภูม, list per-surface: `✅ verified flow X→Y→Z`, `⚠️ rendered but didn't click action button A`, `❌ not opened at all`. Never say "clean" or "all green" if any item is ⚠️ or ❌. The honest sentence is *"3 of 5 surfaces I click-verified, 2 only smoke-tested — those 2 may have interactive bugs I didn't catch"*. ภูม would rather know what's untested than be told it's clean and find out the hard way.
+
+**Concrete miss-case that justified this rule:**
+- I shipped Wave 18 + ran `curl` on all routes (all 200) + did NOT click the eye-icon on a customer row + did NOT measure table overflow. ภูม opened `/admin/customers`, scrolled visually, saw the "จัดการ" column missing → bug 1. ภูม clicked the eye-icon on PR10899 → 404 → bug 2. **Both were 60-second checks I skipped.** The route-smoke discipline (AGENTS.md §11 → `phase-verify-loop` skill) was followed; it was insufficient.
+
+**Anti-patterns:**
+- ❌ Claiming "wave clean" because `pnpm verify` + route-smoke pass
+- ❌ `const { data } = await admin.from(...)` — error path is invisible
+- ❌ Letting the user discover interactive bugs by clicking around
+- ❌ Wide tables (≥ 8 cols) without `.scrollbar-x-visible` or a "⇆ scroll" hint
+- ❌ Detail pages that fall through to `notFound()` when the underlying issue is a transient db error (notFound = "row doesn't exist", not "I had a problem reading")
+
+Full lesson: [`docs/learnings/verify-deep-flow.md`](docs/learnings/verify-deep-flow.md) (to be written next session — capture the 2 bug case studies for compounding memory).
+
+---
+
 ## 0. Current direction — D1: Pacred is a faithful PCS Cargo port
 
 On **2026-05-18 the owner rejected the rebuilt-from-scratch Pacred app** — its UI and workflow look nothing like the legacy **PCS Cargo** system that staff and ~8,898 customers use daily. The direction is now **D1: Pacred becomes the legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`.** This is the canonical lens for every task. Three phases:
@@ -87,8 +167,10 @@ When the user says "จัดมาเลย / รันยาวๆ / ลุย
 
 ## 9. Skills are playbooks — invoke them
 
-The `.claude/skills/` directory contains 14 skills (see [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md)):
+The `.claude/skills/` directory contains 16 skills (see [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md)):
 
+- `debug-mantra` — every bug session starts here: reproduce → fail path → falsify → breadcrumb (no fix before reliable repro)
+- `management-talk` — translate engineer-to-engineer content for the channel (JIRA / Slack / standup / email / meeting) — for "report ส่งพี่ป๊อป"
 - `phase-verify-loop` — close every phase with assume → check → verify → analyze → fix
 - `bug-swarm-loop` — hard bug? Spawn 4-5 hunter sub-agents in parallel
 - `audit-kpi-dashboard` — generate dashboards from operational data

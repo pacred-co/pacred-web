@@ -121,7 +121,7 @@ export default async function SalesTeamMembersPage() {
 
   // ── user-sales.php L96-103 — the team-member query ──────────────
   // 1. tb_users WHERE coID = $userIDMain.
-  const { data: usersRaw } = await admin
+  const { data: usersRaw, error: usersRawErr } = await admin
     .from("tb_users")
     .select(
       "adminidsale, userid, coid, userpicture, username, userlastname, " +
@@ -129,6 +129,9 @@ export default async function SalesTeamMembersPage() {
         "userfacebook, userregistered",
     )
     .eq("coid", agent.userIDMain);
+  if (usersRawErr) {
+    console.error(`[tb_users list] failed`, { code: usersRawErr.code, message: usersRawErr.message });
+  }
 
   const users = (usersRaw ?? []) as unknown as {
     userid: string;
@@ -160,23 +163,29 @@ export default async function SalesTeamMembersPage() {
     }
   >();
   if (memberIds.length > 0) {
-    const { data: mains } = await admin
+    const { data: mains, error: mainsErr } = await admin
       .from("tb_address_main")
       .select("userid, addressid")
       .in("userid", memberIds);
+    if (mainsErr) {
+      console.error(`[tb_address_main list] failed`, { code: mainsErr.code, message: mainsErr.message });
+    }
     const mainRows = (mains ?? []) as unknown as {
       userid: string;
       addressid: number;
     }[];
     const addressIds = mainRows.map((m) => m.addressid);
     if (addressIds.length > 0) {
-      const { data: addrs } = await admin
+      const { data: addrs, error: addrsErr } = await admin
         .from("tb_address")
         .select(
           "addressid, addressname, addresslastname, addressno, " +
             "addresssubdistrict, addressdistrict, addressprovince, addresszipcode",
         )
         .in("addressid", addressIds);
+      if (addrsErr) {
+        console.error(`[tb_address list] failed`, { code: addrsErr.code, message: addrsErr.message });
+      }
       const addrById = new Map(
         ((addrs ?? []) as unknown as {
           addressid: number;

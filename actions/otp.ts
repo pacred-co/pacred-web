@@ -150,7 +150,7 @@ export async function verifyOtp(
   const phone = normalizePhone(phoneRaw);
   const admin = createAdminClient();
 
-  const { data: otp } = await admin
+  const { data: otp, error: otpErr } = await admin
     .from("otp_codes")
     .select("*")
     .eq("phone", phone)
@@ -160,6 +160,9 @@ export async function verifyOtp(
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (otpErr) {
+    console.error(`[otp_codes list] failed`, { code: otpErr.code, message: otpErr.message });
+  }
 
   if (!otp) return false;
   if (otp.attempts >= MAX_ATTEMPTS) return false;

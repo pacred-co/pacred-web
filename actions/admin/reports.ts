@@ -405,11 +405,14 @@ export async function getOtpSuccessReport(range: DateRange): Promise<Result<OtpS
     const phones = Array.from(new Set(otpRows.map((o) => o.phone)));
     let phoneToProfile = new Map<string, { member_code: string | null; first_name: string | null; last_name: string | null }>();
     if (phones.length > 0) {
-      const { data: profs } = await admin
+      const { data: profs, error: profsErr } = await admin
         .from("profiles")
         .select("phone, member_code, first_name, last_name")
         .in("phone", phones)
         .limit(LIMIT);
+      if (profsErr) {
+        console.error(`[profiles list] failed`, { code: profsErr.code, message: profsErr.message });
+      }
       phoneToProfile = new Map((profs ?? []).map((p) => [p.phone as string, p]));
     }
 

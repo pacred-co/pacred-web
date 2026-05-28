@@ -56,13 +56,19 @@ export default async function AdminBroadcastsListPage({
     .order("created_at", { ascending: false })
     .limit(200);
   if (status) query = query.eq("status", status);
-  const { data: raw } = await query;
+  const { data: raw, error: rawErr } = await query;
+  if (rawErr) {
+    console.error(`[broadcasts list] failed`, { code: rawErr.code, message: rawErr.message });
+  }
   const rows = (raw ?? []) as Row[];
 
   // Status counts for chip badges.
   const counts: Record<BroadcastStatus, number> = {} as Record<BroadcastStatus, number>;
   for (const s of BROADCAST_STATUSES) counts[s] = 0;
-  const { data: countRows } = await admin.from("broadcasts").select("status");
+  const { data: countRows, error: countRowsErr } = await admin.from("broadcasts").select("status");
+  if (countRowsErr) {
+    console.error(`[broadcasts list] failed`, { code: countRowsErr.code, message: countRowsErr.message });
+  }
   for (const r of (countRows ?? []) as Array<{ status: BroadcastStatus }>) {
     counts[r.status] = (counts[r.status] ?? 0) + 1;
   }
@@ -71,7 +77,7 @@ export default async function AdminBroadcastsListPage({
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · V-G3</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · V-G3</p>
           <h1 className="mt-1 text-2xl font-bold">📢 Broadcasts</h1>
           <p className="text-xs text-muted mt-1">
             push popup ออกหาลูกค้า (in-app + LINE in V-G3.1) — workflow: draft → ส่งทันที / กำหนดเวลา → sent

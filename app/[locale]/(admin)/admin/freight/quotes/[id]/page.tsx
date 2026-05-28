@@ -84,7 +84,7 @@ export default async function AdminFreightQuoteDetailPage({
 
   const admin = createAdminClient();
 
-  const { data: header } = await admin
+  const { data: header, error: headerErr } = await admin
     .from("freight_quotes")
     .select(`
       id, quote_no, status, profile_id, buyer_name_snapshot, buyer_tax_id_snapshot,
@@ -95,23 +95,33 @@ export default async function AdminFreightQuoteDetailPage({
     `)
     .eq("id", id)
     .maybeSingle<HeaderRow>();
+  if (headerErr) {
+    console.error(`[freight_quotes lookup] failed`, { code: headerErr.code, message: headerErr.message, details: headerErr.details, hint: headerErr.hint });
+    throw new Error(`Failed to load freight_quotes (${headerErr.code ?? "unknown"}): ${headerErr.message}`);
+  }
   if (!header) notFound();
 
-  const { data: itemsRaw } = await admin
+  const { data: itemsRaw, error: itemsRawErr } = await admin
     .from("freight_quote_items")
     .select("id, position, description, quantity, unit, unit_price_thb, line_total_thb, note")
     .eq("freight_quote_id", id)
     .order("position", { ascending: true });
+  if (itemsRawErr) {
+    console.error(`[freight_quote_items list] failed`, { code: itemsRawErr.code, message: itemsRawErr.message });
+  }
   const items = (itemsRaw ?? []) as ItemRow[];
 
   // Audit trail rows for this quote.
-  const { data: auditRaw } = await admin
+  const { data: auditRaw, error: auditRawErr } = await admin
     .from("admin_audit_log")
     .select("id, action, created_at, payload, admin_id, admin:profiles!admin_id ( member_code, first_name, last_name )")
     .eq("target_type", "freight_quote")
     .eq("target_id", id)
     .order("created_at", { ascending: false })
     .limit(50);
+  if (auditRawErr) {
+    console.error(`[admin_audit_log list] failed`, { code: auditRawErr.code, message: auditRawErr.message });
+  }
   type AuditRaw = {
     id: string; action: string; created_at: string; payload: unknown;
     admin: { member_code: string | null; first_name: string | null; last_name: string | null } | { member_code: string | null; first_name: string | null; last_name: string | null }[] | null;

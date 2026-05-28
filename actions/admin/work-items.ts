@@ -135,7 +135,7 @@ export async function adminAssignWorkItem(
   return withAdmin([...ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("work_items")
       .select("id, status, assigned_role, assigned_to")
       .eq("id", d.id)
@@ -143,6 +143,10 @@ export async function adminAssignWorkItem(
         id: string; status: string;
         assigned_role: string; assigned_to: string | null;
       }>();
+    if (existingErr) {
+      console.error(`[work_items mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
+      return { ok: false, error: `db_error:${existingErr.code ?? "unknown"}` };
+    }
     if (!existing) return { ok: false, error: "not_found" };
     if (existing.status === "done" || existing.status === "cancelled") {
       return { ok: false, error: `closed:${existing.status}` };
@@ -203,11 +207,15 @@ export async function adminAdvanceWorkItem(
   return withAdmin([...ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("work_items")
       .select("id, status")
       .eq("id", id)
       .maybeSingle<{ id: string; status: string }>();
+    if (existingErr) {
+      console.error(`[work_items mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
+      return { ok: false, error: `db_error:${existingErr.code ?? "unknown"}` };
+    }
     if (!existing) return { ok: false, error: "not_found" };
     if (existing.status !== from) {
       // Card already moved — the caller's `from` is stale.
@@ -263,11 +271,15 @@ export async function adminSetWorkItemPriority(
   return withAdmin([...ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("work_items")
       .select("id, status, priority")
       .eq("id", id)
       .maybeSingle<{ id: string; status: string; priority: string }>();
+    if (existingErr) {
+      console.error(`[work_items mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
+      return { ok: false, error: `db_error:${existingErr.code ?? "unknown"}` };
+    }
     if (!existing) return { ok: false, error: "not_found" };
     if (existing.status === "done" || existing.status === "cancelled") {
       return { ok: false, error: `closed:${existing.status}` };

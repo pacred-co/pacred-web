@@ -80,10 +80,13 @@ export default async function CommissionsPage() {
   // team_leaders (policy `team_leaders_select_own` from 0013 L217-218).
   // No row = no commissions to ever show → render the empty state.
   const supabase = await createClient();
-  const { data: leadersRaw } = await supabase
+  const { data: leadersRaw, error: leadersRawErr } = await supabase
     .from("team_leaders")
     .select("id, team_code, commission_pct, is_active")
     .eq("profile_id", user.id);
+  if (leadersRawErr) {
+    console.error(`[team_leaders list] failed`, { code: leadersRawErr.code, message: leadersRawErr.message });
+  }
   const leaders = (leadersRaw ?? []) as {
     id: string; team_code: string; commission_pct: number; is_active: boolean;
   }[];
@@ -107,7 +110,7 @@ export default async function CommissionsPage() {
           <Coins className="h-6 w-6" />
         </div>
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold tracking-widest text-primary-500">{t("kicker")}</p>
+          <p className="text-[10px] font-semibold tracking-widest text-primary-600">{t("kicker")}</p>
           <h1 className="text-xl sm:text-2xl font-bold text-foreground mt-0.5">{t("title")}</h1>
           <p className="text-xs text-muted mt-0.5 max-w-[60ch]">{t("subtitle")}</p>
         </div>

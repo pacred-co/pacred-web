@@ -1,0 +1,37 @@
+/*
+ * Admin > "อีเมลในองค์กร" — page-specific styles.
+ *
+ * Source: pcs-admin/include/pages/organization-email/home.php L7-26
+ * — the inline <style> block (password-eye toggle position + the
+ *   numbered <ol> "ขั้นตอน" list visual).
+ *
+ * Brought in verbatim per the faithful-port-transcription rule
+ * (§1: copy the legacy 1:1; CSS via <link>, not @import).
+ *
+ * Loaded by /admin/organization-email/page.tsx alongside admin-base.css.
+ * Scoped to `.pcs-legacy` to avoid clashing with the Tailwind v4
+ * preflight on the rest of the app.
+ */
+
+.pcs-legacy .toggle-button {
+  position: absolute;
+  right: 15px;
+  top: 8px;
+}
+
+.pcs-legacy .password-container {
+  position: relative;
+}
+
+.pcs-legacy .pcs-sequence ol {
+  counter-reset: item;
+}
+
+.pcs-legacy .pcs-sequence li {
+  display: block;
+}
+
+.pcs-legacy .pcs-sequence li:before {
+  content: counters(item, ".") " ";
+  counter-increment: item;
+}

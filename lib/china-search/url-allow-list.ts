@@ -2,7 +2,11 @@
  * Pure URL host allow-list for the product-search server action.
  *
  * Lives in its own file (no `server-only`) so it can be unit-tested
+<<<<<<< HEAD
+ * with tsx without spinning up Next.js — actions/admin/product-search.ts
+=======
  * with tsx without spinning up Next.js — actions/product-search.ts
+>>>>>>> origin/dave-pacred
  * is "use server" and would throw at import time in a plain node
  * runner. Same pattern as lib/china-search/extract-product-id.ts.
  *
@@ -21,6 +25,13 @@
  * round-trip.  Non-https URLs (ftp://, javascript:) also rejected
  * for XSS hygiene — Pacred's CSP would block them at the browser
  * anyway, but failing fast is cheaper than producing an inert card.
+<<<<<<< HEAD
+ *
+ * Cherry-picked from dave-pacred commit 356edcb (D1 customer-side
+ * link-paste) and shared with admin /admin/service-orders/cart/add
+ * by Wave 23 (2026-05-27).
+=======
+>>>>>>> origin/dave-pacred
  */
 
 const SUPPORTED_HOST_PATTERN =

@@ -108,11 +108,14 @@ export default async function AdminNotificationsLogPage({
     if (isUuid(trimmed)) {
       recipientFilterId = trimmed;
     } else {
-      const { data: profile } = await admin
+      const { data: profile, error: profileErr } = await admin
         .from("profiles")
         .select("id")
         .eq("member_code", trimmed.toUpperCase())
         .maybeSingle<{ id: string }>();
+      if (profileErr) {
+        console.error(`[profiles list] failed`, { code: profileErr.code, message: profileErr.message });
+      }
       recipientFilterId = profile?.id ?? "__not_found__";
     }
   }
@@ -142,7 +145,10 @@ export default async function AdminNotificationsLogPage({
     q = q.lte("created_at", padded);
   }
 
-  const { data, count } = await q;
+  const { data, count, error } = await q;
+  if (error) {
+    console.error(`[notifications list] failed`, { code: error.code, message: error.message });
+  }
   const rows = (data ?? []) as Row[];
   const totalCount = count ?? 0;
   const pageEnd = Math.min(offset + PAGE_SIZE, offset + rows.length);
@@ -172,7 +178,7 @@ export default async function AdminNotificationsLogPage({
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · system · U4-1</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · system · U4-1</p>
           <h1 className="mt-1 text-2xl font-bold">Notification delivery log</h1>
           <p className="mt-1 text-sm text-muted">
             ค้นหา notifications ที่ส่งให้ลูกค้า · ดู delivery status · debug LINE/email push.

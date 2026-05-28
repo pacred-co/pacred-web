@@ -29,6 +29,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+dev-restart.log
+dev*.log
 
 # env files (can opt-in for committing if needed)
 .env*
@@ -44,4 +46,9 @@ next-env.d.ts
 # Claude Code session worktrees (separate git checkouts, not source)
 .claude/worktrees/
 .claude/settings.local.json
+
+# Backfill 06 progress files (contain target paths only · no secrets)
+# Keep gitignored to avoid leaking the backfill state across machines.
+scripts/backfill/.progress/
+
 .claude/scheduled_tasks.lock

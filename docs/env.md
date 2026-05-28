@@ -94,7 +94,29 @@ set in Vercel straight into a fresh `.env.local`.
 
 **Critical:** `SUPABASE_SERVICE_ROLE_KEY` must never end up in client bundle. Only used inside `lib/supabase/admin.ts` (`createAdminClient()` is `import "server-only"`).
 
-> **D1 Supabase projects (2026-05-19):** dev = `pprrlabgebrnocthwdmg` · prod = `yzljakczhwrpbxflnmco` — both carry the loaded Phase-A legacy `tb_*` data ([`runbook/pcs-data-migration.md`](runbook/pcs-data-migration.md) §9). Local `.env.local` points at the **dev** project; never point local dev at prod. Fastest fresh-machine setup: copy `.env.local` directly (LINE self-chat / drive) or `vercel env pull` — values are never recorded in this doc (§ inventory note above).
+### 🚨 2026-05-20 ค่ำ — Pacred is now PROD-ONLY (ก๊อต took dev for other work)
+
+ภูม + ทีม ย้ายไปใช้ **Supabase prod project ตัวเดียว** ตั้งแต่ 2026-05-20 ค่ำ. ก๊อต ขอ dev project ไปทำงานอื่น · Pacred Pro plan upgraded.
+
+**Active project:** `yzljakczhwrpbxflnmco` (pacred-production)
+
+**Values to paste into `.env.local`** (public-safe — URL + anon key only · service_role excluded for security):
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://yzljakczhwrpbxflnmco.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6bGpha2N6aHdycGJ4ZmxubWNvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MDU3ODQsImV4cCI6MjA5NDA4MTc4NH0.wNx-zJ2VHhnyvpByNSc_qEq2UttWOteLPaDXwjnMG1c
+
+# ⚠️ SERVICE ROLE — DO NOT PASTE HERE OR IN ANY COMMITTED FILE
+# Fetch from: https://app.supabase.com → project yzljakczhwrpbxflnmco → Settings → API → service_role (secret)
+# Share with team via 1Password / LINE DM / signed message — never via the repo.
+SUPABASE_SERVICE_ROLE_KEY=<paste from Supabase dashboard>
+```
+
+**Why no service_role here:** the service_role JWT bypasses every RLS policy on prod — anyone with this key can read/write all customer rows, all wallets, all admin password hashes. Even on private repos, secrets in git history can leak (compromised tokens, accidental fork, etc.). OWASP A02:2021 "Cryptographic Failure" maps directly to this.
+
+**Old dev project (FROZEN):** `pprrlabgebrnocthwdmg` — both `pprrl...`/`yzlj...` projects carry the loaded Phase-A legacy `tb_*` data ([`runbook/pcs-data-migration.md`](runbook/pcs-data-migration.md) §9). The dev project's keys WILL NOT cryptographically validate against prod — tested 2026-05-20 ค่ำ: `GET https://yzljakczhwrpbxflnmco.supabase.co/rest/v1/forwarders` with the dev service_role JWT returns 401 "Invalid API key". You MUST use the prod project's own keys.
+
+**Backup of old dev `.env.local`:** local file `.env.local.dev-backup-2026-05-20` (gitignored) — rollback path if needed.
 
 ---
 
@@ -153,7 +175,7 @@ Off by default because legacy PCS had password-only login — the D1 faithful po
 
 | Var | Value | Powers | Auth |
 |---|---|---|---|
-| `PACRED_TAMIT_DETAIL_URL` | `https://tamit-cloud.com/api-product` | Product detail (1688/Taobao/Tmall — pasted URL → SKU axes + price ranges + images). Endpoint shape: `{base}/get/{1688\|taobao}/?id={productID}` | None |
+| `PACRED_TAMIT_DETAIL_URL` | `https://tamit-cloud.com/api-product-2026` | Product detail (1688/Taobao/Tmall — pasted URL → SKU axes + price ranges + images). Endpoint shape: `{base}/get/{1688\|taobao}/?id={productID}`. **2026-05-27 — upstream bumped `/api-product` → `/api-product-2026`; old path returns 404. Update your local `.env.local` to the new value if it was set before this date. See [`docs/learnings/partner-apis-quirks.md`](learnings/partner-apis-quirks.md) for the diagnostic.** | None |
 | `PACRED_TAMIT_CACHE_URL` | `https://tam-i-t.com/api/convert-link-china` | Short-URL cache (1688 `qr.1688.com/s/{tk}` + Taobao `m.tb.cn/{tk}` → productID). Endpoint shape: `{base}/get[/taobao]/?tk={tk}` + `/save/?tk=...&provider={1\|2}&productID=...` | None |
 | `PACRED_AKUCARGO_API_URL` | `https://akucargo.com/api3/api-2022` | Keyword search (1688 + Taobao). Endpoint shape: `{base}/search/v1[/taobao]/?q={words}&page={N}&page_size=15&lang=zh-CN` | None (UA spoof to desktop Firefox) |
 | `PACRED_LAONET_API_URL` | `https://laonet.online` | Image search (reverse-image) + product detail fallback. Endpoint shape: `{base}/index.php?route=api_tester/call&api_name={item_search_img\|item_get\|upload_img}&...&key={key}` | Email-as-key (`PACRED_LAONET_KEY`) |

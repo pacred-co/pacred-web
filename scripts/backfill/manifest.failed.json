@@ -1,0 +1,20 @@
+[
+  {
+    "relativePath": "images/admin/admin_แจน_1706746557.jpg",
+    "absolutePath": "C:\\Users\\Admin\\pcscargo\\member\\images\\admin\\admin_แจน_1706746557.jpg",
+    "size": 434278,
+    "mimeType": "image/jpeg",
+    "targetBucket": "member-docs",
+    "targetPath": "legacy-images/admin/admin_แจน_1706746557.jpg",
+    "error": "Invalid key: legacy-images/admin/admin_แจน_1706746557.jpg"
+  },
+  {
+    "relativePath": "images/admin/admin_เต้ย_1706673553.jpg",
+    "absolutePath": "C:\\Users\\Admin\\pcscargo\\member\\images\\admin\\admin_เต้ย_1706673553.jpg",
+    "size": 329191,
+    "mimeType": "image/jpeg",
+    "targetBucket": "member-docs",
+    "targetPath": "legacy-images/admin/admin_เต้ย_1706673553.jpg",
+    "error": "Invalid key: legacy-images/admin/admin_เต้ย_1706673553.jpg"
+  }
+]

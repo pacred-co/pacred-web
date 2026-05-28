@@ -26,7 +26,7 @@ export default async function AdminMomoLclPage() {
   return (
     <main className="p-4 sm:p-6 lg:p-8 space-y-5">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
         <h1 className="mt-1 text-2xl font-bold">ตรวจสอบ MOMO LCL Sack</h1>
         <p className="mt-1 text-sm text-muted">
           ดึงรายการ tracking ใน sack จาก MOMO + รวมยอด CBM / น้ำหนัก

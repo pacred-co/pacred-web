@@ -6,13 +6,16 @@
  * `PACRED_RCGROUP_API_URL` was incorrect: in PHP, RCGroup is dead code
  * gated by `$APIKEY` which is never assigned.  The real flow is:
  *
- *   - Product detail (URL→cart):  TAMIT-cloud `/api-product/get/{1688|taobao}/?id=<id>`  (P-50)
+ *   - Product detail (URL→cart):  TAMIT-cloud `/api-product-2026/get/{1688|taobao}/?id=<id>`  (P-50)
  *   - Short-URL resolver (m.tb.cn / qr.1688.com → productID):  tam-i-t.com cache  (P-51)
  *   - Keyword search:  AkuCargo (P-52 — still legacy here, TODO comment)
  *   - Image reverse search:  Laonet (P-53 — still legacy here, TODO comment)
  *
  * Env vars:
- *   PACRED_TAMIT_DETAIL_URL   defaults to `https://tamit-cloud.com/api-product`
+ *   PACRED_TAMIT_DETAIL_URL   defaults to `https://tamit-cloud.com/api-product-2026`
+ *                             (legacy bumped from `/api-product` → `/api-product-2026`
+ *                             in 2026 · the old path returns 404 · per
+ *                             `pcs-admin/include/functions.php` L100/174/191)
  *   PACRED_TAMIT_API_URL      (legacy keyword endpoint — superseded by AkuCargo in P-52)
  *
  * When TAMIT detail is unreachable / unparseable / productID-not-extractable
@@ -42,7 +45,7 @@ export type {
   ChinaSearchResult,
 };
 
-const DEFAULT_TAMIT_DETAIL_URL = "https://tamit-cloud.com/api-product";
+const DEFAULT_TAMIT_DETAIL_URL = "https://tamit-cloud.com/api-product-2026";
 
 // ────────────────────────────────────────────────────────────
 // KEYWORD SEARCH — wired to AkuCargo per audit §4a (P-52)

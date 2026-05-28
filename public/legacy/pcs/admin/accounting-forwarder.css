@@ -1,0 +1,71 @@
+/* =============================================================
+ * accounting-forwarder.css — legacy PCS Cargo
+ *                          `pcs-admin/acc-forwarder.php`
+ *                          (default view) page-specific stylesheet
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription — admin port of the
+ * "รายงานฝากนำเข้า" (forwarder-import revenue accounting) ledger.
+ * Paired with the chrome bundle: public/legacy/pcs/admin/admin-base.css.
+ *
+ * Source — verbatim from acc-forwarder.php L9-43 inline <style>
+ * block (identical to the other three acc-*.php screens). Every
+ * selector is scoped under `.pcs-legacy` so the legacy Bootstrap-4
+ * cannot leak into — or collide with — the rest of the Tailwind
+ * app, exactly as the cnt-hs + admin-table pilots established.
+ *
+ * The static-asset + <link rel="stylesheet"> loading rule (no
+ * `import`) applies — Tailwind v4 / PostCSS rejects verbatim
+ * legacy CSS (da4cd79).
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- acc-forwarder.php L10-12 — table cell tighter padding ---- */
+.pcs-legacy .table td { padding: 0.25rem 0.5rem; }
+
+/* ---- acc-forwarder.php L13-15 — table header padding ---- */
+.pcs-legacy .table th { padding: 0.5rem 0.5rem; }
+
+/* ---- acc-forwarder.php L16-19 — DataTables button bar layout ---- */
+.pcs-legacy .dt-buttons {
+  width: 50%;
+  display: inline-block;
+}
+
+/* ---- acc-forwarder.php L20-23 — DataTables filter bar layout ---- */
+.pcs-legacy #myTable_filter {
+  display: inline-block;
+  width: 50%;
+}
+
+/* ---- acc-forwarder.php L24-30 — orange/red header gradient ---- */
+.pcs-legacy thead {
+  height: 35px;
+  background: #ee7411;
+  background: -webkit-linear-gradient(to right, #ee7411, #c24e4e);
+  background: linear-gradient(to right, #ee7411 0%, #c24e4e 100%);
+  color: #fff;
+}
+
+/* ---- acc-forwarder.php L31-36 — totals row green/blue gradient ---- */
+.pcs-legacy .bg-color {
+  background: #35b842;
+  background: -webkit-linear-gradient(to right, #27b836, #1f81b3);
+  background: linear-gradient(to right, #27b836, #1f81b3);
+  color: #fff;
+}
+
+/* ---- acc-forwarder.php L37-42 — "คำอธิบายระบบ" button gradient ---- */
+.pcs-legacy .bg-color-select {
+  background: #35b842;
+  background: -webkit-linear-gradient(to right, #27b836, #1f81b3);
+  background: linear-gradient(to right, #27b836, #1f81b3);
+  color: #fff;
+}
+
+/* ---- modal chrome (Bootstrap-4 default — the legacy theme uses
+ * its global `header-from` modal wrapper for the inline help modal.
+ * Kept minimal — the modal opens via data-toggle wired by the
+ * vendor jQuery+Bootstrap-4 bundle in the (admin) layout). */
+.pcs-legacy .modal { display: none; }

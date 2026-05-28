@@ -107,12 +107,15 @@ async function buildCloseSnapshots(
 
   // ── tax_invoices ────────────────────────────────────────────
   {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("tax_invoices")
       .select("total_thb")
       .eq("status", "issued")
       .gte("issued_at", fromIso)
       .lt("issued_at", toIso);
+    if (error) {
+      console.error(`[tax_invoices list] failed`, { code: error.code, message: error.message });
+    }
     const rows = (data ?? []) as Array<{ total_thb: number }>;
     out.push({
       table_name: "tax_invoices",
@@ -124,12 +127,15 @@ async function buildCloseSnapshots(
 
   // ── freight_invoices ────────────────────────────────────────
   {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("freight_invoices")
       .select("commercial_value_thb")
       .eq("status", "issued")
       .gte("issued_at", fromIso)
       .lt("issued_at", toIso);
+    if (error) {
+      console.error(`[freight_invoices list] failed`, { code: error.code, message: error.message });
+    }
     const rows = (data ?? []) as Array<{ commercial_value_thb: number | null }>;
     out.push({
       table_name: "freight_invoices",
@@ -141,12 +147,15 @@ async function buildCloseSnapshots(
 
   // ── freight_invoice_payments ────────────────────────────────
   {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("freight_invoice_payments")
       .select("amount_thb")
       .eq("status", "recorded")
       .gte("paid_at", fromIso)
       .lt("paid_at", toIso);
+    if (error) {
+      console.error(`[freight_invoice_payments list] failed`, { code: error.code, message: error.message });
+    }
     const rows = (data ?? []) as Array<{ amount_thb: number }>;
     out.push({
       table_name: "freight_invoice_payments",
@@ -161,12 +170,15 @@ async function buildCloseSnapshots(
   // give a "gross money moved" headline. A separate net could be added
   // in V-E12 dashboards if accounting wants it.
   {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("wallet_transactions")
       .select("amount")
       .eq("status", "completed")
       .gte("created_at", fromIso)
       .lt("created_at", toIso);
+    if (error) {
+      console.error(`[wallet_transactions list] failed`, { code: error.code, message: error.message });
+    }
     const rows = (data ?? []) as Array<{ amount: number }>;
     out.push({
       table_name: "wallet_transactions",
@@ -205,11 +217,14 @@ export async function adminOpenAccountingPeriod(
   return withAdmin(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("accounting_periods")
       .select("period_yyyymm, status")
       .eq("period_yyyymm", d.period_yyyymm)
       .maybeSingle<{ period_yyyymm: string; status: string }>();
+    if (existingErr) {
+      console.error(`[accounting_periods list] failed`, { code: existingErr.code, message: existingErr.message });
+    }
     if (existing) return { ok: false, error: "period_already_exists" };
 
     const { error: insErr } = await admin
@@ -252,11 +267,15 @@ export async function adminMarkPeriodClosing(
   return withAdmin(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("accounting_periods")
       .select("period_yyyymm, status")
       .eq("period_yyyymm", d.period_yyyymm)
       .maybeSingle<{ period_yyyymm: string; status: string }>();
+    if (rowErr) {
+      console.error(`[accounting_periods mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+    }
     if (!row) return { ok: false, error: "period_not_found" };
     if (row.status === "closing") return { ok: false, error: "already_closing" };
     if (row.status === "closed")  return { ok: false, error: "already_closed" };
@@ -302,11 +321,15 @@ export async function adminClosePeriod(
   return withAdmin(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("accounting_periods")
       .select("period_yyyymm, status")
       .eq("period_yyyymm", d.period_yyyymm)
       .maybeSingle<{ period_yyyymm: string; status: string }>();
+    if (rowErr) {
+      console.error(`[accounting_periods mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+    }
     if (!row) return { ok: false, error: "period_not_found" };
     if (row.status === "closed") return { ok: false, error: "already_closed" };
     // Allow close from either 'open' (skip the closing soft-state) or
@@ -390,11 +413,15 @@ export async function adminReopenPeriod(
   return withAdmin(["super"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("accounting_periods")
       .select("period_yyyymm, status")
       .eq("period_yyyymm", d.period_yyyymm)
       .maybeSingle<{ period_yyyymm: string; status: string }>();
+    if (rowErr) {
+      console.error(`[accounting_periods mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+    }
     if (!row) return { ok: false, error: "period_not_found" };
     if (row.status !== "closed") return { ok: false, error: "period_not_closed" };
 

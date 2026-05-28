@@ -287,11 +287,14 @@ export async function bridgeLegacyLogin(
 async function ensureLegacyProfile(authUserId: string, row: LegacyUser): Promise<void> {
   const admin = createAdminClient();
 
-  const { data: existing } = await admin
+  const { data: existing, error: existingErr } = await admin
     .from("profiles")
     .select("id")
     .eq("member_code", row.userID)
     .maybeSingle();
+  if (existingErr) {
+    console.error(`[profiles list] failed`, { code: existingErr.code, message: existingErr.message });
+  }
 
   if (existing) {
     // A different id = a pre-D1 `0067`-scaffold row already holds this

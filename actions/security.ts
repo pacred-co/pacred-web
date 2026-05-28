@@ -61,7 +61,10 @@ export async function changePassword(input: ChangePasswordInput): Promise<Action
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const verify = await verifyCurrentPassword(supabase, user, d.currentPassword);
@@ -105,7 +108,10 @@ export async function requestPhoneChangeOtp(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // Verify current password — supports both email and phone-only accounts
@@ -123,12 +129,15 @@ export async function requestPhoneChangeOtp(
 
   // Reject if some other profile already owns this phone
   const admin = createAdminClient();
-  const { data: clash } = await admin
+  const { data: clash, error: clashErr } = await admin
     .from("profiles")
     .select("id")
     .eq("phone", newPhone)
     .neq("id", user.id)
     .maybeSingle();
+  if (clashErr) {
+    console.error(`[profiles list] failed`, { code: clashErr.code, message: clashErr.message });
+  }
   if (clash) {
     return { ok: false, error: "เบอร์นี้ถูกใช้กับบัญชีอื่นแล้ว" };
   }
@@ -152,7 +161,10 @@ export async function confirmPhoneChange(
   if (blocked) return blocked;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const newPhone = normalizePhone(d.newPhone);
@@ -167,12 +179,15 @@ export async function confirmPhoneChange(
 
   // Re-check phone availability right before the write (small TOCTOU window
   // since requestPhoneChangeOtp — another user could have grabbed it).
-  const { data: clash } = await admin
+  const { data: clash, error: clashErr } = await admin
     .from("profiles")
     .select("id")
     .eq("phone", newPhone)
     .neq("id", user.id)
     .maybeSingle();
+  if (clashErr) {
+    console.error(`[profiles list] failed`, { code: clashErr.code, message: clashErr.message });
+  }
   if (clash) {
     return { ok: false, error: "เบอร์นี้ถูกใช้กับบัญชีอื่นแล้ว" };
   }

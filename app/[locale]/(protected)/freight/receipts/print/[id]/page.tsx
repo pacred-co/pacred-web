@@ -288,11 +288,14 @@ export default async function FreightReceiptPrintPage({
     // tb_corporate WHERE rID. PostgREST cannot express the multi-table
     // join in one select, so it is the same sequence of lookups the
     // PHP effectively does.
-    const { data: receipt } = await admin
+    const { data: receipt, error: receiptErr } = await admin
       .from("tb_receipt")
       .select("rdate, userid")
       .eq("rid", ID)
       .maybeSingle<{ rdate: string | null; userid: string }>();
+    if (receiptErr) {
+      console.error(`[tb_receipt list] failed`, { code: receiptErr.code, message: receiptErr.message });
+    }
 
     // printReceiptF.php L53: `if ($result->num_rows > 0)` — skip a
     // receipt id that does not exist.
@@ -305,13 +308,16 @@ export default async function FreightReceiptPrintPage({
     // owner; the Pacred port enforces it server-side).
     if (receipt.userid !== userID) continue;
 
-    const { data: userRow } = await admin
+    const { data: userRow, error: userRowErr } = await admin
       .from("tb_users")
       .select("username, userlastname")
       .eq("userid", receipt.userid)
       .maybeSingle<{ username: string | null; userlastname: string | null }>();
+    if (userRowErr) {
+      console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
+    }
 
-    const { data: corpRow } = await admin
+    const { data: corpRow, error: corpRowErr } = await admin
       .from("tb_corporate")
       .select("corporatename, corporatenumber, corporateaddress")
       .eq("userid", receipt.userid)
@@ -320,6 +326,9 @@ export default async function FreightReceiptPrintPage({
         corporatenumber: string | null;
         corporateaddress: string | null;
       }>();
+    if (corpRowErr) {
+      console.error(`[tb_corporate list] failed`, { code: corpRowErr.code, message: corpRowErr.message });
+    }
 
     const rowMain: ReceiptRow = {
       rdate: receipt.rdate,
@@ -336,7 +345,7 @@ export default async function FreightReceiptPrintPage({
     };
     // printReceiptF.php SELECTs reCompNumber / reCompName / reCompAddress
     // from tb_receipt — fetch them (the receipt-level company override).
-    const { data: reComp } = await admin
+    const { data: reComp, error: reCompErr } = await admin
       .from("tb_receipt")
       .select("recompnumber, recompname, recompaddress")
       .eq("rid", ID)
@@ -345,6 +354,9 @@ export default async function FreightReceiptPrintPage({
         recompname: string | null;
         recompaddress: string | null;
       }>();
+    if (reCompErr) {
+      console.error(`[tb_receipt list] failed`, { code: reCompErr.code, message: reCompErr.message });
+    }
     rowMain.recompnumber = reComp?.recompnumber ?? "";
     rowMain.recompname = reComp?.recompname ?? "";
     rowMain.recompaddress = reComp?.recompaddress ?? "";
@@ -373,14 +385,17 @@ export default async function FreightReceiptPrintPage({
             "222/1 หมู่4 หมู่บ้านลัดดาลม อีลี่ แกรนต์ ตำบล/แขวง บางขุนกอง อำเภอ/เขต บางกรวย จังหวัด นนทบุรี 11130";
         }
         // printReceiptF.php L76-82 — fall back to the main address.
-        const { data: addrRow } = await admin
+        const { data: addrRow, error: addrRowErr } = await admin
           .from("tb_address_main")
           .select("addressid")
           .eq("userid", rowMain.userid)
           .maybeSingle<{ addressid: number }>();
+        if (addrRowErr) {
+          console.error(`[tb_address_main list] failed`, { code: addrRowErr.code, message: addrRowErr.message });
+        }
         let fullAddress = "";
         if (addrRow?.addressid != null) {
-          const { data: addr } = await admin
+          const { data: addr, error: addrErr } = await admin
             .from("tb_address")
             .select(
               "addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel",
@@ -394,6 +409,9 @@ export default async function FreightReceiptPrintPage({
               addresszipcode: string;
               addresstel: string;
             }>();
+          if (addrErr) {
+            console.error(`[tb_address list] failed`, { code: addrErr.code, message: addrErr.message });
+          }
           if (addr) {
             // CONCAT(addressNo,' ตำบล/แขวง ',…) — printReceiptF.php L76.
             fullAddress =
@@ -452,10 +470,13 @@ export default async function FreightReceiptPrintPage({
     // tb_wallet_hs join (status=2, type<>5) pulls `amount` — the slip
     // amount actually paid for each forwarder line.
     // 1. the receipt's item fIDs (tb_receipt_item).
-    const { data: itemLinks } = await admin
+    const { data: itemLinks, error: itemLinksErr } = await admin
       .from("tb_receipt_item")
       .select("fid")
       .eq("rid", ID);
+    if (itemLinksErr) {
+      console.error(`[tb_receipt_item list] failed`, { code: itemLinksErr.code, message: itemLinksErr.message });
+    }
     const fIds = Array.from(
       new Set(((itemLinks ?? []) as { fid: number }[]).map((r) => r.fid)),
     );
@@ -464,20 +485,26 @@ export default async function FreightReceiptPrintPage({
     if (fIds.length > 0) {
       // tb_forwarder — the line columns the receipt table renders +
       // the price columns the rollup sums.
-      const { data: fRows } = await admin
+      const { data: fRows, error: fRowsErr } = await admin
         .from("tb_forwarder")
         .select(
           "id, fpriceupdate, fshippingservice, ftransportpricechnthb, pricecrate, priceother, fdiscount, ftotalprice, ftransportprice, famount, fvolume, fweight, ftrackingchn, userid",
         )
         .in("id", fIds);
+      if (fRowsErr) {
+        console.error(`[tb_forwarder list] failed`, { code: fRowsErr.code, message: fRowsErr.message });
+      }
 
       // tb_wallet_hs — the paid-slip amount per forwarder line
       // (refOrder=f.ID, status=2, type<>5, userID=f.userID).
-      const { data: walletRows } = await admin
+      const { data: walletRows, error: walletRowsErr } = await admin
         .from("tb_wallet_hs")
         .select("reforder, amount, status, type, userid")
         .in("reforder", fIds.map((n) => String(n)))
         .eq("status", "2");
+      if (walletRowsErr) {
+        console.error(`[tb_wallet_hs list] failed`, { code: walletRowsErr.code, message: walletRowsErr.message });
+      }
 
       const walletByRef = new Map<string, number>();
       for (const w of (walletRows ?? []) as {

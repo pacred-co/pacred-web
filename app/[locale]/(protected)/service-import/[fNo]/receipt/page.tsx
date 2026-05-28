@@ -25,13 +25,16 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
   const existingInvoice = taxInv.ok ? taxInv.data : null;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   let companyName    = "";
   let companyAddress = "";
   let buyerTaxId     = "";
   let buyerName      = "";
   if (user) {
-    const { data: profile } = await supabase
+    const { data: profile, error: profileErr } = await supabase
       .from("profiles")
       .select("first_name, last_name, account_type, company_name, tax_id")
       .eq("id", user.id)
@@ -42,13 +45,16 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
         company_name: string | null;
         tax_id:       string | null;
       }>();
+    if (profileErr) {
+      console.error(`[profiles list] failed`, { code: profileErr.code, message: profileErr.message });
+    }
     buyerName = profile?.company_name
       ?? `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim();
     buyerTaxId = profile?.tax_id ?? "";
     companyName = profile?.company_name ?? "";
 
     if (profile?.account_type === "juristic") {
-      const { data: corp } = await supabase
+      const { data: corp, error: corpErr } = await supabase
         .from("corporate")
         .select("company_name, tax_id, company_address")
         .eq("profile_id", user.id)
@@ -57,6 +63,9 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
           tax_id:          string | null;
           company_address: string | null;
         }>();
+      if (corpErr) {
+        console.error(`[corporate list] failed`, { code: corpErr.code, message: corpErr.message });
+      }
       if (corp) {
         if (corp.company_name)    { buyerName = corp.company_name; companyName = corp.company_name; }
         if (corp.tax_id)          buyerTaxId = corp.tax_id;
@@ -79,17 +88,20 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
     created_at: string;
     paid_at:    string | null;
   };
-  const { data: costAdjRaw } = await supabase
+  const { data: costAdjRaw, error: costAdjRawErr } = await supabase
     .from("forwarder_cost_adjustments")
     .select("id, kind, amount_thb, note, status, created_at, paid_at")
     .eq("forwarder_id", f.id)
     .neq("status", "cancelled")
     .order("created_at", { ascending: false })
     .returns<CostAdjRow[]>();
+  if (costAdjRawErr) {
+    console.error(`[forwarder_cost_adjustments list] failed`, { code: costAdjRawErr.code, message: costAdjRawErr.message });
+  }
 
   // V-A6: WHT info banner (juristic customer who withholds tax — see ADR-0015).
   // RLS allows the customer to read OWN withholding_tax_entries row.
-  const { data: whtRow } = await supabase
+  const { data: whtRow, error: whtRowErr } = await supabase
     .from("withholding_tax_entries")
     .select("id, cert_status, wht_rate_pct, wht_amount_thb, net_expected_thb, gross_invoice_thb")
     .eq("forwarder_f_no", f.f_no ?? fNo)
@@ -101,6 +113,9 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
       net_expected_thb:   number;
       gross_invoice_thb:  number;
     }>();
+  if (whtRowErr) {
+    console.error(`[withholding_tax_entries list] failed`, { code: whtRowErr.code, message: whtRowErr.message });
+  }
   const costAdjustments = costAdjRaw ?? [];
   const totalUnpaidExtra = costAdjustments
     .filter((r) => r.status === "unpaid")

@@ -64,15 +64,21 @@ export default async function AdminFreightQuotesListPage({
       `quote_no.ilike.%${q}%,buyer_name_snapshot.ilike.%${q}%,buyer_tax_id_snapshot.ilike.%${q}%`,
     );
   }
-  const { data: rows } = await query;
+  const { data: rows, error: rowsErr } = await query;
+  if (rowsErr) {
+    console.error(`[freight_quotes list] failed`, { code: rowsErr.code, message: rowsErr.message });
+  }
   const quotes = (rows ?? []) as QuoteRow[];
 
   // Counts per status for badges.
   const counts: Record<QuoteStatus, number> = {} as Record<QuoteStatus, number>;
   for (const s of QUOTE_STATUSES) counts[s] = 0;
-  const { data: countRows } = await admin
+  const { data: countRows, error: countRowsErr } = await admin
     .from("freight_quotes")
     .select("status");
+  if (countRowsErr) {
+    console.error(`[freight_quotes list] failed`, { code: countRowsErr.code, message: countRowsErr.message });
+  }
   for (const r of (countRows ?? []) as Array<{ status: QuoteStatus }>) {
     counts[r.status] = (counts[r.status] ?? 0) + 1;
   }
@@ -81,7 +87,7 @@ export default async function AdminFreightQuotesListPage({
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · FREIGHT</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · FREIGHT</p>
           <h1 className="mt-1 text-2xl font-bold">ใบเสนอราคา (Freight quotes)</h1>
           <p className="text-xs text-muted mt-1">
             workflow: draft → รออนุมัติ → อนุมัติ → ส่ง → ลูกค้ายืนยัน · approve/reject = super only

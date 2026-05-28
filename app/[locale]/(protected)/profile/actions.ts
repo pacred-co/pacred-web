@@ -91,11 +91,14 @@ export async function updateProfileAction(
   const admin = createAdminClient();
 
   // profile.php L24-27 — account still exists?
-  const { data: exists } = await admin
+  const { data: exists, error: existsErr } = await admin
     .from("tb_users")
     .select("id")
     .eq("userid", memberCode)
     .maybeSingle();
+  if (existsErr) {
+    console.error(`[tb_users list] failed`, { code: existsErr.code, message: existsErr.message });
+  }
   if (!exists) {
     return { sweetalert: "noAccount" };
   }
@@ -103,11 +106,14 @@ export async function updateProfileAction(
   // profile.php L29-32 — the current phone on file (legacy $userTel2 =
   // getMessage($userTel), i.e. the SESSION phone). Read it so the
   // dedupe-check can exclude the customer's own row.
-  const { data: currentRow } = await admin
+  const { data: currentRow, error: currentRowErr } = await admin
     .from("tb_users")
     .select("usertel")
     .eq("userid", memberCode)
     .maybeSingle<{ usertel: string | null }>();
+  if (currentRowErr) {
+    console.error(`[tb_users list] failed`, { code: currentRowErr.code, message: currentRowErr.message });
+  }
   const currentTel = currentRow?.usertel ?? "";
 
   // profile.php L29-32 — phone uniqueness: any OTHER user holding this
@@ -183,11 +189,14 @@ export async function checkEmailTaken(userEmail: string): Promise<string> {
 
   // The current email on file — the legacy excludes it via
   // `userEmail<>${_SESSION['userEmail']}`.
-  const { data: ownRow } = await admin
+  const { data: ownRow, error: ownRowErr } = await admin
     .from("tb_users")
     .select("useremail")
     .eq("userid", memberCode)
     .maybeSingle<{ useremail: string | null }>();
+  if (ownRowErr) {
+    console.error(`[tb_users list] failed`, { code: ownRowErr.code, message: ownRowErr.message });
+  }
   const ownEmail = (ownRow?.useremail ?? "").toLowerCase();
 
   let query = admin
@@ -222,11 +231,14 @@ export async function checkTelTaken(userTel: string): Promise<string> {
   const memberCode = data.profile.member_code ?? "";
   const admin = createAdminClient();
 
-  const { data: ownRow } = await admin
+  const { data: ownRow, error: ownRowErr } = await admin
     .from("tb_users")
     .select("usertel")
     .eq("userid", memberCode)
     .maybeSingle<{ usertel: string | null }>();
+  if (ownRowErr) {
+    console.error(`[tb_users list] failed`, { code: ownRowErr.code, message: ownRowErr.message });
+  }
   const ownTel = ownRow?.usertel ?? "";
 
   let query = admin

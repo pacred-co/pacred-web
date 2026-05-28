@@ -91,7 +91,7 @@ export default async function AdminCommissionWithdrawalDetailPage({
 
   const admin = createAdminClient();
 
-  const { data: headerRaw } = await admin
+  const { data: headerRaw, error: headerRawErr } = await admin
     .from("commission_withdrawals")
     .select(`
       id, withdrawal_no, status, earner_admin_id, role_kind, title,
@@ -103,6 +103,10 @@ export default async function AdminCommissionWithdrawalDetailPage({
     `)
     .eq("id", id)
     .maybeSingle();
+  if (headerRawErr) {
+    console.error(`[commission_withdrawals lookup] failed`, { code: headerRawErr.code, message: headerRawErr.message, details: headerRawErr.details, hint: headerRawErr.hint });
+    throw new Error(`Failed to load commission_withdrawals (${headerRawErr.code ?? "unknown"}): ${headerRawErr.message}`);
+  }
   if (!headerRaw) notFound();
   type RawHeader = Omit<HeaderRow, "earner"> & {
     earner: HeaderRow["earner"] | HeaderRow["earner"][] | null;
@@ -113,7 +117,7 @@ export default async function AdminCommissionWithdrawalDetailPage({
     earner: Array.isArray(raw.earner) ? raw.earner[0] ?? null : raw.earner,
   };
 
-  const { data: itemsRaw } = await admin
+  const { data: itemsRaw, error: itemsRawErr } = await admin
     .from("commission_withdrawal_items")
     .select(`
       id, included_amount_thb,
@@ -122,6 +126,9 @@ export default async function AdminCommissionWithdrawalDetailPage({
       )
     `)
     .eq("commission_withdrawal_id", id);
+  if (itemsRawErr) {
+    console.error(`[commission_withdrawal_items list] failed`, { code: itemsRawErr.code, message: itemsRawErr.message });
+  }
   type RawItem = Omit<ItemRow, "accrual"> & {
     accrual: ItemRow["accrual"] | ItemRow["accrual"][] | null;
   };
@@ -131,13 +138,16 @@ export default async function AdminCommissionWithdrawalDetailPage({
   }));
 
   // Audit trail
-  const { data: auditRaw } = await admin
+  const { data: auditRaw, error: auditRawErr } = await admin
     .from("admin_audit_log")
     .select("id, action, created_at, admin:profiles!admin_id ( member_code, first_name, last_name )")
     .eq("target_type", "commission_withdrawal")
     .eq("target_id", id)
     .order("created_at", { ascending: false })
     .limit(50);
+  if (auditRawErr) {
+    console.error(`[admin_audit_log list] failed`, { code: auditRawErr.code, message: auditRawErr.message });
+  }
   type AuditRaw = {
     id: string; action: string; created_at: string;
     admin: { member_code: string | null; first_name: string | null; last_name: string | null } | { member_code: string | null; first_name: string | null; last_name: string | null }[] | null;

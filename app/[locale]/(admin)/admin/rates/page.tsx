@@ -15,7 +15,7 @@ type Settings = {
 
 export default async function AdminRatesPage() {
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("settings")
     .select(`
       yuan_rate, service_fee,
@@ -26,6 +26,10 @@ export default async function AdminRatesPage() {
     .eq("id", 1)
     .maybeSingle();
 
+  if (error) {
+    console.error(`[settings lookup] failed`, { code: error.code, message: error.message, details: error.details, hint: error.hint });
+    throw new Error(`Failed to load settings (${error.code ?? "unknown"}): ${error.message}`);
+  }
   if (!data) notFound();
   const s = data as Settings;
 
@@ -34,7 +38,7 @@ export default async function AdminRatesPage() {
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
           <h1 className="mt-1 text-2xl font-bold">อัตราค่าบริการ</h1>
           <p className="mt-1 text-sm text-muted">อัตราปัจจุบันที่ใช้คำนวณราคาออเดอร์ใหม่</p>
         </div>

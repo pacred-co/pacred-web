@@ -1,62 +1,159 @@
-# D1 Faithful-Port Plan — production launch (updated 2026-05-24)
+# D1 Faithful-Port Plan — production launch this week
 
-> **Owner directive (2026-05-19, refreshed 2026-05-24).** Pacred's customer portal + admin back-office become a **1:1 transcription** of the legacy PCS Cargo PHP system — rebuilt in Next.js, rebranded `PCS` → `PR`, **identical to the original 100%**.
+> **Owner directive (2026-05-19).** Pacred's customer portal + admin back-office
+> become a **1:1 transcription** of the legacy PCS Cargo PHP system — rebuilt in
+> Next.js, rebranded `PCS` → `PR`, **identical to the original 100%**.
+> **`faithful-port` is the real production branch — it launches to real
+> customers + staff THIS WEEK.**
 >
-> **The 1:1 ports ship to `main` first.** V3 enhancements ([Poom-pacred](#branch-model)) layer on after.
->
-> This doc is the plan + branch model + work-split **everyone follows**. The *how* (the transcription method) → [`faithful-port-transcription.md`](faithful-port-transcription.md). The *what's missing* deep audit → [`d1-deep-audit-2026-05-24.md`](../research/d1-deep-audit-2026-05-24.md).
+> This doc is the plan + branch model + work-split **everyone follows**. The
+> *how* (the transcription method) →
+> [`faithful-port-transcription.md`](faithful-port-transcription.md).
 
 ---
 
-## Branch model (updated 2026-05-24 — `faithful-port` deleted · V3 unlocked)
+## 🔴 2026-05-20 ค่ำ — Option C: spine retirement (ภูม → พี่เดฟ heads-up)
 
-| Branch | Owner | Role | Status |
+ภูม audited `/admin/warehouse/containers` (the "spine" — pre-D1 wave-1
+T-P2/CT-4 redesign with `cargo_containers`/`cargo_shipments` and the
+new status enum `packing/sealed/in_transit/arrived/unloading/closed`).
+The audit found a **complete gap** vs legacy `member/pcs-admin/report-cnt.php`
+(2487 LOC) + `top-menu-report.php` (the 11-button audit menu):
+
+| Element | Legacy `report-cnt.php` | Spine | Gap |
 |---|---|---|---|
-| **`main`** | ก๊อต gate | 🚀 **PRODUCTION** — Vercel auto-deploy | 🟢 live |
-| **`podeng`** | ปอน | Customer-facing **frontend** + **brand SOT (theme/images/icons)** → merged into `dave-pacred` | 🟢 active |
-| **`dave-pacred`** | เดฟ | 1:1 **customer-backend** portal port (`(protected)/*`) + integrates ปอน frontend → merges to `main` | 🟢 active |
-| **`Poom-pacred`** | ภูม | **V3 backend primary lane (UNLOCKED 2026-05-24)** — DPX ERP enhancements; merges after 1:1 ships | 🟢 active |
-| **`Poom`** | ภูม | **V3 backend secondary lane (UNLOCKED — was frozen)** | 🟢 active |
-| **`dave`** | (เดฟ future) | **V3 full-site lane** — activates AFTER `dave-pacred` ships to main; combo with Poom-pacred + podeng | 💤 dormant |
+| 11-button top menu (ประวัติเข้าโกดังไทย · รายงานตู้ · หมายเหตุ × 2 · ไม่ใส่X × 6 · เครดิตเกินกำหนด) | ✅ | ❌ | 🔴 |
+| Status tabs (รอเข้าโกดังไทย / เข้าโกดังไทยแล้ว) | ✅ (`fStatus<4` vs `>3`) | ❌ (different enum) | 🔴 |
+| Date-range + actionPay search form | ✅ | ❌ (only `?q=` code) | 🔴 |
+| Money columns (ต้นทุน · ราคาขาย · กำไร · role-gated CEO/Manager/QA/Accounting/IT) | ✅ | ❌ | 🔴 |
+| ทำรายการจ่ายเงินตู้ + ประวัติรายการจ่ายเงินตู้ | ✅ (`tb_cnt`/`tb_cnt_item`) | ❌ | 🔴 |
+| Data source | `tb_forwarder` (legacy, ported via migration 0081) | `cargo_containers` (spine model) | 🔴 |
 
-**Flow (post-2026-05-24):**
-```
-ปอน (podeng)      ─┐
-                   ├─► เดฟ merges into dave-pacred → verify → push main (ก๊อต gates)
-ก๊อต (admin 1:1) ─┘                                                  ▲
-                                                                      │
-ภูม (Poom-pacred V3) ── continues V3, merges in after 1:1 ships ─────┘
-                                                                      │
-(future) เดฟ on dave V3 full ── combo with Poom-pacred + podeng ─────┘
-```
+**Decision (Option C, owner-approved 2026-05-20 ค่ำ):** retire the spine
+page; the canonical รายการตู้ becomes a faithful port of `report-cnt.php`
+reading `tb_forwarder` directly with `GROUP BY fCabinetNumber`.
 
-**Deleted on 2026-05-24:** `faithful-port` (no longer the integration target — direct-to-main pattern won out during the OTP emergency week) · all `claude/*` remotes (work merged or stale) · `hotfix/auth-unblock` (cherry-picked as `5c6bb8a`).
+**What landed (Wave 1, this commit chain):**
+- New `<TopMenuReport>` component (`components/admin/top-menu-report.tsx`) —
+  the 11-button audit menu, badge counts queried from `tb_forwarder`.
+- New `/admin/report-cnt` — faithful port of `report-cnt.php` (status tabs,
+  transport-mode tabs, date+actionPay search, totals row, money columns
+  gated to `super`/`ops`/`accounting`).
+- New `/admin/forwarder-action?action=…` — 9 audit-queue stubs with the
+  legacy SQL condition wired (Note / notPhoto / notPortage / notContainer /
+  NotDateContainerClose / fCreditError live; NoteShop + NotShipFree* need
+  `tb_shop` / ZIP-list join → Wave 2).
+- New `/admin/forwarder-import-warehouse` — ประวัติเข้าโกดังไทย stub
+  reading `tb_forwarder` rows with `fStatus≥4`.
+- Tombstoned `/admin/warehouse/containers` → 308-redirect to
+  `/admin/report-cnt`. Sidebar `warehouse.containers` repointed.
+  Dashboard top-strip "🚛 รายการตู้" repointed.
 
-**Branding (owner directive 2026-05-24):** All theme/images/icons follow **ปอน's `podeng` style** (Tailwind + Pacred red `#B30000` + Prompt + lucide). Customer code = **`PR…`** (e.g. `PR201`). 1:1 ports legacy workflow + markup + SQL — visual treatment rebranded to podeng.
+**What's NOT touched (heads-up for พี่เดฟ):**
+- `cargo_containers` + `cargo_shipments` tables (migration 0033) — still
+  live. The detail routes `/admin/warehouse/containers/[code]/*` (scan-form,
+  sack-form, status-form, link-form, manual-shipment-form, hs-lines-editor)
+  are unchanged; ภูม did NOT delete the scan flow. They're reachable via
+  direct URL but no longer in the sidebar.
+- Migration: no schema change in this wave. `tb_forwarder` already has all
+  the columns we need (fCabinetNumber, fStatus, fTransportType, fDateStatus4,
+  fCostTotalPrice, fTotalPrice, fCredit, fCreditDate, fNote, fCover).
 
-**Customer data + storage:** Already in Supabase S3 production (ภูม uploaded `pcsracgo/public/member` files). DB = `yzljakczhwrpbxflnmco`. Internal table conflict (rebuilt-era vs `tb_*`) is OUR cleanup task — NOT a legacy migration gap.
+**Wave 2 (next):**
+- `ทำรายการจ่ายเงินตู้` form action — POST insert into `tb_cnt` /
+  `tb_cnt_item` / `tb_cnt_pay_idorco` / `tb_cnt_pay_trackingchn` (legacy
+  flow from `report-cnt.php` L4-101).
+- `NoteShop` queue — join `tb_forwarder` × `tb_shop`.
+- `NotShipFree` + `NotShipFreeError` — ZIP-code list from legacy free-shipping
+  config (need to locate the source — likely `tb_shipfree` or similar).
+- Decision on retiring `cargo_containers` + scan flow vs keeping it as
+  Pacred-extension (warehouse internal use). **พี่เดฟ-decision pending.**
 
-Everyone opens **their own** branch and works there. Sync daily; never push half-built work to `main`. Spawned worktree agents must `git fetch origin && git reset --hard origin/<your-branch>` before working.
+**Question for พี่เดฟ:** the scan flow (`/admin/warehouse/containers/[code]/scan-form`
+etc.) is genuinely Pacred-original (no legacy counterpart in PHP — the
+PHP barcode flow is at `member/pcs-admin/barcode-*.php` reading
+`tb_forwarder` directly). Should we (a) retire it, (b) port the PHP
+barcode flow over and absorb the spine's scan helpers, or (c) keep it
+as a Pacred-extension internal tool? Flagging for review.
 
-### Audit reports (2026-05-24)
-- 🔍 [`d1-deep-audit-2026-05-24.md`](../research/d1-deep-audit-2026-05-24.md) — top-10 gap summary + sprint sequence
-- 📑 [`d1-audit-pcscargo-2026-05-24.md`](../research/d1-audit-pcscargo-2026-05-24.md) — exhaustive pcscargo.co.th .php sweep
-- 📑 [`d1-audit-backoffice-2026-05-24.md`](../research/d1-audit-backoffice-2026-05-24.md) — backoffice.pcscargo.co.th MVC admin
-- 📑 [`d1-audit-pcsseafreight-2026-05-24.md`](../research/d1-audit-pcsseafreight-2026-05-24.md) — pcs-seafreight.com freight (V3 reference)
+### 🟢 2026-05-20 EVENING — Wave 1/2/3 + audits + env switch (8 commits)
 
-### Gap ownership map (owner-assigned 2026-05-24)
-| # | Gap | Owners |
-|---|---|---|
-| 1 | Google Sheets sync (CTT/MX/MK/Sang) | เดฟ + ก๊อต + ภูม |
-| 2 | JMF / TTP / CN forwarder partner APIs | ก๊อต |
-| 3 | LINE Notify per-user OAuth + cron | เดฟ |
-| 4 | CargoThai PO sync | เดฟ |
-| 5 | TAMIT (Thai ID) verification | เดฟ |
-| 6 | MOMO LCL sack tracking | ภูม |
-| 7 | Barcode + Excel bulk import | เดฟ |
-| 8 | 40+ admin reports | เดฟ + ก๊อต + ภูม |
-| 9 | Customer image migration | ✅ ภูม DONE (S3 production) |
-| 10 | WP blog/news CMS | เดฟ + ปอน |
+ภูม ran a 12-hour Phase 1 push. Cumulative state as of `90c1dbe`:
+
+**Shipped:**
+- Wave 1: `/admin/report-cnt` faithful port + `<TopMenuReport>` 11-button menu + 9 audit-queue stubs + spine list tombstone (`967f2dc`)
+- Wave 2: 8 barcode routes (cargo + driver) + gateway routing + cnt-payment server action + cnt-hs history + 3 audit queues wired (NoteShop→tb_header_order · NotShipFree×2 with 41-ZIP list) + 8 spine scan routes deleted (`ffdad6c`)
+- Wave 3 mobile P0: DataTables-Responsive + iOS auto-zoom + Quagga2 install (`81f80b1`)
+- Schema bundle `supabase/bundle/prod-fresh.sql` (891 KB · 117 legacy tables verified)
+- Env switch: dev (pprrlabgebrnocthwdmg) → prod (yzljakczhwrpbxflnmco) · publishable-key format · service_role JWT kept per ภูม
+- 4 audit docs: fidelity-2026-05-20 · mobile-verify-2026-05-20 · pcs-complete-analysis · pcs-admin-roles · pcs-business-flow · pcs-master-synthesis (P0/P1/P2 list)
+- พี่เดฟ's "real latest" pcscargo source = byte-identical (16,184 PHP · 0 hash diffs). Value = the 5 markdown analyses in `N'POOM - PCS LEARNNING/`.
+
+**Wave 4 backlog (per master-synthesis):** 6 P0 items remain · ~14-21 ชม
+1. `/admin/forwarders` rewrite → read tb_forwarder (currently reads rebuilt `forwarders`) — most-used screen, biggest operational risk · 4-6 ชม
+2. QA module rebuild (tombstoned currently) · 6-8 ชม
+3. Forwarder 10%-over-preview re-confirm gate (surprise-billing risk) · 2-3 ชม
+4. driver role phase-unlock (sidebar invisible) · 30 นาที
+5. qa role enum add (no QA login without super) · 1 ชม
+6. sales_admin vs sales clarify · 30 นาที (or already settled by Q3 agent tonight)
+
+**Wave 3D unfinished:** 14 of 19 cargo_* consumers still reference retired tables · `lib/warehouse/*` helpers undeleted · migration `0090` DROP commented. Prerequisite before applying 0090 to prod.
+
+### ✅ 2026-05-20 ค่ำ — DECISION: Option A (พี่เดฟ confirmed · ภูม locked)
+
+**Decision:** **Option A — Retire spine wholesale + port legacy `barcode-*.php`
+1:1.** ภูม consulted with พี่เดฟ — พี่เดฟ confirms "just match what พี่ป๊อป
+wants" (faithful 100% per owner rule). ภูม verified Supabase
+`cargo_containers` / `cargo_shipments` / `cargo_sacks` are empty (no
+production data to migrate).
+
+**Wave 2 scope (split across 5 parallel agents on 2026-05-20 ค่ำ):**
+
+| Agent | Files | Source | Destination |
+|---|---|---|---|
+| 1 | 4 cargo barcode pages | `barcode-c-{all,from,import,prepare}.php` (~1500L) | `/admin/barcode/cargo/{all,from,import,prepare}` |
+| 2 | 4 driver barcode pages | `barcode-d-{all,from,import,prepare}.php` (~530L) | `/admin/barcode/driver/{all,from,import,prepare}` |
+| 3 | Gateway + menu | `gateway.php` (213L) + new `<TopMenuBarcode>` | `/admin/barcode/gateway` + `components/admin/top-menu-barcode.tsx` |
+| 4 | Cnt-payment + history | `report-cnt.php` L4-101 (POST form) + `cnt-hs.php` (1861L) | server action on `/admin/report-cnt` + new `/admin/cnt-hs` page |
+| 5 | Remaining audit queues | `forwarder-action.php` (NoteShop · NotShipFree · NotShipFreeError conditions) | 3 wave-1 stubs in `/admin/forwarder-action` |
+
+**Wave 2D cleanup (after agents complete):**
+- DROP tables: `cargo_containers` · `cargo_shipments` · `cargo_sacks`
+  (migration `0090_drop_spine_tables.sql`).
+- Delete spine routes under `/admin/warehouse/containers/[code]/*`
+  (scan-form, sack-form, status-form, link-form, manual-shipment-form,
+  hs-lines-editor, unlink-button — ~1100 LOC).
+- Delete `lib/warehouse/{containers,shipments,sacks,bulletin,cargo-type,
+  code-gen,lifecycle,tracking}.ts` (~800 LOC) + 4 `.test.ts` files.
+- Update sidebar: add `/admin/barcode/cargo/all` + `/admin/barcode/driver/all`
+  leaves; remove dead `warehouse.containers` reference.
+- pnpm tsc + lint + smoke routes.
+
+After Wave 2D: there is exactly ONE source of truth for container/scan
+data — `tb_forwarder` — read by `/admin/report-cnt` (faithful list) and
+written by `/admin/barcode/*` (faithful scan).
+
+---
+
+---
+
+## Branch model
+
+| Branch | Role |
+|---|---|
+| **`faithful-port`** | 🚀 **PRODUCTION** — the real owner project, launches this week. Only tested, integrated 1:1 work lands here. |
+| **`dave-pacred`** | เดฟ's 1:1 working branch **+ the integration branch** — `Poom-pacred` syncs here; merge + full test here *before* `faithful-port`. |
+| **`Poom-pacred`** | ภูม's 1:1 working branch (admin back-office). push / pull-sync → `dave-pacred`. |
+| **`podeng`** | ปอน's front-end branch (marketing / landing + the brand-asset swap) → merges into `faithful-port`. |
+| `dave` · `Poom` | 🧊 **FROZEN** — the pre-pivot Next.js rebuild ("V3" / Track A). Untouched; resumed only after the faithful port ships. |
+
+**Flow:** `Poom-pacred` → `dave-pacred` (integrate + full test) → `faithful-port`
+(production) → ก๊อต gate → `main` (Vercel deploy). ปอน's `podeng` → `faithful-port`.
+
+Everyone opens **their own** branch and works there. Sync daily; never push
+half-built work to `faithful-port`. Spawned worktree agents must
+`git fetch origin && git reset --hard origin/<your-branch>` before working
+(they branch from a stale `origin/main` otherwise).
 
 ---
 
@@ -156,14 +253,14 @@ connection · [F] TODO list.
 
 ---
 
-## Work-split — parallel, no collision (updated 2026-05-24)
+## Work-split — parallel, no collision
 
 | Who | Owns | Branch |
 |---|---|---|
-| **เดฟ** | Drive the port · 1:1 **customer-backend** portal (`(protected)/*` screens + their Server Actions onto `tb_*`) · cross-cutting infra (vendor JS · legacy-CSS scoping) · integrate ปอน's frontend · merge to main | `dave-pacred` |
-| **ก๊อต** | **Admin back-office 1:1 lane** — drives the 187 `pcs-admin/*.php` transcription (now ก๊อต-led, was ภูม pre-2026-05-24) · fidelity review · TAMIT/JMF watch · production-launch gate | (own commits) |
-| **ปอน** | **Customer-portal frontend** transcription (coordinate with เดฟ — one owner per screen) · front-end (marketing/landing) in owner's style · **brand-asset swap** | `podeng` |
-| **ภูม** | **V3 backend continuation (UNLOCKED 2026-05-24)** — DPX ERP enhancements, wave-17+ admin features; merges *after* 1:1 ships to main | `Poom-pacred` |
+| **เดฟ** | Drive the port · the **customer portal** screens · the **cross-cutting infra** (vendor JS · the customer-side unwired Server Actions) · integrate at `dave-pacred` · coordinate the `faithful-port` launch | `dave-pacred` |
+| **ภูม** | Transcribe the **admin back-office** — 187 `pcs-admin/*.php` screens · the admin-side Server Actions · split screen-batches to spawned agents | `Poom-pacred` |
+| **ปอน** | **Customer-portal** screen transcription (coordinate with เดฟ — one owner per screen) · the **front-end** (marketing / landing) in the owner's style · **the brand-asset swap** — sweep every legacy-PCS icon / emoji / logo placeholder and replace with the proper `PR` asset (see "Brand assets") | `podeng` |
+| **ก๊อต** | **Fidelity review** — every screen 1:1 vs the legacy original · the borrowed-API (TAMIT) watch · **confirm the `tb_*` dev↔prod Supabase wiring** · the production-launch gate | review |
 
 **One owner per screen** — coordinate via เดฟ before claiming a batch, so two
 people never transcribe the same file. ภูม keeps ปอน informed so the data

@@ -9,7 +9,10 @@ export default async function ServiceOrderCartPage() {
   const cart    = cartRes.ok ? (cartRes.data ?? []) : [];
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
 
   // Default address (pre-fill checkout form)
   const { data: defaultAddress } = user
@@ -23,11 +26,14 @@ export default async function ServiceOrderCartPage() {
     : { data: null };
 
   // Yuan rate + service fee from settings singleton
-  const { data: settings } = await supabase
+  const { data: settings, error: settingsErr } = await supabase
     .from("settings")
     .select("yuan_rate, service_fee")
     .eq("id", 1)
     .maybeSingle<{ yuan_rate: number; service_fee: number }>();
+  if (settingsErr) {
+    console.error(`[settings list] failed`, { code: settingsErr.code, message: settingsErr.message });
+  }
   const yuanRate    = Number(settings?.yuan_rate ?? 5);
   const serviceFee  = Number(settings?.service_fee ?? 50);
 

@@ -172,7 +172,7 @@ export async function adminChargeToCredit(
     //    reference. A bare "charge ฿500 reason=manual" has no anchor
     //    to dedupe against, so we always insert in that case.
     if (d.reference_type && d.reference_id) {
-      const { data: existingTx } = await admin
+      const { data: existingTx, error: existingTxErr } = await admin
         .from("wallet_transactions")
         .select("id, amount")
         .eq("profile_id",     d.profile_id)
@@ -181,6 +181,9 @@ export async function adminChargeToCredit(
         .eq("kind",           "credit_charge")
         .eq("status",         "completed")
         .maybeSingle<{ id: string; amount: number }>();
+      if (existingTxErr) {
+        console.error(`[wallet_transactions list] failed`, { code: existingTxErr.code, message: existingTxErr.message });
+      }
       if (existingTx) {
         return {
           ok: true,

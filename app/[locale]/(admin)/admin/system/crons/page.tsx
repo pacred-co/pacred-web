@@ -69,12 +69,15 @@ export default async function AdminCronHealthPage() {
   // Fetch all invocations from the last 7 days + last 30 invocations PER cron.
   // PostgREST doesn't expose `distinct on`; we fetch the 7-day window and
   // compute last + counts in JS — small dataset for an admin page.
-  const { data: rows7d } = await admin
+  const { data: rows7d, error: rows7dErr } = await admin
     .from("cron_invocations")
     .select("cron_path, fired_at, finished_at, duration_ms, status, result_summary, error_message")
     .gte("fired_at", cutoff7d)
     .order("fired_at", { ascending: false })
     .limit(2000);
+  if (rows7dErr) {
+    console.error(`[cron_invocations list] failed`, { code: rows7dErr.code, message: rows7dErr.message });
+  }
 
   const byPath = new Map<string, InvocationRow[]>();
   for (const r of (rows7d ?? []) as InvocationRow[]) {
@@ -90,12 +93,15 @@ export default async function AdminCronHealthPage() {
     const recent = byPath.get(entry.path) ?? [];
     let last: InvocationRow | null = recent[0] ?? null;
     if (!last) {
-      const { data: olderRows } = await admin
+      const { data: olderRows, error: olderRowsErr } = await admin
         .from("cron_invocations")
         .select("cron_path, fired_at, finished_at, duration_ms, status, result_summary, error_message")
         .eq("cron_path", entry.path)
         .order("fired_at", { ascending: false })
         .limit(1);
+      if (olderRowsErr) {
+        console.error(`[cron_invocations list] failed`, { code: olderRowsErr.code, message: olderRowsErr.message });
+      }
       last = ((olderRows ?? []) as InvocationRow[])[0] ?? null;
     }
     const success7d = recent.filter((r) => r.status === "success").length;
@@ -113,7 +119,7 @@ export default async function AdminCronHealthPage() {
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · system · U4-1</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · system · U4-1</p>
           <h1 className="mt-1 text-2xl font-bold">Cron health</h1>
           <p className="mt-1 text-sm text-muted">
             สถานะ cron ทั้ง {CRON_REGISTRY.length} งาน (last fire · 7-day success rate · last error).

@@ -72,7 +72,7 @@ export default async function BookingConfirmationPage({
   // We restrict the SELECT to the columns we display + never echo any
   // editable PII (just contact_name first-name for the greeting).
   const admin = createAdminClient();
-  const { data: booking } = await admin
+  const { data: booking, error: bookingErr } = await admin
     .from("bookings")
     .select(
       "id, booking_no, status, service_slug, route_slug, transport_mode, " +
@@ -81,6 +81,9 @@ export default async function BookingConfirmationPage({
     )
     .eq("booking_no", bookingNo)
     .maybeSingle<BookingRow>();
+  if (bookingErr) {
+    console.error(`[bookings list] failed`, { code: bookingErr.code, message: bookingErr.message });
+  }
 
   if (!booking) {
     redirect({ href: "/book", locale });
@@ -106,11 +109,14 @@ export default async function BookingConfirmationPage({
     return;
   }
 
-  const { data: options } = await admin
+  const { data: options, error: optionsErr } = await admin
     .from("booking_options")
     .select("option_key, option_label, detail, quantity, line_amount")
     .eq("booking_id", booking.id)
     .order("position", { ascending: true });
+  if (optionsErr) {
+    console.error(`[booking_options list] failed`, { code: optionsErr.code, message: optionsErr.message });
+  }
 
   const cfg = getServiceConfig(booking.service_slug);
   const isTh = locale !== "en";
@@ -187,7 +193,7 @@ export default async function BookingConfirmationPage({
         {/* ── Estimate breakdown (frozen snapshot) ──────────────── */}
         <section className="mt-5 rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
           {/* i18n-key: booking.confirmation.estimate.title */}
-          <p className="text-xs font-semibold tracking-widest text-primary-500">
+          <p className="text-xs font-semibold tracking-widest text-primary-600">
             ราคาประมาณการ
           </p>
 

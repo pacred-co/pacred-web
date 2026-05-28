@@ -79,15 +79,18 @@ export default async function AdminBoardInboxPage({
 
   // ── Items for ME — assigned_to = me OR assigned_role ∈ my roles ───
   // Two queries (OR across two columns is cleaner as a union).
-  const { data: mineRaw } = await admin
+  const { data: mineRaw, error: mineRawErr } = await admin
     .from("work_items")
     .select(selectCols)
     .eq("assigned_to", user.id)
     .in("status", ACTIVE)
     .order("created_at", { ascending: false })
     .limit(300);
+  if (mineRawErr) {
+    console.error(`[work_items list] failed`, { code: mineRawErr.code, message: mineRawErr.message });
+  }
 
-  const { data: deptRaw } = await admin
+  const { data: deptRaw, error: deptRawErr } = await admin
     .from("work_items")
     .select(selectCols)
     .in("assigned_role", roles as WorkAssignableRole[])
@@ -95,6 +98,9 @@ export default async function AdminBoardInboxPage({
     .in("status", ACTIVE)
     .order("created_at", { ascending: false })
     .limit(300);
+  if (deptRawErr) {
+    console.error(`[work_items list] failed`, { code: deptRawErr.code, message: deptRawErr.message });
+  }
 
   const mine = (mineRaw ?? []) as WorkRow[];
   const dept = (deptRaw ?? []) as WorkRow[];
@@ -103,7 +109,7 @@ export default async function AdminBoardInboxPage({
   // Jobs blocked on my DEPT (blocked_on_role ∈ my roles, waiting_reason
   // present).  Excludes jobs already pinned to a specific person — those
   // go in "blocked on me personally".
-  const { data: blockedDeptRaw } = await admin
+  const { data: blockedDeptRaw, error: blockedDeptRawErr } = await admin
     .from("work_items")
     .select(selectCols)
     .in("blocked_on_role", roles as WorkAssignableRole[])
@@ -112,9 +118,12 @@ export default async function AdminBoardInboxPage({
     .in("status", ACTIVE)
     .order("created_at", { ascending: false })
     .limit(300);
+  if (blockedDeptRawErr) {
+    console.error(`[work_items list] failed`, { code: blockedDeptRawErr.code, message: blockedDeptRawErr.message });
+  }
 
   // Jobs blocked on ME personally (a specific person was named).
-  const { data: blockedMeRaw } = await admin
+  const { data: blockedMeRaw, error: blockedMeRawErr } = await admin
     .from("work_items")
     .select(selectCols)
     .eq("blocked_on_admin", user.id)
@@ -122,6 +131,9 @@ export default async function AdminBoardInboxPage({
     .in("status", ACTIVE)
     .order("created_at", { ascending: false })
     .limit(300);
+  if (blockedMeRawErr) {
+    console.error(`[work_items list] failed`, { code: blockedMeRawErr.code, message: blockedMeRawErr.message });
+  }
 
   const blockedDept = (blockedDeptRaw ?? []) as WorkRow[];
   const blockedMe   = (blockedMeRaw   ?? []) as WorkRow[];
@@ -145,7 +157,7 @@ export default async function AdminBoardInboxPage({
       entity_ref:  string;
     } | { title: string; entity_type: string; entity_ref: string }[] | null;
   };
-  const { data: mentionsRaw } = await admin
+  const { data: mentionsRaw, error: mentionsRawErr } = await admin
     .from("work_item_message_mentions")
     .select(`
       message_id, work_item_id, created_at, seen_at,
@@ -159,6 +171,9 @@ export default async function AdminBoardInboxPage({
     .is("seen_at", null)
     .order("created_at", { ascending: false })
     .limit(100);
+  if (mentionsRawErr) {
+    console.error(`[work_item_message_mentions list] failed`, { code: mentionsRawErr.code, message: mentionsRawErr.message });
+  }
   type MentionRow = {
     messageId:   string;
     workItemId:  string;
@@ -199,10 +214,13 @@ export default async function AdminBoardInboxPage({
   });
 
   // ── Admin options for the assignee picker (claim → pin to a person) ─
-  const { data: adminRows } = await admin
+  const { data: adminRows, error: adminRowsErr } = await admin
     .from("admins")
     .select("profile_id, profile:profiles!profile_id ( member_code, first_name, last_name )")
     .eq("is_active", true);
+  if (adminRowsErr) {
+    console.error(`[admins list] failed`, { code: adminRowsErr.code, message: adminRowsErr.message });
+  }
   type AR = {
     profile_id: string;
     profile: { member_code: string | null; first_name: string | null; last_name: string | null }
@@ -262,7 +280,7 @@ export default async function AdminBoardInboxPage({
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · งานของฉัน</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · งานของฉัน</p>
           <h1 className="mt-1 text-2xl font-bold">กล่องงานของฉัน (My Inbox)</h1>
           <p className="mt-1 text-sm text-muted">
             งานที่มอบหมายให้คุณ + งานของแผนก ({roles.map((r) => WORK_ROLE_LABEL[r as WorkAssignableRole] ?? r).join(" · ")}) ที่ยังไม่มีคนรับ

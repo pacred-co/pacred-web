@@ -72,27 +72,38 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname),
   },
-  images: {
-    qualities: [75, 92, 95, 100],
-  },
-
   /**
-   * Server Actions used for file uploads (juristic register: ภพ20 +
-   * ใบรับรองบริษัท + บัตรประชาชนกรรมการ — see actions/auth.ts
-   * `uploadJuristicDoc`) need a body-size limit ABOVE the validator's
-   * `MAX_SIZE` (10 MB).
+   * Server Actions default body limit (Next 16) = 1 MB.
    *
-   * Next 16 default is 1 MB — silently rejected ~10 MB file uploads as
-   * "stuck on click", which is exactly the 2026-05-25 prod symptom that
-   * survived the requireGuest() + resume-flow fixes (P0 #2 + #3): no
-   * documents in prod despite users completing Step 1–3. The action's
-   * `if (file.size > MAX_SIZE)` check never runs because the platform
-   * blocks the request body first.
+   * Bumped to 12 MB to cover ALL upload paths:
+   *   - Admin file-upload forms — cover photos · slip uploads · driver
+   *     photos. Per-form client-side validation caps at 5 MB but phone-
+   *     shot HEIC files routinely land at 8-12 MB. Fixed the silent
+   *     "Body exceeded 1 MB limit" 500 ภูม hit on /admin/forwarders/new
+   *     (2026-05-27 Wave 23 P0 · pre-existing config gap since Wave 12-C
+   *     built the cover-upload modal).
+   *   - Juristic register Step-3 uploads — ภพ20 + ใบรับรองบริษัท +
+   *     บัตรประชาชนกรรมการ (validator MAX_SIZE = 10 MB · see
+   *     actions/auth.ts `uploadJuristicDoc`). Without this limit, the
+   *     request body is blocked at the platform layer BEFORE the action
+   *     even runs — looked like "stuck on click" in prod (2026-05-25
+   *     P0 #4 survived the requireGuest() + resume-flow fixes).
+   *
+   * 12 MB chosen so both upload caps (5 MB + 10 MB) have safety margin
+   * for multipart overhead.
    */
   experimental: {
     serverActions: {
       bodySizeLimit: "12mb",
     },
+  },
+  images: {
+    // Quality values used across the codebase: 75 (default thumbs · table avatars),
+    // 92 (hi-res shop covers · forwarder thumbs), 95 (marketing banners · office
+    // photos), 100 (hero banner desktop · pristine source). Next 16 dev overlay
+    // throws an Issue per <Image quality={N}> where N isn't in this allowlist —
+    // so keep all 4 values listed even if some are only used by 1-2 components.
+    qualities: [75, 92, 95, 100],
   },
 
   async headers() {

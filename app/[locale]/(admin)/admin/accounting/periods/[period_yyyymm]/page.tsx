@@ -94,7 +94,7 @@ export default async function AdminAccountingPeriodDetailPage({
 
   const admin = createAdminClient();
 
-  const { data: period } = await admin
+  const { data: period, error: periodErr } = await admin
     .from("accounting_periods")
     .select(`
       period_yyyymm, status, opened_at, closing_marked_at, closed_at, closing_notes,
@@ -105,9 +105,13 @@ export default async function AdminAccountingPeriodDetailPage({
     `)
     .eq("period_yyyymm", parsed.data)
     .maybeSingle<PeriodRow>();
+  if (periodErr) {
+    console.error(`[accounting_periods lookup] failed`, { code: periodErr.code, message: periodErr.message, details: periodErr.details, hint: periodErr.hint });
+    throw new Error(`Failed to load accounting_periods (${periodErr.code ?? "unknown"}): ${periodErr.message}`);
+  }
   if (!period) notFound();
 
-  const { data: eventsRaw } = await admin
+  const { data: eventsRaw, error: eventsRawErr } = await admin
     .from("period_close_event")
     .select(`
       id, table_name, row_count, sum_thb, sum_label, closed_at,
@@ -115,6 +119,9 @@ export default async function AdminAccountingPeriodDetailPage({
     `)
     .eq("period_yyyymm", parsed.data)
     .order("closed_at", { ascending: false });
+  if (eventsRawErr) {
+    console.error(`[period_close_event list] failed`, { code: eventsRawErr.code, message: eventsRawErr.message });
+  }
   const events = (eventsRaw ?? []) as EventRow[];
 
   return (

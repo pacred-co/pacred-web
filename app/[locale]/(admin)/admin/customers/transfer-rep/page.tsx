@@ -1,163 +1,137 @@
+/**
+ * /admin/customers/transfer-rep — ย้ายเซลล์ผู้ดูแลลูกค้า (bulk).
+ *
+ * Faithful port of the legacy `pcs-admin/user-transfer-sales.php` flow
+ * (D1 / ADR-0017 Phase-B). Replaces the Wave 7.2 "ยังไม่เปิด" banner.
+ *
+ * The bulk form lets a sales-admin/super UPDATE `tb_users.adminidsale`
+ * across many customers in one shot via `adminBulkTransferSalesRepTb`.
+ *
+ * Reads:
+ *   - Recent customers (cap 100, optionally filtered by ?currentRep=PR0001)
+ *     for the multi-select source list.
+ *   - All active admins from `tb_admin` (the legacy source-of-truth for
+ *     sales-rep assignment) for the target dropdown.
+ *
+ * Query-params:
+ *   - ?currentRep=PR0001 → filter the source list to customers currently
+ *     assigned to that admin (useful when reassigning a leaving rep's
+ *     portfolio).
+ *   - ?q=John → free-text filter on customer name / member code.
+ */
+
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
-import { ArrowLeftRight, ChevronRight, Home, Users } from "lucide-react";
-import { requireAdmin } from "@/lib/auth/require-admin";
-import { TransferRepForm } from "./transfer-form";
+import {
+  TransferRepForm,
+  type CustomerLite,
+  type TbAdminLite,
+} from "./transfer-form";
 
-type FilterValue = string;     // uuid | "noSale" | "all"
+export const dynamic = "force-dynamic";
 
-type RepRow = {
-  profile_id: string;
-  role:       string;
-  profile: { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null } |
-           { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null }[] |
-           null;
-  contact: { display_name: string | null; direct_phone: string | null } |
-           { display_name: string | null; direct_phone: string | null }[] |
-           null;
-};
-
-export type RepOption = {
-  profile_id:   string;
-  display_name: string;
-  member_code:  string | null;
-  role:         string;
-};
-
-function repToOption(r: RepRow): RepOption {
-  const prof    = Array.isArray(r.profile) ? r.profile[0] ?? null : r.profile;
-  const contact = Array.isArray(r.contact) ? r.contact[0] ?? null : r.contact;
-  const fallback = `${prof?.first_name ?? ""} ${prof?.last_name ?? ""}`.trim() || "(ไม่มีชื่อ)";
-  return {
-    profile_id:   r.profile_id,
-    display_name: contact?.display_name?.trim() || fallback,
-    member_code:  prof?.member_code ?? null,
-    role:         r.role,
-  };
-}
+type SP = { q?: string; currentRep?: string };
 
 export default async function TransferSalesRepPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string }>;
+  searchParams: Promise<SP>;
 }) {
-  // W-1 (gap-admin H-1/H-7): page-level role gate. Reassigns
-  // customers' sales rep + lists customer PII — ops + sales.
-  await requireAdmin(["ops", "sales_admin"]);
+  await requireAdmin(["sales_admin", "super"]);
 
   const sp = await searchParams;
-  const fromFilter: FilterValue = sp.from ?? "all";
-
   const admin = createAdminClient();
 
-  // List of active sales admins (filter dropdown source + target source)
-  const { data: repsRaw } = await admin
-    .from("admins")
-    .select(`profile_id, role,
-             profile:profiles!profile_id ( member_code, first_name, last_name, phone ),
-             contact:admin_contact_extras!profile_id ( display_name, direct_phone )`)
-    .in("role", ["sales_admin", "super"])
-    .eq("is_active", true);
+  // Build the customer list query.
+  let q = admin
+    .from("tb_users")
+    .select("userid, username, userlastname, usertel, adminidsale")
+    .eq("userstatus", "1")
+    .order("userregistered", { ascending: false })
+    .limit(100);
 
-  const reps: RepOption[] = ((repsRaw ?? []) as RepRow[]).map(repToOption);
-  const repsById = new Map(reps.map((r) => [r.profile_id, r]));
-
-  // Filter customers
-  let q = admin.from("profiles")
-    .select(`id, member_code, account_type, first_name, last_name, company_name,
-             phone, customer_group, sales_admin_id, created_at`)
-    .order("created_at", { ascending: false })
-    .limit(500);
-
-  if (fromFilter === "noSale") {
-    q = q.is("sales_admin_id", null);
-  } else if (fromFilter !== "all") {
-    q = q.eq("sales_admin_id", fromFilter);
+  if (sp.currentRep) {
+    q = q.eq("adminidsale", sp.currentRep.toUpperCase());
   }
 
-  const { data: customersRaw } = await q;
+  const qFree = (sp.q ?? "").trim();
+  if (qFree) {
+    // Free-text: try userid match first (case-insensitive), else fall back to name ilike.
+    if (/^PR\d+$/i.test(qFree)) {
+      q = q.eq("userid", qFree.toUpperCase());
+    } else {
+      const pat = `%${qFree.replace(/[%_]/g, "\\$&")}%`;
+      q = q.or(`username.ilike.${pat},userlastname.ilike.${pat},usertel.ilike.${pat}`);
+    }
+  }
 
-  type CustomerRow = {
-    id:              string;
-    member_code:     string | null;
-    account_type:    "personal" | "juristic";
-    first_name:      string | null;
-    last_name:       string | null;
-    company_name:    string | null;
-    phone:           string | null;
-    customer_group:  string;
-    sales_admin_id:  string | null;
-    created_at:      string;
-  };
-  const customers = ((customersRaw ?? []) as CustomerRow[]).map((c) => ({
-    id:              c.id,
-    member_code:     c.member_code,
-    name: c.account_type === "juristic" && c.company_name
-      ? c.company_name
-      : `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "—",
-    phone:           c.phone,
-    customer_group:  c.customer_group,
-    current_rep:     c.sales_admin_id ? repsById.get(c.sales_admin_id) ?? null : null,
-    sales_admin_id:  c.sales_admin_id,
-    account_type:    c.account_type,
-    created_at:      c.created_at,
-  }));
+  const { data: customersRaw, error: customersRawErr } = await q;
+  if (customersRawErr) {
+    console.error(`[tb_users list] failed`, { code: customersRawErr.code, message: customersRawErr.message });
+  }
+  const customers = (customersRaw ?? []) as unknown as CustomerLite[];
+
+  // Active admins from tb_admin for the target dropdown.
+  const { data: adminsRaw, error: adminsRawErr } = await admin
+    .from("tb_admin")
+    .select("adminid, adminnickname, adminname, adminlastname, department, section")
+    .eq("adminstatusa", "1")
+    .order("adminnickname", { ascending: true })
+    .limit(500);
+  if (adminsRawErr) {
+    console.error(`[tb_admin list] failed`, { code: adminsRawErr.code, message: adminsRawErr.message });
+  }
+  const admins = (adminsRaw ?? []) as unknown as TbAdminLite[];
 
   return (
-    <main className="p-6 lg:p-8 space-y-5">
+    <main className="p-6 lg:p-8 max-w-5xl mx-auto space-y-5">
+      {/* Wave 20 P1 rewrite (2026-05-26): removed Bootstrap-4 `.pcs-legacy`
+          chrome + jQuery `<link>` to admin-base.css. Pure Tailwind v4 now;
+          same form logic + same `tb_users` / `tb_admin` queries. */}
+
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-xs text-muted">
-        <Link href="/admin" className="hover:text-primary-600 inline-flex items-center gap-1">
-          <Home className="w-3.5 h-3.5" /> Admin
-        </Link>
-        <ChevronRight className="w-3 h-3" />
+      <nav aria-label="breadcrumb" className="text-xs text-muted flex gap-1.5 items-center flex-wrap">
+        <Link href="/admin" className="hover:text-primary-600">หน้าแรก</Link>
+        <span>/</span>
         <Link href="/admin/customers" className="hover:text-primary-600">ลูกค้า</Link>
-        <ChevronRight className="w-3 h-3" />
-        <span className="text-foreground font-medium">ย้ายเซลล์ผู้ดูแล</span>
+        <span>/</span>
+        <span className="text-foreground">ย้ายเซลล์ผู้ดูแล (bulk)</span>
       </nav>
 
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600">
-            <ArrowLeftRight className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · ลูกค้า</p>
-            <h1 className="mt-1 text-xl sm:text-2xl font-bold">ย้ายเซลล์ผู้ดูแลลูกค้า</h1>
-            <p className="text-xs text-muted mt-0.5">เลือกลูกค้าที่ต้องการย้าย แล้วเลือกพนักงานขายผู้รับโอน — เปลี่ยนทีละหลายรายการได้ในครั้งเดียว</p>
-          </div>
-        </div>
+      {/* Header */}
+      <div>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
+        <h1 className="mt-1 text-2xl font-bold">ย้ายเซลล์ผู้ดูแลลูกค้า (bulk)</h1>
+        <p className="mt-1 text-sm text-muted">
+          อัปเดต <code className="rounded bg-surface-alt px-1 text-xs">tb_users.adminidsale</code> หลายรายในครั้งเดียว
+        </p>
       </div>
 
-      {/* Filter by current rep */}
-      <form method="GET" className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 flex flex-wrap items-end gap-3">
-        <label className="text-sm space-y-1">
-          <span className="block text-xs font-medium text-muted">กรองโดยพนักงานขายปัจจุบัน</span>
-          <select
-            name="from"
-            defaultValue={fromFilter}
-            className="rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm min-w-[280px]"
-          >
-            <option value="all">— ทุกลูกค้า —</option>
-            <option value="noSale">ลูกค้าที่ยังไม่มีเซลล์ดูแล</option>
-            <optgroup label="พนักงานขายที่ดูแลอยู่">
-              {reps.map((r) => (
-                <option key={r.profile_id} value={r.profile_id}>
-                  {r.display_name}{r.member_code ? ` (${r.member_code})` : ""}{r.role === "super" ? " · ผู้ดูแลระบบ" : ""}
-                </option>
-              ))}
-            </optgroup>
-          </select>
-        </label>
-        <button type="submit" className="rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-medium hover:bg-primary-600">
-          ค้นหา
-        </button>
-        <div className="ml-auto inline-flex items-center gap-2 text-xs text-muted">
-          <Users className="w-4 h-4" /> พบ <span className="font-bold text-foreground">{customers.length}</span> ราย {customers.length === 500 && <span className="text-amber-600">(แสดงได้สูงสุด 500 — ใช้ตัวกรองให้แคบลง)</span>}
-        </div>
-      </form>
+      {/* How-to card */}
+      <section className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+        <p className="font-medium mb-1.5">วิธีใช้</p>
+        <ol className="list-decimal list-inside space-y-1 text-xs">
+          <li>
+            ตัวกรองรายชื่อ — กรอกชื่อ/รหัส PR หรือใส่{" "}
+            <code className="rounded bg-white px-1 py-0.5">?currentRep=PR0001</code> ใน URL เพื่อกรองตามเซลล์ปัจจุบัน
+          </li>
+          <li>เลือกลูกค้า (multi-select) แล้วเลือก admin ปลายทาง</li>
+          <li>
+            กด &ldquo;ยืนยันการย้าย&rdquo; → <code className="rounded bg-white px-1 py-0.5">tb_users.adminidsale</code> จะถูกอัปเดตทุกราย
+          </li>
+        </ol>
+      </section>
 
-      <TransferRepForm customers={customers} reps={reps} />
+      {/* Form card */}
+      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
+        <TransferRepForm
+          customers={customers}
+          admins={admins}
+          initialQuery={qFree}
+          initialCurrentRep={sp.currentRep ?? ""}
+        />
+      </section>
     </main>
   );
 }

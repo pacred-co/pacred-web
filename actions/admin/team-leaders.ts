@@ -21,7 +21,11 @@ export async function adminCreateTeamLeader(input: CreateTeamLeaderInput): Promi
     const admin = createAdminClient();
 
     // Verify the profile exists
-    const { data: prof } = await admin.from("profiles").select("id, member_code").eq("id", d.profile_id).maybeSingle();
+    const { data: prof, error: profErr } = await admin.from("profiles").select("id, member_code").eq("id", d.profile_id).maybeSingle();
+    if (profErr) {
+      console.error(`[profiles mutation lookup] failed`, { code: profErr.code, message: profErr.message });
+      return { ok: false, error: `db_error:${profErr.code ?? "unknown"}` };
+    }
     if (!prof) return { ok: false, error: "ไม่พบ profile" };
 
     const { error } = await admin

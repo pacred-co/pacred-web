@@ -1,74 +1,190 @@
+/**
+ * /admin/accounting — accounting hub (faithful-port rewrite).
+ *
+ * Wave 20 P0-2 (2026-05-26) — swap all data sources from the rebuilt-app
+ * tables (forwarders / service_orders / yuan_payments / wallet_transactions
+ * — EMPTY on prod) to the legacy `tb_*` tables that the 8,898-customer
+ * data import loaded.  Same UI surface, same tab structure, same sub-page
+ * links; only the SQL changes.  Mirrors the Wave 6 P0 dashboard rewrite
+ * at commit `9c0ffd6` (`/admin/page.tsx`).
+ *
+ * Field map (rebuilt → legacy):
+ *   forwarders.total_price             → tb_forwarder.ftotalprice
+ *   forwarders.created_at              → tb_forwarder.fdate
+ *   forwarders.status enum             → tb_forwarder.fstatus '1'..'7'
+ *                                        ('7' = delivered, '5' = pending payment)
+ *   yuan_payments.thb_amount           → tb_payment.paythb
+ *   yuan_payments.yuan_amount          → tb_payment.payyuan
+ *   yuan_payments.exchange_rate        → tb_payment.payrate
+ *   yuan_payments.channel              → tb_payment.paytype ('1'/'2'/'3')
+ *   yuan_payments.status               → tb_payment.paystatus '1'/'2'/'3'
+ *                                        ('2' = completed)
+ *   yuan_payments.created_at           → tb_payment.paydate
+ *   service_orders.total_thb           → tb_header_order.hcostallth
+ *   service_orders.status enum         → tb_header_order.hstatus '1'..'6'
+ *                                        ('5' = completed, '6' = cancelled)
+ *   service_orders.created_at          → tb_header_order.hdate
+ *   service_orders.h_no                → tb_header_order.hno
+ *   service_orders.title               → tb_header_order.htitle
+ *   service_orders.item_count          → tb_header_order.hcount
+ *   wallet_transactions.amount         → tb_wallet_hs.amount
+ *   wallet_transactions.kind=deposit   → tb_wallet_hs.type='1'  (topup)
+ *   wallet_transactions.kind=withdraw  → tb_wallet_hs.type='3'  (withdraw)
+ *   wallet_transactions.kind=refund    → tb_wallet_hs.type='5'  (refund)
+ *   wallet_transactions.status=completed→ tb_wallet_hs.status='2'
+ *   wallet_transactions.created_at     → tb_wallet_hs.date
+ *
+ * Customer name: legacy tables key on `userid` (text like PR12345); the
+ * `profiles` table is empty for migrated customers, so we 2nd-query
+ * `tb_users.in(userid, [...])` and merge in TS — mirrors the pattern in
+ * `/admin/forwarders/page.tsx` (Wave 3 P0 #1, commit on Poom-pacred).
+ */
+
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { Suspense } from "react";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { AccountingSegmentPills } from "@/components/admin/accounting-segment-pills";
+import { CARGO_MENUBAR, ACCOUNTING_HUB_CARDS } from "@/lib/admin/accounting-menubar";
+import {
+  legacyOrderStatusThai,
+  legacyForwarderStatusThai,
+} from "@/lib/legacy-status-map";
 
-type Profile = {
-  member_code: string | null;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-} | null;
+export const dynamic = "force-dynamic";
 
+// Legacy user join shape (tb_users keyed by userid text).
+type LegacyUser = {
+  userid: string;
+  username: string | null;
+  userlastname: string | null;
+  usertel: string | null;
+};
+
+// Per-row shapes after legacy → display normalisation.
 type FRow = {
-  id: string; f_no: string; status: string; source_warehouse: string; transport_type: string;
-  weight_kg: number; volume_cbm: number; total_price: number; created_at: string; profile: Profile;
+  id: number;
+  f_no: string;                  // formatted display id (legacy uses raw integer)
+  status: string;                // tb_forwarder.fstatus ('1'..'7')
+  source_warehouse: string;      // fwarehousechina
+  transport_type: string;        // ftransporttype
+  weight_kg: number;
+  volume_cbm: number;
+  total_price: number;
+  created_at: string;
+  user: LegacyUser | null;
 };
 type YRow = {
-  id: string; channel: string | null; yuan_amount: number; exchange_rate: number;
-  thb_amount: number; status: string; created_at: string; profile: Profile;
+  id: number;
+  channel: string | null;        // paytype '1'/'2'/'3'
+  yuan_amount: number;
+  exchange_rate: number;
+  thb_amount: number;
+  status: string;                // paystatus '1'/'2'/'3'
+  created_at: string;
+  user: LegacyUser | null;
 };
 type SRow = {
-  id: string; h_no: string; status: string; title: string | null;
-  item_count: number; total_thb: number; created_at: string; profile: Profile;
+  id: number;
+  h_no: string;                  // tb_header_order.hno
+  status: string;                // hstatus '1'..'6'
+  title: string | null;
+  item_count: number;
+  total_thb: number;
+  created_at: string;
+  user: LegacyUser | null;
 };
 type WRow = {
-  id: string; kind: string; amount: number; status: string;
-  bank_name: string | null; account_name: string | null; account_number: string | null;
-  note: string | null; created_at: string; profile: Profile;
+  id: number;
+  type: string;                  // tb_wallet_hs.type '1'/'3'/'5'
+  amount: number;
+  status: string;                // '1'/'2'/'3'
+  bank_name: string | null;      // depositnamebank
+  account_name: string | null;   // nameuserbank
+  account_number: string | null; // nouserbank
+  note: string | null;
+  created_at: string;
+  user: LegacyUser | null;
 };
 
-function normP(p: Profile | Profile[] | null): Profile {
-  if (!p) return null;
-  return Array.isArray(p) ? (p[0] ?? null) : p;
-}
-function sumCol(data: unknown[] | null, col: string): number {
+function sumCol<T extends Record<string, unknown>>(data: T[] | null, col: keyof T): number {
   if (!data) return 0;
-  return (data as Array<Record<string, number>>).reduce((s, r) => s + Math.abs(Number(r[col] ?? 0)), 0);
+  return data.reduce((s, r) => s + Math.abs(Number(r[col] ?? 0)), 0);
 }
 function thb(n: number) {
   return "฿" + n.toLocaleString("th-TH", { minimumFractionDigits: 2 });
 }
-function profileName(p: Profile) {
-  return [p?.first_name, p?.last_name].filter(Boolean).join(" ") || "—";
+function userDisplayName(u: LegacyUser | null) {
+  if (!u) return "—";
+  return [u.username, u.userlastname].filter(Boolean).join(" ") || "—";
 }
 
-const STATUS_BADGE: Record<string, string> = {
-  pending_payment: "bg-yellow-50 text-yellow-700 border-yellow-200",
-  pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
-  awaiting_payment: "bg-yellow-50 text-yellow-700 border-yellow-200",
-  shipped_china: "bg-blue-50 text-blue-700 border-blue-200",
-  ordered: "bg-blue-50 text-blue-700 border-blue-200",
-  processing: "bg-blue-50 text-blue-700 border-blue-200",
-  in_transit: "bg-indigo-50 text-indigo-700 border-indigo-200",
-  awaiting_chn_dispatch: "bg-indigo-50 text-indigo-700 border-indigo-200",
-  arrived_thailand: "bg-purple-50 text-purple-700 border-purple-200",
-  out_for_delivery: "bg-orange-50 text-orange-700 border-orange-200",
-  delivered: "bg-green-50 text-green-700 border-green-200",
-  completed: "bg-green-50 text-green-700 border-green-200",
-  cancelled: "bg-gray-50 text-gray-600 border-gray-200",
-  failed: "bg-red-50 text-red-700 border-red-200",
-  refunded: "bg-gray-50 text-gray-600 border-gray-200",
+/**
+ * 2nd-query helper: batch-load tb_users rows for the userid set on the page,
+ * return a Map for O(1) lookup. Mirrors the Wave 3 P0 #1 pattern in
+ * `/admin/forwarders/page.tsx`.
+ */
+async function fetchUsersByUserId(
+  admin: ReturnType<typeof createAdminClient>,
+  userIds: string[],
+): Promise<Map<string, LegacyUser>> {
+  const map = new Map<string, LegacyUser>();
+  const unique = Array.from(new Set(userIds.filter(Boolean)));
+  if (unique.length === 0) return map;
+  const { data, error } = await admin
+    .from("tb_users")
+    .select("userid, username, userlastname, usertel")
+    .in("userid", unique);
+  if (error) {
+    console.error(`[tb_users batch] failed`, { code: error.code, message: error.message });
+    return map;
+  }
+  for (const u of (data ?? []) as LegacyUser[]) {
+    map.set(u.userid, u);
+  }
+  return map;
+}
+
+// Forwarder status badges — keyed by tb_forwarder.fstatus single-char codes.
+const FORWARDER_BADGE: Record<string, string> = {
+  "1": "bg-blue-50 text-blue-700 border-blue-200",        // รอเข้าโกดังจีน
+  "2": "bg-blue-50 text-blue-700 border-blue-200",        // ถึงโกดังจีน
+  "3": "bg-indigo-50 text-indigo-700 border-indigo-200",  // กำลังส่งมาไทย
+  "4": "bg-purple-50 text-purple-700 border-purple-200",  // ถึงไทย
+  "5": "bg-yellow-50 text-yellow-700 border-yellow-200",  // รอชำระเงิน
+  "6": "bg-orange-50 text-orange-700 border-orange-200",  // เตรียมส่ง
+  "7": "bg-green-50 text-green-700 border-green-200",     // ส่งแล้ว
 };
-const STATUS_LABEL: Record<string, string> = {
-  pending_payment: "รอชำระ", pending: "รอ", awaiting_payment: "รอชำระ",
-  shipped_china: "ออกจีน", ordered: "สั่งแล้ว", processing: "กำลังโอน",
-  in_transit: "กลางทาง", awaiting_chn_dispatch: "รอจัดส่ง",
-  arrived_thailand: "ถึงไทย", out_for_delivery: "ส่ง",
-  delivered: "สำเร็จ", completed: "สำเร็จ",
-  cancelled: "ยกเลิก", failed: "ล้มเหลว", refunded: "คืนเงิน",
+// Order status badges — keyed by tb_header_order.hstatus single-char codes.
+const ORDER_BADGE: Record<string, string> = {
+  "1": "bg-yellow-50 text-yellow-700 border-yellow-200",  // รอดำเนินการ
+  "2": "bg-yellow-50 text-yellow-700 border-yellow-200",  // รอชำระเงิน
+  "3": "bg-blue-50 text-blue-700 border-blue-200",        // สั่งสินค้า
+  "4": "bg-indigo-50 text-indigo-700 border-indigo-200",  // รอร้านจีนจัดส่ง
+  "5": "bg-green-50 text-green-700 border-green-200",     // สำเร็จ
+  "6": "bg-gray-50 text-gray-600 border-gray-200",        // ยกเลิก
+};
+// Payment status (tb_payment.paystatus) + wallet_hs status share the same enum.
+const PAYMENT_BADGE: Record<string, string> = {
+  "1": "bg-yellow-50 text-yellow-700 border-yellow-200",  // รอดำเนินการ
+  "2": "bg-green-50 text-green-700 border-green-200",     // สำเร็จ
+  "3": "bg-red-50 text-red-700 border-red-200",           // ไม่สำเร็จ
+};
+const PAYMENT_LABEL: Record<string, string> = {
+  "1": "รอ", "2": "สำเร็จ", "3": "ไม่สำเร็จ",
+};
+// tb_payment.paytype channel labels.
+const PAYTYPE_LABEL: Record<string, string> = {
+  "1": "เว็บจีน",
+  "2": "Alipay",
+  "3": "อื่นๆ",
+};
+// tb_forwarder.ftransporttype labels.
+const TRANSPORT_LABEL: Record<string, string> = {
+  "1": "รถ", "2": "เรือ", "3": "เครื่องบิน",
 };
 
 const TABS = [
@@ -111,64 +227,77 @@ export default async function AdminAccountingPage({
   // T-P5 owner-overview additions
   let sPrevNet = 0;          // total net revenue in the previous same-length window
   let nPendingDeposits = 0;  // count of pending wallet deposits (revenue waiting to land)
-  let vAwaitingPayment = 0;  // baht value of service-orders in awaiting_payment status (revenue in flight)
+  let vAwaitingPayment = 0;  // baht value of service-orders in รอชำระ status (revenue in flight)
   let vForwarderInFlight = 0;// baht value of forwarders not yet delivered (revenue in flight)
-  let vYuanInProcess = 0;    // baht value of yuan_payments in pending+processing
-  let nNewCustomers = 0;     // profiles created within current period
-  let nActiveCustomers = 0;  // distinct profile_ids with any completed revenue tx in current period
+  let vYuanInProcess = 0;    // baht value of yuan_payments in รอดำเนินการ
+  let nActiveCustomers = 0;  // distinct userids with any completed wallet outflow in current period
   // other tabs: running totals computed after fetch
   let tabTotal = 0, tabCount = 0, tabPending = 0;
   let tabExtra = 0; // e.g. total weight for forwarder, total CNY for yuan
 
   if (tab === "summary") {
+    // Legacy "revenue this window" mapped to the 6 source-of-truth aggregates.
+    // Note: tb_forwarder doesn't have a "delivered" filter that's free of
+    // edge cases on real prod data — fstatus='7' is "ส่งแล้ว" per legacy
+    // map. Use it as the "revenue realised" gate.
     const [fD, yD, sD, tD, wD, rD] = await Promise.all([
       (() => {
-        let q = admin.from("forwarders").select("total_price").eq("status", "delivered");
-        if (dateFrom) q = q.gte("created_at", dateFrom);
-        if (dateTo)   q = q.lte("created_at", dateTo + "T23:59:59");
+        let q = admin.from("tb_forwarder").select("ftotalprice").eq("fstatus", "7");
+        if (dateFrom) q = q.gte("fdate", dateFrom);
+        if (dateTo)   q = q.lte("fdate", dateTo + "T23:59:59");
         return q;
       })(),
       (() => {
-        let q = admin.from("yuan_payments").select("thb_amount").eq("status", "completed");
-        if (dateFrom) q = q.gte("created_at", dateFrom);
-        if (dateTo)   q = q.lte("created_at", dateTo + "T23:59:59");
+        let q = admin.from("tb_payment").select("paythb").eq("paystatus", "2");
+        if (dateFrom) q = q.gte("paydate", dateFrom);
+        if (dateTo)   q = q.lte("paydate", dateTo + "T23:59:59");
         return q;
       })(),
       (() => {
-        let q = admin.from("service_orders").select("total_thb").eq("status", "completed");
-        if (dateFrom) q = q.gte("created_at", dateFrom);
-        if (dateTo)   q = q.lte("created_at", dateTo + "T23:59:59");
+        let q = admin.from("tb_header_order").select("hcostallth").eq("hstatus", "5");
+        if (dateFrom) q = q.gte("hdate", dateFrom);
+        if (dateTo)   q = q.lte("hdate", dateTo + "T23:59:59");
         return q;
       })(),
       (() => {
-        let q = admin.from("wallet_transactions").select("amount").eq("kind", "deposit").eq("status", "completed");
-        if (dateFrom) q = q.gte("created_at", dateFrom);
-        if (dateTo)   q = q.lte("created_at", dateTo + "T23:59:59");
+        // topup completed: tb_wallet_hs type='1' (เติมเงิน) status='2' (สำเร็จ)
+        let q = admin.from("tb_wallet_hs").select("amount").eq("type", "1").eq("status", "2");
+        if (dateFrom) q = q.gte("date", dateFrom);
+        if (dateTo)   q = q.lte("date", dateTo + "T23:59:59");
         return q;
       })(),
       (() => {
-        let q = admin.from("wallet_transactions").select("amount").eq("kind", "withdraw").eq("status", "completed");
-        if (dateFrom) q = q.gte("created_at", dateFrom);
-        if (dateTo)   q = q.lte("created_at", dateTo + "T23:59:59");
+        // withdraw completed: type='3' status='2'
+        let q = admin.from("tb_wallet_hs").select("amount").eq("type", "3").eq("status", "2");
+        if (dateFrom) q = q.gte("date", dateFrom);
+        if (dateTo)   q = q.lte("date", dateTo + "T23:59:59");
         return q;
       })(),
       (() => {
-        let q = admin.from("wallet_transactions").select("amount").eq("kind", "refund").eq("status", "completed");
-        if (dateFrom) q = q.gte("created_at", dateFrom);
-        if (dateTo)   q = q.lte("created_at", dateTo + "T23:59:59");
+        // refund completed: type='5' status='2'
+        let q = admin.from("tb_wallet_hs").select("amount").eq("type", "5").eq("status", "2");
+        if (dateFrom) q = q.gte("date", dateFrom);
+        if (dateTo)   q = q.lte("date", dateTo + "T23:59:59");
         return q;
       })(),
     ]);
-    sForwarder = sumCol(fD.data, "total_price");
-    sYuan      = sumCol(yD.data, "thb_amount");
-    sShop      = sumCol(sD.data, "total_thb");
+    if (fD.error) console.error(`[tb_forwarder sum] failed`, { code: fD.error.code, message: fD.error.message });
+    if (yD.error) console.error(`[tb_payment sum] failed`, { code: yD.error.code, message: yD.error.message });
+    if (sD.error) console.error(`[tb_header_order sum] failed`, { code: sD.error.code, message: sD.error.message });
+    if (tD.error) console.error(`[tb_wallet_hs topup sum] failed`, { code: tD.error.code, message: tD.error.message });
+    if (wD.error) console.error(`[tb_wallet_hs withdraw sum] failed`, { code: wD.error.code, message: wD.error.message });
+    if (rD.error) console.error(`[tb_wallet_hs refund sum] failed`, { code: rD.error.code, message: rD.error.message });
+
+    sForwarder = sumCol(fD.data, "ftotalprice");
+    sYuan      = sumCol(yD.data, "paythb");
+    sShop      = sumCol(sD.data, "hcostallth");
     sTopup     = sumCol(tD.data, "amount");
     sWithdraw  = sumCol(wD.data, "amount");
     sRefund    = sumCol(rD.data, "amount");
 
     // T-P5 owner-overview: previous-period comparison + pending pipeline +
-    // customer counts. All run in parallel; each query degrades to 0 if
-    // dateFrom/dateTo aren't set (full-history view → no comparison).
+    // active-customer count. All run in parallel; each query degrades to 0
+    // if dateFrom/dateTo aren't set (full-history view → no comparison).
     const sNetCurrent = sForwarder + sYuan + sShop;
 
     // Compute previous-period window (same length as current, immediately before).
@@ -185,182 +314,259 @@ export default async function AdminAccountingPage({
       }
     }
 
-    const [prevF, prevY, prevS, pendDep, awaitPay, fwdInFlight, yuanInProc, newCust, activeCust] = await Promise.all([
+    const [prevF, prevY, prevS, pendDep, awaitPay, fwdInFlight, yuanInProc, activeCust] = await Promise.all([
       // PREV PERIOD revenue — only if both dates are set (else returns 0)
       prevFrom && prevTo
-        ? admin.from("forwarders").select("total_price").eq("status", "delivered")
-            .gte("created_at", prevFrom).lte("created_at", prevTo + "T23:59:59")
-        : Promise.resolve({ data: [] as Array<{ total_price: number }> }),
+        ? admin.from("tb_forwarder").select("ftotalprice").eq("fstatus", "7")
+            .gte("fdate", prevFrom).lte("fdate", prevTo + "T23:59:59")
+        : Promise.resolve({ data: [] as Array<{ ftotalprice: number }>, error: null }),
       prevFrom && prevTo
-        ? admin.from("yuan_payments").select("thb_amount").eq("status", "completed")
-            .gte("created_at", prevFrom).lte("created_at", prevTo + "T23:59:59")
-        : Promise.resolve({ data: [] as Array<{ thb_amount: number }> }),
+        ? admin.from("tb_payment").select("paythb").eq("paystatus", "2")
+            .gte("paydate", prevFrom).lte("paydate", prevTo + "T23:59:59")
+        : Promise.resolve({ data: [] as Array<{ paythb: number }>, error: null }),
       prevFrom && prevTo
-        ? admin.from("service_orders").select("total_thb").eq("status", "completed")
-            .gte("created_at", prevFrom).lte("created_at", prevTo + "T23:59:59")
-        : Promise.resolve({ data: [] as Array<{ total_thb: number }> }),
+        ? admin.from("tb_header_order").select("hcostallth").eq("hstatus", "5")
+            .gte("hdate", prevFrom).lte("hdate", prevTo + "T23:59:59")
+        : Promise.resolve({ data: [] as Array<{ hcostallth: number }>, error: null }),
 
       // PIPELINE — what's in flight that will become revenue (independent of date window)
-      admin.from("wallet_transactions")
+      // Pending wallet deposits: type='1' (เติม) AND status='1' (รอ)
+      admin.from("tb_wallet_hs")
         .select("id", { count: "exact", head: true })
-        .eq("kind", "deposit").eq("status", "pending"),
-      admin.from("service_orders").select("total_thb").eq("status", "awaiting_payment"),
-      admin.from("forwarders").select("total_price")
-        .not("status", "in", "(delivered,cancelled)"),
-      admin.from("yuan_payments").select("thb_amount").in("status", ["pending", "processing"]),
+        .eq("type", "1").eq("status", "1"),
+      // Service orders awaiting payment: hstatus='2' (รอชำระเงิน)
+      admin.from("tb_header_order").select("hcostallth").eq("hstatus", "2"),
+      // Forwarders not yet delivered / cancelled — fstatus '1'..'6' (everything except '7' completed)
+      admin.from("tb_forwarder").select("ftotalprice").neq("fstatus", "7"),
+      // Yuan transfers in process: paystatus='1' (รอ)
+      admin.from("tb_payment").select("paythb").eq("paystatus", "1"),
 
-      // CUSTOMER COUNTS — gated on date window (else "all-time" doesn't make sense)
+      // ACTIVE customers — distinct userids that paid us anything in the window.
+      // tb_wallet_hs is the canonical revenue join point — every outflow
+      // (type IN '2','4','6' = paid for shop/import/yuan) lands a row here.
       (() => {
-        let q = admin.from("profiles").select("id", { count: "exact", head: true })
-          .eq("status", "active");
-        if (dateFrom) q = q.gte("created_at", dateFrom);
-        if (dateTo)   q = q.lte("created_at", dateTo + "T23:59:59");
-        return q;
-      })(),
-      // active = distinct profile_ids that paid us anything in the window. Use
-      // wallet_transactions as the join point — every revenue event lands a
-      // wallet row.  amount<0 = customer paid us (debit).
-      (() => {
-        let q = admin.from("wallet_transactions")
-          .select("profile_id")
-          .eq("status", "completed")
-          .lt("amount", 0);
-        if (dateFrom) q = q.gte("created_at", dateFrom);
-        if (dateTo)   q = q.lte("created_at", dateTo + "T23:59:59");
+        let q = admin.from("tb_wallet_hs")
+          .select("userid")
+          .eq("status", "2")
+          .in("type", ["2", "4", "6"]);
+        if (dateFrom) q = q.gte("date", dateFrom);
+        if (dateTo)   q = q.lte("date", dateTo + "T23:59:59");
         return q;
       })(),
     ]);
+    if (prevF.error)      console.error(`[tb_forwarder prev sum] failed`, { code: prevF.error.code, message: prevF.error.message });
+    if (prevY.error)      console.error(`[tb_payment prev sum] failed`, { code: prevY.error.code, message: prevY.error.message });
+    if (prevS.error)      console.error(`[tb_header_order prev sum] failed`, { code: prevS.error.code, message: prevS.error.message });
+    if (pendDep.error)    console.error(`[tb_wallet_hs pending count] failed`, { code: pendDep.error.code, message: pendDep.error.message });
+    if (awaitPay.error)   console.error(`[tb_header_order awaiting_payment] failed`, { code: awaitPay.error.code, message: awaitPay.error.message });
+    if (fwdInFlight.error)console.error(`[tb_forwarder in-flight] failed`, { code: fwdInFlight.error.code, message: fwdInFlight.error.message });
+    if (yuanInProc.error) console.error(`[tb_payment in-process] failed`, { code: yuanInProc.error.code, message: yuanInProc.error.message });
+    if (activeCust.error) console.error(`[tb_wallet_hs active customers] failed`, { code: activeCust.error.code, message: activeCust.error.message });
 
-    sPrevNet = sumCol(prevF.data, "total_price") + sumCol(prevY.data, "thb_amount") + sumCol(prevS.data, "total_thb");
+    sPrevNet           = sumCol(prevF.data, "ftotalprice") + sumCol(prevY.data, "paythb") + sumCol(prevS.data, "hcostallth");
     nPendingDeposits   = pendDep.count ?? 0;
-    vAwaitingPayment   = sumCol(awaitPay.data, "total_thb");
-    vForwarderInFlight = sumCol(fwdInFlight.data, "total_price");
-    vYuanInProcess     = sumCol(yuanInProc.data, "thb_amount");
-    nNewCustomers      = newCust.count ?? 0;
-    nActiveCustomers   = new Set(((activeCust.data ?? []) as Array<{ profile_id: string }>).map((r) => r.profile_id)).size;
+    vAwaitingPayment   = sumCol(awaitPay.data, "hcostallth");
+    vForwarderInFlight = sumCol(fwdInFlight.data, "ftotalprice");
+    vYuanInProcess     = sumCol(yuanInProc.data, "paythb");
+    nActiveCustomers   = new Set(((activeCust.data ?? []) as Array<{ userid: string }>).map((r) => r.userid)).size;
 
     // Stash for the render block (so we don't recompute or pass extra args).
     void sNetCurrent;
   } else if (tab === "forwarder") {
     let q = admin
-      .from("forwarders")
-      .select(`id, f_no, status, source_warehouse, transport_type, weight_kg, volume_cbm, total_price, created_at,
-        profile:profiles!profile_id ( member_code, first_name, last_name, phone )`)
-      .order("created_at", { ascending: false })
+      .from("tb_forwarder")
+      .select(`id, fdate, fstatus, fwarehousechina, ftransporttype, fweight, fvolume, ftotalprice, userid`)
+      .order("fdate", { ascending: false })
       .limit(500);
-    if (dateFrom) q = q.gte("created_at", dateFrom);
-    if (dateTo)   q = q.lte("created_at", dateTo + "T23:59:59");
-    const { data } = await q;
-    type Raw = Omit<FRow, "profile"> & { profile: Profile | Profile[] | null };
-    forwarderRows = ((data ?? []) as Raw[]).map((r) => ({ ...r, profile: normP(r.profile) }));
+    if (dateFrom) q = q.gte("fdate", dateFrom);
+    if (dateTo)   q = q.lte("fdate", dateTo + "T23:59:59");
+    const { data, error } = await q;
+    if (error) {
+      console.error(`[tb_forwarder list] failed`, { code: error.code, message: error.message });
+    }
+    type Raw = {
+      id: number; fdate: string | null; fstatus: string;
+      fwarehousechina: string; ftransporttype: string;
+      fweight: number | null; fvolume: number | null;
+      ftotalprice: number | null; userid: string;
+    };
+    const raw = (data ?? []) as Raw[];
+    const usersByUserId = await fetchUsersByUserId(admin, raw.map((r) => r.userid));
+    forwarderRows = raw.map((r) => ({
+      id: r.id,
+      f_no: `${r.id}`,
+      status: r.fstatus,
+      source_warehouse: r.fwarehousechina,
+      transport_type: r.ftransporttype,
+      weight_kg: Number(r.fweight ?? 0),
+      volume_cbm: Number(r.fvolume ?? 0),
+      total_price: Number(r.ftotalprice ?? 0),
+      created_at: r.fdate ?? "",
+      user: usersByUserId.get(r.userid) ?? null,
+    }));
     tabCount = forwarderRows.length;
-    tabTotal = forwarderRows.reduce((s, r) => s + Number(r.total_price ?? 0), 0);
-    tabExtra = forwarderRows.reduce((s, r) => s + Number(r.weight_kg ?? 0), 0);
+    tabTotal = forwarderRows.reduce((s, r) => s + r.total_price, 0);
+    tabExtra = forwarderRows.reduce((s, r) => s + r.weight_kg, 0);
 
   } else if (tab === "yuan") {
     let q = admin
-      .from("yuan_payments")
-      .select(`id, channel, yuan_amount, exchange_rate, thb_amount, status, created_at,
-        profile:profiles!profile_id ( member_code, first_name, last_name, phone )`)
-      .order("created_at", { ascending: false })
+      .from("tb_payment")
+      .select(`id, paytype, payyuan, payrate, paythb, paystatus, paydate, userid`)
+      .order("paydate", { ascending: false })
       .limit(500);
-    if (dateFrom) q = q.gte("created_at", dateFrom);
-    if (dateTo)   q = q.lte("created_at", dateTo + "T23:59:59");
-    const { data } = await q;
-    type Raw = Omit<YRow, "profile"> & { profile: Profile | Profile[] | null };
-    yuanRows = ((data ?? []) as Raw[]).map((r) => ({ ...r, profile: normP(r.profile) }));
+    if (dateFrom) q = q.gte("paydate", dateFrom);
+    if (dateTo)   q = q.lte("paydate", dateTo + "T23:59:59");
+    const { data, error } = await q;
+    if (error) {
+      console.error(`[tb_payment list] failed`, { code: error.code, message: error.message });
+    }
+    type Raw = {
+      id: number; paytype: string | null;
+      payyuan: number | null; payrate: number | null; paythb: number | null;
+      paystatus: string; paydate: string | null; userid: string;
+    };
+    const raw = (data ?? []) as Raw[];
+    const usersByUserId = await fetchUsersByUserId(admin, raw.map((r) => r.userid));
+    yuanRows = raw.map((r) => ({
+      id: r.id,
+      channel: r.paytype,
+      yuan_amount: Number(r.payyuan ?? 0),
+      exchange_rate: Number(r.payrate ?? 0),
+      thb_amount: Number(r.paythb ?? 0),
+      status: r.paystatus,
+      created_at: r.paydate ?? "",
+      user: usersByUserId.get(r.userid) ?? null,
+    }));
     tabCount = yuanRows.length;
-    tabTotal = yuanRows.reduce((s, r) => s + Number(r.thb_amount ?? 0), 0);
-    tabExtra = yuanRows.reduce((s, r) => s + Number(r.yuan_amount ?? 0), 0);
+    tabTotal = yuanRows.reduce((s, r) => s + r.thb_amount, 0);
+    tabExtra = yuanRows.reduce((s, r) => s + r.yuan_amount, 0);
 
   } else if (tab === "shop") {
     let q = admin
-      .from("service_orders")
-      .select(`id, h_no, status, title, item_count, total_thb, created_at,
-        profile:profiles!profile_id ( member_code, first_name, last_name, phone )`)
-      .order("created_at", { ascending: false })
+      .from("tb_header_order")
+      .select(`id, hno, hstatus, htitle, hcount, hcostallth, hdate, userid`)
+      .order("hdate", { ascending: false })
       .limit(500);
-    if (dateFrom) q = q.gte("created_at", dateFrom);
-    if (dateTo)   q = q.lte("created_at", dateTo + "T23:59:59");
-    const { data } = await q;
-    type Raw = Omit<SRow, "profile"> & { profile: Profile | Profile[] | null };
-    shopRows = ((data ?? []) as Raw[]).map((r) => ({ ...r, profile: normP(r.profile) }));
+    if (dateFrom) q = q.gte("hdate", dateFrom);
+    if (dateTo)   q = q.lte("hdate", dateTo + "T23:59:59");
+    const { data, error } = await q;
+    if (error) {
+      console.error(`[tb_header_order list] failed`, { code: error.code, message: error.message });
+    }
+    type Raw = {
+      id: number; hno: string; hstatus: string;
+      htitle: string | null; hcount: number | null;
+      hcostallth: number | null; hdate: string | null; userid: string;
+    };
+    const raw = (data ?? []) as Raw[];
+    const usersByUserId = await fetchUsersByUserId(admin, raw.map((r) => r.userid));
+    shopRows = raw.map((r) => ({
+      id: r.id,
+      h_no: r.hno,
+      status: r.hstatus,
+      title: r.htitle,
+      item_count: Number(r.hcount ?? 0),
+      total_thb: Number(r.hcostallth ?? 0),
+      created_at: r.hdate ?? "",
+      user: usersByUserId.get(r.userid) ?? null,
+    }));
     tabCount = shopRows.length;
-    tabTotal = shopRows.reduce((s, r) => s + Number(r.total_thb ?? 0), 0);
-    tabExtra = shopRows.reduce((s, r) => s + Number(r.item_count ?? 0), 0);
+    tabTotal = shopRows.reduce((s, r) => s + r.total_thb, 0);
+    tabExtra = shopRows.reduce((s, r) => s + r.item_count, 0);
 
   } else if (tab === "topup" || tab === "withdraw" || tab === "refund") {
-    const kind = tab === "topup" ? "deposit" : tab === "withdraw" ? "withdraw" : "refund";
+    // Wallet history (tb_wallet_hs) — map tab to legacy `type` value.
+    const legacyType = tab === "topup" ? "1" : tab === "withdraw" ? "3" : "5";
     let q = admin
-      .from("wallet_transactions")
-      .select(`id, kind, amount, status, bank_name, account_name, account_number, note, created_at,
-        profile:profiles!profile_id ( member_code, first_name, last_name, phone )`)
-      .eq("kind", kind)
-      .order("created_at", { ascending: false })
+      .from("tb_wallet_hs")
+      .select(`id, type, amount, status, depositnamebank, nameuserbank, nouserbank, note, date, userid`)
+      .eq("type", legacyType)
+      .order("date", { ascending: false })
       .limit(500);
-    if (dateFrom) q = q.gte("created_at", dateFrom);
-    if (dateTo)   q = q.lte("created_at", dateTo + "T23:59:59");
-    const { data } = await q;
-    type Raw = Omit<WRow, "profile"> & { profile: Profile | Profile[] | null };
-    walletRows = ((data ?? []) as Raw[]).map((r) => ({ ...r, profile: normP(r.profile) }));
+    if (dateFrom) q = q.gte("date", dateFrom);
+    if (dateTo)   q = q.lte("date", dateTo + "T23:59:59");
+    const { data, error } = await q;
+    if (error) {
+      console.error(`[tb_wallet_hs list] failed`, { code: error.code, message: error.message });
+    }
+    type Raw = {
+      id: number; type: string;
+      amount: number | null; status: string | null;
+      depositnamebank: string | null; nameuserbank: string | null; nouserbank: string | null;
+      note: string | null; date: string | null; userid: string;
+    };
+    const raw = (data ?? []) as Raw[];
+    const usersByUserId = await fetchUsersByUserId(admin, raw.map((r) => r.userid));
+    walletRows = raw.map((r) => ({
+      id: r.id,
+      type: r.type,
+      amount: Number(r.amount ?? 0),
+      status: r.status ?? "1",
+      bank_name: r.depositnamebank,
+      account_name: r.nameuserbank,
+      account_number: r.nouserbank,
+      note: r.note,
+      created_at: r.date ?? "",
+      user: usersByUserId.get(r.userid) ?? null,
+    }));
     tabCount   = walletRows.length;
-    tabPending = walletRows.filter((r) => r.status === "pending").length;
+    tabPending = walletRows.filter((r) => r.status === "1").length;
     tabTotal   = walletRows
-      .filter((r) => r.status === "completed")
-      .reduce((s, r) => s + Math.abs(Number(r.amount ?? 0)), 0);
+      .filter((r) => r.status === "2")
+      .reduce((s, r) => s + Math.abs(r.amount), 0);
   }
 
   // ── CSV data ────────────────────────────────────────────────────────────────
 
   const forwarderCsv: CsvRow[] = forwarderRows.map((r) => ({
     เลขที่: r.f_no,
-    รหัสสมาชิก: r.profile?.member_code ?? "",
-    ชื่อ: profileName(r.profile),
-    เบอร์: r.profile?.phone ?? "",
+    รหัสสมาชิก: r.user?.userid ?? "",
+    ชื่อ: userDisplayName(r.user),
+    เบอร์: r.user?.usertel ?? "",
     คลัง: r.source_warehouse,
-    ขนส่ง: r.transport_type,
+    ขนส่ง: TRANSPORT_LABEL[r.transport_type] ?? r.transport_type,
     น้ำหนักkg: r.weight_kg,
     ปริมาตรcbm: r.volume_cbm,
     ราคา: r.total_price,
-    สถานะ: STATUS_LABEL[r.status] ?? r.status,
-    วันที่: new Date(r.created_at).toLocaleDateString("th-TH"),
+    สถานะ: legacyForwarderStatusThai(r.status),
+    วันที่: r.created_at ? new Date(r.created_at).toLocaleDateString("th-TH") : "",
   }));
 
   const yuanCsv: CsvRow[] = yuanRows.map((r) => ({
-    รหัสสมาชิก: r.profile?.member_code ?? "",
-    ชื่อ: profileName(r.profile),
-    เบอร์: r.profile?.phone ?? "",
-    ช่องทาง: r.channel ?? "",
+    รหัสสมาชิก: r.user?.userid ?? "",
+    ชื่อ: userDisplayName(r.user),
+    เบอร์: r.user?.usertel ?? "",
+    ช่องทาง: r.channel ? PAYTYPE_LABEL[r.channel] ?? r.channel : "",
     หยวน: r.yuan_amount,
     อัตราแลกเปลี่ยน: r.exchange_rate,
     บาท: r.thb_amount,
-    สถานะ: STATUS_LABEL[r.status] ?? r.status,
-    วันที่: new Date(r.created_at).toLocaleDateString("th-TH"),
+    สถานะ: PAYMENT_LABEL[r.status] ?? r.status,
+    วันที่: r.created_at ? new Date(r.created_at).toLocaleDateString("th-TH") : "",
   }));
 
   const shopCsv: CsvRow[] = shopRows.map((r) => ({
     เลขที่: r.h_no,
-    รหัสสมาชิก: r.profile?.member_code ?? "",
-    ชื่อ: profileName(r.profile),
-    เบอร์: r.profile?.phone ?? "",
+    รหัสสมาชิก: r.user?.userid ?? "",
+    ชื่อ: userDisplayName(r.user),
+    เบอร์: r.user?.usertel ?? "",
     รายการ: r.title ?? "",
     ชิ้น: r.item_count,
     ยอด: r.total_thb,
-    สถานะ: STATUS_LABEL[r.status] ?? r.status,
-    วันที่: new Date(r.created_at).toLocaleDateString("th-TH"),
+    สถานะ: legacyOrderStatusThai(r.status),
+    วันที่: r.created_at ? new Date(r.created_at).toLocaleDateString("th-TH") : "",
   }));
 
   const walletCsv: CsvRow[] = walletRows.map((r) => ({
-    รหัสสมาชิก: r.profile?.member_code ?? "",
-    ชื่อ: profileName(r.profile),
-    เบอร์: r.profile?.phone ?? "",
+    รหัสสมาชิก: r.user?.userid ?? "",
+    ชื่อ: userDisplayName(r.user),
+    เบอร์: r.user?.usertel ?? "",
     จำนวน: r.amount,
     ธนาคาร: r.bank_name ?? "",
     ชื่อบัญชี: r.account_name ?? "",
     เลขบัญชี: r.account_number ?? "",
     หมายเหตุ: r.note ?? "",
-    สถานะ: STATUS_LABEL[r.status] ?? r.status,
-    วันที่: new Date(r.created_at).toLocaleDateString("th-TH"),
+    สถานะ: PAYMENT_LABEL[r.status] ?? r.status,
+    วันที่: r.created_at ? new Date(r.created_at).toLocaleDateString("th-TH") : "",
   }));
 
   const csvFilename = `accounting_${tab}_${dateFrom ?? "all"}_${dateTo ?? "all"}.csv`;
@@ -369,14 +575,24 @@ export default async function AdminAccountingPage({
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      {/* Header */}
+      {/* ── Header — PEAK-style (Wave 20 fix 2026-05-26 per ภูม) ──
+          - h1 + Cargo/Freight segment pills (was on /cargo only)
+          - subtitle hint about the 6 section labels
+          - Optional date-range chip when filter is set
+          - "ปิดงบรายเดือน" CTA stays right-side */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
-          <h1 className="mt-1 text-2xl font-bold">ระบบบัญชี</h1>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
+          <div className="mt-1 flex items-center gap-3 flex-wrap">
+            <h1 className="text-2xl font-bold">ระบบบัญชี</h1>
+            <AccountingSegmentPills active="cargo" />
+          </div>
+          <p className="mt-2 text-sm text-muted">
+            Cargo · ฝากสั่งซื้อ · ฝากนำเข้า · ฝากโอนหยวน — รายรับ · รายจ่าย · ผู้ติดต่อ · การเงิน · การบัญชี
+          </p>
           {(dateFrom || dateTo) && (
-            <p className="text-sm text-muted mt-0.5">
-              {dateFrom ? new Date(dateFrom).toLocaleDateString("th-TH") : "ทั้งหมด"}
+            <p className="text-xs text-muted mt-1">
+              ช่วงเวลา: {dateFrom ? new Date(dateFrom).toLocaleDateString("th-TH") : "ทั้งหมด"}
               {" — "}
               {dateTo ? new Date(dateTo).toLocaleDateString("th-TH") : "ปัจจุบัน"}
             </p>
@@ -389,6 +605,13 @@ export default async function AdminAccountingPage({
           📋 ปิดงบฝากนำเข้ารายเดือน →
         </Link>
       </div>
+
+      {/* ── PEAK-style TOP menubar — purple bar with cascading dropdowns ──
+          Shared config from `lib/admin/accounting-menubar.ts`. Many leaf
+          URLs are TODO placeholders (legacy `acc-system-cargo.php` parity
+          — owner brief 2026-05-20 night). activeHref="/admin/accounting"
+          so "หน้าหลัก" lights up on this dashboard. */}
+      <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting" />
 
       {/* Tab nav */}
       <div className="flex flex-wrap border-b border-border gap-0">
@@ -459,14 +682,17 @@ export default async function AdminAccountingPage({
               <PipelineCard
                 label="ฝากโอนหยวนกำลังโอน"
                 value={thb(vYuanInProcess)}
-                hint="pending + processing"
+                hint="รอดำเนินการ"
                 href="/admin/yuan-payments?status=pending"
                 tone="blue"
               />
             </div>
           </div>
 
-          {/* T-P5 customer counts — only meaningful if a date window is set */}
+          {/* Active-customer count — only meaningful if a date window is set.
+              (We removed the "new customers" card; tb_users.userregistered is
+               loaded but the rebuilt-era profile gate doesn't exist on legacy
+               schema — most legacy customers signed up years ago.) */}
           {(dateFrom || dateTo) && (
             <div>
               <h2 className="text-sm font-bold text-muted uppercase tracking-wider mb-2">
@@ -474,16 +700,9 @@ export default async function AdminAccountingPage({
               </h2>
               <div className="grid sm:grid-cols-2 gap-3">
                 <PipelineCard
-                  label="ลูกค้าใหม่ (สมัครในช่วงนี้)"
-                  value={`${nNewCustomers} คน`}
-                  hint="status=active, สมัครภายในช่วงเวลา"
-                  href="/admin/customers"
-                  tone="green"
-                />
-                <PipelineCard
                   label="ลูกค้าที่ใช้บริการ (จ่ายเงินจริง)"
                   value={`${nActiveCustomers} คน`}
-                  hint="distinct profile ที่จ่ายเงิน Pacred ในช่วง"
+                  hint="distinct userid ที่จ่ายเงิน Pacred ในช่วง"
                   href="/admin/customers"
                   tone="green"
                 />
@@ -497,12 +716,12 @@ export default async function AdminAccountingPage({
               📊 รายได้แยกประเภท
             </h2>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <SumCard label="ฝากนำเข้า (ส่งมอบแล้ว)" value={sForwarder} tone="green" />
-              <SumCard label="ฝากโอนหยวน (สำเร็จ)"   value={sYuan}      tone="green" />
-              <SumCard label="ฝากสั่งซื้อ (สำเร็จ)"   value={sShop}      tone="green" />
-              <SumCard label="เติมเงินรวม (อนุมัติ)"   value={sTopup}     tone="blue" />
-              <SumCard label="ถอนเงินรวม (จ่ายแล้ว)"  value={sWithdraw}  tone="red" />
-              <SumCard label="คืนเงินรวม (สำเร็จ)"     value={sRefund}    tone="red" />
+              <SumCard label="ฝากนำเข้า (ส่งแล้ว)" value={sForwarder} tone="green" />
+              <SumCard label="ฝากโอนหยวน (สำเร็จ)"  value={sYuan}      tone="green" />
+              <SumCard label="ฝากสั่งซื้อ (สำเร็จ)"  value={sShop}      tone="green" />
+              <SumCard label="เติมเงินรวม (สำเร็จ)"  value={sTopup}     tone="blue" />
+              <SumCard label="ถอนเงินรวม (จ่ายแล้ว)" value={sWithdraw}  tone="red" />
+              <SumCard label="คืนเงินรวม (สำเร็จ)"    value={sRefund}    tone="red" />
             </div>
           </div>
 
@@ -517,7 +736,7 @@ export default async function AdminAccountingPage({
             <div className="rounded-xl border border-border bg-white p-4 space-y-2">
               <p className="font-semibold text-muted uppercase tracking-wide text-[10px]">ลิงก์ด่วน</p>
               {[
-                ["/admin/forwarders?status=delivered", "ฝากนำเข้าที่ส่งมอบแล้ว"],
+                ["/admin/forwarders?status=7", "ฝากนำเข้าที่ส่งแล้ว"],
                 ["/admin/yuan-payments?status=completed", "ฝากโอนหยวนสำเร็จ"],
                 ["/admin/service-orders?status=completed", "ฝากสั่งสำเร็จ"],
               ].map(([href, label]) => (
@@ -559,21 +778,21 @@ export default async function AdminAccountingPage({
             {forwarderRows.map((r) => (
               <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
                 <td className="px-4 py-3 font-mono text-xs">
-                  <Link href={`/admin/forwarders/${r.f_no}`} className="text-primary-600 hover:underline">{r.f_no}</Link>
+                  <Link href={`/admin/forwarders/${r.f_no}`} className="text-primary-600 hover:underline">#{r.f_no}</Link>
                 </td>
                 <td className="px-4 py-3 text-xs">
-                  <div className="font-mono">{r.profile?.member_code ?? "—"}</div>
-                  <div>{profileName(r.profile)}</div>
-                  <div className="text-muted">{r.profile?.phone}</div>
+                  <div className="font-mono">{r.user?.userid ?? "—"}</div>
+                  <div>{userDisplayName(r.user)}</div>
+                  <div className="text-muted">{r.user?.usertel ?? ""}</div>
                 </td>
-                <td className="px-4 py-3 text-xs">{r.source_warehouse} / {r.transport_type}</td>
+                <td className="px-4 py-3 text-xs">{r.source_warehouse} / {TRANSPORT_LABEL[r.transport_type] ?? r.transport_type}</td>
                 <td className="px-4 py-3 text-right text-xs">
-                  {Number(r.weight_kg).toFixed(2)} kg<br />
-                  <span className="text-muted">{Number(r.volume_cbm).toFixed(3)} cbm</span>
+                  {r.weight_kg.toFixed(2)} kg<br />
+                  <span className="text-muted">{r.volume_cbm.toFixed(3)} cbm</span>
                 </td>
                 <td className="px-4 py-3 text-right font-mono text-xs">{thb(r.total_price)}</td>
-                <td className="px-4 py-3"><StatusBadge s={r.status} /></td>
-                <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{new Date(r.created_at).toLocaleDateString("th-TH")}</td>
+                <td className="px-4 py-3"><ForwarderStatusBadge s={r.status} /></td>
+                <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{r.created_at ? new Date(r.created_at).toLocaleDateString("th-TH") : "—"}</td>
               </tr>
             ))}
           </DataTable>
@@ -602,16 +821,16 @@ export default async function AdminAccountingPage({
             {yuanRows.map((r) => (
               <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
                 <td className="px-4 py-3 text-xs">
-                  <div className="font-mono">{r.profile?.member_code ?? "—"}</div>
-                  <div>{profileName(r.profile)}</div>
-                  <div className="text-muted">{r.profile?.phone}</div>
+                  <div className="font-mono">{r.user?.userid ?? "—"}</div>
+                  <div>{userDisplayName(r.user)}</div>
+                  <div className="text-muted">{r.user?.usertel ?? ""}</div>
                 </td>
-                <td className="px-4 py-3 text-xs">{r.channel ?? "—"}</td>
-                <td className="px-4 py-3 text-right font-mono">¥{Number(r.yuan_amount).toFixed(2)}</td>
-                <td className="px-4 py-3 text-right text-xs text-muted">{Number(r.exchange_rate).toFixed(4)}</td>
+                <td className="px-4 py-3 text-xs">{r.channel ? PAYTYPE_LABEL[r.channel] ?? r.channel : "—"}</td>
+                <td className="px-4 py-3 text-right font-mono">¥{r.yuan_amount.toFixed(2)}</td>
+                <td className="px-4 py-3 text-right text-xs text-muted">{r.exchange_rate.toFixed(4)}</td>
                 <td className="px-4 py-3 text-right font-mono text-xs">{thb(r.thb_amount)}</td>
-                <td className="px-4 py-3"><StatusBadge s={r.status} /></td>
-                <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{new Date(r.created_at).toLocaleDateString("th-TH")}</td>
+                <td className="px-4 py-3"><PaymentStatusBadge s={r.status} /></td>
+                <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{r.created_at ? new Date(r.created_at).toLocaleDateString("th-TH") : "—"}</td>
               </tr>
             ))}
           </DataTable>
@@ -643,15 +862,15 @@ export default async function AdminAccountingPage({
                   <Link href={`/admin/service-orders/${r.h_no}`} className="text-primary-600 hover:underline">{r.h_no}</Link>
                 </td>
                 <td className="px-4 py-3 text-xs">
-                  <div className="font-mono">{r.profile?.member_code ?? "—"}</div>
-                  <div>{profileName(r.profile)}</div>
-                  <div className="text-muted">{r.profile?.phone}</div>
+                  <div className="font-mono">{r.user?.userid ?? "—"}</div>
+                  <div>{userDisplayName(r.user)}</div>
+                  <div className="text-muted">{r.user?.usertel ?? ""}</div>
                 </td>
                 <td className="px-4 py-3 text-xs">{r.title ?? "—"}</td>
                 <td className="px-4 py-3 text-right text-xs">{r.item_count}</td>
                 <td className="px-4 py-3 text-right font-mono text-xs">{thb(r.total_thb)}</td>
-                <td className="px-4 py-3"><StatusBadge s={r.status} /></td>
-                <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{new Date(r.created_at).toLocaleDateString("th-TH")}</td>
+                <td className="px-4 py-3"><OrderStatusBadge s={r.status} /></td>
+                <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{r.created_at ? new Date(r.created_at).toLocaleDateString("th-TH") : "—"}</td>
               </tr>
             ))}
           </DataTable>
@@ -665,7 +884,7 @@ export default async function AdminAccountingPage({
             <StatCard label="รายการทั้งหมด"    value={String(tabCount)} />
             <StatCard label="รอดำเนินการ"      value={String(tabPending)} tone={tabPending > 0 ? "warn" : undefined} />
             <StatCard
-              label={tab === "topup" ? "เติมรวม (อนุมัติ)" : tab === "withdraw" ? "ถอนรวม (จ่ายแล้ว)" : "คืนรวม (สำเร็จ)"}
+              label={tab === "topup" ? "เติมรวม (สำเร็จ)" : tab === "withdraw" ? "ถอนรวม (จ่ายแล้ว)" : "คืนรวม (สำเร็จ)"}
               value={thb(tabTotal)}
               tone={tab === "topup" ? "green" : "red"}
             />
@@ -681,28 +900,69 @@ export default async function AdminAccountingPage({
             headers={["ลูกค้า", "จำนวน (฿)", "บัญชี/หลักฐาน", "หมายเหตุ", "สถานะ", "วันที่"]}
             empty={walletRows.length === 0}
           >
-            {walletRows.map((r) => (
-              <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
-                <td className="px-4 py-3 text-xs">
-                  <div className="font-mono">{r.profile?.member_code ?? "—"}</div>
-                  <div>{profileName(r.profile)}</div>
-                  <div className="text-muted">{r.profile?.phone}</div>
-                </td>
-                <td className={`px-4 py-3 text-right font-mono font-bold ${r.amount < 0 ? "text-red-700" : "text-green-700"}`}>
-                  {r.amount > 0 ? "+" : ""}{Number(r.amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                </td>
-                <td className="px-4 py-3 text-xs space-y-0.5">
-                  {r.bank_name    && <div>{r.bank_name}</div>}
-                  {r.account_name && <div className="text-muted">{r.account_name}</div>}
-                  {r.account_number && <div className="font-mono text-muted text-[10px]">{r.account_number}</div>}
-                </td>
-                <td className="px-4 py-3 text-xs text-muted">{r.note ?? "—"}</td>
-                <td className="px-4 py-3"><StatusBadge s={r.status} /></td>
-                <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{new Date(r.created_at).toLocaleString("th-TH")}</td>
-              </tr>
-            ))}
+            {walletRows.map((r) => {
+              // For "ถอนเงิน" tab, render the legacy amount as negative for UX
+              // clarity (legacy stores all wallet_hs.amount as positive, the
+              // direction comes from `type`).
+              const isOutflow = r.type === "3" || r.type === "5"; // withdraw / refund
+              const renderedAmount = isOutflow ? -Math.abs(r.amount) : Math.abs(r.amount);
+              return (
+                <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
+                  <td className="px-4 py-3 text-xs">
+                    <div className="font-mono">{r.user?.userid ?? "—"}</div>
+                    <div>{userDisplayName(r.user)}</div>
+                    <div className="text-muted">{r.user?.usertel ?? ""}</div>
+                  </td>
+                  <td className={`px-4 py-3 text-right font-mono font-bold ${renderedAmount < 0 ? "text-red-700" : "text-green-700"}`}>
+                    {renderedAmount > 0 ? "+" : ""}{renderedAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-4 py-3 text-xs space-y-0.5">
+                    {r.bank_name    && <div>{r.bank_name}</div>}
+                    {r.account_name && <div className="text-muted">{r.account_name}</div>}
+                    {r.account_number && <div className="font-mono text-muted text-[10px]">{r.account_number}</div>}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-muted">{r.note ?? "—"}</td>
+                  <td className="px-4 py-3"><PaymentStatusBadge s={r.status} /></td>
+                  <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{r.created_at ? new Date(r.created_at).toLocaleString("th-TH") : "—"}</td>
+                </tr>
+              );
+            })}
           </DataTable>
         </div>
+      )}
+
+      {/* ── Quick-access cards — pulled in from the old /cargo hub
+            (Wave 20 fix 2026-05-26). Shown only on the Summary tab so the
+            other tabs stay focused on their ledgers. */}
+      {tab === "summary" && (
+        <section className="pt-2">
+          <h2 className="text-sm font-bold text-muted uppercase tracking-wider mb-3">
+            🗂 หน้าบัญชีที่ใช้ได้ตอนนี้
+          </h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {ACCOUNTING_HUB_CARDS.map((card) => (
+              <Link
+                key={card.href}
+                href={card.href}
+                className="block rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm hover:shadow-md hover:border-primary-300 transition-all"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-semibold text-foreground">{card.title}</h3>
+                  <span className="rounded-full bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 text-[10px] font-medium uppercase">
+                    {card.badge}
+                  </span>
+                </div>
+                <p className="mt-1.5 text-xs text-muted leading-relaxed">{card.desc}</p>
+                <p className="mt-3 text-xs font-medium text-primary-600">เปิด →</p>
+              </Link>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-muted italic">
+            เมนูด้านบน (รายรับ / รายจ่าย / ผู้ติดต่อ / การเงิน / การบัญชี) เป็นโครงเดียวกับ legacy{" "}
+            <code className="rounded bg-gray-100 dark:bg-gray-800 px-1 py-0.5">acc-system-cargo.php</code>{" "}
+            — บางลิงก์ปลายทางยังเป็น placeholder (รอสร้างหน้าจริง)
+          </p>
+        </section>
       )}
     </main>
   );
@@ -809,10 +1069,26 @@ function StatCard({ label, value, tone }: { label: string; value: string; tone?:
   );
 }
 
-function StatusBadge({ s }: { s: string }) {
+function ForwarderStatusBadge({ s }: { s: string }) {
   return (
-    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE[s] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
-      {STATUS_LABEL[s] ?? s}
+    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${FORWARDER_BADGE[s] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+      {legacyForwarderStatusThai(s) || s}
+    </span>
+  );
+}
+
+function OrderStatusBadge({ s }: { s: string }) {
+  return (
+    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${ORDER_BADGE[s] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+      {legacyOrderStatusThai(s) || s}
+    </span>
+  );
+}
+
+function PaymentStatusBadge({ s }: { s: string }) {
+  return (
+    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${PAYMENT_BADGE[s] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+      {PAYMENT_LABEL[s] ?? s}
     </span>
   );
 }

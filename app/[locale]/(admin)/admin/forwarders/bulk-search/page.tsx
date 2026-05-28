@@ -30,7 +30,7 @@ export default async function BulkSearchPage() {
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-5xl">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · ปฏิบัติการ</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ปฏิบัติการ</p>
         <h1 className="mt-1 text-2xl font-bold">ค้นหา tracking หลายเลข (Bulk Search)</h1>
         <p className="mt-1 text-sm text-muted">
           วาง tracking number หลายเลข (แยกบรรทัดละเลข, comma หรือ spaces ได้)

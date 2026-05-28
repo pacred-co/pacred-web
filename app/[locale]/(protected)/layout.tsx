@@ -89,6 +89,11 @@ const CSS_BUNDLE: string[] = [
   `${PCS}/fonts/feather/style.min.css`,
   `${PCS}/plugins/magnific-popup/dist/magnific-popup.css`,
   `${PCS}/fonts/simple-line-icons/style.css`,
+  // DataTables core + responsive (mobile-fix per Agent C audit 2026-05-20 ค่ำ —
+  // without the responsive CSS, /service-order's 7-column #myTable horizontal-
+  // scrolls on phones because the `dtr-inline` collapse rules are dead).
+  `${PCS}/plugins/datatables/css/dataTables.bootstrap4.css`,
+  `${PCS}/plugins/datatables/css/responsive.dataTables.min.css`,
   "https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/css/intlTelInput.css",
   "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css",
   `${PCS}/plugins/slick/slick.css`,
@@ -159,6 +164,9 @@ const JS_BUNDLE: string[] = [
   `${PCS}/plugins/sweetalert/js/polyfill.min.js`,
   `${PCS}/plugins/magnific-popup/dist/jquery.magnific-popup.min.js`,
   `${PCS}/plugins/magnific-popup/meg.init.js`,
+  // DataTables JS + responsive plugin (mobile-fix per Agent C audit 2026-05-20 ค่ำ).
+  `${PCS}/plugins/datatables.net/js/jquery.dataTables.min.js`,
+  `${PCS}/plugins/datatables/js/dataTables.responsive.min.js`,
 ];
 
 export default async function ProtectedLayout({

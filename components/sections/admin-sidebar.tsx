@@ -31,13 +31,58 @@ import {
   FileText, Newspaper, ScrollText, Boxes, Wrench, ShoppingBag, HandCoins,
   PackagePlus, PackageCheck, UserPlus, Plus, History, Landmark, Layers,
   SlidersHorizontal, Network, ListOrdered, Barcode, ScanLine, Camera,
-  Printer, Calculator, BadgeCheck, ShieldAlert, UserCheck, FileSpreadsheet,
+  Printer, Calculator, BadgeCheck, ShieldAlert, UserCheck, Wand2, RefreshCw,
+  Banknote, KanbanSquare, Smartphone, Save,
   ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
 import {
   menuForRoles, primaryRole, type BadgeCounts, type MenuItem, type MenuSection,
 } from "@/lib/admin/sidebar-menu";
+
+// ──────────────────────────────────────────────────────────────
+// Phase-gated visibility (2026-05-20 night owner brief).
+//
+// Tag rule (in `lib/admin/sidebar-menu.ts`):
+//   undefined / 1 = visible to all admin staff
+//   2 / 3 / 4     = visible to `super` only
+//
+// Parent items are NOT tagged — a parent's effective phase is the
+// MIN of its remaining (post-filter) children's phases. If every
+// child of a parent is filtered out, the parent is dropped too.
+//
+// This is purely a UI visibility filter; route-level enforcement is
+// the responsibility of `lib/admin/phase-access.ts` (`canAccessRoute`),
+// which the (admin) layout / per-page guards consume.
+// ──────────────────────────────────────────────────────────────
+function filterByPhase(items: MenuItem[], role: AdminRole | null): MenuItem[] {
+  if (role === "super") return items; // super sees everything
+  return items
+    .map((item): MenuItem | null => {
+      const hasOriginalChildren = !!item.children?.length;
+      const childrenFiltered = hasOriginalChildren
+        ? filterByPhase(item.children!, role)
+        : undefined;
+
+      // A parent's "effective phase" = MIN of its surviving children's phases.
+      // If the parent originally had children but ALL got filtered out, treat
+      // the parent as gone too (Infinity). For a true leaf (never had any
+      // children), default to its own phase or 1.
+      const effectivePhase = hasOriginalChildren
+        ? (childrenFiltered!.length === 0
+            ? Infinity
+            : Math.min(...childrenFiltered!.map((c) => c.phase ?? 1)))
+        : (item.phase ?? 1);
+
+      // An explicit `phase` on the item itself always wins. Otherwise the
+      // effective (child-derived for parents · 1-default for leaves) phase
+      // decides.
+      const myPhase = item.phase ?? effectivePhase;
+      if (myPhase > 1) return null;
+      return { ...item, children: childrenFiltered };
+    })
+    .filter((x): x is MenuItem => x !== null);
+}
 
 // ── Icon-name → component map. Menu items carry icon NAMES (strings) so
 //    `lib/admin/sidebar-menu.ts` stays a plain non-JSX module. ──────────
@@ -50,61 +95,110 @@ const ICONS: Record<string, LucideIcon> = {
   Newspaper, ScrollText, Boxes, Wrench, ShoppingBag, HandCoins, PackagePlus,
   PackageCheck, UserPlus, Plus, History, Landmark, Layers, SlidersHorizontal,
   Network, ListOrdered, Barcode, ScanLine, Camera, Printer, Calculator,
-  BadgeCheck, ShieldAlert, UserCheck, FileSpreadsheet,
+  BadgeCheck, ShieldAlert, UserCheck, Wand2, RefreshCw,
+  // 2026-05-27 (Wave 22 Agent M finding) — these 4 were referenced from
+  // lib/admin/sidebar-menu.ts but missing from this map → Icon() silently
+  // returned a blank 18×18 spacer (visually = "icon missing"). Added all 4.
+  Banknote,        // รายการเบิกเงิน parent + 5 sub-items
+  KanbanSquare,    // /admin/board workboard
+  Smartphone,      // driver mobile leaves + super
+  Save,            // extension / audit
 };
 
 function Icon({ name, active }: { name?: string; active: boolean }) {
-  const Cmp = name ? ICONS[name] : undefined;
-  if (!Cmp) return <span className="w-[18px] h-[18px] shrink-0" />;
-  return <Cmp className={`w-[18px] h-[18px] shrink-0 ${active ? "text-white" : "text-gray-500"}`} />;
+  if (!name) return <span className="w-[18px] h-[18px] shrink-0" />;
+  const Cmp = ICONS[name];
+  if (!Cmp) {
+    // Dev-only warning so the next icon name we forget to register is
+    // surfaced immediately instead of silently rendering a blank spacer.
+    if (process.env.NODE_ENV !== "production") {
+      console.warn(`[admin-sidebar] unknown icon name '${name}' — add to ICONS map in components/sections/admin-sidebar.tsx`);
+    }
+    return <span className="w-[18px] h-[18px] shrink-0" />;
+  }
+  return <Cmp className={`w-[18px] h-[18px] shrink-0 ${active ? "text-white" : "text-muted"}`} />;
 }
 
 // ── Role badge label (legacy nameAdminType + dept/section). ────────────
+// 2026-05-20 ค่ำ — extended to cover the 8 new roles added by migration
+// 0091 (sales + qa + 13 freight_*). i18n keys under `role.*` are added
+// in messages/th.json + en.json by Agent ZZ in the same wave.
 const ROLE_LABEL_KEY: Record<AdminRole, string> = {
   super:       "role.super",
   ops:         "role.ops",
   accounting:  "role.accounting",
   sales_admin: "role.salesAdmin",
+  sales:       "role.sales",
+  qa:          "role.qa",
   warehouse:   "role.warehouse",
   driver:      "role.driver",
   interpreter: "role.interpreter",
+  freight_sales_manager:    "role.freightSalesManager",
+  freight_sales:            "role.freightSales",
+  freight_export_manager:   "role.freightExportManager",
+  freight_export_cs:        "role.freightExportCs",
+  freight_export_doc:       "role.freightExportDoc",
+  freight_export_clearance: "role.freightExportClearance",
+  freight_clearance_both:   "role.freightClearanceBoth",
+  freight_export_messenger: "role.freightExportMessenger",
+  freight_import_manager:   "role.freightImportManager",
+  freight_import_cs:        "role.freightImportCs",
+  freight_import_doc:       "role.freightImportDoc",
+  freight_import_clearance: "role.freightImportClearance",
+  freight_import_messenger: "role.freightImportMessenger",
 };
 
-/** Does any descendant href match the current (pathname + search) location? */
+/** Does any descendant href match the current path? Used to auto-open. */
 function subtreeHasActive(item: MenuItem, pathname: string, search: string): boolean {
   if (item.href && hrefMatches(item.href, pathname, search)) return true;
   return (item.children ?? []).some((c) => subtreeHasActive(c, pathname, search));
 }
 
-/**
- * Path-match — pathname AND query string aware. (Sprint-22 fix — the prior
- * version stripped `?` and only compared the path, so multiple sibling
- * leafs like `/admin?c=all` + `/admin?c=freight` + `/admin?c=cargo` ALL
- * matched the same `/admin` pathname and all 4 lit up simultaneously.)
+/** Path + query-string match (locale-agnostic).
  *
- *   - If `href` carries no query (e.g. `/admin/forwarders`): match the
- *     pathname exactly OR as a parent prefix of a deeper segment (so
- *     `/admin/forwarders/F-001` still highlights "บริการฝากนำเข้า").
- *   - If `href` carries a query (e.g. `/admin?c=all`): both the pathname
- *     AND every query-string param in the href must equal the current
- *     URL's. A leaf with `?c=all` does NOT match `/admin` with no `c`
- *     param (the parent `/admin` link covers the no-param view).
+ * Two ภูม-flagged bugs this matcher closes:
+ *
+ * Bug A (2026-05-20 morning): `startsWith`-based matching highlighted
+ *   every leaf under `/admin/forwarders/X` whenever any sibling page
+ *   was open (the entire "บริการฝากนำเข้า" subtree lit up). Fixed by
+ *   moving to **exact** path equality — leaves highlight ONLY when
+ *   their own href is the active route; parent dropdowns still open
+ *   via `subtreeHasActive` (the recursive matcher).
+ *
+ * Bug B (2026-05-20 afternoon): URL = `/admin/wallet?kind=withdraw&
+ *   status=pending` lit up FIVE sidebar items at once (walletAll +
+ *   wallet.deposit + wallet.withdraw + accCargo.topup + accCargo.withdraw)
+ *   because `usePathname()` strips the query string — everything sharing
+ *   the same bare pathname matched. Fixed by **including the query
+ *   string in the comparison**: every key in the href's query must be
+ *   present + equal in the current URL's query; a query-less href
+ *   only matches a query-less URL.
+ *
+ * Locale: next/navigation's usePathname() returns the locale-prefixed
+ * path ("/en/admin/...") for non-default locales. Strip the 2-letter
+ * prefix so the comparison is locale-agnostic (TH default = no prefix
+ * so the strip is a no-op).
  */
-function hrefMatches(href: string, pathname: string, search: string): boolean {
-  const [base, query] = href.split("?", 2);
-  if (query) {
-    // Query-aware: pathname must match exactly AND every key in href's
-    // query must equal the URL's value for the same key.
-    if (pathname !== base) return false;
-    const want = new URLSearchParams(query);
-    const have = new URLSearchParams(search);
-    for (const [k, v] of want) {
-      if (have.get(k) !== v) return false;
-    }
-    return true;
+function hrefMatches(href: string, pathname: string, currentSearch: string): boolean {
+  const [hrefBase, hrefQuery = ""] = href.split("?");
+  const stripped = pathname.replace(/^\/[a-z]{2}(?=\/|$)/, "");
+  if (stripped !== hrefBase) return false;
+
+  const currentParams = new URLSearchParams(currentSearch);
+  if (hrefQuery === "") {
+    // A bare href ("ทั้งหมด") matches ONLY a bare URL. If the user is
+    // on /admin/wallet?kind=withdraw, the bare "/admin/wallet" item
+    // should NOT light up — wallet.withdraw owns that view.
+    return currentParams.toString() === "";
   }
-  if (base === "/admin") return pathname === "/admin" || pathname.endsWith("/admin");
-  return pathname === base || pathname.startsWith(base + "/");
+
+  // A href-with-query matches only when every key it declares is
+  // present + equal in the current URL.
+  const hrefParams = new URLSearchParams(hrefQuery);
+  for (const [key, value] of hrefParams) {
+    if (currentParams.get(key) !== value) return false;
+  }
+  return true;
 }
 
 // ── A red count pill — the legacy badgeMenu($n). ───────────────────────
@@ -140,7 +234,7 @@ function MenuRow({
   const rowClasses = `group flex items-center gap-2.5 rounded-md ${padLeft} pr-2 py-2 text-[13px] transition-colors ${
     active
       ? "bg-primary-600 text-white font-semibold shadow-sm"
-      : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+      : "text-foreground/75 hover:bg-primary-50 hover:text-primary-700"
   }`;
 
   // Accordion parent (no own href, or a parent with children).
@@ -157,8 +251,8 @@ function MenuRow({
           <span className="truncate">{t(item.labelKey)}</span>
           {badgeVal > 0 && <CountBadge value={badgeVal} />}
           {open
-            ? <ChevronDown className={`${badgeVal > 0 ? "ml-1.5" : "ml-auto"} w-3.5 h-3.5 opacity-60 shrink-0`} />
-            : <ChevronRight className={`${badgeVal > 0 ? "ml-1.5" : "ml-auto"} w-3.5 h-3.5 opacity-60 shrink-0`} />}
+            ? <ChevronDown className={`${badgeVal > 0 ? "ml-1.5" : "ml-auto"} w-3.5 h-3.5 opacity-50 shrink-0`} />
+            : <ChevronRight className={`${badgeVal > 0 ? "ml-1.5" : "ml-auto"} w-3.5 h-3.5 opacity-50 shrink-0`} />}
         </button>
         {open && (
           <ul className="mt-0.5 space-y-0.5">
@@ -203,37 +297,37 @@ function SidebarHeader({
   const [open, setOpen] = useState(false);
   const initial = adminLabel.trim().charAt(0).toUpperCase() || "P";
   return (
-    <div className="px-4 py-4 border-b border-gray-200">
+    <div className="px-4 py-4 border-b border-border">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-3 w-full text-left rounded-lg hover:bg-gray-50 px-1 py-1 transition-colors"
+        className="flex items-center gap-3 w-full text-left rounded-lg hover:bg-surface-alt px-1 py-1 transition-colors"
         aria-expanded={open}
       >
         <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-primary-600 text-white font-bold text-sm shrink-0">
           {initial}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-gray-900 truncate">{adminLabel}</span>
+          <span className="block text-sm font-semibold text-foreground truncate">{adminLabel}</span>
           {roleKey && (
-            <span className="block text-[11px] text-gray-500 truncate">{t(roleKey)}</span>
+            <span className="block text-[11px] text-muted truncate">{t(roleKey)}</span>
           )}
         </span>
         {open
-          ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
-          : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
+          ? <ChevronDown className="w-4 h-4 text-muted shrink-0" />
+          : <ChevronRight className="w-4 h-4 text-muted shrink-0" />}
       </button>
       {open && (
         <div className="mt-2 space-y-0.5">
-          <Link href="/dashboard" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors">
+          <Link href="/dashboard" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-foreground/70 hover:bg-primary-50 hover:text-primary-700 transition-colors">
             <User className="w-4 h-4" />
             <span>{t("account.profile")}</span>
           </Link>
-          <Link href="/admin/settings" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors">
+          <Link href="/admin/settings" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-foreground/70 hover:bg-primary-50 hover:text-primary-700 transition-colors">
             <Settings className="w-4 h-4" />
             <span>{t("account.settings")}</span>
           </Link>
-          <Link href="/logout" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors">
+          <Link href="/logout" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-foreground/70 hover:bg-primary-50 hover:text-primary-700 transition-colors">
             <ArrowRightLeft className="w-4 h-4" />
             <span>{t("account.logout")}</span>
           </Link>
@@ -255,14 +349,23 @@ export function AdminSidebar({
   adminLabel?: string;
 }) {
   const pathname = usePathname() ?? "";
-  const searchParams = useSearchParams();
-  const search = searchParams ? searchParams.toString() : "";
+  // useSearchParams() is the current URL's query string — needed by
+  // hrefMatches to disambiguate sidebar items that share a pathname
+  // but carry different ?kind= / ?status= / ?group= carriers (ภูม
+  // 2026-05-20 Bug B). Strip leading "?" for clean construction.
+  const search = useSearchParams()?.toString() ?? "";
   const t = useTranslations("pcsAdminNav");
   const [openMobile, setOpenMobile] = useState(false);
 
   // Per-role purpose-built menu — faithful to the legacy per-role .php.
-  const sections: MenuSection[] = menuForRoles(roles);
+  // After role-routing, apply the Phase-gate filter (2026-05-20 brief): items
+  // tagged `phase: 2/3/4` are hidden from everyone except `super`.
   const role = primaryRole(roles);
+  const rawSections: MenuSection[] = menuForRoles(roles);
+  const sections: MenuSection[] = rawSections.map((sec) => ({
+    ...sec,
+    items: filterByPhase(sec.items, role),
+  }));
   const roleKey = role ? ROLE_LABEL_KEY[role] : null;
 
   const closeMobile = () => setOpenMobile(false);
@@ -279,23 +382,22 @@ export function AdminSidebar({
       </button>
 
       {/*
-        Podeng-aligned light sidebar — owner directive 2026-05-25
-        ("admin บัคกระจาย ยึด theme ตาม podeng"). White base, gray-700
-        text, gray-200 borders, primary-600 active state + brand accents.
-        Legacy PCS dark `menu-dark` is intentionally not reproduced —
-        Pacred admin is Pacred-native, not 1:1 with legacy admin (the
-        D1 1:1 mandate applies to customer-side, not admin UI).
+        White accordion sidebar (ภูม brief 2026-05-23 — "เปลี่ยนสี Sidebar
+        เป็นสีขาว ทำให้สมูทๆ ตัดกับหน้าทำงานข้างๆ"). Light surface keeps the
+        rail visually distinct from the main content via the right-edge
+        border + soft shadow; active item stays in Pacred primary-red so the
+        brand cue carries through.
       */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col transition-transform lg:translate-x-0
-          bg-white text-gray-900 border-r border-gray-200 shadow-sm
+          bg-white text-foreground border-r border-border shadow-[2px_0_8px_-2px_rgba(0,0,0,0.06)]
           ${openMobile ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
       >
         {/* Brand */}
-        <div className="px-4 pt-4 pb-3 border-b border-gray-200">
+        <div className="px-4 pt-4 pb-3 border-b border-border">
           <div className="flex items-baseline gap-2">
             <h2 className="text-lg font-black tracking-tight text-primary-600">PR</h2>
-            <span className="text-[10px] uppercase tracking-widest text-gray-500">Admin</span>
+            <span className="text-[10px] uppercase tracking-widest text-muted">Admin</span>
           </div>
         </div>
 
@@ -314,7 +416,7 @@ export function AdminSidebar({
           {sections.filter((sec) => sec.items.length > 0).map((sec, si) => (
             <div key={sec.header || `sec-${si}`} className="space-y-0.5">
               {sec.header && (
-                <p className="px-3 pt-1.5 pb-1 text-[10px] uppercase tracking-widest text-gray-400 font-bold">
+                <p className="px-3 pt-1.5 pb-1 text-[10px] uppercase tracking-widest text-muted/70 font-bold">
                   {sec.header}
                 </p>
               )}
@@ -336,11 +438,11 @@ export function AdminSidebar({
           ))}
         </nav>
 
-        <div className="px-2.5 py-3 border-t border-gray-200">
+        <div className="px-2.5 py-3 border-t border-border">
           <Link
             href="/dashboard"
             onClick={closeMobile}
-            className="block rounded-md px-3 py-2 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+            className="block rounded-md px-3 py-2 text-xs text-muted hover:bg-primary-50 hover:text-primary-700 transition-colors"
           >
             {t("backToCustomer")}
           </Link>

@@ -51,7 +51,10 @@ export async function customerCreateRefundRequest(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // ── Verify the source_ref is owned by this customer + was ever paid ──
@@ -61,31 +64,43 @@ export async function customerCreateRefundRequest(
   // against a never-paid parent (pending_payment / awaiting_payment /
   // pending) has nothing to refund and is rejected at creation time.
   if (d.source === "forwarder") {
-    const { data } = await supabase
+    const { data, error: error1 } = await supabase
       .from("forwarders")
       .select("f_no, status")
       .eq("f_no", d.source_ref)
       .maybeSingle<{ f_no: string; status: string }>();
+    if (error1) {
+      console.error(`[forwarders mutation lookup] failed`, { code: error1.code, message: error1.message });
+      return { ok: false, error: `db_error:${error1.code ?? "unknown"}` };
+    }
     if (!data) return { ok: false, error: "forwarder_not_found_or_not_owned" };
     if (isNeverPaidParentStatus(d.source, data.status)) {
       return { ok: false, error: "forwarder_not_paid — ฝากนำเข้านี้ยังไม่ได้ชำระเงิน ไม่มียอดให้คืน" };
     }
   } else if (d.source === "service_order") {
-    const { data } = await supabase
+    const { data, error: error1 } = await supabase
       .from("service_orders")
       .select("h_no, status")
       .eq("h_no", d.source_ref)
       .maybeSingle<{ h_no: string; status: string }>();
+    if (error1) {
+      console.error(`[service_orders mutation lookup] failed`, { code: error1.code, message: error1.message });
+      return { ok: false, error: `db_error:${error1.code ?? "unknown"}` };
+    }
     if (!data) return { ok: false, error: "service_order_not_found_or_not_owned" };
     if (isNeverPaidParentStatus(d.source, data.status)) {
       return { ok: false, error: "service_order_not_paid — ออเดอร์นี้ยังไม่ได้ชำระเงิน ไม่มียอดให้คืน" };
     }
   } else if (d.source === "yuan_payment") {
-    const { data } = await supabase
+    const { data, error: error1 } = await supabase
       .from("yuan_payments")
       .select("id, status")
       .eq("id", d.source_ref)
       .maybeSingle<{ id: string; status: string }>();
+    if (error1) {
+      console.error(`[yuan_payments mutation lookup] failed`, { code: error1.code, message: error1.message });
+      return { ok: false, error: `db_error:${error1.code ?? "unknown"}` };
+    }
     if (!data) return { ok: false, error: "yuan_payment_not_found_or_not_owned" };
     if (isNeverPaidParentStatus(d.source, data.status)) {
       return { ok: false, error: "yuan_payment_not_paid — รายการโอนหยวนนี้ยังไม่ได้ชำระเงิน ไม่มียอดให้คืน" };

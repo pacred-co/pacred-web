@@ -42,7 +42,10 @@ export default async function AdminContactMessagesPage({
 
   if (sp.status) q = q.eq("status", sp.status);
 
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) {
+    console.error(`[contact_messages list] failed`, { code: error.code, message: error.message });
+  }
   type RawRow = Omit<NonNullable<typeof data>[number], "profile"> & {
     profile: ProfileShape | ProfileShape[] | null;
   };
@@ -52,9 +55,12 @@ export default async function AdminContactMessagesPage({
   }));
 
   // Counts per status (separate query for the chip badges)
-  const { data: counts } = await admin
+  const { data: counts, error: countsErr } = await admin
     .from("contact_messages")
     .select("status");
+  if (countsErr) {
+    console.error(`[contact_messages list] failed`, { code: countsErr.code, message: countsErr.message });
+  }
   const tally = (counts ?? []).reduce<Record<string, number>>((acc, r) => {
     const s = (r as { status: string }).status;
     acc[s] = (acc[s] ?? 0) + 1;
@@ -67,11 +73,14 @@ export default async function AdminContactMessagesPage({
   const contactIds = rows.map((r) => r.id);
   const workItemByContact = new Map<string, string>();
   if (contactIds.length > 0) {
-    const { data: wiRaw } = await admin
+    const { data: wiRaw, error: wiRawErr } = await admin
       .from("work_items")
       .select("id, entity_ref")
       .eq("entity_type", "contact_message")
       .in("entity_ref", contactIds);
+    if (wiRawErr) {
+      console.error(`[work_items list] failed`, { code: wiRawErr.code, message: wiRawErr.message });
+    }
     for (const w of (wiRaw ?? []) as Array<{ id: string; entity_ref: string }>) {
       if (!workItemByContact.has(w.entity_ref)) workItemByContact.set(w.entity_ref, w.id);
     }
@@ -80,7 +89,7 @@ export default async function AdminContactMessagesPage({
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
         <h1 className="mt-1 text-2xl font-bold">ข้อความติดต่อจากเว็บไซต์</h1>
         <p className="mt-1 text-sm text-muted">
           ฟอร์มติดต่อจากหน้า /contact — รับเรื่อง ตอบกลับ ปิดเคส

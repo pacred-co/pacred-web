@@ -3,6 +3,8 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { AdminDateFilter } from "@/components/admin/date-filter";
+import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { LeaderPicker } from "./leader-picker";
 
 // Port of legacy `pcs-admin/forwarder-sale.php` — sales commission
@@ -57,7 +59,7 @@ function customerLabel(p: Profile | null): string {
 }
 
 const STATUS_BADGE: Record<string, string> = {
-  unpaid:    "bg-yellow-50 text-yellow-700 border-yellow-200",
+  unpaid:    "bg-amber-50 text-amber-700 border-amber-200",
   paid:      "bg-green-50  text-green-700  border-green-200",
   cancelled: "bg-gray-50   text-gray-700   border-gray-200",
 };
@@ -96,7 +98,7 @@ export default async function AdminForwarderSalesPage({
   const admin = createAdminClient();
 
   // List of all active leaders (for the picker)
-  const { data: leadersRaw } = await admin
+  const { data: leadersRaw, error: leadersRawErr } = await admin
     .from("team_leaders")
     .select(`
       id, team_code, commission_pct, is_active,
@@ -104,6 +106,9 @@ export default async function AdminForwarderSalesPage({
     `)
     .eq("is_active", true)
     .order("team_code");
+  if (leadersRawErr) {
+    console.error(`[team_leaders list] failed`, { code: leadersRawErr.code, message: leadersRawErr.message });
+  }
 
   type LeaderRow = { id: string; team_code: string; commission_pct: number; profile: Profile | Profile[] | null };
   const leaders = ((leadersRaw ?? []) as LeaderRow[]).map((l) => ({
@@ -133,7 +138,10 @@ export default async function AdminForwarderSalesPage({
   if (leaderId) q = q.eq("team_leader_id", leaderId);
   if (status !== "all") q = q.eq("status", status);
 
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) {
+    console.error(`[sales_commissions list] failed`, { code: error.code, message: error.message });
+  }
   const rows = ((data ?? []) as unknown as Row[]).map((r) => ({
     ...r,
     customer:    normSingle(r.customer),
@@ -168,10 +176,12 @@ export default async function AdminForwarderSalesPage({
   });
 
   return (
-    <main className="p-6 lg:p-8 space-y-5">
+    <>
+      <PageTopMenubar items={DISBURSEMENT_MENUBAR} activeHref="/admin/forwarder-sales" />
+      <main className="p-6 lg:p-8 space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · SALES</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · SALES</p>
           <h1 className="mt-1 text-2xl font-bold">รายงานค่าคอมมิชชันฝากนำเข้า</h1>
           <p className="text-sm text-muted mt-1">
             ติดตาม commission ที่เกิดจากออเดอร์ + forwarder ของลูกค้าในทีม — auto-emit เมื่อ status เปลี่ยนเป็น delivered/completed
@@ -301,6 +311,7 @@ export default async function AdminForwarderSalesPage({
         </table>
       </section>
     </main>
+    </>
   );
 }
 

@@ -77,11 +77,14 @@ export async function GET(request: Request) {
           const { sm, hNo } = splitSmCode(c.sm_code);
 
           // Container upsert
-          const { data: existing } = await admin
+          const { data: existing, error: existingErr } = await admin
             .from("tb_tmp_forwarder_cargothai")
             .select("sm_code")
             .eq("sm_code", c.sm_code)
             .maybeSingle<{ sm_code: string }>();
+          if (existingErr) {
+            console.error(`[tb_tmp_forwarder_cargothai list] failed`, { code: existingErr.code, message: existingErr.message });
+          }
 
           const payload = {
             smid:                String(c.id ?? ""),
@@ -134,11 +137,14 @@ export async function GET(request: Request) {
 
             const tracking = (p.product_tracking ?? "").toString().trim() || sm;
 
-            const { data: existingItem } = await admin
+            const { data: existingItem, error: existingItemErr } = await admin
               .from("tb_tmp_forwarder_item_cargothai")
               .select("productid")
               .eq("productid", String(p.product_id))
               .maybeSingle<{ productid: string }>();
+            if (existingItemErr) {
+              console.error(`[tb_tmp_forwarder_item_cargothai list] failed`, { code: existingItemErr.code, message: existingItemErr.message });
+            }
 
             if (existingItem) {
               const { error } = await admin

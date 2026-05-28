@@ -16,7 +16,7 @@ const STATUS_LABEL: Record<number, string> = {
   4: "ส่งงานเสร็จ",
 };
 const STATUS_BADGE: Record<number, string> = {
-  1: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  1: "bg-amber-50 text-amber-700 border-amber-200",
   2: "bg-blue-50 text-blue-700 border-blue-200",
   3: "bg-gray-50 text-gray-600 border-gray-200",
   4: "bg-green-50 text-green-700 border-green-200",

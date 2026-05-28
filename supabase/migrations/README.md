@@ -124,6 +124,32 @@
 > renumbered his booking/credit-note/chat batch to `0084`-`0086` (commit
 > `a248696`) to free that block. Next free for new Phase-B work = **`0087`**.
 
+> ⚡ **Perf-fix index migrations (`0108` + `0109`) — apply when ready.**
+> - [`0108_pcs_legacy_hot_indexes.sql`](0108_pcs_legacy_hot_indexes.sql) (Sprint-8c)
+>   — 13 (`userid`)-anchored indexes that fix every CUSTOMER chrome query
+>   (`/wallet`, `/dashboard`, sidebar) from a per-click seq-scan to an
+>   indexed lookup. Plain `CREATE INDEX IF NOT EXISTS`; idempotent.
+> - [`0109_pcs_legacy_admin_hot_indexes.sql`](0109_pcs_legacy_admin_hot_indexes.sql) (Wave 21 P2)
+>   — 23 partial indexes covering every filter column the admin sidebar /
+>   dashboards / reports hit. Without these, `getSidebarCounts()` does 22
+>   sequential seq-scans on `tb_forwarder` (47K) + `tb_wallet_hs` (104K) +
+>   `tb_header_order` (22K) → 1.5-3s of chrome time on every `/admin/*`
+>   render. Apply in a quiet window (build locks queue writes briefly,
+>   ~10-15 min total worst case on Pro tier). Full plan + per-query
+>   evidence: [`docs/research/wave-21-p2-query-survey.md`](../../docs/research/wave-21-p2-query-survey.md).
+>
+> 🔧 **Admin-merge migration (`0110`) — apply when starting Wave 22 Phase 3.**
+> - [`0110_admin_contact_extras_legacy_bridge.sql`](0110_admin_contact_extras_legacy_bridge.sql)
+>   — 5 sidecar columns on `admin_contact_extras` (legacy_admin_id +
+>   ended_at + legacy_admin_type + legacy_admin_status + admin_note)
+>   that the new `/admin/admins/new` form writes when ภูม manually
+>   recreates the 13 legacy PCS admins under fresh Pacred auth.users.
+>   Unique partial index on legacy_admin_id keeps the bridge to
+>   `tb_users.adminidsale` working during transition. Adds ~50ms lock
+>   on the 0-row table — apply anytime. Full intel:
+>   [`docs/research/tb-admin-merge-intel-2026-05-27.md`](../../docs/research/tb-admin-merge-intel-2026-05-27.md)
+>   + [`docs/research/tb-admin-code-audit-2026-05-27.md`](../../docs/research/tb-admin-code-audit-2026-05-27.md).
+
 > 📋 **Phase-I2 batch (`0044`-`0052` + `0060`) — ภูม applies.** ภูม owns running
 > these on **dev + production** Supabase — paste each file into the SQL Editor in
 > ascending number order, or `supabase db push`. Apply in number order:

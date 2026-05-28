@@ -120,7 +120,7 @@ export default async function SalesHistoryDetailPage({
   // ── L298 — the payout row. WHERE ID=$ID AND userIDMain=$userIDMain
   //   — the `AND userIDMain` scopes the lookup to the viewer's own
   //   team; a foreign / unknown ID yields no row → legacy `//404page`. ──
-  const { data: rowMain } = await admin
+  const { data: rowMain, error: rowMainErr } = await admin
     .from("tb_user_sales_admin_pay")
     .select(
       "id, status, useridmain, dateslip, imagesslip, amount, admincreate, " +
@@ -143,6 +143,10 @@ export default async function SalesHistoryDetailPage({
     }>();
 
   // Legacy `if ($result->num_rows > 0){…}else{ //404page }`.
+  if (rowMainErr) {
+    console.error(`[tb_user_sales_admin_pay lookup] failed`, { code: rowMainErr.code, message: rowMainErr.message, details: rowMainErr.details, hint: rowMainErr.hint });
+    throw new Error(`Failed to load tb_user_sales_admin_pay (${rowMainErr.code ?? "unknown"}): ${rowMainErr.message}`);
+  }
   if (!rowMain) {
     notFound();
   }
@@ -150,10 +154,13 @@ export default async function SalesHistoryDetailPage({
   const amount = Number(rowMain.amount ?? 0);
 
   // ── L433 — the IDUS set for this payout ──
-  const { data: payLinksRaw } = await admin
+  const { data: payLinksRaw, error: payLinksRawErr } = await admin
     .from("tb_user_sales_pay")
     .select("idus")
     .eq("idusap", id);
+  if (payLinksRawErr) {
+    console.error(`[tb_user_sales_pay list] failed`, { code: payLinksRawErr.code, message: payLinksRawErr.message });
+  }
   const idusList = (
     (payLinksRaw ?? []) as unknown as { idus: number }[]
   ).map((p) => p.idus);
@@ -162,10 +169,13 @@ export default async function SalesHistoryDetailPage({
   //   joined to tb_forwarder (by IDF) and tb_users. ──
   let items: ItemRow[] = [];
   if (idusList.length > 0) {
-    const { data: usRaw } = await admin
+    const { data: usRaw, error: usRawErr } = await admin
       .from("tb_user_sales")
       .select("id, usstatus, date, idf")
       .in("id", idusList);
+    if (usRawErr) {
+      console.error(`[tb_user_sales list] failed`, { code: usRawErr.code, message: usRawErr.message });
+    }
     const usRows = (usRaw ?? []) as unknown as {
       id: number;
       usstatus: string | null;
@@ -187,10 +197,13 @@ export default async function SalesHistoryDetailPage({
       }
     >();
     if (forwarderIds.length > 0) {
-      const { data: fwdRaw } = await admin
+      const { data: fwdRaw, error: fwdRawErr } = await admin
         .from("tb_forwarder")
         .select("id, userid, ftrackingchn, fvolume, fweight, ftotalprice, fstatus")
         .in("id", forwarderIds);
+      if (fwdRawErr) {
+        console.error(`[tb_forwarder list] failed`, { code: fwdRawErr.code, message: fwdRawErr.message });
+      }
       for (const f of (fwdRaw ?? []) as unknown as {
         id: number;
         userid: string | null;

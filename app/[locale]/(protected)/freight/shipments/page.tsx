@@ -89,10 +89,13 @@ export default async function CustomerFreightShipmentsPage({
   const counts: Record<FreightShipmentStatus, number> = {
     draft: 0, confirmed: 0, in_progress: 0, cleared: 0, delivered: 0, cancelled: 0,
   };
-  const { data: countRows } = await sb
+  const { data: countRows, error: countRowsErr } = await sb
     .from("freight_shipments")
     .select("status")
     .returns<Array<{ status: FreightShipmentStatus }>>();
+  if (countRowsErr) {
+    console.error(`[freight_shipments list] failed`, { code: countRowsErr.code, message: countRowsErr.message });
+  }
   for (const r of countRows ?? []) {
     counts[r.status] = (counts[r.status] ?? 0) + 1;
   }
@@ -102,13 +105,16 @@ export default async function CustomerFreightShipmentsPage({
   const ids = shipments.map((s) => s.id);
   const paymentByShipment = new Map<string, FreightInvoicePaymentStatus>();
   if (ids.length > 0) {
-    const { data: invsRaw } = await sb
+    const { data: invsRaw, error: invsRawErr } = await sb
       .from("freight_invoices")
       .select("freight_shipment_id, payment_status, status, created_at")
       .in("freight_shipment_id", ids)
       .neq("status", "cancelled")
       .order("created_at", { ascending: false })
       .returns<InvoiceForShipment[]>();
+    if (invsRawErr) {
+      console.error(`[freight_invoices list] failed`, { code: invsRawErr.code, message: invsRawErr.message });
+    }
     for (const r of invsRaw ?? []) {
       if (!paymentByShipment.has(r.freight_shipment_id)) {
         paymentByShipment.set(r.freight_shipment_id, r.payment_status);

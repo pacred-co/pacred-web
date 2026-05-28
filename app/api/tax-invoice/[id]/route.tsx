@@ -68,16 +68,22 @@ export async function GET(
 
   // ── 1. Auth + row visibility (RLS scopes) ──
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) {
     return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
   }
 
-  const { data: header } = await supabase
+  const { data: header, error: headerErr } = await supabase
     .from("tax_invoices")
     .select("id, profile_id, status, serial_no, pdf_storage_path, issued_at, created_at, buyer_name, buyer_address, buyer_tax_id, buyer_branch, subtotal_thb, vat_thb, total_thb, vat_mode, payment_method, order_h_no, forwarder_f_no")
     .eq("id", id)
     .maybeSingle<HeaderRow>();
+  if (headerErr) {
+    console.error(`[tax_invoices list] failed`, { code: headerErr.code, message: headerErr.message });
+  }
 
   if (!header) {
     return NextResponse.json({ error: "not_found_or_unauthorised" }, { status: 404 });
@@ -122,11 +128,14 @@ export async function GET(
   // ── helpers ──
   async function renderAndReturn(h: HeaderRow, name: string): Promise<NextResponse> {
     // We need lines too — fetch via admin client (RLS already proved access at parent)
-    const { data: lines } = await admin
+    const { data: lines, error: linesErr } = await admin
       .from("tax_invoice_lines")
       .select("position, description, qty, unit_price_thb, amount_thb, vat_thb")
       .eq("tax_invoice_id", h.id)
       .order("position", { ascending: true });
+    if (linesErr) {
+      console.error(`[tax_invoice_lines list] failed`, { code: linesErr.code, message: linesErr.message });
+    }
 
     // Optional WHT breakdown (per ADR-0015) — only render the block when the
     // cert is settled (received | waived); pending entries shouldn't reach here

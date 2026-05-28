@@ -466,3 +466,38 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+/* ────────────────────────────────────────────────────────────────────
+ * Mobile P0 fixes (Wave 7 · 2026-05-21 · Agent C audit)
+ * Tap targets ≥ 44px on phone-sized viewports (admins also use phones).
+ * Targets `.nav-link` (tab strips · top menubars) + `.btn-sm` (pagination
+ * + action buttons in Bootstrap-style legacy chrome) inside the scoped
+ * `.pcs-legacy` namespace. iOS safe-area for fixed-bottom action bars.
+ * Source: docs/audit/mobile-admin-pages-2026-05-21.md.
+ * ──────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  /* Bump small chips + buttons to thumb-friendly 44px */
+  .pcs-legacy .nav-link,
+  .pcs-legacy .btn-sm,
+  .pcs-legacy .nav.nav-tabs .nav-item .nav-link,
+  .pcs-legacy .pcs-tabs .nav-link {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Checkboxes — bare native 16px is too small to tap reliably */
+  .pcs-legacy input[type="checkbox"] {
+    min-width: 20px;
+    min-height: 20px;
+  }
+}
+
+/* iOS safe-area inset for fixed-bottom action bars (e.g. /admin/report-cnt
+ * bottom bar with ทำรายการจ่าย/ประวัติ buttons hidden under home indicator). */
+.pcs-safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  bottom: max(1rem, env(safe-area-inset-bottom, 1rem));
+}

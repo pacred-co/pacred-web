@@ -14,7 +14,7 @@ export default async function NewRecruitmentPostingPage() {
   await requireAdmin();
   const admin = createAdminClient();
 
-  const { data } = await admin
+  const { data, error } = await admin
     .from("org_positions")
     .select(`
       id, name, sort_order,
@@ -24,6 +24,9 @@ export default async function NewRecruitmentPostingPage() {
       )
     `)
     .order("sort_order");
+  if (error) {
+    console.error(`[org_positions list] failed`, { code: error.code, message: error.message });
+  }
 
   const positions = ((data ?? []) as Position[]).map((p) => {
     const sec = Array.isArray(p.section) ? p.section[0] ?? null : p.section;
