@@ -55,25 +55,6 @@ type SyncResponse = {
   message?: string;
 };
 
-type BackfillResponse = {
-  ok: boolean;
-  importTracksScanned?:      number;
-  importTracksUpdated?:      number;
-  containerClosedScanned?:   number;
-  containerClosedUpdated?:   number;
-  containerTracksUpserted?:  number;
-  // Phase B counters:
-  statusDatesUpserted?:      number;
-  containerDetailsUpserted?: number;
-  sackInfosScanned?:         number;
-  sackTracksUpserted?:       number;
-  rawEventsInserted?:        number;
-  // Phase C counters:
-  linksUpserted?:            number;
-  snapshotsRefreshed?:       number;
-  snapshotsChanged?:         number;
-  errors?:                   Array<{ scope: string; message: string }>;
-};
 
 const BADGE_CLS: Record<MomoBadgeColor, string> = {
   yellow: "bg-amber-100 text-amber-700 border-amber-200",
@@ -108,7 +89,6 @@ export function MomoSyncClient({ initialDbRows }: { initialDbRows: {
 
   const [busy, setBusy]    = useState<string | null>(null);
   const [result, setResult] = useState<SyncResponse | null>(null);
-  const [backfillResult, setBackfillResult] = useState<BackfillResponse | null>(null);
   const [rawOpen, setRawOpen] = useState<Record<string, boolean>>({});
 
   // Phase D debug — tracking lookup state
@@ -173,28 +153,6 @@ export function MomoSyncClient({ initialDbRows }: { initialDbRows: {
       setDebugResult(j);
     } catch (e) {
       setDebugResult({ ok: false, error: "NETWORK_ERROR", message: e instanceof Error ? e.message : "fail" });
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function onBackfill() {
-    if (!confirm("รัน Backfill Phase A?\n\n• กรอก momo_container_ref ลง momo_import_tracks (จาก raw.container_no เดิม)\n• กรอก momo_container_ref / container_batch_no / real_container_no ลง momo_container_closed (จาก raw.fid/cid/cid_code)\n• แตก track_details[] จาก momo_container_closed.raw → momo_container_closed_tracks\n\nIdempotent — รันซ้ำได้.")) return;
-    setBusy("backfill");
-    setBackfillResult(null);
-    try {
-      const r = await fetch("/api/admin/momo/backfill", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
-      });
-      const j: BackfillResponse = await r.json().catch(() => ({ ok: false, errors: [{ scope: "parse", message: "JSON parse failed" }] }));
-      setBackfillResult(j);
-    } catch (e) {
-      setBackfillResult({
-        ok: false,
-        errors: [{ scope: "network", message: e instanceof Error ? e.message : "network error" }],
-      });
     } finally {
       setBusy(null);
     }
@@ -278,88 +236,6 @@ export function MomoSyncClient({ initialDbRows }: { initialDbRows: {
             {busy === "sync" ? "กำลัง Sync..." : "Sync เข้าตาราง MOMO"}
           </button>
         </div>
-      </section>
-
-      {/* ── Phase A+B · Backfill ────────────────────────────────────── */}
-      <section className="rounded-2xl border border-violet-200 bg-violet-50/50 p-4 shadow-sm space-y-3">
-        <div>
-          <h3 className="text-sm font-bold text-violet-900">🛠 Phase A+B · Backfill</h3>
-          <p className="text-xs text-violet-700 mt-1 leading-relaxed">
-            กรอก column ใหม่จาก raw เดิม + แตก{" "}
-            <code className="rounded bg-violet-100 px-1">track_details[]</code>,{" "}
-            <code className="rounded bg-violet-100 px-1">status_date</code>,{" "}
-            <code className="rounded bg-violet-100 px-1">container_details</code>,{" "}
-            <code className="rounded bg-violet-100 px-1">sack.tracks[]</code>{" "}
-            ออกเป็น table แยก + retroactive audit log ลง{" "}
-            <code className="rounded bg-violet-100 px-1">momo_raw_events</code>.{" "}
-            <strong>Idempotent</strong> — รันซ้ำได้ ไม่เพิ่มข้อมูลซ้ำ (raw_events insert-only).
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2 items-center">
-          <button
-            type="button"
-            onClick={onBackfill}
-            disabled={busy != null}
-            className="rounded-lg border border-violet-400 bg-violet-600 px-3 py-2 text-xs font-bold text-white hover:bg-violet-700 disabled:opacity-50"
-          >
-            {busy === "backfill" ? "กำลัง Backfill..." : "▶ รัน Backfill"}
-          </button>
-          {backfillResult && (
-            <span className={`text-xs font-bold ${backfillResult.ok ? "text-emerald-700" : "text-red-700"}`}>
-              {backfillResult.ok ? "✓ Done" : "✗ มี error"}
-            </span>
-          )}
-        </div>
-
-        {backfillResult && (
-          <div className="space-y-2">
-            {/* Phase A counters */}
-            <div>
-              <h4 className="text-[10px] font-bold uppercase text-violet-700 mb-1">Phase A — Naming + Tracks</h4>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-xs">
-                <Stat label="IT scanned" value={backfillResult.importTracksScanned ?? 0} />
-                <Stat label="IT ref filled" value={backfillResult.importTracksUpdated ?? 0} tone="green" />
-                <Stat label="CC scanned" value={backfillResult.containerClosedScanned ?? 0} />
-                <Stat label="CC refs filled" value={backfillResult.containerClosedUpdated ?? 0} tone="green" />
-                <Stat label="Tracks upserted" value={backfillResult.containerTracksUpserted ?? 0} tone="green" />
-              </div>
-            </div>
-            {/* Phase B counters */}
-            <div>
-              <h4 className="text-[10px] font-bold uppercase text-violet-700 mb-1">Phase B — Detail Explosion + Audit</h4>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-xs">
-                <Stat label="Status dates" value={backfillResult.statusDatesUpserted ?? 0} tone="green" />
-                <Stat label="CC details" value={backfillResult.containerDetailsUpserted ?? 0} tone="green" />
-                <Stat label="Sack scanned" value={backfillResult.sackInfosScanned ?? 0} />
-                <Stat label="Sack tracks" value={backfillResult.sackTracksUpserted ?? 0} tone="green" />
-                <Stat label="Raw events" value={backfillResult.rawEventsInserted ?? 0} tone="green" />
-              </div>
-            </div>
-            {/* Phase C counters */}
-            <div>
-              <h4 className="text-[10px] font-bold uppercase text-violet-700 mb-1">Phase C — Links + Snapshots</h4>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                <Stat label="Links upserted" value={backfillResult.linksUpserted ?? 0} tone="green" />
-                <Stat label="Snapshots refreshed" value={backfillResult.snapshotsRefreshed ?? 0} tone="green" />
-                <Stat label="Snapshots changed" value={backfillResult.snapshotsChanged ?? 0} tone="amber" />
-              </div>
-            </div>
-            {backfillResult.errors && backfillResult.errors.length > 0 && (
-              <details className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs">
-                <summary className="cursor-pointer font-bold text-red-900">
-                  ดู errors ({backfillResult.errors.length})
-                </summary>
-                <ul className="mt-2 space-y-1">
-                  {backfillResult.errors.map((e, i) => (
-                    <li key={i} className="font-mono">
-                      <strong>{e.scope}:</strong> {e.message}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
-          </div>
-        )}
       </section>
 
       {/* ── Phase D · Debug · Tracking Lookup ───────────────────────── */}
