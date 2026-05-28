@@ -131,7 +131,6 @@ body {
   .protected-content { padding-left: 0; }
 }
 
-<<<<<<< HEAD
 /* Always-visible thin horizontal scrollbar for wide admin tables.
    Wave 18 follow-up (2026-05-25 ค่ำ — ภูม flagged): the /admin/customers
    table now has 14 columns (Wave 18-A fidelity columns) so it overflows
