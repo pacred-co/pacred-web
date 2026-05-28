@@ -129,13 +129,13 @@ export default async function ServiceImportPage({
   // legacy data path (not the rebuilt-app `profiles.account_type`).
   const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
-    .select("usercompany")
-    .eq("userid", memberCode)
-    .maybeSingle<{ usercompany: string | number | null }>();
+    .select("userCompany")
+    .eq("userID", memberCode)
+    .maybeSingle<{ userCompany: string | number | null }>();
   if (userRowErr) {
     console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
   }
-  const isJuristic = String(userRow?.usercompany ?? "") === "1";
+  const isJuristic = String(userRow?.userCompany ?? "") === "1";
 
   // ── forwarder.php L450 — corporate check ──
   // SELECT ID FROM tb_corporate WHERE userID=… AND corporateStatus=1

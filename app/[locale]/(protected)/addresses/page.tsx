@@ -136,12 +136,12 @@ export default async function AddressesPage({
       .order("addressid", { ascending: false }),
     admin
       .from("tb_users")
-      .select("username, userlastname, usertel")
-      .eq("userid", userID)
+      .select("userName, userLastName, userTel")
+      .eq("userID", userID)
       .maybeSingle<{
-        username: string | null;
-        userlastname: string | null;
-        usertel: string | null;
+        userName: string | null;
+        userLastName: string | null;
+        userTel: string | null;
       }>(),
     admin
       .from("tb_address_main")
@@ -153,9 +153,9 @@ export default async function AddressesPage({
   const addresses = (addressRes.data ?? []) as AddressRow[];
 
   // $_SESSION['userName'] / userLastName / userTel — the add-form prefill.
-  const userName = userRowRes.data?.username ?? "";
-  const userLastName = userRowRes.data?.userlastname ?? "";
-  const userTel = userRowRes.data?.usertel ?? "";
+  const userName = userRowRes.data?.userName ?? "";
+  const userLastName = userRowRes.data?.userLastName ?? "";
+  const userTel = userRowRes.data?.userTel ?? "";
 
   // address.php L601-608 — the addressID that is the customer's main
   // address; the matching row swaps its "ตั้งเป็นที่อยู่หลัก" button

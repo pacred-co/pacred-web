@@ -124,32 +124,32 @@ export default async function SalesTeamMembersPage() {
   const { data: usersRaw, error: usersRawErr } = await admin
     .from("tb_users")
     .select(
-      "adminidsale, userid, coid, userpicture, username, userlastname, " +
-        "userstatus, userbirthday, useremail, usertel, userlineid, " +
-        "userfacebook, userregistered",
+      "adminIDSale, userID, coID, userPicture, userName, userLastName, " +
+        "userStatus, userBirthday, userEmail, userTel, userLineID, " +
+        "userFacebook, userRegistered",
     )
-    .eq("coid", agent.userIDMain);
+    .eq("coID", agent.userIDMain);
   if (usersRawErr) {
     console.error(`[tb_users list] failed`, { code: usersRawErr.code, message: usersRawErr.message });
   }
 
   const users = (usersRaw ?? []) as unknown as {
-    userid: string;
-    coid: string | null;
-    userpicture: string | null;
-    username: string | null;
-    userlastname: string | null;
-    userstatus: string | null;
-    useremail: string | null;
-    usertel: string | null;
-    userlineid: string | null;
-    userfacebook: string | null;
-    userregistered: string | null;
+    userID: string;
+    coID: string | null;
+    userPicture: string | null;
+    userName: string | null;
+    userLastName: string | null;
+    userStatus: string | null;
+    userEmail: string | null;
+    userTel: string | null;
+    userLineID: string | null;
+    userFacebook: string | null;
+    userRegistered: string | null;
   }[];
 
   // 2-3. The LEFT JOIN tb_address_main ⋈ tb_address — per member, the
   //      "main address". Resolve in bulk for the member set.
-  const memberIds = users.map((u) => u.userid);
+  const memberIds = users.map((u) => u.userID);
   const addressByUser = new Map<
     string,
     {
@@ -221,19 +221,19 @@ export default async function SalesTeamMembersPage() {
   }
 
   const rows: TeamMemberRow[] = users.map((u) => {
-    const a = addressByUser.get(u.userid);
+    const a = addressByUser.get(u.userID);
     return {
-      userID: u.userid,
-      coID: u.coid,
-      userPicture: u.userpicture,
-      userName: u.username,
-      userLastName: u.userlastname,
-      userStatus: u.userstatus,
-      userEmail: u.useremail,
-      userTel: u.usertel,
-      userLineID: u.userlineid,
-      userFacebook: u.userfacebook,
-      userRegistered: u.userregistered,
+      userID: u.userID,
+      coID: u.coID,
+      userPicture: u.userPicture,
+      userName: u.userName,
+      userLastName: u.userLastName,
+      userStatus: u.userStatus,
+      userEmail: u.userEmail,
+      userTel: u.userTel,
+      userLineID: u.userLineID,
+      userFacebook: u.userFacebook,
+      userRegistered: u.userRegistered,
       addressName: a?.addressname ?? null,
       addressLastname: a?.addresslastname ?? null,
       addressNo: a?.addressno ?? null,
@@ -241,8 +241,8 @@ export default async function SalesTeamMembersPage() {
       addressDistrict: a?.addressdistrict ?? null,
       addressProvince: a?.addressprovince ?? null,
       addressZIPCode: a?.addresszipcode ?? null,
-      hasSvip: svipSet.has(u.userid),
-      hasCorporate: corpSet.has(u.userid),
+      hasSvip: svipSet.has(u.userID),
+      hasCorporate: corpSet.has(u.userID),
     };
   });
 

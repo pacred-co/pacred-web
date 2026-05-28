@@ -179,13 +179,13 @@ export default async function CartPage() {
       .maybeSingle<{ rsdefault: number }>(),
     admin
       .from("tb_users")
-      .select("useraddressid, usertransporttype, usershipby, userpaymethod")
-      .eq("userid", userID)
+      .select("userAddressID, userTransportType, userShipBy, userPayMethod")
+      .eq("userID", userID)
       .maybeSingle<{
-        useraddressid: string | null;
-        usertransporttype: string | null;
-        usershipby: string | null;
-        userpaymethod: string | null;
+        userAddressID: string | null;
+        userTransportType: string | null;
+        userShipBy: string | null;
+        userPayMethod: string | null;
       }>(),
     admin
       .from("tb_cart")
@@ -194,12 +194,12 @@ export default async function CartPage() {
   ]);
 
   const rsDefault = Number(settingsRes.data?.rsdefault ?? 0);
-  const userAddressID = userRowRes.data?.useraddressid ?? "";
+  const userAddressID = userRowRes.data?.userAddressID ?? "";
   // cart.php L150-151: $userTransportType is read then forced to 2.
   // Typed `number` (not the literal 2) so the legacy `=== 1` radio
   // checks below stay as faithful transcribed comparisons.
   const userTransportType: number = 2;
-  let userShipBy = userRowRes.data?.usershipby ?? "";
+  let userShipBy = userRowRes.data?.userShipBy ?? "";
   // cart.php L163-170: $countCart from the COUNT(ID) query.
   const countCart = cartCountRes.count ?? 0;
 

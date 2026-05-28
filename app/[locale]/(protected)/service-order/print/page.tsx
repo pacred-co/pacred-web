@@ -312,14 +312,14 @@ export default async function ServiceOrderPrintPage({
     // The legacy joins tb_users for the customer name / email.
     const { data: userRow, error: userRowErr } = await admin
       .from("tb_users")
-      .select("username, userlastname, useremail, userpicture, usercompany")
-      .eq("userid", headerRow.userid)
+      .select("userName, userLastName, userEmail, userPicture, userCompany")
+      .eq("userID", headerRow.userid)
       .maybeSingle<{
-        username: string | null;
-        userlastname: string | null;
-        useremail: string | null;
-        userpicture: string | null;
-        usercompany: string | null;
+        userName: string | null;
+        userLastName: string | null;
+        userEmail: string | null;
+        userPicture: string | null;
+        userCompany: string | null;
       }>();
     if (userRowErr) {
       console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
@@ -356,11 +356,11 @@ export default async function ServiceOrderPrintPage({
       : "";
 
     const header: HeaderRow = {
-      usercompany: userRow?.usercompany ?? null,
-      userfullname: `${userRow?.username ?? ""} ${userRow?.userlastname ?? ""}`.trim(),
+      usercompany: userRow?.userCompany ?? null,
+      userfullname: `${userRow?.userName ?? ""} ${userRow?.userLastName ?? ""}`.trim(),
       userid: headerRow.userid,
-      userpicture: userRow?.userpicture ?? null,
-      useremail: userRow?.useremail ?? null,
+      userpicture: userRow?.userPicture ?? null,
+      useremail: userRow?.userEmail ?? null,
       hstatus: headerRow.hstatus,
       hno: headerRow.hno,
       hdate: headerRow.hdate,

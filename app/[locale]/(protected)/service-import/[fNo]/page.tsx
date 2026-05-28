@@ -585,18 +585,18 @@ export default async function ServiceImportDetailPage({
     if (adminIds.length > 0) {
       const { data: admRows, error: admErr } = await admin
         .from("tb_admin")
-        .select("adminid, adminname, admintel")
-        .in("adminid", adminIds);
+        .select("adminID, adminName, adminTel")
+        .in("adminID", adminIds);
       if (admErr) {
         // Soft-fail — admin name/tel is decorative.
         console.error(`[service-import/[fNo] tb_admin lookup] adminIds=${JSON.stringify(adminIds)}`, { code: admErr.code, message: admErr.message });
       }
       for (const a of (admRows ?? []) as Array<{
-        adminid: string;
-        adminname: string | null;
-        admintel: string | null;
+        adminID: string;
+        adminName: string | null;
+        adminTel: string | null;
       }>) {
-        adminMap[a.adminid] = { adminname: a.adminname, admintel: a.admintel };
+        adminMap[a.adminID] = { adminname: a.adminName, admintel: a.adminTel };
       }
     }
     for (const fd of (drvRows ?? []) as Array<{
