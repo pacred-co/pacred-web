@@ -2581,8 +2581,11 @@
   },
   "pcsAdminNav": {
     "backToCustomer": "← Back to customer site",
+    "showAll": "Show all menus (super)",
+    "showRole": "Show my role menu only",
     "role": {
       "super": "Super Admin",
+      "manager": "Cargo Manager",
       "ops": "Cargo Operations",
       "accounting": "Accounting",
       "salesAdmin": "Cargo Sales Manager",
@@ -2647,6 +2650,7 @@
     "qa": {
       "title": "QA & QC",
       "titleGroup": "QA & QC",
+      "queuesTitle": "QA Queues",
       "payShopOver1d": "Shop payment overdue 1 day",
       "payFwdOver2d": "Import payment overdue 2 days",
       "orderCancelled": "Cancelled orders",
@@ -2658,7 +2662,20 @@
       "ownerlessGoods": "Ownerless goods",
       "prepareOverdue": "Prep-to-ship overdue",
       "newClientNoContact": "New client no contact 2 days",
-      "transferSalesRep": "Transfer sales rep"
+      "transferSalesRep": "Transfer sales rep",
+      "queues": {
+        "payShopOver1d": "Shop payment overdue 1 day",
+        "payFwdOver2d": "Import payment overdue 2 days",
+        "orderCancellations": "Cancelled orders",
+        "creditOverdue": "Credit overdue",
+        "orderOver10min": "Orders pending over 10 min",
+        "chnShopOver2d": "Awaiting CN shop dispatch 2 days",
+        "chnWhOver2d": "Awaiting CN warehouse 2 days",
+        "transitOverdue": "In transit overdue",
+        "ownerlessGoods": "Ownerless goods",
+        "prepareOverdue": "Prep-to-ship overdue",
+        "newClientNoContact": "New client no contact 2 days"
+      }
     },
     "wallet": {
       "title": "Wallet",

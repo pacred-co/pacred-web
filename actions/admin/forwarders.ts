@@ -6,10 +6,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
+import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
 import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 import { getCargoBillingGate } from "@/lib/forwarder/billing-gate";
 import { logger, redactId } from "@/lib/logger";
+import { getAdminRoles } from "@/lib/auth/require-admin";
+import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
 
 const STATUSES = [
   "pending_payment","shipped_china","in_transit","arrived_thailand",
@@ -546,7 +549,15 @@ export async function adminBulkUpdateForwarderTbStatus(
   }
   const { fids, fstatus, cabinet_number, tracking_th, fnote } = parsed.data;
 
-  return withAdmin<{ updated: number }>(["ops", "super"], async ({ adminId }) => {
+  return withAdmin<{ updated: number }>(
+    // Wave 26 G5 (2026-05-28 ดึก): page-level union widened from ["ops","super"]
+    // to include every role that legacy hard-codes as an owner of SOME
+    // transition. Per-row gate below filters to the SPECIFIC transition
+    // the caller is attempting — Warehouse can call this action but only
+    // for 3→4 / *→4 rows, Accounting only for *→5 / 5→6 etc. `super`
+    // and `manager` retain the global override. See lib/auth/check-fstatus-transition.ts.
+    ["ops", "super", "manager", "warehouse", "accounting", "driver"],
+    async ({ adminId }) => {
     const admin = createAdminClient();
 
     // Snapshot before — for audit log + change detection + the cabinet-close
@@ -566,6 +577,27 @@ export async function adminBulkUpdateForwarderTbStatus(
       fcabinetnumber: string | null;
       fdatecontainerclose: string | null;
     }>;
+
+    // Wave 26 G5 (2026-05-28 ดึก) — status-transition role gate.
+    // Per-row check: every row in the bulk must satisfy the legacy
+    // owner-role matrix for its own (from → to) transition. Mixed-status
+    // bulks (e.g. 3 rows at fstatus=4 + 1 row at fstatus=99 → fstatus=5)
+    // hit different matrix entries → the 99 row needs super/manager even
+    // if the rest don't. Rather than partial-process (which the bulk-bill
+    // action does), this top-level any-vs-all bulk REFUSES the whole batch
+    // when any row fails — caller can split and retry.
+    const callerRoles = (await getAdminRoles()) ?? [];
+    const forbidden = beforeRows.filter(
+      (r) => !canAnyRoleFlipFstatus(callerRoles, r.fstatus, fstatus),
+    );
+    if (forbidden.length > 0) {
+      const sample = forbidden.slice(0, 5).map((r) => `#${r.id}(${r.fstatus}→${fstatus})`).join(", ");
+      const more = forbidden.length > 5 ? ` (และอีก ${forbidden.length - 5} รายการ)` : "";
+      return {
+        ok: false,
+        error: `forbidden_transition: บัญชีของคุณไม่มีสิทธิ์เปลี่ยนสถานะรายการต่อไปนี้ ${sample}${more}`,
+      };
+    }
 
     const nowIso = new Date().toISOString();
     const dateCol = TB_STATUS_DATE_COL[fstatus];
@@ -655,12 +687,22 @@ export async function adminBulkUpdateForwarderTbStatus(
       after:           { fstatus },
     });
 
+    // G8 (2026-05-28 ดึก): append one tb_log_forwarder_status row per
+    // changed row. Legacy forwarder.php:1284 wrote this log inside the
+    // admin-dropdown path; our bulk action was missing it. Best-effort —
+    // a log insert failure does NOT roll back the UPDATE that already
+    // succeeded above. The legacy report screens (status-history view)
+    // depend on this trail being populated.
+    const changed = beforeRows.filter((r) => r.fstatus !== fstatus);
+    for (const row of changed) {
+      await appendStatusLog(admin, row.id, row.fstatus, fstatus, adminIdSafe);
+    }
+
     // Wave 16 follow-up A (2026-05-25): resolver wired. Bulk-resolve every
     // changed row's legacy userid → profiles.id, then fire status-change
     // notifications. Each call wrapped in try/catch so one failed delivery
     // doesn't block the bulk operation. (Same pattern as forwarder-check
     // action — uses `lib/auth/tb-users-resolver.ts` + sendNotification.)
-    const changed = beforeRows.filter((r) => r.fstatus !== fstatus);
     if (changed.length > 0) {
       try {
         const profileMap = await resolveProfileIdsForLegacyUserids(

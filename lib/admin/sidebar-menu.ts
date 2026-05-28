@@ -20,6 +20,48 @@
  *
  *   Audit source: docs/research/d1-fidelity-admin.md §1
  *   Legacy ground truth: pcs-admin/include/pages/left-menu/OOP/
+ *
+ * ─────────────────────────────────────────────────────────────────
+ * G4 — per-role sidebar filter layer (Wave 26 · 2026-05-28 ดึก)
+ * ─────────────────────────────────────────────────────────────────
+ * Per `docs/research/legacy-deep-dive/_SYNTHESIS.md` §3 G4 + ภูม decision
+ * #5 ("sidebar รก · fix per-role filter ก่อนเปิดได้เลย"), this module
+ * carries the canonical per-role menus consumed by the admin sidebar
+ * (`components/sections/admin-sidebar.tsx`).
+ *
+ * Filtering happens in TWO layers (legacy-faithful + Pacred-pragmatic):
+ *  1. Per-role assembly (THIS file): `menuForRoles()` picks ONE
+ *     purpose-built menu by precedence — `super` → `manager` →
+ *     `accounting` → `qa` → `ops` → `sales_admin` → `sales` →
+ *     `warehouse` → `driver` → `interpreter` → freight_* roles.
+ *     Each menu is hand-assembled in §"PER-ROLE MENUS" below.
+ *  2. Phase gating (admin-sidebar.tsx · `filterByPhase`): leaves
+ *     tagged `phase: 2/3/4` are hidden from everyone except `super`.
+ *     Allows soft-launching post-MVP features (QA queues · marketing ·
+ *     extensions) to super-only while role menus stay stable.
+ *
+ * `menuForRolesUnion()` is the Pacred-only multi-role escape hatch:
+ *  - Default behaviour (`menuForRoles`) = legacy-faithful single-menu pick.
+ *  - Union behaviour = a staffer with e.g. `['warehouse', 'driver']`
+ *    sees the dedup'd join of both menus (each section's items merged
+ *    by `labelKey`). Use ONLY for the rare admin holding >1 role.
+ *
+ * `super` users get a "show all" escape hatch in the sidebar UI that
+ * forces them onto `menuSuper` regardless of which role's view they
+ * have currently selected (component-level toggle · state below).
+ *
+ * Per-role spec (ภูม brief §4 + synthesis §3 G4):
+ *  - super:        ALL (CEO sidebar · full toolbox)
+ *  - manager:      super minus HR-only + billing config + admin grants
+ *  - accounting:   wallet · yuan · reports · accounting · disbursements
+ *  - warehouse:    forwarders (?q=3) · forwarder-action · cnt-hs · driver
+ *  - driver:       drivers/work · barcode scanner (mobile-first)
+ *  - sales_admin:  customers · forwarders (?q=1) · reports · transfer-rep
+ *  - sales:        same as sales_admin minus approval rights
+ *  - interpreter:  service-orders · cart · cnt-hs initiate · customers
+ *  - qa:           the 11 QA follow-up queues + customer search
+ *  - ops:          generic catch-all (forwarders · customers · reports)
+ *  - freight_*:    Freight-only items (NO cargo items mixed in)
  */
 
 import type { AdminRole } from "@/lib/auth/require-admin";
@@ -372,8 +414,9 @@ const itemCustomersAll: MenuItem = {
 };
 
 /** Single-leaf "QA & QC" replacement (ภูม brief 2026-05-20 ค่ำ · Phase 2).
- *  The 12 SLA-breach sub-queues now live in the page top-menubar on
- *  /admin/qa (Agent B creates the new hub page).
+ *  The 11 SLA-breach sub-queues live in the page top-menubar on /admin/qa
+ *  for non-QA roles. QA role itself sees the expanded `blockQAQueues`
+ *  parent below (Wave 26 · 2026-05-28 ดึก).
  *
  *  Tombstone: prior `blockQA: MenuItem = { labelKey: "qa.title", ... 12 SLA leaves ... }`
  *  defined here was the legacy `OOP/Cargo/menu-QAAndQC.php` faithful port.
@@ -383,6 +426,33 @@ const itemQAAll: MenuItem = {
   href: "/admin/qa",
   icon: "ShieldAlert",
   phase: 2,
+};
+
+/** Wave 26 (2026-05-28 ดึก) — ตรวจสอบคุณภาพ (QA) parent block for the QA
+ *  role's sidebar. Lists the 11 SLA-breach queues that legacy `QAAndQC.php`
+ *  enumerated (`Your Work Cargo` section L17-83). Source: `docs/research/
+ *  legacy-deep-dive/04-staff-workflow-by-role.md` §2.3.
+ *
+ *  Non-QA roles continue to see only the `itemQAAll` single leaf —
+ *  the 11 queues surface via the page top-menubar on /admin/qa.
+ *  This keeps Pacred-is-one-company sidebar slim for everyone except
+ *  the role that actually lives in these queues all day. */
+const blockQAQueues: MenuItem = {
+  labelKey: "qa.queuesTitle",
+  icon: "ShieldAlert",
+  children: [
+    { labelKey: "qa.queues.payShopOver1d",      href: "/admin/qa/pay-shop-over-1d",      icon: "Clock" },
+    { labelKey: "qa.queues.payFwdOver2d",       href: "/admin/qa/pay-fwd-over-2d",       icon: "Clock" },
+    { labelKey: "qa.queues.orderCancellations", href: "/admin/qa/order-cancellations",   icon: "Ban" },
+    { labelKey: "qa.queues.creditOverdue",      href: "/admin/qa/credit-overdue",        icon: "AlertCircle" },
+    { labelKey: "qa.queues.orderOver10min",     href: "/admin/qa/order-over-10min",      icon: "AlertCircle" },
+    { labelKey: "qa.queues.chnShopOver2d",      href: "/admin/qa/chn-shop-over-2d",      icon: "AlertCircle" },
+    { labelKey: "qa.queues.chnWhOver2d",        href: "/admin/qa/chn-wh-over-2d",        icon: "AlertCircle" },
+    { labelKey: "qa.queues.transitOverdue",     href: "/admin/qa/transit-overdue",       icon: "AlertCircle" },
+    { labelKey: "qa.queues.ownerlessGoods",     href: "/admin/qa/ownerless-goods",       icon: "AlertCircle" },
+    { labelKey: "qa.queues.prepareOverdue",     href: "/admin/qa/prepare-overdue",       icon: "AlertCircle" },
+    { labelKey: "qa.queues.newClientNoContact", href: "/admin/qa/new-client-no-contact", icon: "AlertCircle" },
+  ],
 };
 
 /** 2-level "HR" dropdown (ภูม brief 2026-05-20 ค่ำ — flatten the prior
@@ -606,6 +676,60 @@ const menuSuper: MenuSection[] = [
   // (ภูม flagged · audit doc orphan-pages-audit-2026-05-21.md):
   // kpi · workboard · inbox · contactMessages · broadcasts · taxInvoices ·
   // withdrawalsAll. All phase: 2 — non-super doesn't see them.
+  extensionSection([
+    blockExtKpi,
+    blockExtWorkboard,
+    blockExtInbox,
+    blockExtContactMessages,
+    blockExtBroadcasts,
+    blockExtTaxInvoices,
+    blockExtWithdrawalsAll,
+    blockExtJuristic,
+    blockExtThaiTransport,
+    blockExtMeetingRoom,
+    blockExtHistory,
+    blockExtIncidents,
+  ]),
+];
+
+/**
+ * `manager` — Cargo Manager (Wave 26 · 2026-05-28 ดึก · synthesis §6 D6).
+ *
+ * Per ภูม decision: Manager has cnt-payment approval + cross-team supervision
+ * + full operational reach across Cargo & Freight ops. Manager does NOT see:
+ *  - HR block (admin hire/fire / org chart / corporate assets) — `blockHr`
+ *  - Settings section (rates / business-config / admins / system / tools) —
+ *    `blockSettingsCargo`. This is where billing config + admin role grants
+ *    live; only `super` configures the system.
+ *
+ * Everything else mirrors `menuSuper` — same operational queues, same
+ * extension toolbox (Phase 2/3/4 items still hidden by `filterByPhase`
+ * unless manager is also super, which the precedence rules out).
+ */
+const menuManager: MenuSection[] = [
+  { header: "", items: [itemDashboard] },
+  {
+    header: "Cargo & Freight",
+    items: [
+      // NOTE: `blockHr` intentionally dropped — manager doesn't own HR.
+      itemQAAll,
+      { labelKey: "warehouse.qaInspect", href: "/admin/warehouse/qa-inspections", icon: "ClipboardCheck" },
+      itemCustomersAll,
+      blockWithdrawalList,
+      itemWalletAll,
+      itemPurchasingAll,
+      blockForwarderImport,
+      blockApiForwarderUpdate,
+      { labelKey: "forwarder.assignDriver", href: "/admin/drivers", icon: "Truck", badge: "driverItems" },
+      { labelKey: "forwarder.driverWork", href: "/admin/drivers/work", icon: "Smartphone" },
+      blockPayment,
+      itemReportsAll,
+      blockAccounting,
+    ],
+  },
+  // NOTE: Settings section intentionally dropped — manager doesn't configure
+  // rates / billing / role grants. Use super for those.
+  learningSection,
   extensionSection([
     blockExtKpi,
     blockExtWorkboard,
@@ -878,10 +1002,14 @@ const menuQa: MenuSection[] = [
   {
     header: "Cargo & Freight",
     items: [
-      // QA hub (12 SLA-breach queues live in this page's top-menubar) —
+      // QA hub (11 SLA-breach queues live in this page's top-menubar) —
       // un-phase-gated for the `qa` role specifically. `itemQAAll` keeps
       // `phase: 2` for non-QA roles via the menu file precedence.
       { labelKey: "qa.title", href: "/admin/qa", icon: "ShieldAlert" },
+      // Wave 26 (2026-05-28 ดึก) — expanded 11-queue parent for QA staff.
+      // Legacy `QAAndQC.php` `Your Work Cargo` section. Each leaf is a
+      // dedicated `/admin/qa/<slug>` page with SLA filter pre-applied.
+      blockQAQueues,
       // Pre-shipment QA inspection module (P0 #2 rebuild · 2026-05-21).
       // The faithful port of legacy ตรวจสอบสินค้า workflow per
       // PCS_Cargo_Guidebook_TH.md L441-454 — record verdict (pass/fail/
@@ -1151,6 +1279,13 @@ const menuInterpreter: MenuSection[] = [
 
 const ROLE_MENUS: Record<AdminRole, MenuSection[]> = {
   super:       menuSuper,
+  // 2026-05-28 ดึก — Wave 26 · `manager` role added by migration 0118.
+  // Per ภูม decision #5 (synthesis §6 D6 · "sidebar รก · fix per-role filter
+  // ก่อนเปิดได้เลย") — Cargo Manager has cnt-payment approval + cross-team
+  // supervision + full operational reach EXCEPT HR block + Settings section
+  // (rates / billing / admin grants belong to super only). See `menuManager`
+  // definition above.
+  manager:     menuManager,
   ops:         menuOps,
   accounting:  menuAccounting,
   sales_admin: menuSalesAdmin,
@@ -1199,6 +1334,9 @@ const ROLE_MENUS: Record<AdminRole, MenuSection[]> = {
  */
 const ROLE_PRECEDENCE: AdminRole[] = [
   "super",
+  // 2026-05-28 ดึก — Wave 26 · manager outranks accounting/qa/ops.
+  // Approval-rights inheritance: super → manager → accounting → qa → ops.
+  "manager",
   "accounting",
   "qa",                          // QA outranks ops (audit reach)
   "ops",
@@ -1240,6 +1378,57 @@ export function primaryRole(roles: AdminRole[]): AdminRole | null {
     if (roles.includes(r)) return r;
   }
   return null;
+}
+
+// ──────────────────────────────────────────────────────────────
+// Multi-role union — Pacred-only escape hatch (Wave 26 · G4)
+// ──────────────────────────────────────────────────────────────
+// Legacy assigns each admin EXACTLY ONE menu. Pacred allows an admin
+// to hold multiple roles (e.g. a sales lead also tagged `qa` during a
+// QA staffing gap). `menuForRoles` keeps legacy-faithful single-pick;
+// this function returns the dedup'd UNION of every held role's menu,
+// keeping each section once and merging items by labelKey.
+//
+// Use when the role badge is misleading (multi-hat staffer) AND the
+// staffer needs to see everything they can act on — not the rare case.
+// Default sidebar consumer keeps using `menuForRoles` for the slim
+// legacy-faithful single menu.
+
+/** Sections + items deduped by header + labelKey. Item children preserved
+ *  as-is from the higher-precedence role's copy (no per-leaf merging). */
+export function menuForRolesUnion(roles: AdminRole[]): MenuSection[] {
+  if (roles.includes("super")) return ROLE_MENUS.super;
+  if (roles.length === 0) return [];
+
+  // Pick all in-precedence-order so the highest-rank menu sets section order.
+  const ordered = ROLE_PRECEDENCE.filter((r) => roles.includes(r));
+  if (ordered.length === 0) return [];
+  if (ordered.length === 1) return ROLE_MENUS[ordered[0]];
+
+  const sectionByHeader = new Map<string, MenuSection>();
+  const seenLabels = new Set<string>(); // per-section dedupe via composite key
+
+  for (const r of ordered) {
+    for (const sec of ROLE_MENUS[r]) {
+      if (!sectionByHeader.has(sec.header)) {
+        sectionByHeader.set(sec.header, { header: sec.header, items: [] });
+      }
+      const target = sectionByHeader.get(sec.header)!;
+      for (const item of sec.items) {
+        const key = `${sec.header}::${item.labelKey}`;
+        if (seenLabels.has(key)) continue;
+        seenLabels.add(key);
+        target.items.push(item);
+      }
+    }
+  }
+  return Array.from(sectionByHeader.values()).filter((s) => s.items.length > 0);
+}
+
+/** Returns `menuSuper` (the CEO toolbox) — used by the super-only
+ *  "show all" toggle in the sidebar component to escape role-filtering. */
+export function menuShowAll(): MenuSection[] {
+  return ROLE_MENUS.super;
 }
 
 /** Every badge key referenced anywhere in the menus — used to size the

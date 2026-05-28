@@ -37,7 +37,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
+import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
 import { logger } from "@/lib/logger";
+import { getAdminRoles } from "@/lib/auth/require-admin";
+import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
 
 // ────────────────────────────────────────────────────────────
 // Schemas
@@ -392,16 +395,50 @@ export async function adminBarcodeImportScan(
       // ── 3. MAYBE FLIP STATUS — legacy L167-175
       let statusFlipped = false;
       if (row && fi2amount >= row.famount) {
-        const { error: flipErr } = await admin
-          .from("tb_forwarder")
-          .update({
-            fstatus: "4",
-            fdatestatus4: nowIso,
-            adminidupdate: legacyAdminId,
-            fpallet: fPallet,
-          })
-          .eq("id", row.id);
-        if (!flipErr) statusFlipped = true;
+        // Wave 26 G5 (2026-05-28 ดึก) — status-transition role gate.
+        // Matrix: *→4 = warehouse (super / manager override). The page-
+        // level union ["super","ops","warehouse"] also lets `ops` through
+        // — same justification as warehouse-history: helper additionally
+        // rejects non-warehouse `ops` callers from auto-flipping fstatus,
+        // while still permitting the scan-event upsert in step (2) and
+        // the touch in the else-branch below (no fstatus change there).
+        // Skip the gate when the row is already at fstatus 4 (idempotent
+        // re-scan after parity reached).
+        let allowFlip = row.fstatus === "4";
+        if (!allowFlip) {
+          const callerRoles = (await getAdminRoles()) ?? [];
+          allowFlip = canAnyRoleFlipFstatus(callerRoles, row.fstatus, "4");
+        }
+
+        if (!allowFlip) {
+          // Soft-fail: the scan upsert already succeeded; surface the gap
+          // in the audit log without breaking the warehouse UX. A `super`
+          // can complete the flip via the bulk action.
+          logger.warn(
+            "barcode_import.scan",
+            "fstatus auto-flip blocked by G5 transition gate",
+            { fid: row.id, from: row.fstatus },
+          );
+        } else {
+          const { error: flipErr } = await admin
+            .from("tb_forwarder")
+            .update({
+              fstatus: "4",
+              fdatestatus4: nowIso,
+              adminidupdate: legacyAdminId,
+              fpallet: fPallet,
+            })
+            .eq("id", row.id);
+          if (!flipErr) {
+            statusFlipped = true;
+            // G8 (2026-05-28 ดึก): every fstatus UPDATE writes the legacy
+            // audit log. Barcode-driven flip → '4' was a missing site
+            // per §7 of the state-machine audit ("no log entry — bug").
+            // No customer notification on this transition: matrix is
+            // log-only for 3→4 (internal warehouse confirmation).
+            await appendStatusLog(admin, row.id, row.fstatus, "4", legacyAdminId);
+          }
+        }
       } else if (row) {
         // L171-175 — touch adminidupdate + fpallet even without status flip.
         await admin

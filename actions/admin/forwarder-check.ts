@@ -58,7 +58,10 @@ import { sendSms } from "@/lib/sms/gateway";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { logger, redactPhone } from "@/lib/logger";
 import { sendNotification } from "@/lib/notifications";
+import { appendStatusLog as appendStatusLogShared } from "@/lib/notifications/status-flip-helper";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
+import { getAdminRoles } from "@/lib/auth/require-admin";
+import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
 
 // ────────────────────────────────────────────────────────────
 // Schemas
@@ -129,7 +132,12 @@ type BillResult = {
 
 /** Best-effort: insert one audit row per status transition. Failures
  *  don't break the main flow — the admin_audit_log entry above carries
- *  the same data at the call-level, this is the legacy per-row trail. */
+ *  the same data at the call-level, this is the legacy per-row trail.
+ *
+ *  2026-05-28 ดึก (G8 unification) — now delegates to
+ *  `lib/notifications/status-flip-helper.ts` so every call site goes
+ *  through the same code path. Signature kept stable for the few
+ *  internal callers here. */
 async function appendStatusLog(
   admin: ReturnType<typeof createAdminClient>,
   fid: number,
@@ -137,17 +145,7 @@ async function appendStatusLog(
   newStatus: string,
   adminLegacyId: string,
 ): Promise<void> {
-  try {
-    await admin.from("tb_log_forwarder_status").insert({
-      fid,
-      fstatusold:    oldStatus,
-      fstatusnew:    newStatus,
-      adminidchange: adminLegacyId,
-      fdatechange:   new Date().toISOString(),
-    });
-  } catch (e) {
-    logger.error("forwarder-check", "tb_log_forwarder_status insert failed", e, { fid });
-  }
+  await appendStatusLogShared(admin, fid, oldStatus, newStatus, adminLegacyId);
 }
 
 /** Compose the customer-facing SMS body. Legacy template was
@@ -216,6 +214,18 @@ export async function adminCallPriceUser(
     ["super", "ops", "accounting"],
     async ({ adminId }) => {
       const admin = createAdminClient();
+
+      // Wave 26 G5 (2026-05-28 ดึก) — status-transition role gate.
+      // Bulk-bill is universally 4→5 (the .eq below pins the from-status),
+      // so we check ONCE before reading. Matrix: 4→5 = accounting (super /
+      // manager override). The existing union ["super","ops","accounting"]
+      // page-level gate already filtered out e.g. Sales — but a future
+      // role-expansion that touches this action would bypass the matrix
+      // without this row-level helper call. We compute roles once.
+      const callerRoles = (await getAdminRoles()) ?? [];
+      if (!canAnyRoleFlipFstatus(callerRoles, "4", "5")) {
+        return { ok: false, error: "forbidden_transition" };
+      }
 
       // 1. Read candidate forwarder rows (filter to fstatus='4' = ตรวจสอบแล้ว).
       //    A row at any other status was already billed (or rolled back) and

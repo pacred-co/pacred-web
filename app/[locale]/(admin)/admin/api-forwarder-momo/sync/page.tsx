@@ -91,6 +91,20 @@ export default async function AdminMomoSyncPage() {
         ไม่กระทบ <code className="rounded bg-amber-100 px-1">cargo_*</code> / <code className="rounded bg-amber-100 px-1">tb_*</code>.
       </div>
 
+      {/* Workflow hint — after sync, go to /review to commit into tb_forwarder */}
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900 leading-relaxed">
+        <strong>📥 ขั้นถัดไป:</strong> หลัง sync แล้ว ไปที่{" "}
+        <Link
+          href="/admin/api-forwarder-momo/review"
+          className="font-bold underline hover:text-emerald-700"
+        >
+          /admin/api-forwarder-momo/review
+        </Link>{" "}
+        เพื่อตรวจ + commit row เข้า <code className="rounded bg-emerald-100 px-1">tb_forwarder</code>{" "}
+        (per-row หรือ bulk · atomic INSERT — fstatus + fcabinetnumber + fdatetothai
+        + fdatecontainerclose พร้อมกัน). Synthesis G1 (2026-05-28 ดึก).
+      </div>
+
       <MomoSyncClient initialDbRows={initialDbRows} />
     </main>
   );

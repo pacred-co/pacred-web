@@ -32,8 +32,9 @@
  *   tb_settings       — rgdefault (เรทสั่งซื้อ), rsdefault (sale), rpdefault (โอน)
  */
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireAdmin } from "@/lib/auth/require-admin";
-import { Link } from "@/i18n/navigation";
+import { requireAdmin, getAdminRoles } from "@/lib/auth/require-admin";
+import { Link, redirect } from "@/i18n/navigation";
+import { getLocale } from "next-intl/server";
 import { ShoppingBasket, Box, ArrowLeftRight, Wallet as WalletIcon, Users, UserX, XCircle, Eye } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -58,6 +59,25 @@ type TabKey =
   | "inactiveCustomers";  // tb_users useractive='0'
 
 export default async function AdminDashboardPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  // 2026-05-28 — Driver landing redirect (G12 — Driver mobile UI parity sprint).
+  // Drivers logging into /admin used to hit notFound() because the office
+  // role gate below excludes them. Their actual home is /admin/drivers/work.
+  // Done BEFORE requireAdmin so a driver-only user doesn't 404 — they
+  // bounce one segment over to where their job lives.
+  //
+  // Multi-role admins (e.g. someone with BOTH driver + ops) still see the
+  // ops dashboard — the redirect only fires when driver is the ONLY role.
+  // This mirrors legacy `index.php:133` (case 7 → home/Cargo/Warehouse/Driver.php)
+  // which sends pure-driver staff straight to their work queue.
+  const allRoles = await getAdminRoles();
+  if (allRoles && allRoles.length > 0) {
+    const isDriverOnly = allRoles.every((r) => r === "driver");
+    if (isDriverOnly) {
+      const locale = await getLocale();
+      redirect({ href: "/admin/drivers/work", locale });
+    }
+  }
+
   // W-1 (gap-admin H-2): page-level role gate. The (admin) layout only
   // proves "some admin" — driver/warehouse roles legitimately reach
   // floor-ops pages, but this dashboard exposes company-wide revenue +

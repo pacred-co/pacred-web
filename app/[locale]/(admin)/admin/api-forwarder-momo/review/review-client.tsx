@@ -1,0 +1,531 @@
+"use client";
+
+/**
+ * /admin/api-forwarder-momo/review — client UI (review grid + commit).
+ *
+ * Synthesis G1 SOT: docs/research/legacy-deep-dive/_SYNTHESIS.md §3.
+ *
+ * The "feels automatic" UX from legacy api-forwarder-momo.php:
+ *   1. Per-row prefilled inputs (userID guess · shipBy default · productsType default)
+ *   2. Per-row commit button → ONE atomic INSERT (status + cabinet + dates together)
+ *   3. Bulk "สร้างทั้งหมด" button — commits every row that has userID + shipBy filled
+ *   4. Committed rows disappear from the grid (via revalidate)
+ *
+ * Per AGENTS.md §0a — workflow stolen from legacy, Tailwind chrome (no Bootstrap).
+ * Per AGENTS.md §0c — every Supabase query checked for error (the parent server
+ * page); the commit action returns AdminActionResult so errors surface to UI.
+ */
+
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Truck, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
+import { Link } from "@/i18n/navigation";
+import {
+  commitMomoRowToForwarder,
+  commitMomoRowsBatch,
+  type CommitMomoRowInput,
+} from "@/actions/admin/momo-commit";
+
+// ─────────────────────────────────────────────────────────────
+// Types (also re-exported for the server page)
+// ─────────────────────────────────────────────────────────────
+
+export type PendingRow = {
+  id:                 string;
+  momoTrackingNo:     string | null;
+  momoContainerNo:    string | null;
+  momoSackNo:         string | null;
+  shipmentStatus:     string | null;
+  adminStatusText:    string | null;
+  phase:              string | null;
+  /** Guessed from MOMO `user_group + user_code` (e.g. "PR032") — admin verifies. */
+  guessedUserId:      string | null;
+  guessedShipBy:      string | null;
+  qty:                number | null;
+  lastSyncedAt:       string | null;
+  momoUpdatedAt:      string | null;
+};
+
+type CommittedRow = {
+  id:                    string;
+  momoTrackingNo:        string | null;
+  momoContainerNo:       string | null;
+  committedAt:           string | null;
+  committedForwarderId:  number | null;
+  commitUserId:          string | null;
+};
+
+/** Per-row form state — admin overrides the prefilled defaults. */
+type RowFormState = {
+  userID:        string;
+  fShipBy:       string;
+  fProductsType: "1" | "2" | "3" | "4";
+};
+
+// Reuse the same ship-by option list as the manual-form (Wave 17 P1).
+const SHIP_BY_OPTIONS: { value: string; label: string }[] = [
+  { value: "PCS",  label: "รับเองโกดัง PCS กทม"  },
+  { value: "2",    label: "Flash Express"           },
+  { value: "3",    label: "J.K. เอ็กซ์เพรส"          },
+  { value: "21",   label: "นิ่มซี่เส็งขนส่ง"            },
+  { value: "5",    label: "Nim Express"             },
+  { value: "11",   label: "ไปรษณีย์ไทย"              },
+  { value: "24",   label: "J&T Express"             },
+  { value: "1",    label: "DHL Express"             },
+  { value: "4",    label: "Kerry Express"           },
+];
+
+const PRODUCT_TYPE_OPTIONS: { value: "1" | "2" | "3" | "4"; label: string }[] = [
+  { value: "1", label: "ทั่วไป"   },
+  { value: "2", label: "มอก."     },
+  { value: "3", label: "อย./น้ำยา" },
+  { value: "4", label: "พิเศษ"    },
+];
+
+// ─────────────────────────────────────────────────────────────
+// Top-level component
+// ─────────────────────────────────────────────────────────────
+
+export function ReviewGridClient({
+  pendingRows,
+  recentCommitted,
+  pendingError,
+}: {
+  pendingRows:     PendingRow[];
+  recentCommitted: CommittedRow[];
+  pendingError:    string | null;
+}) {
+  const router = useRouter();
+
+  // Per-row form state — keyed by momo_import_tracks.id (UUID).
+  const [formState, setFormState] = useState<Record<string, RowFormState>>(() => {
+    const m: Record<string, RowFormState> = {};
+    for (const r of pendingRows) {
+      // Prefill with the MOMO-guessed userID (admin verifies).
+      // PCS is a safe default for fShipBy — it bypasses address lookup.
+      m[r.id] = {
+        userID:        r.guessedUserId ?? "",
+        fShipBy:       "PCS",
+        fProductsType: "1",
+      };
+    }
+    return m;
+  });
+
+  // Per-row result (after commit) — keyed by row id.
+  const [rowResults, setRowResults] = useState<Record<string, {
+    ok:           boolean;
+    message:      string;
+    forwarderId?: number;
+  }>>({});
+
+  // Track which rows are committing (in-flight) so we disable their buttons.
+  const [pending, startTransition] = useTransition();
+  const [committingRow, setCommittingRow] = useState<string | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkSummary, setBulkSummary] = useState<{
+    total: number; succeeded: number; failed: number;
+  } | null>(null);
+
+  // Set the form value for one row.
+  const setRowField = <K extends keyof RowFormState>(
+    rowId: string,
+    field: K,
+    value: RowFormState[K],
+  ) => {
+    setFormState((s) => ({
+      ...s,
+      [rowId]: { ...s[rowId], [field]: value },
+    }));
+  };
+
+  // Single-row commit handler.
+  const commitOne = async (rowId: string) => {
+    const f = formState[rowId];
+    if (!f) return;
+
+    const input: CommitMomoRowInput = {
+      rowId,
+      userID:        f.userID.toUpperCase(),
+      fShipBy:       f.fShipBy,
+      fProductsType: f.fProductsType,
+    };
+
+    setCommittingRow(rowId);
+    const res = await commitMomoRowToForwarder(input);
+    setCommittingRow(null);
+
+    if (res.ok) {
+      setRowResults((m) => ({
+        ...m,
+        [rowId]: {
+          ok:          true,
+          message:     `สร้างสำเร็จ → tb_forwarder #${res.data?.forwarderId}`,
+          forwarderId: res.data?.forwarderId,
+        },
+      }));
+      // Reload server data so the row disappears from pending.
+      startTransition(() => router.refresh());
+    } else {
+      setRowResults((m) => ({
+        ...m,
+        [rowId]: { ok: false, message: res.error },
+      }));
+    }
+  };
+
+  // Bulk commit — every row that has userID + fShipBy filled.
+  const commitAll = async () => {
+    // Filter to rows that the admin has prepared (userID looks valid).
+    const validRows = pendingRows
+      .filter((r) => {
+        const f = formState[r.id];
+        if (!f) return false;
+        return /^PR\d+$/i.test(f.userID.trim()) && !!f.fShipBy;
+      })
+      .map((r) => ({
+        rowId:         r.id,
+        userID:        formState[r.id].userID.toUpperCase(),
+        fShipBy:       formState[r.id].fShipBy,
+        fProductsType: formState[r.id].fProductsType,
+      }));
+
+    if (validRows.length === 0) {
+      alert("ยังไม่มี row ใดที่กรอก userID + บริษัทขนส่งครบ — กรอกอย่างน้อย 1 row ก่อน");
+      return;
+    }
+    if (!confirm(
+      `ยืนยัน commit ${validRows.length} row พร้อมกัน?\n` +
+      `(action นี้จะ INSERT ${validRows.length} row ลง tb_forwarder · ส่งเมล/LINE ถ้าเปิด)`,
+    )) {
+      return;
+    }
+
+    setBulkRunning(true);
+    const res = await commitMomoRowsBatch({ rows: validRows });
+    setBulkRunning(false);
+
+    // TS narrowing — AdminActionResult is a discriminated union on `ok`.
+    // Treat `ok: false` first so `res.error` is accessible; then the
+    // `ok: true` arm has access to `res.data` (still optional but safe).
+    if (!res.ok) {
+      alert(`bulk commit failed: ${res.error}`);
+      return;
+    }
+    if (!res.data) {
+      alert("bulk commit returned no data");
+      return;
+    }
+    // Apply per-row results onto rowResults map.
+    const newResults: typeof rowResults = { ...rowResults };
+    for (const r of res.data.results) {
+      if (r.ok) {
+        newResults[r.rowId] = {
+          ok:          true,
+          message:     `สร้างสำเร็จ → tb_forwarder #${r.forwarderId}`,
+          forwarderId: r.forwarderId,
+        };
+      } else {
+        newResults[r.rowId] = {
+          ok:      false,
+          message: r.error ?? "unknown error",
+        };
+      }
+    }
+    setRowResults(newResults);
+    setBulkSummary({
+      total:     res.data.total,
+      succeeded: res.data.succeeded,
+      failed:    res.data.failed,
+    });
+    // Reload — committed rows disappear from pending grid.
+    startTransition(() => router.refresh());
+  };
+
+  // Counts for header.
+  const totalPending = pendingRows.length;
+  const totalReady = useMemo(
+    () =>
+      pendingRows.filter((r) => {
+        const f = formState[r.id];
+        return f && /^PR\d+$/i.test(f.userID.trim()) && !!f.fShipBy;
+      }).length,
+    [pendingRows, formState],
+  );
+
+  return (
+    <div className="space-y-5">
+      {/* Bulk action bar */}
+      <section className="rounded-2xl border border-border bg-white p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+        <div className="text-sm">
+          <strong>{totalPending}</strong> รายการรอ commit
+          {" · "}
+          <strong className="text-primary-700">{totalReady}</strong> พร้อม commit
+          {" "}
+          <span className="text-xs text-muted">
+            (มี userID + บริษัทขนส่ง)
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => router.refresh()}
+            disabled={pending || bulkRunning}
+            className="inline-flex items-center gap-1 rounded-lg border border-border bg-white px-3 py-2 text-xs font-semibold hover:bg-surface-alt disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${pending ? "animate-spin" : ""}`} />
+            รีเฟรช
+          </button>
+          <button
+            type="button"
+            onClick={commitAll}
+            disabled={bulkRunning || pending || totalReady === 0}
+            className="inline-flex items-center gap-1 rounded-lg border border-primary-700 bg-primary-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary-700 disabled:opacity-50"
+          >
+            <Truck className="h-3.5 w-3.5" />
+            {bulkRunning
+              ? `กำลัง commit ${totalReady}…`
+              : `สร้างทั้งหมด (${totalReady})`}
+          </button>
+        </div>
+      </section>
+
+      {/* Bulk result banner */}
+      {bulkSummary && (
+        <div className={`rounded-2xl border p-3 text-sm ${
+          bulkSummary.failed === 0
+            ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+            : "border-amber-200 bg-amber-50 text-amber-900"
+        }`}>
+          <strong>Bulk commit เสร็จ:</strong>{" "}
+          ทั้งหมด {bulkSummary.total} · สำเร็จ {bulkSummary.succeeded}
+          {bulkSummary.failed > 0 ? ` · ล้มเหลว ${bulkSummary.failed} (ดู message ในแต่ละ row)` : ""}
+        </div>
+      )}
+
+      {/* Pending error banner */}
+      {pendingError && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+          <strong>Load failed:</strong> {pendingError}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {totalPending === 0 && !pendingError && (
+        <section className="rounded-2xl border border-border bg-white p-8 text-center text-sm text-muted shadow-sm">
+          <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-500" />
+          <p className="mt-2">
+            ไม่มีรายการรอ commit — sync ใหม่จาก{" "}
+            <Link href="/admin/api-forwarder-momo/sync" className="text-primary-700 underline">
+              /sync
+            </Link>{" "}
+            เพื่อนำรายการเข้า momo_import_tracks
+          </p>
+        </section>
+      )}
+
+      {/* Pending grid */}
+      {totalPending > 0 && (
+        <section className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
+          <div className="overflow-x-auto scrollbar-x-visible">
+            <table className="w-full text-xs border-collapse min-w-[1100px]">
+              <thead className="bg-surface-alt sticky top-0">
+                <tr>
+                  <th className="text-left px-3 py-2 border-b w-8">#</th>
+                  <th className="text-left px-3 py-2 border-b">Tracking</th>
+                  <th className="text-left px-3 py-2 border-b">ตู้ / Sack</th>
+                  <th className="text-left px-3 py-2 border-b">Phase</th>
+                  <th className="text-left px-3 py-2 border-b">Qty</th>
+                  <th className="text-left px-3 py-2 border-b w-32">userID *</th>
+                  <th className="text-left px-3 py-2 border-b w-44">บริษัทขนส่ง *</th>
+                  <th className="text-left px-3 py-2 border-b w-32">ประเภท</th>
+                  <th className="text-left px-3 py-2 border-b w-44">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingRows.map((r, idx) => {
+                  const f = formState[r.id];
+                  const result = rowResults[r.id];
+                  const isCommitting = committingRow === r.id;
+                  const isReady = !!f && /^PR\d+$/i.test(f.userID.trim()) && !!f.fShipBy;
+
+                  return (
+                    <tr key={r.id} className={`border-b align-top ${
+                      result?.ok ? "bg-emerald-50/60" : ""
+                    }`}>
+                      <td className="px-3 py-2 text-muted">{idx + 1}</td>
+                      <td className="px-3 py-2 font-mono">{r.momoTrackingNo ?? "—"}</td>
+                      <td className="px-3 py-2 font-mono">
+                        <div>{r.momoContainerNo ?? "—"}</div>
+                        {r.momoSackNo && (
+                          <div className="text-[10px] text-muted">sack: {r.momoSackNo}</div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div>{r.phase ?? "—"}</div>
+                        {r.adminStatusText && (
+                          <div className="text-[10px] text-muted">
+                            {r.adminStatusText}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">{r.qty ?? 1}</td>
+
+                      {/* userID input */}
+                      <td className="px-3 py-2">
+                        <input
+                          type="text"
+                          value={f?.userID ?? ""}
+                          onChange={(e) =>
+                            setRowField(r.id, "userID", e.target.value)
+                          }
+                          placeholder="PR12345"
+                          disabled={isCommitting || !!result?.ok}
+                          className="w-full rounded border border-border px-2 py-1 font-mono text-xs uppercase"
+                        />
+                        {r.guessedUserId && f?.userID !== r.guessedUserId && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setRowField(r.id, "userID", r.guessedUserId ?? "")
+                            }
+                            className="mt-0.5 text-[10px] text-sky-600 underline"
+                          >
+                            ใช้ค่าจาก MOMO: {r.guessedUserId}
+                          </button>
+                        )}
+                      </td>
+
+                      {/* ship-by select */}
+                      <td className="px-3 py-2">
+                        <select
+                          value={f?.fShipBy ?? "PCS"}
+                          onChange={(e) =>
+                            setRowField(r.id, "fShipBy", e.target.value)
+                          }
+                          disabled={isCommitting || !!result?.ok}
+                          className="w-full rounded border border-border px-2 py-1 text-xs"
+                        >
+                          {SHIP_BY_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+
+                      {/* products-type select */}
+                      <td className="px-3 py-2">
+                        <select
+                          value={f?.fProductsType ?? "1"}
+                          onChange={(e) =>
+                            setRowField(
+                              r.id,
+                              "fProductsType",
+                              e.target.value as RowFormState["fProductsType"],
+                            )
+                          }
+                          disabled={isCommitting || !!result?.ok}
+                          className="w-full rounded border border-border px-2 py-1 text-xs"
+                        >
+                          {PRODUCT_TYPE_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+
+                      {/* commit button + result */}
+                      <td className="px-3 py-2">
+                        {result?.ok ? (
+                          <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-2 py-1 text-[11px] font-bold text-emerald-700">
+                            <CheckCircle2 className="h-3 w-3" />
+                            #{result.forwarderId}
+                          </span>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => commitOne(r.id)}
+                              disabled={
+                                !isReady ||
+                                isCommitting ||
+                                bulkRunning ||
+                                pending
+                              }
+                              className="w-full rounded-lg border border-primary-300 bg-primary-50 px-2 py-1.5 text-xs font-bold text-primary-700 hover:bg-primary-100 disabled:opacity-50"
+                              title={
+                                isReady
+                                  ? "INSERT ลง tb_forwarder (atomic)"
+                                  : "กรอก userID และเลือก บ.ขนส่ง ก่อน"
+                              }
+                            >
+                              {isCommitting ? "กำลัง..." : "สร้างใหม่"}
+                            </button>
+                            {result && !result.ok && (
+                              <div className="mt-1 flex items-start gap-1 text-[10px] text-red-700">
+                                <AlertCircle className="h-3 w-3 flex-shrink-0 mt-0.5" />
+                                <span>{result.message}</span>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* Recent committed strip (history) */}
+      {recentCommitted.length > 0 && (
+        <section className="rounded-2xl border border-border bg-white p-4 shadow-sm">
+          <h3 className="text-sm font-bold mb-2">
+            ⏱ commit ล่าสุด ({recentCommitted.length}) — landed ใน tb_forwarder
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead className="bg-surface-alt">
+                <tr>
+                  <th className="text-left px-2 py-1 border-b">Tracking</th>
+                  <th className="text-left px-2 py-1 border-b">ตู้</th>
+                  <th className="text-left px-2 py-1 border-b">userID</th>
+                  <th className="text-left px-2 py-1 border-b">tb_forwarder id</th>
+                  <th className="text-left px-2 py-1 border-b">เวลา</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentCommitted.map((c) => (
+                  <tr key={c.id} className="border-b">
+                    <td className="px-2 py-1 font-mono">{c.momoTrackingNo ?? "—"}</td>
+                    <td className="px-2 py-1 font-mono">{c.momoContainerNo ?? "—"}</td>
+                    <td className="px-2 py-1 font-mono">{c.commitUserId ?? "—"}</td>
+                    <td className="px-2 py-1">
+                      {c.committedForwarderId ? (
+                        <Link
+                          href={`/admin/forwarders/${c.committedForwarderId}`}
+                          className="text-primary-700 underline font-bold"
+                        >
+                          #{c.committedForwarderId}
+                        </Link>
+                      ) : "—"}
+                    </td>
+                    <td className="px-2 py-1 text-muted">
+                      {c.committedAt
+                        ? new Date(c.committedAt).toLocaleString("th-TH")
+                        : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}

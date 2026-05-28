@@ -1,7 +1,9 @@
 import { Link } from "@/i18n/navigation";
+import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
+import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { CabinetListCell } from "./cabinet-list-cell";
 
 /**
@@ -80,9 +82,21 @@ export default async function CntHsPage({
 }: {
   searchParams: Promise<SP>;
 }) {
-  await requireAdmin(["super", "ops", "accounting"]);
+  const { roles } = await requireAdmin(["super", "ops", "accounting"]);
 
   const sp = await searchParams;
+
+  // G6 — default queue filter per role. CSPurchasing (interpreter)
+  // lands on ?q=1 (รอดำเนินการ — their pending initiations); other
+  // roles see the full ledger (review queue). Matrix in
+  // lib/admin/default-queue-filter.ts.
+  const defaultRedirect = buildDefaultLandingRedirect(
+    "/admin/cnt-hs",
+    roles,
+    sp as Record<string, unknown>,
+  );
+  if (defaultRedirect) redirect(defaultRedirect);
+
   const admin = createAdminClient();
 
   // ── tb_cnt_item fan-out (cnt-hs.php L202-213) ───────────────────
@@ -185,6 +199,18 @@ export default async function CntHsPage({
             <h1 className="mt-1 text-2xl font-bold">รายการเบิกเงินค่าตู้</h1>
             <p className="mt-1 text-sm text-muted">
               จัดการการชำระเงินค่าตู้คอนเทนเนอร์ (tb_cnt) · {countAll.toLocaleString()} รายการทั้งหมด
+              {sp.q && (
+                <>
+                  {" · "}
+                  <Link
+                    href="/admin/cnt-hs?nofilter=1"
+                    className="text-primary-600 hover:underline"
+                    title="ล้างฟิลเตอร์เริ่มต้นตามบทบาท · แสดงรายการทั้งหมด"
+                  >
+                    ดูทั้งหมด
+                  </Link>
+                </>
+              )}
             </p>
           </div>
           <nav aria-label="breadcrumb" className="text-xs text-muted flex gap-1.5 items-center">
