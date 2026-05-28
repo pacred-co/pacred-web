@@ -96,11 +96,7 @@ export function SearchBar({ embedded = false, hideOnMobile = false, defaultColla
     <div className={rootClass}>
       <div className="mx-auto w-full max-w-[1440px] px-4 py-[10px] md:pl-[168px] md:pr-[56px]">
 
-        {/* Form wrapper so Enter / submit-button routes to `/search?url=…`
-            — the input + buttons used to live in a bare <div>, so neither
-            keyboard-Enter nor the red search button did anything (ปอน
-            2026-05-28: "เอาลิงก์ไปวางแล้วไม่ติดอะ กดค้นแล้วไม่มา"). */}
-        <form action="/search" method="GET" className="flex items-center gap-0">
+        <div className="flex items-center gap-0">
 
           {/* Search input + camera + button */}
           <div className="relative flex-1">
@@ -164,7 +160,7 @@ export function SearchBar({ embedded = false, hideOnMobile = false, defaultColla
             </button>
           )}
 
-        </form>
+        </div>
 
         {/* Quick keywords — desktop only. Hidden on mobile entirely per ปอน
             2026-05-28 ("ในมือถือเอาไอ้คีย์เวิร์ดพวกนี้ออกให้หมดเลย"). Still
