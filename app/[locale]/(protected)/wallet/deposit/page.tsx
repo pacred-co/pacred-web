@@ -139,9 +139,9 @@ export default async function WalletDepositPage() {
       .maybeSingle<{ wallettotal: number }>(),
     admin
       .from("tb_users")
-      .select("username, userlastname")
-      .eq("userid", memberCode)
-      .maybeSingle<{ username: string | null; userlastname: string | null }>(),
+      .select("userName, userLastName")
+      .eq("userID", memberCode)
+      .maybeSingle<{ userName: string | null; userLastName: string | null }>(),
     admin
       .from("tb_wallet_hs")
       .select("id, date, status, amount, type, reforder")
@@ -151,7 +151,7 @@ export default async function WalletDepositPage() {
 
   const walletTotal = Number(walletRes.data?.wallettotal ?? 0);
 
-  const legacyName = [userRowRes.data?.username, userRowRes.data?.userlastname]
+  const legacyName = [userRowRes.data?.userName, userRowRes.data?.userLastName]
     .filter((s): s is string => !!s && s.trim() !== "")
     .join(" ")
     .trim();

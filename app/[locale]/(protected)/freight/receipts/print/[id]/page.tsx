@@ -310,9 +310,9 @@ export default async function FreightReceiptPrintPage({
 
     const { data: userRow, error: userRowErr } = await admin
       .from("tb_users")
-      .select("username, userlastname")
-      .eq("userid", receipt.userid)
-      .maybeSingle<{ username: string | null; userlastname: string | null }>();
+      .select("userName, userLastName")
+      .eq("userID", receipt.userid)
+      .maybeSingle<{ userName: string | null; userLastName: string | null }>();
     if (userRowErr) {
       console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
     }
@@ -336,8 +336,8 @@ export default async function FreightReceiptPrintPage({
       corporatename: corpRow?.corporatename ?? "",
       corporatenumber: corpRow?.corporatenumber ?? "",
       corporateaddress: corpRow?.corporateaddress ?? "",
-      username: userRow?.username ?? "",
-      userlastname: userRow?.userlastname ?? "",
+      username: userRow?.userName ?? "",
+      userlastname: userRow?.userLastName ?? "",
       // tb_receipt also carries the per-receipt reComp* override cols.
       recompnumber: "",
       recompname: "",

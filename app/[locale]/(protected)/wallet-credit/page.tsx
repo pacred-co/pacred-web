@@ -166,12 +166,12 @@ export default async function WalletCreditPage() {
     // wallet-credit.php L67-74 + header.php L33-38: tb_users
     admin
       .from("tb_users")
-      .select("username, userlastname, usercreditvalue")
-      .eq("userid", memberCode)
+      .select("userName, userLastName, userCreditValue")
+      .eq("userID", memberCode)
       .maybeSingle<{
-        username: string | null;
-        userlastname: string | null;
-        usercreditvalue: number | string | null;
+        userName: string | null;
+        userLastName: string | null;
+        userCreditValue: number | string | null;
       }>(),
     // wallet-credit.php L59-66: SELECT cbTotal FROM tb_cash_back WHERE userID=…
     admin
@@ -196,12 +196,12 @@ export default async function WalletCreditPage() {
   ]);
 
   const walletTotal = Number(walletRes.data?.wallettotal ?? 0);
-  const userCreditValue = Number(userRowRes.data?.usercreditvalue ?? 0);
+  const userCreditValue = Number(userRowRes.data?.userCreditValue ?? 0);
   // wallet-credit.php L107: $userCreditValue - $creditValue → available credit
   const creditValue = Number(creditRes.data?.creditvalue ?? 0);
   const creditAvailable = userCreditValue - creditValue;
   // wallet-credit.php L105: $userName . ' ' . $userLastName
-  const legacyName = [userRowRes.data?.username, userRowRes.data?.userlastname]
+  const legacyName = [userRowRes.data?.userName, userRowRes.data?.userLastName]
     .filter((s): s is string => !!s && s.trim() !== "")
     .join(" ")
     .trim();

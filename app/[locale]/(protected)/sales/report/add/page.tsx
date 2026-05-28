@@ -112,14 +112,14 @@ export default async function SalesReportAddPage() {
   // 1. The team's member ids — tb_users WHERE coID = $userIDMain.
   const { data: teamUsersRaw, error: teamUsersRawErr } = await admin
     .from("tb_users")
-    .select("userid")
-    .eq("coid", userIDMain);
+    .select("userID")
+    .eq("coID", userIDMain);
   if (teamUsersRawErr) {
     console.error(`[tb_users list] failed`, { code: teamUsersRawErr.code, message: teamUsersRawErr.message });
   }
   const teamUserIds = (
-    (teamUsersRaw ?? []) as unknown as { userid: string }[]
-  ).map((u) => u.userid);
+    (teamUsersRaw ?? []) as unknown as { userID: string }[]
+  ).map((u) => u.userID);
 
   let rows: UnpaidRow[] = [];
   if (teamUserIds.length > 0) {
