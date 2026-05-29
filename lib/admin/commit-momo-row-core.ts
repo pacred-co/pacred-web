@@ -423,7 +423,14 @@ export async function commitMomoRowCore(
       paymethod:             "1",
       fusercompany:          fUserCompany,
       priceother:            0,
-      fwarehousename:        "7",       // MOMO = Cargo Center per legacy
+      // fwarehousename: "8" = MOMO (per WAREHOUSE_LABEL in /admin/report-cnt/
+      // [fNo]/page.tsx L55 — { "7": "Cargo Center", "8": "MOMO" }).
+      // 2026-05-30 evening fix: previously hardcoded "7" with a misleading
+      // comment ("MOMO = Cargo Center per legacy") — that comment was wrong
+      // (a copy-paste from the CargoCenter manual entry form). Result on
+      // /admin/report-cnt/[cabinet]: rows committed from MOMO showed
+      // "Cargo Center (กวางโจว)" instead of "MOMO". ภูม flagged 2026-05-30.
+      fwarehousename:        "8",
       // Date fields run through cleanDate (bug 2b) — Postgres rejects
       // "0000-00-00" / empty / invalid; coerce to null instead.
       fdatestatus2:          fDateStatus2,
