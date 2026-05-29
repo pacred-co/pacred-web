@@ -159,20 +159,21 @@ export default async function AdminDriversPage({
   }
 
   // Driver name directory — resolve fdadminid (legacy text id) → display name.
+  // tb_users uses CAMELCASE columns (CLAUDE.md exception · userID/userName).
   const driverIds = Array.from(new Set(rows.map((r) => r.fdadminid).filter(Boolean) as string[]));
   let driverDirectory = new Map<string, DriverDirectoryEntry>();
   if (driverIds.length > 0) {
     const { data: usersData, error: usersErr } = await admin
       .from("tb_users")
-      .select("userid, username, userlastname")
-      .in("userid", driverIds);
+      .select("userID, userName, userLastName")
+      .in("userID", driverIds);
     if (usersErr) {
       console.error("/admin/drivers: driver directory failed", usersErr);
     }
     driverDirectory = new Map(
-      ((usersData ?? []) as { userid: string; username: string | null; userlastname: string | null }[]).map((u) => [
-        u.userid,
-        { member_code: u.userid, name: `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || "—" },
+      ((usersData ?? []) as { userID: string; userName: string | null; userLastName: string | null }[]).map((u) => [
+        u.userID,
+        { member_code: u.userID, name: `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—" },
       ]),
     );
   }

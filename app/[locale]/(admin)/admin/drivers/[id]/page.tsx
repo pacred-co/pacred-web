@@ -184,20 +184,21 @@ export default async function AdminDriverBatchDetailPage({
   const fwdById = new Map(forwarders.map((f) => [f.id, f]));
 
   // 4. Driver display info
+  // tb_users uses CAMELCASE columns (CLAUDE.md exception · userID/userName).
   let driverName = "—";
   if (batch.fdadminid) {
     const { data: driverUser, error: driverUserErr } = await admin
       .from("tb_users")
-      .select("username, userlastname, usertel")
-      .eq("userid", batch.fdadminid)
-      .maybeSingle<{ username: string | null; userlastname: string | null; usertel: string | null }>();
+      .select("userName, userLastName, userTel")
+      .eq("userID", batch.fdadminid)
+      .maybeSingle<{ userName: string | null; userLastName: string | null; userTel: string | null }>();
     if (driverUserErr) {
       console.error("[drivers/[id]] driver user lookup failed", {
         code: driverUserErr.code, message: driverUserErr.message,
       });
     }
     if (driverUser) {
-      driverName = `${driverUser.username ?? ""} ${driverUser.userlastname ?? ""}`.trim() || "—";
+      driverName = `${driverUser.userName ?? ""} ${driverUser.userLastName ?? ""}`.trim() || "—";
     }
   }
 

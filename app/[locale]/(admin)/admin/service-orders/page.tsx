@@ -142,12 +142,15 @@ type RawHeaderOrder = {
   userid: string;
 };
 
+// tb_users uses mixed-case columns (CLAUDE.md exception · userID/userName).
+// Most other tb_* tables are lowercase post-port; tb_users + tb_admin keep
+// the original camelCase from the PHP schema dump.
 type RawUserRow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  coid: string | null;
-  adminidsale: string | null;
+  userID:       string;
+  userName:     string | null;
+  userLastName: string | null;
+  coID:         string | null;
+  adminIDSale:  string | null;
 };
 
 type RawCorpRow = {
@@ -265,8 +268,8 @@ export default async function AdminServiceOrdersPage({
   if (uniqueUserIds.length > 0) {
     const { data: userRows, error: userErr } = await admin
       .from("tb_users")
-      .select("userid,username,userlastname,coid,adminidsale")
-      .in("userid", uniqueUserIds);
+      .select("userID,userName,userLastName,coID,adminIDSale")
+      .in("userID", uniqueUserIds);
     if (userErr) {
       console.error("[/admin/service-orders] tb_users join failed", {
         userIdCount: uniqueUserIds.length,
@@ -274,7 +277,7 @@ export default async function AdminServiceOrdersPage({
       });
     }
     usersByUserId = new Map(
-      ((userRows ?? []) as unknown as RawUserRow[]).map((u) => [u.userid, u]),
+      ((userRows ?? []) as unknown as RawUserRow[]).map((u) => [u.userID, u]),
     );
   }
 
@@ -305,10 +308,11 @@ export default async function AdminServiceOrdersPage({
   // ── Shape into ServiceOrderRow for the table ─────────────────────
   const rows: ServiceOrderRow[] = raw.map((r) => {
     const user = usersByUserId.get(r.userid);
+    // tb_users uses camelCase columns (CLAUDE.md exception).
     const name = user
-      ? `${user.username ?? ""} ${user.userlastname ?? ""}`.trim() || null
+      ? `${user.userName ?? ""} ${user.userLastName ?? ""}`.trim() || null
       : null;
-    const coid = user?.coid ?? null;
+    const coid = user?.coID ?? null;
     const isVip = coid !== null && coid !== "" && coid !== "PCS";
     return {
       id: r.id,
@@ -344,7 +348,7 @@ export default async function AdminServiceOrdersPage({
       isVip,
       vipTier: isVip ? coid : null,
       isCorporate: corporateUserIds.has(r.userid),
-      salesRep: user?.adminidsale && user.adminidsale !== "" ? user.adminidsale : null,
+      salesRep: user?.adminIDSale && user.adminIDSale !== "" ? user.adminIDSale : null,
     };
   });
 
