@@ -183,11 +183,11 @@ type ForwarderRow = {
 };
 
 type UserRow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
-  usercompany: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
+  userCompany: string | null;
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -271,8 +271,8 @@ export default async function CombineBillPrintPage({
   // ── Load the user row for the header (consignee info) ──
   const { data: userData, error: uErr } = await admin
     .from("tb_users")
-    .select("userid, username, userlastname, usertel, usercompany")
-    .eq("userid", header.userid)
+    .select("userID, userName, userLastName, userTel, userCompany")
+    .eq("userID", header.userid)
     .maybeSingle<UserRow>();
 
   if (uErr) {
@@ -304,9 +304,9 @@ export default async function CombineBillPrintPage({
   // since we're reading legacy tb_forwarder here (no override column),
   // fall back to the address-name + user-name pair.
   const consigneeName =
-    user?.usercompany === "1" && user?.username
-      ? user.username // company name (legacy `usercompany`=1 = juristic)
-      : `คุณ ${user?.username ?? ""} ${user?.userlastname ?? ""}`.trim();
+    user?.userCompany === "1" && user?.userName
+      ? user.userName // company name (legacy `usercompany`=1 = juristic)
+      : `คุณ ${user?.userName ?? ""} ${user?.userLastName ?? ""}`.trim();
 
   const fullShipAddress = [
     `คุณ ${header.faddressname ?? ""} ${header.faddresslastname ?? ""}`.trim(),
@@ -386,7 +386,7 @@ export default async function CombineBillPrintPage({
             <h3 className="font-bold mb-1 text-xs uppercase tracking-wider text-gray-500">
               เรียน / Attention
             </h3>
-            <p className="font-semibold">{user?.userid ?? header.userid}</p>
+            <p className="font-semibold">{user?.userID ?? header.userid}</p>
             <p className="text-sm">{consigneeName}</p>
             <p className="text-xs mt-1 text-gray-700">{fullShipAddress}</p>
             {header.faddressnote && (
@@ -400,9 +400,9 @@ export default async function CombineBillPrintPage({
               ขนส่งโดย
             </h3>
             <p>{shipByLabel(header.fshipby)}</p>
-            {user?.usertel && (
+            {user?.userTel && (
               <p className="text-xs mt-2 text-gray-700">
-                โทรลูกค้า: {user.usertel}
+                โทรลูกค้า: {user.userTel}
               </p>
             )}
           </div>

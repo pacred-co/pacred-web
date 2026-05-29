@@ -475,19 +475,27 @@ export default async function ServiceImportDetailPage({
   // ── forwarder.php L976-997 / L1953-2011 — address <select> options ──
   // Used by the inline "แก้ไข ที่อยู่จัดส่ง" form (update_fAddress POST).
   // Main address first (tb_address ⋈ tb_address_main), then the rest.
-  const { data: mainAddrRow } = await admin
+  const { data: mainAddrRow, error: mainAddrErr } = await admin
     .from("tb_address_main")
     .select("addressid")
     .eq("userid", memberCode)
     .maybeSingle<{ addressid: number | string | null }>();
+  if (mainAddrErr) {
+    // Soft-fail — empty mainAddressId falls through to plain ordering; legacy uses LEFT JOIN.
+    console.error(`[service-import/[fNo] tb_address_main lookup] memberCode=${memberCode}`, { code: mainAddrErr.code, message: mainAddrErr.message });
+  }
   const mainAddressId = mainAddrRow?.addressid ?? null;
-  const { data: allAddrs } = await admin
+  const { data: allAddrs, error: allAddrsErr } = await admin
     .from("tb_address")
     .select(
       "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode",
     )
     .eq("userid", memberCode)
     .eq("addressstatus", "1");
+  if (allAddrsErr) {
+    // Soft-fail — empty list renders an empty address picker; mirror's legacy behaviour when SELECT returns no rows.
+    console.error(`[service-import/[fNo] tb_address list] memberCode=${memberCode}`, { code: allAddrsErr.code, message: allAddrsErr.message });
+  }
   type AddressOption = {
     addressid: number | string;
     label: string;
@@ -585,18 +593,18 @@ export default async function ServiceImportDetailPage({
     if (adminIds.length > 0) {
       const { data: admRows, error: admErr } = await admin
         .from("tb_admin")
-        .select("adminid, adminname, admintel")
-        .in("adminid", adminIds);
+        .select("adminID, adminName, adminTel")
+        .in("adminID", adminIds);
       if (admErr) {
         // Soft-fail — admin name/tel is decorative.
         console.error(`[service-import/[fNo] tb_admin lookup] adminIds=${JSON.stringify(adminIds)}`, { code: admErr.code, message: admErr.message });
       }
       for (const a of (admRows ?? []) as Array<{
-        adminid: string;
-        adminname: string | null;
-        admintel: string | null;
+        adminID: string;
+        adminName: string | null;
+        adminTel: string | null;
       }>) {
-        adminMap[a.adminid] = { adminname: a.adminname, admintel: a.admintel };
+        adminMap[a.adminID] = { adminname: a.adminName, admintel: a.adminTel };
       }
     }
     for (const fd of (drvRows ?? []) as Array<{
@@ -892,7 +900,7 @@ export default async function ServiceImportDetailPage({
                                     // hide the image — the tracking number text
                                     // is rendered alongside so this is purely a
                                     // visual aid.
-                                    src=""
+                                    src={undefined}
                                     style={{ display: "none" }}
                                   />
                                 </h3>
@@ -1059,7 +1067,7 @@ export default async function ServiceImportDetailPage({
                             <h5 className="">
                               <b>ที่อยู่จัดส่งสินค้า : </b>
                             </h5>
-                            <p className="font-16">
+                            <div className="font-16">
                               {/* forwarder.php L1663 — CONCAT 'คุณ' addressName … */}
                               คุณ{row.faddressname} {row.faddresslastname}
                               <br />
@@ -1073,7 +1081,7 @@ export default async function ServiceImportDetailPage({
                                 options={addressOptions}
                                 isEditable={Number(fStatusValue) < 4}
                               />
-                            </p>
+                            </div>
                             <h5>
                               <span className="font-16">
                                 <b>เลขพัสดุในไทย : </b>

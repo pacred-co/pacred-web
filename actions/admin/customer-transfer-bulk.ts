@@ -68,13 +68,17 @@ export async function bulkTransferCustomersToSalesRep(
     // Validate target rep up-front (single check, not per row) — same guard
     // as the existing bulk path. Saves N round-trips when the target is wrong.
     if (d.new_sales_admin_id) {
-      const { data: target } = await admin
+      const { data: target, error: targetErr } = await admin
         .from("admins")
         .select("profile_id, role, is_active")
         .eq("profile_id", d.new_sales_admin_id)
         .in("role", ["sales_admin", "super"])
         .eq("is_active", true)
         .maybeSingle();
+      if (targetErr) {
+        console.error(`[customer-transfer-bulk target lookup] failed`, { code: targetErr.code, message: targetErr.message });
+        return { ok: false, error: targetErr.message };
+      }
       if (!target) return { ok: false, error: "target_not_active_sales_admin" };
     }
 
@@ -83,11 +87,15 @@ export async function bulkTransferCustomersToSalesRep(
     // caller. A super-admin bypasses this. We resolve the caller's
     // super-status by re-checking the admins table — `withAdmin` already
     // gated entry but didn't surface the role set into the action body.
-    const { data: callerRoles } = await admin
+    const { data: callerRoles, error: callerRolesErr } = await admin
       .from("admins")
       .select("role")
       .eq("profile_id", adminId)
       .eq("is_active", true);
+    if (callerRolesErr) {
+      console.error(`[customer-transfer-bulk caller roles lookup] failed`, { code: callerRolesErr.code, message: callerRolesErr.message });
+      return { ok: false, error: callerRolesErr.message };
+    }
     const isSuper = (callerRoles ?? []).some((r) => r.role === "super");
 
     // Pull current sales_admin_id for the selected customers up-front —
@@ -95,10 +103,14 @@ export async function bulkTransferCustomersToSalesRep(
     // "already same rep" pre-check (the per-customer action will reject
     // these with "same_rep_no_change", but counting them on the failed
     // list before calling makes the summary cleaner).
-    const { data: currentRows } = await admin
+    const { data: currentRows, error: currentRowsErr } = await admin
       .from("profiles")
       .select("id, sales_admin_id")
       .in("id", uniqueIds);
+    if (currentRowsErr) {
+      console.error(`[customer-transfer-bulk current rows lookup] failed`, { code: currentRowsErr.code, message: currentRowsErr.message });
+      return { ok: false, error: currentRowsErr.message };
+    }
     const currentRepById = new Map<string, string | null>(
       ((currentRows ?? []) as Array<{ id: string; sales_admin_id: string | null }>)
         .map((r) => [r.id, r.sales_admin_id]),

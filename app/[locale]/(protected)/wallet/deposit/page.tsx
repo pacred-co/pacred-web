@@ -139,9 +139,9 @@ export default async function WalletDepositPage() {
       .maybeSingle<{ wallettotal: number }>(),
     admin
       .from("tb_users")
-      .select("username, userlastname")
-      .eq("userid", memberCode)
-      .maybeSingle<{ username: string | null; userlastname: string | null }>(),
+      .select("userName, userLastName")
+      .eq("userID", memberCode)
+      .maybeSingle<{ userName: string | null; userLastName: string | null }>(),
     admin
       .from("tb_wallet_hs")
       .select("id, date, status, amount, type, reforder")
@@ -151,7 +151,7 @@ export default async function WalletDepositPage() {
 
   const walletTotal = Number(walletRes.data?.wallettotal ?? 0);
 
-  const legacyName = [userRowRes.data?.username, userRowRes.data?.userlastname]
+  const legacyName = [userRowRes.data?.userName, userRowRes.data?.userLastName]
     .filter((s): s is string => !!s && s.trim() !== "")
     .join(" ")
     .trim();
@@ -492,15 +492,22 @@ export default async function WalletDepositPage() {
 
       {/* wallet.php L294-302 — auto-open the #wallet-add modal because
           ?page=='add' (Pacred routes this URL at /wallet/deposit, which
-          matches the legacy `?page=add` branch). */}
+          matches the legacy `?page=add` branch).
+          Poll for $ — both this script and vendors.min.js (jQuery 537KB)
+          are strategy="afterInteractive" and race; the small script wins
+          the race and hits "$ is not defined" without the poll guard. */}
       <Script
         id="wallet-deposit-auto-open"
         strategy="afterInteractive"
         dangerouslySetInnerHTML={{
           __html: `
-            $(document).ready(function() {
-              $("#wallet-add").modal("show");
-            });
+            (function waitForJQuery() {
+              if (typeof window.$ !== 'undefined' && typeof window.$.fn.modal !== 'undefined') {
+                window.$("#wallet-add").modal("show");
+              } else {
+                setTimeout(waitForJQuery, 50);
+              }
+            })();
           `,
         }}
       />

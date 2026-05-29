@@ -1,8 +1,11 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { CustomerRowActions } from "@/components/admin/customer-row-actions";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
+import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
 import { ResetPwdButton } from "./reset-pwd-button";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -14,6 +17,10 @@ import { ResetPwdButton } from "./reset-pwd-button";
 // ─────────────────────────────────────────────────────────────────────
 const CUSTOMERS_MENUBAR: MenubarItem[] = [
   { label: "หน้าหลัก", href: "/admin/customers" },
+  // Wave 28 (2026-05-29 · ภูม flagged): "รออนุมัติ" was buried 2-levels deep
+  // under "งาน" submenu — staff couldn't find new-signup queue. Promoted
+  // to a top-level tab since the E2E loop step 2 ("เซลรับลูกค้า") starts here.
+  { label: "🆕 รออนุมัติ",  href: "/admin/customers/pending" },
   {
     label: "ตามประเภท",
     children: [
@@ -29,7 +36,6 @@ const CUSTOMERS_MENUBAR: MenubarItem[] = [
   {
     label: "งาน",
     children: [
-      { label: "รออนุมัติ",          href: "/admin/customers/pending" },
       { label: "เคลื่อนไหวล่าสุด",   href: "/admin/customers/recently-active" },
       { label: "ย้ายเซลล์ดูแล",      href: "/admin/customers/transfer-rep" },
     ],
@@ -47,9 +53,9 @@ const CUSTOMERS_MENUBAR: MenubarItem[] = [
 //   suspended (deleted) · otherwise active.
 type DerivedStatus = "active" | "incomplete" | "suspended";
 
-function deriveStatus(u: { useractive: string | null; userstatus: string | null }): DerivedStatus {
-  if (u.userstatus === "0") return "suspended";
-  if (u.useractive === "0") return "incomplete";
+function deriveStatus(u: { userActive: string | null; userStatus: string | null }): DerivedStatus {
+  if (u.userStatus === "0") return "suspended";
+  if (u.userActive === "0") return "incomplete";
   return "active";
 }
 
@@ -131,19 +137,33 @@ const GROUP_CFG: Record<string, { label: string; col?: string }> = {
   general:    { label: "สมาชิกทั่วไป" },
   vip:        { label: "สมาชิก VIP" },
   svip:       { label: "สมาชิก SVIP" },
-  corporate:  { label: "สมาชิกนิติบุคคล", col: "usercompany" },
-  credit:     { label: "สมาชิกเครดิต",    col: "usercredit" },
-  comparison: { label: "สมาชิกคิดค่าเทียบ", col: "usercomparison" },
+  corporate:  { label: "สมาชิกนิติบุคคล", col: "userCompany" },
+  credit:     { label: "สมาชิกเครดิต",    col: "userCredit" },
+  comparison: { label: "สมาชิกคิดค่าเทียบ", col: "userComparison" },
 };
 
-export default async function AdminCustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; type?: string; group?: string }> }) {
+export default async function AdminCustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; type?: string; group?: string; adminidsale?: string }> }) {
   // W-1 (gap-admin H-1/H-7): page-level role gate. Lists every
   // customer's member_code/name/phone/email + wallet balances via
   // createAdminClient (RLS-bypass) — a PDPA/PII surface. ops + sales +
   // accounting (super implicit); driver/warehouse refused.
-  await requireAdmin(["ops", "sales_admin", "accounting"]);
+  const { user, roles } = await requireAdmin(["ops", "sales_admin", "accounting"]);
 
   const sp = await searchParams;
+
+  // G6 — default queue filter per role. sales_admin lands on their
+  // own customer book via ?adminidsale=<legacy_admin_id>. Other roles
+  // see all (no default). Lookup gates on legacy_admin_id presence —
+  // Pacred-native admins (no PCS bridge) fall through unfiltered.
+  const legacyAdminId = await getAdminLegacyId(user.id);
+  const defaultRedirect = buildDefaultLandingRedirect(
+    "/admin/customers",
+    roles,
+    sp as Record<string, unknown>,
+    { legacyAdminId },
+  );
+  if (defaultRedirect) redirect(defaultRedirect);
+
   const admin = createAdminClient();
 
   // D1 Wave-2: read legacy tb_users (member-code identity = `userid`).
@@ -152,26 +172,36 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
   // a separate batched query (tb_address) below.
   let q = admin.from("tb_users")
     .select(`
-      userid, username, userlastname, usercompany,
-      usertel, useremail, useractive, userstatus, adminidsale, userregistered,
-      coid, userlineid, userfacebook, userbirthday
+      userID, userName, userLastName, userCompany,
+      userTel, userEmail, userActive, userStatus, adminIDSale, userRegistered,
+      coID, userLineID, userFacebook, userBirthday
     `)
-    .order("userregistered", { ascending: false })
+    .order("userRegistered", { ascending: false })
     .limit(200);
 
-  // `type` filter — usercompany '1' = นิติบุคคล (juristic), else บุคคล.
-  if (sp.type === "personal")  q = q.neq("usercompany", "1");
-  if (sp.type === "juristic")  q = q.eq("usercompany", "1");
+  // `type` filter — userCompany '1' = นิติบุคคล (juristic), else บุคคล.
+  if (sp.type === "personal")  q = q.neq("userCompany", "1");
+  if (sp.type === "juristic")  q = q.eq("userCompany", "1");
 
   // Sidebar `?group=` filter — see GROUP_CFG header comment for the mapping.
   const group = typeof sp.group === "string" && sp.group in GROUP_CFG ? sp.group : null;
   const groupCol = group ? GROUP_CFG[group].col : undefined;
   if (groupCol) q = q.eq(groupCol, "1");
 
+  // G6 — sales-rep filter (sp.adminidsale). Set by the per-role landing
+  // redirect for sales_admin (= sees their own book) OR by clicking the
+  // "เซลล์ผู้ดูแล" name on any customer row (= "ดูลูกค้าทั้งหมดของเซลล์
+  // คนนี้"). Maps to tb_users.adminIDSale text column.
+  const adminidsale =
+    typeof sp.adminidsale === "string" && sp.adminidsale.trim() !== ""
+      ? sp.adminidsale.trim()
+      : null;
+  if (adminidsale) q = q.eq("adminIDSale", adminidsale);
+
   if (sp.q) {
-    // Search by member_code (userid) OR phone OR name (parallel OR via or() filter)
+    // Search by member_code (userID) OR phone OR name (parallel OR via or() filter)
     const term = sp.q.replace(/[\\%_,]/g, (m) => "\\" + m);
-    q = q.or(`userid.ilike.%${term}%,usertel.ilike.%${term}%,username.ilike.%${term}%,userlastname.ilike.%${term}%`);
+    q = q.or(`userID.ilike.%${term}%,userTel.ilike.%${term}%,userName.ilike.%${term}%,userLastName.ilike.%${term}%`);
   }
 
   const { data, error } = await q;
@@ -179,26 +209,27 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
     console.error(`[tb_users list] failed`, { code: error.code, message: error.message });
   }
   type Row = {
-    userid: string;
-    username: string | null;
-    userlastname: string | null;
-    usercompany: string | null;
-    usertel: string | null;
-    useremail: string | null;
-    useractive: string | null;
-    userstatus: string | null;
-    adminidsale: string | null;
-    userregistered: string | null;
-    coid: string | null;
-    userlineid: string | null;
-    userfacebook: string | null;
-    userbirthday: string | null;
+    userID: string;
+    userName: string | null;
+    userLastName: string | null;
+    userCompany: string | null;
+    userTel: string | null;
+    userEmail: string | null;
+    userActive: string | null;
+    userStatus: string | null;
+    adminIDSale: string | null;
+    userRegistered: string | null;
+    coID: string | null;
+    userLineID: string | null;
+    userFacebook: string | null;
+    userBirthday: string | null;
   };
   const rows = (data ?? []) as Row[];
 
   // Wallet balances — legacy tb_wallet keyed by userid (one row/customer,
   // wallettotal numeric). Batch-fetch for the rows on screen.
-  const userIds = rows.map((r) => r.userid);
+  // NOTE: tb_wallet.userid stays lowercase (only tb_users renamed to userID).
+  const userIds = rows.map((r) => r.userID);
   const walletByUser = new Map<string, number>();
   if (userIds.length > 0) {
     const { data: wallets, error: walletsErr } = await admin
@@ -267,6 +298,19 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
               </Link>
             </div>
           ) : null}
+          {adminidsale ? (
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">
+              <span>เซลล์ผู้ดูแล: {adminidsale}</span>
+              <Link
+                href="/admin/customers?nofilter=1"
+                className="rounded-full px-1 leading-none hover:bg-primary-100"
+                aria-label="ล้างฟิลเตอร์เซลล์ผู้ดูแล · ดูทั้งหมด"
+                title="ดูทั้งหมด"
+              >
+                ×
+              </Link>
+            </div>
+          ) : null}
         </div>
         <div className="flex gap-2 flex-wrap items-center">
           <Link
@@ -289,6 +333,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
           </Link>
         <form action="/admin/customers" className="flex gap-2">
           {group ? <input type="hidden" name="group" value={group} /> : null}
+          {adminidsale ? <input type="hidden" name="adminidsale" value={adminidsale} /> : null}
           <input
             name="q"
             defaultValue={sp.q}
@@ -343,19 +388,19 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
               </thead>
               <tbody>
                 {rows.map((r) => {
-                  const isJuristic = r.usercompany === "1";
+                  const isJuristic = r.userCompany === "1";
                   const status = deriveStatus(r);
-                  const fullName = `${r.username ?? ""} ${r.userlastname ?? ""}`.trim() || "—";
+                  const fullName = `${r.userName ?? ""} ${r.userLastName ?? ""}`.trim() || "—";
                   // Wave 18-A — per-row derived fidelity values.
-                  const vip = isVipCoid(r.coid);
-                  const birthday = formatBirthday(r.userbirthday);
-                  const address = summarizeAddress(addressByUser.get(r.userid));
-                  const fb = (r.userfacebook ?? "").trim();
+                  const vip = isVipCoid(r.coID);
+                  const birthday = formatBirthday(r.userBirthday);
+                  const address = summarizeAddress(addressByUser.get(r.userID));
+                  const fb = (r.userFacebook ?? "").trim();
                   const isFbUrl = /^https?:\/\//i.test(fb);
                   return (
-                  <tr key={r.userid} className="border-t border-border hover:bg-surface-alt/30">
+                  <tr key={r.userID} className="border-t border-border hover:bg-surface-alt/30">
                     <td className="px-4 py-3 font-mono text-xs">
-                      <Link href={`/admin/customers/${r.userid}`} className="text-primary-600 hover:underline">{r.userid}</Link>
+                      <Link href={`/admin/customers/${r.userID}`} className="text-primary-600 hover:underline">{r.userID}</Link>
                     </td>
                     <td className="px-4 py-3 text-xs">
                       <span className={`rounded-full border px-2 py-0.5 text-[10px] ${
@@ -368,8 +413,8 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
                       {fullName}
                     </td>
                     <td className="px-4 py-3 text-xs">
-                      <div>{r.usertel ?? "—"}</div>
-                      <div className="text-muted">{r.useremail ?? "—"}</div>
+                      <div>{r.userTel ?? "—"}</div>
+                      <div className="text-muted">{r.userEmail ?? "—"}</div>
                     </td>
                     {/* Wave 18-A — main address (tb_address lowest addressid per userid) */}
                     <td className="px-4 py-3 text-xs max-w-[260px]">
@@ -394,8 +439,8 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
                     </td>
                     {/* Wave 18-A — LINE ID */}
                     <td className="px-4 py-3 text-xs">
-                      {r.userlineid?.trim() ? (
-                        <span className="font-mono">{r.userlineid}</span>
+                      {r.userLineID?.trim() ? (
+                        <span className="font-mono">{r.userLineID}</span>
                       ) : (
                         <span className="text-muted">—</span>
                       )}
@@ -414,7 +459,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
                         <span className="text-muted">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs font-mono">{r.adminidsale || "—"}</td>
+                    <td className="px-4 py-3 text-xs font-mono">{r.adminIDSale || "—"}</td>
                     <td className="px-4 py-3">
                       {(() => {
                         const cfg = STATUS_CFG[status];
@@ -426,16 +471,16 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
                       })()}
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-xs">
-                      ฿{(walletByUser.get(r.userid) ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                      ฿{(walletByUser.get(r.userID) ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
-                      {r.userregistered ? new Date(r.userregistered).toLocaleDateString("th-TH") : "—"}
+                      {r.userRegistered ? new Date(r.userRegistered).toLocaleDateString("th-TH") : "—"}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <CustomerRowActions id={r.userid} status={status} />
+                        <CustomerRowActions id={r.userID} status={status} />
                         {/* Wave 18-A — password-reset (legacy users.php per-row action) */}
-                        <ResetPwdButton userid={r.userid} />
+                        <ResetPwdButton userid={r.userID} />
                       </div>
                     </td>
                   </tr>

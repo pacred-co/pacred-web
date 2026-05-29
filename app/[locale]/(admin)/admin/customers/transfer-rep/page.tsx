@@ -4,7 +4,7 @@
  * Faithful port of the legacy `pcs-admin/user-transfer-sales.php` flow
  * (D1 / ADR-0017 Phase-B). Replaces the Wave 7.2 "ยังไม่เปิด" banner.
  *
- * The bulk form lets a sales-admin/super UPDATE `tb_users.adminidsale`
+ * The bulk form lets a sales-admin/super UPDATE `tb_users.adminIDSale`
  * across many customers in one shot via `adminBulkTransferSalesRepTb`.
  *
  * Reads:
@@ -47,19 +47,19 @@ export default async function TransferSalesRepPage({
   let q = admin
     .from("tb_users")
     .select("userid, username, userlastname, usertel, adminidsale")
-    .eq("userstatus", "1")
-    .order("userregistered", { ascending: false })
+    .eq("userStatus", "1")
+    .order("userRegistered", { ascending: false })
     .limit(100);
 
   if (sp.currentRep) {
-    q = q.eq("adminidsale", sp.currentRep.toUpperCase());
+    q = q.eq("adminIDSale", sp.currentRep.toUpperCase());
   }
 
   const qFree = (sp.q ?? "").trim();
   if (qFree) {
     // Free-text: try userid match first (case-insensitive), else fall back to name ilike.
     if (/^PR\d+$/i.test(qFree)) {
-      q = q.eq("userid", qFree.toUpperCase());
+      q = q.eq("userID", qFree.toUpperCase());
     } else {
       const pat = `%${qFree.replace(/[%_]/g, "\\$&")}%`;
       q = q.or(`username.ilike.${pat},userlastname.ilike.${pat},usertel.ilike.${pat}`);
@@ -76,8 +76,8 @@ export default async function TransferSalesRepPage({
   const { data: adminsRaw, error: adminsRawErr } = await admin
     .from("tb_admin")
     .select("adminid, adminnickname, adminname, adminlastname, department, section")
-    .eq("adminstatusa", "1")
-    .order("adminnickname", { ascending: true })
+    .eq("adminStatusA", "1")
+    .order("adminNickname", { ascending: true })
     .limit(500);
   if (adminsRawErr) {
     console.error(`[tb_admin list] failed`, { code: adminsRawErr.code, message: adminsRawErr.message });
@@ -104,7 +104,7 @@ export default async function TransferSalesRepPage({
         <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
         <h1 className="mt-1 text-2xl font-bold">ย้ายเซลล์ผู้ดูแลลูกค้า (bulk)</h1>
         <p className="mt-1 text-sm text-muted">
-          อัปเดต <code className="rounded bg-surface-alt px-1 text-xs">tb_users.adminidsale</code> หลายรายในครั้งเดียว
+          อัปเดต <code className="rounded bg-surface-alt px-1 text-xs">tb_users.adminIDSale</code> หลายรายในครั้งเดียว
         </p>
       </div>
 
@@ -118,7 +118,7 @@ export default async function TransferSalesRepPage({
           </li>
           <li>เลือกลูกค้า (multi-select) แล้วเลือก admin ปลายทาง</li>
           <li>
-            กด &ldquo;ยืนยันการย้าย&rdquo; → <code className="rounded bg-white px-1 py-0.5">tb_users.adminidsale</code> จะถูกอัปเดตทุกราย
+            กด &ldquo;ยืนยันการย้าย&rdquo; → <code className="rounded bg-white px-1 py-0.5">tb_users.adminIDSale</code> จะถูกอัปเดตทุกราย
           </li>
         </ol>
       </section>

@@ -751,3 +751,50 @@ Either repoint (if there's a replacement route) or remove the Link.
 - Commit `5bc98ec4` — repointed `/line-notify` → `/line-settings`
 - `app/[locale]/(protected)/dashboard/page.tsx` L135-142 — the offending Link
 - 2026-05-26 entry "Deletion sweep missed two consumers" — same pattern for `package.json` test-chain references
+
+---
+
+## [2026-05-28] CI `tsc --noEmit` OOMs at the default 2 GB heap once the type universe gets large enough
+
+**Symptom (GitHub Actions).** CI `verify` job's `Typecheck` step blows up with:
+
+```
+<--- Last few GCs --->
+[…]: Mark-Compact 2027.9 (2043.8) -> 2005.3 (2043.6) MB […]
+FATAL ERROR: Ineffective mark-compacts near heap limit
+Allocation failed - JavaScript heap out of memory
+[…]
+[ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL] Command was killed with SIGABRT (Aborted): tsc --noEmit
+Error: Process completed with exit code 1.
+```
+
+Build still passes locally — devs typically have `NODE_OPTIONS=--max-old-space-size=8192` (or higher) exported, masking the problem until CI catches up.
+
+**Root cause.** Node's V8 heap defaults to 2 GB. The Pacred codebase grew past that for tsc once these landed together:
+- camelCase batch 2a + ภูม's wave-25 #194-#196 sweep (~114 files × type-thicker camelCase signatures)
+- ปอน's MOMO isolated layer (+2 234 LOC · 4 new tables × type-rich Zod schemas + 14-status × 3-phase enum)
+- All the new legacy `tb_*` row types we hand-author in admin pages
+- Sentry + Supabase + react-pdf large type packages
+
+The bare `tsc --noEmit` invocation in the CI workflow (and in `package.json` `verify`) inherits Node's 2 GB default and OOMs.
+
+**Fix.**
+1. New wrapper `scripts/tsc-check.mjs` that sets `NODE_OPTIONS=--max-old-space-size=8192` (preserving any caller-supplied flags) and spawns the local `tsc --noEmit`. Cross-platform — works on Linux/Mac/Windows because the env-var is set via `process.env`, not a shell prefix.
+2. `package.json`:
+   - new `"typecheck": "node scripts/tsc-check.mjs"`
+   - `"verify"` now reads `pnpm typecheck` instead of raw `tsc --noEmit`
+3. `.github/workflows/ci.yml` Typecheck step → `run: pnpm typecheck`. Removed the inline `env: NODE_OPTIONS:` (the wrapper owns it now — single source of truth).
+4. **Build step still needs the bump too** — `next build` runs tsc internally during the type-check pass + during page generation. Kept `env: NODE_OPTIONS: "--max-old-space-size=8192"` on the Build step for now (could route it through the wrapper later if we add `pnpm build:safe`).
+
+**Why this matters next time:**
+- The 2 GB → 8 GB cliff is unavoidable as the codebase grows; **don't try to "fix" it by sharding tsconfigs unless someone is genuinely below 4 GB locally**. The heap bump is the right answer.
+- Override via env: `NODE_OPTIONS="--max-old-space-size=12288" pnpm typecheck` if 8 GB ever isn't enough.
+- Local devs who hit OOM running raw `pnpm exec tsc --noEmit` should switch to `pnpm typecheck`.
+- **Watch the build for slowness, not just memory** — once you cross ~6 GB resident set tsc starts spending significant time in GC even when it succeeds. That's a signal to actually audit type complexity (e.g. `lib/integrations/momo-isolated/types.ts` 14-status × 3-phase tuple was deliberately kept narrow to avoid a 14×3=42 × N projection blowup).
+
+**Cross-links:**
+- `scripts/tsc-check.mjs` — the wrapper
+- `package.json` `typecheck` + `verify` scripts
+- `.github/workflows/ci.yml` Typecheck step
+- 2026-05-21 entry: `googleapis` package crash (different cause — a single bad dep) but same OOM-shape symptom
+- Local-dev workaround that this supersedes: `NODE_OPTIONS=--max-old-space-size=8192 pnpm build`

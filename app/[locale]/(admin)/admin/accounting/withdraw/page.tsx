@@ -289,16 +289,16 @@ export default async function AdminAccountingWithdrawPage({
   if (userIds.length > 0) {
     const usersRes = await admin
       .from("tb_users")
-      .select("userid, username, userlastname")
-      .in("userid", userIds);
+      .select("userID, userName, userLastName")
+      .in("userID", userIds);
     for (const u of (usersRes.data ?? []) as Array<{
-      userid: string;
-      username: string;
-      userlastname: string;
+      userID: string;
+      userName: string;
+      userLastName: string;
     }>) {
-      userById.set(u.userid, {
-        username: u.username,
-        userlastname: u.userlastname,
+      userById.set(u.userID, {
+        username: u.userName,
+        userlastname: u.userLastName,
       });
     }
   }

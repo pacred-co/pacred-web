@@ -58,7 +58,10 @@ import { sendSms } from "@/lib/sms/gateway";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { logger, redactPhone } from "@/lib/logger";
 import { sendNotification } from "@/lib/notifications";
+import { appendStatusLog as appendStatusLogShared } from "@/lib/notifications/status-flip-helper";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
+import { getAdminRoles } from "@/lib/auth/require-admin";
+import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
 
 // ────────────────────────────────────────────────────────────
 // Schemas
@@ -102,12 +105,12 @@ type ForwarderRow = {
 };
 
 type UserRow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
-  useremail: string | null;
-  userlinenotify: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
+  userEmail: string | null;
+  userLineNotify: string | null;
 };
 
 type BillResult = {
@@ -129,7 +132,12 @@ type BillResult = {
 
 /** Best-effort: insert one audit row per status transition. Failures
  *  don't break the main flow — the admin_audit_log entry above carries
- *  the same data at the call-level, this is the legacy per-row trail. */
+ *  the same data at the call-level, this is the legacy per-row trail.
+ *
+ *  2026-05-28 ดึก (G8 unification) — now delegates to
+ *  `lib/notifications/status-flip-helper.ts` so every call site goes
+ *  through the same code path. Signature kept stable for the few
+ *  internal callers here. */
 async function appendStatusLog(
   admin: ReturnType<typeof createAdminClient>,
   fid: number,
@@ -137,35 +145,56 @@ async function appendStatusLog(
   newStatus: string,
   adminLegacyId: string,
 ): Promise<void> {
-  try {
-    await admin.from("tb_log_forwarder_status").insert({
-      fid,
-      fstatusold:    oldStatus,
-      fstatusnew:    newStatus,
-      adminidchange: adminLegacyId,
-      fdatechange:   new Date().toISOString(),
-    });
-  } catch (e) {
-    logger.error("forwarder-check", "tb_log_forwarder_status insert failed", e, { fid });
-  }
+  await appendStatusLogShared(admin, fid, oldStatus, newStatus, adminLegacyId);
 }
 
 /** Compose the customer-facing SMS body. Legacy template was
  *    "คุณมีค่าขนส่งที่ต้องชำระ ดู->{url}"
- *  We surface the order id + total so the customer can match it against
- *  their LINE/email without opening the link first. */
+ *
+ *  Wave 27 / E2E LOOP FIX gap #5 (2026-05-29) — the URL now points at
+ *  the new customer-side invoice view `/service-import/<fid>/invoice`
+ *  (built same wave by Agent F4) so the customer can SEE their bill
+ *  before paying. The bare `/service-import/<fid>` detail page still
+ *  works as a fallback but the invoice surface carries the formal
+ *  ใบแจ้งหนี้ chrome + print/PDF button.
+ *
+ *  Char budget — ThaiBulkSMS encodes Thai as TIS-620 (1 SMS = 70 chars
+ *  · multi-part up to 153/segment). We aim for ≤155 chars TIS-620 so
+ *  the message ships in at most 3 segments. The Thai labels here
+ *  (~50 chars) + the URL (~50 chars) + amount/id (~20 chars) keeps
+ *  us comfortably inside the budget.
+ */
 function composeBillSms(opts: {
   userId: string;
   fid: number;
   amountThb: number;
   trackingChn: string | null;
 }): string {
-  const url = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://pacred.co"}/service-import/${opts.fid}`;
+  // Domain root — env override · falls back to bare "pacred.co.th" (no
+  // protocol) which gives us ~7 chars of head-room over "https://" + the
+  // domain is the launch property.
+  const envUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() ?? "";
+  // Strip trailing slash · drop protocol so the SMS body stays compact
+  // (most carriers auto-linkify bare domains). If the env wasn't set we
+  // emit the launch host directly.
+  const host = (envUrl !== "" ? envUrl : "pacred.co.th")
+    .replace(/^https?:\/\//, "")
+    .replace(/\/+$/, "");
+  const invoiceUrl = `${host}/service-import/${opts.fid}/invoice`;
   const amount = opts.amountThb.toLocaleString("th-TH", { minimumFractionDigits: 2 });
-  const trackingPart = opts.trackingChn ? ` ${opts.trackingChn}` : "";
-  // ThaiBulkSMS Standard limit = 160 chars Latin / 70 chars TIS-620. Keep
-  // the body tight so we don't get truncated mid-amount.
-  return `Pacred: ${opts.userId} บริการนำเข้า #${opts.fid}${trackingPart} ยอด ฿${amount} ชำระที่ ${url}`;
+  void opts.trackingChn; // kept for back-compat callers; tracking now lives on the invoice page
+  // Tight single-block message under 155 chars TIS-620 — every line
+  // is mandatory for the customer to act:
+  //   1. Sender identity + order id
+  //   2. Amount to pay (the most-read line)
+  //   3. Invoice link (the new gap #5 fix)
+  //   4. Wallet-pay CTA (the close-the-loop hint)
+  return (
+    `Pacred · ฝากนำเข้า ${opts.fid}\n` +
+    `ยอดที่ต้องชำระ: ฿${amount}\n` +
+    `ดูใบแจ้งหนี้: ${invoiceUrl}\n` +
+    `จ่ายจากกระเป๋าได้เลย`
+  );
 }
 
 /** Compose the LINE/email notification body. Longer than SMS — we can afford
@@ -217,6 +246,18 @@ export async function adminCallPriceUser(
     async ({ adminId }) => {
       const admin = createAdminClient();
 
+      // Wave 26 G5 (2026-05-28 ดึก) — status-transition role gate.
+      // Bulk-bill is universally 4→5 (the .eq below pins the from-status),
+      // so we check ONCE before reading. Matrix: 4→5 = accounting (super /
+      // manager override). The existing union ["super","ops","accounting"]
+      // page-level gate already filtered out e.g. Sales — but a future
+      // role-expansion that touches this action would bypass the matrix
+      // without this row-level helper call. We compute roles once.
+      const callerRoles = (await getAdminRoles()) ?? [];
+      if (!canAnyRoleFlipFstatus(callerRoles, "4", "5")) {
+        return { ok: false, error: "forbidden_transition" };
+      }
+
       // 1. Read candidate forwarder rows (filter to fstatus='4' = ตรวจสอบแล้ว).
       //    A row at any other status was already billed (or rolled back) and
       //    must not be touched again.
@@ -242,13 +283,13 @@ export async function adminCallPriceUser(
       const uniqueUserIds = Array.from(new Set(candidates.map((r) => r.userid).filter(Boolean)));
       const { data: userRows, error: userRowsErr } = await admin
         .from("tb_users")
-        .select("userid, username, userlastname, usertel, useremail, userlinenotify")
-        .in("userid", uniqueUserIds);
+        .select("userID, userName, userLastName, userTel, userEmail, userLineNotify")
+        .in("userID", uniqueUserIds);
       if (userRowsErr) {
         console.error(`[tb_users list] failed`, { code: userRowsErr.code, message: userRowsErr.message });
       }
       const usersById = new Map<string, UserRow>(
-        ((userRows ?? []) as unknown as UserRow[]).map((u) => [u.userid, u]),
+        ((userRows ?? []) as unknown as UserRow[]).map((u) => [u.userID, u]),
       );
 
       // 2b. Resolve tb_users.userid → profiles.id (uuid) in one round-trip.
@@ -309,9 +350,9 @@ export async function adminCallPriceUser(
 
         // 3b. Notify the customer (SMS now · LINE/email deferred).
         const user = usersById.get(row.userid);
-        if (user?.usertel) {
+        if (user?.userTel) {
           const sms = await sendSms(
-            user.usertel,
+            user.userTel,
             composeBillSms({
               userId:      row.userid,
               fid:         row.id,
@@ -327,7 +368,7 @@ export async function adminCallPriceUser(
             logger.warn("forwarder-check", "SMS failed", {
               fid:   row.id,
               userid: row.userid,
-              phone: redactPhone(user.usertel),
+              phone: redactPhone(user.userTel),
               error: sms.error,
             });
           }
@@ -378,7 +419,7 @@ export async function adminCallPriceUser(
             // failure, just unavailable for this channel.
             if (notif.deliveredLine) {
               result.line_sent++;
-            } else if (user?.useremail || user) {
+            } else if (user?.userEmail || user) {
               // Heuristic: count line_failed only when we'd expect LINE to
               // exist. line_user_id presence is the actual gate (set via
               // /liff/link). Without exposing it through sendNotification's
@@ -393,7 +434,7 @@ export async function adminCallPriceUser(
             // team knows to wire RESEND.
             if (notif.deliveredEmail) {
               result.email_sent++;
-            } else if (user?.useremail) {
+            } else if (user?.userEmail) {
               result.email_failed++;
             }
           } catch (e) {

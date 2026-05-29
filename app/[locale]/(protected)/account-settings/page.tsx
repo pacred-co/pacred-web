@@ -31,15 +31,15 @@ import { PasswordForm } from "./password-form";
  *
  * Data — the legacy screen reads the customer from `$_SESSION` values
  * that `header.php` populates from `tb_users` (header.php L12-38):
- *   - $_SESSION['userPicture']                 → tb_users.userpicture
- *   - $_SESSION['userName'] . $userLastName    → tb_users.username / userlastname
- *   - $_SESSION['userID']                      → tb_users.userid (the member code)
+ *   - $_SESSION['userPicture']                 → tb_users.userPicture
+ *   - $_SESSION['userName'] . $userLastName    → tb_users.userName / userlastname
+ *   - $_SESSION['userID']                      → tb_users.userID (the member code)
  * `tb_*` is RLS-locked to service_role, so the read goes through the
- * admin client; the join key is `tb_users.userid === profile.member_code`
+ * admin client; the join key is `tb_users.userID === profile.member_code`
  * (the customer's "PR<n>" code).
  *
  * The change-password POST handler (account-settings.php L3-36 — verify
- * old password against tb_users.userpass, UPDATE userpass + pcs_logged)
+ * old password against tb_users.userPass, UPDATE userpass + pcs_logged)
  * is transcribed 1:1 into the Server Action `updatePasswordAction`
  * (`./actions.ts`); the form + its jQuery behaviours + SweetAlert result
  * popups (L79-247) are the `<PasswordForm>` client component.
@@ -89,7 +89,7 @@ export default async function AccountSettingsPage() {
   const userID = profile.member_code ?? "";
 
   // $_SESSION['userPicture'] — legacy: basePath."images/users/".picture
-  // (account-settings.php L69-70). The migrated tb_users.userpicture
+  // (account-settings.php L69-70). The migrated tb_users.userPicture
   // holds a bare filename → reference it under the legacy images path;
   // prefer the Pacred avatar_url when set.
   const userPicture =

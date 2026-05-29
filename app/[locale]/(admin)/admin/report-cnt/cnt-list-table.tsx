@@ -1,33 +1,33 @@
 "use client";
 
 /**
- * <CntListTable> — Wave 17 P0-fix (2026-05-25 ค่ำ)
+ * <CntListTable> — Wave 17 P0-fix + ROW-COLOR-RESTORE (2026-05-28 P1)
  *
  * Client wrapper for the report-cnt list table. Owns:
  *   - Row checkbox state (multi-select unpaid containers)
+ *   - Sortable column headers (lucide-react ArrowUpDown / ArrowUp / ArrowDown)
+ *   - Row tint per fstatus (canonical FSTATUS_CFG · solid Tailwind weights)
+ *   - Status chip (canonical fstatusBadge · matches legacy labels + palette)
+ *   - Orange summary band (avg วันที่รอเข้าโกดัง + sum trackCount/CBM/KG/cost/price/profit)
  *   - Floating action button "💸 ทำรายการเบิกเงินค่าตู้"
  *   - Inline `<CntPaymentModal>` (instead of navigating to /pay)
  *
- * Faithful to legacy `report-cnt.php` L502-505 + L660-680 (the AJAX modal
- * pattern via `getListCNTPay.php`) — match the legacy click→modal flow
- * exactly so admin doesn't navigate twice to file a withdrawal request.
+ * 2026-05-28 ROW-COLOR-RESTORE (Agent P1): the previous build used a local
+ * STATUS_BADGE map with WRONG labels + opacity tints invisible at-a-glance.
+ * พี่ป๊อป + ภูม opened the page + flagged it — staff cannot scan workflow
+ * state. Restored canonical lib usage + solid row tint + sortable headers
+ * + completed summary band (the legacy เฉลี่ย: N วัน + per-column sums).
  *
- * Checkbox visibility rules (corrected 2026-05-25 ค่ำ after browser-test):
- * Legacy `report-cnt.php` L501-505 actually renders the `#select-pay`
- * button + DataTables checkbox column on BOTH tabs (waiting + succeed) ·
- * filtered only by money-tier role gate. The initial implementation
- * wrongly assumed "succeed tab only" — ภูม caught it via screenshot.
- *
- *   - On BOTH tabs (waiting + succeed) — admin may pre-bill before
- *     containers arrive in Thailand (rare but valid)
- *   - ONLY for unpaid containers (g.isPaid === false) — paid rows have
- *     a placeholder dash · checkbox disabled
- *   - HIDDEN entirely for non-money-tier roles (warehouse)
+ * Faithful to legacy `report-cnt.php` L407-423 (totals row with .bg-color
+ * orange→red gradient) + L501-505 (modal trigger) + L532-538 (jQuery DOM
+ * updates filling t7..t12 sums and t16 avg).
  */
 
 import { useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { CntPaymentModal, type SelectedSummary } from "./cnt-payment-modal";
+import { fstatusBadge, listRowTint } from "@/lib/admin/forwarder-status";
 
 // ─────────────────────────────────────────────────────────────────────
 // Row shape (mirrors `Grouped` in page.tsx — kept independent so
@@ -55,26 +55,108 @@ type Props = {
   isWaiting: boolean;
   warehouseLabel: Record<string, string>;
   transportLabel: Record<string, string>;
-  statusBadge: Record<string, { label: string; cls: string }>;
 };
+
+// ─────────────────────────────────────────────────────────────────────
+// Sortable header config
+// ─────────────────────────────────────────────────────────────────────
+
+type SortKey =
+  | "fcabinetnumber"
+  | "fwarehousename"
+  | "fdatecontainerclose"
+  | "ftransporttype"
+  | "diffDay"          // = waitDays (waiting tab) or transitDays (succeed tab)
+  | "fdatestatus4"
+  | "trackCount"
+  | "volumeSum"
+  | "weightSum"
+  | "costSum"
+  | "priceSum"
+  | "profitSum"
+  | "fstatus"
+  | "isPaid";
+
+type SortDir = "asc" | "desc";
+
+// ─────────────────────────────────────────────────────────────────────
+// SortIcon + SortableTH — module-level components (Next 16 react-hooks/
+// static-components rule rejects components created inside render bodies
+// because their identity changes every render, breaking memoisation +
+// tree stability). Extracted from inline definitions; parent passes
+// activeKey/sortDir/onSort as props.
+// ─────────────────────────────────────────────────────────────────────
+
+function SortIcon({
+  k,
+  activeKey,
+  sortDir,
+}: {
+  k: SortKey;
+  activeKey: SortKey;
+  sortDir: SortDir;
+}) {
+  if (k !== activeKey) {
+    return <ArrowUpDown className="inline h-3 w-3 ml-0.5 opacity-60" />;
+  }
+  return sortDir === "asc"
+    ? <ArrowUp className="inline h-3 w-3 ml-0.5" />
+    : <ArrowDown className="inline h-3 w-3 ml-0.5" />;
+}
+
+function SortableTH({
+  sortKeyValue,
+  align,
+  children,
+  activeKey,
+  sortDir,
+  onSort,
+}: {
+  sortKeyValue: SortKey;
+  align?: "left" | "right" | "center";
+  children: React.ReactNode;
+  activeKey: SortKey;
+  sortDir: SortDir;
+  onSort: (key: SortKey) => void;
+}) {
+  const justify =
+    align === "right" ? "justify-end" :
+    align === "center" ? "justify-center" :
+    "justify-start";
+  const text =
+    align === "right" ? "text-right" :
+    align === "center" ? "text-center" :
+    "text-left";
+  return (
+    <th className={`px-2 py-2 ${text}`}>
+      <button
+        type="button"
+        onClick={() => onSort(sortKeyValue)}
+        className={`inline-flex items-center w-full ${justify} cursor-pointer hover:text-foreground transition-colors`}
+        aria-label={`เรียงตาม ${typeof children === "string" ? children : ""}`}
+      >
+        {children}
+        <SortIcon k={sortKeyValue} activeKey={activeKey} sortDir={sortDir} />
+      </button>
+    </th>
+  );
+}
 
 function fmtDate(d: string | null) {
   return d ? d.slice(0, 10) : "-";
 }
 
-function diffDateNow(closeDate: string | null): string {
-  if (!closeDate) return "-";
+function diffDateNow(closeDate: string | null): number | null {
+  if (!closeDate) return null;
   const d = new Date(closeDate).getTime();
-  const days = Math.floor((Date.now() - d) / 86_400_000);
-  return `${days} วัน`;
+  return Math.floor((Date.now() - d) / 86_400_000);
 }
 
-function diffDateCNT(closeDate: string | null, arrivedDate: string | null): string {
-  if (!closeDate || !arrivedDate) return "-";
+function diffDateCNT(closeDate: string | null, arrivedDate: string | null): number | null {
+  if (!closeDate || !arrivedDate) return null;
   const c = new Date(closeDate).getTime();
   const a = new Date(arrivedDate).getTime();
-  const days = Math.floor((a - c) / 86_400_000);
-  return `${days} วัน`;
+  return Math.floor((a - c) / 86_400_000);
 }
 
 export function CntListTable({
@@ -83,43 +165,90 @@ export function CntListTable({
   isWaiting,
   warehouseLabel,
   transportLabel,
-  statusBadge,
 }: Props) {
   // Checkboxes available on BOTH tabs (waiting + succeed) for money-tier
   // roles, hidden per-row for already-paid containers. Matches legacy
-  // report-cnt.php L501-505 which renders the bottom "ทำรายการจ่ายเงินตู้"
-  // button + DataTables checkbox column without any tab filter — only
-  // gated by `$departmentKey IN (CEO|Manager|QAAndQC|Accounting|ITDT)`.
-  // `isWaiting` is kept in the signature for future divergence but no
-  // longer gates visibility.
+  // report-cnt.php L501-505.
   const canSelect = showMoney;
-  void isWaiting; // explicit — silences unused-var lint without behavior change
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("fdatecontainerclose");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  // Annotate rows with computed diff-days (so sort + summary stay in sync)
+  const rowsWithDiff = useMemo(
+    () =>
+      rows.map((r) => {
+        const diffDay = isWaiting
+          ? diffDateNow(r.fdatecontainerclose)
+          : diffDateCNT(r.fdatecontainerclose, r.fdatestatus4);
+        return { ...r, diffDay, profitSum: r.priceSum - r.costSum };
+      }),
+    [rows, isWaiting],
+  );
+
+  // Sort rows by current sortKey/sortDir
+  const sortedRows = useMemo(() => {
+    const out = [...rowsWithDiff];
+    const dir = sortDir === "asc" ? 1 : -1;
+    out.sort((a, b) => {
+      const av = a[sortKey];
+      const bv = b[sortKey];
+      // null/undefined → sort to bottom regardless of dir
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      if (typeof av === "number" && typeof bv === "number") {
+        return (av - bv) * dir;
+      }
+      if (typeof av === "boolean" && typeof bv === "boolean") {
+        return (Number(av) - Number(bv)) * dir;
+      }
+      return String(av).localeCompare(String(bv)) * dir;
+    });
+    return out;
+  }, [rowsWithDiff, sortKey, sortDir]);
 
   const selectableRows = useMemo(
-    () => (canSelect ? rows.filter((r) => !r.isPaid) : []),
-    [canSelect, rows],
+    () => (canSelect ? sortedRows.filter((r) => !r.isPaid) : []),
+    [canSelect, sortedRows],
   );
 
   const allSelected =
     selectableRows.length > 0 &&
     selectableRows.every((r) => selected.has(r.fcabinetnumber));
 
+  // Aggregates for the orange summary band (matches legacy L532-538 jQuery
+  // .t7..t12 + .t16). avgDay = สูตรเฉลี่ย วันที่รอเข้าโกดัง — averaged across
+  // all containers with non-null diffDay.
   const totals = useMemo(() => {
-    return rows.reduce(
-      (acc, r) => ({
-        trackCount: acc.trackCount + r.trackCount,
-        volumeSum:  acc.volumeSum  + r.volumeSum,
-        weightSum:  acc.weightSum  + r.weightSum,
-        costSum:    acc.costSum    + r.costSum,
-        priceSum:   acc.priceSum   + r.priceSum,
-        profitSum:  acc.profitSum  + (r.priceSum - r.costSum),
-      }),
-      { trackCount: 0, volumeSum: 0, weightSum: 0, costSum: 0, priceSum: 0, profitSum: 0 },
-    );
-  }, [rows]);
+    let trackCount = 0;
+    let volumeSum = 0;
+    let weightSum = 0;
+    let costSum = 0;
+    let priceSum = 0;
+    let profitSum = 0;
+    let dayTotal = 0;
+    let dayCount = 0;
+    for (const r of rows) {
+      trackCount += r.trackCount;
+      volumeSum  += r.volumeSum;
+      weightSum  += r.weightSum;
+      costSum    += r.costSum;
+      priceSum   += r.priceSum;
+      profitSum  += r.priceSum - r.costSum;
+      const d = isWaiting
+        ? diffDateNow(r.fdatecontainerclose)
+        : diffDateCNT(r.fdatecontainerclose, r.fdatestatus4);
+      if (d != null) {
+        dayTotal += d;
+        dayCount += 1;
+      }
+    }
+    const avgDay = dayCount > 0 ? Math.round(dayTotal / dayCount) : 0;
+    return { trackCount, volumeSum, weightSum, costSum, priceSum, profitSum, avgDay };
+  }, [rows, isWaiting]);
 
   function toggle(code: string) {
     setSelected((prev) => {
@@ -134,6 +263,15 @@ export function CntListTable({
       setSelected(new Set());
     } else {
       setSelected(new Set(selectableRows.map((r) => r.fcabinetnumber)));
+    }
+  }
+
+  function onSort(key: SortKey) {
+    if (key === sortKey) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
     }
   }
 
@@ -167,27 +305,31 @@ export function CntListTable({
                   />
                 </th>
               )}
-              <th className="px-2 py-2 text-left">หมายเลขตู้</th>
-              <th className="px-2 py-2 text-left">โกดัง</th>
-              <th className="px-2 py-2 text-left">วันที่ปิดตู้</th>
-              <th className="px-2 py-2 text-center">ขนส่ง</th>
-              <th className="px-2 py-2 text-right">{isWaiting ? "รอเข้าโกดัง" : "เดินทาง"}</th>
-              <th className="px-2 py-2 text-right">{isWaiting ? "วันที่รอเข้าโกดัง" : "วันที่เดินทาง"}</th>
-              <th className="px-2 py-2 text-right">จำนวนแทรคกิ้ง</th>
-              <th className="px-2 py-2 text-right">ปริมาตร</th>
-              <th className="px-2 py-2 text-right">น้ำหนัก</th>
-              {showMoney && <th className="px-2 py-2 text-right">ต้นทุนตู้</th>}
-              {showMoney && <th className="px-2 py-2 text-right">ราคาขาย</th>}
-              {showMoney && <th className="px-2 py-2 text-right">กำไร</th>}
-              <th className="px-2 py-2 text-center">สถานะตู้</th>
-              <th className="px-2 py-2 text-center">สถานะจ่ายค่าตู้</th>
+              <SortableTH sortKeyValue="fcabinetnumber"      align="left"   activeKey={sortKey} sortDir={sortDir} onSort={onSort}>หมายเลขตู้</SortableTH>
+              <SortableTH sortKeyValue="fwarehousename"      align="left"   activeKey={sortKey} sortDir={sortDir} onSort={onSort}>โกดัง</SortableTH>
+              <SortableTH sortKeyValue="fdatecontainerclose" align="left"   activeKey={sortKey} sortDir={sortDir} onSort={onSort}>วันที่ปิดตู้</SortableTH>
+              <SortableTH sortKeyValue="ftransporttype"      align="center" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>ขนส่ง</SortableTH>
+              <SortableTH sortKeyValue="diffDay"             align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>{isWaiting ? "รอเข้าโกดัง" : "เดินทาง"}</SortableTH>
+              <SortableTH sortKeyValue="fdatestatus4"        align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>{isWaiting ? "วันที่รอเข้าโกดัง" : "วันที่เดินทาง"}</SortableTH>
+              <SortableTH sortKeyValue="trackCount"          align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>จำนวนแทรคกิ้ง</SortableTH>
+              <SortableTH sortKeyValue="volumeSum"           align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>ปริมาตร</SortableTH>
+              <SortableTH sortKeyValue="weightSum"           align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>น้ำหนัก</SortableTH>
+              {showMoney && <SortableTH sortKeyValue="costSum"   align="right" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>ต้นทุนตู้</SortableTH>}
+              {showMoney && <SortableTH sortKeyValue="priceSum"  align="right" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>ราคาขาย</SortableTH>}
+              {showMoney && <SortableTH sortKeyValue="profitSum" align="right" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>กำไร</SortableTH>}
+              <SortableTH sortKeyValue="fstatus"             align="center" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>สถานะตู้</SortableTH>
+              <SortableTH sortKeyValue="isPaid"              align="center" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>สถานะจ่ายค่าตู้</SortableTH>
             </tr>
           </thead>
           <tbody>
-            {/* Totals row */}
+            {/* Orange→red gradient summary band — faithful to legacy .bg-color
+                row (L407-423 + L532-538 jQuery fills). Shows total container
+                count + avg waiting/transit days + per-column aggregates. */}
             <tr className="bg-gradient-to-r from-orange-500 to-red-500 text-white font-medium">
               {canSelect && <td className="px-2 py-2"></td>}
-              <td className="px-2 py-2" colSpan={6}>รวม ({rows.length} ตู้)</td>
+              <td className="px-2 py-2 font-semibold" colSpan={4}>รวม ({rows.length} ตู้)</td>
+              <td className="px-2 py-2 text-right">เฉลี่ย: {totals.avgDay.toLocaleString()} วัน</td>
+              <td className="px-2 py-2"></td>
               <td className="px-2 py-2 text-right">{totals.trackCount.toLocaleString()}</td>
               <td className="px-2 py-2 text-right">{totals.volumeSum.toFixed(2)}</td>
               <td className="px-2 py-2 text-right">{totals.weightSum.toFixed(2)}</td>
@@ -197,14 +339,19 @@ export function CntListTable({
               <td className="px-2 py-2" colSpan={2}></td>
             </tr>
 
-            {rows.map((r) => {
-              const badge = statusBadge[r.fstatus] ?? { label: r.fstatus, cls: "bg-gray-100" };
+            {sortedRows.map((r) => {
+              const badge = fstatusBadge(r.fstatus);
               const isOn = selected.has(r.fcabinetnumber);
               const selectable = canSelect && !r.isPaid;
+              // SOLID row tint per fstatus (canonical listRowTint · isPaid =
+              // emerald-100 wins · fstatus → yellow/cyan/pink/amber/red/blue/
+              // emerald-100). Replaces the prior bg-green-50/30 opacity tint
+              // that was invisible at-a-glance for staff.
+              const rowTint = listRowTint(r.fstatus, r.isPaid, isOn);
               return (
                 <tr
                   key={r.fcabinetnumber}
-                  className={`border-t border-border ${r.isPaid ? "bg-green-50/30" : ""} ${isOn ? "bg-yellow-50" : ""}`}
+                  className={`border-t border-border ${rowTint}`}
                 >
                   {canSelect && (
                     <td className="px-2 py-2 text-center">
@@ -233,7 +380,7 @@ export function CntListTable({
                   <td className="px-2 py-2 text-right">{fmtDate(r.fdatecontainerclose)}</td>
                   <td className="px-2 py-2 text-center">{transportLabel[r.ftransporttype] ?? r.ftransporttype}</td>
                   <td className="px-2 py-2 text-right">
-                    {isWaiting ? diffDateNow(r.fdatecontainerclose) : diffDateCNT(r.fdatecontainerclose, r.fdatestatus4)}
+                    {r.diffDay == null ? "-" : `${r.diffDay} วัน`}
                   </td>
                   <td className="px-2 py-2 text-right">{fmtDate(r.fdatestatus4)}</td>
                   <td className="px-2 py-2 text-right">{r.trackCount.toLocaleString()}</td>
@@ -241,15 +388,15 @@ export function CntListTable({
                   <td className="px-2 py-2 text-right">{r.weightSum.toFixed(2)}</td>
                   {showMoney && <td className="px-2 py-2 text-right">{r.costSum.toFixed(2)}</td>}
                   {showMoney && <td className="px-2 py-2 text-right">{r.priceSum.toFixed(2)}</td>}
-                  {showMoney && <td className="px-2 py-2 text-right">{(r.priceSum - r.costSum).toFixed(2)}</td>}
+                  {showMoney && <td className="px-2 py-2 text-right">{r.profitSum.toFixed(2)}</td>}
                   <td className="px-2 py-2 text-center">
-                    <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] ${badge.cls}`}>{badge.label}</span>
+                    <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${badge.chip}`}>{badge.label}</span>
                   </td>
                   <td className="px-2 py-2 text-center">
                     {r.isPaid ? (
-                      <span className="inline-block rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px]">จ่ายแล้ว</span>
+                      <span className="inline-block rounded-full bg-emerald-500 text-emerald-50 border border-emerald-700 px-2 py-0.5 text-[10px] font-medium">จ่ายแล้ว</span>
                     ) : (
-                      <span className="inline-block rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-[10px]">ยังไม่จ่าย</span>
+                      <span className="inline-block rounded-full bg-red-500 text-red-50 border border-red-700 px-2 py-0.5 text-[10px] font-medium">ยังไม่จ่าย</span>
                     )}
                   </td>
                 </tr>
@@ -259,7 +406,7 @@ export function CntListTable({
         </table>
       </div>
 
-      {/* Floating action bar — only on succeed tab + only for money tier */}
+      {/* Floating action bar — only for money tier (both tabs) */}
       {canSelect && (
         <div className="pcs-safe-area-bottom fixed bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 z-50">
           <button

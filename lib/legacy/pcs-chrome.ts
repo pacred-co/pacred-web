@@ -122,51 +122,50 @@ async function resolveSalesRep(
 ): Promise<PcsSalesRep> {
   if (!adminIdSale) return { ...SALES_FALLBACK };
 
-  const { data: adminRow, error: adminRowErr } = await admin
-    .from("tb_admin")
-    .select("adminnickname, adminpicture")
-    .eq("adminid", adminIdSale)
-    .maybeSingle<{ adminnickname: string | null; adminpicture: string | null }>();
-  if (adminRowErr) {
-    console.error(`[tb_admin list] failed`, { code: adminRowErr.code, message: adminRowErr.message });
-  }
+  // Run both first-level queries in parallel — they only depend on adminIdSale,
+  // not on each other. Saves 1 serial RTT vs the original 3-sequential chain.
+  const [{ data: adminRow, error: adminRowErr }, { data: shipRow, error: shipRowErr }] =
+    await Promise.all([
+      admin
+        .from("tb_admin")
+        .select("adminNickname, adminPicture")
+        .eq("adminID", adminIdSale)
+        .maybeSingle<{ adminNickname: string | null; adminPicture: string | null }>(),
+      admin
+        .from("tb_org_tell_ships")
+        .select("otid")
+        .eq("adminid", adminIdSale)
+        .order("id", { ascending: false })
+        .limit(1)
+        .maybeSingle<{ otid: number | null }>(),
+    ]);
+
+  if (adminRowErr) console.error(`[tb_admin] failed`, adminRowErr.message);
+  if (shipRowErr) console.error(`[tb_org_tell_ships] failed`, shipRowErr.message);
   if (!adminRow) return { ...SALES_FALLBACK };
 
+  // tb_organization_tell depends on shipRow.otid — unavoidably sequential.
   let tel: string | null = null;
-  const { data: shipRow, error: shipRowErr } = await admin
-    .from("tb_org_tell_ships")
-    .select("otid")
-    .eq("adminid", adminIdSale)
-    .order("id", { ascending: false })
-    .limit(1)
-    .maybeSingle<{ otid: number | null }>();
-  if (shipRowErr) {
-    console.error(`[tb_org_tell_ships list] failed`, { code: shipRowErr.code, message: shipRowErr.message });
-  }
   if (shipRow?.otid != null) {
     const { data: tellRow, error: tellRowErr } = await admin
       .from("tb_organization_tell")
       .select("tell")
       .eq("id", shipRow.otid)
       .maybeSingle<{ tell: string | null }>();
-    if (tellRowErr) {
-      console.error(`[tb_organization_tell list] failed`, { code: tellRowErr.code, message: tellRowErr.message });
-    }
+    if (tellRowErr) console.error(`[tb_organization_tell] failed`, tellRowErr.message);
     tel = tellRow?.tell ?? null;
   }
 
   // left-menu.php L28: $adminPicture = basePath."images/admin/".picture.
   const picture =
-    adminRow.adminpicture &&
-    adminRow.adminpicture !== "user.jpg" &&
-    /^(https?:|\/)/.test(adminRow.adminpicture)
-      ? adminRow.adminpicture
+    adminRow.adminPicture &&
+    adminRow.adminPicture !== "user.jpg" &&
+    /^(https?:|\/)/.test(adminRow.adminPicture)
+      ? adminRow.adminPicture
       : SALES_FALLBACK.picture;
 
   return {
-    nickname:
-      (adminRow.adminnickname && adminRow.adminnickname.trim()) ||
-      SALES_FALLBACK.nickname,
+    nickname: adminRow.adminNickname?.trim() || SALES_FALLBACK.nickname,
     picture,
     tel: tel ?? SALES_FALLBACK.tel,
   };
@@ -209,15 +208,15 @@ async function loadPcsChromeDataUncached(
     ] = await Promise.all([
       admin
         .from("tb_users")
-        .select("username, userlastname, useremail, userpicture, coid, adminidsale")
-        .eq("userid", uid)
+        .select("userName, userLastName, userEmail, userPicture, coID, adminIDSale")
+        .eq("userID", uid)
         .maybeSingle<{
-          username: string | null;
-          userlastname: string | null;
-          useremail: string | null;
-          userpicture: string | null;
-          coid: string | null;
-          adminidsale: string | null;
+          userName: string | null;
+          userLastName: string | null;
+          userEmail: string | null;
+          userPicture: string | null;
+          coID: string | null;
+          adminIDSale: string | null;
         }>(),
       admin
         .from("tb_wallet")
@@ -273,16 +272,16 @@ async function loadPcsChromeDataUncached(
       admin.from("tb_corporate").select("*", { count: "exact", head: true }).eq("userid", uid),
     ]);
 
-    const sales = await resolveSalesRep(admin, userRow.data?.adminidsale ?? null);
+    const sales = await resolveSalesRep(admin, userRow.data?.adminIDSale ?? null);
     const keywordRows = (keywordRes.data ?? []) as { keyword: string | null }[];
 
     return {
       userID: uid,
-      userName: userRow.data?.username ?? "",
-      userLastName: userRow.data?.userlastname ?? "",
-      userEmail: (userRow.data?.useremail ?? "").toLowerCase(),
+      userName: userRow.data?.userName ?? "",
+      userLastName: userRow.data?.userLastName ?? "",
+      userEmail: (userRow.data?.userEmail ?? "").toLowerCase(),
       userPicture: PCS_DEFAULT_AVATAR,
-      coID: userRow.data?.coid ?? "",
+      coID: userRow.data?.coID ?? "",
       walletTotal: Number(walletRow.data?.wallettotal ?? 0),
       cbTotal: Number(cashbackRow.data?.cbtotal ?? 0),
       creditValue: Number(creditRow.data?.creditvalue ?? 0),
@@ -322,5 +321,5 @@ async function loadPcsChromeDataUncached(
 export const loadPcsChromeData = unstable_cache(
   loadPcsChromeDataUncached,
   ["pcs-chrome"],
-  { revalidate: 30, tags: ["pcs-chrome"] },
+  { revalidate: 60, tags: ["pcs-chrome"] },
 );

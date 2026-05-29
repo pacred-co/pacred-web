@@ -127,3 +127,50 @@ Use this for any admin table with ≥ 8 columns or any table where the column co
 - **AGENTS.md §11** — production deploy gate (route-smoke + dead-DB probe)
 - **`.claude/skills/phase-verify-loop/SKILL.md`** — the smoke-test skill (now augmented by §0c click-through)
 - **`docs/learnings/audit-discipline.md`** — the 2026-05-25 day audit miss (companion lesson)
+
+## [2026-05-28] cnt-payment "ขออภัย เกิดข้อผิดพลาด" — case study #2
+
+**Context:** Wave 25 close-out · 3 commits ready (camelCase merge + tsc errors + §0c lint). Claimed "verified working" + asked ภูม to push. ภูม opened `/admin/report-cnt` · ticked container · clicked "💸 ทำรายการเบิกเงินค่าตู้" · modal opened · submit → Thai error boundary "ขออภัย เกิดข้อผิดพลาด" + Chrome dev "1 Issue" badge.
+
+**Symptom — the deceitful state:**
+- ✅ `pnpm lint` — 0 errors
+- ✅ `tsc --noEmit` — 0 errors
+- ✅ `pnpm test:unit` — ~280 pass · 0 fail
+- ✅ `pnpm audit:all` — green
+- ✅ `pnpm build` — succeeded
+- ✅ `curl http://localhost:3000/th/admin/report-cnt` → 307 (auth redirect · expected)
+- ❌ **User clicks submit button → "ขออภัย เกิดข้อผิดพลาด"**
+
+Console:
+```
+Error: A "use server" file can only export async functions, found object.
+The above error occurred in the <CntPaymentModal> component.
+It was handled by the <ErrorBoundaryHandler> error boundary.
+```
+
+**Root cause:** 4 `actions/admin/*` files exported Zod schemas (`export const xxxSchema = z.object(...)`) from `"use server"` modules. Next 16 rejects this at module-load — but rejection only fires when the module is loaded (i.e., when the server action is invoked). Build + tsc + curl smoke ALL bypass this code path. Full write-up in [`nextjs-16-quirks.md`](nextjs-16-quirks.md) [2026-05-28] entry.
+
+**The lesson — round 2 of the same lesson:**
+
+Round 1 (2026-05-25, top of this file) was about WIDE TABLE COLUMN CLIPPING + silent DB errors.
+Round 2 (today) is about `"use server"` AST rejection.
+**Different symptoms, same root cause: my verify gate was incomplete.**
+
+> **No verify is complete without a real human-style click-through of every mutation button you touched in the wave.**
+
+If I had spent 60 seconds clicking the submit button before pushing, ภูม would not have hit this. Click-through cost: ~5-10 min/wave. NOT-doing-it cost: "ขออภัย" in front of a real customer transaction.
+
+**Hardened protocol (effective immediately, on top of the 2026-05-25 5-step protocol):**
+
+6. **For every wave that touches `actions/**/*.ts`:** open Chrome to the route that hosts each touched action. Click the action button. Observe one of:
+   (a) success toast / navigation / state change → ✅
+   (b) Thai/English error boundary → ❌ — open dev console → fix root cause → repeat
+   (c) silent no-op → ❌ — likely silent action failure → check network tab → fix
+7. **Report wave completion in terms of action-buttons-clicked, not files-touched.** "Wave 25 done — 3 commits across 100 files · **2 of 30+ action buttons click-verified end-to-end · 28 not clicked (risk-flag for next-session click-through audit)**." Honesty about coverage beats optimism about clean.
+8. **At `pnpm verify` EXIT 0, the gate is necessary but NOT sufficient.** Only end-to-end click-through is sufficient for "ready to push" claim.
+
+**Cross-links:**
+- Commit `6d88c8e` — Wave 25 #196 fix (demote 4 schema exports)
+- Companion entry [`nextjs-16-quirks.md`](nextjs-16-quirks.md) [2026-05-28] — technical root cause
+- Save-point: [`docs/research/poom-save-point-2026-05-28-afternoon.md`](../research/poom-save-point-2026-05-28-afternoon.md) §1D + §8 reflection
+- Round-1 case study at top of this file (2026-05-25)

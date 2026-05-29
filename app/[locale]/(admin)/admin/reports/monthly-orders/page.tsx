@@ -66,9 +66,9 @@ const PAYTYPE_LABEL: Record<string, string> = {
 };
 
 type LegacyUser = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
 };
 
 type FRow = {
@@ -104,7 +104,7 @@ type YRow = {
 
 function userDisplayName(u: LegacyUser | null): string {
   if (!u) return "—";
-  return [u.username, u.userlastname].filter(Boolean).join(" ") || "—";
+  return [u.userName, u.userLastName].filter(Boolean).join(" ") || "—";
 }
 function thb(n: number): string {
   return "฿" + n.toLocaleString("th-TH", { minimumFractionDigits: 2 });
@@ -133,14 +133,14 @@ async function fetchUsersByUserId(
   if (unique.length === 0) return map;
   const { data, error } = await admin
     .from("tb_users")
-    .select("userid, username, userlastname")
-    .in("userid", unique);
+    .select("userID, userName, userLastName")
+    .in("userID", unique);
   if (error) {
     console.error(`[tb_users batch] failed`, { code: error.code, message: error.message });
     return map;
   }
   for (const u of (data ?? []) as LegacyUser[]) {
-    map.set(u.userid, u);
+    map.set(u.userID, u);
   }
   return map;
 }

@@ -16,6 +16,7 @@ import { getCargoBillingGate } from "@/lib/forwarder/billing-gate";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { validateStoredFile } from "@/lib/file-validation";
+import { buildPromptPayPayload, buildPromptPayQrDataUrl, PromptPayConfigError } from "@/lib/promptpay";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -84,13 +85,13 @@ export async function calculateForwarderTotal(
   // userName/userLastName are read but unused by the calc.
   const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
-    .select("usercompany")
-    .eq("userid", userID)
-    .maybeSingle<{ usercompany: string | number | null }>();
+    .select("userCompany")
+    .eq("userID", userID)
+    .maybeSingle<{ userCompany: string | number | null }>();
   if (userRowErr) {
     console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
   }
-  const userCompany = String(userRow?.usercompany ?? "");
+  const userCompany = String(userRow?.userCompany ?? "");
 
   // calPrice.php L21 — SELECT fAddressDistrict, fShipBy, fShippingService,
   //   fTransportType, fDiscount, ID, fTrackingCHN, fRefRate, fTotalPrice,
@@ -961,18 +962,11 @@ export async function getForwarderPaymentQr(
     return { ok: false, error: "promptpay_not_configured" };
   }
   try {
-    // `promptpay-qr` builds the EMVCo TLV payload; `qrcode` renders it.
-    // Both are existing project deps (see lib/promptpay.ts) — no new
-    // dependency added.
-    const { default: promptpay } = await import("promptpay-qr");
-    const { default: QRCode } = await import("qrcode");
-    const payload = promptpay(promptPayId, { amount: amountThb });
-    const dataUrl = await QRCode.toDataURL(payload, { margin: 1, scale: 6 });
-    return {
-      ok: true,
-      data: { dataUrl, payload, promptPayId },
-    };
-  } catch {
+    const payload = buildPromptPayPayload(amountThb);
+    const dataUrl = await buildPromptPayQrDataUrl(amountThb);
+    return { ok: true, data: { dataUrl, payload, promptPayId } };
+  } catch (err) {
+    if (err instanceof PromptPayConfigError) return { ok: false, error: err.code };
     return { ok: false, error: "qr_failed" };
   }
 }
@@ -1274,6 +1268,13 @@ export async function submitForwarderPayment(
   // Faithful: do NOT flip tb_forwarder.fstatus (legacy keeps fStatus=5
   // until the admin verifies the slip) and do NOT mutate tb_wallet
   // (wallet disabled for this service).
+  //
+  // Wave 29: auto-receipt is NOT triggered here — the wallet_hs rows
+  // we just inserted are status='1' (pending admin verify). The receipt
+  // fires when admin flips them to status='2' via either
+  // `adminApproveWalletHs` (actions/admin/wallet-trans.ts) or
+  // `adminBulkApproveWalletHs` (actions/admin/tb-bulk.ts), both of which
+  // call `autoIssueReceiptOnPaymentLand`.
 
   revalidatePath("/service-import");
   revalidatePath("/service-import/pending");

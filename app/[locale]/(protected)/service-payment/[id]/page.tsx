@@ -7,15 +7,25 @@
  * lives on a per-row detail page rather than the table itself so the
  * existing list UX stays untouched.
  *
- * Linked from the table via /service-payment/[id]. The yuan_payments
- * getYuanPayment action is RLS-scoped — admins cannot use this surface
- * (their dedicated tool lives under /admin/yuan-payments).
+ * Linked from the table via /service-payment/[id] — `id` is the legacy
+ * `tb_payment.id` (a positive integer). `getYuanPayment` is scoped to
+ * the auth user's `tb_payment.userid = profile.member_code` so
+ * customers can only see their OWN row; admins use the dedicated
+ * /admin/yuan-payments tools.
+ *
+ * F2 fix (2026-05-29): when `createYuanPayment` was repointed off the
+ * rebuilt `yuan_payments` table onto legacy `tb_payment` (so the list
+ * and admin pages can see the row at all), this detail page had to
+ * follow. The `YuanPayment` shape is the same friendly type — only the
+ * underlying row is now `tb_payment` and the foreign profile lookup is
+ * the auth user (we already have it via getCurrentUserWithProfile).
  */
 
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getYuanPayment } from "@/actions/payment";
+import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { getMyTaxInvoiceForOrder } from "@/actions/tax-invoices";
 import { TaxInvoiceRequestPanel } from "@/components/tax-invoice-request-panel";
 
@@ -23,17 +33,13 @@ export const dynamic = "force-dynamic";
 
 const STATUS_BADGE: Record<string, string> = {
   pending:    "bg-amber-50 text-amber-700 border-amber-200",
-  processing: "bg-blue-50 text-blue-700 border-blue-200",
   completed:  "bg-green-50 text-green-700 border-green-200",
   failed:     "bg-red-50 text-red-700 border-red-200",
-  refunded:   "bg-gray-50 text-gray-600 border-gray-200",
 };
 const STATUS_LABEL: Record<string, string> = {
   pending:    "รอตรวจสอบ",
-  processing: "กำลังโอน",
   completed:  "สำเร็จ",
   failed:     "ไม่สำเร็จ",
-  refunded:   "คืนเงินแล้ว",
 };
 const CHANNEL_LABEL: Record<string, string> = {
   alipay: "Alipay",
@@ -52,20 +58,31 @@ export default async function YuanPaymentDetailPage({
   const yp = res.data;
 
   // U4-3b: tax-invoice eligibility — must be completed + customer has tax_id.
-  // We pull the latest tax-invoice row (if any) + the customer's juristic
-  // profile snapshot in parallel.
+  // The auth user IS the customer who owns yp (getYuanPayment scopes by
+  // member_code), so we read profile + corporate by the signed-in
+  // user.id rather than by an explicit join key on the legacy row.
+  const userData = await getCurrentUserWithProfile();
+  if (!userData?.user) notFound();
+  const userId = userData.user.id;
+
   const supabase = await createClient();
   const [taxInv, profileRow, corporateRow] = await Promise.all([
-    getMyTaxInvoiceForOrder("yuan_payment", id),
-    supabase.from("profiles").select("first_name, last_name, account_type, tax_id").eq("id", yp.profile_id).maybeSingle<{
+    getMyTaxInvoiceForOrder("yuan_payment", String(yp.id)),
+    supabase.from("profiles").select("first_name, last_name, account_type, tax_id").eq("id", userId).maybeSingle<{
       first_name: string | null; last_name: string | null;
       account_type: "personal" | "juristic" | null;
       tax_id: string | null;
     }>(),
-    supabase.from("corporate").select("company_name, company_address, tax_id").eq("profile_id", yp.profile_id).maybeSingle<{
+    supabase.from("corporate").select("company_name, company_address, tax_id").eq("profile_id", userId).maybeSingle<{
       company_name: string | null; company_address: string | null; tax_id: string | null;
     }>(),
   ]);
+  if (profileRow.error) {
+    console.error(`[profiles lookup] failed`, { code: profileRow.error.code, message: profileRow.error.message });
+  }
+  if (corporateRow.error) {
+    console.error(`[corporate lookup] failed`, { code: corporateRow.error.code, message: corporateRow.error.message });
+  }
   const existingInvoice = taxInv.ok ? taxInv.data : null;
   const profile = profileRow.data;
   const corp    = corporateRow.data;
@@ -83,11 +100,11 @@ export default async function YuanPaymentDetailPage({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold tracking-widest text-primary-600">ฝากโอนหยวน</p>
-            <h1 className="mt-1 text-2xl font-bold font-mono text-foreground">{yp.id.slice(0, 8)}…</h1>
+            <h1 className="mt-1 text-2xl font-bold font-mono text-foreground">#{yp.id}</h1>
             <p className="text-xs text-muted mt-1">
               สร้างเมื่อ {new Date(yp.created_at).toLocaleString("th-TH")}
-              {yp.executed_at && (
-                <> · โอนเมื่อ {new Date(yp.executed_at).toLocaleString("th-TH")}</>
+              {yp.paydateadmin && (
+                <> · ตรวจสอบเมื่อ {new Date(yp.paydateadmin).toLocaleString("th-TH")}</>
               )}
             </p>
           </div>
@@ -141,7 +158,7 @@ export default async function YuanPaymentDetailPage({
         {yp.status === "completed" ? (
           <TaxInvoiceRequestPanel
             orderType="yuan_payment"
-            orderId={yp.id}
+            orderId={String(yp.id)}
             defaults={{
               name:    defaultName || "",
               address: defaultAddr,

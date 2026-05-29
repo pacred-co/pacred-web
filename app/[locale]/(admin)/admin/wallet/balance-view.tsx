@@ -30,11 +30,11 @@ const STATUS_CFG: Record<string, { label: string; cls: string }> = {
 type WalletRow = { userid: string; wallettotal: number | null };
 type CashBackRow = { userid: string; cbtotal: number | null };
 type UserRow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  coid: string | null;
-  userstatus: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  coID: string | null;
+  userStatus: string | null;
 };
 
 export type BalanceViewProps = {
@@ -83,9 +83,9 @@ export async function WalletBalanceView({ q }: BalanceViewProps) {
       ? Promise.resolve(new Map<string, UserRow>())
       : admin
           .from("tb_users")
-          .select("userid,username,userlastname,coid,userstatus")
-          .in("userid", userIds)
-          .then(({ data }) => new Map(((data ?? []) as UserRow[]).map((u) => [u.userid, u]))),
+          .select("userID,userName,userLastName,coID,userStatus")
+          .in("userID", userIds)
+          .then(({ data }) => new Map(((data ?? []) as UserRow[]).map((u) => [u.userID, u]))),
     userIds.length === 0
       ? Promise.resolve(new Map<string, number>())
       : admin
@@ -179,11 +179,11 @@ export async function WalletBalanceView({ q }: BalanceViewProps) {
                 {walletRows.map((r, idx) => {
                   const u = userMap.get(r.userid);
                   const fullName = u
-                    ? `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || "—"
+                    ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—"
                     : "—";
                   const cb = cbMap.get(r.userid) ?? 0;
                   const wt = Number(r.wallettotal ?? 0);
-                  const isSuspended = u?.userstatus === "0";
+                  const isSuspended = u?.userStatus === "0";
                   const statusKey = isSuspended ? "suspended" : "active";
                   return (
                     <tr key={r.userid} className="border-t border-border hover:bg-surface-alt/30">
@@ -195,9 +195,9 @@ export async function WalletBalanceView({ q }: BalanceViewProps) {
                         >
                           {r.userid}
                         </Link>
-                        {u?.coid ? (
+                        {u?.coID ? (
                           <div className="text-[10px] text-muted font-mono mt-0.5">
-                            {u.coid}
+                            {u.coID}
                           </div>
                         ) : null}
                       </td>

@@ -2,7 +2,7 @@
  * /admin/customers/pending — สมาชิกที่ยังไม่ครบข้อมูล / รออนุมัติ
  *
  * Wave 7.2 (2026-05-21 night): rewritten from `profiles.status='incomplete'`
- * (rebuilt · empty) → `tb_users.useractive='0'` (legacy approval queue).
+ * (rebuilt · empty) → `tb_users.userActive='0'` (legacy approval queue).
  *
  * In legacy PCS the queue is normally near-empty (most customers are
  * pre-approved on registration), but ops still need a place to see
@@ -23,14 +23,14 @@ import { TbCustomerBulkBar, TbCustomerRowCheckbox } from "./tb-bulk-bar";
 export const dynamic = "force-dynamic";
 
 type Row = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
-  useremail: string | null;
-  usercompany: string | null;
-  userregistered: string | null;
-  useractive: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
+  userEmail: string | null;
+  userCompany: string | null;
+  userRegistered: string | null;
+  userActive: string | null;
 };
 
 export default async function AdminCustomersPendingPage() {
@@ -42,11 +42,11 @@ export default async function AdminCustomersPendingPage() {
   const { data: customers, count, error: customersErr } = await admin
     .from("tb_users")
     .select(
-      "userid,username,userlastname,usertel,useremail,usercompany,userregistered,useractive",
+      "userID,userName,userLastName,userTel,userEmail,userCompany,userRegistered,userActive",
       { count: "exact" },
     )
-    .eq("useractive", "0")
-    .order("userregistered", { ascending: false })
+    .eq("userActive", "0")
+    .order("userRegistered", { ascending: false })
     .limit(500);
   if (customersErr) {
     console.error(`[tb_users list] failed`, { code: customersErr.code, message: customersErr.message });
@@ -68,7 +68,7 @@ export default async function AdminCustomersPendingPage() {
             </p>
             <h1 className="mt-0.5 text-2xl font-bold">รอ Approve</h1>
             <p className="text-sm text-muted">
-              สมาชิกที่ยังไม่ครบข้อมูล รอการอนุมัติ (tb_users.useractive=0) · Wave 7.2 read-only · approve button → Wave 8
+              สมาชิกที่สมัครใหม่ผ่าน Pacred · รอการอนุมัติ · กดอนุมัติแล้วระบบจะส่ง SMS ต้อนรับ + จับคู่เซลให้อัตโนมัติ
             </p>
           </div>
         </div>
@@ -113,32 +113,32 @@ export default async function AdminCustomersPendingPage() {
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-4 py-12 text-center text-sm text-muted">
-                    ไม่มีสมาชิกรอ Approve · ลูกค้าที่ลงทะเบียนใหม่ทุกราย ถูก approve อัตโนมัติ
+                    ไม่มีสมาชิกรอ Approve · ทุกรายอนุมัติเรียบร้อย
                   </td>
                 </tr>
               )}
               {rows.map((c) => {
-                const isJuristic = c.usercompany === "1";
-                const personalName = `${c.username ?? ""} ${c.userlastname ?? ""}`.trim() || "—";
-                const date = c.userregistered
-                  ? new Date(c.userregistered).toLocaleDateString("th-TH", {
+                const isJuristic = c.userCompany === "1";
+                const personalName = `${c.userName ?? ""} ${c.userLastName ?? ""}`.trim() || "—";
+                const date = c.userRegistered
+                  ? new Date(c.userRegistered).toLocaleDateString("th-TH", {
                       day: "numeric",
                       month: "short",
                       year: "2-digit",
                     })
                   : "—";
                 return (
-                  <tr key={c.userid} className="hover:bg-surface-alt/30 transition-colors">
+                  <tr key={c.userID} className="hover:bg-surface-alt/30 transition-colors">
                     <td className="px-2 py-3 w-8">
-                      <TbCustomerRowCheckbox userid={c.userid} />
+                      <TbCustomerRowCheckbox userid={c.userID} />
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-muted">{c.userid}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-muted">{c.userID}</td>
                     <td className="px-4 py-3 font-medium text-foreground max-w-[200px] truncate">
                       {personalName}
                     </td>
-                    <td className="px-4 py-3 text-muted">{c.usertel ?? "—"}</td>
+                    <td className="px-4 py-3 text-muted">{c.userTel ?? "—"}</td>
                     <td className="px-4 py-3 text-muted max-w-[160px] truncate">
-                      {c.useremail || "—"}
+                      {c.userEmail || "—"}
                     </td>
                     <td className="px-4 py-3">
                       <span
@@ -154,7 +154,7 @@ export default async function AdminCustomersPendingPage() {
                     <td className="px-4 py-3 text-muted text-xs">{date}</td>
                     <td className="px-4 py-3">
                       <Link
-                        href={`/admin/customers/${c.userid}`}
+                        href={`/admin/customers/${c.userID}`}
                         className="text-primary-600 hover:underline text-xs"
                       >
                         ดูรายละเอียด →

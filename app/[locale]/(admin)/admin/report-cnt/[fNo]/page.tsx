@@ -235,19 +235,19 @@ export default async function AdminReportCntDetailPage({
     }
   }
 
-  // ── 5) tb_users for usernames + coid ──
+  // ── 5) tb_users for usernames + coID ──
   const userIds = Array.from(new Set(cntRows.map((r) => r.userid).filter(Boolean) as string[]));
   const userMap = new Map<string, { username: string | null; coid: string | null }>();
   if (userIds.length > 0) {
     const { data: users, error: usersErr } = await admin
       .from("tb_users")
-      .select("userid, username, coid")
-      .in("userid", userIds);
+      .select("userID, userName, coID")
+      .in("userID", userIds);
     if (usersErr) {
       console.error(`[tb_users list] failed`, { code: usersErr.code, message: usersErr.message });
     }
-    for (const u of (users ?? []) as Array<{ userid: string; username: string | null; coid: string | null }>) {
-      userMap.set(u.userid, { username: u.username, coid: u.coid });
+    for (const u of (users ?? []) as Array<{ userID: string; userName: string | null; coID: string | null }>) {
+      userMap.set(u.userID, { username: u.userName, coid: u.coID });
     }
   }
 

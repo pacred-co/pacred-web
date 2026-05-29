@@ -475,22 +475,22 @@ export async function getServiceOrderForReceipt(
   // 2. Customer — the signed-in customer's own legacy row (tb_users).
   const { data: legacyUser, error: legacyUserErr } = await admin
     .from("tb_users")
-    .select("userid, username, userlastname, useremail, usertel, usercompany")
-    .eq("userid", memberCode)
+    .select("userID, userName, userLastName, userEmail, userTel, userCompany")
+    .eq("userID", memberCode)
     .maybeSingle<{
-      userid:      string | null;
-      username:    string | null;
-      userlastname: string | null;
-      useremail:   string | null;
-      usertel:     string | null;
-      usercompany: string | null;
+      userID:      string | null;
+      userName:    string | null;
+      userLastName: string | null;
+      userEmail:   string | null;
+      userTel:     string | null;
+      userCompany: string | null;
     }>();
   if (legacyUserErr) {
     console.error(`[tb_users list] failed`, { code: legacyUserErr.code, message: legacyUserErr.message });
   }
 
   const accountType: "personal" | "juristic" =
-    legacyUser?.usercompany === "1" ? "juristic" : "personal";
+    legacyUser?.userCompany === "1" ? "juristic" : "personal";
 
   // Corporate detail (company name / tax id) is a Pacred-native enrichment —
   // best-effort lookup; the receipt + tax-invoice panel degrade gracefully
@@ -571,11 +571,11 @@ export async function getServiceOrderForReceipt(
       ship_province:         o.haddressprovince && o.haddressprovince.trim() ? o.haddressprovince : null,
       ship_postal_code:      o.haddresszipcode && o.haddresszipcode.trim() ? o.haddresszipcode : null,
       customer: {
-        member_code:  legacyUser?.userid       ?? memberCode,
-        first_name:   legacyUser?.username      ?? null,
-        last_name:    legacyUser?.userlastname  ?? null,
-        email:        legacyUser?.useremail     ?? null,
-        phone:        legacyUser?.usertel       ?? null,
+        member_code:  legacyUser?.userID       ?? memberCode,
+        first_name:   legacyUser?.userName      ?? null,
+        last_name:    legacyUser?.userLastName  ?? null,
+        email:        legacyUser?.userEmail     ?? null,
+        phone:        legacyUser?.userTel       ?? null,
         account_type: accountType,
         company_name,
         tax_id,

@@ -65,18 +65,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *     load (auto-expire overdue orders) — likewise NOT reproduced.
  *  3. payment.php L611 `saveHS(...)` is a visit-log INSERT — NOT
  *     reproduced (render-time write).
- *  4. The `#add-payment` modal markup IS transcribed 1:1. The form's
- *     `method="POST"` submit (the legacy create-payment action) is
- *     unwired here — it needs a Server Action + the image-upload
- *     pipeline (a separate `/service-payment/add` screen). The modal
- *     opens 1:1 via the globally-staged Bootstrap-4 vendor JS
- *     (`data-toggle="modal"`); the dropify file input + the
- *     calculatePay() live JS are not transcribed — the inputs render
- *     statically. FLAGGED: the create-payment submit is a no-op here.
- *  5. The legacy `.tam-counter` count-up animation needs client JS;
- *     the modal balance is rendered statically as `number_format($n,2)`
- *     — exactly the legacy text node before its JS runs.
- *  6. The `#myTable` DataTables JS (sort / paginate / search) is not
+ *  4. F2 (2026-05-29): the in-page #add-payment modal was REMOVED.
+ *     The transcribed BS4 modal's POST submit was UNWIRED — it would
+ *     404 on submit. The real create form lives at `/service-payment/add`
+ *     (YuanPaymentForm + createYuanPayment server action), and the
+ *     "เพิ่มรายการ" button is now a `<Link href="/service-payment/add">`
+ *     so customers can actually submit. Workflow preserved; the modal
+ *     markup is dropped per design-philosophy §0a (logic-loop fidelity
+ *     beats pixel fidelity when pixel fidelity ships a broken submit).
+ *  5. The `#myTable` DataTables JS (sort / paginate / search) is not
  *     ported — the table renders statically with the legacy classes so
  *     it looks identical at rest; the `?q=` status filter is server-side.
  *
@@ -211,7 +208,6 @@ export default async function ServicePaymentPage({
     rawQ === "1" || rawQ === "2" || rawQ === "3" ? (rawQ as PayQ) : null;
 
   // ── Transcribed queries ──────────────────────────────────────
-  // payment.php L246: SELECT rpDefault FROM tb_settings WHERE ID=1
   // payment.php L258: SELECT ID FROM tb_corporate WHERE userID=…
   //                   AND corporateStatus=1
   // payment.php L264: SELECT ID FROM tb_forwarder WHERE userID=…
@@ -219,22 +215,18 @@ export default async function ServicePaymentPage({
   // payment.php L270: SELECT ID FROM tb_header_order WHERE userID=…
   //                   AND hStatus>3 AND hStatus<>6
   // payment.php L313: SELECT payStatus FROM tb_payment WHERE userID=…
-  // header.php L33-38 / L86-92: tb_users name + tb_wallet balance
-  // payment.php L487: SELECT numberPaymemt FROM tb_settings WHERE ID=1
+  //
+  // F2 fix (2026-05-29): the wallet-balance, settings.rpDefault,
+  // numberPaymemt, and tb_users name queries were here only to render
+  // the in-page #add-payment modal, which has been removed (the real
+  // create flow is /service-payment/add). Dropped them so we don't
+  // pull data we don't render.
   const [
-    settingsRes,
     corporateRes,
     forwarderRes,
     headerOrderRes,
     payCountRes,
-    userRowRes,
-    walletRes,
   ] = await Promise.all([
-    admin
-      .from("tb_settings")
-      .select("rpdefault, numberpaymemt")
-      .eq("id", 1)
-      .maybeSingle<{ rpdefault: number | null; numberpaymemt: string | null }>(),
     admin
       .from("tb_corporate")
       .select("id")
@@ -257,23 +249,7 @@ export default async function ServicePaymentPage({
       .from("tb_payment")
       .select("paystatus")
       .eq("userid", memberCode),
-    admin
-      .from("tb_users")
-      .select("username, userlastname")
-      .eq("userid", memberCode)
-      .maybeSingle<{ username: string | null; userlastname: string | null }>(),
-    admin
-      .from("tb_wallet")
-      .select("wallettotal")
-      .eq("userid", memberCode)
-      .maybeSingle<{ wallettotal: number }>(),
   ]);
-
-  // payment.php L245-249 / L518 — the yuan rate (1 หยวน = rpDefault บาท).
-  const rpDefault = Number(settingsRes.data?.rpdefault ?? 0);
-
-  // payment.php L487-489 — the customer's ฝากจ่าย number.
-  const numberPaymemt = settingsRes.data?.numberpaymemt ?? "";
 
   // payment.php L256-276 — the gate logic.
   //  $statusCheckJuristic = 1 only when the customer has NO active
@@ -306,21 +282,6 @@ export default async function ServicePaymentPage({
     else if (ps === "3") countStatusF3++;
     countStatusAll++;
   }
-
-  // $userName . ' ' . $userLastName (payment.php L470) — prefer the
-  // ported tb_users name, fall back to the Pacred profile fields.
-  const legacyName = [userRowRes.data?.username, userRowRes.data?.userlastname]
-    .filter((s): s is string => !!s && s.trim() !== "")
-    .join(" ")
-    .trim();
-  const profileName = [profile.first_name, profile.last_name]
-    .filter((s): s is string => !!s && s.trim() !== "")
-    .join(" ")
-    .trim();
-  const fullName = legacyName || profileName || profile.company_name || "";
-
-  // $walletTotal (header.php L86 default 0).
-  const walletTotal = Number(walletRes.data?.wallettotal ?? 0);
 
   // payment.php L378-391 — the list query. Built only when the list
   // view will render (statusCheckJuristic && !showNeverPaidBlock).
@@ -438,20 +399,25 @@ export default async function ServicePaymentPage({
                         <div className="content-header-right col-md-6 col-12">
                           <div className="float-md-right">
                             <div className="text-center text-md-right">
-                              {/* payment.php L298 — opens the #add-payment
-                                  modal via the globally-staged BS4 JS. */}
-                              <a
-                                href="#add-payment"
-                                data-toggle="modal"
-                                data-target="#add-payment"
-                              >
+                              {/* F2 fix (2026-05-29): the legacy
+                                  payment.php L298 opened an in-place
+                                  modal with `data-toggle="modal"`. The
+                                  transcribed modal here was UNWIRED
+                                  (file-header §4) — submit was a no-op
+                                  because the create-payment server
+                                  action + the slip-upload pipeline only
+                                  exist on the dedicated /add screen.
+                                  Wire the button straight to that
+                                  screen instead of opening the dead
+                                  modal so customers can actually submit. */}
+                              <Link href="/service-payment/add">
                                 <button className="btn btn-sm btn-circle btn-success text-white">
                                   <i className="ft-plus"></i>
                                 </button>
                                 <span className="font-normal text-dark">
                                   เพิ่มรายการ
                                 </span>
-                              </a>
+                              </Link>
                             </div>
                           </div>
                         </div>
@@ -587,211 +553,16 @@ export default async function ServicePaymentPage({
       </div>
       {/* END: Content — payment.php L456 */}
 
-      {/* ── #add-payment modal — payment.php L457-530 ──
-          Transcribed 1:1. Opens via the globally-staged Bootstrap-4
-          vendor JS (data-toggle="modal"). The form's POST submit (the
-          legacy create-payment action) is UNWIRED here — see the file
-          header §4: it needs a Server Action + the image-upload
-          pipeline. The dropify file input + the calculatePay() live JS
-          are not transcribed; the inputs render statically. */}
-      {statusCheckJuristic && !showNeverPaidBlock && (
-        <div
-          id="add-payment"
-          className="modal fade in"
-          tabIndex={-1}
-          role="dialog"
-          aria-hidden="true"
-        >
-          <div className="modal-dialog">
-            <div className="modal-content header-from">
-              <div className="modal-header">
-                <h4 className="modal-title">สร้างออเดอร์ฝากชำระสินค้า</h4>
-                <button
-                  type="button"
-                  className="close"
-                  data-dismiss="modal"
-                  aria-hidden="true"
-                >
-                  <i className="la la-close"> </i>
-                </button>
-              </div>
-              <div className="modal-body header-from">
-                {/* payment.php L465 — legacy `action="payment/"` POST.
-                    UNWIRED in this transcription (see file header §4). */}
-                <form
-                  id="order2"
-                  className="form-horizontal"
-                  method="POST"
-                  action="/service-payment/"
-                  autoComplete="off"
-                  encType="multipart/form-data"
-                >
-                  {/* L466-485 — the wallet balance card */}
-                  <div className="card-body border-wallet pb-0">
-                    <div className="media d-flex">
-                      <div className="media-body text-left">
-                        <h3 className="warning mb-0">
-                          <span className="text-black-1">{fullName}</span>
-                          <br />
-                          <span className="text-black-1 font-14 ">
-                            กระเป๋าสตางค์ (บาท)
-                          </span>
-                          <br />
-                          <span
-                            className="tam-counter font-3rem"
-                            data-count={walletTotal}
-                          >
-                            {numberFormat2(walletTotal)}
-                          </span>
-                          <br />
-                        </h3>
-                      </div>
-                      <div>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          className="brand-logo logo-wallet"
-                          alt="logo"
-                          src="/images/pacred-logo-red.png"
-                        />
-                      </div>
-                    </div>
-                    <div className="progress progress-sm mt-1 mb-0 box-shadow-2">
-                      <div
-                        className="progress-bar bg-gradient-x-warning"
-                        role="progressbar"
-                        style={{ width: "100%" }}
-                        aria-valuenow={100}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                      ></div>
-                    </div>
-                    <div
-                      className="text-center pt-1"
-                      style={{ marginBottom: "-20px" }}
-                    >
-                      <Link href="/wallet/deposit">
-                        <div className="btn-add-wallet">
-                          {" "}
-                          <i className="ft-plus"></i> เติมเงินเข้ากระเป๋า{" "}
-                        </div>
-                      </Link>
-                    </div>
-                  </div>
-                  {/* L491-525 — the create-payment form fields */}
-                  <div className="form-group pt-2">
-                    <h5 className="text-right text-danger">
-                      เลขฝากจ่าย : <b>{numberPaymemt}</b>
-                    </h5>
-                    <div className="mb-1">
-                      <label className="form-control-label" htmlFor="payType">
-                        วิธีการชำระ
-                      </label>
-                      <select
-                        className="form-control"
-                        name="payType"
-                        required
-                        defaultValue=""
-                      >
-                        <option value="">กรุณาเลือกช่องทาง...</option>
-                        <option value="1" className="text-primary">
-                          จ่ายผ่านเว็บไซต์จีน
-                        </option>
-                        <option value="2" className="text-info">
-                          โอนเข้าบัญชี Alipay ร้านค้าจีน
-                        </option>
-                        <option value="3">อื่นๆ</option>
-                      </select>
-                    </div>
-                    <div className="mb-1">
-                      <label
-                        className="form-control-label"
-                        htmlFor="payDetail"
-                      >
-                        รายละเอียด
-                      </label>
-                      <textarea
-                        className="form-control"
-                        name="payDetail"
-                        rows={3}
-                        placeholder="รายละเอียดการชำระ"
-                        maxLength={2500}
-                        required
-                      ></textarea>
-                    </div>
-                    <div className="mt-2 mb-1">
-                      <label
-                        className="form-control-label"
-                        htmlFor="certifiedTrueCopy"
-                      >
-                        หลักฐานสำเนาบัตรประจำตัวประชาชนหรือหนังสือเดินทางพร้อมรับรองสำเนาถูกต้อง
-                        (รูปภาพ หรือ pdf) [
-                        <a href="" target="_blank">
-                          คลิกเพื่อดูตัวอย่าง
-                        </a>
-                        ]
-                      </label>
-                      <div className="fallback">
-                        <input
-                          type="file"
-                          name="certifiedTrueCopy"
-                          className="dropify"
-                          accept="image/*,.pdf"
-                          data-max-file-size="9M"
-                          required
-                        />
-                      </div>
-                    </div>
-                    <div className="mb-1">
-                      <label className="form-control-label" htmlFor="payYuan">
-                        ยอดเงินที่ฝากชำระ (หยวนจีน)
-                      </label>
-                      <input
-                        id="payYuan"
-                        className="form-control form-control-lg notranslate"
-                        name="payYuan"
-                        type="number"
-                        pattern="\d+(\.\d*)?"
-                        step="0.01"
-                        placeholder="0.00"
-                        required
-                        defaultValue="0.00"
-                      />
-                    </div>
-                    <div className="notranslate text-right text-danger">
-                      <span className="text-danger">
-                        1 หยวน = <span id="rpDefault">{rpDefault}</span> บาท
-                      </span>
-                    </div>
-                    <div className="notranslate text-right text-danger">
-                      ยอดเงินที่ต้องชำระ{" "}
-                      <h3 className="text-danger">
-                        <span id="pay_thb">0.00</span> บาท
-                      </h3>
-                    </div>
-                    <div className="QRPayment"></div>
-                    <div className="modal-footer">
-                      <button
-                        type="reset"
-                        className="btn btn-outline-secondary round waves-effect"
-                        data-dismiss="modal"
-                      >
-                        ยกเลิก
-                      </button>
-                      <button
-                        type="submit"
-                        className="btn btn-color-main round waves-effect"
-                        name="payment"
-                      >
-                        ยืนยัน
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── #add-payment modal — REMOVED 2026-05-29 F2 fix ──
+          The legacy `payment.php L457-530` modal was transcribed 1:1
+          but the form's POST submit (the legacy create-payment action)
+          was UNWIRED — it would 404 on submit because there's no
+          /service-payment/ POST handler. The real create form lives at
+          /service-payment/add (YuanPaymentForm + createYuanPayment
+          server action) and the "เพิ่มรายการ" button now navigates
+          there directly. Removed the dead modal block to keep the loop
+          unambiguous; design-philosophy §0a — "workflow + polish, not
+          1:1 markup" — applies. */}
     </div>
   );
 }

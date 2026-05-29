@@ -6,6 +6,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
+import { sendSms } from "@/lib/sms/gateway";
+import { logger, redactPhone } from "@/lib/logger";
+import { resolveProfileIdForLegacyUserid } from "@/lib/auth/tb-users-resolver";
 
 const editCustomerSchema = z.object({
   id:              z.string().uuid(),
@@ -28,7 +31,11 @@ export async function editCustomer(input: EditCustomerInput): Promise<AdminActio
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before } = await admin.from("profiles").select("*").eq("id", id).maybeSingle();
+    const { data: before, error: beforeErr } = await admin.from("profiles").select("*").eq("id", id).maybeSingle();
+    if (beforeErr) {
+      console.error(`[editCustomer profiles read] failed`, { code: beforeErr.code, message: beforeErr.message, id });
+      return { ok: false, error: beforeErr.message };
+    }
     if (!before) return { ok: false, error: "not_found" };
 
     const update: Record<string, unknown> = {};
@@ -101,7 +108,7 @@ export async function rejectJuristic(input: z.infer<typeof rejectJuristicSchema>
  * Approve a customer — D1 Wave-2 (_SYNTHESIS §7.1 / §7.4): re-pointed
  * from the rebuilt-era `profiles` table to the legacy `tb_users` table.
  *
- * `id` is the legacy member code (`tb_users.userid`, e.g. `PR2791`) —
+ * `id` is the legacy member code (`tb_users.userID`, e.g. `PR2791`) —
  * the identifier the re-pointed customer list (page.tsx) passes via
  * `<CustomerRowActions>`. Approving lifts a pending account by setting
  * the legacy `useractive` flag to `'1'` (1=ใช้งานแล้ว). A suspended
@@ -113,36 +120,245 @@ export async function approveCustomer(id: string): Promise<AdminActionResult> {
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("tb_users")
-      .select("userID, userActive, userStatus")
+      .select("userID, userActive, userStatus, userTel, userName, userLastName")
       .eq("userID", id)
-      .maybeSingle<{ userID: string; userActive: string | null; userStatus: string | null }>();
+      .maybeSingle<{
+        userID: string;
+        userActive: string | null;
+        userStatus: string | null;
+        userTel: string | null;
+        userName: string | null;
+        userLastName: string | null;
+      }>();
+    if (beforeErr) {
+      console.error(`[approveCustomer tb_users read] failed`, { code: beforeErr.code, message: beforeErr.message, id });
+      return { ok: false, error: beforeErr.message };
+    }
     if (!before) return { ok: false, error: "not_found" };
     // No-op when already active (userActive='1' and not deleted).
     if (before.userActive === "1" && before.userStatus !== "0") return { ok: true };
 
+    // E2E loop fix · Agent F1 · 2026-05-29 (Gap #3 part 2):
+    // Auto-assign a sales rep BEFORE flipping useractive so the customer's
+    // first touch already has owner attribution. If no sales rep is
+    // available, leave adminidsale unchanged (don't fail the approve).
+    const assignedLegacyAdminId = await pickLeastLoadedSalesRep(admin);
+
+    const updatePayload: Record<string, unknown> = {
+      userActive: "1",
+      userStatus: "1",
+    };
+    if (assignedLegacyAdminId) {
+      updatePayload.adminIDSale = assignedLegacyAdminId;
+    }
+
     const { error } = await admin
       .from("tb_users")
-      .update({ userActive: "1", userStatus: "1" })
+      .update(updatePayload)
       .eq("userID", id);
     if (error) return { ok: false, error: error.message };
 
     await logAdminAction(adminId, "customer.approve", "tb_users", id, {
       before: { userActive: before.userActive, userStatus: before.userStatus },
-      after:  { userActive: "1", userStatus: "1" },
+      after:  { userActive: "1", userStatus: "1", adminIDSale: assignedLegacyAdminId ?? null },
     });
 
-    // Note: customer notification deferred — migrated tb_users customers
-    // have no `profiles` row yet (the _SYNTHESIS §8 ghost finding;
-    // sendNotification is profiles-keyed). Wave-2 profiles backfill
-    // re-enables the notify side-effect.
+    // E2E loop fix · Agent F1 · 2026-05-29 (Gap #3 part 1):
+    // Fire welcome SMS to the customer (NOTIFY_BYPASS-respected via the
+    // sendSms gateway). Best-effort — log on failure but never roll back.
+    if (before.userTel) {
+      const welcomeMsg =
+        `ยินดีต้อนรับสู่ Pacred · บัญชี ${id} อนุมัติแล้ว · ` +
+        `เริ่มสั่งสินค้าได้เลย: pacred.co.th`;
+      const sms = await sendSms(before.userTel, welcomeMsg);
+      if (!sms.ok) {
+        logger.warn("approveCustomer", "welcome SMS failed", {
+          userID: id,
+          phone:  redactPhone(before.userTel),
+          error:  sms.error,
+        });
+      }
+    } else {
+      logger.warn("approveCustomer", "customer has no userTel — welcome SMS skipped", { userID: id });
+    }
+
+    // Also notify via the profiles spine (LINE/email when wired) — covers
+    // migrated tb_users customers that now have a profiles row via the
+    // Wave-1 backfill. Resolver returns null when no profile exists yet
+    // (legacy ghost case) — sendNotification is then skipped.
+    const profileId = await resolveProfileIdForLegacyUserid(id);
+    if (profileId) {
+      void sendNotification(profileId, notify.customerApproved({ memberCode: id }));
+    }
+
+    // Notify the assigned sales rep so they see the new customer right away.
+    if (assignedLegacyAdminId) {
+      const displayName = `${before.userName ?? ""} ${before.userLastName ?? ""}`.trim() || id;
+      await notifyAssignedSalesRep(admin, assignedLegacyAdminId, {
+        memberCode: id,
+        displayName,
+        phone: before.userTel,
+      });
+    }
 
     revalidatePath("/admin/customers");
     revalidatePath("/admin/customers/pending");
     revalidatePath(`/admin/customers/${id}`);
     return { ok: true };
   });
+}
+
+/**
+ * Pick the least-loaded sales rep (sales / sales_admin / super) — the
+ * one currently owning the fewest customer rows in tb_users.adminIDSale.
+ * Returns the rep's legacy_admin_id string (the value the column stores)
+ * or null when no sales rep is available (Pacred-native admins with NULL
+ * legacy_admin_id can't own legacy tb_users rows — adminIDSale is
+ * varchar(20) holding the legacy string).
+ *
+ * Round-robin via "fewest customers wins" — gives newer reps a chance
+ * before piling onto the senior rep. Fallback to null on lookup failure.
+ *
+ * E2E loop fix · Agent F1 · 2026-05-29 (Gap #3 part 2).
+ */
+async function pickLeastLoadedSalesRep(
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<string | null> {
+  // Step 1 — enumerate active sales reps (or super) with a non-null
+  // legacy_admin_id (= bridge value the legacy column accepts).
+  const { data: roles, error: rolesErr } = await admin
+    .from("admins")
+    .select("profile_id, role, is_active")
+    .in("role", ["sales", "sales_admin", "super"])
+    .eq("is_active", true);
+  if (rolesErr) {
+    logger.warn("approveCustomer", "admins lookup for auto-assign failed", { reason: rolesErr.message });
+    return null;
+  }
+  const profileIds = (roles ?? [])
+    .map((r) => (r as { profile_id: string }).profile_id)
+    .filter(Boolean);
+  if (profileIds.length === 0) return null;
+
+  const { data: extras, error: extrasErr } = await admin
+    .from("admin_contact_extras")
+    .select("profile_id, legacy_admin_id, ended_at, suspended_at")
+    .in("profile_id", profileIds);
+  if (extrasErr) {
+    logger.warn("approveCustomer", "admin_contact_extras lookup for auto-assign failed", { reason: extrasErr.message });
+    return null;
+  }
+  const candidateIds: string[] = [];
+  for (const e of (extras ?? [])) {
+    const row = e as {
+      legacy_admin_id: string | null;
+      ended_at: string | null;
+      suspended_at: string | null;
+    };
+    if (!row.legacy_admin_id) continue;
+    if (row.ended_at) continue;          // permanently left
+    if (row.suspended_at) continue;      // temporarily paused
+    candidateIds.push(row.legacy_admin_id);
+  }
+  if (candidateIds.length === 0) return null;
+
+  // Step 2 — count current customer load per legacy_admin_id (only
+  // currently-owned, active customers). Use a single query with the
+  // .in() filter + group it client-side (PostgREST has no GROUP BY in
+  // standard select; counting per id with .head + count would be N
+  // round-trips, which is wasteful for ~10 candidates).
+  const { data: owned, error: ownedErr } = await admin
+    .from("tb_users")
+    .select("adminIDSale")
+    .in("adminIDSale", candidateIds)
+    .eq("userActive", "1")
+    .eq("userStatus", "1");
+  if (ownedErr) {
+    logger.warn("approveCustomer", "tb_users load count for auto-assign failed", { reason: ownedErr.message });
+    // Fall through to picking the first candidate — better than no
+    // assignment at all.
+    return candidateIds[0] ?? null;
+  }
+
+  const counts = new Map<string, number>();
+  for (const id of candidateIds) counts.set(id, 0);
+  for (const r of (owned ?? [])) {
+    const sale = (r as { adminIDSale: string | null }).adminIDSale;
+    if (!sale) continue;
+    counts.set(sale, (counts.get(sale) ?? 0) + 1);
+  }
+
+  // Tie-broken by insertion order (the admin list order) — deterministic
+  // enough for round-robin semantics; no need for randomness when "fewest
+  // wins" already balances over time.
+  let winner: string | null = null;
+  let winnerCount = Number.POSITIVE_INFINITY;
+  for (const id of candidateIds) {
+    const c = counts.get(id) ?? 0;
+    if (c < winnerCount) {
+      winnerCount = c;
+      winner = id;
+    }
+  }
+  return winner;
+}
+
+/**
+ * Notify the auto-assigned sales rep via SMS to their work phone (if any).
+ * Best-effort — sales rep notification is informational, not load-bearing.
+ *
+ * E2E loop fix · Agent F1 · 2026-05-29 (Gap #3 part 2).
+ */
+async function notifyAssignedSalesRep(
+  admin: ReturnType<typeof createAdminClient>,
+  legacyAdminId: string,
+  customer: { memberCode: string; displayName: string; phone: string | null },
+): Promise<void> {
+  // Look up the rep's work phone via admin_contact_extras → profile join.
+  const { data: extras, error: extrasErr } = await admin
+    .from("admin_contact_extras")
+    .select("profile_id, work_phone, direct_phone")
+    .eq("legacy_admin_id", legacyAdminId)
+    .maybeSingle<{
+      profile_id: string;
+      work_phone: string | null;
+      direct_phone: string | null;
+    }>();
+  if (extrasErr) {
+    logger.warn("approveCustomer", "rep contact extras lookup failed", { legacyAdminId, reason: extrasErr.message });
+    return;
+  }
+  if (!extras) return;
+
+  const repPhone = extras.work_phone || extras.direct_phone;
+  const message =
+    `ลูกค้าใหม่: ${customer.memberCode} ${customer.displayName} · ` +
+    `เบอร์ ${customer.phone ?? "-"}`;
+
+  if (repPhone) {
+    const sms = await sendSms(repPhone, message);
+    if (!sms.ok) {
+      logger.warn("approveCustomer", "sales-rep SMS failed", {
+        legacyAdminId,
+        phone: redactPhone(repPhone),
+        error: sms.error,
+      });
+    }
+  }
+
+  // Also drop a system notification on the rep's profile so they see it
+  // in the in-app inbox + LINE push (when wired).
+  if (extras.profile_id) {
+    void sendNotification(extras.profile_id, {
+      category:  "sales",
+      severity:  "info",
+      title:     "ลูกค้าใหม่ในทีมของคุณ",
+      body:      message,
+      link_href: `/admin/customers/${customer.memberCode}`,
+    });
+  }
 }
 
 // ────────────────────────────────────────────────────────────
@@ -179,22 +395,30 @@ export async function adminConvertToJuristic(
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("profiles")
       .select("id, account_type, member_code, first_name, last_name")
       .eq("id", d.profile_id)
-      .maybeSingle<{ id: string; account_type: "personal" | "juristic"; member_code: string | null; first_name: string | null; last_name: string | null }>();
+      .maybeSingle<{ ID: string; account_type: "personal" | "juristic"; member_code: string | null; first_name: string | null; last_name: string | null }>();
+    if (beforeErr) {
+      console.error(`[adminConvertToJuristic profiles read] failed`, { code: beforeErr.code, message: beforeErr.message, profile_id: d.profile_id });
+      return { ok: false, error: beforeErr.message };
+    }
     if (!before) return { ok: false, error: "not_found" };
     if (before.account_type === "juristic") return { ok: false, error: "already_juristic" };
 
     // Block duplicate tax_id collisions early — the partial unique index
     // on corporate(tax_id) only covers 'verified' rows, so we double-check.
-    const { data: clash } = await admin
+    const { data: clash, error: clashErr } = await admin
       .from("corporate")
       .select("profile_id")
       .eq("tax_id", d.tax_id)
       .neq("profile_id", d.profile_id)
       .maybeSingle();
+    if (clashErr) {
+      console.error(`[adminConvertToJuristic corporate clash check] failed`, { code: clashErr.code, message: clashErr.message, tax_id: d.tax_id });
+      return { ok: false, error: clashErr.message };
+    }
     if (clash) return { ok: false, error: "tax_id_already_used" };
 
     // Step 1 — flip account_type so the corporate trigger lets the insert through
@@ -202,7 +426,10 @@ export async function adminConvertToJuristic(
       .from("profiles")
       .update({ account_type: "juristic" })
       .eq("id", d.profile_id);
-    if (profErr) return { ok: false, error: profErr.message };
+    if (profErr) {
+      console.error(`[adminConvertToJuristic profiles update] failed`, { code: profErr.code, message: profErr.message, profile_id: d.profile_id });
+      return { ok: false, error: profErr.message };
+    }
 
     // Step 2 — upsert the corporate row
     const corporatePayload: Record<string, unknown> = {
@@ -254,7 +481,7 @@ export async function adminConvertToJuristic(
 /**
  * Suspend an active customer — D1 Wave-2 (_SYNTHESIS §7.1 / §7.4):
  * re-pointed from `profiles` to the legacy `tb_users` table. `id` is the
- * legacy member code (`tb_users.userid`). Legacy PCS has no distinct
+ * legacy member code (`tb_users.userID`). Legacy PCS has no distinct
  * "suspended" state — a disabled account is `userstatus='0'`
  * (0=ลบบัญชี), which the re-pointed customer list renders as "ระงับ".
  */
@@ -263,11 +490,15 @@ export async function suspendCustomer(id: string): Promise<AdminActionResult> {
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("tb_users")
       .select("userID, userStatus")
       .eq("userID", id)
       .maybeSingle<{ userID: string; userStatus: string | null }>();
+    if (beforeErr) {
+      console.error(`[suspendCustomer tb_users read] failed`, { code: beforeErr.code, message: beforeErr.message, id });
+      return { ok: false, error: beforeErr.message };
+    }
     if (!before) return { ok: false, error: "not_found" };
     if (before.userStatus === "0") return { ok: true };  // no-op — already disabled
 

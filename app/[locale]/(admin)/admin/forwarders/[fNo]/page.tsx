@@ -363,20 +363,20 @@ async function renderLegacyForwarderView(
     crate: string | null; fpallet: number | null;
   };
 
-  // Customer name lookup — now also pulls adminidsale (the customer's
-  // assigned sales rep, shown as a "Sale" badge in legacy) + userpicture.
+  // Customer name lookup — now also pulls adminIDSale (the customer's
+  // assigned sales rep, shown as a "Sale" badge in legacy) + userPicture.
   const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
-    .select("userid, username, userlastname, usertel, useremail, userpicture, adminidsale")
-    .eq("userid", r.userid)
+    .select("userID, userName, userLastName, userTel, userEmail, userPicture, adminIDSale")
+    .eq("userID", r.userid)
     .maybeSingle();
   if (userRowErr) {
     console.error(`[tb_users detail] failed`, { code: userRowErr.code, message: userRowErr.message });
   }
   const u = userRow as unknown as {
-    userid: string; username: string | null; userlastname: string | null;
-    usertel: string | null; useremail: string | null;
-    userpicture: string | null; adminidsale: string | null;
+    userID: string; userName: string | null; userLastName: string | null;
+    userTel: string | null; userEmail: string | null;
+    userPicture: string | null; adminIDSale: string | null;
   } | null;
 
   // Resolve cover image — shop-spawned rows may have a live alicdn URL
@@ -384,7 +384,7 @@ async function renderLegacyForwarderView(
   const coverHref = r.fcover && r.fcover.trim() !== ""
     ? (r.fcover.startsWith("http") ? r.fcover : await resolveLegacyUrl(r.fcover, "cover"))
     : null;
-  const customerAvatar = await resolveLegacyUrl(u?.userpicture ?? null, "profile-thumb");
+  const customerAvatar = await resolveLegacyUrl(u?.userPicture ?? null, "profile-thumb");
 
   const STATUS_LABEL: Record<string, string> = {
     "1":"รอเข้าโกดังจีน","2":"ถึงโกดังจีนแล้ว","3":"กำลังส่งมาไทย","4":"ถึงไทยแล้ว",
@@ -451,9 +451,9 @@ async function renderLegacyForwarderView(
           <span className={`rounded-full border px-2.5 py-0.5 text-xs ${sourceTag.cls}`}>
             {sourceTag.label}
           </span>
-          {u?.adminidsale && u.adminidsale !== "" && (
+          {u?.adminIDSale && u.adminIDSale !== "" && (
             <span className="rounded-full border border-purple-200 bg-purple-50 text-purple-700 px-2.5 py-0.5 text-xs">
-              Sale : {u.adminidsale}
+              Sale : {u.adminIDSale}
             </span>
           )}
           {r.fcredit === "1" && (
@@ -524,7 +524,7 @@ async function renderLegacyForwarderView(
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={customerAvatar}
-                  alt={u?.username ?? r.userid}
+                  alt={u?.userName ?? r.userid}
                   className="h-12 w-12 rounded-full object-cover border border-border"
                 />
               ) : (
@@ -534,10 +534,10 @@ async function renderLegacyForwarderView(
               )}
               <div>
                 <p className="text-sm font-semibold group-hover:text-primary-600">
-                  คุณ{u?.username ?? ""} {u?.userlastname ?? ""}
+                  คุณ{u?.userName ?? ""} {u?.userLastName ?? ""}
                 </p>
                 <p className="text-xs text-muted font-mono">[{r.userid}]</p>
-                <p className="text-xs text-muted">📞 {u?.usertel ?? "—"} · ✉️ {u?.useremail ?? "—"}</p>
+                <p className="text-xs text-muted">📞 {u?.userTel ?? "—"} · ✉️ {u?.userEmail ?? "—"}</p>
               </div>
             </Link>
           </section>

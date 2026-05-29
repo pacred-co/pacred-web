@@ -110,17 +110,17 @@ export default async function AdminForwarderEditPage({
   // ─── Look up customer name (legacy text id, no FK auto-join) ───────
   const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
-    .select("userid, username, userlastname, usertel")
-    .eq("userid", r.userid)
+    .select("userID, userName, userLastName, userTel")
+    .eq("userID", r.userid)
     .maybeSingle();
   if (userRowErr) {
     console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
   }
   const u = userRow as unknown as {
-    userid: string;
-    username: string | null;
-    userlastname: string | null;
-    usertel: string | null;
+    userID: string;
+    userName: string | null;
+    userLastName: string | null;
+    userTel: string | null;
   } | null;
 
   // ─── Load tb_forwarder_item rows for crate per-item entry ──────────
@@ -163,7 +163,7 @@ export default async function AdminForwarderEditPage({
     "5": "JMF", "6": "GOGO", "7": "Cargo Center", "8": "MOMO",
   };
 
-  const customerName = `${u?.username ?? ""} ${u?.userlastname ?? ""}`.trim() || r.userid;
+  const customerName = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || r.userid;
   const slugForLink = r.fidorco ?? String(r.id);
 
   return (

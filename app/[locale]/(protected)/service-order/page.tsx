@@ -134,11 +134,20 @@ export default async function ServiceOrderPage({
   const hNoAnchor = sp.hNo ?? "";
 
   // ── shops.php L756-758 — juristic-pending gate.
-  const { data: corpRows } = await admin
+  const { data: corpRows, error: corpErr } = await admin
     .from("tb_corporate")
     .select("id")
     .eq("userid", userID)
     .eq("corporatestatus", "1");
+  if (corpErr) {
+    // Server page — surface real DB errors via throw. A silent fallthrough
+    // here would hide a juristic-pending state and let a customer with a
+    // pending corporate-approval row place orders they shouldn't.
+    console.error(`[service-order/page] tb_corporate lookup failed`, {
+      code: corpErr.code, message: corpErr.message, userID,
+    });
+    throw new Error(`tb_corporate lookup failed: ${corpErr.message}`);
+  }
   const corporatePending = (corpRows?.length ?? 0) > 0;
 
   // ── shops.php L784-839 — 7 status counters.
@@ -189,10 +198,17 @@ export default async function ServiceOrderPage({
   const orderHnos = rows.map((r) => r.hno);
   let promoMap = new Map<string, number>();
   if (orderHnos.length > 0) {
-    const { data: promoRows } = await admin
+    const { data: promoRows, error: promoErr } = await admin
       .from("tb_promotion")
       .select("promoid, hno")
       .in("hno", orderHnos);
+    if (promoErr) {
+      // Non-fatal — promo badges are decorative; log and render the list
+      // without them rather than 500'ing the whole orders page.
+      console.error(`[service-order/page] tb_promotion lookup failed`, {
+        code: promoErr.code, message: promoErr.message, orderCount: orderHnos.length,
+      });
+    }
     promoMap = new Map(
       (promoRows ?? []).map((p: { promoid: number; hno: string }) => [p.hno, p.promoid]),
     );
@@ -202,7 +218,7 @@ export default async function ServiceOrderPage({
     <>
       <title>รายการฝากสั่งซื้อสินค้า | Pacred</title>
 
-      <div className="pcs-content-pad w-full px-3 md:px-6 pt-4 pb-24 md:py-6">
+      <div className="pcs-content-pad w-full px-3 md:px-6 pt-4 pb-24 md:py-6 max-w-[1280px] mx-auto">
 
         {/* ── Breadcrumb (above header row) ── */}
         <div className="flex items-center gap-2 text-[11px] text-muted mb-2">

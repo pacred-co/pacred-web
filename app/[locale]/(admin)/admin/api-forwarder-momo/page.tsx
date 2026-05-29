@@ -18,7 +18,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
-import { Truck, Wand2, Database, Search, BarChart3 } from "lucide-react";
+import { Truck, Wand2, Database, Search, BarChart3, CheckCircle2 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -105,6 +105,33 @@ export default async function AdminApiForwarderMomoPage() {
             </div>
           </div>
         </div>
+
+        {/* Live (added 2026-05-28 ดึก · synthesis G1): Review & Commit grid.
+            Reads pending rows from momo_import_tracks → per-row form +
+            "สร้างใหม่" button → atomic INSERT into tb_forwarder. The missing
+            "feels automatic" piece per ภูม's 2026-05-28 flag. */}
+        <Link
+          href="/admin/api-forwarder-momo/review"
+          className="group rounded-2xl border-2 border-emerald-400 bg-emerald-50/30 p-5 shadow-sm hover:border-emerald-600 hover:shadow-md transition"
+        >
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl bg-emerald-100 p-3 text-emerald-700 group-hover:bg-emerald-200">
+              <CheckCircle2 className="h-6 w-6" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-base font-bold text-foreground">Review &amp; Commit</h3>
+              <p className="mt-1 text-xs text-muted leading-relaxed">
+                ตรวจสอบ row ที่ sync มาแล้ว → กรอก userID + บริษัทขนส่ง
+                → คลิก &ldquo;สร้างใหม่&rdquo; → atomic INSERT ลง{" "}
+                <code className="rounded bg-surface-alt px-1">tb_forwarder</code>{" "}
+                · มีปุ่ม &ldquo;สร้างทั้งหมด&rdquo; bulk-commit ด้วย.
+              </p>
+              <span className="mt-3 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                ✓ ใหม่ · synthesis G1 (P0)
+              </span>
+            </div>
+          </div>
+        </Link>
 
         {/* Live (added 2026-05-28 per ปอน brief): MOMO Status Sync.
             Isolated parallel path → writes to momo_* tables ONLY,

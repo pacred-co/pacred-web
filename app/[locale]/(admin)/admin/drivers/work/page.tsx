@@ -121,10 +121,10 @@ type Forwarder = {
 };
 
 type DriverUser = {
-  userid:        string;
-  username:      string | null;
-  userlastname:  string | null;
-  usertel:       string | null;
+  userID:        string;
+  userName:      string | null;
+  userLastName:  string | null;
+  userTel:       string | null;
 };
 
 export default async function DriverWorkPage({
@@ -343,16 +343,16 @@ async function loadDriverDirectory(admin: ReturnType<typeof createAdminClient>) 
 
   const { data: userRows, error: userRowsErr } = await admin
     .from("tb_users")
-    .select("userid, username, userlastname, usertel")
-    .in("userid", adminIds);
+    .select("userID, userName, userLastName, userTel")
+    .in("userID", adminIds);
   if (userRowsErr) {
     console.error(`[tb_users list] failed`, { code: userRowsErr.code, message: userRowsErr.message });
   }
   const users = (userRows ?? []) as DriverUser[];
-  const byId  = new Map(users.map((u) => [u.userid, u]));
+  const byId  = new Map(users.map((u) => [u.userID, u]));
   return adminIds.map((id) => {
     const u = byId.get(id);
-    const name = `${u?.username ?? ""} ${u?.userlastname ?? ""}`.trim();
+    const name = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim();
     return { userid: id, label: name ? `${id} · ${name}` : id };
   });
 }

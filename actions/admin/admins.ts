@@ -435,19 +435,19 @@ export async function adminBulkTransferSalesRep(
 }
 
 // ────────────────────────────────────────────────────────────
-// Bulk transfer sales rep on the LEGACY `tb_users.adminidsale` column
+// Bulk transfer sales rep on the LEGACY `tb_users.adminIDSale` column
 // (D1 / ADR-0017 Phase-B faithful port).
 //
 // Why a separate action from adminBulkTransferSalesRep above:
 //   The earlier action updates the REBUILT `profiles.sales_admin_id`
 //   column which is empty on prod. The legacy column-of-truth is
-//   `tb_users.adminidsale` (varchar holding the admin's legacy
-//   `tb_admin.adminid` username, e.g. "PR0001"). The new `/admin/
+//   `tb_users.adminIDSale` (varchar holding the admin's legacy
+//   `tb_admin.adminID` username, e.g. "PR0001"). The new `/admin/
 //   customers/transfer-rep` bulk page writes against the legacy column
 //   so the assignment is visible to PHP staff + the new Pacred admin
-//   surfaces that join tb_users.adminidsale.
+//   surfaces that join tb_users.adminIDSale.
 //
-// Target admin id is the legacy varchar `tb_admin.adminid` (NOT a
+// Target admin id is the legacy varchar `tb_admin.adminID` (NOT a
 // Pacred profile UUID) — passing the raw legacy adminid keeps the
 // foreign-key shape PHP expects.
 // ────────────────────────────────────────────────────────────
@@ -478,7 +478,7 @@ export async function adminBulkTransferSalesRepTb(
       // matching profile + admins-role-grant both active).
       //
       // The transfer-rep flow stores the LEGACY varchar adminID string in
-      // tb_users.adminidsale to preserve PHP-staff visibility — so we
+      // tb_users.adminIDSale to preserve PHP-staff visibility — so we
       // resolve the requested legacy string via the bridge column ภูม fills
       // in when recreating each legacy admin through /admin/admins/new.
       //
@@ -531,18 +531,18 @@ export async function adminBulkTransferSalesRepTb(
       // silently update 0 rows; surface the bad list).
       const { data: validRows, error: readErr } = await admin
         .from("tb_users")
-        .select("userid, adminidsale")
-        .in("userid", userIds);
+        .select("userID, adminIDSale")
+        .in("userID", userIds);
       if (readErr) return { ok: false, error: readErr.message };
-      const validIds = (validRows ?? []).map((r) => (r as { userid: string }).userid);
+      const validIds = (validRows ?? []).map((r) => (r as { userID: string }).userID);
       if (validIds.length === 0) {
         return { ok: false, error: "ไม่พบลูกค้าตาม userid ที่เลือก" };
       }
 
       const { error: updErr, count } = await admin
         .from("tb_users")
-        .update({ adminidsale: target.legacy_admin_id }, { count: "exact" })
-        .in("userid", validIds);
+        .update({ adminIDSale: target.legacy_admin_id }, { count: "exact" })
+        .in("userID", validIds);
       if (updErr) return { ok: false, error: updErr.message };
 
       await logAdminAction(adminId, "tb_users.bulk_transfer_rep", "tb_users", validIds.join(","), {
@@ -574,16 +574,16 @@ export async function adminBulkTransferSalesRepTb(
 // to rows that have `legacy_admin_id` set — that's the bridge column
 // ภูม fills when recreating each legacy admin through /admin/admins/new.
 // Only admins WITH a legacy_admin_id can be sales-rep targets because
-// tb_users.adminidsale stores the legacy string (not a profile UUID).
+// tb_users.adminIDSale stores the legacy string (not a profile UUID).
 //
 // Empty dropdown until ภูม recreates the 13 legacy admins (Phase 3 of
 // this wave). The page is used quarterly for rep-rotation, not daily.
 export type TbAdminLite = {
-  adminid:        string;
-  adminnickname:  string | null;
-  adminname:      string | null;
-  adminlastname:  string | null;
-  adminpicture:   string | null;
+  adminID:        string;
+  adminNickname:  string | null;
+  adminName:      string | null;
+  adminLastName:  string | null;
+  adminPicture:   string | null;
   department:     string | null;
   section:        string | null;
 };
@@ -634,11 +634,11 @@ export async function listActiveTbAdmins(): Promise<AdminActionResult<{ rows: Tb
         })
         .filter(({ r, profile }) => profile?.is_active && activeProfileIds.has(r.profile_id))
         .map(({ r, profile }) => ({
-          adminid:       r.legacy_admin_id ?? "",
-          adminnickname: r.nickname ?? null,
-          adminname:     profile?.first_name ?? null,
-          adminlastname: profile?.last_name ?? null,
-          adminpicture:  profile?.avatar_url ?? null,
+          adminID:       r.legacy_admin_id ?? "",
+          adminNickname: r.nickname ?? null,
+          adminName:     profile?.first_name ?? null,
+          adminLastName: profile?.last_name ?? null,
+          adminPicture:  profile?.avatar_url ?? null,
           department:    r.department ?? null,
           section:       r.section ?? null,
         }));

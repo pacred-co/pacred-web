@@ -452,11 +452,11 @@ export async function submitCartOrder(input: {
   await admin
     .from("tb_users")
     .update({
-      useraddressid: input.addressID,
-      usershipby: hShipBy ?? "",
-      userpaymethod: input.payMethod ?? "",
+      userAddressID: input.addressID,
+      userShipBy: hShipBy ?? "",
+      userPayMethod: input.payMethod ?? "",
     })
-    .eq("userid", userID);
+    .eq("userID", userID);
 
   // shops.php L208-220 — UPDATE tb_header_order with rollup totals
   // (hTotalPriceCHN / hRate / hCount / hTitle / hCover).

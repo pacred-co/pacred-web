@@ -58,10 +58,10 @@ export const dynamic = "force-dynamic";
 
 // Legacy user join shape (tb_users keyed by userid text).
 type LegacyUser = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
 };
 
 // Per-row shapes after legacy → display normalisation.
@@ -119,7 +119,7 @@ function thb(n: number) {
 }
 function userDisplayName(u: LegacyUser | null) {
   if (!u) return "—";
-  return [u.username, u.userlastname].filter(Boolean).join(" ") || "—";
+  return [u.userName, u.userLastName].filter(Boolean).join(" ") || "—";
 }
 
 /**
@@ -136,14 +136,14 @@ async function fetchUsersByUserId(
   if (unique.length === 0) return map;
   const { data, error } = await admin
     .from("tb_users")
-    .select("userid, username, userlastname, usertel")
-    .in("userid", unique);
+    .select("userID, userName, userLastName, userTel")
+    .in("userID", unique);
   if (error) {
     console.error(`[tb_users batch] failed`, { code: error.code, message: error.message });
     return map;
   }
   for (const u of (data ?? []) as LegacyUser[]) {
-    map.set(u.userid, u);
+    map.set(u.userID, u);
   }
   return map;
 }
@@ -520,9 +520,9 @@ export default async function AdminAccountingPage({
 
   const forwarderCsv: CsvRow[] = forwarderRows.map((r) => ({
     เลขที่: r.f_no,
-    รหัสสมาชิก: r.user?.userid ?? "",
+    รหัสสมาชิก: r.user?.userID ?? "",
     ชื่อ: userDisplayName(r.user),
-    เบอร์: r.user?.usertel ?? "",
+    เบอร์: r.user?.userTel ?? "",
     คลัง: r.source_warehouse,
     ขนส่ง: TRANSPORT_LABEL[r.transport_type] ?? r.transport_type,
     น้ำหนักkg: r.weight_kg,
@@ -533,9 +533,9 @@ export default async function AdminAccountingPage({
   }));
 
   const yuanCsv: CsvRow[] = yuanRows.map((r) => ({
-    รหัสสมาชิก: r.user?.userid ?? "",
+    รหัสสมาชิก: r.user?.userID ?? "",
     ชื่อ: userDisplayName(r.user),
-    เบอร์: r.user?.usertel ?? "",
+    เบอร์: r.user?.userTel ?? "",
     ช่องทาง: r.channel ? PAYTYPE_LABEL[r.channel] ?? r.channel : "",
     หยวน: r.yuan_amount,
     อัตราแลกเปลี่ยน: r.exchange_rate,
@@ -546,9 +546,9 @@ export default async function AdminAccountingPage({
 
   const shopCsv: CsvRow[] = shopRows.map((r) => ({
     เลขที่: r.h_no,
-    รหัสสมาชิก: r.user?.userid ?? "",
+    รหัสสมาชิก: r.user?.userID ?? "",
     ชื่อ: userDisplayName(r.user),
-    เบอร์: r.user?.usertel ?? "",
+    เบอร์: r.user?.userTel ?? "",
     รายการ: r.title ?? "",
     ชิ้น: r.item_count,
     ยอด: r.total_thb,
@@ -557,9 +557,9 @@ export default async function AdminAccountingPage({
   }));
 
   const walletCsv: CsvRow[] = walletRows.map((r) => ({
-    รหัสสมาชิก: r.user?.userid ?? "",
+    รหัสสมาชิก: r.user?.userID ?? "",
     ชื่อ: userDisplayName(r.user),
-    เบอร์: r.user?.usertel ?? "",
+    เบอร์: r.user?.userTel ?? "",
     จำนวน: r.amount,
     ธนาคาร: r.bank_name ?? "",
     ชื่อบัญชี: r.account_name ?? "",
@@ -781,9 +781,9 @@ export default async function AdminAccountingPage({
                   <Link href={`/admin/forwarders/${r.f_no}`} className="text-primary-600 hover:underline">#{r.f_no}</Link>
                 </td>
                 <td className="px-4 py-3 text-xs">
-                  <div className="font-mono">{r.user?.userid ?? "—"}</div>
+                  <div className="font-mono">{r.user?.userID ?? "—"}</div>
                   <div>{userDisplayName(r.user)}</div>
-                  <div className="text-muted">{r.user?.usertel ?? ""}</div>
+                  <div className="text-muted">{r.user?.userTel ?? ""}</div>
                 </td>
                 <td className="px-4 py-3 text-xs">{r.source_warehouse} / {TRANSPORT_LABEL[r.transport_type] ?? r.transport_type}</td>
                 <td className="px-4 py-3 text-right text-xs">
@@ -821,9 +821,9 @@ export default async function AdminAccountingPage({
             {yuanRows.map((r) => (
               <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
                 <td className="px-4 py-3 text-xs">
-                  <div className="font-mono">{r.user?.userid ?? "—"}</div>
+                  <div className="font-mono">{r.user?.userID ?? "—"}</div>
                   <div>{userDisplayName(r.user)}</div>
-                  <div className="text-muted">{r.user?.usertel ?? ""}</div>
+                  <div className="text-muted">{r.user?.userTel ?? ""}</div>
                 </td>
                 <td className="px-4 py-3 text-xs">{r.channel ? PAYTYPE_LABEL[r.channel] ?? r.channel : "—"}</td>
                 <td className="px-4 py-3 text-right font-mono">¥{r.yuan_amount.toFixed(2)}</td>
@@ -862,9 +862,9 @@ export default async function AdminAccountingPage({
                   <Link href={`/admin/service-orders/${r.h_no}`} className="text-primary-600 hover:underline">{r.h_no}</Link>
                 </td>
                 <td className="px-4 py-3 text-xs">
-                  <div className="font-mono">{r.user?.userid ?? "—"}</div>
+                  <div className="font-mono">{r.user?.userID ?? "—"}</div>
                   <div>{userDisplayName(r.user)}</div>
-                  <div className="text-muted">{r.user?.usertel ?? ""}</div>
+                  <div className="text-muted">{r.user?.userTel ?? ""}</div>
                 </td>
                 <td className="px-4 py-3 text-xs">{r.title ?? "—"}</td>
                 <td className="px-4 py-3 text-right text-xs">{r.item_count}</td>
@@ -909,9 +909,9 @@ export default async function AdminAccountingPage({
               return (
                 <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
                   <td className="px-4 py-3 text-xs">
-                    <div className="font-mono">{r.user?.userid ?? "—"}</div>
+                    <div className="font-mono">{r.user?.userID ?? "—"}</div>
                     <div>{userDisplayName(r.user)}</div>
-                    <div className="text-muted">{r.user?.usertel ?? ""}</div>
+                    <div className="text-muted">{r.user?.userTel ?? ""}</div>
                   </td>
                   <td className={`px-4 py-3 text-right font-mono font-bold ${renderedAmount < 0 ? "text-red-700" : "text-green-700"}`}>
                     {renderedAmount > 0 ? "+" : ""}{renderedAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}

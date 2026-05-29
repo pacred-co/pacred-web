@@ -126,23 +126,31 @@ export default async function ProfilePage() {
   // from it. profile.php's modal SELECT (L144) additionally reads
   // userTel/userSex/userBirthday/userFacebook/userLineID — all on the
   // same tb_users row, so one read covers both.
-  const { data: userRow } = await admin
+  const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
     .select(
-      "username, userlastname, useremail, usertel, userpicture, usersex, userbirthday, userfacebook, userlineid",
+      "userName, userLastName, userEmail, userTel, userPicture, userSex, userBirthday, userFacebook, userLineID",
     )
-    .eq("userid", memberCode)
+    .eq("userID", memberCode)
     .maybeSingle<{
-      username: string | null;
-      userlastname: string | null;
-      useremail: string | null;
-      usertel: string | null;
-      userpicture: string | null;
-      usersex: string | null;
-      userbirthday: string | null;
-      userfacebook: string | null;
-      userlineid: string | null;
+      userName: string | null;
+      userLastName: string | null;
+      userEmail: string | null;
+      userTel: string | null;
+      userPicture: string | null;
+      userSex: string | null;
+      userBirthday: string | null;
+      userFacebook: string | null;
+      userLineID: string | null;
     }>();
+  if (userRowErr) {
+    // Server page — surface real DB errors via throw (Next renders error
+    // boundary) instead of silently falling through to a "ยังไม่ระบุ" view.
+    console.error(`[profile/page] tb_users lookup failed`, {
+      code: userRowErr.code, message: userRowErr.message, memberCode,
+    });
+    throw new Error(`tb_users lookup failed: ${userRowErr.message}`);
+  }
 
   // header.php L86-92 — SELECT walletTotal FROM tb_wallet WHERE userID=…
   // header.php L100/104/105 — the three stat-card COUNT()s.
@@ -182,7 +190,7 @@ export default async function ProfilePage() {
   let fullAddress = "";
   const mainAddressId = addressMainRes.data?.addressid ?? null;
   if (mainAddressId != null) {
-    const { data: addrRow } = await admin
+    const { data: addrRow, error: addrErr } = await admin
       .from("tb_address")
       .select(
         "addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode",
@@ -197,14 +205,22 @@ export default async function ProfilePage() {
         addressprovince: string | null;
         addresszipcode: string | null;
       }>();
+    if (addrErr) {
+      // Non-fatal — address is a display nicety; log and fall through with
+      // empty fullAddress (the page already handles that case with a
+      // "กรุณาเพิ่มที่อยู่" prompt). Don't take the whole profile page down.
+      console.error(`[profile/page] tb_address lookup failed`, {
+        code: addrErr.code, message: addrErr.message, mainAddressId,
+      });
+    }
     if (addrRow) fullAddress = buildFullAddress(addrRow);
   }
 
   // $_SESSION['userName'] . ' ' . $_SESSION['userLastName']
   // (profile.php L253) — prefer the ported tb_users name, fall back to
   // the Pacred profile fields.
-  const userName = userRow?.username ?? "";
-  const userLastName = userRow?.userlastname ?? "";
+  const userName = userRow?.userName ?? "";
+  const userLastName = userRow?.userLastName ?? "";
   const legacyName = [userName, userLastName]
     .filter((s) => s.trim() !== "")
     .join(" ")
@@ -220,21 +236,21 @@ export default async function ProfilePage() {
   const userID = profile.member_code ?? "";
 
   // $_SESSION['userEmail'] (profile.php L262).
-  const userEmail = (userRow?.useremail ?? "").toLowerCase();
+  const userEmail = (userRow?.userEmail ?? "").toLowerCase();
   // $row['userTel'] / userSex / userBirthday / userFacebook / userLineID
   // — the modal SELECT (profile.php L144) + the detail block below.
-  const userTel = userRow?.usertel ?? "";
-  const userSex = userRow?.usersex ?? "";
-  const userBirthday = userRow?.userbirthday ?? "";
-  const userFacebook = userRow?.userfacebook ?? "";
-  const userLineID = userRow?.userlineid ?? "";
+  const userTel = userRow?.userTel ?? "";
+  const userSex = userRow?.userSex ?? "";
+  const userBirthday = userRow?.userBirthday ?? "";
+  const userFacebook = userRow?.userFacebook ?? "";
+  const userLineID = userRow?.userLineID ?? "";
 
   // $_SESSION['userPicture'] — legacy: basePath."images/users/".picture
   // (profile.php L197-198). The migrated tb_users.userpicture holds a
   // bare filename → reference it under the legacy images path; prefer
   // the Pacred avatar_url when set. (account-settings.php uses the same
   // resolution.)
-  const userPictureFile = userRow?.userpicture ?? "user.jpg";
+  const userPictureFile = userRow?.userPicture ?? "user.jpg";
   const userPicture =
     profile.avatar_url ||
     `/legacy/pcs/images/users/${userPictureFile || "user.jpg"}`;

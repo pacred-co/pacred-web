@@ -41,10 +41,12 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
+import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import {
   ForwarderCheckTable,
   type ForwarderCheckRow,
@@ -106,11 +108,11 @@ type ForwarderRawRow = {
 };
 
 type UserRawRow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usercompany: string | null;
-  usercredit: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userCompany: string | null;
+  userCredit: string | null;
 };
 
 type PromoRawRow = {
@@ -138,6 +140,18 @@ export default async function AdminForwarderCheckPage({
   const { roles } = await requireAdmin(["super", "ops", "accounting"]);
 
   const sp = await searchParams;
+
+  // G6 — default queue filter per role. Page is already implicitly
+  // scoped to fStatus=4 (the bill-prep queue), so no per-role default
+  // applies — the call is here for matrix-uniformity. Future per-role
+  // tweaks (e.g. accounting → ?q=n vs qa → ?q=c) wire through here.
+  const defaultRedirect = buildDefaultLandingRedirect(
+    "/admin/forwarder-check",
+    roles,
+    sp as Record<string, unknown>,
+  );
+  if (defaultRedirect) redirect(defaultRedirect);
+
   const tab: "all" | "c" | "n" = sp.q === "c" ? "c" : sp.q === "n" ? "n" : "all";
   // Money cols visible to the same role union — `super` always sees;
   // others are already gated by requireAdmin above. Adding the explicit
@@ -213,10 +227,10 @@ export default async function AdminForwarderCheckPage({
   const uniqueUserIds = Array.from(new Set(forwarders.map((r) => r.userid).filter(Boolean)));
   const userRes = await admin
     .from("tb_users")
-    .select("userid, username, userlastname, usercompany, usercredit")
-    .in("userid", uniqueUserIds);
+    .select("userID, userName, userLastName, userCompany, userCredit")
+    .in("userID", uniqueUserIds);
   const usersById = new Map<string, UserRawRow>(
-    ((userRes.data ?? []) as unknown as UserRawRow[]).map((u) => [u.userid, u]),
+    ((userRes.data ?? []) as unknown as UserRawRow[]).map((u) => [u.userID, u]),
   );
 
   // ── Step 4: Tab counts ──────────────────────────────────────────────────
@@ -228,7 +242,7 @@ export default async function AdminForwarderCheckPage({
   let normalCount = 0;
   for (const f of forwarders) {
     const u = usersById.get(f.userid);
-    if (u?.usercredit === "1") creditCount++;
+    if (u?.userCredit === "1") creditCount++;
     else normalCount++;
   }
   // Queue rows whose forwarder row didn't survive the fstatus<5 filter
@@ -277,9 +291,9 @@ export default async function AdminForwarderCheckPage({
     const user = usersById.get(r.userid);
     const queueRow = queueByFid.get(r.id);
     const customerName = user
-      ? `${user.username ?? ""} ${user.userlastname ?? ""}`.trim()
+      ? `${user.userName ?? ""} ${user.userLastName ?? ""}`.trim()
       : "";
-    const customerCompany = user?.usercompany === "1" ? 1 : 0;
+    const customerCompany = user?.userCompany === "1" ? 1 : 0;
     const fiAmount = importByFid.get(r.id) ?? 0;
     const promoId = promoByFid.get(r.id) ?? null;
     const outstanding = calcForwarderOutstanding(r);
@@ -314,7 +328,7 @@ export default async function AdminForwarderCheckPage({
       userid: r.userid,
       customer_name: customerName,
       customer_company: customerCompany,
-      user_credit: user?.usercredit ?? "0",
+      user_credit: user?.userCredit ?? "0",
       amount: Number(r.famount ?? 0),
       amount_fi: fiAmount,
       amount_count: r.famountcount,

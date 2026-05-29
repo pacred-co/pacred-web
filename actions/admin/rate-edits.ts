@@ -245,9 +245,9 @@ export async function adminUpdateCustomerHsRates(
       // Verify customer exists.
       const { data: customer, error: customerErr } = await admin
         .from("tb_users")
-        .select("userid")
-        .eq("userid", userid)
-        .maybeSingle<{ userid: string }>();
+        .select("userID")
+        .eq("userID", userid)
+        .maybeSingle<{ userID: string }>();
       if (customerErr) {
         console.error(`[tb_users mutation lookup] failed`, { code: customerErr.code, message: customerErr.message });
         return { ok: false, error: `db_error:${customerErr.code ?? "unknown"}` };

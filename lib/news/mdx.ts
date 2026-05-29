@@ -20,7 +20,7 @@
  *   slug: welcome-pacred                   # optional — falls back to filename
  *   excerpt: "Pacred Shipping เปิดให้บริการแล้ว..."
  *   publishedAt: 2026-05-24                # ISO YYYY-MM-DD
- *   category: ประกาศ                       # ประกาศ | อัปเดตบริการ | กิจกรรม
+ *   category: ข่าวด่วน                      # ข่าวด่วน | อัปเดตบริการ | กิจกรรม
  *   image: /images/PacredNews/welcome.png   # cover (card + hero)
  *   author: Pacred Shipping                # optional
  *   inlineImage: /images/PacredNews/x.png   # optional mid-article illustration
@@ -54,6 +54,7 @@ type Frontmatter = {
   category?: string;
   image?: string;
   author?: string;
+  draft?: string;
   inlineImage?: string;
   inlineImageAlt?: string;
   inlineImageCaption?: string;
@@ -66,7 +67,12 @@ type Frontmatter = {
  * Returns `[frontmatter, body]`. If no frontmatter block, frontmatter = {}.
  */
 function parseFrontmatter(raw: string): [Frontmatter, string] {
-  const trimmed = raw.replace(/^﻿/, ""); // strip BOM if present
+  // Strip BOM, then normalize Windows CRLF / lone CR → LF. Editors on
+  // Windows (เดฟ / ปอน) save .mdx with CRLF; without this the per-line
+  // `key: value` parser leaves a trailing \r that breaks every field's
+  // `(.*)$` match → frontmatter comes back empty → the article is silently
+  // skipped. Normalizing here keeps the rest of the parser LF-only.
+  const trimmed = raw.replace(/^﻿/, "").replace(/\r\n?/g, "\n");
   const match = trimmed.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
   if (!match) {
     return [{}, trimmed];
@@ -95,7 +101,7 @@ function parseFrontmatter(raw: string): [Frontmatter, string] {
 }
 
 const CATEGORIES: ReadonlySet<PacredNews["category"]> = new Set([
-  "ประกาศ",
+  "ข่าวด่วน",
   "อัปเดตบริการ",
   "กิจกรรม",
 ]);
@@ -137,6 +143,12 @@ function loadMdxNews(): PacredNews[] {
     const raw = readFileSync(path, "utf8");
     const [fm, body] = parseFrontmatter(raw);
 
+    // `draft: true` hides a not-yet-ready article (e.g. its own cover
+    // image is still pending) from the public /news listing, detail
+    // routes, and sitemap — without deleting the file. Flip the flag to
+    // publish once the article is ready.
+    if (fm.draft?.trim().toLowerCase() === "true") continue;
+
     const slug = (fm.slug?.trim() || file.replace(/\.mdx$/, "")).trim();
     const title = fm.title?.trim();
     const excerpt = fm.excerpt?.trim();
@@ -144,7 +156,7 @@ function loadMdxNews(): PacredNews[] {
     const image = fm.image?.trim();
     const category = isValidCategory(fm.category)
       ? fm.category
-      : ("ประกาศ" as const);
+      : ("ข่าวด่วน" as const);
 
     if (!title || !excerpt || !publishedAt || !image) {
       console.warn(

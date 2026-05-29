@@ -32,8 +32,9 @@
  *   tb_settings       — rgdefault (เรทสั่งซื้อ), rsdefault (sale), rpdefault (โอน)
  */
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireAdmin } from "@/lib/auth/require-admin";
-import { Link } from "@/i18n/navigation";
+import { requireAdmin, getAdminRoles } from "@/lib/auth/require-admin";
+import { Link, redirect } from "@/i18n/navigation";
+import { getLocale } from "next-intl/server";
 import { ShoppingBasket, Box, ArrowLeftRight, Wallet as WalletIcon, Users, UserX, XCircle, Eye } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -58,6 +59,25 @@ type TabKey =
   | "inactiveCustomers";  // tb_users useractive='0'
 
 export default async function AdminDashboardPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  // 2026-05-28 — Driver landing redirect (G12 — Driver mobile UI parity sprint).
+  // Drivers logging into /admin used to hit notFound() because the office
+  // role gate below excludes them. Their actual home is /admin/drivers/work.
+  // Done BEFORE requireAdmin so a driver-only user doesn't 404 — they
+  // bounce one segment over to where their job lives.
+  //
+  // Multi-role admins (e.g. someone with BOTH driver + ops) still see the
+  // ops dashboard — the redirect only fires when driver is the ONLY role.
+  // This mirrors legacy `index.php:133` (case 7 → home/Cargo/Warehouse/Driver.php)
+  // which sends pure-driver staff straight to their work queue.
+  const allRoles = await getAdminRoles();
+  if (allRoles && allRoles.length > 0) {
+    const isDriverOnly = allRoles.every((r) => r === "driver");
+    if (isDriverOnly) {
+      const locale = await getLocale();
+      redirect({ href: "/admin/drivers/work", locale });
+    }
+  }
+
   // W-1 (gap-admin H-2): page-level role gate. The (admin) layout only
   // proves "some admin" — driver/warehouse roles legitimately reach
   // floor-ops pages, but this dashboard exposes company-wide revenue +
@@ -121,10 +141,19 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     // Leaving the fetch for now: PostgREST has no SUM endpoint + accepting a
     // stale cache here would diverge from staff "always fresh" expectation.
     admin.from("tb_wallet").select("wallettotal").limit(50_000),
-    // Customer counts — useractive '1' = ใช้งานแล้ว · '0' = ยังไม่ใช้งาน.
-    admin.from("tb_users").select("id", { count: "exact", head: true }).eq("useractive", "0"),
-    admin.from("tb_users").select("id", { count: "exact", head: true }).eq("useractive", "1"),
-    admin.from("tb_users").select("id", { count: "exact", head: true }),
+    // Customer counts — userActive '1' = ใช้งานแล้ว · ANY-NOT-'1' = ยังไม่ใช้งาน.
+    // 2026-05-28 fix (เดฟ): the schema comment says "1=ใช้งานแล้ว" but the
+    // legacy PHP relied on truthy/falsy of userActive. On prod the column
+    // is varchar(1) NOT NULL with distribution { "1": 1961 rows, "": 6937
+    // rows } — there's NO "0" value at all. The previous `.eq("userActive",
+    // "0")` query matched 0 rows, so /admin dashboard rendered "0 ลูกค้าที่
+    // ยังไม่ใช้งาน" while the percentage band still said 78% (the % is from
+    // totalUsers - activeUsers). Switched to `.neq("userActive", "1")`
+    // which catches BOTH empty-string AND the documented "0" if any rows
+    // ever carry it.
+    admin.from("tb_users").select("ID", { count: "exact", head: true }).neq("userActive", "1"),
+    admin.from("tb_users").select("ID", { count: "exact", head: true }).eq("userActive", "1"),
+    admin.from("tb_users").select("ID", { count: "exact", head: true }),
     // Cancelled orders this month — hstatus='6' on tb_header_order.
     admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("hstatus", "6").gte("hdate", monthStart),
     // Pending queues (tab badge counts).
@@ -380,10 +409,10 @@ type RowShape = {
 };
 
 type RawUserRow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
 };
 
 /**
@@ -400,17 +429,17 @@ async function loadUsersByUserId(
   if (unique.length === 0) return new Map();
   const { data, error } = await admin
     .from("tb_users")
-    .select("userid,username,userlastname,usertel")
-    .in("userid", unique);
+    .select("userID,userName,userLastName,userTel")
+    .in("userID", unique);
   if (error) {
     console.warn(`[tb_users list] failed (soft-fail · returning empty map)`, error);
   }
-  return new Map(((data ?? []) as unknown as RawUserRow[]).map((u) => [u.userid, u]));
+  return new Map(((data ?? []) as unknown as RawUserRow[]).map((u) => [u.userID, u]));
 }
 
 function nameOf(u: RawUserRow | undefined): string {
   if (!u) return "—";
-  const n = `${u.username ?? ""} ${u.userlastname ?? ""}`.trim();
+  const n = `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim();
   return n || "—";
 }
 
@@ -605,26 +634,29 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       });
     }
 
-    // ── ลูกค้าที่ยังไม่ใช้งาน (tb_users useractive='0') ───────────────────
+    // ── ลูกค้าที่ยังไม่ใช้งาน (tb_users userActive ≠ '1') ───────────────
+    // 2026-05-28 fix: see the count query at line ~125 — the prod data is
+    // { "1": active, "": inactive }, no "0" at all. Use neq("userActive",
+    // "1") to match the count query's definition + return the inactive set.
     case "inactiveCustomers": {
       const { data, error } = await admin
         .from("tb_users")
-        .select("id,userid,username,userlastname,usertel,useremail,userregistered,usercompany")
-        .eq("useractive", "0")
-        .order("userregistered", { ascending: false, nullsFirst: false })
+        .select("ID,userID,userName,userLastName,userTel,userEmail,userRegistered,userCompany")
+        .neq("userActive", "1")
+        .order("userRegistered", { ascending: false, nullsFirst: false })
         .limit(50);
       if (error) {
         console.warn(`[tb_users list] failed (soft-fail · returning empty map)`, error);
       }
       const rows = (data ?? []) as unknown as RawUserListRow[];
       return rows.map((u) => ({
-        id: String(u.id),
-        created_at: u.userregistered ?? "",
-        member_code: u.userid,
-        customer_name: `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || "—",
+        id: String(u.ID),
+        created_at: u.userRegistered ?? "",
+        member_code: u.userID,
+        customer_name: `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—",
         amount: 0,
-        detail: `${u.usertel ?? "—"}${u.useremail ? ` · ${u.useremail}` : ""}`,
-        link: `/admin/customers/${u.userid}`,
+        detail: `${u.userTel ?? "—"}${u.userEmail ? ` · ${u.userEmail}` : ""}`,
+        link: `/admin/customers/${u.userID}`,
         status: "registered",
       }));
     }
@@ -640,7 +672,7 @@ type RawWalletHsRow   = { id: number | string; date: string | null; amount: numb
 type RawHeaderOrderRow = { id: number | string; hno: string | null; hstatus: string | null; htotalpriceuser: number | string; hdate: string | null; htitle: string | null; userid: string };
 type RawForwarderRow  = { id: number | string; fdate: string | null; fstatus: string | null; fidorco: string | null; ftotalprice: number | string; ftransporttype: string | null; fweight: number | string; userid: string; fcabinetnumber: string | null; fcredit: string | null };
 type RawPaymentRow    = { id: number | string; paydate: string | null; paystatus: string | null; paytype: string | null; payyuan: number | string; paythb: number | string; userid: string };
-type RawUserListRow   = { id: number | string; userid: string; username: string | null; userlastname: string | null; usertel: string | null; useremail: string | null; userregistered: string | null; usercompany: string | null };
+type RawUserListRow   = { ID: number | string; userID: string; userName: string | null; userLastName: string | null; userTel: string | null; userEmail: string | null; userRegistered: string | null; userCompany: string | null };
 
 // sales_payouts (rebuilt schema · the one tab without a legacy equivalent)
 type ProfileShape       = { member_code: string | null; first_name: string | null; last_name: string | null; company_name: string | null };

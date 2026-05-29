@@ -41,32 +41,47 @@ export default async function AdminYuanPaymentNewPage({
   const admin = createAdminClient();
 
   // Preselect customer from ?q=PR1234.
+  type UserRow = {
+    userID: string;
+    userName: string | null;
+    userLastName: string | null;
+    userTel: string | null;
+    userEmail: string | null;
+  };
+  const toCustomerLite = (u: UserRow): CustomerLite => ({
+    userid: u.userID,
+    username: u.userName,
+    userlastname: u.userLastName,
+    usertel: u.userTel,
+    useremail: u.userEmail,
+  });
+
   let preset: CustomerLite | null = null;
   const qRaw = (sp.q ?? "").trim();
   if (qRaw) {
     const candidate = qRaw.toUpperCase();
     const { data, error } = await admin
       .from("tb_users")
-      .select("userid, username, userlastname, usertel, useremail")
-      .eq("userid", candidate)
-      .maybeSingle<CustomerLite>();
+      .select("userID, userName, userLastName, userTel, userEmail")
+      .eq("userID", candidate)
+      .maybeSingle<UserRow>();
     if (error) {
       console.error(`[tb_users list] failed`, { code: error.code, message: error.message });
     }
-    preset = data ?? null;
+    preset = data ? toCustomerLite(data) : null;
   }
 
   // Recent customers (cap 20).
   const { data: recentRaw, error: recentRawErr } = await admin
     .from("tb_users")
-    .select("userid, username, userlastname, usertel, useremail")
-    .eq("userstatus", "1")
-    .order("userregistered", { ascending: false })
+    .select("userID, userName, userLastName, userTel, userEmail")
+    .eq("userStatus", "1")
+    .order("userRegistered", { ascending: false })
     .limit(20);
   if (recentRawErr) {
     console.error(`[tb_users list] failed`, { code: recentRawErr.code, message: recentRawErr.message });
   }
-  const recent = (recentRaw ?? []) as unknown as CustomerLite[];
+  const recent = ((recentRaw ?? []) as unknown as UserRow[]).map(toCustomerLite);
 
   // Default rate from tb_settings (single-row config). rsdefault = sell-rate default.
   const { data: settingsRaw, error: settingsRawErr } = await admin

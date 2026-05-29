@@ -71,16 +71,16 @@ function fmtDateOnly(iso: string | null): string {
 // ── Row shapes ──────────────────────────────────────────────────────
 
 type URow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
-  useremail: string | null;
-  userstatus: string | null;
-  userregistered: string | null;
-  userlastlogin: string | null;
-  adminidsale: string | null;
-  usercompany: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
+  userEmail: string | null;
+  userStatus: string | null;
+  userRegistered: string | null;
+  userLastLogin: string | null;
+  adminIDSale: string | null;
+  userCompany: string | null;
 };
 
 type FRow = { userid: string | null; fdate: string | null; ftotalprice: number | null };
@@ -136,23 +136,23 @@ export default async function UserSalesHistoryEntry({
   let usersQ = admin
     .from("tb_users")
     .select(
-      "userid, username, userlastname, usertel, useremail, userstatus, userregistered, userlastlogin, adminidsale, usercompany",
+      "userID, userName, userLastName, userTel, userEmail, userStatus, userRegistered, userLastLogin, adminIDSale, userCompany",
     )
-    .neq("userstatus", "0") // exclude deleted accounts (per tb_users.userstatus comment)
-    .order("userregistered", { ascending: false, nullsFirst: false })
+    .neq("userStatus", "0") // exclude deleted accounts (per tb_users.userStatus comment)
+    .order("userRegistered", { ascending: false, nullsFirst: false })
     .limit(limit);
 
   if (cohort) {
     usersQ = usersQ
-      .gte("userregistered", cohortStartISO(cohort))
-      .lt("userregistered", cohortEndExclusiveISO(cohort));
+      .gte("userRegistered", cohortStartISO(cohort))
+      .lt("userRegistered", cohortEndExclusiveISO(cohort));
   }
 
   if (search) {
-    // PostgREST .or() with ilike for userid / username / phone
+    // PostgREST .or() with ilike for userID / userName / userTel
     const safe = search.replace(/[%,]/g, "");
     usersQ = usersQ.or(
-      `userid.ilike.%${safe}%,username.ilike.%${safe}%,userlastname.ilike.%${safe}%,usertel.ilike.%${safe}%`,
+      `userID.ilike.%${safe}%,userName.ilike.%${safe}%,userLastName.ilike.%${safe}%,userTel.ilike.%${safe}%`,
     );
   }
 
@@ -165,7 +165,7 @@ export default async function UserSalesHistoryEntry({
   }
   const users = (usersData ?? []) as unknown as URow[];
 
-  const userids = users.map((u) => u.userid);
+  const userids = users.map((u) => u.userID);
 
   // ── 2) Aggregate revenue/dates per user (parallel fetches) ──────
   // For each of the three revenue tables, fetch the slim columns we need
@@ -211,15 +211,15 @@ export default async function UserSalesHistoryEntry({
   // Bucket per userid
   const aggMap = new Map<string, CustomerAggregate>();
   for (const u of users) {
-    aggMap.set(u.userid, {
-      userid: u.userid,
-      fullname: `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || "—",
-      phone: u.usertel ?? "",
-      email: u.useremail ?? "",
-      registered_at: u.userregistered,
-      last_login_at: u.userlastlogin,
-      adminidsale: u.adminidsale,
-      is_juristic: u.usercompany === "1",
+    aggMap.set(u.userID, {
+      userid: u.userID,
+      fullname: `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—",
+      phone: u.userTel ?? "",
+      email: u.userEmail ?? "",
+      registered_at: u.userRegistered,
+      last_login_at: u.userLastLogin,
+      adminidsale: u.adminIDSale,
+      is_juristic: u.userCompany === "1",
       first_order_at: null,
       last_order_at: null,
       forwarder_count: 0,

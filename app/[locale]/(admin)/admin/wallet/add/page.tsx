@@ -46,8 +46,8 @@ export default async function AdminWalletAddPage({
     const candidate = qRaw.toUpperCase();
     const { data, error } = await admin
       .from("tb_users")
-      .select("userid, username, userlastname, usertel, useremail")
-      .eq("userid", candidate)
+      .select("userID, userName, userLastName, userTel, userEmail")
+      .eq("userID", candidate)
       .maybeSingle<CustomerLite>();
     if (error) {
       console.error(`[tb_users list] failed`, { code: error.code, message: error.message });
@@ -59,8 +59,8 @@ export default async function AdminWalletAddPage({
   const { data: recentRaw, error: recentRawErr } = await admin
     .from("tb_users")
     .select("userid, username, userlastname, usertel, useremail")
-    .eq("userstatus", "1")
-    .order("userregistered", { ascending: false })
+    .eq("userStatus", "1")
+    .order("userRegistered", { ascending: false })
     .limit(20);
   if (recentRawErr) {
     console.error(`[tb_users list] failed`, { code: recentRawErr.code, message: recentRawErr.message });

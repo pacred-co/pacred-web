@@ -93,8 +93,8 @@ export async function updateProfileAction(
   // profile.php L24-27 — account still exists?
   const { data: exists, error: existsErr } = await admin
     .from("tb_users")
-    .select("id")
-    .eq("userid", memberCode)
+    .select("ID")
+    .eq("userID", memberCode)
     .maybeSingle();
   if (existsErr) {
     console.error(`[tb_users list] failed`, { code: existsErr.code, message: existsErr.message });
@@ -108,22 +108,22 @@ export async function updateProfileAction(
   // dedupe-check can exclude the customer's own row.
   const { data: currentRow, error: currentRowErr } = await admin
     .from("tb_users")
-    .select("usertel")
-    .eq("userid", memberCode)
-    .maybeSingle<{ usertel: string | null }>();
+    .select("userTel")
+    .eq("userID", memberCode)
+    .maybeSingle<{ userTel: string | null }>();
   if (currentRowErr) {
     console.error(`[tb_users list] failed`, { code: currentRowErr.code, message: currentRowErr.message });
   }
-  const currentTel = currentRow?.usertel ?? "";
+  const currentTel = currentRow?.userTel ?? "";
 
   // profile.php L29-32 — phone uniqueness: any OTHER user holding this
   // phone? (legacy: WHERE userTel='$userTel' AND userTel<>'$userTel2').
   if (userTel !== currentTel) {
     const { count } = await admin
       .from("tb_users")
-      .select("id", { count: "exact", head: true })
-      .eq("usertel", userTel)
-      .neq("userid", memberCode);
+      .select("ID", { count: "exact", head: true })
+      .eq("userTel", userTel)
+      .neq("userID", memberCode);
     if ((count ?? 0) > 0) {
       return { sweetalert: "dupTel" };
     }
@@ -133,16 +133,16 @@ export async function updateProfileAction(
   const { error: updateErr } = await admin
     .from("tb_users")
     .update({
-      username: userName,
-      userlastname: userLastName,
-      useremail: userEmail,
-      userlineid: userLineID,
-      userfacebook: userFacebook,
-      usertel: userTel,
-      usersex: userSex,
-      userbirthday: userBirthday,
+      userName: userName,
+      userLastName: userLastName,
+      userEmail: userEmail,
+      userLineID: userLineID,
+      userFacebook: userFacebook,
+      userTel: userTel,
+      userSex: userSex,
+      userBirthday: userBirthday,
     })
-    .eq("userid", memberCode);
+    .eq("userID", memberCode);
   if (updateErr) {
     // profile.php L51 — $sweetalert = 'errorUpdate'
     return { sweetalert: "errorUpdate" };
@@ -191,20 +191,20 @@ export async function checkEmailTaken(userEmail: string): Promise<string> {
   // `userEmail<>${_SESSION['userEmail']}`.
   const { data: ownRow, error: ownRowErr } = await admin
     .from("tb_users")
-    .select("useremail")
-    .eq("userid", memberCode)
-    .maybeSingle<{ useremail: string | null }>();
+    .select("userEmail")
+    .eq("userID", memberCode)
+    .maybeSingle<{ userEmail: string | null }>();
   if (ownRowErr) {
     console.error(`[tb_users list] failed`, { code: ownRowErr.code, message: ownRowErr.message });
   }
-  const ownEmail = (ownRow?.useremail ?? "").toLowerCase();
+  const ownEmail = (ownRow?.userEmail ?? "").toLowerCase();
 
   let query = admin
     .from("tb_users")
-    .select("id", { count: "exact", head: true })
-    .eq("useremail", email)
-    .neq("userstatus", "0");
-  if (ownEmail !== "") query = query.neq("useremail", ownEmail);
+    .select("ID", { count: "exact", head: true })
+    .eq("userEmail", email)
+    .neq("userStatus", "0");
+  if (ownEmail !== "") query = query.neq("userEmail", ownEmail);
 
   const { count } = await query;
   return (count ?? 0) > 0 ? "มีบัญชีผู้ใช้สำหรับอีเมลนี้แล้ว!" : "";
@@ -233,20 +233,20 @@ export async function checkTelTaken(userTel: string): Promise<string> {
 
   const { data: ownRow, error: ownRowErr } = await admin
     .from("tb_users")
-    .select("usertel")
-    .eq("userid", memberCode)
-    .maybeSingle<{ usertel: string | null }>();
+    .select("userTel")
+    .eq("userID", memberCode)
+    .maybeSingle<{ userTel: string | null }>();
   if (ownRowErr) {
     console.error(`[tb_users list] failed`, { code: ownRowErr.code, message: ownRowErr.message });
   }
-  const ownTel = ownRow?.usertel ?? "";
+  const ownTel = ownRow?.userTel ?? "";
 
   let query = admin
     .from("tb_users")
-    .select("id", { count: "exact", head: true })
-    .eq("usertel", tel)
-    .neq("userstatus", "0");
-  if (ownTel !== "") query = query.neq("usertel", ownTel);
+    .select("ID", { count: "exact", head: true })
+    .eq("userTel", tel)
+    .neq("userStatus", "0");
+  if (ownTel !== "") query = query.neq("userTel", ownTel);
 
   const { count } = await query;
   return (count ?? 0) > 0 ? "มีบัญชีผู้ใช้สำหรับเบอรฺโทรนี้แล้ว!" : "";

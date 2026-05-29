@@ -1,9 +1,5 @@
 import { type ReactNode } from "react";
-import { MessageCircle, Phone, ArrowRight, Quote } from "lucide-react";
-import { TrackedExternalLink } from "@/components/analytics/tracked-link";
-
-const LINE_URL = "/line";
-const HOTLINE = "066-131-0253";
+import { Quote } from "lucide-react";
 
 const EMOJI_HEAD = /^([\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{1F000}-\u{1F02F}✅⚠️📞📲🚢✈️📦🛠️🆘🛑🚫🌍🇨🇳🚀🛳️💡🎯👉⏱⏰🔎🛒🇹🇭🏁📍⭐📂](?:[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{FE0F}️])*)\s*(.*)$/u;
 const NUMBERED_RE = /^(\d+)\.\s+(.+)$/;
@@ -369,52 +365,6 @@ export function ArticleContent({ text, title }: { text: string; title?: string }
             {b.text}
           </p>
         </blockquote>
-      );
-    }
-    if (b.kind === "cta") {
-      return (
-        <aside
-          key={i}
-          className="my-8 md:my-10 relative overflow-hidden rounded-2xl md:rounded-3xl border border-primary-200 dark:border-primary-900/60 bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 text-white p-4 md:p-6 shadow-[0_18px_40px_rgba(179,0,0,0.30)]"
-        >
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 opacity-[0.08]"
-            style={{
-              backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)",
-              backgroundSize: "16px 16px",
-            }}
-          />
-          <div className="relative flex flex-col md:flex-row md:items-center gap-3 md:gap-5">
-            <div className="flex-1 min-w-0">
-              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/15 text-[10.5px] md:text-[11px] font-black tracking-[0.14em] uppercase backdrop-blur-sm mb-1.5">
-                Pacred Shipping
-              </div>
-              <p className="text-[14.5px] md:text-[17px] leading-[1.55] md:leading-[1.55] font-black text-white tracking-tight">
-                {b.text}
-              </p>
-            </div>
-            <div className="flex flex-col sm:flex-row md:flex-row gap-2 md:gap-2.5 shrink-0">
-              <TrackedExternalLink
-                href={LINE_URL}
-                cta="line_consult"
-                surface="article_content"
-                className="inline-flex items-center justify-center gap-1.5 h-10 md:h-11 px-4 rounded-xl bg-white text-primary-700 text-[12.5px] md:text-[13.5px] font-black hover:bg-yellow-50 transition-colors shadow-[0_8px_18px_rgba(255,255,255,0.15)]"
-              >
-                <MessageCircle className="w-4 h-4" strokeWidth={2.6} fill="currentColor" />
-                ทักไลน์
-                <ArrowRight className="w-3.5 h-3.5" strokeWidth={3} />
-              </TrackedExternalLink>
-              <a
-                href={`tel:${HOTLINE.replace(/-/g, "")}`}
-                className="inline-flex items-center justify-center gap-1.5 h-10 md:h-11 px-4 rounded-xl bg-white/10 text-white text-[12.5px] md:text-[13.5px] font-black border border-white/25 hover:bg-white/20 hover:border-white/45 transition-colors backdrop-blur-sm"
-              >
-                <Phone className="w-3.5 h-3.5" strokeWidth={2.6} />
-                {HOTLINE}
-              </a>
-            </div>
-          </div>
-        </aside>
       );
     }
     if (b.kind === "tags") {

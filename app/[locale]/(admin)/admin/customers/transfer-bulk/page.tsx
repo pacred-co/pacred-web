@@ -66,13 +66,17 @@ export default async function TransferBulkPage({
   // List of active sales admins (filter dropdown source + target source).
   // Same query as /admin/customers/transfer-rep — keeping the shape
   // identical so a future refactor can share the rep selector component.
-  const { data: repsRaw } = await admin
+  const { data: repsRaw, error: repsErr } = await admin
     .from("admins")
     .select(`profile_id, role,
              profile:profiles!profile_id ( member_code, first_name, last_name, phone ),
              contact:admin_contact_extras!profile_id ( display_name, direct_phone )`)
     .in("role", ["sales_admin", "super"])
     .eq("is_active", true);
+  if (repsErr) {
+    console.error(`[transfer-bulk admins read] failed`, { code: repsErr.code, message: repsErr.message });
+    throw new Error(`failed to load sales reps: ${repsErr.message}`);
+  }
 
   const reps: RepOption[] = ((repsRaw ?? []) as RepRow[]).map(repToOption);
   const repsById = new Map(reps.map((r) => [r.profile_id, r]));

@@ -162,7 +162,7 @@ export async function bulkAssignDriver(
     // Verify driver eligibility ONCE up-front. A single bad driverAdminId
     // should fail the WHOLE batch (mirror legacy modal — the driver picker
     // gates the form submit), not produce N near-identical per-row errors.
-    const { data: driver } = await admin
+    const { data: driver, error: driverErr } = await admin
       .from("admins")
       .select(`
         profile_id, role, is_active,
@@ -179,6 +179,12 @@ export async function bulkAssignDriver(
                | Array<{ first_name: string | null; last_name: string | null; member_code: string | null }>
                | null;
       }>();
+    if (driverErr) {
+      console.error(`[forwarders-bulk bulkAssignDriver] driver lookup failed`, {
+        code: driverErr.code, message: driverErr.message, driverAdminId: d.driverAdminId,
+      });
+      return { ok: false, error: `driver lookup failed: ${driverErr.message}` };
+    }
     if (!driver) {
       return { ok: false, error: "driverAdminId ไม่ใช่ driver ที่ active" };
     }
@@ -188,23 +194,37 @@ export async function bulkAssignDriver(
 
     for (const fNo of d.forwarderIds) {
       // 1. forwarder lookup
-      const { data: forwarder } = await admin
+      const { data: forwarder, error: forwarderErr } = await admin
         .from("forwarders")
         .select("id, f_no, profile_id, status")
         .eq("f_no", fNo)
         .maybeSingle<{ id: string; f_no: string; profile_id: string; status: string }>();
+      if (forwarderErr) {
+        console.error(`[forwarders-bulk bulkAssignDriver] forwarder lookup failed`, {
+          code: forwarderErr.code, message: forwarderErr.message, fNo,
+        });
+        failed.push({ fNo, error: `lookup failed: ${forwarderErr.message}` });
+        continue;
+      }
       if (!forwarder) {
         failed.push({ fNo, error: "ไม่พบรายการ" });
         continue;
       }
 
       // 2. open-assignment guard (status 1 = assigned-waiting, 2 = accepted)
-      const { data: existing } = await admin
+      const { data: existing, error: existingErr } = await admin
         .from("forwarder_driver")
         .select("id, status")
         .eq("forwarder_id", forwarder.id)
         .in("status", [1, 2])
         .maybeSingle<{ id: string; status: number }>();
+      if (existingErr) {
+        console.error(`[forwarders-bulk bulkAssignDriver] open-assignment lookup failed`, {
+          code: existingErr.code, message: existingErr.message, fNo, forwarderId: forwarder.id,
+        });
+        failed.push({ fNo, error: `assignment-check failed: ${existingErr.message}` });
+        continue;
+      }
       if (existing) {
         failed.push({
           fNo,
@@ -299,11 +319,18 @@ export async function bulkCancel(
     const failed:    { fNo: string; error: string }[] = [];
 
     for (const fNo of d.forwarderIds) {
-      const { data: existing } = await admin
+      const { data: existing, error: existingErr } = await admin
         .from("forwarders")
         .select("id, f_no, profile_id, status, note_admin")
         .eq("f_no", fNo)
         .maybeSingle<{ id: string; f_no: string; profile_id: string; status: string; note_admin: string | null }>();
+      if (existingErr) {
+        console.error(`[forwarders-bulk bulkCancel] forwarder lookup failed`, {
+          code: existingErr.code, message: existingErr.message, fNo,
+        });
+        failed.push({ fNo, error: `lookup failed: ${existingErr.message}` });
+        continue;
+      }
       if (!existing) {
         failed.push({ fNo, error: "ไม่พบรายการ" });
         continue;

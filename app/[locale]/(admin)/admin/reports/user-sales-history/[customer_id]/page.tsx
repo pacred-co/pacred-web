@@ -40,16 +40,16 @@ export const dynamic = "force-dynamic";
 const MAX_EVENTS = 100;
 
 type URow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
-  useremail: string | null;
-  userstatus: string | null;
-  userregistered: string | null;
-  userlastlogin: string | null;
-  adminidsale: string | null;
-  usercompany: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
+  userEmail: string | null;
+  userStatus: string | null;
+  userRegistered: string | null;
+  userLastLogin: string | null;
+  adminIDSale: string | null;
+  userCompany: string | null;
 };
 
 type FRow = {
@@ -181,9 +181,9 @@ export default async function UserSalesHistoryDrillIn({
   const { data: userRaw, error: userRawErr } = await admin
     .from("tb_users")
     .select(
-      "userid, username, userlastname, usertel, useremail, userstatus, userregistered, userlastlogin, adminidsale, usercompany",
+      "userID, userName, userLastName, userTel, userEmail, userStatus, userRegistered, userLastLogin, adminIDSale, userCompany",
     )
-    .eq("userid", id)
+    .eq("userID", id)
     .maybeSingle();
 
   if (userRawErr) {
@@ -207,31 +207,31 @@ export default async function UserSalesHistoryDrillIn({
     admin
       .from("tb_forwarder")
       .select("id, fdate, fstatus, fidorco, fdetail, ftotalprice, ftrackingth")
-      .eq("userid", u.userid)
+      .eq("userid", u.userID)
       .order("fdate", { ascending: false, nullsFirst: false })
       .limit(MAX_EVENTS),
     admin
       .from("tb_header_order")
       .select("id, hdate, hstatus, hno, htitle, htotalpriceuser, hcount")
-      .eq("userid", u.userid)
+      .eq("userid", u.userID)
       .order("hdate", { ascending: false, nullsFirst: false })
       .limit(MAX_EVENTS),
     admin
       .from("tb_payment")
       .select("id, paydate, paystatus, payyuan, paythb, paydetail")
-      .eq("userid", u.userid)
+      .eq("userid", u.userID)
       .order("paydate", { ascending: false, nullsFirst: false })
       .limit(MAX_EVENTS),
     admin
       .from("tb_wallet_hs")
       .select("id, date, status, typenew, amount, note, reforder")
-      .eq("userid", u.userid)
+      .eq("userid", u.userID)
       .order("date", { ascending: false, nullsFirst: false })
       .limit(MAX_EVENTS),
     admin
       .from("tb_wallet")
       .select("wallettotal")
-      .eq("userid", u.userid)
+      .eq("userid", u.userID)
       .maybeSingle(),
   ]);
 
@@ -282,7 +282,7 @@ export default async function UserSalesHistoryDrillIn({
       detail: `${r.paydetail ?? "—"} · ¥${thb(Number(r.payyuan ?? 0))}`,
       amount_thb: r.paythb !== null ? Number(r.paythb) : null,
       status: P_STATUS_LABEL[r.paystatus ?? ""] ?? r.paystatus ?? "—",
-      href: `/admin/yuan-payments?q=${encodeURIComponent(u.userid)}`,
+      href: `/admin/yuan-payments?q=${encodeURIComponent(u.userID)}`,
     });
   }
   for (const r of wls) {
@@ -294,7 +294,7 @@ export default async function UserSalesHistoryDrillIn({
       detail: r.note ?? r.reforder ?? "—",
       amount_thb: r.amount !== null ? Number(r.amount) : null,
       status: W_STATUS_LABEL[r.status ?? ""] ?? r.status ?? "—",
-      href: `/admin/wallet?userid=${encodeURIComponent(u.userid)}`,
+      href: `/admin/wallet?userid=${encodeURIComponent(u.userID)}`,
     });
   }
 
@@ -302,8 +302,8 @@ export default async function UserSalesHistoryDrillIn({
   events.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   const timeline = events.slice(0, MAX_EVENTS);
 
-  const fullname = `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || "—";
-  const isJuristic = u.usercompany === "1";
+  const fullname = `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—";
+  const isJuristic = u.userCompany === "1";
 
   // Lifetime totals (same status gates as the list page · sales-by-rep view)
   const lifetimeForwarderRevenue = fws
@@ -326,7 +326,7 @@ export default async function UserSalesHistoryDrillIn({
             ADMIN · รายงาน · ประวัติการขายต่อลูกค้า
           </p>
           <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold">
-            <span className="font-mono">{u.userid}</span>
+            <span className="font-mono">{u.userID}</span>
             {isJuristic && (
               <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
                 นิติบุคคล
@@ -346,7 +346,7 @@ export default async function UserSalesHistoryDrillIn({
             ← กลับรายชื่อลูกค้า
           </Link>
           <Link
-            href={`/admin/customers/${encodeURIComponent(u.userid)}`}
+            href={`/admin/customers/${encodeURIComponent(u.userID)}`}
             className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt"
           >
             ดูโปรไฟล์ลูกค้า →
@@ -361,23 +361,23 @@ export default async function UserSalesHistoryDrillIn({
             <p className="font-semibold text-base">{fullname}</p>
             <p className="text-xs text-muted">
               โทร:{" "}
-              <span className="font-mono text-foreground">{u.usertel ?? "—"}</span>
+              <span className="font-mono text-foreground">{u.userTel ?? "—"}</span>
               {" · "}อีเมล:{" "}
-              <span className="font-mono text-foreground">{u.useremail ?? "—"}</span>
+              <span className="font-mono text-foreground">{u.userEmail ?? "—"}</span>
             </p>
             <p className="text-xs text-muted">
-              สมัคร: <span className="text-foreground">{fmtDateTime(u.userregistered)}</span>
+              สมัคร: <span className="text-foreground">{fmtDateTime(u.userRegistered)}</span>
               {" · "}ล่าสุดล็อกอิน:{" "}
-              <span className="text-foreground">{fmtDateTime(u.userlastlogin)}</span>
+              <span className="text-foreground">{fmtDateTime(u.userLastLogin)}</span>
             </p>
-            {u.adminidsale && (
+            {u.adminIDSale && (
               <p className="text-xs text-muted">
                 เซลล์ผู้ดูแล:{" "}
                 <Link
-                  href={`/admin/admins/${encodeURIComponent(u.adminidsale)}`}
+                  href={`/admin/admins/${encodeURIComponent(u.adminIDSale)}`}
                   className="text-primary-600 hover:underline"
                 >
-                  {u.adminidsale}
+                  {u.adminIDSale}
                 </Link>
               </p>
             )}

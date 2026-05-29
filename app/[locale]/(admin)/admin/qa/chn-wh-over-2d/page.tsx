@@ -38,10 +38,10 @@ type FwdRow = {
 };
 
 type URow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
 };
 
 const WAREHOUSE_LABEL: Record<string, string> = {
@@ -92,12 +92,12 @@ export default async function ChnWhOver2dPage() {
   if (userIds.length > 0) {
     const { data: usersRaw, error: usersRawErr } = await admin
       .from("tb_users")
-      .select("userid,username,userlastname,usertel")
-      .in("userid", userIds);
+      .select("userID,userName,userLastName,userTel")
+      .in("userID", userIds);
     if (usersRawErr) {
       console.error(`[tb_users list] failed`, { code: usersRawErr.code, message: usersRawErr.message });
     }
-    userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userid, u]));
+    userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
   }
 
   const now = nowMs();
@@ -159,7 +159,7 @@ export default async function ChnWhOver2dPage() {
                 {rows.map((r) => {
                   const u = r.userid ? userMap.get(r.userid) : undefined;
                   const customerName = u
-                    ? `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || r.userid
+                    ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || r.userid
                     : r.userid ?? "—";
                   const daysWaiting = r.fdate
                     ? Math.floor((now - new Date(r.fdate).getTime()) / (24 * 60 * 60 * 1000))
@@ -182,7 +182,7 @@ export default async function ChnWhOver2dPage() {
                       <td className="px-2 py-2">
                         <div className="font-mono text-[11px]">{r.userid ?? "—"}</div>
                         <div>{customerName}</div>
-                        {u?.usertel ? <div className="text-muted text-[10px]">{u.usertel}</div> : null}
+                        {u?.userTel ? <div className="text-muted text-[10px]">{u.userTel}</div> : null}
                       </td>
                       <td className="px-2 py-2">{WAREHOUSE_LABEL[r.fwarehousechina ?? ""] ?? r.fwarehousechina ?? "—"}</td>
                       <td className="px-2 py-2">{TRANSPORT_LABEL[r.ftransporttype ?? ""] ?? "—"}</td>

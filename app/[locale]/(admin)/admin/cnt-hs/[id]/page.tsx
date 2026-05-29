@@ -39,6 +39,7 @@ import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { CntActionButtons } from "./action-buttons";
 import { CntSlipUploadForm } from "./slip-upload-form";
+import { fstatusBadge } from "@/lib/admin/forwarder-status";
 
 export const dynamic = "force-dynamic";
 
@@ -47,10 +48,13 @@ const STATUS_LABEL: Record<string, string> = {
   "2": "จ่ายแล้ว",
   "3": "ปฏิเสธ",
 };
+// Wave 24 ROW-COLOR-RESTORE — was `-100` washed tints; staff couldn't read
+// the chip at-a-glance. Solid Tailwind weights match canonical CNTSTATUS_CFG
+// + `forwarder-status.ts` rule: chip-color is LOGIC not chrome.
 const STATUS_CLS: Record<string, string> = {
-  "1": "bg-yellow-100 text-yellow-700 border-yellow-200",
-  "2": "bg-green-100 text-green-700 border-green-200",
-  "3": "bg-red-100 text-red-700 border-red-200",
+  "1": "bg-amber-500 text-amber-50 border-amber-700",
+  "2": "bg-emerald-500 text-emerald-50 border-emerald-700",
+  "3": "bg-red-500 text-red-50 border-red-700",
 };
 
 type CntRow = {
@@ -85,9 +89,9 @@ type FwRow = {
   userid: string | null;
 };
 type URow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
 };
 
 /**
@@ -199,12 +203,12 @@ export default async function CntHsDetailPage({
   if (userIds.length > 0) {
     const { data: usersRaw, error: usersRawErr } = await admin
       .from("tb_users")
-      .select("userid,username,userlastname")
-      .in("userid", userIds);
+      .select("userID,userName,userLastName")
+      .in("userID", userIds);
     if (usersRawErr) {
       console.error(`[tb_users list] failed`, { code: usersRawErr.code, message: usersRawErr.message });
     }
-    userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userid, u]));
+    userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
   }
 
   // Group forwarders by cabinet for the table layout
@@ -442,8 +446,10 @@ export default async function CntHsDetailPage({
               <tbody>
                 {forwarders.slice(0, 50).map((f) => {
                   const u = f.userid ? userMap.get(f.userid) : undefined;
+                  // Wave 24 ROW-COLOR-RESTORE — row tint + chip per fstatus.
+                  const badge = fstatusBadge(f.fstatus ?? "");
                   return (
-                    <tr key={f.id} className="border-t border-border">
+                    <tr key={f.id} className={`border-t border-border ${badge.rowBg}`}>
                       <td className="px-3 py-2">
                         {f.fdate ? String(f.fdate).slice(0, 10) : "—"}
                       </td>
@@ -453,22 +459,32 @@ export default async function CntHsDetailPage({
                         {f.userid ? (
                           <Link
                             href={`/admin/customers/${encodeURIComponent(f.userid)}`}
-                            className="text-primary-600 hover:underline"
+                            className="text-primary-700 hover:underline"
                           >
-                            {`${u?.username ?? ""} ${u?.userlastname ?? ""}`.trim() || f.userid}
+                            {`${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || f.userid}
                           </Link>
                         ) : (
                           "—"
                         )}
                       </td>
-                      <td className="px-3 py-2">{f.fstatus ?? "—"}</td>
+                      <td className="px-3 py-2">
+                        {f.fstatus ? (
+                          <span
+                            className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge.chip}`}
+                          >
+                            {badge.label}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-right font-mono">
                         ฿{Number(f.ftotalprice ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </td>
                       <td className="px-3 py-2">
                         <Link
                           href={`/admin/forwarders/${encodeURIComponent(f.fidorco ?? String(f.id))}`}
-                          className="text-primary-600 hover:underline"
+                          className="text-primary-700 hover:underline"
                         >
                           ดู
                         </Link>

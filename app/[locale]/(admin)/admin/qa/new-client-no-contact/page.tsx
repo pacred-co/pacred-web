@@ -21,16 +21,16 @@ import { nowMs, cutoffIsoDaysAgo } from "@/lib/datetime-helpers";
 export const dynamic = "force-dynamic";
 
 type URow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
-  useremail: string | null;
-  userregistered: string | null;
-  userlastlogin: string | null;
-  useractive: string | null;
-  adminidsale: string | null;
-  usercompany: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
+  userEmail: string | null;
+  userRegistered: string | null;
+  userLastLogin: string | null;
+  userActive: string | null;
+  adminIDSale: string | null;
+  userCompany: string | null;
 };
 
 export default async function NewClientNoContactPage() {
@@ -50,16 +50,21 @@ export default async function NewClientNoContactPage() {
   const registerCutoff = cutoffIsoDaysAgo(30);
   const loginCutoff = cutoffIsoDaysAgo(2);
 
+  // 2026-05-28 B-4 P0 fix: tb_users cols are camelCase quoted post-batch-1
+  // (migration 0113). Lowercase selects/filters return PGRST 42703 +
+  // silently rendered "no results" → SLA queue invisible to sales. The
+  // .or() syntax needs quoted identifiers ("userLastLogin") because the
+  // raw filter string is fed straight to PostgREST as the column name.
   const { data: rowsRaw, error } = await admin
     .from("tb_users")
     .select(
-      "userid,username,userlastname,usertel,useremail,userregistered," +
-        "userlastlogin,useractive,adminidsale,usercompany",
+      "userID,userName,userLastName,userTel,userEmail,userRegistered," +
+        "userLastLogin,userActive,adminIDSale,userCompany",
     )
-    .eq("useractive", "1")
-    .gt("userregistered", registerCutoff)
-    .or(`userlastlogin.is.null,userlastlogin.lt.${loginCutoff}`)
-    .order("userregistered", { ascending: true })
+    .eq("userActive", "1")
+    .gt("userRegistered", registerCutoff)
+    .or(`userLastLogin.is.null,userLastLogin.lt.${loginCutoff}`)
+    .order("userRegistered", { ascending: true })
     .limit(500);
 
   // Exact total count — push the same .or() filter into PostgREST so the
@@ -67,10 +72,10 @@ export default async function NewClientNoContactPage() {
   // (ภูม flagged in driver/work · same pattern across QA queues).
   const { count: breachCount } = await admin
     .from("tb_users")
-    .select("userid", { count: "exact", head: true })
-    .eq("useractive", "1")
-    .gt("userregistered", registerCutoff)
-    .or(`userlastlogin.is.null,userlastlogin.lt.${loginCutoff}`);
+    .select("userID", { count: "exact", head: true })
+    .eq("userActive", "1")
+    .gt("userRegistered", registerCutoff)
+    .or(`userLastLogin.is.null,userLastLogin.lt.${loginCutoff}`);
 
   // Same .or() pushed into the data query (above) makes the in-memory
   // filter redundant; keep the slice(0, 200) cap for the display window.
@@ -131,22 +136,22 @@ export default async function NewClientNoContactPage() {
               <tbody>
                 {rows.map((u) => {
                   const fullName =
-                    `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || "—";
-                  const daysSinceReg = u.userregistered
-                    ? Math.floor((now - new Date(u.userregistered).getTime()) / (24 * 60 * 60 * 1000))
+                    `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—";
+                  const daysSinceReg = u.userRegistered
+                    ? Math.floor((now - new Date(u.userRegistered).getTime()) / (24 * 60 * 60 * 1000))
                     : 0;
                   const severity =
                     daysSinceReg >= 14 ? "bg-red-100 text-red-700 border-red-200"
                     : daysSinceReg >= 7 ? "bg-orange-100 text-orange-700 border-orange-200"
                     : "bg-yellow-100 text-yellow-700 border-yellow-200";
-                  const lastLoginLabel = u.userlastlogin
-                    ? new Date(u.userlastlogin).toLocaleDateString("th-TH")
+                  const lastLoginLabel = u.userLastLogin
+                    ? new Date(u.userLastLogin).toLocaleDateString("th-TH")
                     : "ไม่เคย login";
                   return (
-                    <tr key={u.userid} className="border-t border-border hover:bg-surface-alt/30">
-                      <td className="px-2 py-2 font-mono">{u.userid}</td>
+                    <tr key={u.userID} className="border-t border-border hover:bg-surface-alt/30">
+                      <td className="px-2 py-2 font-mono">{u.userID}</td>
                       <td className="px-2 py-2 whitespace-nowrap">
-                        {u.userregistered ? String(u.userregistered).slice(0, 10) : "—"}
+                        {u.userRegistered ? String(u.userRegistered).slice(0, 10) : "—"}
                       </td>
                       <td className="px-2 py-2">
                         <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${severity}`}>
@@ -154,12 +159,12 @@ export default async function NewClientNoContactPage() {
                         </span>
                       </td>
                       <td className="px-2 py-2">{fullName}</td>
-                      <td className="px-2 py-2 font-mono">{u.usertel || "—"}</td>
-                      <td className="px-2 py-2 max-w-[180px] truncate" title={u.useremail ?? ""}>
-                        {u.useremail || "—"}
+                      <td className="px-2 py-2 font-mono">{u.userTel || "—"}</td>
+                      <td className="px-2 py-2 max-w-[180px] truncate" title={u.userEmail ?? ""}>
+                        {u.userEmail || "—"}
                       </td>
                       <td className="px-2 py-2">
-                        {u.usercompany === "1" ? (
+                        {u.userCompany === "1" ? (
                           <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] text-blue-700">
                             นิติบุคคล
                           </span>
@@ -168,16 +173,16 @@ export default async function NewClientNoContactPage() {
                         )}
                       </td>
                       <td className="px-2 py-2 whitespace-nowrap">
-                        {u.userlastlogin ? (
+                        {u.userLastLogin ? (
                           <span>{lastLoginLabel}</span>
                         ) : (
                           <span className="text-red-600 font-medium">{lastLoginLabel}</span>
                         )}
                       </td>
-                      <td className="px-2 py-2 font-mono">{u.adminidsale || "—"}</td>
+                      <td className="px-2 py-2 font-mono">{u.adminIDSale || "—"}</td>
                       <td className="px-2 py-2">
                         <Link
-                          href={`/admin/customers?q=${u.userid}`}
+                          href={`/admin/customers?q=${u.userID}`}
                           className="text-primary-600 hover:underline text-[11px]"
                         >
                           ดู

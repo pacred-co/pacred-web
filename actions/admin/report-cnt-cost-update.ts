@@ -71,7 +71,10 @@ const updateRow = z.object({
   newCostSheet:  z.number().min(0).max(99999999.99),
 });
 
-export const bulkUpdateCostSheetSchema = z.object({
+// INTERNAL — Next 16 `"use server"` files may only export async functions,
+// so a Zod-object export crashes the route at request time. Type-only
+// exports (BulkUpdateCostSheetInput below) are runtime-erased and safe.
+const bulkUpdateCostSheetSchema = z.object({
   updates: z.array(updateRow).min(1, { message: "ไม่มีรายการให้บันทึก" }).max(5000),
 });
 
