@@ -128,11 +128,19 @@ export async function insertLegacyTbUserRow(
   // We pre-check and no-op: the customer already HAS a tb_users identity
   // under the other code, so the admin queue + approve flow can still act on
   // them via that row. Logged at info (expected), not error.
-  const { data: phoneOwner } = await admin
+  const { data: phoneOwner, error: phoneOwnerErr } = await admin
     .from("tb_users")
     .select("userID")
     .eq("userTel", legacyTel)
     .maybeSingle();
+  if (phoneOwnerErr) {
+    // Not fatal — same as the userID pre-check above: the insert below will
+    // re-surface a real problem. Log + continue.
+    logger.warn(SCOPE, "tb_users phone-collision pre-check failed — continuing to insert", {
+      memberCode,
+      reason: phoneOwnerErr.message,
+    });
+  }
   if (phoneOwner) {
     logger.info(
       SCOPE,
