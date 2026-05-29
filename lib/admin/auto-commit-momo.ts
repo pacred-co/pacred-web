@@ -31,30 +31,31 @@
  * @see actions/admin/momo-commit.ts — the canonical commit action
  * @see docs/research/legacy-accounting-reality-2026-05-30.md §4
  *
- * ⚠️ KNOWN LIMITATION (Wave 30 #2 ship — to be fixed in Wave 30.5):
+ * ✅ RESOLVED in Wave 30.5 (was a KNOWN LIMITATION in Wave 30 #2):
  *
- *   `commitMomoRowToForwarder` is wrapped with `withAdmin(["super",
- *   "ops", "warehouse"])` which requires an admin session cookie. When
- *   called from cron context (NO session, just service-role), withAdmin
- *   throws `requireAdmin: no admin role`. We catch the throw and mark
- *   the row as "failed" — net effect: cron pulls MOMO data but DOES NOT
- *   commit rows automatically. Admin still clicks /review to commit.
+ *   Previously this helper called `commitMomoRowToForwarder`, which is
+ *   wrapped with `withAdmin(["super","ops","warehouse"])` → requires an
+ *   admin session cookie. In cron context (NO session, just service-role)
+ *   withAdmin threw `requireAdmin: no admin role`, so every eligible row
+ *   was marked "failed" — cron pulled MOMO data but committed NOTHING.
  *
- *   Fix path (Wave 30.5): extract the commit body from momo-commit.ts
- *   into `lib/admin/commit-momo-row-core.ts` taking `(admin, adminId,
- *   parsedInput)` as params; admin-gated `commitMomoRowToForwarder`
- *   wraps it with withAdmin, and a NEW `commitMomoRowSystem` calls it
- *   with adminId='momo-cron' for the cron path.
+ *   The fix: the commit body was extracted into the auth-agnostic core
+ *   `lib/admin/commit-momo-row-core.ts` as `commitMomoRowCore(ctx, input)`.
+ *   The admin button resolves its ctx from the session inside withAdmin;
+ *   this cron helper calls `commitMomoRowSystem` (a system ctx — no
+ *   session, adminid="momo-cron", committed_by=null) which runs the SAME
+ *   write path. So cron can now auto-commit eligible rows.
  *
- *   Why not done in this commit: extracting 380 LOC of commit logic
- *   needs careful 3-way coordination with the existing review-grid
- *   path; we ship the pull-only cron NOW (immediate value: ภูม sees
- *   fresh MOMO data every 10 min · no more clicking /sync manually)
- *   and follow up the auto-commit in a focused next-session pass.
+ *   ⚠️ SAFETY GATE: the cron route (app/api/cron/momo-sync/route.ts) only
+ *   invokes this helper when `process.env.MOMO_CRON_AUTOCOMMIT === "true"`.
+ *   Default OFF = pull-only (fresh MOMO data every N min, admin still
+ *   clicks /review to commit). Flip the env to ON once ภูม has eyeballed a
+ *   sample of auto-committed rows. Money-path conservatism: a wrong commit
+ *   bills the wrong customer, so we opt INTO automation, not out of it.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { commitMomoRowToForwarder } from "@/actions/admin/momo-commit";
+import { commitMomoRowSystem } from "@/lib/admin/commit-momo-row-core";
 
 export type AutoCommitMomoResult = {
   /** Total uncommitted rows scanned. */
@@ -188,16 +189,17 @@ export async function autoCommitEligibleMomoRows(
       continue;
     }
 
-    // Eligible — attempt commit. We CALL the canonical action so the
-    // exact same write path runs whether admin clicks manually or cron
-    // fires automatically. If commitMomoRowToForwarder requires admin
-    // auth (it does — withAdmin gate), the cron context will fail
-    // because there is no admin session. We handle that fallthrough
-    // below: if the action throws auth error, we mark as skipped, NOT
-    // failed — the row stays at /review and admin commits manually.
+    // Eligible — attempt commit. We call `commitMomoRowSystem` (the
+    // auth-agnostic core's cron entry point — Wave 30.5), so the EXACT
+    // same write path runs whether an admin clicks "สร้างใหม่" manually
+    // or cron fires automatically. It does NOT read a session, so unlike
+    // the old `commitMomoRowToForwarder` (withAdmin gate, which failed
+    // 7/7 here in Wave 30 #2) it works in the session-less cron context.
+    // Created rows are stamped adminid="momo-cron" + committed_by=null so
+    // they're identifiable as system-committed in tb_forwarder.
     result.attempted++;
     try {
-      const res = await commitMomoRowToForwarder({
+      const res = await commitMomoRowSystem({
         rowId: c.rowId,
         userID: c.guessedUserId,
         fShipBy: "PCS",

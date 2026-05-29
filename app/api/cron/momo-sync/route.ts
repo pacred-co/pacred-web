@@ -65,17 +65,26 @@ export async function GET(request: Request) {
         sync.errors.length > 0 && sync.upsertedCount === 0;
 
       // ── 2. Auto-commit eligible rows → tb_forwarder ──
-      // Best-effort: any failure here doesn't fail the cron (rows that
-      // didn't commit stay at /review for admin to handle).
+      // Wave 30.5: GATED behind MOMO_CRON_AUTOCOMMIT (default OFF). The
+      // auto-commit path now works (commitMomoRowSystem — no withAdmin
+      // gate), but committing money-path rows automatically can bill the
+      // wrong customer if MOMO's user_group/user_code is mistagged. So we
+      // ship pull-only by default; ภูม flips the env to "true" after
+      // eyeballing a sample of would-be auto-commits at /review.
+      // Best-effort either way: a failure here never fails the cron — rows
+      // that don't commit stay at /review for admin to handle.
+      const autoCommitEnabled = process.env.MOMO_CRON_AUTOCOMMIT === "true";
       let commit: Awaited<ReturnType<typeof autoCommitEligibleMomoRows>> = {
         scanned: 0, attempted: 0, succeeded: 0, failed: 0, skipped: 0, perRow: [],
       };
-      try {
-        commit = await autoCommitEligibleMomoRows(admin, 100);
-      } catch (err) {
-        logger.error("momo-cron", "auto-commit threw", err, {
-          syncLogId: sync.syncLogId,
-        });
+      if (autoCommitEnabled) {
+        try {
+          commit = await autoCommitEligibleMomoRows(admin, 100);
+        } catch (err) {
+          logger.error("momo-cron", "auto-commit threw", err, {
+            syncLogId: sync.syncLogId,
+          });
+        }
       }
 
       const cronStatus =
@@ -92,6 +101,7 @@ export async function GET(request: Request) {
           containers_closed:    sync.containerClosedCount,
           upserted:             sync.upsertedCount,
           sync_errors:          sync.errors.length,
+          auto_commit_enabled:  autoCommitEnabled,
           auto_commit_scanned:  commit.scanned,
           auto_commit_eligible: commit.attempted,
           auto_commit_succeeded: commit.succeeded,
@@ -113,6 +123,7 @@ export async function GET(request: Request) {
             syncLogId:           sync.syncLogId,
           },
           autoCommit: {
+            enabled:   autoCommitEnabled,
             scanned:   commit.scanned,
             attempted: commit.attempted,
             succeeded: commit.succeeded,
