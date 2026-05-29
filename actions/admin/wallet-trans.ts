@@ -7,18 +7,26 @@
  * Three actions:
  *   1. adminUpdateWalletHsDateSlip — admin types the correct "วันที่โอน
  *      ในสลิป" before approving (legacy form `updateDate`). This unlocks the
- *      similar-transaction detector + the auto-receipt date.
- *   2. adminApproveWalletHs        — approve the topup (status 1 → 2) + credit
- *      tb_wallet.wallettotal. Mirrors `adminBulkApproveWalletHs` semantics
- *      (already in tb-bulk.ts L41-154) but for a single row triggered from
- *      the detail page.
- *   3. adminRejectWalletHs         — reject the topup (status 1 → 3) without
- *      any wallet adjustment.
+ *      similar-transaction detector + the auto-receipt date. STILL THE
+ *      CANONICAL writer — does not need the paydeposit cascade.
+ *   2. adminApproveWalletHs        — DEPRECATED 2026-05-30 (ADR-0018 D-3 #2 +
+ *      P0-9/MS-1). Superseded by `adminApproveWalletDeposit` in `wallet-hs.ts`
+ *      which adds the `tb_wallet_paydeposit` cascade (legacy `wallet.php`
+ *      L444-568) that this single-row approve was MISSING. The detail-page
+ *      edit-form.tsx now imports from `wallet-hs.ts`. This export remains as
+ *      a no-changes-to-callsite tombstone (in case the bulk path in
+ *      `tb-bulk.ts` is reached via a different route — it still uses the
+ *      naked-credit pattern this implements). Retire when the last caller
+ *      migrates.
+ *   3. adminRejectWalletHs         — DEPRECATED 2026-05-30 (same as #2 ·
+ *      superseded by `adminRejectWalletDeposit` in `wallet-hs.ts` which
+ *      adds the cascade revert + type='7' refund per legacy L598-619).
  *
  * Why a NEW file (separate from wallet-hs.ts):
- *   wallet-hs.ts owns the manual-CREATE action; this file owns single-row
- *   UPDATE actions on existing rows. Keeping them apart so the next agent
- *   that retires either flow can delete one file cleanly.
+ *   wallet-hs.ts owns the manual-CREATE + the new D-2-rule-3 approve/reject.
+ *   This file owns the dateslip edit + the deprecated naked-credit approve/
+ *   reject. Keeping them apart so the next agent that retires the deprecated
+ *   pair can delete those two functions cleanly without touching dateslip.
  *
  * Schema reference: supabase/migrations/0081_pcs_legacy_schema.sql L6159
  *   (tb_wallet_hs) + L6135 (tb_wallet · per-customer balance row).

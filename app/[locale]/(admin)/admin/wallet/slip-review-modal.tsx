@@ -3,21 +3,25 @@
 /**
  * Phase C QoL #3 — slip-vs-amount overlay modal.
  *
- * Today admin approving a deposit eyeballs the slip image against the
- * customer-typed amount in a tiny cramped <img> tile. This modal opens
- * a side-by-side overlay:
- *   left  = full-size slip (image or PDF, signed URL via
- *           adminGetWalletTxSlipSignedUrl, lazily fetched on open)
- *   right = panel with the customer-typed amount + bank + slip_date +
- *           account number + reference + member info, plus two big
- *           buttons:
- *             ✓ ตรงกัน — Approve  (status='completed')
- *             ✗ ไม่ตรง — Reject   (status='cancelled' + reason required)
+ * ⚠️ TOMBSTONE 2026-05-30 (ADR-0018 D-3 #2 · P0-9/MS-1) — ORPHAN component.
+ * This file has ZERO inbound callers — verified by grep across `app/`,
+ * `components/`, `actions/`, `lib/` 2026-05-30. The live admin wallet
+ * slip-review surface is `[id]/page.tsx` (per-row "ดู / แก้ไข" link →
+ * detail page → ApproveRejectForm from edit-form.tsx), not this modal.
  *
- * Approve / reject reuse the existing adminUpdateWalletTransaction
- * action — no schema change. Cancelled is the wallet-tx status used for
- * "rejected" deposits in the existing UX (not 'failed', which is for
- * post-approval bank failures).
+ * Imports have been swapped from `actions/admin/wallet.ts` (rebuilt,
+ * dead-write) → `actions/admin/wallet-hs.ts` tombstone shims. Runtime
+ * calls will fail loudly with the tombstone error. The component is kept
+ * on disk for one sprint per ADR-0018 D-3 #2 retire window; delete it
+ * (along with `actions-cell.tsx` + `bulk-approve-bar.tsx` +
+ * `components/admin/slip-transferred-at-cell.tsx`) when the rebuilt
+ * `wallet_transactions` table is dropped.
+ *
+ * Previously documented:
+ *   Today admin approving a deposit eyeballs the slip image against the
+ *   customer-typed amount in a tiny cramped <img> tile. This modal opens
+ *   a side-by-side overlay: left = full-size slip · right = customer
+ *   info + amount + approve/reject buttons.
  */
 
 import { useEffect, useState, useTransition } from "react";
@@ -25,7 +29,7 @@ import { useRouter } from "next/navigation";
 import {
   adminUpdateWalletTransaction,
   adminGetWalletTxSlipSignedUrl,
-} from "@/actions/admin/wallet";
+} from "@/actions/admin/wallet-hs";
 
 type Props = {
   open:    boolean;

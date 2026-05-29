@@ -1,9 +1,21 @@
 "use client";
 
+/**
+ * ⚠️ TOMBSTONE 2026-05-30 (ADR-0018 D-3 #2 · P0-9/MS-1) — ORPHAN component.
+ * Zero inbound callers (verified by grep 2026-05-30). The live bulk-approve
+ * sticky bar is `TbWalletBulkBar` in `tb-bulk-bar.tsx` (calls the cascade-
+ * unaware `actions/admin/tb-bulk.ts:adminBulkApproveWalletHs` — task
+ * explicitly out-of-scope for paydeposit cascade patching this PR).
+ *
+ * Imports swapped from `actions/admin/wallet.ts` → `actions/admin/wallet-hs.ts`
+ * tombstone shim. Runtime calls fail loudly with the tombstone error.
+ * Delete this file when the rebuilt `wallet_transactions` table is dropped.
+ */
+
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { adminBulkApproveDeposits } from "@/actions/admin/wallet";
+import { adminBulkApproveDeposits } from "@/actions/admin/wallet-hs";
 
 /**
  * T-P3: Bulk-approve sticky bar for /admin/wallet (pending deposits).

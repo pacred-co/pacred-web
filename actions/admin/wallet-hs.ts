@@ -259,3 +259,1263 @@ export async function adminCreateWalletHsManual(
     },
   );
 }
+
+// ════════════════════════════════════════════════════════════════
+// P0-9 / MS-1 — Admin top-up slip approval per ADR-0018 D-2 rule 3.
+// ════════════════════════════════════════════════════════════════
+//
+// Faithful port of the legacy `pcs-admin/wallet.php` $_GET['page']='deposit'
+// approve/reject branch (L420-700 — read end-to-end before patching).
+//
+// The legacy contract has THREE shapes:
+//
+//   (A) "Bare" deposit slip (NO tb_wallet_paydeposit links).
+//       Approve → tb_wallet_hs.status='2' · tb_wallet.wallettotal += amount.
+//       Reject  → tb_wallet_hs.status='3' · NO tb_wallet change.
+//
+//   (B) "Topup-and-pay" deposit slip (HAS tb_wallet_paydeposit links).
+//       Customer uploaded one slip that funded N parent records (shop
+//       orders OR forwarders OR mix). The topup row exists at type='1'
+//       and each link records (whid=topup.id, hno=<parent>) — plus
+//       sibling tb_wallet_hs rows: type='2' for shop-pay (parent =
+//       tb_header_order), type='4' for forwarder-pay (parent =
+//       tb_forwarder), AND type='7' rows tracking the "pending-pay-
+//       from-this-topup" amount on each parent.
+//
+//       Approve → flip status of: topup row · type='2'/type='4'
+//                 sibling-pay rows · type='7' sibling-pending rows.
+//                 For each linked parent, clear `paydeposit=''`
+//                 (shop orders) or `paydeposit=''` + `fdatestatus6=NOW()`
+//                 (forwarders, non-credit branch) or `paydeposit=''`
+//                 + `fcredit=''` + `tb_credit.creditvalue -= fPrice`
+//                 (forwarders, wUserCredit='1' branch).
+//                 **NO wallettotal credit** — the topup amount was
+//                 already counted via the type='7' sibling debits;
+//                 net credit = 0.
+//
+//       Reject  → flip status of: topup · sibling pay rows · sibling
+//                 type='7' rows to '3'. For each parent, revert state:
+//                   shop_order: paydeposit='' · hstatus='2' · hdatepayment=NOW()+5d
+//                   forwarder:  paydeposit='' · fstatus='5'
+//                               (PCSF-50 special: ALSO ftransportprice=0
+//                                · fusercompany='')
+//                   (wUserCredit branch keeps fcredit='1' on reject — the
+//                    customer's credit line was already extended; reject
+//                    just means the slip was bad, the credit still applies)
+//                 DELETE the tb_wallet_paydeposit link rows for this whid.
+//                 **REFUND wallet:** wallettotal += SUM(amount) of
+//                 type='7' siblings (give the money back · legacy L607-614).
+//
+//   (C) Idempotency: terminal status (2 or 3) returns {ok:true,
+//       alreadyDone:true}, no rows touched.
+//
+// Dispatch rule (verified against legacy wallet.php L444-568):
+//   SELECT hno FROM tb_wallet_paydeposit WHERE whid=$id
+//   For each hno, legacy uses PHP `strpos($hno, "X") !== FALSE` — substring
+//   contains. In real prod data the hno is always the order/forwarder id
+//   starting with the prefix; we use startsWith() which matches legacy intent.
+//     ONS<*>  → shop order (tb_header_order)
+//     N<*>    → shop order
+//     A<*>    → shop order
+//     P<*>    → shop order
+//     <else>  → forwarder (tb_forwarder, ID = numeric hno)
+//
+// Failure rollback: PostgREST has no real transaction. The action owns
+// the rollback path — if the topup status flip succeeds but a parent
+// update fails, we DO NOT auto-revert (the legacy doesn't either).
+// Errors are surfaced in the result so accounting reconciles manually.
+
+type PaydepositLink = { id: number; whid: number; hno: string };
+type ParentClass = "shop_order" | "forwarder";
+
+function classifyHnoParent(hno: string): ParentClass {
+  // Legacy `strpos` checks ONS first (longest prefix), then N/A/P single-char.
+  // We use startsWith() which matches legacy intent in real prod data.
+  if (hno.startsWith("ONS")) return "shop_order";
+  if (hno.startsWith("N"))   return "shop_order";
+  if (hno.startsWith("A"))   return "shop_order";
+  if (hno.startsWith("P"))   return "shop_order";
+  return "forwarder";
+}
+
+const approveDepositSchema = z.object({
+  id: z.number().int().positive(),
+});
+export type AdminApproveWalletDepositInput = z.infer<typeof approveDepositSchema>;
+
+type CascadedRow = {
+  table: "tb_header_order" | "tb_forwarder" | "tb_wallet_hs" | "tb_credit";
+  id: string;
+  fromStatus: string | null;
+  toStatus: string | null;
+  note?: string;
+};
+
+type ApproveResult = {
+  ok: true;
+  walletHsId: number;
+  alreadyDone?: boolean;
+  customer: {
+    userid: string;
+    walletTotalBefore: number;
+    walletTotalAfter: number;
+  };
+  cascadedRows: CascadedRow[];
+  hadPaydepositLinks: boolean;
+};
+
+/**
+ * Approve a customer top-up slip (status `1`→`2`).
+ *
+ * Implements ADR-0018 D-2 rule 3:
+ *   - Idempotent (terminal status returns alreadyDone)
+ *   - Bare slip → credit wallet
+ *   - Linked slip → cascade to N parents (shop_order / forwarder),
+ *     flip type='2'/'4'/'7' sibling wallet_hs rows, NO wallet credit
+ *
+ * Requires `tb_wallet_hs WHERE id=walletHsId AND status='1' AND type='1'`.
+ * (Withdraw approve = different function · scope out — ADR-0018 D-2 rule 3
+ *  paragraph 3 will be a follow-up — task explicitly limits us to type='1'.)
+ */
+export async function adminApproveWalletDeposit(
+  input: AdminApproveWalletDepositInput,
+): Promise<AdminActionResult<ApproveResult>> {
+  const parsed = approveDepositSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { id } = parsed.data;
+
+  return withAdmin<ApproveResult>(
+    ["accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const legacyAdminId = await resolveLegacyAdminId();
+      const nowIso = new Date().toISOString();
+
+      // ──────────────────────────────────────────────
+      // 1. Read the topup row + idempotency check.
+      // ──────────────────────────────────────────────
+      const { data: rowRaw, error: rowErr } = await admin
+        .from("tb_wallet_hs")
+        .select("id, userid, amount, type, status")
+        .eq("id", id)
+        .maybeSingle<{
+          id: number;
+          userid: string;
+          amount: number;
+          type: string | null;
+          status: string | null;
+        }>();
+      if (rowErr) {
+        console.error(`[tb_wallet_hs list] failed`, { code: rowErr.code, message: rowErr.message });
+        return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+      }
+      if (!rowRaw) return { ok: false, error: "ไม่พบรายการ" };
+
+      // Idempotency — already-terminal returns OK with alreadyDone.
+      if (rowRaw.status === "2" || rowRaw.status === "3") {
+        return {
+          ok: true,
+          data: {
+            ok: true,
+            walletHsId: id,
+            alreadyDone: true,
+            customer: {
+              userid: rowRaw.userid,
+              walletTotalBefore: NaN,  // not read
+              walletTotalAfter:  NaN,
+            },
+            cascadedRows: [],
+            hadPaydepositLinks: false,
+          },
+        };
+      }
+      if (rowRaw.status !== "1") {
+        return { ok: false, error: `รายการนี้สถานะไม่ใช่ 'รอตรวจสอบ' (status=${rowRaw.status ?? "null"})` };
+      }
+      // Per task: only handle deposit (type='1') — withdraw approve is a
+      // separate function (rule 3 paragraph 3) and out of scope here.
+      if (rowRaw.type !== "1") {
+        return { ok: false, error: `ฟังก์ชันนี้รองรับเฉพาะรายการเติมเงิน (type='1') · พบ type='${rowRaw.type ?? "null"}'` };
+      }
+
+      const amount = Number(rowRaw.amount ?? 0);
+      const userid = rowRaw.userid;
+
+      // ──────────────────────────────────────────────
+      // 2. Read paydeposit links + classify into parents.
+      // ──────────────────────────────────────────────
+      const { data: linksRaw, error: linksErr } = await admin
+        .from("tb_wallet_paydeposit")
+        .select("id, whid, hno")
+        .eq("whid", id);
+      if (linksErr) {
+        console.error(`[tb_wallet_paydeposit list] failed`, {
+          code: linksErr.code,
+          message: linksErr.message,
+        });
+        return { ok: false, error: `db_error:${linksErr.code ?? "unknown"}` };
+      }
+      const links = (linksRaw ?? []) as PaydepositLink[];
+      const hasLinks = links.length > 0;
+
+      const cascadedRows: CascadedRow[] = [];
+
+      // ──────────────────────────────────────────────
+      // 3. Flip the topup row to status='2'.
+      // ──────────────────────────────────────────────
+      const { error: updHsErr } = await admin
+        .from("tb_wallet_hs")
+        .update({ status: "2", adminid: legacyAdminId, adminidupdate: legacyAdminId })
+        .eq("id", id)
+        .eq("status", "1");
+      if (updHsErr) {
+        console.error(`[tb_wallet_hs mutation] failed`, { code: updHsErr.code, message: updHsErr.message });
+        return { ok: false, error: updHsErr.message };
+      }
+      cascadedRows.push({
+        table: "tb_wallet_hs",
+        id: String(id),
+        fromStatus: "1",
+        toStatus: "2",
+        note: "topup",
+      });
+
+      // ──────────────────────────────────────────────
+      // 4a. BARE slip path — no links → plain wallet credit.
+      // ──────────────────────────────────────────────
+      let walletBefore = 0;
+      let walletAfter = 0;
+      if (!hasLinks) {
+        const { data: wRow, error: wRowErr } = await admin
+          .from("tb_wallet")
+          .select("userid, wallettotal")
+          .eq("userid", userid)
+          .maybeSingle<{ userid: string; wallettotal: number }>();
+        if (wRowErr) {
+          console.error(`[tb_wallet list] failed`, { code: wRowErr.code, message: wRowErr.message });
+        }
+        if (!wRow) {
+          const { error: walletInsErr } = await admin
+            .from("tb_wallet")
+            .insert({ userid: userid, wallettotal: amount });
+          if (walletInsErr) {
+            return {
+              ok: false,
+              error: `อนุมัติ tb_wallet_hs สำเร็จ (id=${id}) แต่ tb_wallet insert ล้มเหลว: ${walletInsErr.message}`,
+            };
+          }
+          walletBefore = 0;
+          walletAfter = amount;
+        } else {
+          walletBefore = Number(wRow.wallettotal);
+          walletAfter = walletBefore + amount;
+          const { error: walletUpdErr } = await admin
+            .from("tb_wallet")
+            .update({ wallettotal: walletAfter })
+            .eq("userid", userid);
+          if (walletUpdErr) {
+            return {
+              ok: false,
+              error: `อนุมัติ tb_wallet_hs สำเร็จ (id=${id}) แต่ tb_wallet update ล้มเหลว: ${walletUpdErr.message}`,
+            };
+          }
+        }
+
+        await logAdminAction(adminId, "tb_wallet_hs.approve_deposit", "tb_wallet_hs", String(id), {
+          userid,
+          amount,
+          before: { wallettotal: walletBefore },
+          after:  { wallettotal: walletAfter },
+          hadPaydepositLinks: false,
+          cascade: cascadedRows,
+        });
+
+        revalidatePath(`/admin/wallet/${id}`);
+        revalidatePath("/admin/wallet");
+        revalidatePath("/admin");
+
+        return {
+          ok: true,
+          data: {
+            ok: true,
+            walletHsId: id,
+            customer: {
+              userid,
+              walletTotalBefore: walletBefore,
+              walletTotalAfter:  walletAfter,
+            },
+            cascadedRows,
+            hadPaydepositLinks: false,
+          },
+        };
+      }
+
+      // ──────────────────────────────────────────────
+      // 4b. LINKED slip path — cascade to parents + siblings.
+      //
+      //   Per legacy L598-619: when paydeposit links exist, the topup
+      //   amount is NOT credited to wallettotal (it was already counted
+      //   via the type='7' sibling debits). Net wallet change = 0 on
+      //   approve. Wallet credit only happens on REJECT (refund path).
+      // ──────────────────────────────────────────────
+
+      // Pre-read current wallet balance for the result payload (no mutation).
+      const { data: wDispRow, error: wDispErr } = await admin
+        .from("tb_wallet")
+        .select("wallettotal")
+        .eq("userid", userid)
+        .maybeSingle<{ wallettotal: number }>();
+      if (wDispErr) {
+        console.error(`[tb_wallet display read] failed`, { code: wDispErr.code, message: wDispErr.message });
+      }
+      walletBefore = Number(wDispRow?.wallettotal ?? 0);
+      walletAfter = walletBefore;  // no change on approve when linked
+
+      // For each linked parent, dispatch by hno prefix.
+      for (const link of links) {
+        const klass = classifyHnoParent(link.hno);
+
+        // ──────────────────────────────────────────
+        // (i) Flip the sibling pay row (type='2' for shop, type='4' for
+        //     forwarder; refOrder=hno · refOrder2=topup.id · status='1').
+        //     Legacy L450-467.
+        // ──────────────────────────────────────────
+        const siblingType = klass === "shop_order" ? "2" : "4";
+        const { error: sibUpdErr } = await admin
+          .from("tb_wallet_hs")
+          .update({ status: "2", adminid: legacyAdminId, adminidupdate: legacyAdminId })
+          .eq("reforder", link.hno)
+          .eq("type", siblingType)
+          .eq("status", "1")
+          .eq("reforder2", id);
+        if (sibUpdErr) {
+          console.error(`[tb_wallet_hs sibling pay flip] failed`, {
+            code: sibUpdErr.code,
+            message: sibUpdErr.message,
+            hno: link.hno,
+          });
+          // continue — legacy doesn't abort on sub-update failure either
+        }
+        cascadedRows.push({
+          table: "tb_wallet_hs",
+          id: `reforder=${link.hno}&type=${siblingType}&reforder2=${id}`,
+          fromStatus: "1",
+          toStatus: "2",
+          note: `sibling-pay (${klass})`,
+        });
+
+        // ──────────────────────────────────────────
+        // (ii) Update the parent row (shop_order or forwarder).
+        //      Legacy L499-513 (shop), L554-566 (forwarder).
+        // ──────────────────────────────────────────
+        if (klass === "shop_order") {
+          const { data: hoBefore, error: hoBeforeErr } = await admin
+            .from("tb_header_order")
+            .select("hno, paydeposit, hstatus")
+            .eq("hno", link.hno)
+            .maybeSingle<{ hno: string; paydeposit: string | null; hstatus: string | null }>();
+          if (hoBeforeErr) {
+            console.error(`[tb_header_order read] failed`, {
+              code: hoBeforeErr.code,
+              message: hoBeforeErr.message,
+              hno: link.hno,
+            });
+            cascadedRows.push({
+              table: "tb_header_order",
+              id: link.hno,
+              fromStatus: null,
+              toStatus: null,
+              note: `read-failed: ${hoBeforeErr.message}`,
+            });
+            continue;
+          }
+          if (!hoBefore) {
+            cascadedRows.push({
+              table: "tb_header_order",
+              id: link.hno,
+              fromStatus: null,
+              toStatus: null,
+              note: "parent not found",
+            });
+            continue;
+          }
+          const { error: hoUpdErr } = await admin
+            .from("tb_header_order")
+            .update({ paydeposit: "", adminidupdate: legacyAdminId })
+            .eq("hno", link.hno);
+          if (hoUpdErr) {
+            console.error(`[tb_header_order mutation] failed`, {
+              code: hoUpdErr.code,
+              message: hoUpdErr.message,
+              hno: link.hno,
+            });
+            cascadedRows.push({
+              table: "tb_header_order",
+              id: link.hno,
+              fromStatus: hoBefore.paydeposit,
+              toStatus: hoBefore.paydeposit,
+              note: `update-failed: ${hoUpdErr.message}`,
+            });
+            continue;
+          }
+          cascadedRows.push({
+            table: "tb_header_order",
+            id: link.hno,
+            fromStatus: `paydeposit=${hoBefore.paydeposit ?? ""}`,
+            toStatus: "paydeposit=",
+            note: "approve · clear paydeposit",
+          });
+        } else {
+          // forwarder branch
+          const fwdId = Number(link.hno);
+          if (!Number.isFinite(fwdId) || fwdId <= 0) {
+            cascadedRows.push({
+              table: "tb_forwarder",
+              id: link.hno,
+              fromStatus: null,
+              toStatus: null,
+              note: "non-numeric hno · skipped",
+            });
+            continue;
+          }
+          // Need wusercredit from the SIBLING pay row (type='4') to decide
+          // credit vs non-credit branch. Legacy reads from the sibling
+          // tb_wallet_hs row's wusercredit column (NOT tb_forwarder's).
+          const { data: sibRow, error: sibReadErr } = await admin
+            .from("tb_wallet_hs")
+            .select("wusercredit, amount")
+            .eq("reforder", link.hno)
+            .eq("type", "4")
+            .eq("reforder2", id)
+            .maybeSingle<{ wusercredit: string | null; amount: number }>();
+          if (sibReadErr) {
+            console.error(`[tb_wallet_hs sibling read for fwd] failed`, {
+              code: sibReadErr.code,
+              message: sibReadErr.message,
+              hno: link.hno,
+            });
+          }
+          const isCreditPay = sibRow?.wusercredit === "1";
+          const sibAmount = Number(sibRow?.amount ?? 0);
+
+          const { data: fwdBefore, error: fwdBeforeErr } = await admin
+            .from("tb_forwarder")
+            .select("id, paydeposit, fstatus, fcredit")
+            .eq("id", fwdId)
+            .maybeSingle<{ id: number; paydeposit: string | null; fstatus: string | null; fcredit: string | null }>();
+          if (fwdBeforeErr) {
+            console.error(`[tb_forwarder read] failed`, {
+              code: fwdBeforeErr.code,
+              message: fwdBeforeErr.message,
+              id: fwdId,
+            });
+            cascadedRows.push({
+              table: "tb_forwarder",
+              id: String(fwdId),
+              fromStatus: null,
+              toStatus: null,
+              note: `read-failed: ${fwdBeforeErr.message}`,
+            });
+            continue;
+          }
+          if (!fwdBefore) {
+            cascadedRows.push({
+              table: "tb_forwarder",
+              id: String(fwdId),
+              fromStatus: null,
+              toStatus: null,
+              note: "parent not found",
+            });
+            continue;
+          }
+          if (isCreditPay) {
+            // wUserCredit branch: clear paydeposit + fcredit + set
+            // fdatestatus6 + decrement tb_credit.creditvalue by sibling
+            // amount. Legacy L555-560.
+            const { error: fwdUpdErr } = await admin
+              .from("tb_forwarder")
+              .update({
+                paydeposit:    "",
+                fcredit:       "",
+                fdatestatus6:  nowIso,
+                adminidupdate: legacyAdminId,
+              })
+              .eq("id", fwdId);
+            if (fwdUpdErr) {
+              cascadedRows.push({
+                table: "tb_forwarder",
+                id: String(fwdId),
+                fromStatus: `paydeposit=${fwdBefore.paydeposit ?? ""}|fcredit=${fwdBefore.fcredit ?? ""}`,
+                toStatus: `paydeposit=${fwdBefore.paydeposit ?? ""}|fcredit=${fwdBefore.fcredit ?? ""}`,
+                note: `update-failed: ${fwdUpdErr.message}`,
+              });
+              continue;
+            }
+            // Decrement tb_credit.creditvalue. Legacy L559: `creditValue = creditValue - $fPrice`.
+            const { data: credRow, error: credReadErr } = await admin
+              .from("tb_credit")
+              .select("userid, creditvalue")
+              .eq("userid", userid)
+              .maybeSingle<{ userid: string; creditvalue: number }>();
+            if (credReadErr) {
+              console.error(`[tb_credit read] failed`, { code: credReadErr.code, message: credReadErr.message });
+            }
+            if (credRow) {
+              const newCredit = Number(credRow.creditvalue) - sibAmount;
+              const { error: credUpdErr } = await admin
+                .from("tb_credit")
+                .update({ creditvalue: newCredit })
+                .eq("userid", userid);
+              if (credUpdErr) {
+                console.error(`[tb_credit mutation] failed`, { code: credUpdErr.code, message: credUpdErr.message });
+              } else {
+                cascadedRows.push({
+                  table: "tb_credit",
+                  id: userid,
+                  fromStatus: `creditvalue=${credRow.creditvalue}`,
+                  toStatus: `creditvalue=${newCredit}`,
+                  note: "decrement on credit-pay approve",
+                });
+              }
+            }
+            cascadedRows.push({
+              table: "tb_forwarder",
+              id: String(fwdId),
+              fromStatus: `paydeposit=${fwdBefore.paydeposit ?? ""}|fcredit=${fwdBefore.fcredit ?? ""}`,
+              toStatus: `paydeposit=|fcredit=|fdatestatus6=${nowIso}`,
+              note: "approve · wUserCredit branch",
+            });
+          } else {
+            // Non-credit branch: clear paydeposit + set fdatestatus6.
+            // Legacy L562.
+            const { error: fwdUpdErr } = await admin
+              .from("tb_forwarder")
+              .update({
+                paydeposit:    "",
+                fdatestatus6:  nowIso,
+                adminidupdate: legacyAdminId,
+              })
+              .eq("id", fwdId);
+            if (fwdUpdErr) {
+              cascadedRows.push({
+                table: "tb_forwarder",
+                id: String(fwdId),
+                fromStatus: `paydeposit=${fwdBefore.paydeposit ?? ""}`,
+                toStatus: `paydeposit=${fwdBefore.paydeposit ?? ""}`,
+                note: `update-failed: ${fwdUpdErr.message}`,
+              });
+              continue;
+            }
+            cascadedRows.push({
+              table: "tb_forwarder",
+              id: String(fwdId),
+              fromStatus: `paydeposit=${fwdBefore.paydeposit ?? ""}`,
+              toStatus: `paydeposit=|fdatestatus6=${nowIso}`,
+              note: "approve · non-credit branch",
+            });
+          }
+        }
+      }
+
+      // ──────────────────────────────────────────
+      // (iii) Flip type='7' sibling pending-pay rows linked by refOrder=topup.id.
+      //       Legacy L598-599 (always runs · regardless of approve/reject).
+      // ──────────────────────────────────────────
+      const { error: type7UpdErr } = await admin
+        .from("tb_wallet_hs")
+        .update({ status: "2", adminid: legacyAdminId, adminidupdate: legacyAdminId })
+        .eq("reforder", String(id))
+        .eq("type", "7");
+      if (type7UpdErr) {
+        console.error(`[tb_wallet_hs type-7 sibling flip] failed`, {
+          code: type7UpdErr.code,
+          message: type7UpdErr.message,
+        });
+      } else {
+        cascadedRows.push({
+          table: "tb_wallet_hs",
+          id: `reforder=${id}&type=7`,
+          fromStatus: "1",
+          toStatus: "2",
+          note: "sibling type=7 pending-pay rows",
+        });
+      }
+
+      // No wallet credit on linked-slip approve (legacy L621-633 explicit
+      // comment: "ไม่เติมเพิ่ม"). The topup amount was already counted via
+      // the type='7' sibling debits.
+
+      await logAdminAction(adminId, "tb_wallet_hs.approve_deposit", "tb_wallet_hs", String(id), {
+        userid,
+        amount,
+        hadPaydepositLinks: true,
+        linkCount: links.length,
+        before: { wallettotal: walletBefore },
+        after:  { wallettotal: walletAfter },
+        cascade: cascadedRows,
+      });
+
+      revalidatePath(`/admin/wallet/${id}`);
+      revalidatePath("/admin/wallet");
+      revalidatePath("/admin");
+      // Revalidate every parent we touched.
+      for (const link of links) {
+        if (classifyHnoParent(link.hno) === "shop_order") {
+          revalidatePath(`/admin/service-orders/${link.hno}`);
+        } else {
+          revalidatePath(`/admin/forwarders/${link.hno}`);
+        }
+      }
+
+      return {
+        ok: true,
+        data: {
+          ok: true,
+          walletHsId: id,
+          customer: {
+            userid,
+            walletTotalBefore: walletBefore,
+            walletTotalAfter:  walletAfter,
+          },
+          cascadedRows,
+          hadPaydepositLinks: true,
+        },
+      };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+
+const rejectDepositSchema = z.object({
+  id:     z.number().int().positive(),
+  reason: z.string().trim().max(1000).optional(),
+});
+export type AdminRejectWalletDepositInput = z.infer<typeof rejectDepositSchema>;
+
+type RejectResult = {
+  ok: true;
+  walletHsId: number;
+  alreadyDone?: boolean;
+  customer: {
+    userid: string;
+    walletTotalBefore: number;
+    walletTotalAfter: number;
+  };
+  refundedAmount: number;
+  cascadedRows: CascadedRow[];
+  hadPaydepositLinks: boolean;
+};
+
+/**
+ * Reject a customer top-up slip (status `1`→`3`).
+ *
+ * Implements ADR-0018 D-2 rule 3:
+ *   - Bare slip → status='3' · NO tb_wallet change · no cascade.
+ *   - Linked slip → cascade flips parents back to pre-pay state, DELETEs
+ *     paydeposit links, AND REFUNDS the wallet by SUM(type='7' amounts)
+ *     (legacy L607-614 cash-back path).
+ */
+export async function adminRejectWalletDeposit(
+  input: AdminRejectWalletDepositInput,
+): Promise<AdminActionResult<RejectResult>> {
+  const parsed = rejectDepositSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { id, reason } = parsed.data;
+
+  return withAdmin<RejectResult>(
+    ["accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const legacyAdminId = await resolveLegacyAdminId();
+
+      // ──────────────────────────────────────────
+      // 1. Read topup row + idempotency.
+      // ──────────────────────────────────────────
+      const { data: rowRaw, error: rowErr } = await admin
+        .from("tb_wallet_hs")
+        .select("id, userid, amount, type, status")
+        .eq("id", id)
+        .maybeSingle<{
+          id: number;
+          userid: string;
+          amount: number;
+          type: string | null;
+          status: string | null;
+        }>();
+      if (rowErr) {
+        console.error(`[tb_wallet_hs list] failed`, { code: rowErr.code, message: rowErr.message });
+        return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+      }
+      if (!rowRaw) return { ok: false, error: "ไม่พบรายการ" };
+
+      if (rowRaw.status === "2" || rowRaw.status === "3") {
+        return {
+          ok: true,
+          data: {
+            ok: true,
+            walletHsId: id,
+            alreadyDone: true,
+            customer: {
+              userid: rowRaw.userid,
+              walletTotalBefore: NaN,
+              walletTotalAfter:  NaN,
+            },
+            refundedAmount: 0,
+            cascadedRows: [],
+            hadPaydepositLinks: false,
+          },
+        };
+      }
+      if (rowRaw.status !== "1") {
+        return { ok: false, error: `รายการนี้สถานะไม่ใช่ 'รอตรวจสอบ' (status=${rowRaw.status ?? "null"})` };
+      }
+      if (rowRaw.type !== "1") {
+        return { ok: false, error: `ฟังก์ชันนี้รองรับเฉพาะรายการเติมเงิน (type='1') · พบ type='${rowRaw.type ?? "null"}'` };
+      }
+
+      const userid = rowRaw.userid;
+      const cascadedRows: CascadedRow[] = [];
+
+      // ──────────────────────────────────────────
+      // 2. Read paydeposit links.
+      // ──────────────────────────────────────────
+      const { data: linksRaw, error: linksErr } = await admin
+        .from("tb_wallet_paydeposit")
+        .select("id, whid, hno")
+        .eq("whid", id);
+      if (linksErr) {
+        console.error(`[tb_wallet_paydeposit list] failed`, {
+          code: linksErr.code,
+          message: linksErr.message,
+        });
+        return { ok: false, error: `db_error:${linksErr.code ?? "unknown"}` };
+      }
+      const links = (linksRaw ?? []) as PaydepositLink[];
+      const hasLinks = links.length > 0;
+
+      // ──────────────────────────────────────────
+      // 3. Flip topup row to status='3' (with optional note).
+      // ──────────────────────────────────────────
+      const patch: Record<string, unknown> = {
+        status:        "3",
+        adminid:       legacyAdminId,
+        adminidupdate: legacyAdminId,
+      };
+      if (reason && reason.length > 0) patch.note = reason;
+      const { error: updHsErr } = await admin
+        .from("tb_wallet_hs")
+        .update(patch)
+        .eq("id", id)
+        .eq("status", "1");
+      if (updHsErr) {
+        console.error(`[tb_wallet_hs mutation] failed`, { code: updHsErr.code, message: updHsErr.message });
+        return { ok: false, error: updHsErr.message };
+      }
+      cascadedRows.push({
+        table: "tb_wallet_hs",
+        id: String(id),
+        fromStatus: "1",
+        toStatus: "3",
+        note: "topup-rejected",
+      });
+
+      // ──────────────────────────────────────────
+      // 4. Cascade to parents + sibling rows.
+      // ──────────────────────────────────────────
+      if (hasLinks) {
+        const future = new Date();
+        future.setDate(future.getDate() + 5);
+        const hDatePaymentIso = future.toISOString();
+
+        for (const link of links) {
+          const klass = classifyHnoParent(link.hno);
+
+          // Flip sibling pay row to status='3'.
+          const siblingType = klass === "shop_order" ? "2" : "4";
+          const { error: sibUpdErr } = await admin
+            .from("tb_wallet_hs")
+            .update({ status: "3", adminid: legacyAdminId, adminidupdate: legacyAdminId })
+            .eq("reforder", link.hno)
+            .eq("type", siblingType)
+            .eq("status", "1")
+            .eq("reforder2", id);
+          if (sibUpdErr) {
+            console.error(`[tb_wallet_hs sibling pay flip · reject] failed`, {
+              code: sibUpdErr.code,
+              message: sibUpdErr.message,
+              hno: link.hno,
+            });
+          }
+          cascadedRows.push({
+            table: "tb_wallet_hs",
+            id: `reforder=${link.hno}&type=${siblingType}&reforder2=${id}`,
+            fromStatus: "1",
+            toStatus: "3",
+            note: `sibling-pay reject (${klass})`,
+          });
+
+          // Update parent row.
+          if (klass === "shop_order") {
+            // legacy L494-498: paydeposit='' · hstatus='2' · hdatepayment=NOW()+5d
+            const { data: hoBefore, error: hoBeforeReadErr } = await admin
+              .from("tb_header_order")
+              .select("paydeposit, hstatus")
+              .eq("hno", link.hno)
+              .maybeSingle<{ paydeposit: string | null; hstatus: string | null }>();
+            if (hoBeforeReadErr) {
+              console.error(`[tb_header_order before-read · reject] failed`, {
+                code: hoBeforeReadErr.code,
+                message: hoBeforeReadErr.message,
+                hno: link.hno,
+              });
+            }
+            const { error: hoUpdErr } = await admin
+              .from("tb_header_order")
+              .update({
+                paydeposit:    "",
+                hstatus:       "2",
+                hdatepayment:  hDatePaymentIso,
+                adminidupdate: legacyAdminId,
+              })
+              .eq("hno", link.hno);
+            if (hoUpdErr) {
+              cascadedRows.push({
+                table: "tb_header_order",
+                id: link.hno,
+                fromStatus: hoBefore ? `paydeposit=${hoBefore.paydeposit}|hstatus=${hoBefore.hstatus}` : null,
+                toStatus: null,
+                note: `update-failed: ${hoUpdErr.message}`,
+              });
+            } else {
+              cascadedRows.push({
+                table: "tb_header_order",
+                id: link.hno,
+                fromStatus: hoBefore ? `paydeposit=${hoBefore.paydeposit ?? ""}|hstatus=${hoBefore.hstatus ?? ""}` : null,
+                toStatus: `paydeposit=|hstatus=2|hdatepayment=${hDatePaymentIso}`,
+                note: "reject · revert to awaiting-payment + 5d",
+              });
+            }
+          } else {
+            // forwarder branch. Legacy L536-552.
+            const fwdId = Number(link.hno);
+            if (!Number.isFinite(fwdId) || fwdId <= 0) {
+              cascadedRows.push({
+                table: "tb_forwarder",
+                id: link.hno,
+                fromStatus: null,
+                toStatus: null,
+                note: "non-numeric hno · skipped",
+              });
+              continue;
+            }
+            // PCSF-50 special case: ALSO reset ftransportprice + fusercompany.
+            const { data: pcsf50Row, error: pcsf50Err } = await admin
+              .from("tb_forwarder")
+              .select("id")
+              .eq("id", fwdId)
+              .eq("fshipby", "PCSF")
+              .eq("ftransportprice", 50)
+              .maybeSingle<{ id: number }>();
+            if (pcsf50Err) {
+              console.error(`[tb_forwarder PCSF-50 probe] failed`, { code: pcsf50Err.code, message: pcsf50Err.message });
+            }
+            const isPCSF50 = pcsf50Row != null;
+
+            // Read wusercredit sibling to know whether to wipe fCredit too.
+            const { data: sibRow, error: sibReadErr } = await admin
+              .from("tb_wallet_hs")
+              .select("wusercredit")
+              .eq("reforder", link.hno)
+              .eq("type", "4")
+              .eq("reforder2", id)
+              .maybeSingle<{ wusercredit: string | null }>();
+            if (sibReadErr) {
+              console.error(`[tb_wallet_hs sibling read for fwd · reject] failed`, {
+                code: sibReadErr.code,
+                message: sibReadErr.message,
+                hno: link.hno,
+              });
+            }
+            const isCreditPay = sibRow?.wusercredit === "1";
+
+            const { data: fwdBefore, error: fwdBeforeReadErr } = await admin
+              .from("tb_forwarder")
+              .select("paydeposit, fstatus, fcredit, ftransportprice, fusercompany")
+              .eq("id", fwdId)
+              .maybeSingle<{
+                paydeposit: string | null;
+                fstatus: string | null;
+                fcredit: string | null;
+                ftransportprice: number | null;
+                fusercompany: string | null;
+              }>();
+            if (fwdBeforeReadErr) {
+              console.error(`[tb_forwarder before-read · reject] failed`, {
+                code: fwdBeforeReadErr.code,
+                message: fwdBeforeReadErr.message,
+                id: fwdId,
+              });
+            }
+
+            // Legacy reject path:
+            //   wUserCredit branch (L539-541): paydeposit='' · fCredit='1' (keep) — the only
+            //     change is paydeposit; fStatus stays whatever it was, fCredit was already '1'.
+            //     Verified L540: `UPDATE tb_forwarder SET paydeposit='', adminIDUpdate, fCredit='1'`.
+            //   Non-credit branch (L542): paydeposit='' · fstatus='5' · adminIDUpdate.
+            //   PCSF-50 (L547): + ftransportprice=0 · fusercompany=''.
+            let fwdPatch: Record<string, unknown>;
+            if (isCreditPay) {
+              fwdPatch = {
+                paydeposit:    "",
+                fcredit:       "1",
+                adminidupdate: legacyAdminId,
+              };
+            } else if (isPCSF50) {
+              fwdPatch = {
+                paydeposit:      "",
+                fstatus:         "5",
+                ftransportprice: 0,
+                fusercompany:    "",
+                adminidupdate:   legacyAdminId,
+              };
+            } else {
+              fwdPatch = {
+                paydeposit:    "",
+                fstatus:       "5",
+                adminidupdate: legacyAdminId,
+              };
+            }
+            const { error: fwdUpdErr } = await admin
+              .from("tb_forwarder")
+              .update(fwdPatch)
+              .eq("id", fwdId);
+            if (fwdUpdErr) {
+              cascadedRows.push({
+                table: "tb_forwarder",
+                id: String(fwdId),
+                fromStatus: fwdBefore ? `paydeposit=${fwdBefore.paydeposit ?? ""}|fstatus=${fwdBefore.fstatus ?? ""}` : null,
+                toStatus: null,
+                note: `update-failed: ${fwdUpdErr.message}`,
+              });
+            } else {
+              cascadedRows.push({
+                table: "tb_forwarder",
+                id: String(fwdId),
+                fromStatus: fwdBefore ? `paydeposit=${fwdBefore.paydeposit ?? ""}|fstatus=${fwdBefore.fstatus ?? ""}|fcredit=${fwdBefore.fcredit ?? ""}` : null,
+                toStatus: isCreditPay
+                  ? "paydeposit=|fcredit=1"
+                  : (isPCSF50 ? "paydeposit=|fstatus=5|ftransportprice=0|fusercompany=" : "paydeposit=|fstatus=5"),
+                note: isCreditPay ? "reject · credit-pay branch" : (isPCSF50 ? "reject · PCSF-50 branch" : "reject · standard branch"),
+              });
+            }
+          }
+        }
+
+        // Flip type='7' sibling rows to status='3'. Read their amounts FIRST
+        // for the refund calculation.
+        const { data: type7RowsRaw, error: type7ReadErr } = await admin
+          .from("tb_wallet_hs")
+          .select("id, amount")
+          .eq("reforder", String(id))
+          .eq("type", "7");
+        if (type7ReadErr) {
+          console.error(`[tb_wallet_hs type-7 read] failed`, { code: type7ReadErr.code, message: type7ReadErr.message });
+        }
+        const type7Rows = (type7RowsRaw ?? []) as Array<{ id: number; amount: number }>;
+        const refundAmount = type7Rows.reduce((s, r) => s + Number(r.amount ?? 0), 0);
+
+        const { error: type7UpdErr } = await admin
+          .from("tb_wallet_hs")
+          .update({ status: "3", adminid: legacyAdminId, adminidupdate: legacyAdminId })
+          .eq("reforder", String(id))
+          .eq("type", "7");
+        if (type7UpdErr) {
+          console.error(`[tb_wallet_hs type-7 flip] failed`, { code: type7UpdErr.code, message: type7UpdErr.message });
+        } else {
+          cascadedRows.push({
+            table: "tb_wallet_hs",
+            id: `reforder=${id}&type=7`,
+            fromStatus: "1",
+            toStatus: "3",
+            note: `sibling type=7 rows · refund=${refundAmount}`,
+          });
+        }
+
+        // DELETE paydeposit link rows. Legacy L616: only on status='3'.
+        const { error: pdDelErr } = await admin
+          .from("tb_wallet_paydeposit")
+          .delete()
+          .eq("whid", id);
+        if (pdDelErr) {
+          console.error(`[tb_wallet_paydeposit delete] failed`, { code: pdDelErr.code, message: pdDelErr.message });
+        }
+
+        // REFUND the wallet (legacy L607-614).
+        const { data: wRow, error: wRowErr } = await admin
+          .from("tb_wallet")
+          .select("userid, wallettotal")
+          .eq("userid", userid)
+          .maybeSingle<{ userid: string; wallettotal: number }>();
+        if (wRowErr) {
+          console.error(`[tb_wallet read for refund] failed`, { code: wRowErr.code, message: wRowErr.message });
+        }
+        const walletBefore = Number(wRow?.wallettotal ?? 0);
+        const walletAfter = walletBefore + refundAmount;
+
+        if (refundAmount !== 0) {
+          if (!wRow) {
+            const { error: walletInsErr } = await admin
+              .from("tb_wallet")
+              .insert({ userid, wallettotal: refundAmount });
+            if (walletInsErr) {
+              console.error(`[tb_wallet refund insert] failed`, {
+                code: walletInsErr.code,
+                message: walletInsErr.message,
+              });
+            }
+          } else {
+            const { error: walletUpdErr } = await admin
+              .from("tb_wallet")
+              .update({ wallettotal: walletAfter })
+              .eq("userid", userid);
+            if (walletUpdErr) {
+              console.error(`[tb_wallet refund update] failed`, {
+                code: walletUpdErr.code,
+                message: walletUpdErr.message,
+              });
+            }
+          }
+        }
+
+        await logAdminAction(adminId, "tb_wallet_hs.reject_deposit", "tb_wallet_hs", String(id), {
+          userid,
+          reason,
+          hadPaydepositLinks: true,
+          linkCount: links.length,
+          refundedAmount: refundAmount,
+          before: { wallettotal: walletBefore },
+          after:  { wallettotal: walletAfter },
+          cascade: cascadedRows,
+        });
+
+        revalidatePath(`/admin/wallet/${id}`);
+        revalidatePath("/admin/wallet");
+        revalidatePath("/admin");
+        for (const link of links) {
+          if (classifyHnoParent(link.hno) === "shop_order") {
+            revalidatePath(`/admin/service-orders/${link.hno}`);
+          } else {
+            revalidatePath(`/admin/forwarders/${link.hno}`);
+          }
+        }
+
+        return {
+          ok: true,
+          data: {
+            ok: true,
+            walletHsId: id,
+            customer: {
+              userid,
+              walletTotalBefore: walletBefore,
+              walletTotalAfter:  walletAfter,
+            },
+            refundedAmount: refundAmount,
+            cascadedRows,
+            hadPaydepositLinks: true,
+          },
+        };
+      }
+
+      // ──────────────────────────────────────────
+      // Bare-reject path: no cascade, no wallet change.
+      // ──────────────────────────────────────────
+      await logAdminAction(adminId, "tb_wallet_hs.reject_deposit", "tb_wallet_hs", String(id), {
+        userid,
+        reason,
+        hadPaydepositLinks: false,
+        refundedAmount: 0,
+        cascade: cascadedRows,
+      });
+
+      revalidatePath(`/admin/wallet/${id}`);
+      revalidatePath("/admin/wallet");
+      revalidatePath("/admin");
+
+      return {
+        ok: true,
+        data: {
+          ok: true,
+          walletHsId: id,
+          customer: {
+            userid,
+            walletTotalBefore: NaN,
+            walletTotalAfter:  NaN,
+          },
+          refundedAmount: 0,
+          cascadedRows,
+          hadPaydepositLinks: false,
+        },
+      };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+
+const bulkApproveDepositSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1, "ต้องเลือกอย่างน้อย 1 รายการ").max(50, "เลือกได้สูงสุด 50 รายการต่อรอบ"),
+});
+export type AdminBulkApproveWalletDepositsInput = z.infer<typeof bulkApproveDepositSchema>;
+
+type BulkApproveResult = {
+  results: Array<
+    | { id: number; ok: true; alreadyDone?: boolean; cascadeRowCount: number }
+    | { id: number; ok: false; error: string }
+  >;
+  summary: { approved: number; alreadyDone: number; failed: number };
+};
+
+/**
+ * Bulk-approve N top-up slips. Per-row failure does NOT abort the batch
+ * (mirrors `tb-bulk.ts adminBulkApproveWalletHs`).
+ */
+export async function adminBulkApproveWalletDeposits(
+  input: AdminBulkApproveWalletDepositsInput,
+): Promise<AdminActionResult<BulkApproveResult>> {
+  const parsed = bulkApproveDepositSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { ids } = parsed.data;
+
+  const results: BulkApproveResult["results"] = [];
+  let approved = 0;
+  let alreadyDone = 0;
+  let failed = 0;
+
+  // Sequential — keeps per-row audit log + revalidatePath behaviour intact.
+  // This is also legacy semantics (the legacy UI approves one at a time;
+  // this skill just runs the loop server-side).
+  for (const id of ids) {
+    const res = await adminApproveWalletDeposit({ id });
+    if (res.ok && res.data) {
+      if (res.data.alreadyDone) {
+        alreadyDone++;
+        results.push({ id, ok: true, alreadyDone: true, cascadeRowCount: 0 });
+      } else {
+        approved++;
+        results.push({ id, ok: true, cascadeRowCount: res.data.cascadedRows.length });
+      }
+    } else {
+      failed++;
+      results.push({ id, ok: false, error: res.ok ? "unknown" : res.error });
+    }
+  }
+
+  revalidatePath("/admin/wallet");
+  revalidatePath("/admin");
+
+  return {
+    ok: true,
+    data: {
+      results,
+      summary: { approved, alreadyDone, failed },
+    },
+  };
+}
+
+// ════════════════════════════════════════════════════════════════
+// TOMBSTONE SHIMS — repoint targets for the orphan UI files in
+// app/[locale]/(admin)/admin/wallet/{slip-review-modal,actions-cell,
+// bulk-approve-bar}.tsx + components/admin/slip-transferred-at-cell.tsx.
+//
+// These re-export the legacy-faithful-named "rebuilt" signatures so any
+// repointed import still type-checks, but runtime-fail-loud with an
+// error message pointing at the canonical surface. Per ADR-0018 D-3 #2
+// the rebuilt-era components are scheduled for deletion when the last
+// reader retires; until then, this is the "no more dead-writes" gate.
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * @deprecated Tombstoned per ADR-0018 D-3 #2. The rebuilt-schema
+ * `wallet_transactions` table is empty on prod; this shape uses UUID ids
+ * that don't exist on the legacy `tb_wallet_hs`. Use
+ * {@link adminApproveWalletDeposit} / {@link adminRejectWalletDeposit}
+ * with the numeric tb_wallet_hs.id instead.
+ */
+export async function adminUpdateWalletTransaction(
+  _input: { id: string; status: string; note?: string },
+): Promise<AdminActionResult> {
+  console.warn(
+    "[wallet-hs] adminUpdateWalletTransaction is TOMBSTONED (ADR-0018 D-3 #2). " +
+    "The rebuilt wallet_transactions table is empty on prod — UUID-shaped " +
+    "ids are not portable. Use adminApproveWalletDeposit / " +
+    "adminRejectWalletDeposit (tb_wallet_hs.id : number) instead.",
+  );
+  return {
+    ok: false,
+    error: "TOMBSTONED: adminUpdateWalletTransaction — use adminApproveWalletDeposit per ADR-0018",
+  };
+}
+
+/**
+ * @deprecated Tombstoned per ADR-0018 D-3 #2.
+ * Use {@link adminBulkApproveWalletDeposits} (numeric ids) instead.
+ */
+export async function adminBulkApproveDeposits(
+  _input: { ids: string[]; note?: string },
+): Promise<AdminActionResult<{ approved: number; skipped: number; errors: Array<{ id: string; reason: string }> }>> {
+  console.warn(
+    "[wallet-hs] adminBulkApproveDeposits is TOMBSTONED (ADR-0018 D-3 #2). " +
+    "Use adminBulkApproveWalletDeposits (numeric ids · cascade-aware) instead.",
+  );
+  return {
+    ok: false,
+    error: "TOMBSTONED: adminBulkApproveDeposits — use adminBulkApproveWalletDeposits per ADR-0018",
+  };
+}
+
+/**
+ * @deprecated Tombstoned per ADR-0018 D-3 #2. Slip URLs for tb_wallet_hs
+ * are resolved by `lib/storage/legacy-resolver.ts:resolveLegacyUrl()`
+ * directly on the server (see `/admin/wallet/[id]/page.tsx`), not via
+ * a UUID-keyed action.
+ */
+export async function adminGetWalletTxSlipSignedUrl(
+  _input: { id: string },
+): Promise<AdminActionResult<{ url: string | null; mime: string | null }>> {
+  console.warn(
+    "[wallet-hs] adminGetWalletTxSlipSignedUrl is TOMBSTONED (ADR-0018 D-3 #2). " +
+    "Use `resolveLegacyUrl(filename, 'slip')` from lib/storage/legacy-resolver " +
+    "with tb_wallet_hs.imagesslip instead.",
+  );
+  return {
+    ok: false,
+    error: "TOMBSTONED: adminGetWalletTxSlipSignedUrl — use resolveLegacyUrl per ADR-0018",
+  };
+}
+
+/**
+ * @deprecated Tombstoned per ADR-0018 D-3 #2. The `slip_transferred_at`
+ * column lived on rebuilt `wallet_transactions`; on `tb_wallet_hs` the
+ * equivalent is `dateslip` (set via `adminUpdateWalletHsDateSlip` in
+ * `actions/admin/wallet-trans.ts`).
+ */
+export async function adminSetWalletTxSlipTransferredAt(
+  _input: { id: string; slip_transferred_at: string },
+): Promise<AdminActionResult<{ id: string; slip_transferred_at: string | null }>> {
+  console.warn(
+    "[wallet-hs] adminSetWalletTxSlipTransferredAt is TOMBSTONED (ADR-0018 D-3 #2). " +
+    "Use adminUpdateWalletHsDateSlip from actions/admin/wallet-trans.ts " +
+    "(numeric tb_wallet_hs.id · column = dateslip) instead.",
+  );
+  return {
+    ok: false,
+    error: "TOMBSTONED: adminSetWalletTxSlipTransferredAt — use adminUpdateWalletHsDateSlip per ADR-0018",
+  };
+}

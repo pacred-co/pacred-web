@@ -1,8 +1,22 @@
 "use client";
 
+/**
+ * ⚠️ TOMBSTONE 2026-05-30 (ADR-0018 D-3 #2 · P0-9/MS-1) — ORPHAN component.
+ * Zero inbound callers (verified by grep 2026-05-30) for both kind values
+ * `wallet_tx` and `yuan_payment`. On the live wallet detail page
+ * (`/admin/wallet/[id]`) the equivalent dateslip editor is `EditDateSlipForm`
+ * in `[id]/edit-form.tsx` calling `adminUpdateWalletHsDateSlip` from
+ * `actions/admin/wallet-trans.ts` (writes `tb_wallet_hs.dateslip` —
+ * the faithful column).
+ *
+ * The wallet-tx import has been swapped from `actions/admin/wallet.ts` →
+ * `actions/admin/wallet-hs.ts` tombstone shim. Runtime calls fail loudly.
+ * Delete this file when the rebuilt `wallet_transactions` table is dropped.
+ */
+
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { adminSetWalletTxSlipTransferredAt } from "@/actions/admin/wallet";
+import { adminSetWalletTxSlipTransferredAt } from "@/actions/admin/wallet-hs";
 import { adminSetYuanSlipTransferredAt } from "@/actions/admin/yuan-payments";
 
 // V-A1 — inline cell for editing slip_transferred_at (the actual bank-

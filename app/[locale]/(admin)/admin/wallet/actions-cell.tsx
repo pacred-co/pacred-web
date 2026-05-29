@@ -1,9 +1,23 @@
 "use client";
 
+/**
+ * ⚠️ TOMBSTONE 2026-05-30 (ADR-0018 D-3 #2 · P0-9/MS-1) — ORPHAN component.
+ * Zero inbound callers (verified by grep 2026-05-30). The live per-row
+ * action surface is `transactions-view.tsx` which links rows to
+ * `/admin/wallet/[id]` (the detail page using `ApproveRejectForm` from
+ * `[id]/edit-form.tsx`). Bulk-approve uses `TbWalletBulkBar` from
+ * `tb-bulk-bar.tsx`. This `WalletTxActions` cell is dead code from the
+ * rebuilt-schema era.
+ *
+ * Imports swapped from `actions/admin/wallet.ts` → `actions/admin/wallet-hs.ts`
+ * tombstone shim. Runtime calls fail loudly with the tombstone error.
+ * Delete the file when the rebuilt `wallet_transactions` table is dropped.
+ */
+
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { adminUpdateWalletTransaction } from "@/actions/admin/wallet";
+import { adminUpdateWalletTransaction } from "@/actions/admin/wallet-hs";
 import { SlipReviewModal } from "./slip-review-modal";
 
 type Props = {

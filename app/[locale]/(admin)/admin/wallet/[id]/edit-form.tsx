@@ -23,11 +23,15 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Calendar, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { adminUpdateWalletHsDateSlip } from "@/actions/admin/wallet-trans";
+// ADR-0018 D-3 #2 + MS-1 fix (2026-05-30): repointed approve/reject from
+// `wallet-trans.ts` (no paydeposit cascade) → `wallet-hs.ts` (cascade-aware
+// per D-2 rule 3). The dateslip edit stays in `wallet-trans.ts` since it's
+// unaffected by the paydeposit cascade.
 import {
-  adminUpdateWalletHsDateSlip,
-  adminApproveWalletHs,
-  adminRejectWalletHs,
-} from "@/actions/admin/wallet-trans";
+  adminApproveWalletDeposit,
+  adminRejectWalletDeposit,
+} from "@/actions/admin/wallet-hs";
 
 // ────────────────────────────────────────────────────────────
 // <EditDateSlipForm>
@@ -144,7 +148,7 @@ export function ApproveRejectForm({
       return;
     }
     startTransition(async () => {
-      const res = await adminApproveWalletHs({ id });
+      const res = await adminApproveWalletDeposit({ id });
       if (res.ok) {
         router.refresh();
       } else {
@@ -160,7 +164,10 @@ export function ApproveRejectForm({
       return;
     }
     startTransition(async () => {
-      const res = await adminRejectWalletHs({ id, note: reason.trim() || undefined });
+      // ADR-0018 D-3 #2 + MS-1: param renamed `note` → `reason` for clarity
+      // (matches the legacy "เหตุผลที่ปฏิเสธ" UI label). Both names map to
+      // tb_wallet_hs.note column on the server.
+      const res = await adminRejectWalletDeposit({ id, reason: reason.trim() || undefined });
       if (res.ok) {
         router.refresh();
         setMode("idle");

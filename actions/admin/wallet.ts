@@ -1,11 +1,44 @@
 "use server";
 
+// TOMBSTONE 2026-05-30: superseded by actions/admin/wallet-hs.ts per ADR-0018 D-3.
+// All imports repointed; this file retires when no reader remains.
+//
+// Every export here writes to the REBUILT `wallet_transactions` table which is
+// EMPTY on prod. Calling these is a "silent dead-write" (Master Gap Audit §5 #1)
+// — UI shows green toast, zero real rows change. The canonical wallet ledger
+// per ADR-0018 D-1 is `tb_wallet` + `tb_wallet_hs` (legacy schema, 104,591 rows).
+//
+// Faithful replacements (use these instead):
+//   adminUpdateWalletTransaction     → adminApproveWalletDeposit /
+//                                      adminRejectWalletDeposit  (wallet-hs.ts)
+//   adminBulkApproveDeposits         → adminBulkApproveWalletDeposits (wallet-hs.ts)
+//   adminGetWalletTxSlipSignedUrl    → resolveLegacyUrl(filename, 'slip')
+//                                      (lib/storage/legacy-resolver.ts)
+//   adminSetWalletTxSlipTransferredAt → adminUpdateWalletHsDateSlip
+//                                       (actions/admin/wallet-trans.ts)
+//   adminCreateManualWalletEntry     → adminCreateWalletHsManual (wallet-hs.ts)
+//
+// One-sprint retire window per ADR-0018 D-3 #2. Last grep-survey 2026-05-30
+// shows no readers remain in app/, components/, actions/, lib/ except the
+// 4 already-tombstoned orphan UI files (slip-review-modal · actions-cell ·
+// bulk-approve-bar · components/admin/slip-transferred-at-cell) — those
+// have been repointed to wallet-hs.ts tombstone shims.
+
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
+
+// Module-load warning — any import of this file logs a tombstone notice on
+// server start (next dev/start). Helps surface forgotten readers in CI logs.
+console.warn(
+  "[actions/admin/wallet.ts] TOMBSTONED 2026-05-30 per ADR-0018 D-3 #2. " +
+  "All exports here write to the empty rebuilt `wallet_transactions` table — " +
+  "silent dead-writes. Migrate readers to `actions/admin/wallet-hs.ts` + " +
+  "`actions/admin/wallet-trans.ts:adminUpdateWalletHsDateSlip` immediately.",
+);
 
 const STATUSES = ["pending","completed","failed","cancelled"] as const;
 
