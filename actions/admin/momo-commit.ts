@@ -109,7 +109,11 @@ const PCS_PICKUP_ADDRESS: ResolvedAddress = {
 const PRODUCT_TYPE_OPTIONS = ["1", "2", "3", "4"] as const;
 const TRANSPORT_OPTIONS    = ["1", "2"] as const; // 1=EK truck, 2=SEA — legacy code values
 
-export const commitMomoRowSchema = z.object({
+// Wave 30 #2 — demoted from `export const` to plain const per Next 16
+// "use server" rule: a "use server" file can only export async functions.
+// Per docs/learnings/nextjs-16-quirks.md (Wave 25 #196 case study). Internal-
+// only Zod schemas + types stay (types are erased at compile time).
+const commitMomoRowSchema = z.object({
   rowId:        z.string().uuid("rowId ต้องเป็น uuid"),
   userID:       z.string().trim().regex(/^PR\d+$/i, "userID ต้องเป็น PR####").max(20),
   subUserID:    z.string().trim().max(20).optional().default(""),
