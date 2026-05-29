@@ -18,7 +18,13 @@
  *     functional; Wave 21 will restyle that island in Tailwind.
  *
  * Query-param prefill: `?q=PR1234` to pre-select a customer.
- * Default rate pulled from tb_settings.rsdefault (sell-rate default).
+ * Default rate pulled from tb_settings.rpdefault (ฝากชำระ/transfer-rate
+ * default — เรทฝากชำระสินค้า). Tier A6 fix (2026-05-29): was previously
+ * reading `rsdefault` (shop sell-rate, ฝากสั่งสินค้า) which is the WRONG
+ * column for ฝากโอนหยวน — legacy `pcs-admin/payment.php` L25, L129, L132
+ * reads `rpDefault` for this surface; `rsDefault` belongs to /cart /search
+ * /service-order (shop yuan-rate). Mixing the two = mis-priced yuan
+ * transfers (cost-side vs sell-side rate, ~5% margin error).
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
@@ -83,16 +89,22 @@ export default async function AdminYuanPaymentNewPage({
   }
   const recent = ((recentRaw ?? []) as unknown as UserRow[]).map(toCustomerLite);
 
-  // Default rate from tb_settings (single-row config). rsdefault = sell-rate default.
+  // Default rate from tb_settings (single-row config). rpdefault = ฝากชำระ
+  // transfer-rate default. Tier A6 fix (2026-05-29): switched from `rsdefault`
+  // (shop sell-rate · ฝากสั่งสินค้า) to `rpdefault` (transfer-rate · ฝากชำระ
+  // สินค้า). Legacy `pcs-admin/payment.php` L25, L129, L132 confirms this
+  // surface reads `rpDefault`; the previous code was reading the wrong column,
+  // causing yuan transfers to be priced at the shop rate (typically ~5%
+  // off from the transfer rate). Fallback 5.0 mirrors legacy default.
   const { data: settingsRaw, error: settingsRawErr } = await admin
     .from("tb_settings")
-    .select("rsdefault")
+    .select("rpdefault")
     .limit(1)
-    .maybeSingle<{ rsdefault: number | null }>();
+    .maybeSingle<{ rpdefault: number | null }>();
   if (settingsRawErr) {
     console.error(`[tb_settings list] failed`, { code: settingsRawErr.code, message: settingsRawErr.message });
   }
-  const defaultRate = Number(settingsRaw?.rsdefault ?? 5);
+  const defaultRate = Number(settingsRaw?.rpdefault ?? 5);
 
   return (
     <main className="p-6 lg:p-8 max-w-5xl mx-auto space-y-5">
@@ -136,7 +148,8 @@ export default async function AdminYuanPaymentNewPage({
           <li>ใช้เมื่อต้องสร้างรายการแทนลูกค้า (เช่นลูกค้าโทรมาขอ admin บันทึก)</li>
           <li>
             เรทดีฟอลต์อ่านจาก{" "}
-            <code className="rounded bg-white px-1 py-0.5">tb_settings.rsdefault</code> — เปลี่ยนได้
+            <code className="rounded bg-white px-1 py-0.5">tb_settings.rpdefault</code> — แก้ที่{" "}
+            <Link href="/admin/settings/legacy-rates" className="underline">ตั้งค่าเรทระบบ (tb_settings)</Link>
           </li>
           <li>เมื่อบันทึก รายการจะอยู่ในสถานะ &ldquo;อนุมัติ&rdquo; ทันที (admin เป็นผู้ยืนยัน)</li>
         </ol>
