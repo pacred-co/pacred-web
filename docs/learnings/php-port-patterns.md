@@ -8,6 +8,31 @@ Topics: porting `D:\xampp\htdocs\pcscargo\` → Pacred Next.js. Schema mappings 
 
 ---
 
+## 2026-05-30 — Dual-table writes: a "best-effort mirror" that NEVER fires looks identical to "working" (เดฟ)
+
+**Symptom (owner-reported):** new customers who registered never appeared in `/admin?tab=inactiveCustomers` (or `/admin/customers/pending`). The admin queue showed zero recent signups even though `/register` succeeded and the customer could log in.
+
+**Root cause — TWO compounding failures:**
+1. **Table-split the rebuilt app introduced.** Pacred customer signup writes to **`profiles`** (rebuilt-app table). The legacy admin queue reads **`tb_users` WHERE `userActive='0'`**. A "bridge" (`lib/auth/legacy-bridge-tb-users.ts`, wave-28 F1) was supposed to mirror each new profile into `tb_users` so the legacy admin UI sees it. Classic D1 dual-write: new code writes table A, ported legacy UI reads table B.
+2. **The bridge was deployed-but-never-ran-on-prod.** Written 2026-05-29 03:02 on `Poom-pacred`, it only reached production `main` via integration a day later. Every signup in between (58 profiles, PR002–PR027) wrote `profiles` only → orphaned. **Prod-probe proof:** `SELECT count(*) FROM tb_users WHERE coID='PR'` (the bridge's signature value) returned **0** — the bridge had literally never inserted a single row in production. A grep of the code would say "bridge is wired + awaited + correct"; only a prod-data probe revealed it had never executed there.
+3. **Latent third bug surfaced during backfill:** `tb_users.userTel` carries a UNIQUE index (`idx_*_usertel`). The bridge pre-checked `userID` collision but **not** `userTel`. 14 of the 58 orphans were re-registrations sharing a phone with an existing row → the insert would throw `23505` and (being best-effort, never-throw) silently orphan them anyway. So even after the bridge "worked", ~24% of signups would still vanish.
+
+**The deeper lesson — a silent best-effort mirror is invisible when it fails.** The bridge was written to *never throw* (so a failed mirror wouldn't 500 the signup). Good intent, but it means: **failure produces exactly the same observable result as the table-split bug it was meant to fix** — customer in `profiles`, absent from admin. There was no signal. The ONLY way to know the bridge worked is to assert the row landed in table B — which nobody did until the owner noticed customers missing weeks later.
+
+**Fix applied (commit 221856bc):**
+- Backfilled 44 orphans into `tb_users` (idempotent script `scripts/backfill-orphan-tb-users.mjs`, savepoint-per-row, phone-collision skip). 14 phone-dupes intentionally left mapping to their existing identity.
+- Added the missing `userTel` pre-check + degraded `23505`-on-insert from `error`→`info` (race-safe).
+
+**Rules this burns in:**
+1. **Any dual-write (new table + ported legacy table) needs a reconciliation probe, not just code review.** `SELECT count(*) FROM legacy_table WHERE <new-code signature>` — if it's 0, the mirror never ran, no matter how correct the code reads. Add it to the deploy gate for any feature that mirrors across the `profiles ↔ tb_*` split.
+2. **A best-effort/never-throw mirror MUST emit a success metric you can query later** (here: `coID='PR'` was an accidental signature that saved us — make it deliberate). Silent degrade = invisible failure = weeks of lost signups.
+3. **"Deployed" ≠ "ran on prod."** A commit on a feature branch that reaches `main` days later means prod had the OLD behavior the whole time. When diagnosing "feature X doesn't work," first verify X's code actually reached prod *and left a trace*, before debugging the logic.
+4. **Mirror EVERY unique constraint of the target table in the pre-check**, not just the PK. `tb_users` has unique `userID` AND unique `userTel`; checking only `userID` left a 24% silent-failure hole.
+
+Cross-link: [`verify-deep-flow.md`](verify-deep-flow.md) (assert the row/outcome, not the 200) · [`ci-and-deploy-gotchas.md`](ci-and-deploy-gotchas.md) (deployed-vs-ran, dead-DB-probe).
+
+---
+
 ## 2026-05-16 — V-A7 receipt-number "-N suffix" is N/A in Pacred (ภูม)
 
 **What:** PORT_PLAN Part V row V-A7 ("Receipt-number cleanup — one canonical number, drop the error-prone `-N` suffix") describes a legacy PCS Cargo PHP problem where receipts could spawn `R-12345-1`, `R-12345-2`, etc. variants for re-issues — error-prone because staff and customers kept different numbers in their records.
