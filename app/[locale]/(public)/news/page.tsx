@@ -5,7 +5,7 @@ import { ArrowRight, Calendar, Newspaper } from "lucide-react";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { Footer } from "@/components/sections/footer";
-import { ImportExportBanner } from "@/components/sections/import-export-banner";
+import { HomeBottomBanner } from "@/components/sections/home-bottom-banner";
 import { ArticleListTabs } from "@/components/sections/article-list-tabs";
 import { ALL_NEWS as PACRED_NEWS } from "@/lib/news/all";
 import { ArticleStats } from "@/components/knowledge/article-stats";
@@ -30,7 +30,7 @@ export async function generateMetadata({
 }
 
 const CATEGORY_BADGE: Record<string, string> = {
-  "ประกาศ":      "bg-primary-50 text-primary-700 border-primary-200 dark:bg-primary-900/30 dark:text-primary-300 dark:border-primary-900/50",
+  "ข่าวด่วน":    "bg-primary-50 text-primary-700 border-primary-200 dark:bg-primary-900/30 dark:text-primary-300 dark:border-primary-900/50",
   "อัปเดตบริการ": "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-900/50",
   "กิจกรรม":     "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-900/50",
 };
@@ -131,7 +131,7 @@ export default async function NewsListingPage({
                       <span
                         className={[
                           "inline-flex items-center gap-1 px-2 md:px-2.5 py-0.5 md:py-1 rounded-full text-[9px] md:text-[10.5px] font-black tracking-wider border shadow-[0_2px_6px_rgba(0,0,0,0.10)]",
-                          CATEGORY_BADGE[news.category] ?? CATEGORY_BADGE["ประกาศ"],
+                          CATEGORY_BADGE[news.category] ?? CATEGORY_BADGE["ข่าวด่วน"],
                         ].join(" ")}
                       >
                         {news.category}
@@ -161,7 +161,7 @@ export default async function NewsListingPage({
 
                     {/* Read more */}
                     <div className="mt-auto pt-1.5 md:pt-2 flex items-center gap-1 text-primary-600 text-[10.5px] md:text-[12px] font-black opacity-80 group-hover:opacity-100 transition-opacity">
-                      อ่านประกาศ
+                      อ่านข่าวด่วน
                       <ArrowRight className="w-3 h-3 md:w-3.5 md:h-3.5 transition-transform duration-300 group-hover:translate-x-1" strokeWidth={3} />
                     </div>
                   </div>
@@ -171,7 +171,7 @@ export default async function NewsListingPage({
           </div>
         </section>
 
-        <ImportExportBanner />
+        <HomeBottomBanner />
       </main>
       <Footer />
     </>

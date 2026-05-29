@@ -12,7 +12,7 @@ import {
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { Footer } from "@/components/sections/footer";
-import { ImportExportBanner } from "@/components/sections/import-export-banner";
+import { HomeBottomBanner } from "@/components/sections/home-bottom-banner";
 import { ArticleContent } from "@/components/knowledge/article-content";
 import { ShareButton } from "@/components/knowledge/share-button";
 import { ArticleStats } from "@/components/knowledge/article-stats";
@@ -26,7 +26,7 @@ import { articleSchema, breadcrumbSchema } from "@/components/seo/schemas";
 import { SITE_URL } from "@/components/seo/site";
 
 const CATEGORY_BADGE: Record<string, string> = {
-  "ประกาศ":      "bg-primary-50 text-primary-700 border-primary-200 dark:bg-primary-900/30 dark:text-primary-300 dark:border-primary-900/50",
+  "ข่าวด่วน":    "bg-primary-50 text-primary-700 border-primary-200 dark:bg-primary-900/30 dark:text-primary-300 dark:border-primary-900/50",
   "อัปเดตบริการ": "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-900/50",
   "กิจกรรม":     "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-900/50",
 };
@@ -150,7 +150,7 @@ export default async function NewsArticlePage({
                 <span
                   className={[
                     "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] font-black tracking-wider border",
-                    CATEGORY_BADGE[news.category] ?? CATEGORY_BADGE["ประกาศ"],
+                    CATEGORY_BADGE[news.category] ?? CATEGORY_BADGE["ข่าวด่วน"],
                   ].join(" ")}
                 >
                   {news.category}
@@ -183,14 +183,15 @@ export default async function NewsArticlePage({
               </div>
             </header>
 
-            {/* Hero cover — uses news.image (the announcement poster) centered, portrait. */}
-            <figure className="mx-auto w-full max-w-[480px] mb-6 md:mb-8">
-              <div className="relative aspect-[4/5] rounded-2xl md:rounded-3xl overflow-hidden border border-border shadow-[0_14px_36px_-12px_rgba(15,23,42,0.18)] bg-gradient-to-br from-gray-100 to-gray-200 dark:from-surface-alt dark:to-background">
+            {/* Hero cover — landscape, fitted to the article width so the
+                full image shows without edge-cropping (this detail page only). */}
+            <figure className="mx-auto w-full max-w-[760px] mb-6 md:mb-8">
+              <div className="relative aspect-[1280/580] rounded-2xl md:rounded-3xl overflow-hidden border border-border shadow-[0_14px_36px_-12px_rgba(15,23,42,0.18)] bg-gradient-to-br from-gray-100 to-gray-200 dark:from-surface-alt dark:to-background">
                 <Image
-                  src={news.image}
+                  src={news.heroImage ?? news.image}
                   alt={news.title}
                   fill
-                  sizes="(max-width: 480px) 100vw, 480px"
+                  sizes="(max-width: 760px) 100vw, 760px"
                   quality={92}
                   className="object-cover"
                   priority
@@ -205,7 +206,7 @@ export default async function NewsArticlePage({
           </div>
         </article>
 
-        <ImportExportBanner />
+        <HomeBottomBanner />
 
         <article className="relative pt-2 md:pt-4 pb-10 md:pb-16">
           <div className="mx-auto w-full max-w-[1140px] px-[10px]">
@@ -250,7 +251,7 @@ export default async function NewsArticlePage({
                           <span
                             className={[
                               "inline-flex items-center px-2 py-0.5 rounded-full text-[9px] md:text-[10px] font-black tracking-wider border shadow-[0_2px_6px_rgba(0,0,0,0.10)]",
-                              CATEGORY_BADGE[r.category] ?? CATEGORY_BADGE["ประกาศ"],
+                              CATEGORY_BADGE[r.category] ?? CATEGORY_BADGE["ข่าวด่วน"],
                             ].join(" ")}
                           >
                             {r.category}
@@ -262,7 +263,7 @@ export default async function NewsArticlePage({
                           {r.title}
                         </h3>
                         <div className="mt-auto pt-1.5 flex items-center gap-1 text-primary-600 text-[10.5px] md:text-[11.5px] font-black opacity-80 group-hover:opacity-100 transition-opacity">
-                          อ่านประกาศ
+                          อ่านข่าวด่วน
                           <ArrowRight className="w-3 h-3 transition-transform duration-300 group-hover:translate-x-1" strokeWidth={3} />
                         </div>
                       </div>

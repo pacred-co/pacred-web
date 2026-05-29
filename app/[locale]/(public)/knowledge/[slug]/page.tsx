@@ -12,9 +12,7 @@ import {
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { Footer } from "@/components/sections/footer";
-import { PurchaseBanner } from "@/components/sections/purchase-banner";
-import { ClearanceBanner } from "@/components/sections/clearance-banner";
-import { ImportExportBanner } from "@/components/sections/import-export-banner";
+import { HomeBottomBanner } from "@/components/sections/home-bottom-banner";
 import { ArticleContent } from "@/components/knowledge/article-content";
 import { ShareButton } from "@/components/knowledge/share-button";
 import { ArticleStats } from "@/components/knowledge/article-stats";
@@ -193,14 +191,8 @@ export default async function ArticlePage({
           </div>
         </article>
 
-        {/* Banner ตามหมวด — ใช้ banner เต็มของหน้าหลัก */}
-        {article.category === "เคลียร์" ? (
-          <ClearanceBanner />
-        ) : article.category === "ส่งออก" ? (
-          <ImportExportBanner />
-        ) : (
-          <PurchaseBanner />
-        )}
+        {/* LINE banner — ใช้แบนเนอร์ไลน์จากหน้าแรก */}
+        <HomeBottomBanner />
 
         <article className="relative pt-2 md:pt-4 pb-10 md:pb-16">
           <div className="mx-auto w-full max-w-[1140px] px-[10px]">
