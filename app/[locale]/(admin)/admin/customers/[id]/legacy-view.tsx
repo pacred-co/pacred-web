@@ -26,6 +26,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { Link } from "@/i18n/navigation";
+import { getCustomerRateMatrix } from "@/actions/admin/customer-rate";
+import { CustomerRateEditor } from "./rate-editor";
 
 type URow = {
   userID: string;
@@ -239,6 +241,10 @@ export async function renderLegacyCustomerView(id: string) {
   const hos = (shopRows ?? []) as unknown as HRow[];
   const pys = (yuanRows ?? []) as unknown as PRow[];
 
+  // Per-customer rate matrix (live tb_rate_custom_kg/cbm) — drives the
+  // in-profile rate editor + the SVIP badge. Reader logs+degrades on error.
+  const rateMatrix = await getCustomerRateMatrix(u.userID);
+
   return (
     <main className="p-6 lg:p-8 max-w-5xl mx-auto space-y-5">
       <div className="flex items-baseline justify-between flex-wrap gap-2">
@@ -269,6 +275,11 @@ export async function renderLegacyCustomerView(id: string) {
               {u.adminIDSale ? (
                 <span className="rounded-full border border-border bg-surface-alt px-3 py-1 text-xs font-mono">
                   ดูแลโดย {u.adminIDSale}
+                </span>
+              ) : null}
+              {rateMatrix.isSvip ? (
+                <span className="rounded-full bg-primary-600 text-white px-3 py-1 text-xs font-semibold">
+                  SVIP · เรทเฉพาะตัว
                 </span>
               ) : null}
             </div>
@@ -312,18 +323,22 @@ export async function renderLegacyCustomerView(id: string) {
         </div>
       </div>
 
-      {/* Wave 20 P0-1: deferred-mutation banner. The legacy view is
-          read-only by design — credit-line · status mutate · assign-rep ·
-          impersonation panels relied on the rebuilt `profiles.id` (uuid)
-          and don't apply to the ~8,898 migrated PCS customers. Edit
-          actions are tracked as separate audit items + Phase C work. */}
+      {/* Per-customer rate editor (เดฟ 2026-05-30) — faithful port of the
+          legacy customer-profile #rate-settings modal. Writes the LIVE
+          tb_rate_custom_kg/cbm + history (tb_customrate_hs + tb_hs_rate_custom_*).
+          This is the in-profile "ปรับเรทขายต่อลูกค้า" the owner pointed at;
+          it feeds the SVIP tier of the forwarder price waterfall. */}
+      <CustomerRateEditor userid={u.userID} customerName={fullName} matrix={rateMatrix} />
+
+      {/* Remaining deferred mutations still live on dedicated sub-pages /
+          a later pass (status · approve · note · address CRUD · stat cards). */}
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
-        <strong>หมายเหตุ:</strong> หน้านี้อ่านอย่างเดียว (Wave 20 schema port).
-        การอนุมัติ / ระงับ / แก้ไขข้อมูล / โอนเซลล์ → ใช้หน้าย่อยเฉพาะทาง
+        <strong>หมายเหตุ:</strong> ตั้งเรทขนส่ง (เรทขายต่อลูกค้า) ทำได้ในหน้านี้แล้ว ✓ —
+        ส่วน อนุมัติ / ระงับ / แก้ไขข้อมูล / โน้ต / ที่อยู่ ยังใช้หน้าย่อยเฉพาะทาง
         (<Link href="/admin/customers/transfer-rep" className="underline">ย้ายเซลล์</Link>
         {" · "}
         <Link href="/admin/customers/pending" className="underline">รายการรออนุมัติ</Link>)
-        หรือรอ Phase C สำหรับ inline editor.
+        หรือรอรอบถัดไป.
       </div>
 
       {/* Wave 20 P0-1: juristic company info (tb_corporate) — only render

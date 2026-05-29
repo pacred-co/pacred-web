@@ -331,3 +331,17 @@ ORDER BY table_name;
 - Migration `0113_align_pilot_users_admin_co.sql` — ironically normalized tb_users/tb_admin/tb_co to camelCase but didn't sweep tb_cnt* which were already mixed. Future align migrations should pick a casing convention project-wide.
 - Action code that relies on PostgREST fuzzy-match: `actions/admin/cnt-payment.ts` lines 240-252 (tb_cnt INSERT), 391-392 (tb_cnt_item INSERT)
 
+
+---
+
+## [2026-05-30] เขียนแค่ history table = ตัว editor ดูทำงานแต่ไม่มีผลต่อ billing
+
+**บริบท:** legacy customer-profile มีตัวปรับ "เรทขายต่อลูกค้า" (per-user rate override). port มาเป็น `/admin/rates/custom-hs` + `adminUpdateCustomerHsRates` — แต่มัน INSERT แค่ history (`tb_customrate_hs` + `tb_hs_rate_custom_kg/cbm`) **ไม่เคยเขียน live (`tb_rate_custom_kg/cbm`)** ที่ price engine อ่าน. แอดมินตั้งเรท เห็น "บันทึกแล้ว" แต่ราคาเรียกเก็บ **ไม่เปลี่ยน** — เพราะ legacy `customRate` handler เขียน **ทั้ง live + history** แต่ port มาแค่ครึ่งเดียว.
+
+**บทเรียน:**
+1. **ตาราง `*_hs` / `*_history` = audit ไม่ใช่ source-of-truth.** เวลา port write-handler ที่ปรับเงิน/เรท ให้ไล่ว่า legacy เขียน **กี่ตาราง** — มักมีคู่ (live ที่ระบบอ่าน + history ที่เก็บ audit). port ทั้งคู่เสมอ. ชื่อ `tb_customrate_hs` = customrate **History** ไม่ใช่ HS-code (confusion ที่ทำให้ port ผิด).
+2. **Verify ถึง "ค่าที่ engine อ่านจริง" ไม่ใช่แค่ "save สำเร็จ".** route 200 + toast เขียวไม่พอ — ต้องเช็คว่า field ที่ billing อ่าน เปลี่ยนจริง.
+3. **Floor/min ที่ legacy โชว์ มักเป็น display-only ไม่ enforce.** อย่า hard-block ตาม UI label — ข้อมูลจริงอาจละเมิด (ลูกค้า PW: KG=0 คิด CBM อย่างเดียว · CBM 4500 < floor 5300). ทำ advisory (เตือน) + ให้ owner ตัดสิน policy เอง. `0 = ไม่คิดตามหน่วยนั้น` ห้ามนับว่า "ต่ำกว่าทุน".
+4. **ตรวจ encoding ที่ port มาก่อนหน้าด้วย** — `/admin/rates/*` เดิม label โกดังสลับ (`1=อี้อู` แต่ legacy `1=กวางโจว`). data เขียนถูก (ส่ง value ผ่าน) แต่ป้ายผิด → แอดมินตั้งเรทผิดโกดังได้.
+
+**Cross-link:** [`docs/audit/customer-profile-rate-audit-2026-05-30.md`](../audit/customer-profile-rate-audit-2026-05-30.md) · `actions/admin/customer-rate.ts` (live+history เขียนคู่ · faithful) · `lib/admin/customer-rate-tables.ts`
