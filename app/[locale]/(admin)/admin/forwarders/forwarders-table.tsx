@@ -275,6 +275,24 @@ function CustomerBadges({
   );
 }
 
+/**
+ * MOMO writes their own routing-batch ID into `container_no` (e.g.
+ * "PR20260527-SEA02" / "MO20260523-SEA02") BEFORE the container actually
+ * closes. Until MOMO's sync flips that to the real cabinet (e.g.
+ * "GZS260525-2" from `momo_container_closed.raw.cid`), the value isn't
+ * a real cabinet a staff member can drill into via /admin/report-cnt/.
+ *
+ * This helper detects those routing-batch IDs so the UI can display
+ * "รอปิดตู้" instead of the cryptic value, and skip the (broken) drill
+ * link. The backfill script (scripts/backfill-momo-cabinet.mjs) replaces
+ * these values with real cabinets once MOMO closes the batch — so this
+ * is a transitional display, not a permanent mask.
+ */
+const MOMO_ROUTING_RX = /^(PR|MO)\d{8}-(SEA|EK)\d{2}$/;
+function isMomoRoutingBatch(cab: string | null | undefined): boolean {
+  return !!cab && MOMO_ROUTING_RX.test(cab.trim());
+}
+
 export function ForwardersTable({
   rows,
   statusLabel,
@@ -763,12 +781,21 @@ export function ForwardersTable({
                         {r.cabinet_number && (
                           <div className="mt-1 text-[10px]">
                             <span className="text-muted">เลขตู้: </span>
-                            <Link
-                              href={`/admin/report-cnt/${encodeURIComponent(r.cabinet_number)}`}
-                              className="font-mono text-primary-600 hover:underline"
-                            >
-                              {r.cabinet_number}
-                            </Link>
+                            {isMomoRoutingBatch(r.cabinet_number) ? (
+                              <span
+                                className="font-mono text-amber-700"
+                                title={`รอ MOMO ปิดตู้ (routing batch: ${r.cabinet_number})`}
+                              >
+                                รอปิดตู้
+                              </span>
+                            ) : (
+                              <Link
+                                href={`/admin/report-cnt/${encodeURIComponent(r.cabinet_number)}`}
+                                className="font-mono text-primary-600 hover:underline"
+                              >
+                                {r.cabinet_number}
+                              </Link>
+                            )}
                           </div>
                         )}
                         {/* Wave 18-B — fpallet (warehouse location) chip
@@ -801,7 +828,16 @@ export function ForwardersTable({
                           {sLabel}
                         </span>
                         {r.cabinet_number && (
-                          <div className="mt-0.5 text-[9px] text-muted font-mono">ตู้ {r.cabinet_number}</div>
+                          isMomoRoutingBatch(r.cabinet_number) ? (
+                            <div
+                              className="mt-0.5 text-[9px] text-amber-700 font-mono"
+                              title={`รอ MOMO ปิดตู้ (routing batch: ${r.cabinet_number})`}
+                            >
+                              ตู้ · รอปิด
+                            </div>
+                          ) : (
+                            <div className="mt-0.5 text-[9px] text-muted font-mono">ตู้ {r.cabinet_number}</div>
+                          )
                         )}
                       </td>
                       <td className="px-2 py-2.5 whitespace-nowrap">

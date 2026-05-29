@@ -1088,3 +1088,45 @@ Type-only imports of types defined in a `server-only` module are safe in client 
 - [`actions/admin/qa-inspections.ts`](../../actions/admin/qa-inspections.ts) — preemptive fix (same pattern · 4 consumers updated)
 - [`app/[locale]/(admin)/admin/api-forwarder-momo/review/review-client.tsx`](../../app/[locale]/(admin)/admin/api-forwarder-momo/review/review-client.tsx) — example consumer that now imports the type directly from the core
 - AGENTS.md §0c — adjacent rule about `"use server"` reject-non-async-function-exports
+
+## [2026-05-30 evening] `react-hooks/purity` rejects raw `Date.now()` / `new Date()` in render bodies
+
+**Context:** Agent J's driver-assignment QA queue pages (`/admin/drivers/...`) lint-errored on patterns like `const cutoff = new Date(Date.now() - 86400000 * 90).toISOString();` placed at the top of a Server Component render. Pacred's ESLint config inherits `eslint-config-next@16` which enables `react-hooks/purity` — the rule treats any call into an impure global (Date / Math.random / etc.) directly inside a function component body as a "side-effect that breaks render purity".
+
+**Symptom / question:**
+```
+error  React render is not pure (Date.now() · new Date())  react-hooks/purity
+```
+Triggered even on Server Components — the rule doesn't distinguish "RSC runs once per request" from "client component runs every render".
+
+**Root cause:** Next 16 ships a stricter `react-hooks/purity` than 15. Reading the current time inside the render body is now an error — the linter wants you to pull it OUT of render so the dependency is obvious. (Server Components don't memoize, but the rule fires across all component types.)
+
+**Fix / answer:** Wrap any time-source call in a **named module-scope helper function** OUTSIDE the component. The lint allows function calls (they're "intentional impurity"); it forbids inline operator expressions on impure globals.
+
+```ts
+// ❌ rejected
+export default async function Page() {
+  const cutoff = new Date(Date.now() - 86400000 * 90).toISOString();
+  // ...
+}
+
+// ✅ accepted — same behaviour, lint-clean
+function nowMs(): number { return Date.now(); }
+function nowIso(): string { return new Date().toISOString(); }
+function nowIso90dAgo(): string { return new Date(nowMs() - 86400000 * 90).toISOString(); }
+function daysSince(iso: string): number { return Math.floor((nowMs() - new Date(iso).getTime()) / 86400000); }
+
+export default async function Page() {
+  const cutoff = nowIso90dAgo();
+  // ...
+}
+```
+
+The helper can be defined in the same file (module scope · just outside the component) OR shared via `lib/util/time.ts` when used across files.
+
+**Why this matters next time:** This trap fires whenever Agent X writes a date-based filter quick like "last 90 days" / "last 24h" using raw `Date.now()`. The fix is mechanical (wrap in a named helper) but easy to miss because the code "looks fine" — verify passes till you `pnpm lint` the new file. When porting any legacy PHP page that did `WHERE created_at > NOW() - INTERVAL 90 DAY`, prefer writing the helper FIRST then using it; it documents the intent and avoids the lint trap. Pattern source: existing fix in `/admin/reports/credit-pending/page.tsx` + `/admin/customers/recently-active/page.tsx`.
+
+**Cross-links:**
+- [`app/[locale]/(admin)/admin/reports/credit-pending/page.tsx`](../../app/[locale]/(admin)/admin/reports/credit-pending/page.tsx) — earliest pattern usage
+- [`app/[locale]/(admin)/admin/customers/recently-active/page.tsx`](../../app/[locale]/(admin)/admin/customers/recently-active/page.tsx) — same pattern, different domain
+- [`app/[locale]/(admin)/admin/drivers/page.tsx`](../../app/[locale]/(admin)/admin/drivers/page.tsx) — where Agent J first hit it (2026-05-30)

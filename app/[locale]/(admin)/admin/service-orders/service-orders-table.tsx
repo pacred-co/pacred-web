@@ -267,7 +267,15 @@ export function ServiceOrdersTable({
                     sortHrefs={sortHrefs}
                   />
                   <th className="px-2 py-3">อัปเดต</th>
-                  <th className="px-2 py-3 text-center">ตัวเลือก</th>
+                  {/* Action column — sticky-right so admins always see
+                      ดูรายละเอียด / อัปเดต / พิมพ์ buttons regardless of
+                      horizontal scroll position. Windows Chrome hides the
+                      scrollbar by default; if the buttons were off-screen
+                      the column might as well not exist (AGENTS.md §0c
+                      lesson — invisible column = invisible workflow). */}
+                  <th className="px-2 py-3 text-center sticky right-0 z-10 bg-surface-alt/95 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)]">
+                    ตัวเลือก
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -292,7 +300,7 @@ export function ServiceOrdersTable({
                   return (
                     <tr
                       key={r.id}
-                      className={`border-t border-border hover:bg-surface-alt/30 ${isOn ? "bg-primary-50/40" : ""}`}
+                      className={`group border-t border-border hover:bg-surface-alt/30 ${isOn ? "bg-primary-50/40" : "bg-white"}`}
                     >
                       <td className="px-2 py-2.5 w-8">
                         <input
@@ -451,7 +459,11 @@ export function ServiceOrdersTable({
                           <div className="text-[9px] text-muted font-mono mt-0.5">{r.adminidupdate}</div>
                         )}
                       </td>
-                      <td className="px-2 py-2.5">
+                      <td
+                        className={`px-2 py-2.5 sticky right-0 z-10 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)] ${
+                          isOn ? "bg-primary-50/95" : "bg-white"
+                        } group-hover:bg-surface-alt/95`}
+                      >
                         <div className="flex flex-col gap-1 items-stretch min-w-[110px]">
                           <Link
                             href={`/admin/service-orders/${r.hno}`}

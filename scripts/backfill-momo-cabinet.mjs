@@ -142,44 +142,148 @@ if (top.length > 0) {
   console.log();
 }
 
-// ── 4. APPLY or stop ───────────────────────────────────────────
-if (!APPLY) {
-  console.log("🟡 DRY-RUN done — nothing was written.");
-  console.log("   Re-run with APPLY=true to perform the UPDATEs.\n");
-  process.exit(0);
+// ── 4. APPLY (or skip in dry-run) momo_import_tracks updates ─────
+if (APPLY) {
+  console.log("Step 4 — applying momo_import_tracks UPDATEs…");
+  let updated = 0;
+  let failed = 0;
+  const errors = [];
+  for (const w of work) {
+    const { error: upErr } = await admin
+      .from("momo_import_tracks")
+      .update({
+        container_batch_no: w.cabinetNo,
+        updated_at:         new Date().toISOString(),
+      })
+      .in("momo_tracking_no", w.reTracks);
+    if (upErr) {
+      failed++;
+      errors.push({ cabinet: w.cabinetNo, trackCount: w.reTracks.length, message: upErr.message });
+      console.error(`  ✗ cabinet=${w.cabinetNo}: ${upErr.message}`);
+    } else {
+      updated++;
+    }
+  }
+  console.log(`  cabinets updated: ${updated} · failed: ${failed}`);
+} else {
+  console.log("Step 4 — 🟡 DRY-RUN · skipping momo_import_tracks writes (Step 5 preview continues).\n");
 }
 
-console.log("Step 4 — applying UPDATEs…");
-let updated = 0;
-let failed = 0;
-const errors = [];
+// ── 5. PROPAGATE backfill → tb_forwarder.fcabinetnumber ──────────
+// ภูม flag 2026-05-30 evening (post-script): /admin/forwarders ยัง
+// แสดงเลขตู้เดิม "PR20260527-SEA02" — เพราะ Step 4 ข้างบนแก้แค่ใน
+// momo_import_tracks แต่ rows ใน tb_forwarder ที่ commit ก่อน fix
+// ยังเก็บเลข MOMO routing batch เดิมที่ Agent I propagation pipeline
+// ใส่ลงไป. ต้อง JOIN + update ที่ tb_forwarder ด้วย.
+//
+// SAFETY: เฉพาะ rows ที่ fcabinetnumber match pattern MOMO routing
+// batch (เช่น "PR####-SEA##", "PR####-EK##") · ไม่แตะ admin's manual
+// values หรือ legacy cabinets (GZE/GZS/GZ...).
+console.log("\nStep 5 — propagate cabinet to tb_forwarder.fcabinetnumber…");
+const MOMO_ROUTING_RX = /^PR\d{8}-(SEA|EK)\d{2}$/;
+
+// Source-of-truth for the (tracking → cabinet) map: the in-memory `work[]`
+// plan from Step 2. This way the dry-run preview shows what tb_forwarder
+// updates WOULD cascade even before Step 4 writes anything, and APPLY=true
+// always sees the freshest map (the same data we'd just write).
+//
+// We also UNION any already-filled momo_import_tracks rows (e.g. from a
+// previous sync) so the cascade fires for legacy commits too.
+const trackToCabinet = new Map();
 for (const w of work) {
-  const { error: upErr } = await admin
-    .from("momo_import_tracks")
-    .update({
-      container_batch_no: w.cabinetNo,
-      updated_at:         new Date().toISOString(),
-    })
-    .in("momo_tracking_no", w.reTracks);
-  if (upErr) {
-    failed++;
-    errors.push({ cabinet: w.cabinetNo, trackCount: w.reTracks.length, message: upErr.message });
-    console.error(`  ✗ cabinet=${w.cabinetNo}: ${upErr.message}`);
-  } else {
-    updated++;
+  for (const t of w.reTracks) trackToCabinet.set(t, w.cabinetNo);
+}
+const { data: filledTracks, error: filledTracksErr } = await admin
+  .from("momo_import_tracks")
+  .select("momo_tracking_no, container_batch_no")
+  .not("container_batch_no", "is", null)
+  .not("momo_tracking_no", "is", null);
+if (filledTracksErr) {
+  console.error("  failed loading filled tracks:", filledTracksErr);
+  process.exit(3);
+}
+for (const r of filledTracks ?? []) {
+  if (r.momo_tracking_no && r.container_batch_no && !trackToCabinet.has(r.momo_tracking_no)) {
+    trackToCabinet.set(r.momo_tracking_no, r.container_batch_no);
   }
 }
-console.log(`\n  cabinets updated: ${updated}`);
-console.log(`  cabinets failed:  ${failed}`);
-if (errors.length > 0) {
-  console.log("\n  Errors:");
-  for (const e of errors) {
-    console.log(`    cabinet=${e.cabinet} trackCount=${e.trackCount}: ${e.message}`);
+console.log(`  tracking → cabinet map: ${trackToCabinet.size} entries (work=${
+  work.reduce((n, w) => n + w.reTracks.length, 0)
+} + existing=${filledTracks?.length ?? 0})`);
+
+const trackings = Array.from(trackToCabinet.keys());
+let fwdMatched = 0, fwdWillUpdate = 0, fwdAlreadyOk = 0, fwdSkippedAdminSet = 0;
+const fwdUpdatePlan = []; // [{ id, oldCab, newCab }]
+
+if (trackings.length > 0) {
+  // Chunked .in() to avoid PostgREST URL limit (≈200 tracking strings).
+  for (let i = 0; i < trackings.length; i += 200) {
+    const slice = trackings.slice(i, i + 200);
+    const { data: matching, error: matchErr } = await admin
+      .from("tb_forwarder")
+      .select("id, ftrackingchn, fcabinetnumber")
+      .in("ftrackingchn", slice);
+    if (matchErr) {
+      console.error(`  match chunk ${i} failed:`, matchErr);
+      continue;
+    }
+    for (const f of matching ?? []) {
+      fwdMatched++;
+      const newCab = trackToCabinet.get(f.ftrackingchn);
+      if (!newCab) continue;
+      const oldCab = (f.fcabinetnumber ?? "").trim();
+      if (oldCab === newCab) {
+        fwdAlreadyOk++;
+        continue;
+      }
+      // Safe path 1: empty cell → fill it.
+      // Safe path 2: cell currently has a MOMO routing batch ID
+      // (PR########-SEA##/EK## pattern) → replace it with real cid.
+      // Otherwise: admin has set a manual value → DO NOT TOUCH.
+      const isMomoPattern = MOMO_ROUTING_RX.test(oldCab);
+      if (oldCab === "" || isMomoPattern) {
+        fwdWillUpdate++;
+        fwdUpdatePlan.push({ id: f.id, oldCab: oldCab || "(empty)", newCab });
+      } else {
+        fwdSkippedAdminSet++;
+      }
+    }
+  }
+}
+console.log(`  tb_forwarder rows matched:   ${fwdMatched}`);
+console.log(`  already correct:             ${fwdAlreadyOk}`);
+console.log(`  will UPDATE (empty/MOMO):    ${fwdWillUpdate}`);
+console.log(`  skipped (admin-set value):   ${fwdSkippedAdminSet}`);
+
+if (fwdUpdatePlan.length > 0 && fwdUpdatePlan.length <= 10) {
+  console.log("\n  Preview (first 10):");
+  for (const u of fwdUpdatePlan.slice(0, 10)) {
+    console.log(`    id=${String(u.id).padStart(6)}  '${u.oldCab.padEnd(22)}' → '${u.newCab}'`);
   }
 }
 
-// ── 5. Final post-check ────────────────────────────────────────
-console.log("\nStep 5 — post-check tallies…");
+if (APPLY && fwdUpdatePlan.length > 0) {
+  console.log(`\n  applying ${fwdUpdatePlan.length} tb_forwarder updates…`);
+  let fwdUpdated = 0, fwdFailed = 0;
+  for (const u of fwdUpdatePlan) {
+    const { error: upErr } = await admin
+      .from("tb_forwarder")
+      .update({ fcabinetnumber: u.newCab })
+      .eq("id", u.id);
+    if (upErr) {
+      fwdFailed++;
+      console.error(`    ✗ id=${u.id}: ${upErr.message}`);
+    } else {
+      fwdUpdated++;
+    }
+  }
+  console.log(`  tb_forwarder updated: ${fwdUpdated} · failed: ${fwdFailed}`);
+} else if (!APPLY && fwdUpdatePlan.length > 0) {
+  console.log(`\n  🟡 DRY-RUN — would UPDATE ${fwdUpdatePlan.length} tb_forwarder rows.`);
+}
+
+// ── 6. Final tallies ─────────────────────────────────────────────
+console.log("\nStep 6 — post-check tallies…");
 const { count: pendingNullCount, error: nullErr } = await admin
   .from("momo_import_tracks")
   .select("id", { count: "exact", head: true })
@@ -191,8 +295,8 @@ const { count: filledCount, error: filledErr } = await admin
 if (nullErr || filledErr) {
   console.error("  count failed:", nullErr || filledErr);
 } else {
-  console.log(`  container_batch_no IS NULL: ${pendingNullCount}`);
-  console.log(`  container_batch_no SET:     ${filledCount}\n`);
+  console.log(`  momo_import_tracks · container_batch_no IS NULL: ${pendingNullCount}`);
+  console.log(`  momo_import_tracks · container_batch_no SET:     ${filledCount}\n`);
 }
 
 console.log("✅ Backfill done.");
