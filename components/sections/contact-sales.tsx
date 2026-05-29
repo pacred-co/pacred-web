@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Phone, Sparkles, Headset, Award, MessageCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Phone, Sparkles, Headset, Award, MessageCircle, ChevronLeft, ChevronRight, Truck } from "lucide-react";
 import { trackCtaClick } from "@/lib/analytics";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
@@ -44,13 +44,13 @@ const SALES: SalesPerson[] = [
   },
   {
     name: "วิน",
-    role: "ดูแลลูกค้า (CS)",
+    role: "ผู้จัดการโลจิสติกส์",
     tagline: "ดูแลทุกขั้นตอน ตอบทุกคำถาม ตลอดการใช้บริการ",
     phone: "062-603-0456",
     image: "/images/Character_Icon/win01.png",
-    badge: "Customer Service",
-    badgeIcon: Headset,
-    alt: "ทีมดูแลลูกค้าวิน Pacred",
+    badge: "Logistics Manager",
+    badgeIcon: Truck,
+    alt: "ผู้จัดการโลจิสติกส์วิน Pacred",
   },
   {
     name: "พลอย",

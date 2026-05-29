@@ -8,12 +8,12 @@ import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
 const LINE_URL = "/line";
 
-// 2 sales (เมย์ · แนท) + 2 customer-service (วิน · พลอย). วิน + พลอย are CS,
-// not sales — per owner directive 2026-05-29 (apply site-wide).
+// เมย์ · แนท = sales · วิน = Logistics Manager (ผู้จัดการโลจิสติกส์) · พลอย = customer-service.
+// Per owner directive — apply site-wide.
 const SALES = [
   { name: "เมย์", slogan: "นำเข้า-ส่งออก ครบวงจร ปรึกษาฟรี ปิดดีลให้จบในที่เดียว", phone: "066-125-3006", image: "/images/Character_Icon/may.png",    useContain: false, alt: "ฝ่ายขายเมย์ Pacred",      button: "ทักเมย์เลย" },
   { name: "แนท",  slogan: "นำเข้าสั่งซื้อจีน ทุกแพลตฟอร์ม ครบจบในที่เดียว",       phone: "066-131-0253", image: "/images/pacred-logo-red.png",      useContain: true,  alt: "ฝ่ายขายแนท Pacred",      button: "ทักแนทเลย"  },
-  { name: "วิน",  slogan: "ดูแลทุกขั้นตอน ตอบทุกคำถาม ตลอดการใช้บริการ",          phone: "062-603-0456", image: "/images/Character_Icon/win01.png", useContain: false, alt: "ทีมดูแลลูกค้าวิน Pacred",  button: "ทักวินเลย"  },
+  { name: "วิน",  slogan: "ดูแลทุกขั้นตอน ตอบทุกคำถาม ตลอดการใช้บริการ",          phone: "062-603-0456", image: "/images/Character_Icon/win01.png", useContain: false, alt: "ผู้จัดการโลจิสติกส์วิน Pacred",  button: "ทักวินเลย"  },
   { name: "พลอย", slogan: "พร้อมช่วยเหลือ ดูแลคุณทุกเรื่องนำเข้า-ส่งออก เร็ว ใส่ใจ", phone: "062-603-4456", image: "/images/Character_Icon/ploy01.png", useContain: false, alt: "ทีมดูแลลูกค้าพลอย Pacred", button: "ทักพลอยเลย" },
 ];
 

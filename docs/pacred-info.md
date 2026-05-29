@@ -166,13 +166,13 @@ Last updated: 2026-05-25 (post-org-shift roster — full per-department director
 
 ## 🧑‍💼 Customer-facing team widget (4 cards — owner directive 2026-05-30)
 
-> Owner directive (2026-05-30): the customer-facing team widget shows **exactly 4 people — เมย์ + แนท (Sales) · วิน + พลอย (CS, customer service)**. วิน and พลอย are NOT sales — they are CS. Apply site-wide, every spot. Source-of-truth is [`components/sections/contact-sales.tsx`](../components/sections/contact-sales.tsx) `SALES`; mirrored by [`lib/booking-data.ts`](../lib/booking-data.ts) `SALES_CARDS_DATA` (4 reps · `personKey: 'may' | 'nat' | 'win' | 'ploy'`) + the banner variants (`sales-carousel.tsx` · `purchase-banner.tsx` · `clearance-banner.tsx` · `import-export-banner.tsx`) which all show the same 4. Roles + slogans live in the `salesTeam` i18n namespace (TH/EN). All currently route to main Pacred OA; per-rep LINE channels = future enhancement (Phase C marketing).
+> Owner directive (2026-05-30, updated): the customer-facing team widget shows **exactly 4 people — เมย์ + แนท (Sales) · วิน (Logistics Manager / ผู้จัดการโลจิสติกส์) · พลอย (CS, customer service)**. เมย์ + แนท are sales; วิน is the Logistics Manager; พลอย is CS. Apply site-wide, every spot. Source-of-truth is [`components/sections/contact-sales.tsx`](../components/sections/contact-sales.tsx) `SALES`; mirrored by [`lib/booking-data.ts`](../lib/booking-data.ts) `SALES_CARDS_DATA` (4 reps · `personKey: 'may' | 'nat' | 'win' | 'ploy'`) + the banner variants (`sales-carousel.tsx` · `purchase-banner.tsx` · `clearance-banner.tsx` · `import-export-banner.tsx`) which all show the same 4. Roles + slogans live in the `salesTeam` i18n namespace (TH/EN). All currently route to main Pacred OA; per-rep LINE channels = future enhancement (Phase C marketing).
 
 | Name | Role (widget) | Phone |
 |---|---|---|
 | **เมย์** | ฝ่ายขาย (Sales) | 066-125-3006 |
 | **แนท** | ฝ่ายขาย (Sales) | **066-131-0253** |
-| **วิน** | ดูแลลูกค้า (CS) | 062-603-0456 |
+| **วิน** | ผู้จัดการโลจิสติกส์ (Logistics Manager) | 062-603-0456 |
 | **พลอย** | ดูแลลูกค้า (CS) | **062-603-4456** |
 
 > Because the widget now mixes Sales + CS, customer-facing CTA/heading copy was broadened from "เซลล์" → "ทีมงาน" / "ผู้ดูแล" (e.g. `ContactSales` heading "ทักทีมงาน"; `purchaseBanner.ctaSales` "เลือกทีมงาน"). When ad campaigns target a person, set `<ContactSales featuredName="…" />` accordingly (e.g. `featuredName="พลอย"` on `/customs-clearance-shipping-suvarnabhumi`).
