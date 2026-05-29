@@ -5,11 +5,11 @@
 
 ---
 
-## 🔢 NEXT FREE NUMBER = **0127**
+## 🔢 NEXT FREE NUMBER = **0128**
 
-ใครจะเขียน migration ใหม่ → ใช้ `0127_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
+ใครจะเขียน migration ใหม่ → ใช้ `0128_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
 
-> 0118-0126 ครอง prod แล้ว (ปอน 0118-0122 MOMO · ภูม 0123-0124 admins+momo-commit · เดฟ 0125 customer-usage-split · เดฟ 0126 tax-rates-seed · all applied 2026-05-30).
+> 0118-0127 ครอง prod แล้ว (ปอน 0118-0122 MOMO · ภูม 0123-0124 admins+momo-commit · เดฟ 0125 customer-usage-split · เดฟ 0126 tax-rates-seed · เดฟ 0127 order-tax-doc-pref · all applied 2026-05-30).
 
 > **กฎกันชนถาวร:** migration เป็น **global sequence ของทั้ง repo** ไม่ใช่ของ branch ใคร. เลขชนกัน = merge เจ็บ. **เขียนใหม่ → ขอเลขจากเดฟ / เช็คไฟล์นี้ก่อนเสมอ.**
 
@@ -29,6 +29,7 @@
 | 0124 | `momo_commit_tracking` | ภูม | ✅ applied (renumbered from 0119 · integrated 2026-05-30) | main |
 | 0125 | `customer_usage_split` | เดฟ | ✅ applied 2026-05-30 (135ms · used=2805/unused=6085) | main |
 | 0126 | `tax_rates_seed` | เดฟ | ✅ applied 2026-05-30 (74ms · 4 rate rows: transport 1% · service 3% · goods 3% · VAT 7%) | main |
+| 0127 | `order_tax_doc_pref` | เดฟ | ✅ applied 2026-05-30 (2309ms · 3 cols × 2 tables · CHECK constraint · 2 partial indexes) | main |
 
 ---
 

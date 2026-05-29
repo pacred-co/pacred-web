@@ -17,6 +17,7 @@ import {
   type CartAddressOption,
   type ShipByOption,
 } from "./cart-address-shipby";
+import { CartTaxDocPref, type TaxDocDefaults } from "./cart-tax-doc-pref";
 import {
   ShoppingCart,
   Plus,
@@ -171,7 +172,7 @@ export default async function CartPage() {
   // cart.php L146-153: SELECT userAddressID, userTransportType,
   //   userShipBy, userPayMethod FROM tb_users WHERE userID=…
   // cart.php L163-170: SELECT COUNT(ID) FROM tb_cart WHERE userID=…
-  const [settingsRes, userRowRes, cartCountRes] = await Promise.all([
+  const [settingsRes, userRowRes, cartCountRes, juristicRes] = await Promise.all([
     admin
       .from("tb_settings")
       .select("rsdefault")
@@ -179,22 +180,39 @@ export default async function CartPage() {
       .maybeSingle<{ rsdefault: number }>(),
     admin
       .from("tb_users")
-      .select("userAddressID, userTransportType, userShipBy, userPayMethod")
+      .select("userAddressID, userTransportType, userShipBy, userPayMethod, userCompany")
       .eq("userID", userID)
       .maybeSingle<{
         userAddressID: string | null;
         userTransportType: string | null;
         userShipBy: string | null;
         userPayMethod: string | null;
+        userCompany: string | null;
       }>(),
     admin
       .from("tb_cart")
       .select("id", { count: "exact", head: true })
       .eq("userid", userID),
+    // P1 (tax-doc selector) — pre-fill juristic customers' tax id +
+    // company name + address from tb_corporate. The cart selector defaults
+    // to 'tax_invoice' when the customer is juristic AND has a tax id.
+    admin
+      .from("tb_corporate")
+      .select("corporatenumber, corporatename, corporateaddress")
+      .eq("userid", userID)
+      .maybeSingle<{ corporatenumber: string | null; corporatename: string | null; corporateaddress: string | null }>(),
   ]);
 
   const rsDefault = Number(settingsRes.data?.rsdefault ?? 0);
   const userAddressID = userRowRes.data?.userAddressID ?? "";
+
+  // P1 — tax-doc defaults for the cart selector.
+  const taxDocDefaults: TaxDocDefaults = {
+    isJuristic: userRowRes.data?.userCompany === "1",
+    taxId: juristicRes.data?.corporatenumber ?? "",
+    companyName: juristicRes.data?.corporatename ?? "",
+    companyAddress: juristicRes.data?.corporateaddress ?? "",
+  };
   // cart.php L150-151: $userTransportType is read then forced to 2.
   // Typed `number` (not the literal 2) so the legacy `=== 1` radio
   // checks below stay as faithful transcribed comparisons.
@@ -438,16 +456,22 @@ export default async function CartPage() {
               when rows exist, the rendering + the promo + order-summary
               card are delegated to <CartInteractivity> (client). */}
           {cartRows.length > 0 ? (
-            <CartInteractivity
-              groupedProviders={interactiveProviders}
-              totalRowCount={totalRowCount}
-              initialRsDefault={rsDefault}
-              promo33Active={promo33Active}
-              memberCode={userID}
-              shippingCard={
-                <ShippingOptionsCard userTransportType={userTransportType} />
-              }
-            />
+            <>
+              {/* P1 — tax-document preference selector (เดฟ 2026-05-30). Inside the
+                  form so its hidden+visible inputs reach the submit FormData
+                  read by CartInteractivity.handleSubmitOrder. */}
+              <CartTaxDocPref defaults={taxDocDefaults} />
+              <CartInteractivity
+                groupedProviders={interactiveProviders}
+                totalRowCount={totalRowCount}
+                initialRsDefault={rsDefault}
+                promo33Active={promo33Active}
+                memberCode={userID}
+                shippingCard={
+                  <ShippingOptionsCard userTransportType={userTransportType} />
+                }
+              />
+            </>
           ) : (
             <EmptyCartState />
           )}

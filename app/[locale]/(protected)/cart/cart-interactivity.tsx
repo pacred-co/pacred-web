@@ -358,6 +358,31 @@ export function CartInteractivity({
     const pro2 = pro2Checked ? "77" : null;
     const hNote = fd.get("hNote");
 
+    // P1 (เดฟ 2026-05-30) — tax-document selector at /cart. The
+    // CartTaxDocPref client component writes these form fields; the action
+    // persists them on tb_header_order so billing/payment-land can issue the
+    // right doc (P2 will route 'tax_invoice' to the existing tax_invoices
+    // machinery + VAT 7%; 'receipt' is the legacy default).
+    const taxDocPref = fd.get("taxDocPref");
+    const taxDocTaxId = fd.get("taxDocTaxId");
+    const taxDocBillingName = fd.get("taxDocBillingName");
+    const taxDocAddress = fd.get("taxDocAddress");
+    if (taxDocPref === "tax_invoice") {
+      const t = String(taxDocTaxId ?? "").trim();
+      if (!/^\d{13}$/.test(t)) {
+        window.alert("กรุณากรอกเลขผู้เสียภาษี 13 หลักให้ครบ");
+        return;
+      }
+      if (!String(taxDocBillingName ?? "").trim()) {
+        window.alert("กรุณากรอกชื่อบริษัทสำหรับใบกำกับภาษี");
+        return;
+      }
+      if (!String(taxDocAddress ?? "").trim()) {
+        window.alert("กรุณากรอกที่อยู่สำหรับใบกำกับภาษี");
+        return;
+      }
+    }
+
     if (!addressID) {
       window.alert("กรุณาเลือกที่อยู่จัดส่ง");
       return;
@@ -383,6 +408,10 @@ export function CartInteractivity({
         pro: pro ? String(pro) : null,
         pro2,
         hNote: hNote ? String(hNote) : null,
+        taxDocPref: taxDocPref ? String(taxDocPref) : null,
+        taxDocTaxId: taxDocTaxId ? String(taxDocTaxId) : null,
+        taxDocBillingName: taxDocBillingName ? String(taxDocBillingName) : null,
+        taxDocAddress: taxDocAddress ? String(taxDocAddress) : null,
       });
       setSubmitting(false);
       if (!res.ok) {

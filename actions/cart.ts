@@ -235,6 +235,14 @@ export async function submitCartOrder(input: {
   pro?: string | null;                    // 'f' = PCSF promo (+50฿ shipping)
   pro2?: string | null;                   // '77' = 3.3 date-window promo
   hNote?: string | null;                  // free-text note
+  // P1 (เดฟ 2026-05-30) — tax-doc selector at /cart. Persisted on
+  // tb_header_order so the billing/payment-land flow can issue the right doc.
+  // Validated server-side: 'tax_invoice' requires the 13-digit tax id +
+  // billing name + address; 'receipt' (default) needs nothing.
+  taxDocPref?: string | null;             // 'receipt' | 'tax_invoice'
+  taxDocTaxId?: string | null;            // 13-digit
+  taxDocBillingName?: string | null;      // company name
+  taxDocAddress?: string | null;          // billing address snapshot
 }): Promise<ActionResult<{ hNo: string }>> {
   const impErr = await assertNotImpersonating();
   if (impErr) return impErr;
@@ -249,6 +257,19 @@ export async function submitCartOrder(input: {
   if (!input.hTransportType || !input.crate || !input.addressID) {
     return { ok: false, error: "missing_required_fields" };
   }
+
+  // P1 — tax-doc selector validation (server side too, so a stale client
+  // can't sneak a tax_invoice through without the required snapshot fields).
+  const taxDocPref = input.taxDocPref === "tax_invoice" ? "tax_invoice" : "receipt";
+  const taxDocTaxId = (input.taxDocTaxId ?? "").trim();
+  const taxDocBillingName = (input.taxDocBillingName ?? "").trim();
+  const taxDocAddress = (input.taxDocAddress ?? "").trim();
+  if (taxDocPref === "tax_invoice") {
+    if (!/^\d{13}$/.test(taxDocTaxId)) return { ok: false, error: "tax_id_invalid" };
+    if (taxDocBillingName === "") return { ok: false, error: "tax_billing_name_required" };
+    if (taxDocAddress === "") return { ok: false, error: "tax_address_required" };
+  }
+
   const admin = createAdminClient();
 
   // shops.php L3-9 — generate hNo = 'P' + (max(tb_header_order.ID) + 1).
@@ -380,6 +401,15 @@ export async function submitCartOrder(input: {
       paymethod: input.payMethod ?? null,
       fshippingservice: fShippingService,
       hno: hNo,
+      // P1 — tax-doc snapshot. 'receipt' (default) snapshots nothing;
+      // 'tax_invoice' carries the 13-digit tax id + billing name+address so
+      // the eventual ใบกำกับภาษี reflects what the customer chose at order
+      // time (their profile can change later — the doc must not).
+      tax_doc_pref: taxDocPref,
+      tax_doc_tax_id: taxDocPref === "tax_invoice" ? taxDocTaxId : null,
+      tax_doc_address: taxDocPref === "tax_invoice"
+        ? `${taxDocBillingName} · ${taxDocAddress}`
+        : null,
       hdate: new Date().toISOString(),
       hfreeshipping: input.pro === "f" ? "1" : null,
       htransporttype: input.hTransportType,
