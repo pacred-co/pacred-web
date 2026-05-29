@@ -48,13 +48,11 @@
 - `docs/learnings/php-port-patterns.md` — legacy PHP `NULL` string-interpolation = empty string · NOT Postgres NULL
 - `docs/learnings/verify-deep-flow.md` — the "silent dead-write" pattern (#1 across 5-system audit)
 
-**🟠 Pending ภูม manual actions:**
-1. 🔴 ROTATE S3 access key `e913d7da34ca0089638f100afb74c972` (carry-over · weeks)
-2. **Click-test MOMO commit one more time** — `/admin/api-forwarder-momo/review` → กด "สร้างใหม่" PR005 row → ควร commit ลง tb_forwarder id ~51986 ในตู้ GZS260529-1
-3. **Browser-verify 2 surfaces:** `/admin/forwarders` (real cabinets, no "PR20260527-*") · `/admin/report-cnt/GZS260525-2` + `/admin/report-cnt/GZS260529-1` ("โกดังจีน: MOMO")
-4. **Decide A/B/C** for ~8,898 customer MOMO mapping problem (will recur if many use MOMO)
-5. **6 decisions** in master audit (LINE Notify · Google Maps · print brand · numeric pallet · cron retarget · push-on-3→4)
-6. Migrations 0118 (manager role) + 0119 (MOMO commit-tracking) apply prod if not yet
+**🟠 Pending ภูม manual actions** (post-2026-05-30 close-out · trimmed):
+1. ✅ ~~PR005 commit ลงตู้ GZS260529-1~~ — DONE (ภูม confirmed 2026-05-30 night)
+2. **Browser-verify 2 surfaces post-deploy:** `/admin/forwarders` (real cabinets, no "PR20260527-*") · `/admin/report-cnt/GZS260525-2` + `/admin/report-cnt/GZS260529-1` ("โกดังจีน: MOMO")
+3. **Decide A/B/C** for ~8,898 customer MOMO mapping problem (will recur if many MOMO customers have legacy user_codes)
+4. **6 decisions** in master audit (LINE Notify · Google Maps · print brand · numeric pallet · cron retarget · push-on-3→4) — ภูม กำลังตอบบางข้อ
 
 **🎯 Pickup options for home computer:**
 - **A** Tier A revenue holes (6 fixes · ~9h)

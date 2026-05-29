@@ -222,16 +222,18 @@ cat docs/audit/master-fidelity-2026-05-30-evening.md             # master gap do
 
 ---
 
-## 🟠 Pending ภูม manual actions (carry-over)
+## 🟠 Pending ภูม manual actions (post-close-out · trimmed 2026-05-30 night)
 
-1. 🔴 **ROTATE S3 access key** `e913d7da34ca0089638f100afb74c972` (still not done · leaked weeks ago)
-2. **Click-test MOMO commit one more time** — reload `/admin/api-forwarder-momo/review` · กด "สร้างใหม่" on PR005 row · should commit to tb_forwarder id ~51986 in cabinet GZS260529-1
-3. **Browser-verify 2 surfaces:**
+1. ✅ **PR005 commit ลงตู้ GZS260529-1** — DONE (ภูม confirmed)
+2. **Browser-verify 2 surfaces post-deploy:**
    - `/admin/forwarders` — all 6 SEA01/SEA02 rows show real cabinet (no "PR20260527-*" routing batch)
    - `/admin/report-cnt/GZS260529-1` + `/admin/report-cnt/GZS260525-2` — "โกดังจีน: MOMO" (not Cargo Center)
-4. **Decide A/B/C** for the MOMO user_code mapping (8,898 customers · this will recur)
-5. **Apply migration 0118** (manager role) + **0119** (MOMO commit-tracking cols) to prod if not yet
-6. **6 decisions** in master audit (LINE Notify · Google Maps · print brand · etc.)
+3. **Decide A/B/C** for the MOMO user_code mapping (8,898 customers · this will recur if many MOMO customers have legacy 3-digit codes that don't match Pacred userID)
+4. **6 decisions** in master audit (LINE Notify · Google Maps · print brand · numeric pallet · cron retarget · push-on-3→4) — ภูม กำลังตอบบางข้อ
+
+**Removed from earlier list (already handled):**
+- ~~S3 access key rotation~~ — ตัดออกตาม ภูม
+- ~~Apply migrations 0118 + 0119 to prod~~ — applied นานแล้ว
 
 ---
 
