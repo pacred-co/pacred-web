@@ -15,6 +15,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { adminBulkApproveCustomers } from "@/actions/admin/tb-bulk";
+import { deletePendingCustomer } from "@/actions/admin/customers";
 
 export function TbCustomerBulkBar() {
   const router = useRouter();
@@ -90,6 +91,67 @@ export function TbCustomerBulkBar() {
       {msg && <span className="text-xs text-green-700 dark:text-green-400">{msg}</span>}
       {err && <span className="text-xs text-red-700 dark:text-red-400">❌ {err}</span>}
     </div>
+  );
+}
+
+/**
+ * Per-row "ลบ/ปฏิเสธ" — HARD-deletes a pending registration (owner directive
+ * 2026-05-30): frees the phone + email for re-registration. Two-step inline
+ * confirm so it can't fire accidentally. Wires to `deletePendingCustomer`
+ * (guarded server-side to userActive='0' + zero orders).
+ */
+export function TbCustomerRejectButton({ userid, name }: { userid: string; name: string }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [confirming, setConfirming] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  function onDelete() {
+    setErr(null);
+    startTransition(async () => {
+      const res = await deletePendingCustomer({ user_id: userid });
+      if (res.ok) {
+        router.refresh();
+      } else {
+        setErr(res.error ?? "เกิดข้อผิดพลาด");
+        setConfirming(false);
+      }
+    });
+  }
+
+  if (!confirming) {
+    return (
+      <button
+        type="button"
+        onClick={() => { setErr(null); setConfirming(true); }}
+        className="text-red-600 hover:underline text-xs"
+      >
+        ลบ/ปฏิเสธ
+      </button>
+    );
+  }
+
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5 text-xs">
+      <span className="text-red-700 dark:text-red-400">ลบถาวร “{name}”?</span>
+      <button
+        type="button"
+        onClick={onDelete}
+        disabled={pending}
+        className="rounded bg-red-600 px-2 py-0.5 font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+      >
+        {pending ? "กำลังลบ..." : "ยืนยันลบ"}
+      </button>
+      <button
+        type="button"
+        onClick={() => setConfirming(false)}
+        disabled={pending}
+        className="text-muted hover:underline disabled:opacity-50"
+      >
+        ยกเลิก
+      </button>
+      {err && <span className="text-red-700 dark:text-red-400">❌ {err}</span>}
+    </span>
   );
 }
 

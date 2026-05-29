@@ -18,7 +18,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { Clock } from "lucide-react";
-import { TbCustomerBulkBar, TbCustomerRowCheckbox } from "./tb-bulk-bar";
+import { TbCustomerBulkBar, TbCustomerRowCheckbox, TbCustomerRejectButton } from "./tb-bulk-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -153,12 +153,15 @@ export default async function AdminCustomersPendingPage() {
                     </td>
                     <td className="px-4 py-3 text-muted text-xs">{date}</td>
                     <td className="px-4 py-3">
-                      <Link
-                        href={`/admin/customers/${c.userID}`}
-                        className="text-primary-600 hover:underline text-xs"
-                      >
-                        ดูรายละเอียด →
-                      </Link>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <Link
+                          href={`/admin/customers/${c.userID}`}
+                          className="text-primary-600 hover:underline text-xs"
+                        >
+                          ดูรายละเอียด →
+                        </Link>
+                        <TbCustomerRejectButton userid={c.userID} name={personalName} />
+                      </div>
                     </td>
                   </tr>
                 );

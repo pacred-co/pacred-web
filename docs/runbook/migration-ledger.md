@@ -5,11 +5,11 @@
 
 ---
 
-## 🔢 NEXT FREE NUMBER = **0125**
+## 🔢 NEXT FREE NUMBER = **0126**
 
-ใครจะเขียน migration ใหม่ → ใช้ `0125_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
+ใครจะเขียน migration ใหม่ → ใช้ `0126_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
 
-> 0118-0124 ครอง prod แล้ว (ปอน 0118-0122 MOMO · ภูม 0123-0124 admins+momo-commit · integrated 2026-05-30).
+> 0118-0125 ครอง prod แล้ว (ปอน 0118-0122 MOMO · ภูม 0123-0124 admins+momo-commit · เดฟ 0125 customer-usage-split · all applied 2026-05-30).
 
 > **กฎกันชนถาวร:** migration เป็น **global sequence ของทั้ง repo** ไม่ใช่ของ branch ใคร. เลขชนกัน = merge เจ็บ. **เขียนใหม่ → ขอเลขจากเดฟ / เช็คไฟล์นี้ก่อนเสมอ.**
 
@@ -27,6 +27,7 @@
 | 0122 | `momo_sync_run_items` | ปอน | ✅ applied (this session) | main |
 | 0123 | `admins_role_manager` | ภูม | ✅ applied (renumbered from 0118 · integrated 2026-05-30) | main |
 | 0124 | `momo_commit_tracking` | ภูม | ✅ applied (renumbered from 0119 · integrated 2026-05-30) | main |
+| 0125 | `customer_usage_split` | เดฟ | ✅ applied 2026-05-30 (135ms · used=2805/unused=6085) | main |
 
 ---
 

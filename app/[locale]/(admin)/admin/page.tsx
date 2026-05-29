@@ -107,8 +107,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     revForwarderMonth, revForwarderToday,
     revYuanMonth, revYuanToday,
     walletTotal,
-    inactiveCustomersCount,
-    activeCustomersCount,
+    usageCountsRes,
     totalCustomersCount,
     cancelledOrdersCount,
     walletDepositsPending,
@@ -141,18 +140,16 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     // Leaving the fetch for now: PostgREST has no SUM endpoint + accepting a
     // stale cache here would diverge from staff "always fresh" expectation.
     admin.from("tb_wallet").select("wallettotal").limit(50_000),
-    // Customer counts — userActive '1' = ใช้งานแล้ว · ANY-NOT-'1' = ยังไม่ใช้งาน.
-    // 2026-05-28 fix (เดฟ): the schema comment says "1=ใช้งานแล้ว" but the
-    // legacy PHP relied on truthy/falsy of userActive. On prod the column
-    // is varchar(1) NOT NULL with distribution { "1": 1961 rows, "": 6937
-    // rows } — there's NO "0" value at all. The previous `.eq("userActive",
-    // "0")` query matched 0 rows, so /admin dashboard rendered "0 ลูกค้าที่
-    // ยังไม่ใช้งาน" while the percentage band still said 78% (the % is from
-    // totalUsers - activeUsers). Switched to `.neq("userActive", "1")`
-    // which catches BOTH empty-string AND the documented "0" if any rows
-    // ever carry it.
-    admin.from("tb_users").select("ID", { count: "exact", head: true }).neq("userActive", "1"),
-    admin.from("tb_users").select("ID", { count: "exact", head: true }).eq("userActive", "1"),
+    // Customer usage split — ORDER-BASED (migration 0125 · เดฟ 2026-05-30).
+    // used = customer with ≥1 tb_forwarder/tb_header_order · unused = approved
+    // customer (userActive≠'0', not deleted) with 0 orders. Replaces the old
+    // userActive-flag classification: `approveCustomer` flips userActive→'1' at
+    // approval, so a just-approved customer who never shipped wrongly counted
+    // as "ใช้งานแล้ว". Now usage is derived from real orders — approved-but-no-
+    // shipment correctly sits in "ยังไม่ได้ใช้งาน" and graduates to "ใช้งานแล้ว"
+    // the moment the first shipment lands (self-correcting, no flag-flip hook).
+    // Returns one row { used, unused }; service-role only (SECURITY DEFINER).
+    admin.rpc("get_customer_usage_counts"),
     admin.from("tb_users").select("ID", { count: "exact", head: true }),
     // Cancelled orders this month — hstatus='6' on tb_header_order.
     admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("hstatus", "6").gte("hdate", monthStart),
@@ -212,11 +209,19 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     (containersInTransitRows.data ?? []).map((r) => (r as { fcabinetnumber: string }).fcabinetnumber),
   ).size;
 
+  // Order-based usage split (migration 0125 RPC). usageCountsRes.data is a
+  // one-row set [{ used, unused }]: used = has placed ≥1 shipment/order,
+  // unused = approved customer with none.
+  if (usageCountsRes.error) {
+    console.error(`[get_customer_usage_counts] failed`, { code: usageCountsRes.error.code, message: usageCountsRes.error.message });
+  }
+  const usage = (Array.isArray(usageCountsRes.data) ? usageCountsRes.data[0] : usageCountsRes.data) as
+    { used: number | string; unused: number | string } | null | undefined;
   const totalUsers    = totalCustomersCount.count ?? 0;
-  const activeUsers   = activeCustomersCount.count ?? 0;
-  const inactiveUsers = inactiveCustomersCount.count ?? 0;
+  const activeUsers   = Number(usage?.used ?? 0);
+  const inactiveUsers = Number(usage?.unused ?? 0);
   const activePct     = totalUsers > 0 ? Math.round((activeUsers / totalUsers) * 100) : 0;
-  const inactivePct   = totalUsers > 0 ? 100 - activePct : 0;
+  const inactivePct   = totalUsers > 0 ? Math.round((inactiveUsers / totalUsers) * 100) : 0;
 
   // Tab counts
   const tabCounts: Record<TabKey, number> = {
@@ -634,19 +639,15 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       });
     }
 
-    // ── ลูกค้าที่ยังไม่ใช้งาน (tb_users userActive ≠ '1') ───────────────
-    // 2026-05-28 fix: see the count query at line ~125 — the prod data is
-    // { "1": active, "": inactive }, no "0" at all. Use neq("userActive",
-    // "1") to match the count query's definition + return the inactive set.
+    // ── ลูกค้าที่ยังไม่ได้ใช้งาน — ORDER-BASED (migration 0125) ──────────
+    // Approved customers (userActive≠'0', not deleted) with ZERO orders, via
+    // the list_unused_customers RPC. Matches the order-based count card above:
+    // a just-approved customer who hasn't shipped shows here, and disappears
+    // once their first tb_forwarder/tb_header_order lands.
     case "inactiveCustomers": {
-      const { data, error } = await admin
-        .from("tb_users")
-        .select("ID,userID,userName,userLastName,userTel,userEmail,userRegistered,userCompany")
-        .neq("userActive", "1")
-        .order("userRegistered", { ascending: false, nullsFirst: false })
-        .limit(50);
+      const { data, error } = await admin.rpc("list_unused_customers", { p_limit: 50 });
       if (error) {
-        console.warn(`[tb_users list] failed (soft-fail · returning empty map)`, error);
+        console.warn(`[list_unused_customers] failed (soft-fail · returning empty map)`, error);
       }
       const rows = (data ?? []) as unknown as RawUserListRow[];
       return rows.map((u) => ({

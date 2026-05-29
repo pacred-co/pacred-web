@@ -692,3 +692,112 @@ export async function suspendCustomer(id: string): Promise<AdminActionResult> {
     return { ok: true };
   });
 }
+
+/**
+ * Hard-delete a PENDING (not-yet-approved) customer registration — owner
+ * directive 2026-05-30. When staff reject/cancel a signup still in the approval
+ * queue, the rows must be PHYSICALLY removed so the phone number + email are
+ * freed for re-registration: legacy `tb_users.userTel` carries a UNIQUE index
+ * (idx_*_usertel) and Supabase auth holds the phone/email too — a soft-delete
+ * (suspendCustomer) leaves them occupied and blocks the customer from signing
+ * up again with the same number.
+ *
+ * SAFETY — irreversible, so tightly guarded:
+ *   - ONLY `userActive='0'` (pending approval). Approved ('1') / legacy ('') /
+ *     active customers are REFUSED — this can never nuke a real customer.
+ *   - ONLY when the customer has ZERO orders (tb_forwarder + tb_header_order).
+ *   - super / ops only.
+ *   - The deleted row is captured in the audit log BEFORE removal (recovery ref).
+ *
+ * Removal order (tolerates auth→profiles cascade present OR absent):
+ *   profiles (+ CASCADE children: corporate · documents · addresses · cart_items
+ *   · notifications…) → auth.users (frees auth phone/email) → tb_users (frees
+ *   legacy userTel UNIQUE).
+ */
+const deletePendingCustomerSchema = z.object({ user_id: z.string().trim().min(1).max(20) });
+
+export async function deletePendingCustomer(
+  input: z.infer<typeof deletePendingCustomerSchema> | string,
+): Promise<AdminActionResult> {
+  const raw = typeof input === "string" ? { user_id: input } : input;
+  const parsed = deletePendingCustomerSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const id = parsed.data.user_id;
+
+  return withAdmin(["super", "ops"], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    // 1. Load + GUARD: must be a pending (userActive='0') registration.
+    const { data: before, error: beforeErr } = await admin
+      .from("tb_users")
+      .select("userID, userActive, userStatus, userTel, userEmail, userName, userLastName, userCompany")
+      .eq("userID", id)
+      .maybeSingle<{
+        userID: string; userActive: string | null; userStatus: string | null;
+        userTel: string | null; userEmail: string | null;
+        userName: string | null; userLastName: string | null; userCompany: string | null;
+      }>();
+    if (beforeErr) {
+      logger.error("deletePendingCustomer", "tb_users read failed", beforeErr, { userID: id, code: beforeErr.code });
+      return { ok: false, error: beforeErr.message };
+    }
+    if (!before) return { ok: false, error: "not_found" };
+    if (before.userActive !== "0") {
+      return { ok: false, error: "ลบได้เฉพาะสมาชิกที่ยังรอ approve เท่านั้น (อนุมัติ/ใช้งานแล้ว ลบถาวรไม่ได้)" };
+    }
+
+    // 2. GUARD: refuse if the customer already has orders/shipments (defensive).
+    const [{ count: fwdCount }, { count: ordCount }] = await Promise.all([
+      admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("userid", id),
+      admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("userid", id),
+    ]);
+    if ((fwdCount ?? 0) > 0 || (ordCount ?? 0) > 0) {
+      return { ok: false, error: "สมาชิกนี้มีรายการสั่งซื้อ/ชิปเมนต์แล้ว — ลบถาวรไม่ได้" };
+    }
+
+    const profileId = await resolveProfileIdForLegacyUserid(id);
+
+    // 3. Audit BEFORE deleting (recovery reference — the row is about to vanish).
+    await logAdminAction(adminId, "customer.hard_delete_pending", "tb_users", id, {
+      reason: "rejected/cancelled pending registration — freed phone+email for re-registration",
+      deleted: {
+        userID: id,
+        userCompany: before.userCompany,
+        phone: redactPhone(before.userTel ?? ""),
+        hasEmail: !!before.userEmail,
+      },
+      profileId: profileId ?? null,
+    });
+
+    // 4. Delete profiles (+ CASCADE children). RESTRICT children (bookings /
+    //    freight / tax_invoices…) would block — impossible for a pending,
+    //    zero-order customer, but if it happens we abort cleanly here.
+    if (profileId) {
+      const { error: profErr } = await admin.from("profiles").delete().eq("id", profileId);
+      if (profErr) {
+        logger.error("deletePendingCustomer", "profiles delete failed", profErr, { userID: id, profileId });
+        return { ok: false, error: `ลบโปรไฟล์ไม่สำเร็จ: ${profErr.message}` };
+      }
+      // 5. Delete the auth user (frees Supabase auth phone/email). Best-effort:
+      //    if a cascade already removed it, deleteUser may report not-found.
+      const { error: authErr } = await admin.auth.admin.deleteUser(profileId);
+      if (authErr) {
+        logger.warn("deletePendingCustomer", "auth user delete reported error (may already be gone)", {
+          userID: id, profileId, reason: authErr.message,
+        });
+      }
+    }
+
+    // 6. Delete the legacy tb_users row (frees userTel UNIQUE + email).
+    const { error: tbErr } = await admin.from("tb_users").delete().eq("userID", id);
+    if (tbErr) {
+      logger.error("deletePendingCustomer", "tb_users delete failed", tbErr, { userID: id });
+      return { ok: false, error: `ลบข้อมูลสมาชิกไม่สำเร็จ: ${tbErr.message}` };
+    }
+
+    revalidatePath("/admin/customers/pending");
+    revalidatePath("/admin/customers");
+    revalidatePath("/admin");
+    return { ok: true };
+  });
+}
