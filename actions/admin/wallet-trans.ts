@@ -41,6 +41,8 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
+import { logger } from "@/lib/logger";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — duplicated from wallet-hs.ts L54 (third caller —
@@ -162,12 +164,23 @@ export async function adminApproveWalletHs(
       const admin = createAdminClient();
       const legacyAdminId = await resolveLegacyAdminId();
 
-      // 1. Read the pending row.
+      // 1. Read the pending row. Includes typeservice + reforder + dateslip
+      //    so we can detect a forwarder-payment (typeservice='2') and trigger
+      //    the auto-receipt hook after wallet update succeeds.
       const { data: row, error: rowErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, amount, type, status")
+        .select("id, userid, amount, type, status, typeservice, reforder, dateslip")
         .eq("id", id)
-        .maybeSingle<{ id: number; userid: string; amount: number; type: string | null; status: string | null }>();
+        .maybeSingle<{
+          id: number;
+          userid: string;
+          amount: number;
+          type: string | null;
+          status: string | null;
+          typeservice: string | null;
+          reforder: string | null;
+          dateslip: string | null;
+        }>();
       if (rowErr) {
         console.error(`[tb_wallet_hs list] failed`, { code: rowErr.code, message: rowErr.message });
         return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
@@ -236,6 +249,37 @@ export async function adminApproveWalletHs(
         delta,
         new_balance: newTotal,
       });
+
+      // 4. Wave 29: auto-receipt hook (matches legacy grenrateReceiptF
+      //    behaviour from functions.php L400-608). Trigger when this is a
+      //    forwarder-payment row (typeservice='2') with a forwarder id
+      //    pinned in `reforder`. Best-effort — receipt failure does NOT
+      //    block the wallet approval (the money already moved).
+      if (row.typeservice === "2" && row.reforder) {
+        const fid = Number(row.reforder);
+        if (Number.isFinite(fid) && fid > 0) {
+          const dateSlip = row.dateslip ? new Date(row.dateslip) : new Date();
+          const r = await autoIssueReceiptOnPaymentLand(admin, {
+            userid: row.userid,
+            fids: [fid],
+            dateSlip,
+            source: "wallet_hs.approve.single",
+          });
+          if (!r.ok && !r.alreadyIssued) {
+            logger.warn("wallet-trans", "auto-receipt failed (non-fatal)", {
+              wallet_hs_id: id,
+              userid:       row.userid,
+              fid,
+              error:        r.error,
+            });
+          }
+          if (r.ok) {
+            revalidatePath(`/admin/accounting/forwarder-invoice/${r.data.receiptId}`);
+            revalidatePath("/admin/accounting/forwarder-invoice");
+            revalidatePath(`/service-import/${fid}/invoice`);
+          }
+        }
+      }
 
       revalidatePath(`/admin/wallet/${id}`);
       revalidatePath("/admin/wallet");

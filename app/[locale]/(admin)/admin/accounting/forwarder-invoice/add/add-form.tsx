@@ -2,17 +2,26 @@
 
 /**
  * AddInvoiceForm — client component for the
- * `/admin/accounting/forwarder-invoice/add` page.
+ * `/admin/accounting/forwarder-invoice/add` page (MANUAL OVERRIDE).
  *
- * Agent F3 · E2E LOOP FIX batch (2026-05-29).
+ * Wave 29 P0 #206+#208 (2026-05-30) — pivoted from Wave 28 F3's single-row
+ * radio to a multi-row checkbox batch select. Matches legacy
+ * `pcs-admin/include/pages/hs-forwarder-invoice/add.php` which uses the
+ * jquery-datatables-checkboxes plugin for multi-select per customer.
  *
- * Workflow (matches legacy `add.php` semantics, Pacred design):
- *   1. Admin sees a table of all fstatus=5 forwarder rows not yet invoiced
- *   2. Selects ONE row (radio) — legacy supports many-per-customer but our
- *      receipt schema is 1-fid-per-rid, so we surface 1-at-a-time creation
- *   3. Picks due date · adds optional notes/discount
- *   4. Confirms → calls server action adminIssueForwarderInvoice
- *   5. On success → redirect to /admin/accounting/forwarder-invoice/[id]
+ * Workflow (legacy semantics · Pacred design):
+ *   1. Server loads ALL fstatus=5 forwarder rows for the searched customer
+ *      (or all, if no userid filter) that are NOT yet on a tb_receipt
+ *   2. Admin filters by userid (a single customer's basket) — UI groups by
+ *      customer, but submit requires all-from-one-customer
+ *   3. Admin ticks ≥ 1 rows (multi-select), sets issue+due date + notes
+ *   4. Submit → adminIssueForwarderInvoice({ fids, issueDate, dueDate, notes })
+ *      → ONE tb_receipt + N × tb_receipt_item
+ *   5. Redirect to /admin/accounting/forwarder-invoice/[receiptId]
+ *
+ * Manual override banner: explains this is for the case where the auto-
+ * receipt hook (lib/admin/auto-issue-receipt.ts) failed or accounting
+ * needs to consolidate fids manually.
  */
 
 import { useMemo, useState, useTransition } from "react";
@@ -49,61 +58,92 @@ function fmtDate(iso: string | null): string {
 
 export default function AddInvoiceForm({
   candidates,
+  issueDateDefault,
   dueDateDefault,
 }: {
   candidates: CandidateRow[];
+  issueDateDefault: string;
   dueDateDefault: string;
 }) {
   const router = useRouter();
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [issueDate, setIssueDate] = useState(issueDateDefault);
   const [dueDate, setDueDate] = useState(dueDateDefault);
   const [notes, setNotes] = useState("");
-  const [discount, setDiscount] = useState<string>("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  // Picked rows + the userid they share. If multiple userids → error inline.
   const selected = useMemo(
-    () => candidates.find((c) => c.id === selectedId) ?? null,
-    [candidates, selectedId],
+    () => candidates.filter((c) => selectedIds.has(c.id)),
+    [candidates, selectedIds],
   );
 
-  // Computed totals shown in "สรุปข้อมูล" panel
-  const summary = useMemo(() => {
-    if (!selected) {
-      return { total: 0, deliveryChn: 0, deliveryTh: 0, other: 0, discount: 0, grandTotal: 0 };
-    }
-    const discountOverride = parseFloat(discount);
-    const effectiveDiscount = Number.isFinite(discountOverride)
-      ? discountOverride
-      : selected.discount;
-    return {
-      total:        selected.totalPrice,
-      deliveryChn:  selected.transportPrice,
-      deliveryTh:   selected.shippingService,
-      other:        0,
-      discount:     effectiveDiscount,
-      grandTotal:   Number.isFinite(discountOverride)
-        ? selected.outstanding - (effectiveDiscount - selected.discount)
-        : selected.outstanding,
-    };
-  }, [selected, discount]);
+  const uniqueUserIds = useMemo(
+    () => Array.from(new Set(selected.map((s) => s.userid))),
+    [selected],
+  );
+  const mixedCustomer = uniqueUserIds.length > 1;
+  const sharedUserid = uniqueUserIds.length === 1 ? uniqueUserIds[0]! : "";
+  const sharedCustomer = uniqueUserIds.length === 1 ? selected[0]!.customer : "";
 
-  const canSubmit = selected !== null && dueDate.length === 10 && !isPending;
+  // Totals (pre-WHT) — server re-computes for the actual receipt, but the
+  // UI summary shows the admin what they're about to commit.
+  const summary = useMemo(() => {
+    const total = selected.reduce((s, r) => s + r.outstanding, 0);
+    return {
+      rows:        selected.length,
+      grandTotal:  Math.round(total * 100) / 100,
+    };
+  }, [selected]);
+
+  const canSubmit =
+    selected.length > 0 &&
+    !mixedCustomer &&
+    issueDate.length === 10 &&
+    dueDate.length === 10 &&
+    !isPending;
+
+  function toggleRow(id: number, checked: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleAllForUser(userid: string, checked: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const c of candidates) {
+        if (c.userid === userid) {
+          if (checked) next.add(c.id);
+          else next.delete(c.id);
+        }
+      }
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+    setNotes("");
+    setError(null);
+  }
 
   function handleConfirm() {
-    if (!canSubmit || !selected) return;
+    if (!canSubmit || selected.length === 0) return;
     setError(null);
     setConfirmOpen(false);
 
-    const discountOverride = parseFloat(discount);
-
     startTransition(async () => {
       const result = await adminIssueForwarderInvoice({
-        forwarderId: selected.id,
+        fids:      selected.map((s) => s.id),
+        issueDate,
         dueDate,
-        discount: Number.isFinite(discountOverride) ? discountOverride : undefined,
-        notes:    notes.trim() || undefined,
+        notes:     notes.trim() || undefined,
       });
 
       if (!result.ok) {
@@ -115,16 +155,38 @@ export default function AddInvoiceForm({
     });
   }
 
+  // Group candidates by userid so admin can see per-customer baskets.
+  const groupedByUser = useMemo(() => {
+    const m = new Map<string, CandidateRow[]>();
+    for (const c of candidates) {
+      const arr = m.get(c.userid) ?? [];
+      arr.push(c);
+      m.set(c.userid, arr);
+    }
+    return Array.from(m.entries()).sort(([a], [b]) => a.localeCompare(b));
+  }, [candidates]);
+
   return (
     <>
-      {/* Candidates table */}
+      {/* Manual override banner */}
+      <div className="rounded-lg border-l-4 border-amber-500 bg-amber-50 p-3 mb-4 text-sm text-amber-900">
+        <div className="font-semibold flex items-center gap-2">
+          <span>🛠</span>
+          <span>Manual override — ใช้เมื่อ auto-receipt fail หรือต้องการรวมหลายออเดอร์</span>
+        </div>
+        <div className="text-xs mt-1 text-amber-700">
+          ปกติใบเสร็จจะถูกสร้างอัตโนมัติเมื่อ admin อนุมัติสลิป (status flip 1→2 บน tb_wallet_hs).
+          หน้านี้สำหรับเคสที่ระบบ auto-create ทำงานไม่สำเร็จ หรือต้องการรวมหลายรายการเป็นใบเดียว.
+        </div>
+      </div>
+
+      {/* Candidates table — multi-row checkbox grouped by customer */}
       <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto scrollbar-x-visible mb-4">
         <table className="min-w-full text-sm">
           <thead className="bg-slate-100 text-slate-700">
             <tr>
               <th className="px-3 py-2 text-center font-medium w-10">เลือก</th>
               <th className="px-3 py-2 text-left font-medium">ID</th>
-              <th className="px-3 py-2 text-left font-medium">รหัสสมาชิก / ลูกค้า</th>
               <th className="px-3 py-2 text-left font-medium">วันที่</th>
               <th className="px-3 py-2 text-left font-medium">Tracking</th>
               <th className="px-3 py-2 text-right font-medium">กล่อง</th>
@@ -134,51 +196,29 @@ export default function AddInvoiceForm({
             </tr>
           </thead>
           <tbody>
-            {candidates.length === 0 ? (
+            {groupedByUser.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-3 py-12 text-center text-slate-500">
-                  ไม่พบรายการฝากนำเข้าที่พร้อมออกใบแจ้งหนี้
+                <td colSpan={8} className="px-3 py-12 text-center text-slate-500">
+                  ไม่พบรายการฝากนำเข้าที่พร้อมออกใบเสร็จ
                 </td>
               </tr>
             ) : (
-              candidates.map((c) => {
-                const isSelected = c.id === selectedId;
+              groupedByUser.map(([userid, rows]) => {
+                const allSelected = rows.every((r) => selectedIds.has(r.id));
+                const someSelected = rows.some((r) => selectedIds.has(r.id));
+                const customerName = rows[0]!.customer;
                 return (
-                  <tr
-                    key={c.id}
-                    onClick={() => setSelectedId(c.id)}
-                    className={`border-t border-slate-100 cursor-pointer ${
-                      isSelected ? "bg-indigo-50" : "hover:bg-slate-50"
-                    }`}
-                  >
-                    <td className="px-3 py-2 text-center">
-                      <input
-                        type="radio"
-                        name="forwarder-row"
-                        checked={isSelected}
-                        onChange={() => setSelectedId(c.id)}
-                        className="size-4 accent-indigo-600"
-                      />
-                    </td>
-                    <td className="px-3 py-2 text-slate-700">#{c.id}</td>
-                    <td className="px-3 py-2">
-                      <div className="font-medium text-slate-900">{c.customer}</div>
-                      <div className="text-xs text-slate-500">{c.userid}</div>
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap">{fmtDate(c.fdate)}</td>
-                    <td className="px-3 py-2 text-xs">
-                      {c.tracking ?? "-"}
-                      {c.cabinetNumber ? (
-                        <div className="text-slate-400">ตู้: {c.cabinetNumber}</div>
-                      ) : null}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">{c.amount}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{c.weight.toFixed(2)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{c.volume.toFixed(5)}</td>
-                    <td className="px-3 py-2 text-right font-medium tabular-nums">
-                      ฿{fmtBaht(c.outstanding)}
-                    </td>
-                  </tr>
+                  <Section
+                    key={userid}
+                    userid={userid}
+                    customerName={customerName}
+                    rows={rows}
+                    selectedIds={selectedIds}
+                    allSelected={allSelected}
+                    someSelected={someSelected}
+                    onToggleRow={toggleRow}
+                    onToggleAllForUser={(checked) => toggleAllForUser(userid, checked)}
+                  />
                 );
               })
             )}
@@ -186,28 +226,48 @@ export default function AddInvoiceForm({
         </table>
       </div>
 
-      {/* Form panel — visible when a row is selected */}
-      {selected && (
+      {mixedCustomer && (
+        <div className="mt-3 mb-3 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+          ผิดพลาด: ใบเสร็จเดียวต้องมาจากลูกค้ารายเดียวกันเท่านั้น — คุณเลือกข้ามรหัสสมาชิก ({uniqueUserIds.join(", ")})
+        </div>
+      )}
+
+      {/* Form panel — visible when ≥ 1 row selected from a single customer */}
+      {selected.length > 0 && !mixedCustomer && (
         <div className="rounded-lg border border-indigo-200 bg-white p-5 shadow-sm">
           <div className="grid md:grid-cols-3 gap-5">
-            {/* Customer + dates */}
+            {/* Customer + dates + notes */}
             <div className="md:col-span-2">
               <h3 className="text-lg font-semibold text-slate-900 mb-3">
-                ข้อมูลใบแจ้งหนี้
+                ข้อมูลใบเสร็จรับเงิน (Manual Override)
               </h3>
               <div className="grid grid-cols-2 gap-3">
-                <div>
+                <div className="col-span-2">
                   <label className="text-xs text-slate-600">ลูกค้า</label>
                   <div className="mt-1 px-3 py-2 rounded border border-slate-200 bg-slate-50 text-sm">
-                    {selected.customer}
-                    <span className="text-slate-400 text-xs ml-2">({selected.userid})</span>
+                    {sharedCustomer}
+                    <span className="text-slate-400 text-xs ml-2">({sharedUserid})</span>
+                  </div>
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs text-slate-600">รายการที่เลือก</label>
+                  <div className="mt-1 px-3 py-2 rounded border border-slate-200 bg-slate-50 text-sm">
+                    {selected.length} รายการ:{" "}
+                    {selected.slice(0, 5).map((s) => `#${s.id}`).join(", ")}
+                    {selected.length > 5 ? ` และอีก ${selected.length - 5} รายการ` : ""}
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-slate-600">รายการ ID</label>
-                  <div className="mt-1 px-3 py-2 rounded border border-slate-200 bg-slate-50 text-sm">
-                    #{selected.id} {selected.tracking ? `· ${selected.tracking}` : ""}
-                  </div>
+                  <label className="text-xs text-slate-600">
+                    วันที่ออกเอกสาร <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={issueDate}
+                    onChange={(e) => setIssueDate(e.target.value)}
+                    className="mt-1 w-full px-3 py-2 rounded border border-slate-300 text-sm"
+                    required
+                  />
                 </div>
                 <div>
                   <label className="text-xs text-slate-600">
@@ -221,23 +281,9 @@ export default function AddInvoiceForm({
                     required
                   />
                 </div>
-                <div>
-                  <label className="text-xs text-slate-600">
-                    ส่วนลด (override · ปล่อยว่าง = ใช้ค่าเดิม)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={discount}
-                    onChange={(e) => setDiscount(e.target.value)}
-                    placeholder={selected.discount.toFixed(2)}
-                    className="mt-1 w-full px-3 py-2 rounded border border-slate-300 text-sm"
-                  />
-                </div>
                 <div className="col-span-2">
                   <label className="text-xs text-slate-600">
-                    หมายเหตุสำหรับลูกค้า (พิมพ์บนใบแจ้งหนี้)
+                    หมายเหตุสำหรับลูกค้า (พิมพ์บนใบเสร็จ)
                   </label>
                   <textarea
                     value={notes}
@@ -255,24 +301,15 @@ export default function AddInvoiceForm({
               <h3 className="text-lg font-semibold text-slate-900 mb-3">สรุปข้อมูล</h3>
               <dl className="space-y-1.5 text-sm">
                 <div className="flex justify-between">
-                  <dt className="text-slate-600">Total</dt>
-                  <dd className="tabular-nums">฿{fmtBaht(summary.total)}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-slate-600">Delivery CHN</dt>
-                  <dd className="tabular-nums">฿{fmtBaht(summary.deliveryChn)}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-slate-600">Delivery TH</dt>
-                  <dd className="tabular-nums">฿{fmtBaht(summary.deliveryTh)}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-slate-600">ส่วนลด</dt>
-                  <dd className="tabular-nums text-red-600">-฿{fmtBaht(summary.discount)}</dd>
+                  <dt className="text-slate-600">รายการที่เลือก</dt>
+                  <dd className="tabular-nums">{summary.rows} รายการ</dd>
                 </div>
                 <div className="border-t border-slate-200 pt-2 mt-2 flex justify-between text-base font-semibold">
-                  <dt className="text-slate-900">ยอดสุทธิ</dt>
+                  <dt className="text-slate-900">ยอดค้างชำระรวม</dt>
                   <dd className="tabular-nums text-indigo-700">฿{fmtBaht(summary.grandTotal)}</dd>
+                </div>
+                <div className="text-xs text-slate-500 pt-2">
+                  ยอดสุทธิจะคำนวณตามนิติบุคคล/บุคคล (หัก ณ ที่จ่าย 1% เฉพาะนิติฯ ≥ ฿1,000)
                 </div>
               </dl>
             </div>
@@ -287,11 +324,11 @@ export default function AddInvoiceForm({
           <div className="mt-5 flex items-center justify-end gap-2">
             <button
               type="button"
-              onClick={() => setSelectedId(null)}
+              onClick={clearSelection}
               className="px-4 py-2 rounded border border-slate-300 text-sm hover:bg-slate-50"
               disabled={isPending}
             >
-              ยกเลิก
+              ยกเลิก (เคลียร์ที่เลือก)
             </button>
             <button
               type="button"
@@ -299,24 +336,32 @@ export default function AddInvoiceForm({
               disabled={!canSubmit}
               className="px-4 py-2 rounded bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isPending ? "กำลังสร้าง..." : "สร้างใบแจ้งหนี้"}
+              {isPending ? "กำลังสร้าง..." : `สร้างใบเสร็จ (${selected.length} รายการ)`}
             </button>
           </div>
         </div>
       )}
 
       {/* Confirm dialog */}
-      {confirmOpen && selected && (
+      {confirmOpen && selected.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-5 shadow-xl">
             <h3 className="text-lg font-semibold text-slate-900 mb-3">
-              ยืนยันการสร้างใบแจ้งหนี้
+              ยืนยันการสร้างใบเสร็จ (Manual Override)
             </h3>
+            <p className="text-sm text-slate-700 mb-2">
+              คุณกำลังจะสร้าง <span className="font-semibold">1 ใบเสร็จ</span>{" "}
+              ที่ครอบ <span className="font-semibold">{selected.length} รายการ</span>
+            </p>
+            <p className="text-sm text-slate-700 mb-2">
+              ลูกค้า: <span className="font-semibold">{sharedCustomer}</span>{" "}
+              ({sharedUserid})
+            </p>
+            <p className="text-sm text-slate-700 mb-2">
+              ยอดค้างชำระรวม: <span className="font-semibold text-indigo-700">฿{fmtBaht(summary.grandTotal)}</span>
+            </p>
             <p className="text-sm text-slate-700 mb-4">
-              คุณกำลังจะสร้างใบแจ้งหนี้ให้ลูกค้า <span className="font-semibold">{selected.customer}</span>
-              {" "}({selected.userid}) สำหรับรายการ #{selected.id}
-              {" "}ยอด <span className="font-semibold text-indigo-700">฿{fmtBaht(summary.grandTotal)}</span>
-              {" "}ครบกำหนด {dueDate}
+              วันที่ออก: {issueDate} · ครบกำหนด: {dueDate}
             </p>
             <p className="text-xs text-slate-500 mb-4">
               ระบบจะส่งแจ้งเตือนไปยังลูกค้าทาง LINE / อีเมล / SMS โดยอัตโนมัติ
@@ -340,6 +385,91 @@ export default function AddInvoiceForm({
           </div>
         </div>
       )}
+    </>
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// Section — one customer's basket of fstatus=5 rows
+// ────────────────────────────────────────────────────────────
+
+function Section({
+  userid,
+  customerName,
+  rows,
+  selectedIds,
+  allSelected,
+  someSelected,
+  onToggleRow,
+  onToggleAllForUser,
+}: {
+  userid: string;
+  customerName: string;
+  rows: CandidateRow[];
+  selectedIds: Set<number>;
+  allSelected: boolean;
+  someSelected: boolean;
+  onToggleRow: (id: number, checked: boolean) => void;
+  onToggleAllForUser: (checked: boolean) => void;
+}) {
+  return (
+    <>
+      <tr className="bg-slate-50 border-t border-slate-200">
+        <td className="px-3 py-2 text-center">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            ref={(el) => {
+              if (el) el.indeterminate = !allSelected && someSelected;
+            }}
+            onChange={(e) => onToggleAllForUser(e.target.checked)}
+            className="size-4 accent-indigo-600"
+            aria-label={`เลือกทุกรายการของ ${userid}`}
+          />
+        </td>
+        <td colSpan={7} className="px-3 py-2 text-sm font-medium text-slate-700">
+          <span className="font-semibold text-slate-900">{customerName}</span>
+          <span className="text-xs text-slate-500 ml-2">{userid}</span>
+          <span className="text-xs text-slate-500 ml-2">({rows.length} รายการ)</span>
+        </td>
+      </tr>
+      {rows.map((c) => {
+        const isSelected = selectedIds.has(c.id);
+        return (
+          <tr
+            key={c.id}
+            onClick={() => onToggleRow(c.id, !isSelected)}
+            className={`border-t border-slate-100 cursor-pointer ${
+              isSelected ? "bg-indigo-50" : "hover:bg-slate-50"
+            }`}
+          >
+            <td className="px-3 py-2 text-center">
+              <input
+                type="checkbox"
+                name="forwarder-row"
+                checked={isSelected}
+                onChange={(e) => onToggleRow(c.id, e.target.checked)}
+                onClick={(e) => e.stopPropagation()}
+                className="size-4 accent-indigo-600"
+              />
+            </td>
+            <td className="px-3 py-2 text-slate-700">#{c.id}</td>
+            <td className="px-3 py-2 whitespace-nowrap">{fmtDate(c.fdate)}</td>
+            <td className="px-3 py-2 text-xs">
+              {c.tracking ?? "-"}
+              {c.cabinetNumber ? (
+                <div className="text-slate-400">ตู้: {c.cabinetNumber}</div>
+              ) : null}
+            </td>
+            <td className="px-3 py-2 text-right tabular-nums">{c.amount}</td>
+            <td className="px-3 py-2 text-right tabular-nums">{c.weight.toFixed(2)}</td>
+            <td className="px-3 py-2 text-right tabular-nums">{c.volume.toFixed(5)}</td>
+            <td className="px-3 py-2 text-right font-medium tabular-nums">
+              ฿{fmtBaht(c.outstanding)}
+            </td>
+          </tr>
+        );
+      })}
     </>
   );
 }

@@ -3,29 +3,39 @@
 /**
  * /admin/accounting/forwarder-invoice — server actions
  *
- * Agent F3 · E2E LOOP FIX batch (2026-05-29) — closes Gap #4 from the E4
- * audit ("96 leaves under /admin/accounting/cargo/income/* are STUBS").
- * Builds the **admin forwarder-invoice creation** flow on the EXISTING
- * `tb_receipt` + `tb_receipt_item` schema (no new tables — these legacy
- * tables already exist in prod with years of data).
+ * ── HISTORY ───────────────────────────────────────────────────────
  *
- * Legacy source — `pcs-admin/include/pages/hs-forwarder-invoice/`:
- *   - `add.php`                         — admin selects a fstatus=5 customer
- *                                          + their items → "สร้างใบแจ้งหนี้"
- *   - `forwarder-invoice/listForwarderItem.php` — AJAX endpoint that returns
- *                                          the candidate items table
- *   - `home.php`                        — list shell (no DataTable in legacy)
+ * Wave 28 F3 (2026-05-29) — built the MANUAL-issue path treating it as
+ * "ใบแจ้งหนี้" with a single-fid radio + Pacred's own `PR<yyMMdd>-N` doc
+ * number. ภูม later flagged this was wrong: legacy never wired ใบแจ้งหนี้
+ * end-to-end; the actual money lane is the 2-click receipt flow.
  *
- * Per AGENTS.md §0a — workflow logic from legacy · Pacred Tailwind polish:
- *   - LEGACY INSERTs tb_receipt + tb_receipt_item rows when admin clicks
- *     "สร้างใบแจ้งหนี้" (records the document; the actual fstatus 4→5 flip
- *     already happened upstream in /admin/forwarder-check via
- *     `adminCallPriceUser` — see actions/admin/forwarder-check.ts:296)
- *   - WE record the document atomically and notify the customer that the
- *     invoice is available for download (LINE + email + SMS — respecting
- *     NOTIFY_BYPASS)
- *   - WE do NOT flip tb_forwarder.fstatus — already=5 (the bill was triggered
- *     when adminCallPriceUser ran on the forwarder-check queue)
+ * Wave 29 P0 #206+#208 (2026-05-30) — PIVOTED to the legacy-faithful
+ * receipt-flow model per `docs/research/legacy-accounting-billing-workflow.md`:
+ *
+ *   1. AUTO PATH — `lib/admin/auto-issue-receipt.ts` fires from
+ *      `actions/admin/wallet-trans.ts:adminApproveWalletHs` and
+ *      `actions/admin/tb-bulk.ts:adminBulkApproveWalletHs` the moment a
+ *      forwarder payment lands (matches legacy `grenrateReceiptF`).
+ *
+ *   2. MANUAL OVERRIDE PATH — this file. Used when auto failed, or when
+ *      accounting needs to consolidate multiple paid forwarder rows for
+ *      the same customer onto ONE receipt manually. Multi-row checkbox
+ *      submit · one `tb_receipt` + N × `tb_receipt_item`.
+ *
+ * ── Legacy reference ──────────────────────────────────────────────
+ *   pcs-admin/include/pages/hs-forwarder-invoice/add.php
+ *   pcs-admin/include/pages/hs-forwarder-invoice/forwarder-invoice/listForwarderItem.php
+ *   pcs-admin/include/functions.php :: grenrateReceiptF (the doc-number rules)
+ *
+ * Key changes from Wave 28 → Wave 29:
+ *   - Input shape: `forwarderId: number` → `fids: number[]` (≥ 1)
+ *   - All fids must share the same userid (re-verified server-side)
+ *   - All fids must be fstatus='5' (รอชำระเงิน)
+ *   - Doc-number minter swapped: `mintReceiptId` (Pacred PR-format) →
+ *     `mintReceiptDocNo` (`lib/admin/mint-receipt-doc-no.ts`, legacy FRC/FRG)
+ *   - WHT 1% deduction logic ported from `grenrateReceiptF` L557-559
+ *   - Single tb_receipt INSERT · batch tb_receipt_item INSERTs (was 1-1)
  *
  * tb_receipt schema (per supabase/migrations/0081_pcs_legacy_schema.sql L4132):
  *   id bigint pk · rstatus varchar(1) default '3' · rid varchar(20)
@@ -46,8 +56,10 @@
  *   '2' = cancelled (ยกเลิก — red)
  *   '3' = pending  (รอชำระเงิน — amber · the default)
  *
- * rid format — legacy uses `PR<yyMMdd>-<seq>` (e.g. PR260529-3), echoing
- * the receipt printing convention. We mint server-side, not client-side.
+ * Manual-issue rid format: `FRC<yyMM>-<00001>` (juristic) or
+ * `FRG<yyMM>-<00001>` (individual). Sequence keyed off `issuedate`
+ * yyMM partition + per-corporate-type. Minted via `mintReceiptDocNo`
+ * (main thread provides at `lib/admin/mint-receipt-doc-no.ts`).
  *
  * Roles: super | accounting (money tier · matches forwarder-check.ts billing).
  */
@@ -57,24 +69,29 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
-import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
+import { mintReceiptDocNo } from "@/lib/admin/mint-receipt-doc-no";
 import { sendSms } from "@/lib/sms/gateway";
 import { logger, redactPhone } from "@/lib/logger";
 import { sendNotification } from "@/lib/notifications";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
 
 // ────────────────────────────────────────────────────────────
-// Schema
+// Schema — multi-row batch input
 // ────────────────────────────────────────────────────────────
 
 const issueInvoiceSchema = z.object({
-  /** tb_forwarder.id of the row to bill (must be fstatus='5') */
-  forwarderId: z.number().int().positive(),
-  /** Customer-facing due date (YYYY-MM-DD). Legacy add.php "วันที่ครบกำหนดจ่าย" */
+  /**
+   * The tb_forwarder.id rows the receipt should cover. All must belong
+   * to the same userid · all must be fstatus='5'. Min 1, max 50 — the
+   * upper bound matches the legacy DataTables checkbox plugin's default
+   * page size + adds a safety cap.
+   */
+  fids: z.array(z.number().int().positive()).min(1).max(50),
+  /** Customer-facing issue date (YYYY-MM-DD). Legacy "วันที่ออกเอกสาร". */
+  issueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  /** Customer-facing due date (YYYY-MM-DD). Legacy "วันที่ครบกำหนดจ่าย". */
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  /** Optional discount override applied at invoice time (THB) */
-  discount: z.number().nonnegative().optional(),
-  /** Operator notes (visible to customer on the printed invoice) */
+  /** Operator notes (visible to customer on the printed receipt) */
   notes: z.string().max(1000).optional(),
 });
 export type AdminIssueForwarderInvoiceInput = z.infer<typeof issueInvoiceSchema>;
@@ -83,12 +100,12 @@ export type AdminIssueForwarderInvoiceInput = z.infer<typeof issueInvoiceSchema>
 // Types
 // ────────────────────────────────────────────────────────────
 
-type ForwarderRowForInvoice = {
+type ForwarderRowForReceipt = {
   id: number;
   userid: string;
   fstatus: string;
   ftrackingchn: string | null;
-  // calcForwarderOutstanding inputs
+  // For per-row totals (matches grenrateReceiptF L548)
   ftotalprice: number | string | null;
   ftransportprice: number | string | null;
   fpriceupdate: number | string | null;
@@ -97,78 +114,76 @@ type ForwarderRowForInvoice = {
   ftransportpricechnthb: number | string | null;
   priceother: number | string | null;
   fdiscount: number | string | null;
-  fusercompany: number | string | null;
 };
 
-type UserRowForInvoice = {
+type UserRowForReceipt = {
   userID: string;
   userName: string | null;
   userLastName: string | null;
   userTel: string | null;
   userEmail: string | null;
-  corporateNumber?: string | null;
-  corporateName?: string | null;
-  corporateAddress?: string | null;
+};
+
+type CorpRowForReceipt = {
+  corporatenumber: string | null;
+  corporatename: string | null;
+  corporateaddress: string | null;
 };
 
 // ────────────────────────────────────────────────────────────
 // Helpers
 // ────────────────────────────────────────────────────────────
 
-/**
- * Mint the next `rid` for tb_receipt. Format: `PR<yyMMdd>-<seq>` (e.g.
- * "PR260529-3"). Legacy used `PCS<yyMMdd>-<seq>`; Pacred uses `PR` per
- * D1 rebrand (CLAUDE.md "PCS → PR"). The seq is the count of receipts
- * issued today + 1 — best-effort uniqueness (race tolerated; collision
- * would surface as a unique-constraint error which we surface to caller).
- */
-async function mintReceiptId(
-  admin: ReturnType<typeof createAdminClient>,
-): Promise<string> {
-  const now = new Date();
-  const yy = String(now.getFullYear()).slice(2);
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
-  const datePart = `${yy}${mm}${dd}`;
-  const prefix = `PR${datePart}-`;
-
-  // Count today's receipts to derive next seq. ilike pattern matches the
-  // `PR260529-N` family. A race between concurrent admins would assign
-  // the same seq; both INSERTs would still succeed because rid is not
-  // strictly unique in legacy schema (it's a business id, not a pkey).
-  const { count, error } = await admin
-    .from("tb_receipt")
-    .select("id", { count: "exact", head: true })
-    .ilike("rid", `${prefix}%`);
-  if (error) {
-    console.error(`[tb_receipt count] failed`, { code: error.code, message: error.message });
-  }
-  const seq = (count ?? 0) + 1;
-  return `${prefix}${seq}`;
+function toNumber(v: number | string | null | undefined): number {
+  if (v === null || v === undefined) return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : 0;
 }
 
-function composeInvoiceSms(opts: {
+/**
+ * Per-row raw price (pre-WHT) — same bucket list as legacy
+ * `grenrateReceiptF` L548 + `calPriceForwarderMain` L1878.
+ */
+function perRowRaw(r: ForwarderRowForReceipt): number {
+  return (
+    toNumber(r.ftotalprice) +
+    toNumber(r.ftransportprice) +
+    toNumber(r.fpriceupdate) +
+    toNumber(r.fshippingservice) +
+    toNumber(r.pricecrate) +
+    toNumber(r.ftransportpricechnthb) +
+    toNumber(r.priceother) -
+    toNumber(r.fdiscount)
+  );
+}
+
+function composeReceiptSms(opts: {
   userId: string;
   rid: string;
-  fid: number;
+  fid: number;          // representative fid for the URL
   amountThb: number;
 }): string {
   const url = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://pacred.co"}/service-import/${opts.fid}/invoice`;
   const amount = opts.amountThb.toLocaleString("th-TH", { minimumFractionDigits: 2 });
-  return `Pacred: ${opts.userId} ใบแจ้งหนี้ ${opts.rid} ยอด ฿${amount} ดูที่ ${url}`;
+  return `Pacred: ${opts.userId} ใบเสร็จ ${opts.rid} ยอด ฿${amount} ดูที่ ${url}`;
 }
 
-function composeInvoiceBody(opts: {
+function composeReceiptBody(opts: {
   userId: string;
   rid: string;
-  fid: number;
+  fids: number[];
   amountThb: number;
   dueDate: string;
 }): string {
   const amount = opts.amountThb.toLocaleString("th-TH", { minimumFractionDigits: 2 });
+  const orderList = opts.fids.length === 1
+    ? `บริการนำเข้า #${opts.fids[0]}`
+    : `บริการนำเข้า ${opts.fids.length} รายการ (#${opts.fids.slice(0, 3).join(", #")}${opts.fids.length > 3 ? "..." : ""})`;
   return (
     `เรียนคุณ ${opts.userId}\n` +
-    `ใบแจ้งหนี้ ${opts.rid} (บริการนำเข้า #${opts.fid})\n` +
+    `ใบเสร็จรับเงิน ${opts.rid}\n` +
+    `${orderList}\n` +
     `ยอดที่ต้องชำระ: ฿${amount}\n` +
     `ครบกำหนดชำระ: ${opts.dueDate}\n` +
     `กรุณาเข้าระบบเพื่อชำระเงิน`
@@ -176,122 +191,169 @@ function composeInvoiceBody(opts: {
 }
 
 // ────────────────────────────────────────────────────────────
-// adminIssueForwarderInvoice — create tb_receipt + tb_receipt_item
+// adminIssueForwarderInvoice — MANUAL OVERRIDE batch path
 // ────────────────────────────────────────────────────────────
 
 /**
- * Issue an invoice document for a tb_forwarder row already at fstatus='5'.
+ * Issue ONE receipt for N tb_forwarder rows (all fstatus='5', same userid).
+ *
+ * This is the MANUAL OVERRIDE — used when auto-receipt failed, or
+ * accounting needs to consolidate multiple paid forwarder rows for the
+ * same customer onto a single tb_receipt.
  *
  * Steps:
- *   1. Read tb_forwarder (must be fstatus='5' — billing already triggered)
- *   2. Read tb_users + tb_corporate for customer header info
- *   3. Mint rid · INSERT tb_receipt · INSERT tb_receipt_item
- *   4. Send LINE/SMS/email to customer (respects NOTIFY_BYPASS)
- *   5. Audit log + revalidate
+ *   1. Re-read all fids, verify same userid + fstatus='5' + not already
+ *      on a receipt
+ *   2. Determine corporate (1=juristic / 2=individual) from tb_corporate
+ *   3. Compute totals — pre-WHT (totalbeforewithholding) + post-juristic-1%
+ *      (rAmount); WHT applies only if corporate=1 AND total ≥ 1000
+ *   4. Mint rid via `mintReceiptDocNo` (FRC/FRG yyMM-NNNNN)
+ *   5. INSERT tb_receipt · batch INSERT N × tb_receipt_item
+ *   6. Notify customer (SMS + LINE + email · best-effort)
+ *   7. Audit log + revalidate paths
  */
 export async function adminIssueForwarderInvoice(
   input: AdminIssueForwarderInvoiceInput,
-): Promise<AdminActionResult<{ receiptId: number; rid: string }>> {
+): Promise<AdminActionResult<{ receiptId: number; rid: string; rAmount: number; totalBeforeWithholding: number }>> {
   const parsed = issueInvoiceSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
-  const { forwarderId, dueDate, discount, notes } = parsed.data;
+  const { fids: rawFids, issueDate, dueDate, notes } = parsed.data;
+  const fids = Array.from(new Set(rawFids)); // dedup
 
-  return withAdmin<{ receiptId: number; rid: string }>(
+  return withAdmin<{ receiptId: number; rid: string; rAmount: number; totalBeforeWithholding: number }>(
     ["super", "accounting"],
     async ({ adminId }) => {
       const admin = createAdminClient();
 
-      // 1. Read tb_forwarder — must be fstatus='5'
-      const { data: forwarderRow, error: readErr } = await admin
+      // 1a. Read tb_forwarder rows — all must be fstatus='5'.
+      const { data: fwRows, error: readErr } = await admin
         .from("tb_forwarder")
         .select(
           "id, userid, fstatus, ftrackingchn, " +
             "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
-            "pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany",
+            "pricecrate, ftransportpricechnthb, priceother, fdiscount",
         )
-        .eq("id", forwarderId)
-        .eq("fstatus", "5")
-        .maybeSingle<ForwarderRowForInvoice>();
+        .in("id", fids)
+        .eq("fstatus", "5");
       if (readErr) {
         console.error(`[tb_forwarder read] failed`, { code: readErr.code, message: readErr.message });
         return { ok: false, error: readErr.message };
       }
-      if (!forwarderRow) {
+      const rows = ((fwRows ?? []) as unknown as ForwarderRowForReceipt[]);
+      if (rows.length === 0) {
         return {
           ok: false,
-          error: "ไม่พบรายการนี้ที่สถานะ 'รอชำระเงิน' (fstatus=5) — อาจถูกออกใบแจ้งหนี้ไปแล้ว หรือยังไม่ได้ส่งให้แจ้งชำระ",
+          error: "ไม่พบรายการที่สถานะ 'รอชำระเงิน' (fstatus=5) — อาจถูกออกใบเสร็จไปแล้ว หรือยังไม่ได้แจ้งชำระ",
+        };
+      }
+      if (rows.length !== fids.length) {
+        return {
+          ok: false,
+          error: `เลือก ${fids.length} รายการ พบเพียง ${rows.length} รายการที่พร้อมออกใบเสร็จ (อาจมีบางรายการถูกเปลี่ยนสถานะแล้ว)`,
         };
       }
 
-      // Apply optional discount override before computing outstanding
-      const effective = discount !== undefined
-        ? { ...forwarderRow, fdiscount: discount }
-        : forwarderRow;
-      const totalBeforeWithholding = calcForwarderOutstanding(effective);
+      // 1b. All fids must share the same userid.
+      const userIds = Array.from(new Set(rows.map((r) => r.userid)));
+      if (userIds.length !== 1) {
+        return {
+          ok: false,
+          error: "เลือกรายการต้องมาจากลูกค้ารายเดียวกัน — พบมากกว่า 1 รหัสสมาชิก",
+        };
+      }
+      const userid = userIds[0]!;
 
-      // 2. Customer info — tb_users + tb_corporate (best-effort: missing
-      //    corporate row is fine, we fall back to the individual name)
+      // 1c. Idempotency — none of the fids may already be on a tb_receipt.
+      const { data: existing, error: existingErr } = await admin
+        .from("tb_receipt_item")
+        .select("fid, rid")
+        .in("fid", fids);
+      if (existingErr) {
+        console.error(`[tb_receipt_item check] failed`, { code: existingErr.code, message: existingErr.message });
+        return { ok: false, error: `db_error:${existingErr.code ?? "unknown"}` };
+      }
+      if ((existing ?? []).length > 0) {
+        const blocked = ((existing ?? []) as Array<{ fid: number; rid: string }>);
+        const sample = blocked.slice(0, 3).map((b) => `#${b.fid}(${b.rid})`).join(", ");
+        return {
+          ok: false,
+          error: `มี ${blocked.length} รายการถูกออกใบเสร็จไปแล้ว: ${sample}${blocked.length > 3 ? "..." : ""}`,
+        };
+      }
+
+      // 2. Customer info — tb_users + tb_corporate.
       const { data: userRow, error: userErr } = await admin
         .from("tb_users")
         .select("userID, userName, userLastName, userTel, userEmail")
-        .eq("userID", forwarderRow.userid)
-        .maybeSingle<UserRowForInvoice>();
+        .eq("userID", userid)
+        .maybeSingle<UserRowForReceipt>();
       if (userErr) {
         console.error(`[tb_users read] failed`, { code: userErr.code, message: userErr.message });
       }
       const { data: corpRow, error: corpErr } = await admin
         .from("tb_corporate")
         .select("corporatenumber, corporatename, corporateaddress")
-        .eq("userid", forwarderRow.userid)
-        .maybeSingle<{
-          corporatenumber: string | null;
-          corporatename: string | null;
-          corporateaddress: string | null;
-        }>();
-      if (corpErr) {
-        // Most customers don't have a tb_corporate row — only juristic
-        // persons do. PGRST116 (no rows) is normal · log other errors only.
-        if (corpErr.code !== "PGRST116") {
-          console.error(`[tb_corporate read] failed`, { code: corpErr.code, message: corpErr.message });
-        }
+        .eq("userid", userid)
+        .maybeSingle<CorpRowForReceipt>();
+      if (corpErr && corpErr.code !== "PGRST116") {
+        console.error(`[tb_corporate read] failed`, { code: corpErr.code, message: corpErr.message });
+      }
+      const corporate: 1 | 2 = corpRow?.corporatenumber ? 1 : 2;
+
+      // 3. Totals — sum per-row raw + apply juristic 1% if eligible
+      //    (legacy `grenrateReceiptF` L548-559).
+      const pricePayAll = rows.reduce((s, r) => s + perRowRaw(r), 0);
+      const totalBeforeWithholding = Math.round(pricePayAll * 100) / 100;
+      const applyJuristic1Pct = corporate === 1 && pricePayAll >= 1000;
+      const rAmount = applyJuristic1Pct
+        ? Math.round(pricePayAll * 0.99 * 100) / 100
+        : totalBeforeWithholding;
+
+      // 4. Mint the rid — main thread provides this minter.
+      const issueDateObj = new Date(`${issueDate}T00:00:00`);
+      if (Number.isNaN(issueDateObj.getTime())) {
+        return { ok: false, error: "วันที่ออกเอกสารไม่ถูกต้อง" };
+      }
+      let rid: string;
+      try {
+        rid = await mintReceiptDocNo(admin, { corporate, dateSlip: issueDateObj });
+      } catch (e) {
+        console.error(`[mintReceiptDocNo] threw`, {
+          error: e instanceof Error ? e.message : String(e),
+          userid, corporate,
+        });
+        return { ok: false, error: `mint_failed: ${e instanceof Error ? e.message : "unknown"}` };
       }
 
-      const isCorporate = !!corpRow?.corporatenumber;
-      const documentIssuer = `Admin ${safeLegacyAdminId(adminId, 30)}`;
-      // documentapprover stays blank at issue time; gets filled when an
-      // accounting manager prints the official copy (statusprintcopy=1).
-      const documentApprover = "";
-
-      // 3a. Mint rid
-      const rid = await mintReceiptId(admin);
-
-      // 3b. INSERT tb_receipt
+      // 5a. INSERT tb_receipt — single header row.
       const nowIso = new Date().toISOString();
+      const issueIso = issueDateObj.toISOString();
       const insertReceipt: Record<string, unknown> = {
-        rstatus:           "3",                       // pending payment
+        rstatus:                "3",                           // pending payment (manual override default)
         rid,
-        refid:             notes ?? "",               // ใช้เป็นหมายเหตุ + เลขอ้างอิง
-        rdatecreate:       nowIso,
-        rdate:             nowIso,
-        issuedate:         nowIso,
-        ramount:           totalBeforeWithholding,    // จะอัพเดทตอนชำระจริงด้วยยอดหลังหัก ณ ที่จ่าย
-        totalbeforewithholding: totalBeforeWithholding,
-        adminid:           safeLegacyAdminId(adminId, 30),
-        userid:            forwarderRow.userid,
-        statusprint:       "0",
-        adminidprint:      "",
-        statusprintcopy:   "0",
-        adminidprintcopy:  "",
-        recompnumber:      corpRow?.corporatenumber ?? "",
-        recompname:        corpRow?.corporatename ?? "",
-        recompaddress:     corpRow?.corporateaddress ?? "",
-        rpopup:            "0",
-        corporatetype:     isCorporate ? "1" : "2",
-        documentissuer:    documentIssuer,
-        documentapprover:  documentApprover,
-        refwhid:           null,
+        refid:                  notes ?? "",                   // หมายเหตุ
+        rdatecreate:            nowIso,
+        rdate:                  issueIso,
+        issuedate:              issueIso,
+        ramount:                rAmount,                       // post-juristic-1%
+        totalbeforewithholding: totalBeforeWithholding,        // pre-WHT
+        adminid:                safeLegacyAdminId(adminId, 30),
+        userid,
+        statusprint:            "0",
+        adminidprint:           "",
+        statusprintcopy:        "0",
+        adminidprintcopy:       "",
+        recompnumber:           corpRow?.corporatenumber ?? "",
+        recompname:             corpRow?.corporatename
+                                  ?? `${userRow?.userName ?? ""} ${userRow?.userLastName ?? ""}`.trim(),
+        recompaddress:          corpRow?.corporateaddress ?? "",
+        rpopup:                 "0",
+        corporatetype:          String(corporate),
+        documentissuer:         `Admin ${safeLegacyAdminId(adminId, 30)} (manual)`,
+        documentapprover:       "",
+        refwhid:                null,
       };
 
       const { data: receiptRow, error: insertErr } = await admin
@@ -304,46 +366,41 @@ export async function adminIssueForwarderInvoice(
         return { ok: false, error: insertErr.message };
       }
 
-      // 3c. INSERT tb_receipt_item — one row per tb_forwarder bill.
-      // The legacy table is a simple junction (rid + fid only); a single
-      // invoice can reference multiple forwarder rows but our flow issues
-      // 1 invoice per 1 forwarder row (matches the legacy `?page=add` form
-      // which restricts to one fstatus=5 row per submission).
+      // 5b. Batch INSERT N × tb_receipt_item — one row per fid (matches
+      //     legacy `INSERT INTO tb_receipt_item VALUES (rid,fid),(rid,fid),...`
+      //     L568-569).
+      const itemRows = rows.map((r) => ({ rid: receiptRow.rid, fid: r.id }));
       const { error: itemErr } = await admin
         .from("tb_receipt_item")
-        .insert({
-          rid: receiptRow.rid,
-          fid: forwarderRow.id,
-        });
+        .insert(itemRows);
       if (itemErr) {
-        // Best-effort cleanup: try to delete the orphan receipt to keep
-        // tb_receipt clean. Don't block on cleanup failure.
-        console.error(`[tb_receipt_item insert] failed`, { code: itemErr.code, message: itemErr.message });
+        // Best-effort cleanup — delete the orphan receipt header.
+        console.error(`[tb_receipt_item batch insert] failed`, {
+          code: itemErr.code, message: itemErr.message, rid: receiptRow.rid,
+        });
         await admin.from("tb_receipt").delete().eq("id", receiptRow.id);
         return { ok: false, error: `item-insert: ${itemErr.message}` };
       }
 
-      // 4. Notify customer — LINE/SMS/email via the notifications spine.
-      //    Same pattern as forwarder-check.ts:adminCallPriceUser.
-      const profileIdMap = await resolveProfileIdsForLegacyUserids([forwarderRow.userid]);
-      const profileId = profileIdMap.get(forwarderRow.userid);
+      // 6. Notify customer — LINE/SMS/email via the notifications spine.
+      const profileIdMap = await resolveProfileIdsForLegacyUserids([userid]);
+      const profileId = profileIdMap.get(userid);
 
       // SMS (always tries — gateway honours OTP_BYPASS / NOTIFY_BYPASS)
       if (userRow?.userTel) {
         const sms = await sendSms(
           userRow.userTel,
-          composeInvoiceSms({
-            userId:    forwarderRow.userid,
+          composeReceiptSms({
+            userId:    userid,
             rid:       receiptRow.rid,
-            fid:       forwarderRow.id,
-            amountThb: totalBeforeWithholding,
+            fid:       rows[0]!.id,
+            amountThb: rAmount,
           }),
         );
         if (!sms.ok) {
           logger.warn("forwarder-invoice", "SMS failed", {
             rid:    receiptRow.rid,
-            fid:    forwarderRow.id,
-            userid: forwarderRow.userid,
+            userid,
             phone:  redactPhone(userRow.userTel),
             error:  sms.error,
           });
@@ -356,53 +413,63 @@ export async function adminIssueForwarderInvoice(
           await sendNotification(profileId, {
             category:       "forwarder",
             severity:       "info",
-            title:          `ใบแจ้งหนี้ ${receiptRow.rid} · บริการนำเข้า #${forwarderRow.id}`,
-            body:           composeInvoiceBody({
-              userId:    forwarderRow.userid,
+            title:          `ใบเสร็จรับเงิน ${receiptRow.rid}`,
+            body:           composeReceiptBody({
+              userId:    userid,
               rid:       receiptRow.rid,
-              fid:       forwarderRow.id,
-              amountThb: totalBeforeWithholding,
+              fids:      rows.map((r) => r.id),
+              amountThb: rAmount,
               dueDate,
             }),
-            link_href:      `/service-import/${forwarderRow.id}`,
+            link_href:      `/service-import/${rows[0]!.id}/invoice`,
             reference_type: "forwarder",
-            reference_id:   String(forwarderRow.id),
+            reference_id:   String(rows[0]!.id),
           });
         } catch (e) {
           logger.warn("forwarder-invoice", "sendNotification threw", {
             rid:    receiptRow.rid,
-            fid:    forwarderRow.id,
-            userid: forwarderRow.userid,
+            userid,
             error:  e instanceof Error ? e.message : String(e),
           });
         }
       }
 
-      // 5. Audit log
+      // 7. Audit log + revalidate.
       await logAdminAction(
         adminId,
-        "forwarder_invoice.issue",
+        "forwarder_invoice.manual_issue",
         "tb_receipt",
         String(receiptRow.id),
         {
-          rid:                     receiptRow.rid,
-          forwarder_id:            forwarderRow.id,
-          userid:                  forwarderRow.userid,
+          rid:                      receiptRow.rid,
+          fids:                     rows.map((r) => r.id),
+          userid,
           total_before_withholding: totalBeforeWithholding,
-          due_date:                dueDate,
-          discount_override:       discount ?? null,
-          notes:                   notes ?? null,
-          corporate:               isCorporate,
+          r_amount:                 rAmount,
+          applied_juristic_1pct:    applyJuristic1Pct,
+          corporate,
+          issue_date:               issueDate,
+          due_date:                 dueDate,
+          notes:                    notes ?? null,
+          source:                   "manual_override",
         },
       );
 
       revalidatePath("/admin/accounting/forwarder-invoice");
       revalidatePath(`/admin/accounting/forwarder-invoice/${receiptRow.id}`);
       revalidatePath("/admin/forwarders");
+      for (const r of rows) {
+        revalidatePath(`/service-import/${r.id}/invoice`);
+      }
 
       return {
         ok:   true,
-        data: { receiptId: receiptRow.id, rid: receiptRow.rid },
+        data: {
+          receiptId:              receiptRow.id,
+          rid:                    receiptRow.rid,
+          rAmount,
+          totalBeforeWithholding,
+        },
       };
     },
   );

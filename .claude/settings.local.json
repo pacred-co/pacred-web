@@ -226,7 +226,13 @@
       "Bash(curl -s -o /dev/null -w \"parent: %{http_code}\\\\n\" http://localhost:3000/admin/api-forwarder-momo)",
       "mcp__Claude_in_Chrome__read_page",
       "mcp__Claude_in_Chrome__javascript_tool",
-      "Bash(git diff *)"
+      "Bash(git diff *)",
+      "Bash(git pull *)",
+      "Bash(curl -s -o /dev/null -w \"dev-server: %{http_code}\\\\n\" http://localhost:3000)",
+      "Bash(curl -s -o /dev/null -w \"forwarder-invoice: %{http_code} → %{redirect_url}\\\\n\" -L http://localhost:3000/admin/accounting/forwarder-invoice)",
+      "Bash(curl -s -L -o /tmp/inv.html -w \"final-url: %{url_effective}\\\\nstatus: %{http_code}\\\\n\" \"http://localhost:3000/service-import/52089/invoice\")",
+      "Bash(taskkill /PID 9100 /F)",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('messages/th.json', encoding='utf-8'\\)\\); print\\(json.dumps\\(d.get\\('barcode', {}\\), ensure_ascii=False, indent=2\\)\\)\")"
     ]
   }
 }
