@@ -4,6 +4,32 @@ Topics: GitHub Actions, Vercel build/deploy, pnpm action-setup, Next 16 build ou
 
 ---
 
+## [2026-05-30] After a multi-agent merge, run the FULL `ci.yml` gate sequence locally — per-file checks are NOT enough
+
+**Context.** Merged a 6-agent Tier-A batch (octopus merge, 20 files) into `dave-pacred` + `main`, then pushed. **Vercel build failed** on a TS error (`yuan-payments.ts:423` — `STATUS_LABEL[existing.status]` indexing a `Record<union,string>` with a plain `string`). Pushed a fix. Then **GitHub Actions `pnpm audit:all` failed** on a *different* gate (`MOMO_SYNC_PROPAGATE_STATUS` used in code but not declared in `.env.example`). Two consecutive red CI runs from one merge — exactly the "check thoroughly, make it done" frustration.
+
+**Root cause — I verified the WRONG things before pushing.** During the merge I ran *per-file* gates (the touched files' unit tests + `eslint <those files>`). Those passed. But:
+1. **A type error in a file NO agent fully re-checked** survived — the failing function (`adminMarkYuanPaymentRefunded`) was *pre-existing* code that only the **whole-project** type-check surfaces (cross-file inference). Per-file `eslint` does not type-check; bare `tsc --noEmit` **OOMs at default heap** on this codebase (see the `googleapis`/heap entries below) so I'd skipped it.
+2. **`pnpm audit:all`** (env-audit) is a *repo-global* check — it greps ALL of `actions/ lib/ app/` for `process.env.X` vs `.env.example`. A new env var introduced by *any* of the 6 agents trips it. No per-file check can catch this.
+
+**The fix that actually works — run the literal CI sequence, in order, before every push of a multi-file merge:**
+```bash
+pnpm lint        # exit 0 = 0 ERRORS (warnings don't fail; the CI lint step has no --max-warnings)
+pnpm typecheck   # NOT bare `tsc` — this is scripts/tsc-check.mjs (heap-bumped to 8192; bare tsc OOMs)
+pnpm test:unit
+pnpm audit:all   # md-link + env-audit + i18n — the repo-global gate that per-file checks miss
+pnpm build       # Vercel parity (compile + TypeScript phase + static-gen). Locally: NODE_OPTIONS=--max-old-space-size=8192 pnpm build (default-heap OOMs at the static-gen worker on an 8GB Mac; CI/Vercel have headroom)
+```
+This is exactly `.github/workflows/ci.yml` (Lint → Typecheck → Unit tests → Docs+env audit → Build). If it's green locally, CI + Vercel are green.
+
+**Two specific traps inside that sequence (both bit me this session):**
+- **`pnpm typecheck` ≠ `tsc --noEmit`.** The project ships `scripts/tsc-check.mjs` (heap 8192) precisely because bare `tsc` OOMs. I ran bare `tsc`, it OOM'd, I assumed "can't type-check locally" and pushed → Vercel caught the error I couldn't see. Always use the `pnpm typecheck` script.
+- **`pnpm build` OOM locally is NOT a Vercel failure signal.** Local `pnpm build` on an 8GB Mac OOMs *after* "✓ Compiled successfully" (the static-gen worker phase). That's a local-heap artifact — `NODE_OPTIONS=--max-old-space-size=8192 pnpm build` → exit 0. Vercel/GitHub runners auto-size the heap and were green before the merge. Don't chase a local-only OOM as if it were a deploy blocker — but DO bump the heap locally to get a true green so you're not push-and-praying.
+
+**env-audit exit semantics (so you know which line to fix):** `scripts/env-audit.mjs` exits 1 **only** on *used-but-undeclared* (line ~102). The "Declared but UNUSED (28)" list is a **warning, never a failure** — the script intentionally counts commented `# KEY=` lines as "declared" so forward-looking docs (GOOGLE_SHEETS_*, CARGOTHAI_*, etc.) don't punish maintainers. So when audit:all goes red, scan only the "⚠ Used but NOT in .env.example" block — that's the single blocker.
+
+**Rule for the integrator:** a multi-agent merge is exactly when whole-project gates matter most — each agent verified its own slice in isolation, so cross-file + repo-global breakage is invisible until you assemble them. Budget the ~5-min full `pnpm verify` (+ heap-bumped build) as a NON-optional step of the merge, before the push. One full local run beats two red CI cycles + two hotfix pushes.
+
 ## [2026-05-27] Supabase prod pg connection — direct URL works, pooler URL fails with "tenant not found"
 
 **Symptom.** Running a one-off migration via Node + `pg` against prod
