@@ -120,6 +120,28 @@ export async function insertLegacyTbUserRow(
     return { ok: true };
   }
 
+  // Phone-collision guard. `tb_users.userTel` carries a UNIQUE index
+  // (`idx_*_usertel`) — a raw insert with a phone that already belongs to
+  // another userID throws 23505 and (pre-2026-05-29) silently orphaned the
+  // signup. This happens for genuine re-registrations (same person signs up
+  // again with a fresh member_code) + legacy rows that share the number.
+  // We pre-check and no-op: the customer already HAS a tb_users identity
+  // under the other code, so the admin queue + approve flow can still act on
+  // them via that row. Logged at info (expected), not error.
+  const { data: phoneOwner } = await admin
+    .from("tb_users")
+    .select("userID")
+    .eq("userTel", legacyTel)
+    .maybeSingle();
+  if (phoneOwner) {
+    logger.info(
+      SCOPE,
+      "tb_users phone already registered under another member — skipping insert (no orphan)",
+      { memberCode, existingUserID: phoneOwner.userID, phone: redactPhone(phone) },
+    );
+    return { ok: true };
+  }
+
   // Pacred-native customers default useractive='0' (= pending admin
   // approval). The admin queue at /admin/customers/pending reads
   // `userActive='0'` to enumerate this list. Approval (Sub-fix B) flips
@@ -171,6 +193,17 @@ export async function insertLegacyTbUserRow(
 
   const { error: insertErr } = await admin.from("tb_users").insert(payload);
   if (insertErr) {
+    // 23505 = unique_violation. A phone-collision that slipped past the
+    // pre-check above (race between two concurrent signups, or the legacy
+    // usertel index) is NOT an orphan risk worth an error page — the other
+    // row already represents this customer's identity. Degrade to info.
+    if (insertErr.code === "23505") {
+      logger.info(SCOPE, "tb_users insert hit unique constraint — treating as already-present (no orphan)", {
+        memberCode,
+        constraint: insertErr.details ?? insertErr.message,
+      });
+      return { ok: true };
+    }
     logger.error(SCOPE, "tb_users insert failed — orphan profile risk", insertErr, {
       memberCode,
       accountType,

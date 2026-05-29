@@ -1,0 +1,18 @@
+import pg from "pg";
+const { Client } = pg;
+const PASS = process.env.PG_PASSWORD;
+const c = new Client({ connectionString:`postgresql://postgres:${encodeURIComponent(PASS)}@db.yzljakczhwrpbxflnmco.supabase.co:5432/postgres`, ssl:{rejectUnauthorized:false}});
+await c.connect();
+console.log("══ admin /admin/customers/pending now shows (userActive='0') ══");
+const p = await c.query(`select count(*)::int n from tb_users where "userActive"='0'`);
+console.log(`  pending-approval queue count: ${p.rows[0].n}`);
+console.log("\n══ dashboard inactiveCustomers count (userActive != '1') ══");
+const ia = await c.query(`select count(*)::int n from tb_users where "userActive" <> '1'`);
+console.log(`  inactiveCustomers: ${ia.rows[0].n}`);
+console.log("\n══ remaining orphan profiles (should be ~14 phone-dupes) ══");
+const o = await c.query(`select count(*)::int n from profiles p where not exists (select 1 from tb_users u where u."userID"=p.member_code)`);
+console.log(`  orphans left: ${o.rows[0].n}  (these are duplicate-phone re-registrations — already have a tb_users identity)`);
+console.log("\n══ the 44 new pending rows — sample ══");
+const s = await c.query(`select "userID","userName","userLastName","userActive","userCompany" from tb_users where "coID"='PR' and "userActive"='0' order by "userRegistered" desc limit 6`);
+for (const r of s.rows) console.log(`  ${r.userID} ${r.userName} ${r.userLastName} active=${r.userActive} company=${r.userCompany}`);
+await c.end();
