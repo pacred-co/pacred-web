@@ -331,19 +331,24 @@ export default async function AccountingForwarderInvoiceListPage({
           <span className="mx-1">/</span>
           <Link href="/admin/accounting" className="hover:text-indigo-700">บัญชี</Link>
           <span className="mx-1">/</span>
-          <span className="text-slate-700">ประวัติการออกใบแจ้งหนี้ ฝากนำเข้า</span>
+          <span className="text-slate-700">ประวัติการออกใบเสร็จ ฝากนำเข้า</span>
         </nav>
 
         <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-          <h1 className="text-2xl font-semibold text-slate-900">
-            ประวัติการออกใบแจ้งหนี้ ฝากนำเข้า
-          </h1>
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-900">
+              ประวัติการออกใบเสร็จ ฝากนำเข้า
+            </h1>
+            <p className="text-xs text-slate-500 mt-1">
+              ใบเสร็จส่วนใหญ่จะถูกสร้างอัตโนมัติเมื่ออนุมัติสลิป — ปุ่มด้านขวาสำหรับเคส manual override
+            </p>
+          </div>
           <Link
             href="/admin/accounting/forwarder-invoice/add"
             className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-indigo-700"
           >
             <Plus className="size-4" />
-            ออกใบแจ้งหนี้ใหม่
+            ออกใบเสร็จใหม่ (manual)
           </Link>
         </div>
 
@@ -479,7 +484,7 @@ export default async function AccountingForwarderInvoiceListPage({
                   <SortLink target="date" label="วันที่ออก" sortKey={sortKey} sortDir={sortDir} sp={sp} />
                 </th>
                 <th className="px-3 py-2 text-left font-medium">
-                  <SortLink target="rid" label="เลขใบแจ้งหนี้" sortKey={sortKey} sortDir={sortDir} sp={sp} />
+                  <SortLink target="rid" label="เลขที่ใบเสร็จ" sortKey={sortKey} sortDir={sortDir} sp={sp} />
                 </th>
                 <th className="px-3 py-2 text-left font-medium">
                   <SortLink target="userid" label="ลูกค้า" sortKey={sortKey} sortDir={sortDir} sp={sp} />
@@ -497,7 +502,7 @@ export default async function AccountingForwarderInvoiceListPage({
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-3 py-12 text-center text-slate-500">
-                    ไม่พบใบแจ้งหนี้ในเงื่อนไขที่เลือก
+                    ไม่พบใบเสร็จในเงื่อนไขที่เลือก
                   </td>
                 </tr>
               ) : (

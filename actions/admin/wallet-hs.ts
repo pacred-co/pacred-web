@@ -170,6 +170,13 @@ export async function adminCreateWalletHsManual(
       // bulk-approve action expects (id is auto-sequence; whno + wusercredit
       // + typenew + typeservice + userid + adminidcrate are NOT NULL per
       // the schema; pass safe defaults for any blank).
+      //
+      // Wave 29: admin-manual entries do NOT trigger the auto-receipt hook.
+      // This form creates wallet deposits/withdraws/adjustments, NOT a
+      // forwarder-payment land — `reforder` stays empty so there's no
+      // tb_forwarder.id to link a receipt to. If accounting needs a receipt
+      // for a specific job, they use /admin/accounting/forwarder-invoice/
+      // add?mode=manual (the override queue).
       const { data: row, error: insErr } = await admin
         .from("tb_wallet_hs")
         .insert({

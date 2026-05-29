@@ -1,16 +1,28 @@
 /**
- * Admin > "สร้างใบแจ้งหนี้รายการฝากนำเข้า" — CREATE INVOICE page
+ * Admin > "สร้างใบเสร็จรายการฝากนำเข้า (Manual Override)" — CREATE RECEIPT page
  *
- * Agent F3 · E2E LOOP FIX batch (2026-05-29) — closes Gap #4 from E4 audit.
+ * ── HISTORY ───────────────────────────────────────────────────────
+ * Wave 28 F3 (2026-05-29) — built as "สร้างใบแจ้งหนี้" (invoice).
+ * Wave 29 P0 #206+#208 (2026-05-30) — pivoted to "สร้างใบเสร็จ" (receipt)
+ *   per `docs/research/legacy-accounting-billing-workflow.md`. The legacy
+ *   PCS Cargo flow never actually wired ใบแจ้งหนี้ — the real revenue path
+ *   is a 2-click receipt issue. This page is now the MANUAL OVERRIDE for
+ *   the auto-receipt hook in `lib/admin/auto-issue-receipt.ts` (which
+ *   fires when admin approves a slip in /admin/wallet).
+ *
  * Legacy reference: `pcs-admin/include/pages/hs-forwarder-invoice/add.php`.
  *
- * Server component loads all `fstatus='5'` rows (= eligible for invoicing —
- * the bill was already triggered upstream by `/admin/forwarder-check`'s
- * `adminCallPriceUser`), joins tb_users for the customer display, and hands
- * the list to the client form.
+ * Server component loads all `fstatus='5'` rows (= eligible — billing was
+ * already triggered by /admin/forwarder-check's `adminCallPriceUser`),
+ * joins tb_users for customer display, and hands the list to the client
+ * form. Filterable by member_code (userid) + optional date window. The
+ * actual multi-row selection + "สร้างใบเสร็จ" submit is handled in
+ * `add-form.tsx` — multi-checkbox now (one receipt covers N fids per
+ * legacy `grenrateReceiptF` model + `add.php` DataTables-Checkboxes).
  *
- * Filterable by member_code (userid) + optional date window. The actual
- * row selection + "สร้างใบแจ้งหนี้" submit is handled in `add-form.tsx`.
+ * URL parameter: `?mode=manual` (default · only mode supported). Mode is
+ * surfaced to the user via a banner in the client form so they know
+ * they're in the override flow.
  */
 
 import { Link } from "@/i18n/navigation";
@@ -25,6 +37,8 @@ type SearchParams = {
   userid?: string;
   date_from?: string;
   date_to?: string;
+  /** Reserved for future modes — currently only "manual" supported. */
+  mode?: string;
 };
 
 type RawForwarderRow = {
@@ -161,6 +175,8 @@ export default async function AddForwarderInvoicePage({
     };
   });
 
+  // Default issue date = today
+  const issueDateDefault = new Date().toISOString().slice(0, 10);
   // Default due date = today + 7 days
   const dueDateDefault = (() => {
     const d = new Date();
@@ -185,9 +201,17 @@ export default async function AddForwarderInvoicePage({
         </nav>
 
         <div className="flex items-center justify-between mb-5">
-          <h1 className="text-2xl font-semibold text-slate-900">
-            สร้างใบแจ้งหนี้รายการฝากนำเข้า
-          </h1>
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-900">
+              สร้างใบเสร็จรายการฝากนำเข้า
+              <span className="ml-2 inline-block px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 border border-amber-300 align-middle">
+                Manual Override
+              </span>
+            </h1>
+            <p className="text-xs text-slate-500 mt-1">
+              ระบบจะออกใบเสร็จอัตโนมัติเมื่ออนุมัติสลิป — หน้านี้สำหรับเคส auto fail หรือ batch หลายออเดอร์
+            </p>
+          </div>
           <Link
             href="/admin/accounting/forwarder-invoice"
             className="text-sm text-slate-600 hover:text-indigo-700"
@@ -243,14 +267,18 @@ export default async function AddForwarderInvoicePage({
             )}
           </form>
           <p className="mt-3 text-xs text-slate-500">
-            แสดงเฉพาะรายการที่สถานะ <span className="font-medium text-amber-700">รอชำระเงิน (fstatus=5)</span> และยังไม่ได้ออกใบแจ้งหนี้
-            · เลือก 1 รายการเพื่อสร้างใบแจ้งหนี้ใหม่
+            แสดงเฉพาะรายการที่สถานะ <span className="font-medium text-amber-700">รอชำระเงิน (fstatus=5)</span> และยังไม่ได้ออกใบเสร็จ
+            · เลือก ≥ 1 รายการจากลูกค้ารายเดียวกันเพื่อสร้างใบเสร็จใหม่
             {candidates.length === 500 && " · แสดง 500 รายการแรกเท่านั้น — กรุณาใช้ตัวกรอง"}
           </p>
         </div>
 
-        {/* Client form — row selection + due date + notes + submit */}
-        <AddInvoiceForm candidates={candidates} dueDateDefault={dueDateDefault} />
+        {/* Client form — multi-row selection + dates + notes + submit */}
+        <AddInvoiceForm
+          candidates={candidates}
+          issueDateDefault={issueDateDefault}
+          dueDateDefault={dueDateDefault}
+        />
       </div>
     </div>
   );
