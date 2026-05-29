@@ -420,7 +420,7 @@ export async function adminMarkYuanPaymentRefunded(
     if (!isYuanTransitionAllowed(existing.status, "refunded")) {
       return {
         ok: false,
-        error: `เปลี่ยนสถานะ ${STATUS_LABEL[existing.status] ?? existing.status} → คืนเงินแล้ว ไม่ได้ — สถานะนี้ห้ามคืน (เลือก refund ได้เฉพาะ pending / processing / completed)`,
+        error: `เปลี่ยนสถานะ ${STATUS_LABEL[existing.status as keyof typeof STATUS_LABEL] ?? existing.status} → คืนเงินแล้ว ไม่ได้ — สถานะนี้ห้ามคืน (เลือก refund ได้เฉพาะ pending / processing / completed)`,
       };
     }
 

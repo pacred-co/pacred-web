@@ -459,11 +459,16 @@ export async function refreshSnapshotForTracking(
   const derived = deriveStatus(signals);
 
   // Read existing snapshot — if any — to detect change.
-  const { data: existing } = await admin
+  // Best-effort: a missing snapshot is normal (first sync). A real DB error
+  // is logged but does not abort — we still write the fresh snapshot below.
+  const { data: existing, error: existingErr } = await admin
     .from("momo_tracking_status_snapshots")
     .select("current_phase, current_status_code, current_status_label, source_endpoint")
     .eq("momo_tracking_no", trackingNo)
     .maybeSingle();
+  if (existingErr) {
+    console.warn(`[momo snapshot] prior-snapshot read failed for ${trackingNo}`, { code: existingErr.code, message: existingErr.message });
+  }
 
   const nowIso = new Date().toISOString();
 
