@@ -47,6 +47,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { adminUpdateForwarder } from "./forwarders";
 import { sendNotification } from "@/lib/notifications";
+import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
+import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
+import { getAdminRoles } from "@/lib/auth/require-admin";
+import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
+import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
 
 // ── Shared types ──────────────────────────────────────────────────────────────
 
@@ -285,18 +290,72 @@ export async function bulkAssignDriver(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3. bulkCancel
+// 3. bulkCancel — Tier A3 "silent dead-write" fix (2026-05-29 master fidelity audit)
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// Faithful port of `moveStatusTo99` (forwarder/getListForwarder.php L17 +
-// the legacy "ย้ายไป สถานะพิเศษ" handler — cancel-with-reason). Constraints:
-//   - Reason required, ≥ 3 chars (matches V-A2 rollback gate semantics for
-//     a forward→cancelled transition's audit trail expectations)
-//   - Skip rows that are already `cancelled` (no-op, not an error) — legacy
-//     PHP did the same via `WHERE fStatus<>'7'`
-//   - Skip rows that are `delivered` — refuses with a clear error
-//   - One audit row per affected forwarder (action: `forwarder.bulk_cancel`)
-//   - Customer notification per row (severity: warning)
+// 🚨 What was broken (the dead-write pattern — #1 root cause across 5 systems):
+//   The prior implementation wrote `UPDATE forwarders SET status='cancelled' …`
+//   against the REBUILT-era `forwarders` table — which is EMPTY on prod
+//   (`tb_forwarder` is the populated legacy table holding ~52k rows of real
+//   cargo state). Every "bulk cancel" looked successful in the UI (no rows
+//   matched → 0 rows updated → no error) while the actual forwarder records
+//   carried on at their original status. Customers got delivered packages
+//   they'd been told were cancelled. See `docs/audit/master-fidelity-2026-05-30-evening.md`
+//   Tier-A pattern #1.
+//
+// Faithful port of `moveStatusTo99` (legacy `pcs-admin/forwarder.php` L4-19 +
+// the "ย้ายไป สถานะพิเศษ" handler invoked from
+// `pcs-admin/include/pages/forwarder/getListForwarder.php` L87). Legacy SQL:
+//
+//     UPDATE tb_forwarder SET fStatus='99' WHERE ID IN ('<ids>');
+//     INSERT INTO tb_log_forwarder_status (fID, fStatusOld, fStatusNew,
+//             adminIDChange, fDateChange)
+//          SELECT ID, '99', '99', <admin>, NOW()
+//          FROM tb_forwarder WHERE ID IN ('<ids>');
+//
+// Pacred port semantics:
+//   - Input `forwarderIds: string[]` is treated as legacy `tb_forwarder.id`
+//     values (bigint serialised as strings — matches the active page
+//     /admin/forwarders/forwarders-table.tsx which keeps `id: number` for
+//     the same selection model). Non-numeric / NaN entries fail per-row.
+//   - Reason required, ≥ 3 chars (Pacred enhancement — legacy stored no
+//     reason at all; we keep one on the audit_log payload so accounting
+//     can reconcile when refunding). Legacy column-set has no
+//     `fCancelReason` / `fCancelBy` / `fCancelDate` fields — the cancel
+//     stamp lives entirely in `tb_log_forwarder_status` + `adminidupdate`
+//     + `fdateadminstatus`. Do NOT invent extra columns.
+//   - Target status is the legacy '99' bucket ("ย้ายไปสถานะพิเศษ" — the
+//     soft-cancel "special hold" lane), NOT '7' (delivered). The active
+//     forwarders-table.tsx exposes the inverse via
+//     adminRestoreForwarderFromSpecial — paired cancel/restore loop.
+//   - Skip rows that are already `fstatus='99'` (no-op, count as success
+//     to mirror legacy "WHERE fStatus<>'99'" idempotency).
+//   - Refuse rows at `fstatus='7'` (delivered terminal) — cancelling a
+//     delivered shipment needs a money-side refund, not a status flip.
+//   - Per-row permission via `canAnyRoleFlipFstatus(roles, fstatus, '99')`
+//     — same matrix the active bulk path uses
+//     (lib/auth/check-fstatus-transition.ts §Rule 2: → 99 is super/manager
+//     only). Mixed-status batches enforce the most restrictive rule across
+//     rows and refuse the whole batch if any row's transition is forbidden
+//     for the caller's roles. This matches the active path's "refuse the
+//     whole batch on any forbidden row" stance — partial-process would let
+//     a non-super admin silently cancel half a batch.
+//   - One `tb_log_forwarder_status` row per affected forwarder (legacy
+//     wrote one log row per row in the batch — preserved here).
+//   - One `admin_audit_log` row per affected forwarder (Pacred extra —
+//     the legacy log table has no payload field, so the cancel reason
+//     lives in admin_audit_log.payload.reason for reconciliation).
+//   - Customer notification per row (Pacred enhancement — legacy fired
+//     NO notification on cancel. The status-flip CHANNEL_MATRIX treats
+//     *→99 as log-only, but we send an in-app warning so customers don't
+//     find out by checking the order page later).
+//
+// What we deliberately don't do:
+//   - Set `note_admin` / refund the wallet / void invoices — those are
+//     separate handlers in legacy (`pcs-admin/wallet-cancel.php`,
+//     `acc-payment-cancel.php`). The cancel-with-refund path is the
+//     refund flow at /admin/refunds (per the "delivered → ใช้ flow คืนเงิน
+//     แทน" branch below).
 // ─────────────────────────────────────────────────────────────────────────────
 
 const bulkCancelSchema = baseBulkSchema.extend({
@@ -313,90 +372,201 @@ export async function bulkCancel(
   }
   const d = parsed.data;
 
-  return withAdmin<BulkForwarderResult>(["ops"], async ({ adminId }) => {
-    const admin = createAdminClient();
-    const succeeded: string[] = [];
-    const failed:    { fNo: string; error: string }[] = [];
+  return withAdmin<BulkForwarderResult>(
+    // Same role union the active /admin/forwarders bulk path uses
+    // (forwarders.ts adminBulkUpdateForwarderTbStatus). The per-row
+    // canAnyRoleFlipFstatus check below narrows → 99 transitions to
+    // super/manager only (per check-fstatus-transition.ts Rule 2).
+    ["ops", "super", "manager", "warehouse", "accounting", "driver"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const adminIdSafe = safeLegacyAdminId(adminId, 10);
 
-    for (const fNo of d.forwarderIds) {
-      const { data: existing, error: existingErr } = await admin
-        .from("forwarders")
-        .select("id, f_no, profile_id, status, note_admin")
-        .eq("f_no", fNo)
-        .maybeSingle<{ id: string; f_no: string; profile_id: string; status: string; note_admin: string | null }>();
-      if (existingErr) {
-        console.error(`[forwarders-bulk bulkCancel] forwarder lookup failed`, {
-          code: existingErr.code, message: existingErr.message, fNo,
+      // ── Pre-flight: caller role gate (for → 99 transition matrix) ─────────
+      // We check the matrix per-row below, but a caller with zero qualifying
+      // roles fails the whole batch fast (no DB round-trip).
+      const callerRoles = (await getAdminRoles()) ?? [];
+
+      // ── Parse + bucket the input ids ──────────────────────────────────────
+      // tb_forwarder.id is bigint — accept numeric strings only. Non-numeric
+      // entries fail per-row with a clear error so the UI can highlight them.
+      const succeeded: string[] = [];
+      const failed:    { fNo: string; error: string }[] = [];
+
+      const idEntries: { raw: string; id: number }[] = [];
+      for (const raw of d.forwarderIds) {
+        const n = Number(raw);
+        if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) {
+          failed.push({ fNo: raw, error: "id ต้องเป็นตัวเลขจำนวนเต็มบวก" });
+          continue;
+        }
+        idEntries.push({ raw, id: n });
+      }
+      if (idEntries.length === 0) {
+        return { ok: true, data: { succeeded, failed } };
+      }
+
+      // ── Snapshot the current state (one round-trip) ───────────────────────
+      // We need fstatus (for the no-op + delivered + log columns) and
+      // userid (for notification resolution) + fidorco (for the display
+      // reference used in the in-app push).
+      const ids = idEntries.map((e) => e.id);
+      const { data: beforeRows, error: readErr } = await admin
+        .from("tb_forwarder")
+        .select("id, fstatus, userid, fidorco")
+        .in("id", ids);
+      if (readErr) {
+        console.error(`[forwarders-bulk bulkCancel] tb_forwarder lookup failed`, {
+          code: readErr.code, message: readErr.message,
         });
-        failed.push({ fNo, error: `lookup failed: ${existingErr.message}` });
-        continue;
-      }
-      if (!existing) {
-        failed.push({ fNo, error: "ไม่พบรายการ" });
-        continue;
+        return { ok: false, error: `lookup failed: ${readErr.message}` };
       }
 
-      // Already cancelled → no-op (count as succeeded so the UI doesn't
-      // misreport; legacy treated this as silent success).
-      if (existing.status === "cancelled") {
-        succeeded.push(fNo);
-        continue;
-      }
-
-      // Refuse delivered — cancelling a settled shipment is a money-handling
-      // operation that needs ATM-side reversal (refund flow), not a status flip.
-      if (existing.status === "delivered") {
-        failed.push({ fNo, error: "รายการส่งสำเร็จแล้ว — ใช้ flow คืนเงินแทน" });
-        continue;
-      }
-
-      // Stamp cancel reason into note_admin (prepend, preserve prior notes).
-      const stampedNote =
-        `[CANCEL ${new Date().toISOString().slice(0, 10)}] ${d.reason}`
-        + (existing.note_admin ? `\n${existing.note_admin}` : "");
-
-      const { error } = await admin
-        .from("forwarders")
-        .update({
-          status:           "cancelled",
-          note_admin:       stampedNote,
-          admin_id_update:  adminId,
-        })
-        .eq("id", existing.id);
-      if (error) {
-        failed.push({ fNo, error: error.message });
-        continue;
-      }
-
-      await logAdminAction(
-        adminId,
-        "forwarder.bulk_cancel",
-        "forwarder",
-        existing.id,
-        {
-          f_no:   existing.f_no,
-          before: { status: existing.status },
-          after:  { status: "cancelled" },
-          reason: d.reason,
-          bulk:   true,
-        },
+      const byId = new Map<number, { id: number; fstatus: string; userid: string; fidorco: string | null }>(
+        (beforeRows ?? []).map((r) => [
+          (r as { id: number }).id,
+          r as { id: number; fstatus: string; userid: string; fidorco: string | null },
+        ]),
       );
 
-      void sendNotification(existing.profile_id, {
-        category:       "forwarder",
-        severity:       "warning",
-        title:          `ฝากนำเข้า ${existing.f_no} ถูกยกเลิก`,
-        body:           `เหตุผล: ${d.reason}`,
-        link_href:      `/service-import/${existing.f_no}`,
-        reference_type: "forwarder",
-        reference_id:   existing.id,
+      // ── First pass: classify + collect cancellable rows ───────────────────
+      type Cancellable = {
+        raw:    string;
+        id:     number;
+        fstatus: string;
+        userid: string;
+        fidorco: string | null;
+      };
+      const cancellable: Cancellable[] = [];
+
+      for (const { raw, id } of idEntries) {
+        const row = byId.get(id);
+        if (!row) {
+          failed.push({ fNo: raw, error: "ไม่พบรายการ" });
+          continue;
+        }
+
+        // Already cancelled → no-op (legacy SQL was idempotent · `WHERE fStatus<>'99'`).
+        if (row.fstatus === "99") {
+          succeeded.push(raw);
+          continue;
+        }
+
+        // Refuse delivered — cancelling a settled shipment is a money-handling
+        // operation that needs ATM-side reversal (the legacy refund flow).
+        if (row.fstatus === "7") {
+          failed.push({ fNo: raw, error: "รายการส่งสำเร็จแล้ว — ใช้ flow คืนเงินแทน" });
+          continue;
+        }
+
+        // Per-row permission for the (fstatus → 99) transition.
+        if (!canAnyRoleFlipFstatus(callerRoles, row.fstatus, "99")) {
+          failed.push({
+            fNo:   raw,
+            error: `forbidden_transition: บัญชีของคุณไม่มีสิทธิ์ย้ายรายการที่ fstatus=${row.fstatus} ไปยังสถานะพิเศษ (99) — super/manager เท่านั้น`,
+          });
+          continue;
+        }
+
+        cancellable.push({ raw, id, fstatus: row.fstatus, userid: row.userid, fidorco: row.fidorco });
+      }
+
+      if (cancellable.length === 0) {
+        return { ok: true, data: { succeeded, failed } };
+      }
+
+      // ── Bulk UPDATE (one statement covers every cancellable row) ──────────
+      // Legacy SQL hit every row at once via `WHERE ID IN ('<ids>')`. We do
+      // the same — single round-trip — and the per-row `fstatus_before` we
+      // already captured above feeds the audit + status-log rows.
+      const nowIso = new Date().toISOString();
+      const cancellableIds = cancellable.map((c) => c.id);
+
+      const { error: updErr } = await admin
+        .from("tb_forwarder")
+        .update({
+          fstatus:           "99",
+          fdateadminstatus:  nowIso,
+          adminidupdate:     adminIdSafe,
+        })
+        .in("id", cancellableIds);
+      if (updErr) {
+        // The bulk UPDATE failed atomically — surface a top-level error.
+        // Any per-row failures we already classified above are still in
+        // `failed`; we leave them there for the UI partial-failure render.
+        console.error(`[forwarders-bulk bulkCancel] bulk UPDATE failed`, {
+          code: updErr.code, message: updErr.message, ids: cancellableIds,
+        });
+        return { ok: false, error: `update failed: ${updErr.message}` };
+      }
+
+      // ── Per-row side-effects ──────────────────────────────────────────────
+      // 1. Status log (legacy tb_log_forwarder_status) — best-effort
+      // 2. admin_audit_log (Pacred · keeps cancel reason)
+      // 3. Customer notification (Pacred enhancement · legacy was silent)
+      //
+      // Notifications resolve legacy userid → profile_id in one round-trip,
+      // then dispatch per row inside try/catch so one failed push doesn't
+      // block the rest.
+      const profileMap = await resolveProfileIdsForLegacyUserids(
+        cancellable.map((c) => c.userid),
+      ).catch((err) => {
+        console.error(`[forwarders-bulk bulkCancel] profile resolver failed`, {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return new Map<string, string>();
       });
 
-      succeeded.push(fNo);
-    }
+      for (const c of cancellable) {
+        // Status log — legacy semantics: one row per affected forwarder.
+        // appendStatusLog is best-effort; a failure does NOT roll back the
+        // UPDATE that already succeeded above (matches the active path).
+        await appendStatusLog(admin, c.id, c.fstatus, "99", adminIdSafe);
 
-    revalidatePath("/admin/forwarders");
-    return { ok: true, data: { succeeded, failed } };
-  });
+        // Audit log — Pacred · carries the cancel reason.
+        await logAdminAction(
+          adminId,
+          "forwarder.bulk_cancel",
+          "tb_forwarder",
+          String(c.id),
+          {
+            id:     c.id,
+            fidorco: c.fidorco,
+            before: { fstatus: c.fstatus },
+            after:  { fstatus: "99" },
+            reason: d.reason,
+            bulk:   true,
+          },
+        );
+
+        // In-app push (no SMS — legacy CHANNEL_MATRIX treats *→99 as log-only).
+        const profileId = profileMap.get(c.userid);
+        if (profileId) {
+          const fNoDisplay = c.fidorco ?? String(c.id);
+          try {
+            await sendNotification(profileId, {
+              category:       "forwarder",
+              severity:       "warning",
+              title:          `ฝากนำเข้า ${fNoDisplay} ถูกย้ายไปสถานะพิเศษ`,
+              body:           `เหตุผล: ${d.reason}`,
+              link_href:      `/service-import/${fNoDisplay}`,
+              reference_type: "forwarder",
+              reference_id:   String(c.id),
+            });
+          } catch (err) {
+            console.error(`[forwarders-bulk bulkCancel] notification failed`, {
+              id: c.id, profileId,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+
+        succeeded.push(c.raw);
+      }
+
+      revalidatePath("/admin/forwarders");
+      return { ok: true, data: { succeeded, failed } };
+    },
+  );
 }
 
