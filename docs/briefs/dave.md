@@ -3,6 +3,12 @@
 Last reviewed: 2026-05-24 (strategy reset — V3 unlocked, faithful-port branch deleted, ก๊อต takes admin lane)
 Branch: **`dave-pacred`** → merges to `main` (ก๊อต gates) · Authority: second-tier owner
 
+> ## 🎯 2026-05-30 MASTER GAP AUDIT — your lane (read FIRST)
+> Full audit (17 agents · 23 P0 + 31 P1): **[`docs/research/legacy-gap-2026-05-30/_MASTER.md`](../research/legacy-gap-2026-05-30/_MASTER.md)** §6 (your 13 tasks) + §7 sprint sequence. Headline: "Potemkin village" — read surfaces faithful, many WRITE surfaces silently write rebuilt empty tables (green toast, 0 real rows).
+>
+> **🔴 Your #1 task = the gate for everything money:** make the **WALLET-SOT decision** (with ก๊อต) — declare `tb_wallet`+`tb_wallet_hs` canonical + write `docs/decisions/0018-wallet-sot.md` + a settle-contract. Nobody touches wallet writes until this lands. Then: flip OTP bypass off (`actions/otp.ts:42`) · unify cart+order→`tb_header_order` (P0-3/4/5) · yuan money-hole (P0-2) · withdraw (P0-7, co-ship ภูม) · MS-1 top-up approval (P0-9) · register inversion · commission architecture pick · adm-08 identity/juristic · pay-on-behalf.
+> **Reachability (AGENTS.md §0d):** every task ships its entry point — the faithful `submitCartOrder` is currently orphaned (`/cart` has no nav). Done = clickable ≤3 clicks, not just curl-200.
+
 > ## 🚨 2026-05-24 STRATEGY RESET (READ FIRST)
 >
 > Owner cleaned up branch model and unlocked V3 for parallel work. New lane split:

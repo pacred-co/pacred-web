@@ -3,6 +3,17 @@
 Last reviewed: 2026-05-24 (strategy reset — **V3 UNLOCKED** · admin 1:1 lane moved to ก๊อต)
 Branch: **`Poom-pacred`** (V3 continuation, active) — `Poom` (pre-1:1) is the FROZEN archive
 
+> ## 🎯 2026-05-30 MASTER GAP AUDIT — your lane (read FIRST)
+> Full audit: **[`docs/research/legacy-gap-2026-05-30/_MASTER.md`](../research/legacy-gap-2026-05-30/_MASTER.md)** §6 (your 14 admin-backend tasks) + §7. You own admin server-actions + `tb_*` queries. **Wallet-write tasks wait on เดฟ's wallet-SOT ADR (§6 เดฟ Task 1).**
+>
+> **Start with the cheap landmines (Sprint 0, zero wallet dependency, highest correctness-per-minute):**
+> 1. **P0-10** yuan bulk-approve UUID one-liner — `resolveLegacyAdminId()` before the `tb_payment` UPDATE (`actions/admin/tb-bulk.ts:318`) — ship immediately.
+> 2. **P0-22/P1-4** 4 cron retargets (refresh-active-customers · sales-daily-digest · expire-probation · expire-driver-assignments) → `tb_*` (~2-3h all four).
+> 3. **P0-14** render `AdminServiceOrderUpdateForm` in `legacy-view.tsx` (~1h, unblocks cancel/status/note for 21,950 real orders).
+> 4. **P1-1/P1-2 (=open task #41)** forwarder list-bar retargets → `tb_forwarder` (faithful actions already exist).
+>
+> Then the big builds: yuan per-row form (P0-11/12) · 5 reports→tb_* (P0-20) · closing→tb_receipt (P0-21) · **5-tab shop UPDATE workflow (P0-13 — biggest build)** · per-item refund · withdraw approve/refund (co-ship เดฟ P0-7). **Reachability (AGENTS.md §0d):** every action ships its UI button — `adminUpdateYuanPayment` is correct but mounted nowhere.
+
 > ## 🚨 2026-05-24 STRATEGY RESET (READ FIRST)
 >
 > **V3 work is UNLOCKED.** You resume building DPX ERP enhancements + wave-17+ admin features on `Poom-pacred`. The 1:1 ports (เดฟ customer + ก๊อต admin) ship to main first; your V3 work merges in after.

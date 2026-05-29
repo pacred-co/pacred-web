@@ -3,6 +3,17 @@
 Last reviewed: 2026-05-24 (strategy reset — faithful-port deleted, your work flows direct → dave-pacred → main)
 Branch: `podeng` — push to own branch only; เดฟ merges `podeng` → `dave-pacred` → `main`
 
+> ## 🎯 2026-05-30 MASTER GAP AUDIT — your lane (read FIRST)
+> Full audit: **[`docs/research/legacy-gap-2026-05-30/_MASTER.md`](../research/legacy-gap-2026-05-30/_MASTER.md)** §6 (your 6 tasks) + §8 reachability. **Your lane = customer FRONTEND + data-analysis/monitoring/sync-platform/dashboards. NO write-path / `tb_*`-mutation work** (that's เดฟ/ภูม) — all your tasks are parallel-safe, frontend/read-only.
+>
+> **Your tasks:**
+> 1. **🔴 Orphan / entry-point sweep (reachability — owner directive)** — for every route under `(admin)/admin/*` + `(protected)/*`, confirm ≥1 inbound `<Link>`/sidebar/button. Zero-inbound = orphan → wire nav or flag for delete. Output an orphan-route table. Sprint-0 parallel-safe. (AGENTS.md §0d)
+> 2. **3 monitoring/usage dashboards** (read-only) — ยอดการค้นหา (`tb_history_key`) · China search-API volume/cost · SMS usage (`tb_sms_hs`).
+> 3. Notification-center + broadcast-popup fidelity (M-1, coordinate `tb_notify` write-target with เดฟ).
+> 4. ToS gate fidelity (M-2) · member-root dashboard fidelity (M-5) · receipt/popup polish · status-color/label drift sweep.
+>
+> The new `cust-08-notify-gates` lane (M-1..M-5: broadcast popups · ToS · re-verify · credit-due nudges) is mostly yours + เดฟ. Branding stays podeng style (you're the brand SOT).
+
 > ## 🚨 2026-05-24 STRATEGY RESET (READ FIRST)
 >
 > Owner cleaned up branch model. `faithful-port` branch deleted — your flow now goes direct via `dave-pacred` to `main` (ก๊อต gates).

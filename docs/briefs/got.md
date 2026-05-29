@@ -3,6 +3,13 @@
 Last reviewed: 2026-05-24 (strategy reset — admin lane moves to you · V3 unlocked for ภูม)
 Branch: `main` (production gatekeeper + own commits for admin 1:1) · Authority: second-tier owner
 
+> ## 🎯 2026-05-30 MASTER GAP AUDIT — your lane (read FIRST)
+> Full audit: **[`docs/research/legacy-gap-2026-05-30/_MASTER.md`](../research/legacy-gap-2026-05-30/_MASTER.md)** §6 (your 6 tasks) + §7. You co-own the cross-cutting decisions with เดฟ + own partner-API + the launch gate.
+>
+> **🔴 #1 — co-decide the WALLET SOT (with เดฟ)** — sign off `tb_wallet`+`tb_wallet_hs` canonical + the settle-contract in `docs/decisions/0018-wallet-sot.md`. **This is the single highest-leverage decision in the audit** — it gates the entire money loop (P0-2/6/7/9 + P1-14/25/26/27). Do it hour-1.
+>
+> **Then:** confirm ThaiBulkSMS route live (so เดฟ flips OTP off `EMERGENCY_OTP_BYPASS`) + JMF pull-contract status · confirm whether affiliate shop-wallet (`tb_wallet_shop`) was ever live in prod (gates cust-05 P0-28 severity) · TTP partner port (`api-forwarder-ttp.php`) · **production gate** — before any `dave-pacred → main`, run `qa-flow-simulator` asserting a **real `tb_wallet` balance-delta** (the route-200 smoke CANNOT catch a dead-write) · build the shared session-lock (`lib/admin/edit-lock.ts`) AFTER the dead-writes land.
+
 > ## 🚨 2026-05-24 STRATEGY RESET (READ FIRST)
 >
 > Owner cleaned up branch model and **assigned you the admin 1:1 lane** (was ภูม pre-reset). ภูม returns to V3 backend continuation on `Poom-pacred` (now UNLOCKED).

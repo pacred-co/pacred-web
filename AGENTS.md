@@ -62,6 +62,24 @@ Executable form: [`.claude/skills/legacy-fidelity-check/SKILL.md`](.claude/skill
 
 ---
 
+## 0d. Reachability — every function MUST have a clickable entry point (2026-05-30 added · owner directive)
+
+Owner: *"ทุกฟังชั่น ต้องมีปุ่ม หรือทางเข้า ให้เข้าถึง เข้าใช้ได้หมดนะ ไม่งั้นจะทำมาทำไม เข้าถึงก็ยาก ก็ไม่ได้หนะ"* — every function / page / server-action MUST be reachable from the running UI via a clear entry point (sidebar item · top-menu link · row-action button · dashboard card · parent-page button). A feature that exists, type-checks, and even writes the right table is **useless if no one can click their way to it**. Hard-to-reach counts as fail too — the path must be obvious, ≤3 clicks from the sidebar/dashboard.
+
+This is the **3rd audit dimension** (after: 1=does the function exist, 2=does it write the right `tb_*` table / correct flow-order). A function can pass 1+2 and still be invisible. The 2026-05-30 master gap audit ([`docs/research/legacy-gap-2026-05-30/_MASTER.md`](docs/research/legacy-gap-2026-05-30/_MASTER.md) §8) found this is a real, recurring failure: the faithful `submitCartOrder` is orphaned (`/cart` has no nav), `adminUpdateYuanPayment` + the service-order update form are mounted on no UI the real rows reach, admin print has no route, customer address buttons are inert. The deleted rebuilt address-manager (branch `cleanup/dead-address-stack`) was a pure orphan.
+
+**Mandatory — every port/fix ships its entry point IN THE SAME CHANGE:**
+1. When you build/port a function, wire its nav entry (sidebar / menu / row-button / card) in the same diff — never "backend now, nav later" (Wave 7.3 had to retro-wire 12 orphan admin pages).
+2. **Definition of done:** you can click from the sidebar/dashboard to the feature in ≤3 clicks. If you can only reach it by typing the URL, it's not done.
+3. This strengthens §0c: the click-through verification MUST start at the real entry point (sidebar→page→action), not `curl /the/url`.
+4. When auditing/reviewing: any route under `(admin)/admin/*` or `(protected)/*` with **zero inbound `<Link href>` / sidebar entry / button** is an orphan → wire it or delete it.
+
+**Anti-patterns:** shipping a working server-action with no button · "the page exists, just go to /admin/x/y" · leaving a feature reachable only by guessing the URL · backend-first with nav deferred to "next wave".
+
+Rule captured in memory `reachability_rule_2026_05_30`.
+
+---
+
 ## 0c. Verify-deep-flow — never claim "clean" without clicking the row (2026-05-25 ค่ำ added)
 
 A page returning HTTP 200 from `curl` is NOT proof it works. A list/table that renders 14 columns isn't done if column 14 is invisible behind a hidden Windows scrollbar. A detail page that says `export const dynamic = "force-dynamic"` and exists on disk isn't done if it 404s intermittently because of a silent Supabase query failure.

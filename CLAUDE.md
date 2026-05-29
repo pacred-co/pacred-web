@@ -3,6 +3,22 @@
 
 ---
 
+# 🎯 2026-05-30 night — MASTER GAP AUDIT + WORK-SPLIT · read FIRST
+
+17-agent exhaustive legacy-vs-Pacred audit (14 subsystem lanes + 2 critics + synthesis). **Canonical SOT for what's broken + who does what: [`docs/research/legacy-gap-2026-05-30/_MASTER.md`](docs/research/legacy-gap-2026-05-30/_MASTER.md)** (+ 14 per-lane `cust-*`/`adm-*` docs + 2 critics in that folder).
+
+**Headline — "Potemkin village":** READ surfaces faithful (wired to legacy `tb_*` where 8,898 customers live); many WRITE surfaces silently write **rebuilt empty tables** → green toast, 0 real rows change. Passes route-200 smoke, fails only on submit. **23 P0 + 31 P1.** Customer ~55% · Admin ~58% faithful.
+
+**🔴 #1 GATE — WALLET SOT decision (เดฟ + ก๊อต, hour-1):** the money loop never closes across 4 lanes; ALL money fixes wait on one call — is the canonical ledger `tb_wallet`+`tb_wallet_hs` (legacy, has balances) or `wallet`+`wallet_transactions` (rebuilt, empty)? Recommend `tb_wallet`. Write `docs/decisions/0018-wallet-sot.md` first. **#2:** OTP fully bypassed (`EMERGENCY_OTP_BYPASS=true` `actions/otp.ts:42`) — security hole.
+
+**Work-split (no lane collision — _MASTER §6):** เดฟ = wallet-SOT + customer write-path + architecture · ภูม = admin backend (start: yuan-UUID one-liner P0-10 + 4 cron retargets + render form in legacy-view + task#41) · ปอน = frontend + monitoring dashboards + **orphan/entry-point sweep** · ก๊อต = co-decide wallet SOT + partner-API + production gate (qa-flow-simulator asserting real `tb_wallet` delta, NOT route-200).
+
+**3 audit dimensions** (all must pass): 1=function exists · 2=writes right `tb_*` table + correct flow-order · **3=reachable (clickable entry point ≤3 clicks — AGENTS.md §0d, owner directive).** Sprint sequence in _MASTER §7.
+
+> ⚠️ The recurring pattern: **the FAITHFUL action is the orphan, the DEAD rebuilt twin is LIVE** (`submitCartOrder` vs `placeServiceOrder` · `wallet-hs.ts` vs `wallet.ts` · `yuan-payments-tb.ts` vs `yuan-payments.ts`). Fix = repoint import + delete twin. Verified intentional divergences (NOT gaps): PCS→PR code · Sheets→CSV cost upload · forwarder-check LINE+email.
+
+---
+
 # 🌃 2026-05-30 evening — 2 PARALLEL SAVE-POINTS · read BOTH
 
 Owner ส่งหน้า legacy customer-profile + ภูม กลับบ้านทำ MOMO ต่อ → 2 sessions ขนานในวันเดียว · ปิดเย็น (เดฟ) + ปิดดึก (ภูม).
