@@ -27,9 +27,11 @@
  */
 
 import { Link } from "@/i18n/navigation";
+import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { WalletBalanceView } from "./balance-view";
 import { WalletTransactionsView } from "./transactions-view";
 
@@ -78,9 +80,20 @@ export default async function AdminWalletPage({
   // W-1 (gap-admin H-1): page-level role gate. Both views read every
   // customer's wallet PII via createAdminClient (RLS-bypass) — money
   // page → accounting + ops (super implicit). Driver/warehouse refused.
-  await requireAdmin(["ops", "accounting"]);
+  const { roles } = await requireAdmin(["ops", "accounting"]);
 
   const sp = await searchParams;
+
+  // G6 — default queue filter per role. accounting lands directly on
+  // the pending-topup queue (?view=tx&status=1) so the slip-review
+  // backlog is visible on open. ops/super stay on balance view default.
+  const defaultRedirect = buildDefaultLandingRedirect(
+    "/admin/wallet",
+    roles,
+    sp as Record<string, unknown>,
+  );
+  if (defaultRedirect) redirect(defaultRedirect);
+
   const view: "balance" | "tx" = sp.view === "tx" ? "tx" : "balance";
 
   // Cheap header counts — kept for the tx-tab badge AND to surface the
@@ -145,6 +158,18 @@ export default async function AdminWalletPage({
               {view === "balance"
                 ? "Wave 15 · ยอดเงินคงเหลือต่อลูกค้า — เรียงจากยอดสูงสุด (รวม Cash Back)"
                 : "Wave 7.2 · อ่านจาก tb_wallet_hs · approve/reject bulk + slip-time editor → Wave 8"}
+              {view === "tx" && sp.status === "1" && (
+                <>
+                  {" · "}
+                  <Link
+                    href="/admin/wallet?view=tx"
+                    className="text-primary-600 hover:underline"
+                    title="ล้างฟิลเตอร์ ‘รอตรวจ’ · ดูประวัติทั้งหมด"
+                  >
+                    ดูทั้งหมด
+                  </Link>
+                </>
+              )}
             </p>
           </div>
           <Link

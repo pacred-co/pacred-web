@@ -252,6 +252,12 @@ export async function adminApiForwarderManualInsert(
   const carrierCfg = CARRIER_CONFIG[carrier];
 
   return withAdmin<{ id: number; fIDorCO: string }>(
+    // Wave 26 G5 (2026-05-28 ดึก) — audited against the legacy owner matrix.
+    // Partner-API sync creates a NEW tb_forwarder row at fstatus=2/3 — this
+    // is an INSERT, not a transition, so it doesn't go through
+    // `canFlipFstatus`. Matrix maps "1→2" + "1→3" + "→2 sync" + "→3 sync"
+    // to warehouse / ITDT (= ops in Pacred role-map). The role union below
+    // already matches: super (override) · ops (ITDT) · warehouse.
     ["super", "ops", "warehouse"],
     async ({ adminId }) => {
       const admin            = createAdminClient();

@@ -65,16 +65,11 @@ const TRANSPORT_LABEL: Record<string, string> = {
   "1": "🚛 ทางรถ", "2": "🚢 ทางเรือ", "3": "✈️ ทางอากาศ",
 };
 
-// Legacy statusForwarderBadge() — fStatus 1..7
-const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  "1": { label: "รอตรวจสอบ",       cls: "bg-yellow-100 text-yellow-700" },
-  "2": { label: "เตรียมส่ง",      cls: "bg-blue-100 text-blue-700" },
-  "3": { label: "กำลังส่งมาไทย",  cls: "bg-pink-100 text-pink-700" },
-  "4": { label: "ถึงไทย",          cls: "bg-purple-100 text-purple-700" },
-  "5": { label: "กำลังส่งให้",    cls: "bg-amber-100 text-amber-700" },
-  "6": { label: "สำเร็จ",          cls: "bg-green-100 text-green-700" },
-  "7": { label: "ยกเลิก",          cls: "bg-gray-100 text-gray-700" },
-};
+// Legacy statusForwarderBadge() — fStatus 1..7 — uses the canonical
+// FSTATUS_CFG palette from `@/lib/admin/forwarder-status`. The earlier
+// inline map here had WRONG labels (e.g. fstatus=4 → "ถึงไทย" instead of
+// the legacy "ถึงไทยแล้ว") + opacity-100 chip colors invisible at-a-glance.
+// CntListTable now consumes FSTATUS_CFG directly — no prop wiring needed.
 
 type Row = {
   fwarehousename: string;
@@ -346,7 +341,6 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
             isWaiting={isWaiting}
             warehouseLabel={WAREHOUSE_LABEL}
             transportLabel={TRANSPORT_LABEL}
-            statusBadge={STATUS_BADGE}
           />
         )}
         {/* Wave 17 fix (2026-05-25 ค่ำ): the fixed-bottom action buttons

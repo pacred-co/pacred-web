@@ -33,12 +33,15 @@ type QaQueue = {
 };
 
 const QA_QUEUES: QaQueue[] = [
-  // 10 SLA-breach alerts (คาดการณ์ล่าช้า) — Wave 10 (2026-05-23): each
-  // queue now has its own focused /admin/qa/<slug> page reading tb_* with
-  // the precise SLA condition (was stub URLs into generic reports/filters
-  // that didn't actually filter by "over" keys).
+  // 11 SLA-breach alerts (คาดการณ์ล่าช้า) — Wave 10 (2026-05-23) built 10;
+  // Wave 26 (2026-05-28 ดึก) added the 11th `orderCancellations` queue per
+  // legacy `pcs-admin/.../QAAndQC.php` L30-34 — orderCancellationList is the
+  // 3rd item in the legacy menu (planned PHP `orderCancellationList.php`
+  // never built in legacy, but Pacred ships it as a dedicated QA queue).
+  // Each queue reads tb_* with the precise SLA condition.
   { key: "payShopOver1d",      label: "รอชำระสินค้าเกิน 1 วัน",          href: "/admin/qa/pay-shop-over-1d",     kind: "alert" },
   { key: "payFwdOver2d",       label: "รอชำระค่านำเข้าเกิน 2 วัน",        href: "/admin/qa/pay-fwd-over-2d",      kind: "alert" },
+  { key: "orderCancellations", label: "รายการยกเลิกออเดอร์",             href: "/admin/qa/order-cancellations",  kind: "alert" },
   { key: "creditOverdue",      label: "เครดิตเกินกำหนด",                 href: "/admin/qa/credit-overdue",       kind: "alert" },
   { key: "orderOver10min",     label: "สั่งซื้อรอเกิน 10 นาที",          href: "/admin/qa/order-over-10min",     kind: "alert" },
   { key: "chnShopOver2d",      label: "สั่งซื้อรอร้านจีนส่งเกิน 2 วัน",  href: "/admin/qa/chn-shop-over-2d",     kind: "alert" },
@@ -47,9 +50,8 @@ const QA_QUEUES: QaQueue[] = [
   { key: "ownerlessGoods",     label: "สินค้าไม่มีเจ้าของ",              href: "/admin/qa/ownerless-goods",      kind: "alert" },
   { key: "prepareOverdue",     label: "เตรียมส่งเกินกำหนด",              href: "/admin/qa/prepare-overdue",      kind: "alert" },
   { key: "newClientNoContact", label: "ไม่ติดต่อลูกค้าใหม่เกิน 2 วัน",   href: "/admin/qa/new-client-no-contact", kind: "alert" },
-  // 2 งาน (work)
-  { key: "orderCancelled",  label: "รายการยกเลิกออเดอร์",          href: "/admin/service-orders?status=cancelled",        kind: "work" },
-  { key: "transferSalesRep", label: "ย้ายพนักงานขายที่ดูแลลูกค้า", href: "/admin/customers/transfer-rep",                 kind: "work" },
+  // 1 งาน (work) — ย้ายเซลส์ดูแลลูกค้า (cross-cutting QA tool)
+  { key: "transferSalesRep",   label: "ย้ายพนักงานขายที่ดูแลลูกค้า",     href: "/admin/customers/transfer-rep", kind: "work" },
 ];
 
 // ── Menubar config — mirrors the 12 leaves grouped by alert/work ────
