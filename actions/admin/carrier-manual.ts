@@ -140,6 +140,12 @@ export async function adminCarrierManualInsert(
   const carrier = CARRIER_REGISTRY[d.carrier];
 
   return withAdmin<{ fid: number }>(
+    // Wave 26 G5 (2026-05-28 ดึก) — audited against the legacy owner matrix.
+    // Carrier-manual INSERTs at fstatus=2 (api-sheets workflow assumes the
+    // row arrived in China). INSERT not transition → not gated by
+    // canFlipFstatus. Matrix: warehouse / ITDT (= ops) own this surface;
+    // the role union already matches (super override · ops = ITDT ·
+    // warehouse).
     ["ops", "warehouse", "super"],
     async ({ adminId }) => {
       const admin            = createAdminClient();

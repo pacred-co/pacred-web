@@ -28,7 +28,7 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
   const [slipPath, setSlipPath] = useState<string | null>(null);
   const [idDocPath, setIdDocPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ id: string; thb: number } | null>(null);
+  const [done, setDone] = useState<{ id: number; thb: number } | null>(null);
   const [pending, startTransition] = useTransition();
 
   const thb = useMemo(() => {
@@ -110,7 +110,7 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
         <p className="text-sm text-green-700">
           {t("submittedSubtitle", { thb: done.thb.toLocaleString("th-TH", { minimumFractionDigits: 2 }) })}
         </p>
-        <p className="text-xs text-green-700">ref: <span className="font-mono">{done.id.slice(0, 8)}</span></p>
+        <p className="text-xs text-green-700">ref: <span className="font-mono">#{done.id}</span></p>
       </div>
     );
   }

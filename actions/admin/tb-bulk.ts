@@ -22,6 +22,11 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { sendSms } from "@/lib/sms/gateway";
+import { logger, redactPhone } from "@/lib/logger";
+import { sendNotification } from "@/lib/notifications";
+import { notify } from "@/lib/notifications/templates";
+import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — duplicated from wallet-trans.ts L49 (fourth caller).
@@ -295,9 +300,11 @@ export async function adminBulkApproveCustomers(
     async ({ adminId }) => {
       const admin = createAdminClient();
 
+      // Pull the contact fields too so the post-approval SMS + sales-rep
+      // notification can be sent without a second round-trip.
       const { data: rows, error: readErr } = await admin
         .from("tb_users")
-        .select("userID, userActive")
+        .select("userID, userActive, userTel, userName, userLastName")
         .in("userID", user_ids)
         .eq("userActive", "0");
       if (readErr) return { ok: false, error: readErr.message };
@@ -305,7 +312,14 @@ export async function adminBulkApproveCustomers(
         return { ok: false, error: "ไม่พบสมาชิกที่รออนุมัติ (อาจถูกอนุมัติไปแล้ว)" };
       }
 
-      const toApprove = rows.map((r) => (r as { userID: string }).userID);
+      type ApproveRow = {
+        userID: string;
+        userTel: string | null;
+        userName: string | null;
+        userLastName: string | null;
+      };
+      const candidates = rows as ApproveRow[];
+      const toApprove = candidates.map((r) => r.userID);
       const nowIso = new Date().toISOString();
 
       const { error: updErr } = await admin
@@ -328,11 +342,56 @@ export async function adminBulkApproveCustomers(
         processed: toApprove.length,
       });
 
+      // E2E loop fix · Agent F1 · 2026-05-29 (Gap #3 part 1):
+      // Send welcome SMS + LINE/email notification to every approved
+      // customer (NOTIFY_BYPASS-respected via sendSms gateway).
+      // Best-effort per row — log on failure but never roll back the bulk
+      // approve. Sales-rep auto-assign for the BULK path is INTENTIONALLY
+      // deferred: doing fair least-loaded round-robin across 200 rows
+      // would require N successive queries (read count → assign → repeat)
+      // which is too slow for an admin bar action. Single-row approve
+      // (`approveCustomer`) does handle auto-assign — admins who want
+      // owner attribution should use single-row approve on new signups.
+      const profileIdMap = await resolveProfileIdsForLegacyUserids(toApprove);
+      let smsSent = 0;
+      let smsFailed = 0;
+      for (const r of candidates) {
+        if (!toApprove.includes(r.userID)) continue;
+        if (r.userTel) {
+          const msg =
+            `ยินดีต้อนรับสู่ Pacred · บัญชี ${r.userID} อนุมัติแล้ว · ` +
+            `เริ่มสั่งสินค้าได้เลย: pacred.co.th`;
+          const sms = await sendSms(r.userTel, msg);
+          if (sms.ok) smsSent++;
+          else {
+            smsFailed++;
+            logger.warn("tb_users.bulk_approve", "welcome SMS failed", {
+              userID: r.userID,
+              phone:  redactPhone(r.userTel),
+              error:  sms.error,
+            });
+          }
+        }
+        const profileId = profileIdMap.get(r.userID);
+        if (profileId) {
+          void sendNotification(profileId, notify.customerApproved({ memberCode: r.userID }));
+        }
+      }
+
       revalidatePath("/admin/customers/pending");
       revalidatePath("/admin/customers");
       revalidatePath("/admin");
 
-      return { ok: true, data: { processed: toApprove.length, failed: 0, errors: [] } };
+      return {
+        ok: true,
+        data: {
+          processed: toApprove.length,
+          failed:    smsFailed,
+          errors:    smsSent > 0 || smsFailed > 0
+            ? [`sms sent: ${smsSent}, failed: ${smsFailed}`]
+            : [],
+        },
+      };
     },
   );
 }

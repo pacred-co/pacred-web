@@ -33,11 +33,13 @@ import {
   SlidersHorizontal, Network, ListOrdered, Barcode, ScanLine, Camera,
   Printer, Calculator, BadgeCheck, ShieldAlert, UserCheck, Wand2, RefreshCw,
   Banknote, KanbanSquare, Smartphone, Save,
+  Ban, AlertCircle,
   ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
 import {
-  menuForRoles, primaryRole, type BadgeCounts, type MenuItem, type MenuSection,
+  menuForRoles, menuShowAll, primaryRole,
+  type BadgeCounts, type MenuItem, type MenuSection,
 } from "@/lib/admin/sidebar-menu";
 
 // ──────────────────────────────────────────────────────────────
@@ -103,6 +105,9 @@ const ICONS: Record<string, LucideIcon> = {
   KanbanSquare,    // /admin/board workboard
   Smartphone,      // driver mobile leaves + super
   Save,            // extension / audit
+  // Wave 26 (2026-05-28 ดึก) — 11 QA queue leaves under blockQAQueues.
+  Ban,             // order-cancellations
+  AlertCircle,     // 8 alert queues that don't otherwise have an icon
 };
 
 function Icon({ name, active }: { name?: string; active: boolean }) {
@@ -125,6 +130,11 @@ function Icon({ name, active }: { name?: string; active: boolean }) {
 // in messages/th.json + en.json by Agent ZZ in the same wave.
 const ROLE_LABEL_KEY: Record<AdminRole, string> = {
   super:       "role.super",
+  // 2026-05-28 ดึก — Wave 26 · `manager` role added by migration 0118.
+  // G4 (synthesis §3) added a dedicated role.manager i18n key + the
+  // separate `menuManager` (super menu minus HR + Settings) in
+  // lib/admin/sidebar-menu.ts.
+  manager:     "role.manager",
   ops:         "role.ops",
   accounting:  "role.accounting",
   sales_admin: "role.salesAdmin",
@@ -357,11 +367,24 @@ export function AdminSidebar({
   const t = useTranslations("pcsAdminNav");
   const [openMobile, setOpenMobile] = useState(false);
 
+  // G4 — super-only "show all" toggle (Wave 26 · 2026-05-28 ดึก).
+  // Sidebar defaults to the staffer's role-filtered menu; `super` users
+  // can flip this to expose the full CEO toolbox even when their role
+  // would normally show a narrower menu (e.g. when super wears a
+  // sales/warehouse hat for a day). Non-super never sees the toggle.
+  const isSuper = roles.includes("super");
+  const [showAll, setShowAll] = useState(false);
+
   // Per-role purpose-built menu — faithful to the legacy per-role .php.
   // After role-routing, apply the Phase-gate filter (2026-05-20 brief): items
   // tagged `phase: 2/3/4` are hidden from everyone except `super`.
   const role = primaryRole(roles);
-  const rawSections: MenuSection[] = menuForRoles(roles);
+  // When `super` ticks "Show all menus", swap to the full CEO toolbox
+  // regardless of any in-page role simulation. Non-super never reaches
+  // this branch (showAll always false for them).
+  const rawSections: MenuSection[] = (isSuper && showAll)
+    ? menuShowAll()
+    : menuForRoles(roles);
   const sections: MenuSection[] = rawSections.map((sec) => ({
     ...sec,
     items: filterByPhase(sec.items, role),
@@ -438,7 +461,20 @@ export function AdminSidebar({
           ))}
         </nav>
 
-        <div className="px-2.5 py-3 border-t border-border">
+        <div className="px-2.5 py-3 border-t border-border space-y-1">
+          {/* G4 — super-only escape hatch (Wave 26 · 2026-05-28 ดึก). Lets a
+              super admin flip between their role's slim menu and the full
+              CEO toolbox without re-login. Non-super never sees this row. */}
+          {isSuper && (
+            <button
+              type="button"
+              onClick={() => setShowAll((v) => !v)}
+              className="block w-full text-left rounded-md px-3 py-2 text-xs text-muted hover:bg-primary-50 hover:text-primary-700 transition-colors"
+              aria-pressed={showAll}
+            >
+              {showAll ? t("showRole") : t("showAll")}
+            </button>
+          )}
           <Link
             href="/dashboard"
             onClick={closeMobile}
