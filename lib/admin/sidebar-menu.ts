@@ -223,13 +223,16 @@ const blockBarcode: MenuItem = {
         { labelKey: "barcode.byCamera",  href: "/admin/barcode/cargo/all",  icon: "Camera"   },
       ],
     },
+    // Wave 29 #215 (2026-05-30): flattened per legacy menu-barcode.php L10
+    // ("บันทึกสินค้าเข้าโกดัง" is a FLAT single link in legacy — no scanner/
+    // camera split). The camera variant `/admin/barcode/cargo/import` is
+    // still reachable via the "ค้นหารายการฝากนำเข้า → ด้วยกล้อง" parent
+    // group (Pacred maps that to the same scan-handler); legacy doesn't
+    // expose it twice in the menu either.
     {
-      labelKey: "barcode.recordIntake",  // บันทึกเข้าโกดังไทย (type=4)
+      labelKey: "barcode.recordIntake",   // บันทึกสินค้าเข้าโกดัง (type=4)
+      href: "/admin/barcode/driver/import",
       icon: "PackageCheck",
-      children: [
-        { labelKey: "barcode.byScanner", href: "/admin/barcode/driver/import", icon: "ScanLine" },
-        { labelKey: "barcode.byCamera",  href: "/admin/barcode/cargo/import",  icon: "Camera"   },
-      ],
     },
     {
       labelKey: "barcode.searchPrepare",  // เตรียมส่ง (type=6)

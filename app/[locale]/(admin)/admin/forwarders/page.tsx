@@ -73,13 +73,12 @@ const FORWARDER_MENUBAR: MenubarItem[] = [
       { label: "เช็คต้นทุนตู้ (Sheet)",    href: "/admin/forwarders/container-cost-check" },
     ],
   },
-  {
-    label: "บาร์โค้ด",
-    children: [
-      { label: "ทั้งหมด", href: "/admin/barcode" },
-      { label: "driver", href: "/admin/barcode/driver" },
-    ],
-  },
+  // Wave 29 #214 (2026-05-30 · ภูม flag): removed "บาร์โค้ด" tab — both leaves
+  // pointed at orphan redirects (/admin/barcode and /admin/barcode/driver are
+  // now redirect stubs after Wave 29 #209 Agent F orphan cleanup) and the same
+  // destination (/admin/barcode/driver/import) is exposed in the sidebar as a
+  // top-level flat shortcut "บันทึกสินค้าเข้าโกดัง". Duplicate menubar entry
+  // would only confuse warehouse staff who already know to look at the sidebar.
   {
     label: "ค้นหา",
     children: [
