@@ -34,6 +34,7 @@ import {
   type BarcodeImportScanOk,
 } from "@/actions/admin/barcode-import";
 import { PacredDialog } from "@/components/ui/pacred-dialog";
+import { fstatusBadge } from "@/lib/admin/forwarder-status";
 
 // Legacy L192-199 — the 46 hardcoded location codes that switch
 // `fPallet` when scanned.
@@ -155,9 +156,17 @@ function ResultCard({ data }: { data: BarcodeImportScanOk }) {
         </div>
         <div>
           สถานะ :{" "}
-          <span className="font-semibold">
-            {data.statusFlipped ? "ถึงโกดังไทย (4)" : "บันทึกแล้ว"}
-          </span>
+          {data.statusFlipped ? (
+            // Wave 28 (2026-05-29 · audit fix): use canonical fstatusBadge from
+            // lib/admin/forwarder-status so the result pill matches the color
+            // staff trained on PCS (legacy statusForwarderBadge palette). Plain
+            // text was missing the visual state cue.
+            <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${fstatusBadge("4").chip}`}>
+              ถึงไทยแล้ว (4)
+            </span>
+          ) : (
+            <span className="font-semibold text-emerald-700">บันทึกแล้ว</span>
+          )}
         </div>
         {data.userId && (
           <div>

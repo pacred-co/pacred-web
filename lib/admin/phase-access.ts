@@ -100,9 +100,32 @@ function stripLocale(pathname: string): string {
   return pathname.replace(/^\/[a-z]{2}(?=\/|$)/, "");
 }
 
+/**
+ * Phase 1 carve-outs — pathnames that LOOK like Phase 2 prefixes (so
+ * they'd match `PHASE_2_PLUS_ROUTES` via `startsWith`) but are intentionally
+ * Phase 1 (visible / accessible to non-super roles).
+ *
+ * Add an entry here when a Phase 1 page lives UNDER a Phase 2 prefix —
+ * e.g. `/admin/drivers/work` is the driver mobile UI (Phase 1, all driver
+ * roles) but it sits under `/admin/drivers` (Phase 2, sales/CEO oversight).
+ * Without the carve-out, the proxy.ts middleware would bounce drivers off
+ * their own work page → infinite redirect loop with the driver-landing
+ * redirect in `app/[locale]/(admin)/admin/page.tsx`.
+ *
+ * Matching: exact path OR `path.startsWith(carve + "/")` — same shape as
+ * the block list.
+ */
+const PHASE_1_CARVEOUTS = [
+  "/admin/drivers/work",                 // 2026-05-28 — Driver mobile UI parity sprint
+] as const;
+
 /** Does this pathname target a Phase 2/3/4 admin URL? */
 export function isPhase2PlusRoute(pathname: string): boolean {
   const path = stripLocale(pathname);
+  // Carve-out wins — a Phase 1 sub-path under a Phase 2 prefix is NOT blocked.
+  if (PHASE_1_CARVEOUTS.some((carve) => path === carve || path.startsWith(carve + "/"))) {
+    return false;
+  }
   return PHASE_2_PLUS_ROUTES.some((prefix) => path === prefix || path.startsWith(prefix + "/"));
 }
 
