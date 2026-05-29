@@ -8,16 +8,19 @@ import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
 const LINE_URL = "/line";
 
+// 2 sales (เมย์ · แนท) + 2 customer-service (วิน · พลอย). วิน + พลอย are CS,
+// not sales — per owner directive 2026-05-29 (apply site-wide).
 const SALES = [
-  { name: "วิน",  slogan: "นำเข้าทุก Port ทุก Term ปิดดีลให้จบในที่เดียว",       phone: "062-603-0456", image: "/images/Character_Icon/win01.png", useContain: false, alt: "เซลล์วิน Pacred",  button: "ทักวินเลย"  },
-  { name: "แนท",  slogan: "นำเข้าสั่งซื้อจีน ทุกแพลตฟอร์ม ครบจบในที่เดียว",       phone: "066-131-0253", image: "/images/pacred-logo-red.png",     useContain: true,  alt: "เซลล์แนท Pacred",  button: "ทักแนทเลย"  },
-  { name: "พลอย", slogan: "เคลียร์สินค้าติดด่าน เร็ว ปลอดภัย การันตีจบ",          phone: "062-603-4456", image: "/images/Character_Icon/ploy01.png", useContain: false, alt: "เซลล์พลอย Pacred", button: "ทักพลอยเลย" },
+  { name: "เมย์", slogan: "นำเข้า-ส่งออก ครบวงจร ปรึกษาฟรี ปิดดีลให้จบในที่เดียว", phone: "066-125-3006", image: "/images/Character_Icon/may.png",    useContain: false, alt: "ฝ่ายขายเมย์ Pacred",      button: "ทักเมย์เลย" },
+  { name: "แนท",  slogan: "นำเข้าสั่งซื้อจีน ทุกแพลตฟอร์ม ครบจบในที่เดียว",       phone: "066-131-0253", image: "/images/pacred-logo-red.png",      useContain: true,  alt: "ฝ่ายขายแนท Pacred",      button: "ทักแนทเลย"  },
+  { name: "วิน",  slogan: "ดูแลทุกขั้นตอน ตอบทุกคำถาม ตลอดการใช้บริการ",          phone: "062-603-0456", image: "/images/Character_Icon/win01.png", useContain: false, alt: "ทีมดูแลลูกค้าวิน Pacred",  button: "ทักวินเลย"  },
+  { name: "พลอย", slogan: "พร้อมช่วยเหลือ ดูแลคุณทุกเรื่องนำเข้า-ส่งออก เร็ว ใส่ใจ", phone: "062-603-4456", image: "/images/Character_Icon/ploy01.png", useContain: false, alt: "ทีมดูแลลูกค้าพลอย Pacred", button: "ทักพลอยเลย" },
 ];
 
 const FEATURES = [
   "ดูแลตั้งแต่ต้นทาง → ปลายทาง",
   "ติดตามสถานะได้ 24 ชม.",
-  "เปลี่ยนเซลล์ได้ตลอด 24 ชม.",
+  "เปลี่ยนผู้ดูแลได้ตลอด 24 ชม.",
 ];
 
 const STROKE_LG: CSSProperties = {
@@ -184,7 +187,7 @@ export function ImportExportBanner() {
                     <svg className="w-[14px] h-[14px] md:w-[18px] md:h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
                     </svg>
-                    เลือกเซลล์
+                    เลือกทีมงาน
                   </button>
 
                   <TrackedExternalLink
@@ -229,12 +232,12 @@ export function ImportExportBanner() {
 
             {/* Header */}
             <div className="text-center mb-7">
-              <h3 className="text-[22px] md:text-[28px] font-black text-[#111827]">เลือกเซลล์ที่ต้องการติดต่อ</h3>
-              <p className="text-[14px] md:text-[15px] text-gray-500 mt-1">ทีมงานมืออาชีพพร้อมให้คำปรึกษานำเข้า-ส่งออกครบทุกขั้นตอน</p>
+              <h3 className="text-[22px] md:text-[28px] font-black text-[#111827]">เลือกทีมงานที่ต้องการติดต่อ</h3>
+              <p className="text-[14px] md:text-[15px] text-gray-500 mt-1">ทีมขายและทีมดูแลลูกค้าพร้อมให้คำปรึกษานำเข้า-ส่งออกครบทุกขั้นตอน</p>
             </div>
 
             {/* Sales grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
               {SALES.map((card) => (
                 <div
                   key={card.name}

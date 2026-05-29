@@ -552,7 +552,7 @@ export default async function CustomsClearancePage({
                   <div className="relative w-[110px] md:w-[180px] h-[130px] md:h-[170px] self-stretch shrink-0">
                     <Image
                       src="/images/visit/visit01.png"
-                      alt="ทีมเซลล์ Pacred Shipping พร้อมตอบใน 5 นาที"
+                      alt="ทีมงาน Pacred Shipping พร้อมตอบใน 5 นาที"
                       fill
                       sizes="(max-width: 768px) 110px, 180px"
                       className="object-contain object-bottom drop-shadow-[0_4px_10px_rgba(1,58,20,0.35)]"
@@ -693,7 +693,7 @@ export default async function CustomsClearancePage({
                   <div className="relative w-[110px] md:w-[180px] h-[130px] md:h-[170px] self-stretch shrink-0">
                     <Image
                       src="/images/visit/visit01.png"
-                      alt="ทีมเซลล์ Pacred Shipping พร้อมตอบใน 5 นาที"
+                      alt="ทีมงาน Pacred Shipping พร้อมตอบใน 5 นาที"
                       fill
                       sizes="(max-width: 768px) 110px, 180px"
                       className="object-contain object-bottom drop-shadow-[0_4px_10px_rgba(1,58,20,0.35)]"
@@ -844,7 +844,7 @@ export default async function CustomsClearancePage({
                   <div className="relative w-[150px] md:w-[180px] h-[150px] md:h-[180px] shrink-0 md:mr-6">
                     <Image
                       src="/images/visit/Visit04.png"
-                      alt="ทีมเซลล์ Pacred Shipping"
+                      alt="ทีมงาน Pacred Shipping"
                       fill
                       sizes="(max-width: 768px) 150px, 180px"
                       className="object-contain object-bottom drop-shadow-[0_4px_10px_rgba(0,0,0,0.30)]"

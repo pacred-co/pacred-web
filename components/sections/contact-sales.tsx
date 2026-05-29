@@ -22,55 +22,45 @@ type SalesPerson = {
 
 const SALES: SalesPerson[] = [
   {
-    name: "วิน",
-    role: "Freight Specialist",
-    tagline: "นำเข้าทุก Port ทุก Term ปิดดีลให้จบในที่เดียว",
-    phone: "062-603-0456",
-    image: "/images/Character_Icon/win01.png",
-    badge: "FCL / LCL Expert",
+    name: "เมย์",
+    role: "ฝ่ายขาย (Sales)",
+    tagline: "นำเข้า-ส่งออก ครบวงจร ปรึกษาฟรี ปิดดีลให้จบในที่เดียว",
+    phone: "066-125-3006",
+    image: "/images/Character_Icon/may.png",
+    badge: "Sales Expert",
     badgeIcon: Award,
-    alt: "เซลล์วิน Pacred ผู้เชี่ยวชาญ Freight",
+    alt: "ฝ่ายขายเมย์ Pacred",
   },
   {
     name: "แนท",
-    role: "Cargo Specialist",
+    role: "ฝ่ายขาย (Sales)",
     tagline: "นำเข้าสั่งซื้อจีน ทุกแพลตฟอร์ม ครบจบในที่เดียว",
     phone: "066-131-0253",
     image: "/images/pacred-logo-red.png",
     useContain: true,
     badge: "China Cargo Expert",
     badgeIcon: Sparkles,
-    alt: "เซลล์แนท Pacred ผู้เชี่ยวชาญ Cargo จีน",
+    alt: "ฝ่ายขายแนท Pacred",
+  },
+  {
+    name: "วิน",
+    role: "ดูแลลูกค้า (CS)",
+    tagline: "ดูแลทุกขั้นตอน ตอบทุกคำถาม ตลอดการใช้บริการ",
+    phone: "062-603-0456",
+    image: "/images/Character_Icon/win01.png",
+    badge: "Customer Service",
+    badgeIcon: Headset,
+    alt: "ทีมดูแลลูกค้าวิน Pacred",
   },
   {
     name: "พลอย",
-    role: "Customs Specialist",
-    tagline: "เคลียร์สินค้าติดด่าน เร็ว ปลอดภัย การันตีจบ",
+    role: "ดูแลลูกค้า (CS)",
+    tagline: "พร้อมช่วยเหลือ ดูแลคุณทุกเรื่องนำเข้า-ส่งออก เร็ว ใส่ใจ",
     phone: "062-603-4456",
     image: "/images/Character_Icon/ploy01.png",
-    badge: "Customs Clearance",
+    badge: "Customer Service",
     badgeIcon: Headset,
-    alt: "เซลล์พลอย Pacred ผู้เชี่ยวชาญด่านศุลกากร",
-  },
-  {
-    name: "เรดาห์",
-    role: "Air Freight Specialist",
-    tagline: "ไกลแค่ไหนก็เหมือนใกล้ เมื่อการจัดส่งใส่ใจทุกรายละเอียด",
-    phone: "099-253-1415",
-    image: "/images/Character_Icon/redar01.png",
-    badge: "Air Freight Expert",
-    badgeIcon: Award,
-    alt: "เซลล์เรดาห์ Pacred ผู้เชี่ยวชาญ Air Freight",
-  },
-  {
-    name: "พี",
-    role: "Payment Specialist",
-    tagline: "ไม่ใช่แค่การส่งของ แต่คือการส่งมอบความไว้วางใจ",
-    phone: "061-779-9299",
-    image: "/images/Character_Icon/pee01.png",
-    badge: "Yuan Transfer Expert",
-    badgeIcon: Sparkles,
-    alt: "เซลล์พี Pacred ผู้เชี่ยวชาญฝากโอนเงินจีน",
+    alt: "ทีมดูแลลูกค้าพลอย Pacred",
   },
 ];
 
@@ -171,18 +161,18 @@ export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = 
         <div className="mx-auto w-full max-w-[1120px]">
           <div className="flex items-center gap-1.5 md:gap-2 mb-1 md:mb-1.5 text-primary-600 text-[10.5px] md:text-[13px] font-black tracking-[0.08em] uppercase">
             <span className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-primary-600 shrink-0" />
-            CONTACT OUR SALES TEAM
+            CONTACT OUR TEAM
           </div>
           <h2 className="text-[20px] md:text-[38px] leading-[1.2] md:leading-[1.15] font-black tracking-[-0.03em] md:tracking-[-0.04em] text-[#111827] dark:text-white">
-            ทักทีมเซลล์{" "}
+            ทักทีมงาน{" "}
             <span className="text-primary-600">Pacred</span> ได้เลย
           </h2>
           <p className="mt-2 text-[12px] md:text-[15px] leading-[1.5] md:leading-[1.55] font-medium text-muted max-w-[680px]">
-            เลือกผู้เชี่ยวชาญตามบริการที่คุณต้องการ — ตอบเร็วทุกช่องทาง ตลอด 24 ชม.
+            ทีมขายและทีมดูแลลูกค้าพร้อมช่วยคุณ — ตอบเร็วทุกช่องทาง ตลอด 24 ชม.
           </p>
         </div>
 
-        {/* 3 sales cards — horizontal swipe on mobile, 3-col grid on desktop */}
+        {/* Team cards (sales + CS) — horizontal swipe on mobile, multi-col on desktop */}
         <div className="relative mt-4 md:mt-10">
         {/* Prev / Next chevrons — desktop only, hidden at scroll boundaries */}
         <button

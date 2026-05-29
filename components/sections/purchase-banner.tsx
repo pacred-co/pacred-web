@@ -11,7 +11,7 @@ import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 const LINE_URL = "/line";
 
 type SalesCardLocal = {
-  personKey: "win" | "nat" | "ploy";
+  personKey: "may" | "nat" | "win" | "ploy";
   name: string;
   phone: string;
   image: string;
@@ -19,8 +19,9 @@ type SalesCardLocal = {
 };
 
 const SALES_DATA: SalesCardLocal[] = [
+  { personKey: "may",  name: "เมย์", phone: "066-125-3006", image: "/images/Character_Icon/may.png",    useContain: false },
+  { personKey: "nat",  name: "แนท",  phone: "066-131-0253", image: "/images/pacred-logo-red.png",      useContain: true  },
   { personKey: "win",  name: "วิน",  phone: "062-603-0456", image: "/images/Character_Icon/win01.png",  useContain: false },
-  { personKey: "nat",  name: "แนท",  phone: "066-131-0253", image: "/images/pacred-logo-red.png",     useContain: true  },
   { personKey: "ploy", name: "พลอย", phone: "062-603-4456", image: "/images/Character_Icon/ploy01.png", useContain: false },
 ];
 
@@ -92,7 +93,7 @@ export function PurchaseBanner() {
               <div className="relative w-[108px] h-[104px] shrink-0">
                 <Image
                   src="/images/Character_Icon/visitmobileshop02.png"
-                  alt="เซลล์ Pacred"
+                  alt="ทีมงาน Pacred"
                   fill
                   sizes="108px"
                   className="object-contain object-bottom drop-shadow-[0_4px_10px_rgba(0,0,0,0.25)]"
@@ -204,7 +205,7 @@ export function PurchaseBanner() {
             </div>
 
             {/* Sales grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
               {sales.map((card) => (
                 <div
                   key={card.name}
