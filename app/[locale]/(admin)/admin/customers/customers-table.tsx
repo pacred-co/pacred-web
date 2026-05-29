@@ -22,7 +22,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { ChevronDown, ChevronRight, ChevronsUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronsUpDown, ArrowUp, ArrowDown, Building2 } from "lucide-react";
 import { CustomerRowActions } from "@/components/admin/customer-row-actions";
 import { ResetPwdButton } from "./reset-pwd-button";
 import { HoverZoomImage } from "@/components/admin/hover-zoom-image";
@@ -42,6 +42,9 @@ export type JuristicBundle = {
   companyAddress: string;
   corpStatus: "pending" | "verified" | "rejected";
   docs: { label: string; url: string; mime: string }[];
+  /** For the top review queue card header (corporate-driven, may not be in tb_users). */
+  memberCode?: string;
+  customerName?: string;
 };
 
 export type CustomerTableRow = {
@@ -252,6 +255,54 @@ export function CustomersTable({ rows }: { rows: CustomerTableRow[] }) {
 // Small fragment helper so the row + its expansion share one key cleanly.
 function FragmentRow({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
+}
+
+/**
+ * Top-of-page juristic review queue (corporate-driven · owner 2026-05-30).
+ * Reads the `corporate` review rows directly (like the old /admin/juristic-check),
+ * so it surfaces EVERY juristic customer awaiting review — including re-
+ * registrations whose tb_users identity sits under a different member_code
+ * (phone-dupe) and so never appear in the tb_users-driven list below. Each card
+ * expands to the same inline review (DBD compare + hover-zoom docs + approve).
+ */
+export function PendingJuristicReviews({ bundles }: { bundles: JuristicBundle[] }) {
+  const [open, setOpen] = useState<string | null>(bundles.length === 1 ? bundles[0].profileId : null);
+  if (bundles.length === 0) return null;
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50/50 dark:bg-amber-900/10 p-3 space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Building2 className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+        <h2 className="text-sm font-semibold text-amber-800 dark:text-amber-300">นิติบุคคลรอตรวจสอบ ({bundles.length})</h2>
+        <span className="text-[11px] text-muted">ตรวจเอกสาร + เทียบ DBD แล้วอนุมัติได้เลย — ไม่ต้องเข้าหน้าอื่น</span>
+      </div>
+      <div className="space-y-2">
+        {bundles.map((b) => {
+          const isOpen = open === b.profileId;
+          return (
+            <div key={b.profileId} className="rounded-lg border border-border bg-white dark:bg-surface overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setOpen(isOpen ? null : b.profileId)}
+                className="flex w-full flex-wrap items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-alt/40"
+              >
+                {isOpen ? <ChevronDown className="w-4 h-4 shrink-0" /> : <ChevronRight className="w-4 h-4 shrink-0" />}
+                {b.memberCode && <span className="font-mono text-xs text-primary-600">{b.memberCode}</span>}
+                <span className="font-medium">{b.companyName || b.customerName || "—"}</span>
+                {b.customerName && b.companyName && <span className="text-xs text-muted">· {b.customerName}</span>}
+                <span className="font-mono text-xs text-muted">{b.taxId}</span>
+                <span className="ml-auto rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">รอตรวจ</span>
+              </button>
+              {isOpen && (
+                <div className="border-t border-border p-3">
+                  <JuristicInlineReview bundle={b} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function Th({

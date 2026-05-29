@@ -5,7 +5,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
-import { CustomersTable, type CustomerTableRow, type JuristicBundle } from "./customers-table";
+import { CustomersTable, PendingJuristicReviews, type CustomerTableRow, type JuristicBundle } from "./customers-table";
 
 // ─────────────────────────────────────────────────────────────────────
 // Page top-menubar — ภูม brief 2026-05-20 ค่ำ.
@@ -310,6 +310,58 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
     }
   }
 
+  // ── Pending juristic review QUEUE (corporate-driven · owner 2026-05-30) ──
+  // Independent of tb_users: reads the corporate review rows directly so EVERY
+  // juristic customer awaiting review surfaces at the top of /admin/customers —
+  // including re-registrations whose tb_users identity is under a different
+  // member_code (phone-dupe) and so never appear in the list below. This is the
+  // inline merge of /admin/juristic-check the owner asked for.
+  const pendingJuristic: JuristicBundle[] = [];
+  {
+    const { data: pcorps, error: pcorpsErr } = await admin
+      .from("corporate")
+      .select("profile_id, tax_id, company_name, company_address, status, profile:profiles!profile_id(member_code, first_name, last_name)")
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (pcorpsErr) console.error(`[corporate pending] failed`, { code: pcorpsErr.code, message: pcorpsErr.message });
+    type PProf = { member_code: string | null; first_name: string | null; last_name: string | null };
+    type PCorp = {
+      profile_id: string; tax_id: string | null; company_name: string | null;
+      company_address: string | null; status: string | null; profile: PProf | PProf[] | null;
+    };
+    const pcorpList = (pcorps ?? []) as PCorp[];
+    const pProfileIds = pcorpList.map((c) => c.profile_id);
+    const pdocsByProfile = new Map<string, { label: string; url: string; mime: string }[]>();
+    if (pProfileIds.length > 0) {
+      const { data: pdocs, error: pdocsErr } = await admin
+        .from("documents")
+        .select("profile_id, doc_type, storage_path, mime_type")
+        .in("profile_id", pProfileIds);
+      if (pdocsErr) console.error(`[documents pending-juristic] failed`, { code: pdocsErr.code, message: pdocsErr.message });
+      for (const doc of (pdocs ?? []) as { profile_id: string; doc_type: string; storage_path: string; mime_type: string }[]) {
+        const { data: signed } = await admin.storage.from("member-docs").createSignedUrl(doc.storage_path, 3600);
+        if (!signed?.signedUrl) continue;
+        const arr = pdocsByProfile.get(doc.profile_id) ?? [];
+        arr.push({ label: DOC_LABELS[doc.doc_type] ?? doc.doc_type, url: signed.signedUrl, mime: doc.mime_type });
+        pdocsByProfile.set(doc.profile_id, arr);
+      }
+    }
+    for (const c of pcorpList) {
+      const prof = Array.isArray(c.profile) ? c.profile[0] : c.profile;
+      pendingJuristic.push({
+        profileId: c.profile_id,
+        taxId: c.tax_id ?? "",
+        companyName: c.company_name ?? "",
+        companyAddress: c.company_address ?? "",
+        corpStatus: "pending",
+        docs: pdocsByProfile.get(c.profile_id) ?? [],
+        memberCode: prof?.member_code ?? undefined,
+        customerName: `${prof?.first_name ?? ""} ${prof?.last_name ?? ""}`.trim() || undefined,
+      });
+    }
+  }
+
   // Build the serializable rows for the client table.
   const tableRows: CustomerTableRow[] = rows.map((r) => {
     const birthday = formatBirthday(r.userBirthday);
@@ -375,6 +427,8 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
         </form>
         </div>
       </div>
+
+      <PendingJuristicReviews bundles={pendingJuristic} />
 
       {rows.length === 0 ? (
         <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-12 text-center text-sm text-muted">ไม่พบลูกค้า</div>
