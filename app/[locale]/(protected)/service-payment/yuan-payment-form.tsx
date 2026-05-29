@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { createYuanPayment } from "@/actions/payment";
+import { createYuanPaymentFromWallet } from "@/actions/payment-tb";
 import { uploadSlip } from "@/lib/storage-upload";
 import { Wallet as WalletIcon, Plus } from "lucide-react";
 import { trackPlaceOrder } from "@/lib/analytics";
@@ -74,7 +75,11 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
     }
 
     startTransition(async () => {
-      const res = await createYuanPayment({
+      // P0-2 (ADR-0018 §D-2 rule 1): wallet-paid branch goes to the
+      // tb_* lane (createYuanPaymentFromWallet) which debits tb_wallet
+      // on submit. Slip-paid branch keeps the existing path — no wallet
+      // movement to fix there, admin reviews the slip separately.
+      const payload = {
         channel,
         recipient_detail: recipientDetail,
         yuan_amount:      y,
@@ -82,7 +87,10 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
         paid_via_wallet:  paidViaWallet,
         slip_url:         slipPath ?? undefined,
         id_doc_url:       idDocPath ?? undefined,
-      });
+      };
+      const res = paidViaWallet
+        ? await createYuanPaymentFromWallet(payload)
+        : await createYuanPayment(payload);
       if (res.ok && res.data) {
         trackPlaceOrder("service_payment", res.data.thb_amount);
         setDone({ id: res.data.id, thb: res.data.thb_amount });
