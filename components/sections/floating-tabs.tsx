@@ -30,9 +30,19 @@ export function FloatingTabs() {
 
   // Watch auth state for the mobile login/logout tab — per ปอน 2026-05-18,
   // the right-of-FAB slot flips between "ล็อคอิน" and "ล็อคเอาท์".
+  //
+  // Use getSession() (local-only read) instead of getUser() to avoid the
+  // SDK's auto-refresh path firing an "Invalid Refresh Token: Refresh
+  // Token Not Found" AuthApiError into the dev console when the cookie
+  // jar gets stale. The auth state change listener below picks up the
+  // real session live so we don't miss sign-in / sign-out events.
+  // Authoritative auth still happens server-side.
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    supabase.auth
+      .getSession()
+      .then(({ data }) => setUser(data.session?.user ?? null))
+      .catch(() => setUser(null));
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });

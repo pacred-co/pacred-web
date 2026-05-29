@@ -34,15 +34,18 @@ export default async function AdminCartAddPage({
   const admin = createAdminClient();
   let myAdminId = "";
   if (user.email) {
+    // 2026-05-28 B-4 P0 fix: tb_admin cols are camelCase quoted post-batch-1
+    // (migration 0113). Sister page at .../cart/page.tsx:136 already uses
+    // adminID/adminEmail correctly — this one missed the sweep.
     const { data, error } = await admin
       .from("tb_admin")
-      .select("adminid")
-      .eq("adminemail", user.email)
-      .maybeSingle<{ adminid: string }>();
+      .select("adminID")
+      .eq("adminEmail", user.email)
+      .maybeSingle<{ adminID: string }>();
     if (error) {
       console.error(`[tb_admin lookup] failed`, { code: error.code, message: error.message });
     }
-    myAdminId = data?.adminid ?? "";
+    myAdminId = data?.adminID ?? "";
   }
 
   // Live yuan exchange rate (tb_settings.rsdefault) — feeds the link-paste

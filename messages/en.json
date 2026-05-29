@@ -2702,7 +2702,8 @@
       "scanFromBox": "Scan from box face",
       "byScanner": "By scanner device",
       "byCamera": "By camera",
-      "recordIntake": "Record warehouse intake"
+      "recordIntake": "Record warehouse intake",
+      "recordIntakeFlat": "Record warehouse intake"
     },
     "forwarder": {
       "title": "Import service",

@@ -672,18 +672,25 @@ async function resolveAddressBlock(
 
   if (hasAddress) {
     // cart.php L445-446: the row matching $userAddressID.
-    const { data: matchRow, error: matchRowErr } = await admin
-      .from("tb_address")
-      .select(
-        "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel, addresstel2",
-      )
-      .eq("userid", userID)
-      .eq("addressstatus", "1")
-      .eq("addressid", userAddressID)
-      .maybeSingle<AddressRow>();
-    if (matchRowErr) {
-      // Soft-fail — falls through to the tb_address_main / warehouse-default branches.
-      console.error(`[cart resolveAddressBlock match lookup] failed`, { code: matchRowErr.code, message: matchRowErr.message });
+    // Guard: skip the integer-column lookup when userAddressID is blank or "PCS"
+    // — both cause a PostgreSQL type error (addressid is an integer column).
+    // "PCS" means warehouse pickup and is handled in the warehouse-saved branch below.
+    let matchRow: AddressRow | null = null;
+    if (userAddressID && userAddressID !== "PCS") {
+      const { data, error: matchRowErr } = await admin
+        .from("tb_address")
+        .select(
+          "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel, addresstel2",
+        )
+        .eq("userid", userID)
+        .eq("addressstatus", "1")
+        .eq("addressid", userAddressID)
+        .maybeSingle<AddressRow>();
+      if (matchRowErr) {
+        // Soft-fail — falls through to the tb_address_main / warehouse-default branches.
+        console.error(`[cart resolveAddressBlock match lookup] failed`, matchRowErr.message);
+      }
+      matchRow = data;
     }
 
     if (matchRow) {

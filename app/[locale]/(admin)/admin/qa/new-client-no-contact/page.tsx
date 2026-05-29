@@ -50,15 +50,20 @@ export default async function NewClientNoContactPage() {
   const registerCutoff = cutoffIsoDaysAgo(30);
   const loginCutoff = cutoffIsoDaysAgo(2);
 
+  // 2026-05-28 B-4 P0 fix: tb_users cols are camelCase quoted post-batch-1
+  // (migration 0113). Lowercase selects/filters return PGRST 42703 +
+  // silently rendered "no results" → SLA queue invisible to sales. The
+  // .or() syntax needs quoted identifiers ("userLastLogin") because the
+  // raw filter string is fed straight to PostgREST as the column name.
   const { data: rowsRaw, error } = await admin
     .from("tb_users")
     .select(
-      "userid,username,userlastname,usertel,useremail,userregistered," +
-        "userlastlogin,useractive,adminidsale,usercompany",
+      "userID,userName,userLastName,userTel,userEmail,userRegistered," +
+        "userLastLogin,userActive,adminIDSale,userCompany",
     )
     .eq("userActive", "1")
     .gt("userRegistered", registerCutoff)
-    .or(`userlastlogin.is.null,userlastlogin.lt.${loginCutoff}`)
+    .or(`userLastLogin.is.null,userLastLogin.lt.${loginCutoff}`)
     .order("userRegistered", { ascending: true })
     .limit(500);
 
@@ -70,7 +75,7 @@ export default async function NewClientNoContactPage() {
     .select("userID", { count: "exact", head: true })
     .eq("userActive", "1")
     .gt("userRegistered", registerCutoff)
-    .or(`userlastlogin.is.null,userlastlogin.lt.${loginCutoff}`);
+    .or(`userLastLogin.is.null,userLastLogin.lt.${loginCutoff}`);
 
   // Same .or() pushed into the data query (above) makes the in-memory
   // filter redundant; keep the slice(0, 200) cap for the display window.

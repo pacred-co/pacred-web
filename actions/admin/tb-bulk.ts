@@ -19,6 +19,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendSms } from "@/lib/sms/gateway";
@@ -26,6 +27,37 @@ import { logger, redactPhone } from "@/lib/logger";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
+
+// ────────────────────────────────────────────────────────────
+// resolveLegacyAdminId — duplicated from wallet-trans.ts L49 (fourth caller).
+// 2026-05-28 B-4 P0: writing the Supabase UUID (36 chars) into
+// tb_wallet_hs.adminid (varchar(20)) throws 22001 → every bulk-approve
+// row silently failed. Resolve the legacy admin slug + write that instead.
+// ────────────────────────────────────────────────────────────
+async function resolveLegacyAdminId(): Promise<string> {
+  const supabase = await createClient();
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr) {
+    console.error(`[tb-bulk auth getUser] failed`, { code: authErr.code, message: authErr.message });
+  }
+  const email = user?.email ?? null;
+  if (!email) return "system";
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("tb_admin")
+    .select("adminID")
+    .eq("adminEmail", email)
+    .maybeSingle<{ adminID: string | null }>();
+  if (error) {
+    console.error(`[tb-bulk tb_admin lookup] failed`, { code: error.code, message: error.message });
+  }
+  if (data?.adminID) return data.adminID;
+  // Fall back to the email's local-part, slice to 20 to match the column width
+  // (legacy convention — adminid is varchar(20) on tb_wallet_hs vs varchar(10)
+  // on tb_forwarder; safeLegacyAdminId() defaults to 10 so we slice inline).
+  return email.split("@")[0].slice(0, 20);
+}
 
 // ════════════════════════════════════════════════════════════════
 // 1. WALLET — bulk approve tb_wallet_hs pending rows
@@ -64,6 +96,15 @@ export async function adminBulkApproveWalletHs(
     async ({ adminId }) => {
       const admin = createAdminClient();
 
+      // 2026-05-28 B-4 P0 fix: resolve the LEGACY admin slug (varchar(20)
+      // tb_admin.adminID) instead of writing the Supabase UUID (36 chars)
+      // — the latter throws 22001 "value too long for character varying(20)"
+      // on tb_wallet_hs.adminid and silently bumps result.failed for every
+      // row. The single-row path (wallet-trans.ts) already does this; this
+      // is the bulk path catching up. `adminId` (UUID) stays in the audit
+      // log as a separate column where it belongs.
+      const legacyAdminId = await resolveLegacyAdminId();
+
       // 1. Fetch all candidate rows in one query (filter to pending only).
       const { data: rows, error: readErr } = await admin
         .from("tb_wallet_hs")
@@ -94,7 +135,7 @@ export async function adminBulkApproveWalletHs(
         // Approve the wallet_hs row first.
         const { error: updHsErr } = await admin
           .from("tb_wallet_hs")
-          .update({ status: "2", adminid: adminId })
+          .update({ status: "2", adminid: legacyAdminId })
           .eq("id", r.id)
           .eq("status", "1");  // re-guard against race
         if (updHsErr) {

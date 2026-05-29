@@ -900,7 +900,7 @@ export default async function ServiceImportDetailPage({
                                     // hide the image — the tracking number text
                                     // is rendered alongside so this is purely a
                                     // visual aid.
-                                    src=""
+                                    src={undefined}
                                     style={{ display: "none" }}
                                   />
                                 </h3>
@@ -1067,7 +1067,7 @@ export default async function ServiceImportDetailPage({
                             <h5 className="">
                               <b>ที่อยู่จัดส่งสินค้า : </b>
                             </h5>
-                            <p className="font-16">
+                            <div className="font-16">
                               {/* forwarder.php L1663 — CONCAT 'คุณ' addressName … */}
                               คุณ{row.faddressname} {row.faddresslastname}
                               <br />
@@ -1081,7 +1081,7 @@ export default async function ServiceImportDetailPage({
                                 options={addressOptions}
                                 isEditable={Number(fStatusValue) < 4}
                               />
-                            </p>
+                            </div>
                             <h5>
                               <span className="font-16">
                                 <b>เลขพัสดุในไทย : </b>

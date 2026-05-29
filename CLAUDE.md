@@ -1,8 +1,150 @@
 @AGENTS.md
+@CLAUDE_TECHNICAL.md
 
 ---
 
-# 🌃 2026-05-28 ดึก — NEW BRANCH MODEL + ปอน MOMO LANDED · read FIRST (supersedes 2026-05-28 ค่ำ below)
+# 🌌 2026-05-28 ดึก-3 — SESSION WRAP · 2-REPO LOCAL VERIFIED · SETUP SCRIPTS LANDED
+
+ปิด session ดึกนี้: 2-repo architecture **เชื่อม local + ทดสอบ pass แล้ว** (pacred-web :3000 + pacred-admin-next :3001 · shared Supabase prod). Setup scripts สำหรับ **เดฟ + ปอน + ภูม** push ขึ้น main + dave-pacred แล้ว · พร้อม resume ที่บ้านได้.
+
+**📦 ส่ง main วันนี้ (cluster ดึก-2 → ดึก-3):**
+
+| Commit | งาน |
+|---|---|
+| `f3147052` | docs(CLAUDE.md): 2026-05-28 ดึก-2 — 2-REPO ARCHITECTURE + LAUNCH PLAN |
+| `a9482d71` | docs(team): setup scripts + 2-repo workflow for ปอน + ภูม |
+| `<this commit>` | docs(audit): B-4 click-through cluster a/b/c/d + cross-branch inventory + setup-dave.sh |
+
+**🗺 ความพร้อม resume:**
+
+| คน | Repo | Branch | Setup command (เครื่องใหม่ครั้งแรก) | Daily sync |
+|---|---|---|---|---|
+| **เดฟ** | pacred-web | dave-pacred | `bash scripts/setup-dave.sh` | `git fetch origin && git pull origin main --no-edit` |
+| **ปอน** | pacred-web | InwPond007 | `bash scripts/setup-podeng.sh` | `git pull origin dave-pacred --no-edit` |
+| **ภูม** | pacred-admin-next ⚠️ NEW | admin | `bash setup-poom-admin.sh` (อยู่ใน repo ใหม่) | `git pull origin admin --no-edit` |
+
+**🟢 Local verified working (post ดึก-3):**
+- pacred-web :3000 (Ready in 786ms) — `/`, `/en`, `/login`, `/register` = 200 · `/service-import/truck` + `/admin` + `/dashboard` = 307 (auth-gate ปกติ)
+- pacred-admin-next :3001 (Ready in 491ms · DEV_BYPASS=true) — `/dashboard`, `/admins`, `/accounting`, `/api-forwarder-momo`, `/api-forwarder-jmf`, `/barcode`, `/acc-payment`, `/acc-shop` = 200
+
+**🎯 Pickup options for next session (เลือกเอง):**
+- **A — Soft-launch sprint** (8-11 วัน · ปลาย 5-8 มิย.): 3 BIG P0 cluster D + 4 LOAD-BEARING fidelity gaps + ก๊อต coord (S3 rotate + CRON_SECRET + API switchover)
+- **B — ภูม coordination:** Pull cross-repo migrations + Pacred infra alignment review
+- **C — P1 backlog (33 items)** from B-4 audit: `docs/audit/b4-click-through-cluster-{a,b,c,d}-2026-05-28.md`
+- **D — camelCase batch 2b** (tb_forwarder family ~177 renames · page-by-page approach)
+
+**Resume command (next session at home/work):**
+```bash
+cd /c/Users/Admin/pacred-web/.claude/worktrees/hopeful-almeida-359e44
+bash scripts/setup-dave.sh                              # auto-sync + status + pickup list
+head -120 CLAUDE.md                                      # this section + ดึก-2 2-repo plan
+```
+
+---
+
+# 🚀 2026-05-28 ดึก-2 — 2-REPO ARCHITECTURE + LAUNCH PLAN · read FIRST (supersedes earlier today)
+
+ก๊อต directive 2026-05-28: ตัด admin ออกเป็น **repo แยก** เพื่อให้ ภูม ทำ 1:1 port จากก๊อต baseline. Production = pacred-web/main + pacred-admin-next/admin (deployed คู่กัน).
+
+**🗺 2-REPO ARCHITECTURE (production = both):**
+
+```
+┌─────────────────────────────────────────────┐  ┌─────────────────────────────┐
+│ pacred-web   (this repo)                    │  │ pacred-admin-next           │
+│ → frontend + member back-office + integrator│  │ → admin back-office only    │
+│                                             │  │                             │
+│  InwPond007 (ปอน) ────┐                     │  │  admin (ภูม)                │
+│  podeng (ปอน sub-task)│                     │  │   ↓ ก๊อต baseline + ภูม sweep│
+│  dave-pacred (เดฟ)   ─┴→ main → Vercel     │  │  main → Vercel              │
+│                                             │  │                             │
+│ Shared: Supabase prod yzljakczhwrpbxflnmco  │←→│ Same DB · same env · same   │
+│         + env-config + tb_*/profiles tables │  │   auth (Supabase SSR)       │
+└─────────────────────────────────────────────┘  └─────────────────────────────┘
+                  pacred.co.th                          (admin sub-domain TBD)
+```
+
+| Repo | Branch | คน | งาน |
+|---|---|---|---|
+| `pacred-web` | `main` | ก๊อต gates | production · Vercel auto-deploy (pacred.co.th) |
+| `pacred-web` | `dave-pacred` | **เดฟ** | integrator → main |
+| `pacred-web` | `InwPond007` | **ปอน หลัก** | website + customer member back-office |
+| `pacred-web` | `podeng` | **ปอน sub-task** | API MOMO / JMF integration (landed) |
+| **`pacred-admin-next`** | **`admin`** | **ภูม** | **1:1 admin port จากก๊อต baseline + Pacred infra** |
+| `pacred-admin-next` | `main` | ก๊อต gates | admin production · separate Vercel (admin subdomain TBD) |
+| `pacred-web` | `Poom-pacred` / `Poom` | (ปล่อยไว้) | dormant · จะกลับมาทีหลัง |
+
+**🟢 ก๊อต's `pacred-admin-next` state (cloned 2026-05-28 ดึก):**
+- 133 admin route folders (1:1 จาก legacy `pcs-admin/*.php`)
+- 246 page.tsx · 20,246 LOC
+- Distribution: 4% stub · 33% small · **57% medium · 6% large** = ~63% มี real implementation
+- 4 SQL migrations + docs/database/ × 108 table specs (camelCase canonical schema spec — same target as Pacred batch 1/2a)
+- Same Next 16 + Supabase + lucide stack
+- ภูม pulls + continues 1:1 port + integrates with Pacred DB
+
+**🎯 OWNER DIRECTIVES (2026-05-28 ดึก):**
+1. **Ship ทั้ง 4 LOAD-BEARING fidelity gaps ก่อน launch** (login remember-me · register channel=8 · forgot-password layout · forgot-password email mode)
+2. **All 246 admin pages 1:1 จบตามก๊อต** (D1 rule: 100% sameness FIRST, then improve)
+3. Launch ASAP — realistic window below
+
+**⏰ Realistic LAUNCH ETA (เวลาไทย · Claude Code × 3 + parallel agents):**
+
+| Path | ETA | Conditions |
+|---|---|---|
+| 🟢 **Soft-launch (50-100 beta)** | **5-8 มิย. 2026** (~8-11 วัน) | ปอน member polish DONE · เดฟ 3 BIG P0 + 4 fidelity gaps DONE · ภูม 30 core admin pages working · S3 rotate + CRON_SECRET + API switchover ก๊อต DONE |
+| 🟠 **Hard-launch (~8,898 cust)** | **15-22 มิย. 2026** (~18-25 วัน) | + ภูม 246 admin pages 1:1 DONE · 33 P1 backlog DONE · camelCase remaining batches DONE · click-through audit 90 buttons DONE · real-world QA DONE |
+| 🔴 **Aggressive sprint** | **3-4 มิย. 2026** (~6-7 วัน) | ทุกคน 14-16 ชม/วัน · skip P1 backlog · skip camelCase batches >2a · ภูม 20 core pages only · accept silent-bug risk · feedback fix in week 2 |
+
+**Realistic recommendation:** Soft-launch 5-8 มิย. + hard-launch 15-22 มิย. ตามที่ owner ตอบ "Ship ทั้ง 4 fidelity + 246 admin 1:1". Pure ATM math: ก๊อต ทำ 63% แล้ว + Claude Code × 3 × parallel agents เร่งได้ ~7-10 effective × dev hrs per calendar day.
+
+**📋 Critical path (ลำดับงาน):**
+
+### สัปดาห์นี้ (29-31 พค.) — Decision week + kickoff
+1. 🔴 ก๊อต ROTATE S3 + CRON_SECRET + API switchover plan (1 ชม)
+2. 🟠 ภูม checkout `pacred-admin-next/admin` + setup integration layer (1 วัน · Pacred DB + env + i18n)
+3. 🟢 ปอน กลับมา InwPond007 polish + click-through test
+4. 🟢 เดฟ ปิด 3 BIG P0 cluster D (search rewrite + 5 reports + containers-hs) — ~10 ชม
+5. 🟢 เดฟ ship 4 LOAD-BEARING fidelity gaps — ~6 ชม
+
+### สัปดาห์หน้า (1-7 มิย.) — Beta-ready sprint
+- ปอน: InwPond007 final polish · final QA on member-side
+- เดฟ: P1 priority batch + B-2/B-3/B-5 schema drift + camelCase batch 2b (tb_forwarder)
+- ภูม: 60-80 core admin pages working + camelCase aligned + Pacred auth wired
+- ก๊อต: API switchover progress + admin subdomain DNS
+
+### สัปดาห์ที่ 3 (8-14 มิย.) — Soft-launch + feedback loop
+- 🟢 Soft-launch beta 50-100 คน
+- Daily feedback fixes
+- ภูม fills remaining admin pages
+
+### สัปดาห์ที่ 4 (15-22 มิย.) — Hard-launch ramp
+- 🟠 Hard-launch ทั้ง ~8,898 customers
+- Full admin available
+
+---
+
+**🎯 SOTs for next session — read in order:**
+1. 🚀 **THIS top section** — 2-repo architecture + ETA + critical path
+2. 📋 [`docs/audit/poom-wave-25-merge-audit-2026-05-28.md`](docs/audit/poom-wave-25-merge-audit-2026-05-28.md)
+3. 📋 [`docs/audit/fidelity-auth-screens-2026-05-28.md`](docs/audit/fidelity-auth-screens-2026-05-28.md) — 4 LOAD-BEARING gaps spec
+4. 📋 [`docs/audit/b4-click-through-cluster-{a,b,c,d}-2026-05-28.md`](docs/audit/) — 10 P0 + 33 P1 click-through audit
+5. 🆕 `pacred-admin-next` repo (sibling clone at `C:\Users\Admin\pacred-admin-next\`) — ภูม's working baseline
+
+**Resume command (next session):**
+```bash
+# pacred-web side (เดฟ + ปอน)
+cd /c/Users/Admin/pacred-web/.claude/worktrees/hopeful-almeida-359e44
+git fetch origin --prune && git rev-list --left-right --count HEAD...origin/main   # = 0/0
+head -100 CLAUDE.md
+
+# admin side (ภูม)
+cd /c/Users/Admin/pacred-admin-next
+git fetch origin && git checkout admin && git pull origin admin
+# Pacred infra reference: ../pacred-web (.env.local · supabase config · auth helpers)
+```
+
+---
+
+# 🌃 2026-05-28 ดึก — NEW BRANCH MODEL + ปอน MOMO LANDED (mid-session · superseded by ดึก-2 above)
 
 เดฟ session **ดึกวันนี้** — พี่เดฟอัพเดท branch ownership ใหม่ + ปอน push งาน MOMO API + TAMIT เสร็จเข้า podeng → เดฟ merge เข้า main + apply migration 0116 + sync InwPond007 ให้ตรง main.
 
@@ -809,7 +951,6 @@ Last updated: 2026-05-19 (D1 — Phase A data loaded to dev + prod · Phase B wa
 - Tailwind CSS v4 (`@theme inline` ใน [app/globals.css](app/globals.css) — ไม่มี tailwind.config.js)
 - ESLint 9 (flat config, eslint-config-next)
 - **next-intl** ^4.11.1 — i18n (th/en) แบบ namespace ใน [messages/](messages/)
-- **next-themes** ^0.4.6 — light/dark mode
 - **lucide-react** ^1.14.0 — icons (Lucide outline-style ทั้งโปรเจกต์)
 - Package manager: **pnpm**
 

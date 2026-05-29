@@ -2702,7 +2702,8 @@
       "scanFromBox": "สแกนจากหน้ากล่อง",
       "byScanner": "ด้วยเครื่องสแกน",
       "byCamera": "ด้วยกล้อง",
-      "recordIntake": "บันทึกสินค้าเข้าโกดัง"
+      "recordIntake": "บันทึกสินค้าเข้าโกดัง",
+      "recordIntakeFlat": "บันทึกสินค้าเข้าโกดัง"
     },
     "forwarder": {
       "title": "บริการฝากนำเข้า",

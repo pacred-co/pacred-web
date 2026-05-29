@@ -16,6 +16,7 @@ import { getCargoBillingGate } from "@/lib/forwarder/billing-gate";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { validateStoredFile } from "@/lib/file-validation";
+import { buildPromptPayPayload, buildPromptPayQrDataUrl, PromptPayConfigError } from "@/lib/promptpay";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -961,18 +962,11 @@ export async function getForwarderPaymentQr(
     return { ok: false, error: "promptpay_not_configured" };
   }
   try {
-    // `promptpay-qr` builds the EMVCo TLV payload; `qrcode` renders it.
-    // Both are existing project deps (see lib/promptpay.ts) — no new
-    // dependency added.
-    const { default: promptpay } = await import("promptpay-qr");
-    const { default: QRCode } = await import("qrcode");
-    const payload = promptpay(promptPayId, { amount: amountThb });
-    const dataUrl = await QRCode.toDataURL(payload, { margin: 1, scale: 6 });
-    return {
-      ok: true,
-      data: { dataUrl, payload, promptPayId },
-    };
-  } catch {
+    const payload = buildPromptPayPayload(amountThb);
+    const dataUrl = await buildPromptPayQrDataUrl(amountThb);
+    return { ok: true, data: { dataUrl, payload, promptPayId } };
+  } catch (err) {
+    if (err instanceof PromptPayConfigError) return { ok: false, error: err.code };
     return { ok: false, error: "qr_failed" };
   }
 }
