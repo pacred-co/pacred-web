@@ -31,6 +31,41 @@
  * THB calculation: paythb = payyuan × payrate. paythbcost / payprofitthb
  * are admin-cost / margin fields (set to 0 + paythb here; admin edits
  * later in the detail page).
+ *
+ * ── 2026-05-30 — Tier A1 revenue hole FIX (wallet debit) ─────────────
+ *
+ * Legacy `pcs-admin/payment.php` L11-93 (admin-add branch) ALWAYS debits
+ * the customer wallet when admin creates a yuan-payment on their behalf:
+ *   1. SELECT walletTotal FROM tb_wallet WHERE userID = $userID
+ *   2. Refuse if walletTotal < payTHB ("eWallet" alert)
+ *   3. INSERT tb_payment (the yuan-payment row)
+ *   4. UPDATE tb_wallet SET walletTotal = walletTotal - payTHB
+ *   5. INSERT tb_wallet_hs (date, amount=payTHB, status='1', type='6',
+ *      userID, refOrder=tb_payment.id)
+ *
+ * Pacred was silently SKIPPING steps 1, 2, 4, 5 — admin marked "paid"
+ * but the customer's wallet balance was untouched. Pure revenue leak:
+ * the customer kept the THB AND received the yuan transfer.
+ *
+ * This version mirrors the legacy debit-on-create flow exactly:
+ *   - Reads tb_wallet.wallettotal BEFORE insert
+ *   - Returns `insufficient_balance` if walletTotal < paythb (legacy
+ *     "eWallet" — admin sees an alert in the form)
+ *   - INSERTs tb_payment (as before)
+ *   - INSERTs tb_wallet_hs with type='6', status='2' (approved — same
+ *     convention as `actions/admin/wallet-hs.ts` for admin-verified
+ *     entries; legacy uses '1' but the Pacred mirror was already
+ *     normalized to '2' for admin-add), amount=paythb (positive — the
+ *     debit direction is encoded by type='6' per the schema comment at
+ *     0081 L6220), refOrder=tb_payment.id
+ *   - UPDATEs tb_wallet.wallettotal -= paythb (the source-of-truth
+ *     balance shown to customer dashboard + admin views)
+ *
+ * Partial-failure handling: Supabase JS REST has no true transactions,
+ * so if the tb_payment INSERT succeeds but the wallet UPDATE fails, we
+ * roll the tb_payment back to avoid the silent-debit risk inverting
+ * (admin created the payment but wallet never debited → revenue hole
+ * comes back). Same pattern as cnt-payment commit flow.
  */
 
 import { revalidatePath } from "next/cache";
@@ -90,14 +125,14 @@ export type AdminCreateYuanPaymentManualInput = z.infer<typeof manualYuanPayment
 export async function adminCreateYuanPaymentManual(
   input: AdminCreateYuanPaymentManualInput,
   slipFile?: File | null,
-): Promise<AdminActionResult<{ id: number; paythb: number }>> {
+): Promise<AdminActionResult<{ id: number; paythb: number; new_wallet_balance: number }>> {
   const parsed = manualYuanPaymentSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
   const d = parsed.data;
 
-  return withAdmin<{ id: number; paythb: number }>(
+  return withAdmin<{ id: number; paythb: number; new_wallet_balance: number }>(
     ["accounting"],
     async ({ adminId }) => {
       const admin = createAdminClient();
@@ -122,6 +157,30 @@ export async function adminCreateYuanPaymentManual(
       const payprofitthb = Math.round((paythb - paythbcost) * 100) / 100;
 
       const nowIso = new Date().toISOString();
+
+      // ── Tier A1 — Wallet pre-check (legacy payment.php L11-33) ─────
+      //
+      // Read current wallet balance BEFORE the insert; refuse if the
+      // customer can't cover the THB total. Mirrors the legacy "eWallet"
+      // alert. tb_wallet may not exist yet for a brand-new customer
+      // who has never deposited — treat missing row as balance=0 (the
+      // refuse path below catches that too).
+      const { data: walletBefore, error: walletReadErr } = await admin
+        .from("tb_wallet")
+        .select("userid, wallettotal")
+        .eq("userid", customer.userID)
+        .maybeSingle<{ userid: string; wallettotal: number }>();
+      if (walletReadErr) {
+        console.error(`[tb_wallet read] failed`, { code: walletReadErr.code, message: walletReadErr.message });
+        return { ok: false, error: `db_error:${walletReadErr.code ?? "unknown"}` };
+      }
+      const currentBalance = Number(walletBefore?.wallettotal ?? 0);
+      if (currentBalance < paythb) {
+        return {
+          ok: false,
+          error: `insufficient_balance: ยอดกระเป๋าของลูกค้า ฿${currentBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ไม่พอชำระ ฿${paythb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
+        };
+      }
 
       // Wave 12-A — upload slip first (if provided) so the filename lands in
       // tb_payment.imagesslipadmin (the "admin attached this" slot · NOT
@@ -162,20 +221,101 @@ export async function adminCreateYuanPaymentManual(
         .single<{ id: number }>();
       if (insErr || !row) return { ok: false, error: insErr?.message ?? "insert failed" };
 
+      // ── Tier A1 — Debit customer wallet (legacy payment.php L51-69) ─
+      //
+      // Pacred has no real DB transactions over the REST client, so we
+      // do tb_payment first, then tb_wallet_hs + tb_wallet. If either
+      // wallet write fails AFTER tb_payment was inserted we DELETE the
+      // tb_payment row to keep books balanced (silent half-state =
+      // exactly the bug we are closing). Mirror of cnt-payment commit
+      // partial-failure recovery.
+      const newBalance = Math.round((currentBalance - paythb) * 100) / 100;
+
+      // INSERT tb_wallet_hs — type='6' (ชำระเงินฝากโอน), status='2'
+      // (approved; admin = verifier per Pacred convention in
+      // actions/admin/wallet-hs.ts), amount=paythb (positive — debit
+      // direction is encoded by type='6', not the sign of amount).
+      const { error: hsErr } = await admin
+        .from("tb_wallet_hs")
+        .insert({
+          date:            nowIso,
+          amount:          paythb,
+          status:          "2",
+          type:            "6",
+          typenew:         "1",
+          typeservice:     "1",                              // 1 = cargo (yuan transfer)
+          paydeposit:      d.paydeposit ? "1" : "0",
+          imagesslip:      slipFilename,
+          depositnamebank: "",
+          nameuserbank:    "",
+          nouserbank:      "",
+          note:            d.note ?? "ชำระค่าโอนหยวน (admin-manual)",
+          adminid:         legacyAdminId,
+          adminidupdate:   legacyAdminId,
+          session:         "admin-manual",
+          reforder:        String(row.id),                   // refOrder = tb_payment.id
+          whno:            "",
+          wusercredit:     "0",
+          userid:          customer.userID,
+          adminidcrate:    legacyAdminId,
+        });
+      if (hsErr) {
+        // Roll the tb_payment back to avoid silent half-state.
+        await admin.from("tb_payment").delete().eq("id", row.id);
+        return {
+          ok: false,
+          error: `บันทึก tb_wallet_hs ล้มเหลว · ยกเลิก tb_payment เพื่อรักษาสถานะ: ${hsErr.message}`,
+        };
+      }
+
+      // UPDATE tb_wallet.wallettotal -= paythb (or INSERT if no row).
+      if (!walletBefore) {
+        // Customer has no tb_wallet row yet — should be impossible past
+        // the balance pre-check (currentBalance would be 0 → refuse),
+        // but be defensive.
+        const { error: walletInsErr } = await admin
+          .from("tb_wallet")
+          .insert({ userid: customer.userID, wallettotal: -paythb });
+        if (walletInsErr) {
+          // tb_payment + tb_wallet_hs already wrote — surface for ops.
+          return {
+            ok: false,
+            error: `tb_payment id=${row.id} + tb_wallet_hs สำเร็จ · แต่ tb_wallet insert ล้มเหลว: ${walletInsErr.message} (ลูกค้าจ่ายแล้วแต่ยอดกระเป๋ายังไม่หัก — ติดต่อ ops)`,
+          };
+        }
+      } else {
+        const { error: walletUpdErr } = await admin
+          .from("tb_wallet")
+          .update({ wallettotal: newBalance })
+          .eq("userid", customer.userID);
+        if (walletUpdErr) {
+          return {
+            ok: false,
+            error: `tb_payment id=${row.id} + tb_wallet_hs สำเร็จ · แต่ tb_wallet update ล้มเหลว: ${walletUpdErr.message} (ลูกค้าจ่ายแล้วแต่ยอดกระเป๋ายังไม่หัก — ติดต่อ ops)`,
+          };
+        }
+      }
+
       await logAdminAction(adminId, "tb_payment.manual_create", "tb_payment", String(row.id), {
-        userid: customer.userID,
-        paytype: d.paytype,
-        payyuan: d.payyuan,
-        payrate: d.payrate,
+        userid:           customer.userID,
+        paytype:          d.paytype,
+        payyuan:          d.payyuan,
+        payrate:          d.payrate,
         paythb,
-        paydeposit: d.paydeposit ? "1" : "0",
-        note: d.note,
+        paydeposit:       d.paydeposit ? "1" : "0",
+        wallet_before:    currentBalance,
+        wallet_after:     newBalance,
+        wallet_hs_type:   "6",
+        wallet_hs_status: "2",
+        note:             d.note,
       });
 
       revalidatePath("/admin/yuan-payments");
       revalidatePath(`/admin/yuan-payments/${row.id}`);
+      revalidatePath("/admin/wallet");                          // wallet list (balance changed)
+      revalidatePath(`/admin/wallet/${customer.userID}`);       // per-customer wallet history
       revalidatePath("/admin");
-      return { ok: true, data: { id: row.id, paythb } };
+      return { ok: true, data: { id: row.id, paythb, new_wallet_balance: newBalance } };
     },
   );
 }
