@@ -58,7 +58,7 @@
 | # | คำถาม | ภูม answer | งานที่ตามมา |
 |---|---|---|---|
 | 1 | GOOGLE_MAPS_API_KEY | "เดะเอามาให้อีกที / สอนวิธีเอา" | doc: [`docs/setup/google-maps-api-key.md`](docs/setup/google-maps-api-key.md) — step-by-step setup guide |
-| 2 | LINE Notify (Apr 2025 EOL) | "ย้ายไป LINE OA push + สอนเซ็ท" | doc: [`docs/setup/line-oa-push-migration.md`](docs/setup/line-oa-push-migration.md) — migration guide |
+| 2 | LINE Notify (Apr 2025 EOL) | "ย้ายไป LINE OA push + สอนเซ็ท" | **✅ Pacred infrastructure ALREADY wired** — `sendLinePush()` at `lib/notifications/index.ts:125` · channel access token in `.env.local` · LIFF link flow at `/liff/link` · token VERIFIED working (probe LINE API → Pacred Shipping @pacred · 0/300 quota used) · 3 steps left: (a) add 4 LINE env vars to Vercel prod, (b) `LINE_PUSH_BYPASS=false` Production scope only, (c) upgrade quota plan FREE→Light/Standard. Guide: [`docs/setup/line-oa-push-migration.md`](docs/setup/line-oa-push-migration.md) |
 | 3 | Cron retarget `tb_forwarder_driver` | "เดะทำที่บ้านอีกที" | deferred to home-computer session · ~20 min fix |
 | 4 | Print routes brand | "Pacred (Thailand)" | update print templates + `components/seo/site.ts` if needed (verify tax ID `0105564077716`) |
 | 5 | Numeric pallet 1-40 | "ทำให้รองรับได้ทั้งคู่" (letter A1-Z6 + numeric 1-40) | new feature work · ~3-4h · build dual-mode pallet input |
