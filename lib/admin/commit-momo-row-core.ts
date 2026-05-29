@@ -134,6 +134,34 @@ export type CommitMomoRowContext = {
 // extractMetricsFromMomoRaw) moved to @/lib/admin/momo-raw-helpers — imported
 // at the top of this file. They're unit-tested in momo-raw-helpers.test.ts.
 
+/**
+ * ภูม flag 2026-05-30 (bug 2b): bulk commit threw
+ *   `date/time field value out of range: "0000-00-00"`
+ * because legacy MySQL sentinel "0000-00-00" (and empty string) flowed
+ * from MOMO raw into a Postgres date column write. Postgres rejects both.
+ *
+ * Pipe EVERY date column write through this helper to coerce the legacy
+ * sentinels → null. Accepts ISO "YYYY-MM-DD", returns it untouched only
+ * when it parses as a valid date.
+ */
+function cleanDate(v: unknown): string | null {
+  if (v == null) return null;
+  if (typeof v !== "string") return null;
+  const trimmed = v.trim();
+  if (!trimmed) return null;
+  // Legacy MySQL sentinels.
+  if (trimmed === "0000-00-00" || trimmed === "0000-00-00 00:00:00") return null;
+  // Accept "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM:SS...".
+  const datePart = trimmed.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return null;
+  // Validate it's a real date (rejects 2026-02-30, etc.).
+  const probe = new Date(`${datePart}T00:00:00Z`);
+  if (Number.isNaN(probe.getTime())) return null;
+  // Round-trip to confirm it didn't normalise (e.g. 2026-02-30 → 2026-03-02).
+  if (probe.toISOString().slice(0, 10) !== datePart) return null;
+  return datePart;
+}
+
 // ════════════════════════════════════════════════════════════
 // commitMomoRowCore — the auth-agnostic commit body.
 //
@@ -159,16 +187,22 @@ export async function commitMomoRowCore(
   const legacyAdminId = ctx.legacyAdminId.slice(0, 10);
 
   // ── 1. Load the source row from momo_import_tracks ────────
+  // ภูม flag 2026-05-30 (bug 2c): also pull `container_batch_no` — the
+  // REAL cabinet (e.g. "GZS260525-2") joined from container_closed.cid
+  // via sync.ts step 2.5. Use that for fcabinetnumber; fall back to
+  // momo_container_no (= MOMO routing batch ID) only when propagation
+  // hasn't run yet for this row.
   const { data: srcRow, error: srcErr } = await admin
     .from("momo_import_tracks")
     .select(
-      "id, momo_tracking_no, momo_container_no, momo_sack_no, shipment_status, raw, momo_updated_at, committed_at, committed_forwarder_id",
+      "id, momo_tracking_no, momo_container_no, container_batch_no, momo_sack_no, shipment_status, raw, momo_updated_at, committed_at, committed_forwarder_id",
     )
     .eq("id", d.rowId)
     .maybeSingle<{
       id:                     string;
       momo_tracking_no:       string | null;
       momo_container_no:      string | null;
+      container_batch_no:     string | null;
       momo_sack_no:           string | null;
       shipment_status:        string | null;
       raw:                    unknown;
@@ -305,6 +339,14 @@ export async function commitMomoRowCore(
 
   // ── 4. Derive cargo fields from MOMO source row ────────────
   const trackingNo  = srcRow.momo_tracking_no;
+  // ภูม flag 2026-05-30 (bug 2c): prefer the joined cabinet (cid from
+  // container_closed) over momo_container_no (MOMO routing batch ID).
+  // The legacy PHP writes the cabinet PCS staff/customers actually see
+  // (e.g. "GZS260525-2") — that's what `container_batch_no` holds.
+  // Falls back to momo_container_no ONLY when the propagation hasn't
+  // populated this row yet (sync.ts step 2.5 fires on container_closed
+  // and may lag one cycle behind import_track upsert).
+  const cabinetForDisplay = srcRow.container_batch_no ?? srcRow.momo_container_no ?? "";
   const containerNo = srcRow.momo_container_no ?? "";
   const metrics     = extractMetricsFromMomoRaw(srcRow.raw);
   const fTransportType =
@@ -312,37 +354,41 @@ export async function commitMomoRowCore(
 
   // Legacy "feel automatic" atomicity:
   //   - fstatus: 2 if no manifest/container yet · 3 if container assigned
-  //   - fcabinetnumber: containerNo (or '')
+  //   - fcabinetnumber: cabinetForDisplay (or '')
   //   - fdatetothai: today + 7 (EK) / +14 (SEA) when status=3
   //   - fdatecontainerclose: today (the MOMO confirmation point)
   //
   // Mirrors legacy api-forwarder-momo.php:151-170 logic. We collapse
   // into THE ONE atomic INSERT below.
-  const hasContainer = !!containerNo;
+  // hasContainer = "do we have ANY cabinet/routing identifier" — we use
+  // either propagated cid OR the routing batch number as a signal that
+  // this tracking has been allocated, so status flips to 3.
+  const hasContainer = !!cabinetForDisplay;
   const fStatusNew = hasContainer ? "3" : "2";
 
   // Date fields. Legacy uses `manifest_date` from the SM payload —
   // MOMO Status Sync stores `momo_updated_at` (the latest status_date
   // timestamp from the raw). Use that as the manifest reference; if
   // missing, fall back to today.
+  // ภูม flag 2026-05-30 (bug 2b): coerce legacy sentinels through
+  // cleanDate so empty / "0000-00-00" / invalid dates can't reach the
+  // INSERT (Postgres rejects "0000-00-00").
   const todayIso = new Date().toISOString().slice(0, 10);
-  const manifestDate = srcRow.momo_updated_at
-    ? srcRow.momo_updated_at.slice(0, 10)
-    : todayIso;
+  const manifestDate = cleanDate(srcRow.momo_updated_at) ?? todayIso;
 
-  let fDateToThai = "";
-  let fDateContainerClose: string = "0000-00-00";
+  let fDateToThai: string | null = null;
+  let fDateContainerClose: string | null = null;
   let fCabinetNumber = "";
-  const fDateStatus3 = hasContainer ? manifestDate : "";
+  const fDateStatus3 = hasContainer ? manifestDate : null;
   if (hasContainer) {
     const daysAhead = fTransportType === "1" ? 7 : 14;
     const eta = new Date(`${manifestDate}T00:00:00Z`);
     eta.setUTCDate(eta.getUTCDate() + daysAhead);
-    fDateToThai = eta.toISOString().slice(0, 10);
+    fDateToThai = cleanDate(eta.toISOString().slice(0, 10));
     fDateContainerClose = manifestDate;
-    fCabinetNumber = containerNo;
+    fCabinetNumber = cabinetForDisplay;
   }
-  const fDateStatus2 = manifestDate;
+  const fDateStatus2 = cleanDate(manifestDate);
 
   // fIDorCO — legacy uses 'CC'+productID. For MOMO Status Sync rows,
   // productID isn't in scope; use 'MO' (MOMO marker) + tracking suffix
@@ -378,6 +424,8 @@ export async function commitMomoRowCore(
       fusercompany:          fUserCompany,
       priceother:            0,
       fwarehousename:        "7",       // MOMO = Cargo Center per legacy
+      // Date fields run through cleanDate (bug 2b) — Postgres rejects
+      // "0000-00-00" / empty / invalid; coerce to null instead.
       fdatestatus2:          fDateStatus2,
       fdatestatus3:          fDateStatus3,
       fcosttotalpricesheet:  0,
@@ -396,7 +444,7 @@ export async function commitMomoRowCore(
       faddresstel2:          addr.addresstel2,
 
       // ── package metrics (from MOMO raw) ────────────────
-      fdatetothai:           fDateToThai || null,
+      fdatetothai:           fDateToThai,
       fweight:               metrics.weight,
       fwidth:                metrics.width,
       flength:               metrics.length,
@@ -419,7 +467,7 @@ export async function commitMomoRowCore(
       customratekg:          0,
       customratecbm:         0,
       fcabinetnumber:        fCabinetNumber,
-      fdatecontainerclose:   fDateContainerClose,
+      fdatecontainerclose:   fDateContainerClose,        // null when no cabinet (bug 2b — was "0000-00-00")
       fidorco:               fIDorCO,
       famountcount:          1,
       smpcs:                 smPCS,
@@ -505,15 +553,16 @@ export async function commitMomoRowCore(
       "tb_forwarder",
       String(row.id),
       {
-        momo_row_id:       srcRow.id,
-        momo_tracking_no:  trackingNo,
-        momo_container_no: containerNo,
-        momo_sack_no:      srcRow.momo_sack_no,
-        userid:            customer.userID,
-        ship_by:           d.fShipBy,
+        momo_row_id:        srcRow.id,
+        momo_tracking_no:   trackingNo,
+        momo_container_no:  containerNo,                // MOMO routing batch ID (bug 2c)
+        container_batch_no: srcRow.container_batch_no,  // real cabinet from container_closed.cid
+        momo_sack_no:       srcRow.momo_sack_no,
+        userid:             customer.userID,
+        ship_by:            d.fShipBy,
         fStatusNew,
         fIDorCO,
-        stamp_failed:      stampErr != null,
+        stamp_failed:       stampErr != null,
       },
     );
   }

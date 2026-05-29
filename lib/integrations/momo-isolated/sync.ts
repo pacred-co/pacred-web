@@ -189,6 +189,66 @@ export async function runMomoSync(
           upsertedCount += upRows.length;
         }
       }
+
+      // ── 2.5. PROPAGATE cabinet (cid) → momo_import_tracks ─────────
+      //
+      // ภูม flag 2026-05-30 (bug 2c): import_track.container_no is
+      // MOMO's INTERNAL ROUTING BATCH ID (e.g. "PR20260527-SEA02"), NOT
+      // the cabinet PCS staff/customers actually use. The real cabinet
+      // lives on container_closed.cid (e.g. "GZS260525-2"). Each
+      // container_closed row carries `track_details[]` with `reTrack`
+      // = the tracking number — that's how MOMO joins cabinet → track.
+      //
+      // We walk every container_closed raw, parse track_details[].reTrack,
+      // then UPDATE momo_import_tracks.container_batch_no = container.cid
+      // WHERE momo_tracking_no = reTrack. Column name aligns with the
+      // matching column on momo_container_closed (added in 0119). New
+      // column on momo_import_tracks added in 0126.
+      //
+      // Idempotent (a re-sync just overwrites with the same cid). Best-
+      // effort — failures here log but never fail the sync (next sync
+      // re-applies). One-off backfill: scripts/backfill-momo-cabinet.mjs.
+      try {
+        const rawArray = (ccRes.data && typeof ccRes.data === "object" && Array.isArray((ccRes.data as { data?: unknown }).data))
+          ? (ccRes.data as { data: unknown[] }).data
+          : Array.isArray(ccRes.data) ? (ccRes.data as unknown[]) : [];
+        for (const containerRaw of rawArray) {
+          if (!containerRaw || typeof containerRaw !== "object") continue;
+          const c = containerRaw as Record<string, unknown>;
+          // The cabinet is `cid` (e.g. "GZS260525-2"). Skip if missing.
+          const cabinetNo = typeof c.cid === "string" && c.cid.trim() ? c.cid.trim() : null;
+          if (!cabinetNo) continue;
+          const trackDetails = Array.isArray(c.track_details) ? (c.track_details as unknown[]) : [];
+          const reTracks: string[] = [];
+          for (const td of trackDetails) {
+            if (!td || typeof td !== "object") continue;
+            const rt = (td as Record<string, unknown>).reTrack;
+            if (typeof rt === "string" && rt.trim()) reTracks.push(rt.trim());
+          }
+          if (reTracks.length === 0) continue;
+          const { error: upErr } = await admin
+            .from("momo_import_tracks")
+            .update({
+              container_batch_no: cabinetNo,
+              updated_at:         new Date().toISOString(),
+            })
+            .in("momo_tracking_no", reTracks);
+          if (upErr) {
+            console.error(
+              `[runMomoSync] cabinet propagate failed cid=${cabinetNo}`,
+              { code: upErr.code, message: upErr.message, trackCount: reTracks.length },
+            );
+            errors.push({
+              scope:   "cabinet_propagate",
+              error:   "MOMO_DB_UPDATE_FAILED",
+              message: `cid=${cabinetNo}: ${upErr.message}`,
+            });
+          }
+        }
+      } catch (e) {
+        // Defensive — a malformed raw shouldn't crash the whole sync.
+        console.error("[runMomoSync] cabinet propagate threw", e);
+      }
     } else {
       errors.push({ scope: "container_closed", error: ccRes.error, message: ccRes.message });
     }

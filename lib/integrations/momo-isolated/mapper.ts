@@ -179,6 +179,16 @@ export function mapImportTrackRecord(raw: unknown): MomoInternalAdminRecord {
 
   const trackingNo  = asStr(r.tracking);
   const sackNo      = asStr(r.sack_no);
+  // ⚠️ ภูม flag 2026-05-30 (bug 2c): `container_no` from import_track is
+  // MOMO's INTERNAL ROUTING BATCH ID (e.g. "PR20260527-SEA02"), NOT the
+  // physical cabinet PCS staff/customers use. The REAL cabinet name
+  // (e.g. "GZS260525-2") lives on `container_closed.cid` and is joined
+  // back to each tracking number by sync.ts step 2.5 (cabinet propagate)
+  // which writes to `momo_import_tracks.momo_cabinet_no`.
+  //
+  // We KEEP storing this here as an audit trail (so you can trace which
+  // MOMO routing batch a tracking number was assigned to) but the display
+  // + tb_forwarder.fcabinetnumber must prefer `momo_cabinet_no` when set.
   const containerNo = asStr(r.container_no);
 
   const shipmentStatus = deriveImportTrackStatus(r);

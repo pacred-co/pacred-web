@@ -30,10 +30,15 @@ export default async function AdminMomoReviewPage() {
   // Pending rows — committed_at IS NULL, ordered most-recent-sync first.
   // Cap at 200 (the same upper bound as commitMomoRowsBatch). Past that, admin
   // should narrow with sync filters first.
+  //
+  // ภูม flag 2026-05-30 (bug 2c): also pull `container_batch_no` — the
+  // REAL cabinet joined from container_closed.cid (added in migration 0126).
+  // Display this when present; falls back to momo_container_no (which is
+  // the MOMO routing batch ID, not a real cabinet).
   const { data: pendingRowsRaw, error: pendingErr } = await admin
     .from("momo_import_tracks")
     .select(
-      "id, momo_tracking_no, momo_container_no, momo_sack_no, shipment_status, admin_status_text, phase, raw, last_synced_at, momo_updated_at",
+      "id, momo_tracking_no, momo_container_no, container_batch_no, momo_sack_no, shipment_status, admin_status_text, phase, raw, last_synced_at, momo_updated_at",
     )
     .is("committed_at", null)
     .order("last_synced_at", { ascending: false })
@@ -58,7 +63,9 @@ export default async function AdminMomoReviewPage() {
   }
 
   // Coerce raw → PendingRow shape (extract qty/ship_by hint from raw blob).
-  const pendingRows: PendingRow[] = (pendingRowsRaw ?? []).map((row) => {
+  // (Intermediate shape — `userIdValid` filled in below after the bulk
+  // tb_users existence probe.)
+  const intermediate = (pendingRowsRaw ?? []).map((row) => {
     const raw = row.raw as Record<string, unknown> | null;
     const userCodeRaw =
       raw && typeof raw === "object"
@@ -86,6 +93,7 @@ export default async function AdminMomoReviewPage() {
       id:                row.id as string,
       momoTrackingNo:    row.momo_tracking_no ?? null,
       momoContainerNo:   row.momo_container_no ?? null,
+      containerBatchNo:  (row.container_batch_no as string | null) ?? null,
       momoSackNo:        row.momo_sack_no ?? null,
       shipmentStatus:    row.shipment_status ?? null,
       adminStatusText:   row.admin_status_text ?? null,
@@ -97,6 +105,51 @@ export default async function AdminMomoReviewPage() {
       momoUpdatedAt:     row.momo_updated_at ?? null,
     };
   });
+
+  // ──────────────────────────────────────────────────────────
+  // ภูม flag 2026-05-30 (bug 2a): pre-validate guessed userIDs.
+  //
+  // Bulk commit was failing 3/4 because PR005 / PR116 / PR032 don't exist
+  // in tb_users (gaps in the PCS sequence — only PR121 was real). Admin
+  // only learned this AFTER clicking "สร้างทั้งหมด". Probe tb_users now
+  // so the grid can show "❌ ไม่มีในระบบ" BEFORE the click.
+  // ──────────────────────────────────────────────────────────
+  const candidateIds = Array.from(
+    new Set(
+      intermediate
+        .map((r) => r.guessedUserId)
+        .filter((v): v is string => typeof v === "string" && /^PR\d+$/i.test(v))
+        .map((v) => v.toUpperCase()),
+    ),
+  );
+
+  let knownUserIds = new Set<string>();
+  if (candidateIds.length > 0) {
+    const { data: existingUsers, error: usersErr } = await admin
+      .from("tb_users")
+      .select("userID")
+      .in("userID", candidateIds);
+    if (usersErr) {
+      console.error("[tb_users pre-validate] failed", usersErr);
+      // Soft-fail — leave knownUserIds empty so EVERY row shows the
+      // warning chip; admin can still type the correct userID by hand.
+    } else if (existingUsers) {
+      knownUserIds = new Set(
+        (existingUsers as Array<{ userID: string | null }>)
+          .map((u) => u.userID)
+          .filter((v): v is string => !!v),
+      );
+    }
+  }
+
+  const pendingRows: PendingRow[] = intermediate.map((r) => ({
+    ...r,
+    // null = no MOMO guess (admin must type); true = exists; false = missing
+    userIdValid:
+      r.guessedUserId == null
+        ? null
+        : knownUserIds.has(r.guessedUserId.toUpperCase()),
+  }));
 
   const recentCommitted = (recentCommittedRaw ?? []).map((row) => ({
     id:                    row.id as string,
