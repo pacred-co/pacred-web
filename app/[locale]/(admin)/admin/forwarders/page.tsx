@@ -893,6 +893,7 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
         rows={rows}
         statusLabel={STATUS_LABEL}
         modeLabel={MODE_LABEL}
+        currentStatus={sp.status}
       />
     </main>
     </>

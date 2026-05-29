@@ -3,7 +3,11 @@
 import { useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { adminBulkUpdateForwarderTbStatus } from "@/actions/admin/forwarders";
+import {
+  adminBulkUpdateForwarderTbStatus,
+  markForwarderPrinted,
+  adminRestoreForwarderFromSpecial,
+} from "@/actions/admin/forwarders";
 
 /**
  * Forwarders table — Wave 11 fidelity port to legacy `forwarder.php`
@@ -275,10 +279,18 @@ export function ForwardersTable({
   rows,
   statusLabel,
   modeLabel,
+  currentStatus,
 }: {
   rows: Row[];
   statusLabel: Record<string, string>;
   modeLabel: Record<string, string>;
+  /**
+   * The active `?status=` filter (from the page's searchParams). When this is
+   * "p" the list is showing the special-status (พิเศษ / fstatus="99") lane, so
+   * the special-toggle button flips its action from "add to special" → "restore
+   * to normal". Undefined = the default mixed list.
+   */
+  currentStatus?: string;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -339,6 +351,88 @@ export function ForwardersTable({
       setSuccess(`อัพเดตสำเร็จ ${result.data?.updated ?? fids.length} รายการ`);
       setSelected(new Set());
       setBulkCabinet("");
+      router.refresh();
+    });
+  };
+
+  // Wave 30.x (2026-05-29 ภูม) — faithful port of legacy printAll.php's three
+  // bottom-left buttons: พิมพ์จากหน้ากล่อง (box label, printStatus1) ·
+  // พิมพ์ที่อยู่ส่งสินค้า (address label, printStatus4) · เพิ่มไปสถานะพิเศษ.
+  const inSpecialLane = currentStatus === "p";
+
+  /**
+   * Open the 100×75mm label print sheet for the selected rows.
+   *  which=1 → box label  (?type=box)     → marks printstatus1
+   *  which=4 → address label (?type=address) → marks printstatus4
+   * window.open fires synchronously inside the click gesture so the popup
+   * blocker stays happy; the markForwarderPrinted call is best-effort audit
+   * only — a failure there must NOT stop the operator from printing.
+   */
+  const onPrintLabels = (which: 1 | 4) => {
+    setError(null);
+    setSuccess(null);
+    if (selected.size === 0) return;
+    const fids = Array.from(selected);
+    const typeParam = which === 1 ? "box" : "address";
+    const query = fids.map((id) => `id[]=${id}`).join("&");
+    window.open(
+      `/admin/forwarders/print?type=${typeParam}&${query}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+    // Best-effort: record that these labels were printed (printStatus flag).
+    startTransition(async () => {
+      const result = await markForwarderPrinted({ fids, which });
+      if (!result.ok) {
+        // Non-blocking — the sheet already opened. Surface softly.
+        setError(`เปิดหน้าพิมพ์แล้ว แต่บันทึกสถานะพิมพ์ไม่สำเร็จ: ${result.error ?? ""}`);
+      }
+    });
+  };
+
+  /**
+   * Special-status toggle. In the normal list → push selected rows to
+   * fstatus="99" (พิเศษ) via the existing bulk action. In the special lane
+   * (?status=p) → restore them to their pre-special status from the status log.
+   */
+  const onSpecialToggle = () => {
+    setError(null);
+    setSuccess(null);
+    if (selected.size === 0) return;
+    const fids = Array.from(selected);
+
+    if (inSpecialLane) {
+      if (
+        !window.confirm(
+          `ย้าย ${fids.length} รายการ กลับสู่สถานะปกติ (คืนค่าจากประวัติสถานะ) ?`,
+        )
+      )
+        return;
+      startTransition(async () => {
+        const result = await adminRestoreForwarderFromSpecial({ fids });
+        if (!result.ok) {
+          setError(result.error ?? "ย้ายกลับสถานะปกติไม่สำเร็จ");
+          return;
+        }
+        setSuccess(`ย้ายกลับสถานะปกติสำเร็จ ${result.data?.restored ?? fids.length} รายการ`);
+        clearSelection();
+        router.refresh();
+      });
+      return;
+    }
+
+    if (
+      !window.confirm(`เพิ่ม ${fids.length} รายการ ไปยังสถานะพิเศษ (พิเศษ / 99) ?`)
+    )
+      return;
+    startTransition(async () => {
+      const result = await adminBulkUpdateForwarderTbStatus({ fids, fstatus: "99" });
+      if (!result.ok) {
+        setError(result.error ?? "เพิ่มไปสถานะพิเศษไม่สำเร็จ");
+        return;
+      }
+      setSuccess(`เพิ่มไปสถานะพิเศษสำเร็จ ${result.data?.updated ?? fids.length} รายการ`);
+      clearSelection();
       router.refresh();
     });
   };
@@ -802,7 +896,47 @@ export function ForwardersTable({
                 className="rounded-md border border-border bg-white px-2 py-1.5 text-sm font-mono w-56"
               />
             </label>
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {/* Faithful port of legacy printAll.php bottom-left trio.
+                  Print buttons open the 100×75mm label sheet in a new tab and
+                  do NOT clear the selection (so the operator can print both
+                  box + address labels for the same batch). */}
+              <button
+                type="button"
+                onClick={() => onPrintLabels(1)}
+                disabled={pending}
+                className="rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                title="พิมพ์ป้ายติดหน้ากล่อง (100×75mm) — รหัสลูกค้า + QR + น้ำหนัก/ปริมาตร"
+              >
+                🖨 พิมพ์จากหน้ากล่อง
+              </button>
+              <button
+                type="button"
+                onClick={() => onPrintLabels(4)}
+                disabled={pending}
+                className="rounded-md border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50"
+                title="พิมพ์ป้ายที่อยู่ส่งสินค้า (100×75mm) — ชื่อ + ที่อยู่ + บริษัทขนส่ง"
+              >
+                🏷 พิมพ์ที่อยู่ส่งสินค้า
+              </button>
+              <button
+                type="button"
+                onClick={onSpecialToggle}
+                disabled={pending}
+                className={
+                  inSpecialLane
+                    ? "rounded-md border border-gray-300 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                    : "rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                }
+                title={
+                  inSpecialLane
+                    ? "ย้ายรายการที่เลือกกลับสู่สถานะปกติ (คืนค่าจากประวัติสถานะ)"
+                    : "เพิ่มรายการที่เลือกไปยังสถานะพิเศษ (พิเศษ / 99)"
+                }
+              >
+                {inSpecialLane ? "↩ ย้ายกลับสถานะปกติ" : "⭐ เพิ่มไปสถานะพิเศษ"}
+              </button>
+              <span className="mx-1 h-5 w-px bg-border" aria-hidden />
               <button
                 type="button"
                 onClick={clearSelection}
