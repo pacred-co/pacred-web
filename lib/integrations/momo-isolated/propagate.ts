@@ -14,7 +14,15 @@ import "server-only";
  * the status drift ภูม sees vs the legacy PCS dashboard.
  *
  * Strategy — three FORWARD-ONLY field updates, each gated by safety rules:
- *   1. fcabinetnumber ← MOMO containerNo, only if currently empty
+ *   1. fcabinetnumber ← REAL cabinet (cid) from momo_import_tracks
+ *                       .container_batch_no (sourced from
+ *                       momo_container_closed.raw.cid). Writes when EMPTY
+ *                       or when current value is a stale MOMO routing
+ *                       batch ID (PR####-SEA##/EK## pattern · 2026-05-30
+ *                       follow-up fix · see learning). NEVER writes the
+ *                       MOMO routing batch (m.containerNo) itself — those
+ *                       are MOMO-internal IDs that link to nothing in
+ *                       Pacred + confuse staff/customers.
  *   2. fdatetothai    ← today, only if MOMO indicates arrival + tb_forwarder
  *                       has no fdatetothai yet
  *   3. fstatus        ← derived from MOMO shipmentStatus, only if STRICTLY
@@ -35,6 +43,25 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MomoInternalAdminRecord, MomoShipmentStatus } from "./types";
+
+/**
+ * MOMO writes its own routing-batch ID into `container_no` BEFORE the
+ * container actually closes (e.g. "PR20260527-SEA02" / "MO20260523-EK01").
+ * Until the container closes, that value is NOT a real PCS cabinet —
+ * staff can't drill into /admin/report-cnt/[cabinet], and customers
+ * shouldn't see cryptic batch IDs as "เลขตู้".
+ *
+ * The REAL cabinet comes from `momo_container_closed.raw.cid` (e.g.
+ * "GZS260525-2") and lives on `momo_import_tracks.container_batch_no`
+ * once sync.ts step 2.5 has propagated it.
+ *
+ * Pattern: PR or MO prefix + 8-digit YYYYMMDD + dash + SEA or EK + 2-digit.
+ * Used to (1) detect stale values to replace, (2) reject ever writing one.
+ */
+const MOMO_ROUTING_RX = /^(PR|MO)\d{8}-(SEA|EK)\d{2}$/;
+function isMomoRoutingBatch(cab: string | null | undefined): boolean {
+  return !!cab && MOMO_ROUTING_RX.test(cab.trim());
+}
 
 // ─────────────────────────────────────────────────────────────
 // MOMO shipmentStatus → Pacred tb_forwarder.fstatus code (string).
@@ -175,6 +202,38 @@ export async function propagateMomoToForwarders(
   }
   result.matched = (matchedRows ?? []).length;
 
+  // Wave 30.6 follow-up (2026-05-30 evening · ภูม): pre-load the REAL cabinet
+  // (cid) per tracking from momo_import_tracks.container_batch_no. We must
+  // NEVER write `m.containerNo` (MOMO's routing batch ID) to tb_forwarder
+  // because:
+  //   - it doesn't link anywhere (no /admin/report-cnt/[routing-batch] page)
+  //   - it confuses customers + staff reading the dashboard
+  //   - it traps the column in a stale value (forward-only safety then
+  //     blocks the real cabinet from ever being written later)
+  // So we resolve `realCabinetByTracking` here and ONLY write that.
+  const { data: cabinetRows, error: cabinetErr } = await admin
+    .from("momo_import_tracks")
+    .select("momo_tracking_no, container_batch_no")
+    .in("momo_tracking_no", trackings)
+    .not("container_batch_no", "is", null);
+  if (cabinetErr) {
+    // Non-fatal — if the lookup fails we just won't fill cabinets this round.
+    // Status + arrival propagation still runs below.
+    console.error("[propagateMomoToForwarders] cabinet lookup failed", {
+      code: cabinetErr.code,
+      message: cabinetErr.message,
+    });
+  }
+  const realCabinetByTracking = new Map<string, string>();
+  for (const r of (cabinetRows ?? []) as Array<{
+    momo_tracking_no: string | null;
+    container_batch_no: string | null;
+  }>) {
+    if (r.momo_tracking_no && r.container_batch_no) {
+      realCabinetByTracking.set(r.momo_tracking_no, r.container_batch_no);
+    }
+  }
+
   const today = new Date().toISOString().slice(0, 10);
 
   // Walk each MOMO record + apply forward-only updates to its matched rows.
@@ -187,12 +246,24 @@ export async function propagateMomoToForwarders(
     const targetFstatusRank = fstatusRank(targetFstatus);
     const isArrivalSignal = isArrivedInThailand(m.shipmentStatus);
 
+    const realCabinet = realCabinetByTracking.get(tracking);
+
     for (const f of hits) {
       const updates: Record<string, string> = {};
 
-      // 1. cabinet — only when empty + MOMO has a containerNo.
-      if (m.containerNo && (!f.fcabinetnumber || f.fcabinetnumber.trim() === "")) {
-        updates.fcabinetnumber = m.containerNo;
+      // 1. cabinet — write ONLY the real cid (e.g. "GZS260525-2"), NEVER
+      //    the MOMO routing batch ID. Two cases trigger a write:
+      //      (a) fcabinetnumber is empty + real cabinet known → fill it
+      //      (b) fcabinetnumber holds a stale MOMO routing batch (from a
+      //          legacy pre-fix propagation) + real cabinet known → replace
+      //    If real cabinet is NOT known yet (container not closed by MOMO
+      //    yet), leave fcabinetnumber alone — NULL is better than a routing
+      //    batch ID that goes nowhere.
+      const current = f.fcabinetnumber?.trim() ?? "";
+      const isEmpty = current === "";
+      const isStaleRouting = isMomoRoutingBatch(current);
+      if (realCabinet && realCabinet !== current && (isEmpty || isStaleRouting)) {
+        updates.fcabinetnumber = realCabinet;
         result.cabinetWrites += 1;
       }
 
