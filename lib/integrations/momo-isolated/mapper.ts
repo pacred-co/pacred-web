@@ -54,11 +54,18 @@
 
 import type {
   MomoBillingStatus,
+  MomoContainerClosedTrack,
+  MomoContainerDetailRow,
+  MomoImportTrackStatusDateRow,
+  MomoImportTrackStatusKey,
   MomoInternalAdminRecord,
   MomoIssueStatus,
   MomoJobStatus,
   MomoPhase,
+  MomoRawEventInput,
+  MomoSackTrackRow,
   MomoShipmentStatus,
+  MomoSourceEndpoint,
 } from "./types";
 import { MOMO_STATUS_PHASE, MOMO_STATUS_TH } from "./types";
 
@@ -109,6 +116,15 @@ function asNum(v: unknown): number | null {
 function asInt(v: unknown): number | null {
   const n = asNum(v);
   return n == null ? null : Math.trunc(n);
+}
+
+/** Coerce to date-only string "YYYY-MM-DD" (drops time). */
+function asDate(v: unknown): string | null {
+  const s = asStr(v);
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const t = asTs(v);
+  return t ? t.slice(0, 10) : null;
 }
 
 /** Map MOMO ship_by → typed enum (or null if unrecognised). */
@@ -201,6 +217,12 @@ export function mapImportTrackRecord(raw: unknown): MomoInternalAdminRecord {
     trackingNo,
     sackNo,
     containerNo,
+    // ── 0119 container identity disambiguation ──
+    // import_track endpoint: raw.container_no holds the ref/round id
+    // (e.g. "PR20260527-SEA01"). It is NOT the real container number.
+    momoContainerRef: containerNo,   // same value, clearer field name
+    containerBatchNo: null,          // not surfaced on import_track endpoint
+    realContainerNo:  null,          // not surfaced on import_track endpoint
     // ── 0118 mirror fields — populate from raw subset ──
     momoUserCode:  asStr(r.user_code),
     momoUserGroup: asStr(r.user_group),
@@ -235,10 +257,16 @@ export function mapContainerClosedRecord(raw: unknown): MomoInternalAdminRecord 
   const r = asBag(raw);
   if (!r) return fallback(raw);
 
-  // MOMO container has BOTH cid (group code, e.g. "GZS260525-2") AND
-  // cid_code (real container number, e.g. "JXLU6157980"). Use cid_code
-  // when present, else cid.
-  const containerNo = asStr(r.cid_code) || asStr(r.cid);
+  // MOMO container endpoint has 3 distinct identifiers:
+  //   raw.fid       = ref/round id    (e.g. "PR20260527-SEA01")
+  //   raw.cid       = batch number    (e.g. "GZS260525-2")
+  //   raw.cid_code  = real container  (e.g. "JXLU6157980")
+  // The legacy `containerNo` column holds cid_code (real) for backward
+  // compat; the new explicit fields below disambiguate.
+  const momoContainerRef = asStr(r.fid);
+  const containerBatchNo = asStr(r.cid);
+  const realContainerNo  = asStr(r.cid_code);
+  const containerNo      = realContainerNo || containerBatchNo;   // legacy: prefer real
   const trackingNo  = null;                          // closed-list is per-container
   const sackNo      = null;
 
@@ -265,6 +293,10 @@ export function mapContainerClosedRecord(raw: unknown): MomoInternalAdminRecord 
     trackingNo,
     sackNo,
     containerNo,
+    // ── 0119 container identity disambiguation ──
+    momoContainerRef,
+    containerBatchNo,
+    realContainerNo,
     // ── 0118 mirror fields — container-level (no per-tracking weights) ──
     momoUserCode:  null,    // container is aggregate of many users
     momoUserGroup: null,
@@ -329,6 +361,10 @@ export function mapSackInfoRecord(raw: unknown): MomoInternalAdminRecord {
     trackingNo,
     sackNo,
     containerNo,
+    // ── 0119 container identity — sack endpoint doesn't surface these ──
+    momoContainerRef: null,
+    containerBatchNo: null,
+    realContainerNo:  null,
     // ── 0118 mirror fields — sack-level ──
     momoUserCode:  null,    // sack is aggregate; user_code is per-tracking
     momoUserGroup: null,
@@ -367,6 +403,9 @@ function fallback(raw: unknown): MomoInternalAdminRecord {
     trackingNo:       null,
     sackNo:           null,
     containerNo:      null,
+    momoContainerRef: null,
+    containerBatchNo: null,
+    realContainerNo:  null,
     momoUserCode:     null,
     momoUserGroup:    null,
     momoCgNo:         null,
@@ -388,6 +427,266 @@ function fallback(raw: unknown): MomoInternalAdminRecord {
     eta:              null,
     momoUpdatedAt:    null,
     raw,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────
+// (0119) Container Closed → per-tracking explode (track_details[])
+// ─────────────────────────────────────────────────────────────
+// Brief 2026-05-28 — Phase A root-cause fix. container_closed.raw has
+// a `track_details: [{reTrack, kg, cbm, ...}]` array that lists every
+// tracking inside the closed container. Without this explode, there
+// is no DB edge from tracking → real container number.
+//
+// Note: this function does NOT need the parent's DB id — the sync
+// route fills `containerClosedId` after upserting the parent. Mirror
+// fields (ref/batch/real) are copied from the parent's raw so each
+// track row is self-describing for fast index lookup.
+
+/**
+ * Extract per-tracking rows from a single container_closed raw item.
+ *
+ * @param raw  The full container_closed item from MOMO API (one element
+ *             of the array returned by /api/func/get/container/closed/...).
+ * @returns    Array of track records (one per `raw.track_details[i]`),
+ *             with `containerClosedId` left as empty string — the sync
+ *             route fills it in after upserting the parent. Returns []
+ *             when raw is malformed or has no track_details.
+ */
+export function extractContainerClosedTracks(
+  raw: unknown,
+): Array<Omit<MomoContainerClosedTrack, "containerClosedId">> {
+  const r = asBag(raw);
+  if (!r) return [];
+
+  const arr = Array.isArray(r.track_details) ? (r.track_details as unknown[]) : [];
+  if (arr.length === 0) return [];
+
+  const momoContainerRef = asStr(r.fid);
+  const containerBatchNo = asStr(r.cid);
+  const realContainerNo  = asStr(r.cid_code);
+
+  const out: Array<Omit<MomoContainerClosedTrack, "containerClosedId">> = [];
+  for (const item of arr) {
+    const t = asBag(item);
+    if (!t) continue;
+    const trackingNo = asStr(t.reTrack);
+    if (!trackingNo) continue;   // can't insert without the unique key
+    out.push({
+      trackingNo,
+      momoContainerRef,
+      containerBatchNo,
+      realContainerNo,
+      weightKg: asNum(t.kg),
+      cbm:      asNum(t.cbm),
+      width:    asNum(t.width),
+      height:   asNum(t.height),
+      length:   asNum(t.length),
+      quantity: asInt(t.total_quantity),
+      raw:      item,
+    });
+  }
+  return out;
+}
+
+// ─────────────────────────────────────────────────────────────
+// (0120 / Phase B) Detail explosion + raw event builders
+// ─────────────────────────────────────────────────────────────
+
+const IMPORT_TRACK_STATUS_KEYS: MomoImportTrackStatusKey[] = [
+  "waiting",
+  "kodang",
+  "mergebox",
+  "wooden_create",
+  "prepare_export",
+  "exported",
+];
+
+/**
+ * Explode `import_track.raw.status_date` into one row per phase key.
+ *
+ * Returns the 6 phase keys (waiting → exported). Empty string value
+ * means "not yet reached" — preserved as statusValueRaw="", statusAt=null.
+ *
+ * @param raw    The import_track item.
+ * @returns      6 rows with empty `importTrackId` (sync route fills it).
+ *               Returns [] if raw is malformed or has no `tracking` key.
+ */
+export function extractImportTrackStatusDates(
+  raw: unknown,
+): Array<Omit<MomoImportTrackStatusDateRow, "importTrackId">> {
+  const r = asBag(raw);
+  if (!r) return [];
+
+  const trackingNo = asStr(r.tracking);
+  if (!trackingNo) return [];
+
+  const sd = asBag(r.status_date) ?? {};
+
+  return IMPORT_TRACK_STATUS_KEYS.map((key) => {
+    const rawValue = sd[key];
+    const valueRaw = typeof rawValue === "string" ? rawValue : (asStr(rawValue) ?? "");
+    const at = valueRaw ? asTs(valueRaw) : null;
+    return {
+      trackingNo,
+      statusKey:      key,
+      statusValueRaw: valueRaw,
+      statusAt:       at,
+    };
+  });
+}
+
+/**
+ * Explode `container_closed.raw.container_details` into typed columns.
+ *
+ * @param raw    The full container_closed item.
+ * @returns      One details row, or null if raw / container_details malformed.
+ *               `containerClosedId` is empty string — sync route fills it.
+ */
+export function extractContainerDetails(
+  raw: unknown,
+): Omit<MomoContainerDetailRow, "containerClosedId"> | null {
+  const r = asBag(raw);
+  if (!r) return null;
+
+  const cd = asBag(r.container_details);
+  if (!cd) return null;
+
+  return {
+    momoContainerRef:    asStr(r.fid),
+    containerBatchNo:    asStr(r.cid),
+    realContainerNo:     asStr(r.cid_code),
+    blNo:                asStr(cd.BL_NO),
+    vesselNo:            asStr(cd.VESSEL_NO),
+    estimateDate:        asDate(cd.ESTIMATE_DATE),
+    etdCnKodang:         asTs(cd.ETD_CN_KODANG),
+    etaThKodang:         asTs(cd.ETA_TH_KODANG),
+    etdImmigration:      asTs(cd.ETD_IMMIGRATION),
+    etaImmigration:      asTs(cd.ETA_IMMIGRATION),
+    transshipment:       asStr(cd.TRANSSHIPMENT),
+    rawContainerDetails: cd,
+  };
+}
+
+/**
+ * Explode `sack_info.raw.tracks[]` into per-tracking rows. The array
+ * may be strings (current MOMO shape) or objects (future expansion) —
+ * we handle both.
+ *
+ * @param raw    The sack_info item.
+ * @returns      Array of track rows. `sackInfoId` + `sackNo` are empty
+ *               strings — sync route fills them with the parent's id +
+ *               sack_no after upserting the sack.
+ */
+export function extractSackTracks(
+  raw: unknown,
+): Array<Omit<MomoSackTrackRow, "sackInfoId" | "sackNo">> {
+  const r = asBag(raw);
+  if (!r) return [];
+
+  const arr = Array.isArray(r.tracks) ? (r.tracks as unknown[]) : [];
+  if (arr.length === 0) return [];
+
+  const out: Array<Omit<MomoSackTrackRow, "sackInfoId" | "sackNo">> = [];
+  for (const item of arr) {
+    // Two possible shapes per MOMO docs:
+    //   tracks: ["9822290862949", ...]                    (current — strings)
+    //   tracks: [{tracking, kg, cbm, ...}, ...]           (future — objects)
+    if (typeof item === "string") {
+      const trackingNo = item.trim();
+      if (!trackingNo) continue;
+      out.push({
+        trackingNo,
+        weightKg: null,
+        cbm:      null,
+        width:    null,
+        height:   null,
+        length:   null,
+        quantity: null,
+        raw:      item,
+      });
+    } else {
+      const t = asBag(item);
+      if (!t) continue;
+      const trackingNo =
+        asStr(t.tracking) ?? asStr(t.tracking_no) ?? asStr(t.reTrack);
+      if (!trackingNo) continue;
+      out.push({
+        trackingNo,
+        weightKg: asNum(t.kg ?? t.weight),
+        cbm:      asNum(t.cbm),
+        width:    asNum(t.width),
+        height:   asNum(t.height),
+        length:   asNum(t.length),
+        quantity: asInt(t.total_quantity ?? t.quantity),
+        raw:      item,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Build a raw-event audit row for an individual MOMO item.
+ *
+ * Use ONE syncRunId per /api/admin/momo/sync invocation so all events
+ * from that run can be grouped. raw_hash is intentionally null for now —
+ * adding sha256 hashing is a follow-up; the field is reserved.
+ *
+ * @param sourceEndpoint  Which MOMO endpoint produced this item.
+ * @param raw             The raw item (one element from the response array,
+ *                        or the single sack_info object).
+ * @param ctx             Run context (URL, date range, sync run id).
+ */
+export function buildRawEventInput(
+  sourceEndpoint: MomoSourceEndpoint,
+  raw: unknown,
+  ctx: {
+    sourceUrl?:       string | null;
+    sourceMethod?:    string;
+    sourceDateRange?: string | null;
+    syncRunId:        string;
+  },
+): MomoRawEventInput {
+  const r = asBag(raw);
+  const momoId = r ? asStr(r._id) : null;
+
+  let momoTrackingNo:    string | null = null;
+  let momoContainerRef:  string | null = null;
+  let sackNo:            string | null = null;
+  let cgNo:              string | null = null;
+  let receivedAt:        string | null = null;
+
+  if (r) {
+    if (sourceEndpoint === "import_track") {
+      momoTrackingNo   = asStr(r.tracking);
+      momoContainerRef = asStr(r.container_no);
+      sackNo           = asStr(r.sack_no);
+      cgNo             = asStr(r.CG_NO);
+      receivedAt       = asTs(r.updated_date);
+    } else if (sourceEndpoint === "container_closed") {
+      momoContainerRef = asStr(r.fid);
+      receivedAt       = asTs(r.updated_date) ?? asTs(r.loading_date);
+    } else if (sourceEndpoint === "sack_info") {
+      sackNo     = asStr(r.sack_id) ?? asStr(r.sack_no);
+      receivedAt = asTs(r.updated_date) ?? asTs(r.closed_date);
+    }
+  }
+
+  return {
+    sourceEndpoint,
+    sourceUrl:        ctx.sourceUrl ?? null,
+    sourceMethod:     ctx.sourceMethod ?? "GET",
+    sourceDateRange:  ctx.sourceDateRange ?? null,
+    momoId,
+    momoTrackingNo,
+    momoContainerRef,
+    sackNo,
+    cgNo,
+    raw,
+    rawHash:          null,         // reserved for later
+    receivedAt,
+    syncRunId:        ctx.syncRunId,
   };
 }
 

@@ -11,7 +11,7 @@ const CATEGORY_BADGE: Record<string, string> = {
   นำเข้า:        "bg-primary-50 text-primary-700 border-primary-200",
   เคลียร์:       "bg-blue-50 text-blue-700 border-blue-200",
   ส่งออก:        "bg-orange-50 text-orange-700 border-orange-200",
-  ประกาศ:        "bg-rose-50 text-rose-700 border-rose-200",
+  ข่าวด่วน:      "bg-rose-50 text-rose-700 border-rose-200",
   อัปเดตบริการ:  "bg-emerald-50 text-emerald-700 border-emerald-200",
   กิจกรรม:       "bg-amber-50 text-amber-700 border-amber-200",
 };

@@ -9,64 +9,10 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-
-type ServiceType = "import" | "export" | "clearance";
+import { Link } from "@/i18n/navigation";
+import { REVIEWS, type ServiceType, type Review } from "@/lib/reviews/catalog";
 
 const ICON_BASE = "/images/hero-section/icon-draf";
-
-type TitleKey = "titleFcl" | "titleLcl" | "titleClearance" | "titleAirClearance";
-type TagKey = "tagFcl" | "tagLcl" | "tagSea" | "tagRoad" | "tagAir" | "tagExpress" | "tagDdp" | "tagCif";
-
-type Review = {
-  id: string;
-  type: ServiceType;
-  titleKey: TitleKey;
-  rating: number;
-  tagKeys: TagKey[];
-  image?: string;
-};
-
-const REVIEWS: Review[] = [
-  // ─── FCL (Import) ──────────────────────────────────────
-  { id: "fcl-1",  type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagDdp"],  image: "/images/review/fcl/1.jpg"  },
-  { id: "fcl-2",  type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagRoad", "tagDdp"], image: "/images/review/fcl/2.jpg"  },
-  { id: "fcl-3",  type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagCif"],  image: "/images/review/fcl/3.jpg"  },
-  { id: "fcl-4",  type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagCif"],  image: "/images/review/fcl/4.jpg"  },
-  { id: "fcl-5",  type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagDdp"],  image: "/images/review/fcl/5.jpg"  },
-  { id: "fcl-6",  type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagDdp"],  image: "/images/review/fcl/6.jpg"  },
-  { id: "fcl-7",  type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagCif"],  image: "/images/review/fcl/7.jpg"  },
-  { id: "fcl-8",  type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagDdp"],  image: "/images/review/fcl/8.jpg"  },
-  { id: "fcl-9",  type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagDdp"],  image: "/images/review/fcl/9.jpg"  },
-  { id: "fcl-10", type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagCif"],  image: "/images/review/fcl/10.jpg" },
-  { id: "fcl-11", type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagDdp"],  image: "/images/review/fcl/11.jpg" },
-  { id: "fcl-12", type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagCif"],  image: "/images/review/fcl/12.jpg" },
-
-  // ─── LCL (Import) ──────────────────────────────────────
-  { id: "lcl-1",  type: "import", titleKey: "titleLcl", rating: 5, tagKeys: ["tagLcl", "tagSea", "tagCif"],  image: "/images/review/lcl/1.jpg"  },
-  { id: "lcl-2",  type: "import", titleKey: "titleLcl", rating: 5, tagKeys: ["tagLcl", "tagSea", "tagDdp"],  image: "/images/review/lcl/2.jpg"  },
-  { id: "lcl-3",  type: "import", titleKey: "titleLcl", rating: 5, tagKeys: ["tagLcl", "tagSea", "tagCif"],  image: "/images/review/lcl/3.jpg"  },
-  { id: "lcl-4",  type: "import", titleKey: "titleLcl", rating: 5, tagKeys: ["tagLcl", "tagSea", "tagDdp"],  image: "/images/review/lcl/4.jpg"  },
-  { id: "lcl-5",  type: "import", titleKey: "titleLcl", rating: 5, tagKeys: ["tagLcl", "tagRoad", "tagCif"], image: "/images/review/lcl/5.jpg"  },
-  { id: "lcl-6",  type: "import", titleKey: "titleLcl", rating: 5, tagKeys: ["tagLcl", "tagRoad", "tagDdp"], image: "/images/review/lcl/6.jpg"  },
-  { id: "lcl-7",  type: "import", titleKey: "titleLcl", rating: 5, tagKeys: ["tagLcl", "tagSea", "tagCif"],  image: "/images/review/lcl/7.jpg"  },
-  { id: "lcl-8",  type: "import", titleKey: "titleLcl", rating: 5, tagKeys: ["tagLcl", "tagSea", "tagDdp"],  image: "/images/review/lcl/8.jpg"  },
-
-  // ─── Clearance ────────────────────
-  { id: "clr-1",  type: "clearance", titleKey: "titleClearance", rating: 5, tagKeys: ["tagDdp", "tagRoad", "tagCif"], image: "/images/review/clearance/1.jpg"  },
-  { id: "clr-2",  type: "clearance", titleKey: "titleClearance", rating: 5, tagKeys: ["tagDdp", "tagRoad"],            image: "/images/review/clearance/2.jpg"  },
-  { id: "clr-3",  type: "clearance", titleKey: "titleClearance", rating: 5, tagKeys: ["tagDdp", "tagSea", "tagCif"],   image: "/images/review/clearance/3.jpg"  },
-  { id: "clr-4",  type: "clearance", titleKey: "titleClearance", rating: 5, tagKeys: ["tagDdp", "tagSea", "tagCif"],   image: "/images/review/clearance/4.jpg"  },
-  { id: "clr-5",  type: "clearance", titleKey: "titleClearance", rating: 5, tagKeys: ["tagDdp", "tagRoad"],            image: "/images/review/clearance/5.jpg"  },
-  { id: "clr-7",  type: "clearance", titleKey: "titleClearance", rating: 5, tagKeys: ["tagDdp", "tagRoad"],            image: "/images/review/clearance/7.jpg"  },
-  { id: "clr-10", type: "clearance", titleKey: "titleClearance", rating: 5, tagKeys: ["tagDdp", "tagSea", "tagCif"],   image: "/images/review/clearance/10.jpg" },
-  { id: "clr-11", type: "clearance", titleKey: "titleClearance", rating: 5, tagKeys: ["tagDdp", "tagRoad", "tagCif"],  image: "/images/review/clearance/11.jpg" },
-  { id: "clr-12", type: "clearance", titleKey: "titleClearance", rating: 5, tagKeys: ["tagDdp", "tagSea"],             image: "/images/review/clearance/12.jpg" },
-
-  // ─── Air Clearance ───
-  { id: "clr-air-6", type: "clearance", titleKey: "titleAirClearance", rating: 5, tagKeys: ["tagAir", "tagExpress", "tagDdp"], image: "/images/review/clearance/6.jpg" },
-  { id: "clr-air-8", type: "clearance", titleKey: "titleAirClearance", rating: 5, tagKeys: ["tagAir", "tagExpress", "tagDdp"], image: "/images/review/clearance/8.jpg" },
-  { id: "clr-air-9", type: "clearance", titleKey: "titleAirClearance", rating: 5, tagKeys: ["tagAir", "tagExpress", "tagDdp"], image: "/images/review/clearance/9.jpg" },
-];
 
 type ReviewsT = ReturnType<typeof useTranslations<"reviews">>;
 
@@ -104,7 +50,7 @@ export function Reviews({ defaultFilter = "all" }: { defaultFilter?: "all" | Ser
         <div className="mx-auto w-full max-w-[1120px]">
           <div className="flex items-center gap-2 mb-1.5 text-primary-600 text-[13px] font-black tracking-[0.08em] uppercase">
             <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
-            Services Reviews
+            Our Case Studies
           </div>
           <h2 className="text-[24px] md:text-[34px] leading-[1.2] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
             <span className="text-primary-600">{t("titleHighlight1")}</span>{" "}
@@ -161,7 +107,7 @@ function ReviewsCarousel({ reviews, t, typeConfig }: { reviews: Review[]; t: Rev
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const dragRef = useRef({ isDown: false, startX: 0, scrollLeft: 0 });
+  const dragRef = useRef({ isDown: false, startX: 0, scrollLeft: 0, moved: false });
 
   const updateButtons = useCallback(() => {
     const el = scrollerRef.current;
@@ -208,6 +154,7 @@ function ReviewsCarousel({ reviews, t, typeConfig }: { reviews: Review[]; t: Rev
     const el = scrollerRef.current;
     if (!el) return;
     dragRef.current.isDown = true;
+    dragRef.current.moved = false;
     dragRef.current.startX = e.pageX - el.offsetLeft;
     dragRef.current.scrollLeft = el.scrollLeft;
     setIsDragging(true);
@@ -227,7 +174,17 @@ function ReviewsCarousel({ reviews, t, typeConfig }: { reviews: Review[]; t: Rev
     e.preventDefault();
     const x = e.pageX - el.offsetLeft;
     const walk = (x - dragRef.current.startX) * 1.2;
+    if (Math.abs(x - dragRef.current.startX) > 6) dragRef.current.moved = true;
     el.scrollLeft = dragRef.current.scrollLeft - walk;
+  };
+
+  // Suppress the click that fires after a drag so we don't navigate the card Link
+  const onClickCapture = (e: MouseEvent<HTMLDivElement>) => {
+    if (dragRef.current.moved) {
+      e.preventDefault();
+      e.stopPropagation();
+      dragRef.current.moved = false;
+    }
   };
 
   return (
@@ -279,6 +236,7 @@ function ReviewsCarousel({ reviews, t, typeConfig }: { reviews: Review[]; t: Rev
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseLeave}
         onMouseMove={onMouseMove}
+        onClickCapture={onClickCapture}
         className={[
           "flex gap-2.5 md:gap-3 overflow-x-auto overflow-y-visible [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden py-2 snap-x snap-proximity",
           isDragging ? "md:cursor-grabbing md:select-none" : "md:cursor-grab",
@@ -323,14 +281,17 @@ function ReviewCard({ review, index = 0, t, typeConfig }: { review: Review; inde
   const [popKey, setPopKey] = useState(0);
 
   const onLike = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();   // don't navigate the wrapping <Link>
     e.stopPropagation();
     setLiked((v) => !v);
     setPopKey((k) => k + 1);
   };
 
   return (
-    <div
+    <Link
+      href={`/reviews/${review.id}`}
       data-review-card
+      aria-label={title}
       style={{
         animation: "card-in 0.55s cubic-bezier(0.22,0.61,0.36,1) both",
         animationDelay: `${Math.min(index, 8) * 60}ms`,
@@ -504,6 +465,6 @@ function ReviewCard({ review, index = 0, t, typeConfig }: { review: Review; inde
           </span>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }

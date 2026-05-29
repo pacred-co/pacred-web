@@ -4,7 +4,7 @@ import { Link } from "@/i18n/navigation";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { Footer } from "@/components/sections/footer";
-import { ImportExportBanner } from "@/components/sections/import-export-banner";
+import { HomeBottomBanner } from "@/components/sections/home-bottom-banner";
 import { ArticleListTabs } from "@/components/sections/article-list-tabs";
 import { KNOWLEDGE_ARTICLES } from "@/lib/knowledge-articles";
 import { JsonLd } from "@/components/seo/json-ld";
@@ -151,8 +151,8 @@ export default async function KnowledgeListingPage({
           </div>
         </section>
 
-        {/* Banner CTA — แทน CTA card เล็ก */}
-        <ImportExportBanner />
+        {/* LINE banner — ใช้แบนเนอร์ไลน์จากหน้าแรก */}
+        <HomeBottomBanner />
       </main>
       <Footer />
     </>

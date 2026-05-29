@@ -2055,10 +2055,10 @@
     "cargoFcl40Badge": "ยอดนิยม"
   },
   "reviews": {
-    "eyebrow": "Services Reviews",
-    "titleHighlight1": "P ดิวะ !",
-    "titleMiddle": "นำเข้า–ส่งออก ชิปปิ้งเคลียร์ของ",
-    "titleHighlight2": "มีครบจบทุกบริการ",
+    "eyebrow": "Our Case Studies",
+    "titleHighlight1": "Pacred Shipping",
+    "titleMiddle": "ผู้ให้บริการนำเข้า-ส่งออก ชิปปิ้ง และพิธีการศุลกากร",
+    "titleHighlight2": "ครบวงจร",
     "filterAll": "ทั้งหมด",
     "filterImport": "นำเข้า",
     "filterClearance": "ชิปปิ้งเคลียร์สินค้า",
@@ -2280,6 +2280,12 @@
       "index": {
         "title": "ข่าวสาร Pacred · ประกาศ + อัปเดตบริการ",
         "description": "ติดตามประกาศจาก Pacred Shipping — มาตรการขนส่ง อัปเดตบริการ และกิจกรรมล่าสุดของบริษัท"
+      }
+    },
+    "reviews": {
+      "index": {
+        "title": "รีวิวลูกค้า Pacred · นำเข้าจีน FCL/LCL + เคลียร์ศุลกากร",
+        "description": "รีวิวจริงจากลูกค้า Pacred Shipping — นำเข้าสินค้าจากจีน FCL เหมาตู้ / LCL เปิดใบขน เคลียร์ศุลกากรทางรถ เรือ แอร์ ครบทุกเทอม DDP/CIF"
       }
     },
     "faq": {

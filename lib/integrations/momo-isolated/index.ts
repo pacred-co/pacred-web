@@ -34,6 +34,13 @@ export {
   mapContainerClosedArray,
   mapSackInfoRecord,
   mapSackInfoSingle,
+  // Migration 0119 — per-tracking explode from container_closed.raw.track_details[].
+  extractContainerClosedTracks,
+  // Migration 0120 — Phase B detail explosion + raw event builder.
+  extractImportTrackStatusDates,
+  extractContainerDetails,
+  extractSackTracks,
+  buildRawEventInput,
   isoToDateOnly,
 } from "./mapper";
 
@@ -45,9 +52,30 @@ export type {
   MomoIssueStatus,
   MomoBadgeColor,
   MomoInternalAdminRecord,
+  MomoContainerClosedTrack,
+  MomoSourceEndpoint,
+  MomoRawEventInput,
+  MomoImportTrackStatusKey,
+  MomoImportTrackStatusDateRow,
+  MomoContainerDetailRow,
+  MomoSackTrackRow,
   MomoClientResult,
   MomoErrorCode,
 } from "./types";
+
+// Migration 0121 — Phase C status derivation (server-only).
+export {
+  deriveStatus,
+  loadSignalsForTracking,
+  refreshSnapshotForTracking,
+  DERIVED_STATUS_LABEL_TH,
+} from "./status-derivation";
+export type {
+  DerivedStatus,
+  DerivedStatusPhase,
+  DerivedStatusPriority,
+  DerivationSignals,
+} from "./status-derivation";
 
 export {
   MOMO_STATUS_BADGE,

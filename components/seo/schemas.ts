@@ -173,3 +173,67 @@ export function articleSchema({
   if (dateModified ?? datePublished) base.dateModified = dateModified ?? datePublished;
   return base;
 }
+
+export type ReviewSchemaInput = {
+  /** Review headline (the page H1). */
+  name: string;
+  /** Review body — the lead paragraph. */
+  reviewBody: string;
+  /** Star rating, 1–5. */
+  ratingValue: number;
+  /** Name of the service being reviewed (the `itemReviewed`). */
+  itemName: string;
+  itemServiceType?: string;
+  /** Page slug, e.g. `/reviews/fcl-1`. */
+  slug: string;
+  image?: string;
+  locale?: SiteLocale;
+};
+
+/**
+ * Review JSON-LD for a `/reviews/[id]` landing page. `itemReviewed` is a
+ * `Service` (NOT the Organization/LocalBusiness itself) — self-serving review
+ * snippets pointed at your own business are ineligible for rich results and
+ * risk a manual action, whereas a review of a specific Service is the
+ * standard, compliant pattern.
+ */
+export function reviewSchema({
+  name,
+  reviewBody,
+  ratingValue,
+  itemName,
+  itemServiceType,
+  slug,
+  image,
+  locale = "th",
+}: ReviewSchemaInput) {
+  const url = absoluteUrl(slug, locale);
+  const base: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "Review",
+    name,
+    reviewBody,
+    url,
+    inLanguage: locale === "th" ? "th-TH" : "en-US",
+    author: { "@type": "Person", name: locale === "th" ? "ลูกค้า Pacred" : "Pacred customer" },
+    publisher: { "@id": `${SITE_URL}#organization` },
+    reviewRating: {
+      "@type": "Rating",
+      ratingValue,
+      bestRating: 5,
+      worstRating: 1,
+    },
+    itemReviewed: {
+      "@type": "Service",
+      name: itemName,
+      serviceType: itemServiceType ?? itemName,
+      provider: { "@id": `${SITE_URL}#organization` },
+    },
+  };
+  if (image) {
+    base.image = image.startsWith("http")
+      ? image
+      : `${SITE_URL}${image.startsWith("/") ? "" : "/"}${image}`;
+  }
+  return base;
+}

@@ -22,11 +22,17 @@
 export type PacredNews = {
   id: number;
   slug: string;
-  category: "ประกาศ" | "อัปเดตบริการ" | "กิจกรรม";
+  category: "ข่าวด่วน" | "อัปเดตบริการ" | "กิจกรรม";
   title: string;
   excerpt: string;
   /** Card cover image — square / 3:4 portrait works best. */
   image: string;
+  /**
+   * Optional landscape hero shown on the `/news/[slug]` detail page only.
+   * Falls back to `image` when absent. Lets the cover stay portrait while
+   * the article header uses a wide shot.
+   */
+  heroImage?: string;
   /** Optional in-article inline illustration (rendered mid-content). */
   inlineImage?: string;
   inlineImageAlt?: string;
@@ -41,11 +47,12 @@ export const PACRED_NEWS: PacredNews[] = [
   {
     id: 1,
     slug: "vietnam-customs-shift-to-sea-route",
-    category: "ประกาศ",
+    category: "ข่าวด่วน",
     title: "ข่าวด่วน · ด่านรถจีน–ไทยติดขัดหนัก หลังเวียดนามตรวจเข้ม กระทบการขนส่งทางรถ",
     excerpt:
       "ในช่วงเดือนพฤษภาคม 2569 เส้นทางขนส่งสินค้าทางรถจากจีนมายังไทย โดยเฉพาะเส้นทางที่ต้องผ่านด่านชายแดนเวียดนามและด่านโหย่วอี้กวน เริ่มได้รับผลกระทบจากปริมาณรถขนส่งที่หนาแน่นและมาตรการตรวจเข้มที่เพิ่มขึ้น",
     image: "/images/PacredNews/khao01.png",
+    heroImage: "/images/PacredNews/khao01-1.png",
     inlineImage: "/images/PacredNews/prakob01.png",
     inlineImageAlt: "ประกาศปรับรูปแบบการจัดส่งสินค้าเป็นทางเรือ — Pacred Shipping",
     inlineImageCaption:

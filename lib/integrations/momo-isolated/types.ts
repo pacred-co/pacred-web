@@ -112,6 +112,18 @@ export type MomoInternalAdminRecord = {
   trackingNo:      string | null;
   sackNo:          string | null;
   containerNo:     string | null;
+  // ── Container identity disambiguation (migration 0119 — 2026-05-28) ──
+  // The legacy `containerNo` is ambiguous (= ref on import_track, = real
+  // container number on container_closed). These 3 fields make it explicit:
+  momoContainerRef: string | null;     // ref/round id (e.g. "PR20260527-SEA01")
+                                       //   import_track: raw.container_no
+                                       //   container:   raw.fid
+  containerBatchNo: string | null;     // momo batch (e.g. "GZS260525-2")
+                                       //   container: raw.cid
+                                       //   (not surfaced on import_track endpoint)
+  realContainerNo:  string | null;     // real shipping container (e.g. "JXLU6157980")
+                                       //   container: raw.cid_code
+                                       //   (not surfaced on import_track endpoint)
   // ── Mirror fields extracted from raw (migration 0118 — 2026-05-28) ──
   // Each mapper populates the subset that exists in its source endpoint;
   // the others stay null (e.g. user_code only exists in import_track).
@@ -137,6 +149,120 @@ export type MomoInternalAdminRecord = {
   eta:             string | null;
   momoUpdatedAt:   string | null;
   raw:             unknown;             // full MOMO record for debug + remap
+};
+
+/**
+ * Per-tracking row exploded from container_closed.raw.track_details[].
+ *
+ * Migration 0119 — populates `momo_container_closed_tracks`. This is the
+ * JOIN bridge that lets us link a tracking number to its real container.
+ * Without these rows, container_closed shows up as cid_code only with no
+ * way to know which tracking is inside.
+ */
+export type MomoContainerClosedTrack = {
+  /** raw.track_details[i].reTrack */
+  trackingNo:        string;
+  /** Parent container_closed.id (filled by sync after upserting the parent). */
+  containerClosedId: string;
+  /** Mirror of parent's momo_container_ref (raw.fid). */
+  momoContainerRef:  string | null;
+  /** Mirror of parent's container_batch_no (raw.cid). */
+  containerBatchNo:  string | null;
+  /** Mirror of parent's real_container_no (raw.cid_code). */
+  realContainerNo:   string | null;
+  /** raw.track_details[i].kg */
+  weightKg:          number | null;
+  /** raw.track_details[i].cbm */
+  cbm:               number | null;
+  /** raw.track_details[i].width */
+  width:             number | null;
+  /** raw.track_details[i].height */
+  height:            number | null;
+  /** raw.track_details[i].length */
+  length:            number | null;
+  /** raw.track_details[i].total_quantity */
+  quantity:          number | null;
+  /** Full track_details[i] for audit. */
+  raw:               unknown;
+};
+
+// ════════════════════════════════════════════════════════════
+// Migration 0120 (Phase B) types — raw audit + detail explosion
+// ════════════════════════════════════════════════════════════
+
+/** Source endpoint that an audit row was sourced from. */
+export type MomoSourceEndpoint =
+  | "import_track"
+  | "container_closed"
+  | "sack_info";
+
+/**
+ * A raw-event audit row to insert into `momo_raw_events`. One row per
+ * MOMO item received, regardless of whether downstream mapping succeeded.
+ */
+export type MomoRawEventInput = {
+  sourceEndpoint:    MomoSourceEndpoint;
+  sourceUrl:         string | null;
+  sourceMethod:      string;
+  sourceDateRange:   string | null;     // e.g. "2026-05-27+2026-05-27"
+  momoId:            string | null;     // raw._id
+  momoTrackingNo:    string | null;     // denormalized lookup
+  momoContainerRef:  string | null;     // denormalized lookup
+  sackNo:            string | null;     // denormalized lookup
+  cgNo:              string | null;     // denormalized lookup
+  raw:               unknown;
+  rawHash:           string | null;     // not yet computed (reserved)
+  receivedAt:        string | null;     // ISO timestamptz parsed from raw.updated_date
+  syncRunId:         string | null;     // links to a sync invocation (uuid)
+};
+
+/** Phase-key enum from import_track.raw.status_date. */
+export type MomoImportTrackStatusKey =
+  | "waiting"
+  | "kodang"
+  | "mergebox"
+  | "wooden_create"
+  | "prepare_export"
+  | "exported";
+
+/** One row in momo_import_track_status_dates — one phase key per import_track. */
+export type MomoImportTrackStatusDateRow = {
+  importTrackId:     string;            // parent FK
+  trackingNo:        string;            // denormalized
+  statusKey:         MomoImportTrackStatusKey;
+  statusValueRaw:    string;            // "" or "YYYY-MM-DD HH:MM:SS"
+  statusAt:          string | null;     // ISO timestamptz (null if statusValueRaw is "")
+};
+
+/** Container-details record exploded from container_closed.raw.container_details. */
+export type MomoContainerDetailRow = {
+  containerClosedId:    string;
+  momoContainerRef:     string | null;
+  containerBatchNo:     string | null;
+  realContainerNo:      string | null;
+  blNo:                 string | null;
+  vesselNo:             string | null;
+  estimateDate:         string | null;     // ISO date "YYYY-MM-DD"
+  etdCnKodang:          string | null;     // ISO timestamptz
+  etaThKodang:          string | null;
+  etdImmigration:       string | null;
+  etaImmigration:       string | null;
+  transshipment:        string | null;
+  rawContainerDetails:  unknown;
+};
+
+/** One row from sack_info.raw.tracks[] (string or object element). */
+export type MomoSackTrackRow = {
+  sackInfoId:        string;
+  sackNo:            string;
+  trackingNo:        string;
+  weightKg:          number | null;
+  cbm:               number | null;
+  width:             number | null;
+  height:            number | null;
+  length:            number | null;
+  quantity:          number | null;
+  raw:               unknown;
 };
 
 // ── HTTP client result envelope ───────────────────────────────

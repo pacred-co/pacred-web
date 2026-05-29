@@ -2055,10 +2055,10 @@
     "cargoFcl40Badge": "Most Popular"
   },
   "reviews": {
-    "eyebrow": "Services Reviews",
-    "titleHighlight1": "P-licious!",
-    "titleMiddle": "Import, export & customs clearance —",
-    "titleHighlight2": "everything covered in one place",
+    "eyebrow": "Our Case Studies",
+    "titleHighlight1": "Pacred Shipping",
+    "titleMiddle": "— full-service import, export, shipping &",
+    "titleHighlight2": "customs clearance, end-to-end",
     "filterAll": "All",
     "filterImport": "Import",
     "filterClearance": "Customs clearance",
@@ -2280,6 +2280,12 @@
       "index": {
         "title": "Pacred News · Announcements & Service Updates",
         "description": "Follow announcements from Pacred Shipping — shipping measures, service updates, and company activities."
+      }
+    },
+    "reviews": {
+      "index": {
+        "title": "Pacred Customer Reviews · China FCL/LCL Import + Customs Clearance",
+        "description": "Real customer reviews of Pacred Shipping — China imports by full-container FCL and consolidated LCL, plus customs clearance by road, sea, and air across DDP/CIF terms."
       }
     },
     "faq": {
