@@ -77,13 +77,17 @@ export interface TaxableParts {
  * stores some as varchar).
  */
 export interface ForwarderCharges {
-  ftotalprice:           number | string | null;   // goods value (ค่าสินค้า)
-  ftransportprice:       number | string | null;   // transport (TH domestic) — VAT 7%
-  ftransportpricechnthb: number | string | null;   // transport (CN→TH international) — VAT 0%
-  fshippingservice:      number | string | null;   // service fee
-  pricecrate:            number | string | null;    // ค่าตีลังไม้ (service)
-  fpriceupdate:          number | string | null;    // price adjustment (service)
-  priceother:            number | string | null;    // misc (service)
+  // ⚠ ค่าขนส่ง — ฝากนำเข้า (import) มี "ค่าสินค้า/goods" ฝั่งนี้ = 0 เสมอ
+  // (ลูกค้าเป็นเจ้าของสินค้าอยู่แล้ว · ฝากแค่ "ขนส่ง"). verified จาก prod
+  // data จริง (ftotalprice ≈ fweight × rate ทุกแถว) + legacy printReceiptF.php
+  // (label "ค่าขนส่ง/Amount") + B agent audit 2026-05-30.
+  ftotalprice:           number | string | null;   // ค่าขนส่งหลัก CN→TH (cargo · weight/cbm × rate) — TRANSPORT · VAT 0% (intl leg)
+  ftransportprice:       number | string | null;   // ค่าส่งในไทย (TH last-mile) — TRANSPORT · VAT 7% (domestic)
+  ftransportpricechnthb: number | string | null;   // ค่าส่งในจีน (China-domestic leg, THB) — TRANSPORT · VAT 0% (foreign leg)
+  fshippingservice:      number | string | null;   // service fee (SERVICE · VAT 7%)
+  pricecrate:            number | string | null;    // ค่าตีลังไม้ (SERVICE)
+  fpriceupdate:          number | string | null;    // price adjustment (SERVICE)
+  priceother:            number | string | null;    // misc (SERVICE)
   fdiscount:             number | string | null;    // discount off the grand total
 }
 
@@ -191,11 +195,15 @@ export function computeForwarderTax(
 ): TaxBreakdown {
   return computeTax(
     {
+      // TH last-mile = domestic transport (VAT 7%, WHT 1%).
       transportDomestic: n(c.ftransportprice),
-      transportIntl: n(c.ftransportpricechnthb),
+      // CN→TH cargo (ftotalprice, the MAIN charge) + China-domestic leg =
+      // international transport (VAT 0% zero-rated, WHT 1%). ftotalprice is
+      // NOT goods — a forwarder bill has no goods line (goods=0 below).
+      transportIntl: n(c.ftotalprice) + n(c.ftransportpricechnthb),
       service: n(c.fshippingservice) + n(c.pricecrate) + n(c.fpriceupdate) + n(c.priceother),
       rental: 0,
-      goods: n(c.ftotalprice),
+      goods: 0,
       discount: n(c.fdiscount),
     },
     opts,

@@ -50,6 +50,7 @@
 import type { createAdminClient } from "@/lib/supabase/admin";
 import type { ForwarderPriceFields } from "@/lib/forwarder/outstanding";
 import { mintReceiptDocNo } from "@/lib/admin/mint-receipt-doc-no";
+import { issueForwarderTaxInvoice } from "@/lib/admin/forwarder-tax-invoice";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
 import { sendNotification } from "@/lib/notifications";
 import { sendSms } from "@/lib/sms/gateway";
@@ -192,12 +193,12 @@ export async function autoIssueReceiptOnPaymentLand(
 
   // 2. Read the forwarder rows to compute totals (re-fetch — never trust
   //    cached row data from the caller's snapshot).
-  type FwRow = ForwarderPriceFields & { id: number; userid: string };
+  type FwRow = ForwarderPriceFields & { id: number; userid: string; tax_doc_pref: string | null };
   const { data: fwRows, error: fwErr } = await admin
     .from("tb_forwarder")
     .select(
       "id, userid, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
-      "pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany",
+      "pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany, tax_doc_pref",
     )
     .in("id", fids)
     .eq("userid", userid);
@@ -395,6 +396,29 @@ export async function autoIssueReceiptOnPaymentLand(
     });
     await admin.from("tb_receipt").delete().eq("id", receiptRow.id);
     return { ok: false, error: `receipt_items_insert: ${itemErr.message}` };
+  }
+
+  // 8b. TAX-INVOICE BRIDGE (P2). If ANY covered forwarder row opted into a
+  //     ใบกำกับภาษี (tb_forwarder.tax_doc_pref='tax_invoice' · migration 0127),
+  //     issue one via the per-line tax engine (computeForwarderTax) into the
+  //     tb_*-native store (migration 0129). The default 'receipt' (or NULL)
+  //     keeps the current receipt-only behaviour. BEST-EFFORT — a tax-invoice
+  //     failure never undoes the receipt (the money already moved; the receipt
+  //     is the document of record · the tax invoice is a follow-on).
+  const wantsTaxInvoice = rows.some((r) => (r.tax_doc_pref ?? "").trim() === "tax_invoice");
+  if (wantsTaxInvoice) {
+    const taxRes = await issueForwarderTaxInvoice(admin, {
+      userid,
+      fids: rows.map((r) => r.id),
+      receiptId: receiptRow.id,
+      rid: receiptRow.rid,
+      issuedBy: "system-auto",
+    });
+    if (!taxRes.ok && !taxRes.alreadyIssued) {
+      logger.warn("auto-receipt", "tax-invoice bridge failed (non-fatal · receipt stands)", {
+        rid: receiptRow.rid, userid, fids: rows.map((r) => r.id), error: taxRes.error,
+      });
+    }
   }
 
   // 9. Audit log (best-effort — don't block on failure).

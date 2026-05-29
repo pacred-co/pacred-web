@@ -37,6 +37,11 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import {
+  resolveForwarderRate,
+  type ResolveRateCandidates,
+  type ResolvedRate,
+} from "@/lib/forwarder/resolve-rate";
 
 // ────────────────────────────────────────────────────────────
 // Resolve current admin's legacy id (tb_forwarder.adminid* is varchar(10)).
@@ -102,22 +107,198 @@ function computeCbm(width: number, length: number, height: number): number {
   return Math.round(v * 100_000) / 100_000;
 }
 
+function num(v: number | string | null | undefined): number {
+  if (v === null || v === undefined) return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const p = parseFloat(v);
+  return Number.isFinite(p) ? p : 0;
+}
+
+// ────────────────────────────────────────────────────────────
+// LIVE PRICING WATERFALL — port of forwarder.php `update_data` getPrice()
+// (L1806-1931) + the SVIP probe (L1841-1843). This is the SQL half; the
+// decision logic lives in lib/forwarder/resolve-rate.ts (pure + unit-tested).
+//
+// Inputs come from the EXISTING tb_forwarder row (warehouse/transport/
+// comparison/refOrder/amount — legacy reads these from the row in
+// update_data L1770-1798) + the dimensions the admin just submitted
+// (weight/cbm/productType).
+//
+// ⚠️ MONEY PATH. The rate this resolves is written to tb_forwarder as
+//    fTotalPrice (the China→Thailand TRANSPORT subtotal · legacy naming —
+//    see resolve-rate.ts header FLAG). It does NOT touch fTransportPrice
+//    (the Thailand domestic-delivery leg, set by the Flash/PCSE flow).
+// ────────────────────────────────────────────────────────────
+interface PricingRowContext {
+  userid: string;
+  fwarehousechina: string;
+  ftransporttype: string;
+  fproductstype: string;
+  weightKg: number;
+  /** CBMProduct = (famountcount==1) ? fvolume : fvolume*famount  (legacy L1935-1941) */
+  cbmProduct: number;
+  famountcount: string | null;
+  famount: number;
+  reforder: string | null;
+  customRateSwitch: boolean;
+  customRateKg: number;
+  customRateCbm: number;
+  userComparison: boolean;
+  userComparisonValue: number;
+}
+
+async function resolveLiveForwarderRate(
+  admin: ReturnType<typeof createAdminClient>,
+  ctx: PricingRowContext,
+): Promise<{ resolved: ResolvedRate; coID: string } | { error: string }> {
+  // tb_users — coID drives general(=='PCS') vs VIP-group; legacy reads
+  // userComparison/userComparisonValue/userCompany too (update_data L1764-1798).
+  // tb_users is camelCase (batch 1) — coID/userCompany/userComparison*.
+  const { data: userRow, error: userErr } = await admin
+    .from("tb_users")
+    .select("coID")
+    .eq("userID", ctx.userid)
+    .maybeSingle<{ coID: string | null }>();
+  if (userErr) {
+    console.error(`[resolveLiveForwarderRate: tb_users] failed`, {
+      code: userErr.code, message: userErr.message, userid: ctx.userid,
+    });
+    return { error: `อ่านข้อมูลลูกค้าไม่สำเร็จ: ${userErr.message}` };
+  }
+  const coID = (userRow?.coID ?? "").trim();
+  const isGeneral = coID === "PCS";
+
+  const wh = ctx.fwarehousechina;
+  const tt = ctx.ftransporttype;
+  const pt = ctx.fproductstype;
+
+  const candidates: ResolveRateCandidates = {
+    manualOverride: ctx.customRateSwitch,
+    manualKg: ctx.customRateKg,
+    manualCbm: ctx.customRateCbm,
+    isSvip: false,
+    svipKg: null,
+    svipCbm: null,
+    isGeneral,
+    generalKg: null,
+    generalCbm: null,
+    vipKg: null,
+    vipCbm: null,
+  };
+
+  if (!ctx.customRateSwitch) {
+    // SVIP probe — legacy `SELECT ID FROM tb_rate_custom_cbm WHERE userID`
+    // (forwarder.php L1841). ANY row → SVIP.
+    const { data: svipProbe, error: svipErr } = await admin
+      .from("tb_rate_custom_cbm")
+      .select("id")
+      .eq("userid", ctx.userid)
+      .limit(1)
+      .maybeSingle<{ id: number }>();
+    if (svipErr) {
+      console.error(`[resolveLiveForwarderRate: tb_rate_custom_cbm probe] failed`, {
+        code: svipErr.code, message: svipErr.message, userid: ctx.userid,
+      });
+      return { error: `ตรวจสอบเรท SVIP ไม่สำเร็จ: ${svipErr.message}` };
+    }
+    candidates.isSvip = svipProbe != null;
+
+    if (candidates.isSvip) {
+      // SVIP per-user rates for the tuple (forwarder.php L1907-1925).
+      const { data: svipKgRow, error: svipKgErr } = await admin
+        .from("tb_rate_custom_kg")
+        .select("rkg")
+        .eq("userid", ctx.userid).eq("sourcewarehouse", wh).eq("rtransporttype", tt).eq("rproductstype", pt)
+        .maybeSingle<{ rkg: number | string | null }>();
+      if (svipKgErr) console.error(`[resolveLiveForwarderRate: tb_rate_custom_kg] failed`, { code: svipKgErr.code, message: svipKgErr.message });
+      const { data: svipCbmRow, error: svipCbmErr } = await admin
+        .from("tb_rate_custom_cbm")
+        .select("rcbm")
+        .eq("userid", ctx.userid).eq("sourcewarehouse", wh).eq("rtransporttype", tt).eq("rproductstype", pt)
+        .maybeSingle<{ rcbm: number | string | null }>();
+      if (svipCbmErr) console.error(`[resolveLiveForwarderRate: tb_rate_custom_cbm rate] failed`, { code: svipCbmErr.code, message: svipCbmErr.message });
+      candidates.svipKg = svipKgRow?.rkg ?? null;
+      candidates.svipCbm = svipCbmRow?.rcbm ?? null;
+    } else if (isGeneral) {
+      // General tiered rates (forwarder.php L1846-1880). tb_rate_g_* keyed
+      // by coid (not userid) — here coid='PCS', the general bucket.
+      const { data: gKg, error: gKgErr } = await admin
+        .from("tb_rate_g_kg")
+        .select("rgkg1, rgkg2, rgkg3")
+        .eq("coid", coID).eq("sourcewarehouse", wh).eq("rgtransporttype", tt).eq("rgproductstype", pt)
+        .maybeSingle<{ rgkg1: number | string | null; rgkg2: number | string | null; rgkg3: number | string | null }>();
+      if (gKgErr) console.error(`[resolveLiveForwarderRate: tb_rate_g_kg] failed`, { code: gKgErr.code, message: gKgErr.message });
+      const { data: gCbm, error: gCbmErr } = await admin
+        .from("tb_rate_g_cbm")
+        .select("rgcbm1, rgcbm2, rgcbm3")
+        .eq("coid", coID).eq("sourcewarehouse", wh).eq("rgtransporttype", tt).eq("rgproductstype", pt)
+        .maybeSingle<{ rgcbm1: number | string | null; rgcbm2: number | string | null; rgcbm3: number | string | null }>();
+      if (gCbmErr) console.error(`[resolveLiveForwarderRate: tb_rate_g_cbm] failed`, { code: gCbmErr.code, message: gCbmErr.message });
+      candidates.generalKg = gKg ? { tier1: gKg.rgkg1, tier2: gKg.rgkg2, tier3: gKg.rgkg3 } : null;
+      candidates.generalCbm = gCbm ? { tier1: gCbm.rgcbm1, tier2: gCbm.rgcbm2, tier3: gCbm.rgcbm3 } : null;
+    } else {
+      // VIP-group flat rates by coID (forwarder.php L1884-1904).
+      const { data: vKg, error: vKgErr } = await admin
+        .from("tb_rate_vip_kg")
+        .select("rkg")
+        .eq("coid", coID).eq("sourcewarehouse", wh).eq("rtransporttype", tt).eq("rproductstype", pt)
+        .maybeSingle<{ rkg: number | string | null }>();
+      if (vKgErr) console.error(`[resolveLiveForwarderRate: tb_rate_vip_kg] failed`, { code: vKgErr.code, message: vKgErr.message });
+      const { data: vCbm, error: vCbmErr } = await admin
+        .from("tb_rate_vip_cbm")
+        .select("rcbm")
+        .eq("coid", coID).eq("sourcewarehouse", wh).eq("rtransporttype", tt).eq("rproductstype", pt)
+        .maybeSingle<{ rcbm: number | string | null }>();
+      if (vCbmErr) console.error(`[resolveLiveForwarderRate: tb_rate_vip_cbm] failed`, { code: vCbmErr.code, message: vCbmErr.message });
+      candidates.vipKg = vKg?.rkg ?? null;
+      candidates.vipCbm = vCbm?.rcbm ?? null;
+    }
+  }
+
+  const resolved = resolveForwarderRate(candidates, {
+    weightKg: ctx.weightKg,
+    volumeCbm: ctx.cbmProduct,
+    comparisonEnabled: ctx.userComparison,
+    comparisonValue: ctx.userComparisonValue,
+    // customComparison (per-order comparison override) is not part of the
+    // dimensions form; legacy reads it from the calPrice POST. For the
+    // dimension-edit save we follow the customer's stored userComparison.
+  });
+
+  return { resolved, coID };
+}
+
 // ────────────────────────────────────────────────────────────
 // adminUpdateForwarderDimensions — UPDATE tb_forwarder + tb_forwarder_item.
 //
 // Resolution: numeric fNo → tb_forwarder.id · else → tb_forwarder.fidorco.
 // (Matches `[fNo]/page.tsx` renderLegacyForwarderView.)
 // ────────────────────────────────────────────────────────────
+export type AdminUpdateForwarderDimensionsData = {
+  id: number;
+  cbm: number;
+  /** China→Thailand transport price the rate engine resolved (legacy fTotalPrice). */
+  ftotalprice: number;
+  /** Unit rate chosen (legacy fRefRate). */
+  frefrate: number;
+  /** 1 = billed by KG · 2 = billed by CBM (legacy fRefPrice). */
+  frefprice: 1 | 2;
+  basis: "kg" | "cbm";
+  rateSource: "manual" | "svip" | "vip" | "general";
+  /** Recomputed grand total (transport + adders − discount). */
+  grandTotal: number;
+};
+
 export async function adminUpdateForwarderDimensions(
   rawInput: AdminEditForwarderInput,
-): Promise<AdminActionResult<{ id: number; cbm: number }>> {
+): Promise<AdminActionResult<AdminUpdateForwarderDimensionsData>> {
   const parsed = editForwarderSchema.safeParse(rawInput);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
   const d = parsed.data;
 
-  return withAdmin<{ id: number; cbm: number }>(
+  return withAdmin<AdminUpdateForwarderDimensionsData>(
     ["ops", "accounting", "super"],
     async ({ adminId }) => {
       const admin         = createAdminClient();
@@ -132,11 +313,22 @@ export async function adminUpdateForwarderDimensions(
         .from("tb_forwarder")
         .select(
           "id, fidorco, userid, fweight, fwidth, flength, fheight, fvolume, " +
-          "fproductstype, frefprice, fnote",
+          "fproductstype, frefprice, fnote, " +
+          // ── pricing-context columns (legacy update_data reads these) ──
+          "fwarehousechina, ftransporttype, famount, famountcount, reforder, " +
+          "customrate, customratekg, customratecbm, fdiscount, " +
+          "ftotalprice, ftransportprice, fshippingservice, ftransportpricechnthb, " +
+          "pricecrate, priceother, fpriceupdate, frefrate",
         )
         .limit(1);
       q = isId ? q.eq("id", asNumber) : q.eq("fidorco", d.fNo);
-      const { data: existing } = await q.maybeSingle();
+      const { data: existing, error: existingErr } = await q.maybeSingle();
+      if (existingErr) {
+        console.error(`[adminUpdateForwarderDimensions: tb_forwarder read] failed`, {
+          code: existingErr.code, message: existingErr.message, fNo: d.fNo,
+        });
+        return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${existingErr.message}` };
+      }
       if (!existing) {
         return { ok: false, error: "ไม่พบรายการ (fNo ไม่ตรงกับ tb_forwarder)" };
       }
@@ -152,9 +344,122 @@ export async function adminUpdateForwarderDimensions(
         fproductstype: string;
         frefprice: string;
         fnote: string | null;
+        fwarehousechina: string;
+        ftransporttype: string;
+        famount: number | string | null;
+        famountcount: string | null;
+        reforder: string | null;
+        customrate: string | null;
+        customratekg: number | string | null;
+        customratecbm: number | string | null;
+        fdiscount: number | string | null;
+        ftotalprice: number | string | null;
+        ftransportprice: number | string | null;
+        fshippingservice: number | string | null;
+        ftransportpricechnthb: number | string | null;
+        pricecrate: number | string | null;
+        priceother: number | string | null;
+        fpriceupdate: number | string | null;
+        frefrate: number | string | null;
       };
 
       const nowIso = new Date().toISOString();
+
+      // ─── LIVE PRICING (port of forwarder.php update_data L1934-2068) ──
+      // After the admin sets weight/CBM/product, recompute the China→Thailand
+      // transport price via the legacy rate waterfall, EXACTLY as the legacy
+      // save did. The result → fTotalPrice (legacy naming · transport), with
+      // fRefRate (unit rate) + fRefPrice ('1' KG · '2' CBM). The manual-
+      // override path (customrate switch on) keeps the admin-typed rate.
+      //
+      // ⚠️ Faithful note: the dimension-edit form does NOT send warehouse /
+      //    transport-type / comparison — legacy reads those from the row in
+      //    update_data, so we do the same (use `before.*`).
+      const customRateSwitch = String(before.customrate ?? "0").trim() === "1";
+      const famountCount = before.famountcount;
+      const famount = num(before.famount);
+      // CBMProduct — legacy L1935-1941: famountcount==1 → fvolume; else fvolume*famount.
+      const cbmProduct = String(famountCount ?? "").trim() === "1" ? cbm : cbm * famount;
+
+      // userComparison / userComparisonValue (tb_users · camelCase batch 1).
+      const { data: cmpRow, error: cmpErr } = await admin
+        .from("tb_users")
+        .select("userComparison, userComparisonValue")
+        .eq("userID", before.userid)
+        .maybeSingle<{ userComparison: string | number | null; userComparisonValue: number | string | null }>();
+      if (cmpErr) {
+        console.error(`[adminUpdateForwarderDimensions: tb_users comparison] failed`, {
+          code: cmpErr.code, message: cmpErr.message, userid: before.userid,
+        });
+      }
+      const userComparison = String(cmpRow?.userComparison ?? "0").trim() === "1";
+      const userComparisonValue = num(cmpRow?.userComparisonValue);
+
+      const priceResult = await resolveLiveForwarderRate(admin, {
+        userid:            before.userid,
+        fwarehousechina:   before.fwarehousechina,
+        ftransporttype:    before.ftransporttype,
+        fproductstype:     d.productType,          // the JUST-submitted product type
+        weightKg:          d.weightKg,
+        cbmProduct,
+        famountcount:      famountCount,
+        famount,
+        reforder:          before.reforder,
+        customRateSwitch,
+        customRateKg:      num(before.customratekg),
+        customRateCbm:     num(before.customratecbm),
+        userComparison,
+        userComparisonValue,
+      });
+      if ("error" in priceResult) {
+        return { ok: false, error: priceResult.error };
+      }
+      const { resolved } = priceResult;
+
+      // ⚠️ FAITHFUL-GAP (flagged to orchestrator): legacy update_data also
+      //    re-derives a PROMO discount (forwarder.php L2022-2061 · promoID
+      //    3/4/7/15 → fDiscount += price × 0.10/0.07/0.05/0.03) and writes
+      //    fDiscount. We deliberately DO NOT mutate fDiscount here — a
+      //    dimension edit silently changing the discount is surprising, and
+      //    the promo path needs tb_promotion + coID logic. fDiscount is left
+      //    as-is. If promo auto-discount on re-price is required, port it as a
+      //    follow-up (with owner sign-off, since it changes money).
+
+      // §money: NEVER persist a silent ฿0 transport price. legacy returned 0
+      // + surfaced "ไม่มีเรทราคา …"; we refuse the write and tell the admin.
+      if (resolved.rateMissing) {
+        console.error(`[adminUpdateForwarderDimensions: rate missing]`, {
+          fNo: d.fNo, id: before.id, userid: before.userid,
+          warehouse: before.fwarehousechina, transport: before.ftransporttype,
+          product: d.productType, source: resolved.source,
+        });
+        return {
+          ok: false,
+          error:
+            "ไม่พบเรทราคาขนส่งสำหรับ (โกดัง/ขนส่ง/ประเภทสินค้า) ของลูกค้ารายนี้ — " +
+            "กรุณาตั้งเรทขนส่งให้ลูกค้าก่อน (หน้าโปรไฟล์ลูกค้า) หรือใช้เรทกำหนดเอง แล้วลองอีกครั้ง",
+        };
+      }
+
+      // Recompute the grand total exactly as legacy does (forwarder.php L220 /
+      // printReceiptF.php L354 / outstanding.calcForwarderOutstanding):
+      //   ftotalprice (NEW transport) + fpriceupdate + fshippingservice +
+      //   ftransportpricechnthb + pricecrate + priceother + ftransportprice
+      //   − fdiscount.
+      // (We do NOT mutate the service adders / discount here — the dimension
+      //  edit only changes the transport leg. fTransportPrice = TH-domestic,
+      //  left untouched — legacy update_data also leaves it as the POST value.)
+      const newFTotalPrice = resolved.transportSubtotal;
+      const grandTotal =
+        newFTotalPrice +
+        num(before.fpriceupdate) +
+        num(before.fshippingservice) +
+        num(before.ftransportpricechnthb) +
+        num(before.pricecrate) +
+        num(before.priceother) +
+        num(before.ftransportprice) -
+        num(before.fdiscount);
+      const newGrandTotal = Math.round(grandTotal * 100) / 100;
 
       // ─── UPDATE tb_forwarder ────────────────────────────────────
       const update: Record<string, unknown> = {
@@ -164,7 +469,11 @@ export async function adminUpdateForwarderDimensions(
         fheight:           d.heightCm,
         fvolume:           cbm,
         fproductstype:     d.productType,
-        frefprice:         d.refPrice,
+        // fRefPrice is COMPUTED by the rate engine (legacy overwrites the
+        // POSTed value with the engine's choice). We keep the engine result.
+        frefprice:         String(resolved.refPrice),
+        frefrate:          resolved.rate,
+        ftotalprice:       newFTotalPrice,
         fnote:             d.note ?? before.fnote ?? null,
         adminidupdate:     legacyAdminId,
         fdateadminstatus:  nowIso,
@@ -175,6 +484,9 @@ export async function adminUpdateForwarderDimensions(
         .update(update)
         .eq("id", before.id);
       if (updErr) {
+        console.error(`[adminUpdateForwarderDimensions: tb_forwarder update] failed`, {
+          code: updErr.code, message: updErr.message, id: before.id,
+        });
         return { ok: false, error: updErr.message };
       }
 
@@ -247,8 +559,26 @@ export async function adminUpdateForwarderDimensions(
             fheight:       d.heightCm,
             fvolume:       cbm,
             fproductstype: d.productType,
-            frefprice:     d.refPrice,
+            frefprice:     String(resolved.refPrice),
             fnote:         d.note ?? null,
+          },
+          // ── money-path audit trail (the live-pricing change) ──
+          pricing: {
+            before: {
+              ftotalprice: num(before.ftotalprice),
+              frefrate:    num(before.frefrate),
+              frefprice:   before.frefprice,
+            },
+            after: {
+              ftotalprice: newFTotalPrice,     // China→Thailand transport (legacy fTotalPrice)
+              frefrate:    resolved.rate,
+              frefprice:   String(resolved.refPrice),
+            },
+            basis:           resolved.basis,
+            rate_source:     resolved.source,   // manual | svip | vip | general
+            custom_rate:     customRateSwitch,
+            cbm_product:     cbmProduct,
+            grand_total:     newGrandTotal,
           },
           items_updated:   d.items.length,
           crate_count:     d.items.filter((it) => it.crateType === "2").length,
@@ -263,6 +593,11 @@ export async function adminUpdateForwarderDimensions(
       revalidatePath(`/admin/forwarders/${d.fNo}/edit`);
       revalidatePath(`/admin/forwarders/${before.id}`);
       revalidatePath("/admin");
+      // NB: the sidebar badge "รอชำระเงิน" count is served from the
+      // 60s-TTL pcs-chrome cache (lib/legacy/pcs-chrome.ts). We intentionally
+      // do NOT revalidateTag it here — Next 16's revalidateTag now requires a
+      // cache profile arg and this admin edit doesn't change a customer's
+      // sidebar count (the row is already in รอชำระเงิน). The 60s TTL is fine.
 
       if (itemUpdateErrors.length > 0) {
         return {
@@ -272,7 +607,19 @@ export async function adminUpdateForwarderDimensions(
             itemUpdateErrors.map((e) => `#${e.itemId}: ${e.error}`).join(", "),
         };
       }
-      return { ok: true, data: { id: before.id, cbm } };
+      return {
+        ok: true,
+        data: {
+          id: before.id,
+          cbm,
+          ftotalprice: newFTotalPrice,
+          frefrate:    resolved.rate,
+          frefprice:   resolved.refPrice,
+          basis:       resolved.basis,
+          rateSource:  resolved.source,
+          grandTotal:  newGrandTotal,
+        },
+      };
     },
   );
 }

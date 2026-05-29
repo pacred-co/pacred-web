@@ -21,28 +21,30 @@ function eq(label: string, got: number, want: number, tol = 0.01) {
   eq("personal: netPayable=base", t.netPayable, 10650);
 }
 
-// 2. Juristic — per-class WHT (1% transport, 3% service, 0% goods)
+// 2. Juristic — ftotalprice is the CN→TH TRANSPORT charge (intl), NOT goods.
+//    transport = ftotalprice(10000, intl) + ftransportprice(500, domestic) = 10500 → WHT 1%
 {
   const t = computeForwarderTax(
     { ftotalprice: 10000, ftransportprice: 500, ftransportpricechnthb: 0, fshippingservice: 50, pricecrate: 100, fpriceupdate: 0, priceother: 0, fdiscount: 0 },
     { isJuristic: true, withVat: false });
-  eq("juristic: transport WHT (1% of 500)", t.wht.transport, 5);
+  eq("juristic: transport WHT (1% of 10500)", t.wht.transport, 105);
   eq("juristic: service WHT (3% of 150)", t.wht.service, 4.5);
-  eq("juristic: goods WHT (0% — not withheld)", t.wht.goods, 0);
-  eq("juristic: wht.total", t.wht.total, 9.5);
-  eq("juristic: netPayable", t.netPayable, 10640.5);
+  eq("juristic: goods WHT (0 — no goods in forwarder)", t.wht.goods, 0);
+  eq("juristic: wht.total", t.wht.total, 109.5);
+  eq("juristic: netPayable", t.netPayable, 10540.5);
 }
 
-// 3. With VAT 7% — goods IS in the VAT base (owner: คิด VAT รวมค่าสินค้า)
+// 3. With VAT 7% — intl transport leg (ftotalprice CN→TH) is ZERO-RATED →
+//    only domestic transport (500) + service (150) = 650 is VATable.
 {
   const t = computeForwarderTax(
     { ftotalprice: 10000, ftransportprice: 500, ftransportpricechnthb: 0, fshippingservice: 50, pricecrate: 100, fpriceupdate: 0, priceother: 0, fdiscount: 0 },
     { isJuristic: true, withVat: true });
-  eq("withVat: vatable base = 10650 (no intl)", t.base.vatable, 10650);
-  eq("withVat: VAT 7% of 10650", t.vat, 745.5);
-  eq("withVat: grossBeforeWht=base+VAT", t.grossBeforeWht, 11395.5);
-  eq("withVat: WHT base UNCHANGED (excl VAT)", t.wht.total, 9.5);
-  eq("withVat: netPayable=gross-WHT", t.netPayable, 11386);
+  eq("withVat: vatable = 650 (intl ftotalprice excluded)", t.base.vatable, 650);
+  eq("withVat: VAT 7% of 650", t.vat, 45.5);
+  eq("withVat: grossBeforeWht=base+VAT", t.grossBeforeWht, 10695.5);
+  eq("withVat: WHT base UNCHANGED (excl VAT)", t.wht.total, 109.5);
+  eq("withVat: netPayable=gross-WHT", t.netPayable, 10586);
 }
 
 // 4. International transport leg → VAT 0% (excluded from VAT base), WHT 1% still
@@ -57,25 +59,26 @@ function eq(label: string, got: number, want: number, tol = 0.01) {
   eq("intl: WHT transport = 1% of 2500 (both legs)", t.wht.transport, 25);
 }
 
-// 5. Discount allocated proportionally (goods still 0% WHT)
+// 5. Discount allocated proportionally. ftotalprice(8000)=intl transport,
+//    ftransportprice(1000)=domestic → base.transport = 900+7200 = 8100.
 {
   const t = computeForwarderTax(
     { ftotalprice: 8000, ftransportprice: 1000, ftransportpricechnthb: 0, fshippingservice: 1000, pricecrate: 0, fpriceupdate: 0, priceother: 0, fdiscount: 1000 },
     { isJuristic: true, withVat: false });
-  eq("discount: transport base after alloc", t.base.transport, 900);
+  eq("discount: transport base (dom 900 + intl 7200)", t.base.transport, 8100);
+  eq("discount: transportIntl after alloc", t.base.transportIntl, 7200);
   eq("discount: service base after alloc", t.base.service, 900);
-  eq("discount: goods base after alloc", t.base.goods, 7200);
+  eq("discount: goods base = 0 (forwarder)", t.base.goods, 0);
   eq("discount: total base = 9000", t.base.total, 9000);
-  eq("discount: goods WHT still 0", t.wht.goods, 0);
 }
 
-// 6. Drop-in helper — goods not withheld → full goods amount stays
+// 6. Drop-in helper — transport (intl 1000 + dom 100) all WHT 1%, service 3%
 {
   const n = calcForwarderNetPayable(
     { ftotalprice: 1000, ftransportprice: 100, ftransportpricechnthb: 0, fshippingservice: 50, pricecrate: 0, fpriceupdate: 0, priceother: 0, fdiscount: 0 },
     true);
-  // goods 1000 (0% WHT) + transport 100×0.99=99 + service 50×0.97=48.5 = 1147.5
-  eq("calcForwarderNetPayable juristic", n, 1147.5);
+  // transport 1100×0.99=1089 + service 50×0.97=48.5 = 1137.5
+  eq("calcForwarderNetPayable juristic", n, 1137.5);
 }
 
 // 7. Zero base (defensive)

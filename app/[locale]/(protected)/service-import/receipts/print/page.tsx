@@ -3,6 +3,8 @@ import { requireAuth } from "@/lib/auth/require-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
 import { CONTACT, ADDRESSES, BANK, TAX_ID } from "@/components/seo/site";
+import { computeForwarderTax, type TaxBreakdown } from "@/lib/tax/wht";
+import { getTaxRates } from "@/lib/tax/rates";
 
 /**
  * ฝากนำเข้า (forwarder import) RECEIPT PRINT document — a FAITHFUL
@@ -211,6 +213,7 @@ type ForwarderItemRow = {
   fweight: number;
   ftrackingchn: string;
   amount: number; // tb_wallet_hs.amount (the slip amount)
+  taxDocPref: string | null; // tb_forwarder.tax_doc_pref ('tax_invoice' → +VAT)
 };
 
 /** One fully-resolved receipt ready to render — printReceiptF.php
@@ -239,6 +242,16 @@ type ReceiptDoc = {
   pricPer1Visible: boolean;
   pricPer1Value: number;
   dis1per: number;
+  // ── P2 per-line tax (computeForwarderTax) ──
+  // The owner's per-class WHT model + VAT, replacing the legacy flat 1%.
+  // `isJuristic` here = the receipt is for a นิติบุคคล (corporate-name) row.
+  isJuristic: boolean;
+  // true when ANY covered forwarder opted into a ใบกำกับภาษี (tax_doc_pref).
+  wantsTaxInvoice: boolean;
+  // The aggregate breakdown across all item rows (post-discount, per class).
+  tax: TaxBreakdown;
+  // The configured rates used (for the printed % labels).
+  whtRates: { transportPct: number; servicePct: number; rentalPct: number; vatPct: number };
 };
 
 type SearchParams = {
@@ -272,6 +285,9 @@ export default async function ServiceImportReceiptPrintPage({
   void sp.type;
 
   const admin = createAdminClient();
+
+  // P2: the per-line WHT/VAT rates (config-driven · server-only · one fetch).
+  const taxRates = await getTaxRates();
 
   // ── Build one ReceiptDoc per rID (printReceiptF.php L44-485) ──
   const docs: ReceiptDoc[] = [];
@@ -478,7 +494,7 @@ export default async function ServiceImportReceiptPrintPage({
       const { data: fRows, error: fRowsErr } = await admin
         .from("tb_forwarder")
         .select(
-          "id, fpriceupdate, fshippingservice, ftransportpricechnthb, pricecrate, priceother, fdiscount, ftotalprice, ftransportprice, famount, fvolume, fweight, ftrackingchn, userid",
+          "id, fpriceupdate, fshippingservice, ftransportpricechnthb, pricecrate, priceother, fdiscount, ftotalprice, ftransportprice, famount, fvolume, fweight, ftrackingchn, userid, tax_doc_pref",
         )
         .in("id", fIds);
       if (fRowsErr) {
@@ -514,7 +530,8 @@ export default async function ServiceImportReceiptPrintPage({
       for (const f of (fRows ?? []) as ({
         id: number;
         userid: string;
-      } & Omit<ForwarderItemRow, "fid" | "amount">)[]) {
+        tax_doc_pref: string | null;
+      } & Omit<ForwarderItemRow, "fid" | "amount" | "taxDocPref">)[]) {
         // f.userID match on the wallet join — keep it faithful.
         const amount = walletByRef.get(String(f.id)) ?? 0;
         rows.push({
@@ -532,6 +549,7 @@ export default async function ServiceImportReceiptPrintPage({
           fweight: Number(f.fweight) || 0,
           ftrackingchn: f.ftrackingchn ?? "",
           amount,
+          taxDocPref: f.tax_doc_pref ?? null,
         });
       }
     }
@@ -593,6 +611,27 @@ export default async function ServiceImportReceiptPrintPage({
       }
     }
 
+    // ── P2 per-line tax — aggregate the bill buckets across all item rows
+    //    and run the owner-confirmed engine (transport 1% · service 3% ·
+    //    rental 5% · goods 0% in VAT base · VAT 7% · intl leg VAT 0%).
+    //    isJuristic = corporate-name receipt (reCorporate===1) — the same
+    //    signal the legacy used to decide WHT applies.
+    const isJuristicDoc = reCorporate === 1;
+    const wantsTaxInvoice = rows.some((r) => (r.taxDocPref ?? "").trim() === "tax_invoice");
+    const tax = computeForwarderTax(
+      {
+        ftotalprice:           rows.reduce((s, r) => s + r.ftotalprice, 0),
+        ftransportprice:       rows.reduce((s, r) => s + r.ftransportprice, 0),
+        ftransportpricechnthb: rows.reduce((s, r) => s + r.ftransportpricechnthb, 0),
+        fshippingservice:      rows.reduce((s, r) => s + r.fshippingservice, 0),
+        pricecrate:            rows.reduce((s, r) => s + r.pricecrate, 0),
+        fpriceupdate:          rows.reduce((s, r) => s + r.fpriceupdate, 0),
+        priceother:            rows.reduce((s, r) => s + r.priceother, 0),
+        fdiscount:             rows.reduce((s, r) => s + r.fdiscount, 0),
+      },
+      { isJuristic: isJuristicDoc, withVat: wantsTaxInvoice, rates: taxRates },
+    );
+
     docs.push({
       rID: ID,
       dateCreate,
@@ -614,6 +653,15 @@ export default async function ServiceImportReceiptPrintPage({
       pricPer1Visible,
       pricPer1Value,
       dis1per,
+      isJuristic: isJuristicDoc,
+      wantsTaxInvoice,
+      tax,
+      whtRates: {
+        transportPct: taxRates.transportPct,
+        servicePct:   taxRates.servicePct,
+        rentalPct:    taxRates.rentalPct,
+        vatPct:       taxRates.vatPct,
+      },
     });
   }
 
@@ -720,13 +768,19 @@ function ReceiptPage({
               <div className="text-center">
                 <br />
               </div>
+              {/* P2: when the order opted into a ใบกำกับภาษี (tax_doc_pref=
+                  tax_invoice) the document is a combined ใบกำกับภาษี/ใบเสร็จ
+                  (RD Code 86 · VAT shown below); otherwise the legacy
+                  "ใบเสร็จรับเงิน (ไม่ใช่ใบกำกับภาษี)". */}
               <div
                 className="text-center h-title"
                 style={{ fontFamily: "frutiger" }}
               >
-                ใบเสร็จรับเงิน
+                {doc.wantsTaxInvoice ? "ใบกำกับภาษี / ใบเสร็จรับเงิน" : "ใบเสร็จรับเงิน"}
               </div>
-              <div className="text-center h-title3">(ไม่ใช่ใบกำกับภาษี)</div>
+              <div className="text-center h-title3">
+                {doc.wantsTaxInvoice ? "TAX INVOICE / RECEIPT" : "(ไม่ใช่ใบกำกับภาษี)"}
+              </div>
               <div className="h-title2 ">เลขที่ {doc.rID}</div>
             </th>
           </tr>
@@ -898,9 +952,24 @@ function ReceiptPage({
  * issuer / approver / stamp / customer signature row.
  */
 function ReceiptFooter({ doc }: { doc: ReceiptDoc }) {
-  // printReceiptF.php L393-394 — the bank-transfer line.
-  // $textPay = checked bank-transfer + the centred amount line.
-  const grandTotal = doc.totalPriceAll - doc.dis1per;
+  // ── P2: per-line WHT + VAT (computeForwarderTax), replacing the legacy
+  //    flat 1%. The "amount the customer pays" =
+  //      base_total (post-discount, all classes) + VAT (if ใบกำกับภาษี)
+  //      − Σ per-class WHT (transport 1% · service 3% · rental 5% · goods 0%).
+  //    For a personal (non-juristic) receipt the engine returns wht=0 & vat=0,
+  //    so grandTotal == doc.totalPriceAll — i.e. byte-identical to the legacy
+  //    for the common case (no behaviour change for personal customers).
+  const tx = doc.tax;
+  const grandTotal = tx.netPayable;
+  // Per-class WHT lines to print (only classes that actually withhold). Rates
+  // come straight from business_config (doc.whtRates) — no back-derivation.
+  const whtLines: { label: string; rate: number; amount: number }[] = doc.isJuristic
+    ? [
+        { label: "ค่าขนส่ง (Transport)", rate: doc.whtRates.transportPct, amount: tx.wht.transport },
+        { label: "ค่าบริการ (Service)",  rate: doc.whtRates.servicePct,   amount: tx.wht.service },
+        { label: "ค่าเช่า (Rental)",     rate: doc.whtRates.rentalPct,    amount: tx.wht.rental },
+      ].filter((w) => w.amount > 0)
+    : [];
   // printReceiptF.php L121-122 — the stamp + signature images.
   return (
     <div style={{ position: "fixed", bottom: "0mm", fontSize: "20px" }}>
@@ -919,6 +988,15 @@ function ReceiptFooter({ doc }: { doc: ReceiptDoc }) {
               <br />
               **This is an electronic display of receipt data.
               <br />
+              {/* P2: international transport leg (CN→TH · ค่าขนส่งจีน+) is
+                  VAT zero-rated (ม.80/1) — note it on the tax invoice so the
+                  VAT base (which excludes it) reconciles for the customer. */}
+              {doc.wantsTaxInvoice && doc.tax.base.transportIntl > 0 ? (
+                <>
+                  ***ค่าขนส่งระหว่างประเทศ (จีน-ไทย) {numberFormat(doc.tax.base.transportIntl)} บาท เป็นอัตราภาษี VAT 0% (Zero-rated · ม.80/1)
+                  <br />
+                </>
+              ) : null}
               <div>
                 <input type="checkbox" style={{ fontSize: "20px" }} /> เงินสด
                 _____________________ วันที่____________________________{" "}
@@ -948,24 +1026,21 @@ function ReceiptFooter({ doc }: { doc: ReceiptDoc }) {
                 <b>({convert(grandTotal)})</b>
               </div>
             </th>
+            {/* ── P2 summary labels — legacy rows + (VAT when ใบกำกับ) +
+                  per-class WHT (transport 1% · service 3% · rental 5%).
+                  Replaces the legacy single flat "WITHHOLDING TAX 1%". ── */}
             <th className="text-right v-a-t" style={{ width: "5cm" }}>
               <div>Total</div>
               <div>Delivery Charge CHN</div>
               <div>Delivery Charge TH</div>
               <div>Other</div>
               <div>Discount</div>
-              {/* $textPer1 — the WHT-1% line; printReceiptF.php builds
-                  it as an HTML fragment. It is one of:
-                  '' · '<div>LESS WITHHOLDING TAX 1%</div>' ·
-                  '<div style="color:#fff;">…</div>' (the white/hidden
-                  default for a personal receipt). Rendered 1:1. */}
-              {doc.textPer1 === "" ? null : doc.textPer1.includes(
-                  "#fff",
-                ) ? (
-                <div style={{ color: "#fff" }}>LESS WITHHOLDING TAX 1%</div>
-              ) : (
-                <div>LESS WITHHOLDING TAX 1%</div>
-              )}
+              {doc.wantsTaxInvoice ? <div>VAT {numberFormat(doc.whtRates.vatPct, 0)}%</div> : null}
+              {whtLines.map((w) => (
+                <div key={`l-${w.label}`}>
+                  หัก ณ ที่จ่าย {w.label} {numberFormat(w.rate, w.rate % 1 === 0 ? 0 : 2)}%
+                </div>
+              ))}
             </th>
             <th className="text-right v-a-t" style={{ width: "4cm" }}>
               <div>{numberFormat(doc.fTotalPriceAll)} บาท</div>
@@ -973,13 +1048,10 @@ function ReceiptFooter({ doc }: { doc: ReceiptDoc }) {
               <div>{numberFormat(doc.fTransportPriceTHBAll)} บาท</div>
               <div>{numberFormat(doc.priceOtherBillAll)} บาท</div>
               <div>{numberFormat(doc.fDiscountAll)} บาท</div>
-              {/* $pricPer1 — the WHT-1% amount; white "0" by default,
-                  the real value when WHT was withheld. */}
-              {doc.pricPer1Visible ? (
-                <div>{numberFormat(doc.pricPer1Value)} บาท</div>
-              ) : (
-                <div style={{ color: "#fff" }}>0</div>
-              )}
+              {doc.wantsTaxInvoice ? <div>{numberFormat(doc.tax.vat)} บาท</div> : null}
+              {whtLines.map((w) => (
+                <div key={`a-${w.label}`}>−{numberFormat(w.amount)} บาท</div>
+              ))}
             </th>
           </tr>
           <tr className="text-center">

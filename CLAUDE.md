@@ -3,6 +3,21 @@
 
 ---
 
+# 🌅 2026-05-30 ค่ำ — CUSTOMER-PROFILE + RATE + TAX (P0→P2) · read FIRST
+
+เดฟ session — owner ส่งหน้า legacy customer-profile ถาม "เอามาครบไหม ปรับเรทในหน้า user เชื่อมวางบิล". ทำจนจบ + push **dave-pacred (= main)**. **Resume:** `git pull origin dave-pacred` + อ่าน **[`docs/research/save-point-2026-05-30-rate-tax-profile.md`](docs/research/save-point-2026-05-30-rate-tax-profile.md)** (canonical · file map · flags · pickup).
+
+**ที่ ship (migrations 0125-0129 applied prod · NEXT FREE 0130):**
+- ✅ **ตัวปรับเรทขายต่อลูกค้า ในหน้า profile** (`/admin/customers/[id]`) — live `tb_rate_custom_*` + history · cost-floor · SVIP · ปุ่มย่อ/ขยาย
+- ✅ **Thai tax engine** `lib/tax/wht.ts` — owner 5 กฎ: transport 1% · service 3% · rental 5% · goods 0% (ใน VAT base · ไม่หัก) · VAT 7% (intl leg 0%) · 45 tests
+- ✅ **Profile ครบ** — 8 stat cards · note · edit นิติ · address CRUD · editSale (แก้ split-brain)
+- ✅ **P2 เชื่อมวางบิล** — dimension-edit auto-price (resolve-rate waterfall · 49 tests · กัน ฿0) + ใบกำกับ/VAT/WHT ตอน payment (opt-in `tax_doc_pref`) + ใบเสร็จ per-line WHT
+- 🟡 flags (money · ดู save-point §FLAGGED): ใบเสร็จปกติยัง flat-1% · promo-discount ไม่ port · VAT-per-leg + 50ทวิ รอบัญชี · write-actions ยังไม่ click-test (เลี่ยง mutate prod)
+
+verified: tsc 0 · lint 0 · build 0 · wht 45 + resolve-rate 49 tests · browser (profile PW+PR124 · edit page render)
+
+---
+
 # 🎯 2026-05-30 — STRATEGY RESET · OWNER FINAL · SINGLE-REPO · read FIRST (supersedes 2-repo + 3-deploy below)
 
 Owner ตัดสินใจ final 2026-05-30: **กลับมาใช้แผนเดิม · repo เดียว (`pacred-web`) ก่อน** ให้รับงาน-ส่งงานได้จริง. `pacred-admin-next` **แขวนไว้** — เอาไว้หลังทำ admin เสร็จ ค่อยแยกไปทำ full-performance version อีกที.

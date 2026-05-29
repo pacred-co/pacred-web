@@ -345,3 +345,20 @@ ORDER BY table_name;
 4. **ตรวจ encoding ที่ port มาก่อนหน้าด้วย** — `/admin/rates/*` เดิม label โกดังสลับ (`1=อี้อู` แต่ legacy `1=กวางโจว`). data เขียนถูก (ส่ง value ผ่าน) แต่ป้ายผิด → แอดมินตั้งเรทผิดโกดังได้.
 
 **Cross-link:** [`docs/audit/customer-profile-rate-audit-2026-05-30.md`](../audit/customer-profile-rate-audit-2026-05-30.md) · `actions/admin/customer-rate.ts` (live+history เขียนคู่ · faithful) · `lib/admin/customer-rate-tables.ts`
+
+---
+
+## [2026-05-30 ค่ำ] ชื่อคอลัมน์โกหกได้ — verify "ความหมาย" ของ field ภาษีจาก data จริง ไม่ใช่ชื่อ
+
+**บริบท:** port การคิด WHT/VAT ของ `tb_forwarder`. P0 ผม map `ftotalprice → goods` (ชื่อเหมือน "ยอดรวมสินค้า"). agent (trust-but-verify) flag ว่าผิด → verify จาก prod data: **`ftotalprice` ≈ fweight × rate ทุกแถว** (id2581: 11663/481kg≈24/kg · id7404: ftotalprice 2446 + ftransportprice 1600 + chnthb 1313 แยกกัน) + legacy printReceiptF label "ค่าขนส่ง" → **`ftotalprice` = ค่าขนส่ง CN→TH ไม่ใช่สินค้า**. ฝากนำเข้า (import) **ไม่มีบรรทัด goods เลย** (ลูกค้าเป็นเจ้าของสินค้าอยู่แล้ว · ฝากแค่ขนส่ง).
+
+ถ้าไม่จับ → juristic หัก WHT **ขาดบนบรรทัดใหญ่สุด** (goods 0% แทน transport 1%) + VAT ผิด. แก้: `ftotalprice + ftransportpricechnthb → transport intl` (WHT 1% · VAT 0%) · `ftransportprice → transport domestic` (VAT 7%) · `goods = 0`.
+
+**บทเรียน:**
+1. **field ที่กระทบเงิน — verify ความหมายจาก 3 ทาง:** (a) magnitude ของ data จริง (rate×qty?) · (b) label บนเอกสาร legacy (ใบเสร็จ/ใบกำกับ) · (c) domain logic (ฝากนำเข้า = บริการขนส่ง ไม่มีสินค้า). อย่าเชื่อชื่อคอลัมน์ (`fTotalPrice` ≠ goods).
+2. **per-flow mapping ต่างกัน:** ฝากสั่ง (tb_header_order) มี goods value จริง · ฝากนำเข้า (tb_forwarder) ไม่มี — engine เดียวกัน แต่ map field คนละชุด.
+3. **e-WHT / floor / min ที่ owner พูด มักเป็น policy ไม่ใช่ formula** — แยก nominal rate (ในโค้ด) ออกจาก remit-time reduction (e-WHT) + display-only floor.
+
+**Agent-orchestration note:** spawn isolated-worktree agents (A profile · B P2) คู่ขนาน — env ของ agent **commit/git/tsc ไม่ได้** (permission policy) → agent เขียนไฟล์ไว้ใน worktree + รายงาน · orchestrator (เรา) `cp` เข้า + verify (tsc/lint/test/build) + commit เอง. **trust-but-verify จับ bug ได้** (B flag ftotalprice ที่ P0 ผมพลาด). อ่าน diff money-path ทุกบรรทัดก่อนรับ.
+
+**Cross-link:** `docs/research/save-point-2026-05-30-rate-tax-profile.md` · `lib/tax/wht.ts` (computeForwarderTax mapping) · `lib/forwarder/resolve-rate.ts`

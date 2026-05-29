@@ -164,9 +164,19 @@ export function AdminForwarderEditForm({
         setError(res.error);
         return;
       }
-      setSuccess(
-        `✓ บันทึกขนาด/น้ำหนักสำเร็จ — CBM = ${res.data?.cbm?.toFixed(5)} m³ — กำลังพากลับหน้ารายละเอียด...`,
-      );
+      {
+        const d = res.data;
+        const basisTh = d?.basis === "cbm" ? "ปริมาตร (CBM)" : "น้ำหนัก (KG)";
+        const priceTxt =
+          d != null
+            ? ` · ค่านำเข้าจีน-ไทย ฿${d.ftotalprice.toLocaleString("th-TH", { minimumFractionDigits: 2 })}` +
+              ` (คิดตาม${basisTh} @ ฿${d.frefrate.toLocaleString("th-TH", { minimumFractionDigits: 2 })})` +
+              ` · ราคารวม ฿${d.grandTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
+            : "";
+        setSuccess(
+          `✓ บันทึกขนาด/น้ำหนักสำเร็จ — CBM = ${d?.cbm?.toFixed(5)} m³${priceTxt} — กำลังพากลับหน้ารายละเอียด...`,
+        );
+      }
       setTimeout(() => {
         router.push(`/admin/forwarders/${fNo}`);
         router.refresh();
