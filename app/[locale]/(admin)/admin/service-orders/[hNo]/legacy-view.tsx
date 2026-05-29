@@ -23,6 +23,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import SpawnForwarderForm from "./spawn-form";
 import { buildSpawnRows } from "./spawn-utils";
+import { MarkPaidTbForm } from "./mark-paid-tb-form";
 
 const STATUS_LABEL: Record<string, string> = {
   "1": "รอดำเนินการ",
@@ -226,6 +227,16 @@ export async function renderLegacyServiceOrderView(hno: string) {
           </a>
         </div>
       ) : null}
+
+      {/* Tier A2 fix · 2026-05-29 — admin "Mark as Paid" against tb_header_order.
+          Closes the revenue leak: existing /service-orders/page.tsx's mark-paid
+          action wrote to the empty rebuilt service_orders table; this form
+          targets the live tb_header_order + tb_wallet + tb_wallet_hs trio. */}
+      <MarkPaidTbForm
+        hno={r.hno}
+        status={status}
+        totalThb={Number(r.htotalpriceuser ?? 0)}
+      />
 
       {/* Wave 21 P0 · Task #106 — shop→forwarder auto-spawn. Mirrors legacy
           `pcs-admin/include/pages/shops/update/update4.php` L88-116. */}
