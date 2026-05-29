@@ -26,6 +26,10 @@ import {
   mapSackInfoSingle,
   type MomoInternalAdminRecord,
 } from "./index";
+import {
+  propagateMomoToForwarders,
+  type PropagationResult,
+} from "./propagate";
 
 export type RunMomoSyncOpts = {
   /** ISO date "YYYY-MM-DD" — required for the date-range pulls (track + closed). */
@@ -63,6 +67,11 @@ export type RunMomoSyncResult = {
   status:              "success" | "partial" | "failed";
   /** The momo_sync_logs row id (if log insert succeeded). */
   syncLogId:           string | null;
+  /** Wave 30.6 #230 — tb_forwarder propagation result. `null` when no
+   *  import_track records were scanned. See lib/integrations/momo-isolated/
+   *  propagate.ts for the safety rules + the env gate
+   *  `MOMO_SYNC_PROPAGATE_STATUS=true`. */
+  propagation:         PropagationResult | null;
 };
 
 /**
@@ -240,6 +249,38 @@ export async function runMomoSync(
     }
   }
 
+  // ── 3.5 Wave 30.6 #230 — match-by-tracking propagation into tb_forwarder ──
+  // After the isolated momo_* writes land, walk the import_track records and
+  // forward-propagate to any tb_forwarder rows that share the same tracking
+  // number. Safety: only fills empty fcabinetnumber + fdatetothai by default;
+  // fstatus advancement is gated behind MOMO_SYNC_PROPAGATE_STATUS=true (off
+  // by default — flipping it fires customer notifications). See
+  // docs/research/momo-status-drift-2026-05-30.md for ภูม's diagnosis.
+  let propagation: PropagationResult | null = null;
+  if (importMapped.length > 0) {
+    try {
+      propagation = await propagateMomoToForwarders(admin, importMapped);
+      if (propagation.errors.length > 0) {
+        for (const e of propagation.errors) {
+          errors.push({
+            scope:   "propagation",
+            error:   "MOMO_PROPAGATION_ROW_FAILED",
+            message: `${e.trackingNo}: ${e.message}`,
+          });
+        }
+      }
+    } catch (err) {
+      // Best-effort — propagation must NEVER fail the sync. The momo_*
+      // writes already landed; propagation is downstream enrichment.
+      console.error("[runMomoSync] propagation threw", err);
+      errors.push({
+        scope:   "propagation",
+        error:   "MOMO_PROPAGATION_THREW",
+        message: err instanceof Error ? err.message : "unknown",
+      });
+    }
+  }
+
   // ── 4. log this sync ──
   const totalScanned = importTrackCount + containerClosedCount + sackInfoCount;
   const mappedCount  = importMapped.filter((r) => r.shipmentStatus != null).length;
@@ -291,5 +332,6 @@ export async function runMomoSync(
     errors,
     status,
     syncLogId:           syncLogRow?.id ?? null,
+    propagation,
   };
 }

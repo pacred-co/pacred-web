@@ -107,6 +107,15 @@ export async function GET(request: Request) {
           auto_commit_succeeded: commit.succeeded,
           auto_commit_failed:   commit.failed,
           auto_commit_skipped:  commit.skipped,
+          // Wave 30.6 #230 — match-by-tracking propagation summary so ภูม can
+          // see at a glance whether MOMO → tb_forwarder writes are landing.
+          propagation_scanned:     sync.propagation?.scanned ?? 0,
+          propagation_matched:     sync.propagation?.matched ?? 0,
+          propagation_updated:     sync.propagation?.updated ?? 0,
+          propagation_cabinet:     sync.propagation?.cabinetWrites ?? 0,
+          propagation_arrived:     sync.propagation?.arrivedWrites ?? 0,
+          propagation_status_advance: sync.propagation?.statusAdvanceWrites ?? 0,
+          propagation_status_skipped_by_gate: sync.propagation?.statusAdvanceSkippedByGate ?? 0,
           sync_log_id:          sync.syncLogId,
         },
         payload: {
@@ -121,6 +130,19 @@ export async function GET(request: Request) {
             errors:              sync.errors,
             status:              sync.status,
             syncLogId:           sync.syncLogId,
+            // Wave 30.6 #230 — propagation summary (see ./propagate.ts).
+            propagation:         sync.propagation
+              ? {
+                  scanned:                  sync.propagation.scanned,
+                  matched:                  sync.propagation.matched,
+                  updated:                  sync.propagation.updated,
+                  cabinetWrites:            sync.propagation.cabinetWrites,
+                  arrivedWrites:            sync.propagation.arrivedWrites,
+                  statusAdvanceWrites:      sync.propagation.statusAdvanceWrites,
+                  statusAdvanceSkippedByGate: sync.propagation.statusAdvanceSkippedByGate,
+                  errorCount:               sync.propagation.errors.length,
+                }
+              : null,
           },
           autoCommit: {
             enabled:   autoCommitEnabled,
