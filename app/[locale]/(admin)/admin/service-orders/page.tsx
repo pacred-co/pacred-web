@@ -371,6 +371,10 @@ export default async function AdminServiceOrdersPage({
 
   // Build a sort href that preserves all other filters but toggles the
   // direction when the same field is clicked again.
+  // Next 16: Server Components CANNOT pass functions to Client Components
+  // (only serialisable values · digest 2513737489 trap). So we pre-compute
+  // the href for EVERY SortField into a serialisable Record + pass that to
+  // the table. The table looks up `sortHrefs[field]` instead of calling a fn.
   function buildSortHref(field: SortField): string {
     const params = new URLSearchParams();
     params.set("sort", field);
@@ -384,6 +388,11 @@ export default async function AdminServiceOrdersPage({
     if (sp.n) params.set("n", sp.n);
     return `/admin/service-orders?${params.toString()}`;
   }
+  const SORT_FIELDS: SortField[] = ["id", "hdate", "hno", "userid", "price", "hstatus", "hdateupdate"];
+  const sortHrefs: Record<SortField, string> = SORT_FIELDS.reduce(
+    (acc, f) => ({ ...acc, [f]: buildSortHref(f) }),
+    {} as Record<SortField, string>,
+  );
 
   // Build an href for status tabs that preserves filters
   function buildTabHref(qVal: string | undefined): string {
@@ -576,7 +585,7 @@ export default async function AdminServiceOrdersPage({
           showUpdateDate={showUpdateDate}
           currentSort={currentSort}
           currentDir={currentDir}
-          buildSortHref={buildSortHref}
+          sortHrefs={sortHrefs}
         />
       </main>
     </>

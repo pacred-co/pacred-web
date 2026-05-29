@@ -148,14 +148,16 @@ export function ServiceOrdersTable({
   showUpdateDate,
   currentSort,
   currentDir,
-  buildSortHref,
+  sortHrefs,
 }: {
   rows: ServiceOrderRow[];
   /** When viewing q=3 or q=4 the legacy uses hDateUpdate instead of hDate. */
   showUpdateDate: boolean;
   currentSort: SortField | undefined;
   currentDir: "asc" | "desc";
-  buildSortHref: (field: SortField) => string;
+  /** Next 16: pass pre-computed hrefs as a serialisable Record, NOT a fn.
+   *  Server Components can't ship functions over the RSC wire. */
+  sortHrefs: Record<SortField, string>;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -225,28 +227,28 @@ export function ServiceOrdersTable({
                     field="id"
                     currentSort={currentSort}
                     currentDir={currentDir}
-                    buildSortHref={buildSortHref}
+                    sortHrefs={sortHrefs}
                   />
                   <SortableTh
                     label={showUpdateDate ? "วันที่อัปเดต" : "วันที่สร้าง"}
                     field={showUpdateDate ? "hdateupdate" : "hdate"}
                     currentSort={currentSort}
                     currentDir={currentDir}
-                    buildSortHref={buildSortHref}
+                    sortHrefs={sortHrefs}
                   />
                   <SortableTh
                     label="เลขที่ออเดอร์"
                     field="hno"
                     currentSort={currentSort}
                     currentDir={currentDir}
-                    buildSortHref={buildSortHref}
+                    sortHrefs={sortHrefs}
                   />
                   <SortableTh
                     label="รหัสสมาชิก"
                     field="userid"
                     currentSort={currentSort}
                     currentDir={currentDir}
-                    buildSortHref={buildSortHref}
+                    sortHrefs={sortHrefs}
                   />
                   <th className="px-2 py-3">ข้อมูลสินค้า</th>
                   <SortableTh
@@ -254,7 +256,7 @@ export function ServiceOrdersTable({
                     field="price"
                     currentSort={currentSort}
                     currentDir={currentDir}
-                    buildSortHref={buildSortHref}
+                    sortHrefs={sortHrefs}
                     align="right"
                   />
                   <SortableTh
@@ -262,7 +264,7 @@ export function ServiceOrdersTable({
                     field="hstatus"
                     currentSort={currentSort}
                     currentDir={currentDir}
-                    buildSortHref={buildSortHref}
+                    sortHrefs={sortHrefs}
                   />
                   <th className="px-2 py-3">อัปเดต</th>
                   <th className="px-2 py-3 text-center">ตัวเลือก</th>
@@ -558,14 +560,14 @@ function SortableTh({
   field,
   currentSort,
   currentDir,
-  buildSortHref,
+  sortHrefs,
   align,
 }: {
   label: string;
   field: SortField;
   currentSort: SortField | undefined;
   currentDir: "asc" | "desc";
-  buildSortHref: (field: SortField) => string;
+  sortHrefs: Record<SortField, string>;
   align?: "right";
 }) {
   const active = currentSort === field;
@@ -574,7 +576,7 @@ function SortableTh({
   return (
     <th className={`px-2 py-3 ${cls}`}>
       <Link
-        href={buildSortHref(field)}
+        href={sortHrefs[field]}
         className={`inline-flex items-center gap-1 hover:text-foreground ${active ? "text-primary-600" : ""}`}
       >
         {label}
