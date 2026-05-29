@@ -29,10 +29,39 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
 import { Link } from "@/i18n/navigation";
+import { redirect } from "@/i18n/navigation";
+import { getLocale } from "next-intl/server";
 
 export const dynamic = "force-dynamic";
 
 type SP = { action?: string; q?: string };
+
+/**
+ * Legacy URL → Pacred QA queue redirect map (Wave 26 · 2026-05-28 ดึก).
+ *
+ * The legacy `pcs-admin/.../QAAndQC.php` menu links to URLs like
+ * `forwarder-action.php?action=delayedPaymentShop&s=1` for the 11 QA queues.
+ * Each Pacred queue lives at its own `/admin/qa/<slug>` page (Wave 10 +
+ * this commit's `order-cancellations`). This map preserves the legacy
+ * URL contract so staff trained on the legacy menu can paste the old
+ * URL and land in the right place.
+ *
+ * The 10 legacy `action=*` names map to the Pacred slugs as follows.
+ * Source: `04-staff-workflow-by-role.md` §2.3.
+ */
+const QA_QUEUE_REDIRECTS: Record<string, string> = {
+  delayedPaymentShop:         "/admin/qa/pay-shop-over-1d",
+  delayedPaymentForwarder:    "/admin/qa/pay-fwd-over-2d",
+  orderCancellationList:      "/admin/qa/order-cancellations",
+  creditOverdueForwarder:     "/admin/qa/credit-overdue",
+  shopS1Over10Min:            "/admin/qa/order-over-10min",
+  chineseShopDelay:           "/admin/qa/chn-shop-over-2d",
+  delayedWarehouseChineseEntry: "/admin/qa/chn-wh-over-2d",
+  thaiDeliveryDelay:          "/admin/qa/transit-overdue",
+  ownerlessProducts:          "/admin/qa/ownerless-goods",
+  shippingPrepOverdue:        "/admin/qa/prepare-overdue",
+  newClientFollowUpDelay:     "/admin/qa/new-client-no-contact",
+};
 
 const ACTION_LABEL: Record<string, string> = {
   Note: "หมายเหตุนำเข้า",
@@ -97,6 +126,16 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
   await requireAdmin(["super", "ops", "accounting", "warehouse"]);
   const sp = await searchParams;
   const action = sp.action ?? "";
+
+  // Wave 26: redirect legacy QA queue URLs to the dedicated /admin/qa/* pages.
+  // Staff trained on the legacy `QAAndQC.php` menu can paste the old URL and
+  // land in the right Pacred queue without 404.
+  const qaRedirect = QA_QUEUE_REDIRECTS[action];
+  if (qaRedirect) {
+    const locale = await getLocale();
+    redirect({ href: qaRedirect, locale });
+  }
+
   const label = ACTION_LABEL[action];
 
   if (!action || !label) {

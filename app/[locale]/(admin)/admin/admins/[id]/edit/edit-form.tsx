@@ -33,6 +33,8 @@ import {
 
 const ROLE_LABELS: Record<AdminRoleEnum, string> = {
   super:                     "Super Admin",
+  // 2026-05-28 ดึก — Wave 26 · `manager` role from migration 0118.
+  manager:                   "Cargo Manager",
   ops:                       "Ops",
   accounting:                "Accounting",
   sales_admin:               "Cargo Sales Manager (#29)",

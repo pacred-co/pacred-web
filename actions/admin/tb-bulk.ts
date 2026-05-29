@@ -22,6 +22,12 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { sendSms } from "@/lib/sms/gateway";
+import { logger, redactPhone } from "@/lib/logger";
+import { sendNotification } from "@/lib/notifications";
+import { notify } from "@/lib/notifications/templates";
+import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
+import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — duplicated from wallet-trans.ts L49 (fourth caller).
@@ -101,9 +107,11 @@ export async function adminBulkApproveWalletHs(
       const legacyAdminId = await resolveLegacyAdminId();
 
       // 1. Fetch all candidate rows in one query (filter to pending only).
+      //    Wave 29: include typeservice + reforder + dateslip so we can fire
+      //    the auto-receipt hook for any forwarder payment in the batch.
       const { data: rows, error: readErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, amount, type, status")
+        .select("id, userid, amount, type, status, typeservice, reforder, dateslip")
         .in("id", ids)
         .eq("status", "1");
       if (readErr) return { ok: false, error: readErr.message };
@@ -111,13 +119,27 @@ export async function adminBulkApproveWalletHs(
         return { ok: false, error: "ไม่พบรายการที่รออนุมัติ (อาจถูกอนุมัติไปแล้ว)" };
       }
 
-      type Row = { id: number; userid: string; amount: number; type: string; status: string };
+      type Row = {
+        id: number;
+        userid: string;
+        amount: number;
+        type: string;
+        status: string;
+        typeservice: string | null;
+        reforder: string | null;
+        dateslip: string | null;
+      };
       const candidates = rows as Row[];
 
       // 2. Per-row: UPDATE tb_wallet_hs status='2' + adjust tb_wallet.wallettotal.
+      //    Wave 29: collect forwarder-payment rows (typeservice='2') per userid
+      //    so we can fire ONE auto-receipt per (userid, dateSlip-day) batch
+      //    after the loop — matches the legacy `grenrateReceiptF` behaviour
+      //    of grouping multiple paid fids onto a single tb_receipt.
       let processed = 0;
       let failed = 0;
       const errors: string[] = [];
+      const receiptBatches = new Map<string, { userid: string; dateSlip: Date; fids: number[] }>();
 
       for (const r of candidates) {
         const amt = Number(r.amount);
@@ -176,6 +198,55 @@ export async function adminBulkApproveWalletHs(
         }
 
         processed++;
+
+        // Wave 29: queue forwarder-payment rows for the auto-receipt
+        // hook (typeservice='2' + reforder = a tb_forwarder.id). Group
+        // by (userid · dateSlip-day) so a batch of fids for the same
+        // customer becomes ONE tb_receipt — matches legacy grenrateReceiptF
+        // which loops over multiple `refOrder` rows under one whID.
+        if (r.typeservice === "2" && r.reforder) {
+          const fid = Number(r.reforder);
+          if (Number.isFinite(fid) && fid > 0) {
+            const dt = r.dateslip ? new Date(r.dateslip) : new Date();
+            const dayKey = `${r.userid}|${dt.toISOString().slice(0, 10)}`;
+            const existing = receiptBatches.get(dayKey);
+            if (existing) {
+              existing.fids.push(fid);
+            } else {
+              receiptBatches.set(dayKey, { userid: r.userid, dateSlip: dt, fids: [fid] });
+            }
+          }
+        }
+      }
+
+      // 3. Wave 29: fire auto-receipt for each (userid · dateSlip-day) batch.
+      //    Best-effort — receipt failures DO NOT roll back the bulk approve
+      //    (the money already moved · receipts can be re-generated manually
+      //    via /admin/accounting/forwarder-invoice/add?mode=manual).
+      const receiptsIssued: Array<{ rid: string; fids: number[] }> = [];
+      for (const batch of receiptBatches.values()) {
+        const r = await autoIssueReceiptOnPaymentLand(admin, {
+          userid:   batch.userid,
+          fids:     batch.fids,
+          dateSlip: batch.dateSlip,
+          source:   "wallet_hs.bulk_approve",
+        });
+        if (r.ok) {
+          receiptsIssued.push({ rid: r.data.rid, fids: batch.fids });
+          revalidatePath(`/admin/accounting/forwarder-invoice/${r.data.receiptId}`);
+          for (const fid of batch.fids) {
+            revalidatePath(`/service-import/${fid}/invoice`);
+          }
+        } else if (!r.alreadyIssued) {
+          logger.warn("tb-bulk", "auto-receipt failed in bulk-approve (non-fatal)", {
+            userid: batch.userid,
+            fids:   batch.fids,
+            error:  r.error,
+          });
+        }
+      }
+      if (receiptsIssued.length > 0) {
+        revalidatePath("/admin/accounting/forwarder-invoice");
       }
 
       // Audit one entry per call (not per row) — payload carries the list.
@@ -184,6 +255,7 @@ export async function adminBulkApproveWalletHs(
         processed,
         failed,
         errors: errors.length > 10 ? errors.slice(0, 10).concat("...") : errors,
+        receipts_issued: receiptsIssued,
       });
 
       revalidatePath("/admin/wallet");
@@ -295,9 +367,11 @@ export async function adminBulkApproveCustomers(
     async ({ adminId }) => {
       const admin = createAdminClient();
 
+      // Pull the contact fields too so the post-approval SMS + sales-rep
+      // notification can be sent without a second round-trip.
       const { data: rows, error: readErr } = await admin
         .from("tb_users")
-        .select("userID, userActive")
+        .select("userID, userActive, userTel, userName, userLastName")
         .in("userID", user_ids)
         .eq("userActive", "0");
       if (readErr) return { ok: false, error: readErr.message };
@@ -305,7 +379,14 @@ export async function adminBulkApproveCustomers(
         return { ok: false, error: "ไม่พบสมาชิกที่รออนุมัติ (อาจถูกอนุมัติไปแล้ว)" };
       }
 
-      const toApprove = rows.map((r) => (r as { userID: string }).userID);
+      type ApproveRow = {
+        userID: string;
+        userTel: string | null;
+        userName: string | null;
+        userLastName: string | null;
+      };
+      const candidates = rows as ApproveRow[];
+      const toApprove = candidates.map((r) => r.userID);
       const nowIso = new Date().toISOString();
 
       const { error: updErr } = await admin
@@ -328,11 +409,56 @@ export async function adminBulkApproveCustomers(
         processed: toApprove.length,
       });
 
+      // E2E loop fix · Agent F1 · 2026-05-29 (Gap #3 part 1):
+      // Send welcome SMS + LINE/email notification to every approved
+      // customer (NOTIFY_BYPASS-respected via sendSms gateway).
+      // Best-effort per row — log on failure but never roll back the bulk
+      // approve. Sales-rep auto-assign for the BULK path is INTENTIONALLY
+      // deferred: doing fair least-loaded round-robin across 200 rows
+      // would require N successive queries (read count → assign → repeat)
+      // which is too slow for an admin bar action. Single-row approve
+      // (`approveCustomer`) does handle auto-assign — admins who want
+      // owner attribution should use single-row approve on new signups.
+      const profileIdMap = await resolveProfileIdsForLegacyUserids(toApprove);
+      let smsSent = 0;
+      let smsFailed = 0;
+      for (const r of candidates) {
+        if (!toApprove.includes(r.userID)) continue;
+        if (r.userTel) {
+          const msg =
+            `ยินดีต้อนรับสู่ Pacred · บัญชี ${r.userID} อนุมัติแล้ว · ` +
+            `เริ่มสั่งสินค้าได้เลย: pacred.co.th`;
+          const sms = await sendSms(r.userTel, msg);
+          if (sms.ok) smsSent++;
+          else {
+            smsFailed++;
+            logger.warn("tb_users.bulk_approve", "welcome SMS failed", {
+              userID: r.userID,
+              phone:  redactPhone(r.userTel),
+              error:  sms.error,
+            });
+          }
+        }
+        const profileId = profileIdMap.get(r.userID);
+        if (profileId) {
+          void sendNotification(profileId, notify.customerApproved({ memberCode: r.userID }));
+        }
+      }
+
       revalidatePath("/admin/customers/pending");
       revalidatePath("/admin/customers");
       revalidatePath("/admin");
 
-      return { ok: true, data: { processed: toApprove.length, failed: 0, errors: [] } };
+      return {
+        ok: true,
+        data: {
+          processed: toApprove.length,
+          failed:    smsFailed,
+          errors:    smsSent > 0 || smsFailed > 0
+            ? [`sms sent: ${smsSent}, failed: ${smsFailed}`]
+            : [],
+        },
+      };
     },
   );
 }

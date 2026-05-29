@@ -38,6 +38,8 @@ import {
 // content as the legacy doc role list (lib/auth/require-admin.ts §"doc role").
 const ROLE_LABELS: Record<AdminRoleEnum, string> = {
   super:                     "Super Admin (CEO/Manager/Tech)",
+  // 2026-05-28 ดึก — Wave 26 · `manager` role from migration 0118.
+  manager:                   "Cargo Manager (อนุมัติ cnt-payment + supervise)",
   ops:                       "Ops (forwarder/บริการคลังจีน)",
   accounting:                "Accounting (กระเป๋าเงิน/หยวน/payouts)",
   sales_admin:               "Cargo Sales Manager (#29)",

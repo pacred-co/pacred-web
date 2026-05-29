@@ -41,10 +41,12 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
+import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import {
   ForwarderCheckTable,
   type ForwarderCheckRow,
@@ -138,6 +140,18 @@ export default async function AdminForwarderCheckPage({
   const { roles } = await requireAdmin(["super", "ops", "accounting"]);
 
   const sp = await searchParams;
+
+  // G6 — default queue filter per role. Page is already implicitly
+  // scoped to fStatus=4 (the bill-prep queue), so no per-role default
+  // applies — the call is here for matrix-uniformity. Future per-role
+  // tweaks (e.g. accounting → ?q=n vs qa → ?q=c) wire through here.
+  const defaultRedirect = buildDefaultLandingRedirect(
+    "/admin/forwarder-check",
+    roles,
+    sp as Record<string, unknown>,
+  );
+  if (defaultRedirect) redirect(defaultRedirect);
+
   const tab: "all" | "c" | "n" = sp.q === "c" ? "c" : sp.q === "n" ? "n" : "all";
   // Money cols visible to the same role union — `super` always sees;
   // others are already gated by requireAdmin above. Adding the explicit

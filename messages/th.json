@@ -2587,8 +2587,11 @@
   },
   "pcsAdminNav": {
     "backToCustomer": "← กลับฝั่งลูกค้า",
+    "showAll": "แสดงเมนูทั้งหมด (super)",
+    "showRole": "แสดงเฉพาะเมนูของฉัน",
     "role": {
       "super": "ผู้ดูแลระบบสูงสุด",
+      "manager": "ผู้จัดการ Cargo",
       "ops": "ฝ่ายปฏิบัติการ Cargo",
       "accounting": "ฝ่ายบัญชี",
       "salesAdmin": "ผู้จัดการฝ่ายขาย Cargo",
@@ -2653,6 +2656,7 @@
     "qa": {
       "title": "QA & QC",
       "titleGroup": "QA & QC",
+      "queuesTitle": "ตรวจสอบคุณภาพ (QA)",
       "payShopOver1d": "รอชำระสินค้าเกิน 1 วัน",
       "payFwdOver2d": "รอชำระค่านำเข้าเกิน 2 วัน",
       "orderCancelled": "รายการยกเลิกออเดอร์",
@@ -2664,7 +2668,20 @@
       "ownerlessGoods": "สินค้าไม่มีเจ้าของ",
       "prepareOverdue": "เตรียมส่งเกินกำหนด",
       "newClientNoContact": "ไม่ติดต่อลูกค้าใหม่เกิน 2 วัน",
-      "transferSalesRep": "ย้ายพนักงานขายที่ดูแลลูกค้า"
+      "transferSalesRep": "ย้ายพนักงานขายที่ดูแลลูกค้า",
+      "queues": {
+        "payShopOver1d": "รอชำระสินค้าเกิน 1 วัน",
+        "payFwdOver2d": "รอชำระค่านำเข้าเกิน 2 วัน",
+        "orderCancellations": "รายการยกเลิกออเดอร์",
+        "creditOverdue": "เครดิตเกินกำหนด",
+        "orderOver10min": "สั่งซื้อรอเกิน 10 นาที",
+        "chnShopOver2d": "สั่งซื้อรอร้านจีนส่งเกิน 2 วัน",
+        "chnWhOver2d": "รอเข้าโกดังจีนเกิน 2 วัน",
+        "transitOverdue": "กำลังมาไทยเกินกำหนด",
+        "ownerlessGoods": "สินค้าไม่มีเจ้าของ",
+        "prepareOverdue": "เตรียมส่งเกินกำหนด",
+        "newClientNoContact": "ไม่ติดต่อลูกค้าใหม่เกิน 2 วัน"
+      }
     },
     "wallet": {
       "title": "กระเป๋าสตางค์",
@@ -2691,7 +2708,8 @@
       "scanFromBox": "สแกนจากหน้ากล่อง",
       "byScanner": "ด้วยเครื่องสแกน",
       "byCamera": "ด้วยกล้อง",
-      "recordIntake": "บันทึกสินค้าเข้าโกดัง"
+      "recordIntake": "บันทึกสินค้าเข้าโกดัง",
+      "recordIntakeFlat": "บันทึกสินค้าเข้าโกดัง"
     },
     "forwarder": {
       "title": "บริการฝากนำเข้า",
@@ -2760,8 +2778,12 @@
     },
     "accounting": {
       "title": "ระบบบัญชี",
+      "hub": "หน้าหลักบัญชี",
       "cargo": "Cargo",
-      "freight": "Freight"
+      "freight": "Freight",
+      "forwarderInvoice": "🆕 ใบแจ้งหนี้ฝากนำเข้า",
+      "closing": "ปิดงบรายเดือน",
+      "periods": "งวดบัญชี + กระทบยอด"
     },
     "manageCustomersAll": {
       "title": "ลูกค้าทั้งหมด"
