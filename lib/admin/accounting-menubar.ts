@@ -49,32 +49,32 @@ function quotationStatuses(typeSlug: string): MenubarItem[] {
 
 // Used for invoice (5 statuses but slightly different labels — รอชำระเงิน / ชำระแล้ว / พ้นกำหนด).
 //
-// Wave 28 fix (2026-05-29 · ภูม flagged): the invoice → ฝากนำเข้า แบบเรทราคา /
-// ฝากนำเข้า แบบรายการ leaves now wire to the REAL Pacred page at
-// /admin/accounting/forwarder-invoice (tb_receipt-backed list + add/print) —
-// not the Wave 23 P0 catch-all stub. The page accepts ?status=pending/paid/
-// cancelled and /add for the create form. Other (type,service) combos still
-// fall through to the catch-all "🚧 Wave 24+" banner pending future ports.
+// ── 2026-05-30 ภูม flagged #7 (ROUTING FIX) ──
+// PREVIOUSLY (Wave 28 · commit db473a5e): the invoice → ฝากนำเข้า แบบเรทราคา /
+// ฝากนำเข้า แบบรายการ leaves routed to /admin/accounting/forwarder-invoice.
+// That destination was BUILT as "ใบแจ้งหนี้" in Wave 28 F3, then PIVOTED in
+// Wave 29 P0 (#206+#208) to "ใบเสร็จ" — because legacy "ใบแจ้งหนี้" workflow
+// was a UI stub with no backend (per docs/research/legacy-accounting-
+// reality-2026-05-30.md). After the pivot the page now renders receipt
+// history (tb_receipt) — so routing the INVOICE menu leaf at it was a
+// label/destination mismatch. ภูม clicked "ใบแจ้งหนี้ → ฝากนำเข้า แบบเรทราคา"
+// and landed on receipt history.
+//
+// FIX: invoice leaves fall through to the catch-all stub (legacy ใบแจ้งหนี้
+// workflow doesn't exist in Pacred yet — bannered as "🚧 Wave 24+").
+// The forwarder-invoice page is now routed FROM `receiptStatuses` below
+// (where it truthfully belongs).
 function invoiceStatuses(typeSlug: string): MenubarItem[] {
   return SERVICES.map((s) => {
-    const isForwarderInvoice =
-      typeSlug === "invoice" && (s.slug === "forwarder-rate" || s.slug === "forwarder-item");
-    const base = isForwarderInvoice
-      ? "/admin/accounting/forwarder-invoice"
-      : `/admin/accounting/cargo/income/${typeSlug}/${s.slug}`;
-    const newPath = isForwarderInvoice ? `${base}/add` : `${base}/new`;
-    // Wave 28 (2026-05-29 · ภูม flagged): add `href` on the parent service
-    // node so clicking "ฝากนำเข้า แบบเรทราคา" directly navigates to the list
-    // (was hover-only — nested 4-level cascade buggy in practice). Children
-    // still expand for the status filter drilldown.
+    const base = `/admin/accounting/cargo/income/${typeSlug}/${s.slug}`;
     return {
       label: s.label,
       href: base,
       children: [
-        { label: "สร้าง",          href: newPath },
-        { label: "รอชำระเงิน",     href: `${base}?status=${isForwarderInvoice ? "pending" : "awaiting_payment"}` },
+        { label: "สร้าง",          href: `${base}/new` },
+        { label: "รอชำระเงิน",     href: `${base}?status=awaiting_payment` },
         { label: "ชำระแล้ว",        href: `${base}?status=paid` },
-        { label: "พ้นกำหนด",       href: `${base}?status=${isForwarderInvoice ? "cancelled" : "expired"}` },
+        { label: "พ้นกำหนด",       href: `${base}?status=expired` },
         { label: "ดูทั้งหมด",       href: base },
       ],
     };
@@ -83,15 +83,32 @@ function invoiceStatuses(typeSlug: string): MenubarItem[] {
 
 // Used for receipt (3 statuses — สร้าง / ชำระแล้ว / ดูทั้งหมด — legacy
 // has no pending state for receipts).
+//
+// ── 2026-05-30 ภูม flagged #7 (ROUTING FIX) ──
+// The "ใบเสร็จรับเงิน → ฝากนำเข้า แบบเรทราคา / ฝากนำเข้า แบบรายการ" leaves
+// now route at the REAL Pacred page /admin/accounting/forwarder-invoice
+// (the tb_receipt-backed list + add/print page · Wave 29 pivot · the only
+// working accounting doc-flow in Pacred today). Was previously routing
+// from the INVOICE leaf which was misleading. Other (type,service) combos
+// still fall through to the catch-all "🚧 Wave 24+" stub.
 function receiptStatuses(typeSlug: string): MenubarItem[] {
-  return SERVICES.map((s) => ({
-    label: s.label,
-    children: [
-      { label: "สร้าง",      href: `/admin/accounting/cargo/income/${typeSlug}/${s.slug}/new` },
-      { label: "ชำระแล้ว",    href: `/admin/accounting/cargo/income/${typeSlug}/${s.slug}?status=paid` },
-      { label: "ดูทั้งหมด",   href: `/admin/accounting/cargo/income/${typeSlug}/${s.slug}` },
-    ],
-  }));
+  return SERVICES.map((s) => {
+    const isForwarderReceipt =
+      typeSlug === "receipt" && (s.slug === "forwarder-rate" || s.slug === "forwarder-item");
+    const base = isForwarderReceipt
+      ? "/admin/accounting/forwarder-invoice"
+      : `/admin/accounting/cargo/income/${typeSlug}/${s.slug}`;
+    const newPath = isForwarderReceipt ? `${base}/add` : `${base}/new`;
+    return {
+      label: s.label,
+      href: base,
+      children: [
+        { label: "สร้าง",      href: newPath },
+        { label: "ชำระแล้ว",    href: `${base}?status=paid` },
+        { label: "ดูทั้งหมด",   href: base },
+      ],
+    };
+  });
 }
 
 // Used for credit-note / debit-note / billing-note (2 statuses — สร้าง / ดูทั้งหมด).
@@ -201,8 +218,12 @@ export const ACCOUNTING_HUB_CARDS = [
     badge: "live",
   },
   {
-    title: "Forwarder Invoice",
-    desc: "ใบกำกับภาษีฝากนำเข้า",
+    // 2026-05-30 ภูม flagged #7: was titled "Forwarder Invoice / ใบกำกับภาษี
+    // ฝากนำเข้า". The destination renders RECEIPT history (Wave 29 pivot —
+    // tb_receipt-backed). Relabelled to "Forwarder Receipt / ประวัติใบเสร็จ
+    // ฝากนำเข้า" so the card truthfully describes the page.
+    title: "Forwarder Receipt",
+    desc: "ประวัติใบเสร็จฝากนำเข้า",
     href: "/admin/accounting/forwarder-invoice",
     badge: "live",
   },

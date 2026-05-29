@@ -772,13 +772,15 @@ export default async function ForwarderInvoicePrintPage({
         <div className="mx-auto max-w-5xl px-4 py-6">
           {/* ── Breadcrumb + actions (hidden on print) ── */}
           <div className="no-print">
+            {/* 2026-05-30 ภูม flagged #7: was "ใบแจ้งหนี้ ฝากนำเข้า" —
+                this page renders ใบเสร็จ (receipt) per Wave 29 pivot. */}
             <nav className="text-sm text-slate-500 mb-3">
               <Link href="/admin" className="hover:text-indigo-700">หน้าแรก</Link>
               <span className="mx-1">/</span>
               <Link href="/admin/accounting" className="hover:text-indigo-700">บัญชี</Link>
               <span className="mx-1">/</span>
               <Link href="/admin/accounting/forwarder-invoice" className="hover:text-indigo-700">
-                ใบแจ้งหนี้ ฝากนำเข้า
+                ใบเสร็จ ฝากนำเข้า
               </Link>
               <span className="mx-1">/</span>
               <span className="text-slate-700">{receipt.rid}</span>
