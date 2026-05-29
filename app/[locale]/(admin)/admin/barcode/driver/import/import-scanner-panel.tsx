@@ -1,34 +1,45 @@
 "use client";
 
 /**
- * <ImportScannerPanel> — Wave 17 P1-7
+ * <ImportScannerPanel> — Wave 29 #213 (rewritten from Wave 17 P1-7)
  *
- * Faithful-port of `barcode-d-import.php` L80-256 with the legacy AJAX
- * write wired to `adminBarcodeImportScan` (the server action that ports
+ * Faithful-port of `barcode-d-import.php` L80-256 with the legacy AJAX write
+ * wired to `adminBarcodeImportScan` (the server action that ports
  * `include/pages/barcode-import/index.php`).
  *
- * Behaviour preserved from legacy:
- *   1. fPallet (location) input — sticky via cookie `set_fPallet`
- *      (100-min TTL, exactly matches legacy 100*60*1000ms).
- *   2. Auto-set fPallet when the scanned code matches one of the 46
- *      hardcoded LOCATION_CODES — input clears + plays sSave sound +
- *      cookie refreshes. Does NOT fire the writer.
- *   3. Validation: fPallet required first, then keysearch required
- *      (legacy SweetAlert prompts → inline `setError`).
- *   4. On scan submit: call server action; render the result panel
- *      (green/orange/red Tailwind card) inside `#result`; play
- *      sSave (matched) or notFoundSave (orphan-saved) sound; clear
- *      input + refocus so the operator can keep scanning.
+ * **Workflow stolen from legacy · UI = Pacred Tailwind mobile-first design**
+ * per AGENTS.md §0a + §6. Warehouse staff use this DAILY on mobile — every
+ * tap target ≥ 44px, text ≥ 16px, scanner input thumb-reachable, sticky
+ * pallet card prominently visible.
  *
- * NOT a 1:1 markup port — per AGENTS.md §0a we keep the WORKFLOW but
- * use Pacred design (Tailwind, clean card chrome). The legacy markup
- * is left as a thin Bootstrap-4 shell for the top form area to match
- * the existing pcs-legacy CSS scaffolding, and the result card is
- * rendered with pure Tailwind for clarity.
+ * Behaviour preserved from legacy (unchanged from Wave 17):
+ *   1. fPallet (location) input — sticky via cookie `set_fPallet` (100-min TTL,
+ *      exactly matches legacy 100*60*1000ms).
+ *   2. Auto-set fPallet when the scanned code matches one of the 46 hardcoded
+ *      LOCATION_CODES — input clears + plays sSave sound + cookie refreshes.
+ *      Does NOT fire the writer.
+ *   3. Validation: fPallet required first, then keysearch required (legacy
+ *      SweetAlert prompts → inline `setError`).
+ *   4. On scan submit: call server action; render the result panel
+ *      (green/orange/red Tailwind card) inside the result area; play
+ *      sSave (matched) or notFoundSave (orphan-saved) sound; clear input +
+ *      refocus so the operator can keep scanning.
+ *
+ * Wave 29 #213 changes (UI only, zero workflow change):
+ *   - Removed all Bootstrap-4 markup (col-md-* · badge badge-pill · form-control
+ *     br-30 · btn btn-main r0 · feather-search SVG · lds-ring 4-div spinner)
+ *   - Replaced with mobile-first Tailwind: stacked layout · `max-w-md mx-auto`
+ *   - Prominent sticky pallet card (green pill when set · amber alert when not)
+ *   - Large scanner input (h-14 · text-lg · rounded-2xl) with brand-red focus
+ *   - 56px primary submit button with lucide-react <Search /> icon
+ *   - lucide-react <Loader2 /> spinner replaces 4-div lds-ring
+ *   - History link + help modal trigger styled as clean pill chips
+ *   - Inline help-modal trigger button now properly accessible
  */
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Link } from "@/i18n/navigation";
+import { Search, Loader2, MapPin, Info, History, AlertTriangle } from "lucide-react";
 import {
   adminBarcodeImportScan,
   type BarcodeImportScanOk,
@@ -321,147 +332,135 @@ export function ImportScannerPanel() {
   }
 
   return (
-    <div className="row">
-      {/* Top bar — barcode-d-import.php L84-104, kept in legacy Bootstrap
-          for visual parity with the rest of the admin chrome. */}
-      <div className="col-md-6 offset-md-3 filtered-list-search barcode pl-2 pr-2">
-        <div
-          className="my-lg-0 justify-content-center im"
-          id="form"
+    <div className="mx-auto w-full max-w-md space-y-4">
+      {/* Quick-action chips: history link + help modal trigger.
+          min-h-[44px] guarantees finger-tap target per AGENTS.md §6. */}
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <Link
+          href="/admin/forwarder-import-warehouse"
+          className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 text-sky-700 hover:bg-sky-100 active:bg-sky-200 px-4 py-2.5 text-sm font-semibold transition-colors min-h-[44px]"
         >
-          <div className="row">
-            <div className="col-12 pb-1">
-              <Link
-                href="/admin/forwarder-import-warehouse"
-                className=""
-              >
-                <span className="badge badge-info badge-pill">
-                  ไปยังประวัติรายการเข้าโกดัง
-                </span>
-              </Link>
-            </div>
-            <div className="col-7">
-              <div className="input-group mb-2">
-                <button
-                  type="button"
-                  onClick={() => recomDialogRef.current?.showModal()}
-                  className="badge badge-success badge-pill cursor-pointer border-0"
-                >
-                  คำอธิบายระบบ
-                </button>
-              </div>
-            </div>
-            <div className="col-5">
-              <div className="input-group mb-2">
-                <div className="w-100">
-                  location :{" "}
-                  <span className="result-fPallet">
-                    {fPallet || "ยังไม่ระบุ"}
-                  </span>
-                  <input
-                    type="hidden"
-                    name="fPallet"
-                    id="fPallet"
-                    value={fPallet}
-                    readOnly
-                    className="w-100 form-control2 product-search br-30"
-                    style={{ padding: "5px 16px" }}
-                    placeholder="location"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Scan input — L105-110 */}
-          <div className="input-group">
-            <div className="w-100">
-              <input
-                ref={inputRef}
-                type="text"
-                id="search-tracking"
-                name="tracking"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyUp={onKeyUp}
-                autoComplete="off"
-                disabled={isPending}
-                className="w-100 form-control product-search br-30"
-                placeholder="ค้นหาหมายเลข Tracking..."
-              />
-              <button
-                className="btn btn-main r0"
-                id="send"
-                type="button"
-                disabled={isPending}
-                onClick={submit}
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="feather feather-search"
-                >
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          {error && (
-            <div
-              className="mt-3 rounded-xl border-2 border-red-300 bg-red-50 text-red-900 p-4 text-sm"
-              role="alert"
-            >
-              <div className="text-center font-semibold">ผิดพลาด</div>
-              <div className="text-center mt-1">{error}</div>
-            </div>
-          )}
-        </div>
+          <History className="h-4 w-4" aria-hidden="true" />
+          ประวัติการเข้าโกดัง
+        </Link>
+        <button
+          type="button"
+          onClick={() => recomDialogRef.current?.showModal()}
+          className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 active:bg-emerald-200 px-4 py-2.5 text-sm font-semibold transition-colors min-h-[44px]"
+        >
+          <Info className="h-4 w-4" aria-hidden="true" />
+          คำอธิบายระบบ
+        </button>
       </div>
 
-      {/* Result panel — L113-121 */}
-      <div className="pt-2 col-md-6 offset-md-3">
-        <div className="resultPCS">
-          {isPending && (
-            <div className="text-center">
-              <div className="lds-ring">
-                <div></div>
-                <div></div>
-                <div></div>
-                <div></div>
+      {/* Sticky pallet card — prominent at all times */}
+      {fPallet ? (
+        <div
+          className="flex items-center justify-between gap-3 rounded-xl border-2 border-emerald-300 bg-emerald-50 px-4 py-3"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <MapPin className="h-5 w-5 text-emerald-700 shrink-0" aria-hidden="true" />
+            <div className="min-w-0">
+              <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                LOCATION
+              </div>
+              <div className="text-lg font-bold text-emerald-900 truncate">
+                {fPallet}
               </div>
             </div>
-          )}
-
-          {!isPending && result && (
-            <div id="result" className="pt-2">
-              <ResultCard data={result} />
+          </div>
+          <div className="text-xs text-emerald-700 text-right">
+            ยิง location ใหม่
+            <br />
+            เพื่อเปลี่ยน
+          </div>
+        </div>
+      ) : (
+        <div
+          className="flex items-center gap-3 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3"
+          role="alert"
+        >
+          <AlertTriangle className="h-5 w-5 text-amber-700 shrink-0" aria-hidden="true" />
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-amber-900">
+              กรุณาตั้ง location ก่อนสแกน
             </div>
-          )}
+            <div className="mt-0.5 text-xs text-amber-800">
+              ยิงรหัสตำแหน่ง เช่น A1, B2, M1-1 ลงในช่องด้านล่าง
+            </div>
+          </div>
+        </div>
+      )}
 
-          {/* Hidden audio element — swapped src per call. Legacy used
-              an inline <audio autoplay> rebuilt every scan; we keep one
-              instance + change .src so we don't pile DOM nodes. */}
-          <audio
-            ref={audioRef}
-            preload="none"
-            className="hidden"
-            aria-hidden="true"
+      {/* Scanner input + submit button */}
+      <div className="flex items-stretch gap-2">
+        <input
+          ref={inputRef}
+          type="text"
+          id="search-tracking"
+          name="tracking"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyUp={onKeyUp}
+          autoComplete="off"
+          disabled={isPending}
+          inputMode="text"
+          className="flex-1 h-14 px-4 text-lg rounded-2xl border-2 border-slate-300 bg-white focus:border-primary-600 focus:ring-2 focus:ring-primary-100 focus:outline-none disabled:bg-slate-50 disabled:cursor-not-allowed placeholder:text-slate-400"
+          placeholder="ค้นหาหมายเลข Tracking..."
+          aria-label="หมายเลข Tracking หรือรหัส location"
+        />
+        <button
+          type="button"
+          id="send"
+          disabled={isPending}
+          onClick={submit}
+          aria-label="บันทึก"
+          className="h-14 w-14 shrink-0 flex items-center justify-center rounded-2xl bg-primary-600 hover:bg-primary-700 active:scale-95 text-white shadow-lg transition disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
+        >
+          <Search className="h-6 w-6" aria-hidden="true" />
+        </button>
+      </div>
+
+      {/* Inline error banner (red) — legacy L243-245 + L248 SweetAlert errors */}
+      {error && (
+        <div
+          className="rounded-xl border-2 border-red-300 bg-red-50 text-red-900 p-4 text-sm"
+          role="alert"
+        >
+          <div className="text-center font-semibold">ผิดพลาด</div>
+          <div className="text-center mt-1">{error}</div>
+        </div>
+      )}
+
+      {/* Loading spinner — Pacred Loader2 replaces legacy lds-ring 4-div */}
+      {isPending && (
+        <div className="flex justify-center py-6">
+          <Loader2
+            className="h-12 w-12 animate-spin text-primary-600"
+            aria-label="กำลังบันทึก"
           />
         </div>
-      </div>
+      )}
 
-      {/* Wave 22 — "คำอธิบายระบบ" native <dialog> (moved out of page.tsx
-          when Bootstrap data-toggle stopped working after Wave 21
-          dropped jQuery). Help content unchanged from barcode-d-import.php L135-161. */}
+      {/* Result card (already Pacred Tailwind ✅ from Wave 17) */}
+      {!isPending && result && <ResultCard data={result} />}
+
+      {/* Hidden audio element — swapped src per call. Legacy used an inline
+          <audio autoplay> rebuilt every scan; we keep one instance + change
+          .src so we don't pile DOM nodes. */}
+      <audio
+        ref={audioRef}
+        preload="none"
+        className="hidden"
+        aria-hidden="true"
+      />
+
+      {/* "คำอธิบายระบบ" native <dialog> via PacredDialog. Help content
+          unchanged from barcode-d-import.php L135-161 (the 8-rule guide).
+          Wave 29 #213: nested <ol> uses Tailwind list-decimal/list-[lower-alpha]
+          + space-y for clean typography (replaces legacy CSS counter-reset). */}
       <PacredDialog
         dialogRef={recomDialogRef}
         title="การใช้งานระบบบันทึกรายการเข้าโกดัง"
