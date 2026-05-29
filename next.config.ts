@@ -58,7 +58,11 @@ const SECURITY_HEADERS = [
       // serves the Google Translate widget's font assets.
       "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com",
       "connect-src 'self' https: wss:",
-      "frame-src 'self' https://www.google.com https://hcaptcha.com https://*.hcaptcha.com https://www.youtube.com https://www.youtube-nocookie.com",
+      // *.supabase.co — admin doc review (juristic หนังสือรับรอง / ภพ20 /
+      // บัตรประชาชน) embeds the PDF signed URLs from Supabase Storage in an
+      // <iframe>. Without this, frame-src blocked the PDFs ("This content is
+      // blocked") — only image docs rendered (img-src already allows https:).
+      "frame-src 'self' https://www.google.com https://hcaptcha.com https://*.hcaptcha.com https://www.youtube.com https://www.youtube-nocookie.com https://*.supabase.co",
       "frame-ancestors 'self'",
       "base-uri 'self'",
       "form-action 'self'",
