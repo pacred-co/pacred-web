@@ -4,7 +4,7 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ForwarderInteractivity } from "./forwarder-interactivity";
 import { type ForwarderRow } from "./forwarder-row-view";
-import { ServiceImportAddForm } from "./add/service-import-add-form";
+import { AddForwarderModal } from "./add/add-forwarder-modal";
 
 /**
  * Customer ฝากนำเข้าสินค้า (import / forwarder) screen — a FAITHFUL
@@ -474,20 +474,10 @@ export default async function ServiceImportPage({
                 </Link>
               </div>
 
-              {/* Add-forwarder CTA — `data-toggle="modal"` + `data-target`
-                  are REQUIRED for the Bootstrap-4 vendor JS to open the
-                  legacy #add-forwarder modal. DO NOT REMOVE. */}
-              <a
-                href="#add-forwarder"
-                data-toggle="modal"
-                data-target="#add-forwarder"
-                className="inline-flex items-center gap-2 self-stretch md:self-auto justify-center md:justify-start rounded-full bg-emerald-600 text-white pl-1.5 pr-4 py-1.5 text-sm font-bold shadow-md shadow-emerald-600/25 hover:bg-emerald-700 active:scale-[0.98] transition-all"
-              >
-                <span className="inline-flex w-7 h-7 items-center justify-center rounded-full bg-white text-emerald-600 font-black text-lg leading-none shadow-sm" aria-hidden>
-                  +
-                </span>
-                <span className="lang-add-forwarder">เพิ่มรายการนำเข้า</span>
-              </a>
+              {/* Add-forwarder CTA — Tailwind modal (no Bootstrap JS). Opens
+                  the shared add form over the list; address options resolved
+                  server-side above and handed down as props. */}
+              <AddForwarderModal mainAddr={mainAddress} others={otherAddresses} />
             </div>
 
             {/* ── Status filter chips + content ── */}
@@ -496,28 +486,52 @@ export default async function ServiceImportPage({
                 สถานะรายการ
               </h4>
               <div className="flex flex-wrap gap-2">
-                {statusChips.map((chip) => (
-                  <Link
-                    key={chip.href}
-                    href={chip.href}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-surface-alt/60 hover:bg-surface-alt px-3 py-1.5 text-xs md:text-sm font-medium text-foreground border border-border transition-colors"
-                  >
-                    <span>{chip.label}</span>
-                    {chip.count > 0 && (
-                      <span className={`inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${chip.chipColor}`}>
-                        {chip.count}
-                      </span>
-                    )}
-                  </Link>
-                ))}
+                {statusChips.map((chip) => {
+                  const isActive =
+                    chip.href === "/service-import"
+                      ? q === ""
+                      : chip.href === `/service-import?q=${q}`;
+                  return (
+                    <Link
+                      key={chip.href}
+                      href={chip.href}
+                      aria-current={isActive ? "page" : undefined}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs md:text-sm font-medium border transition-colors ${
+                        isActive
+                          ? "bg-red-600 text-white border-red-600 shadow-sm"
+                          : "bg-surface-alt/60 hover:bg-surface-alt text-foreground border-border"
+                      }`}
+                    >
+                      <span>{chip.label}</span>
+                      {chip.count > 0 && (
+                        <span
+                          className={`inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${
+                            isActive ? "bg-white/25 text-white" : chip.chipColor
+                          }`}
+                        >
+                          {chip.count}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
                 {creditUser === 1 && (
                   <Link
                     href="/service-import?q=c"
-                    className="inline-flex items-center gap-1.5 rounded-full bg-surface-alt/60 hover:bg-surface-alt px-3 py-1.5 text-xs md:text-sm font-medium text-foreground border border-border transition-colors"
+                    aria-current={q === "c" ? "page" : undefined}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs md:text-sm font-medium border transition-colors ${
+                      q === "c"
+                        ? "bg-red-600 text-white border-red-600 shadow-sm"
+                        : "bg-surface-alt/60 hover:bg-surface-alt text-foreground border-border"
+                    }`}
                   >
                     <span>เครดิตสินค้า</span>
                     {(fCreditCount ?? 0) > 0 && (
-                      <span className="inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 bg-red-100 text-red-700">
+                      <span
+                        className={`inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${
+                          q === "c" ? "bg-white/25 text-white" : "bg-red-100 text-red-700"
+                        }`}
+                      >
                         {fCreditCount}
                       </span>
                     )}
@@ -557,384 +571,6 @@ export default async function ServiceImportPage({
         )}
       </div>
 
-      {/* ── #add-forwarder modal — forwarder.php L881-1039 ──
-          Transcribed 1:1. The Bootstrap-4 data-toggle open/close works
-          (vendor JS staged globally by the (protected) layout). The
-          jQuery extras — dropify · the getShipBy()/checkPCSMaoMao()
-          AJAX that fills #selectShipBy · the create POST — are NOT
-          wired here (see file header §1 + §5). */}
-      <div
-        id="add-forwarder"
-        className="modal fade in"
-        tabIndex={-1}
-        role="dialog"
-        aria-hidden="true"
-      >
-        <div className="modal-dialog">
-          <div className="modal-content header-from">
-            <div className="modal-header">
-              <h4 className="modal-title">สร้างออเดอร์ฝากนำเข้าสินค้า</h4>
-              <div className="float-right text-right">
-                <a
-                  href="/china-address"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="p-05 text-white badge badge-sale badge-pill font-1rem"
-                >
-                  ที่อยู่โกดังจีน
-                </a>
-                <a
-                  href="/services/import-china"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="p-05 text-white badge badge-warning badge-pill font-1rem"
-                >
-                  เช็คเรทนำเข้า
-                </a>
-              </div>
-              <button
-                type="button"
-                className="close"
-                data-dismiss="modal"
-                aria-hidden="true"
-              >
-                <i className="la la-close"> </i>
-              </button>
-            </div>
-            <div className="modal-body header-from">
-              {/* The legacy `save` POST (forwarder.php L9-160) INSERTs
-                  tb_forwarder. Wired via the shared <ServiceImportAddForm>
-                  Client Component → createLegacyForwarder Server Action.
-                  Image upload (`fCover`, legacy L102-144) is NOT yet ported
-                  — admin attaches photos in the back-office. */}
-              <ServiceImportAddForm>
-                <div className="form-group mb-0">
-                  <div className="ele-forwarder-detail">
-                    <h5 className="text-center">
-                      <b>ข้อมูลการฝากนำเข้า</b>
-                    </h5>
-                    <div className="mb-05">
-                      <label className="form-control-label" htmlFor="fTrackingCHN">
-                        เลข Tracking
-                      </label>
-                      <input
-                        className="form-control form-control-lg"
-                        name="fTrackingCHN"
-                        id="fTrackingCHN"
-                        type="text"
-                        placeholder="เลข Tracking"
-                        maxLength={50}
-                        required
-                      />
-                      <div id="message"></div>
-                    </div>
-                    <div className="row pr-1 pl-1 mb-05">
-                      <div className="col-md-6 p-05">
-                        <div className="">
-                          <label className="form-control-label" htmlFor="fDetail">
-                            รายละเอียด
-                          </label>
-                          <textarea
-                            className="form-control"
-                            rows={5}
-                            name="fDetail"
-                            placeholder="รายละเอียด"
-                            maxLength={500}
-                            required
-                          ></textarea>
-                        </div>
-                      </div>
-                      <div className="col-md-6 p-05">
-                        <div className="">
-                          <label className="form-control-label" htmlFor="fCover">
-                            รูปสินค้า (ไม่บังคับ)
-                          </label>
-                          <div className="fallback">
-                            <input
-                              type="file"
-                              name="fCover"
-                              className="dropify"
-                              accept="image/*"
-                              data-max-file-size="9M"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mb-1">
-                      <label className="form-control-label" htmlFor="fAmount">
-                        จำนวนกล่อง
-                      </label>
-                      <input
-                        className="form-control form-control-lg"
-                        name="fAmount"
-                        type="number"
-                        min="1"
-                        max="10000"
-                        step="1"
-                        pattern="\d*"
-                        defaultValue="1"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-2 ele-forwarder-china-thai">
-                    <h5 className="text-center">
-                      <b>
-                        การขนส่งจากจีนมาไทย{" "}
-                        <i className="flag-icon flag-icon-ch"></i>
-                      </b>
-                    </h5>
-                    <div className="row">
-                      <div className="col-md-12">
-                        <label
-                          className="form-control-label mb-0"
-                          htmlFor="hTransportType"
-                        >
-                          รูปแบบการขนส่งจีน-ไทย
-                        </label>
-                        <div className="row pr-1 pl-1">
-                          <div className="col-md-6 p-05">
-                            <fieldset
-                              className="border-checkbox-transportType border-checkbox cursor-pointer"
-                              data-for="transportType-ek"
-                            >
-                              <input
-                                type="radio"
-                                className="radio-custom radio-custom-transportType cursor-pointer"
-                                name="hTransportType"
-                                value="1"
-                                id="transportType-ek"
-                              />
-                              <label
-                                htmlFor="transportType-ek"
-                                className="cursor-pointer radio-custom-label"
-                              >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  className="img-fluid"
-                                  src="/legacy/pcs/theme/transport-car-v3.png"
-                                  style={{ maxHeight: "35px" }}
-                                  alt=""
-                                />
-                                รถ (EK) 5-7 วัน
-                              </label>
-                            </fieldset>
-                          </div>
-                          <div className="col-md-6 p-05">
-                            <fieldset
-                              className="border-checkbox-transportType border-checkbox cursor-pointer"
-                              data-for="transportType-sea"
-                            >
-                              <input
-                                type="radio"
-                                className="radio-custom radio-custom-transportType cursor-pointer"
-                                name="hTransportType"
-                                value="2"
-                                id="transportType-sea"
-                              />
-                              <label
-                                htmlFor="transportType-sea"
-                                className="cursor-pointer radio-custom-label"
-                              >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  className="img-fluid"
-                                  src="/legacy/pcs/theme/transport-sea-v3.png"
-                                  style={{ maxHeight: "35px" }}
-                                  alt=""
-                                />
-                                เรือ (SEA) 12-16 วัน
-                              </label>
-                            </fieldset>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-md-12">
-                        <label
-                          className="pt-05 form-control-label mb-0"
-                          htmlFor="hTransportType"
-                        >
-                          การตีลังไม้สินค้า
-                        </label>
-                        <div className="row pr-1 pl-1">
-                          <div className="col-md-6 p-05">
-                            <fieldset
-                              className="border-checkbox-crate border-checkbox cursor-pointer active box-shadow"
-                              data-for="crate-1"
-                            >
-                              <input
-                                type="radio"
-                                className="radio-custom radio-custom-crate cursor-pointer"
-                                name="crate"
-                                value="2"
-                                id="crate-1"
-                                defaultChecked
-                              />
-                              <label
-                                htmlFor="crate-1"
-                                className="cursor-pointer radio-custom-label"
-                              >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  className="img-fluid"
-                                  src="/legacy/pcs/theme/uncrate-v3.png"
-                                  style={{ maxHeight: "35px" }}
-                                  alt=""
-                                />
-                                ไม่ตีลังไม้
-                              </label>
-                            </fieldset>
-                          </div>
-                          <div className="col-md-6 p-05">
-                            <fieldset
-                              className="border-checkbox-crate border-checkbox cursor-pointer"
-                              data-for="crate-2"
-                            >
-                              <input
-                                type="radio"
-                                className="radio-custom radio-custom-crate cursor-pointer"
-                                name="crate"
-                                value="1"
-                                id="crate-2"
-                              />
-                              <label
-                                htmlFor="crate-2"
-                                className="cursor-pointer radio-custom-label"
-                              >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  className="img-fluid"
-                                  src="/legacy/pcs/theme/crate-v3.png"
-                                  style={{ maxHeight: "35px" }}
-                                  alt=""
-                                />
-                                ตีลังไม้ (มีค่าบริการ)
-                              </label>
-                            </fieldset>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-2 ele-forwarder-thai">
-                    <h5 className="text-center mb-05">
-                      <b>
-                        ที่อยู่ในการจัดส่งในไทย{" "}
-                        <i className="flag-icon flag-icon-th"></i>
-                      </b>{" "}
-                      {/* Legacy linked to pcscargo.co.th/member/address/add/
-                          — rewritten to the internal Pacred /addresses
-                          page so the customer stays inside Pacred. */}
-                      <Link
-                        href="/addresses"
-                        target="_blank"
-                        className="text-info font-0_85rem"
-                      >
-                        เพิ่มที่อยู่ใหม่ <i className="fa fa-plus"></i>
-                      </Link>
-                    </h5>
-                    <select className="form-control" name="addressID" id="addressID" required>
-                      <option value="">กรุณาเลือกที่อยู่ในการจัดส่ง</option>
-                      {mainAddress && (
-                        <option value={mainAddress.addressid}>
-                          [ที่อยู่หลัก] {mainAddress.full}
-                        </option>
-                      )}
-                      {mainAddress &&
-                        otherAddresses.map((a) => (
-                          <option key={a.addressid} value={a.addressid}>
-                            {a.full}
-                          </option>
-                        ))}
-                      <option value="PCS">รับเองหน้าโกดัง Pacred กทม</option>
-                    </select>
-                    <div className="shipBy-select pt-1 mb-05">
-                      <div id="selectShipBy"></div>
-                    </div>
-                    <div className="text-danger font-0_85rem">
-                      หมายเหตุ : หากพื้นที่นอกเขตขนส่งของ Pacred ทางบริษัทจะเก็บเงินปลายทางเท่านั้น ยกเว้น แฟลช เอ็กซ์เพรส และ เจแอนด์ที เอ็กซ์เพรส ที่เก็บต้นทางเท่านั้น{" "}
-                      <a
-                        href="/services/import-china"
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        (เช็คพื้นที่ได้ที่นี่)
-                      </a>
-                    </div>
-                  </div>
-
-                  <div className="mt-2 ele-forwarder-pro">
-                    <h5 className="text-center text-danger mb-05">
-                      <b>โปรโมชันสำหรับคุณ</b>
-                    </h5>
-                    <div className="row">
-                      <div className="col-12 col-md-6 maomao">
-                        <fieldset className="border-main12-de cursor-pointer">
-                          <div className="">
-                            <input
-                              type="checkbox"
-                              className="checkboxes-color"
-                              style={{ display: "block" }}
-                              name="pro"
-                              id="input-12"
-                              value="f"
-                            />
-                          </div>
-                          <label htmlFor="input-12" className="text-center">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              className="img-fluid cursor-pointer card-promotion"
-                              src="/legacy/pcs/theme/free50-3.png"
-                              alt=""
-                            />
-                            <br />
-                            <a
-                              href="/services/import-china"
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              <span className="text-info">
-                                ดูพื้นที่จัดส่งและรายละเอียด
-                              </span>
-                            </a>
-                          </label>
-                        </fieldset>
-                      </div>
-                    </div>
-                    <div className="" style={{}}>
-                      <span className="text-danger font-0_85rem">
-                        *หากสินค้ามีขนาดเล็ก บริษัทแนะนำให้เลือกขนส่ง Flash Express (เริ่มต้น 30 บ.)
-                        <br />
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="mt-2 modal-footer">
-                    <button
-                      type="reset"
-                      className="btn btn-outline-secondary round waves-effect"
-                      data-dismiss="modal"
-                    >
-                      ยกเลิก
-                    </button>
-                    <button
-                      type="submit"
-                      className="btn btn-color-main round waves-effect"
-                      name="save"
-                      id="btnSubmit"
-                    >
-                      สร้างออเดอร์
-                    </button>
-                  </div>
-                </div>
-              </ServiceImportAddForm>
-            </div>
-          </div>
-        </div>
-      </div>
       <div id="list-forwarder-data"></div>
 
       {/* ── #pro-maomao modal — forwarder.php L1041-1058 ──

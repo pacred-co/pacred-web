@@ -185,8 +185,16 @@ export function ForwarderInteractivity({
               `<table id="myTable">` is gone; rows are stacked cards. */}
       <form id="frm-example2" className="space-y-3">
         {enrichedRows.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border bg-white dark:bg-surface px-6 py-10 text-center text-muted">
-            <i className="text-sm">ไม่พบรายการ</i>
+          <div className="rounded-2xl border border-border bg-white p-8 text-center shadow-sm dark:bg-surface md:p-12">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/images/Iconistpack/transport%20system.png"
+              alt=""
+              className="mx-auto mb-4 h-40 w-40 object-contain opacity-70 md:h-52 md:w-52"
+            />
+            <h3 className="text-[15px] font-bold text-foreground md:text-[17px]">
+              ไม่พบรายการ
+            </h3>
           </div>
         ) : (
           enrichedRows.map((row) => (

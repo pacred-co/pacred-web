@@ -525,8 +525,17 @@ export default async function ForwarderTablePage({
       {/* Page content — Tailwind rebuild matching /service-import page.tsx.
           Wrapped in `.pcs-content-pad` so the (protected) layout's desktop
           padding (sidebar clearance + FloatingTabs clearance) kicks in. */}
-      <div className="pcs-content-pad w-full px-3 md:px-6 pt-3 pb-[200px] md:py-6 md:pb-24">
-        <section className="bg-white dark:bg-surface border border-border rounded-2xl shadow-sm overflow-hidden">
+      <div className="pcs-content-pad w-full px-3 md:px-6 py-3 md:py-6">
+        {/* The whole card is a bounded flex column: the header (tabs +
+            unified search/status frame) stays pinned and ONLY the table
+            body scrolls inside it — so ตัวค้นหา + สถานะ + หัวตาราง ล็อคไว้
+            ไม่ขยับ (ปอน 2026-05-29: "ทำให้เป็นกรอบเดียวกัน … ล็อคไว้เลย
+            ไม่ให้ขยับ"). max-h reserves room for the top chrome (NavBar 56px
+            + SearchBar) and the bottom pay-bar / FloatingTabs; svh tracks the
+            mobile browser UI. Tuned in-browser §0c. */}
+        <section className="flex max-h-[calc(100svh-18.5rem)] flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-sm dark:bg-surface md:max-h-[calc(100svh-15.5rem)]">
+          {/* ═══ LOCKED HEADER — stays put while the table body scrolls ═══ */}
+          <div className="flex shrink-0 flex-col">
           {/* ── Tab strip — legacy `nav nav-tabs nav-underline` markup
               (forwarder-table.php L734-746): big H3 headings, active =
               red underline. ปอน 2026-05-28 sent legacy HTML to copy. */}
@@ -535,7 +544,7 @@ export default async function ForwarderTablePage({
               <li>
                 <Link
                   href="/service-import"
-                  className="shrink-0 inline-flex items-end gap-2 px-4 pb-2.5 text-lg md:text-2xl font-medium text-muted hover:text-foreground border-b-[3px] border-transparent hover:border-border whitespace-nowrap transition-colors"
+                  className="shrink-0 inline-flex items-end gap-2 px-4 pb-2.5 text-base md:text-2xl font-medium text-muted hover:text-foreground border-b-[3px] border-transparent hover:border-border whitespace-nowrap transition-colors"
                 >
                   <span aria-hidden className="ft-box" />
                   ฝากนำเข้าสินค้าแบบเต็ม
@@ -544,7 +553,7 @@ export default async function ForwarderTablePage({
               <li>
                 <Link
                   href="/service-import/table"
-                  className="shrink-0 inline-flex items-end gap-2 px-4 pb-2.5 text-lg md:text-2xl font-bold text-red-600 border-b-[3px] border-red-600 whitespace-nowrap"
+                  className="shrink-0 inline-flex items-end gap-2 px-4 pb-2.5 text-base md:text-2xl font-bold text-red-600 border-b-[3px] border-red-600 whitespace-nowrap"
                 >
                   <span aria-hidden className="fas fa-table" />
                   ฝากนำเข้าสินค้าแบบตาราง
@@ -553,17 +562,21 @@ export default async function ForwarderTablePage({
             </ul>
           </div>
 
-          {/* ── Search form (Tracking + Lot + search button + add CTA all
-              on the same row, matching the legacy image ปอน 2026-05-28). */}
-          <div className="border-b border-border px-3 py-3 md:px-4 md:py-3 bg-surface-alt/30">
+          {/* ── UNIFIED FRAME — ค้นหา + สถานะ อยู่ในกรอบเดียวกัน (ปอน
+              2026-05-29 "ทำให้เป็นกรอบเดียวกัน"). Search row (Tracking + Lot
+              + search + add CTA), a dashed divider, then the status-tab
+              filter — one box, no inner border between them. On mobile the
+              search row is a 2-col grid (inputs row 1, buttons row 2); md+
+              it's a single flex row. */}
+          <div className="px-3 py-3 md:px-4 md:py-3">
             <form
-              className="flex flex-col md:flex-row md:items-end gap-2 md:gap-3"
+              className="grid grid-cols-2 items-end gap-2 md:flex md:flex-row md:gap-3"
               id="search"
               method="GET"
               action="/service-import/table"
               autoComplete="off"
             >
-              <div className="flex-1 min-w-0">
+              <div className="min-w-0 md:flex-1">
                 <label className="block text-xs font-medium text-muted mb-1" htmlFor="fTrackingCHN">
                   ค้นหา Tracking
                 </label>
@@ -576,7 +589,7 @@ export default async function ForwarderTablePage({
                   defaultValue={fTrackingCHNRaw}
                 />
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="min-w-0 md:flex-1">
                 <label className="block text-xs font-medium text-muted mb-1" htmlFor="fCabinetNumber">
                   ล๊อตสินค้า
                 </label>
@@ -596,14 +609,14 @@ export default async function ForwarderTablePage({
               </div>
               <button
                 type="submit"
-                className="inline-flex items-center justify-center rounded-lg bg-red-600 text-white px-5 py-2 text-sm font-bold shadow-sm hover:bg-red-700 active:scale-[0.98] transition-all whitespace-nowrap"
+                className="inline-flex w-full md:w-auto items-center justify-center rounded-lg bg-red-600 text-white px-5 py-2 text-sm font-bold shadow-sm hover:bg-red-700 active:scale-[0.98] transition-all whitespace-nowrap"
                 name="search"
               >
                 ค้นหารายการ
               </button>
               <Link
                 href="/service-import/add"
-                className="inline-flex items-center gap-2 justify-center md:justify-start rounded-full bg-emerald-600 text-white pl-1.5 pr-4 py-1.5 text-sm font-bold shadow-md shadow-emerald-600/25 hover:bg-emerald-700 active:scale-[0.98] transition-all whitespace-nowrap"
+                className="inline-flex w-full md:w-auto items-center gap-2 justify-center md:justify-start rounded-full bg-emerald-600 text-white pl-1.5 pr-4 py-1.5 text-sm font-bold shadow-md shadow-emerald-600/25 hover:bg-emerald-700 active:scale-[0.98] transition-all whitespace-nowrap"
               >
                 <span className="inline-flex w-7 h-7 items-center justify-center rounded-full bg-white text-emerald-600 font-black text-lg leading-none shadow-sm" aria-hidden>
                   +
@@ -618,13 +631,15 @@ export default async function ForwarderTablePage({
                 {sp.fCabinetNumber ? <> ล๊อตสินค้า: {sp.fCabinetNumber}</> : null}
               </div>
             )}
-          </div>
 
-          {/* ── Status filter — legacy `nav nav-tabs nav-underline pcs-tabs`
-              (forwarder-table.php L795-830): plain nav-link buttons in a
-              row, active = light-pink bg + red text + red borders. */}
-          <div className="px-3 py-3 md:px-4 md:py-4">
-            <h4 className="text-base md:text-lg font-bold text-foreground mb-2.5">
+            {/* dashed divider inside the unified frame — separates the
+                search row from the status-tab filter (same กรอบ). */}
+            <hr className="my-3 border-t border-dashed border-border" />
+
+            {/* ── Status filter — legacy `nav nav-tabs nav-underline pcs-tabs`
+                (forwarder-table.php L795-830): plain nav-link buttons in a
+                row, active = light-pink bg + red text + red borders. */}
+            <h4 className="mb-2.5 text-sm font-bold text-foreground md:text-lg">
               สถานะรายการ
             </h4>
             <ul className="flex flex-wrap items-end gap-0 border-b border-border">
@@ -657,7 +672,6 @@ export default async function ForwarderTablePage({
                 );
               })}
             </ul>
-            <hr className="my-3 border-t border-dashed border-border" />
 
             {/* the `btn-pay-pc` anchor — kept for legacy positioning hooks */}
             {arrStatus[5] > 0 && (
@@ -665,14 +679,19 @@ export default async function ForwarderTablePage({
                 <div style={{ position: "relative" }} className="btn-pay-pc"></div>
               </div>
             )}
+          </div>
+          {/* ═══ END LOCKED HEADER (tabs + unified search/status frame) ═══ */}
+          </div>
 
-            {/* ── The table form. Form id + table id + checkbox/total classes
-                preserved verbatim — DataTables JS attaches to `#myTable`,
-                live pay-recalc JS reads/writes `.countPay` + `.price-all`.
-                Inner <tbody> rows + summary row keep their legacy classes
-                because DataTables column toggles target `.d-none-578` etc. */}
-            <form id="frm-example2">
-              <div className="table-responsive2 -mx-3 md:-mx-4 px-3 md:px-4 overflow-x-auto">
+          {/* ── The table form — the ONLY scrolling region. `flex-1 min-h-0`
+              fills the rest of the card; `overflow-auto` scrolls the rows
+              (both axes); the <thead> is `sticky top-0` so หัวตาราง ล็อค
+              ไม่ขยับ while rows scroll under it. Form id + table id +
+              checkbox/total classes preserved verbatim — DataTables JS
+              attaches to `#myTable`, live pay-recalc JS reads/writes
+              `.countPay` + `.price-all`. */}
+          <form id="frm-example2" className="flex min-h-0 flex-1 flex-col">
+              <div className="table-responsive2 min-h-0 flex-1 overflow-auto">
                 <table
                   id="myTable"
                   className="dataTable w-full text-xs md:text-sm border-collapse"
@@ -683,10 +702,15 @@ export default async function ForwarderTablePage({
                       continuously. ⚠ Inline `display: table-header-group`
                       overrides cart.css's `.pcs-legacy thead { display: none }`
                       leak. */}
-                  <thead style={{ display: "table-header-group" }}>
-                    <tr className="text-center bg-gradient-to-r from-[#ce35a1] to-[#ee7411]">
-                      <th className="all add-text-all px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">ID</th>
-                      <th className="all add-text-all hidden xl:table-cell px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">วันที่สร้าง</th>
+                  <thead
+                    style={{
+                      display: "table-header-group",
+                      position: "sticky",
+                      top: 0,
+                      zIndex: 20,
+                    }}
+                  >
+                    <tr className="text-center bg-gradient-to-r from-[#f59e0b] to-[#dc2626]">
                       <th className="all add-text-all px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">เลขแทรคกิ้งจีน</th>
                       <th className="all add-text-all hidden xl:table-cell px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">ออเดอร์สั่งซื้อ</th>
                       <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">ล๊อต/ลำดับ</th>
@@ -721,9 +745,7 @@ export default async function ForwarderTablePage({
                                           `.bg-color` (forwarder-table.php
                                           inline CSS): same pink→orange
                                           gradient as the thead + white text. */}
-                                      <tr className="bg-gradient-to-r from-[#ce35a1] to-[#ee7411] text-white no-sort">
-                                        <td className="t1 d-none2 px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
-                                        <td className="t2 hidden xl:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
+                                      <tr className="bg-gradient-to-r from-[#f59e0b] to-[#dc2626] text-white no-sort">
                                         <td className="t3 px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
                                         <td className="t4 hidden xl:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
                                         <td className="t5 hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
@@ -760,19 +782,6 @@ export default async function ForwarderTablePage({
                                             }
                                             {...(isAnchor ? { id: `F${row.id}` } : {})}
                                           >
-                                            <td
-                                              className="tr1 px-2 py-1.5 text-center text-xs md:text-sm font-bold text-foreground"
-                                              style={
-                                                row.fstatus !== "5"
-                                                  ? { display: "none" }
-                                                  : undefined
-                                              }
-                                            >
-                                              {row.id}
-                                            </td>
-                                            <td className="hidden xl:table-cell px-2 py-1.5 text-center text-xs text-foreground">
-                                              {fmtDate(row.fdate)}
-                                            </td>
                                             <td className="px-2 py-1.5 text-xs md:text-sm text-foreground whitespace-nowrap">
                                               <Link
                                                 className="text-red-600 hover:underline font-mono"
@@ -909,7 +918,6 @@ export default async function ForwarderTablePage({
               </div>
               <div id="example-console-rows"></div>
             </form>
-          </div>
         </section>
       </div>
 

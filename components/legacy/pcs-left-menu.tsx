@@ -157,15 +157,23 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
           <SubLink href="/cart/add">เพิ่มสินค้าในรถเข็น</SubLink>
         </PcsLeftMenuAccordion>
 
-        {/* บริการฝากนำเข้า — flat per ปอน 2026-05-30: a single records link
-            + add row (LCL/FCL × รถ/เรือ/แอร์ nested accordions removed). */}
+        {/* บริการฝากนำเข้า — flat per ปอน 2026-05-30: 4 sub-rows, รอชำระ shows
+            its pending-payment count (fstatus=5). LCL/FCL × รถ/เรือ/แอร์ nested
+            accordions removed; ประวัติ = ส่งแล้ว filter (q=7). */}
         <PcsLeftMenuAccordion
           icon="/images/home/iconfloating/pcs-forwarder.png"
           label="บริการฝากนำเข้า"
           badge={<MenuBadge n={data.countForwarder5 + data.countFCredit} />}
         >
           <SubLink href="/service-import">รายการนำเข้า</SubLink>
+          <SubLink href="/service-import?q=5">
+            <span className="inline-flex w-full items-center">
+              <span>รอชำระ</span>
+              <MenuBadge n={data.countForwarder5} />
+            </span>
+          </SubLink>
           <SubLink href="/service-import/add">เพิ่มรายการนำเข้า</SubLink>
+          <SubLink href="/service-import?q=7">ประวัติการนำเข้า</SubLink>
         </PcsLeftMenuAccordion>
 
         {/* บริการฝากชำระ/โอน */}
