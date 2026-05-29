@@ -43,6 +43,8 @@ import { z } from "zod";
  */
 export const ADMIN_ROLES = [
   "super",
+  // 2026-05-28 ดึก — Wave 26 · `manager` role from migration 0118.
+  "manager",
   "ops",
   "accounting",
   "sales_admin",

@@ -30,6 +30,7 @@ import type { AdminRole } from "@/lib/auth/require-admin";
 // compile-time gate that keeps the two unions in lockstep.
 const PRIORITY: DashboardVariant[] = [
   "super",
+  "manager",      // 0118 · Cargo Manager — between super and accounting (cross-team approver)
   "accounting",
   "warehouse",
   "sales_admin",
@@ -40,6 +41,7 @@ const PRIORITY: DashboardVariant[] = [
 
 export type DashboardVariant =
   | "super"
+  | "manager"     // 0118 · Cargo Manager dashboard variant
   | "accounting"
   | "warehouse"
   | "sales_admin"

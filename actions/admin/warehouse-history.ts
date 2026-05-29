@@ -41,6 +41,9 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
+import { getAdminRoles } from "@/lib/auth/require-admin";
+import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
 import {
   relinkScanSchema,
   deleteScanSchema,
@@ -131,6 +134,19 @@ export async function adminRelinkScan(
         };
       }
 
+      // Wave 26 G5 (2026-05-28 ดึก) — status-transition role gate.
+      // Matrix: *→4 = warehouse (with super / manager override). The page-
+      // level union ["super","ops","warehouse"] also lets `ops` through;
+      // helper denies non-warehouse `ops` callers unless they ALSO hold
+      // super/manager. Skip the gate when the row is already at 4 (no-op
+      // re-link doesn't actually flip status).
+      if (f.fstatus !== "4") {
+        const callerRoles = (await getAdminRoles()) ?? [];
+        if (!canAnyRoleFlipFstatus(callerRoles, f.fstatus, "4")) {
+          return { ok: false, error: "forbidden_transition" };
+        }
+      }
+
       // ── (b) Read the scan row — fipallet flows to tb_forwarder.fpallet
       const { data: scan, error: scanErr } = await admin
         .from("tb_forwarder_import2")
@@ -179,6 +195,7 @@ export async function adminRelinkScan(
       // ── (e) UPDATE tb_forwarder status + admin-trail (legacy L29-30)
       const legacyAdminId = await resolveLegacyAdminId();
       const nowIso = new Date().toISOString();
+      const oldStatus = f.fstatus;
       const { error: updateFwdErr } = await admin
         .from("tb_forwarder")
         .update({
@@ -202,6 +219,15 @@ export async function adminRelinkScan(
           },
         );
         return { ok: false, error: updateFwdErr.message };
+      }
+
+      // G8 (2026-05-28 ดึก): write the legacy audit-log row for this
+      // status flip. Legacy forwarder-import-warehouse.php was a missing
+      // call-site per §7 of the state-machine audit. No customer
+      // notification here — relink → status 4 is internal warehouse work
+      // (matrix is log-only for *→4 transitions).
+      if (oldStatus !== "4") {
+        await appendStatusLog(admin, fid, oldStatus, "4", legacyAdminId);
       }
 
       await logAdminAction(

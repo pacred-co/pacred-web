@@ -28,6 +28,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { ForwardersTable } from "./forwarders-table";
 import { ForwardersSearchBar } from "./search-bar";
@@ -35,6 +36,7 @@ import { Suspense } from "react";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
+import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -303,9 +305,22 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
   // W-1 (gap-admin H-1): page-level role gate. Lists every customer's
   // import orders + prices via createAdminClient (RLS-bypass) — ops
   // (runs the orders) + accounting (bills them).
-  await requireAdmin(["ops", "accounting"]);
+  const { roles } = await requireAdmin(["ops", "accounting"]);
 
   const sp = await searchParams;
+
+  // G6 — default queue filter per role. When a staffer lands on
+  // /admin/forwarders without any filter params, redirect them into
+  // their default queue (warehouse → status=3 · accounting → status=4
+  // · sales/interpreter/qa → status=1). `super` + multi-filter URLs
+  // fall through unchanged. Matrix lives in lib/admin/default-queue-filter.
+  const defaultRedirect = buildDefaultLandingRedirect(
+    "/admin/forwarders",
+    roles,
+    sp as Record<string, unknown>,
+  );
+  if (defaultRedirect) redirect(defaultRedirect);
+
   const admin = createAdminClient();
 
   // Wave 18-B — resolve default 30-day window (legacy parity ·
@@ -617,6 +632,18 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
           </h1>
           <p className="text-sm text-muted mt-0.5">
             {rows.length.toLocaleString("th-TH")} รายการ (จากทั้งหมด {counts.total.toLocaleString("th-TH")})
+            {sp.status && (
+              <>
+                {" · "}
+                <Link
+                  href="/admin/forwarders?nofilter=1"
+                  className="text-primary-600 hover:underline"
+                  title="ล้างฟิลเตอร์เริ่มต้นตามบทบาท · แสดงรายการทั้งหมด"
+                >
+                  ดูทั้งหมด
+                </Link>
+              </>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
