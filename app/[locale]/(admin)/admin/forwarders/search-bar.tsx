@@ -93,8 +93,9 @@ export function ForwardersSearchBar() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="ค้นหา F-No, ชื่อ, เบอร์, tracking..."
-              className={`${inputCls} pl-8 w-64`}
+              placeholder="ค้นหา รหัสลูกค้า / ออเดอร์ / เลขพัสดุจีน / เลขตู้ / ชื่อ / เบอร์"
+              title="ค้นหาจาก: รหัสลูกค้า (PR####) · เลขออเดอร์ · เลขแทรคกิ้งจีน · เลขตู้ · ชื่อ-นามสกุล · เบอร์ — ค้นได้ทุกประวัติ"
+              className={`${inputCls} pl-8 w-80`}
             />
           </div>
         )}

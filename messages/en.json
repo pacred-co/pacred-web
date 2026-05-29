@@ -2781,7 +2781,7 @@
       "hub": "Hub",
       "cargo": "Cargo",
       "freight": "Freight",
-      "forwarderInvoice": "🆕 Forwarder Invoice",
+      "forwarderInvoice": "🆕 Forwarder Receipt",
       "closing": "Monthly closing",
       "periods": "Periods + Reconcile"
     },

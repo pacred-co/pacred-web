@@ -8,10 +8,8 @@
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
-import {
-  adminUpdateQaInspection,
-  type QaVerdict,
-} from "@/actions/admin/qa-inspections";
+import { adminUpdateQaInspection } from "@/actions/admin/qa-inspections";
+import type { QaVerdict } from "@/lib/validators/qa-inspection-rebuilt";
 
 const VERDICTS: QaVerdict[] = ["pass", "fail", "hold", "fake_product"];
 

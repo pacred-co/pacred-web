@@ -362,3 +362,53 @@ ORDER BY table_name;
 **Agent-orchestration note:** spawn isolated-worktree agents (A profile · B P2) คู่ขนาน — env ของ agent **commit/git/tsc ไม่ได้** (permission policy) → agent เขียนไฟล์ไว้ใน worktree + รายงาน · orchestrator (เรา) `cp` เข้า + verify (tsc/lint/test/build) + commit เอง. **trust-but-verify จับ bug ได้** (B flag ftotalprice ที่ P0 ผมพลาด). อ่าน diff money-path ทุกบรรทัดก่อนรับ.
 
 **Cross-link:** `docs/research/save-point-2026-05-30-rate-tax-profile.md` · `lib/tax/wht.ts` (computeForwarderTax mapping) · `lib/forwarder/resolve-rate.ts`
+
+---
+
+## [2026-05-30 evening] Legacy PHP `NULL` string-interpolation = empty string, NOT Postgres NULL
+
+**Context:** ภูม flagged MOMO review-grid commit failed with `null value in column "fusercompany" of relation "tb_forwarder" violates not-null constraint`. Only ONE of 4 candidates failed (the company customer). The other 3 (individuals) committed fine.
+
+**Root cause:** Pacred translated legacy PHP `NULL` literally to JS `null`, which became Postgres `NULL`. But in the legacy PHP, that `NULL` was string-interpolated into the SQL INSERT:
+
+```php
+$fUserCompany=0;
+if($userCompany=='1') {
+    $fUserCompany=NULL;   // PHP literal NULL
+}
+$sql = "INSERT INTO tb_forwarder (fUserCompany, ...) VALUES ('$fUserCompany', ...)";
+//                                                            ↑
+//                                                  String-interpolated as ''
+//                                                  (PHP's NULL → "" inside quotes)
+```
+
+So the SQL value that actually went to MySQL was empty string `''`, NOT actual NULL. The column is `NOT NULL` — empty string is allowed, NULL is not.
+
+Pacred ported the PHP intent literally:
+```ts
+const fUserCompany = customer.userCompany === "1" ? null : "0";  // ❌ writes Postgres NULL
+```
+
+**Fix — match legacy's effective SQL behavior:**
+```ts
+const fUserCompany = customer.userCompany === "1" ? "" : "0";  // ✅ writes empty string
+```
+
+**Verified prod data** (existing 21,950 tb_forwarder rows for company customers · PR124/PR2503/AIGA) all show `fusercompany=""` — confirms legacy's effective behavior.
+
+**Why this matters next time:** When porting any legacy PHP feature that uses `$var=NULL` followed by `'$var'` in a SQL string, the legacy was writing **empty string, not NULL**. If the target column is `NOT NULL`, writing JS `null` will fail. Always check:
+
+1. What did the legacy PHP `INSERT/UPDATE` statement use — string interpolation (`'$var'`) or actual binding (`?` placeholder with prepared statement)?
+2. If string interpolation: PHP `NULL` → `""` in SQL · don't write Postgres NULL.
+3. Verify against existing prod data — what value did legacy actually persist?
+
+**Other columns at risk** (any "if X then NULL else Y" pattern in PHP that uses string interpolation):
+- `tb_forwarder.fcredit` (similar legacy pattern likely)
+- `tb_forwarder.subuserid` (uses string interp · was bug 2 nights ago)
+- Any column with "_default" semantics where legacy treats NULL as "use the default"
+
+**Cross-links:**
+- [`lib/admin/commit-momo-row-core.ts:401`](../../lib/admin/commit-momo-row-core.ts) — MOMO commit path
+- [`actions/admin/api-forwarder-manual.ts:430`](../../actions/admin/api-forwarder-manual.ts) — CargoCenter manual entry
+- Legacy `api-forwarder-momo.php:241-243` + `:434-436` — the bug
+- AGENTS.md §0a (workflow vs UI · faithful first then improve)

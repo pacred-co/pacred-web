@@ -41,14 +41,36 @@ function dateIsoForCron(daysAgo: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Accept ?start=YYYY-MM-DD&?end=YYYY-MM-DD overrides ONLY on non-prod
+ *  (or when the caller has a valid CRON_SECRET Bearer). Lets ops manually
+ *  reseed a wider range after an outage / env-var fix without redeploy.
+ *  Prod cron (vercel.json schedule) never sends query params → falls back
+ *  to yesterday..today as before. */
+function parseDateOverride(url: URL, request: Request): { start?: string; end?: string } {
+  const isProd     = process.env.NODE_ENV === "production";
+  const secret     = process.env.CRON_SECRET;
+  const authHeader = request.headers.get("authorization");
+  const bearerOk   = !!secret && authHeader === `Bearer ${secret}`;
+  if (isProd && !bearerOk) return {};
+  const re = /^\d{4}-\d{2}-\d{2}$/;
+  const start = url.searchParams.get("start");
+  const end   = url.searchParams.get("end");
+  return {
+    start: start && re.test(start) ? start : undefined,
+    end:   end   && re.test(end)   ? end   : undefined,
+  };
+}
+
 export async function GET(request: Request) {
   return instrumentCron({
     cronPath: "/api/cron/momo-sync",
     request,
     handler: async () => {
       const admin = createAdminClient();
-      const start = dateIsoForCron(1); // yesterday
-      const end   = dateIsoForCron(0); // today
+      const url = new URL(request.url);
+      const override = parseDateOverride(url, request);
+      const start = override.start ?? dateIsoForCron(1); // yesterday (or override)
+      const end   = override.end   ?? dateIsoForCron(0); // today (or override)
 
       // ── 1. Pull MOMO → upsert momo_import_tracks + momo_container_closed ──
       const sync = await runMomoSync(admin, {
@@ -65,17 +87,26 @@ export async function GET(request: Request) {
         sync.errors.length > 0 && sync.upsertedCount === 0;
 
       // ── 2. Auto-commit eligible rows → tb_forwarder ──
-      // Best-effort: any failure here doesn't fail the cron (rows that
-      // didn't commit stay at /review for admin to handle).
+      // Wave 30.5: GATED behind MOMO_CRON_AUTOCOMMIT (default OFF). The
+      // auto-commit path now works (commitMomoRowSystem — no withAdmin
+      // gate), but committing money-path rows automatically can bill the
+      // wrong customer if MOMO's user_group/user_code is mistagged. So we
+      // ship pull-only by default; ภูม flips the env to "true" after
+      // eyeballing a sample of would-be auto-commits at /review.
+      // Best-effort either way: a failure here never fails the cron — rows
+      // that don't commit stay at /review for admin to handle.
+      const autoCommitEnabled = process.env.MOMO_CRON_AUTOCOMMIT === "true";
       let commit: Awaited<ReturnType<typeof autoCommitEligibleMomoRows>> = {
         scanned: 0, attempted: 0, succeeded: 0, failed: 0, skipped: 0, perRow: [],
       };
-      try {
-        commit = await autoCommitEligibleMomoRows(admin, 100);
-      } catch (err) {
-        logger.error("momo-cron", "auto-commit threw", err, {
-          syncLogId: sync.syncLogId,
-        });
+      if (autoCommitEnabled) {
+        try {
+          commit = await autoCommitEligibleMomoRows(admin, 100);
+        } catch (err) {
+          logger.error("momo-cron", "auto-commit threw", err, {
+            syncLogId: sync.syncLogId,
+          });
+        }
       }
 
       const cronStatus =
@@ -92,11 +123,21 @@ export async function GET(request: Request) {
           containers_closed:    sync.containerClosedCount,
           upserted:             sync.upsertedCount,
           sync_errors:          sync.errors.length,
+          auto_commit_enabled:  autoCommitEnabled,
           auto_commit_scanned:  commit.scanned,
           auto_commit_eligible: commit.attempted,
           auto_commit_succeeded: commit.succeeded,
           auto_commit_failed:   commit.failed,
           auto_commit_skipped:  commit.skipped,
+          // Wave 30.6 #230 — match-by-tracking propagation summary so ภูม can
+          // see at a glance whether MOMO → tb_forwarder writes are landing.
+          propagation_scanned:     sync.propagation?.scanned ?? 0,
+          propagation_matched:     sync.propagation?.matched ?? 0,
+          propagation_updated:     sync.propagation?.updated ?? 0,
+          propagation_cabinet:     sync.propagation?.cabinetWrites ?? 0,
+          propagation_arrived:     sync.propagation?.arrivedWrites ?? 0,
+          propagation_status_advance: sync.propagation?.statusAdvanceWrites ?? 0,
+          propagation_status_skipped_by_gate: sync.propagation?.statusAdvanceSkippedByGate ?? 0,
           sync_log_id:          sync.syncLogId,
         },
         payload: {
@@ -111,8 +152,22 @@ export async function GET(request: Request) {
             errors:              sync.errors,
             status:              sync.status,
             syncLogId:           sync.syncLogId,
+            // Wave 30.6 #230 — propagation summary (see ./propagate.ts).
+            propagation:         sync.propagation
+              ? {
+                  scanned:                  sync.propagation.scanned,
+                  matched:                  sync.propagation.matched,
+                  updated:                  sync.propagation.updated,
+                  cabinetWrites:            sync.propagation.cabinetWrites,
+                  arrivedWrites:            sync.propagation.arrivedWrites,
+                  statusAdvanceWrites:      sync.propagation.statusAdvanceWrites,
+                  statusAdvanceSkippedByGate: sync.propagation.statusAdvanceSkippedByGate,
+                  errorCount:               sync.propagation.errors.length,
+                }
+              : null,
           },
           autoCommit: {
+            enabled:   autoCommitEnabled,
             scanned:   commit.scanned,
             attempted: commit.attempted,
             succeeded: commit.succeeded,

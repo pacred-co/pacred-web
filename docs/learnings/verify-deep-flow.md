@@ -174,3 +174,62 @@ If I had spent 60 seconds clicking the submit button before pushing, ภูม w
 - Companion entry [`nextjs-16-quirks.md`](nextjs-16-quirks.md) [2026-05-28] — technical root cause
 - Save-point: [`docs/research/poom-save-point-2026-05-28-afternoon.md`](../research/poom-save-point-2026-05-28-afternoon.md) §1D + §8 reflection
 - Round-1 case study at top of this file (2026-05-25)
+
+## [2026-05-30 evening] The "silent dead-write" pattern — admin actions write to REBUILT empty tables instead of `tb_*`
+
+**Context:** 5-system parallel fidelity audit (forwarders · service-orders · yuan-payments · drivers+barcode · cnt+warehouse) independently flagged the SAME root cause across 7 surfaces. ภูม master gap doc at [`docs/audit/master-fidelity-2026-05-30-evening.md`](../audit/master-fidelity-2026-05-30-evening.md) §"6 recurring patterns" #1.
+
+**The pattern:**
+
+Pacred has two schema families that coexist during D1 transition:
+- **Rebuilt tables** (`service_orders`, `yuan_payments`, `forwarders`) — Pacred-native schema, mostly EMPTY on prod
+- **`tb_*` tables** (`tb_header_order`, `tb_payment`, `tb_forwarder`) — ported legacy schema, contains 21,950 real orders
+
+Some admin action paths target the rebuilt tables (because they were written first, before the D1 pivot). Real data lives in `tb_*`. When admin clicks the action:
+1. Server Action receives input, validates ✅
+2. Writes to `service_orders` (rebuilt, empty) — returns 0 rows affected
+3. UI shows green toast `"บันทึกสำเร็จ"` ✅
+4. **`tb_*` is untouched** — the data the staff actually queries hasn't changed
+5. Staff reload page → sees the SAME old value → reports "edit ไม่ติด"
+
+**Found in 7 surfaces:**
+
+| ระบบ | Action | Writes to | Should write to |
+|---|---|---|---|
+| service-orders | `adminUpdateServiceOrder` | rebuilt `service_orders` | `tb_header_order` |
+| service-orders | `adminMarkServiceOrderPaid` | rebuilt | `tb_wallet` + `tb_wallet_hs` |
+| service-orders | 5-tab status writes | rebuilt (empty) | `tb_header_order.hstatus` |
+| yuan-payments | `adminUpdateYuanPayment` | rebuilt `yuan_payments` | `tb_payment` |
+| yuan-payments | `YuanRefundModal` refund | rebuilt | `tb_payment` |
+| forwarders | `bulkCancel` (bulk-actions-toolbar) | rebuilt `forwarders` | `tb_forwarder` |
+| forwarders | `[fNo]/page.tsx` aside panels | rebuilt-UUID path only | both paths |
+
+**Detection signal — how to find these proactively:**
+
+1. **Grep for `from("rebuilt_table_name")`** in `actions/admin/` — any `.update(...)` / `.insert(...)` against a Pacred-native table is suspect during D1
+2. **Click-test the action** — make a real edit · re-read tb_* in DB · was the data actually updated there?
+3. **Check for DUPLICATE FILES** — `yuan-payments.ts` (writes rebuilt) vs `yuan-payments-tb.ts` (writes tb_payment) · half do each
+4. **Look for hardcoded UUIDs / IDs** in action signatures — `Promise<{ ok: boolean; rowId: string }>` returning a UUID is a tell that the action's writing to rebuilt schema (tb_* uses integer IDs)
+5. **Check the doc comment** — many of these files have docblocks like "Wave 7 read-only · Wave 8 deferred · ROADBLOCK: schema reconciliation" · the comment told us, we missed it
+
+**Fix protocol:**
+
+1. **Stop the bleed** — pivot the action to write to `tb_*` (typically 1-2h per action · pattern is "swap table name + map field names")
+2. **Backfill any orphan rebuilt rows** if applicable (usually no rows accumulated because rebuilt was empty)
+3. **Delete or rename the dead action file** to `*-legacy.ts` so future developers don't grab the wrong one
+4. **Add a typecheck-friendly grep** like `// @no-rebuilt-write` directive to prevent reintroduction
+
+**Why this matters next time:**
+
+This pattern is the #1 source of "ภูม clicks save · sees green toast · reload shows nothing changed". Always be suspicious of a successful-looking write that doesn't reflect in the next page load. Don't trust the toast — trust the row count in the actual table.
+
+**Related pattern — "forward-only safety locks in the WRONG initial value":**
+
+When a write path correctly identifies the right table BUT writes the wrong VALUE on first run · subsequent writes are blocked by a "non-empty so skip" safety. The MOMO routing batch bug (Wave 30.6 follow-up) was this — propagation wrote MOMO's container_no (routing batch ID), forward-only safety locked it, real cabinet from later sync could never replace it. Fix: pair forward-only safety with a "stale value detection" predicate so a follow-up sync can correct.
+
+**Cross-links:**
+- [`docs/audit/master-fidelity-2026-05-30-evening.md`](../audit/master-fidelity-2026-05-30-evening.md) — full 5-system synthesis
+- [`docs/audit/forwarders-fidelity-2026-05-30-evening.md`](../audit/forwarders-fidelity-2026-05-30-evening.md)
+- [`docs/audit/service-orders-fidelity-2026-05-30-evening.md`](../audit/service-orders-fidelity-2026-05-30-evening.md)
+- [`docs/audit/yuan-payments-fidelity-2026-05-30-evening.md`](../audit/yuan-payments-fidelity-2026-05-30-evening.md)
+- AGENTS.md §0c (verify-deep-flow · "HTTP 200 ≠ working")

@@ -355,8 +355,16 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
 
   // Wave 18-B — default-30-day window (escape via ?all=1) — applied to
   // both the data query and the per-tab counts below.
-  if (dateWindow.from) q = q.gte("fdate", dateWindow.from);
-  if (dateWindow.to)   q = q.lte("fdate", dateWindow.to + "T23:59:59");
+  // 🟠 ภูม #2 (2026-05-30): when a keyword search is active, BYPASS the
+  // 30-day window. The search box is meant to find a customer/order/tracking
+  // anywhere in history — limiting to the last 30 days is exactly what made
+  // ภูม think the search "didn't work" (silent zero-results when the order
+  // was from > 30 days ago).
+  const skipDateWindow = !!(sp.q && sp.q.trim().length > 0);
+  if (!skipDateWindow) {
+    if (dateWindow.from) q = q.gte("fdate", dateWindow.from);
+    if (dateWindow.to)   q = q.lte("fdate", dateWindow.to + "T23:59:59");
+  }
 
   // Wave 11 — `create=` top-tab filter (legacy: ?create=user|system|admin).
   //   user   = customer-initiated (adminidcreator empty AND reforder empty)
@@ -417,6 +425,70 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
 
   if (sp.date_from) q = q.gte("fdate", sp.date_from);
   if (sp.date_to)   q = q.lte("fdate", sp.date_to + "T23:59:59");
+
+  // 🟠 ภูม #2 (2026-05-30): server-side keyword search across the fields ภูม
+  // listed — รหัสลูกค้า (userid) · ออเดอร์ (id) · เลขพัสดุจีน (ftrackingchn +
+  // ftrackingchn2) · เลขตู้ (fcabinetnumber) · plus bonus: customer name +
+  // phone via a tb_users prefetch. Was previously a CLIENT-side filter
+  // against only the rows in the current page → if the match wasn't on page
+  // 1, you got silent zero-results (the bug ภูม flagged). PostgREST .or()
+  // pushes the match to Postgres so it scans the entire table (paired with
+  // the date-window bypass above + the 300-row cap → admin can see any
+  // matching row across all of history).
+  if (sp.q && sp.q.trim().length > 0) {
+    const kw = sp.q.trim();
+    // Escape PostgREST `or` reserved chars: `,` `(` `)` would break the
+    // comma-separated tuple list. Replace with %25 placeholders (ilike
+    // tolerates them as wildcards-against-wildcards).
+    const safe = kw.replace(/[,()*]/g, "%");
+
+    // Prefetch tb_users matching name OR phone OR userID → collect their
+    // userIDs so we can ALSO match forwarder rows whose `userid` is one of
+    // those. This lets ภูม type "John" or "0812345678" and find their
+    // order, not just type the exact PR code.
+    const { data: nameMatchedUsers, error: nameMatchErr } = await admin
+      .from("tb_users")
+      .select("userID")
+      .or(
+        [
+          `userID.ilike.%${safe}%`,
+          `userName.ilike.%${safe}%`,
+          `userLastName.ilike.%${safe}%`,
+          `userTel.ilike.%${safe}%`,
+        ].join(","),
+      )
+      .limit(500);
+    if (nameMatchErr) {
+      console.error("[tb_users keyword prefetch] failed", {
+        code: nameMatchErr.code,
+        message: nameMatchErr.message,
+      });
+    }
+    const matchedUserIds = (nameMatchedUsers ?? [])
+      .map((u) => (u as { userID: string | null }).userID)
+      .filter((u): u is string => !!u);
+
+    const parts = [
+      `userid.ilike.%${safe}%`,
+      `ftrackingchn.ilike.%${safe}%`,
+      `ftrackingchn2.ilike.%${safe}%`,
+      `fcabinetnumber.ilike.%${safe}%`,
+      `fidorco.ilike.%${safe}%`,
+    ];
+    // Numeric input → also match the integer id column (= "ออเดอร์").
+    const asInt = /^\d+$/.test(safe) ? Number(safe) : null;
+    if (asInt !== null && Number.isFinite(asInt)) {
+      parts.unshift(`id.eq.${asInt}`);
+    }
+    // Name/phone matches → add `userid.in.(PR123,PR456,...)` to the OR.
+    // Cap at 200 ids so the URL stays sane (the limit:500 above already
+    // upper-bounds, but cap once more here as defense).
+    if (matchedUserIds.length > 0) {
+      const idsList = matchedUserIds.slice(0, 200).join(",");
+      parts.push(`userid.in.(${idsList})`);
+    }
+    q = q.or(parts.join(","));
+  }
 
   const { data: forwarderRows, error: forwarderErr } = await q;
   let raw = (forwarderRows ?? []) as unknown as RawForwarderRow[];
@@ -893,6 +965,7 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
         rows={rows}
         statusLabel={STATUS_LABEL}
         modeLabel={MODE_LABEL}
+        currentStatus={sp.status}
       />
     </main>
     </>

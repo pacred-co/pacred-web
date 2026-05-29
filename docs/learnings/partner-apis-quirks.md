@@ -108,3 +108,75 @@ curl -s "https://opendata.dbd.go.th/api/3/action/datastore_search?resource_id=f0
 ```
 
 ---
+
+## [2026-05-30 evening] MOMO `container_no` ≠ cabinet — never write it to `tb_forwarder.fcabinetnumber`
+
+**Context:** ภูม flagged `/admin/forwarders` showing cryptic "PR20260527-SEA02" / "MO20260523-SEA01" values where staff + customers expect a real cabinet like "GZS260525-2" / "GZE260516-1". The values were written by the MOMO → tb_forwarder propagation pipeline (`lib/integrations/momo-isolated/propagate.ts`) during Wave 30.6 (#230).
+
+**Symptom / question:** Cabinet column on `/admin/forwarders` shows MOMO routing batch IDs (`PR20260527-SEA02`) instead of real PCS cabinets (`GZS260529-1`). Clicking the cabinet link goes to `/admin/report-cnt/PR20260527-SEA02` which 404s because nothing in our DB is keyed by that ID. ภูม:
+
+> "หะ ทำไมเลขตู้ ขึ้น รอปิดตู้อะ ... ภูมิ ก็บอกไปแล้วไงว่าไอบรรทัดเนี้ย มันคือเลขตู้ที่ pacred ใช้จริง `cid: GZS260529-1` อันเนี้ย"
+
+**Root cause — two layered traps:**
+
+1. **MOMO's data model:** Their `/api/func/get/import_track` response has a `container_no` field that contains MOMO's **internal routing batch ID** (format `(PR|MO)YYYYMMDD-(SEA|EK)NN`), NOT the real container number. The REAL container/cabinet lives on `/api/func/get/container/closed/{range}` → `raw.cid` (format `GZ[ES]YYMMDD-N`). They share an ID only via `raw.track_details[].reTrack` = tracking number.
+
+2. **Our propagation bug:** `lib/integrations/momo-isolated/propagate.ts` was filling `tb_forwarder.fcabinetnumber` with `m.containerNo` (routing batch) the moment any new tracking matched. Combined with the "forward-only safety" (never overwrite a non-empty cell), this LOCKED the wrong value in — the real cabinet from a later `container_closed` sync could never replace it.
+
+**Fix / answer (commit `<TBD>`):**
+
+1. Propagation now pre-loads the REAL cabinet per tracking from `momo_import_tracks.container_batch_no` (which sync.ts step 2.5 fills from `momo_container_closed.raw.cid`):
+   ```ts
+   const { data: cabinetRows } = await admin
+     .from("momo_import_tracks")
+     .select("momo_tracking_no, container_batch_no")
+     .in("momo_tracking_no", trackings)
+     .not("container_batch_no", "is", null);
+   const realCabinetByTracking = new Map<string, string>();
+   for (const r of cabinetRows ?? []) {
+     if (r.momo_tracking_no && r.container_batch_no) {
+       realCabinetByTracking.set(r.momo_tracking_no, r.container_batch_no);
+     }
+   }
+   ```
+
+2. Per-row cabinet write rule changed from "write `m.containerNo` if empty" → "write `realCabinet` if known and (empty OR currently a stale MOMO routing batch)":
+   ```ts
+   const MOMO_ROUTING_RX = /^(PR|MO)\d{8}-(SEA|EK)\d{2}$/;
+   const current = f.fcabinetnumber?.trim() ?? "";
+   const isEmpty = current === "";
+   const isStaleRouting = MOMO_ROUTING_RX.test(current);
+   if (realCabinet && realCabinet !== current && (isEmpty || isStaleRouting)) {
+     updates.fcabinetnumber = realCabinet;
+   }
+   ```
+
+3. Cron route accepts optional `?start=&end=` overrides (gated NODE_ENV !== production or valid CRON_SECRET Bearer) so ops can reseed wider windows after env outages without redeploy. Container closed *before* yesterday-window is now reachable manually.
+
+4. One-off backfill `scripts/backfill-momo-cabinet.mjs` Step 5 propagates cabinet to `tb_forwarder` retroactively — fixes all rows that took the routing batch ID before this fix.
+
+**Verification:**
+- Re-ran sync + backfill 2026-05-30 evening:
+  - SEA01 (`cid=GZS260525-2`): 1 row id=51981 ✅
+  - SEA02 (`cid=GZS260529-1`): 5 rows id=51976-51980 ✅
+- Pages: `/admin/forwarders` cabinet column → real `GZ*` cabinet · clickable link to `/admin/report-cnt/[cabinet]` works.
+- Future cycle (mental walkthrough):
+  - Empty + real cabinet known → fill it ✅
+  - Empty + real cabinet UNKNOWN (container not closed yet) → skip (NULL stays) ✅ (no more routing-batch trap)
+  - Stale routing batch + real cabinet known → replace ✅
+  - Admin-set value (e.g. `GZE-MANUAL-001`) + real cabinet → skip (admin-set values never match `MOMO_ROUTING_RX`) ✅
+
+**Why this matters next time:**
+
+- Any time we propagate a partner's field to a customer-visible Pacred column, ASK: "is this the value our staff/customers actually use, or is it an internal partner ID?" MOMO's `container_no` looks like a cabinet (PR + date + dash + SEA + 2-digit) but isn't — they use `cid` for the real value. JMF / CargoCenter / SH / Sang may have similar splits.
+- The "forward-only safety" pattern (never overwrite non-empty) is correct for IDEMPOTENT propagation but DEADLY when the first write is wrong. Pair it with a "replace stale" predicate (like `MOMO_ROUTING_RX`) so a follow-up sync can correct a bad initial value.
+- Cron windows that are too narrow miss late-closing containers permanently. Either widen the window OR make it user-tunable via `?start=&end=` (as we did). Same fix likely applies to any other partner cron sync we have.
+- When a UI mask (e.g. our "รอปิดตู้" amber chip) is being used to hide a stale value, that's a sign the underlying data model is wrong. Mask first to stop the bleed, fix root cause next.
+
+**Cross-links:**
+- [`lib/integrations/momo-isolated/propagate.ts`](../../lib/integrations/momo-isolated/propagate.ts) — the fixed propagation
+- [`lib/integrations/momo-isolated/sync.ts`](../../lib/integrations/momo-isolated/sync.ts) — step 2.5 cabinet propagation (cid → container_batch_no)
+- [`scripts/backfill-momo-cabinet.mjs`](../../scripts/backfill-momo-cabinet.mjs) — one-off retroactive fix
+- [`app/api/cron/momo-sync/route.ts`](../../app/api/cron/momo-sync/route.ts) — manual reseed override
+- [`app/[locale]/(admin)/admin/forwarders/forwarders-table.tsx`](../../app/[locale]/(admin)/admin/forwarders/forwarders-table.tsx) — UI mask for legacy stuck rows (now mostly defensive; backfill removed today's known instances)
+- AGENTS.md §0c — verify-deep-flow rule (must trace propagation, not just observe symptom)

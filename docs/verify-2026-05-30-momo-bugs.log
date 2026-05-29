@@ -1,0 +1,201 @@
+$ eslint
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\actions\admin\customs-declarations.ts
+  169:31  warning  'invErr' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\actions\admin\disbursements.ts
+  32:7  warning  'createSchema' is assigned a value but only used as a type  @typescript-eslint/no-unused-vars
+  48:3  warning  '_input' is defined but never used                          @typescript-eslint/no-unused-vars
+  55:7  warning  'updateSchema' is assigned a value but only used as a type  @typescript-eslint/no-unused-vars
+  69:3  warning  '_input' is defined but never used                          @typescript-eslint/no-unused-vars
+  76:7  warning  'deleteSchema' is assigned a value but only used as a type  @typescript-eslint/no-unused-vars
+  83:3  warning  '_input' is defined but never used                          @typescript-eslint/no-unused-vars
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\actions\admin\qa-inspections.ts
+  41:3  warning  'QA_VERDICTS' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\actions\admin\warehouse.ts
+   60:7  warning  'createContainerSchema' is assigned a value but only used as a type       @typescript-eslint/no-unused-vars
+   73:7  warning  'setContainerStatusSchema' is assigned a value but only used as a type    @typescript-eslint/no-unused-vars
+   80:7  warning  'attachShipmentSchema' is assigned a value but only used as a type        @typescript-eslint/no-unused-vars
+   86:7  warning  'setShipmentStatusSchema' is assigned a value but only used as a type     @typescript-eslint/no-unused-vars
+   92:7  warning  'addEventSchema' is assigned a value but only used as a type              @typescript-eslint/no-unused-vars
+  101:7  warning  'createShipmentManualSchema' is assigned a value but only used as a type  @typescript-eslint/no-unused-vars
+  116:7  warning  'setReceivedQtySchema' is assigned a value but only used as a type        @typescript-eslint/no-unused-vars
+  122:7  warning  'setCargoTypeSchema' is assigned a value but only used as a type          @typescript-eslint/no-unused-vars
+  128:7  warning  'setContainerCloseAtSchema' is assigned a value but only used as a type   @typescript-eslint/no-unused-vars
+  139:3  warning  '_input' is defined but never used                                        @typescript-eslint/no-unused-vars
+  147:3  warning  '_input' is defined but never used                                        @typescript-eslint/no-unused-vars
+  155:3  warning  '_input' is defined but never used                                        @typescript-eslint/no-unused-vars
+  163:3  warning  '_input' is defined but never used                                        @typescript-eslint/no-unused-vars
+  171:3  warning  '_input' is defined but never used                                        @typescript-eslint/no-unused-vars
+  179:3  warning  '_input' is defined but never used                                        @typescript-eslint/no-unused-vars
+  187:3  warning  '_input' is defined but never used                                        @typescript-eslint/no-unused-vars
+  195:3  warning  '_input' is defined but never used                                        @typescript-eslint/no-unused-vars
+  203:3  warning  '_input' is defined but never used                                        @typescript-eslint/no-unused-vars
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\actions\shipments.ts
+  67:3  warning  '_limit' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  74:3  warning  '_shipmentCode' is defined but never used    @typescript-eslint/no-unused-vars
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(admin)\admin\accounting\forwarder\page.tsx
+  151:10  warning  'numberFormat0' is defined but never used                                               @typescript-eslint/no-unused-vars
+  593:7   warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+  594:7   warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(admin)\admin\accounting\payment\page.tsx
+  423:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+  424:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(admin)\admin\accounting\shop\page.tsx
+  540:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+  541:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(admin)\admin\accounting\withdraw\page.tsx
+  351:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+  352:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(admin)\admin\audit\page.tsx
+  92:18  warning  'totalCount' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(admin)\admin\barcode\driver\all\page.tsx
+  37:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(admin)\admin\barcode\driver\from\page.tsx
+  34:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(admin)\admin\barcode\driver\prepare\page.tsx
+  37:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(admin)\admin\hr\assets\page.tsx
+  1:10  warning  'Link' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(admin)\admin\organization-email\page.tsx
+  104:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+  105:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(admin)\admin\service-orders\notes\page.tsx
+  90:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(auth)\register\register-client.tsx
+  291:9  warning  'router' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  508:9  warning  'router' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\account-settings\page.tsx
+  105:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\addresses\page.tsx
+  169:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\china-address\page.tsx
+  71:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\freight\invoice\[id]\page.tsx
+  641:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+  642:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\freight\receipts\history\page.tsx
+  214:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\freight\receipts\print\[id]\page.tsx
+  641:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+  642:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\layout.tsx
+  187:7  warning  Custom fonts not added in `pages/_document.js` will only load for a single page. This is discouraged. See: https://nextjs.org/docs/messages/no-page-custom-font  @next/next/no-page-custom-font
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\pay\page.tsx
+  105:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\profile\page.tsx
+  266:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\sales\history\[id]\page.tsx
+  246:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\sales\history\page.tsx
+  142:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\sales\page.tsx
+  263:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\sales\report\add\page.tsx
+  205:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\sales\report\page.tsx
+  273:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\search\page.tsx
+  283:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+  611:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\service-import\[fNo]\page.tsx
+  816:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\service-import\_tracking\tracking-page.tsx
+  143:33  warning  'userRowErr' is assigned a value but never used   @typescript-eslint/no-unused-vars
+  155:34  warning  'listRowsErr' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\service-import\add\page.tsx
+  171:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\service-import\page.tsx
+  434:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\service-import\receipts\page.tsx
+  209:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\service-import\receipts\print\page.tsx
+  631:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+  632:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\service-import\table\page.tsx
+  522:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+  523:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\service-order\add\page.tsx
+  345:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\service-order\page.tsx
+  9:3  warning  'Search' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\service-order\print\page.tsx
+  515:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+  516:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\service-payment\page.tsx
+  323:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\wallet-credit\page.tsx
+  240:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\wallet\deposit\page.tsx
+  193:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\[locale]\(protected)\wallet\page.tsx
+  229:7  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\app\api\admin\momo\sync\route.ts
+  21:10  warning  'getAdminRoles' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\components\legacy\pcs-top-menu.tsx
+  8:7  warning  'A' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\components\sections\floating-tabs.tsx
+  12:10  warning  'trackSignOut' is defined but never used                  @typescript-eslint/no-unused-vars
+  14:7   warning  'MOBILE_ICON' is assigned a value but never used          @typescript-eslint/no-unused-vars
+  28:10  warning  'user' is assigned a value but never used                 @typescript-eslint/no-unused-vars
+  68:9   warning  'isOnMobileLaunchpad' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\lib\forwarder\billing-gate.ts
+  39:3  warning  '_admin' is defined but never used  @typescript-eslint/no-unused-vars
+  40:3  warning  '_fNo' is defined but never used    @typescript-eslint/no-unused-vars
+
+C:\Users\Admin\pacred-web\.claude\worktrees\agent-a432336552bc86594\scripts\backfill\03-log-tables\_analyze.mjs
+  20:5  warning  'blockBytes' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+✖ 92 problems (0 errors, 92 warnings)
+
+
+=== npx tsc --noEmit (empty = clean) ===
+(0 type errors)

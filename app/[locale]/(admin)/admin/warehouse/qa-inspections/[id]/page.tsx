@@ -13,8 +13,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import {
   adminGetQaInspection,
   adminQaPhotoSignedUrls,
-  type QaVerdict,
 } from "@/actions/admin/qa-inspections";
+import type { QaVerdict } from "@/lib/validators/qa-inspection-rebuilt";
 import { UpdateInspectionForm } from "./update-inspection-form";
 
 export const dynamic = "force-dynamic";

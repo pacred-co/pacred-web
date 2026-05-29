@@ -26,6 +26,10 @@ import {
   mapSackInfoSingle,
   type MomoInternalAdminRecord,
 } from "./index";
+import {
+  propagateMomoToForwarders,
+  type PropagationResult,
+} from "./propagate";
 
 export type RunMomoSyncOpts = {
   /** ISO date "YYYY-MM-DD" — required for the date-range pulls (track + closed). */
@@ -63,6 +67,11 @@ export type RunMomoSyncResult = {
   status:              "success" | "partial" | "failed";
   /** The momo_sync_logs row id (if log insert succeeded). */
   syncLogId:           string | null;
+  /** Wave 30.6 #230 — tb_forwarder propagation result. `null` when no
+   *  import_track records were scanned. See lib/integrations/momo-isolated/
+   *  propagate.ts for the safety rules + the env gate
+   *  `MOMO_SYNC_PROPAGATE_STATUS=true`. */
+  propagation:         PropagationResult | null;
 };
 
 /**
@@ -180,6 +189,66 @@ export async function runMomoSync(
           upsertedCount += upRows.length;
         }
       }
+
+      // ── 2.5. PROPAGATE cabinet (cid) → momo_import_tracks ─────────
+      //
+      // ภูม flag 2026-05-30 (bug 2c): import_track.container_no is
+      // MOMO's INTERNAL ROUTING BATCH ID (e.g. "PR20260527-SEA02"), NOT
+      // the cabinet PCS staff/customers actually use. The real cabinet
+      // lives on container_closed.cid (e.g. "GZS260525-2"). Each
+      // container_closed row carries `track_details[]` with `reTrack`
+      // = the tracking number — that's how MOMO joins cabinet → track.
+      //
+      // We walk every container_closed raw, parse track_details[].reTrack,
+      // then UPDATE momo_import_tracks.container_batch_no = container.cid
+      // WHERE momo_tracking_no = reTrack. Column name aligns with the
+      // matching column on momo_container_closed (added in 0119). New
+      // column on momo_import_tracks added in 0126.
+      //
+      // Idempotent (a re-sync just overwrites with the same cid). Best-
+      // effort — failures here log but never fail the sync (next sync
+      // re-applies). One-off backfill: scripts/backfill-momo-cabinet.mjs.
+      try {
+        const rawArray = (ccRes.data && typeof ccRes.data === "object" && Array.isArray((ccRes.data as { data?: unknown }).data))
+          ? (ccRes.data as { data: unknown[] }).data
+          : Array.isArray(ccRes.data) ? (ccRes.data as unknown[]) : [];
+        for (const containerRaw of rawArray) {
+          if (!containerRaw || typeof containerRaw !== "object") continue;
+          const c = containerRaw as Record<string, unknown>;
+          // The cabinet is `cid` (e.g. "GZS260525-2"). Skip if missing.
+          const cabinetNo = typeof c.cid === "string" && c.cid.trim() ? c.cid.trim() : null;
+          if (!cabinetNo) continue;
+          const trackDetails = Array.isArray(c.track_details) ? (c.track_details as unknown[]) : [];
+          const reTracks: string[] = [];
+          for (const td of trackDetails) {
+            if (!td || typeof td !== "object") continue;
+            const rt = (td as Record<string, unknown>).reTrack;
+            if (typeof rt === "string" && rt.trim()) reTracks.push(rt.trim());
+          }
+          if (reTracks.length === 0) continue;
+          const { error: upErr } = await admin
+            .from("momo_import_tracks")
+            .update({
+              container_batch_no: cabinetNo,
+              updated_at:         new Date().toISOString(),
+            })
+            .in("momo_tracking_no", reTracks);
+          if (upErr) {
+            console.error(
+              `[runMomoSync] cabinet propagate failed cid=${cabinetNo}`,
+              { code: upErr.code, message: upErr.message, trackCount: reTracks.length },
+            );
+            errors.push({
+              scope:   "cabinet_propagate",
+              error:   "MOMO_DB_UPDATE_FAILED",
+              message: `cid=${cabinetNo}: ${upErr.message}`,
+            });
+          }
+        }
+      } catch (e) {
+        // Defensive — a malformed raw shouldn't crash the whole sync.
+        console.error("[runMomoSync] cabinet propagate threw", e);
+      }
     } else {
       errors.push({ scope: "container_closed", error: ccRes.error, message: ccRes.message });
     }
@@ -240,6 +309,38 @@ export async function runMomoSync(
     }
   }
 
+  // ── 3.5 Wave 30.6 #230 — match-by-tracking propagation into tb_forwarder ──
+  // After the isolated momo_* writes land, walk the import_track records and
+  // forward-propagate to any tb_forwarder rows that share the same tracking
+  // number. Safety: only fills empty fcabinetnumber + fdatetothai by default;
+  // fstatus advancement is gated behind MOMO_SYNC_PROPAGATE_STATUS=true (off
+  // by default — flipping it fires customer notifications). See
+  // docs/research/momo-status-drift-2026-05-30.md for ภูม's diagnosis.
+  let propagation: PropagationResult | null = null;
+  if (importMapped.length > 0) {
+    try {
+      propagation = await propagateMomoToForwarders(admin, importMapped);
+      if (propagation.errors.length > 0) {
+        for (const e of propagation.errors) {
+          errors.push({
+            scope:   "propagation",
+            error:   "MOMO_PROPAGATION_ROW_FAILED",
+            message: `${e.trackingNo}: ${e.message}`,
+          });
+        }
+      }
+    } catch (err) {
+      // Best-effort — propagation must NEVER fail the sync. The momo_*
+      // writes already landed; propagation is downstream enrichment.
+      console.error("[runMomoSync] propagation threw", err);
+      errors.push({
+        scope:   "propagation",
+        error:   "MOMO_PROPAGATION_THREW",
+        message: err instanceof Error ? err.message : "unknown",
+      });
+    }
+  }
+
   // ── 4. log this sync ──
   const totalScanned = importTrackCount + containerClosedCount + sackInfoCount;
   const mappedCount  = importMapped.filter((r) => r.shipmentStatus != null).length;
@@ -291,5 +392,6 @@ export async function runMomoSync(
     errors,
     status,
     syncLogId:           syncLogRow?.id ?? null,
+    propagation,
   };
 }

@@ -2781,7 +2781,7 @@
       "hub": "หน้าหลักบัญชี",
       "cargo": "Cargo",
       "freight": "Freight",
-      "forwarderInvoice": "🆕 ใบแจ้งหนี้ฝากนำเข้า",
+      "forwarderInvoice": "🆕 ใบเสร็จฝากนำเข้า",
       "closing": "ปิดงบรายเดือน",
       "periods": "งวดบัญชี + กระทบยอด"
     },

@@ -542,8 +542,14 @@ export default async function AdminForwardersWarehouseHistoryPage({
               <span className="text-foreground">ประวัติสินค้าเข้าโกดัง</span>
             </p>
           </div>
+          {/* ภูม #1 (2026-05-29) — was href="/admin/barcode-d-import" (legacy
+              PHP filename, never ported · 404). Pacred route is
+              /admin/barcode/driver/import — the faithful port of legacy
+              barcode-d-import.php (the warehouse intake scanner workstation).
+              Same target used by /admin/barcode/page.tsx + driver/page.tsx
+              redirects. */}
           <Link
-            href="/admin/barcode-d-import"
+            href="/admin/barcode/driver/import"
             className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500 bg-emerald-500 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-600 transition-colors"
           >
             + สแกนรายการเพิ่ม

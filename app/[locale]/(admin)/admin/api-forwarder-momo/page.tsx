@@ -16,11 +16,175 @@
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
-import { Truck, Wand2, Database, Search, BarChart3, CheckCircle2 } from "lucide-react";
+import {
+  Truck,
+  Wand2,
+  Database,
+  Search,
+  BarChart3,
+  CheckCircle2,
+  Activity,
+  AlertTriangle,
+  XCircle,
+} from "lucide-react";
 
 export const dynamic = "force-dynamic";
+
+// ─────────────────────────────────────────────────────────────
+// Wave 30.6 #230 — MOMO health snapshot (ภูม flag 2026-05-30):
+// "เวลาดึงจากmomoจะเช็คยังไง ว่าไม่ได้ตกหล่นอะ".
+// Reads momo_sync_logs (cron history) to compute 3 health metrics:
+//   1. Freshness — minutes since the last successful sync.
+//   2. Fail streak — count of consecutive `status=failed` rows since last
+//      successful run. Surfaces the silent "env vars missing on Vercel"
+//      bug type that bit us 2026-05-29.
+//   3. Drift — tb_forwarder rows whose ftrackingchn matches a MOMO row
+//      with a clearly-newer status (heuristic: MOMO shipment_status
+//      indicates "at Thailand warehouse or later" but tb_forwarder.fstatus
+//      is still 1/2/3). The remediation count.
+// ─────────────────────────────────────────────────────────────
+type HealthSnapshot = {
+  lastSuccessMinAgo: number | null;
+  failStreak:        number;
+  lastFailMessage:   string | null;
+  driftCount:        number;
+  totalTracks:       number;
+  uncommitted:       number;
+};
+
+async function loadHealth(): Promise<HealthSnapshot> {
+  const admin = createAdminClient();
+
+  // Latest 30 sync log rows — enough to compute streak in the typical case.
+  const { data: logs, error: logsErr } = await admin
+    .from("momo_sync_logs")
+    .select("status, created_at, errors")
+    .order("created_at", { ascending: false })
+    .limit(30);
+  if (logsErr) {
+    console.error("[momo health] logs query failed", {
+      code: logsErr.code,
+      message: logsErr.message,
+    });
+  }
+  const rows = (logs ?? []) as Array<{
+    status: string | null;
+    created_at: string | null;
+    errors: Array<{ message?: string }> | null;
+  }>;
+
+  let lastSuccessMinAgo: number | null = null;
+  let failStreak = 0;
+  let lastFailMessage: string | null = null;
+  for (const r of rows) {
+    if (r.status === "success") {
+      lastSuccessMinAgo = r.created_at
+        ? Math.round((Date.now() - new Date(r.created_at).getTime()) / 60000)
+        : null;
+      break;
+    }
+    if (r.status === "failed") {
+      failStreak += 1;
+      if (!lastFailMessage && r.errors && r.errors.length > 0) {
+        const m = r.errors[0]?.message;
+        if (typeof m === "string") lastFailMessage = m.slice(0, 180);
+      }
+    }
+  }
+
+  // Drift heuristic — fetch up to 200 most recent MOMO tracks with arrived
+  // status, then look up matching tb_forwarder rows still at 1/2/3.
+  const { data: arrived, error: arrivedErr } = await admin
+    .from("momo_import_tracks")
+    .select("momo_tracking_no, shipment_status")
+    .in("shipment_status", [
+      "AT_WAREHOUSE_TH",
+      "WAITING_PAYMENT",
+      "DISTRIBUTING",
+      "DELIVERING",
+      "DELIVERED",
+    ])
+    .order("last_synced_at", { ascending: false })
+    .limit(200);
+  if (arrivedErr) {
+    console.error("[momo health] arrived tracks query failed", {
+      code: arrivedErr.code,
+      message: arrivedErr.message,
+    });
+  }
+  const arrivedTrackings = (arrived ?? [])
+    .map((r) => (r as { momo_tracking_no: string | null }).momo_tracking_no)
+    .filter((t): t is string => !!t);
+  let driftCount = 0;
+  if (arrivedTrackings.length > 0) {
+    const { count } = await admin
+      .from("tb_forwarder")
+      .select("id", { count: "exact", head: true })
+      .in("ftrackingchn", arrivedTrackings)
+      .in("fstatus", ["1", "2", "3"]);
+    driftCount = count ?? 0;
+  }
+
+  const { count: totalTracks } = await admin
+    .from("momo_import_tracks")
+    .select("id", { count: "exact", head: true });
+
+  const { count: uncommitted } = await admin
+    .from("momo_import_tracks")
+    .select("id", { count: "exact", head: true })
+    .is("committed_at", null);
+
+  return {
+    lastSuccessMinAgo,
+    failStreak,
+    lastFailMessage,
+    driftCount,
+    totalTracks: totalTracks ?? 0,
+    uncommitted: uncommitted ?? 0,
+  };
+}
+
+function freshnessTone(min: number | null): {
+  bg: string;
+  border: string;
+  fg: string;
+  label: string;
+} {
+  if (min === null) {
+    return {
+      bg: "bg-red-50",
+      border: "border-red-300",
+      fg: "text-red-800",
+      label: "ไม่มีบันทึก sync success เลย",
+    };
+  }
+  if (min <= 15) {
+    return {
+      bg: "bg-emerald-50",
+      border: "border-emerald-300",
+      fg: "text-emerald-800",
+      label: `${min} นาทีก่อน · ปกติ`,
+    };
+  }
+  if (min <= 60) {
+    return {
+      bg: "bg-amber-50",
+      border: "border-amber-300",
+      fg: "text-amber-800",
+      label: `${min} นาทีก่อน · ช้ากว่าปกติ`,
+    };
+  }
+  const hr = Math.floor(min / 60);
+  return {
+    bg: "bg-red-50",
+    border: "border-red-300",
+    fg: "text-red-800",
+    label: `${hr} ชม. ${min % 60} นาทีก่อน · ต้องตรวจ`,
+  };
+}
 
 const CARRIER_MENUBAR: MenubarItem[] = [
   { label: "MOMO", href: "/admin/api-forwarder-momo" },
@@ -29,6 +193,9 @@ const CARRIER_MENUBAR: MenubarItem[] = [
 
 export default async function AdminApiForwarderMomoPage() {
   await requireAdmin(["super", "ops", "warehouse"]);
+
+  const health = await loadHealth();
+  const freshTone = freshnessTone(health.lastSuccessMinAgo);
 
   return (
     <main className="p-4 lg:p-8 max-w-5xl mx-auto space-y-5">
@@ -54,6 +221,127 @@ export default async function AdminApiForwarderMomoPage() {
 
       {/* Top menubar (MOMO ↔ CargoCenter) */}
       <PageTopMenubar items={CARRIER_MENUBAR} activeHref="/admin/api-forwarder-momo" />
+
+      {/* Wave 30.6 #230 — MOMO Health Snapshot. ภูม flag 2026-05-30:
+          "เวลาดึงจากmomoจะเช็คยังไง ว่าไม่ได้ตกหล่นอะ". 3 cards: freshness,
+          cron-fail streak, drift count. Surfaces the silent failures that
+          caused the 2026-05-29 5-hour blackout (env vars dropped on Vercel). */}
+      <section
+        aria-labelledby="momo-health-h"
+        className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm space-y-3"
+      >
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h2 id="momo-health-h" className="flex items-center gap-2 text-sm font-bold text-gray-900">
+            <Activity className="h-4 w-4 text-primary-600" />
+            สุขภาพการ sync MOMO
+          </h2>
+          <p className="text-[10px] text-muted">
+            อัปเดตทุกครั้งที่เปิดหน้านี้ · cron run ทุก 10 นาที
+          </p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          {/* Card 1: Freshness */}
+          <div className={`rounded-xl border ${freshTone.border} ${freshTone.bg} p-3`}>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">
+              Sync success ล่าสุด
+            </p>
+            <p className={`mt-1 text-lg font-bold ${freshTone.fg}`}>
+              {freshTone.label}
+            </p>
+            <p className="mt-1 text-[10px] text-gray-600">
+              ปกติ ≤ 15 นาที · ช้า 15-60 · ต้องตรวจ {">"} 60
+            </p>
+          </div>
+          {/* Card 2: Fail streak */}
+          <div
+            className={`rounded-xl border p-3 ${
+              health.failStreak === 0
+                ? "border-emerald-300 bg-emerald-50"
+                : health.failStreak < 3
+                  ? "border-amber-300 bg-amber-50"
+                  : "border-red-300 bg-red-50"
+            }`}
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">
+              จำนวน cron ล่าสุดที่ FAIL ต่อกัน
+            </p>
+            <p
+              className={`mt-1 text-lg font-bold ${
+                health.failStreak === 0
+                  ? "text-emerald-800"
+                  : health.failStreak < 3
+                    ? "text-amber-800"
+                    : "text-red-800"
+              }`}
+            >
+              {health.failStreak === 0 ? (
+                <>
+                  <CheckCircle2 className="inline h-4 w-4 mr-1" />0 — ปกติ
+                </>
+              ) : (
+                <>
+                  {health.failStreak >= 3 ? (
+                    <XCircle className="inline h-4 w-4 mr-1" />
+                  ) : (
+                    <AlertTriangle className="inline h-4 w-4 mr-1" />
+                  )}
+                  {health.failStreak} รอบ
+                </>
+              )}
+            </p>
+            {health.lastFailMessage && (
+              <p className="mt-1 text-[10px] text-gray-700 break-words">
+                error: <span className="font-mono">{health.lastFailMessage}</span>
+              </p>
+            )}
+          </div>
+          {/* Card 3: Drift */}
+          <div
+            className={`rounded-xl border p-3 ${
+              health.driftCount === 0
+                ? "border-emerald-300 bg-emerald-50"
+                : health.driftCount < 10
+                  ? "border-amber-300 bg-amber-50"
+                  : "border-red-300 bg-red-50"
+            }`}
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">
+              จำนวน tb_forwarder ที่สถานะ DRIFT vs MOMO
+            </p>
+            <p
+              className={`mt-1 text-lg font-bold ${
+                health.driftCount === 0
+                  ? "text-emerald-800"
+                  : health.driftCount < 10
+                    ? "text-amber-800"
+                    : "text-red-800"
+              }`}
+            >
+              {health.driftCount === 0 ? (
+                <>
+                  <CheckCircle2 className="inline h-4 w-4 mr-1" />0 — ตรงกัน
+                </>
+              ) : (
+                <>{health.driftCount} รายการ</>
+              )}
+            </p>
+            <p className="mt-1 text-[10px] text-gray-600">
+              ตู้/พัสดุที่ MOMO บอกถึงไทย แต่ของเรายัง fstatus 1/2/3
+              {" · "}
+              ตั้ง <code className="rounded bg-white/60 px-1">MOMO_SYNC_PROPAGATE_STATUS=true</code>{" "}
+              ให้ cron แก้ให้อัตโนมัติ
+            </p>
+          </div>
+        </div>
+        <p className="text-[10px] text-muted">
+          MOMO ทั้งหมดที่ sync แล้ว: {health.totalTracks.toLocaleString()} ·{" "}
+          ยังไม่ commit ลง tb_forwarder: {health.uncommitted.toLocaleString()} ({" "}
+          <Link href="/admin/api-forwarder-momo/review" className="text-primary-600 hover:underline">
+            ดู / commit
+          </Link>
+          )
+        </p>
+      </section>
 
       {/* Wave 17 banner */}
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 leading-relaxed">

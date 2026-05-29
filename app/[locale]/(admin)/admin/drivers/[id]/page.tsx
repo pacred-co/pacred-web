@@ -1,224 +1,565 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+/**
+ * /admin/drivers/[id] — Driver batch detail (faithful port of
+ * `pcs-admin/forwarder-driver.php?page=detail&id=X` · 2026-05-30 ภูม #3).
+ *
+ * Shows ONE batch (tb_forwarder_driver) with all its delivery stops
+ * (tb_forwarder_driver_item joined to tb_forwarder for recipient info).
+ *
+ * Legacy reference: forwarder-driver.php lines 1272-2104 (detail mode).
+ *   - Header: batch name + driver + creator + box/tracking/stop counts
+ *   - Countdown timer (endtime - now)
+ *   - Google Maps waypoint-chain nav link
+ *   - Per-stop card with: recipient · address · phone · tracking list
+ *     + status badge · photo (if uploaded) · per-row "ขึ้นรถ/ส่งสำเร็จ/ไม่สำเร็จ"
+ *   - "ยกเลิกรอบ" button for ops/super (no delivered items yet)
+ *
+ * This REPLACES the prior page that read REBUILT `forwarder_driver` UUID table.
+ *
+ * AGENTS.md §0a — Pacred Tailwind design + Lucide icons (NOT verbatim Bootstrap).
+ * AGENTS.md §0c — every Supabase query destructures `error`.
+ */
+
 import { Link } from "@/i18n/navigation";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { DriverAssignmentActions } from "../actions-cell";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getSignedBucketUrl } from "@/lib/storage/upload";
+import {
+  Truck, Clock, CheckCircle2, XCircle, MapPin, Phone,
+  Package, AlertTriangle, ArrowLeft,
+} from "lucide-react";
+import { BatchCountdown } from "./batch-countdown";
+import { BatchActions } from "./batch-actions";
 
-const STATUS_BADGE: Record<number, string> = {
-  1: "bg-amber-50 text-amber-700 border-amber-200",
-  2: "bg-blue-50 text-blue-700 border-blue-200",
-  3: "bg-gray-50 text-gray-600 border-gray-200",
-  4: "bg-green-50 text-green-700 border-green-200",
+export const dynamic = "force-dynamic";
+
+type FdStatus = "1" | "2" | "3";
+type FdiStatus = "" | "1" | "2" | "3";
+
+const BATCH_STATUS_LABEL: Record<FdStatus, string> = {
+  "1": "กำลังดำเนินการ",
+  "2": "สำเร็จ",
+  "3": "ไม่สำเร็จ",
 };
 
-const STATUS_LABEL: Record<number, string> = {
-  1: "มอบหมายแล้ว — รอคนขับรับงาน",
-  2: "คนขับรับงานแล้ว",
-  3: "หมดเวลารับงาน (17 ชม.)",
-  4: "ส่งงานเสร็จ",
+const BATCH_STATUS_CLS: Record<FdStatus, string> = {
+  "1": "bg-amber-50 text-amber-700 border-amber-200",
+  "2": "bg-emerald-50 text-emerald-700 border-emerald-200",
+  "3": "bg-rose-50 text-rose-700 border-rose-200",
 };
 
-function normSingle<T>(x: T | T[] | null | undefined): T | null {
-  if (!x) return null;
-  return Array.isArray(x) ? (x[0] ?? null) : x;
-}
+const ITEM_STATUS_LABEL: Record<FdiStatus, string> = {
+  "":  "ยังไม่ขึ้นรถ",
+  "1": "กำลังส่ง",
+  "2": "ส่งสำเร็จ",
+  "3": "ส่งไม่ได้",
+};
 
-export default async function AdminDriverAssignmentDetailPage({
+const ITEM_STATUS_CLS: Record<FdiStatus, string> = {
+  "":  "bg-gray-100 text-gray-700 border-gray-200",
+  "1": "bg-blue-100 text-blue-700 border-blue-200",
+  "2": "bg-emerald-100 text-emerald-700 border-emerald-200",
+  "3": "bg-rose-100 text-rose-700 border-rose-200",
+};
+
+type Batch = {
+  id:              number;
+  fddate:          string | null;
+  fdname:          string | null;
+  fdadminid:       string | null;
+  fdadmincreator:  string | null;
+  fdstatus:        string | null;
+  fdamount:        number | null;
+  endtime:         string | null;
+};
+
+type Item = {
+  id:             number;
+  fdid:           number;
+  fid:            number;
+  fdistatus:      string | null;
+  fdipictureon:   string | null;
+  fdipictureoff:  string | null;
+};
+
+type Forwarder = {
+  id:                       number;
+  fidorco:                  string | null;
+  fstatus:                  string | null;
+  ftrackingchn:             string | null;
+  fshipby:                  string | null;
+  famount:                  number | null;
+  fweight:                  number | null;
+  fvolume:                  number | null;
+  fpallet:                  string | null;
+  fnote:                    string | null;
+  fphotoend:                string | null;
+  userid:                   string | null;
+  faddressname:             string | null;
+  faddresslastname:         string | null;
+  faddressno:               string | null;
+  faddresssubdistrict:      string | null;
+  faddressdistrict:         string | null;
+  faddressprovince:         string | null;
+  faddresszipcode:          string | null;
+  faddresstel:              string | null;
+  faddresstel2:             string | null;
+  faddresslatitude:         number | null;
+  faddresslongitude:        number | null;
+};
+
+export default async function AdminDriverBatchDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  // P-18-followup-rbac: page-level guard (matches /admin/drivers list).
-  await requireAdmin(["ops"]);
-
+  const { user, roles } = await requireAdmin(["ops", "super", "driver"]);
   const { id } = await params;
-  const admin  = createAdminClient();
+  const batchId = Number.parseInt(id, 10);
+  if (!Number.isFinite(batchId) || batchId <= 0) notFound();
 
-  const { data, error } = await admin
-    .from("forwarder_driver")
-    .select(`
-      id, status, fd_date, accepted_at, completed_at, note, created_at, updated_at,
-      driver:profiles!profile_id (
-        id, member_code, first_name, last_name, phone, email
-      ),
-      forwarder:forwarders!forwarder_id (
-        f_no, status, source_warehouse, transport_type, total_price,
-        weight_kg, volume_cbm, tracking_china,
-        ship_first_name, ship_last_name, ship_phone, ship_phone2,
-        ship_address_line, ship_sub_district, ship_district, ship_province, ship_postal_code,
-        profile_id
-      )
-    `)
-    .eq("id", id)
-    .maybeSingle();
+  const admin = createAdminClient();
+  const isOpsOverride = roles.includes("ops") || roles.includes("super");
 
-  if (error) {
-    console.error(`[forwarder_driver lookup] failed`, { code: error.code, message: error.message, details: error.details, hint: error.hint });
-    throw new Error(`Failed to load forwarder_driver (${error.code ?? "unknown"}): ${error.message}`);
+  // 1. Batch header
+  const { data: batchData, error: batchErr } = await admin
+    .from("tb_forwarder_driver")
+    .select("id, fddate, fdname, fdadminid, fdadmincreator, fdstatus, fdamount, endtime")
+    .eq("id", batchId)
+    .maybeSingle<Batch>();
+  if (batchErr) {
+    console.error(`/admin/drivers/${id}: batch read failed`, batchErr);
+    throw new Error(`ไม่สามารถอ่านรอบจัดส่ง: ${batchErr.message}`);
   }
-  if (!data) notFound();
+  if (!batchData) notFound();
+  const batch = batchData;
 
-  type Row = typeof data & {
-    driver: { id: string; member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null; email: string | null } | { id: string; member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null; email: string | null }[] | null;
-    forwarder: { f_no: string | null; status: string | null; source_warehouse: string | null; transport_type: string | null; total_price: number | null; weight_kg: number | null; volume_cbm: number | null; tracking_china: string | null; ship_first_name: string | null; ship_last_name: string | null; ship_phone: string | null; ship_phone2: string | null; ship_address_line: string | null; ship_sub_district: string | null; ship_district: string | null; ship_province: string | null; ship_postal_code: string | null; profile_id: string | null } | { f_no: string | null; status: string | null; source_warehouse: string | null; transport_type: string | null; total_price: number | null; weight_kg: number | null; volume_cbm: number | null; tracking_china: string | null; ship_first_name: string | null; ship_last_name: string | null; ship_phone: string | null; ship_phone2: string | null; ship_address_line: string | null; ship_sub_district: string | null; ship_district: string | null; ship_province: string | null; ship_postal_code: string | null; profile_id: string | null }[] | null;
+  // For driver role — ensure they own this batch.
+  if (!isOpsOverride) {
+    const { data: myProfile, error: myProfileErr } = await admin
+      .from("profiles")
+      .select("member_code")
+      .eq("id", user.id)
+      .maybeSingle<{ member_code: string | null }>();
+    if (myProfileErr) {
+      console.error("[drivers/[id]] profiles lookup failed", {
+        code: myProfileErr.code, message: myProfileErr.message,
+      });
+    }
+    if (myProfile?.member_code !== batch.fdadminid) {
+      notFound();
+    }
+  }
+
+  // 2. All items in batch
+  const { data: itemsData, error: itemsErr } = await admin
+    .from("tb_forwarder_driver_item")
+    .select("id, fdid, fid, fdistatus, fdipictureon, fdipictureoff")
+    .eq("fdid", batchId);
+  if (itemsErr) {
+    console.error(`/admin/drivers/${id}: item read failed`, itemsErr);
+    throw new Error(`ไม่สามารถอ่านรายการในรอบ: ${itemsErr.message}`);
+  }
+  const items = (itemsData ?? []) as Item[];
+
+  // 3. Forwarder details (recipient + tracking)
+  const fwdIds = Array.from(new Set(items.map((it) => it.fid)));
+  let forwarders: Forwarder[] = [];
+  if (fwdIds.length > 0) {
+    const { data: fwdData, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select(
+        "id, fidorco, fstatus, ftrackingchn, fshipby, famount, fweight, fvolume, " +
+        "fpallet, fnote, fphotoend, userid, " +
+        "faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
+        "faddressdistrict, faddressprovince, faddresszipcode, " +
+        "faddresstel, faddresstel2, faddresslatitude, faddresslongitude",
+      )
+      .in("id", fwdIds);
+    if (fwdErr) {
+      console.error(`/admin/drivers/${id}: forwarder read failed`, fwdErr);
+    }
+    forwarders = (fwdData ?? []) as unknown as Forwarder[];
+  }
+  const fwdById = new Map(forwarders.map((f) => [f.id, f]));
+
+  // 4. Driver display info
+  // tb_users uses CAMELCASE columns (CLAUDE.md exception · userID/userName).
+  let driverName = "—";
+  if (batch.fdadminid) {
+    const { data: driverUser, error: driverUserErr } = await admin
+      .from("tb_users")
+      .select("userName, userLastName, userTel")
+      .eq("userID", batch.fdadminid)
+      .maybeSingle<{ userName: string | null; userLastName: string | null; userTel: string | null }>();
+    if (driverUserErr) {
+      console.error("[drivers/[id]] driver user lookup failed", {
+        code: driverUserErr.code, message: driverUserErr.message,
+      });
+    }
+    if (driverUser) {
+      driverName = `${driverUser.userName ?? ""} ${driverUser.userLastName ?? ""}`.trim() || "—";
+    }
+  }
+
+  // 5. Group items by recipient address (legacy "1 จุดส่ง" model)
+  type Stop = {
+    addressKey: string;
+    forwarder:  Forwarder;
+    items:      { item: Item; forwarder: Forwarder }[];
+    totalBoxes: number;
+    totalWeight: number;
+    totalVolume: number;
   };
-  const row = data as Row;
-  const driver    = normSingle(row.driver);
-  const forwarder = normSingle(row.forwarder);
+  const stopsByKey = new Map<string, Stop>();
+  for (const it of items) {
+    const f = fwdById.get(it.fid);
+    if (!f) continue;
+    const key = [
+      f.fshipby ?? "", f.faddressname ?? "", f.faddresslastname ?? "",
+      f.faddressno ?? "", f.faddresssubdistrict ?? "",
+      f.faddressdistrict ?? "", f.faddressprovince ?? "", f.faddresszipcode ?? "",
+    ].join("|");
+    const existing = stopsByKey.get(key);
+    if (existing) {
+      existing.items.push({ item: it, forwarder: f });
+      existing.totalBoxes  += Number(f.famount  ?? 0);
+      existing.totalWeight += Number(f.fweight  ?? 0);
+      existing.totalVolume += Number(f.fvolume  ?? 0);
+    } else {
+      stopsByKey.set(key, {
+        addressKey:  key,
+        forwarder:   f,
+        items:       [{ item: it, forwarder: f }],
+        totalBoxes:  Number(f.famount  ?? 0),
+        totalWeight: Number(f.fweight  ?? 0),
+        totalVolume: Number(f.fvolume  ?? 0),
+      });
+    }
+  }
+  const stops = Array.from(stopsByKey.values());
 
-  // Compute time since assigned for visual cue.
-  // eslint-disable-next-line react-hooks/purity -- Server Component, renders fresh per request; Date.now() is intentional time-of-render snapshot.
-  const nowMs       = Date.now();
-  const fdDate      = new Date(row.fd_date);
-  const ageHours    = (nowMs - fdDate.getTime()) / (1000 * 60 * 60);
-  const expiringSoon = row.status === 1 && ageHours > 12;
-  const overdue      = row.status === 1 && ageHours > 17;
+  // 6. Resolve signed photo URLs in parallel
+  const stopsWithPhotos = await Promise.all(
+    stops.map(async (stop) => {
+      const itemsWithPhotos = await Promise.all(
+        stop.items.map(async (entry) => {
+          const [onUrl, offUrl] = await Promise.all([
+            entry.item.fdipictureon ? getSignedBucketUrl("forwarder-covers", entry.item.fdipictureon) : Promise.resolve(null),
+            entry.item.fdipictureoff ? getSignedBucketUrl("forwarder-covers", entry.item.fdipictureoff) : Promise.resolve(null),
+          ]);
+          return { ...entry, photoOnUrl: onUrl, photoOffUrl: offUrl };
+        }),
+      );
+      return { ...stop, items: itemsWithPhotos };
+    }),
+  );
+
+  // 7. Aggregates for header
+  const totalItems     = items.length;
+  const totalBoxes     = forwarders.reduce((s, f) => s + Number(f.famount ?? 0), 0);
+  const deliveredCount = items.filter((it) => it.fdistatus === "2").length;
+  const failedCount    = items.filter((it) => it.fdistatus === "3").length;
+  const loadedCount    = items.filter((it) => it.fdistatus === "1").length;
+
+  // 8. Google Maps waypoint URL (concatenate all stop addresses)
+  const start = "13.701751401115621,100.36237187683579";  // legacy origin (Pacred warehouse)
+  const waypoints = stops
+    .map((stop) => {
+      const f = stop.forwarder;
+      const txt = [f.faddressno, f.faddresssubdistrict, f.faddressdistrict, f.faddressprovince, f.faddresszipcode]
+        .filter(Boolean).join(" ");
+      return encodeURIComponent(txt);
+    })
+    .filter(Boolean)
+    .join("/");
+  const googleMapsHref = waypoints
+    ? `https://www.google.com/maps/dir/${start}/${waypoints}`
+    : null;
+
+  const fdstatus = (batch.fdstatus ?? "1") as FdStatus;
 
   return (
-    <main className="p-6 lg:p-8 space-y-5 max-w-4xl">
-      <Link href="/admin/drivers" className="text-xs text-primary-600 hover:underline">
-        ← กลับรายการ
+    <main className="p-4 sm:p-6 lg:p-8 space-y-5 max-w-6xl mx-auto">
+      {/* Breadcrumb */}
+      <Link href="/admin/drivers" className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline">
+        <ArrowLeft className="h-3 w-3" />
+        กลับรายการ
       </Link>
 
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
-        <h1 className="mt-1 text-2xl font-bold">
-          มอบหมาย {forwarder?.f_no ?? "—"}
-        </h1>
-        <p className="mt-1 font-mono text-xs text-muted">{row.id}</p>
-      </div>
-
-      {/* Status hero */}
-      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+      {/* Header card */}
+      <section className="rounded-2xl border border-border bg-white shadow-sm p-5 space-y-4">
+        <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
-            <span
-              className={`inline-block rounded-full border px-3 py-1 text-sm font-medium ${
-                STATUS_BADGE[row.status] ?? "bg-gray-50 border-gray-200"
-              }`}
-            >
-              {STATUS_LABEL[row.status] ?? row.status}
+            <p className="text-xs font-semibold tracking-widest text-primary-500">
+              รอบจัดส่ง · เลขที่ #{batch.id}
+            </p>
+            <h1 className="mt-1 text-xl font-bold flex items-center gap-2">
+              <Truck className="h-5 w-5" />
+              {batch.fdname ?? `รอบ #${batch.id}`}
+            </h1>
+            <div className="mt-1 text-xs text-muted space-y-0.5">
+              <div>
+                <span className="font-medium">คนขับ:</span>{" "}
+                <span className="font-mono">{batch.fdadminid ?? "—"}</span> · {driverName}
+              </div>
+              <div>
+                <span className="font-medium">ผู้สร้าง:</span> {batch.fdadmincreator ?? "—"}
+              </div>
+              {batch.fddate && (
+                <div>
+                  <span className="font-medium">วันที่สร้าง:</span>{" "}
+                  {new Date(batch.fddate).toLocaleString("th-TH")}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end gap-2">
+            <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-sm font-medium ${BATCH_STATUS_CLS[fdstatus]}`}>
+              {fdstatus === "1" && <Clock className="h-3.5 w-3.5" />}
+              {fdstatus === "2" && <CheckCircle2 className="h-3.5 w-3.5" />}
+              {fdstatus === "3" && <XCircle className="h-3.5 w-3.5" />}
+              {BATCH_STATUS_LABEL[fdstatus]}
             </span>
-            {overdue && (
-              <p className="mt-2 text-xs text-red-700 font-semibold">
-                ⏰ เลยเวลา 17 ชม. แล้ว — cron จะ flip เป็น &quot;หมดเวลา&quot; รอบถัดไป
-              </p>
-            )}
-            {!overdue && expiringSoon && (
-              <p className="mt-2 text-xs text-amber-700">
-                ⚠ ใกล้หมดเวลา ({Math.floor(ageHours)} ชม. จากที่ assign)
-              </p>
+            {batch.endtime && fdstatus === "1" && (
+              <BatchCountdown endTimeIso={batch.endtime} />
             )}
           </div>
-          <DriverAssignmentActions id={row.id} status={row.status as 1 | 2 | 3 | 4} />
+        </div>
+
+        {/* Metric strip */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 border-t border-border">
+          <Metric icon={<Package className="h-4 w-4" />} label="แทรคกิ้ง" value={totalItems} />
+          <Metric icon={<Package className="h-4 w-4" />} label="กล่อง" value={totalBoxes} />
+          <Metric icon={<MapPin className="h-4 w-4" />} label="จุดส่ง" value={batch.fdamount ?? stops.length} />
+          <Metric
+            icon={<CheckCircle2 className="h-4 w-4" />}
+            label="ส่งแล้ว"
+            value={`${deliveredCount} / ${totalItems}`}
+            tone={deliveredCount === totalItems && totalItems > 0 ? "success" : "default"}
+          />
+        </div>
+
+        {/* Status sub-line */}
+        {(loadedCount > 0 || failedCount > 0) && (
+          <div className="flex flex-wrap gap-2 text-xs">
+            {loadedCount > 0 && (
+              <span className="inline-flex items-center gap-1 text-blue-700">
+                <Truck className="h-3.5 w-3.5" /> กำลังส่ง {loadedCount}
+              </span>
+            )}
+            {failedCount > 0 && (
+              <span className="inline-flex items-center gap-1 text-rose-700">
+                <AlertTriangle className="h-3.5 w-3.5" /> ส่งไม่ได้ {failedCount}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Actions row */}
+        <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
+          {googleMapsHref && (
+            <a
+              href={googleMapsHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-1.5 text-xs font-medium hover:bg-emerald-100"
+            >
+              <MapPin className="h-3.5 w-3.5" />
+              Google นำทาง (ทุกจุด)
+            </a>
+          )}
+          {isOpsOverride && fdstatus === "1" && deliveredCount === 0 && (
+            <BatchActions batchId={batch.id} />
+          )}
         </div>
       </section>
 
-      {/* Timeline */}
-      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-2">
-        <h2 className="text-sm font-bold text-foreground">Timeline</h2>
-        <ul className="text-xs space-y-1">
-          <li>
-            <span className="text-muted">มอบหมาย:</span>{" "}
-            {fdDate.toLocaleString("th-TH")}
-          </li>
-          {row.accepted_at && (
-            <li>
-              <span className="text-muted">รับงาน:</span>{" "}
-              {new Date(row.accepted_at).toLocaleString("th-TH")}
-            </li>
-          )}
-          {row.completed_at && (
-            <li>
-              <span className="text-muted">ส่งเสร็จ:</span>{" "}
-              {new Date(row.completed_at).toLocaleString("th-TH")}
-            </li>
-          )}
-          <li>
-            <span className="text-muted">อัพเดทล่าสุด:</span>{" "}
-            {new Date(row.updated_at).toLocaleString("th-TH")}
-          </li>
-        </ul>
-        {row.note && (
-          <div className="mt-3 rounded border border-border bg-surface-alt/30 p-2 text-xs">
-            <span className="font-semibold">Note:</span> {row.note}
-          </div>
-        )}
-      </section>
+      {/* Stops list */}
+      {stopsWithPhotos.length === 0 ? (
+        <div className="rounded-2xl border border-border bg-white p-8 text-center">
+          <AlertTriangle className="mx-auto h-8 w-8 text-muted/50 mb-3" />
+          <p className="text-sm text-muted">ไม่มีรายการในรอบนี้</p>
+        </div>
+      ) : (
+        <ol className="space-y-3">
+          {stopsWithPhotos.map((stop, idx) => (
+            <li key={stop.addressKey} className="rounded-2xl border border-border bg-white shadow-sm p-4 space-y-3">
+              {/* Stop header */}
+              <div className="flex items-start gap-3">
+                <div className="rounded-full bg-primary-500 text-white w-7 h-7 flex items-center justify-center text-sm font-bold flex-shrink-0">
+                  {idx + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-base">
+                    คุณ{stop.forwarder.faddressname ?? ""} {stop.forwarder.faddresslastname ?? ""}
+                  </p>
+                  <p className="text-sm text-foreground/80 leading-relaxed">
+                    📍 {stop.forwarder.faddressno ?? ""}{" "}
+                    ตำบล/แขวง {stop.forwarder.faddresssubdistrict ?? ""}{" "}
+                    อำเภอ/เขต <span className="bg-amber-100 px-1 rounded text-amber-800">{stop.forwarder.faddressdistrict ?? ""}</span>{" "}
+                    จังหวัด {stop.forwarder.faddressprovince ?? ""}{" "}
+                    {stop.forwarder.faddresszipcode ?? ""}
+                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    {stop.forwarder.faddresstel && stop.forwarder.faddresstel !== "-" && (
+                      <a
+                        href={`tel:${stop.forwarder.faddresstel}`}
+                        className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 px-2 py-0.5 text-xs hover:bg-blue-100"
+                      >
+                        <Phone className="h-3 w-3" /> {stop.forwarder.faddresstel}
+                      </a>
+                    )}
+                    {stop.forwarder.faddresstel2 && stop.forwarder.faddresstel2 !== "-" && stop.forwarder.faddresstel2 !== stop.forwarder.faddresstel && (
+                      <a
+                        href={`tel:${stop.forwarder.faddresstel2}`}
+                        className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 px-2 py-0.5 text-xs hover:bg-blue-100"
+                      >
+                        <Phone className="h-3 w-3" /> {stop.forwarder.faddresstel2}
+                      </a>
+                    )}
+                    {(stop.forwarder.faddresslatitude && stop.forwarder.faddresslongitude) ? (
+                      <a
+                        href={`https://www.google.com/maps/search/${stop.forwarder.faddresslatitude},${stop.forwarder.faddresslongitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 px-2 py-0.5 text-xs hover:bg-emerald-100"
+                      >
+                        <MapPin className="h-3 w-3" /> แผนที่
+                      </a>
+                    ) : (
+                      <a
+                        href={`https://www.google.com/maps/search/${encodeURIComponent([
+                          stop.forwarder.faddressno, stop.forwarder.faddresssubdistrict,
+                          stop.forwarder.faddressdistrict, stop.forwarder.faddressprovince,
+                          stop.forwarder.faddresszipcode,
+                        ].filter(Boolean).join(" "))}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded-full bg-gray-50 border border-gray-200 text-gray-600 px-2 py-0.5 text-xs hover:bg-gray-100"
+                      >
+                        <MapPin className="h-3 w-3" /> ค้นที่อยู่
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
 
-      <div className="grid lg:grid-cols-2 gap-4">
-        {/* Driver info */}
-        <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-2">
-          <h2 className="text-sm font-bold text-foreground">คนขับ</h2>
-          {driver ? (
-            <ul className="text-xs space-y-1">
-              <li><span className="text-muted">รหัส:</span> <span className="font-mono">{driver.member_code ?? "—"}</span></li>
-              <li><span className="text-muted">ชื่อ:</span> {driver.first_name ?? ""} {driver.last_name ?? ""}</li>
-              <li><span className="text-muted">เบอร์:</span> {driver.phone ?? "—"}</li>
-              <li><span className="text-muted">อีเมล:</span> {driver.email ?? "—"}</li>
-              <li>
-                <Link href={`/admin/customers/${driver.id}`} className="text-primary-600 hover:underline">
-                  ดูโปรไฟล์ →
-                </Link>
-              </li>
-            </ul>
-          ) : <p className="text-xs text-muted">—</p>}
-        </section>
+              {/* Tracking sub-table */}
+              <div className="rounded-lg border border-border overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                    <tr>
+                      <th className="px-2 py-1.5">F-no</th>
+                      <th className="px-2 py-1.5">เลขแทรคกิ้ง</th>
+                      <th className="px-2 py-1.5">ลูกค้า</th>
+                      <th className="px-2 py-1.5 text-right">กล่อง</th>
+                      <th className="px-2 py-1.5 text-right">นน.(kg)</th>
+                      <th className="px-2 py-1.5 text-right">ปริมาตร(m³)</th>
+                      <th className="px-2 py-1.5">สถานะ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stop.items.map(({ item, forwarder, photoOnUrl, photoOffUrl }) => {
+                      const fdistatus = (item.fdistatus ?? "") as FdiStatus;
+                      const fNo = forwarder.fidorco ?? `#${forwarder.id}`;
+                      return (
+                        <tr key={item.id} className="border-t border-border align-top">
+                          <td className="px-2 py-1.5">
+                            <Link
+                              href={`/admin/forwarders/${fNo}`}
+                              className="font-mono text-primary-600 hover:underline"
+                            >
+                              {fNo}
+                            </Link>
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <div>{forwarder.ftrackingchn ?? "—"}</div>
+                            {forwarder.fpallet && (
+                              <div className="text-[10px] text-muted">loc: {forwarder.fpallet}</div>
+                            )}
+                          </td>
+                          <td className="px-2 py-1.5 font-mono">{forwarder.userid ?? "—"}</td>
+                          <td className="px-2 py-1.5 text-right">{forwarder.famount ?? 0}</td>
+                          <td className="px-2 py-1.5 text-right">{Number(forwarder.fweight ?? 0).toFixed(2)}</td>
+                          <td className="px-2 py-1.5 text-right">{Number(forwarder.fvolume ?? 0).toFixed(3)}</td>
+                          <td className="px-2 py-1.5">
+                            <span
+                              className={`inline-block rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${ITEM_STATUS_CLS[fdistatus]}`}
+                            >
+                              {ITEM_STATUS_LABEL[fdistatus]}
+                            </span>
+                            {(photoOnUrl || photoOffUrl) && (
+                              <div className="mt-1 flex gap-1">
+                                {photoOnUrl && (
+                                  <a href={photoOnUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 hover:underline">📦 ขึ้นรถ</a>
+                                )}
+                                {photoOffUrl && (
+                                  <a href={photoOffUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-emerald-600 hover:underline">✅ ส่ง</a>
+                                )}
+                              </div>
+                            )}
+                            {forwarder.fnote && (
+                              <div className="mt-1 text-[10px] bg-amber-50 text-amber-800 border border-amber-200 rounded px-1 py-0.5">
+                                📝 {forwarder.fnote}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
 
-        {/* Forwarder info */}
-        <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-2">
-          <h2 className="text-sm font-bold text-foreground">Forwarder</h2>
-          {forwarder ? (
-            <ul className="text-xs space-y-1">
-              <li>
-                <span className="text-muted">เลขที่:</span>{" "}
+              {/* Stop totals */}
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-2 border-t border-border/50">
+                <div className="text-muted">
+                  รวม {stop.items.length} แทรคกิ้ง · {stop.totalBoxes} กล่อง ·{" "}
+                  {stop.totalWeight.toFixed(2)} kg · {stop.totalVolume.toFixed(3)} m³
+                </div>
                 <Link
-                  href={`/admin/forwarders/${forwarder.f_no}`}
-                  className="font-mono text-primary-600 hover:underline"
+                  href={`/admin/drivers/work?tab=pending`}
+                  className="text-primary-600 hover:underline"
                 >
-                  {forwarder.f_no}
+                  → ดูใน work-list คนขับ
                 </Link>
-              </li>
-              <li><span className="text-muted">สถานะ:</span> {forwarder.status ?? "—"}</li>
-              <li><span className="text-muted">โกดังต้นทาง:</span> {forwarder.source_warehouse ?? "—"}</li>
-              <li><span className="text-muted">ขนส่ง:</span> {forwarder.transport_type ?? "—"}</li>
-              {forwarder.weight_kg && (
-                <li><span className="text-muted">น้ำหนัก:</span> {forwarder.weight_kg} kg</li>
-              )}
-              {forwarder.volume_cbm && (
-                <li><span className="text-muted">ปริมาตร:</span> {forwarder.volume_cbm} CBM</li>
-              )}
-              {forwarder.total_price && (
-                <li>
-                  <span className="text-muted">ราคา:</span>{" "}
-                  ฿{Number(forwarder.total_price).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                </li>
-              )}
-              {forwarder.tracking_china && (
-                <li><span className="text-muted">Tracking:</span> {forwarder.tracking_china}</li>
-              )}
-            </ul>
-          ) : <p className="text-xs text-muted">—</p>}
-        </section>
-      </div>
-
-      {/* Delivery address */}
-      {forwarder && (forwarder.ship_first_name || forwarder.ship_address_line) && (
-        <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-2">
-          <h2 className="text-sm font-bold text-foreground">ที่อยู่ส่ง</h2>
-          <ul className="text-xs space-y-1">
-            <li>
-              <span className="text-muted">ผู้รับ:</span>{" "}
-              {forwarder.ship_first_name} {forwarder.ship_last_name ?? ""}
+              </div>
             </li>
-            <li><span className="text-muted">เบอร์:</span> {forwarder.ship_phone ?? "—"}{forwarder.ship_phone2 && `, ${forwarder.ship_phone2}`}</li>
-            <li>
-              <span className="text-muted">ที่อยู่:</span>{" "}
-              {[forwarder.ship_address_line, forwarder.ship_sub_district, forwarder.ship_district, forwarder.ship_province, forwarder.ship_postal_code].filter(Boolean).join(" ")}
-            </li>
-          </ul>
-        </section>
+          ))}
+        </ol>
       )}
+
+      <p className="text-[10px] text-muted">
+        ฐานข้อมูล: legacy <code className="rounded bg-surface-alt px-1">tb_forwarder_driver</code> #{batch.id}{" "}
+        — {stops.length} จุดส่ง · ดำเนินการสถานะรายการในหน้า{" "}
+        <Link href={`/admin/drivers/work?driver=${batch.fdadminid}`} className="text-primary-600 hover:underline">
+          /admin/drivers/work
+        </Link>
+      </p>
     </main>
+  );
+}
+
+function Metric({
+  icon, label, value, tone = "default",
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  tone?: "default" | "success";
+}) {
+  const cls = tone === "success"
+    ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+    : "bg-surface-alt border-border";
+  return (
+    <div className={`rounded-lg border px-3 py-2 ${cls}`}>
+      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted">
+        {icon}
+        {label}
+      </div>
+      <div className="text-lg font-bold mt-0.5">{value}</div>
+    </div>
   );
 }

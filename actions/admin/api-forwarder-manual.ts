@@ -425,9 +425,15 @@ export async function adminApiForwarderManualInsert(
       const fIDorCO = `${carrierCfg.fIDorCOPrefix}${d.productID}`;
 
       // ── fUserCompany (legacy lines 242-244) ──────────────────
-      // If userCompany=1, set fUserCompany=NULL (legacy). NULL not allowed
-      // here (zero-fill convention) — use "0" / leave as default.
-      const fUserCompany = customer.userCompany === "1" ? null : "0";
+      // 2026-05-30 evening ภูม flag: NULL violates the NOT NULL constraint
+      // on tb_forwarder.fusercompany. The original comment ("NULL not
+      // allowed — use '0'") was correct in spirit but the code still
+      // wrote null. Legacy PHP set $fUserCompany=NULL but then
+      // string-interpolated it in the INSERT (`'$fUserCompany'` → `''`),
+      // so legacy effectively wrote empty string. Match that here for
+      // consistency with existing prod data (PR124/PR2503/AIGA all "").
+      // Convention: "" = company customer · "0" = individual customer.
+      const fUserCompany = customer.userCompany === "1" ? "" : "0";
 
       const nowIso = new Date().toISOString();
 

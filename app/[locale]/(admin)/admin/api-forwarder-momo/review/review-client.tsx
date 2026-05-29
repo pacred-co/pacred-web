@@ -23,8 +23,13 @@ import { Link } from "@/i18n/navigation";
 import {
   commitMomoRowToForwarder,
   commitMomoRowsBatch,
-  type CommitMomoRowInput,
 } from "@/actions/admin/momo-commit";
+// Import the input TYPE directly from the auth-agnostic core, NOT from the
+// "use server" file. Re-exporting the type from a `"use server"` module hits
+// a Turbopack server-actions-analyzer bug where the type-only re-export
+// emits a value re-export against a non-existent binding → runtime
+// `ReferenceError: CommitMomoRowInput is not defined` on bulk commit.
+import type { CommitMomoRowInput } from "@/lib/admin/commit-momo-row-core";
 
 // ─────────────────────────────────────────────────────────────
 // Types (also re-exported for the server page)
@@ -33,13 +38,32 @@ import {
 export type PendingRow = {
   id:                 string;
   momoTrackingNo:     string | null;
+  /**
+   * MOMO's INTERNAL routing batch ID (e.g. "PR20260527-SEA02") — kept
+   * as audit-trail. NOT the cabinet PCS staff/customers know.
+   */
   momoContainerNo:    string | null;
+  /**
+   * The REAL cabinet name (e.g. "GZS260525-2"), joined from
+   * momo_container_closed.cid via sync step 2.5 (cabinet propagate).
+   * Column name matches momo_container_closed.container_batch_no
+   * (per migration 0119 + 0126). NULL until the container_closed sync
+   * has processed this tracking.
+   */
+  containerBatchNo:   string | null;
   momoSackNo:         string | null;
   shipmentStatus:     string | null;
   adminStatusText:    string | null;
   phase:              string | null;
   /** Guessed from MOMO `user_group + user_code` (e.g. "PR032") — admin verifies. */
   guessedUserId:      string | null;
+  /**
+   * Bug 2a pre-validation: does this guessed userID actually exist in
+   * tb_users? null = no MOMO guess; true = exists; false = missing.
+   * Server-side probe in page.tsx — admin sees the warning before
+   * clicking commit, and commitAll auto-skips invalid rows.
+   */
+  userIdValid:        boolean | null;
   guessedShipBy:      string | null;
   qty:                number | null;
   lastSyncedAt:       string | null;
@@ -196,30 +220,77 @@ export function ReviewGridClient({
   };
 
   // Bulk commit — every row that has userID + fShipBy filled.
+  //
+  // ภูม flag (bug 2a): also pre-skip rows whose userID is known to be
+  // absent from tb_users (server-validated userIdValid === false). This
+  // is the most common bulk-fail cause — and the error message after
+  // commit ("ไม่พบสมาชิก") is identical for every skipped row, making
+  // the failures opaque. Mark them ahead of time so admin sees what's
+  // about to skip BEFORE the confirm dialog.
   const commitAll = async () => {
-    // Filter to rows that the admin has prepared (userID looks valid).
-    const validRows = pendingRows
-      .filter((r) => {
-        const f = formState[r.id];
-        if (!f) return false;
-        return /^PR\d+$/i.test(f.userID.trim()) && !!f.fShipBy;
-      })
-      .map((r) => ({
-        rowId:         r.id,
-        userID:        formState[r.id].userID.toUpperCase(),
-        fShipBy:       formState[r.id].fShipBy,
-        fProductsType: formState[r.id].fProductsType,
-      }));
+    // Pre-compute the per-row status of every row.
+    const candidates = pendingRows.map((r) => {
+      const f = formState[r.id];
+      if (!f) return { row: r, kind: "missing-form" as const };
+      const userID = f.userID.trim().toUpperCase();
+      if (!/^PR\d+$/i.test(userID) || !f.fShipBy) {
+        return { row: r, kind: "incomplete" as const };
+      }
+      // If the admin typed the same guessedUserId that's known-missing →
+      // pre-skip. If admin typed a DIFFERENT userID → trust them (they may
+      // have done a manual lookup elsewhere).
+      const typedMatchesGuess =
+        r.guessedUserId &&
+        userID === r.guessedUserId.toUpperCase();
+      if (typedMatchesGuess && r.userIdValid === false) {
+        return { row: r, kind: "user-missing" as const, userID };
+      }
+      return {
+        row:  r,
+        kind: "ok" as const,
+        input: {
+          rowId:         r.id,
+          userID,
+          fShipBy:       f.fShipBy,
+          fProductsType: f.fProductsType,
+        },
+      };
+    });
+
+    const validRows = candidates
+      .filter((c): c is Extract<typeof c, { kind: "ok" }> => c.kind === "ok")
+      .map((c) => c.input);
+    const userMissingRows = candidates.filter((c) => c.kind === "user-missing");
 
     if (validRows.length === 0) {
-      alert("ยังไม่มี row ใดที่กรอก userID + บริษัทขนส่งครบ — กรอกอย่างน้อย 1 row ก่อน");
+      const baseMsg = userMissingRows.length > 0
+        ? `ทุก row ที่กรอกครบ มี userID ที่ไม่มีอยู่ใน tb_users (${userMissingRows.length} row) — ` +
+          "แก้ userID เป็นเลขที่ถูกต้องก่อน หรือคลิก 'สร้างใหม่' รายตัว"
+        : "ยังไม่มี row ใดที่กรอก userID + บริษัทขนส่งครบ — กรอกอย่างน้อย 1 row ก่อน";
+      alert(baseMsg);
       return;
     }
+    const skipNote = userMissingRows.length > 0
+      ? `\n(จะข้าม ${userMissingRows.length} row ที่ userID ไม่มีในระบบ)`
+      : "";
     if (!confirm(
-      `ยืนยัน commit ${validRows.length} row พร้อมกัน?\n` +
+      `ยืนยัน commit ${validRows.length} row พร้อมกัน?${skipNote}\n` +
       `(action นี้จะ INSERT ${validRows.length} row ลง tb_forwarder · ส่งเมล/LINE ถ้าเปิด)`,
     )) {
       return;
+    }
+    // Pre-mark the user-missing rows so they don't sit silent during bulk.
+    if (userMissingRows.length > 0) {
+      setRowResults((m) => {
+        const out = { ...m };
+        for (const u of userMissingRows) {
+          out[u.row.id] = {
+            ok:      false,
+            message: `ข้าม: userID ${u.row.guessedUserId} ไม่มีในระบบ (กรอก userID ที่ถูกต้องก่อน)`,
+          };
+        }
+        return out;
+      });
     }
 
     setBulkRunning(true);
@@ -273,13 +344,26 @@ export function ReviewGridClient({
 
   // Counts for header.
   const totalPending = pendingRows.length;
+  // "พร้อม commit" = form filled AND (no MOMO guess OR guess is known
+  // valid OR admin overrode with a different value). Bug 2a — don't count
+  // known-missing-userID rows in the bulk badge.
   const totalReady = useMemo(
     () =>
       pendingRows.filter((r) => {
         const f = formState[r.id];
-        return f && /^PR\d+$/i.test(f.userID.trim()) && !!f.fShipBy;
+        if (!f) return false;
+        const userID = f.userID.trim().toUpperCase();
+        if (!/^PR\d+$/i.test(userID) || !f.fShipBy) return false;
+        const typedMatchesGuess =
+          r.guessedUserId && userID === r.guessedUserId.toUpperCase();
+        if (typedMatchesGuess && r.userIdValid === false) return false;
+        return true;
       }).length,
     [pendingRows, formState],
+  );
+  const totalUserMissing = useMemo(
+    () => pendingRows.filter((r) => r.userIdValid === false).length,
+    [pendingRows],
   );
 
   return (
@@ -294,6 +378,15 @@ export function ReviewGridClient({
           <span className="text-xs text-muted">
             (มี userID + บริษัทขนส่ง)
           </span>
+          {totalUserMissing > 0 && (
+            <>
+              {" · "}
+              <strong className="text-red-600">{totalUserMissing}</strong>{" "}
+              <span className="text-xs text-red-600">
+                userID ไม่อยู่ในระบบ
+              </span>
+            </>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -385,7 +478,30 @@ export function ReviewGridClient({
                       <td className="px-3 py-2 text-muted">{idx + 1}</td>
                       <td className="px-3 py-2 font-mono">{r.momoTrackingNo ?? "—"}</td>
                       <td className="px-3 py-2 font-mono">
-                        <div>{r.momoContainerNo ?? "—"}</div>
+                        {/*
+                          Cabinet display — prefer the REAL cabinet from
+                          container_closed.cid (containerBatchNo). Show the
+                          routing batch ID only as a faint audit line.
+                        */}
+                        {r.containerBatchNo ? (
+                          <>
+                            <div className="font-bold text-emerald-700">{r.containerBatchNo}</div>
+                            {r.momoContainerNo && r.momoContainerNo !== r.containerBatchNo && (
+                              <div className="text-[10px] text-muted">
+                                MOMO batch: {r.momoContainerNo}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <div>{r.momoContainerNo ?? "—"}</div>
+                            {r.momoContainerNo && (
+                              <div className="text-[10px] text-amber-600">
+                                ⏳ ยังไม่ join cabinet (รอ container_closed sync)
+                              </div>
+                            )}
+                          </>
+                        )}
                         {r.momoSackNo && (
                           <div className="text-[10px] text-muted">sack: {r.momoSackNo}</div>
                         )}
@@ -422,6 +538,23 @@ export function ReviewGridClient({
                           >
                             ใช้ค่าจาก MOMO: {r.guessedUserId}
                           </button>
+                        )}
+                        {/*
+                          ภูม flag (bug 2a): pre-validation chip — server-
+                          side probe of tb_users. Shows BEFORE bulk-commit
+                          so admin knows the row will skip / fail.
+                        */}
+                        {r.userIdValid === false && r.guessedUserId && (
+                          <div className="mt-0.5 inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
+                            <AlertCircle className="h-2.5 w-2.5" />
+                            ไม่มี {r.guessedUserId} ในระบบ
+                          </div>
+                        )}
+                        {r.userIdValid === true && (
+                          <div className="mt-0.5 inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                            <CheckCircle2 className="h-2.5 w-2.5" />
+                            พบใน tb_users
+                          </div>
                         )}
                       </td>
 

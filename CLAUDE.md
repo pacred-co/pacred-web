@@ -3,7 +3,76 @@
 
 ---
 
-# 🌅 2026-05-30 ค่ำ — CUSTOMER-PROFILE + RATE + TAX (P0→P2) · read FIRST
+# 🌃 2026-05-30 evening — 2 PARALLEL SAVE-POINTS · read BOTH
+
+Owner ส่งหน้า legacy customer-profile + ภูม กลับบ้านทำ MOMO ต่อ → 2 sessions ขนานในวันเดียว · ปิดเย็น (เดฟ) + ปิดดึก (ภูม).
+
+---
+
+## 🌙 2026-05-30 night — ภูม MOMO UNBLOCK + 5-SYSTEM FIDELITY AUDIT
+
+ภูม session 2026-05-30 ตอนเย็น→ดึก · กลับบ้าน ต่อจาก home computer · **23 commits pushed to Poom-pacred** (merged into dave-pacred 2026-05-29 reset) · master gap doc + 4 critical learnings captured.
+
+**📦 Cluster ของวันนี้:**
+
+1. **MOMO cabinet display bug (4 commits)** — propagation pipeline เขียน MOMO routing batch IDs (`PR20260527-SEA02`) ลง `tb_forwarder.fcabinetnumber` แทน real cabinet (`GZS260529-1`); forward-only safety ล็อกค่าผิดถาวร; cron window แคบ (`yesterday..today`) ดึง container_closed ที่ปิดก่อนหน้าไม่ได้.
+   - `0dd79949` — backfill Step 5 + UI mask (รอปิดตู้ amber chip) + service-orders sticky action column
+   - `f0847c6b` — cron `?start=&end=` overrides (manual reseed)
+   - `3b9e745f` — propagation root-cause fix · NEVER write routing batch; pre-load real cabinet per tracking; replace stale routing patterns with real cabinets
+   - `b5b8c675` — fwarehousename `7→8` (was Cargo Center, now MOMO)
+   - Backfill prod: 6 tb_forwarder rows fixed (51976-51981) — real cabinets + warehouse=8
+
+2. **MOMO commit unblock — fusercompany NOT NULL violation (1 commit · `3b864858`)** — ภูม "สร้างทั้งหมด" partial fail (3/4 success · PR005 stuck). Root cause: `lib/admin/commit-momo-row-core.ts:401` + `actions/admin/api-forwarder-manual.ts:430` both wrote JS `null` when `userCompany="1"` (company customer); legacy PHP wrote PHP `NULL` but string-interpolated as `''` (empty string). Fix: `null → ""`. Verified prod company customers (PR124/PR2503/AIGA) all have `fusercompany=""`.
+
+3. **3 customer userID renames** (DB-only · ภูม authorized) — MOMO sends 3-digit legacy codes (`005`/`032`/`116`); Pacred had reissued these as `PR9370`/`PR1282`/`PR1321` during migration. Renamed back atomically across 9 tables · **181 rows updated** (PR1321 had 178 FK refs · PR9370/PR1282 clean). After rename: review-grid ungated all 4 MOMO rows.
+
+4. **🚨 5-system parallel fidelity audit + master synthesis** ([`docs/audit/master-fidelity-2026-05-30-evening.md`](docs/audit/master-fidelity-2026-05-30-evening.md)) — ภูม asked "อะไรตกหล่น อะไรยังใช้งานไม่ได้จริง". Spawned 5 agents (forwarders / service-orders / yuan-payments / drivers+barcode / cnt+warehouse) per AGENTS.md §0b deep-audit-from-source. Result:
+
+   | ระบบ | ✅ | ⚠️ | ❌ | 🔧 | % done | Top P0 |
+   |---|---:|---:|---:|---:|---:|---:|
+   | ฝากนำเข้า (forwarders) | 31 | 12 | 9 | 5 | ~80% | ~17h |
+   | ฝากสั่งซื้อ (service-orders) | 11 | 4-7 | 13 | 17 | **~15-25%** | ~12-18h |
+   | ฝากโอน (yuan-payments) | 22 | 18 | 23 | 11 | ~60% | revenue hole |
+   | คนขับ + barcode | partial | partial | 4 | 12 | ~75-80% | ~5h |
+   | ตู้/cnt + warehouse | partial | partial | 5 | 16 | 70-88% | ~15h |
+
+   **Grand total: ~57 P0 + ~63 P1 · ~70h dev work · 8-9 wallclock days with parallel agents**
+
+5. **6 recurring patterns** (root causes ข้ามทุกระบบ):
+   - 🚨 **SILENT DEAD-WRITES** — admin actions write to REBUILT empty tables instead of `tb_*` (#1 bug · 7 surfaces affected)
+   - 🚨 **DUPLICATE ACTION FILES** — `yuan-payments.ts` vs `yuan-payments-tb.ts`; pick wrong = silent dead-write
+   - 🚨 **WALLET LEDGER NOT DEBITED** — admin approve, wallet doesn't decrement (cash leak in yuan-payments + service-orders)
+   - 🚨 **NOTIFY GAPS** — LINE/SMS/email unwired on key transitions (exception: forwarder-check EXCEEDS legacy)
+   - 🚨 **PRINT/PDF ROUTES MISSING** — /admin/service-orders/print absent; forwarders 7-button ribbon missing
+   - 🚨 **SESSION LOCK MISSING** — legacy `updateLock.php` heartbeat; 13 admins on prod = collision risk
+
+6. **Tier A revenue holes (~9h · Day 1 priority)** — A1 yuan adminCreateManual debit wallet · A2 service-orders adminMarkPaid wallet · A3 forwarders bulkCancel pivot to tb_forwarder · A4 adminUpdateServiceOrder pivot to tb_header_order · A5 adminUpdateYuanPayment pivot to tb_payment · A6 CNY rate `rsdefault → rpDefault` typo + admin UI.
+
+**📋 4 new learnings captured today** (compounding for next agent · home computer Claude reads):
+- `docs/learnings/partner-apis-quirks.md` — MOMO `container_no` ≠ cabinet (routing batch trap)
+- `docs/learnings/nextjs-16-quirks.md` — `react-hooks/purity` rejects raw `Date.now()` / `new Date()` in render
+- `docs/learnings/php-port-patterns.md` — legacy PHP `NULL` string-interpolation = empty string · NOT Postgres NULL
+- `docs/learnings/verify-deep-flow.md` — the "silent dead-write" pattern (#1 across 5-system audit)
+
+**🟠 Pending ภูม manual actions** (post-2026-05-30 close-out · trimmed):
+1. ✅ ~~PR005 commit ลงตู้ GZS260529-1~~ — DONE (ภูม confirmed 2026-05-30 night)
+2. **Browser-verify 2 surfaces post-deploy:** `/admin/forwarders` (real cabinets, no "PR20260527-*") · `/admin/report-cnt/GZS260525-2` + `/admin/report-cnt/GZS260529-1` ("โกดังจีน: MOMO")
+3. **Decide A/B/C** for ~8,898 customer MOMO mapping problem (will recur if many MOMO customers have legacy user_codes)
+
+**✅ 6 decisions ภูม answered 2026-05-30 night** (before going home):
+
+| # | คำถาม | ภูม answer | งานที่ตามมา |
+|---|---|---|---|
+| 1 | GOOGLE_MAPS_API_KEY | "เดะเอามาให้อีกที / สอนวิธีเอา" | doc: [`docs/setup/google-maps-api-key.md`](docs/setup/google-maps-api-key.md) — step-by-step setup guide |
+| 2 | LINE Notify (Apr 2025 EOL) | "ย้ายไป LINE OA push + สอนเซ็ท" | **✅ Pacred infrastructure ALREADY wired** — `sendLinePush()` at `lib/notifications/index.ts:125` · channel access token in `.env.local` · LIFF link flow at `/liff/link` · token VERIFIED working (probe LINE API → Pacred Shipping @pacred · 0/300 quota used) · 3 steps left: (a) add 4 LINE env vars to Vercel prod, (b) `LINE_PUSH_BYPASS=false` Production scope only, (c) upgrade quota plan FREE→Light/Standard. Guide: [`docs/setup/line-oa-push-migration.md`](docs/setup/line-oa-push-migration.md) |
+| 3 | Cron retarget `tb_forwarder_driver` | "เดะทำที่บ้านอีกที" | deferred to home-computer session · ~20 min fix |
+| 4 | Print routes brand | "Pacred (Thailand)" | update print templates + `components/seo/site.ts` if needed (verify tax ID `0105564077716`) |
+| 5 | Numeric pallet 1-40 | "ทำให้รองรับได้ทั้งคู่" (letter A1-Z6 + numeric 1-40) | new feature work · ~3-4h · build dual-mode pallet input |
+| 6 | Auto SMS+LINE on fstatus 3→4 | "yes" | wire `MOMO_SYNC_PROPAGATE_STATUS=true` + add SMS/LINE on transition (depends on #2 LINE OA done) |
+
+---
+
+## 🌅 2026-05-30 ค่ำ — เดฟ CUSTOMER-PROFILE + RATE + TAX (P0→P2)
 
 เดฟ session — owner ส่งหน้า legacy customer-profile ถาม "เอามาครบไหม ปรับเรทในหน้า user เชื่อมวางบิล". ทำจนจบ + push **dave-pacred (= main)**. **Resume:** `git pull origin dave-pacred` + อ่าน **[`docs/research/save-point-2026-05-30-rate-tax-profile.md`](docs/research/save-point-2026-05-30-rate-tax-profile.md)** (canonical · file map · flags · pickup).
 
@@ -15,6 +84,28 @@
 - 🟡 flags (money · ดู save-point §FLAGGED): ใบเสร็จปกติยัง flat-1% · promo-discount ไม่ port · VAT-per-leg + 50ทวิ รอบัญชี · write-actions ยังไม่ click-test (เลี่ยง mutate prod)
 
 verified: tsc 0 · lint 0 · build 0 · wht 45 + resolve-rate 49 tests · browser (profile PW+PR124 · edit page render)
+
+---
+
+# 🗺 Branch state (post 2026-05-29 reset merge)
+
+| Branch | HEAD | สถานะ |
+|---|---|---|
+| `main` | (post-merge) | production · Vercel auto-deploy |
+| `dave-pacred` | (= main) | integrator + customer-backend lane (เดฟ) — both Poom-pacred + podeng merged 2026-05-29 |
+| `Poom-pacred` | active | V3 backend primary lane (ภูม) |
+| `podeng` | active | frontend + brand SOT (ปอน) |
+| `Poom` · `dave` | dormant | V3 secondary lanes |
+
+**🎯 Pickup options:**
+- **A** Tier A revenue holes (6 fixes · ~9h)
+- **B** Quick wins (5 items · ≤30 min each · CNY rate typo · cron retarget · delete dupes)
+- **C** Click-test the 4 MOMO fixes from today on prod (after deploy)
+- **D** Decide 6 pending questions (ภูม-only)
+
+---
+
+# Legacy 1:1 strategy (unchanged from 2026-05-24)
 
 ---
 

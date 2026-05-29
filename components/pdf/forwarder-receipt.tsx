@@ -17,6 +17,14 @@ export type ForwarderReceiptData = {
   f_no:        string | null;
   created_at:  string;
 
+  /**
+   * Forwarder lifecycle status code. Drives the document title:
+   *   - "delivered" (paid) → ใบเสร็จรับเงินฝากนำเข้า
+   *   - any other          → ใบแจ้งหนี้ฝากนำเข้า
+   * Optional for backward-compat with older callers; absent = treat as invoice.
+   */
+  status?:     string | null;
+
   /** V-C2: staff-set buyer-name override printed on the bill header. NULL = use default. */
   bill_to_name_override?: string | null;
 
@@ -92,12 +100,16 @@ export function ForwarderReceipt({ data }: { data: ForwarderReceiptData }) {
   if (data.other_price           > 0) rows.push({ label: "ค่าอื่นๆ",          value: Number(data.other_price) });
 
   const fNo = data.f_no ?? "—";
+  // Document title — receipt vs invoice based on lifecycle status.
+  // "delivered" is the rebuilt-app paid terminal state for forwarder rows.
+  const isPaid = data.status === "delivered";
+  const docTitle = isPaid ? "ใบเสร็จรับเงินฝากนำเข้า" : "ใบแจ้งหนี้ฝากนำเข้า";
 
   return (
     <Document
-      title={`Pacred Receipt ${fNo}`}
+      title={`Pacred ${docTitle} ${fNo}`}
       author="Pacred"
-      subject={`Forwarder receipt for ${fNo}`}
+      subject={`Forwarder ${isPaid ? "receipt" : "invoice"} for ${fNo}`}
       creator="Pacred Web (Next.js)"
     >
       <Page size="A4" style={styles.page}>
@@ -112,7 +124,7 @@ export function ForwarderReceipt({ data }: { data: ForwarderReceiptData }) {
             </Text>
           </View>
           <View style={styles.receiptMeta}>
-            <Text style={styles.receiptTitle}>ใบแจ้งหนี้ฝากนำเข้า</Text>
+            <Text style={styles.receiptTitle}>{docTitle}</Text>
             <Text style={styles.receiptNo}>{fNo}</Text>
             <Text style={styles.receiptDate}>วันที่ {formatDateThai(data.created_at)}</Text>
           </View>

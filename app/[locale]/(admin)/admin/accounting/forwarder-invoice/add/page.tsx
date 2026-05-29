@@ -187,17 +187,18 @@ export default async function AddForwarderInvoicePage({
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="mx-auto max-w-7xl px-4 py-6">
-        {/* Breadcrumb */}
+        {/* Breadcrumb — 2026-05-30 ภูม flagged #7: was "ใบแจ้งหนี้ ฝากนำเข้า"
+            but this page issues ใบเสร็จ (Wave 29 pivot · tb_receipt-backed). */}
         <nav className="text-sm text-slate-500 mb-3">
           <Link href="/admin" className="hover:text-indigo-700">หน้าแรก</Link>
           <span className="mx-1">/</span>
           <Link href="/admin/accounting" className="hover:text-indigo-700">บัญชี</Link>
           <span className="mx-1">/</span>
           <Link href="/admin/accounting/forwarder-invoice" className="hover:text-indigo-700">
-            ใบแจ้งหนี้ ฝากนำเข้า
+            ใบเสร็จ ฝากนำเข้า
           </Link>
           <span className="mx-1">/</span>
-          <span className="text-slate-700">สร้างใบแจ้งหนี้ใหม่</span>
+          <span className="text-slate-700">สร้างใบเสร็จใหม่ (Manual Override)</span>
         </nav>
 
         <div className="flex items-center justify-between mb-5">

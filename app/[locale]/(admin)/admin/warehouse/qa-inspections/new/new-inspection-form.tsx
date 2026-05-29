@@ -20,8 +20,8 @@ import { useRouter } from "@/i18n/navigation";
 import {
   adminCreateQaInspection,
   adminUploadQaPhoto,
-  type QaVerdict,
 } from "@/actions/admin/qa-inspections";
+import type { QaVerdict } from "@/lib/validators/qa-inspection-rebuilt";
 
 const VERDICTS: QaVerdict[] = ["pass", "fail", "hold", "fake_product"];
 const MAX_PHOTOS = 20;

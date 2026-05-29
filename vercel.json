@@ -35,7 +35,7 @@
     },
     {
       "path": "/api/cron/momo-sync",
-      "schedule": "*/10 * * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/sheets-sync-ctt",

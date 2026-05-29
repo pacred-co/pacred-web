@@ -435,14 +435,29 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                   </td>
                   <td className="px-2 py-2 font-mono text-[11px]">{r.fidorco ?? "-"}</td>
                   <td className="px-2 py-2 text-[11px]">
-                    <Link href={`/admin/forwarder/update/${r.id}`} className="text-primary-600 hover:underline">
+                    {/* ภูม #5 2026-05-29: legacy PHP linked to
+                        `forwarder/update/<ID>` (singular) which does not exist
+                        in Next.js. The Pacred forwarder detail lives at
+                        `/admin/forwarders/[fNo]` (plural) and accepts either
+                        `fidorco` or numeric `id` via legacy-fallback lookup. */}
+                    <Link
+                      href={`/admin/forwarders/${encodeURIComponent(r.fidorco ?? String(r.id))}`}
+                      className="text-primary-600 hover:underline"
+                    >
                       {r.ftrackingchn ?? "-"}
                     </Link>
                     <br />
                     <span className="text-muted text-[10px]">เลขที่ #{r.id}</span>
                   </td>
                   <td className="px-2 py-2 text-[11px]">
-                    <Link href={`/admin/users/profile/${r.userid}`} className="text-primary-600 hover:underline">
+                    {/* ภูม #5 2026-05-29: legacy PHP linked to
+                        `users/profile/<userID>` which does not exist in
+                        Next.js. Pacred customer detail = `/admin/customers/[id]`
+                        (Wave 20 P0-1, `tb_users.userID` backed). */}
+                    <Link
+                      href={`/admin/customers/${encodeURIComponent(r.userid)}`}
+                      className="text-primary-600 hover:underline"
+                    >
                       {r.userid}
                     </Link>
                   </td>
@@ -554,7 +569,13 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                     })()}
                     {r.fcredit && r.fcredit !== "" && (
                       <div className="mt-1">
-                        <Link href={`/admin/forwarder/update/${r.id}`} className="inline-block rounded-full bg-emerald-500 text-emerald-50 border border-emerald-700 text-[9px] px-1.5 py-0.5">เครดิตได้</Link>
+                        {/* ภูม #5 2026-05-29: same path-fix as tracking link above. */}
+                        <Link
+                          href={`/admin/forwarders/${encodeURIComponent(r.fidorco ?? String(r.id))}`}
+                          className="inline-block rounded-full bg-emerald-500 text-emerald-50 border border-emerald-700 text-[9px] px-1.5 py-0.5"
+                        >
+                          เครดิตได้
+                        </Link>
                       </div>
                     )}
                   </td>

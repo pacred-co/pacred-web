@@ -799,3 +799,199 @@ export async function adminSetForwarderBillToOverride(
     },
   );
 }
+
+// ────────────────────────────────────────────────────────────
+// Wave 30.6 — box / address label print-status audit lift
+// ────────────────────────────────────────────────────────────
+// ภูม flag (2026-05-30): the legacy forwarder list's bottom-left toolbar
+// has three buttons we were missing — "พิมพ์จากหน้ากล่อง" (box label),
+// "พิมพ์ที่อยู่ส่งสินค้า" (address label), and "เพิ่มไปสถานะพิเศษ".
+//
+// Legacy `pcs-admin/printAll.php` marked a row as printed the moment the
+// label PDF was generated:
+//   case "1" (กล่อง)      → UPDATE tb_forwarder SET printStatus1='1' WHERE ID=…
+//   case "4" (ที่อยู่ส่ง)  → UPDATE tb_forwarder SET printStatus4='1' WHERE ID=…
+// Our HTML print pages (/admin/forwarders/print/{box,address}) render the
+// labels + window.print(). This Server Action does the parallel flag write
+// so the "พิมพ์แล้ว" audit trail matches legacy. The table's print buttons
+// call it BEFORE window.open — idempotent (flag set to "1"; a re-print
+// re-sets the same value, never toggles off).
+//
+// printstatus1 / printstatus4 are `character varying(1)` (migration 0081 ·
+// default "0") — we write the STRING "1", never the number 1. Existing
+// reads compare `=== "1"`.
+const markPrintedSchema = z.object({
+  fids:  z.array(z.number().int().positive()).min(1).max(300),
+  which: z.union([z.literal(1), z.literal(4)]),   // 1 = box label · 4 = address label
+});
+
+export async function markForwarderPrinted(
+  input: z.infer<typeof markPrintedSchema>,
+): Promise<AdminActionResult<{ marked: number }>> {
+  const parsed = markPrintedSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { fids, which } = parsed.data;
+  const col = which === 1 ? "printstatus1" : "printstatus4";
+
+  return withAdmin<{ marked: number }>(
+    ["super", "ops", "warehouse", "accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const { error: updErr } = await admin
+        .from("tb_forwarder")
+        .update({ [col]: "1" })
+        .in("id", fids);
+      if (updErr) return { ok: false, error: updErr.message };
+
+      await logAdminAction(adminId, "forwarder.mark_printed", "tb_forwarder", "bulk", {
+        fids,
+        which,
+        column: col,
+      });
+
+      revalidatePath("/admin/forwarders");
+      return { ok: true, data: { marked: fids.length } };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// Wave 30.6 — restore forwarder(s) FROM special-hold (fstatus '99')
+// ────────────────────────────────────────────────────────────
+// The "เพิ่มไปสถานะพิเศษ" move itself is just adminBulkUpdateForwarderTbStatus
+// with fstatus="99" (already supported). This is the INVERSE — the
+// "ย้ายกลับสถานะปกติ" button shown when the admin is filtering the special
+// lane (?status=p). Port of legacy `forwarder.php` removeStatusTo99():
+//   SELECT fStatusOld FROM tb_log_forwarder_status
+//     WHERE fid=? AND fStatusNew='99'
+//     ORDER BY fDateChange DESC LIMIT 1
+//   → restore tb_forwarder.fStatus to that previous status
+//   → if no such log row, fall back to '3' (กำลังส่งมาไทย)
+//   → append a tb_log_forwarder_status row (99 → restored)
+// We only act on rows whose CURRENT fstatus is '99' (a row already moved
+// back is skipped, not re-flipped). Per-row permission via the same
+// canAnyRoleFlipFstatus matrix the bulk action uses — restoring IS a status
+// flip, so it obeys the legacy owner-role rules.
+const restoreFromSpecialSchema = z.object({
+  fids: z.array(z.number().int().positive()).min(1).max(100),
+});
+
+export async function adminRestoreForwarderFromSpecial(
+  input: z.infer<typeof restoreFromSpecialSchema>,
+): Promise<AdminActionResult<{ restored: number }>> {
+  const parsed = restoreFromSpecialSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { fids } = parsed.data;
+
+  return withAdmin<{ restored: number }>(
+    ["ops", "super", "manager", "warehouse", "accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+
+      // Snapshot — only rows currently in special-hold are eligible.
+      const { data: before, error: readErr } = await admin
+        .from("tb_forwarder")
+        .select("id, fstatus, userid, fidorco")
+        .in("id", fids);
+      if (readErr) return { ok: false, error: readErr.message };
+      if (!before || before.length === 0) return { ok: false, error: "not_found" };
+
+      const beforeRows = before as unknown as Array<{
+        id: number;
+        fstatus: string;
+        userid: string;
+        fidorco: string | null;
+      }>;
+
+      const eligible = beforeRows.filter((r) => r.fstatus === "99");
+      if (eligible.length === 0) {
+        return { ok: false, error: "no_special_rows: ไม่มีรายการที่อยู่ในสถานะพิเศษ (99)" };
+      }
+
+      const adminIdSafe = String(adminId).slice(0, 10);
+
+      // Resolve each eligible row's restore-target from its most-recent
+      // "→99" log row (fall back '3'). One query per row — the eligible
+      // set is small (admin clears a handful of holds at a time).
+      const restoreTargets = new Map<number, string>();
+      for (const row of eligible) {
+        const { data: logRow, error: logErr } = await admin
+          .from("tb_log_forwarder_status")
+          .select("fstatusold")
+          .eq("fid", row.id)
+          .eq("fstatusnew", "99")
+          .order("fdatechange", { ascending: false })
+          .limit(1)
+          .maybeSingle<{ fstatusold: string | null }>();
+        // §0c: don't silently swallow a log-lookup failure. It's non-fatal
+        // here (the fallback '3' is a safe restore target), but log it so a
+        // systemic tb_log_forwarder_status problem is visible, not hidden.
+        if (logErr) {
+          console.error("[adminRestoreForwarderFromSpecial] status-log lookup failed", {
+            fid: row.id,
+            code: logErr.code,
+            message: logErr.message,
+          });
+        }
+        const prev = logRow?.fstatusold;
+        // Never restore back INTO "99" (corrupt log) — default to '3'.
+        const target = prev && prev !== "99" ? prev : "3";
+        restoreTargets.set(row.id, target);
+      }
+
+      // Per-row permission — restoring 99 → target is a status flip, so it
+      // obeys the same legacy owner-role matrix the bulk action enforces.
+      const callerRoles = (await getAdminRoles()) ?? [];
+      const forbidden = eligible.filter(
+        (r) => !canAnyRoleFlipFstatus(callerRoles, "99", restoreTargets.get(r.id) ?? "3"),
+      );
+      if (forbidden.length > 0) {
+        const sample = forbidden
+          .slice(0, 5)
+          .map((r) => `#${r.id}(99→${restoreTargets.get(r.id) ?? "3"})`)
+          .join(", ");
+        const more = forbidden.length > 5 ? ` (และอีก ${forbidden.length - 5} รายการ)` : "";
+        return {
+          ok: false,
+          error: `forbidden_transition: บัญชีของคุณไม่มีสิทธิ์นำรายการต่อไปนี้ออกจากสถานะพิเศษ ${sample}${more}`,
+        };
+      }
+
+      // Group by target so we issue one UPDATE per distinct restore status.
+      const byTarget = new Map<string, number[]>();
+      for (const r of eligible) {
+        const t = restoreTargets.get(r.id) ?? "3";
+        const arr = byTarget.get(t) ?? [];
+        arr.push(r.id);
+        byTarget.set(t, arr);
+      }
+
+      const nowIso = new Date().toISOString();
+      for (const [target, ids] of byTarget) {
+        const { error: updErr } = await admin
+          .from("tb_forwarder")
+          .update({ fstatus: target, fdateadminstatus: nowIso, adminidupdate: adminIdSafe })
+          .in("id", ids);
+        if (updErr) return { ok: false, error: updErr.message };
+      }
+
+      await logAdminAction(adminId, "forwarder.restore_from_special", "tb_forwarder", "bulk", {
+        fids:    eligible.map((r) => r.id),
+        targets: Object.fromEntries(restoreTargets),
+      });
+
+      // Append the inverse status-log row per restored item (99 → target).
+      // Best-effort — a log failure does NOT roll back the UPDATEs above.
+      for (const r of eligible) {
+        await appendStatusLog(admin, r.id, "99", restoreTargets.get(r.id) ?? "3", adminIdSafe);
+      }
+
+      revalidatePath("/admin/forwarders");
+      return { ok: true, data: { restored: eligible.length } };
+    },
+  );
+}
