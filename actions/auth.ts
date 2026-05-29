@@ -33,7 +33,7 @@ import {
 } from "@/lib/validators/auth";
 import { requestOtp, verifyOtp } from "./otp";
 import { logger } from "@/lib/logger";
-import { insertLegacyTbUserRow } from "@/lib/auth/legacy-bridge-tb-users";
+import { insertLegacyTbUserRow, findLegacyUserIdByPhone } from "@/lib/auth/legacy-bridge-tb-users";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -186,6 +186,17 @@ export async function registerPersonal(
 
   const admin = createAdminClient();
 
+  // Identity guard (เดฟ 2026-05-30) — block re-registration when the phone
+  // already belongs to an existing customer. Re-registering mints a parallel
+  // orphan identity (new profiles row disconnected from the customer's real
+  // tb_users account — the PR005 case). D1 rule: existing customers sign in
+  // with their existing password (legacy PCS bridge), they don't re-register.
+  const existingUserId = await findLegacyUserIdByPhone(admin, phone);
+  if (existingUserId) {
+    logger.info("auth", "registerPersonal blocked — phone already registered", { existingUserID: existingUserId });
+    return { ok: false, error: "phone_exists" };
+  }
+
   // Create auth user (skip provider's own SMS — we already verified ourselves)
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
     phone,
@@ -311,6 +322,17 @@ export async function registerJuristicStep1(
   if (!otpOk) return { ok: false, error: "invalid_otp" };
 
   const admin = createAdminClient();
+
+  // Identity guard (เดฟ 2026-05-30) — block juristic re-registration when the
+  // phone already belongs to an existing customer. Otherwise a profiles +
+  // corporate row is minted disconnected from the customer's real tb_users
+  // identity (the PR005 orphan case: phone owned by PR9370, signup created a
+  // parallel PR005). Existing customers log in with their existing password.
+  const existingUserId = await findLegacyUserIdByPhone(admin, phone);
+  if (existingUserId) {
+    logger.info("auth", "registerJuristicStep1 blocked — phone already registered", { existingUserID: existingUserId });
+    return { ok: false, error: "phone_exists" };
+  }
 
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
     phone,

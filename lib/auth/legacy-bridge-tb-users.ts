@@ -232,6 +232,41 @@ export async function insertLegacyTbUserRow(
 }
 
 /**
+ * Look up an existing legacy `tb_users` account by phone — used by the signup
+ * guard (actions/auth.ts) to BLOCK a re-registration that would otherwise mint
+ * a parallel orphan identity (profiles/corporate disconnected from the real
+ * customer). Returns the existing `userID` (member code) or null.
+ *
+ * The customer's phone is the stable key: `tb_users.userTel` carries a UNIQUE
+ * index. We convert the signup's E.164 phone to the legacy 10-digit form before
+ * the lookup. Fail-open on a transient read error (return null = allow signup)
+ * so a DB hiccup never blocks a legitimate new customer.
+ */
+export async function findLegacyUserIdByPhone(
+  admin: SupabaseClient,
+  phone: string,
+): Promise<string | null> {
+  const legacyTel = e164ToLegacyThaiPhone(phone);
+  if (!legacyTel) return null;
+  const { data, error } = await admin
+    .from("tb_users")
+    .select("userID, userStatus")
+    .eq("userTel", legacyTel)
+    .maybeSingle<{ userID: string; userStatus: string | null }>();
+  if (error) {
+    logger.warn(SCOPE, "phone-existence pre-check failed — allowing signup (fail-open)", {
+      phone: redactPhone(phone),
+      reason: error.message,
+    });
+    return null;
+  }
+  // userStatus='0' = legacy soft-deleted account. A deleted legacy account
+  // should NOT block a fresh signup (the customer genuinely starts over).
+  if (data && data.userStatus !== "0") return data.userID;
+  return null;
+}
+
+/**
  * Strip the `+66` E.164 prefix and re-prepend `0` so the legacy
  * tb_users.usertel column gets the 10-digit local-thai form it expects.
  * Pass-through for non-`+66` inputs (defensive — legacy column accepts
