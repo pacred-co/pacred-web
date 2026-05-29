@@ -10,11 +10,24 @@ import { CustomerWhtUploadPanel } from "@/components/customer-wht-upload-panel";
 /**
  * Print-ready receipt view. No NavBar/sidebar/footer — just the body.
  * Customer (or admin) opens this and hits Ctrl+P to save as PDF.
- * Phase H ships this as HTML; later we can swap to @react-pdf/renderer
- * for a true PDF endpoint.
+ *
+ * Dual-mode (matches `/service-order/[hNo]/receipt` pattern):
+ *   - status='delivered' (paid)      → ใบเสร็จรับเงินฝากนำเข้า
+ *   - status in any other live state → ใบแจ้งหนี้ฝากนำเข้า
+ *   - ?doc=invoice                   → force ใบแจ้งหนี้ even if paid
+ *     (mirrors legacy printShop.php?print=2 — admin/customer can print
+ *     the invoice form even after payment for filing purposes).
  */
-export default async function ForwarderReceiptPage({ params }: { params: Promise<{ fNo: string }> }) {
+export default async function ForwarderReceiptPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ fNo: string }>;
+  searchParams: Promise<{ doc?: string }>;
+}) {
   const { fNo } = await params;
+  const { doc } = await searchParams;
+  const forceInvoice = doc === "invoice";
   const res = await getForwarderByNo(fNo);
   if (!res.ok || !res.data) notFound();
   const f = res.data;
@@ -76,6 +89,11 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
   void companyName; // referenced in case of future juristic-only branch
   const isEligible = buyerTaxId.replace(/\D/g, "").length === 13;
   const isPaid     = f.status === "delivered";
+  // Document title — match the actual lifecycle stage.
+  // Customer is shown ใบแจ้งหนี้ before payment, ใบเสร็จรับเงิน after, and
+  // can explicitly force ใบแจ้งหนี้ via `?doc=invoice` (legacy print=2).
+  const showAsInvoice = forceInvoice || !isPaid;
+  const docLabel = showAsInvoice ? "ใบแจ้งหนี้ฝากนำเข้า" : "ใบเสร็จรับเงินฝากนำเข้า";
 
   // U2-4: post-delivery cost adjustments (D/O fee · gateway · weight rebill).
   // RLS scopes to profile_id automatically — customer sees only their own.
@@ -184,7 +202,7 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
             <p className="text-xs">โทร {CONTACT.phoneCompanyDisplay} · {CONTACT.email}</p>
           </div>
           <div className="text-right">
-            <h2 className="text-xl font-bold">ใบแจ้งหนี้ฝากนำเข้า</h2>
+            <h2 className="text-xl font-bold">{docLabel}</h2>
             <p className="font-mono text-lg">{f.f_no}</p>
             <p className="text-xs text-gray-600">วันที่: {new Date(f.created_at).toLocaleDateString("th-TH")}</p>
           </div>
