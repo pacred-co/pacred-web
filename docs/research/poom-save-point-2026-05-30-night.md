@@ -229,11 +229,28 @@ cat docs/audit/master-fidelity-2026-05-30-evening.md             # master gap do
    - `/admin/forwarders` — all 6 SEA01/SEA02 rows show real cabinet (no "PR20260527-*" routing batch)
    - `/admin/report-cnt/GZS260529-1` + `/admin/report-cnt/GZS260525-2` — "โกดังจีน: MOMO" (not Cargo Center)
 3. **Decide A/B/C** for the MOMO user_code mapping (8,898 customers · this will recur if many MOMO customers have legacy 3-digit codes that don't match Pacred userID)
-4. **6 decisions** in master audit (LINE Notify · Google Maps · print brand · numeric pallet · cron retarget · push-on-3→4) — ภูม กำลังตอบบางข้อ
 
 **Removed from earlier list (already handled):**
 - ~~S3 access key rotation~~ — ตัดออกตาม ภูม
 - ~~Apply migrations 0118 + 0119 to prod~~ — applied นานแล้ว
+
+## ✅ 6 master-audit decisions — ภูม answered 2026-05-30 night
+
+| # | คำถาม | ภูม answer | งานที่ตามมา · effort |
+|---|---|---|---|
+| 1 | GOOGLE_MAPS_API_KEY · drivers GPS map | "เดะเอามาให้อีกที / สอน" | ✅ doc written: [`docs/setup/google-maps-api-key.md`](../setup/google-maps-api-key.md) — ภูม follows steps to get key from Google Cloud Console · adds to `.env.local` + Vercel env vars · ~15 min setup |
+| 2 | LINE Notify (Apr 2025 EOL) | "ย้ายไป LINE OA push + สอนเซ็ท" | ✅ doc written: [`docs/setup/line-oa-push-migration.md`](../setup/line-oa-push-migration.md) — full migration guide · pacred OA already exists (https://lin.ee/Yg3fU0I) · need channel access token + webhook + LIFF flow to capture userID ↔ Pacred PR-code mapping · ~2-3h setup + code |
+| 3 | Cron retarget `tb_forwarder_driver` | "เดะทำที่บ้านอีกที" | deferred to home session · 20 min · `app/api/cron/expire-driver-assignments/route.ts` retarget the empty rebuilt table → `tb_forwarder_driver` |
+| 4 | Print routes brand | **"Pacred (Thailand)"** | update mPDF receipt + invoice templates to use `Pacred (Thailand) Co., Ltd. · TaxID 0105564077716` (not legacy `PCS Cargo Co., Ltd. · 0105560160694`) · check `lib/admin/print-receipt.ts` / `lib/admin/print-invoice.ts` · 1h |
+| 5 | Numeric pallet 1-40 | **"ทำให้รองรับได้ทั้งคู่"** | dual-mode pallet input · accept both `A1`-`Z6` (legacy 6-letter+digit) AND `1`-`40` (numeric) · update `/admin/barcode/driver/import` form + validation regex + display logic · 3-4h |
+| 6 | Auto SMS+LINE on fstatus 3→4 | **"yes"** | wire on MOMO/CN cron when status transitions 3→4 (`AT_WAREHOUSE_TH`) · set env `MOMO_SYNC_PROPAGATE_STATUS=true` + add SMS via ThaiBulkSMS + LINE OA push via #2 channel · depends on #2 done first · 2h |
+
+**Sequencing recommended for home-computer session:**
+1. **Day 1 (~3h)** — #1 set Google Maps key (15 min) + #4 print brand swap (1h) + #3 cron retarget (20 min) + verify browser-verify items #2 from pending list (30 min)
+2. **Day 2 (~4-5h)** — #2 LINE OA push setup (LINE Developers Console + webhook + LIFF · 3h) + #6 auto-notify wire up (2h) — these are paired
+3. **Day 3+ (~3-4h)** — #5 numeric pallet support (P1 polish · not launch-blocking)
+
+Total remaining for the 6 decisions: **~10-12h work** (mostly setup + integration, light coding).
 
 ---
 

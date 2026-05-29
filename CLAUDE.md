@@ -52,7 +52,17 @@
 1. ✅ ~~PR005 commit ลงตู้ GZS260529-1~~ — DONE (ภูม confirmed 2026-05-30 night)
 2. **Browser-verify 2 surfaces post-deploy:** `/admin/forwarders` (real cabinets, no "PR20260527-*") · `/admin/report-cnt/GZS260525-2` + `/admin/report-cnt/GZS260529-1` ("โกดังจีน: MOMO")
 3. **Decide A/B/C** for ~8,898 customer MOMO mapping problem (will recur if many MOMO customers have legacy user_codes)
-4. **6 decisions** in master audit (LINE Notify · Google Maps · print brand · numeric pallet · cron retarget · push-on-3→4) — ภูม กำลังตอบบางข้อ
+
+**✅ 6 decisions ภูม answered 2026-05-30 night** (before going home):
+
+| # | คำถาม | ภูม answer | งานที่ตามมา |
+|---|---|---|---|
+| 1 | GOOGLE_MAPS_API_KEY | "เดะเอามาให้อีกที / สอนวิธีเอา" | doc: [`docs/setup/google-maps-api-key.md`](docs/setup/google-maps-api-key.md) — step-by-step setup guide |
+| 2 | LINE Notify (Apr 2025 EOL) | "ย้ายไป LINE OA push + สอนเซ็ท" | doc: [`docs/setup/line-oa-push-migration.md`](docs/setup/line-oa-push-migration.md) — migration guide |
+| 3 | Cron retarget `tb_forwarder_driver` | "เดะทำที่บ้านอีกที" | deferred to home-computer session · ~20 min fix |
+| 4 | Print routes brand | "Pacred (Thailand)" | update print templates + `components/seo/site.ts` if needed (verify tax ID `0105564077716`) |
+| 5 | Numeric pallet 1-40 | "ทำให้รองรับได้ทั้งคู่" (letter A1-Z6 + numeric 1-40) | new feature work · ~3-4h · build dual-mode pallet input |
+| 6 | Auto SMS+LINE on fstatus 3→4 | "yes" | wire `MOMO_SYNC_PROPAGATE_STATUS=true` + add SMS/LINE on transition (depends on #2 LINE OA done) |
 
 **🎯 Pickup options for home computer:**
 - **A** Tier A revenue holes (6 fixes · ~9h)
