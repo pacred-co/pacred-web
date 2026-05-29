@@ -8,7 +8,7 @@ const GAP = 20;
 const CARD_WIDTH = 240;
 
 type SalesPersonData = {
-  personKey: "win" | "nat" | "ploy";
+  personKey: "may" | "nat" | "win" | "ploy";
   name: string;
   phone: string;
   image?: string;
@@ -16,8 +16,9 @@ type SalesPersonData = {
 };
 
 const TEAM_DATA: SalesPersonData[] = [
-  { personKey: "win",  name: "วิน",  phone: "062-603-0456", image: "/images/Character_Icon/win01.png" },
+  { personKey: "may",  name: "เมย์", phone: "066-125-3006", image: "/images/Character_Icon/may.png" },
   { personKey: "nat",  name: "แนท",  phone: "066-131-0253", image: "/images/pacred-logo-red.png", useContain: true },
+  { personKey: "win",  name: "วิน",  phone: "062-603-0456", image: "/images/Character_Icon/win01.png" },
   { personKey: "ploy", name: "พลอย", phone: "062-603-4456", image: "/images/Character_Icon/ploy01.png" },
 ];
 

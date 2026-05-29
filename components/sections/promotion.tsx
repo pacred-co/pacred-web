@@ -163,10 +163,6 @@ export function Promotion() {
               </div>
             ))}
           </div>
-          {/* Swipe indicator — mobile only */}
-          <div className="sm:hidden pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-background via-background/85 to-transparent flex items-center justify-end pr-1">
-            <svg className="w-4 h-4 text-primary-600 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
-          </div>
         </div>
 
         {/* Container 3 — Carousel */}

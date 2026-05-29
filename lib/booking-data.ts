@@ -26,11 +26,13 @@ export const HERO_CONTENT_KEYS: Record<string, { titleKey: string; subKey: strin
 
 // SALES_CARDS: name/phone are literal data (proper nouns), the rest comes from i18n.
 // `personKey` resolves under `salesTeam.{personKey}.{slogan|alt|button}`.
+// Lineup = 2 sales (เมย์ · แนท) + 2 customer-service (วิน · พลอย). วิน + พลอย are
+// CS, not sales — per owner directive 2026-05-29 (apply site-wide).
 export interface SalesCardData extends Omit<SalesCard, 'slogan' | 'alt' | 'button'> {
-  personKey: 'win' | 'nat' | 'ploy' | 'redar' | 'pee';
+  personKey: 'may' | 'nat' | 'win' | 'ploy';
 }
 
-// All 5 reps currently route to the main Pacred OA. Swap to per-rep
+// All 4 reps currently route to the main Pacred OA. Swap to per-rep
 // add-friend URLs (LINE OA Manager → "ตอบโดยอัตโนมัติ" or per-rep accounts)
 // once each rep has their own LINE channel.
 //
@@ -38,11 +40,10 @@ export interface SalesCardData extends Omit<SalesCard, 'slogan' | 'alt' | 'butto
 // keep this list in sync when adding/editing a rep (image path + phone +
 // personKey + same i18n key in `salesTeam.*`).
 export const SALES_CARDS_DATA: SalesCardData[] = [
-  { personKey: 'win',   name: 'วิน',    phone: '062-603-0456', image: '/images/Character_Icon/win01.png',   link: LINE_OA.shortUrl },
-  { personKey: 'nat',   name: 'แนท',    phone: '066-131-0253', image: '/images/pacred-logo-red.png',        link: LINE_OA.shortUrl },
-  { personKey: 'ploy',  name: 'พลอย',   phone: '062-603-4456', image: '/images/Character_Icon/ploy01.png',  link: LINE_OA.shortUrl },
-  { personKey: 'redar', name: 'เรดาห์', phone: '099-253-1415', image: '/images/Character_Icon/redar01.png', link: LINE_OA.shortUrl },
-  { personKey: 'pee',   name: 'พี',     phone: '061-779-9299', image: '/images/Character_Icon/pee01.png',   link: LINE_OA.shortUrl },
+  { personKey: 'may',  name: 'เมย์', phone: '066-125-3006', image: '/images/Character_Icon/may.png',    link: LINE_OA.shortUrl },
+  { personKey: 'nat',  name: 'แนท',  phone: '066-131-0253', image: '/images/pacred-logo-red.png',       link: LINE_OA.shortUrl },
+  { personKey: 'win',  name: 'วิน',  phone: '062-603-0456', image: '/images/Character_Icon/win01.png',  link: LINE_OA.shortUrl },
+  { personKey: 'ploy', name: 'พลอย', phone: '062-603-4456', image: '/images/Character_Icon/ploy01.png', link: LINE_OA.shortUrl },
 ];
 
 // Sections describe shape — `headingKey` and `chips[].labelKey` are i18n paths into `bookingCalc.data.*`.

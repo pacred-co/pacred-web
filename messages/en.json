@@ -178,7 +178,7 @@
     "banner1Bullet2": "Transparent — traceable every step",
     "banner1Bullet3": "Easy to get started",
     "banner1Bullet4": "Worldwide, all-in-one",
-    "banner1Cta1": "Choose Sales",
+    "banner1Cta1": "Choose a contact",
     "banner1Cta2": "Chat on LINE",
     "banner2Title": "Customs Clearance for Stuck Goods",
     "banner2Bullet1": "Pacred handles it all — guaranteed",
@@ -1410,45 +1410,39 @@
     "titlePart2": "from anywhere",
     "feature1": "Full care from purchase to import",
     "feature2": "Transparent — traceable every step",
-    "feature3": "Switch sales contact 24/7",
+    "feature3": "Switch your contact 24/7",
     "contactPrefix": "Contact",
-    "ctaSales": "Choose sales",
+    "ctaSales": "Choose a contact",
     "ctaRegister": "Sign up now",
     "lineAria": "Contact Pacred on LINE",
-    "modalTitle": "Choose a sales contact",
+    "modalTitle": "Choose who to contact",
     "modalSubtitle": "Our professional team is ready to advise and handle every step.",
     "closeAria": "Close"
   },
   "salesTeam": {
-    "win": {
-      "slogan": "Any port, any term — we close the deal in one place",
-      "alt": "Sales — Win (Pacred)",
-      "button": "Chat with Win",
-      "role": "Import & export — China and worldwide"
+    "may": {
+      "slogan": "End-to-end import & export — free consult, one-stop deal",
+      "alt": "Sales — May (Pacred)",
+      "button": "Chat with May",
+      "role": "Sales"
     },
     "nat": {
       "slogan": "Source from any China platform — one-stop import",
       "alt": "Sales — Nat (Pacred)",
       "button": "Chat with Nat",
-      "role": "Imports & sourcing — 1688/Taobao/Tmall"
+      "role": "Sales"
+    },
+    "win": {
+      "slogan": "We guide every step and answer every question",
+      "alt": "Logistics Manager — Win (Pacred)",
+      "button": "Chat with Win",
+      "role": "Logistics Manager"
     },
     "ploy": {
-      "slogan": "Stuck cargo cleared fast, safely, guaranteed",
-      "alt": "Sales — Ploy (Pacred)",
+      "slogan": "Here to help with every import & export need — fast and caring",
+      "alt": "Customer Service — Ploy (Pacred)",
       "button": "Chat with Ploy",
-      "role": "Customs clearance for stuck cargo"
-    },
-    "redar": {
-      "slogan": "Wherever you are, attentive delivery brings it close",
-      "alt": "Sales — Redar (Pacred)",
-      "button": "Chat with Redar",
-      "role": "Air Freight Specialist"
-    },
-    "pee": {
-      "slogan": "Not just shipping — delivering trust at every step",
-      "alt": "Sales — Pee (Pacred)",
-      "button": "Chat with Pee",
-      "role": "Payment Specialist"
+      "role": "Customer Service (CS)"
     },
     "lineCta": "Quick chat on LINE"
   },
@@ -1679,8 +1673,8 @@
       "calcLabel": "Request a quote"
     },
     "modal": {
-      "title": "Contact our sales team",
-      "subtitle": "Pick the sales contact for the service you need",
+      "title": "Contact our team",
+      "subtitle": "Pick the team member for the service you need",
       "closeAria": "Close"
     },
     "data": {

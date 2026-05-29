@@ -164,19 +164,18 @@ Last updated: 2026-05-25 (post-org-shift roster — full per-department director
 
 ---
 
-## 🧑‍💼 Customer-facing sales carousel (5 cards as of 2026-05-25)
+## 🧑‍💼 Customer-facing team widget (4 cards — owner directive 2026-05-30)
 
-> Curated subset of `STAFF` shown on landing pages. Source-of-truth is [`components/sections/contact-sales.tsx`](../components/sections/contact-sales.tsx) `SALES`; mirrored by [`lib/booking-data.ts`](../lib/booking-data.ts) `SALES_CARDS_DATA` (5 reps · `personKey: 'win' | 'nat' | 'ploy' | 'redar' | 'pee'`) + the smaller 3-card variants (`sales-carousel.tsx` · `purchase-banner.tsx` · `clearance-banner.tsx` · `import-export-banner.tsx`) which show `วิน / แนท / พลอย`. All currently route to main Pacred OA; per-rep LINE channels = future enhancement (Phase C marketing).
+> Owner directive (2026-05-30, updated): the customer-facing team widget shows **exactly 4 people — เมย์ + แนท (Sales) · วิน (Logistics Manager / ผู้จัดการโลจิสติกส์) · พลอย (CS, customer service)**. เมย์ + แนท are sales; วิน is the Logistics Manager; พลอย is CS. Apply site-wide, every spot. Source-of-truth is [`components/sections/contact-sales.tsx`](../components/sections/contact-sales.tsx) `SALES`; mirrored by [`lib/booking-data.ts`](../lib/booking-data.ts) `SALES_CARDS_DATA` (4 reps · `personKey: 'may' | 'nat' | 'win' | 'ploy'`) + the banner variants (`sales-carousel.tsx` · `purchase-banner.tsx` · `clearance-banner.tsx` · `import-export-banner.tsx`) which all show the same 4. Roles + slogans live in the `salesTeam` i18n namespace (TH/EN). All currently route to main Pacred OA; per-rep LINE channels = future enhancement (Phase C marketing).
 
-| Name | Dept (org) | Phone | Tagline (carousel role) |
-|---|---|---|---|
-| **วิน** | Doc | 062-603-0456 | Freight Specialist — นำเข้าทุก Port ทุก Term ปิดดีลให้จบในที่เดียว |
-| **แนท** | Sales | **066-131-0253** | China Cargo Expert — นำเข้าสั่งซื้อจีน ทุกแพลตฟอร์ม ครบจบในที่เดียว |
-| **พลอย** | CS | **062-603-4456** | Customs Specialist — เคลียร์สินค้าติดด่าน เร็ว ปลอดภัย การันตีจบ |
-| **เรดาห์** | Sales | **099-253-1415** | Air Freight Specialist — ไกลแค่ไหนก็เหมือนใกล้ ใส่ใจทุกรายละเอียด |
-| **พี** | Sales | 061-779-9299 | Payment Specialist — ส่งมอบความไว้วางใจ (ฝากโอนเงินจีน) |
+| Name | Role (widget) | Phone |
+|---|---|---|
+| **เมย์** | ฝ่ายขาย (Sales) | 066-125-3006 |
+| **แนท** | ฝ่ายขาย (Sales) | **066-131-0253** |
+| **วิน** | ผู้จัดการโลจิสติกส์ (Logistics Manager) | 062-603-0456 |
+| **พลอย** | ดูแลลูกค้า (CS) | **062-603-4456** |
 
-> The carousel role ("Freight Specialist" etc.) is presentation-only — the org dept ("Doc" / "CS") is the source of truth. วิน + พลอย still appear on customer surfaces because their pre-org-shift specialisms are still customer-facing (FCL/LCL clearance · customs door-clearance). When ad campaigns target a specialism, set `<ContactSales featuredName="…" />` accordingly (e.g. `featuredName="พลอย"` on `/customs-clearance-shipping-suvarnabhumi`).
+> Because the widget now mixes Sales + CS, customer-facing CTA/heading copy was broadened from "เซลล์" → "ทีมงาน" / "ผู้ดูแล" (e.g. `ContactSales` heading "ทักทีมงาน"; `purchaseBanner.ctaSales` "เลือกทีมงาน"). When ad campaigns target a person, set `<ContactSales featuredName="…" />` accordingly (e.g. `featuredName="พลอย"` on `/customs-clearance-shipping-suvarnabhumi`).
 
 ---
 

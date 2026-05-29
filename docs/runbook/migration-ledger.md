@@ -5,9 +5,9 @@
 
 ---
 
-## 🔢 NEXT FREE NUMBER = **0130**
+## 🔢 NEXT FREE NUMBER = **0132**
 
-ใครจะเขียน migration ใหม่ → ใช้ `0130_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
+ใครจะเขียน migration ใหม่ → ใช้ `0132_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
 
 > 0118-0129 ครอง prod แล้ว (ปอน 0118-0122 MOMO · ภูม 0123-0124 admins+momo-commit · เดฟ 0125 customer-usage-split · เดฟ 0126 tax-rates-seed · เดฟ 0127 order-tax-doc-pref · เดฟ 0128 tax-rates-rental-goods · เดฟ 0129 forwarder-tax-invoice · all applied 2026-05-30).
 
@@ -32,6 +32,8 @@
 | 0127 | `order_tax_doc_pref` | เดฟ | ✅ applied 2026-05-30 (2309ms · 3 cols × 2 tables · CHECK constraint · 2 partial indexes) | main |
 | 0128 | `tax_rates_rental_goods` | เดฟ | ✅ applied 2026-05-30 (563ms · +rental_pct=5 · goods_pct 3→0 · หลัง owner ตอบ 5 คำถามบัญชี) | main |
 | 0129 | `forwarder_tax_invoice` | เดฟ (P2) | ✅ applied 2026-05-30 (935ms · 3 ตาราง tb_*-native: `tb_forwarder_tax_invoice` + `_item` + `tb_forwarder_wht_entry` · per-class WHT · live-lane ใบกำกับ) | main |
+| 0130 | `momo_cabinet_join_field` | ภูม/main | ✅ in main | main |
+| 0131 | `line_oa_inbox` | ปอน | ⏳ **pending apply** (prod probe = 404 · ไม่กระทบ legacy · idempotent) — **renumbered 0125→0131** ตอน integrate InwPond007 2026-05-30 (ชน เดฟ `customer_usage_split`) · 4 ตาราง isolated: `customers_line`/`line_lead_sources`/`line_messages`/`line_webhook_events` · RLS service_role | main (ex-InwPond007) |
 
 ---
 

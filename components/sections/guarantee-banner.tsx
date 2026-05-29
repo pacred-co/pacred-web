@@ -110,7 +110,7 @@ export function GuaranteeBanner() {
               <div className="relative w-[150px] md:w-[180px] h-[150px] md:h-[180px] shrink-0 md:mr-6">
                 <Image
                   src="/images/visit/Visit04.png"
-                  alt="ทีมเซลล์ Pacred Shipping"
+                  alt="ทีมงาน Pacred Shipping"
                   fill
                   sizes="(max-width: 768px) 150px, 180px"
                   className="object-contain object-bottom drop-shadow-[0_4px_10px_rgba(0,0,0,0.30)]"
