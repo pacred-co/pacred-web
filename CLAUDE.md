@@ -3,6 +3,85 @@
 
 ---
 
+# 🌙 2026-05-30 night — MOMO UNBLOCK + MASTER FIDELITY AUDIT (ภูม home handoff · read FIRST)
+
+ภูม session 2026-05-30 ตอนเย็น→ดึก · กลับบ้าน ต่อจาก home computer · **23 commits pushed to Poom-pacred** · master gap doc + 4 critical learnings captured.
+
+**📦 Cluster ของวันนี้:**
+
+1. **MOMO cabinet display bug (4 commits)** — propagation pipeline เขียน MOMO routing batch IDs (`PR20260527-SEA02`) ลง `tb_forwarder.fcabinetnumber` แทน real cabinet (`GZS260529-1`); forward-only safety ล็อกค่าผิดถาวร; cron window แคบ (`yesterday..today`) ดึง container_closed ที่ปิดก่อนหน้าไม่ได้.
+   - `0dd79949` — backfill Step 5 + UI mask (รอปิดตู้ amber chip) + service-orders sticky action column
+   - `f0847c6b` — cron `?start=&end=` overrides (manual reseed)
+   - `3b9e745f` — propagation root-cause fix · NEVER write routing batch; pre-load real cabinet per tracking; replace stale routing patterns with real cabinets
+   - `b5b8c675` — fwarehousename `7→8` (was Cargo Center, now MOMO)
+   - Backfill prod: 6 tb_forwarder rows fixed (51976-51981) — real cabinets + warehouse=8
+
+2. **MOMO commit unblock — fusercompany NOT NULL violation (1 commit · `3b864858`)** — ภูม "สร้างทั้งหมด" partial fail (3/4 success · PR005 stuck). Root cause: `lib/admin/commit-momo-row-core.ts:401` + `actions/admin/api-forwarder-manual.ts:430` both wrote JS `null` when `userCompany="1"` (company customer); legacy PHP wrote PHP `NULL` but string-interpolated as `''` (empty string). Fix: `null → ""`. Verified prod company customers (PR124/PR2503/AIGA) all have `fusercompany=""`.
+
+3. **3 customer userID renames** (DB-only · ภูม authorized) — MOMO sends 3-digit legacy codes (`005`/`032`/`116`); Pacred had reissued these as `PR9370`/`PR1282`/`PR1321` during migration. Renamed back atomically across 9 tables · **181 rows updated** (PR1321 had 178 FK refs · PR9370/PR1282 clean). After rename: review-grid ungated all 4 MOMO rows.
+
+4. **🚨 5-system parallel fidelity audit + master synthesis** ([`docs/audit/master-fidelity-2026-05-30-evening.md`](docs/audit/master-fidelity-2026-05-30-evening.md)) — ภูม asked "อะไรตกหล่น อะไรยังใช้งานไม่ได้จริง". Spawned 5 agents (forwarders / service-orders / yuan-payments / drivers+barcode / cnt+warehouse) per AGENTS.md §0b deep-audit-from-source. Result:
+
+   | ระบบ | ✅ | ⚠️ | ❌ | 🔧 | % done | Top P0 |
+   |---|---:|---:|---:|---:|---:|---:|
+   | ฝากนำเข้า (forwarders) | 31 | 12 | 9 | 5 | ~80% | ~17h |
+   | ฝากสั่งซื้อ (service-orders) | 11 | 4-7 | 13 | 17 | **~15-25%** | ~12-18h |
+   | ฝากโอน (yuan-payments) | 22 | 18 | 23 | 11 | ~60% | revenue hole |
+   | คนขับ + barcode | partial | partial | 4 | 12 | ~75-80% | ~5h |
+   | ตู้/cnt + warehouse | partial | partial | 5 | 16 | 70-88% | ~15h |
+
+   **Grand total: ~57 P0 + ~63 P1 · ~70h dev work · 8-9 wallclock days with parallel agents**
+
+5. **6 recurring patterns** (root causes ข้ามทุกระบบ):
+   - 🚨 **SILENT DEAD-WRITES** — admin actions write to REBUILT empty tables instead of `tb_*` (#1 bug · 7 surfaces affected)
+   - 🚨 **DUPLICATE ACTION FILES** — `yuan-payments.ts` vs `yuan-payments-tb.ts`; pick wrong = silent dead-write
+   - 🚨 **WALLET LEDGER NOT DEBITED** — admin approve, wallet doesn't decrement (cash leak in yuan-payments + service-orders)
+   - 🚨 **NOTIFY GAPS** — LINE/SMS/email unwired on key transitions (exception: forwarder-check EXCEEDS legacy)
+   - 🚨 **PRINT/PDF ROUTES MISSING** — /admin/service-orders/print absent; forwarders 7-button ribbon missing
+   - 🚨 **SESSION LOCK MISSING** — legacy `updateLock.php` heartbeat; 13 admins on prod = collision risk
+
+6. **Tier A revenue holes (~9h · Day 1 priority)** — A1 yuan adminCreateManual debit wallet · A2 service-orders adminMarkPaid wallet · A3 forwarders bulkCancel pivot to tb_forwarder · A4 adminUpdateServiceOrder pivot to tb_header_order · A5 adminUpdateYuanPayment pivot to tb_payment · A6 CNY rate `rsdefault → rpDefault` typo + admin UI.
+
+**📋 4 new learnings captured today** (compounding for next agent · home computer Claude reads):
+- `docs/learnings/partner-apis-quirks.md` — MOMO `container_no` ≠ cabinet (routing batch trap)
+- `docs/learnings/nextjs-16-quirks.md` — `react-hooks/purity` rejects raw `Date.now()` / `new Date()` in render
+- `docs/learnings/php-port-patterns.md` — legacy PHP `NULL` string-interpolation = empty string · NOT Postgres NULL
+- `docs/learnings/verify-deep-flow.md` — the "silent dead-write" pattern (#1 across 5-system audit)
+
+**🟠 Pending ภูม manual actions:**
+1. 🔴 ROTATE S3 access key `e913d7da34ca0089638f100afb74c972` (carry-over · weeks)
+2. **Click-test MOMO commit one more time** — `/admin/api-forwarder-momo/review` → กด "สร้างใหม่" PR005 row → ควร commit ลง tb_forwarder id ~51986 ในตู้ GZS260529-1
+3. **Browser-verify 2 surfaces:** `/admin/forwarders` (real cabinets, no "PR20260527-*") · `/admin/report-cnt/GZS260525-2` + `/admin/report-cnt/GZS260529-1` ("โกดังจีน: MOMO")
+4. **Decide A/B/C** for ~8,898 customer MOMO mapping problem (will recur if many use MOMO)
+5. **6 decisions** in master audit (LINE Notify · Google Maps · print brand · numeric pallet · cron retarget · push-on-3→4)
+6. Migrations 0118 (manager role) + 0119 (MOMO commit-tracking) apply prod if not yet
+
+**🎯 Pickup options for home computer:**
+- **A** Tier A revenue holes (6 fixes · ~9h)
+- **B** Quick wins (5 items · ≤30 min each · CNY rate typo · cron retarget · delete dupes)
+- **C** Click-test the 4 fixes from today on prod (after deploy)
+- **D** Decide 6 pending questions (ภูม-only)
+
+**🗺 Branch state (post-push 2026-05-30 night):**
+
+| Branch | HEAD | สถานะ |
+|---|---|---|
+| `main` | (production) | 14 commits ahead worktree (Vercel auto-deploy) |
+| `Poom-pacred` | `3b864858` | **ACTIVE · 23 commits today landed** |
+| Our worktree | `3b864858` | ✅ in sync 0/0 |
+
+**Resume command (home computer):**
+```bash
+cd /c/Users/Admin/pacred-web/.claude/worktrees/adoring-chandrasekhar-0f8ad7
+git fetch origin --prune
+git rev-list --left-right --count HEAD...origin/Poom-pacred   # ต้อง 0/0
+head -120 CLAUDE.md                                              # this section
+cat docs/research/poom-save-point-2026-05-30-night.md            # full save-point
+cat docs/audit/master-fidelity-2026-05-30-evening.md             # gap synthesis
+```
+
+---
+
 # 🎯 2026-05-30 — STRATEGY RESET · OWNER FINAL · SINGLE-REPO · read FIRST (supersedes 2-repo + 3-deploy below)
 
 Owner ตัดสินใจ final 2026-05-30: **กลับมาใช้แผนเดิม · repo เดียว (`pacred-web`) ก่อน** ให้รับงาน-ส่งงานได้จริง. `pacred-admin-next` **แขวนไว้** — เอาไว้หลังทำ admin เสร็จ ค่อยแยกไปทำ full-performance version อีกที.
