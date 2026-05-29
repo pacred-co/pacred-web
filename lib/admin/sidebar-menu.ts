@@ -177,13 +177,40 @@ const itemPurchasingAll: MenuItem = {
   badge: "shopPending",
 };
 
+/** Flat top-level shortcut to the most-used barcode screen — บันทึกสินค้า
+ *  เข้าโกดัง (USB scanner intake = legacy `barcode-d-import.php` =
+ *  `/admin/barcode/driver/import`).
+ *
+ *  2026-05-30 (Wave 29 #5 · Agent A): ภูม flagged that the import-intake
+ *  page (warehouse staff's daily-most-used scanner) was buried 2 levels
+ *  deep inside `blockBarcode > "บันทึกเข้าโกดังไทย" > "by scanner"`.
+ *  Legacy `include/pages/left-menu/OOP/Cargo/menu-barcode.php` puts the
+ *  same destination at TOP-LEVEL flat (line 10 of that file) for the
+ *  warehouse / driver / cs / CEO role sidebars. We promote it here as a
+ *  shared peer of `warehouse.containers` in `menuWarehouse`/`menuDriver`/
+ *  `menuSuper`. The deeper `blockBarcode` toolbox stays — this is just
+ *  the one-click shortcut for the high-traffic action. */
+const itemBarcodeRecordIntakeFlat: MenuItem = {
+  labelKey: "barcode.recordIntakeFlat",
+  href: "/admin/barcode/driver/import",
+  icon: "ScanLine",
+};
+
 /** legacy OOP/Cargo/menu-barcode.php — สแกนบาร์โค้ด (nested)
  *
  *  2026-05-20 ค่ำ (Wave 2D · Option A) — Phase 4 tags removed; barcode is
  *  Phase 1 because it's the faithful port of legacy daily-use scanners
  *  (`barcode-c-*.php` + `barcode-d-*.php`). Each item below was a `?mode=…`
  *  placeholder; now points at the real routes built by Wave 2B agents.
- *  Driver leaves = USB handheld scanner UI; Cargo leaves = mobile camera UI. */
+ *  Driver leaves = USB handheld scanner UI; Cargo leaves = mobile camera UI.
+ *
+ *  TODO Wave 30: rename axis — legacy uses camera (mobile) vs USB scanner
+ *  (device), NOT cargo vs driver. Per Agent A audit 2026-05-30 (Wave 29 #5
+ *  Pacred barcode sidebar fix). The current `cargo/*` + `driver/*` route
+ *  segments are misleading: legacy `barcode-c-*.php` (mobile camera) and
+ *  `barcode-d-*.php` (USB device scanner) split by INPUT DEVICE, not by
+ *  business role. ~4 hr refactor with redirect stubs for the 8 routes
+ *  + 16 navigation references (sidebar · forwarders top-menubar · etc.). */
 const blockBarcode: MenuItem = {
   labelKey: "barcode.title",
   icon: "Barcode",
@@ -671,6 +698,11 @@ const menuSuper: MenuSection[] = [
       // filters to self · ?driver=<userid> param for oversight). Useful when a
       // dispatcher needs to see what a specific driver has on their phone today.
       { labelKey: "forwarder.driverWork", href: "/admin/drivers/work", icon: "Smartphone" },
+      // 2026-05-30 (Wave 29 #5 · Agent A) — promote the daily-most-used
+      // barcode screen (USB scanner intake = `barcode-d-import.php`) to
+      // top-level flat, matching legacy menu-barcode.php line 10. The
+      // deeper blockBarcode toolbox stays as the comprehensive nested menu.
+      itemBarcodeRecordIntakeFlat,
       blockPayment,
       itemReportsAll,
       blockAccounting,
@@ -728,6 +760,9 @@ const menuManager: MenuSection[] = [
       blockApiForwarderUpdate,
       { labelKey: "forwarder.assignDriver", href: "/admin/drivers", icon: "Truck", badge: "driverItems" },
       { labelKey: "forwarder.driverWork", href: "/admin/drivers/work", icon: "Smartphone" },
+      // 2026-05-30 (Wave 29 #5 · Agent A) — flat barcode-intake shortcut.
+      // Matches the menuSuper / menuWarehouse / menuDriver placement.
+      itemBarcodeRecordIntakeFlat,
       blockPayment,
       itemReportsAll,
       blockAccounting,
@@ -890,6 +925,11 @@ const menuWarehouse: MenuSection[] = [
       // `report-cnt.php`. Spine page at `/admin/warehouse/containers` retired
       // (tombstoned · redirects to /admin/report-cnt).
       { labelKey: "warehouse.containers", href: "/admin/report-cnt", icon: "Package" },
+      // 2026-05-30 (Wave 29 #5 · Agent A) — flat barcode-intake shortcut.
+      // The warehouse role uses this daily (legacy `barcode-d-import.php`).
+      // The deeper blockBarcode toolbox below also keeps it, two levels in;
+      // this is the one-click promotion to match legacy menu-barcode.php L10.
+      itemBarcodeRecordIntakeFlat,
       // Phase 2 — warehouse bulletin aligns with QA queues.
       { labelKey: "warehouse.bulletin",   href: "/admin/warehouse/bulletin",       icon: "ClipboardCheck", phase: 2 },
       // QA inspection module (P0 #2 rebuild · 2026-05-21) — un-phase-gated for
@@ -932,7 +972,12 @@ const menuDriver: MenuSection[] = [
       // Phase 1 — operational driver items (CF-1 fix · ZZ 2026-05-20 ค่ำ).
       { labelKey: "driver.toDeliver", href: "/admin/driver-runs",             icon: "Truck", badge: "driverItems" },
       { labelKey: "driver.history",   href: "/admin/driver-runs?tab=history", icon: "Truck"                       },
-      { labelKey: "driver.barcode",   href: "/admin/barcode/driver",          icon: "Barcode"                     },
+      // 2026-05-30 (Wave 29 #5 · Agent A) — flat barcode-intake shortcut.
+      // The driver role scans intake daily (legacy `barcode-d-import.php`).
+      // Replaces the prior `driver.barcode` leaf which pointed at the orphan
+      // `/admin/barcode/driver` hub page (deleted in this commit · was reading
+      // the abandoned `forwarders` rebuilt table).
+      itemBarcodeRecordIntakeFlat,
     ],
   },
   learningSection,
