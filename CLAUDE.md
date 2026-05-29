@@ -3,7 +3,54 @@
 
 ---
 
-# 🚀 2026-05-29 — 3-DEPLOY ARCHITECTURE FINAL · PROD ENV WIRED · ADMIN2 = Poom-pacred (read FIRST)
+# 🎯 2026-05-30 — STRATEGY RESET · OWNER FINAL · SINGLE-REPO · read FIRST (supersedes 2-repo + 3-deploy below)
+
+Owner ตัดสินใจ final 2026-05-30: **กลับมาใช้แผนเดิม · repo เดียว (`pacred-web`) ก่อน** ให้รับงาน-ส่งงานได้จริง. `pacred-admin-next` **แขวนไว้** — เอาไว้หลังทำ admin เสร็จ ค่อยแยกไปทำ full-performance version อีกที.
+
+**🗺 BRANCH MODEL (final · 1 repo = pacred-web):**
+
+| Branch | คน | บทบาท | สถานะ (2026-05-30) |
+|---|---|---|---|
+| `main` | ก๊อต/เดฟ gate | **production** · Vercel auto-deploy (pacred.co.th) | `b23fa282` · prod env + migrations 0119-0122 applied |
+| `dave-pacred` | **เดฟ** | integrator — ทุก branch verify → main | `= main` (0/0) |
+| `InwPond007` | **ปอน** | หน้าบ้านเว็บไซต์ลูกค้า **+ หลังบ้าน member ลูกค้าทั้งหมด** | `= main` (0/0) · clean base |
+| `podeng` | **ปอน sub** | 🔒 **LOCKED** — member pages ที่ทำ stage ไกลเกินไป · ปอน เอาแค่ **MOMO** มาต่อ | `b2bf7ef4` · 34 behind / 9 ahead |
+| `Poom-pacred` | **ภูม** | **Admin หลังบ้านพนักงาน** · ทำต่อหลัง Owner Approved | `1e2104cc` · 1 behind / **46 ahead** (Wave 28-30) |
+
+**📌 pacred-admin-next = SHELVED** (ก๊อต baseline · งาน import + work-distribution ที่ทำ session ก่อน ไม่หาย · park ไว้). admin งานจริง = **กลับมาที่ `pacred-web/Poom-pacred`** (ภูม owner-approved lane).
+
+**🟢 ที่ทำเสร็จ session ก่อน (KEEP — ยังใช้ได้):**
+- ✅ Local + Vercel = **prod Supabase** (`yzljakczhwrpbxflnmco`) — `.env.local` switched + backed up (`.env.local.dev-backup-2026-05-29-pre-prod-switch`)
+- ✅ ปอน MOMO migrations **0119-0122 applied to prod** + tracked on main (momo_* isolated · legacy intact)
+
+**🔴 CRITICAL FINDING — migration number COLLISION (verified prod 2026-05-30):**
+ภูม (Poom-pacred) มี 2 migration ที่ไม่อยู่ main + เลข **ชน** กับ ปอน/main:
+
+| เลข | main (ปอน · applied prod ✅) | Poom-pacred (ภูม) | ภูม applied prod? | DB ชน? |
+|---|---|---|---|---|
+| 0118 | `momo_promote_raw_columns` | `admins_role_manager` (admins role +manager) | ✅ **applied แล้ว** | ❌ ไม่ชน (คนละ object) |
+| 0119 | `momo_disambiguate_container_naming` | `momo_commit_tracking` (4 cols on momo_import_tracks) | ❌ **ยังไม่ applied** | ❌ ไม่ชน (same table · คนละ column · ADD IF NOT EXISTS) |
+→ **ตอน integrate Poom-pacred → main: renumber ภูม's 0118→0123 + 0119→0124** (main's เลขนี้ applied prod แล้ว) · ภูม 0118 (admins manager) apply prod แล้ว · ภูม 0119 (momo commit cols) ต้อง apply ตอน integrate. ทั้งคู่ idempotent + isolated — re-run ปลอดภัย.
+
+**🎯 Pickup options (เลือกเอง):**
+- **A — Integrate Poom-pacred → dave-pacred → main** (ภูม admin Wave 28-30 · 46 commits) · renumber migrations 0119→0123 ก่อน · ใช้ `branch-integrate-loop` skill
+- **B — Integrate podeng MOMO → main** (9 commits · MOMO consuming code ที่ทำให้ตาราง 0119-0122 ที่ apply แล้วมีข้อมูลจริง)
+- **C — 3 BIG P0 cluster D** (search rewrite + 5 reports + containers-hs) from B-4 audit
+- **D — 4 LOAD-BEARING fidelity gaps** (login remember-me + register channel=8 + forgot-password)
+
+**Resume command:**
+```bash
+cd /c/Users/Admin/pacred-web/.claude/worktrees/hopeful-almeida-359e44
+git fetch origin --prune && git pull origin main --no-edit
+head -80 CLAUDE.md                                       # this reset section
+cat docs/review-2026-05-30-strategy-reset.md             # full review + branch state
+```
+
+> ⚠️ **2 sessions ด้านล่าง (3-deploy + 2-repo) = SUPERSEDED by this reset.** pacred-admin-next docs (team-2026-05-28-2repo-workflow · team-2026-05-29-3-deploy · got-vercel-cloudflare-admin2) parked — revive ถ้ากลับไป multi-repo ทีหลัง.
+
+---
+
+# 🚀 2026-05-29 — 3-DEPLOY ARCHITECTURE FINAL · PROD ENV WIRED · ADMIN2 = Poom-pacred (~~read FIRST~~ SUPERSEDED 2026-05-30)
 
 **Owner directive 2026-05-29:** ตั้ง **3 deploys คู่ขนาน** · ใช้ DB prod เดียวกัน · ทีมเลือกใช้ admin version ตามถนัด.
 
