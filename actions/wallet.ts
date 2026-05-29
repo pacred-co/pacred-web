@@ -47,47 +47,152 @@ export type WalletTransaction = {
 // ────────────────────────────────────────────────────────────
 // READ
 // ────────────────────────────────────────────────────────────
+// ADR-0018 §D-3 #1/#2 repoint (2026-05-30): the displayed wallet balance
+// is now `tb_wallet.wallettotal` (legacy SOT, keyed by member_code PR####),
+// NOT the rebuilt `wallet.balance` (empty on prod → ฿0 for all 8,898
+// migrated customers). `tb_wallet` is RLS deny-all for non-service-role
+// (migration 0081 L8601) so the read goes through the admin client, after
+// resolving member_code from the signed-in user's profile.
+//
+// cashback / credit collapse to 0 here: under ADR-0018 the cash-back
+// wallet lives in a SEPARATE table (tb_cash_back · cust-01 P1-16) and the
+// credit-line in tb_wallet_credit — both are different concerns, out of
+// scope for the balance-read repoint. The customer-credit-line read path
+// is handled elsewhere (actions/credit.ts); this `getWallet` only surfaces
+// the spendable main balance.
+// TODO(ADR-0018 follow-up): wire tb_cash_back / tb_wallet_credit reads if a
+// consumer needs the cashback/credit figures from this single call.
 export async function getWallet(): Promise<ActionResult<WalletBalance>> {
-  const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  const profileData = await getCurrentUserWithProfile();
+  if (!profileData?.user) return { ok: false, error: "not_signed_in" };
+
+  const memberCode = profileData.profile?.member_code ?? null;
+  // No member_code (brand-new account mid-signup) → no legacy wallet row →
+  // zero balance. Not an error.
+  if (!memberCode) {
+    return { ok: true, data: { balance: 0, cashback_balance: 0, credit_balance: 0 } };
   }
-  if (!user) return { ok: false, error: "not_signed_in" };
 
-  const { data, error } = await supabase
-    .from("wallet")
-    .select("balance, cashback_balance, credit_balance")
-    .eq("profile_id", user.id)
-    .maybeSingle<WalletBalance>();
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("tb_wallet")
+    .select("wallettotal")
+    .eq("userid", memberCode)
+    .maybeSingle<{ wallettotal: number | string }>();
 
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    console.error(`[tb_wallet read] failed`, { code: error.code, message: error.message, userid: memberCode });
+    return { ok: false, error: error.message };
+  }
   return {
     ok: true,
-    data: data ?? { balance: 0, cashback_balance: 0, credit_balance: 0 },
+    data: {
+      balance: Number(data?.wallettotal ?? 0),
+      cashback_balance: 0, // separate table (tb_cash_back) — ADR-0018 §D-3 #1
+      credit_balance: 0,   // separate table (tb_wallet_credit) — ADR-0018 §D-3 #1
+    },
   };
 }
+
+// ADR-0018 §D-3 #1 repoint (2026-05-30) — the customer wallet ledger is now
+// the LEGACY `tb_wallet_hs` table (104,591 rows on prod · keyed by member_code
+// PR####), NOT the rebuilt `wallet_transactions` (empty → /wallet/history was
+// blank for all 8,898 migrated customers · P0-8). This is a READ-only repoint
+// that maps each legacy row into the existing `WalletTransaction` shape so the
+// history page's tabs / status badges / +/- rendering keep working unchanged.
+//
+// Mapping (legacy `tb_wallet_hs.type` → rebuilt `kind`/sign · matches the
+// type-categorisation in actions/admin/customer-profile.ts L85-87):
+//   type 1 = เติมเงิน            → kind=deposit        · CREDIT (+)
+//   type 2 = ชำระฝากสั่ง         → kind=order_payment   · DEBIT (−)
+//   type 3 = ถอนเงิน            → kind=withdraw        · DEBIT (−)
+//   type 4 = ชำระฝากนำเข้า       → kind=import_payment  · DEBIT (−)
+//   type 5 = คืนเงิน            → kind=refund          · CREDIT (+)
+//   type 6 = ชำระฝากโอน         → kind=yuan_payment    · DEBIT (−)
+//   type 7 = ชำระเงินรอตรวจสอบ    → kind=order_top_up    · DEBIT (−)
+//   status 1=pending · 2=completed · 3=failed (legacy 0081 L6213)
+// The legacy `amount` is stored POSITIVE; we apply the sign per direction so
+// the page's `tx.amount >= 0` green/red rendering is correct.
+const HS_TYPE_TO_KIND: Record<string, { kind: string; credit: boolean }> = {
+  "1": { kind: "deposit",        credit: true  },
+  "2": { kind: "order_payment",  credit: false },
+  "3": { kind: "withdraw",       credit: false },
+  "4": { kind: "import_payment", credit: false },
+  "5": { kind: "refund",         credit: true  },
+  "6": { kind: "yuan_payment",   credit: false },
+  "7": { kind: "order_top_up",   credit: false },
+};
+const HS_STATUS_TO_STATUS: Record<string, WalletTransaction["status"]> = {
+  "1": "pending",
+  "2": "completed",
+  "3": "failed",
+};
+
+type LegacyWalletHsRow = {
+  id: number;
+  date: string | null;
+  dateslip: string | null;
+  amount: number | string | null;
+  status: string | null;
+  type: string | null;
+  reforder: string | null;
+  imagesslip: string | null;
+  depositnamebank: string | null;
+  nameuserbank: string | null;
+  nouserbank: string | null;
+  note: string | null;
+};
 
 export async function listWalletTransactions(
   limit = 50,
 ): Promise<ActionResult<WalletTransaction[]>> {
-  const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
-  }
-  if (!user) return { ok: false, error: "not_signed_in" };
+  const profileData = await getCurrentUserWithProfile();
+  if (!profileData?.user) return { ok: false, error: "not_signed_in" };
 
-  const { data, error } = await supabase
-    .from("wallet_transactions")
+  const memberCode = profileData.profile?.member_code ?? null;
+  // No member_code (mid-signup) → no legacy ledger → empty list (not an error).
+  if (!memberCode) return { ok: true, data: [] };
+
+  // tb_wallet_hs is RLS deny-all for non-service-role (0081 L8602) → admin client.
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("tb_wallet_hs")
     .select(
-      "id, bucket, amount, kind, status, slip_url, slip_date, bank_name, account_name, account_number, reference_type, reference_id, note, created_at",
+      "id, date, dateslip, amount, status, type, reforder, imagesslip, depositnamebank, nameuserbank, nouserbank, note",
     )
-    .order("created_at", { ascending: false })
+    .eq("userid", memberCode)
+    .order("date", { ascending: false })
     .limit(limit);
 
-  if (error) return { ok: false, error: error.message };
-  return { ok: true, data: (data ?? []) as WalletTransaction[] };
+  if (error) {
+    console.error(`[tb_wallet_hs list] failed`, { code: error.code, message: error.message, userid: memberCode });
+    return { ok: false, error: error.message };
+  }
+
+  const rows = (data ?? []) as LegacyWalletHsRow[];
+  const mapped: WalletTransaction[] = rows.map((r) => {
+    const typeKey = r.type ?? "";
+    const meta = HS_TYPE_TO_KIND[typeKey] ?? { kind: "adjustment", credit: true };
+    const rawAmount = Math.abs(Number(r.amount ?? 0)) || 0;
+    return {
+      id:             String(r.id),
+      bucket:         "main", // tb_wallet_hs has no bucket dimension (cashback = tb_cash_back_hs)
+      amount:         meta.credit ? rawAmount : -rawAmount,
+      kind:           meta.kind,
+      status:         HS_STATUS_TO_STATUS[r.status ?? ""] ?? "pending",
+      slip_url:       r.imagesslip || null,
+      slip_date:      r.dateslip,
+      bank_name:      r.depositnamebank || null,
+      account_name:   r.nameuserbank || null,
+      account_number: r.nouserbank || null,
+      reference_type: null,
+      reference_id:   r.reforder || null,
+      note:           r.note || null,
+      created_at:     r.date ?? new Date(0).toISOString(),
+    };
+  });
+
+  return { ok: true, data: mapped };
 }
 
 // ────────────────────────────────────────────────────────────

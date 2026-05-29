@@ -1,11 +1,13 @@
 /**
  * Unit tests for the pending-aware wallet available-balance helpers.
  *
- * Locks the gap-customer.md §H-1 fix: "available balance" = completed
- * rows + open pending DEBITS — pending credits (a deposit awaiting
- * approval) do NOT count. The DB-side mirror of this rule is migration
- * 0064's wallet_available_balance(); its integration coverage lives in
- * lib/wallet/overdraw-guard.test.ts.
+ * ADR-0018 §D-3 #1 repoint (2026-05-30): `sumAvailableBalance` now reduces
+ * the LEGACY model — `available = tb_wallet.wallettotal − Σ open-pending
+ * DEBITS` from `tb_wallet_hs` (status='1', debit type). Locks the same
+ * gap-customer.md §H-1 invariant ("pending debits reduce spendable; pending
+ * credits do not") against the new source rows. Debit direction is encoded
+ * by `tb_wallet_hs.type` (2/3/4/6/7), NOT the sign of `amount` (always
+ * stored positive).
  *
  * Pattern matches lib/validators/wallet.test.ts (pass/fail counts, no vitest).
  */
@@ -30,68 +32,81 @@ function section(name: string) {
 }
 
 // ────────────────────────────────────────────────────────────
-section("sumAvailableBalance — completed rows");
+section("sumAvailableBalance — settled balance, no pending");
 // ────────────────────────────────────────────────────────────
 
-assertEq("empty ledger = 0", sumAvailableBalance([]), 0);
-assertEq("one completed credit",
-  sumAvailableBalance([{ amount: 1000, status: "completed" }]), 1000);
-assertEq("completed credit + completed debit",
-  sumAvailableBalance([
-    { amount: 1000, status: "completed" },
-    { amount: -300, status: "completed" },
+assertEq("zero balance, empty ledger = 0", sumAvailableBalance(0, []), 0);
+assertEq("settled balance, empty pending = balance",
+  sumAvailableBalance(1000, []), 1000);
+assertEq("approved (status='2') pending rows are NOT an overhang",
+  // status='2' rows are already reflected in wallettotal — they must not
+  // be double-subtracted. Only status='1' rows reduce spendable.
+  sumAvailableBalance(700, [
+    { amount: 300, status: "2", type: "3" },  // approved withdraw — already in wallettotal
   ]), 700);
 
 // ────────────────────────────────────────────────────────────
-section("sumAvailableBalance — pending debits count, pending credits do not");
+section("sumAvailableBalance — open pending debits reduce; pending credits do not");
 // ────────────────────────────────────────────────────────────
 
-assertEq("pending DEBIT reduces available (the §H-1 fix)",
-  sumAvailableBalance([
-    { amount: 1000, status: "completed" },
-    { amount: -200, status: "pending" },
+assertEq("pending DEBIT (yuan-from-wallet type=6) reduces available (the §H-1 fix)",
+  sumAvailableBalance(1000, [
+    { amount: 200, status: "1", type: "6" },
   ]), 800);
-assertEq("pending CREDIT (deposit awaiting approval) does NOT count",
-  sumAvailableBalance([
-    { amount: 1000, status: "completed" },
-    { amount: 500, status: "pending" },
+assertEq("pending CREDIT (deposit type=1 awaiting approval) does NOT count",
+  sumAvailableBalance(1000, [
+    { amount: 500, status: "1", type: "1" },
   ]), 1000);
-assertEq("stacked pending debits all subtract",
-  sumAvailableBalance([
-    { amount: 1000, status: "completed" },
-    { amount: -400, status: "pending" },
-    { amount: -400, status: "pending" },
-    { amount: -400, status: "pending" },
+assertEq("pending refund (type=5) does NOT count as a debit",
+  sumAvailableBalance(1000, [
+    { amount: 500, status: "1", type: "5" },
+  ]), 1000);
+assertEq("stacked pending debits all subtract (withdraw=3, shop=2, fwd=4)",
+  sumAvailableBalance(1000, [
+    { amount: 400, status: "1", type: "3" },
+    { amount: 400, status: "1", type: "2" },
+    { amount: 400, status: "1", type: "4" },
   ]), -200);
-assertEq("failed / cancelled rows are ignored",
-  sumAvailableBalance([
-    { amount: 1000, status: "completed" },
-    { amount: -100, status: "failed" },
-    { amount: -50, status: "cancelled" },
-    { amount: -200, status: "pending" },
+assertEq("approved + rejected rows ignored; only open pending debit counts",
+  sumAvailableBalance(1000, [
+    { amount: 100, status: "2", type: "3" },  // approved (already in balance)
+    { amount: 50,  status: "3", type: "3" },  // rejected
+    { amount: 200, status: "1", type: "6" },  // open pending debit
   ]), 800);
-assertEq("pending debit with no completed rows = negative available",
-  sumAvailableBalance([{ amount: -100, status: "pending" }]), -100);
+assertEq("type=7 (topup-and-pay pending) counts as a pending debit overhang",
+  sumAvailableBalance(1000, [
+    { amount: 300, status: "1", type: "7" },
+  ]), 700);
+assertEq("pending debit larger than balance = negative available",
+  sumAvailableBalance(0, [{ amount: 100, status: "1", type: "3" }]), -100);
+assertEq("null type / unknown type pending row does NOT subtract",
+  sumAvailableBalance(1000, [
+    { amount: 100, status: "1", type: null },
+    { amount: 100, status: "1", type: "9" },
+  ]), 1000);
 
 // ────────────────────────────────────────────────────────────
 section("sumAvailableBalance — numeric robustness");
 // ────────────────────────────────────────────────────────────
 
 assertEq("float drift rounded to 2dp",
-  sumAvailableBalance([
-    { amount: 0.1, status: "completed" },
-    { amount: 0.2, status: "completed" },
-  ]), 0.3);
+  sumAvailableBalance(0.1, [
+    { amount: 0.2, status: "1", type: "1" },  // pending credit, ignored
+  ]), 0.1);
 assertEq("string amounts (PostgREST numeric) parsed",
-  sumAvailableBalance([
-    { amount: "1000.50", status: "completed" },
-    { amount: "-0.50", status: "completed" },
+  sumAvailableBalance("1000.50", [
+    { amount: "0.50", status: "1", type: "3" },  // pending withdraw debit
   ]), 1000);
-assertEq("non-numeric amount skipped, not NaN-poisoned",
-  sumAvailableBalance([
-    { amount: 500, status: "completed" },
-    { amount: "not-a-number", status: "completed" },
+assertEq("non-numeric settled balance treated as 0",
+  sumAvailableBalance("not-a-number", []), 0);
+assertEq("non-numeric pending amount skipped, not NaN-poisoned",
+  sumAvailableBalance(500, [
+    { amount: "not-a-number", status: "1", type: "3" },
   ]), 500);
+assertEq("debit amount stored positive is subtracted (direction by type)",
+  sumAvailableBalance(1000, [
+    { amount: 250, status: "1", type: "2" },  // positive amount, type=2 debit
+  ]), 750);
 
 // ────────────────────────────────────────────────────────────
 section("isWalletOverdrawError — recognises the 0064 trigger rejection");

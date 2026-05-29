@@ -6,6 +6,11 @@ import { Wallet as WalletIcon, Plus, History, Banknote, CreditCard, ArrowDownToL
 import { CreditLinePanel } from "../credit-panel";
 import { CancelPendingButton } from "./cancel-pending-button";
 
+// ADR-0018 §D-3 #1: distinguish a rebuilt `wallet_transactions` row (UUID id)
+// from a legacy `tb_wallet_hs` row (numeric id). Only UUID rows support the
+// rebuilt-table self-cancel action (see the cancel button below).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const BUCKET_LABEL: Record<WalletTransaction["bucket"], string> = {
   main:     "เงินสด",
   cashback: "Cashback",
@@ -259,8 +264,13 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
                           <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${STATUS_BADGE[tx.status]}`}>
                             {STATUS_LABEL[tx.status]}
                           </span>
-                          {/* gap-customer H-3: self-cancel pending deposit/withdraw — no need to call admin */}
-                          {tx.status === "pending" && (tx.kind === "deposit" || tx.kind === "withdraw") && (
+                          {/* gap-customer H-3: self-cancel pending deposit/withdraw — no need to call admin.
+                              ADR-0018 §D-3 #1 (2026-05-30): the ledger now reads LEGACY tb_wallet_hs whose
+                              ids are NUMERIC, while customerCancelPendingWalletTx (rebuilt wallet_transactions,
+                              a separate P0-7 write lane) still validates `z.string().uuid()`. Only render the
+                              self-cancel for genuine UUID rows so a legacy-row click can't fail validation.
+                              The tb_wallet_hs self-cancel is the P0-7 lane's job (not this read repoint). */}
+                          {tx.status === "pending" && (tx.kind === "deposit" || tx.kind === "withdraw") && UUID_RE.test(tx.id) && (
                             <CancelPendingButton txId={tx.id} kind={tx.kind} />
                           )}
                         </td>
