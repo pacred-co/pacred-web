@@ -2,11 +2,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { CustomerRowActions } from "@/components/admin/customer-row-actions";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
-import { ResetPwdButton } from "./reset-pwd-button";
+import { CustomersTable, type CustomerTableRow, type JuristicBundle } from "./customers-table";
 
 // ─────────────────────────────────────────────────────────────────────
 // Page top-menubar — ภูม brief 2026-05-20 ค่ำ.
@@ -59,29 +58,10 @@ function deriveStatus(u: { userActive: string | null; userStatus: string | null 
   return "active";
 }
 
-const STATUS_CFG: Record<DerivedStatus, { label: string; className: string }> = {
-  active:     { label: "ใช้งาน",      className: "bg-green-50 text-green-700 border-green-200" },
-  incomplete: { label: "รอ Approve",  className: "bg-amber-50 text-amber-700 border-amber-200" },
-  suspended:  { label: "ระงับ",       className: "bg-red-50 text-red-700 border-red-200" },
-};
-
 // ────────────────────────────────────────────────────────────────────
 // Wave 18-A: 5 fidelity columns from legacy `pcs-admin/users.php`
-//
-//   - VIP chip       — coid != "general"/"PCS"/empty (legacy uses coid
-//                       to encode tier; "PCS" is the default = ลูกค้าทั่วไป)
-//   - Birthday       — DD/MM (no year) + age computed from full date.
-//                       tb_users.userbirthday is a `date` column in 0081
-//                       but ~110k legacy rows store the legacy varchar
-//                       format "YYYY-MM-DD" — both parse with Date(). We
-//                       fall back to "—" if parsing yields NaN.
-//   - LINE ID        — tb_users.userlineid
-//   - Facebook       — tb_users.userfacebook (link or plain text)
-//   - Main address   — tb_address rows joined by userid. The legacy
-//                       `tb_address_main` pointer table is sparsely
-//                       populated (~5% of customers) so we instead pick
-//                       the lowest addressid per userid (first-added =
-//                       customer's first / "main" address).
+//   VIP chip · birthday DD/MM + age · LINE ID · Facebook · main address.
+//   (Sorting + the inline juristic review now live in customers-table.tsx.)
 // ────────────────────────────────────────────────────────────────────
 
 /** True for any legacy `coid` that signals a non-default VIP tier. */
@@ -129,10 +109,6 @@ function summarizeAddress(a: {
 //   corporate  → usercompany='1'   (นิติบุคคล)
 //   credit     → usercredit='1'    (สมาชิกเครดิต)
 //   comparison → usercomparison='1' (สมาชิกคิดค่าเทียบ)
-// general/vip/svip have no faithful `tb_users` column (legacy did not
-// store a VIP tier on the customer row) — the chip still renders for
-// continuity but applies no DB filter, the same graceful-degrade
-// pattern recently-active uses for its SLA chip.
 const GROUP_CFG: Record<string, { label: string; col?: string }> = {
   general:    { label: "สมาชิกทั่วไป" },
   vip:        { label: "สมาชิก VIP" },
@@ -140,6 +116,12 @@ const GROUP_CFG: Record<string, { label: string; col?: string }> = {
   corporate:  { label: "สมาชิกนิติบุคคล", col: "userCompany" },
   credit:     { label: "สมาชิกเครดิต",    col: "userCredit" },
   comparison: { label: "สมาชิกคิดค่าเทียบ", col: "userComparison" },
+};
+
+const DOC_LABELS: Record<string, string> = {
+  company_affidavit: "หนังสือรับรองบริษัท",
+  vat:               "ภ.พ.20",
+  national_id:       "บัตรประชาชน",
 };
 
 export default async function AdminCustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; type?: string; group?: string; adminidsale?: string }> }) {
@@ -153,8 +135,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
 
   // G6 — default queue filter per role. sales_admin lands on their
   // own customer book via ?adminidsale=<legacy_admin_id>. Other roles
-  // see all (no default). Lookup gates on legacy_admin_id presence —
-  // Pacred-native admins (no PCS bridge) fall through unfiltered.
+  // see all (no default).
   const legacyAdminId = await getAdminLegacyId(user.id);
   const defaultRedirect = buildDefaultLandingRedirect(
     "/admin/customers",
@@ -166,10 +147,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
 
   const admin = createAdminClient();
 
-  // D1 Wave-2: read legacy tb_users (member-code identity = `userid`).
-  // Wave 18-A: extended SELECT with coid (VIP tier), userlineid, userfacebook,
-  // userbirthday — the 4 per-row fidelity columns. Main address comes from
-  // a separate batched query (tb_address) below.
+  // D1 Wave-2: read legacy tb_users (member-code identity = `userID`).
   let q = admin.from("tb_users")
     .select(`
       userID, userName, userLastName, userCompany,
@@ -188,10 +166,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
   const groupCol = group ? GROUP_CFG[group].col : undefined;
   if (groupCol) q = q.eq(groupCol, "1");
 
-  // G6 — sales-rep filter (sp.adminidsale). Set by the per-role landing
-  // redirect for sales_admin (= sees their own book) OR by clicking the
-  // "เซลล์ผู้ดูแล" name on any customer row (= "ดูลูกค้าทั้งหมดของเซลล์
-  // คนนี้"). Maps to tb_users.adminIDSale text column.
+  // G6 — sales-rep filter (sp.adminidsale).
   const adminidsale =
     typeof sp.adminidsale === "string" && sp.adminidsale.trim() !== ""
       ? sp.adminidsale.trim()
@@ -199,7 +174,6 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
   if (adminidsale) q = q.eq("adminIDSale", adminidsale);
 
   if (sp.q) {
-    // Search by member_code (userID) OR phone OR name (parallel OR via or() filter)
     const term = sp.q.replace(/[\\%_,]/g, (m) => "\\" + m);
     q = q.or(`userID.ilike.%${term}%,userTel.ilike.%${term}%,userName.ilike.%${term}%,userLastName.ilike.%${term}%`);
   }
@@ -226,9 +200,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
   };
   const rows = (data ?? []) as Row[];
 
-  // Wallet balances — legacy tb_wallet keyed by userid (one row/customer,
-  // wallettotal numeric). Batch-fetch for the rows on screen.
-  // NOTE: tb_wallet.userid stays lowercase (only tb_users renamed to userID).
+  // Wallet balances — legacy tb_wallet keyed by userid (lowercase).
   const userIds = rows.map((r) => r.userID);
   const walletByUser = new Map<string, number>();
   if (userIds.length > 0) {
@@ -244,11 +216,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
     }
   }
 
-  // Wave 18-A — main address per visible customer. tb_address holds 1..N rows
-  // per userid; the legacy `tb_address_main` pointer table is sparsely populated
-  // (~5% of customers — most never picked a "main") so we instead pick the
-  // lowest-addressid (= first-added = the legacy default-main fallback). One
-  // batched query, then a Map of userid → row for the renderer.
+  // Wave 18-A — main address per visible customer (tb_address lowest addressid).
   type AddressRow = {
     addressid: number;
     userid: string;
@@ -270,11 +238,102 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
       console.error(`[tb_address list] failed`, { code: addressesErr.code, message: addressesErr.message });
     }
     for (const a of (addresses ?? []) as AddressRow[]) {
-      // First-seen (lowest addressid per userid) wins — the order() above
-      // guarantees insertion order matches ascending addressid.
       if (!addressByUser.has(a.userid)) addressByUser.set(a.userid, a);
     }
   }
+
+  // ── Juristic inline-review bundle (owner 2026-05-30) ──────────────
+  // Merge /admin/juristic-check into the customers list: for นิติบุคคล
+  // customers that have a NEW-signup corporate row (docs + DBD review),
+  // pre-fetch the company data + signed document URLs so the row can be
+  // reviewed + approved inline (with hover-zoom) — no separate page.
+  // Legacy juristic customers have no corporate row → no inline review.
+  // Bounded: docs are fetched ONLY for member_codes that resolve to a
+  // corporate row (≈ the handful of new signups), never the full page.
+  const juristicByMember = new Map<string, JuristicBundle>();
+  // Key on ALL visible member_codes (not just legacy userCompany='1'): the
+  // corporate row is the source of truth for "needs juristic review", and the
+  // signup→tb_users backfill didn't always set the legacy userCompany flag.
+  // Resolving every row then filtering to corporate keeps the doc fetch bounded.
+  if (userIds.length > 0) {
+    const { data: profs, error: profsErr } = await admin
+      .from("profiles")
+      .select("id, member_code")
+      .in("member_code", userIds);
+    if (profsErr) console.error(`[profiles juristic resolve] failed`, { code: profsErr.code, message: profsErr.message });
+    const memberByProfile = new Map<string, string>();
+    for (const p of (profs ?? []) as { id: string; member_code: string | null }[]) {
+      if (p.member_code) memberByProfile.set(p.id, p.member_code);
+    }
+    const profileIds = [...memberByProfile.keys()];
+    if (profileIds.length > 0) {
+      const { data: corps, error: corpsErr } = await admin
+        .from("corporate")
+        .select("profile_id, tax_id, company_name, company_address, status")
+        .in("profile_id", profileIds);
+      if (corpsErr) console.error(`[corporate list] failed`, { code: corpsErr.code, message: corpsErr.message });
+      const corpList = (corps ?? []) as {
+        profile_id: string; tax_id: string | null; company_name: string | null;
+        company_address: string | null; status: string | null;
+      }[];
+      const corpProfileIds = corpList.map((c) => c.profile_id);
+
+      // Signed doc URLs ONLY for corporate (review-eligible) profiles.
+      const docsByProfile = new Map<string, { label: string; url: string; mime: string }[]>();
+      if (corpProfileIds.length > 0) {
+        const { data: docs, error: docsErr } = await admin
+          .from("documents")
+          .select("profile_id, doc_type, storage_path, mime_type")
+          .in("profile_id", corpProfileIds);
+        if (docsErr) console.error(`[documents list] failed`, { code: docsErr.code, message: docsErr.message });
+        for (const doc of (docs ?? []) as { profile_id: string; doc_type: string; storage_path: string; mime_type: string }[]) {
+          const { data: signed } = await admin.storage.from("member-docs").createSignedUrl(doc.storage_path, 3600);
+          if (!signed?.signedUrl) continue;
+          const arr = docsByProfile.get(doc.profile_id) ?? [];
+          arr.push({ label: DOC_LABELS[doc.doc_type] ?? doc.doc_type, url: signed.signedUrl, mime: doc.mime_type });
+          docsByProfile.set(doc.profile_id, arr);
+        }
+      }
+
+      for (const c of corpList) {
+        const member = memberByProfile.get(c.profile_id);
+        if (!member) continue;
+        juristicByMember.set(member, {
+          profileId: c.profile_id,
+          taxId: c.tax_id ?? "",
+          companyName: c.company_name ?? "",
+          companyAddress: c.company_address ?? "",
+          corpStatus: c.status === "verified" || c.status === "rejected" ? c.status : "pending",
+          docs: docsByProfile.get(c.profile_id) ?? [],
+        });
+      }
+    }
+  }
+
+  // Build the serializable rows for the client table.
+  const tableRows: CustomerTableRow[] = rows.map((r) => {
+    const birthday = formatBirthday(r.userBirthday);
+    const fb = (r.userFacebook ?? "").trim();
+    return {
+      userID: r.userID,
+      isJuristic: r.userCompany === "1" || juristicByMember.has(r.userID),
+      status: deriveStatus(r),
+      fullName: `${r.userName ?? ""} ${r.userLastName ?? ""}`.trim() || "—",
+      tel: r.userTel ?? "",
+      email: r.userEmail ?? "",
+      address: summarizeAddress(addressByUser.get(r.userID)),
+      birthdayDm: birthday.dm,
+      birthdayAge: birthday.age,
+      vip: isVipCoid(r.coID),
+      lineId: (r.userLineID ?? "").trim(),
+      facebook: fb,
+      isFbUrl: /^https?:\/\//i.test(fb),
+      adminIDSale: r.adminIDSale ?? "",
+      wallet: walletByUser.get(r.userID) ?? 0,
+      registered: r.userRegistered,
+      juristic: juristicByMember.get(r.userID) ?? null,
+    };
+  });
 
   return (
     <>
@@ -289,57 +348,24 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
           {group ? (
             <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">
               <span>กรอง: {GROUP_CFG[group].label}</span>
-              <Link
-                href="/admin/customers"
-                className="rounded-full px-1 leading-none hover:bg-primary-100"
-                aria-label="ล้างตัวกรองกลุ่มลูกค้า"
-              >
-                ×
-              </Link>
+              <Link href="/admin/customers" className="rounded-full px-1 leading-none hover:bg-primary-100" aria-label="ล้างตัวกรองกลุ่มลูกค้า">×</Link>
             </div>
           ) : null}
           {adminidsale ? (
             <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">
               <span>เซลล์ผู้ดูแล: {adminidsale}</span>
-              <Link
-                href="/admin/customers?nofilter=1"
-                className="rounded-full px-1 leading-none hover:bg-primary-100"
-                aria-label="ล้างฟิลเตอร์เซลล์ผู้ดูแล · ดูทั้งหมด"
-                title="ดูทั้งหมด"
-              >
-                ×
-              </Link>
+              <Link href="/admin/customers?nofilter=1" className="rounded-full px-1 leading-none hover:bg-primary-100" aria-label="ล้างฟิลเตอร์เซลล์ผู้ดูแล · ดูทั้งหมด" title="ดูทั้งหมด">×</Link>
             </div>
           ) : null}
         </div>
         <div className="flex gap-2 flex-wrap items-center">
-          <Link
-            href="/admin/customers/recently-active"
-            className="rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-medium text-primary-700 hover:bg-primary-100"
-          >
-            📈 ลูกค้า active ล่าสุด
-          </Link>
-          <Link
-            href="/admin/customers/transfer-rep"
-            className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-surface-alt inline-flex items-center gap-1.5"
-          >
-            ⇄ ย้ายเซลล์ผู้ดูแล
-          </Link>
-          <Link
-            href="/admin/customers/transfer-bulk"
-            className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-surface-alt inline-flex items-center gap-1.5"
-          >
-            ⇄ ย้ายเซลล์ (มีเหตุผล)
-          </Link>
+          <Link href="/admin/customers/recently-active" className="rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-medium text-primary-700 hover:bg-primary-100">📈 ลูกค้า active ล่าสุด</Link>
+          <Link href="/admin/customers/transfer-rep" className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-surface-alt inline-flex items-center gap-1.5">⇄ ย้ายเซลล์ผู้ดูแล</Link>
+          <Link href="/admin/customers/transfer-bulk" className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-surface-alt inline-flex items-center gap-1.5">⇄ ย้ายเซลล์ (มีเหตุผล)</Link>
         <form action="/admin/customers" className="flex gap-2">
           {group ? <input type="hidden" name="group" value={group} /> : null}
           {adminidsale ? <input type="hidden" name="adminidsale" value={adminidsale} /> : null}
-          <input
-            name="q"
-            defaultValue={sp.q}
-            placeholder="ค้นหา รหัส / เบอร์ / ชื่อ"
-            className="rounded-lg border border-border px-3 py-2 text-sm w-64"
-          />
+          <input name="q" defaultValue={sp.q} placeholder="ค้นหา รหัส / เบอร์ / ชื่อ" className="rounded-lg border border-border px-3 py-2 text-sm w-64" />
           <select name="type" defaultValue={sp.type ?? ""} className="rounded-lg border border-border px-3 py-2 text-sm">
             <option value="">ทุกประเภท</option>
             <option value="personal">บุคคล</option>
@@ -350,148 +376,11 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
         </div>
       </div>
 
-      <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
-        {rows.length === 0 ? (
-          <p className="p-12 text-center text-sm text-muted">ไม่พบลูกค้า</p>
-        ) : (
-          <>
-            {/* Wave 18 follow-up (2026-05-25 ค่ำ — ภูม flagged): the table
-                has 14 columns (after Wave 18-A) and overflows ~1583px on
-                a 1920px screen with sidebar. We add a left-rail hint so
-                staff know the table is scrollable + the inner wrapper uses
-                `.scrollbar-x-visible` (globals.css) to force a visible
-                scrollbar on Windows Chrome. */}
-            <p className="px-4 pt-3 text-[11px] text-muted">
-              <span className="opacity-70">เลื่อนซ้าย-ขวาเพื่อดูคอลัมน์ทั้งหมด</span>
-              <span className="ml-1">⇆</span>
-            </p>
-            <div className="overflow-x-auto scrollbar-x-visible">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
-                <tr>
-                  <th className="px-4 py-3">รหัส</th>
-                  <th className="px-4 py-3">ประเภท</th>
-                  <th className="px-4 py-3">ชื่อ</th>
-                  <th className="px-4 py-3">เบอร์ / อีเมล</th>
-                  {/* Wave 18-A — 5 fidelity columns from legacy users.php */}
-                  <th className="px-4 py-3">ที่อยู่หลัก</th>
-                  <th className="px-4 py-3">วันเกิด / อายุ</th>
-                  <th className="px-4 py-3">VIP</th>
-                  <th className="px-4 py-3">LINE</th>
-                  <th className="px-4 py-3">Facebook</th>
-                  <th className="px-4 py-3">เซลล์ผู้ดูแล</th>
-                  <th className="px-4 py-3">สถานะ</th>
-                  <th className="px-4 py-3 text-right">ยอดกระเป๋า</th>
-                  <th className="px-4 py-3">สมัครเมื่อ</th>
-                  <th className="px-4 py-3">จัดการ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => {
-                  const isJuristic = r.userCompany === "1";
-                  const status = deriveStatus(r);
-                  const fullName = `${r.userName ?? ""} ${r.userLastName ?? ""}`.trim() || "—";
-                  // Wave 18-A — per-row derived fidelity values.
-                  const vip = isVipCoid(r.coID);
-                  const birthday = formatBirthday(r.userBirthday);
-                  const address = summarizeAddress(addressByUser.get(r.userID));
-                  const fb = (r.userFacebook ?? "").trim();
-                  const isFbUrl = /^https?:\/\//i.test(fb);
-                  return (
-                  <tr key={r.userID} className="border-t border-border hover:bg-surface-alt/30">
-                    <td className="px-4 py-3 font-mono text-xs">
-                      <Link href={`/admin/customers/${r.userID}`} className="text-primary-600 hover:underline">{r.userID}</Link>
-                    </td>
-                    <td className="px-4 py-3 text-xs">
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] ${
-                        isJuristic ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-gray-50 text-gray-700 border-gray-200"
-                      }`}>
-                        {isJuristic ? "นิติบุคคล" : "บุคคล"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs">
-                      {fullName}
-                    </td>
-                    <td className="px-4 py-3 text-xs">
-                      <div>{r.userTel ?? "—"}</div>
-                      <div className="text-muted">{r.userEmail ?? "—"}</div>
-                    </td>
-                    {/* Wave 18-A — main address (tb_address lowest addressid per userid) */}
-                    <td className="px-4 py-3 text-xs max-w-[260px]">
-                      <div className="truncate" title={address}>{address}</div>
-                    </td>
-                    {/* Wave 18-A — birthday DD/MM + age (legacy users.php showed DD/MM without year) */}
-                    <td className="px-4 py-3 text-xs whitespace-nowrap">
-                      {birthday.dm}
-                      {birthday.age !== null && (
-                        <span className="ml-1 text-muted">({birthday.age} ปี)</span>
-                      )}
-                    </td>
-                    {/* Wave 18-A — VIP chip (coid != general/PCS/empty) */}
-                    <td className="px-4 py-3 text-xs">
-                      {vip ? (
-                        <span className="rounded-full border bg-amber-50 text-amber-700 border-amber-200 px-2 py-0.5 text-[10px] font-medium uppercase">
-                          VIP
-                        </span>
-                      ) : (
-                        <span className="text-muted">—</span>
-                      )}
-                    </td>
-                    {/* Wave 18-A — LINE ID */}
-                    <td className="px-4 py-3 text-xs">
-                      {r.userLineID?.trim() ? (
-                        <span className="font-mono">{r.userLineID}</span>
-                      ) : (
-                        <span className="text-muted">—</span>
-                      )}
-                    </td>
-                    {/* Wave 18-A — Facebook (link if URL, else plain text) */}
-                    <td className="px-4 py-3 text-xs max-w-[180px]">
-                      {fb ? (
-                        isFbUrl ? (
-                          <a href={fb} target="_blank" rel="noreferrer noopener" className="text-primary-600 hover:underline truncate inline-block max-w-full" title={fb}>
-                            {fb.replace(/^https?:\/\/(www\.)?/, "")}
-                          </a>
-                        ) : (
-                          <span className="truncate inline-block max-w-full" title={fb}>{fb}</span>
-                        )
-                      ) : (
-                        <span className="text-muted">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-xs font-mono">{r.adminIDSale || "—"}</td>
-                    <td className="px-4 py-3">
-                      {(() => {
-                        const cfg = STATUS_CFG[status];
-                        return (
-                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${cfg.className}`}>
-                            {cfg.label}
-                          </span>
-                        );
-                      })()}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono text-xs">
-                      ฿{(walletByUser.get(r.userID) ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
-                      {r.userRegistered ? new Date(r.userRegistered).toLocaleDateString("th-TH") : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <CustomerRowActions id={r.userID} status={status} />
-                        {/* Wave 18-A — password-reset (legacy users.php per-row action) */}
-                        <ResetPwdButton userid={r.userID} />
-                      </div>
-                    </td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          </>
-        )}
-      </div>
+      {rows.length === 0 ? (
+        <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-12 text-center text-sm text-muted">ไม่พบลูกค้า</div>
+      ) : (
+        <CustomersTable rows={tableRows} />
+      )}
     </main>
     </>
   );

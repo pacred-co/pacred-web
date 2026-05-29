@@ -1,0 +1,407 @@
+"use client";
+
+/**
+ * Customers table — client-side sortable + quick-filter + inline juristic review.
+ * เดฟ 2026-05-30 (owner directives):
+ *
+ *  A) "หัวข้อทำให้กรองเรียงได้ด้วย" — every meaningful column header is now a
+ *     click-to-sort toggle (asc → desc), plus a quick text filter over the
+ *     loaded rows. Sort idiom mirrors report-cnt container-detail-client.
+ *
+ *  B) "/admin/juristic-check render เอามารวมในนี้เลย … กดดูบัตร/รูป/เอกสาร …
+ *     ลากเม้าส์ขยายเทียบเลข … approve ได้โดยตรง" — for นิติบุคคล customers that
+ *     have a pending review (corporate row + docs), an inline expandable panel
+ *     shows the documents with a hover-zoom magnifier (HoverZoomImage), the
+ *     DBD compare table (lookupDbdJuristic), and approve/reject — so staff
+ *     never leave the customers list or tab into a full-size image.
+ *
+ * The server page (page.tsx) pre-computes every display value + the juristic
+ * bundle, so this stays a pure serializable-props client component.
+ */
+
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Link } from "@/i18n/navigation";
+import { ChevronDown, ChevronRight, ChevronsUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { CustomerRowActions } from "@/components/admin/customer-row-actions";
+import { ResetPwdButton } from "./reset-pwd-button";
+import { HoverZoomImage } from "@/components/admin/hover-zoom-image";
+import {
+  computeCompareRows,
+  isActiveStatus,
+  type DbdLookupData,
+} from "@/lib/dbd/parse-juristic";
+import { lookupDbdJuristic, verifyJuristic, rejectJuristic } from "@/actions/admin/customers";
+
+export type DerivedStatus = "active" | "incomplete" | "suspended";
+
+export type JuristicBundle = {
+  profileId: string;
+  taxId: string;
+  companyName: string;
+  companyAddress: string;
+  corpStatus: "pending" | "verified" | "rejected";
+  docs: { label: string; url: string; mime: string }[];
+};
+
+export type CustomerTableRow = {
+  userID: string;
+  isJuristic: boolean;
+  status: DerivedStatus;
+  fullName: string;
+  tel: string;
+  email: string;
+  address: string;
+  birthdayDm: string;
+  birthdayAge: number | null;
+  vip: boolean;
+  lineId: string;
+  facebook: string;
+  isFbUrl: boolean;
+  adminIDSale: string;
+  wallet: number;
+  registered: string | null; // ISO
+  /** Present only for juristic customers with a pending-review corporate row. */
+  juristic: JuristicBundle | null;
+};
+
+const STATUS_CFG: Record<DerivedStatus, { label: string; className: string; rank: number }> = {
+  incomplete: { label: "รอ Approve", className: "bg-amber-50 text-amber-700 border-amber-200", rank: 0 },
+  active:     { label: "ใช้งาน",     className: "bg-green-50 text-green-700 border-green-200", rank: 1 },
+  suspended:  { label: "ระงับ",      className: "bg-red-50 text-red-700 border-red-200",       rank: 2 },
+};
+
+type SortKey =
+  | "userID" | "type" | "name" | "address" | "age" | "vip"
+  | "sale" | "status" | "wallet" | "registered";
+type SortDir = "asc" | "desc";
+
+function sortValue(r: CustomerTableRow, k: SortKey): string | number {
+  switch (k) {
+    case "userID":     return r.userID.toLowerCase();
+    case "type":       return r.isJuristic ? 1 : 0;
+    case "name":       return r.fullName.toLowerCase();
+    case "address":    return r.address.toLowerCase();
+    case "age":        return r.birthdayAge ?? -1;
+    case "vip":        return r.vip ? 1 : 0;
+    case "sale":       return (r.adminIDSale || "").toLowerCase();
+    case "status":     return STATUS_CFG[r.status].rank;
+    case "wallet":     return r.wallet;
+    case "registered": return r.registered ? Date.parse(r.registered) : 0;
+  }
+}
+
+export function CustomersTable({ rows }: { rows: CustomerTableRow[] }) {
+  const [sortKey, setSortKey] = useState<SortKey | null>("registered");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [filter, setFilter] = useState("");
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  function toggleSort(k: SortKey) {
+    if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(k); setSortDir("asc"); }
+  }
+
+  const view = useMemo(() => {
+    const term = filter.trim().toLowerCase();
+    let out = rows;
+    if (term) {
+      out = rows.filter((r) =>
+        r.userID.toLowerCase().includes(term) ||
+        r.fullName.toLowerCase().includes(term) ||
+        r.tel.toLowerCase().includes(term) ||
+        r.email.toLowerCase().includes(term) ||
+        r.adminIDSale.toLowerCase().includes(term),
+      );
+    }
+    if (sortKey) {
+      const dir = sortDir === "asc" ? 1 : -1;
+      out = [...out].sort((a, b) => {
+        const av = sortValue(a, sortKey);
+        const bv = sortValue(b, sortKey);
+        if (av < bv) return -1 * dir;
+        if (av > bv) return 1 * dir;
+        return 0;
+      });
+    }
+    return out;
+  }, [rows, filter, sortKey, sortDir]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-3 px-1">
+        <input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="กรองในหน้านี้: รหัส / ชื่อ / เบอร์ / อีเมล / เซลล์"
+          className="rounded-lg border border-border px-3 py-1.5 text-sm w-72"
+        />
+        <span className="text-xs text-muted">
+          {view.length === rows.length ? `${rows.length} รายการ` : `${view.length} / ${rows.length} รายการ`}
+        </span>
+        <span className="text-[11px] text-muted ml-auto">คลิกหัวคอลัมน์เพื่อเรียง · เลื่อนซ้าย-ขวา ⇆</span>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+        <div className="overflow-x-auto scrollbar-x-visible">
+          <table className="w-full text-sm">
+            <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+              <tr>
+                <Th k="userID"     {...{ sortKey, sortDir, toggleSort }}>รหัส</Th>
+                <Th k="type"       {...{ sortKey, sortDir, toggleSort }}>ประเภท</Th>
+                <Th k="name"       {...{ sortKey, sortDir, toggleSort }}>ชื่อ</Th>
+                <th className="px-4 py-3">เบอร์ / อีเมล</th>
+                <Th k="address"    {...{ sortKey, sortDir, toggleSort }}>ที่อยู่หลัก</Th>
+                <Th k="age"        {...{ sortKey, sortDir, toggleSort }}>วันเกิด / อายุ</Th>
+                <Th k="vip"        {...{ sortKey, sortDir, toggleSort }}>VIP</Th>
+                <th className="px-4 py-3">LINE</th>
+                <th className="px-4 py-3">Facebook</th>
+                <Th k="sale"       {...{ sortKey, sortDir, toggleSort }}>เซลล์ผู้ดูแล</Th>
+                <Th k="status"     {...{ sortKey, sortDir, toggleSort }}>สถานะ</Th>
+                <Th k="wallet" align="right" {...{ sortKey, sortDir, toggleSort }}>ยอดกระเป๋า</Th>
+                <Th k="registered" {...{ sortKey, sortDir, toggleSort }}>สมัครเมื่อ</Th>
+                <th className="px-4 py-3">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {view.length === 0 && (
+                <tr><td colSpan={14} className="px-4 py-12 text-center text-sm text-muted">ไม่พบลูกค้าตามที่กรอง</td></tr>
+              )}
+              {view.map((r) => {
+                const cfg = STATUS_CFG[r.status];
+                const canReview = !!r.juristic;
+                const isOpen = expanded === r.userID;
+                return (
+                  <FragmentRow key={r.userID}>
+                    <tr className="border-t border-border hover:bg-surface-alt/30 align-top">
+                      <td className="px-4 py-3 font-mono text-xs">
+                        <Link href={`/admin/customers/${r.userID}`} className="text-primary-600 hover:underline">{r.userID}</Link>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${r.isJuristic ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-gray-50 text-gray-700 border-gray-200"}`}>
+                          {r.isJuristic ? "นิติบุคคล" : "บุคคล"}
+                        </span>
+                        {r.juristic && (
+                          <span className={`ml-1 rounded-full border px-1.5 py-0.5 text-[9px] ${
+                            r.juristic.corpStatus === "verified" ? "bg-green-50 text-green-700 border-green-200"
+                            : r.juristic.corpStatus === "rejected" ? "bg-red-50 text-red-700 border-red-200"
+                            : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+                            {r.juristic.corpStatus === "verified" ? "ตรวจแล้ว" : r.juristic.corpStatus === "rejected" ? "ปฏิเสธ" : "รอตรวจ"}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs">{r.fullName}</td>
+                      <td className="px-4 py-3 text-xs">
+                        <div>{r.tel || "—"}</div>
+                        <div className="text-muted">{r.email || "—"}</div>
+                      </td>
+                      <td className="px-4 py-3 text-xs max-w-[260px]"><div className="truncate" title={r.address}>{r.address}</div></td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                        {r.birthdayDm}{r.birthdayAge !== null && <span className="ml-1 text-muted">({r.birthdayAge} ปี)</span>}
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {r.vip ? <span className="rounded-full border bg-amber-50 text-amber-700 border-amber-200 px-2 py-0.5 text-[10px] font-medium uppercase">VIP</span> : <span className="text-muted">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-xs">{r.lineId ? <span className="font-mono">{r.lineId}</span> : <span className="text-muted">—</span>}</td>
+                      <td className="px-4 py-3 text-xs max-w-[180px]">
+                        {r.facebook ? (
+                          r.isFbUrl
+                            ? <a href={r.facebook} target="_blank" rel="noreferrer noopener" className="text-primary-600 hover:underline truncate inline-block max-w-full" title={r.facebook}>{r.facebook.replace(/^https?:\/\/(www\.)?/, "")}</a>
+                            : <span className="truncate inline-block max-w-full" title={r.facebook}>{r.facebook}</span>
+                        ) : <span className="text-muted">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-xs font-mono">{r.adminIDSale || "—"}</td>
+                      <td className="px-4 py-3"><span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${cfg.className}`}>{cfg.label}</span></td>
+                      <td className="px-4 py-3 text-right font-mono text-xs">฿{r.wallet.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</td>
+                      <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{r.registered ? new Date(r.registered).toLocaleDateString("th-TH") : "—"}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {canReview && (
+                            <button
+                              type="button"
+                              onClick={() => setExpanded(isOpen ? null : r.userID)}
+                              className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-medium ${isOpen ? "border-primary-300 bg-primary-100 text-primary-800" : "border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-100"}`}
+                            >
+                              {isOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                              ตรวจนิติบุคคล
+                            </button>
+                          )}
+                          <CustomerRowActions id={r.userID} status={r.status} />
+                          <ResetPwdButton userid={r.userID} />
+                        </div>
+                      </td>
+                    </tr>
+                    {isOpen && r.juristic && (
+                      <tr className="border-t border-border bg-surface-alt/20">
+                        <td colSpan={14} className="px-4 py-4">
+                          <JuristicInlineReview bundle={r.juristic} />
+                        </td>
+                      </tr>
+                    )}
+                  </FragmentRow>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Small fragment helper so the row + its expansion share one key cleanly.
+function FragmentRow({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
+}
+
+function Th({
+  k, children, align = "left", sortKey, sortDir, toggleSort,
+}: {
+  k: SortKey;
+  children: React.ReactNode;
+  align?: "left" | "right";
+  sortKey: SortKey | null;
+  sortDir: SortDir;
+  toggleSort: (k: SortKey) => void;
+}) {
+  const active = sortKey === k;
+  return (
+    <th className={`px-4 py-3 ${align === "right" ? "text-right" : "text-left"}`}>
+      <button
+        type="button"
+        onClick={() => toggleSort(k)}
+        className={`inline-flex items-center gap-1 hover:text-primary-700 ${active ? "text-primary-700 font-semibold" : ""} ${align === "right" ? "flex-row-reverse" : ""}`}
+      >
+        {children}
+        {active ? (sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}
+      </button>
+    </th>
+  );
+}
+
+// ── Inline juristic review (legacy check-juristic merged into the row) ──
+function JuristicInlineReview({ bundle }: { bundle: JuristicBundle }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [dbd, setDbd] = useState<DbdLookupData | null>(null);
+  const [dbdPending, startDbd] = useTransition();
+  const [dbdErr, setDbdErr] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
+  const [actErr, setActErr] = useState<string | null>(null);
+  const [actMsg, setActMsg] = useState<string | null>(null);
+
+  function runDbd() {
+    setDbdErr(null);
+    startDbd(async () => {
+      const res = await lookupDbdJuristic({ profile_id: bundle.profileId });
+      if (res.ok) setDbd(res.data ?? null);
+      else setDbdErr(res.error ?? "ผิดพลาด");
+    });
+  }
+  function act(fn: () => Promise<{ ok: boolean; error?: string }>) {
+    setActErr(null); setActMsg(null);
+    startTransition(async () => {
+      const res = await fn();
+      if (res.ok) { setActMsg("บันทึกแล้ว"); router.refresh(); }
+      else setActErr(res.error ?? "ผิดพลาด");
+    });
+  }
+
+  const rows = dbd?.dbd ? computeCompareRows(dbd.dbd, dbd.pacred, dbd.taxId || bundle.taxId) : [];
+  const mismatch = rows.filter((r) => r.mismatch).length;
+  const dbdUrl = `https://datawarehouse.dbd.go.th/company/show/${encodeURIComponent(bundle.taxId)}`;
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      {/* LEFT — company info + DBD compare */}
+      <div className="space-y-3">
+        <div className="rounded-lg border border-border bg-white dark:bg-surface p-3 text-sm">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <div><span className="text-muted">เลขนิติบุคคล:</span> <span className="font-mono font-semibold">{bundle.taxId || "—"}</span></div>
+            <a href={dbdUrl} target="_blank" rel="noopener noreferrer" className="ml-auto rounded border border-border px-2 py-1 text-xs text-primary-600 hover:bg-surface-alt">เปิด DBD DataWarehouse ↗</a>
+          </div>
+          <div className="mt-1"><span className="text-muted">ชื่อบริษัท:</span> {bundle.companyName || "—"}</div>
+          <div className="mt-1"><span className="text-muted">ที่อยู่:</span> {bundle.companyAddress || "—"}</div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-white dark:bg-surface p-3">
+          {!dbd && !dbdPending && (
+            <button type="button" onClick={runDbd} className="rounded bg-primary-50 border border-primary-200 px-3 py-1.5 text-xs font-medium text-primary-700 hover:bg-primary-100">
+              🔎 ตรวจสอบกับ DBD
+            </button>
+          )}
+          {dbdPending && <p className="text-center text-xs text-muted py-3">กำลังดึงข้อมูล DBD…</p>}
+          {dbdErr && <p className="text-xs text-red-700">ผิดพลาด: {dbdErr}</p>}
+          {dbd && !dbd.configured && (
+            <p className="rounded bg-amber-50 border border-amber-200 px-2 py-1.5 text-[11px] text-amber-800">
+              DBD auto-lookup ยังไม่เปิดใช้งาน — เทียบด้วยตนเองที่ลิงก์ด้านบน + เอกสารทางขวา
+            </p>
+          )}
+          {dbd?.dbd && (
+            <>
+              <p className={`mb-2 rounded px-2 py-1 text-[11px] font-medium ${mismatch > 0 ? "bg-red-50 text-red-700 border border-red-200" : "bg-green-50 text-green-700 border border-green-200"}`}>
+                {mismatch > 0 ? `⚠️ ${mismatch} รายการไม่ตรง DBD (แถวแดง)` : "✅ ข้อมูลหลักตรงกับ DBD"}
+              </p>
+              <div className="overflow-x-auto rounded border border-border">
+                <table className="w-full text-xs">
+                  <thead className="bg-surface-alt text-left text-[10px] uppercase text-muted">
+                    <tr><th className="px-2 py-1.5 w-1/4">รายการ</th><th className="px-2 py-1.5">DBD</th><th className="px-2 py-1.5">Pacred</th></tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr key={row.key} className={`border-t border-border align-top ${row.mismatch ? "bg-red-50" : ""}`}>
+                        <td className="px-2 py-1.5 text-muted">{row.label}</td>
+                        <td className="px-2 py-1.5">
+                          {row.isStatus
+                            ? (row.dbdValue ? <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${isActiveStatus(row.dbdValue) ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>{row.dbdValue}</span> : <span className="text-muted/50">—</span>)
+                            : (row.dbdValue || <span className="text-muted/50">—</span>)}
+                        </td>
+                        <td className="px-2 py-1.5">{row.pacredValue ? <span className={row.mismatch ? "font-medium text-red-700" : ""}>{row.pacredValue}</span> : <span className="text-muted/40">{row.pacredValue === null ? "(ไม่ได้เก็บ)" : "—"}</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* approve / reject */}
+        {bundle.corpStatus === "pending" ? (
+          <div className="rounded-lg border border-border bg-white dark:bg-surface p-3 space-y-2">
+            {actErr && <div className="text-[11px] text-red-700">{actErr}</div>}
+            {actMsg && <div className="text-[11px] text-green-700">{actMsg}</div>}
+            <div className="flex gap-2">
+              <button type="button" disabled={pending} onClick={() => act(() => verifyJuristic({ profile_id: bundle.profileId }))}
+                className="rounded bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50">✅ อนุมัติสถานะบริษัท</button>
+              <button type="button" disabled={pending} onClick={() => { if (!reason.trim()) { setActErr("ระบุเหตุผลก่อนปฏิเสธ"); return; } act(() => rejectJuristic({ profile_id: bundle.profileId, reason })); }}
+                className="rounded border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">❌ ไม่อนุมัติ</button>
+            </div>
+            <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="เหตุผลปฏิเสธ (กรอกก่อนกดไม่อนุมัติ)" className="w-full text-[11px] rounded border border-border px-2 py-1" />
+          </div>
+        ) : (
+          <p className={`rounded-lg border px-3 py-2 text-xs ${bundle.corpStatus === "verified" ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}`}>
+            {bundle.corpStatus === "verified" ? "✅ ยืนยันสถานะบริษัทแล้ว" : "❌ ปฏิเสธสถานะบริษัทแล้ว"}
+          </p>
+        )}
+      </div>
+
+      {/* RIGHT — documents with hover-zoom */}
+      <div className="space-y-2">
+        <p className="text-xs font-medium text-muted">เอกสารแนบ (เลื่อนเมาส์บนรูปเพื่อขยายอ่านเลข)</p>
+        {bundle.docs.length === 0 ? (
+          <p className="rounded-lg border border-border bg-white dark:bg-surface p-6 text-center text-xs text-muted">ไม่มีเอกสารแนบ</p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {bundle.docs.map((d) => (
+              <div key={d.url}>
+                <p className="mb-0.5 text-[11px] font-medium">{d.label}</p>
+                <HoverZoomImage src={d.url} alt={d.label} mime={d.mime} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
