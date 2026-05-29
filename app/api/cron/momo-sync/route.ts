@@ -41,14 +41,36 @@ function dateIsoForCron(daysAgo: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Accept ?start=YYYY-MM-DD&?end=YYYY-MM-DD overrides ONLY on non-prod
+ *  (or when the caller has a valid CRON_SECRET Bearer). Lets ops manually
+ *  reseed a wider range after an outage / env-var fix without redeploy.
+ *  Prod cron (vercel.json schedule) never sends query params → falls back
+ *  to yesterday..today as before. */
+function parseDateOverride(url: URL, request: Request): { start?: string; end?: string } {
+  const isProd     = process.env.NODE_ENV === "production";
+  const secret     = process.env.CRON_SECRET;
+  const authHeader = request.headers.get("authorization");
+  const bearerOk   = !!secret && authHeader === `Bearer ${secret}`;
+  if (isProd && !bearerOk) return {};
+  const re = /^\d{4}-\d{2}-\d{2}$/;
+  const start = url.searchParams.get("start");
+  const end   = url.searchParams.get("end");
+  return {
+    start: start && re.test(start) ? start : undefined,
+    end:   end   && re.test(end)   ? end   : undefined,
+  };
+}
+
 export async function GET(request: Request) {
   return instrumentCron({
     cronPath: "/api/cron/momo-sync",
     request,
     handler: async () => {
       const admin = createAdminClient();
-      const start = dateIsoForCron(1); // yesterday
-      const end   = dateIsoForCron(0); // today
+      const url = new URL(request.url);
+      const override = parseDateOverride(url, request);
+      const start = override.start ?? dateIsoForCron(1); // yesterday (or override)
+      const end   = override.end   ?? dateIsoForCron(0); // today (or override)
 
       // ── 1. Pull MOMO → upsert momo_import_tracks + momo_container_closed ──
       const sync = await runMomoSync(admin, {
