@@ -9,6 +9,8 @@
 
 ใครจะเขียน migration ใหม่ → ใช้ `0125_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
 
+> 0118-0124 ครอง prod แล้ว (ปอน 0118-0122 MOMO · ภูม 0123-0124 admins+momo-commit · integrated 2026-05-30).
+
 > **กฎกันชนถาวร:** migration เป็น **global sequence ของทั้ง repo** ไม่ใช่ของ branch ใคร. เลขชนกัน = merge เจ็บ. **เขียนใหม่ → ขอเลขจากเดฟ / เช็คไฟล์นี้ก่อนเสมอ.**
 
 ---
@@ -23,19 +25,21 @@
 | 0120 | `momo_raw_events_and_detail_tables` | ปอน | ✅ applied (this session) | main |
 | 0121 | `momo_tracking_links_and_status_snapshot` | ปอน | ✅ applied (this session) | main |
 | 0122 | `momo_sync_run_items` | ปอน | ✅ applied (this session) | main |
+| 0123 | `admins_role_manager` | ภูม | ✅ applied (renumbered from 0118 · integrated 2026-05-30) | main |
+| 0124 | `momo_commit_tracking` | ภูม | ✅ applied (renumbered from 0119 · integrated 2026-05-30) | main |
 
 ---
 
-## 🟡 ภูม's migrations — applied prod · ต้อง renumber ตอน integrate
+## ✅ ภูม's migrations — RENUMBERED + INTEGRATED 2026-05-30 (done)
 
-ภูม เขียน 2 migration บน Poom-pacred · **apply prod เองแล้วทั้งคู่ (verified 2026-05-30)** · แต่เลข **ชน filename** กับ ปอน's 0118/0119 ที่อยู่ main แล้ว.
+ภูม เขียน 2 migration บน Poom-pacred · apply prod เองแล้วทั้งคู่ · เลขชน filename กับ ปอน's 0118/0119. **Integrate Poom-pacred → main 2026-05-30: renumbered + merged (done):**
 
-| เลขเดิม (Poom-pacred) | เลขใหม่ (หลัง renumber) | ไฟล์ | object | prod |
+| เลขเดิม (Poom-pacred) | เลขใหม่ (main) | ไฟล์ | object | prod |
 |---|---|---|---|---|
 | 0118 | **0123** | `admins_role_manager` | `admins` role +`manager` | ✅ applied |
-| 0119 | **0124** | `momo_commit_tracking` | `momo_import_tracks` +4 cols (committed_at/forwarder_id/by/userid) | ✅ applied |
+| 0119 | **0124** | `momo_commit_tracking` | `momo_import_tracks` +4 cols | ✅ applied |
 
-**DB ไม่ชน** — คนละ object (ภูม admins/momo-commit · ปอน momo-promote/disambiguate). แค่ filename เลขซ้ำ.
+**DB ไม่ชน** — คนละ object (ภูม admins/momo-commit · ปอน momo-promote/disambiguate). renumber = filename fix เท่านั้น · re-run idempotent no-op.
 
 ### 🔧 ภูม renumber (ทำบน Poom-pacred ก่อน sync main):
 ```bash
