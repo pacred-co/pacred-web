@@ -134,6 +134,84 @@ cat docs/team-2026-05-29-3-deploy-architecture.md         # detailed deploy + se
 bash scripts/setup-dave.sh                                # auto status + pickup
 ```
 
+> ✅ **ภูม Poom-pacred Wave 27-30 INTEGRATED to main 2026-05-30** (this commit · 46 commits · migrations renumbered 0118→0123, 0119→0124). ภูม save-point ด้านล่างเก็บไว้เป็น shipped-history.
+
+---
+
+# 🌅 2026-05-30 — WAVE 29 + WAVE 30 #2 (ภูม · INTEGRATED to main · shipped-history)
+
+ภูม session **ตอนเย็น 2026-05-30** — มา session ใหม่ขอ workflow audit ของ MOMO/accounting/barcode พร้อมแก้. ปิด session ด้วย:
+- ✅ **4-agent legacy deep-audit** เผย legacy accounting = 95% UI stub (ไม่มี backend) · workflow ที่ทำได้คือ "ใบเสร็จรับเงิน" (tb_receipt) เท่านั้น ไม่ใช่ "ใบแจ้งหนี้"
+- ✅ **Wave 29 pivot** Wave 28 F3 invoice → auto-receipt on payment-land (legacy callPriceUser path)
+- ✅ **Wave 30 #2 cron** MOMO pull every 10 min · live test pulled 6 new rows
+- ✅ **Pacred Tailwind mobile-first** rewrite ของ `/admin/barcode/driver/import` (net -60 LOC · sticky pallet · 56px tap targets)
+- ✅ **Legacy verbatim sidebar** flatten recordIntake + remove redundant menubar barcode tab
+
+**📦 17+ commits today (push range `8e9d8ef..709d8ca` บน Poom-pacred):**
+
+### Wave 29 — pivot accounting + barcode polish
+| Commit | งาน |
+|---|---|
+| `c3087d1` | feat(#205) doc-number minter `{FRC|FRG}{yyMM}-{NNNNN}` · 21 unit tests · port functions.php:457-486 |
+| `30ff78d` | merge(#209) barcode sidebar flat shortcut + 2 orphan redirects (Agent F) |
+| `945c848` | feat(#207) printReceipt mPDF faithful · ต้นฉบับ+สำเนา · WHT 1% · 4-sig · disclaimer (Agent E) |
+| `7a43c81` | feat(#206+#208) pivot to receipt-flow · auto on payment-land + batch manual override (Agent G) |
+| `b24c003` | merge(#207) Agent E printReceipt port |
+| `457d225` | merge(#206+#208) Agent G auto-receipt + batch UI · resolved mint-receipt-doc-no.ts conflict (kept main's full 200-LOC vs G's 79-LOC stub) |
+| `2bf54b4` | fix(#212) post-merge lint cleanup · extract inline SortableTh components |
+| `8c210b1` | fix(#214+#215) sidebar verbatim · flatten recordIntake + remove menubar barcode tab |
+| `631a458` | feat(#213) /admin/barcode/driver/import Pacred Tailwind mobile-first (Agent #213) |
+| `99e6d37` | merge(#213) Agent #213 barcode UI rewrite |
+
+### Wave 30 #2 — MOMO cron auto-pull
+| `709d8ca` | feat(#2) cron `*/10 * * * *` + auto-commit hook (deferred to Wave 30.5) · 🎯 LIVE 6 rows pulled in test |
+
+**🟢 Live state (post-push 2026-05-30):**
+- `pnpm verify` EXIT 0 (lint 0 errors · tsc 0 · 54 tests · audits green)
+- `/admin/barcode/driver/import` mobile-first Pacred design verified at viewport 1568×744 (sidebar shortcut active · sticky pallet amber alert · 56px tap targets · 18px input)
+- Cron `/api/cron/momo-sync` live tested with curl → 6 NEW import-track rows synced + log row db02a7b9 logged
+
+**🟠 Pending — ภูม manual actions (carry-over):**
+1. 🟠 **B-3 13 admins recreate** via `/admin/admins/new` (~45 min · use `docs/research/tb-admin-13-row-reference.md` · unblocks F1 auto-assign sales rep)
+2. 🔴 **B-2 ROTATE S3 key** `e913d7da34ca0089638f100afb74c972` (carry-over many sessions)
+3. 🟡 **SQL cleanup #51972** (`DELETE FROM tb_forwarder WHERE id=51972 AND ftrackingchn='TEST-SPAWN-WAVE21-A';`)
+4. 🟡 **5 rows date corruption** (`fdatestatus3 + fdatetothai` ปี 2037/2027 · `docs/runbook/wave-29-tb-receipt-pollution-audit.md` adjacent issue)
+5. 🟡 **Apply migrations** 0118 (manager role) + 0119 (MOMO commit-tracking cols) to prod if not applied yet
+6. 🟡 **Run prod audit** Step 1 of `docs/runbook/wave-29-tb-receipt-pollution-audit.md` to count PR-format rows in tb_receipt
+7. 🟡 **ก๊อต/เดฟ decision** — receipt issuer brand: keep `PCS Cargo Co., Ltd. · TaxID 0105560160694` (legacy) หรือ switch เป็น `Pacred (Thailand) Co., Ltd. · TaxID 0105564077716`
+
+**🟡 Wave 30 P1 backlog (next session):**
+- **#30.5** Auto-commit body extraction (commit-momo-row-core.ts) — let cron auto-commit eligible MOMO rows · today fails 7/7 because withAdmin rejects
+- **#30.6** Barcode axis rename `cargo/driver` → `camera/scanner` (~4 hr · 8 routes + 16 nav refs + redirects)
+- **#30.7** Receive payment monitoring · alert if cron-pulled rows accumulate uncommitted for > N hrs
+
+**🟢 Prod snapshot 2026-05-30:**
+- **tb_forwarder distribution:** 45,840 ส่งแล้ว (long tail · OK) · **457 รอชำระเงิน** (revenue waiting!) · 268 เตรียมส่ง · 613 ถึงโกดังจีน · 261 กำลังส่งมาไทย · 34 ถึงไทยแล้ว
+- **tb_cnt:** 0 rows (cnt-payment flow ภูม ยังไม่ได้ใช้)
+- **Latest order:** #51971 fdate=2026-05-18 · ระบบ idle ~12 วัน · รอ hard launch
+- **MOMO sync lag pre-cron:** 17h 38m → **post-cron ทุก 10 นาที** ⚡
+
+**🎯 SOTs for next session — read in order:**
+1. 🌅 **THIS top section** — Wave 29 + Wave 30 #2 ครบ
+2. 📋 `docs/research/legacy-accounting-reality-2026-05-30.md` — 4-agent deep-audit (Wave 29 SOT · legacy "ระบบบัญชี" = 95% stub)
+3. 📋 `docs/runbook/wave-29-tb-receipt-pollution-audit.md` — prod cleanup gate (Step 1-4) สำหรับ Wave 28 PR-format pollution
+4. 🛠 `lib/admin/mint-receipt-doc-no.ts` + tests · `lib/admin/auto-issue-receipt.ts` · `lib/admin/auto-commit-momo.ts` · `lib/integrations/momo-isolated/sync.ts` (NEW core libs)
+5. 🤖 `app/api/cron/momo-sync/route.ts` (Wave 30 #2 · pull every 10 min) · vercel.json cron schedule
+
+**Resume command (next session):**
+```bash
+cd /c/Users/Admin/pacred-web/.claude/worktrees/adoring-chandrasekhar-0f8ad7
+git fetch origin --prune
+git rev-list --left-right --count HEAD...origin/Poom-pacred   # should be 0/0
+head -100 CLAUDE.md                                            # this top section
+pnpm dev   # port 3000 (if not running)
+# Next pickup options:
+# A) Wave 30.5 — extract commit body + enable cron auto-commit
+# B) ภูม B-3 13 admins recreate (manual ~45 min)
+# C) ภูม run SQL pollution audit Step 1 (read-only · 2 min)
+# D) Wave 30.6 — barcode axis camera/scanner rename
+```
+
 ---
 
 # 🌌 2026-05-28 ดึก-3 — SESSION WRAP · 2-REPO LOCAL VERIFIED · SETUP SCRIPTS LANDED

@@ -1,85 +1,127 @@
 /**
- * GET /api/cron/momo-sync — Sprint-11 P2.1 wiring.
+ * GET /api/cron/momo-sync — Wave 30 #2 (ภูม brief 2026-05-30 evening).
  *
- * Daily cron that pulls MOMO JMF container + shipment updates into the
- * Pacred cargo spine (cargo_containers / cargo_shipments /
- * cargo_shipment_tracking / cargo_container_status_history) via
- * `syncContainersFromMomo`.
+ * 🆕 PIVOT from the prior daily cron that wrote to spine cargo_* tables
+ *    (`syncContainersFromMomo` via momo-jmf integration · DEPRECATED here).
  *
- * Suggested schedule: `30 18 * * *` (18:30 UTC = 01:30 ICT). Offset from
- * cargothai-sync (02:30 ICT) so the two partner syncs never compete for
- * the same lambda warm slot.
+ *    The new flow points at ปอน's Wave 26 MOMO Status Sync — isolated
+ *    `momo_*` tables ONLY · runs every 10 minutes (vercel.json schedule
+ *    `*\/10 * * * *`) · then auto-commits high-confidence rows to
+ *    `tb_forwarder` so admin doesn't have to click /review for every one.
  *
- * Auth: instrumentCron handles the CRON_SECRET / x-vercel-cron header
- * check — same pattern as the other crons.
+ * Why every 10 min: legacy PCS Cargo had NO cron — admins clicked
+ * `?page=updateAPI` manually whenever they wanted fresh data. Pacred
+ * does better: 10-min sync = warehouse staff always see today's MOMO
+ * activity within ~10 min lag. (Vercel Pro lets us schedule any
+ * interval; Hobby is once-per-day.)
  *
- * Window default: last 24 hours via `since` param. The MOMO listContainers
- * client accepts an optional `updated_since` so re-running yesterday
- * doesn't reprocess everything.
+ * Eligibility for auto-commit (conservative — see lib/admin/auto-commit-momo.ts):
+ *   ✅ row.committed_at IS NULL
+ *   ✅ raw.user_group + raw.user_code → valid `tb_users.userID`
+ *   ✅ default `fShipBy=PCS` + `fProductsType=1` (admin overrides at /review if needed)
+ *   ❌ rows without a userid match stay at /review (admin verifies + commits manually)
  *
- * Degrade pattern: when MOMO env (MOMO_JMF_TOKEN / MOMO_JMF_BASE_URL) is
- * unset, syncContainersFromMomo returns ok with reason='not_configured'
- * and counters at 0 — we report status='failure' so the admin UI shows
- * the "ขอ token จาก MOMO ops" banner.
+ * Window: yesterday → today (covers overnight + intraday updates each run).
  *
- * @see lib/integrations/momo-jmf/sync.ts
- * @see docs/integrations/momo-jmf-api-spec.md
+ * @see lib/integrations/momo-isolated/sync.ts — runMomoSync orchestrator
+ * @see lib/admin/auto-commit-momo.ts            — autoCommitEligibleMomoRows
+ * @see app/api/admin/momo/sync/route.ts         — admin manual variant
+ * @see docs/integrations/momo-jmf-api-spec.md   — partner API spec
  */
+import { createAdminClient } from "@/lib/supabase/admin";
 import { instrumentCron } from "@/lib/cron/instrument";
-import { syncContainersFromMomo } from "@/lib/integrations/momo-jmf";
+import { runMomoSync } from "@/lib/integrations/momo-isolated/sync";
+import { autoCommitEligibleMomoRows } from "@/lib/admin/auto-commit-momo";
 import { logger } from "@/lib/logger";
+
+/** Window helper — YYYY-MM-DD for today + yesterday. */
+function dateIsoForCron(daysAgo: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - daysAgo);
+  return d.toISOString().slice(0, 10);
+}
 
 export async function GET(request: Request) {
   return instrumentCron({
     cronPath: "/api/cron/momo-sync",
     request,
     handler: async () => {
-      // Default window: last 24 hours.
-      const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const admin = createAdminClient();
+      const start = dateIsoForCron(1); // yesterday
+      const end   = dateIsoForCron(0); // today
 
-      const res = await syncContainersFromMomo(since);
+      // ── 1. Pull MOMO → upsert momo_import_tracks + momo_container_closed ──
+      const sync = await runMomoSync(admin, {
+        start,
+        end,
+        sackNo:      null,
+        triggeredBy: null,   // cron has no admin user
+        syncSource:  "cron",
+      });
 
-      if (!res.ok) {
-        logger.warn("momo-cron", "sync failed", { reason: res.reason, errors: res.errors });
-        return {
-          status:  "failure",
-          summary: { reason: res.reason ?? "unknown", errorCount: res.errors.length },
-          payload: { ok: false, error: `momo_sync: ${res.reason ?? "unknown"}` },
-        };
+      // If MOMO API itself died (every fetch errored), surface as failure
+      // so the cron-health log shows the issue + future runs can recover.
+      const allFailed =
+        sync.errors.length > 0 && sync.upsertedCount === 0;
+
+      // ── 2. Auto-commit eligible rows → tb_forwarder ──
+      // Best-effort: any failure here doesn't fail the cron (rows that
+      // didn't commit stay at /review for admin to handle).
+      let commit: Awaited<ReturnType<typeof autoCommitEligibleMomoRows>> = {
+        scanned: 0, attempted: 0, succeeded: 0, failed: 0, skipped: 0, perRow: [],
+      };
+      try {
+        commit = await autoCommitEligibleMomoRows(admin, 100);
+      } catch (err) {
+        logger.error("momo-cron", "auto-commit threw", err, {
+          syncLogId: sync.syncLogId,
+        });
       }
 
-      // Token unset → ok=true with reason='not_configured'. Surface as
-      // failure so the cron-invocations log shows it (matches cargothai).
-      if (res.reason === "not_configured") {
-        return {
-          status:  "failure",
-          summary: { reason: "not_configured" },
-          payload: { ok: false, error: "MOMO_JMF_TOKEN / MOMO_JMF_BASE_URL not set" },
-        };
-      }
+      const cronStatus =
+        allFailed                        ? "failure" :
+        sync.status === "partial"        ? "partial" :
+        commit.failed > 0                ? "partial" :
+                                           "success";
 
       return {
-        status:  res.errors.length > 0 ? "partial" : "success",
+        status: cronStatus,
         summary: {
-          since:               since.toISOString(),
-          fetched:             res.fetched,
-          upserted:            res.upserted,
-          skipped:             res.skipped,
-          shipments_upserted:  res.shipments_upserted,
-          tracking_appended:   res.tracking_appended,
-          status_transitions:  res.status_transitions,
-          errorCount:          res.errors.length,
+          window:               { start, end },
+          import_tracks:        sync.importTrackCount,
+          containers_closed:    sync.containerClosedCount,
+          upserted:             sync.upsertedCount,
+          sync_errors:          sync.errors.length,
+          auto_commit_scanned:  commit.scanned,
+          auto_commit_eligible: commit.attempted,
+          auto_commit_succeeded: commit.succeeded,
+          auto_commit_failed:   commit.failed,
+          auto_commit_skipped:  commit.skipped,
+          sync_log_id:          sync.syncLogId,
         },
         payload: {
-          ok:                  true,
-          since:               since.toISOString(),
-          fetched:             res.fetched,
-          upserted:            res.upserted,
-          skipped:             res.skipped,
-          shipments_upserted:  res.shipments_upserted,
-          tracking_appended:   res.tracking_appended,
-          status_transitions:  res.status_transitions,
-          errors:              res.errors,
+          ok:    !allFailed,
+          start,
+          end,
+          sync: {
+            importTrackCount:    sync.importTrackCount,
+            containerClosedCount: sync.containerClosedCount,
+            upsertedCount:       sync.upsertedCount,
+            failedCount:         sync.failedCount,
+            errors:              sync.errors,
+            status:              sync.status,
+            syncLogId:           sync.syncLogId,
+          },
+          autoCommit: {
+            scanned:   commit.scanned,
+            attempted: commit.attempted,
+            succeeded: commit.succeeded,
+            failed:    commit.failed,
+            skipped:   commit.skipped,
+            // Don't dump perRow into the response payload — it can be
+            // hundreds of rows. The cron-invocations table has its own
+            // result_summary jsonb; perRow stays in-memory only.
+          },
         },
       };
     },

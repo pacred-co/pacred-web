@@ -1,281 +1,568 @@
+/**
+ * Admin > "ประวัติการออกใบแจ้งหนี้ ฝากนำเข้า" — LIST page
+ *
+ * Agent F3 · E2E LOOP FIX batch (2026-05-29) — REPLACES the prior 1:1
+ * faithful shell (which had no DataTable, no add/detail wired) with a
+ * real Tailwind admin list reading tb_receipt JOIN tb_users.
+ *
+ * Legacy reference: `pcs-admin/include/pages/hs-forwarder-invoice/home.php`
+ * (the default view is a header shell; the actual per-customer invoice list
+ * is reached behind "ดูรายละเอียด" workflows that don't have a single PHP
+ * source — Pacred surfaces it here as the canonical list).
+ *
+ * Per AGENTS.md §0a — workflow logic from legacy · Pacred Tailwind polish:
+ *   - Status filter chips (pending / paid / cancelled — rstatus 3/1/2)
+ *   - Sortable columns (date · rid · customer · amount)
+ *   - Summary band (count + sum per status)
+ *   - Row tint per status (amber=pending · emerald=paid · red=cancelled)
+ *   - Search by customer userid or rid
+ *   - Date range filter
+ *
+ * Reads:
+ *   - tb_receipt (filtered by rstatus + date)
+ *   - tb_users (joined by userid for customer display name)
+ *   - tb_receipt_item (count per receipt — "N items")
+ */
+
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-
-/**
- * Admin > "ประวัติการออกใบแจ้งหนี้ ฝากนำเข้า" — a FAITHFUL 1:1
- * TRANSCRIPTION of the legacy PCS Cargo admin
- * `pcs-admin/hs-forwarder-invoice.php` DEFAULT view
- * (`include/pages/hs-forwarder-invoice/home.php` L1-88), per
- * D1 / ADR-0017 + the faithful-port transcription runbook
- * (`docs/runbook/faithful-port-transcription.md` §8 — admin pattern).
- *
- * The legacy `hs-forwarder-invoice.php` (30 LOC wrapper) is a
- * `switch($_GET['page'])` router that branches into three views:
- *   - (default)  → include/pages/hs-forwarder-invoice/home.php   (this file)
- *   - ?page=add  → include/pages/hs-forwarder-invoice/add.php    (future pilot)
- *   - ?page=detail&id=X → include/pages/hs-forwarder-invoice/detail.php (future pilot)
- *
- * This file transcribes ONLY the default (home.php) view = the LIST
- * shell that wraps a help modal + the "เพิ่มรายการใหม่" CTA. The
- * actual issued-invoice list, the create-invoice form, and the
- * per-invoice detail/print flow land as SIBLING pilots:
- *   - /admin/accounting/forwarder-invoice/add     (the ?page=add form)
- *   - /admin/accounting/forwarder-invoice/[id]    (the ?page=detail&id=X view)
- *
- * The legacy home.php intentionally renders an empty list-shell —
- * it shows the page heading, the help modal, the "เพิ่มรายการใหม่"
- * CTA, then a centred subheading. There is no DataTable on the
- * default view — the per-customer invoice listing lives behind the
- * "ดูรายละเอียด" workflow (per `member/pcs-admin/include/pages/
- * hs-forwarder-invoice/home.php`). This pilot reproduces that
- * shell faithfully — same Bootstrap-4 markup, same labels (Thai
- * hardcoded), same modal contents.
- *
- * The JSX below is the exact HTML structure home.php renders —
- * same Bootstrap-4 markup, same elements, same labels, same order.
- * The visual identity comes from the legacy admin CSS, brought in
- * verbatim as the static `.pcs-legacy`-scoped
- * `public/legacy/pcs/admin/admin-base.css` (the shared admin chrome
- * — established by the admin-table pilot) and
- * `public/legacy/pcs/admin/accounting-forwarder-invoice.css` (the
- * page-specific overrides — the orange `bg-color-recom` modal CTA
- * gradient + the Bootstrap-4 modal chrome the help dialog needs).
- * Both loaded via plain `<link rel="stylesheet">` so they bypass
- * the app's Tailwind v4 / PostCSS pipeline (the rule da4cd79 set).
- *
- * `home.php` source structure transcribed here:
- *   - Title bar      home.php L1 (window/page title)
- *   - Breadcrumb     home.php L11 → breadcrumbAdmin() helper in
- *                    pcs-admin/include/function.php L2976-2996.
- *                    The legacy passes a one-element array (the
- *                    section heading) — reproduced here.
- *   - Card header    home.php L13-77 (heading + help-modal + CTA)
- *   - Page heading   home.php L70-74 (centred "PCS-red" subheading)
- *
- * Data — home.php has NO SQL. The default home view is a
- * header-shell only; the per-customer invoice listing is wired
- * inside the `add` and `detail` sub-pilots. Nothing fetched here.
- *
- * Auth — runbook §3 says keep the Pacred auth chain. The legacy
- * gate is implicit (header.php require — any logged-in admin can
- * land here); but the page IS in the บัญชี Cargo workspace, so the
- * closest Pacred V3 RBAC roles are `super + accounting`.
- * requireAdmin treats `super` as universal.
- *
- * Sub-page router pattern (legacy `?page=` branch table) —
- * mirrors the admin-table + combine-bill pilots:
- * | Legacy                                | Pacred route |
- * |---|---|
- * | (default) header-shell + help modal   | `/admin/accounting/forwarder-invoice`        (this file) |
- * | `?page=add`                           | `/admin/accounting/forwarder-invoice/add`    (future pilot) |
- * | `?page=detail&id=X`                   | `/admin/accounting/forwarder-invoice/[id]`   (future pilot) |
- *
- * Rebrand: legacy `PCS Cargo Admin` window title → `PR Cargo
- * Admin`; everything else is verbatim Thai. The PCS-scrub stays
- * API-switchover-gated (CLAUDE.md / ADR-0017) and is NOT a
- * faithful-port concern; "branding text + member codes only".
- *
- * Not transcribed (deliberate · documented for the pilot):
- *   - The `?page=add` sub-route (legacy switch `case 'add'`,
- *     home.php L17-22). The "เพิ่มรายการใหม่" CTA is rendered
- *     faithfully (link `/admin/accounting/forwarder-invoice/add`)
- *     but the actual create-invoice form lives in a sibling pilot.
- *   - The `?page=detail&id=X` sub-route (legacy switch `case 'detail'`,
- *     home.php L5-15) — sibling pilot at `[id]/page.tsx`.
- *   - The Bootstrap-4 modal opens via `data-toggle="modal"` /
- *     `data-target="#recom"` — the (admin) layout loads the
- *     vendor jQuery+Bootstrap-4 bundle so the modal works without
- *     React state.
- */
+import { createAdminClient } from "@/lib/supabase/admin";
+import { Plus } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-export default async function AccountingForwarderInvoicePage() {
-  // Legacy gate (home.php inherits header.php auth — any admin can
-  // view; the accounting / sales / CEO roles are the legitimate
-  // users). Pacred V3 narrows to super + accounting; super is
-  // always included by requireAdmin semantics.
-  await requireAdmin(["super", "accounting"]);
+// ────────────────────────────────────────────────────────────
+// Status palette — rstatus mapping
+// ────────────────────────────────────────────────────────────
 
-  // home.php L11 — title = ประวัติการออกใบแจ้งหนี้ ฝากนำเข้า
-  const sectionName = "ประวัติการออกใบแจ้งหนี้ ฝากนำเข้า";
+type RStatus = "1" | "2" | "3";
+
+const RSTATUS_CFG: Record<
+  RStatus,
+  { label: string; chip: string; rowBg: string; key: "paid" | "cancelled" | "pending" }
+> = {
+  "1": {
+    label:  "จ่ายแล้ว",
+    chip:   "bg-emerald-500 text-emerald-50 border border-emerald-700",
+    rowBg:  "bg-emerald-50",
+    key:    "paid",
+  },
+  "2": {
+    label:  "ยกเลิก",
+    chip:   "bg-red-500 text-red-50 border border-red-700",
+    rowBg:  "bg-red-50",
+    key:    "cancelled",
+  },
+  "3": {
+    label:  "รอชำระเงิน",
+    chip:   "bg-amber-400 text-amber-950 border border-amber-600",
+    rowBg:  "bg-amber-50",
+    key:    "pending",
+  },
+};
+
+function rstatusCfg(rstatus: string) {
+  return RSTATUS_CFG[rstatus as RStatus] ?? {
+    label: rstatus,
+    chip:  "bg-gray-300 text-gray-900",
+    rowBg: "",
+    key:   "pending" as const,
+  };
+}
+
+// ────────────────────────────────────────────────────────────
+// SearchParams
+// ────────────────────────────────────────────────────────────
+
+type SearchParams = {
+  status?: string;   // 'pending' | 'paid' | 'cancelled' | undefined (= all)
+  q?: string;        // search by rid or userid
+  date_from?: string;
+  date_to?: string;
+  sort?: string;     // 'date' | 'rid' | 'userid' | 'amount' — default 'date'
+  dir?: string;      // 'asc' | 'desc' — default 'desc'
+};
+
+const STATUS_PARAM_TO_RSTATUS: Record<string, RStatus> = {
+  pending:   "3",
+  paid:      "1",
+  cancelled: "2",
+};
+
+// ────────────────────────────────────────────────────────────
+// Row types
+// ────────────────────────────────────────────────────────────
+
+type RawReceipt = {
+  id: number;
+  rid: string;
+  refid: string | null;
+  rdate: string | null;
+  rdatecreate: string | null;
+  issuedate: string | null;
+  ramount: number | string | null;
+  totalbeforewithholding: number | string | null;
+  rstatus: string;
+  userid: string;
+  adminid: string | null;
+  statusprint: string | null;
+  corporatetype: string | null;
+  recompname: string | null;
+};
+
+type RawUser = {
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+};
+
+type DisplayRow = {
+  id: number;
+  rid: string;
+  refid: string | null;
+  date: string | null;
+  rstatus: string;
+  userid: string;
+  customerName: string;
+  amount: number;
+  isCorporate: boolean;
+  itemCount: number;
+};
+
+// ────────────────────────────────────────────────────────────
+// Helpers
+// ────────────────────────────────────────────────────────────
+
+function toNumber(v: number | string | null | undefined): number {
+  if (v === null || v === undefined) return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function fmtBaht(n: number): string {
+  return n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleDateString("th-TH", { year: "numeric", month: "2-digit", day: "2-digit" });
+}
+
+function customerDisplay(u: RawUser | undefined, userid: string, recompname: string | null): string {
+  if (recompname && recompname.trim()) return recompname.trim();
+  if (!u) return userid;
+  const name = [u.userName, u.userLastName].filter(Boolean).join(" ").trim();
+  return name || userid;
+}
+
+function buildQuery(current: SearchParams, patch: Partial<SearchParams>): string {
+  const merged = { ...current, ...patch };
+  const parts: string[] = [];
+  for (const [k, v] of Object.entries(merged)) {
+    if (v === undefined || v === null || v === "") continue;
+    parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
+  }
+  return parts.length ? `?${parts.join("&")}` : "";
+}
+
+type SortKey = "date" | "rid" | "userid" | "amount";
+
+// Hoisted to top-level — React 19 react-compiler rule forbids nested
+// component definitions inside the page render. Closure-free.
+function SortLink({
+  target,
+  label,
+  sortKey,
+  sortDir,
+  sp,
+}: {
+  target: SortKey;
+  label: string;
+  sortKey: SortKey;
+  sortDir: "asc" | "desc";
+  sp: SearchParams;
+}) {
+  const nextDir = sortKey === target && sortDir === "desc" ? "asc" : "desc";
+  const arrow = sortKey === target ? (sortDir === "desc" ? "↓" : "↑") : "";
+  return (
+    <Link
+      href={`/admin/accounting/forwarder-invoice${buildQuery(sp, { sort: target, dir: nextDir })}`}
+      className="inline-flex items-center gap-1 hover:text-indigo-700"
+    >
+      {label} <span className="text-xs">{arrow}</span>
+    </Link>
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// Page component
+// ────────────────────────────────────────────────────────────
+
+export default async function AccountingForwarderInvoiceListPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  await requireAdmin(["super", "accounting"]);
+  const sp = await searchParams;
+
+  const admin = createAdminClient();
+
+  // ── Sort + status filter ─────────────────────────────────
+  const sortKey: SortKey =
+    sp.sort === "rid" || sp.sort === "userid" || sp.sort === "amount" ? sp.sort : "date";
+  const sortDir: "asc" | "desc" = sp.dir === "asc" ? "asc" : "desc";
+
+  const sortColumn: Record<SortKey, string> = {
+    date:   "rdate",
+    rid:    "rid",
+    userid: "userid",
+    amount: "totalbeforewithholding",
+  };
+
+  // ── Build query ──────────────────────────────────────────
+  let query = admin
+    .from("tb_receipt")
+    .select(
+      "id, rid, refid, rdate, rdatecreate, issuedate, ramount, totalbeforewithholding, " +
+        "rstatus, userid, adminid, statusprint, corporatetype, recompname",
+    )
+    .order(sortColumn[sortKey], { ascending: sortDir === "asc", nullsFirst: false })
+    .limit(500);
+
+  const rstatusFilter = sp.status ? STATUS_PARAM_TO_RSTATUS[sp.status] : undefined;
+  if (rstatusFilter) {
+    query = query.eq("rstatus", rstatusFilter);
+  }
+  if (sp.date_from) {
+    query = query.gte("rdate", sp.date_from);
+  }
+  if (sp.date_to) {
+    // inclusive end of day
+    query = query.lte("rdate", `${sp.date_to}T23:59:59`);
+  }
+  if (sp.q && sp.q.trim()) {
+    const q = sp.q.trim();
+    query = query.or(`rid.ilike.%${q}%,userid.ilike.%${q}%`);
+  }
+
+  const { data: receiptRows, error: receiptErr } = await query;
+  if (receiptErr) {
+    console.error(`[tb_receipt list] failed`, { code: receiptErr.code, message: receiptErr.message });
+    throw new Error(`Failed to load invoices: ${receiptErr.message}`);
+  }
+  const receipts = (receiptRows ?? []) as unknown as RawReceipt[];
+
+  // ── Load tb_users for customer display names ─────────────
+  const uniqueUserIds = Array.from(new Set(receipts.map((r) => r.userid).filter(Boolean)));
+  let usersById = new Map<string, RawUser>();
+  if (uniqueUserIds.length > 0) {
+    const { data: userRows, error: userErr } = await admin
+      .from("tb_users")
+      .select("userID, userName, userLastName")
+      .in("userID", uniqueUserIds);
+    if (userErr) {
+      console.error(`[tb_users list] failed`, { code: userErr.code, message: userErr.message });
+    }
+    usersById = new Map<string, RawUser>(
+      ((userRows ?? []) as unknown as RawUser[]).map((u) => [u.userID, u]),
+    );
+  }
+
+  // ── Item counts (one query, group in TS) ─────────────────
+  const rids = receipts.map((r) => r.rid).filter(Boolean);
+  const itemCountByRid = new Map<string, number>();
+  if (rids.length > 0) {
+    const { data: items, error: itemsErr } = await admin
+      .from("tb_receipt_item")
+      .select("rid")
+      .in("rid", rids);
+    if (itemsErr) {
+      console.error(`[tb_receipt_item list] failed`, { code: itemsErr.code, message: itemsErr.message });
+    }
+    for (const it of (items ?? []) as unknown as Array<{ rid: string }>) {
+      itemCountByRid.set(it.rid, (itemCountByRid.get(it.rid) ?? 0) + 1);
+    }
+  }
+
+  // ── Materialise display rows ─────────────────────────────
+  const rows: DisplayRow[] = receipts.map((r) => {
+    const u = usersById.get(r.userid);
+    return {
+      id:           r.id,
+      rid:          r.rid,
+      refid:        r.refid,
+      date:         r.rdate ?? r.rdatecreate ?? r.issuedate,
+      rstatus:      r.rstatus,
+      userid:       r.userid,
+      customerName: customerDisplay(u, r.userid, r.recompname),
+      amount:       toNumber(r.totalbeforewithholding) || toNumber(r.ramount),
+      isCorporate:  r.corporatetype === "1",
+      itemCount:    itemCountByRid.get(r.rid) ?? 0,
+    };
+  });
+
+  // ── Summary band ─────────────────────────────────────────
+  const summary = {
+    total:     rows.length,
+    pending:   { count: 0, amount: 0 },
+    paid:      { count: 0, amount: 0 },
+    cancelled: { count: 0, amount: 0 },
+    grand:     0,
+  };
+  for (const r of rows) {
+    const key = rstatusCfg(r.rstatus).key;
+    summary[key].count++;
+    summary[key].amount += r.amount;
+    summary.grand += r.amount;
+  }
+
+  // ── Helpers for sort link (hoisted via SortLink component below) ─
 
   return (
-    <div className="pcs-legacy">
-      {/* Legacy admin chrome + page-specific CSS — both served as
-          static /public/ assets so they bypass Tailwind / PostCSS. */}
-      <link rel="stylesheet" href="/legacy/pcs/admin/admin-base.css" />
-      <link
-        rel="stylesheet"
-        href="/legacy/pcs/admin/accounting-forwarder-invoice.css"
-      />
+    <div className="min-h-screen bg-slate-50">
+      <div className="mx-auto max-w-7xl px-4 py-6">
+        {/* Breadcrumb + title */}
+        <nav className="text-sm text-slate-500 mb-3">
+          <Link href="/admin" className="hover:text-indigo-700">หน้าแรก</Link>
+          <span className="mx-1">/</span>
+          <Link href="/admin/accounting" className="hover:text-indigo-700">บัญชี</Link>
+          <span className="mx-1">/</span>
+          <span className="text-slate-700">ประวัติการออกใบเสร็จ ฝากนำเข้า</span>
+        </nav>
 
-      {/* BEGIN: Content — home.php L7 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          {/* Breadcrumb — home.php L11 → breadcrumbAdmin([{name:
-              'ประวัติการออกใบแจ้งหนี้ ฝากนำเข้า'}]).
-              The legacy helper renders: หน้าแรก / {sectionName}. */}
-          <div className="content-header row">
-            <div className="content-header-left col-12">
-              <div className="row breadcrumbs-top">
-                <div className="breadcrumb-wrapper col-12">
-                  <ol className="breadcrumb">
-                    <li className="breadcrumb-item">
-                      <Link href="/admin">หน้าแรก</Link>
-                    </li>
-                    <li className="breadcrumb-item active">{sectionName}</li>
-                  </ol>
-                </div>
-              </div>
-            </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-900">
+              ประวัติการออกใบเสร็จ ฝากนำเข้า
+            </h1>
+            <p className="text-xs text-slate-500 mt-1">
+              ใบเสร็จส่วนใหญ่จะถูกสร้างอัตโนมัติเมื่ออนุมัติสลิป — ปุ่มด้านขวาสำหรับเคส manual override
+            </p>
           </div>
+          <Link
+            href="/admin/accounting/forwarder-invoice/add"
+            className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-indigo-700"
+          >
+            <Plus className="size-4" />
+            ออกใบเสร็จใหม่ (manual)
+          </Link>
+        </div>
 
-          <div className="content-body">
-            {/* home.php L13 */}
-            <section>
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  <div className="card">
-                    <div className="card-content">
-                      <div className="card-body">
-                        <div className="row">
-                          {/* Section heading — home.php L20-24 */}
-                          <div className="content-header-left col-md-6 col-12">
-                            <div className="text-center text-md-left">
-                              <h3 className="text-center text-md-left">
-                                {sectionName}
-                              </h3>
-                            </div>
-                          </div>
-
-                          {/* Right column — help modal + "เพิ่มรายการใหม่" CTA
-                              home.php L25-67 */}
-                          <div className="content-header-right col-md-6 col-12">
-                            <div className="float-md-right">
-                              <div className="text-center text-md-right">
-                                {/* "คำแนะนำการใช้งาน" pill that opens the
-                                    help modal via Bootstrap-4 data-toggle —
-                                    home.php L28-30 */}
-                                <span
-                                  className="btn btn-sm bg-color-recom box-shadow-2 mr-1 cursor-pointer"
-                                  data-toggle="modal"
-                                  data-target="#recom"
-                                >
-                                  คำแนะนำการใช้งาน
-                                </span>
-
-                                {/* Help modal — home.php L31-59.
-                                    Renders the "การใช้งานระบบออกใบแจ้งหนี้
-                                    รายการฝากนำเข้าสินค้า" panel verbatim;
-                                    the (admin) layout's jQuery+Bootstrap-4
-                                    bundle wires the show/hide. */}
-                                <div
-                                  id="recom"
-                                  className="text-left modal fade in"
-                                  tabIndex={-1}
-                                  role="dialog"
-                                  aria-hidden="true"
-                                >
-                                  <div className="modal-dialog modal-xl">
-                                    <div className="modal-content header-from">
-                                      <div className="modal-header">
-                                        <h4 className="modal-title">
-                                          การใช้งานระบบออกใบแจ้งหนี้รายการฝากนำเข้าสินค้า
-                                        </h4>
-                                        <button
-                                          type="button"
-                                          className="close"
-                                          data-dismiss="modal"
-                                          aria-hidden="true"
-                                        >
-                                          <i className="la la-close"> </i>
-                                        </button>
-                                      </div>
-                                      <div className="modal-body header-from">
-                                        <ol>
-                                          <li>
-                                            {" "}เงื่อนไขที่จะออกใบแจ้งหนี้ได้
-                                            <ol>
-                                              <li>
-                                                {" "}หากต้องการออกใบแจ้งหนี้พร้อมกันหลายรายการต้องมาทำที่ระบบสร้างใบแจ้งหนี้{" "}
-                                              </li>
-                                              <li>
-                                                {" "}รายการฝากนำเข้านั้นต้องอยู่ในสถานะรอชำระเงินแล้ว{" "}
-                                              </li>
-                                              <li>
-                                                {" "}ต้องเป็นลูกค้าในรหัสสมาชิกเดียวกันเท่านั้น{" "}
-                                              </li>
-                                              <li>
-                                                {" "}ต้องระบุวันที่ครบกำหนดชำระ{" "}
-                                              </li>
-                                            </ol>
-                                          </li>
-                                          <li>
-                                            {" "}ขั้นตอนการสร้างใบแจ้งหนี้
-                                            <ol>
-                                              <li>
-                                                {" "}กรอกรหัสสมาชิกของลูกค้า{" "}
-                                              </li>
-                                              <li>
-                                                {" "}เลือกรายการที่ต้องการ
-                                              </li>
-                                              <li>
-                                                {" "}ลูกค้าบางคนสามารถอนุมัติเครดิตไปได้เลยด้วย
-                                              </li>
-                                            </ol>
-                                          </li>
-                                        </ol>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* "เพิ่มรายการใหม่" CTA — home.php L60-65.
-                                    Drops into the legacy
-                                    hs-forwarder-invoice.php?page=add =
-                                    Pacred /admin/accounting/forwarder-invoice/add
-                                    (future sibling pilot). */}
-                                <Link href="/admin/accounting/forwarder-invoice/add">
-                                  <button
-                                    className="btn btn-sm btn-circle btn-success text-white"
-                                    type="button"
-                                    title="เพิ่มรายการใหม่"
-                                  >
-                                    {/* Inline SVG of the legacy ft-plus icon
-                                        (matches the .pcs-icon admin-base.css
-                                        pattern from combine-bill). */}
-                                    <svg className="pcs-icon" viewBox="0 0 24 24">
-                                      <line x1="12" y1="5" x2="12" y2="19" />
-                                      <line x1="5" y1="12" x2="19" y2="12" />
-                                    </svg>
-                                  </button>
-                                  <span className="font-normal text-dark">
-                                    เพิ่มรายการใหม่
-                                  </span>
-                                </Link>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Centred "PCS-red" subheading — home.php L70-74 */}
-                        <div className="row">
-                          <div className="col-12 text-center">
-                            <h2 className="text-color-main">{sectionName}</h2>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
+        {/* Summary band */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+          <div className="rounded-lg border border-slate-200 bg-white p-3">
+            <div className="text-xs text-slate-500">ทั้งหมด</div>
+            <div className="text-2xl font-semibold text-slate-900">{summary.total.toLocaleString()}</div>
+            <div className="text-xs text-slate-500 mt-1">รวม ฿{fmtBaht(summary.grand)}</div>
+          </div>
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
+            <div className="text-xs text-amber-900">รอชำระเงิน</div>
+            <div className="text-2xl font-semibold text-amber-950">{summary.pending.count}</div>
+            <div className="text-xs text-amber-900 mt-1">฿{fmtBaht(summary.pending.amount)}</div>
+          </div>
+          <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3">
+            <div className="text-xs text-emerald-900">จ่ายแล้ว</div>
+            <div className="text-2xl font-semibold text-emerald-950">{summary.paid.count}</div>
+            <div className="text-xs text-emerald-900 mt-1">฿{fmtBaht(summary.paid.amount)}</div>
+          </div>
+          <div className="rounded-lg border border-red-300 bg-red-50 p-3">
+            <div className="text-xs text-red-900">ยกเลิก</div>
+            <div className="text-2xl font-semibold text-red-950">{summary.cancelled.count}</div>
+            <div className="text-xs text-red-900 mt-1">฿{fmtBaht(summary.cancelled.amount)}</div>
           </div>
         </div>
+
+        {/* Status filter chips + search + dates */}
+        <div className="rounded-lg border border-slate-200 bg-white p-3 mb-4">
+          <form method="GET" action="/admin/accounting/forwarder-invoice" className="flex flex-wrap items-end gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm text-slate-600 mr-1">สถานะ:</span>
+              <Link
+                href={`/admin/accounting/forwarder-invoice${buildQuery(sp, { status: undefined })}`}
+                className={`px-3 py-1.5 rounded-md text-sm border ${
+                  !sp.status
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                }`}
+              >
+                ทั้งหมด
+              </Link>
+              <Link
+                href={`/admin/accounting/forwarder-invoice${buildQuery(sp, { status: "pending" })}`}
+                className={`px-3 py-1.5 rounded-md text-sm border ${
+                  sp.status === "pending"
+                    ? "bg-amber-500 text-white border-amber-700"
+                    : "bg-white text-amber-700 border-amber-300 hover:bg-amber-50"
+                }`}
+              >
+                รอชำระเงิน
+              </Link>
+              <Link
+                href={`/admin/accounting/forwarder-invoice${buildQuery(sp, { status: "paid" })}`}
+                className={`px-3 py-1.5 rounded-md text-sm border ${
+                  sp.status === "paid"
+                    ? "bg-emerald-600 text-white border-emerald-800"
+                    : "bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                }`}
+              >
+                จ่ายแล้ว
+              </Link>
+              <Link
+                href={`/admin/accounting/forwarder-invoice${buildQuery(sp, { status: "cancelled" })}`}
+                className={`px-3 py-1.5 rounded-md text-sm border ${
+                  sp.status === "cancelled"
+                    ? "bg-red-600 text-white border-red-800"
+                    : "bg-white text-red-700 border-red-300 hover:bg-red-50"
+                }`}
+              >
+                ยกเลิก
+              </Link>
+            </div>
+
+            <div className="flex flex-wrap items-end gap-2">
+              {/* keep status param across submit */}
+              {sp.status && <input type="hidden" name="status" value={sp.status} />}
+              {sp.sort && <input type="hidden" name="sort" value={sp.sort} />}
+              {sp.dir && <input type="hidden" name="dir" value={sp.dir} />}
+
+              <label className="flex flex-col text-xs text-slate-600">
+                <span>ค้นหา (rid / userid)</span>
+                <input
+                  type="text"
+                  name="q"
+                  defaultValue={sp.q ?? ""}
+                  placeholder="PR260529-1 หรือ PR10899"
+                  className="mt-1 px-2 py-1.5 rounded border border-slate-300 text-sm w-56"
+                />
+              </label>
+              <label className="flex flex-col text-xs text-slate-600">
+                <span>ตั้งแต่</span>
+                <input
+                  type="date"
+                  name="date_from"
+                  defaultValue={sp.date_from ?? ""}
+                  className="mt-1 px-2 py-1.5 rounded border border-slate-300 text-sm"
+                />
+              </label>
+              <label className="flex flex-col text-xs text-slate-600">
+                <span>ถึง</span>
+                <input
+                  type="date"
+                  name="date_to"
+                  defaultValue={sp.date_to ?? ""}
+                  className="mt-1 px-2 py-1.5 rounded border border-slate-300 text-sm"
+                />
+              </label>
+              <button
+                type="submit"
+                className="px-3 py-1.5 rounded bg-slate-900 text-white text-sm hover:bg-slate-800"
+              >
+                ค้นหา
+              </button>
+              {(sp.q || sp.date_from || sp.date_to) && (
+                <Link
+                  href={`/admin/accounting/forwarder-invoice${buildQuery({}, { status: sp.status })}`}
+                  className="px-3 py-1.5 rounded border border-slate-300 text-sm hover:bg-slate-50 text-slate-600"
+                >
+                  ล้าง
+                </Link>
+              )}
+            </div>
+          </form>
+        </div>
+
+        {/* Table */}
+        <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto scrollbar-x-visible">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-100 text-slate-700">
+              <tr>
+                <th className="px-3 py-2 text-left font-medium">
+                  <SortLink target="date" label="วันที่ออก" sortKey={sortKey} sortDir={sortDir} sp={sp} />
+                </th>
+                <th className="px-3 py-2 text-left font-medium">
+                  <SortLink target="rid" label="เลขที่ใบเสร็จ" sortKey={sortKey} sortDir={sortDir} sp={sp} />
+                </th>
+                <th className="px-3 py-2 text-left font-medium">
+                  <SortLink target="userid" label="ลูกค้า" sortKey={sortKey} sortDir={sortDir} sp={sp} />
+                </th>
+                <th className="px-3 py-2 text-center font-medium">รายการ</th>
+                <th className="px-3 py-2 text-right font-medium">
+                  <SortLink target="amount" label="ยอด (บาท)" sortKey={sortKey} sortDir={sortDir} sp={sp} />
+                </th>
+                <th className="px-3 py-2 text-center font-medium">สถานะ</th>
+                <th className="px-3 py-2 text-center font-medium">พิมพ์แล้ว</th>
+                <th className="px-3 py-2 text-center font-medium">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-3 py-12 text-center text-slate-500">
+                    ไม่พบใบเสร็จในเงื่อนไขที่เลือก
+                  </td>
+                </tr>
+              ) : (
+                rows.map((r) => {
+                  const cfg = rstatusCfg(r.rstatus);
+                  return (
+                    <tr key={r.id} className={`${cfg.rowBg} border-t border-slate-100 hover:bg-slate-50/80`}>
+                      <td className="px-3 py-2 whitespace-nowrap">{fmtDate(r.date)}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <Link
+                          href={`/admin/accounting/forwarder-invoice/${r.id}`}
+                          className="text-indigo-700 hover:underline font-medium"
+                        >
+                          {r.rid}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="font-medium text-slate-900">{r.customerName}</div>
+                        <div className="text-xs text-slate-500">
+                          {r.userid}{r.isCorporate ? " · นิติบุคคล" : ""}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-center">{r.itemCount}</td>
+                      <td className="px-3 py-2 text-right font-medium tabular-nums">
+                        ฿{fmtBaht(r.amount)}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${cfg.chip}`}>
+                          {cfg.label}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-center text-xs">
+                        {r.refid && r.refid.trim() ? (
+                          <span className="text-slate-500" title={r.refid}>มีหมายเหตุ</span>
+                        ) : (
+                          <span className="text-slate-300">-</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <Link
+                          href={`/admin/accounting/forwarder-invoice/${r.id}`}
+                          className="text-sm text-indigo-700 hover:underline"
+                        >
+                          ดู
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {rows.length === 500 && (
+          <div className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+            แสดงผล 500 แถวแรกเท่านั้น — กรุณาใช้ตัวกรองวันที่หรือสถานะเพื่อจำกัดผลลัพธ์
+          </div>
+        )}
       </div>
-      {/* END: Content — home.php L84 */}
     </div>
   );
 }

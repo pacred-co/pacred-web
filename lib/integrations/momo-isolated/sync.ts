@@ -1,0 +1,295 @@
+/**
+ * Wave 30 — shared MOMO sync orchestrator.
+ *
+ * Extracted from `app/api/admin/momo/sync/route.ts` so BOTH the admin
+ * manual endpoint AND the cron auto-pull (`/api/cron/momo-sync`) can
+ * call the exact same flow without duplicating ~250 LOC of upsert logic.
+ *
+ * The admin route still owns input validation + the auth guard; this
+ * helper just executes the sync given an already-built admin client +
+ * a validated date range / sackNo.
+ *
+ * Sync flow (verbatim from the legacy POST route):
+ *   1. import_track  — pull MOMO + upsert into momo_import_tracks
+ *   2. container_closed — pull MOMO + upsert into momo_container_closed
+ *   3. sack_info — pull MOMO + upsert into momo_sack_infos
+ *   4. log to momo_sync_logs
+ */
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  getImportTrack,
+  getContainerClosed,
+  getSackInfo,
+  mapImportTrackArray,
+  mapContainerClosedArray,
+  mapSackInfoSingle,
+  type MomoInternalAdminRecord,
+} from "./index";
+
+export type RunMomoSyncOpts = {
+  /** ISO date "YYYY-MM-DD" — required for the date-range pulls (track + closed). */
+  start: string | null;
+  /** ISO date "YYYY-MM-DD" — required for the date-range pulls. */
+  end:   string | null;
+  /** Optional single-sack lookup (independent of the date range). */
+  sackNo: string | null;
+  /** Who triggered the sync — admin user.id for manual, null for cron. */
+  triggeredBy: string | null;
+  /** "manual" (admin clicked /sync) or "cron" (automated). Stamped into sync_type. */
+  syncSource: "manual" | "cron";
+};
+
+export type RunMomoSyncError = {
+  scope:   string;
+  error:   string;
+  message: string;
+};
+
+export type RunMomoSyncResult = {
+  ok:                  boolean;
+  start:               string | null;
+  end:                 string | null;
+  sackNo:              string | null;
+  importTrackCount:    number;
+  containerClosedCount: number;
+  sackInfoCount:       number;
+  mappedCount:         number;
+  unmappedCount:       number;
+  upsertedCount:       number;
+  failedCount:         number;
+  errors:              RunMomoSyncError[];
+  /** Status as logged: 'success' | 'partial' | 'failed'. */
+  status:              "success" | "partial" | "failed";
+  /** The momo_sync_logs row id (if log insert succeeded). */
+  syncLogId:           string | null;
+};
+
+/**
+ * Execute one MOMO sync cycle. Pure function from `opts → DB writes`.
+ * Caller (admin route OR cron) is responsible for auth + input validation.
+ */
+export async function runMomoSync(
+  admin: SupabaseClient,
+  opts: RunMomoSyncOpts,
+): Promise<RunMomoSyncResult> {
+  const { start, end, sackNo, triggeredBy, syncSource } = opts;
+  const wantDateRange = !!(start && end);
+  const wantSack      = !!sackNo;
+
+  const errors:               RunMomoSyncError[] = [];
+  let importTrackCount    = 0;
+  let containerClosedCount = 0;
+  let sackInfoCount       = 0;
+  let upsertedCount       = 0;
+  let failedCount         = 0;
+  let importMapped:        MomoInternalAdminRecord[] = [];
+
+  // ── 1. import_track (date-range) ──
+  if (wantDateRange) {
+    const res = await getImportTrack(start!, end!);
+    if (res.ok) {
+      importMapped = mapImportTrackArray(res.data);
+      importTrackCount = importMapped.length;
+
+      const upRows = importMapped
+        .filter((r) => r.trackingNo) // upsert requires the unique key
+        .map((r) => ({
+          momo_tracking_no:  r.trackingNo,
+          momo_sack_no:      r.sackNo,
+          momo_container_no: r.containerNo,
+          momo_user_code:    r.momoUserCode,
+          momo_user_group:   r.momoUserGroup,
+          momo_cg_no:        r.momoCgNo,
+          ship_by:           r.shipBy,
+          weight_kg:         r.weightKg,
+          cbm:               r.cbm,
+          quantity:          r.quantity,
+          date_from:         start,
+          date_to:           end,
+          phase:             r.phase,
+          shipment_status:   r.shipmentStatus,
+          billing_status:    r.billingStatus,
+          job_status:        r.jobStatus,
+          issue_status:      r.issueStatus,
+          admin_status_text: r.adminStatusText,
+          current_location:  r.currentLocation,
+          etd:               r.etd,
+          eta:               r.eta,
+          momo_updated_at:   r.momoUpdatedAt,
+          raw:               r.raw as never,
+          last_synced_at:    new Date().toISOString(),
+          updated_at:        new Date().toISOString(),
+        }));
+      if (upRows.length > 0) {
+        const { error: upErr } = await admin
+          .from("momo_import_tracks")
+          .upsert(upRows, { onConflict: "momo_tracking_no" });
+        if (upErr) {
+          failedCount += upRows.length;
+          errors.push({
+            scope:   "import_track_upsert",
+            error:   "MOMO_DB_UPSERT_FAILED",
+            message: upErr.message,
+          });
+        } else {
+          upsertedCount += upRows.length;
+        }
+      }
+    } else {
+      errors.push({ scope: "import_track", error: res.error, message: res.message });
+    }
+
+    // ── 2. container_closed (date-range) ──
+    const ccRes = await getContainerClosed(start!, end!);
+    if (ccRes.ok) {
+      const mapped = mapContainerClosedArray(ccRes.data);
+      containerClosedCount = mapped.length;
+
+      const upRows = mapped
+        .filter((r) => r.containerNo)
+        .map((r) => ({
+          momo_container_no: r.containerNo,
+          momo_sack_no:      r.sackNo,
+          ship_by:           r.shipBy,
+          total_kg:          r.totalKg,
+          total_cbm:         r.totalCbm,
+          total_parcel:      r.totalParcel,
+          date_from:         start,
+          date_to:           end,
+          closed_at:         r.momoUpdatedAt,
+          phase:             r.phase,
+          shipment_status:   r.shipmentStatus,
+          admin_status_text: r.adminStatusText,
+          raw:               r.raw as never,
+          last_synced_at:    new Date().toISOString(),
+          updated_at:        new Date().toISOString(),
+        }));
+      if (upRows.length > 0) {
+        const { error: upErr } = await admin
+          .from("momo_container_closed")
+          .upsert(upRows, { onConflict: "momo_container_no" });
+        if (upErr) {
+          failedCount += upRows.length;
+          errors.push({
+            scope:   "container_closed_upsert",
+            error:   "MOMO_DB_UPSERT_FAILED",
+            message: upErr.message,
+          });
+        } else {
+          upsertedCount += upRows.length;
+        }
+      }
+    } else {
+      errors.push({ scope: "container_closed", error: ccRes.error, message: ccRes.message });
+    }
+  }
+
+  // ── 3. sack_info (single sack) ──
+  if (wantSack) {
+    const siRes = await getSackInfo(sackNo!);
+    if (siRes.ok) {
+      const mapped = mapSackInfoSingle(siRes.data);
+      const r = mapped[0];
+      sackInfoCount = mapped.length;
+      if (!r) {
+        errors.push({
+          scope:   "sack_info_parse",
+          error:   "MOMO_PARSE_ERROR",
+          message: "Sack response not parseable",
+        });
+      } else {
+        const row = {
+          momo_sack_no:      r.sackNo || sackNo,
+          momo_tracking_no:  r.trackingNo,
+          momo_container_no: r.containerNo,
+          ship_by:           r.shipBy,
+          weight_kg:         r.weightKg,
+          cbm:               r.cbm,
+          total_parcel:      r.totalParcel,
+          phase:             r.phase,
+          shipment_status:   r.shipmentStatus,
+          billing_status:    r.billingStatus,
+          job_status:        r.jobStatus,
+          issue_status:      r.issueStatus,
+          admin_status_text: r.adminStatusText,
+          current_location:  r.currentLocation,
+          etd:               r.etd,
+          eta:               r.eta,
+          momo_updated_at:   r.momoUpdatedAt,
+          raw:               r.raw as never,
+          last_synced_at:    new Date().toISOString(),
+          updated_at:        new Date().toISOString(),
+        };
+        const { error: upErr } = await admin
+          .from("momo_sack_infos")
+          .upsert(row, { onConflict: "momo_sack_no" });
+        if (upErr) {
+          failedCount += 1;
+          errors.push({
+            scope:   "sack_info_upsert",
+            error:   "MOMO_DB_UPSERT_FAILED",
+            message: upErr.message,
+          });
+        } else {
+          upsertedCount += 1;
+        }
+      }
+    } else {
+      errors.push({ scope: "sack_info", error: siRes.error, message: siRes.message });
+    }
+  }
+
+  // ── 4. log this sync ──
+  const totalScanned = importTrackCount + containerClosedCount + sackInfoCount;
+  const mappedCount  = importMapped.filter((r) => r.shipmentStatus != null).length;
+  const unmappedCount = importTrackCount - mappedCount;
+
+  const status: "success" | "partial" | "failed" =
+    errors.length === 0 ? "success" :
+    upsertedCount > 0   ? "partial" :
+                          "failed";
+
+  const { data: syncLogRow, error: syncLogErr } = await admin
+    .from("momo_sync_logs")
+    .insert({
+      sync_type:              syncSource,
+      date_from:              start,
+      date_to:                end,
+      sack_no:                sackNo || null,
+      status,
+      import_track_count:     importTrackCount,
+      container_closed_count: containerClosedCount,
+      sack_info_count:        sackInfoCount,
+      mapped_count:           mappedCount,
+      unmapped_count:         unmappedCount,
+      upserted_count:         upsertedCount,
+      failed_count:           failedCount,
+      errors:                 errors as never,
+      created_by:             triggeredBy,
+    })
+    .select("id")
+    .maybeSingle<{ id: string }>();
+
+  if (syncLogErr) {
+    // Best-effort — don't fail the whole sync if logging failed.
+    console.error("[runMomoSync] sync_logs insert failed", { code: syncLogErr.code, message: syncLogErr.message });
+  }
+
+  return {
+    ok:                  totalScanned > 0 || errors.length === 0,
+    start,
+    end,
+    sackNo,
+    importTrackCount,
+    containerClosedCount,
+    sackInfoCount,
+    mappedCount,
+    unmappedCount,
+    upsertedCount,
+    failedCount,
+    errors,
+    status,
+    syncLogId:           syncLogRow?.id ?? null,
+  };
+}

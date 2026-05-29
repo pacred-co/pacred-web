@@ -40,6 +40,8 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { uploadToBucket } from "@/lib/storage/upload";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
+import type { AdminRole } from "@/lib/auth/require-admin";
 
 // fdistatus values are CHAR(1) strings per the legacy schema
 // (`tb_forwarder_driver_item.fdistatus character varying(1) NOT NULL`).
@@ -218,6 +220,92 @@ async function transitionItemStatus(
       .eq("id", itemId);
     if (error) return { ok: false, error: error.message };
 
+    // ── (c) AUTO-FLIP tb_forwarder.fstatus → '7' on DELIVER (Wave 26 · 2026-05-28).
+    //
+    // Legacy `pcs-admin/forwarder-driver.php:1328-1331` updates BOTH tables
+    // in the same handler when the driver uploads a delivery photo:
+    //
+    //   UPDATE tb_forwarder SET fPhotoEnd='...', fStatus='7', fDateStatus7=NOW()
+    //     WHERE ID IN ('$ids');
+    //   UPDATE tb_forwarder_driver_item SET fdiStatus='2'
+    //     WHERE fID IN ('$ids') AND fdID='$ID2';
+    //
+    // Without this 2nd UPDATE the order looks "เตรียมส่ง (6)" in /admin/forwarders
+    // forever even after the driver delivered — exactly the "feel not
+    // automatic" gap from `docs/research/legacy-deep-dive/_SYNTHESIS.md` §2 #5
+    // ("Driver photo upload → fStatus 7"). Filling that gap here.
+    //
+    // Idempotent: skip if the row is already at fstatus 7 (legacy `IN ('$ids')`
+    // doesn't filter on prior state either, but we add the WHERE to avoid
+    // bumping the date if the driver re-uploads).
+    //
+    // The fphotoend column gets the SAME filename the driver-item row got
+    // (so /admin/forwarders detail-page "รูปส่ง" matches the driver mobile
+    // photo). On the "load" action we DO NOT touch tb_forwarder — the legacy
+    // flow only flips fstatus=7 at the deliver step.
+    if (action === "deliver") {
+      // Wave 26 G5 (2026-05-28 ดึก) — status-transition role gate.
+      // Matrix: 6→7 = driver / warehouse (with super / manager override).
+      // The page-level union already filters to ["driver","ops","super"]
+      // before reaching here; the helper additionally rejects `ops` (which
+      // is the IT/admin slot — legacy doesn't grant it driver-delivery
+      // rights) UNLESS the caller also holds driver / warehouse / super /
+      // manager. `callerRoles` was loaded at the top of this function
+      // for the existing batch-owner check — reuse it.
+      if (!canAnyRoleFlipFstatus(callerRoles as readonly AdminRole[], "6", "7")) {
+        // Soft-fail: the item flip in step (b) already succeeded (driver
+        // legitimately marked the parcel delivered on the per-item table),
+        // but the global fstatus auto-flip would let an `ops` caller bump
+        // a forwarder row through the matrix gate. Logging + skipping
+        // keeps per-item UX intact while honouring G5.
+        console.error(`[tb_forwarder fstatus=7 auto-flip] forbidden_transition`, {
+          fid:    authz.row.fid,
+          roles:  callerRoles,
+        });
+      } else {
+        const fwdUpdate: Record<string, string> = {
+          fstatus:          "7",
+          fdatestatus7:     new Date().toISOString(),
+          // varchar(10) constraint on adminidupdate (per Wave 23 fix 5254f8d)
+          adminidupdate:    String(adminId).slice(0, 10),
+        };
+        if (uploadedFilename) {
+          fwdUpdate.fphotoend = uploadedFilename;
+        }
+        const { error: fwdErr } = await admin
+          .from("tb_forwarder")
+          .update(fwdUpdate)
+          .eq("id", authz.row.fid)
+          .neq("fstatus", "7");        // idempotent — don't stomp on a prior delivery
+        if (fwdErr) {
+          // Soft-fail: the item flip already succeeded; log + carry on so the
+          // driver UI doesn't show an error for a 2nd-tier mutation. A Wave 27
+          // cron can backfill any orphaned fdistatus=2 rows whose tb_forwarder
+          // didn't flip.
+          console.error(`[tb_forwarder fstatus=7 auto-flip] failed`, {
+            fid: authz.row.fid,
+            code: fwdErr.code,
+            message: fwdErr.message,
+          });
+        } else {
+          // Wave 26 G8 residual gap (Agent A3 flagged): append the canonical
+          // status-flip log row so /admin/forwarders timeline + audit reports
+          // reflect the driver-delivered transition 6→7 the same as every
+          // other fstatus flip in the system.
+          //
+          // Best-effort: log insert failure does NOT block the driver UI.
+          const { appendStatusLog } = await import("@/lib/notifications/status-flip-helper");
+          await appendStatusLog(
+            admin,
+            authz.row.fid,
+            "6",
+            "7",
+            String(adminId).slice(0, 50),
+          );
+        }
+      }
+    }
+
     await logAdminAction(
       adminId,
       `tb_forwarder_driver_item.${action}`,
@@ -230,10 +318,22 @@ async function transitionItemStatus(
         before_status: authz.row.fdistatus,
         after_status:  nextStatus,
         photo_uploaded: uploadedFilename ?? null,
+        // Wave 26: surface the tb_forwarder auto-flip in the audit payload so
+        // ops can correlate driver-item deliveries with tb_forwarder status
+        // changes when investigating "why is this order still showing เตรียมส่ง"
+        forwarder_fstatus_flipped_to_7: action === "deliver",
       },
     );
 
     revalidatePath("/admin/drivers/work");
+    // Wave 26: the listing /admin/forwarders + the detail /admin/forwarders/[fNo]
+    // both read tb_forwarder.fstatus — revalidate them too so admin
+    // ops see the status flip immediately (without it the cached page
+    // would keep showing เตรียมส่ง until the next cache TTL).
+    if (action === "deliver") {
+      revalidatePath("/admin/forwarders");
+      revalidatePath("/admin/drivers");
+    }
     return { ok: true };
   });
 }

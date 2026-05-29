@@ -1,8 +1,11 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { CustomerRowActions } from "@/components/admin/customer-row-actions";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
+import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
 import { ResetPwdButton } from "./reset-pwd-button";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -14,6 +17,10 @@ import { ResetPwdButton } from "./reset-pwd-button";
 // ─────────────────────────────────────────────────────────────────────
 const CUSTOMERS_MENUBAR: MenubarItem[] = [
   { label: "หน้าหลัก", href: "/admin/customers" },
+  // Wave 28 (2026-05-29 · ภูม flagged): "รออนุมัติ" was buried 2-levels deep
+  // under "งาน" submenu — staff couldn't find new-signup queue. Promoted
+  // to a top-level tab since the E2E loop step 2 ("เซลรับลูกค้า") starts here.
+  { label: "🆕 รออนุมัติ",  href: "/admin/customers/pending" },
   {
     label: "ตามประเภท",
     children: [
@@ -29,7 +36,6 @@ const CUSTOMERS_MENUBAR: MenubarItem[] = [
   {
     label: "งาน",
     children: [
-      { label: "รออนุมัติ",          href: "/admin/customers/pending" },
       { label: "เคลื่อนไหวล่าสุด",   href: "/admin/customers/recently-active" },
       { label: "ย้ายเซลล์ดูแล",      href: "/admin/customers/transfer-rep" },
     ],
@@ -136,14 +142,28 @@ const GROUP_CFG: Record<string, { label: string; col?: string }> = {
   comparison: { label: "สมาชิกคิดค่าเทียบ", col: "userComparison" },
 };
 
-export default async function AdminCustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; type?: string; group?: string }> }) {
+export default async function AdminCustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; type?: string; group?: string; adminidsale?: string }> }) {
   // W-1 (gap-admin H-1/H-7): page-level role gate. Lists every
   // customer's member_code/name/phone/email + wallet balances via
   // createAdminClient (RLS-bypass) — a PDPA/PII surface. ops + sales +
   // accounting (super implicit); driver/warehouse refused.
-  await requireAdmin(["ops", "sales_admin", "accounting"]);
+  const { user, roles } = await requireAdmin(["ops", "sales_admin", "accounting"]);
 
   const sp = await searchParams;
+
+  // G6 — default queue filter per role. sales_admin lands on their
+  // own customer book via ?adminidsale=<legacy_admin_id>. Other roles
+  // see all (no default). Lookup gates on legacy_admin_id presence —
+  // Pacred-native admins (no PCS bridge) fall through unfiltered.
+  const legacyAdminId = await getAdminLegacyId(user.id);
+  const defaultRedirect = buildDefaultLandingRedirect(
+    "/admin/customers",
+    roles,
+    sp as Record<string, unknown>,
+    { legacyAdminId },
+  );
+  if (defaultRedirect) redirect(defaultRedirect);
+
   const admin = createAdminClient();
 
   // D1 Wave-2: read legacy tb_users (member-code identity = `userid`).
@@ -167,6 +187,16 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
   const group = typeof sp.group === "string" && sp.group in GROUP_CFG ? sp.group : null;
   const groupCol = group ? GROUP_CFG[group].col : undefined;
   if (groupCol) q = q.eq(groupCol, "1");
+
+  // G6 — sales-rep filter (sp.adminidsale). Set by the per-role landing
+  // redirect for sales_admin (= sees their own book) OR by clicking the
+  // "เซลล์ผู้ดูแล" name on any customer row (= "ดูลูกค้าทั้งหมดของเซลล์
+  // คนนี้"). Maps to tb_users.adminIDSale text column.
+  const adminidsale =
+    typeof sp.adminidsale === "string" && sp.adminidsale.trim() !== ""
+      ? sp.adminidsale.trim()
+      : null;
+  if (adminidsale) q = q.eq("adminIDSale", adminidsale);
 
   if (sp.q) {
     // Search by member_code (userID) OR phone OR name (parallel OR via or() filter)
@@ -268,6 +298,19 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
               </Link>
             </div>
           ) : null}
+          {adminidsale ? (
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">
+              <span>เซลล์ผู้ดูแล: {adminidsale}</span>
+              <Link
+                href="/admin/customers?nofilter=1"
+                className="rounded-full px-1 leading-none hover:bg-primary-100"
+                aria-label="ล้างฟิลเตอร์เซลล์ผู้ดูแล · ดูทั้งหมด"
+                title="ดูทั้งหมด"
+              >
+                ×
+              </Link>
+            </div>
+          ) : null}
         </div>
         <div className="flex gap-2 flex-wrap items-center">
           <Link
@@ -290,6 +333,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
           </Link>
         <form action="/admin/customers" className="flex gap-2">
           {group ? <input type="hidden" name="group" value={group} /> : null}
+          {adminidsale ? <input type="hidden" name="adminidsale" value={adminidsale} /> : null}
           <input
             name="q"
             defaultValue={sp.q}

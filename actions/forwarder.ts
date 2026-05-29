@@ -1268,6 +1268,13 @@ export async function submitForwarderPayment(
   // Faithful: do NOT flip tb_forwarder.fstatus (legacy keeps fStatus=5
   // until the admin verifies the slip) and do NOT mutate tb_wallet
   // (wallet disabled for this service).
+  //
+  // Wave 29: auto-receipt is NOT triggered here — the wallet_hs rows
+  // we just inserted are status='1' (pending admin verify). The receipt
+  // fires when admin flips them to status='2' via either
+  // `adminApproveWalletHs` (actions/admin/wallet-trans.ts) or
+  // `adminBulkApproveWalletHs` (actions/admin/tb-bulk.ts), both of which
+  // call `autoIssueReceiptOnPaymentLand`.
 
   revalidatePath("/service-import");
   revalidatePath("/service-import/pending");

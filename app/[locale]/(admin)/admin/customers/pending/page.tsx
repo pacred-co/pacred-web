@@ -68,7 +68,7 @@ export default async function AdminCustomersPendingPage() {
             </p>
             <h1 className="mt-0.5 text-2xl font-bold">รอ Approve</h1>
             <p className="text-sm text-muted">
-              สมาชิกที่ยังไม่ครบข้อมูล รอการอนุมัติ (tb_users.userActive=0) · Wave 7.2 read-only · approve button → Wave 8
+              สมาชิกที่สมัครใหม่ผ่าน Pacred · รอการอนุมัติ · กดอนุมัติแล้วระบบจะส่ง SMS ต้อนรับ + จับคู่เซลให้อัตโนมัติ
             </p>
           </div>
         </div>
@@ -113,7 +113,7 @@ export default async function AdminCustomersPendingPage() {
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-4 py-12 text-center text-sm text-muted">
-                    ไม่มีสมาชิกรอ Approve · ลูกค้าที่ลงทะเบียนใหม่ทุกราย ถูก approve อัตโนมัติ
+                    ไม่มีสมาชิกรอ Approve · ทุกรายอนุมัติเรียบร้อย
                   </td>
                 </tr>
               )}
