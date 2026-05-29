@@ -398,7 +398,15 @@ export async function commitMomoRowCore(
   const smParts = (srcRow.momo_sack_no ?? "").split("-");
   const smPCS = smParts[0] ?? "";
 
-  const fUserCompany = customer.userCompany === "1" ? null : "0";
+  // fusercompany — 2026-05-30 evening ภูม flag: NULL violates the
+  // NOT NULL constraint on tb_forwarder.fusercompany. Legacy PHP
+  // (api-forwarder-momo.php L241-243) DID set $fUserCompany=NULL but
+  // PHP string-interpolated it back as "" in the INSERT statement
+  // (`'$fUserCompany'` → `''`). Result: legacy ended up writing empty
+  // string for company customers. We match that here (verified in
+  // prod tb_forwarder rows for PR124 / PR2503 / AIGA — all show "").
+  // Convention: "" = company customer · "0" = individual customer.
+  const fUserCompany = customer.userCompany === "1" ? "" : "0";
 
   const nowIso = new Date().toISOString();
 
