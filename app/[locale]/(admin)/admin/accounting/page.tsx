@@ -224,6 +224,11 @@ export default async function AdminAccountingPage({
 
   // summary-tab aggregate sums
   let sForwarder = 0, sYuan = 0, sShop = 0, sTopup = 0, sWithdraw = 0, sRefund = 0;
+  // ภูม #9 PEAK redesign — 30-day daily revenue trend for the top-of-page chart.
+  // Each item = { d: "YYYY-MM-DD", v: total THB realised that day (forwarder +
+  // yuan + shop). } Empty array on non-summary tab or query failure.
+  type DailyPoint = { d: string; v: number };
+  let dailyTrend: DailyPoint[] = [];
   // T-P5 owner-overview additions
   let sPrevNet = 0;          // total net revenue in the previous same-length window
   let nPendingDeposits = 0;  // count of pending wallet deposits (revenue waiting to land)
@@ -372,6 +377,51 @@ export default async function AdminAccountingPage({
 
     // Stash for the render block (so we don't recompute or pass extra args).
     void sNetCurrent;
+
+    // ── ภูม #9 PEAK redesign — 30-day daily revenue trend ─────────────
+    // Single batch of 3 queries against the source-of-truth completed rows
+    // (forwarder fstatus=7 + yuan paystatus=2 + shop hstatus=5). Bucketed
+    // in TS by date so we don't need a DB function. Window: 29 days back +
+    // today. Each bar = sum of THB realised that day.
+    const TREND_DAYS = 30;
+    const trendCutoff = new Date();
+    trendCutoff.setUTCDate(trendCutoff.getUTCDate() - (TREND_DAYS - 1));
+    const trendCutoffIso = trendCutoff.toISOString().slice(0, 10);
+
+    const [trendF, trendY, trendS] = await Promise.all([
+      admin.from("tb_forwarder").select("ftotalprice, fdate").eq("fstatus", "7").gte("fdate", trendCutoffIso),
+      admin.from("tb_payment").select("paythb, paydate").eq("paystatus", "2").gte("paydate", trendCutoffIso),
+      admin.from("tb_header_order").select("hcostallth, hdate").eq("hstatus", "5").gte("hdate", trendCutoffIso),
+    ]);
+    if (trendF.error) console.error(`[trend tb_forwarder] failed`, { code: trendF.error.code, message: trendF.error.message });
+    if (trendY.error) console.error(`[trend tb_payment] failed`,   { code: trendY.error.code, message: trendY.error.message });
+    if (trendS.error) console.error(`[trend tb_header_order] failed`, { code: trendS.error.code, message: trendS.error.message });
+
+    // Build a YYYY-MM-DD → v map seeded with zeros so empty days show in the chart.
+    const bucket = new Map<string, number>();
+    for (let i = 0; i < TREND_DAYS; i++) {
+      const d = new Date(trendCutoff);
+      d.setUTCDate(d.getUTCDate() + i);
+      bucket.set(d.toISOString().slice(0, 10), 0);
+    }
+    const addRow = (raw: unknown, dateKey: string, valKey: string) => {
+      const arr = (raw ?? []) as Array<Record<string, unknown>>;
+      for (const r of arr) {
+        const ts = r[dateKey];
+        const v  = Number(r[valKey] ?? 0);
+        if (typeof ts !== "string" || !Number.isFinite(v)) continue;
+        const k = ts.slice(0, 10);
+        const prev = bucket.get(k);
+        if (prev === undefined) continue; // outside window
+        bucket.set(k, prev + v);
+      }
+    };
+    addRow(trendF.data, "fdate",   "ftotalprice");
+    addRow(trendY.data, "paydate", "paythb");
+    addRow(trendS.data, "hdate",   "hcostallth");
+    dailyTrend = Array.from(bucket.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([d, v]) => ({ d, v }));
   } else if (tab === "forwarder") {
     let q = admin
       .from("tb_forwarder")
@@ -645,6 +695,13 @@ export default async function AdminAccountingPage({
       {/* ── Summary tab ───────────────────────────────────────────────── */}
       {tab === "summary" && (
         <div className="space-y-4">
+          {/* ภูม #9 PEAK redesign — 30-day revenue trend chart at top.
+              Sums forwarder + yuan + shop revenue per day across the last
+              30 calendar days. Pure SVG · no chart library dependency.
+              ภูม brief 2026-05-30: "ตัด ประกาศโฆษณา + อัพเดตล่าสุด" — we
+              don't have these blocks anywhere (Pacred clean baseline). */}
+          {dailyTrend.length > 0 && <RevenueTrendChart data={dailyTrend} />}
+
           {/* T-P5 owner-overview hero — net revenue big number + delta vs prev period */}
           <OwnerHero
             netCurrent={sForwarder + sYuan + sShop}
@@ -1120,6 +1177,124 @@ function DataTable({
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// ภูม #9 PEAK redesign — RevenueTrendChart
+// 30-day daily revenue bar chart · pure SVG · no chart-lib dependency.
+// Inputs: array of { d: "YYYY-MM-DD", v: number } sorted oldest → newest.
+// Renders responsive: chart scales to container width via viewBox.
+// ─────────────────────────────────────────────────────────────────────
+function RevenueTrendChart({ data }: { data: Array<{ d: string; v: number }> }) {
+  if (data.length === 0) return null;
+  const maxV   = Math.max(1, ...data.map((p) => p.v));
+  const total  = data.reduce((s, p) => s + p.v, 0);
+  const avg    = total / data.length;
+  const peakP  = data.reduce((best, p) => (p.v > best.v ? p : best), data[0]!);
+  // viewBox: 1 unit per day horizontally, 100 vertical
+  const W = data.length * 10;
+  const H = 100;
+  const barW = 6;
+  const fmt = (n: number) =>
+    n.toLocaleString("th-TH", { maximumFractionDigits: 0 });
+  // Highlight ticks: 1st, mid, last
+  const ticks = [data[0]!, data[Math.floor(data.length / 2)]!, data[data.length - 1]!];
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+        <div>
+          <h2 className="text-sm font-bold text-gray-900">
+            📈 รายได้ {data.length} วันย้อนหลัง
+          </h2>
+          <p className="text-[10px] text-muted mt-0.5">
+            ฝากนำเข้า (ส่งแล้ว) + ฝากโอนหยวน (สำเร็จ) + ฝากสั่งซื้อ (สำเร็จ)
+          </p>
+        </div>
+        <div className="flex gap-4 text-xs">
+          <div>
+            <p className="text-[10px] text-muted">รวม {data.length} วัน</p>
+            <p className="font-bold text-primary-700">฿{fmt(total)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-muted">เฉลี่ย/วัน</p>
+            <p className="font-bold text-emerald-700">฿{fmt(avg)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-muted">วันสูงสุด ({peakP.d.slice(5)})</p>
+            <p className="font-bold text-blue-700">฿{fmt(peakP.v)}</p>
+          </div>
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H + 20}`} className="w-full h-32" preserveAspectRatio="none">
+        {/* baseline */}
+        <line x1={0} y1={H} x2={W} y2={H} stroke="#e5e7eb" strokeWidth="0.4" />
+        {/* avg line */}
+        {avg > 0 && (
+          <line
+            x1={0}
+            y1={H - (avg / maxV) * H}
+            x2={W}
+            y2={H - (avg / maxV) * H}
+            stroke="#10b981"
+            strokeWidth="0.4"
+            strokeDasharray="1.5 1.5"
+          />
+        )}
+        {data.map((p, i) => {
+          const h = (p.v / maxV) * H;
+          const x = i * 10 + (10 - barW) / 2;
+          const y = H - h;
+          const isPeak = p.d === peakP.d && p.v > 0;
+          return (
+            <g key={p.d}>
+              <rect
+                x={x}
+                y={y}
+                width={barW}
+                height={h}
+                fill={isPeak ? "#3b82f6" : "#B30000"}
+                opacity={p.v > 0 ? 0.85 : 0.15}
+                rx="0.6"
+              >
+                <title>
+                  {p.d} — ฿{fmt(p.v)}
+                </title>
+              </rect>
+            </g>
+          );
+        })}
+        {/* x-axis tick labels (3 marks) */}
+        {ticks.map((t) => {
+          const idx = data.findIndex((d) => d.d === t.d);
+          const x = idx * 10 + 5;
+          return (
+            <text
+              key={t.d}
+              x={x}
+              y={H + 14}
+              fontSize="6"
+              fill="#6b7280"
+              textAnchor="middle"
+            >
+              {t.d.slice(5)}
+            </text>
+          );
+        })}
+      </svg>
+      <p className="text-[10px] text-muted mt-1 flex items-center gap-3">
+        <span className="inline-flex items-center gap-1">
+          <span className="inline-block w-2 h-2 bg-[#B30000] rounded-sm"></span> รายวัน
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="inline-block w-2 h-2 bg-[#3b82f6] rounded-sm"></span> วันสูงสุด
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="inline-block w-3 border-t border-dashed border-emerald-500"></span> ค่าเฉลี่ย
+        </span>
+      </p>
     </div>
   );
 }
