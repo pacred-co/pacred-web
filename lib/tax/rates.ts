@@ -5,7 +5,8 @@
  * code. `business_config` is a key/value jsonb store; we read 4 keys:
  *   tax.wht.transport_pct   (default 1)
  *   tax.wht.service_pct     (default 3)
- *   tax.wht.goods_pct       (default 3 — owner directive 2026-05-30: include goods)
+ *   tax.wht.rental_pct      (default 5)
+ *   tax.wht.goods_pct       (default 0 — goods not withheld; still in VAT base)
  *   tax.vat.pct             (default 7)
  *
  * Cached per request (Next 16 React `cache`) — one DB hit per render.
@@ -20,6 +21,7 @@ import { DEFAULT_TAX_RATES, type TaxRates } from "./wht";
 const KEYS = [
   "tax.wht.transport_pct",
   "tax.wht.service_pct",
+  "tax.wht.rental_pct",
   "tax.wht.goods_pct",
   "tax.vat.pct",
 ] as const;
@@ -54,6 +56,7 @@ export const getTaxRates = cache(async (): Promise<TaxRates> => {
     return {
       transportPct: toPct(m.get("tax.wht.transport_pct"), DEFAULT_TAX_RATES.transportPct),
       servicePct:   toPct(m.get("tax.wht.service_pct"),   DEFAULT_TAX_RATES.servicePct),
+      rentalPct:    toPct(m.get("tax.wht.rental_pct"),    DEFAULT_TAX_RATES.rentalPct),
       goodsPct:     toPct(m.get("tax.wht.goods_pct"),     DEFAULT_TAX_RATES.goodsPct),
       vatPct:       toPct(m.get("tax.vat.pct"),           DEFAULT_TAX_RATES.vatPct),
     };

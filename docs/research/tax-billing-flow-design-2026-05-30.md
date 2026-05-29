@@ -110,9 +110,20 @@ Each phase: `pnpm verify` + browser click-through + owner sign-off.
 
 ---
 
-## 6. Open questions for owner (before P0)
-1. **`fTotalPrice` (สินค้า cost):** is the goods value a VATable/WHT-able line, or a pass-through reimbursement (no VAT/WHT)? (freight-forwarder rule allows separating reimbursements.)
-2. **e-WHT reduced rate:** is the service WHT currently 3% or the reduced 1% (e-Withholding)? (drives the config default.)
-3. **International vs domestic transport:** apply 0% VAT for international-leg transport? (affects the VAT line.)
-4. **ใบขน vs ใบกำกับ — both at once?** Owner said "เลือกสักอันนึง" (pick one) — confirm a customer never needs BOTH on the same order.
-5. **WHT cert (50 ทวิ):** does Pacred RECEIVE the cert from the juristic customer (chase/track), and/or ISSUE one? (legacy only deducted inline, issued nothing.)
+## 6. Owner answers (2026-05-30) — ANSWERED ✅ (baked into the engine)
+
+| # | คำถาม | คำตอบ owner | ผลต่อระบบ |
+|---|---|---|---|
+| 1 | สินค้า (goods) VAT/WHT? | **VAT: ใช่ (อยู่ในฐาน) · WHT: ไม่หัก** (Q2 "บริการที่ไม่ใช่สินค้า หัก 3" → สินค้าไม่ใช่บริการ) | engine: goods อยู่ในฐาน VAT 7% · `goodsPct=0` (migration 0128 แก้ 3→0) |
+| 2 | WHT rate ต่อประเภท | **ขนส่ง 1% · บริการ(ที่ไม่ใช่สินค้า)ทั้งหมด 3% · ค่าเช่า 5%** | engine: transport 1 · service 3 · **rental 5 (bucket ใหม่)** · goods 0 |
+| 3 | ขนส่งระหว่างประเทศ VAT 0%? | **ใช่** (zero-rated ม.80/1) | engine: ตัด `ftransportpricechnthb` (CN→TH leg) ออกจากฐาน VAT · ยังหัก WHT 1% |
+| 4 | ใบกำกับ + ใบขน ใช้ทั้ง 2 ใบในออเดอร์เดียว? | **ใช้** (ต้องได้ทั้งคู่) | ❗ แก้ design: ใบขน ≠ either/or กับ ใบเสร็จ/ใบกำกับ — เป็นคนละแกน. cart selector (P1) ต้องเพิ่มแกน "ต้องใบขนด้วย" ใน import flow (P3) |
+| 5 | e-WHT ใช้รึยัง (service ลด 1%)? | **ใช่ ใช้** | service nominal = 3% · e-WHT reduction = จัดการตอน **remit** (P2 · ไม่ฝังใน nominal rate) |
+
+**tax point (Q ที่ owner งง — อธิบาย):** จุดที่ Pacred **ต้องออกใบกำกับภาษี + รับรู้ VAT ขาย** = **ตอนรับชำระเงิน** (บริการ · ม.78/1 ประมวลรัษฎากร — "ความรับผิด VAT ของบริการเกิดเมื่อได้รับชำระราคา"). ไม่ใช่ตอนสร้างออเดอร์/ตอนทำงานเสร็จ. ในระบบเรา = **payment-land** (ลูกค้าจ่าย/หัก wallet สำเร็จ) → trigger ออกใบกำกับ + บันทึก VAT. WHT ก็หักจุดเดียวกัน (ลูกค้านิติหัก ณ จุดจ่าย → ออก 50-ทวิ ให้ Pacred). → ยืนยัน design P2: ออกใบกำกับ/บันทึก VAT/WHT ที่ payment ไม่ใช่ booking.
+
+### Engine state (lib/tax/wht.ts · P0 refined 2026-05-30)
+`transport 1% · service 3% · rental 5% · goods 0% (in VAT base) · VAT 7% (intl leg 0%)`. 45 unit tests pass. business_config (prod) = migration 0126 + **0128**. ยังเป็น pure lib **ไม่ wire เข้า live billing** — รอ P2 (ต้อง sign-off · กระทบราคา live + printed receipt).
+
+### ค้างคำถามเดียว (ไม่ block · ยืนยันตอน P2)
+- **50-ทวิ direction:** Pacred **รับ** จากลูกค้านิติ (chase/track) — owner ยังไม่ระบุชัดว่าออกเองด้วยไหม. P2: track การรับ cert เป็นหลัก (legacy หักเฉยๆ ไม่ออกอะไร).

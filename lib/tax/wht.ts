@@ -1,37 +1,45 @@
 /**
- * Thai tax engine — per-line withholding tax (WHT 1%/3%) + VAT (7%).
+ * Thai tax engine — per-line withholding tax (WHT) + VAT.
  * เดฟ 2026-05-30 · P0 of the tax-billing-flow rebuild.
  * Design: docs/research/tax-billing-flow-design-2026-05-30.md
  *
  * Replaces the legacy flat "priceFull × 0.01 for juristic" (lib/forwarder/
- * outstanding.ts) which is WRONG by Thai RD rules. The correct rule
- * (researched + owner-confirmed 2026-05-30):
- *   - WHT rate depends on the CHARGE TYPE, not the customer:
- *       ค่าขนส่ง (transport/freight)        → 1%
- *       ค่าบริการ (service / ฝากนำเข้า fee)  → 3%
- *       ค่าสินค้า (goods — owner: include)   → goods rate (default 3%, config)
- *   - WHT base = the charge amount EXCLUSIVE of VAT (never VAT-inclusive).
- *   - WHT applies only when the customer is a juristic person (นิติบุคคล).
- *   - VAT 7% applies on the (post-discount, pre-WHT) base only when a tax
- *     invoice is requested (tax point = on payment, handled by the caller).
+ * outstanding.ts) which is WRONG by Thai RD rules.
  *
- * All rates are CONFIGURABLE (they change by law — e.g. the e-Withholding
- * 3%→1% reduction expired end-2568, the VAT 7% reduced rate runs to Sep 2026).
- * Pass `rates` from business_config; the DEFAULT_TAX_RATES below are the
- * 2026 fallbacks.
+ * RULES — owner-confirmed 2026-05-30 (the 5 accountant answers):
+ *   WHT rate depends on the CHARGE TYPE (not the customer):
+ *     ค่าขนส่ง (transport — รถ/เรือ/แอร์ · ทั้ง domestic + ระหว่างประเทศ) → 1%
+ *     ค่าบริการ (service — ตีลังไม้/QC/ปรับราคา/อื่นๆ · "อะไรก็ตามที่ไม่ใช่สินค้า") → 3%
+ *     ค่าเช่า (rental — เช่นค่าเช่าโกดัง/พื้นที่)                            → 5%
+ *     ค่าสินค้า (goods)                                                  → 0% (ไม่หัก — สินค้าไม่ใช่บริการ)
+ *   WHT base = the charge amount EXCLUSIVE of VAT (never VAT-inclusive).
+ *   WHT applies only when the customer is a juristic person (นิติบุคคล).
  *
- * Pure module (no server-only) — unit-tested with tsx. Same pattern as
- * lib/dbd/parse-juristic.ts.
+ *   VAT:
+ *     ปกติ 7% (ลดถึง 30 ก.ย. 2026).
+ *     ค่าขนส่งระหว่างประเทศ (international transport leg, CN→TH) = VAT 0%
+ *       (zero-rated, ม.80/1) → ตัดออกจากฐาน VAT.
+ *     ค่าสินค้า (goods) อยู่ในฐาน VAT (owner: "คิด VAT รวมค่าสินค้าด้วย").
+ *   tax point ของบริการ = เมื่อรับชำระเงิน (ม.78/1) → ออกใบกำกับ + รับรู้ VAT
+ *     ตอน payment-land (จัดการโดย caller).
+ *   e-Withholding tax: Pacred ใช้ → service WHT อาจลดเหลือ 1% ตอน remit ผ่าน
+ *     e-WHT (กลไก remittance · ไม่ฝังในเรท nominal นี้ · จัดการชั้น P2).
+ *
+ * All rates are CONFIGURABLE (business_config); DEFAULT_TAX_RATES = 2026 fallback.
+ * Pure module (no server-only) — unit-tested with tsx.
  */
 
-export type WhtClass = "transport" | "service" | "goods";
+export type WhtClass = "transport" | "service" | "rental" | "goods";
 
 export interface TaxRates {
-  /** ค่าขนส่ง/ค่าระวาง WHT % (default 1) */
+  /** ค่าขนส่ง WHT % (default 1) */
   transportPct: number;
-  /** ค่าบริการ/ค่าจ้างทำของ WHT % (default 3; e-WHT reduced 1% expired 2568) */
+  /** ค่าบริการ/ค่าจ้างทำของ WHT % (default 3) */
   servicePct: number;
-  /** ค่าสินค้า WHT % (owner 2026-05-30: include goods in base; default 3, config — set 0 if accountant rules goods = sale-of-goods/WHT-exempt) */
+  /** ค่าเช่า WHT % (default 5) */
+  rentalPct: number;
+  /** ค่าสินค้า WHT % (default 0 — goods is not a service → not withheld; it is
+   *  still in the VAT base). Configurable in case an accountant rules otherwise. */
   goodsPct: number;
   /** VAT % (default 7; reduced rate to 30 Sep 2026) */
   vatPct: number;
@@ -40,9 +48,28 @@ export interface TaxRates {
 export const DEFAULT_TAX_RATES: TaxRates = {
   transportPct: 1,
   servicePct: 3,
-  goodsPct: 3,
+  rentalPct: 5,
+  goodsPct: 0,
   vatPct: 7,
 };
+
+/**
+ * Generic taxable parts (any Pacred bill). Amounts are pre-VAT, pre-WHT.
+ *   transportDomestic → VAT 7%, WHT 1%
+ *   transportIntl     → VAT 0% (zero-rated), WHT 1%
+ *   service           → VAT 7%, WHT 3%
+ *   rental            → VAT 7%, WHT 5%
+ *   goods             → VAT 7% (in base), WHT 0%
+ *   discount          → subtracted off the grand total (allocated proportionally)
+ */
+export interface TaxableParts {
+  transportDomestic: number;
+  transportIntl: number;
+  service: number;
+  rental: number;
+  goods: number;
+  discount: number;
+}
 
 /**
  * The legacy `tb_forwarder` price components (lowercase per current schema —
@@ -51,8 +78,8 @@ export const DEFAULT_TAX_RATES: TaxRates = {
  */
 export interface ForwarderCharges {
   ftotalprice:           number | string | null;   // goods value (ค่าสินค้า)
-  ftransportprice:       number | string | null;   // transport (TH domestic)
-  ftransportpricechnthb: number | string | null;   // transport (CN→TH)
+  ftransportprice:       number | string | null;   // transport (TH domestic) — VAT 7%
+  ftransportpricechnthb: number | string | null;   // transport (CN→TH international) — VAT 0%
   fshippingservice:      number | string | null;   // service fee
   pricecrate:            number | string | null;    // ค่าตีลังไม้ (service)
   fpriceupdate:          number | string | null;    // price adjustment (service)
@@ -61,10 +88,18 @@ export interface ForwarderCharges {
 }
 
 export interface TaxBreakdown {
-  /** Post-discount, pre-VAT taxable base, split by WHT class + total. */
-  base: { transport: number; service: number; goods: number; total: number };
+  /** Post-discount, pre-VAT taxable base, split by class + total + VAT base. */
+  base: {
+    transport: number;       // domestic + intl (WHT-transport total)
+    transportIntl: number;   // the zero-rated (VAT-excluded) portion
+    service: number;
+    rental: number;
+    goods: number;
+    total: number;           // grand base = grossBase − discount
+    vatable: number;         // total − transportIntl (what 7% applies to)
+  };
   /** WHT withheld per class + total (0 when not juristic). */
-  wht: { transport: number; service: number; goods: number; total: number };
+  wht: { transport: number; service: number; rental: number; goods: number; total: number };
   /** VAT amount (0 when withVat=false). */
   vat: number;
   /** base.total + vat (what the invoice shows before WHT). */
@@ -84,53 +119,57 @@ function n(v: number | string | null | undefined): number {
 const round2 = (x: number) => Math.round(x * 100) / 100;
 
 /**
- * Compute the full tax breakdown for a forwarder bill.
- *
- * Discount is allocated PROPORTIONALLY across the three class bases (legacy
- * subtracted it from the grand total before the flat 1%; proportional keeps
- * each class's WHT correct). WHT is per-class on the post-discount pre-VAT
- * base; VAT (if requested) is on the post-discount pre-VAT total.
+ * Core tax math over generic taxable parts. Discount is allocated
+ * PROPORTIONALLY across all class bases (keeps each class's WHT correct).
+ * VAT applies to (post-discount base − international transport leg).
  */
-export function computeForwarderTax(
-  c: ForwarderCharges,
+export function computeTax(
+  parts: TaxableParts,
   opts: { isJuristic: boolean; withVat: boolean; rates?: TaxRates },
 ): TaxBreakdown {
   const r = opts.rates ?? DEFAULT_TAX_RATES;
 
-  const transportGross = n(c.ftransportprice) + n(c.ftransportpricechnthb);
-  const serviceGross =
-    n(c.fshippingservice) + n(c.pricecrate) + n(c.fpriceupdate) + n(c.priceother);
-  const goodsGross = n(c.ftotalprice);
-  const grossBase = transportGross + serviceGross + goodsGross;
+  const transportGross = n(parts.transportDomestic) + n(parts.transportIntl);
+  const intlGross = n(parts.transportIntl);
+  const serviceGross = n(parts.service);
+  const rentalGross = n(parts.rental);
+  const goodsGross = n(parts.goods);
+  const grossBase = transportGross + serviceGross + rentalGross + goodsGross;
 
-  const discount = n(c.fdiscount);
-  const allocDiscount = (classGross: number) =>
-    grossBase > 0 ? (classGross / grossBase) * discount : 0;
+  const discount = n(parts.discount);
+  const alloc = (g: number) => (grossBase > 0 ? (g / grossBase) * discount : 0);
 
-  const transport = transportGross - allocDiscount(transportGross);
-  const service = serviceGross - allocDiscount(serviceGross);
-  const goods = goodsGross - allocDiscount(goodsGross);
-  const totalBase = round2(transport + service + goods); // = grossBase − discount
+  const transport = transportGross - alloc(transportGross);
+  const intl = intlGross - alloc(intlGross);
+  const service = serviceGross - alloc(serviceGross);
+  const rental = rentalGross - alloc(rentalGross);
+  const goods = goodsGross - alloc(goodsGross);
+  const totalBase = round2(transport + service + rental + goods);
+  const vatable = round2(Math.max(0, totalBase - intl)); // intl transport zero-rated
 
   const wht = opts.isJuristic
     ? {
         transport: round2(transport * (r.transportPct / 100)),
         service: round2(service * (r.servicePct / 100)),
+        rental: round2(rental * (r.rentalPct / 100)),
         goods: round2(goods * (r.goodsPct / 100)),
       }
-    : { transport: 0, service: 0, goods: 0 };
-  const whtTotal = round2(wht.transport + wht.service + wht.goods);
+    : { transport: 0, service: 0, rental: 0, goods: 0 };
+  const whtTotal = round2(wht.transport + wht.service + wht.rental + wht.goods);
 
-  const vat = opts.withVat ? round2(totalBase * (r.vatPct / 100)) : 0;
+  const vat = opts.withVat ? round2(vatable * (r.vatPct / 100)) : 0;
   const grossBeforeWht = round2(totalBase + vat);
   const netPayable = Math.max(0, round2(grossBeforeWht - whtTotal));
 
   return {
     base: {
       transport: round2(transport),
+      transportIntl: round2(intl),
       service: round2(service),
+      rental: round2(rental),
       goods: round2(goods),
       total: totalBase,
+      vatable,
     },
     wht: { ...wht, total: whtTotal },
     vat,
@@ -139,6 +178,28 @@ export function computeForwarderTax(
     isJuristic: opts.isJuristic,
     withVat: opts.withVat,
   };
+}
+
+/**
+ * Map legacy `tb_forwarder` charges → TaxableParts and compute. (No rental
+ * line in the forwarder schema → rental=0; rental matters for other Pacred
+ * bills, e.g. warehouse storage.)
+ */
+export function computeForwarderTax(
+  c: ForwarderCharges,
+  opts: { isJuristic: boolean; withVat: boolean; rates?: TaxRates },
+): TaxBreakdown {
+  return computeTax(
+    {
+      transportDomestic: n(c.ftransportprice),
+      transportIntl: n(c.ftransportpricechnthb),
+      service: n(c.fshippingservice) + n(c.pricecrate) + n(c.fpriceupdate) + n(c.priceother),
+      rental: 0,
+      goods: n(c.ftotalprice),
+      discount: n(c.fdiscount),
+    },
+    opts,
+  );
 }
 
 /**
