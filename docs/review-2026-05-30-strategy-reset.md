@@ -49,19 +49,20 @@
 | 0118 | `momo_promote_raw_columns` | `admins_role_manager` | ✅ applied | ❌ คนละ object |
 | 0119 | `momo_disambiguate_container_naming` | `momo_commit_tracking` | ❌ ยังไม่ | ❌ same table คนละ col |
 
-**Verified on prod (yzljakczhwrpbxflnmco):**
-- ภูม 0118: `admins_role_check` = `CHECK (role IN ('owner','admin','manager','staff','viewer'))` → **'manager' มีแล้ว = applied** ✅
-- ภูม 0119: `momo_import_tracks.{committed_at,committed_by,commit_status,commit_error}` → **ทั้ง 4 column MISSING = ยังไม่ apply** ❌
+**Verified on prod (yzljakczhwrpbxflnmco) 2026-05-30:**
+- ภูม 0118: `admins_role_check` มี `'manager'` → **applied ✅**
+- ภูม 0119: `momo_import_tracks.{committed_at, committed_forwarder_id, committed_by, commit_userid}` → **4/4 present = FULLY applied ✅**
 
-**Assessment:**
-- ✅ **DB ไม่ชน** — 0118 ภูม แก้ `admins` constraint · main's 0118 เพิ่ม column ให้ momo_import_tracks (คนละ object). 0119 ทั้งคู่แตะ momo_import_tracks แต่คนละ column (ADD COLUMN IF NOT EXISTS — coexist ได้)
-- ⚠️ **Filename/order ชน** — ตอน integrate จะมี 2 ไฟล์ชื่อ 0118_*.sql + 2 ไฟล์ 0119_*.sql
+**Assessment (ปลอดภัยกว่าที่คาด):**
+- ✅ **DB ไม่ชน** — 0118 ภูม แก้ `admins` constraint · main's 0118 เพิ่ม column ให้ momo_import_tracks (คนละ object). 0119 ทั้งคู่แตะ momo_import_tracks แต่คนละ column (ADD COLUMN IF NOT EXISTS — coexist)
+- ✅ **ภูม apply ทั้ง 2 ลง prod เองแล้ว** — ไม่มี DB change ค้าง
+- ⚠️ **Filename/order ชน** — ตอน integrate จะมี 2 ไฟล์ 0118_*.sql + 2 ไฟล์ 0119_*.sql
 
-**Resolution (ตอน integrate · Pickup A):**
+**Resolution (ตอน integrate · Pickup A) — pure filename fix · zero DB risk:**
 1. Renumber ภูม's `0118_admins_role_manager` → `0123_admins_role_manager`, `0119_momo_commit_tracking` → `0124_momo_commit_tracking`
-2. ภูม 0118 (admins manager) — applied prod แล้ว · renumbered file = no-op re-run (idempotent)
-3. ภูม 0119 (momo commit cols) — **ต้อง apply prod ตอน integrate** (4 columns ยังไม่มี)
-4. ภูม's code refs ไม่ต้องแก้ (อ้าง column/table name ไม่ใช่เลข migration)
+2. ทั้ง 2 applied prod แล้ว · renumbered files = idempotent no-op re-run
+3. ภูม's code refs ไม่ต้องแก้ (อ้าง column/table name ไม่ใช่เลข migration)
+4. **ไม่ต้อง apply migration เพิ่ม** ตอน integrate — แค่ merge code + renumber
 
 ---
 
@@ -80,7 +81,7 @@
 
 | Lane | commits ahead | งาน | merge เมื่อ |
 |---|---|---|---|
-| `Poom-pacred` (ภูม) | 46 | Admin Wave 27-30: invoice/receipt auto-gen (tb_receipt) · doc-number minter + 21 tests · printReceipt mPDF port · MOMO cron (10min) · barcode mobile rewrite · sidebar legacy-verbatim · menubar bug fix | Pickup A (renumber 0118→0123, 0119→0124 + apply ภูม 0119) |
+| `Poom-pacred` (ภูม) | 46 | Admin Wave 27-30: invoice/receipt auto-gen (tb_receipt) · doc-number minter + 21 tests · printReceipt mPDF port · MOMO cron (10min) · barcode mobile rewrite · sidebar legacy-verbatim · menubar bug fix | Pickup A (renumber 0118→0123, 0119→0124 · both already applied prod · no migration to run) |
 | `podeng` (ปอน) | 9 | MOMO Phase A-D consuming code (mapper explode track_details · raw_events · sync UI) — ทำให้ตาราง 0119-0122 ที่ apply แล้วมีข้อมูลจริง | Pickup B |
 
 > ⚠️ podeng 36 behind main — merge ต้อง resolve (camelCase 2a + LCL + fidelity ที่ landed). Surgical cherry-pick MOMO commits เท่านั้น (podeng "LOCKED except MOMO").
@@ -102,7 +103,7 @@
 
 ## 🎯 Pickup recommendations (ลำดับแนะนำ)
 
-1. **A — Integrate Poom-pacred → main** (ภูม owner-approved admin · 46 commits · Wave 27-30) — renumber 0118→0123 + 0119→0124, apply ภูม 0119 prod, verify · `branch-integrate-loop` skill
+1. **A — Integrate Poom-pacred → main** (ภูม owner-approved admin · 46 commits · Wave 27-30) — renumber 0118→0123 + 0119→0124 (both applied prod · no migration to run) · code-merge + verify · `branch-integrate-loop` skill
 2. **B — Integrate podeng MOMO → main** (9 commits · ทำให้ตาราง 0119-0122 มีข้อมูลจริง · surgical cherry-pick MOMO only · podeng 36 behind)
 3. **ก๊อต infra** — CRON_SECRET + S3 rotate (got-vercel runbook §1/§6)
 4. **C — 3 BIG P0 cluster D** (search rewrite · 5 reports · containers-hs) from B-4 audit
