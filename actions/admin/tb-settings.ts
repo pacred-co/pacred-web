@@ -166,6 +166,12 @@ export async function adminSetTbSettingsRates(
       });
 
       revalidatePath("/admin/settings");
+      // Tier A6 (2026-05-29): also revalidate the legacy-rates editor + the
+      // two surfaces that read tb_settings rates directly so accounting sees
+      // the change without a manual page refresh.
+      revalidatePath("/admin/settings/legacy-rates");
+      revalidatePath("/admin/yuan-payments/new");
+      revalidatePath("/service-payment/add");
       return { ok: true, data: { updated } };
     },
   );

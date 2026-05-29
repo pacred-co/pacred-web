@@ -2,67 +2,73 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
+import { resolveProfileIdForLegacyUserid } from "@/lib/auth/tb-users-resolver";
+import {
+  YUAN_STATUSES,
+  YUAN_STATUS_LABEL,
+  isYuanTransitionAllowed,
+  paystatusToPacred,
+  pacredToPaystatus,
+} from "@/lib/legacy-paystatus-map";
 
-const STATUSES = ["pending","processing","completed","failed","refunded"] as const;
+// Local aliases — the function body below reads `STATUSES` (for the Zod
+// enum) and `STATUS_LABEL` (for Thai error messages). Keep the names so
+// the body diff against the pre-A5 version stays minimal.
+const STATUSES = YUAN_STATUSES;
+const STATUS_LABEL = YUAN_STATUS_LABEL;
 
-// ── W-3 / revenue-flow H-1 — status-transition allow-list ────────────
-// adminUpdateYuanPayment previously let ANY status → ANY status. That is
-// a money hole: the wallet-tx flip block below only fires on a *new*
-// `completed` and the refund branch only cancels a *pending* debit. So
-// `refunded → completed` re-stamped the payment completed and shipped the
-// goods WITHOUT re-debiting the wallet — the customer kept the money and
-// the goods. The order/forwarder actions guard transitions with
-// isStatusRollback; yuan-payment statuses are not a single linear chain
-// (failed / refunded are branch terminals), so we use an explicit
-// per-from-status allow-list instead.
-//
-// Rules:
-//   pending    → processing | completed | failed | refunded
-//   processing → completed  | failed    | refunded
-//   completed  → refunded   (a settled payment may be refunded — the
-//                            wallet credit-back is handled below)
-//   failed     → pending    (retry only — no money moved on a failed
-//                            payment, so re-opening is safe)
-//   refunded   → (terminal — money already returned; no transition out)
-//
-// Explicitly FORBIDDEN — any transition that would require re-taking
-// money the code does not re-debit: refunded→completed, refunded→*,
-// failed→completed, failed→processing, completed→processing/pending/failed.
-const YUAN_STATUS_TRANSITIONS: Record<string, ReadonlyArray<string>> = {
-  pending:    ["processing", "completed", "failed", "refunded"],
-  processing: ["completed", "failed", "refunded"],
-  completed:  ["refunded"],
-  failed:     ["pending"],
-  refunded:   [],
-};
+// ── resolveLegacyAdminId — same helper as wallet-hs.ts + yuan-payments-tb.ts ──
+// `withAdmin({ adminId })` returns the Supabase auth UUID (36 chars). The
+// legacy `tb_payment.adminid` / `adminidupdate` columns are varchar(10);
+// writing the UUID throws 22001 "value too long for character varying(10)".
+// Resolve the legacy slug from tb_admin instead. Falls back to "system".
+async function resolveLegacyAdminId(): Promise<string> {
+  const supabase = await createClient();
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr) {
+    console.error(`[yuan-payments auth getUser] failed`, { code: authErr.code, message: authErr.message });
+  }
+  const email = user?.email ?? null;
+  if (!email) return "system";
 
-/** True when `from → to` is a permitted yuan-payment status transition. */
-function isYuanTransitionAllowed(from: string, to: string): boolean {
-  if (from === to) return true; // a no-op re-save of the same status is fine
-  return (YUAN_STATUS_TRANSITIONS[from] ?? []).includes(to);
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("tb_admin")
+    .select("adminID")
+    .eq("adminEmail", email)
+    .maybeSingle<{ adminID: string | null }>();
+  if (error) {
+    console.error(`[yuan-payments tb_admin lookup] failed`, { code: error.code, message: error.message });
+  }
+  if (data?.adminID) return data.adminID;
+  return email.split("@")[0].slice(0, 10);
 }
 
 const updateSchema = z.object({
-  id:               z.string().uuid(),
+  // Tier A5: id accepts string OR number (the live caller — actions-cell.tsx —
+  // passes the tb_payment.id as a string from the page row key, but tb_payment.id
+  // is bigint; coerce numerically and reject non-numeric input).
+  id: z.union([
+    z.string().regex(/^\d+$/, "id ต้องเป็นตัวเลข"),
+    z.number().int().positive(),
+  ]).transform((v) => (typeof v === "number" ? v : Number(v))),
   status:           z.enum(STATUSES).optional(),
-  cost_rate:        z.number().positive().optional(),
-  cost_thb:         z.number().nonnegative().optional(),
-  profit_thb:       z.number().optional(),
+  cost_rate:        z.number().positive().optional(),  // → payratecost (admin's internal cost rate)
+  cost_thb:         z.number().nonnegative().optional(), // → paythbcost
+  profit_thb:       z.number().optional(),             // → payprofitthb
+  // admin_proof_url kept on the schema (back-compat with rebuilt-shape callers)
+  // but NOT written to tb_payment — that lane uses tb_payment.imagesslipadmin
+  // (varchar(250) — a Supabase Storage filename, NOT a URL). A future detail-page
+  // mutation can wire imagesslipadmin via a separate slipFile + uploadToBucket
+  // flow (see actions/admin/yuan-payments-tb.ts:130 for the create-side pattern).
   admin_proof_url:  z.string().max(500).optional(),
   note:             z.string().trim().max(1000).optional(),
 });
-export type AdminUpdateYuanPaymentInput = z.infer<typeof updateSchema>;
-
-const STATUS_LABEL: Record<string, string> = {
-  pending:    "รอตรวจสอบ",
-  processing: "กำลังโอน",
-  completed:  "สำเร็จ",
-  failed:     "ไม่สำเร็จ",
-  refunded:   "คืนเงินแล้ว",
-};
+export type AdminUpdateYuanPaymentInput = z.input<typeof updateSchema>;
 
 export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput): Promise<AdminActionResult> {
   const parsed = updateSchema.safeParse(input);
@@ -71,101 +77,197 @@ export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput)
 
   return withAdmin(["accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
+    const legacyAdminId = await resolveLegacyAdminId();
+
+    // ── Read the existing tb_payment row.
     const { data: existing, error: existingErr } = await admin
-      .from("yuan_payments")
-      .select("id, profile_id, status, yuan_amount, thb_amount, paid_via_wallet")
+      .from("tb_payment")
+      .select("id, userid, paystatus, payyuan, paythb, paydeposit")
       .eq("id", d.id)
-      .maybeSingle<{ id: string; profile_id: string; status: string; yuan_amount: number; thb_amount: number; paid_via_wallet: boolean }>();
+      .maybeSingle<{
+        id: number;
+        userid: string;
+        paystatus: string;
+        payyuan: number;
+        paythb: number;
+        paydeposit: string | null;
+      }>();
     if (existingErr) {
-      console.error(`[yuan_payments mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
+      console.error(`[tb_payment mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
       return { ok: false, error: `db_error:${existingErr.code ?? "unknown"}` };
     }
     if (!existing) return { ok: false, error: "not_found" };
 
-    const update: Record<string, unknown> = { admin_id_update: adminId };
+    // ── Check whether an earlier refund already exists, so we can correctly
+    // collapse paystatus='3' to either `refunded` or `failed`. Legacy refund
+    // pattern (payment.php L678-680): INSERT tb_wallet_hs (type='5', reforder=ID).
+    const { data: refundRow, error: refundErr } = await admin
+      .from("tb_wallet_hs")
+      .select("id")
+      .eq("type", "5")
+      .eq("reforder", String(existing.id))
+      .eq("userid", existing.userid)
+      .limit(1)
+      .maybeSingle<{ id: number }>();
+    if (refundErr) {
+      console.error(`[tb_wallet_hs refund lookup] failed`, { code: refundErr.code, message: refundErr.message });
+    }
+    const existingStatus = paystatusToPacred(existing.paystatus, Boolean(refundRow?.id));
+    const paidViaWallet = existing.paydeposit === "1";
+
+    const update: Record<string, unknown> = { adminidupdate: legacyAdminId };
     let statusChanged = false;
-    if (d.status && d.status !== existing.status) {
+
+    if (d.status && d.status !== existingStatus) {
       // W-3 / revenue-flow H-1 — reject any transition that is not on the
       // allow-list. Most importantly this blocks refunded→completed (and
       // failed→completed), which would re-stamp the payment completed
       // without re-debiting the wallet → customer keeps money + goods.
-      if (!isYuanTransitionAllowed(existing.status, d.status)) {
+      if (!isYuanTransitionAllowed(existingStatus, d.status)) {
         return {
           ok: false,
-          error: `เปลี่ยนสถานะ ${STATUS_LABEL[existing.status] ?? existing.status} → ${STATUS_LABEL[d.status] ?? d.status} ไม่ได้ (ไม่อนุญาต) — สถานะนี้ห้ามย้อน/ข้าม เพราะจะทำให้ยอด wallet ไม่ตรง`,
+          error: `เปลี่ยนสถานะ ${STATUS_LABEL[existingStatus] ?? existingStatus} → ${STATUS_LABEL[d.status] ?? d.status} ไม่ได้ (ไม่อนุญาต) — สถานะนี้ห้ามย้อน/ข้าม เพราะจะทำให้ยอด wallet ไม่ตรง`,
         };
       }
-      update.status = d.status;
       statusChanged = true;
-      if (d.status === "completed" || d.status === "processing") {
-        update.executed_at = new Date().toISOString();
+      const newPaystatus = pacredToPaystatus(d.status);
+      if (newPaystatus !== null) {
+        update.paystatus = newPaystatus;
+        // Stamp paydateadmin on every legacy state-flip (matches payment.php
+        // L644 + L659 — set on both approve '2' and reject '3').
+        update.paydateadmin = new Date().toISOString();
+        update.adminid = legacyAdminId;
       }
     }
-    if (d.cost_rate       != null) update.cost_rate       = d.cost_rate;
-    if (d.cost_thb        != null) update.cost_thb        = d.cost_thb;
-    if (d.profit_thb      != null) update.profit_thb      = d.profit_thb;
-    if (d.admin_proof_url != null) update.admin_proof_url = d.admin_proof_url || null;
+    // Cost/profit fields → legacy column names.
+    if (d.cost_rate  != null) update.payratecost  = d.cost_rate;
+    if (d.cost_thb   != null) update.paythbcost   = d.cost_thb;
+    if (d.profit_thb != null) update.payprofitthb = d.profit_thb;
 
-    const { error } = await admin.from("yuan_payments").update(update).eq("id", existing.id);
-    if (error) return { ok: false, error: error.message };
+    // ── Single UPDATE on tb_payment.
+    const { error: updErr } = await admin
+      .from("tb_payment")
+      .update(update)
+      .eq("id", existing.id);
+    if (updErr) return { ok: false, error: updErr.message };
 
-    // If a wallet-paid payment is completed, flip the paired wallet_transaction to completed
-    if (d.status === "completed" && existing.paid_via_wallet) {
-      await admin
-        .from("wallet_transactions")
-        .update({ status: "completed", admin_id_update: adminId })
-        .eq("reference_type", "yuan_payment")
-        .eq("reference_id", existing.id)
-        .eq("status", "pending");
-    }
+    // ── Wallet refund side-effect (paystatus → '3' refunded path).
+    //
+    // Mirrors legacy payment.php L666-682:
+    //   INSERT tb_wallet_hs (type='5', status='2', amount=paythb, refOrder=ID, ...)
+    //   UPDATE tb_wallet SET walletTotal = walletTotal + paythb
+    //
+    // Fires ONLY when:
+    //   - the new Pacred status is `refunded` (not `failed` — legacy reject
+    //     without wallet-paid never moved money)
+    //   - the original payment was paid_via_wallet (paydeposit='1')
+    //   - we haven't already written a type='5' refund row for this id
+    //     (idempotent — re-running the refund must not double-credit)
+    if (statusChanged && d.status === "refunded" && paidViaWallet && !refundRow?.id) {
+      const nowIso = new Date().toISOString();
+      const refundAmount = Number(existing.paythb);
 
-    // If a wallet-paid payment is refunded/failed, reverse the wallet
-    // debit. W-3 / revenue-flow H-2 — the debit may be `pending` (payment
-    // refunded before it ever completed) OR `completed` (the common case:
-    // a payment is completed first, then later refunded — its wallet tx is
-    // `completed` too). The old code filtered `.eq("status","pending")`
-    // only, so a refund of a completed wallet-paid transfer left the debit
-    // standing and the customer was never credited back. Cancelling both
-    // pending AND completed makes the balance trigger (0007) drop the
-    // debit → the customer's wallet is restored.
-    if ((d.status === "refunded" || d.status === "failed") && existing.paid_via_wallet) {
-      const { error: reverseErr } = await admin
-        .from("wallet_transactions")
-        .update({ status: "cancelled", admin_id_update: adminId })
-        .eq("reference_type", "yuan_payment")
-        .eq("reference_id", existing.id)
-        .in("status", ["pending", "completed"]);
-      if (reverseErr) {
-        // The yuan_payments row is already updated; surface so an admin
+      const { error: hsErr } = await admin
+        .from("tb_wallet_hs")
+        .insert({
+          date:            nowIso,
+          dateslip:        nowIso,
+          amount:          refundAmount,
+          status:          "2",
+          type:            "5",                          // 5 = refund (legacy)
+          typenew:         "1",
+          typeservice:     "1",
+          paydeposit:      "0",
+          imagesslip:      "",
+          depositnamebank: "",
+          nameuserbank:    "",
+          nouserbank:      "",
+          note:            d.note ?? "ระบบคืนเงินอัตโนมัติ (ยกเลิกฝากโอนหยวน)",
+          adminid:         legacyAdminId,
+          adminidupdate:   legacyAdminId,
+          session:         "admin-refund",
+          reforder:        String(existing.id),         // varchar(30) — id stringified
+          whno:            "",
+          wusercredit:     "0",
+          userid:          existing.userid,
+          adminidcrate:    legacyAdminId,
+        });
+      if (hsErr) {
+        // tb_payment status is already flipped to '3'; surface so accounting
         // reconciles the still-standing debit rather than silently leaving
         // the customer charged for a refunded transfer.
         return {
           ok: false,
-          error: `payment marked ${d.status} but wallet refund failed (debit for ${existing.id} stands): ${reverseErr.message}`,
+          error: `เปลี่ยนสถานะเป็น "คืนเงินแล้ว" สำเร็จ แต่บันทึก tb_wallet_hs ล้มเหลว: ${hsErr.message}`,
         };
+      }
+
+      // Update tb_wallet.wallettotal (legacy adjusts the per-customer balance row).
+      const { data: wRow, error: wRowErr } = await admin
+        .from("tb_wallet")
+        .select("userid, wallettotal")
+        .eq("userid", existing.userid)
+        .maybeSingle<{ userid: string; wallettotal: number }>();
+      if (wRowErr) {
+        console.error(`[tb_wallet refund lookup] failed`, { code: wRowErr.code, message: wRowErr.message });
+      }
+      if (!wRow) {
+        const { error: walletInsErr } = await admin
+          .from("tb_wallet")
+          .insert({ userid: existing.userid, wallettotal: refundAmount });
+        if (walletInsErr) {
+          return {
+            ok: false,
+            error: `คืนเงินสำเร็จ (tb_wallet_hs) แต่ tb_wallet insert ล้มเหลว: ${walletInsErr.message}`,
+          };
+        }
+      } else {
+        const newTotal = Number(wRow.wallettotal) + refundAmount;
+        const { error: walletUpdErr } = await admin
+          .from("tb_wallet")
+          .update({ wallettotal: newTotal })
+          .eq("userid", existing.userid);
+        if (walletUpdErr) {
+          return {
+            ok: false,
+            error: `คืนเงินสำเร็จ (tb_wallet_hs) แต่ tb_wallet update ล้มเหลว: ${walletUpdErr.message}`,
+          };
+        }
       }
     }
 
-    await logAdminAction(adminId, "yuan_payment.update", "yuan_payment", existing.id, {
-      before: { status: existing.status }, after: update,
+    await logAdminAction(adminId, "tb_payment.update", "tb_payment", String(existing.id), {
+      before: { paystatus: existing.paystatus, status: existingStatus },
+      after:  update,
+      pacred_status: d.status,
     });
 
+    // ── LINE/in-app notify (matches legacy payment.php L651-655 + L684-688
+    // sendLine pattern). Resolve the legacy userid to a Supabase profile uuid
+    // so `sendNotification` can deliver via LINE + in-app inbox.
     if (statusChanged && d.status) {
-      const isSuccess = d.status === "completed";
-      void sendNotification(existing.profile_id, {
-        category: "yuan_payment",
-        severity: isSuccess ? "success" : (d.status === "refunded" || d.status === "failed") ? "warning" : "info",
-        title:    `ฝากโอนหยวน — ${STATUS_LABEL[d.status]}`,
-        body:     `¥${Number(existing.yuan_amount).toFixed(2)} = ฿${Number(existing.thb_amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
-        link_href: `/service-payment`,
-        reference_type: "yuan_payment",
-        reference_id:   existing.id,
-        ...(d.note ? { body: d.note } : {}),
-      });
+      const profileId = await resolveProfileIdForLegacyUserid(existing.userid);
+      if (profileId) {
+        const isSuccess = d.status === "completed";
+        void sendNotification(profileId, {
+          category: "yuan_payment",
+          severity: isSuccess
+            ? "success"
+            : (d.status === "refunded" || d.status === "failed")
+              ? "warning"
+              : "info",
+          title:    `ฝากโอนหยวน — ${STATUS_LABEL[d.status]}`,
+          body:     d.note ?? `¥${Number(existing.payyuan).toFixed(2)} = ฿${Number(existing.paythb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
+          link_href:      `/service-payment`,
+          reference_type: "yuan_payment",
+          reference_id:   String(existing.id),
+        });
+      }
     }
 
     revalidatePath("/admin/yuan-payments");
-    revalidatePath(`/admin/yuan-payments/${d.id}`);
+    revalidatePath(`/admin/yuan-payments/${existing.id}`);
+    revalidatePath("/admin");
     return { ok: true };
   });
 }

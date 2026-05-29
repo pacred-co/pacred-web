@@ -41,6 +41,11 @@ export default async function AdminSettingsPage() {
             → ตั้งค่าการแจ้งเตือนของฉัน (รวม Sales Daily Digest)
           </Link>
         </p>
+        <p className="mt-2 text-xs">
+          <Link href="/admin/settings/legacy-rates" className="text-primary-600 underline">
+            → เรท CNY-THB ของ tb_settings (ฝากชำระ + ฝากสั่ง)
+          </Link>
+        </p>
       </div>
 
       <SettingsForm {...s} />

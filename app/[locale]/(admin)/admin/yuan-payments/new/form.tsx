@@ -231,7 +231,7 @@ export function AdminYuanPaymentNewForm({
             disabled={pending}
             required
           />
-          <small className="mt-1 block text-xs text-muted">default = tb_settings.rsdefault</small>
+          <small className="mt-1 block text-xs text-muted">default = tb_settings.rpdefault (เรทฝากชำระ)</small>
         </div>
         <div>
           <label className="block text-xs text-muted mb-1">cost rate (admin)</label>

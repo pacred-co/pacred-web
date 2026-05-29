@@ -85,15 +85,68 @@ function paystatusToStatus(ps: string | null): "pending" | "completed" | "failed
 }
 
 // ────────────────────────────────────────────────────────────
-// RATE — current CNY→THB exchange rate
+// RATE — current CNY→THB exchange rate (ฝากชำระ — yuan transfer)
 // ────────────────────────────────────────────────────────────
-// For Phase D Pacred will read from tb_settings (singleton config),
-// but until that migration lands, we read from env so admin can set
-// it without a DB write. Falls back to 5.00 (sane-ish dev default).
+// Tier A6 fix (2026-05-29): now reads `tb_settings.rpdefault` (the singleton
+// config row id=1). This matches legacy `pcs-admin/payment.php` L129-132 + the
+// admin /admin/yuan-payments/new page. Accounting can change the rate live via
+// /admin/settings/legacy-rates without a Vercel rebuild.
+//
+// Legacy field semantics (from `pcs-admin/settings.php`):
+//   • rpDefault → เรทฝากชำระสินค้า (yuan transfer · THIS surface)
+//   • rsDefault → เรทฝากสั่งสินค้า (shop yuan-rate · used by /cart, /search)
+//   • rgDefault → unused in legacy (schema-only)
+//   • hRateCostDefault → cost-rate for admin approval form (margin calc)
+//
+// Fallback chain (most → least authoritative):
+//   1. tb_settings.rpdefault (canonical · admin-editable · LIVE)
+//   2. process.env.NEXT_PUBLIC_YUAN_RATE (legacy env · LOGGED AS WARN — should
+//      never be hit in prod; if it is, the DB read failed)
+//   3. 5.00 (sane dev default; matches legacy hardcoded fallback)
 export async function getCurrentYuanRate(): Promise<{ rate: number; updated_at: string }> {
+  // Try the DB first (the authoritative source).
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("tb_settings")
+      .select("rpdefault")
+      .eq("id", 1)
+      .maybeSingle<{ rpdefault: number | string | null }>();
+
+    if (error) {
+      console.error("[getCurrentYuanRate] tb_settings.rpdefault read failed", {
+        code: error.code,
+        message: error.message,
+      });
+    } else if (data?.rpdefault != null) {
+      const rate = Number(data.rpdefault);
+      if (Number.isFinite(rate) && rate > 0) {
+        return { rate, updated_at: new Date().toISOString() };
+      }
+      console.warn(
+        "[getCurrentYuanRate] tb_settings.rpdefault is present but invalid · falling back to env",
+        { raw: data.rpdefault },
+      );
+    } else {
+      console.warn(
+        "[getCurrentYuanRate] tb_settings row id=1 missing rpdefault · falling back to env",
+      );
+    }
+  } catch (e) {
+    console.error("[getCurrentYuanRate] tb_settings read threw — falling back to env", e);
+  }
+
+  // Fallback: the legacy env. Log WARN so prod alerts fire — the DB should
+  // always be the source of truth; an env hit means tb_settings is unreachable
+  // or the row was deleted. Either way, accounting will not see their live edits.
   const envRate = Number(process.env.NEXT_PUBLIC_YUAN_RATE ?? "5.00");
+  const finalRate = Number.isFinite(envRate) && envRate > 0 ? envRate : 5.0;
+  console.warn(
+    "[getCurrentYuanRate] using ENV fallback (NEXT_PUBLIC_YUAN_RATE) — should always read from DB · investigate tb_settings access",
+    { envRate, finalRate },
+  );
   return {
-    rate: Number.isFinite(envRate) && envRate > 0 ? envRate : 5.0,
+    rate: finalRate,
     updated_at: new Date().toISOString(),
   };
 }
