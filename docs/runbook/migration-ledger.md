@@ -1,0 +1,77 @@
+# 🗄 Migration Ledger — canonical state + numbering authority
+**Updated:** 2026-05-30 (เดฟ) · **Authority:** เดฟ owns migration numbering · ขอเลขก่อนเขียน
+
+นี่คือ **single source of truth** ของ migration ทั้งหมด. ก่อนเขียน migration ใหม่ → เปิดไฟล์นี้ → ใช้เลขถัดไป → จองโดยเพิ่ม row + commit.
+
+---
+
+## 🔢 NEXT FREE NUMBER = **0125**
+
+ใครจะเขียน migration ใหม่ → ใช้ `0125_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
+
+> **กฎกันชนถาวร:** migration เป็น **global sequence ของทั้ง repo** ไม่ใช่ของ branch ใคร. เลขชนกัน = merge เจ็บ. **เขียนใหม่ → ขอเลขจากเดฟ / เช็คไฟล์นี้ก่อนเสมอ.**
+
+---
+
+## ✅ Applied to prod (yzljakczhwrpbxflnmco) — canonical
+
+| # | ไฟล์ | เจ้าของ | สถานะ prod | branch ที่มี |
+|---|---|---|---|---|
+| 0001-0117 | (historic — base schema · legacy tb_* · indexes · RLS · admins · etc.) | ทีม | ✅ applied | main |
+| 0118 | `momo_promote_raw_columns` | ปอน | ✅ applied | main |
+| 0119 | `momo_disambiguate_container_naming` | ปอน | ✅ applied (this session) | main |
+| 0120 | `momo_raw_events_and_detail_tables` | ปอน | ✅ applied (this session) | main |
+| 0121 | `momo_tracking_links_and_status_snapshot` | ปอน | ✅ applied (this session) | main |
+| 0122 | `momo_sync_run_items` | ปอน | ✅ applied (this session) | main |
+
+---
+
+## 🟡 ภูม's migrations — applied prod · ต้อง renumber ตอน integrate
+
+ภูม เขียน 2 migration บน Poom-pacred · **apply prod เองแล้วทั้งคู่ (verified 2026-05-30)** · แต่เลข **ชน filename** กับ ปอน's 0118/0119 ที่อยู่ main แล้ว.
+
+| เลขเดิม (Poom-pacred) | เลขใหม่ (หลัง renumber) | ไฟล์ | object | prod |
+|---|---|---|---|---|
+| 0118 | **0123** | `admins_role_manager` | `admins` role +`manager` | ✅ applied |
+| 0119 | **0124** | `momo_commit_tracking` | `momo_import_tracks` +4 cols (committed_at/forwarder_id/by/userid) | ✅ applied |
+
+**DB ไม่ชน** — คนละ object (ภูม admins/momo-commit · ปอน momo-promote/disambiguate). แค่ filename เลขซ้ำ.
+
+### 🔧 ภูม renumber (ทำบน Poom-pacred ก่อน sync main):
+```bash
+cd <your-pacred-clone>
+git checkout Poom-pacred
+git mv supabase/migrations/0118_admins_role_manager.sql supabase/migrations/0123_admins_role_manager.sql
+git mv supabase/migrations/0119_momo_commit_tracking.sql  supabase/migrations/0124_momo_commit_tracking.sql
+git commit -m "chore(migrations): renumber 0118→0123, 0119→0124 (collision w/ main ปอน MOMO)"
+# จากนั้น sync main (จะได้ ปอน's 0118-0122 มาแบบไม่ชน):
+git pull origin dave-pacred --no-edit
+git push origin Poom-pacred
+```
+> SQL content idempotent (ADD COLUMN IF NOT EXISTS / drop-add constraint) — renumbered file = no-op re-run · prod ไม่กระทบ.
+
+---
+
+## 📋 Apply mechanism (custom · ไม่ใช่ Supabase CLI)
+
+โปรเจกต์นี้ apply migration ด้วย script ตรง (ไม่ได้ใช้ `supabase db push`) → **ไม่มี `supabase_migrations.schema_migrations` table** → "applied" = ดูจาก schema จริง (probe scripts).
+
+```bash
+# Apply 1 migration:
+PG_PASSWORD='<prod-pw>' node scripts/apply-pilot-migration.mjs   # แก้ MIGRATION_PATH ในไฟล์ก่อน
+# Probe ว่า apply แล้วยัง:
+PG_PASSWORD='<prod-pw>' node scripts/check-momo-migrations.mjs    # ปอน MOMO 0119-0122
+PG_PASSWORD='<prod-pw>' node scripts/check-poom-migrations.mjs    # ภูม 0118/0119
+```
+PG_PASSWORD อยู่ใน `.env.local` (`PG_PASSWORD=...`).
+
+---
+
+## 🔑 กฎ (ทุกคนต้องทำตาม)
+
+1. **migration = global sequence** · ไม่ใช่ per-branch · เลขชน = เจ็บตอน merge
+2. **ก่อนเขียน → เช็คไฟล์นี้ → ใช้ NEXT FREE → จอง (เพิ่ม row + commit)**
+3. **ทุก migration idempotent** (IF NOT EXISTS / IF EXISTS guards) — re-run ปลอดภัย
+4. **isolation** — momo_* แตะแต่ momo_* · อย่าแตะ legacy tb_*/cargo_* ถ้าไม่จำเป็น
+5. **apply prod → บอกเดฟ + update ledger นี้** (เปลี่ยนสถานะเป็น ✅ applied)
+6. **ห้าม renumber migration ที่อยู่ main แล้ว** (apply prod ไปแล้ว · เลขครอง) — คนใหม่หลบไปเลขถัดไป
