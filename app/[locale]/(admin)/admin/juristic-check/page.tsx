@@ -129,6 +129,7 @@ export default async function AdminJuristicCheckPage({ searchParams }: { searchP
                     <JuristicActions
                       profileId={r.profile_id}
                       status={r.status}
+                      taxId={r.tax_id ?? ""}
                       docUrls={docMap[r.profile_id] ?? []}
                     />
                   </td>

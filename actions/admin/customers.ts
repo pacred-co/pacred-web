@@ -9,6 +9,11 @@ import { notify } from "@/lib/notifications/templates";
 import { sendSms } from "@/lib/sms/gateway";
 import { logger, redactPhone } from "@/lib/logger";
 import { resolveProfileIdForLegacyUserid } from "@/lib/auth/tb-users-resolver";
+import {
+  parseDbdResponse,
+  buildDbdLookupUrl,
+  type DbdLookupData,
+} from "@/lib/dbd/parse-juristic";
 
 const editCustomerSchema = z.object({
   id:              z.string().uuid(),
@@ -102,6 +107,173 @@ export async function rejectJuristic(input: z.infer<typeof rejectJuristicSchema>
     revalidatePath(`/admin/customers/${parsed.data.profile_id}`);
     return { ok: true };
   });
+}
+
+/**
+ * DBD juristic-person lookup + compare (legacy check-juristic/compare.php).
+ *
+ * Faithful port of the legacy "ตรวจสอบสถานะกับ DBD" button. Given a juristic
+ * customer's profile, look up the company at the Department of Business
+ * Development (กรมพัฒนาธุรกิจการค้า) by tax id and return both the DBD record
+ * and the Pacred-submitted data so the admin can compare them field-by-field
+ * before approving (verifyJuristic).
+ *
+ * DBD data source — env `DBD_LOOKUP_URL` (a template, see buildDbdLookupUrl):
+ *   - UNSET (default)        → manual-check mode: no external call, the UI links
+ *                              to dbd.go.th and the admin verifies by eye against
+ *                              the uploaded หนังสือรับรอง + ภพ20. SAFE default —
+ *                              we never send a customer's tax id to a third party
+ *                              unless ก๊อต deliberately wires an endpoint.
+ *   - SET (e.g. the legacy   → fetch + parse + cache the payload to
+ *     borrowed scraper, or      corporate.dbd_payload/dbd_fetched_at, then compare.
+ *     an official DBD API)      On fetch failure we fall back to any cached payload.
+ *
+ * The legacy endpoint (a "borrowed" interim API, per docs/runbook/pcs-scrub-plan.md)
+ * is documented in .env.example / docs/env.md — switching it on is a ก๊อต call.
+ *
+ * Gate: the customer-facing review roles (legacy CEO/Manager/QA/Accounting/ITDT).
+ */
+const lookupDbdJuristicSchema = z.object({ profile_id: z.string().uuid() });
+
+export async function lookupDbdJuristic(
+  input: z.infer<typeof lookupDbdJuristicSchema>,
+): Promise<AdminActionResult<DbdLookupData>> {
+  const parsed = lookupDbdJuristicSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+
+  return withAdmin<DbdLookupData>(
+    ["super", "manager", "ops", "accounting", "qa", "sales_admin"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+
+      // 1. Read the customer's corporate row (Pacred-submitted juristic data).
+      const { data: corp, error: corpErr } = await admin
+        .from("corporate")
+        .select("tax_id, company_name, company_address, dbd_payload, dbd_fetched_at")
+        .eq("profile_id", parsed.data.profile_id)
+        .maybeSingle();
+      if (corpErr) {
+        logger.error("dbd-lookup", "corporate read failed", corpErr, {
+          profileId: redactPhone(parsed.data.profile_id),
+          code: corpErr.code,
+        });
+        return { ok: false, error: corpErr.message };
+      }
+      if (!corp) return { ok: false, error: "not_juristic" };
+
+      const taxId = (corp.tax_id ?? "").trim();
+      const pacred = {
+        taxId,
+        companyName: corp.company_name ?? null,
+        companyAddress: corp.company_address ?? null,
+      };
+      const cachedFetchedAt: string | null = corp.dbd_fetched_at ?? null;
+      const cachedDbd = corp.dbd_payload ? parseDbdResponse(corp.dbd_payload) : null;
+
+      // 2. No endpoint configured → manual-check mode (still surface any cached
+      //    payload so a previous lookup stays visible).
+      const url = buildDbdLookupUrl(process.env.DBD_LOOKUP_URL, taxId);
+      if (!url) {
+        return {
+          ok: true,
+          data: {
+            configured: false,
+            dbd: cachedDbd,
+            pacred,
+            taxId,
+            cached: cachedDbd !== null,
+            fetchedAt: cachedFetchedAt,
+          },
+        };
+      }
+
+      // 3. Live fetch (server-side, 12s timeout — legacy used 15s × 2 retries
+      //    against a flaky scraper; one bounded attempt keeps the action snappy).
+      let rawBody: string | null = null;
+      let fetchWarning: string | undefined;
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 12_000);
+        try {
+          const res = await fetch(url, {
+            signal: ctrl.signal,
+            cache: "no-store",
+            headers: { Accept: "application/json" },
+          });
+          if (!res.ok) {
+            fetchWarning = `DBD endpoint returned HTTP ${res.status}`;
+          } else {
+            rawBody = await res.text();
+          }
+        } finally {
+          clearTimeout(timer);
+        }
+      } catch (e) {
+        fetchWarning = e instanceof Error ? e.message : "DBD fetch failed";
+      }
+
+      // 3a. Fetch failed → serve cached payload if we have one.
+      if (rawBody === null) {
+        logger.warn("dbd-lookup", "live fetch failed — falling back to cache", {
+          taxId,
+          reason: fetchWarning,
+          hasCache: cachedDbd !== null,
+        });
+        return {
+          ok: true,
+          data: {
+            configured: true,
+            dbd: cachedDbd,
+            pacred,
+            taxId,
+            cached: cachedDbd !== null,
+            fetchedAt: cachedFetchedAt,
+            warning: fetchWarning ?? "DBD lookup ไม่สำเร็จ",
+          },
+        };
+      }
+
+      // 3b. Parse the live body. null = ไม่พบข้อมูล (status != 200 / empty).
+      const dbd = parseDbdResponse(rawBody);
+
+      // 4. Cache the raw decoded body for audit/anti-tampering + re-display.
+      let cachePayload: unknown = null;
+      try {
+        cachePayload = JSON.parse(rawBody);
+      } catch {
+        cachePayload = { raw: rawBody.slice(0, 4000) };
+      }
+      const nowIso = new Date().toISOString();
+      const { error: cacheErr } = await admin
+        .from("corporate")
+        .update({ dbd_payload: cachePayload, dbd_fetched_at: nowIso })
+        .eq("profile_id", parsed.data.profile_id);
+      if (cacheErr) {
+        // Non-fatal — the lookup still returns; we just didn't persist the cache.
+        logger.warn("dbd-lookup", "dbd_payload cache write failed", {
+          profileId: redactPhone(parsed.data.profile_id),
+          reason: cacheErr.message,
+        });
+      }
+
+      await logAdminAction(adminId, "juristic.dbd_lookup", "corporate", parsed.data.profile_id, {
+        taxId,
+        found: dbd !== null,
+      });
+
+      return {
+        ok: true,
+        data: {
+          configured: true,
+          dbd,
+          pacred,
+          taxId,
+          cached: false,
+          fetchedAt: cacheErr ? cachedFetchedAt : nowIso,
+        },
+      };
+    },
+  );
 }
 
 /**

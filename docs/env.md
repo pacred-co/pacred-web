@@ -595,4 +595,28 @@ import {
 
 ---
 
+## 20. DBD juristic-person lookup ⚪ (เดฟ 2026-05-30 · `/admin/juristic-check`)
+
+| Var | Required? | Where to get | Notes |
+|---|---|---|---|
+| `DBD_LOOKUP_URL` | optional (off by default) | ก๊อต — confirm a DBD data source | URL template; `{taxId}` substituted, else the 13-digit id is appended |
+
+Powers the **"ตรวจสอบกับ DBD"** compare panel on `/admin/juristic-check` — the faithful port of legacy `pcs-admin/include/pages/check-juristic/compare.php`. Lets an admin pull a company's กรมพัฒนาธุรกิจการค้า (DBD) record by tax id and compare it field-by-field (ชื่อ TH/EN · ประเภท · วันจดทะเบียน · สถานะ · ทุน · ที่อยู่) against what the customer submitted, with red highlight on mismatches, before approving (`verifyJuristic`).
+
+**Behaviour by env:**
+- **Unset (default)** — *manual-check mode*. NO external call is made. The panel shows the customer's data + a link to `datawarehouse.dbd.go.th` so the admin verifies by eye against the uploaded หนังสือรับรอง + ภพ20. This is the **safe default** — a customer's tax id is never sent to a third party unless an endpoint is deliberately wired.
+- **Set** — the action fetches the endpoint (12 s timeout), parses `{ status:200, data:[{ OrganizationJuristicNameTH, …NameEN, …Type, …RegisterDate, …Status, …RegisterCapital, OrganizationJuristicAddress:{ fullAddressTH, fullAddressEN }, … }] }`, caches the raw body to `corporate.dbd_payload` + `dbd_fetched_at` (audit + re-display), and renders the compare table. On fetch failure it falls back to the last cached payload.
+
+**Legacy "borrowed" endpoint** (per [`docs/runbook/pcs-scrub-plan.md`](runbook/pcs-scrub-plan.md) — a third-party scraper proxy the legacy PCS app used; **confirm it is still live + acceptable to keep using before enabling in prod**, or switch to an official DBD API):
+```
+DBD_LOOKUP_URL=http://hexvapes.com/check-juristic-person/?juristic_id={taxId}
+```
+
+**Code:**
+- `lib/dbd/parse-juristic.ts` — pure parser + `computeCompareRows()` + `buildDbdLookupUrl()` (unit-testable, no `server-only`)
+- `actions/admin/customers.ts` → `lookupDbdJuristic()` — fetch + cache + compare (gated super/manager/ops/accounting/qa/sales_admin)
+- `app/[locale]/(admin)/admin/juristic-check/juristic-actions.tsx` — the compare modal
+
+---
+
 **End of env.md** — ถามเดฟถ้าได้ค่า credential แล้วจะตั้งที่ไหน

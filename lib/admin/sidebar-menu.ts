@@ -581,8 +581,14 @@ const blockLearningTos: MenuItem = {
 // Phase 4 — Extension toolbox per 2026-05-20 owner brief (way later).
 // Exception: `extension.history` (= /admin/audit) is Phase 1 because HR audit
 // is in the Phase 1 essentials list ("ระบบทำงานพนักงาน · audit · policies").
+// 2026-05-30 (เดฟ · owner directive) — demoted phase 4 → phase 1 (launch-critical).
+// Legacy `users/corporation` (juristic review) was reachable by CEO/Manager/QA/
+// Accounting/ITDT — i.e. the customer-facing ops roles, not super-only. There are
+// real pending juristic customers in prod awaiting approval, so the staff who do
+// the review (ops/accounting/sales/manager — the roles whose Extension block carries
+// this item) must see the menu. No `phase` tag = phase 1 = visible to all admin staff.
 const blockExtJuristic: MenuItem = {
-  labelKey: "extension.juristicCheck", href: "/admin/juristic-check", icon: "ClipboardCheck", phase: 4,
+  labelKey: "extension.juristicCheck", href: "/admin/juristic-check", icon: "ClipboardCheck",
 };
 const blockExtThaiTransport: MenuItem = {
   labelKey: "extension.thaiTransport", href: "/admin/carriers", icon: "Truck", phase: 4,
