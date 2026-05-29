@@ -457,3 +457,66 @@ export async function adminCancelForwarderInvoice(
     },
   );
 }
+
+// ────────────────────────────────────────────────────────────
+// adminMarkReceiptPrinted — flip statusprint=1 + stamp adminidprint + rdateprint
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Mark a receipt as printed. Mirrors legacy `printReceipt.php:65-66`:
+ *   UPDATE tb_receipt SET statusprint='1', adminidprint='<adminId>',
+ *                         rdateprint=NOW() WHERE rID='<rid>'
+ *
+ * Called from the print page client component on print-button click —
+ * BEFORE window.print() — so the audit trail reflects who triggered the
+ * print. Idempotent: re-pressing print re-stamps adminidprint + rdateprint
+ * but doesn't error.
+ */
+const markPrintedSchema = z.object({
+  receiptId: z.number().int().positive(),
+});
+export type AdminMarkReceiptPrintedInput = z.infer<typeof markPrintedSchema>;
+
+export async function adminMarkReceiptPrinted(
+  input: AdminMarkReceiptPrintedInput,
+): Promise<AdminActionResult<{ receiptId: number }>> {
+  const parsed = markPrintedSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { receiptId } = parsed.data;
+
+  return withAdmin<{ receiptId: number }>(
+    ["super", "accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const nowIso = new Date().toISOString();
+
+      const { error: updErr } = await admin
+        .from("tb_receipt")
+        .update({
+          statusprint:  "1",
+          adminidprint: safeLegacyAdminId(adminId, 30),
+          rdateprint:   nowIso,
+        })
+        .eq("id", receiptId);
+      if (updErr) {
+        console.error(`[tb_receipt mark printed] failed`, { code: updErr.code, message: updErr.message });
+        return { ok: false, error: updErr.message };
+      }
+
+      await logAdminAction(
+        adminId,
+        "forwarder_invoice.print",
+        "tb_receipt",
+        String(receiptId),
+        { ts: nowIso },
+      );
+
+      // No revalidate — we want the click to feel instant; the print page is
+      // already rendered and the user is about to leave it via window.print().
+
+      return { ok: true, data: { receiptId } };
+    },
+  );
+}
