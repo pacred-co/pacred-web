@@ -13,7 +13,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Settings, Save, AlertTriangle, X, BadgeCheck } from "lucide-react";
+import { Settings, Save, AlertTriangle, X, BadgeCheck, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { adminSaveCustomerRate } from "@/actions/admin/customer-rate";
 import {
@@ -47,6 +47,10 @@ export function CustomerRateEditor({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [confirmWh, setConfirmWh] = useState<WarehouseId | null>(null);
+  // Owner ask 2026-05-30: "ทำปุ่ม ย่อ/ขยาย ได้ด้วย". The profile page is
+  // long, so the rate editor starts COLLAPSED — the header (title + SVIP
+  // badge + chevron) is always visible; clicking it reveals the tabs/grid.
+  const [open, setOpen] = useState(false);
 
   // Seed inputs: current live value, else the legacy default-start for that wh.
   const seeded = useMemo(() => {
@@ -137,11 +141,17 @@ export function CustomerRateEditor({
 
   return (
     <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b border-border/60 px-4 py-3 bg-gradient-to-r from-rose-50/70 via-white to-white dark:from-surface-alt/40">
-        <div className="flex items-center gap-2">
-          <Settings className="w-4 h-4 text-primary-600" />
-          <h2 className="text-sm font-semibold">ตั้งค่าเรทขนส่ง (เรทขายต่อลูกค้า)</h2>
+      {/* Header — click to ย่อ/ขยาย (collapse/expand). Always shows the
+          title + SVIP badge + chevron even when collapsed. */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-2 border-b border-border/60 px-4 py-3 bg-gradient-to-r from-rose-50/70 via-white to-white dark:from-surface-alt/40 text-left hover:bg-rose-50/40 transition-colors"
+      >
+        <div className="flex items-center gap-2 flex-wrap">
+          <Settings className="w-4 h-4 text-primary-600 shrink-0" />
+          <span className="text-sm font-semibold">ตั้งค่าเรทขนส่ง (เรทขายต่อลูกค้า)</span>
           {matrix.isSvip ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-primary-600 text-white px-2 py-0.5 text-[10px] font-semibold">
               <BadgeCheck className="w-3 h-3" /> SVIP · มีเรทเฉพาะตัว
@@ -152,9 +162,17 @@ export function CustomerRateEditor({
             </span>
           )}
         </div>
-        <span className="text-[10px] text-muted font-mono hidden sm:block">{userid}</span>
-      </div>
+        <span className="flex items-center gap-2 shrink-0">
+          <span className="text-[10px] text-muted font-mono hidden sm:block">{userid}</span>
+          <span className="inline-flex items-center gap-1 text-xs text-primary-600 font-medium">
+            {open ? "ย่อ" : "ขยาย"}
+            {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </span>
+        </span>
+      </button>
 
+      {!open ? null : (
+      <>
       {/* Tabs */}
       <div className="flex border-b border-border bg-surface-alt/30 text-sm">
         {WAREHOUSES.map((w) => (
@@ -224,6 +242,8 @@ export function CustomerRateEditor({
         {/* Info + cost floor */}
         {tab === "info" && <InfoTab />}
       </div>
+      </>
+      )}
 
       {/* Confirm dialog */}
       {confirmWh && (

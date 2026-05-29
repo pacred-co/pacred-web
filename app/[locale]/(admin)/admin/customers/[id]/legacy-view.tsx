@@ -27,7 +27,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { Link } from "@/i18n/navigation";
 import { getCustomerRateMatrix } from "@/actions/admin/customer-rate";
+import { getCustomerStatCounts, listSalesAdmins } from "@/actions/admin/customer-profile";
 import { CustomerRateEditor } from "./rate-editor";
+import {
+  StatCards,
+  NoteEditor,
+  SaleRepEditor,
+  CorporateEditor,
+  AddressManager,
+} from "./profile-sections";
 
 type URow = {
   userID: string;
@@ -243,7 +251,16 @@ export async function renderLegacyCustomerView(id: string) {
 
   // Per-customer rate matrix (live tb_rate_custom_kg/cbm) — drives the
   // in-profile rate editor + the SVIP badge. Reader logs+degrades on error.
-  const rateMatrix = await getCustomerRateMatrix(u.userID);
+  // Stat-card counts (8 cards · cheap COUNT/head) + the sales-admin dropdown
+  // for the editSale control fetched alongside. Each reader logs+degrades on
+  // error (never throws — the profile must still render).
+  const [rateMatrix, statCounts, salesAdminsRes] = await Promise.all([
+    getCustomerRateMatrix(u.userID),
+    getCustomerStatCounts(u.userID),
+    listSalesAdmins(),
+  ]);
+  const salesAdmins = salesAdminsRes.ok ? salesAdminsRes.data?.rows ?? [] : [];
+  const walletBalance = Number(wallet?.wallettotal ?? 0);
 
   return (
     <main className="p-6 lg:p-8 max-w-5xl mx-auto space-y-5">
@@ -284,7 +301,7 @@ export async function renderLegacyCustomerView(id: string) {
               ) : null}
             </div>
             <p className="text-xs text-muted mt-1">
-              Wave 20 P0-1 · `tb_*` schema · status mutate / credit-line editor → Phase C
+              `tb_*` schema · status mutate / credit-line editor → Phase C
             </p>
           </div>
         </div>
@@ -293,34 +310,27 @@ export async function renderLegacyCustomerView(id: string) {
         </Link>
       </div>
 
-      {/* Profile + wallet card */}
-      <div className="grid md:grid-cols-3 gap-4">
-        <div className="md:col-span-2 rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3 text-sm">
-          <KV label="ชื่อ" value={fullName} />
-          <KV label="โทรศัพท์" value={u.userTel ?? "-"} />
-          <KV label="อีเมล" value={u.userEmail ?? "-"} />
-          <KV
-            label="สมัครเมื่อ"
-            value={u.userRegistered ? new Date(u.userRegistered).toLocaleString("th-TH") : "-"}
-          />
-          <KV
-            label="ล่าสุดล็อกอิน"
-            value={u.userLastLogin ? new Date(u.userLastLogin).toLocaleString("th-TH") : "-"}
-          />
-          {u.userNote ? <KV label="หมายเหตุ" value={u.userNote} /> : null}
-        </div>
-        <div className="rounded-2xl border border-border bg-primary-50 dark:bg-surface p-5 text-sm">
-          <p className="text-xs font-semibold text-muted">ยอดกระเป๋า (THB)</p>
-          <p className="mt-2 text-3xl font-bold font-mono text-primary-700">
-            ฿{Number(wallet?.wallettotal ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </p>
-          <Link
-            href={`/admin/wallet?userid=${encodeURIComponent(u.userID)}`}
-            className="mt-3 inline-block text-xs text-primary-600 hover:underline"
-          >
-            ดูประวัติ wallet →
-          </Link>
-        </div>
+      {/* 8 stat cards (faithful to legacy profile.php tiles · counts from
+          tb_header_order / tb_forwarder / tb_payment / tb_wallet(_hs) /
+          tb_cash_back_hs). Unverifiable counts render "—" not a wrong number. */}
+      <StatCards userid={u.userID} walletBalance={walletBalance} counts={statCounts} />
+
+      {/* Profile card */}
+      <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3 text-sm">
+        <KV label="ชื่อ" value={fullName} />
+        <KV label="โทรศัพท์" value={u.userTel ?? "-"} />
+        <KV label="อีเมล" value={u.userEmail ?? "-"} />
+        <KV
+          label="สมัครเมื่อ"
+          value={u.userRegistered ? new Date(u.userRegistered).toLocaleString("th-TH") : "-"}
+        />
+        <KV
+          label="ล่าสุดล็อกอิน"
+          value={u.userLastLogin ? new Date(u.userLastLogin).toLocaleString("th-TH") : "-"}
+        />
+        {/* editSale — write tb_users.adminIDSale (legacy-correct side; the
+            rebuilt transfer-rep page writes profiles.sales_admin_id). */}
+        <SaleRepEditor userid={u.userID} currentRep={u.adminIDSale} admins={salesAdmins} />
       </div>
 
       {/* Per-customer rate editor (เดฟ 2026-05-30) — faithful port of the
@@ -330,76 +340,27 @@ export async function renderLegacyCustomerView(id: string) {
           it feeds the SVIP tier of the forwarder price waterfall. */}
       <CustomerRateEditor userid={u.userID} customerName={fullName} matrix={rateMatrix} />
 
-      {/* Remaining deferred mutations still live on dedicated sub-pages /
-          a later pass (status · approve · note · address CRUD · stat cards). */}
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
-        <strong>หมายเหตุ:</strong> ตั้งเรทขนส่ง (เรทขายต่อลูกค้า) ทำได้ในหน้านี้แล้ว ✓ —
-        ส่วน อนุมัติ / ระงับ / แก้ไขข้อมูล / โน้ต / ที่อยู่ ยังใช้หน้าย่อยเฉพาะทาง
-        (<Link href="/admin/customers/transfer-rep" className="underline">ย้ายเซลล์</Link>
-        {" · "}
-        <Link href="/admin/customers/pending" className="underline">รายการรออนุมัติ</Link>)
-        หรือรอรอบถัดไป.
-      </div>
+      {/* Inline note editor (tb_users.userNote) — เดฟ 2026-05-30 */}
+      <NoteEditor userid={u.userID} initialNote={u.userNote} />
 
-      {/* Wave 20 P0-1: juristic company info (tb_corporate) — only render
-          when usercompany='1' AND a corporate row exists. */}
-      {isJuristic && corp ? (
-        <Section title="ข้อมูลบริษัท (นิติบุคคล)">
-          <div className="p-4 grid sm:grid-cols-2 gap-4 text-sm">
-            <KV label="ชื่อบริษัท" value={corp.corporatename ?? "-"} />
-            <KV label="เลขผู้เสียภาษี" value={corp.corporatenumber ?? "-"} mono />
-            <KV
-              label="สถานะอนุมัติ"
-              value={corp.corporatestatus === "1" ? "อนุมัติแล้ว" : "รออนุมัติ"}
-            />
-            <KV label="ที่อยู่บริษัท" value={corp.corporateaddress ?? "-"} />
-          </div>
-        </Section>
-      ) : isJuristic ? (
-        <Section title="ข้อมูลบริษัท (นิติบุคคล)">
-          <Empty>ลูกค้าเลือกประเภทนิติบุคคลแต่ยังไม่ได้กรอกข้อมูลบริษัท</Empty>
-        </Section>
+      {/* Juristic company info (tb_corporate) — editable in-place (UPDATE-
+          only, file upload deferred). Only render for นิติบุคคล customers. */}
+      {isJuristic ? (
+        <CorporateEditor userid={u.userID} corp={corp} />
       ) : null}
 
-      {/* Wave 20 P0-1: shipping addresses (tb_address) — show default
-          flag from tb_address_main. */}
-      <Section title={`ที่อยู่จัดส่ง (${addresses.length})`}>
-        {addresses.length === 0 ? (
-          <Empty>ยังไม่มีที่อยู่จัดส่ง</Empty>
-        ) : (
-          <ul className="divide-y divide-border">
-            {addresses.map((ad) => {
-              const isMain = ad.addressid === mainAddrId;
-              const recipient = `${ad.addressname ?? ""} ${ad.addresslastname ?? ""}`.trim() || "-";
-              const phones = [ad.addresstel, ad.addresstel2].filter(Boolean).join(" · ") || "-";
-              const line = [
-                ad.addressno,
-                ad.addresssubdistrict ? `ต.${ad.addresssubdistrict}` : null,
-                ad.addressdistrict ? `อ.${ad.addressdistrict}` : null,
-                ad.addressprovince ? `จ.${ad.addressprovince}` : null,
-                ad.addresszipcode,
-              ].filter(Boolean).join(" ");
-              return (
-                <li key={ad.addressid} className="px-4 py-3 text-sm space-y-0.5">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium">{recipient}</span>
-                    {isMain ? (
-                      <span className="rounded-full bg-primary-500 text-white px-2 py-0.5 text-[10px]">
-                        ที่อยู่หลัก
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="text-xs text-muted">📞 {phones}</p>
-                  <p className="text-xs">{line || "-"}</p>
-                  {ad.addressnote ? (
-                    <p className="text-xs text-muted italic">หมายเหตุ: {ad.addressnote}</p>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Section>
+      {/* Shipping addresses (tb_address) — full CRUD + set-main, main flag
+          from tb_address_main. เดฟ 2026-05-30. */}
+      <AddressManager userid={u.userID} addresses={addresses} mainAddressId={mainAddrId} />
+
+      {/* Status mutate (อนุมัติ / ระงับ) still lives on the dedicated queues. */}
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+        <strong>หมายเหตุ:</strong> เรทขนส่ง · โน้ต · นิติบุคคล · ที่อยู่ · เซลล์ผู้ดูแล ทำได้ในหน้านี้แล้ว ✓ —
+        ส่วน อนุมัติ / ระงับ ยังใช้หน้าย่อยเฉพาะทาง
+        (<Link href="/admin/customers/transfer-rep" className="underline">ย้ายเซลล์ (bulk)</Link>
+        {" · "}
+        <Link href="/admin/customers/pending" className="underline">รายการรออนุมัติ</Link>).
+      </div>
 
       {/* Recent forwarders */}
       <Section title={`ฝากนำเข้าล่าสุด (${fws.length})`} viewAllHref={`/admin/forwarders?focus=search&q=${u.userID}`}>
