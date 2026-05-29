@@ -3,6 +3,85 @@
 
 ---
 
+# 🚀 2026-05-29 — 3-DEPLOY ARCHITECTURE FINAL · PROD ENV WIRED · ADMIN2 = Poom-pacred (read FIRST)
+
+**Owner directive 2026-05-29:** ตั้ง **3 deploys คู่ขนาน** · ใช้ DB prod เดียวกัน · ทีมเลือกใช้ admin version ตามถนัด.
+
+```
+┌─────────────────────────┐  ┌──────────────────────────────┐  ┌──────────────────────────────┐
+│ pacred.co.th            │  │ admin.pacred.co.th           │  │ admin2.pacred.co.th          │
+│ pacred-web/main         │  │ pacred-admin-next/main       │  │ pacred-web/Poom-pacred       │
+│ Website + customer      │  │ ก๊อต admin baseline 246 pages│  │ ภูม admin V2 (Wave 1-30+)    │
+│ HEAD: 53104312 (QR fix) │  │ HEAD: d630b7c                │  │ HEAD: 1e2104cc (Wave 30 #2)  │
+│ (legacy /admin still in) │  │ DEV_BYPASS=true              │  │ active dev · 46 ahead main   │
+└─────────────────────────┘  └──────────────────────────────┘  └──────────────────────────────┘
+            │                              │                                │
+            └──────────────────────────────┼────────────────────────────────┘
+                                           ▼
+                  Shared Supabase prod:  yzljakczhwrpbxflnmco.supabase.co
+                  (3 deploys · 1 DB · ลูกค้า/ตู้/wallet/admins ใช้ชุดเดียว)
+```
+
+**🔄 Env switch (CRITICAL):** ก่อนหน้านี้ทุกคนต่อ **dev** project (`pprrlabgebrnocthwdmg`). **2026-05-29 ดึก** owner ส่ง prod env (`yzljakczhwrpbxflnmco`) → ผม update `.env.local` ในทั้ง 2 repo + ทดสอบ local pass แล้ว.
+
+| คน | Local env source | Backup ของ DEV เก็บไว้ที่ |
+|---|---|---|
+| เดฟ | `pacred-web/.env.local` (prod) | `.env.local.dev-backup-2026-05-29-pre-prod-switch` |
+| ภูม | `pacred-admin-next/.env.local` (prod) | `.env.local.dev-backup-2026-05-29` |
+| ปอน | ใช้ของเดิม (pacred-web · ขอจากเดฟ) | TBD |
+
+**🟢 Local verified 2026-05-29 (against PROD DB yzljakczhwrpbxflnmco):**
+- pacred-web :3000 → `/`, `/en`, `/login`, `/register` = 200 · `/service-import/truck`, `/dashboard` = 307 (auth-gate ปกติ)
+- pacred-admin-next :3001 → `/dashboard`, `/admins`, `/accounting`, `/api-forwarder-momo`, `/barcode`, `/acc-payment` = 200
+- Supabase health probe `https://yzljakczhwrpbxflnmco.supabase.co/auth/v1/health` = 401 (alive · needs apikey)
+
+**📦 3-deploy branch state (post-2026-05-29 ดึก):**
+
+| Deploy | Repo | Branch | HEAD | Vercel project |
+|---|---|---|---|---|
+| pacred.co.th | pacred-web | main | `53104312` | (existing · auto-deploy main) |
+| **admin.pacred.co.th** | pacred-admin-next | main | `d630b7c` | (existing · pacred-admin-next.vercel.app) |
+| **admin2.pacred.co.th** | pacred-web | Poom-pacred | `1e2104cc` Wave 30 #2 | ⚠️ **NEW · ก๊อต ตั้ง Vercel project** |
+
+**🔥 NEW deploy needed: admin2.pacred.co.th**
+- ก๊อต ตั้ง Vercel project ใหม่ใน org pacred-co
+- Repo: `pacred-web` (เดิม) · Production Branch: `Poom-pacred`
+- Domain: admin2.pacred.co.th
+- Env vars: copy full `.env.local` (prod yzljakczhwrpbxflnmco) จาก pacred-web Vercel project · เพิ่ม `NEXT_PUBLIC_SITE_URL=https://admin2.pacred.co.th`
+- ภูม push commit ใหม่ → Vercel auto-deploy admin2 ทันที (เหมือน main · auto-CI)
+
+**🎯 ทีมเลือกใช้ตามถนัด:**
+- admin.pacred.co.th (ก๊อต baseline · 246 pages · 1:1 PHP→Next · Auth.js v5 · clean Next 16)
+- admin2.pacred.co.th (ภูม Wave 1-30+ · enhanced UX · Pacred Tailwind · brand-red · sidebar groups)
+
+**⚠️ Migrations ปอน 0119-0122 (pending verify):**
+- ปอน push migrations 0119/0120/0121/0122 ขึ้น `podeng` branch (MOMO Phase A/B/C/D)
+- ยังไม่ใช่ confirm apply prod แล้วหรือยัง — เดฟ ต้องตรวจกับ ปอน + apply ถ้ายัง
+- Files: `supabase/migrations/0119..0122_momo_*.sql` บน `origin/podeng` (`d40fb868..b2bf7ef4` range)
+
+**📁 Resources:**
+- Legacy backup: `C:\Users\Admin\Desktop\REALSHITDATAPCS.rar` (37.5 GB · งานเก่าทั้งหมดที่ไม่ใช่ Pacred · ใช้เป็น reference)
+- Active legacy reference path: `D:\REALSHITDATAPCS\pcsc\public_html\member\pcs-admin\*.php` (per AGENTS.md §0b)
+- Cross-repo reference materials: ดูใน pacred-admin-next/docs/, .claude/skills/, supabase/migrations-pacred-web/ (imported 2026-05-28 ดึก-3)
+
+**🎯 Pickup options for next session:**
+- **A** ก๊อต Vercel setup: admin2.pacred.co.th project (Poom-pacred branch · prod env vars)
+- **B** เดฟ + ปอน confirm migrations 0119-0122 apply prod (MOMO Phase A/B/C/D)
+- **C** 3 BIG P0 cluster D (search rewrite + 5 reports + containers-hs) from B-4 audit
+- **D** 4 LOAD-BEARING fidelity gaps (login remember-me + register channel=8 + forgot-password layout + email mode)
+- **E** S3 access key rotation (ภูม · 5 นาที · ค้างจาก 2026-05-20)
+
+**Resume command (next session at home/work):**
+```bash
+cd /c/Users/Admin/pacred-web/.claude/worktrees/hopeful-almeida-359e44
+git fetch origin --prune && git pull origin main --no-edit
+head -100 CLAUDE.md                                       # 3-deploy architecture (this section)
+cat docs/team-2026-05-29-3-deploy-architecture.md         # detailed deploy + setup guide
+bash scripts/setup-dave.sh                                # auto status + pickup
+```
+
+---
+
 # 🌌 2026-05-28 ดึก-3 — SESSION WRAP · 2-REPO LOCAL VERIFIED · SETUP SCRIPTS LANDED
 
 ปิด session ดึกนี้: 2-repo architecture **เชื่อม local + ทดสอบ pass แล้ว** (pacred-web :3000 + pacred-admin-next :3001 · shared Supabase prod). Setup scripts สำหรับ **เดฟ + ปอน + ภูม** push ขึ้น main + dave-pacred แล้ว · พร้อม resume ที่บ้านได้.
