@@ -8,12 +8,16 @@
  *     click-to-sort toggle (asc → desc), plus a quick text filter over the
  *     loaded rows. Sort idiom mirrors report-cnt container-detail-client.
  *
- *  B) "/admin/juristic-check render เอามารวมในนี้เลย … กดดูบัตร/รูป/เอกสาร …
- *     ลากเม้าส์ขยายเทียบเลข … approve ได้โดยตรง" — for นิติบุคคล customers that
- *     have a pending review (corporate row + docs), an inline expandable panel
- *     shows the documents with a hover-zoom magnifier (HoverZoomImage), the
- *     DBD compare table (lookupDbdJuristic), and approve/reject — so staff
- *     never leave the customers list or tab into a full-size image.
+ *  B) "คลิ๊กตรวจหน้านี้เลยได้ไหมแบบทีละคน พอกดคนไหน ก็ขยายคอนเท้นลงมา อ่านๆ
+ *     ดูๆ ตรวจ แล้วก็ย่อ … ขยายย่อ ตรวจ approve ได้เลย" (owner 2026-05-29) —
+ *     EVERY row is now click-to-expand (chevron in the รหัส cell + a row-body
+ *     click; the member-code Link, the Facebook link, and the action cell all
+ *     stopPropagation so they never trigger expand). One row open at a time
+ *     (accordion). The expand renders <CustomerExpandPanel>: a read-only detail
+ *     grid + the per-row actions (Approve/ระงับ/reset password) + — for a
+ *     นิติบุคคล with a pending corporate review — the same <JuristicInlineReview>
+ *     that the old "ตรวจนิติบุคคล" button used (DBD compare + hover-zoom docs +
+ *     approve/reject). The separate review button is gone — one unified expand.
  *
  * The server page (page.tsx) pre-computes every display value + the juristic
  * bundle, so this stays a pure serializable-props client component.
@@ -172,13 +176,27 @@ export function CustomersTable({ rows }: { rows: CustomerTableRow[] }) {
               )}
               {view.map((r) => {
                 const cfg = STATUS_CFG[r.status];
-                const canReview = !!r.juristic;
                 const isOpen = expanded === r.userID;
+                const toggle = () => setExpanded(isOpen ? null : r.userID);
                 return (
                   <FragmentRow key={r.userID}>
-                    <tr className="border-t border-border hover:bg-surface-alt/30 align-top">
+                    <tr
+                      onClick={toggle}
+                      className={`cursor-pointer border-t border-border align-top ${isOpen ? "bg-primary-50/40 dark:bg-primary-900/10" : "hover:bg-surface-alt/30"}`}
+                    >
                       <td className="px-4 py-3 font-mono text-xs">
-                        <Link href={`/admin/customers/${r.userID}`} className="text-primary-600 hover:underline">{r.userID}</Link>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); toggle(); }}
+                            aria-expanded={isOpen}
+                            title={isOpen ? "ย่อ" : "ขยายเพื่อตรวจ"}
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors ${isOpen ? "bg-primary-100 text-primary-700" : "text-muted hover:bg-surface-alt hover:text-foreground"}`}
+                          >
+                            {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                          </button>
+                          <Link href={`/admin/customers/${r.userID}`} onClick={(e) => e.stopPropagation()} className="text-primary-600 hover:underline">{r.userID}</Link>
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-xs">
                         <span className={`rounded-full border px-2 py-0.5 text-[10px] ${r.isJuristic ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-gray-50 text-gray-700 border-gray-200"}`}>
@@ -209,7 +227,7 @@ export function CustomersTable({ rows }: { rows: CustomerTableRow[] }) {
                       <td className="px-4 py-3 text-xs max-w-[180px]">
                         {r.facebook ? (
                           r.isFbUrl
-                            ? <a href={r.facebook} target="_blank" rel="noreferrer noopener" className="text-primary-600 hover:underline truncate inline-block max-w-full" title={r.facebook}>{r.facebook.replace(/^https?:\/\/(www\.)?/, "")}</a>
+                            ? <a href={r.facebook} target="_blank" rel="noreferrer noopener" onClick={(e) => e.stopPropagation()} className="text-primary-600 hover:underline truncate inline-block max-w-full" title={r.facebook}>{r.facebook.replace(/^https?:\/\/(www\.)?/, "")}</a>
                             : <span className="truncate inline-block max-w-full" title={r.facebook}>{r.facebook}</span>
                         ) : <span className="text-muted">—</span>}
                       </td>
@@ -217,27 +235,17 @@ export function CustomersTable({ rows }: { rows: CustomerTableRow[] }) {
                       <td className="px-4 py-3"><span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${cfg.className}`}>{cfg.label}</span></td>
                       <td className="px-4 py-3 text-right font-mono text-xs">฿{r.wallet.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</td>
                       <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{r.registered ? new Date(r.registered).toLocaleDateString("th-TH") : "—"}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          {canReview && (
-                            <button
-                              type="button"
-                              onClick={() => setExpanded(isOpen ? null : r.userID)}
-                              className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-medium ${isOpen ? "border-primary-300 bg-primary-100 text-primary-800" : "border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-100"}`}
-                            >
-                              {isOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                              ตรวจนิติบุคคล
-                            </button>
-                          )}
                           <CustomerRowActions id={r.userID} status={r.status} />
                           <ResetPwdButton userid={r.userID} />
                         </div>
                       </td>
                     </tr>
-                    {isOpen && r.juristic && (
+                    {isOpen && (
                       <tr className="border-t border-border bg-surface-alt/20">
                         <td colSpan={14} className="px-4 py-4">
-                          <JuristicInlineReview bundle={r.juristic} />
+                          <CustomerExpandPanel row={r} />
                         </td>
                       </tr>
                     )}
@@ -255,6 +263,86 @@ export function CustomersTable({ rows }: { rows: CustomerTableRow[] }) {
 // Small fragment helper so the row + its expansion share one key cleanly.
 function FragmentRow({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
+}
+
+/**
+ * One read-only detail field — label above, value below. Keeps the expand grid
+ * scannable for the "อ่านๆ ดูๆ ตรวจ" review pass.
+ */
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[10px] uppercase tracking-wide text-muted">{label}</dt>
+      <dd className="mt-0.5 text-xs text-foreground break-words">{children}</dd>
+    </div>
+  );
+}
+
+/**
+ * The per-row expand body (owner 2026-05-29 inline-review).
+ * Read-only customer detail grid + the same row actions (so staff can
+ * "approve ได้เลย" without scrolling back to the จัดการ column) + the juristic
+ * doc-review panel when the customer is a นิติบุคคล with a corporate row.
+ */
+function CustomerExpandPanel({ row: r }: { row: CustomerTableRow }) {
+  const cfg = STATUS_CFG[r.status];
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border border-border bg-white dark:bg-surface p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-sm font-semibold text-primary-700">{r.userID}</span>
+            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${cfg.className}`}>{cfg.label}</span>
+            {r.vip && <span className="rounded-full border bg-amber-50 text-amber-700 border-amber-200 px-2 py-0.5 text-[10px] font-medium uppercase">VIP</span>}
+          </div>
+          <Link href={`/admin/customers/${r.userID}`} className="text-xs font-medium text-primary-600 hover:underline">→ ดูโปรไฟล์เต็ม</Link>
+        </div>
+
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
+          <Field label="รหัสสมาชิก"><span className="font-mono">{r.userID}</span></Field>
+          <Field label="ชื่อ">{r.fullName || "—"}</Field>
+          <Field label="ประเภท">{r.isJuristic ? "นิติบุคคล" : "บุคคล"}</Field>
+          <Field label="สถานะ"><span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${cfg.className}`}>{cfg.label}</span></Field>
+          <Field label="เบอร์โทร">{r.tel || "—"}</Field>
+          <Field label="อีเมล">{r.email || "—"}</Field>
+          <Field label="วันเกิด / อายุ">{r.birthdayDm || "—"}{r.birthdayAge !== null && <span className="ml-1 text-muted">({r.birthdayAge} ปี)</span>}</Field>
+          <Field label="VIP">{r.vip ? "ใช่" : "—"}</Field>
+          <Field label="LINE">{r.lineId ? <span className="font-mono">{r.lineId}</span> : "—"}</Field>
+          <Field label="Facebook">
+            {r.facebook ? (
+              r.isFbUrl
+                ? <a href={r.facebook} target="_blank" rel="noreferrer noopener" className="text-primary-600 hover:underline break-all">{r.facebook.replace(/^https?:\/\/(www\.)?/, "")}</a>
+                : <span className="break-all">{r.facebook}</span>
+            ) : "—"}
+          </Field>
+          <Field label="เซลล์ผู้ดูแล"><span className="font-mono">{r.adminIDSale || "—"}</span></Field>
+          <Field label="ยอดกระเป๋า"><span className="font-mono">฿{r.wallet.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></Field>
+          <Field label="สมัครเมื่อ">{r.registered ? new Date(r.registered).toLocaleDateString("th-TH") : "—"}</Field>
+          <div className="col-span-2 min-w-0 sm:col-span-3 lg:col-span-4">
+            <dt className="text-[10px] uppercase tracking-wide text-muted">ที่อยู่หลัก</dt>
+            <dd className="mt-0.5 text-xs text-foreground break-words">{r.address || "—"}</dd>
+          </div>
+        </dl>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+          <span className="text-[11px] font-medium text-muted">การจัดการ:</span>
+          <CustomerRowActions id={r.userID} status={r.status} />
+          <ResetPwdButton userid={r.userID} />
+        </div>
+      </div>
+
+      {r.juristic && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50/40 dark:bg-blue-900/10 p-3">
+          <div className="mb-2 flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-blue-700 dark:text-blue-400" />
+            <h3 className="text-xs font-semibold text-blue-800 dark:text-blue-300">ตรวจสอบนิติบุคคล</h3>
+            <span className="text-[11px] text-muted">เทียบ DBD + ตรวจเอกสาร แล้วอนุมัติได้เลย</span>
+          </div>
+          <JuristicInlineReview bundle={r.juristic} />
+        </div>
+      )}
+    </div>
+  );
 }
 
 /**
