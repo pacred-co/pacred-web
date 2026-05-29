@@ -26,20 +26,29 @@ const OTP_TTL_MS = 15 * 60 * 1000;
 const RATE_LIMIT_PER_HOUR = 3;
 const MAX_ATTEMPTS = 5;
 
-// ⚠️ EMERGENCY 2026-05-22 — OTP bypass HARDCODED ON.
-// prod ThaiBulkSMS gateway broken, customers couldn't sign up, sales losing
-// leads. Switched from env-gated (`process.env.OTP_BYPASS === "true"`) to a
-// hardcoded constant so it stays on regardless of the Vercel env state.
+// ⚠️ EMERGENCY OTP bypass — env-gated + DEFAULT-FALSE (fail-closed).
 //
-// Effect: `requestOtp` returns {ok:true, bypass:true} without sending an SMS,
-// and `verifyOtp` short-circuits to true. The register page UI already
-// handles `bypass:true` by skipping the OTP entry step + submitting the form
-// directly (`app/[locale]/(auth)/register/page.tsx:290` + `:543`).
+// History: 2026-05-22 this was HARDCODED `true` (prod ThaiBulkSMS gateway was
+// broken, customers couldn't sign up). That left a security hole — anyone could
+// register / reset any phone with zero verification. 2026-05-30 audit flagged
+// it as the #2 prod security hole, so it is now env-controlled and OFF unless
+// someone explicitly opts in.
 //
-// SECURITY HOLE: anyone can register with any phone, no verification. The
-// docs/env.md §3 "production blocker" warning. Restore the env check below
-// (and revert this constant to `false`) the moment SMS routing is fixed.
-const EMERGENCY_OTP_BYPASS = true;
+// Behaviour: ONLY bypasses when `EMERGENCY_OTP_BYPASS=true` is set in the
+// environment. Unset / any-other-value → `false` → real OTP verify runs. This
+// is fail-CLOSED: a missing env var means production verifies OTP, it does not
+// silently skip it.
+//
+// When true: `requestOtp` returns {ok:true, bypass:true} without sending an SMS,
+// and `verifyOtp` short-circuits to true. The register page UI handles
+// `bypass:true` by skipping the OTP entry step + submitting the form directly
+// (`app/[locale]/(auth)/register/page.tsx:290` + `:543`).
+//
+// ⚠️ Flipping this on in production is a real-emergency-only lever AND requires
+// a working ThaiBulkSMS key first to actually SEND OTPs once it's turned back
+// off — see docs/env.md §3 + .env.example. The dev convenience bypass
+// (`OTP_BYPASS=true`) is a separate, unchanged mechanism below.
+const EMERGENCY_OTP_BYPASS = process.env.EMERGENCY_OTP_BYPASS === "true";
 
 type Purpose = "register" | "login" | "reset" | "change_phone";
 
