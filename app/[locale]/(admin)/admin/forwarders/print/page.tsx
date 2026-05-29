@@ -23,9 +23,15 @@
  *   shows the customer member code (userID) ONLY + 3 QR codes
  *   (detail · gateway-pickup · tracking) + weight / total-CBM / qty / location.
  *   It does NOT print the ship-to address (legacy SELECTed it but never
- *   rendered it on the box sticker). Since Pacred has no Code128 lib, the
- *   tracking "barcode" is rendered as a QR of the tracking string (§0a — our
- *   design; same scannable intent).
+ *   rendered it on the box sticker).
+ *
+ *   TRACKING BARCODE — faithful to legacy L162-175:
+ *     `preg_match('/^[A-Z0-9-]+$/', fTrackingCHN)` true  → Code128A barcode
+ *     with human-readable text + a separate tracking QR (both shown).
+ *                                                  false → tracking QR only
+ *     (no barcode).
+ *   Code128 is rendered via `bwip-js/node` → SVG data URL (vector for crisp
+ *   print at 100mm; no native canvas dep on Vercel).
  *
  * ADDRESS label (case "4") — legacy printAll.php L237-426:
  *   shows userID + full ship-to address + address note + carrier name + qty.
@@ -36,6 +42,7 @@
 
 import { notFound } from "next/navigation";
 import QRCode from "qrcode";
+import bwipjs from "bwip-js/node";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -48,23 +55,42 @@ export const dynamic = "force-dynamic";
 // ─────────────────────────────────────────────────────────────
 // URL parsing — Next 16 searchParams is a Promise; for `?id[]=1&id[]=2`
 // Next coalesces duplicate keys into an array under the bracket-less name
-// `id`. Accept BOTH the bracketed (id[]) and bracket-less (id) shapes since
-// the legacy URL emits `id[]`.
+// `id`. Accept THREE shapes since callers may construct any of them:
+//   ?id[]=1&id[]=2        → legacy printAll.php emits this; Next surfaces it as sp["id[]"]
+//   ?id=1&id=2            → bracket-less duplicate keys; Next coalesces to sp.id array
+//   ?ids=1,2,3            → comma-joined single param (compact for long lists / Excel-paste)
 // ─────────────────────────────────────────────────────────────
 type SP = {
   type?: string | string[];
   id?: string | string[];
+  ids?: string | string[];
   "id[]"?: string | string[];
 };
 
 function extractForwarderIds(sp: SP): number[] {
-  const raw = sp["id[]"] ?? sp.id;
-  if (raw === undefined) return [];
-  const arr = Array.isArray(raw) ? raw : [raw];
+  // Collect every candidate string token from all 3 supported shapes.
+  const tokens: string[] = [];
+  const push = (v: string | string[] | undefined) => {
+    if (v === undefined) return;
+    if (Array.isArray(v)) tokens.push(...v);
+    else tokens.push(v);
+  };
+  push(sp["id[]"]);
+  push(sp.id);
+  push(sp.ids);
+
   const out: number[] = [];
-  for (const v of arr) {
-    const n = Number(v);
-    if (Number.isFinite(n) && n > 0) out.push(n);
+  const seen = new Set<number>();
+  for (const raw of tokens) {
+    // ?ids=1,2,3 → split on comma (also tolerate whitespace).
+    for (const piece of String(raw).split(/[\s,]+/)) {
+      if (!piece) continue;
+      const n = Number(piece);
+      if (Number.isFinite(n) && n > 0 && !seen.has(n)) {
+        seen.add(n);
+        out.push(n);
+      }
+    }
   }
   return out;
 }
@@ -138,6 +164,41 @@ async function qr(payload: string): Promise<string> {
   return QRCode.toDataURL(payload, { margin: 1, scale: 6 });
 }
 
+// ─────────────────────────────────────────────────────────────
+// Code128 SVG data-url — faithful to legacy printAll.php L162-175.
+// Legacy: `preg_match('/^[A-Z0-9-]+$/', $row["fTrackingCHN"])`
+//   true  → mPDF `<barcode type="C128A" text="1">` (with human-readable text)
+//   false → caller falls back to QR-only (no barcode)
+// We render as SVG (vector → crisp print at 100mm scale; no native canvas dep
+// → safe on Vercel serverless) embedded as a base64 data URL so the existing
+// `<img src=…>` pipeline stays identical to QR rendering.
+// ─────────────────────────────────────────────────────────────
+const CODE128_FRIENDLY = /^[A-Z0-9-]+$/;
+
+function tryRenderCode128(text: string): string | null {
+  try {
+    const svg = bwipjs.toSVG({
+      bcid: "code128",
+      text,
+      scale: 3,
+      height: 10,
+      includetext: true,
+      textxalign: "center",
+      textsize: 9,
+    });
+    return `data:image/svg+xml;base64,${Buffer.from(svg, "utf-8").toString("base64")}`;
+  } catch (e) {
+    // Defensive — bwip-js throws on unencodable chars, but the regex above
+    // guarantees [A-Z0-9-] which Code128 always accepts. Log + return null so
+    // the label still renders (without the barcode) rather than 500-ing.
+    console.error("[forwarders/print] Code128 render failed", {
+      text,
+      message: (e as Error).message,
+    });
+    return null;
+  }
+}
+
 // Clamp copies-per-item so a bad `famount` can't render thousands of pages.
 const MAX_COPIES_PER_ITEM = 99;
 
@@ -192,19 +253,61 @@ export default async function ForwarderLabelPrintPage({
 
   if (ids.length === 0) {
     return (
-      <main className="min-h-screen bg-white p-8 text-black">
-        <div className="mx-auto max-w-2xl rounded-lg border border-amber-300 bg-amber-50 p-6 text-sm text-amber-900">
-          <h1 className="text-lg font-bold mb-2">ไม่พบเลขที่รายการ</h1>
-          <p>
-            URL ต้องมีพารามิเตอร์{" "}
-            <code className="px-1 bg-amber-100 rounded">id[]=…</code> อย่างน้อย 1 ตัว
-            เช่น <code className="px-1 bg-amber-100 rounded">?type=box&amp;id[]=51967</code>
-          </p>
+      <main className="min-h-screen bg-gray-50 p-6 text-gray-900">
+        <div className="mx-auto max-w-3xl space-y-4">
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-6 shadow-sm">
+            <h1 className="mb-2 text-xl font-bold text-amber-900">
+              📋 หน้านี้พิมพ์ป้ายสติกเกอร์ — ต้องเลือกรายการก่อน
+            </h1>
+            <p className="text-sm text-amber-900">
+              หน้านี้สร้างป้ายสติกเกอร์ขนาด 100×75 มม. สำหรับติดบนกล่องพัสดุ
+              (พิมพ์จากหน้ากล่อง) หรือใช้เป็นป้ายที่อยู่ส่งสินค้า — ไม่ใช่หน้าที่เปิดตรงๆ
+              แต่ต้องเลือกรายการจากหน้ารายการพัสดุก่อน
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <h2 className="mb-3 text-base font-bold text-gray-900">วิธีพิมพ์</h2>
+            <ol className="list-decimal space-y-2 pl-5 text-sm text-gray-700">
+              <li>
+                เปิด{" "}
+                <Link
+                  href="/admin/forwarders"
+                  className="font-semibold text-primary-600 hover:underline"
+                >
+                  รายการพัสดุ
+                </Link>
+              </li>
+              <li>
+                ติ๊กเลือกแถวที่ต้องการพิมพ์ (ติ๊กหลายแถวพิมพ์รวมเป็นชุดเดียวได้)
+              </li>
+              <li>
+                ปุ่มจะโผล่ขึ้นที่แถบดำด้านล่างจอ — กด{" "}
+                <span className="rounded bg-primary-100 px-2 py-0.5 font-semibold text-primary-700">
+                  🖨 พิมพ์จากหน้ากล่อง
+                </span>{" "}
+                หรือ{" "}
+                <span className="rounded bg-primary-100 px-2 py-0.5 font-semibold text-primary-700">
+                  🏷 พิมพ์ที่อยู่ส่งสินค้า
+                </span>
+              </li>
+              <li>หน้าพิมพ์จะเปิดขึ้นเป็นแท็บใหม่ → กด &quot;พิมพ์ป้าย&quot; หรือ Ctrl+P</li>
+            </ol>
+
+            <p className="mt-4 rounded-md bg-gray-50 p-3 text-xs text-gray-600">
+              💡 หรือถ้าจะลิงก์ URL ตรงๆ ใช้รูปแบบ:{" "}
+              <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px]">
+                /admin/forwarders/print?type=box&amp;id[]=51967&amp;id[]=51968
+              </code>{" "}
+              (รองรับ <code>id[]=</code>, <code>id=</code>, และ <code>ids=1,2,3</code>)
+            </p>
+          </div>
+
           <Link
             href="/admin/forwarders"
-            className="mt-4 inline-block rounded-md bg-primary-600 px-4 py-2 text-white font-medium hover:bg-primary-700"
+            className="inline-flex items-center rounded-md bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-700"
           >
-            ← กลับไปรายการพัสดุ
+            ← ไปหน้ารายการพัสดุ
           </Link>
         </div>
       </main>
@@ -248,8 +351,10 @@ export default async function ForwarderLabelPrintPage({
 
   if (orderedForwarders.length === 0) notFound();
 
-  // ── Pre-generate the 3 QR codes per forwarder (box label only) ──
+  // ── Pre-generate QR codes + Code128 barcodes per forwarder (box label only) ──
+  // Legacy printAll.php L162-175 dispatches: regex-match → Code128 + QR; else → QR only.
   const qrMap = new Map<number, BoxQr>();
+  const barcodeMap = new Map<number, string | null>();
   if (labelType === "box") {
     for (const f of orderedForwarders) {
       const detailUrl = `${SITE_URL}/admin/forwarders/${f.id}`;
@@ -262,6 +367,14 @@ export default async function ForwarderLabelPrintPage({
         f.ftrackingchn ? qr(f.ftrackingchn) : Promise.resolve<string | null>(null),
       ]);
       qrMap.set(f.id, { detail, gateway, tracking });
+
+      // Code128 only when the tracking string is Code128-A friendly
+      // (uppercase / digits / dash) — same gate as legacy preg_match.
+      const chn = f.ftrackingchn;
+      barcodeMap.set(
+        f.id,
+        chn && CODE128_FRIENDLY.test(chn) ? tryRenderCode128(chn) : null,
+      );
     }
   }
 
@@ -324,6 +437,7 @@ export default async function ForwarderLabelPrintPage({
             orderedForwarders.flatMap((f) => {
               const copies = copyCount(f.famount);
               const q = qrMap.get(f.id);
+              const barcode = barcodeMap.get(f.id) ?? null;
               const displayUser = displayBoxUserId(f.userid, f.ftrackingchn2);
               const showLogo = !isFamilyAccount(f.userid);
               const totalVolume = Number(f.fvolume ?? 0) * Number(f.famount ?? 1);
@@ -358,19 +472,33 @@ export default async function ForwarderLabelPrintPage({
 
                   <hr className="my-[1mm] border-gray-400" />
 
-                  {/* Row 3 — tracking + tracking QR */}
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-[3mm] leading-tight text-gray-600">เลขแทรคกิ้ง</p>
-                      <p className="break-all text-[4mm] font-bold leading-tight">
+                  {/* Row 3 — tracking text + (optional Code128) + tracking QR
+                      Faithful to legacy printAll.php L162-175:
+                      regex-match → Code128 with human-readable text + QR alongside
+                      else        → text + QR only (no barcode) */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[2.6mm] leading-tight text-gray-600">เลขแทรคกิ้ง</p>
+                      <p
+                        className={`break-all leading-tight ${
+                          barcode ? "text-[3mm] font-semibold" : "text-[4mm] font-bold"
+                        }`}
+                      >
                         {f.ftrackingchn || "—"}
                       </p>
+                      {barcode && (
+                        <img
+                          src={barcode}
+                          alt="tracking barcode"
+                          className="mt-[0.5mm] h-[9mm] w-auto max-w-full"
+                        />
+                      )}
                     </div>
                     {q?.tracking && (
                       <img
                         src={q.tracking}
                         alt="tracking QR"
-                        className="h-[13mm] w-[13mm] shrink-0"
+                        className={`shrink-0 ${barcode ? "h-[11mm] w-[11mm]" : "h-[13mm] w-[13mm]"}`}
                       />
                     )}
                   </div>

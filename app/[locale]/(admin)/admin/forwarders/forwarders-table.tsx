@@ -835,6 +835,17 @@ export function ForwardersTable({
                           >
                             อัปเดต
                           </Link>
+                          {/* Per-row print entry — bulk bar opens with multi-id;
+                              this is the discoverable single-row equivalent. */}
+                          <a
+                            href={`/admin/forwarders/print?type=box&id[]=${r.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="พิมพ์ป้ายสติกเกอร์ติดกล่อง (100×75 มม.)"
+                            className="rounded border border-blue-500 bg-blue-50 text-blue-700 text-[10px] px-2 py-1 hover:bg-blue-100 text-center whitespace-nowrap"
+                          >
+                            🖨 พิมพ์ป้าย
+                          </a>
                         </div>
                       </td>
                     </tr>
