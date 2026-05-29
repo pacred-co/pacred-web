@@ -179,7 +179,7 @@ The `.claude/skills/` directory contains 16 skills (see [`.claude/skills/INDEX.m
 - `performance-hunter` — measured perf fixes, never blind
 - `scholar-immortal` — capture every learning to `docs/learnings/` (knowledge compounds)
 - `copyist-unlimited` — clone templates at scale (N variants)
-- `legacy-php-sweep` — port from `D:\xampp\htdocs\pcscargo` to Pacred Next.js
+- `legacy-php-sweep` — port from `/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/public_html/` (canonical 2026-05-24 extract, ~25GB) to Pacred Next.js
 - `qa-flow-simulator` — agent simulates a user journey end-to-end, asserts the real outcome (not just a 200)
 - `branch-integrate-loop` — consolidate teammate branches into `dave` safely (integrate → verify → distribute)
 - `mobile-first-verify` — render a customer surface at 360/390px + assert it's mobile-clean before pushing

@@ -49,9 +49,9 @@ order; never copy the literal string `PCS`.
 ## The legacy source
 
 The legacy PCS Cargo system (PHP) — the source of truth to copy:
-- Mac: `/Users/dev/Desktop/pcscargo/` · Windows: the `xampp/htdocs/pcscargo`
-  path (canonical path owned by [`legacy-php-sweep`](../legacy-php-sweep/SKILL.md)
-  + CLAUDE.md).
+- **Canonical 2026-05-24 extract (latest, full server, ~25GB):** `/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/public_html/` — includes backoffice.pcscargo.co.th + pcs-seafreight.com + sms/ subdomains
+- **Legacy git snapshot (May 21):** `/Users/dev/Desktop/pcscargo/` · **Windows:** `C:\Users\Admin\pcscargo\`
+- Canonical path owned by [`legacy-php-sweep`](../legacy-php-sweep/SKILL.md) + CLAUDE.md.
 - Customer portal = `member/*.php`; admin = `member/pcs-admin/*`.
 
 If the legacy source is not on the machine, fall back to the **D1 fidelity gap

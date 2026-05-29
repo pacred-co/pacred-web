@@ -1,19 +1,19 @@
 ---
 name: legacy-php-sweep
-description: Use this skill whenever the user wants to port a feature from the old PHP cargo system to Pacred Next.js — "port the customs clearance flow", "find how PHP did Y", "ดึงฟังก์ชั่นเก่ามา", "เอาของเก่ามาแปลง", "sweep the legacy PHP for X", "implement <feature> based on the PHP original". Sweeps `D:\xampp\htdocs\pcscargo\` (the canonical legacy source path on เดฟ's machine) for the relevant PHP files, extracts the business logic + DB tables + helper functions, then writes the equivalent Next.js + Supabase implementation in the right Pacred location. Critical because Pacred ecosystem services 2-4 (cargo) port directly from this PHP source — getting the port accurate is the revenue path during emergency sprint.
+description: Use this skill whenever the user wants to port a feature from the old PHP cargo system to Pacred Next.js — "port the customs clearance flow", "find how PHP did Y", "ดึงฟังก์ชั่นเก่ามา", "เอาของเก่ามาแปลง", "sweep the legacy PHP for X", "implement <feature> based on the PHP original". Sweeps `/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/public_html/` (the canonical legacy source path on เดฟ's machine) for the relevant PHP files, extracts the business logic + DB tables + helper functions, then writes the equivalent Next.js + Supabase implementation in the right Pacred location. Critical because Pacred ecosystem services 2-4 (cargo) port directly from this PHP source — getting the port accurate is the revenue path during emergency sprint.
 ---
 
 # Legacy PHP Sweep — port from `D:\xampp\htdocs\pcscargo`
 
-> **Why this exists.** Pacred's emergency P0 is **cargo system live → revenue**. The cargo system exists, fully working, in PHP at `D:\xampp\htdocs\pcscargo\`. Every cargo feature already has a battle-tested PHP implementation that handled real customers for years. Don't reinvent — port. The user (เดฟ) said *"เน้นจริงๆ D:\xampp\htdocs\pcscargo"* + *"ไปกวาดฟังชั่นทั้งหมด และเรียนรู้การทำงานทั้งหมด ของเก่าเรามาด้วย เอาให้ไม่เหลือซากอะไรต้องกลับไปมอง"*.
+> **Why this exists.** Pacred's emergency P0 is **cargo system live → revenue**. The cargo system exists, fully working, in PHP at `/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/public_html/`. Every cargo feature already has a battle-tested PHP implementation that handled real customers for years. Don't reinvent — port. The user (เดฟ) said *"เน้นจริงๆ D:\xampp\htdocs\pcscargo"* + *"ไปกวาดฟังชั่นทั้งหมด และเรียนรู้การทำงานทั้งหมด ของเก่าเรามาด้วย เอาให้ไม่เหลือซากอะไรต้องกลับไปมอง"*.
 
 ## ⚠️ Path discipline
 
-**Canonical legacy source:** `D:\xampp\htdocs\pcscargo\`
-**Member-facing PHP:** `D:\xampp\htdocs\pcscargo\member\`
-**Admin PHP:** `D:\xampp\htdocs\pcscargo\member\pcs-admin\`
-**Helper catalogue:** `D:\xampp\htdocs\pcscargo\member\include\function.php` (2451 LOC business helpers)
-**Auth + dashboard precompute:** `D:\xampp\htdocs\pcscargo\member\include\header.php`
+**Canonical legacy source:** `/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/public_html/`
+**Member-facing PHP:** `/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/public_html/member/`
+**Admin PHP:** `/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/public_html/member/pcs-admin/`
+**Helper catalogue:** `/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/public_html/member/include\function.php` (2451 LOC business helpers)
+**Auth + dashboard precompute:** `/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/public_html/member/include\header.php`
 **DB schema dump (read-only ref):** `C:\Users\Admin\Desktop\SQLWPPCS\somedata-2026-03-19-1348-pcsc_main.sql` (1.38M LOC — never `Read` whole, use `Grep`)
 
 The PHP source is **read-only reference**. We DO NOT modify it. We extract logic + write fresh Next.js code.
@@ -33,7 +33,7 @@ The PHP source is **read-only reference**. We DO NOT modify it. We extract logic
 ```
 1. LOCATE — find PHP file(s) implementing the target feature
    Use the helper catalogue + file tree:
-   · grep -r "<feature keyword>" D:\xampp\htdocs\pcscargo\member\
+   · grep -r "<feature keyword>" /Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/public_html/member/
    · Cross-reference docs/sprints/archive-a-to-n.md (Phase D/E/F)
      for the feature-to-PHP-file mapping the legacy audit produced
 
@@ -90,7 +90,7 @@ These are referenced by many features; port them early once + reuse:
 | `clearCreditBalance()` | apply customer credit balance to order | `lib/wallet/apply-credit.ts` |
 | `DateThai*()` family | Thai date format (พ.ศ. years) | `lib/format/thai-date.ts` |
 
-📋 Full catalogue → `D:\xampp\htdocs\pcscargo\member\include\function.php` — 2451 LOC. ภูม owns this port. Track in [`docs/PORT_PLAN.md`](../../../docs/PORT_PLAN.md) Phase D.
+📋 Full catalogue → `/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/public_html/member/include\function.php` — 2451 LOC. ภูม owns this port. Track in [`docs/PORT_PLAN.md`](../../../docs/PORT_PLAN.md) Phase D.
 
 ## Auth pattern (legacy → Pacred)
 
@@ -173,7 +173,7 @@ Already ported: `components/pdf/forwarder-receipt.tsx`, `components/pdf/shop-ord
 
 ## Cross-links
 
-- `D:\xampp\htdocs\pcscargo\` — canonical legacy source (READ-ONLY)
+- `/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/public_html/` — canonical legacy source (READ-ONLY)
 - [`docs/audit/php-pcscargo-integrations.md`](../../../docs/audit/php-pcscargo-integrations.md) — integration inventory from initial sweep
 - [`docs/audit/cargo-ops-forensics-2026-05-16.md`](../../../docs/audit/cargo-ops-forensics-2026-05-16.md) — decoded cargo/freight ops model from 10 real China-cargo documents (the *data shapes* + the *problems* a port must solve; pairs with the PHP logic sweep) → backlog in [`docs/PORT_PLAN.md`](../../../docs/PORT_PLAN.md) Part V
 - [`docs/sprints/archive-a-to-n.md`](../../../docs/sprints/archive-a-to-n.md) — Phase D / E / F port phases
