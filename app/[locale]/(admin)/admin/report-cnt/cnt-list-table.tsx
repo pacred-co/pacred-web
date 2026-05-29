@@ -79,6 +79,69 @@ type SortKey =
 
 type SortDir = "asc" | "desc";
 
+// ─────────────────────────────────────────────────────────────────────
+// SortIcon + SortableTH — module-level components (Next 16 react-hooks/
+// static-components rule rejects components created inside render bodies
+// because their identity changes every render, breaking memoisation +
+// tree stability). Extracted from inline definitions; parent passes
+// activeKey/sortDir/onSort as props.
+// ─────────────────────────────────────────────────────────────────────
+
+function SortIcon({
+  k,
+  activeKey,
+  sortDir,
+}: {
+  k: SortKey;
+  activeKey: SortKey;
+  sortDir: SortDir;
+}) {
+  if (k !== activeKey) {
+    return <ArrowUpDown className="inline h-3 w-3 ml-0.5 opacity-60" />;
+  }
+  return sortDir === "asc"
+    ? <ArrowUp className="inline h-3 w-3 ml-0.5" />
+    : <ArrowDown className="inline h-3 w-3 ml-0.5" />;
+}
+
+function SortableTH({
+  sortKeyValue,
+  align,
+  children,
+  activeKey,
+  sortDir,
+  onSort,
+}: {
+  sortKeyValue: SortKey;
+  align?: "left" | "right" | "center";
+  children: React.ReactNode;
+  activeKey: SortKey;
+  sortDir: SortDir;
+  onSort: (key: SortKey) => void;
+}) {
+  const justify =
+    align === "right" ? "justify-end" :
+    align === "center" ? "justify-center" :
+    "justify-start";
+  const text =
+    align === "right" ? "text-right" :
+    align === "center" ? "text-center" :
+    "text-left";
+  return (
+    <th className={`px-2 py-2 ${text}`}>
+      <button
+        type="button"
+        onClick={() => onSort(sortKeyValue)}
+        className={`inline-flex items-center w-full ${justify} cursor-pointer hover:text-foreground transition-colors`}
+        aria-label={`เรียงตาม ${typeof children === "string" ? children : ""}`}
+      >
+        {children}
+        <SortIcon k={sortKeyValue} activeKey={activeKey} sortDir={sortDir} />
+      </button>
+    </th>
+  );
+}
+
 function fmtDate(d: string | null) {
   return d ? d.slice(0, 10) : "-";
 }
@@ -225,47 +288,6 @@ export function CntListTable({
     [selectableRows, selected, warehouseLabel],
   );
 
-  // Compact icon for sortable headers
-  function SortIcon({ k }: { k: SortKey }) {
-    if (k !== sortKey) return <ArrowUpDown className="inline h-3 w-3 ml-0.5 opacity-60" />;
-    return sortDir === "asc"
-      ? <ArrowUp className="inline h-3 w-3 ml-0.5" />
-      : <ArrowDown className="inline h-3 w-3 ml-0.5" />;
-  }
-
-  // Sortable column header button — used by every <th> below
-  function SortableTH({
-    sortKeyValue,
-    align,
-    children,
-  }: {
-    sortKeyValue: SortKey;
-    align?: "left" | "right" | "center";
-    children: React.ReactNode;
-  }) {
-    const justify =
-      align === "right" ? "justify-end" :
-      align === "center" ? "justify-center" :
-      "justify-start";
-    const text =
-      align === "right" ? "text-right" :
-      align === "center" ? "text-center" :
-      "text-left";
-    return (
-      <th className={`px-2 py-2 ${text}`}>
-        <button
-          type="button"
-          onClick={() => onSort(sortKeyValue)}
-          className={`inline-flex items-center w-full ${justify} cursor-pointer hover:text-foreground transition-colors`}
-          aria-label={`เรียงตาม ${typeof children === "string" ? children : ""}`}
-        >
-          {children}
-          <SortIcon k={sortKeyValue} />
-        </button>
-      </th>
-    );
-  }
-
   return (
     <>
       <div className="overflow-x-auto rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
@@ -283,20 +305,20 @@ export function CntListTable({
                   />
                 </th>
               )}
-              <SortableTH sortKeyValue="fcabinetnumber" align="left">หมายเลขตู้</SortableTH>
-              <SortableTH sortKeyValue="fwarehousename" align="left">โกดัง</SortableTH>
-              <SortableTH sortKeyValue="fdatecontainerclose" align="left">วันที่ปิดตู้</SortableTH>
-              <SortableTH sortKeyValue="ftransporttype" align="center">ขนส่ง</SortableTH>
-              <SortableTH sortKeyValue="diffDay" align="right">{isWaiting ? "รอเข้าโกดัง" : "เดินทาง"}</SortableTH>
-              <SortableTH sortKeyValue="fdatestatus4" align="right">{isWaiting ? "วันที่รอเข้าโกดัง" : "วันที่เดินทาง"}</SortableTH>
-              <SortableTH sortKeyValue="trackCount" align="right">จำนวนแทรคกิ้ง</SortableTH>
-              <SortableTH sortKeyValue="volumeSum" align="right">ปริมาตร</SortableTH>
-              <SortableTH sortKeyValue="weightSum" align="right">น้ำหนัก</SortableTH>
-              {showMoney && <SortableTH sortKeyValue="costSum" align="right">ต้นทุนตู้</SortableTH>}
-              {showMoney && <SortableTH sortKeyValue="priceSum" align="right">ราคาขาย</SortableTH>}
-              {showMoney && <SortableTH sortKeyValue="profitSum" align="right">กำไร</SortableTH>}
-              <SortableTH sortKeyValue="fstatus" align="center">สถานะตู้</SortableTH>
-              <SortableTH sortKeyValue="isPaid" align="center">สถานะจ่ายค่าตู้</SortableTH>
+              <SortableTH sortKeyValue="fcabinetnumber"      align="left"   activeKey={sortKey} sortDir={sortDir} onSort={onSort}>หมายเลขตู้</SortableTH>
+              <SortableTH sortKeyValue="fwarehousename"      align="left"   activeKey={sortKey} sortDir={sortDir} onSort={onSort}>โกดัง</SortableTH>
+              <SortableTH sortKeyValue="fdatecontainerclose" align="left"   activeKey={sortKey} sortDir={sortDir} onSort={onSort}>วันที่ปิดตู้</SortableTH>
+              <SortableTH sortKeyValue="ftransporttype"      align="center" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>ขนส่ง</SortableTH>
+              <SortableTH sortKeyValue="diffDay"             align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>{isWaiting ? "รอเข้าโกดัง" : "เดินทาง"}</SortableTH>
+              <SortableTH sortKeyValue="fdatestatus4"        align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>{isWaiting ? "วันที่รอเข้าโกดัง" : "วันที่เดินทาง"}</SortableTH>
+              <SortableTH sortKeyValue="trackCount"          align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>จำนวนแทรคกิ้ง</SortableTH>
+              <SortableTH sortKeyValue="volumeSum"           align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>ปริมาตร</SortableTH>
+              <SortableTH sortKeyValue="weightSum"           align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>น้ำหนัก</SortableTH>
+              {showMoney && <SortableTH sortKeyValue="costSum"   align="right" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>ต้นทุนตู้</SortableTH>}
+              {showMoney && <SortableTH sortKeyValue="priceSum"  align="right" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>ราคาขาย</SortableTH>}
+              {showMoney && <SortableTH sortKeyValue="profitSum" align="right" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>กำไร</SortableTH>}
+              <SortableTH sortKeyValue="fstatus"             align="center" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>สถานะตู้</SortableTH>
+              <SortableTH sortKeyValue="isPaid"              align="center" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>สถานะจ่ายค่าตู้</SortableTH>
             </tr>
           </thead>
           <tbody>

@@ -410,7 +410,7 @@ export default async function ServiceImportInvoicePage({
                 </span>
               </p>
               <p className="text-amber-800 text-xs">
-                ใบแจ้งหนี้จะออกหลังเจ้าหน้าที่ตรวจสอบและคำนวณค่าขนส่งเสร็จ (สถานะ "รอชำระเงิน")
+                ใบแจ้งหนี้จะออกหลังเจ้าหน้าที่ตรวจสอบและคำนวณค่าขนส่งเสร็จ (สถานะ &ldquo;รอชำระเงิน&rdquo;)
               </p>
             </div>
 

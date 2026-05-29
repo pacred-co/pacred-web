@@ -63,6 +63,54 @@ type SortKey =
 
 type SortDir = "asc" | "desc";
 
+// ─────────────────────────────────────────────────────────────────────
+// SortableTh — module-level component (Next 16 react-hooks/static-components
+// rule rejects components created INSIDE the render body of another component
+// because their identity changes every render, breaking memoisation + tree
+// stability). Extracted here so the parent passes (activeKey · onSort) as
+// props instead of closing over them.
+// ─────────────────────────────────────────────────────────────────────
+
+type SortableThProps = {
+  label: string;
+  sortKey: SortKey;
+  activeKey: SortKey;
+  onSort: (key: SortKey) => void;
+  align?: "left" | "right" | "center";
+  className?: string;
+};
+
+function SortableTh({
+  label,
+  sortKey,
+  activeKey,
+  onSort,
+  align = "left",
+  className = "",
+}: SortableThProps) {
+  const active = activeKey === sortKey;
+  const alignCls =
+    align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left";
+  return (
+    <th className={`px-4 py-3 ${alignCls} ${className}`}>
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className={`inline-flex items-center gap-1 hover:text-foreground transition-colors ${
+          active ? "text-primary-700 font-semibold" : ""
+        }`}
+        aria-label={`เรียงตาม ${label}`}
+      >
+        {label}
+        <ArrowUpDown
+          className={`w-3 h-3 ${active ? "opacity-100" : "opacity-40"}`}
+          aria-hidden
+        />
+      </button>
+    </th>
+  );
+}
+
 /** Legacy PHP `number_format($n, 2)` — produces "1,234.56" thousand-grouped. */
 function numberFormat2(n: number | string | null | undefined): string {
   const v = typeof n === "string" ? Number(n) : (n ?? 0);
@@ -147,39 +195,6 @@ export function CntHsTable({ rows }: { rows: CntHsRow[] }) {
     }
   };
 
-  const SortableTh = ({
-    label,
-    sortKey: key,
-    align = "left",
-    className = "",
-  }: {
-    label: string;
-    sortKey: SortKey;
-    align?: "left" | "right" | "center";
-    className?: string;
-  }) => {
-    const active = sortKey === key;
-    const alignCls = align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left";
-    return (
-      <th className={`px-4 py-3 ${alignCls} ${className}`}>
-        <button
-          type="button"
-          onClick={() => handleSort(key)}
-          className={`inline-flex items-center gap-1 hover:text-foreground transition-colors ${
-            active ? "text-primary-700 font-semibold" : ""
-          }`}
-          aria-label={`เรียงตาม ${label}`}
-        >
-          {label}
-          <ArrowUpDown
-            className={`w-3 h-3 ${active ? "opacity-100" : "opacity-40"}`}
-            aria-hidden
-          />
-        </button>
-      </th>
-    );
-  };
-
   return (
     <>
       <p className="px-4 pt-3 text-[11px] text-muted">
@@ -190,15 +205,15 @@ export function CntHsTable({ rows }: { rows: CntHsRow[] }) {
         <table className="w-full text-sm">
           <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
             <tr>
-              <SortableTh label="ID" sortKey="ID" />
-              <SortableTh label="วันที่" sortKey="date" />
-              <SortableTh label="หมายเลขตู้" sortKey="cabinetCount" />
-              <SortableTh label="จำนวนเงิน" sortKey="cntAmount" align="right" />
-              <SortableTh label="ธนาคาร" sortKey="nameBlank" />
+              <SortableTh label="ID"           sortKey="ID"            activeKey={sortKey} onSort={handleSort} />
+              <SortableTh label="วันที่"        sortKey="date"          activeKey={sortKey} onSort={handleSort} />
+              <SortableTh label="หมายเลขตู้"   sortKey="cabinetCount"  activeKey={sortKey} onSort={handleSort} />
+              <SortableTh label="จำนวนเงิน"    sortKey="cntAmount"     activeKey={sortKey} onSort={handleSort} align="right" />
+              <SortableTh label="ธนาคาร"      sortKey="nameBlank"     activeKey={sortKey} onSort={handleSort} />
               <th className="px-4 py-3 text-center">สลิป</th>
               <th className="px-4 py-3 text-center">หลักฐาน</th>
-              <SortableTh label="ผู้ทำรายการ" sortKey="adminIDCreate" />
-              <SortableTh label="สถานะ" sortKey="cntStatus" align="center" />
+              <SortableTh label="ผู้ทำรายการ"   sortKey="adminIDCreate" activeKey={sortKey} onSort={handleSort} />
+              <SortableTh label="สถานะ"        sortKey="cntStatus"     activeKey={sortKey} onSort={handleSort} align="center" />
               <th className="px-4 py-3 text-right">ตัวเลือก</th>
             </tr>
             {/* Orange summary band — legacy "bg-color" tone + pattern from
