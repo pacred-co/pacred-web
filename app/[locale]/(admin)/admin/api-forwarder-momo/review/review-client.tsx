@@ -23,8 +23,13 @@ import { Link } from "@/i18n/navigation";
 import {
   commitMomoRowToForwarder,
   commitMomoRowsBatch,
-  type CommitMomoRowInput,
 } from "@/actions/admin/momo-commit";
+// Import the input TYPE directly from the auth-agnostic core, NOT from the
+// "use server" file. Re-exporting the type from a `"use server"` module hits
+// a Turbopack server-actions-analyzer bug where the type-only re-export
+// emits a value re-export against a non-existent binding → runtime
+// `ReferenceError: CommitMomoRowInput is not defined` on bulk commit.
+import type { CommitMomoRowInput } from "@/lib/admin/commit-momo-row-core";
 
 // ─────────────────────────────────────────────────────────────
 // Types (also re-exported for the server page)

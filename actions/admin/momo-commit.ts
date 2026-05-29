@@ -45,10 +45,16 @@ import {
   type CommitMomoRowInput,
 } from "@/lib/admin/commit-momo-row-core";
 
-// Re-export the input type so existing consumers (review-client.tsx) keep
-// importing it from this module. A type-only re-export is erased at compile
-// time, so it's allowed in a "use server" file.
-export type { CommitMomoRowInput };
+// NOTE: do NOT re-export CommitMomoRowInput from this file. A previous
+// attempt did `export type { CommitMomoRowInput }` here, betting that the
+// type-only re-export would be erased before Next's "use server" analyzer
+// saw it. Under Turbopack the bet failed — the bulk commit path threw
+// `ReferenceError: CommitMomoRowInput is not defined` at runtime because
+// the analyzer emitted a value re-export against a non-existent binding.
+// Consumers must import the type directly from
+// `@/lib/admin/commit-momo-row-core`, e.g.
+//   import type { CommitMomoRowInput } from "@/lib/admin/commit-momo-row-core";
+// Captured as a learning in docs/learnings/nextjs-16-quirks.md.
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — same pattern as api-forwarder-manual.ts.

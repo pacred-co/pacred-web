@@ -15,10 +15,8 @@
 import { Link } from "@/i18n/navigation";
 import { getTranslations } from "next-intl/server";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import {
-  adminListQaInspections,
-  type QaVerdict,
-} from "@/actions/admin/qa-inspections";
+import { adminListQaInspections } from "@/actions/admin/qa-inspections";
+import type { QaVerdict } from "@/lib/validators/qa-inspection-rebuilt";
 
 export const dynamic = "force-dynamic";
 

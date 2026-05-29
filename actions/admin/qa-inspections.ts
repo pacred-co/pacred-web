@@ -45,11 +45,15 @@ import {
   type CreateQaInspectionInput,
   type UpdateQaInspectionInput,
 } from "@/lib/validators/qa-inspection-rebuilt";
-export type {
-  QaVerdict,
-  CreateQaInspectionInput,
-  UpdateQaInspectionInput,
-} from "@/lib/validators/qa-inspection-rebuilt";
+// NOTE: do NOT re-export types from this file. Under Turbopack, the
+// `export type { ... }` re-export pattern on a "use server" file leaks as a
+// value re-export against a non-existent runtime binding, throwing
+// `ReferenceError: <TypeName> is not defined` at action-call time
+// (MOMO commit bulk hit this exact pattern 2026-05-30).
+// Consumers must import these types directly from the validator:
+//   import type { QaVerdict, CreateQaInspectionInput, UpdateQaInspectionInput }
+//     from "@/lib/validators/qa-inspection-rebuilt";
+// See docs/learnings/nextjs-16-quirks.md.
 
 // ════════════════════════════════════════════════════════════════
 // 1) Create QA inspection
