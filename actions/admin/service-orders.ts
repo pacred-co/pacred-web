@@ -3,9 +3,54 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
 import { getWalletAvailableBalance } from "@/lib/wallet/balance";
+import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
+import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
+import {
+  LEGACY_ORDER_STATUS,
+  legacyOrderStatusThai,
+  type LegacyOrderCode,
+} from "@/lib/legacy-status-map";
+
+// ────────────────────────────────────────────────────────────
+// resolveLegacyAdminId — local helper (same pattern as
+// service-orders-spawn.ts L51 + customer-profile.ts L51 + 8 other
+// admin actions). The acting Pacred admin is identified by their
+// auth email; we look up the matching `tb_admin.adminID` (the legacy
+// PCS varchar id used in audit-trail columns like
+// `tb_header_order.adminidupdate`). Fallback chain on miss:
+//   1. `tb_admin.adminID` matched by `adminEmail`  → returned as-is
+//   2. raw auth email (clipped at the call site via safeLegacyAdminId)
+//   3. literal "system" (no auth context — should not happen under withAdmin)
+// ────────────────────────────────────────────────────────────
+async function resolveLegacyAdminId(): Promise<string> {
+  const supabase = await createClient();
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr) {
+    console.error(`[service-orders.resolveLegacyAdminId auth.getUser] failed`, {
+      code: authErr.code, message: authErr.message,
+    });
+  }
+  const email = user?.email ?? null;
+  if (!email) return "system";
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("tb_admin")
+    .select("adminID")
+    .eq("adminEmail", email)
+    .maybeSingle<{ adminID: string | null }>();
+  if (error) {
+    console.error(`[service-orders.resolveLegacyAdminId tb_admin lookup] failed`, {
+      code: error.code, message: error.message,
+    });
+  }
+  if (data?.adminID) return data.adminID;
+  return email;
+}
 
 const STATUSES = [
   "pending","awaiting_payment","ordered","awaiting_chn_dispatch","completed","cancelled",
@@ -33,15 +78,51 @@ const updateSchema = z.object({
 });
 export type AdminUpdateServiceOrderInput = z.infer<typeof updateSchema>;
 
-const STATUS_LABEL: Record<string, string> = {
-  pending: "รอดำเนินการ", awaiting_payment: "รอชำระเงิน", ordered: "สั่งสินค้าแล้ว",
-  awaiting_chn_dispatch: "รอจีนจัดส่ง", completed: "สำเร็จ", cancelled: "ยกเลิก",
+// ────────────────────────────────────────────────────────────
+// D1 Phase-B (Tier A4) — legacy `tb_header_order` field map
+// ────────────────────────────────────────────────────────────
+// The rebuilt `service_orders` table is empty on prod after the D1 pivot.
+// The real shop-order data — and the row the customer detail page reads
+// from in `actions/service-order.ts::getServiceOrder` — is in
+// `tb_header_order`. Writing to `service_orders` was a silent dead-write:
+// admin saved a status flip, no error, but the customer never saw it.
+//
+// Legacy schema (lowercase column names, per migration 0081):
+//   tb_header_order(id, hno, hstatus, hnote, hnoteuser, hnoteuserread,
+//                   hnotedate, hdate, hdate2, hdate3, hdate4, hdate5,
+//                   hdateupdate, adminidupdate, userid …)
+//   hstatus codes: '1'=รอดำเนินการ '2'=รอชำระเงิน '3'=สั่งสินค้า
+//                  '4'=รอร้านจีนจัดส่ง '5'=สำเร็จ '6'=ยกเลิก
+//   adminidupdate: varchar(10) — clip via safeLegacyAdminId
+//
+// Legacy SOT for the field set:
+//   pcsc/public_html/member/pcs-admin/shops.php
+//   - L908: `UPDATE tb_header_order SET hStatus='$hStatus', adminIDUpdate=…`
+//   - L725, L854: `UPDATE tb_header_order SET hNoteDate=NOW(), hNoteUser=…,
+//                   hNoteUserRead=…, hNote=…, adminIDUpdate=…`
+//   - L130, L976, L1101, L1559: stamp hDate2..hDate5 + hDateUpdate per status
+const LEGACY_STATUS_DATE_COL: Record<string, string | null> = {
+  awaiting_payment:       "hdate2",   // legacy hDate2 — รอชำระเงิน
+  ordered:                "hdate3",   // legacy hDate3 — สั่งสินค้า
+  awaiting_chn_dispatch:  "hdate4",   // legacy hDate4 — รอร้านจีนจัดส่ง
+  completed:              "hdate5",   // legacy hDate5 — สำเร็จ
 };
-const STATUS_DATE_COL: Record<string, string | null> = {
-  awaiting_payment: "date_awaiting_payment",
-  ordered:          "date_ordered",
-  awaiting_chn_dispatch: "date_dispatched",
-  completed:        "date_completed",
+
+// Rebuilt-enum → legacy hstatus single-char code. We inline this rather
+// than depend on `toLegacyOrderCode()` because the rebuilt schema chose
+// `awaiting_chn_dispatch` as the status-4 key (migration 0011), while
+// `lib/legacy-status-map.ts` uses the legacy-canonical key
+// `awaiting_china_ship` for the same code. Both forms exist in the
+// codebase — toLegacyOrderCode would return undefined for the rebuilt
+// form and silently kill the mutation. This map is the single point
+// where the rebuilt-enum vocabulary meets the legacy `'1'..'6'` codes.
+const REBUILT_TO_LEGACY_HSTATUS: Record<string, string> = {
+  pending:               "1",
+  awaiting_payment:      "2",
+  ordered:               "3",
+  awaiting_chn_dispatch: "4",   // legacy-map calls this "awaiting_china_ship"
+  completed:             "5",
+  cancelled:             "6",
 };
 
 export async function adminUpdateServiceOrder(input: AdminUpdateServiceOrderInput): Promise<AdminActionResult> {
@@ -51,74 +132,161 @@ export async function adminUpdateServiceOrder(input: AdminUpdateServiceOrderInpu
 
   return withAdmin(["ops"], async ({ adminId }) => {
     const admin = createAdminClient();
+
+    // Pre-resolve the acting admin's legacy adminID (used both in the audit
+    // payload + the adminidupdate stamp). Same pattern as forwarders-new.ts
+    // / customer-profile.ts. Clip to 10 chars — `tb_header_order.adminidupdate`
+    // is varchar(10) and an unclipped slug like "admin_pasit_pappornpisit"
+    // raises "value too long for type character varying(10)" → silent UI fail.
+    const legacyAdminId = safeLegacyAdminId(await resolveLegacyAdminId(), 10);
+
+    // D1: read from the LIVE table — `tb_header_order` (the rebuilt
+    // `service_orders` is empty on prod after the D1 pivot · see file
+    // header comment). `hno` is the legacy join key, `userid` is the
+    // customer's member code (PR<n>) used downstream for notification
+    // routing via resolveProfileIdsForLegacyUserids.
     const { data: existing, error: existingErr } = await admin
-      .from("service_orders")
-      .select("id, profile_id, status, total_thb")
-      .eq("h_no", d.h_no)
-      .maybeSingle<{ id: string; profile_id: string; status: string; total_thb: number }>();
+      .from("tb_header_order")
+      .select("id, hno, userid, hstatus, htotalpriceuser")
+      .eq("hno", d.h_no)
+      .maybeSingle<{
+        id: number;
+        hno: string;
+        userid: string;
+        hstatus: string | null;
+        htotalpriceuser: number | null;
+      }>();
     if (existingErr) {
-      console.error(`[service_orders mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
+      console.error(`[tb_header_order mutation lookup] failed`, {
+        code: existingErr.code, message: existingErr.message,
+      });
       return { ok: false, error: `db_error:${existingErr.code ?? "unknown"}` };
     }
     if (!existing) return { ok: false, error: "not_found" };
 
-    const update: Record<string, unknown> = { admin_id_update: adminId };
+    // Map the legacy hstatus code → rebuilt enum key so the rebuilt
+    // rollback gate (STATUS_ORDER) keeps working. Unknown codes (e.g.
+    // a manually-injected legacy oddity) fall back to "pending" — the
+    // rollback gate is then permissive, the audit log captures the raw
+    // hstatus, and the staff still sees the order load.
+    const existingStatusKey =
+      LEGACY_ORDER_STATUS[(existing.hstatus ?? "1") as LegacyOrderCode]?.key ?? "pending";
+
+    // Mutation payload — lowercase legacy column names. We always stamp
+    // `adminidupdate` + `hdateupdate` on any update (legacy parity:
+    // every UPDATE in shops.php sets adminIDUpdate, and every status/
+    // value mutation sets hDateUpdate).
+    const nowIso = new Date().toISOString();
+    const update: Record<string, unknown> = {
+      adminidupdate: legacyAdminId,
+      hdateupdate:   nowIso,
+    };
     let statusChanged = false;
     let isRollback    = false;
 
-    if (d.status && d.status !== existing.status) {
+    if (d.status && d.status !== existingStatusKey) {
       // V-A2: rollback path requires reason
-      isRollback = isStatusRollback(existing.status, d.status);
+      isRollback = isStatusRollback(existingStatusKey, d.status);
       if (isRollback) {
         const reason = (d.rollback_reason ?? "").trim();
         if (reason.length < 3) {
           return {
             ok: false,
-            error: `rollback ${existing.status} → ${d.status} ต้องระบุเหตุผล (≥3 ตัว) — ใส่ใน rollback_reason`,
+            error: `rollback ${existingStatusKey} → ${d.status} ต้องระบุเหตุผล (≥3 ตัว) — ใส่ใน rollback_reason`,
           };
         }
-        // Stamp reason in note_admin so it surfaces in admin UI
-        update.note_admin = `[ROLLBACK ${existing.status}→${d.status}] ${reason}`;
+        // Stamp reason in hnote so it surfaces in legacy + rebuilt admin UI
+        update.hnote     = `[ROLLBACK ${existingStatusKey}→${d.status}] ${reason}`;
+        update.hnotedate = nowIso;
       }
 
-      update.status = d.status;
+      // Map rebuilt key → legacy single-char code for the stored column.
+      // Use the local REBUILT_TO_LEGACY_HSTATUS map (not toLegacyOrderCode)
+      // because the rebuilt schema's `awaiting_chn_dispatch` differs from
+      // the legacy-status-map's `awaiting_china_ship` for code '4'.
+      const legacyCode = REBUILT_TO_LEGACY_HSTATUS[d.status];
+      if (!legacyCode) {
+        return { ok: false, error: `unknown_status:${d.status}` };
+      }
+      update.hstatus = legacyCode;
       statusChanged = true;
-      const dateCol = STATUS_DATE_COL[d.status];
-      if (dateCol) update[dateCol] = new Date().toISOString();
+
+      const dateCol = LEGACY_STATUS_DATE_COL[d.status];
+      if (dateCol) update[dateCol] = nowIso;
     }
-    if (d.note_admin != null && !isRollback) update.note_admin = d.note_admin || null;
+    if (d.note_admin != null && !isRollback) {
+      // note_admin maps to legacy hnote (the staff/admin note column).
+      // Empty string → null (matches the rebuilt prior behaviour). Stamp
+      // hnotedate per shops.php L725 saveNote handler.
+      update.hnote     = d.note_admin.length > 0 ? d.note_admin : null;
+      update.hnotedate = nowIso;
+    }
 
-    const { error } = await admin.from("service_orders").update(update).eq("id", existing.id);
-    if (error) return { ok: false, error: error.message };
+    const { error } = await admin
+      .from("tb_header_order")
+      .update(update)
+      .eq("id", existing.id);
+    if (error) {
+      console.error(`[tb_header_order update] failed`, {
+        code: error.code, message: error.message, hint: error.hint,
+        h_no: d.h_no,
+      });
+      return { ok: false, error: error.message };
+    }
 
-    // V-A2: audit log marks rollback distinctly from forward-update
-    await logAdminAction(adminId, isRollback ? "service_order.rollback" : "service_order.update", "service_order", existing.id, {
-      h_no:   d.h_no,
-      before: { status: existing.status },
-      after:  update,
-      ...(isRollback && d.rollback_reason ? { rollback_reason: d.rollback_reason.trim() } : {}),
-    });
+    // V-A2: audit log marks rollback distinctly from forward-update.
+    // target_id is the legacy numeric id (stringified) so re-querying
+    // the audit row by id matches the tb_header_order row.
+    await logAdminAction(
+      adminId,
+      isRollback ? "service_order.rollback" : "service_order.update",
+      "service_order",
+      String(existing.id),
+      {
+        h_no:   d.h_no,
+        before: { status: existingStatusKey, hstatus: existing.hstatus },
+        after:  update,
+        ...(isRollback && d.rollback_reason ? { rollback_reason: d.rollback_reason.trim() } : {}),
+      },
+    );
 
     if (statusChanged && d.status) {
-      void sendNotification(existing.profile_id, {
-        category: "order",
-        // V-A2: rollback notifications use 'warning' severity so customer
-        // is aware admin reverted state (they may have planned around the
-        // earlier status — e.g., already saw "completed" then it bounced back).
-        severity: (d.status === "cancelled" || isRollback) ? "warning" : "info",
-        title:    isRollback
-          ? `ฝากสั่ง ${d.h_no} ถูกย้อนสถานะ`
-          : `ฝากสั่ง ${d.h_no} อัพเดทแล้ว`,
-        body:     `สถานะ: ${STATUS_LABEL[d.status] ?? d.status}`
-          + (isRollback && d.rollback_reason ? ` · เหตุผล: ${d.rollback_reason.trim()}` : ""),
-        link_href: `/service-order/${d.h_no}`,
-        reference_type: "service_order",
-        reference_id:   existing.id,
-      });
+      // Resolve the rebuilt profile_id from the legacy member code
+      // (tb_header_order.userid). Without this the rebuilt `notifications`
+      // table can't be addressed — legacy userid is the PR<n> string, not
+      // a UUID. Mirrors service-orders-spawn.ts L335.
+      try {
+        const profileMap = await resolveProfileIdsForLegacyUserids([existing.userid]);
+        const profileId  = profileMap.get(existing.userid);
+        if (profileId) {
+          void sendNotification(profileId, {
+            category: "order",
+            // V-A2: rollback notifications use 'warning' severity so customer
+            // is aware admin reverted state (they may have planned around the
+            // earlier status — e.g., already saw "completed" then it bounced back).
+            severity: (d.status === "cancelled" || isRollback) ? "warning" : "info",
+            title:    isRollback
+              ? `ฝากสั่ง ${d.h_no} ถูกย้อนสถานะ`
+              : `ฝากสั่ง ${d.h_no} อัพเดทแล้ว`,
+            body:     `สถานะ: ${legacyOrderStatusThai(REBUILT_TO_LEGACY_HSTATUS[d.status] ?? "1")}`
+              + (isRollback && d.rollback_reason ? ` · เหตุผล: ${d.rollback_reason.trim()}` : ""),
+            link_href: `/service-order/${d.h_no}`,
+            reference_type: "service_order",
+            reference_id:   String(existing.id),
+          });
+        }
+        // If no profile_id (legacy customer never bridged) the notification
+        // silently no-ops — same legacy fallback as spawn (L351-354).
+      } catch {
+        // Non-fatal — admin status update already succeeded, notification
+        // failure shouldn't bounce the UI. Legacy `sendLine` also failed
+        // silently on missing token.
+      }
     }
 
     revalidatePath("/admin/service-orders");
     revalidatePath(`/admin/service-orders/${d.h_no}`);
+    revalidatePath(`/service-order/${d.h_no}`);
     return { ok: true };
   });
 }
