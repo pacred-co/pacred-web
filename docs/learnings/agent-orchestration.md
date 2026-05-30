@@ -254,3 +254,32 @@ new Promise(r => setTimeout(r, 1500)).then(() => ({
 **Rule.** ANY background Agent that writes files → `isolation: "worktree"` (the spawn cost ~200-500ms is nothing vs an hour untangling). The ONLY safe non-isolated background agents are read-only (Explore, audits). If you'll keep editing in the main session while it runs, isolation is mandatory, not optional. Bonus: an isolated agent's branch is reviewable as a clean diff before you integrate.
 
 **Cross-links:** AGENTS.md §13 (stale-base / worktree discipline) · the Agent tool's own note: "opts.isolation: 'worktree' … use ONLY when agents mutate files in parallel" — "in parallel" includes *you* editing concurrently, not just sibling agents.
+
+---
+
+## [2026-05-30 night] Concurrent build-heavy agents thrash the machine — load hit 216
+
+**What happened.** เดฟ spawned 3 isolated worktree agents at once (cust-03 reconcile + P0-19 slip + cust-06 address), each running `pnpm build` (NODE_OPTIONS=8GB heap) + `pnpm typecheck` in its own worktree, WHILE a `pnpm dev` server ran for a live Chrome demo. System **load average hit 216** (normal < cores ≈ 8-16). The dev server couldn't compile `/login` in 150s; Chrome `navigate` timed out. The machine was unusable. Had to stop all 3 agents + kill the build procs to recover.
+
+**Why.** Each `pnpm build` on this 246-page project peaks one core for minutes + ~2-8GB RAM. THREE simultaneously + a dev server = 4 heavy node processes contending → thrash. Isolation (separate worktrees) prevents file-collisions but does NOT isolate CPU/RAM — they share the host.
+
+**Rules.**
+- **Cap concurrent BUILD-heavy agents at 1-2** when you're also running a dev server (or anything latency-sensitive). isolation:worktree solves collisions, not load.
+- In a spawn prompt for parallel agents, tell each to run the full `pnpm build` **ONCE at the end** (not repeatedly mid-work) — and stagger if you can.
+- **READ-ONLY agents (audits, Explore) are cheap** — fan out as many as you like; they don't build. (The function-audit workflow's 14 read-only lane agents were fine; it was the 3 build agents + dev server that thrashed.)
+- Before a live Chrome/dev demo, make sure no build agents are running — `uptime` load should be < ~2× cores.
+- Recovery: `TaskStop` each agent (snapshot their worktree to a branch FIRST so nothing's lost), `pkill -9 -f "next build"`, wait for load to fall, restart dev clean.
+
+## [2026-05-30 night] Workflow with `schema` is fragile at scale — one missed StructuredOutput kills the whole run
+
+**What happened.** A function-audit Workflow used `agent({schema})` for every lane audit AND fanned out a per-finding adversarial-verify agent (audit → verify each finding). That ballooned to **119 agents / 3.9M tokens / 609 tool-uses**, then **failed entirely**: "subagent completed without calling StructuredOutput (after 2 nudges)." One agent (deep in reading) ran out of room before the structured call → the whole workflow errored → all 119 agents' work was unreturned (only in transcripts).
+
+**Why.** (1) `{schema}` forces a StructuredOutput tool-call; an agent that exhausts its turn reading large files never makes it → hard error. (2) The per-finding verify fan-out multiplied the agent count (and the failure surface) enormously — and the token cost.
+
+**Rules.**
+- For **audit/research workflows, prefer SCHEMA-LESS `agent()`** (returns final text). A text agent CANNOT fail the StructuredOutput check. Synthesize structure from the texts in one final agent (also text → markdown). The v2 rewrite: 14 self-verifying text lane-agents + 1 text synthesizer = ~15 agents, robust, far cheaper.
+- **Don't fan out a verify agent per finding** — have each audit agent **self-verify its own findings** (read the code path, cite file:line) before reporting. Collapses audit+verify into one step, kills the agent-count explosion.
+- Reserve `{schema}` for SMALL, bounded agent outputs where the agent won't exhaust its turn (a single verdict, a short extraction) — not for "read 20 files then emit a big structured report."
+- A 100+-agent workflow is a token bonfire. Size the fan-out to the task; a 14-lane audit needs ~14 agents, not 119.
+
+**Cross-links:** the Workflow tool description (pipeline/parallel, schema option) · this session's `wf_2e371291` (failed v1) → `wf_b18b0784` (robust v2).
