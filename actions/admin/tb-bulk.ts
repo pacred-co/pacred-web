@@ -144,7 +144,13 @@ export async function adminBulkApproveWalletHs(
       for (const r of candidates) {
         const amt = Number(r.amount);
         // Determine wallet delta from legacy `type` taxonomy:
-        //   '1'/'2' = deposit (credit) · '4'/'7' = withdraw/order-pay (debit)
+        //   '1'/'2' = deposit (credit) · '4'/'7' = order-pay/pending-pay (debit)
+        // ADR-0018 P1-26 note: type='3' (customer withdraw) is INTENTIONALLY
+        // delta=0 here — its wallet debit already happened at submit (the
+        // "debit-hold" model), so bulk-approving a withdraw only flips status
+        // 1→2 with NO balance change (matches adminApproveWithdraw). A reject
+        // (with refund) must go through the per-row queue (/admin/wallet/
+        // withdrawals), NOT this bulk-approve bar.
         const delta = (r.type === "1" || r.type === "2") ? amt
                     : (r.type === "4" || r.type === "7") ? -amt
                     : 0;

@@ -4,7 +4,12 @@ import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { createWithdraw } from "@/actions/wallet";
+// ADR-0018 §D-2 rule 1 + §D-3 #4 (2026-05-30 · P0-7): the live withdraw
+// submit now writes the LEGACY SOT (tb_wallet + tb_wallet_hs) via
+// submitWithdrawRequest. The old createWithdraw wrote the rebuilt
+// `wallet_transactions` (empty on prod) → migrated customers' requests were
+// invisible to admin. createWithdraw is now a TOMBSTONE (see actions/wallet.ts).
+import { submitWithdrawRequest } from "@/actions/wallet-tb";
 import { Banknote, User, Hash } from "lucide-react";
 import { trackWalletWithdrawRequest } from "@/lib/analytics";
 
@@ -48,7 +53,7 @@ export function WithdrawForm({ balance }: Props) {
       return;
     }
     startTransition(async () => {
-      const res = await createWithdraw({
+      const res = await submitWithdrawRequest({
         amount:         amt,
         bank_name:      bank,
         account_name:   accountName,

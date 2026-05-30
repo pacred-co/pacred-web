@@ -595,9 +595,17 @@ export default async function AdminWalletDetail({
               </span>
             </div>
 
-            {/* Pending → action form · Completed → audit line */}
+            {/* Pending → action form · Completed → audit line.
+                P1-25/26 (ADR-0018): for a customer-withdraw row (type='3')
+                the form dispatches to adminApproveWithdraw/Reject (approve =
+                pay out, no balance change · reject = refund). Every other
+                pending type keeps the deposit approve/reject path. */}
             {isPending ? (
-              <ApproveRejectForm id={row.id} hasDateSlip={Boolean(row.dateslip)} />
+              <ApproveRejectForm
+                id={row.id}
+                hasDateSlip={Boolean(row.dateslip)}
+                kind={row.type === "3" ? "withdraw" : "deposit"}
+              />
             ) : (
               <div className="rounded-xl border border-border bg-surface-alt/40 px-3 py-2 text-xs text-muted">
                 ดำเนินรายการแล้ว โดย: <span className="font-mono text-foreground">{row.adminidupdate ?? "—"}</span>

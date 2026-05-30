@@ -276,6 +276,15 @@ export async function createDeposit(
 // ────────────────────────────────────────────────────────────
 // WITHDRAW
 // ────────────────────────────────────────────────────────────
+// TOMBSTONE (2026-05-30 · ADR-0018 §D-2 rule 1 + §D-3 #4 · P0-7) — DEAD on
+// the legacy SOT. This writes the REBUILT `wallet_transactions` table which
+// is empty on prod, so all 8,898 migrated customers' withdraw requests were
+// invisible to admin (audit P0-7 / cust-05). The live customer withdraw flow
+// is `submitWithdrawRequest` in actions/wallet-tb.ts (debits tb_wallet +
+// inserts a pending tb_wallet_hs type='3' row); the withdraw-form.tsx now
+// calls THAT. Kept on disk for one sprint per the Tier-A tombstone convention;
+// delete together with the rebuilt `wallet` / `wallet_transactions` tables
+// when their last reader retires. Do NOT wire new callers to this.
 export async function createWithdraw(
   input: WithdrawInput,
 ): Promise<ActionResult<{ id: string }>> {

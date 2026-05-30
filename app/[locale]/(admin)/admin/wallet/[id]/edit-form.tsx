@@ -31,6 +31,12 @@ import { adminUpdateWalletHsDateSlip } from "@/actions/admin/wallet-trans";
 import {
   adminApproveWalletDeposit,
   adminRejectWalletDeposit,
+  // P1-25/26 (ADR-0018 D-2 rule 1 + rule 3 ¶3-4): customer-withdraw (type='3')
+  // approve = no balance change · reject = refund the held money. The detail
+  // page renders ONE <ApproveRejectForm> for every pending tb_wallet_hs row;
+  // it dispatches deposit-vs-withdraw on the `kind` prop below.
+  adminApproveWithdraw,
+  adminRejectWithdraw,
 } from "@/actions/admin/wallet-hs";
 
 // ────────────────────────────────────────────────────────────
@@ -131,9 +137,19 @@ export function EditDateSlipForm({
 export function ApproveRejectForm({
   id,
   hasDateSlip,
+  kind = "deposit",
 }: {
   id: number;
   hasDateSlip: boolean;
+  /**
+   * Which legacy tb_wallet_hs flow this row is:
+   *   "deposit"  — type='1' top-up slip (approve credits wallet · reject no-op
+   *                or cascade-refund). Dispatches to adminApproveWalletDeposit.
+   *   "withdraw" — type='3' customer withdraw (approve = pay out, NO balance
+   *                change · reject = refund the held money). Dispatches to
+   *                adminApproveWithdraw. ADR-0018 D-2 rule 1 + rule 3 ¶3-4.
+   */
+  kind?: "deposit" | "withdraw";
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"idle" | "reject">("idle");
@@ -141,14 +157,21 @@ export function ApproveRejectForm({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  const isWithdraw = kind === "withdraw";
+
   function approve() {
     setError(null);
-    if (!hasDateSlip) {
+    // The slip-date gate only applies to deposit top-ups (the date must match
+    // the bank slip before crediting). Withdraw approve = "confirm bank payout";
+    // no incoming slip to match, so no gate.
+    if (!isWithdraw && !hasDateSlip) {
       setError("กรุณากรอกวันที่ในสลิปก่อนอนุมัติ");
       return;
     }
     startTransition(async () => {
-      const res = await adminApproveWalletDeposit({ id });
+      const res = isWithdraw
+        ? await adminApproveWithdraw({ id })
+        : await adminApproveWalletDeposit({ id });
       if (res.ok) {
         router.refresh();
       } else {
@@ -164,10 +187,12 @@ export function ApproveRejectForm({
       return;
     }
     startTransition(async () => {
-      // ADR-0018 D-3 #2 + MS-1: param renamed `note` → `reason` for clarity
-      // (matches the legacy "เหตุผลที่ปฏิเสธ" UI label). Both names map to
-      // tb_wallet_hs.note column on the server.
-      const res = await adminRejectWalletDeposit({ id, reason: reason.trim() || undefined });
+      // ADR-0018 D-3 #2 + MS-1: param `reason` maps to tb_wallet_hs.note.
+      // Withdraw reject ALSO refunds the held money (rule 3 ¶4) — that's
+      // handled server-side in adminRejectWithdraw.
+      const res = isWithdraw
+        ? await adminRejectWithdraw({ id, reason: reason.trim() || undefined })
+        : await adminRejectWalletDeposit({ id, reason: reason.trim() || undefined });
       if (res.ok) {
         router.refresh();
         setMode("idle");
@@ -181,7 +206,9 @@ export function ApproveRejectForm({
   return (
     <div className="space-y-3">
       <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
-        กรุณาตรวจสอบวันที่โอนทางด้านซ้ายกับวันที่ในสลิป พร้อมดูรายการใกล้เคียงด้านล่าง (ถ้ามี) ก่อนอนุมัติ
+        {isWithdraw
+          ? "ตรวจบัญชีปลายทาง + จำนวนเงินทางด้านซ้ายก่อน. กด ‘ยืนยันจ่ายเงิน’ เมื่อโอนเข้าบัญชีลูกค้าแล้ว (ยอดถูกหักจากกระเป๋าตั้งแต่ลูกค้ากดถอน) · กด ‘ปฏิเสธ’ เพื่อคืนเงินเข้ากระเป๋า"
+          : "กรุณาตรวจสอบวันที่โอนทางด้านซ้ายกับวันที่ในสลิป พร้อมดูรายการใกล้เคียงด้านล่าง (ถ้ามี) ก่อนอนุมัติ"}
       </div>
 
       {error && (
@@ -199,9 +226,9 @@ export function ApproveRejectForm({
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-green-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50"
           >
             {pending ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> กำลังอนุมัติ…</>
+              <><Loader2 className="h-4 w-4 animate-spin" /> {isWithdraw ? "กำลังจ่าย…" : "กำลังอนุมัติ…"}</>
             ) : (
-              <><CheckCircle2 className="h-4 w-4" /> ยืนยันทำรายการ</>
+              <><CheckCircle2 className="h-4 w-4" /> {isWithdraw ? "ยืนยันจ่ายเงิน" : "ยืนยันทำรายการ"}</>
             )}
           </button>
           <button
@@ -210,21 +237,26 @@ export function ApproveRejectForm({
             disabled={pending}
             className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-500 bg-white px-3 py-2.5 text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-50"
           >
-            <XCircle className="h-4 w-4" /> ปฏิเสธรายการ
+            <XCircle className="h-4 w-4" /> {isWithdraw ? "ปฏิเสธ + คืนเงิน" : "ปฏิเสธรายการ"}
           </button>
         </div>
       )}
 
       {mode === "reject" && (
         <div className="space-y-2 rounded-xl border border-red-300 bg-red-50 p-3">
-          <p className="text-xs font-bold text-red-900">เหตุผลที่ปฏิเสธ (ตัวเลือก · ระบบจะบันทึกลง note)</p>
+          <p className="text-xs font-bold text-red-900">
+            เหตุผลที่ปฏิเสธ (ตัวเลือก · ระบบจะบันทึกลง note)
+            {isWithdraw ? " · เมื่อปฏิเสธ ระบบจะคืนเงินเข้ากระเป๋าลูกค้าอัตโนมัติ" : ""}
+          </p>
           <textarea
             rows={3}
             maxLength={500}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs"
-            placeholder="เช่น ยอดในสลิปไม่ตรง / สลิปอ่านไม่ออก / เลขที่อ้างอิงไม่ตรง"
+            placeholder={isWithdraw
+              ? "เช่น เอกสารบัญชีไม่ครบ / เลขบัญชีไม่ตรงชื่อ / ลูกค้าขอยกเลิก"
+              : "เช่น ยอดในสลิปไม่ตรง / สลิปอ่านไม่ออก / เลขที่อ้างอิงไม่ตรง"}
             autoFocus
           />
           <div className="flex gap-2">
@@ -234,7 +266,7 @@ export function ApproveRejectForm({
               disabled={pending}
               className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50"
             >
-              {pending ? "กำลังปฏิเสธ…" : "✓ ยืนยันปฏิเสธ"}
+              {pending ? "กำลังปฏิเสธ…" : (isWithdraw ? "✓ ยืนยันปฏิเสธ + คืนเงิน" : "✓ ยืนยันปฏิเสธ")}
             </button>
             <button
               type="button"

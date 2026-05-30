@@ -46,12 +46,15 @@ export const dynamic = "force-dynamic";
 const WALLET_MENUBAR: MenubarItem[] = [
   { label: "หน้าหลัก", href: "/admin/wallet" },
   { label: "ประวัติรายการ", href: "/admin/wallet?view=tx" },
+  // P1-26 (ADR-0018 · 2026-05-30): dedicated customer-withdraw approval queue
+  // (type='3' status='1') — the clear ≤3-click entry point per AGENTS.md §0d.
+  { label: "รายการถอนเงิน", href: "/admin/wallet/withdrawals" },
   {
     label: "กรองรายการ",
     children: [
       { label: "ทั้งหมด",    href: "/admin/wallet?view=tx" },
       { label: "รอเติมเงิน", href: "/admin/wallet?view=tx&kind=topup&status=1" },
-      { label: "รอถอน",      href: "/admin/wallet?view=tx&kind=withdraw&status=1" },
+      { label: "รอถอน",      href: "/admin/wallet/withdrawals" },
       { label: "อนุมัติแล้ว", href: "/admin/wallet?view=tx&status=2" },
     ],
   },
@@ -108,7 +111,8 @@ export default async function AdminWalletPage({
     { count: customerCount },
   ] = await Promise.all([
     admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).in("type", ["1", "2"]).eq("status", "1"),
-    admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("type", "7").eq("status", "1"),
+    // ADR-0018 P1-25: customer withdraw pending = type='3' (was wrongly '7').
+    admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("type", "3").eq("status", "1"),
     admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("status", "1"),
     admin.from("tb_wallet").select("userid", { count: "exact", head: true }),
   ]);
@@ -147,7 +151,7 @@ export default async function AdminWalletPage({
               ) : null}
               {pendingWithdrawCount ? (
                 <Link
-                  href="/admin/wallet?view=tx&kind=withdraw&status=1"
+                  href="/admin/wallet/withdrawals"
                   className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
                 >
                   ถอน {pendingWithdrawCount.toLocaleString()}
