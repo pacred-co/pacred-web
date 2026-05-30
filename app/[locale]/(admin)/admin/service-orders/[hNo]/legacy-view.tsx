@@ -26,6 +26,8 @@ import { buildSpawnRows } from "./spawn-utils";
 import { MarkPaidTbForm } from "./mark-paid-tb-form";
 import { AdminServiceOrderUpdateForm } from "./update-form";
 import { AdminQuoteShopOrderForm } from "./quote-form";
+import { AdminExtraEditsPanel } from "./extra-edits-form";
+import { AdminRefundItemPanel } from "./refund-item-form";
 import {
   AdminMarkShopOrderOrderedForm,
   AdminSpawnToCompletedButton,
@@ -140,10 +142,15 @@ export async function renderLegacyServiceOrderView(hno: string) {
   // Wave 21 P0 · Task #106 — load tb_order line items for the spawn form.
   // Same pattern as the rebuilt-path branch in page.tsx; expansion lives
   // in spawn-utils.buildSpawnRows so server + client share the contract.
+  //
+  // Sitting G — extended SELECT to include id + ctitle + cprice + camount +
+  // crewallet so the new per-item refund button has the full item detail
+  // it needs (closes §0d gap for P0-16 sitting-F adminRefundShopOrderItem).
   const { data: trackingItems, error: trackingErr } = await admin
     .from("tb_order")
-    .select("cnameshop, cshippingnumber, ctrackingnumber")
+    .select("id, cnameshop, cshippingnumber, ctrackingnumber, ctitle, cprice, camount, crewallet")
     .eq("hno", r.hno)
+    .order("id", { ascending: true })
     .limit(200);
   if (trackingErr) {
     console.error(`[tb_order spawn list legacy-view] failed`, {
@@ -151,6 +158,18 @@ export async function renderLegacyServiceOrderView(hno: string) {
     });
   }
   const spawnRows = buildSpawnRows(trackingItems ?? []);
+  // Refundable items = anything with remaining camount > 0 and NOT yet
+  // marked crewallet='1' (already refunded full-qty).
+  const refundableItems = (trackingItems ?? [])
+    .filter((it: { id?: number; ctitle?: string; cprice?: number; camount?: number; crewallet?: string | null }) =>
+      Number(it.camount ?? 0) > 0 && it.crewallet !== "1")
+    .map((it: { id?: number; ctitle?: string; cprice?: number; camount?: number; cnameshop?: string }) => ({
+      id:        Number(it.id ?? 0),
+      title:     it.ctitle ?? "",
+      cprice:    Number(it.cprice ?? 0),
+      camount:   Number(it.camount ?? 0),
+      cnameshop: it.cnameshop ?? "",
+    }));
 
   const customerName = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || "—";
   const status = r.hstatus ?? "1";
@@ -299,6 +318,38 @@ export async function renderLegacyServiceOrderView(hno: string) {
         status={LEGACY_TO_REBUILT_KEY[r.hstatus ?? "1"] ?? "pending"}
         note_admin={r.hnote ?? null}
         totalThb={Number(r.htotalpriceuser ?? 0)}
+      />
+
+      {/* Sitting G — 3 Phase-2 header-edit handlers from P0-13 batch
+          (sitting F) now have UI buttons. Address / Transport / Note
+          editing on real `tb_header_order` rows without leaving Pacred.
+          Closes §0d reachability gap from sitting F. */}
+      <AdminExtraEditsPanel
+        hNo={r.hno}
+        hstatus={r.hstatus ?? "1"}
+        haddressname={r.haddressname}
+        haddresslastname={r.haddresslastname}
+        haddressno={r.haddressno}
+        haddresssubdistrict={r.haddresssubdistrict}
+        haddressdistrict={r.haddressdistrict}
+        haddressprovince={r.haddressprovince}
+        haddresszipcode={r.haddresszipcode}
+        haddresstel={r.haddresstel}
+        haddressnote={r.haddressnote}
+        htransporttype={r.htransporttype}
+        hnote={r.hnote}
+        hnoteuser={r.hnoteuser}
+      />
+
+      {/* Sitting G — per-item refund UI (closes §0d gap for sitting-F
+          P0-16 adminRefundShopOrderItem). Server-side already handles
+          tb_order partial-qty split + tb_wallet_hs type='5' + tb_wallet
+          balance-bump + parent total recompute. Refunds visible
+          instantly via router.refresh. */}
+      <AdminRefundItemPanel
+        hNo={r.hno}
+        hstatus={r.hstatus ?? "1"}
+        refundableItems={refundableItems}
       />
 
       {/* Wave 21 P0 · Task #106 — shop→forwarder auto-spawn. Mirrors legacy
