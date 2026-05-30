@@ -32,8 +32,19 @@
  * เหมาๆ ฿50 + corporate 1%) is factored into the pure helper
  * `lib/forwarder/forwarder-debit-total.ts` so the money math is tested.
  *
- * The insufficient-balance slip-top-up path (pay-users.php L342 / L561) is
- * Phase 3 — flagged, not silently dropped.
+ * SCOPE (Phase 3 — slip-top-up-and-pay, THIS extension):
+ * `adminPayOrdersWithTopUp` + `adminPayForwardersWithTopUp` port the
+ * INSUFFICIENT-balance branches (shop pay-users.php L85-191; forwarder
+ * "no-wallet-money" path #1 L342-433). When the customer can't cover the
+ * selected total, staff upload a bank-transfer slip → the action writes a
+ * PENDING top-up deposit (`tb_wallet_hs` type='1' status='1', with the slip
+ * + `paydeposit='1'`), then per-item PENDING pay rows linking `refOrder2=whID`,
+ * a `tb_wallet_paydeposit(whID,itemId)` bridge per item, and flips the item
+ * status forward. The money is NOT settled here — the deposit awaits admin
+ * approval via `adminApproveWalletDeposit` (actions/admin/wallet-hs.ts), which
+ * is the exact mirror image that cascades these linked rows to status='2'
+ * (or `adminRejectWalletDeposit` which reverts + refunds). See the BALANCE
+ * MOVEMENT contract block above each Phase-3 action for the line-by-line cite.
  */
 
 import { revalidatePath } from "next/cache";
@@ -49,6 +60,13 @@ import {
   computeForwarderDebitBatch,
   type ForwarderDebitRow,
 } from "@/lib/forwarder/forwarder-debit-total";
+import { uploadToBucket } from "@/lib/storage/upload";
+
+// Legacy `pcs-admin/pay-users.php` hardcodes this destination bank on every
+// slip-top-up INSERT (shop L103 + forwarder L360/L578). Mirrored verbatim so
+// the deposit row that `adminApproveWalletDeposit` later reviews looks
+// identical to a legacy-created one.
+const PAYUSER_DEPOSIT_NAMEBANK = "KBANK-064-174-3836";
 
 // The exact tb_forwarder pricing columns the debit helper reads (lowercase =
 // PostgREST casing, verified against actions/admin/forwarders-bulk.ts +
@@ -346,7 +364,10 @@ export async function adminPayOrdersOnBehalf(
       const balance = Number(wallet?.wallettotal ?? 0);
       if (!(balance >= price)) {
         skipped.push({ hno, reason: `ยอดเงินไม่พอ (มี ฿${balance.toFixed(2)} ต้อง ฿${price.toFixed(2)})` });
-        continue; // FLAG (Phase 2): legacy offers a slip-top-up path here
+        // Per-order shortfall: skip here. The whole-batch slip-top-up path
+        // (legacy shop L85-191) is handled by adminPayOrdersWithTopUp below —
+        // the UI routes to it when the wallet can't cover the selected total.
+        continue;
       }
 
       // 4. INSERT tb_wallet_hs (admin twin of A1 — adminid/adminidcrate = staff slug)
@@ -568,7 +589,11 @@ export async function adminPayForwardersOnBehalf(
       const balance = Number(wallet?.wallettotal ?? 0);
       if (!(balance >= price)) {
         skipped.push({ fid, reason: `ยอดเงินไม่พอ (มี ฿${balance.toFixed(2)} ต้อง ฿${price.toFixed(2)})` });
-        continue; // FLAG (Phase 3): legacy offers a slip-top-up path here
+        // Per-row shortfall: skip here. The whole-batch slip-top-up path
+        // (legacy forwarder path #1 L342-433) is handled by
+        // adminPayForwardersWithTopUp below — the UI routes to it when the
+        // wallet can't cover the selected total.
+        continue;
       }
 
       // 3. PCSF first-item — mutate tb_forwarder.fTransportPrice=50 BEFORE the
@@ -683,5 +708,713 @@ export async function adminPayForwardersOnBehalf(
       };
     }
     return { ok: true, data: { paid, skipped, total_debited: Math.round(totalDebited * 100) / 100 } };
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// PHASE 3 — SLIP-TOP-UP-AND-PAY (insufficient-balance branches)
+// ════════════════════════════════════════════════════════════════════════
+//
+// ── THE BALANCE-MOVEMENT CONTRACT (mirrored EXACTLY — real money) ─────────
+//
+// These two actions handle the case where the wallet can't cover the
+// selected total. Legacy splits this into two branches per service:
+//
+//   SHOP (pay-users.php L85-191 — the `else` after L39
+//   `if($walletTotal>=$pricePayAll)`):
+//     • Requires `!empty($_POST['amount']) && !empty($_FILES['imagesSlip'])`
+//       (L86) — staff types a top-up amount + uploads a slip.
+//     • Guard L107-109: `$walletTotalTmp = $walletTotal + $amount`; proceed
+//       only if `$walletTotalTmp > $pricePayAll` OR exactly covers
+//       (`bcsub == 0`). i.e. old-balance + new-slip must clear the bill.
+//     • L111 `$walletTotalU = $walletTotal` captures the OLD balance.
+//     • L113 `if($walletTotalU != 0) UPDATE tb_wallet SET walletTotal=0` —
+//       ███ THE WALLET IS ZEROED ███ (the existing balance is consumed into
+//       the payment). If old balance was already 0, no UPDATE.
+//     • L117-118 INSERT top-up `tb_wallet_hs`: type='1' status='1' (PENDING)
+//       amount=$amount(slip) imagesSlip paydeposit='1' depositNameBank.
+//     • L132-133 (ONLY inside `walletTotalU != 0`) INSERT `tb_wallet_hs`
+//       type='7' status='1' amount=$walletTotalU refOrder=$whID — ███ the
+//       type='7' row RECORDS the old balance that was zeroed ███. This is
+//       what `adminRejectWalletDeposit` SUMs to refund (wallet-hs.ts
+//       L1237-1246). On a 0 old-balance there is NO type='7' row → refund=0.
+//     • L162-163 per-order pay rows: type='2' status='1' refOrder=$hNo
+//       refOrder2=$whID.  (NO immediate wallet debit for the slip portion —
+//       it's pending until the deposit is approved.)
+//     • L166 flip header hStatus='3' paydeposit='1' hDate3=NOW().
+//     • L173-174 `tb_wallet_paydeposit(whID,$hNo)` bridge per order.
+//
+//   FORWARDER (pay-users.php path #1 L342-433 — the
+//   `if($userTotalWalletForm==0)` branch, "ไม่มีเงินเลย เติมพร้อมรายการนี้"):
+//     • CRITICAL: L291 `$walletTotal=0;` (hard reset) + L340
+//       `$userTotalWalletForm = 0;` ("ไม่ให้ใช้เงินจากกระเป๋าแล้ว") — this
+//       path FORCES the wallet contribution to 0; the customer pays the
+//       WHOLE bill with the new slip.  ███ THE WALLET IS NEVER READ OR
+//       DEBITED in path #1 ███, and there is NO type='7' row (nothing was
+//       taken from the wallet → nothing to refund on reject).
+//     • Requires `!empty($_FILES['imagesSlip'])` (L344) — slip only; the
+//       top-up amount IS the bill (`$amount = $pricePayAll`, L361).
+//     • L364-365 INSERT top-up `tb_wallet_hs`: type='1' status='1' (PENDING)
+//       amount=$pricePayAll imagesSlip paydeposit='1' typeNew='6'
+//       typeService='2' depositNameBank.
+//     • L386-389 PCSF first-item side-effect: UPDATE tb_forwarder
+//       fTransportPrice=50 (same as the sufficient path).
+//     • L404-405 per-row pay rows: type='4' status='1' refOrder=$ID
+//       refOrder2=$whID typeNew='6' typeService='2'.
+//     • L408/L410 flip tb_forwarder: standard fStatus='6' paydeposit='1';
+//       credit fCredit='' paydeposit='1' (no fStatus flip). fUserCompany
+//       '1' when corporate-discount fired else ''.
+//     • L417-418 `tb_wallet_paydeposit(whID,$ID)` bridge per row.
+//
+// WHY status='1' EVERYWHERE: unlike the sufficient-balance path (status='2',
+// settled, wallet debited NOW), the slip-top-up path leaves EVERYTHING
+// pending — the deposit + the pay rows are status='1' and reconcile only
+// when accounting approves the slip. `adminApproveWalletDeposit` (wallet-hs.ts
+// L396) reads `tb_wallet_paydeposit WHERE whid=<topup.id>`, flips each
+// sibling pay row (reforder=item · type='2'/'4' · reforder2=topup.id ·
+// status='1') to status='2' AND the type='7' sibling rows (reforder=topup.id ·
+// type='7') to status='2' — NO extra wallet credit (the net was already
+// captured). The reject mirror reverts + refunds the SUM of type='7' rows.
+// So the rows we write here MUST match that reader's shape exactly (verified
+// field-by-field against wallet-hs.ts: the cascade keys on reforder + type +
+// status + reforder2 ONLY — typenew is non-load-bearing on the shop pay row).
+//
+// ── tb_wallet_paydeposit bridge ──
+// One row per paid item: (whid = the top-up deposit's tb_wallet_hs.id,
+// hno = the order hNo / forwarder ID). This is the join the approve/reject
+// cascade walks. We insert it AFTER the status flip succeeds (legacy L173 /
+// L417 insert it inside the success branch).
+
+const SLIP_AMOUNT_TOLERANCE = 0.01; // satang-level float slack on the "covers" check
+
+// Shared slip upload — returns the bucket filename or a Thai error.
+async function uploadPayUserSlip(
+  slipFile: File,
+  userId: string,
+): Promise<{ ok: true; filename: string } | { ok: false; error: string }> {
+  const up = await uploadToBucket(slipFile, "slips", `admin/pay-user/${userId}`);
+  if (!up.ok) return { ok: false, error: up.error };
+  return { ok: true, filename: up.filename };
+}
+
+// ── PHASE 3 · SHOP — top-up-and-pay ───────────────────────────────────────
+
+const payWithTopUpSchema = z.object({
+  userId: z.string().trim().min(1).max(20),
+  hNos: z.array(z.string().trim().min(1).max(100)).min(1).max(100),
+  // The bank-transfer amount the staff typed (the slip's value). Must be a
+  // positive number; legacy reads `$_POST['amount']` (shop L104).
+  topUpAmount: z.number().positive(),
+});
+
+export type PayWithTopUpResult = {
+  /** the PENDING top-up deposit row id (tb_wallet_hs.id) — review at /admin/wallet/<id>. */
+  topupWalletHsId: number;
+  /** items that got a pending pay-row + status flip + paydeposit bridge. */
+  paid: string[];
+  skipped: { hno: string; reason: string }[];
+  /** = the top-up deposit amount (the slip value), pending approval. NOT debited yet. */
+  topup_amount: number;
+  /** the OLD wallet balance that was consumed into the payment (zeroed). 0 if it was already 0. */
+  wallet_consumed: number;
+};
+
+/**
+ * Phase 3 — shop orders, insufficient balance + slip top-up.
+ *
+ * Faithful port of pay-users.php L85-191. Writes a PENDING top-up deposit
+ * (with the slip), per-order PENDING pay rows linked via refOrder2=whID +
+ * a tb_wallet_paydeposit bridge, zeroes the existing wallet balance into a
+ * type='7' tracking row, and flips each order hStatus 2→3. Nothing settles
+ * until accounting approves the deposit (adminApproveWalletDeposit).
+ */
+export async function adminPayOrdersWithTopUp(
+  input: unknown,
+  slipFile?: File | null,
+): Promise<AdminActionResult<PayWithTopUpResult>> {
+  return withAdmin(undefined, async () => {
+    const parsed = payWithTopUpSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+    }
+    if (!slipFile || !(slipFile instanceof File)) {
+      return { ok: false, error: "กรุณาแนบสลิปการโอนเงิน" }; // legacy L86/L190 'eInput'
+    }
+    const userId = parsed.data.userId.toUpperCase();
+    const hNos = Array.from(new Set(parsed.data.hNos));
+    const topUpAmount = Math.round(parsed.data.topUpAmount * 100) / 100;
+    const admin = createAdminClient();
+    const legacyAdminId = safeLegacyAdminId(await resolveLegacyAdminId(), 10);
+    const nowIso = new Date().toISOString();
+
+    // 0. customer must exist (legacy L20-24 'ePass')
+    const { data: u, error: uErr } = await admin
+      .from("tb_users")
+      .select("userID")
+      .eq("userID", userId)
+      .maybeSingle<{ userID: string }>();
+    if (uErr) {
+      console.error(`[adminPayOrdersWithTopUp tb_users] failed`, { code: uErr.code, message: uErr.message, userId });
+      return { ok: false, error: `db_error:${uErr.code ?? "unknown"}` };
+    }
+    if (!u) return { ok: false, error: `ไม่พบลูกค้า ${userId}` };
+
+    // 1. idempotency — legacy L13: any already-SETTLED pay row for these
+    //    orders means the batch was paid → bail (legacy shows 'eSQL').
+    const { data: settled, error: settledErr } = await admin
+      .from("tb_wallet_hs")
+      .select("reforder")
+      .eq("userid", userId)
+      .eq("type", "2")
+      .eq("status", "2")
+      .in("reforder", hNos)
+      .limit(1);
+    if (settledErr) {
+      console.error(`[adminPayOrdersWithTopUp idempotency] failed`, { code: settledErr.code, message: settledErr.message, userId });
+      return { ok: false, error: `db_error:${settledErr.code ?? "unknown"}` };
+    }
+    if (settled && settled.length > 0) {
+      return { ok: false, error: "มีออเดอร์ที่ชำระไปแล้วในชุดนี้ — ยกเลิก (โปรดรีเฟรช)" };
+    }
+
+    // 2. load the payable orders (legacy L153: hStatus='2' AND hDatePayment>NOW).
+    const { data: rows, error: oErr } = await admin
+      .from("tb_header_order")
+      .select("id, hno, hstatus, htotalpriceuser, htotalpricechn, hshippingchn, hshippingservice, hrate, hdatepayment")
+      .eq("userid", userId)
+      .eq("hstatus", "2")
+      .gt("hdatepayment", nowIso)
+      .in("hno", hNos)
+      .order("hdatepayment", { ascending: true });
+    if (oErr) {
+      console.error(`[adminPayOrdersWithTopUp tb_header_order] failed`, { code: oErr.code, message: oErr.message, userId });
+      return { ok: false, error: `db_error:${oErr.code ?? "unknown"}` };
+    }
+    type HeaderRow = {
+      id: number; hno: string; hstatus: string | null;
+      htotalpriceuser: number | string | null; htotalpricechn: number | string | null;
+      hshippingchn: number | string | null; hshippingservice: number | string | null;
+      hrate: number | string | null; hdatepayment: string | null;
+    };
+    const payable = (rows ?? []) as HeaderRow[];
+    if (payable.length === 0) return { ok: false, error: "ไม่พบออเดอร์ที่พร้อมชำระของลูกค้ารายนี้" };
+
+    const priced = payable
+      .map((h) => ({ hno: String(h.hno), price: computeShopOrderDebitTotal(h) }))
+      .filter((p) => Number.isFinite(p.price) && p.price > 0);
+    const pricePayAll = Math.round(priced.reduce((s, p) => s + p.price, 0) * 100) / 100;
+    if (pricePayAll <= 0) return { ok: false, error: "ราคารวมของออเดอร์ไม่ถูกต้อง" };
+
+    // 3. read OLD wallet balance (legacy L34-37 $walletTotal).
+    const { data: w, error: wErr } = await admin
+      .from("tb_wallet")
+      .select("wallettotal")
+      .eq("userid", userId)
+      .maybeSingle<{ wallettotal: number | string | null }>();
+    if (wErr) {
+      console.error(`[adminPayOrdersWithTopUp tb_wallet read] failed`, { code: wErr.code, message: wErr.message, userId });
+      return { ok: false, error: `db_error:${wErr.code ?? "unknown"}` };
+    }
+    const oldBalance = Math.round(Number(w?.wallettotal ?? 0) * 100) / 100;
+
+    // 4. COVERAGE GUARD — legacy L107-109: old-balance + new-slip must clear
+    //    the bill (> OR exactly ==). Only here should staff be on this path
+    //    (the sufficient path handles balance>=bill on its own).
+    const combined = Math.round((oldBalance + topUpAmount) * 100) / 100;
+    if (!(combined > pricePayAll || Math.abs(combined - pricePayAll) <= SLIP_AMOUNT_TOLERANCE)) {
+      return {
+        ok: false,
+        error: `ยอดเติม + ยอดในกระเป๋าไม่พอ — รวม ฿${combined.toFixed(2)} ต้องชำระ ฿${pricePayAll.toFixed(2)}`,
+      };
+    }
+
+    // 5. upload slip BEFORE writing the deposit (legacy renames first, moves
+    //    file after insert; we upload first so the filename is real).
+    const slip = await uploadPayUserSlip(slipFile, userId);
+    if (!slip.ok) return { ok: false, error: slip.error };
+
+    // 6. ZERO the existing wallet (legacy L113) — only if non-zero.
+    if (oldBalance !== 0) {
+      const { error: zeroErr } = await admin
+        .from("tb_wallet")
+        .update({ wallettotal: 0 })
+        .eq("userid", userId);
+      if (zeroErr) {
+        console.error(`[adminPayOrdersWithTopUp zero wallet] failed`, { code: zeroErr.code, message: zeroErr.message, userId });
+        return { ok: false, error: `หักยอดกระเป๋าเดิมล้มเหลว: ${zeroErr.message}` };
+      }
+    }
+
+    // 7. INSERT the PENDING top-up deposit (legacy L117-118). amount = slip
+    //    value · type='1' · status='1' · paydeposit='1' · imagesSlip.
+    const { data: topup, error: topErr } = await admin
+      .from("tb_wallet_hs")
+      .insert({
+        date:            nowIso,
+        amount:          topUpAmount,
+        status:          "1",                 // PENDING — awaits admin approval
+        type:            "1",                 // เติมเงิน (deposit)
+        typenew:         "1",
+        typeservice:     "1",
+        paydeposit:      "1",
+        imagesslip:      slip.filename,
+        depositnamebank: PAYUSER_DEPOSIT_NAMEBANK,
+        nameuserbank:    "",
+        nouserbank:      "",
+        note:            `เติมเงินพร้อมชำระฝากสั่ง (เจ้าหน้าที่ทำรายการแทนลูกค้า)`,
+        adminid:         legacyAdminId,
+        adminidupdate:   legacyAdminId,
+        session:         "admin-pay-onbehalf-topup",
+        reforder:        "",
+        whno:            "",
+        wusercredit:     "0",
+        userid:          userId,
+        adminidcrate:    legacyAdminId,
+      })
+      .select("id")
+      .single<{ id: number }>();
+    if (topErr || !topup) {
+      // rollback the wallet-zero so we don't lose the customer's balance.
+      if (oldBalance !== 0) {
+        await admin.from("tb_wallet").update({ wallettotal: oldBalance }).eq("userid", userId);
+      }
+      console.error(`[adminPayOrdersWithTopUp insert topup] failed`, { code: topErr?.code, message: topErr?.message, userId });
+      return { ok: false, error: `บันทึกรายการเติมเงินล้มเหลว · คืนยอดกระเป๋าแล้ว: ${topErr?.message ?? "no row"}` };
+    }
+    const whID = topup.id;
+
+    // 8. record the consumed OLD balance as a type='7' tracking row (legacy
+    //    L132-133) — ONLY when old balance > 0. This is the refund anchor on
+    //    reject (wallet-hs.ts SUMs type='7' WHERE reforder=whID).
+    if (oldBalance !== 0) {
+      const { error: t7Err } = await admin
+        .from("tb_wallet_hs")
+        .insert({
+          date:         nowIso,
+          amount:       oldBalance,
+          status:       "1",                  // PENDING (settles/voids with the deposit)
+          type:         "7",                  // wallet-consumed tracking
+          typenew:      "1",                  // NOT NULL
+          typeservice:  "1",                  // NOT NULL
+          paydeposit:   "0",
+          imagesslip:   "",
+          note:         `ยอดกระเป๋าเดิมที่ใช้ชำระ (อ้างอิงเติม #${whID})`,
+          adminid:      legacyAdminId,
+          adminidupdate: legacyAdminId,
+          session:      "admin-pay-onbehalf-topup",
+          reforder:     String(whID),         // legacy refOrder=$whID (varchar col)
+          whno:         "",                   // NOT NULL
+          wusercredit:  "0",                  // NOT NULL
+          userid:       userId,               // NOT NULL
+          adminidcrate: legacyAdminId,        // NOT NULL
+        });
+      if (t7Err) {
+        // Non-fatal to the pay flow, but loud — the refund anchor is missing.
+        console.error(`[adminPayOrdersWithTopUp insert type7] FAILED — refund anchor missing`, {
+          code: t7Err.code, message: t7Err.message, userId, whID, oldBalance,
+        });
+      }
+    }
+
+    // 9. per-order: PENDING pay row + status flip + paydeposit bridge.
+    const paid: string[] = [];
+    const skipped: { hno: string; reason: string }[] = [];
+
+    let profileId: string | null = null;
+    try {
+      const map = await resolveProfileIdsForLegacyUserids([userId]);
+      profileId = map.get(userId) ?? null;
+    } catch (e) {
+      console.error(`[adminPayOrdersWithTopUp resolveProfileId] failed`, { userId, e: String(e) });
+    }
+
+    for (const p of priced) {
+      const header = payable.find((h) => String(h.hno) === p.hno);
+      if (!header) { skipped.push({ hno: p.hno, reason: "ออเดอร์หายไประหว่างทำรายการ" }); continue; }
+
+      // pay row — legacy L162-163: type='2' status='1' refOrder=hNo
+      // refOrder2=whID. (This is exactly what adminApproveWalletDeposit's
+      // sibling-flip matches on: reforder + type='2' + status='1' + reforder2.)
+      const { error: payErr } = await admin
+        .from("tb_wallet_hs")
+        .insert({
+          date:            nowIso,
+          amount:          p.price,
+          status:          "1",               // PENDING (settles on deposit approve)
+          type:            "2",               // ชำระเงินฝากสั่ง
+          typenew:         "3",
+          typeservice:     "1",
+          paydeposit:      "1",
+          imagesslip:      "",
+          depositnamebank: "",
+          note:            `ชำระฝากสั่ง #${p.hno} (เติม-แล้วจ่าย · รออนุมัติสลิป)`,
+          adminid:         legacyAdminId,
+          adminidupdate:   legacyAdminId,
+          session:         "admin-pay-onbehalf-topup",
+          reforder:        p.hno,
+          reforder2:       whID,              // legacy refOrder2=$whID (reforder2 is bigint)
+          whno:            "",
+          wusercredit:     "0",
+          userid:          userId,
+          adminidcrate:    legacyAdminId,
+        });
+      if (payErr) {
+        console.error(`[adminPayOrdersWithTopUp pay row] failed`, { code: payErr.code, message: payErr.message, hno: p.hno });
+        skipped.push({ hno: p.hno, reason: `บันทึกรายการชำระล้มเหลว: ${payErr.message}` });
+        continue;
+      }
+
+      // flip header 2→3 (legacy L166: hStatus='3' paydeposit='1' hDate3=NOW).
+      const { error: hUpdErr } = await admin
+        .from("tb_header_order")
+        .update({ hstatus: "3", hdate3: nowIso, hdateupdate: nowIso, paydeposit: "1" })
+        .eq("id", header.id)
+        .eq("hstatus", "2");
+      if (hUpdErr) {
+        console.error(`[adminPayOrdersWithTopUp header flip] failed`, { code: hUpdErr.code, message: hUpdErr.message, hno: p.hno, whID });
+        skipped.push({ hno: p.hno, reason: `อัพเดทสถานะออเดอร์ล้มเหลว (รายการชำระบันทึกแล้ว · เติม #${whID})` });
+        continue;
+      }
+
+      // bridge row (legacy L173-174: tb_wallet_paydeposit(whID, hNo)).
+      const { error: bridgeErr } = await admin
+        .from("tb_wallet_paydeposit")
+        .insert({ whid: whID, hno: p.hno });
+      if (bridgeErr) {
+        console.error(`[adminPayOrdersWithTopUp bridge] failed`, { code: bridgeErr.code, message: bridgeErr.message, hno: p.hno, whID });
+        // bridge missing = approve cascade won't reach this order. Loud.
+        skipped.push({ hno: p.hno, reason: `เชื่อมรายการเติม-จ่ายล้มเหลว (เติม #${whID}) — แจ้งทีมบัญชี` });
+        continue;
+      }
+
+      paid.push(p.hno);
+    }
+
+    if (profileId) {
+      void sendNotification(profileId, {
+        category:       "order",
+        severity:       "info",
+        title:          `รับเรื่องชำระค่าฝากสั่ง (รออนุมัติสลิป)`,
+        body:           `เจ้าหน้าที่ทำรายการเติม-จ่ายให้ ${paid.length} รายการ · รอตรวจสอบสลิป`,
+        link_href:      `/wallet/history`,
+        reference_type: "wallet_transaction",
+        reference_id:   String(whID),
+      });
+    }
+
+    revalidatePath("/admin/wallet/pay-user");
+    revalidatePath("/admin/service-orders");
+    revalidatePath(`/admin/wallet/${whID}`);
+    revalidatePath("/admin/wallet");
+
+    if (paid.length === 0) {
+      return {
+        ok: false,
+        error: `เติมเงินบันทึกแล้ว (เติม #${whID}) แต่ไม่มีออเดอร์ที่ทำรายการได้: ${skipped.map((s) => `${s.hno}: ${s.reason}`).join(" · ")}`,
+      };
+    }
+    return {
+      ok: true,
+      data: {
+        topupWalletHsId: whID,
+        paid,
+        skipped,
+        topup_amount: topUpAmount,
+        wallet_consumed: oldBalance,
+      },
+    };
+  });
+}
+
+// ── PHASE 3 · FORWARDER — top-up-and-pay (path #1: zero wallet) ────────────
+
+const payForwardersWithTopUpSchema = z.object({
+  userId: z.string().trim().min(1).max(20),
+  fIds: z.array(z.string().trim().min(1).max(20)).min(1).max(100),
+});
+
+export type PayForwardersWithTopUpResult = {
+  topupWalletHsId: number;
+  paid: string[];
+  skipped: { fid: string; reason: string }[];
+  /** = the bill total (= top-up deposit amount), pending approval. Wallet was NOT touched (path #1). */
+  topup_amount: number;
+};
+
+/**
+ * Phase 3 — forwarders, insufficient balance + slip top-up (path #1).
+ *
+ * Faithful port of pay-users.php path #1 (L342-433, the
+ * `if($userTotalWalletForm==0)` branch). The wallet is NOT read or debited
+ * — the customer pays the WHOLE bill with the new slip. Writes a PENDING
+ * top-up deposit (amount = bill total) + per-row PENDING pay rows
+ * (refOrder2=whID) + a tb_wallet_paydeposit bridge per row + flips
+ * tb_forwarder 5→6 (or credit variant). Nothing settles until accounting
+ * approves the deposit. There is NO type='7' tracking row (nothing taken
+ * from the wallet → reject refund = 0).
+ *
+ * The top-up amount is the AUTHORITATIVE batch total from
+ * computeForwarderDebitBatch on the selected rows — staff don't type an
+ * amount (legacy L361 `$amount = $pricePayAll`), so the slip must cover the
+ * computed bill exactly.
+ */
+export async function adminPayForwardersWithTopUp(
+  input: unknown,
+  slipFile?: File | null,
+): Promise<AdminActionResult<PayForwardersWithTopUpResult>> {
+  return withAdmin(undefined, async () => {
+    const parsed = payForwardersWithTopUpSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+    }
+    if (!slipFile || !(slipFile instanceof File)) {
+      return { ok: false, error: "กรุณาแนบสลิปการโอนเงิน" }; // legacy L431 'eSlip'
+    }
+    const userId = parsed.data.userId.toUpperCase();
+    const fIds = Array.from(new Set(parsed.data.fIds)).filter((x) => /^\d+$/.test(x));
+    if (fIds.length === 0) return { ok: false, error: "ไม่มีรายการฝากนำเข้าที่ถูกต้อง" };
+
+    const admin = createAdminClient();
+    const legacyAdminId = safeLegacyAdminId(await resolveLegacyAdminId(), 10);
+    const nowIso = new Date().toISOString();
+
+    // 0. customer must exist.
+    const { data: u, error: uErr } = await admin
+      .from("tb_users")
+      .select("userID")
+      .eq("userID", userId)
+      .maybeSingle<{ userID: string }>();
+    if (uErr) {
+      console.error(`[adminPayForwardersWithTopUp tb_users] failed`, { code: uErr.code, message: uErr.message, userId });
+      return { ok: false, error: `db_error:${uErr.code ?? "unknown"}` };
+    }
+    if (!u) return { ok: false, error: `ไม่พบลูกค้า ${userId}` };
+
+    // 1. idempotency — legacy L212: any already-SETTLED forwarder pay row for
+    //    these IDs (typeNew 5/6, status=2) means the batch was paid → bail.
+    const { data: settled, error: settledErr } = await admin
+      .from("tb_wallet_hs")
+      .select("reforder")
+      .eq("userid", userId)
+      .in("typenew", ["5", "6"])
+      .eq("status", "2")
+      .in("reforder", fIds)
+      .limit(1);
+    if (settledErr) {
+      console.error(`[adminPayForwardersWithTopUp idempotency] failed`, { code: settledErr.code, message: settledErr.message, userId });
+      return { ok: false, error: `db_error:${settledErr.code ?? "unknown"}` };
+    }
+    if (settled && settled.length > 0) {
+      return { ok: false, error: "มีรายการที่ชำระไปแล้วในชุดนี้ — ยกเลิก (โปรดรีเฟรช)" };
+    }
+
+    // 2. corporate flag (legacy L255) — gates the per-row 1% allowance.
+    const { data: corpRow, error: corpErr } = await admin
+      .from("tb_corporate")
+      .select("id")
+      .eq("userid", userId)
+      .limit(1)
+      .maybeSingle<{ id: number }>();
+    if (corpErr) {
+      console.error(`[adminPayForwardersWithTopUp tb_corporate] failed`, { code: corpErr.code, message: corpErr.message, userId });
+      return { ok: false, error: `db_error:${corpErr.code ?? "unknown"}` };
+    }
+    const isCorporate = corpRow != null;
+
+    // 3. AUTHORITATIVE batch — price the selected rows (legacy L316/L380).
+    const { data: eligibleRaw, error: eligErr } = await admin
+      .from("tb_forwarder")
+      .select(`${FORWARDER_PRICE_COLS}, fcredit`)
+      .eq("userid", userId)
+      .in("id", fIds.map(Number))
+      .or("fstatus.eq.5,fcredit.eq.1")
+      .order("id", { ascending: true });
+    if (eligErr) {
+      console.error(`[adminPayForwardersWithTopUp eligibility] failed`, { code: eligErr.code, message: eligErr.message, userId });
+      return { ok: false, error: `db_error:${eligErr.code ?? "unknown"}` };
+    }
+    const eligible = (eligibleRaw ?? []) as Array<ForwarderDebitRow & { fcredit: string | null }>;
+    if (eligible.length === 0) return { ok: false, error: "ไม่พบรายการฝากนำเข้าที่พร้อมชำระของลูกค้ารายนี้" };
+
+    const batch = computeForwarderDebitBatch(eligible, { userId, isCorporate });
+    const priceById = new Map(batch.lines.map((l) => [l.id, l.price_thb]));
+    const creditById = new Map(eligible.map((r) => [String(r.id), (r.fcredit ?? "").trim() === "1"]));
+    const fUserCompanyValue = batch.applyCorporateDiscount ? "1" : "";
+    const pricePayAll = Math.round(batch.total_thb * 100) / 100;
+    if (pricePayAll <= 0) return { ok: false, error: "ราคารวมของรายการไม่ถูกต้อง" };
+
+    // 4. upload slip BEFORE the deposit.
+    const slip = await uploadPayUserSlip(slipFile, userId);
+    if (!slip.ok) return { ok: false, error: slip.error };
+
+    // 5. PCSF first-item side-effect (legacy L386-389) — set fTransportPrice=50
+    //    on the first PCSF-zero row BEFORE the ledger/status writes, exactly as
+    //    the sufficient path does. Mirrors the reject reversal in wallet-hs.ts
+    //    (isPCSF50 branch → ftransportprice=0).
+    if (batch.pcsfTransportFixId) {
+      const { error: pcsfErr } = await admin
+        .from("tb_forwarder")
+        .update({ ftransportprice: 50 })
+        .eq("id", Number(batch.pcsfTransportFixId))
+        .eq("userid", userId);
+      if (pcsfErr) {
+        console.error(`[adminPayForwardersWithTopUp PCSF ftransportprice=50] failed`, { code: pcsfErr.code, message: pcsfErr.message, fid: batch.pcsfTransportFixId });
+        return { ok: false, error: `ตั้งค่าค่าขนส่ง PCSF ล้มเหลว: ${pcsfErr.message}` };
+      }
+    }
+
+    // 6. INSERT the PENDING top-up deposit (legacy L364-365). amount = the
+    //    AUTHORITATIVE bill total · type='1' status='1' paydeposit='1'
+    //    typeNew='6' typeService='2'.
+    const { data: topup, error: topErr } = await admin
+      .from("tb_wallet_hs")
+      .insert({
+        date:            nowIso,
+        amount:          pricePayAll,
+        status:          "1",                 // PENDING
+        type:            "1",                 // เติมเงิน
+        typenew:         "6",                 // legacy L365 typeNew='6'
+        typeservice:     "2",                 // legacy L365 typeService='2' (forwarder)
+        paydeposit:      "1",
+        imagesslip:      slip.filename,
+        depositnamebank: PAYUSER_DEPOSIT_NAMEBANK,
+        nameuserbank:    "",
+        nouserbank:      "",
+        note:            `เติมเงินพร้อมชำระฝากนำเข้า (เจ้าหน้าที่ทำรายการแทนลูกค้า)`,
+        adminid:         legacyAdminId,
+        adminidupdate:   legacyAdminId,
+        session:         "admin-pay-onbehalf-topup",
+        reforder:        "",
+        whno:            "",
+        wusercredit:     "0",
+        userid:          userId,
+        adminidcrate:    legacyAdminId,
+      })
+      .select("id")
+      .single<{ id: number }>();
+    if (topErr || !topup) {
+      // rollback the PCSF side-effect so the row isn't left at 50 with no pay.
+      if (batch.pcsfTransportFixId) {
+        await admin.from("tb_forwarder").update({ ftransportprice: 0 }).eq("id", Number(batch.pcsfTransportFixId)).eq("userid", userId);
+      }
+      console.error(`[adminPayForwardersWithTopUp insert topup] failed`, { code: topErr?.code, message: topErr?.message, userId });
+      return { ok: false, error: `บันทึกรายการเติมเงินล้มเหลว: ${topErr?.message ?? "no row"}` };
+    }
+    const whID = topup.id;
+
+    // NOTE: path #1 writes NO type='7' row — the wallet is never touched
+    // (legacy L291/L340 force the wallet contribution to 0). reject refund = 0.
+
+    // 7. per-row: PENDING pay row + status flip + paydeposit bridge.
+    const paid: string[] = [];
+    const skipped: { fid: string; reason: string }[] = [];
+
+    let profileId: string | null = null;
+    try {
+      const map = await resolveProfileIdsForLegacyUserids([userId]);
+      profileId = map.get(userId) ?? null;
+    } catch (e) {
+      console.error(`[adminPayForwardersWithTopUp resolveProfileId] failed`, { userId, e: String(e) });
+    }
+
+    for (const fid of fIds) {
+      const price = priceById.get(fid);
+      const isCredit = creditById.get(fid) ?? false;
+      if (price === undefined) { skipped.push({ fid, reason: "ไม่อยู่สถานะพร้อมชำระ" }); continue; }
+      if (!Number.isFinite(price) || price <= 0) { skipped.push({ fid, reason: "ราคารายการไม่ถูกต้อง" }); continue; }
+
+      // pay row — legacy L404-405: type='4' status='1' refOrder=ID
+      // refOrder2=whID typeService='2' typeNew='6'. (Matches the approve
+      // cascade's sibling-flip: reforder + type='4' + status='1' + reforder2.)
+      const { error: payErr } = await admin
+        .from("tb_wallet_hs")
+        .insert({
+          date:            nowIso,
+          amount:          price,
+          status:          "1",               // PENDING
+          type:            "4",               // ชำระเงินฝากนำเข้า
+          typenew:         "6",
+          typeservice:     "2",
+          paydeposit:      "1",
+          imagesslip:      "",
+          depositnamebank: "",
+          note:            `ชำระฝากนำเข้า #${fid} (เติม-แล้วจ่าย · รออนุมัติสลิป)`,
+          adminid:         legacyAdminId,
+          adminidupdate:   legacyAdminId,
+          session:         "admin-pay-onbehalf-topup",
+          reforder:        fid,
+          reforder2:       whID,              // legacy refOrder2=$whID (reforder2 is bigint)
+          whno:            "",
+          wusercredit:     isCredit ? "1" : "0",
+          userid:          userId,
+          adminidcrate:    legacyAdminId,
+        });
+      if (payErr) {
+        console.error(`[adminPayForwardersWithTopUp pay row] failed`, { code: payErr.code, message: payErr.message, fid });
+        skipped.push({ fid, reason: `บันทึกรายการชำระล้มเหลว: ${payErr.message}` });
+        continue;
+      }
+
+      // flip forwarder 5→6 (or credit variant) — legacy L408/L410. Path #1
+      // (slip top-up) DOES set paydeposit='1' (it created a bridge row).
+      const fwdPatch: Record<string, unknown> = isCredit
+        ? { fcredit: "", paydeposit: "1", fdateadminstatus: nowIso, fusercompany: fUserCompanyValue }
+        : { fstatus: "6", paydeposit: "1", fdateadminstatus: nowIso, fdatestatus6: nowIso, fusercompany: fUserCompanyValue };
+      const { error: fUpdErr } = await admin
+        .from("tb_forwarder")
+        .update(fwdPatch)
+        .eq("id", Number(fid))
+        .eq("userid", userId);
+      if (fUpdErr) {
+        console.error(`[adminPayForwardersWithTopUp forwarder flip] failed`, { code: fUpdErr.code, message: fUpdErr.message, fid, whID });
+        skipped.push({ fid, reason: `อัพเดทสถานะรายการล้มเหลว (รายการชำระบันทึกแล้ว · เติม #${whID})` });
+        continue;
+      }
+
+      // bridge row (legacy L417-418: tb_wallet_paydeposit(whID, ID)).
+      const { error: bridgeErr } = await admin
+        .from("tb_wallet_paydeposit")
+        .insert({ whid: whID, hno: fid });
+      if (bridgeErr) {
+        console.error(`[adminPayForwardersWithTopUp bridge] failed`, { code: bridgeErr.code, message: bridgeErr.message, fid, whID });
+        skipped.push({ fid, reason: `เชื่อมรายการเติม-จ่ายล้มเหลว (เติม #${whID}) — แจ้งทีมบัญชี` });
+        continue;
+      }
+
+      paid.push(fid);
+    }
+
+    if (profileId) {
+      void sendNotification(profileId, {
+        category:       "forwarder",
+        severity:       "info",
+        title:          `รับเรื่องชำระค่าฝากนำเข้า (รออนุมัติสลิป)`,
+        body:           `เจ้าหน้าที่ทำรายการเติม-จ่ายให้ ${paid.length} รายการ · รอตรวจสอบสลิป`,
+        link_href:      `/wallet/history`,
+        reference_type: "wallet_transaction",
+        reference_id:   String(whID),
+      });
+    }
+
+    revalidatePath("/admin/wallet/pay-user");
+    revalidatePath("/admin/forwarders");
+    revalidatePath(`/admin/wallet/${whID}`);
+    revalidatePath("/admin/wallet");
+
+    if (paid.length === 0) {
+      return {
+        ok: false,
+        error: `เติมเงินบันทึกแล้ว (เติม #${whID}) แต่ไม่มีรายการที่ทำได้: ${skipped.map((s) => `${s.fid}: ${s.reason}`).join(" · ")}`,
+      };
+    }
+    return {
+      ok: true,
+      data: {
+        topupWalletHsId: whID,
+        paid,
+        skipped,
+        topup_amount: pricePayAll,
+      },
+    };
   });
 }

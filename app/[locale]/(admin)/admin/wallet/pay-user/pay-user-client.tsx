@@ -10,6 +10,12 @@
  * legacy two-form `paymentOrder` / `paymentForwarderNew` split). Both lanes
  * draw from the same wallet — each pay re-fetches the context so the balance
  * + remaining lists stay correct after a partial payment.
+ *
+ * Phase 3 — when the wallet can't cover the selected total, the pay button is
+ * replaced by an amber slip-top-up panel (shortfall amount + slip-image input)
+ * that routes to adminPayOrdersWithTopUp / adminPayForwardersWithTopUp. Those
+ * write a PENDING top-up deposit + linked pay rows; the money settles when
+ * accounting approves the slip at /admin/wallet/<id>.
  */
 
 import { useState, useTransition } from "react";
@@ -17,9 +23,13 @@ import {
   getPayUserContext,
   adminPayOrdersOnBehalf,
   adminPayForwardersOnBehalf,
+  adminPayOrdersWithTopUp,
+  adminPayForwardersWithTopUp,
   type PayUserContext,
   type PayOnBehalfResult,
   type PayForwardersOnBehalfResult,
+  type PayWithTopUpResult,
+  type PayForwardersWithTopUpResult,
 } from "@/actions/admin/pay-user";
 
 function thb(n: number): string {
@@ -42,10 +52,24 @@ export function PayUserClient() {
   const [fwdResult, setFwdResult] = useState<PayForwardersOnBehalfResult | null>(null);
   const [payingFwds, startPayFwds] = useTransition();
 
+  // Phase 3 — slip-top-up-and-pay (insufficient balance). One slip + amount
+  // per lane (the shop lane lets staff type a top-up amount; the forwarder
+  // lane tops up the exact computed bill, so no amount field there).
+  const [orderSlip, setOrderSlip] = useState<File | null>(null);
+  const [orderTopUpAmount, setOrderTopUpAmount] = useState<string>("");
+  const [orderTopUpResult, setOrderTopUpResult] = useState<PayWithTopUpResult | null>(null);
+  const [fwdSlip, setFwdSlip] = useState<File | null>(null);
+  const [fwdTopUpResult, setFwdTopUpResult] = useState<PayForwardersWithTopUpResult | null>(null);
+
   function resetAll() {
     setErr(null);
     setOrderResult(null);
     setFwdResult(null);
+    setOrderTopUpResult(null);
+    setFwdTopUpResult(null);
+    setOrderSlip(null);
+    setOrderTopUpAmount("");
+    setFwdSlip(null);
     setCtx(null);
     setSelOrders(new Set());
     setSelFwds(new Set());
@@ -97,6 +121,35 @@ export function PayUserClient() {
     });
   }
 
+  // Phase 3 — shop: insufficient balance → upload slip + amount, top-up & pay.
+  function payOrdersWithTopUp() {
+    setErr(null);
+    setOrderTopUpResult(null);
+    if (!ctx || selOrders.size === 0) { setErr("เลือกออเดอร์ฝากสั่งอย่างน้อย 1 รายการ"); return; }
+    if (!orderSlip) { setErr("กรุณาแนบสลิปการโอนเงิน"); return; }
+    const amt = Number(orderTopUpAmount);
+    if (!Number.isFinite(amt) || amt <= 0) { setErr("กรุณากรอกยอดเงินที่โอน (มากกว่า 0)"); return; }
+    if (amt + ctx.wallet_balance + 0.01 < ordersTotal) {
+      setErr(`ยอดโอน + ยอดในกระเป๋าไม่พอ — รวม ${thb(amt + ctx.wallet_balance)} ต้องชำระ ${thb(ordersTotal)}`);
+      return;
+    }
+    startPayOrders(async () => {
+      const res = await adminPayOrdersWithTopUp(
+        { userId: ctx.user.userid, hNos: Array.from(selOrders), topUpAmount: amt },
+        orderSlip,
+      );
+      if (res.ok) {
+        setOrderTopUpResult(res.data ?? null);
+        setSelOrders(new Set());
+        setOrderSlip(null);
+        setOrderTopUpAmount("");
+        await refresh();
+      } else {
+        setErr(res.error);
+      }
+    });
+  }
+
   // ── forwarder ──
   function toggleFwd(fid: string) {
     setSelFwds((prev) => {
@@ -122,6 +175,29 @@ export function PayUserClient() {
       if (res.ok) {
         setFwdResult(res.data ?? null);
         setSelFwds(new Set());
+        await refresh();
+      } else {
+        setErr(res.error);
+      }
+    });
+  }
+
+  // Phase 3 — forwarder: insufficient balance → upload slip, top-up the exact
+  // computed bill & pay (path #1 · wallet not touched, slip covers the whole bill).
+  function payFwdsWithTopUp() {
+    setErr(null);
+    setFwdTopUpResult(null);
+    if (!ctx || selFwds.size === 0) { setErr("เลือกรายการฝากนำเข้าอย่างน้อย 1 รายการ"); return; }
+    if (!fwdSlip) { setErr("กรุณาแนบสลิปการโอนเงิน"); return; }
+    startPayFwds(async () => {
+      const res = await adminPayForwardersWithTopUp(
+        { userId: ctx.user.userid, fIds: Array.from(selFwds) },
+        fwdSlip,
+      );
+      if (res.ok) {
+        setFwdTopUpResult(res.data ?? null);
+        setSelFwds(new Set());
+        setFwdSlip(null);
         await refresh();
       } else {
         setErr(res.error);
@@ -193,6 +269,49 @@ export function PayUserClient() {
         </div>
       )}
 
+      {orderTopUpResult && (
+        <div className="rounded-lg border border-blue-300 bg-blue-50 p-4 text-sm">
+          <p className="font-semibold text-blue-900">
+            🧾 บันทึกเติม-แล้วจ่ายฝากสั่ง {orderTopUpResult.paid.length} รายการ · เติม {thb(orderTopUpResult.topup_amount)} (รออนุมัติสลิป)
+          </p>
+          <p className="mt-1 text-blue-800">
+            รายการเติมเงิน #{orderTopUpResult.topupWalletHsId} — ต้องให้ฝ่ายบัญชีอนุมัติสลิปก่อนจึงจะตัดเงินจริง
+            {orderTopUpResult.wallet_consumed > 0 && ` · ใช้ยอดในกระเป๋าเดิม ${thb(orderTopUpResult.wallet_consumed)}`}
+          </p>
+          {orderTopUpResult.paid.length > 0 && (
+            <p className="mt-1 text-blue-800">ออเดอร์: {orderTopUpResult.paid.join(", ")}</p>
+          )}
+          {orderTopUpResult.skipped.length > 0 && (
+            <ul className="mt-2 list-disc pl-5 text-amber-800">
+              {orderTopUpResult.skipped.map((s) => (
+                <li key={s.hno}>{s.hno}: {s.reason}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {fwdTopUpResult && (
+        <div className="rounded-lg border border-blue-300 bg-blue-50 p-4 text-sm">
+          <p className="font-semibold text-blue-900">
+            🧾 บันทึกเติม-แล้วจ่ายฝากนำเข้า {fwdTopUpResult.paid.length} รายการ · เติม {thb(fwdTopUpResult.topup_amount)} (รออนุมัติสลิป)
+          </p>
+          <p className="mt-1 text-blue-800">
+            รายการเติมเงิน #{fwdTopUpResult.topupWalletHsId} — ต้องให้ฝ่ายบัญชีอนุมัติสลิปก่อนจึงจะตัดเงินจริง
+          </p>
+          {fwdTopUpResult.paid.length > 0 && (
+            <p className="mt-1 text-blue-800">รายการ: {fwdTopUpResult.paid.join(", ")}</p>
+          )}
+          {fwdTopUpResult.skipped.length > 0 && (
+            <ul className="mt-2 list-disc pl-5 text-amber-800">
+              {fwdTopUpResult.skipped.map((s) => (
+                <li key={s.fid}>#{s.fid}: {s.reason}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       {/* customer header */}
       {ctx && (
         <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-2">
@@ -248,14 +367,62 @@ export function PayUserClient() {
                   <span className={`font-mono font-bold ${ordersInsufficient ? "text-red-600" : "text-gray-900"}`}>{thb(ordersTotal)}</span>
                   {ordersInsufficient && <span className="ml-2 text-xs text-red-600">(ยอดเงินไม่พอ)</span>}
                 </div>
-                <button
-                  onClick={payOrders}
-                  disabled={payingOrders || selOrders.size === 0 || ordersInsufficient}
-                  className="rounded-lg bg-primary-600 px-6 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
-                >
-                  {payingOrders ? "กำลังตัดเงิน..." : `ชำระฝากสั่ง ${selOrders.size ? `(${thb(ordersTotal)})` : ""}`}
-                </button>
+                {!ordersInsufficient && (
+                  <button
+                    onClick={payOrders}
+                    disabled={payingOrders || selOrders.size === 0}
+                    className="rounded-lg bg-primary-600 px-6 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
+                  >
+                    {payingOrders ? "กำลังตัดเงิน..." : `ชำระฝากสั่ง ${selOrders.size ? `(${thb(ordersTotal)})` : ""}`}
+                  </button>
+                )}
               </div>
+
+              {/* Phase 3 — insufficient balance: top-up via slip + pay */}
+              {ordersInsufficient && selOrders.size > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-3">
+                  <p className="text-sm font-medium text-amber-800">
+                    ยอดเงินในกระเป๋าไม่พอ — แนบสลิปการโอนเพื่อเติมเงินแล้วชำระทันที (รออนุมัติสลิป)
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">ยอดเงินที่โอน (บาท)</label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        value={orderTopUpAmount}
+                        onChange={(e) => setOrderTopUpAmount(e.target.value)}
+                        placeholder={Math.max(0, ordersTotal - (ctx?.wallet_balance ?? 0)).toFixed(2)}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                      />
+                      <p className="mt-1 text-[11px] text-gray-500">
+                        ต้องเติมอย่างน้อย {thb(Math.max(0, ordersTotal - (ctx?.wallet_balance ?? 0)))}
+                        {(ctx?.wallet_balance ?? 0) > 0 && ` (จะใช้ยอดในกระเป๋าเดิม ${thb(ctx?.wallet_balance ?? 0)} ร่วมด้วย)`}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">สลิปการโอน (รูปภาพ/PDF)</label>
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={(e) => setOrderSlip(e.target.files?.[0] ?? null)}
+                        className="w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary-600 file:px-3 file:py-1.5 file:text-white"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={payOrdersWithTopUp}
+                      disabled={payingOrders || !orderSlip}
+                      className="rounded-lg bg-amber-600 px-6 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                    >
+                      {payingOrders ? "กำลังบันทึก..." : "เติมเงิน + ชำระ (รออนุมัติสลิป)"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -298,14 +465,46 @@ export function PayUserClient() {
                   <span className={`font-mono font-bold ${fwdsInsufficient ? "text-red-600" : "text-gray-900"}`}>{thb(fwdsTotal)}</span>
                   {fwdsInsufficient && <span className="ml-2 text-xs text-red-600">(ยอดเงินไม่พอ)</span>}
                 </div>
-                <button
-                  onClick={payFwds}
-                  disabled={payingFwds || selFwds.size === 0 || fwdsInsufficient}
-                  className="rounded-lg bg-primary-600 px-6 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
-                >
-                  {payingFwds ? "กำลังตัดเงิน..." : `ชำระฝากนำเข้า ${selFwds.size ? `(${thb(fwdsTotal)})` : ""}`}
-                </button>
+                {!fwdsInsufficient && (
+                  <button
+                    onClick={payFwds}
+                    disabled={payingFwds || selFwds.size === 0}
+                    className="rounded-lg bg-primary-600 px-6 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
+                  >
+                    {payingFwds ? "กำลังตัดเงิน..." : `ชำระฝากนำเข้า ${selFwds.size ? `(${thb(fwdsTotal)})` : ""}`}
+                  </button>
+                )}
               </div>
+
+              {/* Phase 3 — insufficient balance: top-up the computed bill via slip + pay */}
+              {fwdsInsufficient && selFwds.size > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-3">
+                  <p className="text-sm font-medium text-amber-800">
+                    ยอดเงินในกระเป๋าไม่พอ — แนบสลิปการโอนเต็มจำนวนบิล (~{thb(fwdsTotal)}) เพื่อชำระทันที (รออนุมัติสลิป)
+                  </p>
+                  <p className="text-[11px] text-amber-700">
+                    หมายเหตุ: ช่องทางนี้ใช้สลิปจ่ายเต็มบิล (ไม่ดึงจากกระเป๋าเงินเดิม) · ยอดจริงคำนวณจากรายการที่เลือกบนเซิร์ฟเวอร์ (อาจต่างจากตัวอย่าง ≤1% หรือ ฿50)
+                  </p>
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">สลิปการโอน (รูปภาพ/PDF)</label>
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      onChange={(e) => setFwdSlip(e.target.files?.[0] ?? null)}
+                      className="w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary-600 file:px-3 file:py-1.5 file:text-white"
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={payFwdsWithTopUp}
+                      disabled={payingFwds || !fwdSlip}
+                      className="rounded-lg bg-amber-600 px-6 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                    >
+                      {payingFwds ? "กำลังบันทึก..." : "เติมเงิน + ชำระ (รออนุมัติสลิป)"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
