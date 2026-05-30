@@ -1036,7 +1036,13 @@ export async function adminAddOrderNote(
 
     const nowIso = new Date().toISOString();
     const update: Record<string, unknown> = {
-      hnote:         d.hnote.length > 0 ? d.hnote : null,
+      // Sitting-G bug fix: tb_header_order.hnote is NOT NULL (legacy
+      // schema 0081 — every row needs a real string, default ''). The
+      // prior empty→null mapping crashed prod with "null value in
+      // column 'hnote' violates not-null constraint" (browser-verified
+      // on P22305 via adminUpdateServiceOrder · same pattern here).
+      // Empty string is the legacy "no note" marker.
+      hnote:         d.hnote.length > 0 ? d.hnote : "",
       hnotedate:     nowIso,
       hdateupdate:   nowIso,
       adminidupdate: legacyAdminId,
