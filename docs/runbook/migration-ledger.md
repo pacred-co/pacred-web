@@ -33,7 +33,7 @@
 | 0128 | `tax_rates_rental_goods` | เดฟ | ✅ applied 2026-05-30 (563ms · +rental_pct=5 · goods_pct 3→0 · หลัง owner ตอบ 5 คำถามบัญชี) | main |
 | 0129 | `forwarder_tax_invoice` | เดฟ (P2) | ✅ applied 2026-05-30 (935ms · 3 ตาราง tb_*-native: `tb_forwarder_tax_invoice` + `_item` + `tb_forwarder_wht_entry` · per-class WHT · live-lane ใบกำกับ) | main |
 | 0130 | `momo_cabinet_join_field` | ภูม/main | ✅ in main | main |
-| 0131 | `line_oa_inbox` | ปอน | ⏳ **pending apply** (prod probe = 404 · ไม่กระทบ legacy · idempotent) — **renumbered 0125→0131** ตอน integrate InwPond007 2026-05-30 (ชน เดฟ `customer_usage_split`) · 4 ตาราง isolated: `customers_line`/`line_lead_sources`/`line_messages`/`line_webhook_events` · RLS service_role | main (ex-InwPond007) |
+| 0131 | `line_oa_inbox` | ปอน | ✅ **applied prod** (re-probe 2026-05-30 = HTTP 200 ×4 tables · ไม่กระทบ legacy · idempotent) — **renumbered 0125→0131** ตอน integrate InwPond007 2026-05-30 (ชน เดฟ `customer_usage_split`) · 4 ตาราง isolated: `customers_line`/`line_lead_sources`/`line_messages`/`line_webhook_events` · RLS service_role | main (ex-InwPond007) |
 
 ---
 
