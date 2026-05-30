@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
+import { isFreeShippingZip } from "@/lib/bkk-zip";
 
 /**
  * Legacy `tb_forwarder` writers — D1 / ADR-0017 faithful 1:1 ports of
@@ -457,4 +458,237 @@ export async function updateLegacyForwarderAddress(
   revalidatePath(`/service-import/${ID}`);
   revalidatePath("/service-import");
   return { ok: true };
+}
+
+// ────────────────────────────────────────────────────────────
+// READ ship-by options — `getShipBy.php` + `optionHShipByCart3`
+//   (member/include/pages/forwarder/getShipBy.php
+//    + member/include/function.php L884-930)
+// ────────────────────────────────────────────────────────────
+//
+// The customer's carrier (#hShipBy) <select> on the "ฝากนำเข้า" add form is
+// data-driven: the option list DEPENDS on whether the chosen Thai delivery
+// address falls inside Pacred's free-shipping metro allowlist (BKK + 5 metro
+// provinces — the same ZIP set `lib/bkk-zip.ts` ports, with the empty Pathum
+// Thani array that getShipBy.php L9 uses).
+//
+// Legacy `optionHShipByCart3($conn, $addressID)`:
+//   - SELECT addressZIPCode FROM tb_address WHERE addressID='$addressID'
+//   - ZIP NOT in free-area  → the FULL out-of-area carrier list (23 couriers)
+//   - ZIP IN free-area      → only 2 options: Flash (2) + J&T (24)
+// Legacy `getShipBy.php` ALSO reads tb_users.{userShipBy, userPayMethod} to
+// pre-select the customer's saved carrier (L25-32, L105-109). We return both
+// so the UI can default-select them, exactly like the legacy inline
+// `$('#hShipBy').val('<userShipBy>')`.
+//
+// NB on userID scoping: the legacy helper does NOT scope the tb_address read
+// by userID — but getShipBy.php is invoked for the signed-in customer's own
+// address picker, so we scope by userid (strictly safer; an address that
+// isn't the caller's simply yields the "address not found" empty result the
+// caller already handles). The PCS warehouse pickup ("PCS") has no courier
+// select in the legacy UI — we return an empty list + a flag for that case.
+
+/** A single carrier option for the #hShipBy <select>. */
+export type LegacyShipByOption = { id: string; name: string };
+
+export type GetShipByOptionsResult =
+  | {
+      ok: true;
+      /** Carrier options for the <select> (empty when warehouse pickup). */
+      options: LegacyShipByOption[];
+      /** True when the destination ZIP is inside the free-shipping metro
+       *  allowlist (legacy `proF != 2`) — drives the 2-option short list. */
+      inFreeArea: boolean;
+      /** True when addressID === "PCS" (รับเองหน้าโกดัง — no courier select). */
+      warehousePickup: boolean;
+      /** The customer's saved `tb_users.usershipby` (pre-select default). */
+      userShipBy: string;
+      /** The customer's saved `tb_users.userpaymethod`
+       *  ('1'=เก็บต้นทาง '2'=เก็บปลายทาง). */
+      userPayMethod: string;
+    }
+  | { ok: false; error: string };
+
+// getShipBy.php L36-51 / optionHShipByCart3 L900-921 — the OUT-OF-AREA list
+// (ZIP not in the free-shipping metro allowlist): the full courier roster.
+// Faithful to legacy option order + value codes + Thai names.
+const SHIP_BY_OUT_OF_AREA: readonly LegacyShipByOption[] = [
+  { id: "2",  name: "Flash Express" },
+  { id: "3",  name: "J.K. เอ็กซ์เพรส" },
+  { id: "21", name: "นิ่มซี่เส็งขนส่ง 1988" },
+  { id: "6",  name: "S & J ขนส่งด่วนสุพรรณบุรี" },
+  { id: "7",  name: "SB สมใจขนส่ง" },
+  { id: "9",  name: "เคพีเอ็น" },
+  { id: "10", name: "เฟิร์ส เอ็กเพรส ขนส่ง" },
+  { id: "12", name: "จันทร์สว่างขนส่ง" },
+  { id: "13", name: "ธนามัย ขนส่งด่วน" },
+  { id: "14", name: "บุญอนันต์ขนส่ง" },
+  { id: "15", name: "พี.เจ. ด่วนอีสาน ขนส่ง" },
+  { id: "16", name: "มะม่วงขนส่ง" },
+  { id: "17", name: "วันชนะ แอนด์ วันณิสา ขนส่ง" },
+  { id: "18", name: "สมพงษ์อุบลรัตน์ ขนส่ง" },
+  { id: "19", name: "อาร์.ซี.อาร์ เพลส" },
+  { id: "20", name: "ตองสอง ขนส่ง" },
+  { id: "22", name: "ธนาไพศาล ขนส่ง" },
+  { id: "23", name: "PL ขนส่งด่วน" },
+  { id: "24", name: "J&T Express" },
+  { id: "25", name: "มังกรทองขนส่ง 2019" },
+  { id: "26", name: "PM ชลบุรี ขนส่งด่วน" },
+];
+
+// getShipBy.php / optionHShipByCart3 L922-926 — the IN-FREE-AREA short list:
+// only Flash + J&T pick up free inside the metro allowlist.
+const SHIP_BY_IN_FREE_AREA: readonly LegacyShipByOption[] = [
+  { id: "2",  name: "Flash Express" },
+  { id: "24", name: "J&T Express" },
+];
+
+export async function getShipByOptions(
+  addressID: string,
+): Promise<GetShipByOptionsResult> {
+  const aid = (addressID ?? "").trim();
+  if (!aid) return { ok: false, error: "missing_address_id" };
+
+  const session = await getCurrentUserWithProfile();
+  if (!session?.profile) return { ok: false, error: "not_signed_in" };
+  const userID = session.profile.member_code ?? "";
+  if (!userID) return { ok: false, error: "no_member_code" };
+
+  const admin = createAdminClient();
+
+  // getShipBy.php L23-33 — the saved carrier + pay-method to pre-select.
+  // NOTE: `tb_users` was renamed to camelCase columns on prod (the 2026-05-27
+  // batch-1 rename — `userID`/`userShipBy`/`userPayMethod`), UNLIKE `tb_address`
+  // / `tb_forwarder` which stayed lowercase. Probed live 2026-05-31; querying
+  // lowercase `usershipby` here would throw "column does not exist" at runtime.
+  const { data: userRow, error: userErr } = await admin
+    .from("tb_users")
+    .select('"userShipBy", "userPayMethod"')
+    .eq("userID", userID)
+    .maybeSingle<{ userShipBy: string | null; userPayMethod: string | null }>();
+  if (userErr) {
+    console.error(`[forwarder-legacy getShipByOptions user lookup] failed`, {
+      code: userErr.code,
+      message: userErr.message,
+    });
+    return { ok: false, error: userErr.message };
+  }
+  const userShipBy = userRow?.userShipBy ?? "";
+  const userPayMethod = userRow?.userPayMethod ?? "";
+
+  // addressID === "PCS" — รับเองหน้าโกดัง (getShipBy.php L55-57): no courier
+  // <select>; the form sends hShipBy="PCS". Return an empty option list.
+  if (aid === "PCS") {
+    return {
+      ok: true,
+      options: [],
+      inFreeArea: false,
+      warehousePickup: true,
+      userShipBy,
+      userPayMethod,
+    };
+  }
+
+  // optionHShipByCart3 L893-899 — read the address's ZIP, decide the list.
+  const { data: addr, error: addrErr } = await admin
+    .from("tb_address")
+    .select("addresszipcode")
+    .eq("addressid", aid)
+    .eq("userid", userID)
+    .maybeSingle<{ addresszipcode: string | null }>();
+  if (addrErr) {
+    console.error(`[forwarder-legacy getShipByOptions address lookup] failed`, {
+      code: addrErr.code,
+      message: addrErr.message,
+    });
+    return { ok: false, error: addrErr.message };
+  }
+  if (!addr) {
+    // Legacy returns NULL content (no <option>s) when the address row is
+    // missing — surface an empty list so the caller shows "no carriers".
+    return {
+      ok: true,
+      options: [],
+      inFreeArea: false,
+      warehousePickup: false,
+      userShipBy,
+      userPayMethod,
+    };
+  }
+
+  const inFreeArea = isFreeShippingZip(addr.addresszipcode);
+  const options = inFreeArea
+    ? [...SHIP_BY_IN_FREE_AREA]
+    : [...SHIP_BY_OUT_OF_AREA];
+
+  return {
+    ok: true,
+    options,
+    inFreeArea,
+    warehousePickup: false,
+    userShipBy,
+    userPayMethod,
+  };
+}
+
+// ────────────────────────────────────────────────────────────
+// CHECK free-shipping area — `checkFreeArea.php`
+//   (member/include/pages/forwarder/checkFreeArea.php L11-30)
+// ────────────────────────────────────────────────────────────
+//
+// Legacy `checkFreeArea.php` runs when the customer ticks the "Pacred เหมา ๆ"
+// free-delivery promo (fShipBy='PCSF'): it confirms the chosen address's ZIP
+// is inside the metro allowlist and, if not, clears #hShipBy + Swal-errors
+// "ที่อยู่ของคุณ ไม่ได้อยู่ในพื้นที่จัดส่งฟรี!!!".
+//
+//   SELECT addressZIPCode FROM tb_address
+//    WHERE userID='$_SESSION[userID]' AND addressID='$ID'
+//      AND addressZIPCode IN ('<free-list>')
+//   num_rows > 0 → "ผ่าน"   else → "ไม่ผ่าน"
+//
+// We reproduce the SAME decision via the canonical `lib/bkk-zip.ts` allowlist
+// (which IS the ported free-list) after fetching the address's ZIP under the
+// caller's ownership — matching the legacy userID-scoped SELECT exactly.
+
+export type CheckFreeAreaResult =
+  | { ok: true; inFreeArea: boolean; zip: string }
+  | { ok: false; error: string };
+
+export async function checkFreeArea(
+  addressID: string,
+): Promise<CheckFreeAreaResult> {
+  const aid = (addressID ?? "").trim();
+  if (!aid) return { ok: false, error: "missing_address_id" };
+
+  // The PCS warehouse pickup is never a "free delivery area" question.
+  if (aid === "PCS") return { ok: true, inFreeArea: false, zip: "" };
+
+  const session = await getCurrentUserWithProfile();
+  if (!session?.profile) return { ok: false, error: "not_signed_in" };
+  const userID = session.profile.member_code ?? "";
+  if (!userID) return { ok: false, error: "no_member_code" };
+
+  const admin = createAdminClient();
+
+  // checkFreeArea.php L13 — userID-scoped address read.
+  const { data: addr, error: addrErr } = await admin
+    .from("tb_address")
+    .select("addresszipcode")
+    .eq("addressid", aid)
+    .eq("userid", userID)
+    .maybeSingle<{ addresszipcode: string | null }>();
+  if (addrErr) {
+    console.error(`[forwarder-legacy checkFreeArea address lookup] failed`, {
+      code: addrErr.code,
+      message: addrErr.message,
+    });
+    return { ok: false, error: addrErr.message };
+  }
+  if (!addr) {
+    // No matching address row → legacy "ไม่ผ่าน" (num_rows == 0).
+    return { ok: true, inFreeArea: false, zip: "" };
+  }
+
+  const zip = (addr.addresszipcode ?? "").trim();
+  return { ok: true, inFreeArea: isFreeShippingZip(zip), zip };
 }
