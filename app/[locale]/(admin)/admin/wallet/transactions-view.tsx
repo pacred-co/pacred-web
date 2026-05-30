@@ -30,24 +30,30 @@ const STATUS_CLS: Record<string, string> = {
   "3": "bg-red-100 text-red-700 border-red-200",
 };
 
-// type → kind label + colour (legacy taxonomy · see page.tsx header)
+// type → kind label + colour (legacy taxonomy · 0081 L6220 · see page.tsx header).
+// ADR-0018 P1-25 fix (2026-05-30): customer withdraw is type='3' (was missing
+// here, so customer withdraw requests were INVISIBLE in this list — a P0-7
+// reachability bug). type='7' is "ชำระเงินรอตรวจสอบการเติม" (a top-up sibling),
+// NOT a withdraw — it was mislabeled "ถอนเงิน". Both corrected below.
 const TYPE_LABEL: Record<string, string> = {
   "1": "เติมเงิน",
   "2": "เติม (manual)",
+  "3": "ถอนเงิน",
   "4": "ชำระจากกระเป๋า",
-  "7": "ถอนเงิน",
+  "7": "รอตรวจการเติม",
 };
 const TYPE_CLS: Record<string, string> = {
   "1": "bg-green-50 text-green-700 border-green-200",
   "2": "bg-emerald-50 text-emerald-700 border-emerald-200",
+  "3": "bg-red-50 text-red-700 border-red-200",
   "4": "bg-blue-50 text-blue-700 border-blue-200",
-  "7": "bg-red-50 text-red-700 border-red-200",
+  "7": "bg-amber-50 text-amber-700 border-amber-200",
 };
 
 const KIND_TABS: { key: string | null; label: string; types: string[] | null }[] = [
   { key: null,       label: "ทั้งหมด", types: null },
   { key: "topup",    label: "เติมเงิน (รอตรวจ + manual)", types: ["1", "2"] },
-  { key: "withdraw", label: "ถอนเงิน", types: ["7"] },
+  { key: "withdraw", label: "ถอนเงิน", types: ["3"] },
   { key: "orderpay", label: "ชำระจากกระเป๋า", types: ["4"] },
 ];
 
@@ -102,9 +108,10 @@ export async function WalletTransactionsView({ kind, status, q }: TransactionsVi
   const kindTab = KIND_TABS.find((t) => t.key === (kind ?? null));
   const typeFilter = kindTab?.types ?? null;
   // Back-compat: legacy menubar URLs used kind=deposit, kind=withdraw, status=pending.
+  // ADR-0018 P1-25: customer withdraw is type='3' (was wrongly '7').
   const legacyKindMap: Record<string, string[]> = {
     deposit: ["1", "2"],
-    withdraw: ["7"],
+    withdraw: ["3"],
   };
   const legacyTypeFilter = kind && legacyKindMap[kind] ? legacyKindMap[kind] : null;
   const effectiveTypeFilter = typeFilter ?? legacyTypeFilter;

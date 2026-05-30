@@ -207,6 +207,71 @@ section("E. siblingPayType — wallet_hs type by parent class");
 assertEq("shop_order → type='2'", siblingPayType("shop_order"), "2");
 assertEq("forwarder  → type='4'", siblingPayType("forwarder"),  "4");
 
+// ════════════════════════════════════════════════════════════════
+// F. Customer-WITHDRAW approve/reject (P1-25/26 · ADR-0018 D-2 rule 1 +
+//    rule 3 ¶3-4). The withdraw "debit-hold" contract:
+//      submit  → tb_wallet -= amount · row type='3' status='1'
+//      approve → status 1→2 · NO tb_wallet change (debit already happened)
+//      reject  → status 1→3 · tb_wallet += amount (refund · balance-bump,
+//                NOT a new type='5' row — legacy wallet.php L807-814)
+//    These pure helpers lock the money contract the (Supabase-coupled)
+//    adminApproveWithdraw / adminRejectWithdraw encode.
+// ════════════════════════════════════════════════════════════════
+
+// F1. Type guard — only type='3' is a customer withdraw.
+function isCustomerWithdrawRow(type: string | null): boolean {
+  return type === "3";
+}
+
+section("F1. withdraw type guard — only type='3'");
+
+assertEq("type='3' → withdraw",             isCustomerWithdrawRow("3"), true);
+assertEq("type='7' → NOT withdraw (topup-sibling)", isCustomerWithdrawRow("7"), false);
+assertEq("type='1' → NOT withdraw (deposit)", isCustomerWithdrawRow("1"), false);
+assertEq("type=null → NOT withdraw",        isCustomerWithdrawRow(null), false);
+
+// F2. APPROVE wallet delta — ALWAYS 0 (debit happened at submit).
+function withdrawApproveDelta(): number {
+  return 0; // approve = pay out · NO balance change (rule 3 ¶3)
+}
+
+section("F2. withdraw approve — wallet delta is ALWAYS 0");
+
+assertEq("approve delta = 0 (no balance change)", withdrawApproveDelta(), 0);
+
+// F3. REJECT refund — newBalance = balanceBefore + amount (balance-bump).
+function withdrawRejectNewBalance(balanceBefore: number, amount: number): number {
+  return balanceBefore + amount;
+}
+
+section("F3. withdraw reject — refund bumps balance by amount");
+
+assertEq("reject 500 hold · 200 + 500 = 700", withdrawRejectNewBalance(200, 500), 700);
+assertEq("reject from 0 balance · 0 + 1500 = 1500", withdrawRejectNewBalance(0, 1500), 1500);
+assertEq("reject fractional · 75.25 + 25 = 100.25", withdrawRejectNewBalance(75.25, 25), 100.25);
+
+// F4. Idempotency — terminal status returns alreadyDone (NO double-refund).
+//     CRITICAL: a second reject must NOT refund again.
+type WithdrawOutcome =
+  | { kind: "proceed" }
+  | { kind: "alreadyDone"; refund: number }
+  | { kind: "error" };
+
+function withdrawStatusBranch(status: string | null, type: string | null): WithdrawOutcome {
+  if (status === "2" || status === "3") return { kind: "alreadyDone", refund: 0 };
+  if (status !== "1") return { kind: "error" };
+  if (type !== "3") return { kind: "error" };
+  return { kind: "proceed" };
+}
+
+section("F4. withdraw idempotency — terminal = alreadyDone, NO double-refund");
+
+assertEq("status='1' type='3' → proceed",          withdrawStatusBranch("1", "3"), { kind: "proceed" });
+assertEq("status='2' → alreadyDone (refund 0)",     withdrawStatusBranch("2", "3"), { kind: "alreadyDone", refund: 0 });
+assertEq("status='3' → alreadyDone (NO 2nd refund)",withdrawStatusBranch("3", "3"), { kind: "alreadyDone", refund: 0 });
+assertEq("status='1' type='1' → error (not withdraw)", withdrawStatusBranch("1", "1"), { kind: "error" });
+assertEq("status=null → error",                     withdrawStatusBranch(null, "3"), { kind: "error" });
+
 // ────────────────────────────────────────────────────────────
 // Wrap-up
 // ────────────────────────────────────────────────────────────

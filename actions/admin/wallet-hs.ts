@@ -24,12 +24,28 @@
  * for a manual-entry — same convention as the existing /admin/wallet
  * bulk-approve flow in tb-bulk.ts.
  *
- * Type convention (legacy comment L6220 + L6227):
- *   type '1' = deposit (เติมเงิน) · '7' = withdraw (ถอนเงิน)
+ * Type convention (legacy schema comment 0081 L6220 + L6227 — VERIFIED):
+ *   type '1' = เติมเงิน · '3' = ถอนเงิน · '7' = ชำระเงินรอตรวจสอบการเติม
  *   typenew '1' = deposit · '2' = refund · '3..7' = various pay
- * For a manual admin-add we use the simplest mapping:
+ *
+ * P1-25 (ADR-0018 · 2026-05-30) — type='7' fix for the WITHDRAW kind:
+ *   The previous mapping used type='7' for a manual withdraw. That is WRONG:
+ *   the schema enum says '7' = "ชำระเงินรอตรวจสอบการเติม" (a top-up-pending-pay
+ *   sibling — used by the deposit-approve cascade in adminApproveWalletDeposit
+ *   at the `reforder=topup.id AND type='7'` flip), NOT a withdraw. ถอนเงิน is
+ *   type='3' (same as the customer withdraw flow in actions/wallet-tb.ts) and
+ *   the customer history "ถอนเงิน" tab filters `WHERE type=3`
+ *   (load_wallet_hs_withdraw.php). Verified vs legacy: the legacy admin
+ *   manual-add (wallet.php?page=add L40-42) only ever inserted type='1'
+ *   (deposit) — admin-manual-WITHDRAW is a Pacred addition, so it must use the
+ *   correct schema value '3', else (a) it's invisible in the customer withdraw
+ *   tab and (b) it collides with the type='7' deposit-cascade. NO existing
+ *   prod rows are rewritten — this only fixes the value for NEW manual
+ *   withdraws.
+ *
+ * For a manual admin-add we use:
  *   deposit    → type='1'  · typenew='1'  · positive amount → credit balance
- *   withdraw   → type='7'  · typenew='1'  · positive amount → debit balance
+ *   withdraw   → type='3'  · typenew='2'  · positive amount → debit balance
  *   adjustment → type='1'  · typenew='1'  · admin-typed signed amount
  *
  * Wallet-balance side effect: tb_wallet.wallettotal is the source-of-truth
@@ -119,7 +135,7 @@ export async function adminCreateWalletHsManual(
     delta = d.amount;
   } else if (d.kind === "withdraw") {
     if (d.amount <= 0) return { ok: false, error: "ถอนเงิน ต้องใส่จำนวนบวก (ระบบจะหักให้)" };
-    signedAmount = d.amount;          // tb_wallet_hs.amount stays positive — `type='7'` already signals withdraw
+    signedAmount = d.amount;          // tb_wallet_hs.amount stays positive — `type='3'` (ถอนเงิน) signals withdraw
     delta = -d.amount;
   } else {
     // adjustment — admin types signed (e.g. -250 to deduct)
@@ -183,9 +199,9 @@ export async function adminCreateWalletHsManual(
           date:            nowIso,
           dateslip:        slipDateIso,
           amount:          signedAmount,
-          status:          "2",                              // approved (admin = verifier)
-          type:            d.kind === "withdraw" ? "7" : "1",
-          typenew:         "1",                              // 1 = เติมเงิน (admin-add legacy default)
+          status:          "2",                              // approved (admin = verifier; manual entry is final)
+          type:            d.kind === "withdraw" ? "3" : "1", // P1-25: ถอน=3 (was wrongly 7 · see docblock)
+          typenew:         d.kind === "withdraw" ? "2" : "1", // withdraw bucket=2 · deposit/adjust=1
           typeservice:     d.typeservice ?? "1",             // default 1 = cargo
           paydeposit:      d.paydeposit ? "1" : "0",
           imagesslip:      slipFilename,                     // Wave 12-A: slip path in `slips` bucket (empty if no slip)
@@ -1427,6 +1443,365 @@ export async function adminBulkApproveWalletDeposits(
       summary: { approved, alreadyDone, failed },
     },
   };
+}
+
+// ════════════════════════════════════════════════════════════════
+// P1-25/26 — Admin customer-WITHDRAW approve/reject per ADR-0018
+// D-2 rule 1 STATUS sub-case + rule 3 paragraphs 3-4.
+// ════════════════════════════════════════════════════════════════
+//
+// Faithful port of the legacy `pcs-admin/wallet.php` $_GET['page']='withdraw'
+// approve/reject branch (L744-819 — read end-to-end before patching).
+//
+// The customer withdraw flow is "debit-hold": submitWithdrawRequest
+// (actions/wallet-tb.ts) ALREADY debited tb_wallet.wallettotal at submit
+// and left a pending tb_wallet_hs row (type='3' status='1'). So:
+//
+//   APPROVE (status 1→2): flip status + stamp admin. **NO tb_wallet change**
+//     — the debit happened at submit; approve = "confirm the bank payout".
+//     Legacy L754-792 (status='2' branch) flips status + records the payout
+//     slip; it does NOT touch tb_wallet. We make the slip optional (the ADR
+//     contract is "approve to pay out"; the bank-transfer proof is a nice-to-
+//     have, not a gate — accounting often approves first, attaches later).
+//
+//   REJECT (status 1→3): flip status + stamp admin + **REFUND**
+//     tb_wallet.wallettotal += amount (give the held money back). Legacy
+//     L794-818 (status='3' branch) reads walletTotal then writes
+//     walletTotal+amount — a **balance-bump on the SAME tb_wallet row**, NOT
+//     a new type='5' row. (The ADR rule-3 floated a type='5' row, but the
+//     legacy code is the authority and it bumps the balance — we mirror
+//     legacy exactly. The rejected row itself stays type='3' status='3'; the
+//     customer history tab renders it "ไม่สำเร็จ".)
+//
+//   Idempotency: terminal status (2 or 3) → {ok:true, alreadyDone:true},
+//     no rows touched, no double-refund.
+//
+// Failure rollback: PostgREST has no real transaction. On REJECT, the
+// status flip happens first; if the tb_wallet refund then fails we surface
+// a LOUD error including the tb_wallet_hs.id so accounting reconciles (we do
+// NOT auto-revert the status flip — the legacy doesn't either, and leaving
+// the row rejected-but-not-refunded is safer than a flapping status).
+//
+// Scope guard: these functions handle ONLY type='3' (customer withdraw).
+// type='7' (admin-manual withdraw) is a different flow inserted with
+// status='2' directly by adminCreateWalletHsManual — it never reaches a
+// status='1' queue, so it is not in scope here.
+
+// ────────────────────────────────────────────────────────────
+
+const approveWithdrawSchema = z.object({
+  id: z.number().int().positive(),
+});
+export type AdminApproveWithdrawInput = z.infer<typeof approveWithdrawSchema>;
+
+type WithdrawResult = {
+  ok: true;
+  walletHsId: number;
+  alreadyDone?: boolean;
+  customer: {
+    userid: string;
+    walletTotalBefore: number;
+    walletTotalAfter: number;
+  };
+  refundedAmount: number;
+};
+
+/**
+ * Approve a customer withdraw request (status `1`→`2`).
+ *
+ * Per ADR-0018 D-2 rule 3 paragraph 3: flip status + stamp admin,
+ * **NO tb_wallet change** (the debit already happened at submit — this is
+ * "approve to pay out", the bank-transfer is the side-effect).
+ *
+ * Idempotent (terminal status returns alreadyDone). Requires
+ * `tb_wallet_hs WHERE id=walletHsId AND status='1' AND type='3'`.
+ */
+export async function adminApproveWithdraw(
+  input: AdminApproveWithdrawInput,
+): Promise<AdminActionResult<WithdrawResult>> {
+  const parsed = approveWithdrawSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { id } = parsed.data;
+
+  return withAdmin<WithdrawResult>(
+    ["accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const legacyAdminId = await resolveLegacyAdminId();
+
+      // 1. Read the withdraw row + idempotency check.
+      const { data: rowRaw, error: rowErr } = await admin
+        .from("tb_wallet_hs")
+        .select("id, userid, amount, type, status")
+        .eq("id", id)
+        .maybeSingle<{
+          id: number;
+          userid: string;
+          amount: number;
+          type: string | null;
+          status: string | null;
+        }>();
+      if (rowErr) {
+        console.error(`[tb_wallet_hs list] failed`, { code: rowErr.code, message: rowErr.message });
+        return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+      }
+      if (!rowRaw) return { ok: false, error: "ไม่พบรายการ" };
+
+      // Idempotency — already-terminal returns OK with alreadyDone.
+      if (rowRaw.status === "2" || rowRaw.status === "3") {
+        return {
+          ok: true,
+          data: {
+            ok: true,
+            walletHsId: id,
+            alreadyDone: true,
+            customer: { userid: rowRaw.userid, walletTotalBefore: NaN, walletTotalAfter: NaN },
+            refundedAmount: 0,
+          },
+        };
+      }
+      if (rowRaw.status !== "1") {
+        return { ok: false, error: `รายการนี้สถานะไม่ใช่ 'รอตรวจสอบ' (status=${rowRaw.status ?? "null"})` };
+      }
+      // Only customer withdraw (type='3'). type='7' admin-manual is a
+      // different flow (inserted status='2' directly — never queued here).
+      if (rowRaw.type !== "3") {
+        return { ok: false, error: `ฟังก์ชันนี้รองรับเฉพาะรายการถอนเงินของลูกค้า (type='3') · พบ type='${rowRaw.type ?? "null"}'` };
+      }
+
+      const userid = rowRaw.userid;
+
+      // 2. Flip status='2' + stamp admin. NO tb_wallet change (rule 3 ¶3).
+      const { error: updErr } = await admin
+        .from("tb_wallet_hs")
+        .update({ status: "2", adminid: legacyAdminId, adminidupdate: legacyAdminId })
+        .eq("id", id)
+        .eq("status", "1");  // race-guard
+      if (updErr) {
+        console.error(`[tb_wallet_hs withdraw approve] failed`, { code: updErr.code, message: updErr.message });
+        return { ok: false, error: updErr.message };
+      }
+
+      // Read current balance only for the result payload (no mutation).
+      const { data: wRow, error: wErr } = await admin
+        .from("tb_wallet")
+        .select("wallettotal")
+        .eq("userid", userid)
+        .maybeSingle<{ wallettotal: number }>();
+      if (wErr) {
+        console.error(`[tb_wallet display read] failed`, { code: wErr.code, message: wErr.message });
+      }
+      const walletBalance = Number(wRow?.wallettotal ?? 0);
+
+      await logAdminAction(adminId, "tb_wallet_hs.approve_withdraw", "tb_wallet_hs", String(id), {
+        userid,
+        amount: Number(rowRaw.amount ?? 0),
+        walletUnchanged: true,
+        note: "approve to pay out — debit already happened at submit",
+      });
+
+      revalidatePath(`/admin/wallet/${id}`);
+      revalidatePath("/admin/wallet");
+      revalidatePath("/admin/wallet/withdrawals");
+      revalidatePath("/admin");
+
+      return {
+        ok: true,
+        data: {
+          ok: true,
+          walletHsId: id,
+          customer: { userid, walletTotalBefore: walletBalance, walletTotalAfter: walletBalance },
+          refundedAmount: 0,
+        },
+      };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+
+const rejectWithdrawSchema = z.object({
+  id:     z.number().int().positive(),
+  reason: z.string().trim().max(1000).optional(),
+});
+export type AdminRejectWithdrawInput = z.infer<typeof rejectWithdrawSchema>;
+
+/**
+ * Reject a customer withdraw request (status `1`→`3`) + REFUND the hold.
+ *
+ * Per ADR-0018 D-2 rule 3 paragraph 4 + legacy wallet.php L794-818: flip
+ * status + stamp admin + **tb_wallet.wallettotal += amount** (balance-bump
+ * on the same row — NOT a new type='5' row, per the legacy code). Gives the
+ * held money back since the withdraw is cancelled.
+ *
+ * Idempotent (terminal status returns alreadyDone — no double-refund).
+ */
+export async function adminRejectWithdraw(
+  input: AdminRejectWithdrawInput,
+): Promise<AdminActionResult<WithdrawResult>> {
+  const parsed = rejectWithdrawSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { id, reason } = parsed.data;
+
+  return withAdmin<WithdrawResult>(
+    ["accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const legacyAdminId = await resolveLegacyAdminId();
+
+      // 1. Read the withdraw row + idempotency check.
+      const { data: rowRaw, error: rowErr } = await admin
+        .from("tb_wallet_hs")
+        .select("id, userid, amount, type, status")
+        .eq("id", id)
+        .maybeSingle<{
+          id: number;
+          userid: string;
+          amount: number;
+          type: string | null;
+          status: string | null;
+        }>();
+      if (rowErr) {
+        console.error(`[tb_wallet_hs list] failed`, { code: rowErr.code, message: rowErr.message });
+        return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+      }
+      if (!rowRaw) return { ok: false, error: "ไม่พบรายการ" };
+
+      // Idempotency — already-terminal returns OK with alreadyDone (NO refund
+      // re-applied — critical: a second reject must not double-refund).
+      if (rowRaw.status === "2" || rowRaw.status === "3") {
+        return {
+          ok: true,
+          data: {
+            ok: true,
+            walletHsId: id,
+            alreadyDone: true,
+            customer: { userid: rowRaw.userid, walletTotalBefore: NaN, walletTotalAfter: NaN },
+            refundedAmount: 0,
+          },
+        };
+      }
+      if (rowRaw.status !== "1") {
+        return { ok: false, error: `รายการนี้สถานะไม่ใช่ 'รอตรวจสอบ' (status=${rowRaw.status ?? "null"})` };
+      }
+      if (rowRaw.type !== "3") {
+        return { ok: false, error: `ฟังก์ชันนี้รองรับเฉพาะรายการถอนเงินของลูกค้า (type='3') · พบ type='${rowRaw.type ?? "null"}'` };
+      }
+
+      const userid = rowRaw.userid;
+      const amount = Number(rowRaw.amount ?? 0);
+
+      // 2. Flip status='3' + stamp admin (+ optional reason → note).
+      //    Legacy L802: UPDATE tb_wallet_hs SET status='3', adminID, adminIDUpdate.
+      const patch: Record<string, unknown> = {
+        status:        "3",
+        adminid:       legacyAdminId,
+        adminidupdate: legacyAdminId,
+      };
+      if (reason && reason.length > 0) patch.note = reason;
+      // .select() so we can tell whether THIS call actually flipped the row.
+      // Under a concurrent double-reject, the loser's UPDATE matches 0 rows
+      // (status already '3') — Supabase returns no error but an empty array.
+      // We MUST NOT refund in that case (it would be a double-refund). Only
+      // the winner (whose UPDATE returns the row) proceeds to refund.
+      const { data: flipped, error: updErr } = await admin
+        .from("tb_wallet_hs")
+        .update(patch)
+        .eq("id", id)
+        .eq("status", "1")  // race-guard: someone else must not have just acted
+        .select("id");
+      if (updErr) {
+        console.error(`[tb_wallet_hs withdraw reject] failed`, { code: updErr.code, message: updErr.message });
+        return { ok: false, error: updErr.message };
+      }
+      if (!flipped || flipped.length === 0) {
+        // Lost the race — another reject already flipped + refunded. Treat as
+        // idempotent success (NO second refund).
+        return {
+          ok: true,
+          data: {
+            ok: true,
+            walletHsId: id,
+            alreadyDone: true,
+            customer: { userid, walletTotalBefore: NaN, walletTotalAfter: NaN },
+            refundedAmount: 0,
+          },
+        };
+      }
+
+      // 3. REFUND tb_wallet.wallettotal += amount (legacy L807-814 balance-bump).
+      const { data: wRow, error: wErr } = await admin
+        .from("tb_wallet")
+        .select("userid, wallettotal")
+        .eq("userid", userid)
+        .maybeSingle<{ userid: string; wallettotal: number }>();
+      if (wErr) {
+        console.error(`[tb_wallet read for refund] failed`, { code: wErr.code, message: wErr.message });
+      }
+      const walletBefore = Number(wRow?.wallettotal ?? 0);
+      const walletAfter = walletBefore + amount;
+
+      if (!wRow) {
+        // No tb_wallet row (would be unusual for a customer who withdrew) —
+        // insert with the refund amount so the money isn't lost.
+        const { error: insErr } = await admin
+          .from("tb_wallet")
+          .insert({ userid, wallettotal: amount });
+        if (insErr) {
+          // Status already flipped to '3'. Surface LOUD so accounting refunds
+          // manually — we don't auto-revert the status (legacy doesn't either).
+          console.error(`[tb_wallet refund insert] FAILED post-reject`, {
+            tb_wallet_hs_id: id, userid, amount, message: insErr.message,
+          });
+          return {
+            ok: false,
+            error: `ปฏิเสธรายการสำเร็จ (id=${id}) แต่คืนเงินเข้ากระเป๋าล้มเหลว: ${insErr.message} (ยังไม่คืนเงิน — ติดต่อ ops)`,
+          };
+        }
+      } else {
+        const { error: updWErr } = await admin
+          .from("tb_wallet")
+          .update({ wallettotal: walletAfter })
+          .eq("userid", userid);
+        if (updWErr) {
+          console.error(`[tb_wallet refund update] FAILED post-reject`, {
+            tb_wallet_hs_id: id, userid, amount, before: walletBefore, target: walletAfter, message: updWErr.message,
+          });
+          return {
+            ok: false,
+            error: `ปฏิเสธรายการสำเร็จ (id=${id}) แต่คืนเงินเข้ากระเป๋าล้มเหลว: ${updWErr.message} (ยังไม่คืนเงิน — ติดต่อ ops)`,
+          };
+        }
+      }
+
+      await logAdminAction(adminId, "tb_wallet_hs.reject_withdraw", "tb_wallet_hs", String(id), {
+        userid,
+        reason,
+        refundedAmount: amount,
+        before: { wallettotal: walletBefore },
+        after:  { wallettotal: walletAfter },
+      });
+
+      revalidatePath(`/admin/wallet/${id}`);
+      revalidatePath("/admin/wallet");
+      revalidatePath("/admin/wallet/withdrawals");
+      revalidatePath("/admin");
+
+      return {
+        ok: true,
+        data: {
+          ok: true,
+          walletHsId: id,
+          customer: { userid, walletTotalBefore: walletBefore, walletTotalAfter: walletAfter },
+          refundedAmount: amount,
+        },
+      };
+    },
+  );
 }
 
 // ════════════════════════════════════════════════════════════════
