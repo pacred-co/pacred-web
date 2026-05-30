@@ -191,14 +191,14 @@ export function ServiceOrdersTable({
     const params = new URLSearchParams();
     params.set("print", "2");
     for (const hno of selected) params.append("id", hno);
-    return `/service-order/print?${params.toString()}`;
+    return `/admin/service-orders/print?${params.toString()}`;
   })();
   const bulkPrintReceiptUrl = (() => {
     if (selected.size === 0) return "#";
     const params = new URLSearchParams();
     params.set("print", "1");
     for (const hno of selected) params.append("id", hno);
-    return `/service-order/print?${params.toString()}`;
+    return `/admin/service-orders/print?${params.toString()}`;
   })();
 
   return (
@@ -479,7 +479,7 @@ export function ServiceOrdersTable({
                           </Link>
                           {r.hstatus === "5" && (
                             <a
-                              href={`/service-order/print?print=1&id=${encodeURIComponent(r.hno)}`}
+                              href={`/admin/service-orders/print?print=1&id=${encodeURIComponent(r.hno)}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="rounded border border-blue-500 bg-blue-50 text-blue-700 text-[10px] px-2 py-1 hover:bg-blue-100 text-center whitespace-nowrap"
@@ -490,7 +490,7 @@ export function ServiceOrdersTable({
                           {/* hStatus 2..5 (legacy L534) — invoice button */}
                           {["2", "3", "4", "5"].includes(r.hstatus) && (
                             <a
-                              href={`/service-order/print?print=2&id=${encodeURIComponent(r.hno)}`}
+                              href={`/admin/service-orders/print?print=2&id=${encodeURIComponent(r.hno)}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="rounded border border-red-500 bg-red-50 text-red-700 text-[10px] px-2 py-1 hover:bg-red-100 text-center whitespace-nowrap"
