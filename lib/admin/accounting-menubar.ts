@@ -91,6 +91,15 @@ function invoiceStatuses(typeSlug: string): MenubarItem[] {
 // working accounting doc-flow in Pacred today). Was previously routing
 // from the INVOICE leaf which was misleading. Other (type,service) combos
 // still fall through to the catch-all "🚧 Wave 24+" stub.
+//
+// ── 2026-05-30 sitting-Phase-B (ภูม) — new PEAK-style ใบเสร็จ surface ──
+// `/admin/accounting/receipts` is the NEW PEAK-pattern ใบเสร็จ list with
+// 7-tab nav (ล่าสุด/ทั้งหมด/ร่าง/รอชำระ/ออกแล้ว/ยกเลิก/e-Receipt). It is
+// the canonical landing for "ใบเสร็จรับเงิน" going forward. The legacy
+// forwarder-invoice list still works for service-specific receipts (it's
+// scoped to forwarder rows), but the new page handles ALL receipts in
+// tb_receipt regardless of source. Leaves keep both wired so accounting
+// staff can pick the view they prefer.
 function receiptStatuses(typeSlug: string): MenubarItem[] {
   return SERVICES.map((s) => {
     const isForwarderReceipt =
@@ -142,7 +151,11 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       { label: "ใบเสนอราคา",                            children: quotationStatuses("quotation") },
       { label: "ใบรับเงินมัดจำ",                         children: quotationStatuses("deposit") },
       { label: "ใบแจ้งหนี้ (ใบส่งของ, บันทึกลูกหนี้)",     children: invoiceStatuses("invoice") },
-      { label: "ใบเสร็จรับเงิน",                          children: receiptStatuses("receipt") },
+      {
+        label: "ใบเสร็จรับเงิน",
+        href: "/admin/accounting/receipts",  // 2026-05-30 sitting-Phase-B: PEAK 7-tab landing (NEW)
+        children: receiptStatuses("receipt"),
+      },
       { label: "ใบลดหนี้",                              children: notesStatuses("credit-note") },
       { label: "ใบเพิ่มหนี้",                            children: notesStatuses("debit-note") },
       { label: "ใบวางบิล",                              children: notesStatuses("billing-note") },
@@ -193,6 +206,15 @@ export const CARGO_MENUBAR: MenubarItem[] = [
  * invoice generation.
  */
 export const ACCOUNTING_HUB_CARDS = [
+  // 2026-05-30 sitting-Phase-B (ภูม) — PEAK-style ใบเสร็จ explorer landed.
+  // Placed FIRST because new daily-driver for accounting staff per owner
+  // brief (matches PEAK accounting UI patterns).
+  {
+    title: "ใบเสร็จรับเงิน (PEAK style)",
+    desc: "7-tab nav · ล่าสุด/รอชำระ/ออกแล้ว/ยกเลิก · default current month",
+    href: "/admin/accounting/receipts",
+    badge: "live",
+  },
   {
     title: "ฝากนำเข้า (รายงานบัญชี)",
     desc: "Report 1:1 ของ acc-forwarder.php — ledger ฝากนำเข้าที่ชำระแล้ว",
