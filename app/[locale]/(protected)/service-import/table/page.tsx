@@ -570,7 +570,7 @@ export default async function ForwarderTablePage({
               it's a single flex row. */}
           <div className="px-3 py-3 md:px-4 md:py-3">
             <form
-              className="grid grid-cols-2 items-end gap-2 md:flex md:flex-row md:gap-3"
+              className="grid grid-cols-2 items-start gap-2 md:flex md:flex-row md:items-end md:gap-3"
               id="search"
               method="GET"
               action="/service-import/table"

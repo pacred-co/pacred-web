@@ -1569,7 +1569,7 @@
       "customsSub": "<hl>เริ่มต้น</hl> <em><hl>2</hl>,800 บาท</em>",
       "sourcingTitle": "ฝากสั่งซื้อสินค้า <em>จากจีน</em>",
       "sourcingSub": "1688 · Taobao · Alibaba · Tmall — ฝากซื้อ ชำระ นำส่ง ครบในที่เดียว",
-      "remitTitle": "โอนเงินชำระ <em>ต่างประเทศ</em>",
+      "remitTitle": "อำนวยความสะดวก<em>ชำระค่าสินค้า</em>",
       "remitSub": ""
     },
     "lcl": {
@@ -1806,7 +1806,7 @@
     "china": "ประเทศจีน",
     "whTh": "โกดังไทย",
     "whCn": "โกดังจีน",
-    "customsHot": "Shipping, Customs Clearance & Import Duties",
+    "customsHot": "ชิปปิ้ง เคลียร์สินค้า เคลียร์ภาษี พิธีการศุลกากร",
     "importChina": "นำเข้าสินค้าจากจีน",
     "importChinaLcl": "นำเข้าสินค้าจากจีน แชร์ตู้/รวมตู้",
     "importChinaFcl": "นำเข้าสินค้าจากจีน เหมาตู้/ปิดตู้",

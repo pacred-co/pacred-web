@@ -22,10 +22,30 @@ const MOBILE_ICON = {
 // no random sales-rep rotation).
 const OFFICE_PHONE = "0661310253";
 
-export function FloatingTabs() {
+/** Module-level memo of the last fetched payment-due count, so the badge does
+ *  NOT flash to 0 when FloatingTabs remounts crossing the (public)↔(protected)
+ *  layout boundary (a different layout group = a fresh mount). Seeded into the
+ *  initial state below. */
+let lastKnownPayDue = 0;
+
+/** Circular red count pill over a tab icon — "ค้างกี่รายการ" on the ชำระ tab.
+ *  Renders nothing when the count is 0 (or on public pages where it's unset). */
+function TabCountBadge({ n }: { n: number }) {
+  if (n <= 0) return null;
+  return (
+    <span className="absolute -top-1.5 -right-2 grid min-w-[18px] h-[18px] place-items-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white dark:ring-surface shadow-sm">
+      {n > 99 ? "99+" : n}
+    </span>
+  );
+}
+
+export function FloatingTabs({ payDueCount = 0 }: { payDueCount?: number }) {
   const t = useTranslations("floatingTabs");
   const [active, setActive] = useState<number | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  // Live "ชำระ" badge count. Seeded from the SSR prop (protected layout) or the
+  // last-known value (avoids a 0-flash on remount), then refreshed client-side.
+  const [payDue, setPayDue] = useState(() => payDueCount || lastKnownPayDue);
   const pathname = usePathname();
 
   // Watch auth state for the mobile login/logout tab — per ปอน 2026-05-18,
@@ -48,6 +68,35 @@ export function FloatingTabs() {
     });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // Live payment-due count for the "ชำระ" badge — fetched client-side so the
+  // number appears on EVERY page (incl. the public site, not just where the
+  // protected layout seeds it) and stays real-time. Re-fetched on navigation
+  // (pathname), on login / logout (user), and when the tab regains focus; the
+  // endpoint returns 0 for signed-out / no-member users so the badge clears.
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      fetch("/api/payment-due-count", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (cancelled || !d) return;
+          const n = Number(d.count ?? 0);
+          lastKnownPayDue = n;
+          setPayDue(n);
+        })
+        .catch(() => {
+          /* network blip — keep the last known count */
+        });
+    };
+    load();
+    const onFocus = () => load();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [pathname, user]);
 
   // Don't render in admin back-office (admin has its own sidebar) or on the
   // auth flow (login/register/forgot-password) — auth pages are designed to
@@ -87,10 +136,11 @@ export function FloatingTabs() {
     iconImg?: string;
     iconNode?: ReactNode;
     external?: boolean;
+    badge?: number;
   }> = [
     { label: t("homeMain"), iconImg: "/images/home/iconfloating/pacred-home-main.png", href: "/" },
     { label: t("orders"),   iconImg: "/images/home/iconfloating/pcs-cart.png",         href: "/service-order" },
-    { label: t("pay"),      iconImg: "/images/home/iconfloating/pcs-payment.png",      href: "/dashboard" },
+    { label: t("pay"),      iconImg: "/images/home/iconfloating/pcs-payment.png",      href: "/payment-due", badge: payDue },
     { label: t("chat"),     iconImg: "/images/home/iconfloating/pcs-line-notify.png",  href: "/line", external: true },
     { label: t("menu"),     iconNode: <Menu className="w-8 h-8" strokeWidth={2.2} />,  href: "/dashboard" },
   ];
@@ -105,16 +155,19 @@ export function FloatingTabs() {
           const inner = (
             <>
               {item.iconImg && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={item.iconImg}
-                  alt={item.label}
-                  className={`w-8 h-8 object-contain transition-all duration-300 ${
-                    active === i
-                      ? "grayscale-0 brightness-100 opacity-100"
-                      : "grayscale brightness-75 opacity-60 group-hover:grayscale-0 group-hover:brightness-100 group-hover:opacity-100"
-                  }`}
-                />
+                <span className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={item.iconImg}
+                    alt={item.label}
+                    className={`w-8 h-8 object-contain transition-all duration-300 ${
+                      active === i
+                        ? "grayscale-0 brightness-100 opacity-100"
+                        : "grayscale brightness-75 opacity-60 group-hover:grayscale-0 group-hover:brightness-100 group-hover:opacity-100"
+                    }`}
+                  />
+                  {item.badge != null && <TabCountBadge n={item.badge} />}
+                </span>
               )}
               {item.iconNode && (
                 <span
@@ -204,12 +257,15 @@ export function FloatingTabs() {
             {/* Spacer — FAB sits here, positioned on the relative wrapper above */}
             <div aria-hidden />
 
-            {/* 4 — ชำระ */}
-            <Link href="/dashboard" onClick={() => setActive(3)}
+            {/* 4 — ชำระ → รายการที่ต้องชำระ (cross-service payment-due list) */}
+            <Link href="/payment-due" onClick={() => setActive(3)}
               className="group flex flex-col items-center justify-center gap-1 pt-2 pb-4 transition-colors active:bg-primary-50/60">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/images/home/iconfloating/pcs-payment.png" alt={t("pay")}
-                className={`w-8 h-8 object-contain transition-all duration-300 ${active === 3 ? "grayscale-0 brightness-100 opacity-100 scale-110" : "grayscale brightness-75 opacity-75"}`} />
+              <span className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/images/home/iconfloating/pcs-payment.png" alt={t("pay")}
+                  className={`w-8 h-8 object-contain transition-all duration-300 ${active === 3 ? "grayscale-0 brightness-100 opacity-100 scale-110" : "grayscale brightness-75 opacity-75"}`} />
+                <TabCountBadge n={payDue} />
+              </span>
               <span className={`text-[11px] leading-tight font-medium ${active === 3 ? "text-primary-600 font-bold" : "text-muted"}`}>{t("pay")}</span>
             </Link>
 
