@@ -22,6 +22,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { Link } from "@/i18n/navigation";
+import { YuanPaymentActions } from "../actions-cell";
+import { paystatusToPacred } from "@/lib/legacy-paystatus-map";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +61,8 @@ type PaymentRow = {
   adminid: string | null;
   imagesslip: string | null;
   imagesslipadmin: string | null;
+  // P0-11: '1' = paid from wallet (refund must reverse the debit on YuanPaymentActions)
+  paydeposit: string | null;
 };
 type UserRow = {
   userID: string;
@@ -79,10 +83,12 @@ export default async function AdminYuanPaymentDetail({
   if (!Number.isFinite(id) || id <= 0) notFound();
 
   const admin = createAdminClient();
+  // P0-11: pulled `paydeposit` so YuanPaymentActions knows whether the
+  // refund modal should warn about a wallet reversal (Phase C QoL #4).
   const { data: rowRaw, error: rowRawErr } = await admin
     .from("tb_payment")
     .select(
-      "id,paydate,paystatus,paytype,paydetail,payyuan,payrate,paythb,paythbcost,payprofitthb,paydateadmin,userid,adminid,imagesslip,imagesslipadmin",
+      "id,paydate,paystatus,paytype,paydetail,payyuan,payrate,paythb,paythbcost,payprofitthb,paydateadmin,userid,adminid,imagesslip,imagesslipadmin,paydeposit",
     )
     .eq("id", id)
     .maybeSingle();
@@ -111,10 +117,29 @@ export default async function AdminYuanPaymentDetail({
   // parallel. Bare filenames (`PCS9122_…jpg`) live under `slips/legacy/`
   // after backfill 06; the resolver also passes through full URLs and
   // Wave-12 admin uploads at `admin/cnt-slip/…` unchanged.
-  const [slipUrl, slipAdminUrl] = await Promise.all([
+  //
+  // P0-11: ALSO probe for an existing wallet refund row so YuanPaymentActions
+  // can render the right "refunded" vs "failed" branch on paystatus='3'.
+  // Pattern verified against actions/admin/yuan-payments.ts:104 — refund
+  // is INSERT tb_wallet_hs(type='5', reforder=id, userid).
+  const [slipUrl, slipAdminUrl, refundRow] = await Promise.all([
     resolveLegacyUrl(row.imagesslip, "slip"),
     resolveLegacyUrl(row.imagesslipadmin, "slip"),
+    admin
+      .from("tb_wallet_hs")
+      .select("id")
+      .eq("type", "5")
+      .eq("reforder", String(row.id))
+      .eq("userid", row.userid)
+      .limit(1)
+      .maybeSingle<{ id: number }>(),
   ]);
+  // P0-11: compute the pacred-string status from the legacy char + wallet
+  // refund probe. This is the same mapping the rebuilt action uses internally
+  // (lib/legacy-paystatus-map.ts), so YuanPaymentActions can decide which
+  // buttons to render off a single source of truth.
+  const pacredStatus = paystatusToPacred(status, Boolean(refundRow.data?.id));
+  const paidViaWallet = row.paydeposit === "1";
 
   return (
     <main className="p-6 lg:p-8 max-w-3xl mx-auto space-y-5">
@@ -139,7 +164,7 @@ export default async function AdminYuanPaymentDetail({
             ) : null}
           </div>
           <p className="text-xs text-muted mt-1">
-            Wave 7 read-only · ปุ่ม approve/reject + auto-credit wallet → Wave 8
+            P0-11 · ปุ่ม approve/reject ด้านล่างเขียน tb_payment (เปลี่ยนสถานะ + stamp adminid)
           </p>
         </div>
         <Link href="/admin/yuan-payments" className="text-xs text-primary-600 hover:underline">
@@ -214,6 +239,26 @@ export default async function AdminYuanPaymentDetail({
           <p className="text-xs text-muted mt-2 break-all">{row.imagesslipadmin}</p>
         </div>
       )}
+
+      {/* P0-11 — actions row. YuanPaymentActions is the same client island
+          the table-list bulk-bar uses (renders different buttons per
+          rebuilt-string status: pending → เริ่มโอน/ปฏิเสธ; processing →
+          โอนสำเร็จ/ล้มเหลว; non-terminal → คืนเงิน w/ slip modal). The
+          underlying adminUpdateYuanPayment action writes tb_payment per
+          the legacy paystatus flow (verified actions/admin/yuan-payments.ts:73). */}
+      <div className="rounded-2xl border border-primary-200 bg-primary-50/40 dark:bg-primary-50/5 p-5">
+        <p className="text-xs font-semibold text-primary-700 mb-2">การดำเนินการ</p>
+        <YuanPaymentActions
+          id={String(row.id)}
+          status={pacredStatus}
+          yuan_amount={Number(row.payyuan ?? 0)}
+          thb_amount={Number(row.paythb ?? 0)}
+          member_code={row.userid}
+          customer_name={customerName}
+          phone={user?.userTel ?? null}
+          paid_via_wallet={paidViaWallet}
+        />
+      </div>
 
       <div className="flex gap-2 flex-wrap pt-2">
         <Link
