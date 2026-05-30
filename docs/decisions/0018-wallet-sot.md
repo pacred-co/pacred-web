@@ -3,6 +3,7 @@
 **Status:** Accepted 2026-05-30 (เดฟ + ก๊อต — pending ก๊อต co-sign in writing; เดฟ owns the implementation contract)
 **Supersedes (on the wallet domain only):** the rebuilt-era `wallet` / `wallet_transactions` model implied by migrations `0007` (`wallet_recompute_balance` trigger) + `0064` (`wallet_available_balance()` function).
 **Closes audit gate:** [`docs/research/legacy-gap-2026-05-30/_MASTER.md`](../research/legacy-gap-2026-05-30/_MASTER.md) §1 #1 risk + §6 เดฟ Task 1 + ก๊อต Task 1.
+**Implementation (2026-05-30 · เดฟ):** D-1/D-2 shipped — Settle-1 `8d4b9c2f` (P0-2) + Settle-2 `cb9f4220` (P0-9), both verified faithful vs legacy via workflow. D-3 balance-read repoint shipped (`46379832`). **D-4 qa-flow gate (`tests/qa-flows/wallet-delta.ts`) RAN GREEN on prod 2026-05-30 — 8/8, real `tb_wallet.wallettotal` +Δ / −Δ / no-Δ on approve / debit / reject.** All on `dave-pacred`, behind the production gate (NOT yet on main). **Pending:** ก๊อต's written co-sign + a CI re-run of the gate before the money-loop batch merges to main.
 
 ## Context
 
