@@ -1,22 +1,36 @@
-import { redirect } from "next/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
+import { PayUserClient } from "./pay-user-client";
 
 /**
- * Stub for the legacy `/pay-users.php` sidebar item ("จ่ายแทนลูกค้า").
+ * P0-19 — จ่ายแทนลูกค้า (admin pay-on-behalf).
  *
- * The full PHP page is 1,140 lines covering admin-initiated payments
- * from the company wallet on behalf of a customer (cash withdrawals,
- * supplier transfers, fee waivers). Porting it 1:1 needs:
- *  - select-customer + select-bucket + amount + reason
- *  - debit wallet_transactions (kind=adjustment, negative amount)
- *  - audit + notification flow
+ * Faithful port of legacy `pcs-admin/pay-users.php` (shop-order leg). Staff
+ * take a phone/LINE customer's wallet payment for their unpaid ฝากสั่ง
+ * orders: debit `tb_wallet` + write `tb_wallet_hs` (type='2') + flip
+ * `tb_header_order.hStatus` 2→3. The wallet contract is shared with the
+ * customer self-pay path (ADR-0018) so the THB charged is identical.
  *
- * Until that ships, this stub redirects to the existing payment-view
- * filter so the sidebar link no longer 404s. The order-payment kind
- * surfaces the same "money out the door" transactions the legacy
- * pay-users page tracked.
+ * Was a redirect stub to `/admin/wallet?kind=order_payment` (which itself
+ * landed in the rebuilt-table wallet family) — now a real working tool.
  *
- * Follow-up tracked in docs/runbook/faithful-port-plan.md.
+ * Phase-2 follow-ups (flagged in actions/admin/pay-user.ts): the forwarder
+ * leg (paymentForwarderNew, fStatus 5→6) + the insufficient-balance
+ * slip-top-up path.
  */
-export default function AdminWalletPayUserPage() {
-  redirect("/admin/wallet?kind=order_payment");
+export const dynamic = "force-dynamic";
+
+export default async function AdminWalletPayUserPage() {
+  await requireAdmin();
+
+  return (
+    <div className="mx-auto max-w-3xl p-4 sm:p-6">
+      <header className="mb-5">
+        <h1 className="text-xl font-bold text-gray-900">จ่ายแทนลูกค้า</h1>
+        <p className="mt-1 text-sm text-gray-500">
+          รับชำระค่าฝากสั่งซื้อจากลูกค้าที่ติดต่อทางโทรศัพท์/LINE — ตัดจากกระเป๋าเงินของลูกค้า
+        </p>
+      </header>
+      <PayUserClient />
+    </div>
+  );
 }
