@@ -6,7 +6,7 @@ import {
   bulkUpdateStatus,
   bulkAssignDriver,
   bulkCancel,
-  type ForwarderStatus,
+  type TbForwarderStatus,
 } from "@/actions/admin/forwarders-bulk";
 import { searchDriversByQuery, type DriverSearchHit } from "@/actions/admin/forwarder-drivers";
 
@@ -17,27 +17,50 @@ import { searchDriversByQuery, type DriverSearchHit } from "@/actions/admin/forw
  *
  * Action set ports `forwarder-action.php` (L162-189 status tabs + the
  * AJAX-driven modal in `include/pages/forwarder-action/`):
- *   - เปลี่ยน status — pick target status; calls bulkUpdateStatus
- *   - มอบหมายคนขับ — fuzzy driver search + pick; calls bulkAssignDriver
+ *   - เปลี่ยน status — pick target legacy fstatus ('1'..'7','99'); calls bulkUpdateStatus
+ *   - มอบหมายคนขับ — fuzzy driver search + pick + endTime hr; calls bulkAssignDriver
  *   - ยกเลิก       — required reason ≥ 3 chars; calls bulkCancel
  *
  * Result rendering: every action returns `{ succeeded, failed }`; the
  * toolbar shows "สำเร็จ N รายการ" green banner + a yellow per-row failure
  * list (max 3 lines + "+M more") so the operator can act on the failures.
+ *
+ * P1-1/P1-2 (2026-05-30 night · open task #41): swapped status enum from
+ * the rebuilt-string keys to the legacy numeric chars (`1`..`7`,`99`) —
+ * single source of truth matches `tb_forwarder.fstatus` directly. The
+ * `selectedFNos` prop is now stringified `tb_forwarder.id` values (not
+ * `f_no`/UUID); parent components pass `Array.from(Set<number>).map(String)`.
+ *
+ * NOTE on reachability (AGENTS.md §0d): this component is currently NOT
+ * mounted anywhere — the live /admin/forwarders page uses an inline
+ * bulk-bar inside `forwarders-table.tsx`. Once the inline bar is migrated
+ * to this component, the wiring will land. The retarget here is so the
+ * action wiring is correct when that happens.
  */
 
 type Props = {
+  /**
+   * Selected `tb_forwarder.id` values (bigint, stringified) — NOT f_no/UUID.
+   * Renamed from `selectedFNos` for clarity but the prop name stays for
+   * caller-side compat (parents pass `Array.from(Set<number>).map(String)`).
+   */
   selectedFNos: string[];
   onClearSelection: () => void;
 };
 
-const STATUSES: ForwarderStatus[] = [
-  "pending_payment", "shipped_china", "in_transit", "arrived_thailand",
-  "out_for_delivery", "delivered", "cancelled",
-];
-const STATUS_LABEL: Record<ForwarderStatus, string> = {
-  pending_payment: "รอชำระ", shipped_china: "ออกจีน", in_transit: "กลางทาง",
-  arrived_thailand: "ถึงไทย", out_for_delivery: "ส่ง", delivered: "สำเร็จ", cancelled: "ยกเลิก",
+// Legacy fstatus matrix — matches `tb_forwarder.fstatus` (varchar(2) NOT NULL,
+// default '1', schema citation 0081_pcs_legacy_schema.sql L1601). The labels
+// mirror `forwarders-table.tsx` BULK_STATUS_OPTIONS verbatim.
+const STATUSES: TbForwarderStatus[] = ["1", "2", "3", "4", "5", "6", "7", "99"];
+const STATUS_LABEL: Record<TbForwarderStatus, string> = {
+  "1":  "1 · รอเข้าโกดังจีน",
+  "2":  "2 · ถึงโกดังจีนแล้ว",
+  "3":  "3 · กำลังส่งมาไทย",
+  "4":  "4 · ถึงไทยแล้ว",
+  "5":  "5 · รอชำระเงิน",
+  "6":  "6 · เตรียมส่ง",
+  "7":  "7 · ส่งแล้ว",
+  "99": "99 · สถานะพิเศษ",
 };
 
 type Mode = "idle" | "status" | "driver" | "cancel";
@@ -54,7 +77,7 @@ export function BulkActionsToolbar({ selectedFNos, onClearSelection }: Props) {
   const [topErr, setTopErr] = useState<string | null>(null);
 
   // Status mode
-  const [targetStatus, setTargetStatus] = useState<ForwarderStatus | "">("");
+  const [targetStatus, setTargetStatus] = useState<TbForwarderStatus | "">("");
   const [statusNote, setStatusNote] = useState("");
 
   // Driver mode
@@ -62,6 +85,9 @@ export function BulkActionsToolbar({ selectedFNos, onClearSelection }: Props) {
   const [driverHits, setDriverHits] = useState<DriverSearchHit[]>([]);
   const [pickedDriver, setPickedDriver] = useState<DriverSearchHit | null>(null);
   const [driverSearching, setDriverSearching] = useState(false);
+  // Driver mode — endTime selector (legacy `addFrom.php` 17/24/30 hr select).
+  // Default 17h matches the single-row driver assignment flow.
+  const [driverEndTimeHours, setDriverEndTimeHours] = useState<17 | 24 | 30>(17);
 
   // Cancel mode
   const [cancelReason, setCancelReason] = useState("");
@@ -75,6 +101,7 @@ export function BulkActionsToolbar({ selectedFNos, onClearSelection }: Props) {
     setDriverQuery("");
     setDriverHits([]);
     setPickedDriver(null);
+    setDriverEndTimeHours(17);
     setCancelReason("");
   }
 
@@ -129,7 +156,7 @@ export function BulkActionsToolbar({ selectedFNos, onClearSelection }: Props) {
     setTopErr(null);
     setOutcome(null);
     startTransition(async () => {
-      const res = await bulkAssignDriver(selectedFNos, pickedDriver.profile_id);
+      const res = await bulkAssignDriver(selectedFNos, pickedDriver.profile_id, driverEndTimeHours);
       applyResult(res);
     });
   }
@@ -197,7 +224,7 @@ export function BulkActionsToolbar({ selectedFNos, onClearSelection }: Props) {
         <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-primary-100">
           <select
             value={targetStatus}
-            onChange={(e) => setTargetStatus(e.target.value as ForwarderStatus | "")}
+            onChange={(e) => setTargetStatus(e.target.value as TbForwarderStatus | "")}
             className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm"
           >
             <option value="">— เลือกสถานะปลายทาง —</option>
@@ -234,6 +261,16 @@ export function BulkActionsToolbar({ selectedFNos, onClearSelection }: Props) {
               placeholder="ค้นหาคนขับ (member_code / ชื่อ / เบอร์)"
               className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm flex-1 min-w-[220px]"
             />
+            {/* endTime hr selector — legacy addFrom.php 17/24/30 hr <select>. */}
+            <select
+              value={driverEndTimeHours}
+              onChange={(e) => setDriverEndTimeHours(Number(e.target.value) as 17 | 24 | 30)}
+              className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm"
+            >
+              <option value={17}>17 ชม.</option>
+              <option value={24}>24 ชม.</option>
+              <option value={30}>30 ชม.</option>
+            </select>
             <button
               type="button"
               onClick={runDriverAssign}
