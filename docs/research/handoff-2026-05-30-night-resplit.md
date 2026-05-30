@@ -6,6 +6,18 @@
 
 ---
 
+## 0. 🔓 DESIGN LATITUDE — owner directive 2026-05-30 (read FIRST)
+
+Owner (พี่ป๊อป via เดฟ): **ปล่อยน้องๆ ดีไซน์เต็มที่ — อย่าบิดกั้นความคิด.** ภูม + ปอน (and any sub-agent) have **full latitude on design · UX · UI · layout · wording · "I think this is better".** If a teammate gets a revised brief from the owner, or has a better idea than the legacy, **do it — เอาตามน้องเลย** (follow the teammate, not a rigid legacy clone). UX/UI = entirely the teammate's call (`uxui น้องปรับได้หมด`).
+
+**The integrator (เดฟ) controls ONLY one thing:** that **every BASE FUNCTION of the legacy system actually works on prod** — customers + staff can really sign in, run jobs, receive jobs, move money, see real `tb_*` data; **ไม่เพี้ยน ไม่เอ๋อ ไม่ลวก, complete, NO death gap / dead flow / Potemkin (green toast + 0 real rows).** That's the floor. Above the floor, design is free.
+
+**The ONLY hard rule on teammates = no file-collision** (lane discipline below). Two people never edit the same file at once; split by FUNCTION across files. That's the entire constraint — everything else is unlocked.
+
+> So: a "fidelity gap" that matters = **a base function that doesn't work for real** (writes a dead table, has no entry point, breaks a flow). A "fidelity gap" that does NOT matter = **the screen looks different / nicer than legacy** — that's allowed, even encouraged. Don't file design-divergence as a bug; file only broken-function as a bug.
+
+---
+
 ## 1. What SHIPPED (don't redo — verified in code)
 
 | Area | Status | Where |
