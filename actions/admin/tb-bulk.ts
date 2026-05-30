@@ -306,6 +306,15 @@ export async function adminBulkApproveYuanPaymentsTb(
     async ({ adminId }) => {
       const admin = createAdminClient();
 
+      // 2026-05-30 P0-10 fix: tb_payment.adminid is varchar(10) (see
+      // supabase/migrations/0081_pcs_legacy_schema.sql L3626) — writing the
+      // Supabase UUID (36 chars) here throws Postgres 22001 "string data
+      // right truncation" and the entire bulk approve fails. Mirror the
+      // wallet-path pattern at L107: resolve the LEGACY admin slug (varchar(20)
+      // tb_admin.adminID) and use that for the column. `adminId` (UUID)
+      // stays as the audit log actor below where the column is uuid.
+      const legacyAdminId = await resolveLegacyAdminId();
+
       const { data: rows, error: readErr } = await admin
         .from("tb_payment")
         .select("id, userid, payyuan, paystatus")
@@ -321,7 +330,7 @@ export async function adminBulkApproveYuanPaymentsTb(
       // Bulk UPDATE in one call (no per-row balance work needed).
       const { error: updErr } = await admin
         .from("tb_payment")
-        .update({ paystatus: "2", adminid: adminId, paydateadmin: nowIso })
+        .update({ paystatus: "2", adminid: legacyAdminId, paydateadmin: nowIso })
         .in("id", rows.map((r) => (r as { id: number }).id))
         .eq("paystatus", "1");
 
