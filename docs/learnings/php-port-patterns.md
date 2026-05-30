@@ -8,6 +8,27 @@ Topics: porting `D:\xampp\htdocs\pcscargo\` → Pacred Next.js. Schema mappings 
 
 ---
 
+## 2026-05-31 — Split-casing landmine: `tb_users` is camelCase on prod, `tb_address`/`tb_forwarder` are lowercase (เดฟ · agent C)
+
+**Symptom (caught by a DB-connected test, NOT tsc):** a freshly-ported action querying `tb_users` threw `column "usershipby" does not exist` at runtime — even though `0081_*.sql` (the migration file on disk) declares the column lowercase. tsc + lint + a route-200 smoke all passed; only a test that hit the **real prod DB** surfaced it.
+
+**Root cause:** the **2026-05-27 batch-1 camelCase rename** (`tb_users` + `tb_admin` + `tb_co`, migrations 0113/0114) renamed those three tables' columns to camelCase **on prod**, but `tb_address` / `tb_forwarder` / `tb_header_order` / `tb_payment` / `tb_wallet*` stayed **lowercase**. The `0081` migration file still shows the OLD lowercase names, so reading the migration source LIES about prod reality. PostgREST fuzzy-matches some cases but raw `.eq("usershipby", …)` / `.select("userShipBy")` mismatches hard-error.
+
+**The canonical truth (verify against prod, not the migration file):**
+| Table family | Casing on prod | Examples |
+|---|---|---|
+| `tb_users`, `tb_admin`, `tb_co` | **camelCase** | `userID`, `userShipBy`, `userPayMethod`, `companyCustomer`, `coID`, `adminIDSale` |
+| `tb_address`, `tb_forwarder`, `tb_header_order`, `tb_payment`, `tb_wallet`, `tb_wallet_hs`, `tb_cnt*` | **lowercase** | `userid`, `fstatus`, `hstatus`, `paystatus`, `wallettotal`, `walletid` |
+
+**Rules this burns in:**
+1. **Any new code reading `tb_users`/`tb_admin`/`tb_co` MUST use camelCase column names** (`userID` not `userid`, `userShipBy` not `usershipby`). The join key on those tables is `userID` (camelCase); on every OTHER `tb_*` table it's `userid` (lowercase). This bites silently because the JS object key is just a string — no compiler catches it.
+2. **The migration FILE on disk is NOT the prod schema** for these 3 tables (0113/0114 renamed them post-0081). To know a column's real casing, probe prod (`select * … limit 1` and read the keys) — don't trust the `CREATE TABLE` in `0081`.
+3. **tsc cannot catch a wrong Supabase column string.** A DB-connected test (sentinel-guarded, hits real prod) is the ONLY gate that finds it. Every new `tb_*` reader/writer should ship with one. This is the §0c "destructure error + a real query" discipline made concrete.
+
+(Earlier related entry: "Schema casing drift" 2026-05-28 — this is the confirmed prod-runtime consequence.)
+
+---
+
 ## 2026-05-30 — Dual-table writes: a "best-effort mirror" that NEVER fires looks identical to "working" (เดฟ)
 
 **Symptom (owner-reported):** new customers who registered never appeared in `/admin?tab=inactiveCustomers` (or `/admin/customers/pending`). The admin queue showed zero recent signups even though `/register` succeeded and the customer could log in.

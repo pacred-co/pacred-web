@@ -3,7 +3,34 @@
 
 ---
 
-# 🚀 2026-05-31 — POOM-PACRED INTEGRATE + MAIN SHIP · read FIRST
+# 🔱 2026-05-31 — 4-AGENT PARALLEL SPRINT + 3-BATCH SHIP · read FIRST
+
+เดฟ session — owner "เอามาทำเอง ไม่ต้องรอ ก๊อต · แยกร่างรุมทำ". ส่ง main 3 batch จบในรอบเดียว.
+
+**📦 SHIPPED to main (`a58a6893` → `f56625b3`):**
+1. **ภูม Poom-pacred** (11 commits) — P0-13 5-tab shop UPDATE · P0-16 per-item refund · P1-5 earn-trigger · P1-10 promo carry · P1-13 refund repoint · bug#2 hnote · ws polyfill
+2. **ปอน InwPond007** (1,913 LOC) — `/payment-due` NEW page · address-book CRUD popups (P1-29) · sidebar badge
+3. **เดฟ 4-agent parallel** (worktree-isolated · disjoint files · no host-thrash):
+   - **A · P0-19 Phase 3** slip-top-up (wallet ไม่พอ → admin slip ส่วนต่าง → จ่ายจังหวะเดียว · `tb_wallet`/`_hs`/`_paydeposit`)
+   - **B · P1-16** register seed `tb_wallet`+`tb_cash_back` · juristic→`tb_corporate`
+   - **C · P1-18** getShipBy carrier picker + checkFreeArea (func-first, ปอน styles)
+   - **D · P0-23** commission earn→withdraw E2E บน `tb_user_sales` (Path A) + **ADR-0020**
+
+**🟢 GATE GREEN ก่อน ship:** `pnpm verify` EXIT 0 · 5 DB tests **84 pass/0 fail** (A15+B23+C9+D20+qa-flow17) · `pnpm build` EXIT 0.
+
+**🔑 4-agent pattern ที่ WORK (ตรงข้าม 119-agent bonfire):** flat `Agent` calls (ไม่ใช่ Workflow {schema}) · `isolation:"worktree"` · disjoint files verified BEFORE spawn · agents ห้าม `pnpm build`/`pnpm dev` (tsc+tsx เท่านั้น) → ไม่ thrash · merge serial (clean) · verify ครั้งเดียว. **ใช้ pattern นี้ต่อไป.**
+
+**⚠️ LANDMINE ใหม่ (learnings/php-port-patterns.md):** `tb_users`/`tb_admin`/`tb_co` = **camelCase บน prod** (`userID`,`userShipBy`,`coID`); `tb_*` อื่นทั้งหมด lowercase. migration file 0081 โกหก (โชว์ lowercase เก่า). tsc จับ column string ผิดไม่ได้ — ต้อง DB test ที่ยิง prod จริง.
+
+**🔐 ENV:** `CRON_SECRET=594bf48b…52106a` owner set Vercel prod แล้ว (redeploying). OTP env-gated ถูกต้อง — ห้ามตั้ง `EMERGENCY_OTP_BYPASS=true` prod.
+
+**🔴 เหลือ (next session):** P0-12 yuan self-approve+notify (ภูม) · P0-23 admin pay-out side (D ทำแค่ customer earn→withdraw) · B's rebuilt-`corporate` write cleanup · ปอน frontend polish + P1-30 · ภูม P1 batch (~20h: P1-2/4/6/7/9/11/12/25/26/27).
+
+**🧹 prune ได้:** 4 agent worktree (a5cb83/ad7d1b/a67cd9/a6589a) MERGED แล้ว.
+
+---
+
+# 🚀 2026-05-31 — POOM-PACRED INTEGRATE + MAIN SHIP (batch 1 · superseded by 4-agent above)
 
 เดฟ session — owner สั่ง "เอามาทำเอง ไม่ต้องรอ ก๊อต". รวม ภูม Poom-pacred (11 commits, clean merge no conflict) → run qa-flow ก่อน push → push main.
 
