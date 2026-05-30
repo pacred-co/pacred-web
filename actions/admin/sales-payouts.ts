@@ -1,5 +1,13 @@
 "use server";
 
+// ⚰️ TOMBSTONE (P0-23 · ADR-0020 · 2026-05-31): this file writes the DEAD
+// rebuilt `sales_payouts` / `sales_commissions` tables (empty on prod). The
+// commission SOT is the legacy `tb_user_sales` family — the live admin
+// pay-out path is now actions/admin/sales-payouts-tb.ts (+ the repointed
+// /admin/sales-payouts page). This module is retained only because
+// lib/validators/commission.ts still imports its type; do NOT wire it to any
+// UI. Delete with the rest of the rebuilt schema in Phase C+.
+
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
