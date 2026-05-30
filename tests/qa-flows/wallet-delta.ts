@@ -113,6 +113,14 @@
  */
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import WS from "ws";
+
+// Node <22 lacks native WebSocket — supabase-js realtime constructor errors at
+// new RealtimeClient() unless we polyfill globalThis.WebSocket before createClient.
+// (No-op on Node ≥22 / Bun / browsers.)
+if (typeof (globalThis as { WebSocket?: unknown }).WebSocket === "undefined") {
+  (globalThis as { WebSocket: unknown }).WebSocket = WS;
+}
 
 // Bind to the REAL actions (compile-time coupling — see docblock).
 // `import type` is erased at runtime, so this pulls in NO "use server" /
