@@ -160,21 +160,29 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
             </div>
             <div className="modal-body header-from">
               {/* L128 — legacy form action=profile/ method=POST; here it
-                  posts to the transcribed Server Action. */}
+                  posts to the transcribed Server Action. Tailwind chrome
+                  (ปอน 2026-05-30 · mobile-first): inputs text-base on mobile
+                  to dodge iOS zoom, tap targets ≥40px. ZERO logic changed —
+                  same name/id/type/defaultValue/required/value/onChange/
+                  onBlur/pattern + the is-invalid + messageEmail/messageTel
+                  hook classes the focusout-dedupe still targets. */}
               <form
                 id="updateProfile"
                 className="form-horizontal"
                 action={formAction}
                 autoComplete="off"
               >
-                <div className="form-group">
+                <div className="grid grid-cols-1 gap-3">
                   {/* L130-133 — ชื่อจริง */}
-                  <div className="mb-1">
-                    <label className="form-control-label" htmlFor="userName">
+                  <div>
+                    <label
+                      className="block text-xs font-medium text-muted mb-1"
+                      htmlFor="userName"
+                    >
                       ชื่อจริง
                     </label>
                     <input
-                      className="form-control form-control-lg"
+                      className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base md:text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
                       name="userName"
                       type="text"
                       placeholder="กรุณากรอกชื่อจริง"
@@ -184,13 +192,16 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                     />
                   </div>
                   {/* L134-137 — นามสกุล */}
-                  <div className="mb-1">
-                    <label className="form-control-label" htmlFor="userLastName">
+                  <div>
+                    <label
+                      className="block text-xs font-medium text-muted mb-1"
+                      htmlFor="userLastName"
+                    >
                       นามสกุล
                     </label>
                     <input
                       id="userLastName"
-                      className="form-control form-control-lg"
+                      className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base md:text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
                       name="userLastName"
                       type="text"
                       placeholder="กรุณากรอกนามสกุล"
@@ -199,14 +210,23 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                       required
                     />
                   </div>
-                  {/* L138-142 — อีเมล (focusout dedupe → checkEmailUser) */}
-                  <div className="mb-1">
-                    <label className="form-control-label" htmlFor="userEmail">
+                  {/* L138-142 — อีเมล (focusout dedupe → checkEmailUser).
+                      Keep `is-invalid` (red ring toggled by emailMsg) +
+                      `messageEmail` (legacy AJAX target) classes. */}
+                  <div>
+                    <label
+                      className="block text-xs font-medium text-muted mb-1"
+                      htmlFor="userEmail"
+                    >
                       อีเมล
                     </label>
                     <input
                       id="userEmail"
-                      className={`form-control form-control-lg${emailMsg ? " is-invalid" : ""}`}
+                      className={`w-full rounded-lg border bg-white dark:bg-surface px-3 py-2 text-base md:text-sm text-foreground focus:outline-none focus:ring-2 ${
+                        emailMsg
+                          ? "is-invalid border-red-500 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-border focus:ring-red-500/30 focus:border-red-500"
+                      }`}
                       name="userEmail"
                       type="email"
                       placeholder="กรุณากรอกอีเมล"
@@ -218,16 +238,26 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                         setEmailMsg(msg);
                       }}
                     />
-                    <span className="messageEmail text-danger">{emailMsg}</span>
+                    <span className="messageEmail block mt-1 text-xs text-red-600">
+                      {emailMsg}
+                    </span>
                   </div>
-                  {/* L150-154 — เบอร์โทร (focusout dedupe → checkTelUser) */}
-                  <div className="mb-1">
-                    <label className="form-control-label" htmlFor="userTel">
+                  {/* L150-154 — เบอร์โทร (focusout dedupe → checkTelUser).
+                      Keep `is-invalid` + `messageTel` hook classes. */}
+                  <div>
+                    <label
+                      className="block text-xs font-medium text-muted mb-1"
+                      htmlFor="userTel"
+                    >
                       เบอร์โทร
                     </label>
                     <input
                       id="userTel"
-                      className={`form-control form-control-lg${telMsg ? " is-invalid" : ""}`}
+                      className={`w-full rounded-lg border bg-white dark:bg-surface px-3 py-2 text-base md:text-sm text-foreground focus:outline-none focus:ring-2 ${
+                        telMsg
+                          ? "is-invalid border-red-500 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-border focus:ring-red-500/30 focus:border-red-500"
+                      }`}
                       name="userTel"
                       type="text"
                       pattern="\d*"
@@ -243,16 +273,19 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                       }}
                       required
                     />
-                    <div className="messageTel text-danger"> {telMsg} </div>
+                    <div className="messageTel mt-1 text-xs text-red-600"> {telMsg} </div>
                   </div>
                   {/* L156-159 — วันเกิด */}
-                  <div className="mb-1">
-                    <label className="form-control-label" htmlFor="userBirthday">
+                  <div>
+                    <label
+                      className="block text-xs font-medium text-muted mb-1"
+                      htmlFor="userBirthday"
+                    >
                       วันเกิด (ตัวอย่าง. 1998-01-01)
                     </label>
                     <input
                       id="userBirthday"
-                      className="form-control form-control-lg"
+                      className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base md:text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
                       name="userBirthday"
                       minLength={10}
                       maxLength={10}
@@ -264,13 +297,16 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                     />
                   </div>
                   {/* L161-174 — เพศ (legacy PHP echoes the selected option) */}
-                  <div className="mb-1">
-                    <label className="form-control-label" htmlFor="userSex">
+                  <div>
+                    <label
+                      className="block text-xs font-medium text-muted mb-1"
+                      htmlFor="userSex"
+                    >
                       เพศ
                     </label>
                     <select
                       id="userSex"
-                      className="form-control form-control-lg"
+                      className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base md:text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
                       name="userSex"
                       defaultValue={fields.userSex}
                       required
@@ -286,13 +322,16 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                     </select>
                   </div>
                   {/* L176-179 — เฟสบุ๊ค */}
-                  <div className="mb-1">
-                    <label className="form-control-label" htmlFor="userFacebook">
+                  <div>
+                    <label
+                      className="block text-xs font-medium text-muted mb-1"
+                      htmlFor="userFacebook"
+                    >
                       เฟสบุ๊ค
                     </label>
                     <input
                       id="userFacebook"
-                      className="form-control form-control-lg"
+                      className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base md:text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
                       name="userFacebook"
                       type="url"
                       placeholder="URL เฟสบุ๊ค"
@@ -300,24 +339,29 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                     />
                   </div>
                   {/* L181-184 — ไอดีไลน์ */}
-                  <div className="mb-1">
-                    <label className="form-control-label" htmlFor="userLineID">
+                  <div>
+                    <label
+                      className="block text-xs font-medium text-muted mb-1"
+                      htmlFor="userLineID"
+                    >
                       ไอดีไลน์
                     </label>
                     <input
                       id="userLineID"
-                      className="form-control form-control-lg"
+                      className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base md:text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
                       name="userLineID"
                       type="text"
                       placeholder="ไอดีไลน์"
                       defaultValue={fields.userLineID}
                     />
                   </div>
-                  {/* L185-188 — modal-footer action bar */}
-                  <div className="modal-footer">
+                  {/* L185-188 — modal-footer action bar. Keep `modal-footer`
+                      + `data-dismiss="modal"` (Bootstrap-JS close wiring) +
+                      id/name/value/type/disabled. */}
+                  <div className="modal-footer flex flex-wrap items-center justify-end gap-2 pt-2">
                     <button
                       type="button"
-                      className="btn btn-outline-secondary round btn-min-width waves-effect"
+                      className="rounded-lg border border-border bg-white dark:bg-surface px-4 py-2 text-sm font-medium text-foreground hover:bg-surface-alt"
                       data-dismiss="modal"
                     >
                       ยกเลิก
@@ -327,7 +371,7 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                       name="update"
                       value="update"
                       id="btnSubmit"
-                      className="btn btn-outline-info round btn-min-width waves-effect"
+                      className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
                       disabled={submitDisabled}
                     >
                       บันทึก

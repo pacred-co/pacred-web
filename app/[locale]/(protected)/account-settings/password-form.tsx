@@ -124,17 +124,21 @@ export function PasswordForm() {
 
   return (
     <>
-      {/* account-settings.php L79-113 — the password-change <form> */}
-      <span className="font-16">เปลี่ยนรหัสผ่านใหม่ </span>
-      <hr />
-      <form className="form-horizontal mt-2" action={formAction} autoComplete="off">
+      {/* account-settings.php L79-113 — the password-change <form>.
+          Tailwind rebuild of the Bootstrap-4 chrome (เดฟ 2026-05-30): same
+          form wiring (ids · names · types · server action · validation
+          state), only presentation classes converted. Mobile-first inputs
+          use text-base to stop iOS zoom. */}
+      <span className="text-base font-bold text-foreground">เปลี่ยนรหัสผ่านใหม่ </span>
+      <hr className="my-3 border-t border-border" />
+      <form className="mt-2" action={formAction} autoComplete="off">
         {/* L80-88 — รหัสผ่านเดิม */}
-        <div className="form-group row">
-          <div className="col-12" id="show_hide_password">
-            <label className="form-control-label">รหัสผ่านเดิม</label>
+        <div className="mb-3">
+          <div className="relative" id="show_hide_password">
+            <label className="block text-xs font-medium text-muted mb-1">รหัสผ่านเดิม</label>
             <input
               id="password"
-              className="form-control form-control-lg"
+              className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 pr-11 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
               name="password"
               type={show1 ? "text" : "password"}
               required
@@ -144,9 +148,10 @@ export function PasswordForm() {
               value={oldPass}
               onChange={(e) => setOldPass(e.target.value)}
             />
-            <div className="input-group-addon input-show-pass">
+            <div className="absolute right-1 bottom-0 h-[42px] flex items-center">
               <a
                 href=""
+                className="flex items-center justify-center w-10 h-10 text-muted hover:text-foreground"
                 onClick={(e) => {
                   e.preventDefault();
                   toggle1();
@@ -157,22 +162,20 @@ export function PasswordForm() {
             </div>
           </div>
         </div>
-        <div>
-          <hr />
-        </div>
+        <hr className="my-3 border-t border-border" />
         {/* L90-99 — รหัสผ่านใหม่ */}
-        <div className="form-group row">
-          <div className="col-12" id="show_hide_password2">
-            <label className="form-control-label">
+        <div className="mb-3">
+          <div className="relative" id="show_hide_password2">
+            <label className="block text-xs font-medium text-muted mb-1">
               รหัสผ่านใหม่{" "}
-              <span id="showText" className={`text-danger ${newSameAsOld ? "" : "d-none"}`}>
+              <span id="showText" className={`text-red-600 ${newSameAsOld ? "" : "hidden"}`}>
                 {" "}
                 รหัสผ่านใหม่ต้องไม่ตรงกับรหัสผ่านเดิม
               </span>
             </label>
             <input
               id="password1"
-              className="form-control form-control-lg"
+              className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 pr-11 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
               name="password1"
               type={show2 ? "text" : "password"}
               required
@@ -186,10 +189,10 @@ export function PasswordForm() {
                 setNewSameAsOld(oldPass === newPass && oldPass !== "");
               }}
             />
-            <div className="input-info">(6-20 ตัวอักษร)</div>
-            <div className="input-group-addon input-show-pass">
+            <div className="absolute right-1 top-[26px] h-[42px] flex items-center">
               <a
                 href=""
+                className="flex items-center justify-center w-10 h-10 text-muted hover:text-foreground"
                 onClick={(e) => {
                   e.preventDefault();
                   toggle2();
@@ -198,21 +201,26 @@ export function PasswordForm() {
                 <i className={show2 ? "fa fa-eye" : "fa fa-eye-slash"} aria-hidden="true"></i>
               </a>
             </div>
+            <div className="text-xs text-muted mt-1">(6-20 ตัวอักษร)</div>
           </div>
         </div>
         {/* L100-108 — ยืนยันรหัสผ่านใหม่ */}
-        <div className="form-group row">
-          <div className="col-12" id="show_hide_password3">
-            <label className="form-control-label">
+        <div className="mb-3">
+          <div className="relative" id="show_hide_password3">
+            <label className="block text-xs font-medium text-muted mb-1">
               ยืนยันรหัสผ่านใหม่{" "}
-              <span id="showText2" className={`text-danger ${confirmMismatch ? "" : "d-none"}`}>
+              <span id="showText2" className={`text-red-600 ${confirmMismatch ? "" : "hidden"}`}>
                 {" "}
                 รหัสผ่านใหม่ไม่ตรงกัน
               </span>
             </label>
             <input
               id="password2"
-              className={`form-control form-control-lg${confirmMismatch ? " is-invalid" : ""}`}
+              className={`w-full rounded-lg border bg-white dark:bg-surface px-3 py-2 pr-11 text-base md:text-sm focus:outline-none focus:ring-2 ${
+                confirmMismatch
+                  ? "is-invalid border-red-500 focus:ring-red-500/30 focus:border-red-500"
+                  : "border-border focus:ring-red-500/30 focus:border-red-500"
+              }`}
               name="password2"
               type={show3 ? "text" : "password"}
               required
@@ -226,9 +234,10 @@ export function PasswordForm() {
                 setConfirmMismatch(newPass !== confirmPass);
               }}
             />
-            <div className="input-group-addon input-show-pass">
+            <div className="absolute right-1 bottom-0 h-[42px] flex items-center">
               <a
                 href=""
+                className="flex items-center justify-center w-10 h-10 text-muted hover:text-foreground"
                 onClick={(e) => {
                   e.preventDefault();
                   toggle3();
@@ -240,10 +249,10 @@ export function PasswordForm() {
           </div>
         </div>
         {/* L109-112 — modal-footer action bar */}
-        <div className="modal-footer">
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-5 pt-4 border-t border-border">
           <button
             type="button"
-            className="btn btn-outline-secondary round btn-min-width waves-effect"
+            className="rounded-lg border border-border bg-white dark:bg-surface text-foreground hover:bg-surface-alt px-4 py-2 text-sm font-bold"
             data-dismiss="modal"
           >
             ยกเลิก
@@ -253,7 +262,7 @@ export function PasswordForm() {
             name="update"
             value="update"
             id="btnSubmit"
-            className="btn btn-outline-info round btn-min-width waves-effect"
+            className="rounded-lg bg-red-600 hover:bg-red-700 text-white px-4 py-2 text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={submitDisabled}
           >
             เปลี่ยนรหัสผ่านใหม่

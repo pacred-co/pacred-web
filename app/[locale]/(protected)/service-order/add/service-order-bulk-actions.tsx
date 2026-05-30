@@ -99,7 +99,7 @@ export function RowCheckbox({ hNo, selectable }: { hNo: string; selectable: bool
   return (
     <input
       type="checkbox"
-      className="dt-checkboxes"
+      className="dt-checkboxes h-5 w-5 accent-red-600 align-middle"
       checked={selected.has(hNo)}
       onChange={() => toggle(hNo)}
       aria-label={`เลือกออเดอร์ ${hNo}`}
@@ -137,15 +137,13 @@ export function RowCancelButton({ hNo }: { hNo: string }) {
         type="button"
         onClick={onClick}
         disabled={pending}
-        className="btn-as-link p-0 border-0 bg-transparent"
+        className="block w-full rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-xs font-bold px-3 py-1.5 text-center min-h-[40px] transition-colors"
         style={{ cursor: pending ? "wait" : "pointer" }}
       >
-        <p className="btn font-12 btn-danger btn-rounded btn-sm">
-          {pending ? "กำลังยกเลิก..." : "ยกเลิกออเดอร์"}
-        </p>
+        {pending ? "กำลังยกเลิก..." : "ยกเลิกออเดอร์"}
       </button>
       {err && (
-        <div className="text-white bg-danger font-12 p-05 mt-05" role="alert">
+        <div className="rounded-md bg-red-600 text-white text-xs px-2 py-1 mt-1" role="alert">
           {err}
         </div>
       )}
@@ -204,7 +202,7 @@ export function BulkCancelButton({ cancellableHNos }: { cancellableHNos: string[
     <>
       <button
         type="button"
-        className="btn btn-sm btn-danger waves-effect round"
+        className="inline-flex items-center justify-center rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-bold px-4 py-2 min-h-[40px] transition-colors"
         id="selectCancel"
         onClick={onClick}
         disabled={pending}
@@ -214,10 +212,8 @@ export function BulkCancelButton({ cancellableHNos }: { cancellableHNos: string[
       {banner && (
         <div
           className={
-            "font-12 p-05 mt-05 " +
-            (banner.kind === "ok"
-              ? "text-white bg-success"
-              : "text-white bg-danger")
+            "rounded-md text-xs px-2 py-1 mt-1.5 text-white " +
+            (banner.kind === "ok" ? "bg-emerald-600" : "bg-red-600")
           }
           role="status"
         >
@@ -323,65 +319,58 @@ export function BulkPayBar({
 
   return (
     <div
-      className="b-pay"
-      style={{ position: "fixed", bottom: "20px", zIndex: 999 }}
+      className="b-pay fixed inset-x-0 bottom-0 md:bottom-5 z-[999] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-0 md:flex md:justify-center pointer-events-none"
     >
-      <div className="row">
-        <div className="col-md-6 offset-md-3" style={{ marginLeft: "9%" }}>
-          <div className="row">
-            <div className="col-3 p-05 text-center">
-              <input
-                type="checkbox"
-                className="dt-checkboxes check-all c6"
-                checked={allChecked}
-                onChange={toggleAll}
-                aria-label="เลือกทั้งหมด"
-              />
-              <br />
-              เลือกทั้งหมด
-            </div>
-            <div className="col-6 p-05">
+      <div className="pointer-events-auto mx-auto md:mx-0 w-full md:max-w-2xl rounded-2xl border border-border bg-white dark:bg-surface shadow-lg p-3">
+        <div className="flex items-center gap-3">
+          <label className="flex flex-col items-center gap-1 text-xs text-muted shrink-0 cursor-pointer">
+            <input
+              type="checkbox"
+              className="dt-checkboxes check-all c6 h-5 w-5 accent-red-600"
+              checked={allChecked}
+              onChange={toggleAll}
+              aria-label="เลือกทั้งหมด"
+            />
+            เลือกทั้งหมด
+          </label>
+          <div className="flex-1 min-w-0 text-sm">
+            <div className="text-xs text-muted">
               จำนวนรายการ :{" "}
-              <span className="countPay">
+              <span className="countPay font-medium text-foreground">
                 {String(countPay).padStart(2, "0")}
               </span>
-              <br />
-              <b>
-                ยอดชำระรวม :{" "}
-                <span className="text-danger price-all">
-                  {priceAll > 0
-                    ? priceAll.toLocaleString("th-TH", { minimumFractionDigits: 2 })
-                    : "00000"}
-                </span>{" "}
-                บ.
-              </b>
             </div>
-            <div className="col-3 p-05 text-right">
-              <button
-                type="button"
-                className="btn btn-color-main waves-effect round animate__animated animate__infinite animate__headShake"
-                id="select"
-                onClick={onPay}
-                disabled={pending}
-              >
-                {pending ? "กำลังชำระ..." : "ชำระเงิน"}
-              </button>
-            </div>
+            <b className="block">
+              ยอดชำระรวม :{" "}
+              <span className="text-danger price-all">
+                {priceAll > 0
+                  ? priceAll.toLocaleString("th-TH", { minimumFractionDigits: 2 })
+                  : "00000"}
+              </span>{" "}
+              บ.
+            </b>
           </div>
-          {banner && (
-            <div
-              className={
-                "font-12 p-05 mt-05 " +
-                (banner.kind === "ok"
-                  ? "text-white bg-success"
-                  : "text-white bg-danger")
-              }
-              role="status"
-            >
-              {banner.text}
-            </div>
-          )}
+          <button
+            type="button"
+            className="animate__animated animate__infinite animate__headShake shrink-0 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-bold px-4 py-2.5 min-h-[44px] transition-colors"
+            id="select"
+            onClick={onPay}
+            disabled={pending}
+          >
+            {pending ? "กำลังชำระ..." : "ชำระเงิน"}
+          </button>
         </div>
+        {banner && (
+          <div
+            className={
+              "rounded-md text-xs px-2 py-1 mt-2 text-white " +
+              (banner.kind === "ok" ? "bg-emerald-600" : "bg-red-600")
+            }
+            role="status"
+          >
+            {banner.text}
+          </div>
+        )}
       </div>
     </div>
   );

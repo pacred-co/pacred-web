@@ -269,80 +269,58 @@ export default async function ProfilePage() {
           comment for the fidelity record):
           โปรไฟล์ <userID> | Pacred */}
 
-      {/* BEGIN: Content — profile.php L78 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          {/* L82-93 — breadcrumb header */}
-          <div className="content-header row">
-            <div className="content-header-left col-12">
-              <div className="row breadcrumbs-top">
-                <div className="breadcrumb-wrapper col-12">
-                  <ol className="breadcrumb ">
-                    <li className="breadcrumb-item">
-                      <Link href="/dashboard">
-                        <span className="menu-home">หน้าแรก</span>
-                      </Link>
-                    </li>
-                    <li className="breadcrumb-item active">โปรไฟล์</li>
-                  </ol>
-                </div>
-              </div>
+      {/* BEGIN: Content — profile.php L78. Tailwind chrome (ปอน 2026-05-30 ·
+          mobile-first). Workflow + data identical to the legacy profile.php;
+          only presentation moved Bootstrap-4 → Tailwind, matching the
+          /service-import + /service-payment siblings. The `.modal` image-edit
+          shells + their data-toggle/data-dismiss wiring + the dropify hidden
+          inputs are kept 1:1 (Bootstrap-JS opens them · profile.css styles
+          them) — only the page surface is restyled. */}
+      <div className="pcs-content-pad w-full px-3 md:px-6 py-3 md:py-6">
+        {/* L82-93 — breadcrumb header */}
+        <nav className="mb-3 flex items-center gap-1.5 text-sm text-muted">
+          <Link href="/dashboard" className="hover:text-foreground">
+            หน้าแรก
+          </Link>
+          <span aria-hidden>/</span>
+          <span className="text-foreground font-medium">โปรไฟล์</span>
+        </nav>
+
+        {/* Basic Carousel start — L95-96 */}
+        <section id="basic-carousel">
+          <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 md:p-6">
+            {/* L102-119 — two corner icon buttons */}
+            <div className="flex items-center justify-end gap-1">
+              {/* L104 — legacy opens the #edit-profile modal via
+                  data-toggle; the modal markup is rendered by
+                  <EditProfileForm> below. Bootstrap-4 vendor JS wires the
+                  toggle — href/data-toggle/data-target kept EXACTLY. */}
+              <a
+                href="#edit-profile"
+                data-toggle="modal"
+                data-target="#edit-profile"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted hover:bg-surface-alt hover:text-foreground"
+                aria-label="แก้ไขข้อมูล"
+                title="แก้ไขข้อมูล"
+              >
+                <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="css-i6dzq1">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+              </a>
+              {/* L112 — link to the account-settings screen */}
+              <Link
+                href="/account-settings"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted hover:bg-surface-alt hover:text-foreground"
+                aria-label="ตั้งค่าบัญชีผู้ใช้งาน"
+                title="ตั้งค่าบัญชีผู้ใช้งาน"
+              >
+                <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="css-i6dzq1">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+              </Link>
             </div>
-          </div>
-          {/* L94 — content-body */}
-          <div className="content-body pr110">
-            {/* Basic Carousel start — L95-96 */}
-            <section id="basic-carousel">
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  <div className="card border-black">
-                    <div className="card-content">
-                      <div className="card-body">
-                        {/* L102-119 — two corner icon buttons */}
-                        <ul className="list-inline dl text-right">
-                          <li className="list-inline-item">
-                            {/* L104 — legacy opens the #edit-profile
-                                modal via data-toggle; the modal markup
-                                is rendered by <EditProfileForm> below.
-                                Bootstrap-4 vendor JS wires the toggle. */}
-                            <a
-                              href="#edit-profile"
-                              data-toggle="modal"
-                              data-target="#edit-profile"
-                            >
-                              <button
-                                className="btn tn-icon btn-pure warning p-0 pull-up"
-                                type="button"
-                              >
-                                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="css-i6dzq1">
-                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                                </svg>
-                              </button>
-                              <span className="font-normal text-dark d-none d-sm-inline-block d-sm-none">
-                                แก้ไขข้อมูล
-                              </span>
-                            </a>
-                          </li>
-                          <li className="list-inline-item text-info">
-                            {/* L112 — link to the account-settings screen */}
-                            <Link href="/account-settings">
-                              <button
-                                className="btn tn-icon btn-pure warning p-0 pull-up"
-                                type="button"
-                              >
-                                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="css-i6dzq1">
-                                  <circle cx="12" cy="12" r="3"></circle>
-                                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                                </svg>
-                              </button>
-                              <span className="font-normal text-dark d-none d-sm-inline-block d-sm-none">
-                                ตั้งค่าบัญชีผู้ใช้งาน
-                              </span>
-                            </Link>
-                          </li>
-                        </ul>
 
                         {/* L120-194 — the #edit-profile modal + form.
                             The modal SELECT (L144) reads the same
@@ -362,7 +340,7 @@ export default async function ProfilePage() {
                         />
 
                         {/* L196-255 — avatar + edit-image modals + name */}
-                        <div className="text-center">
+                        <div className="mt-4 flex flex-col items-center text-center">
                           {/* L197-199 — magnific-popup avatar zoom link */}
                           <a
                             className="image-popup-vertical-fit el-link"
@@ -371,7 +349,7 @@ export default async function ProfilePage() {
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               src={userPicture}
-                              className="rounded-circle"
+                              className="h-[120px] w-[120px] md:h-[150px] md:w-[150px] rounded-full object-cover border border-border shadow-sm"
                               width={150}
                               alt=""
                             />
@@ -379,10 +357,11 @@ export default async function ProfilePage() {
                           {/* L200-204 — the edit-image button. Opens the
                               #edit-img-profile modal via data-toggle
                               (vendor JS wires it). The crop-and-upload
-                              behind it is NOT wired — see the page-doc. */}
-                          <div className="edit-img-profile mb--20">
+                              behind it is NOT wired — see the page-doc.
+                              data-toggle/data-target kept EXACTLY. */}
+                          <div className="edit-img-profile">
                             <button
-                              className="btn rounded-circle btn-xs  btn-dark text-white"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-neutral-900 text-white shadow-md hover:bg-black"
                               type="button"
                               data-toggle="modal"
                               data-target="#edit-img-profile"
@@ -506,63 +485,69 @@ export default async function ProfilePage() {
                             </div>
                           </div>
                           {/* L253-254 — name + member code */}
-                          <h2 className="">
-                            <span className="d-inline-block">{fullName}</span>
+                          <h2 className="mt-3 text-xl md:text-2xl font-bold text-foreground">
+                            <span>{fullName}</span>
                           </h2>
-                          <h5 className="">
-                            รหัสสมาชิก : <span>{userID}</span>
+                          <h5 className="mt-1 text-sm text-muted">
+                            รหัสสมาชิก : <span className="font-medium text-foreground">{userID}</span>
                             <span></span>
                           </h5>
                         </div>
 
                         {/* L257 — divider */}
-                        <hr />
+                        <hr className="my-4 border-t border-border" />
                         {/* L258-299 — contact (left) + address/dob/sex (right) */}
-                        <div className="row">
-                          <div className="col-12 col-md-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
                             {/* L260-263 — email */}
-                            <span className="font-18 font-weight-500">
+                            <span className="text-sm font-semibold text-foreground">
                               อีเมล{" "}
                             </span>
-                            <p>
-                              <a className="font-16" href={`mailto:${userEmail}`}>
+                            <p className="mt-0.5 mb-3 break-words">
+                              <a
+                                className="text-sm text-red-600 hover:underline"
+                                href={`mailto:${userEmail}`}
+                              >
                                 {userEmail}
                               </a>
                             </p>
                             {/* L264-269 — phone */}
-                            <span className="font-18 font-weight-500">
+                            <span className="text-sm font-semibold text-foreground">
                               เบอร์โทร{" "}
                             </span>
-                            <ul className="list-unstyled">
-                              <li className="">
-                                <a className="font-16" href={`tel:${userTel}`}>
+                            <ul className="mt-0.5 mb-3 list-none p-0">
+                              <li>
+                                <a
+                                  className="text-sm text-red-600 hover:underline"
+                                  href={`tel:${userTel}`}
+                                >
                                   {userTel}
                                 </a>
                               </li>
                             </ul>
                             {/* L270-283 — Facebook + LINE */}
-                            <ul className="list-unstyled">
-                              <li className="mt-2 mb-2">
+                            <ul className="list-none p-0 space-y-2">
+                              <li>
                                 <a
-                                  className="text-muted font-16"
+                                  className="inline-flex items-center gap-2 text-sm text-muted"
                                   href={userFacebook || ""}
                                   target="_blank"
                                   rel="noreferrer"
                                 >
-                                  <button className="btn btn-info">
+                                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#1e9ff2] text-white">
                                     <i className="fab fa-facebook-f"></i>
-                                  </button>{" "}
+                                  </span>{" "}
                                   :{" "}
                                   {userFacebook === "" || userFacebook == null
                                     ? "ยังไม่ระบุ"
                                     : userFacebook}
                                 </a>
                               </li>
-                              <li className="mt-2 mb-2">
-                                <a className="text-muted font-16" href="">
-                                  <button className="btn btn-success">
-                                    <i className="fab fa-line font-18"></i>
-                                  </button>{" "}
+                              <li>
+                                <a className="inline-flex items-center gap-2 text-sm text-muted" href="">
+                                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#0cc27e] text-white">
+                                    <i className="fab fa-line"></i>
+                                  </span>{" "}
                                   :{" "}
                                   {userLineID === "" || userLineID == null
                                     ? "ยังไม่ระบุ"
@@ -571,197 +556,141 @@ export default async function ProfilePage() {
                               </li>
                             </ul>
                           </div>
-                          <div className="col-12 col-md-6">
+                          <div>
                             {/* L286 — main address + add-address link */}
-                            <span className="font-18 font-weight-500">
-                              ที่อยู่จัดส่งสินค้า (ที่อยู่หลัก)
-                            </span>{" "}
-                            <Link
-                              className="text-info font-14 float-right"
-                              href="/addresses/add"
-                            >
-                              <i className="ft-plus"></i> เพิ่มที่อยู่
-                            </Link>
-                            <p className="text-muted font-16">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-semibold text-foreground">
+                                ที่อยู่จัดส่งสินค้า (ที่อยู่หลัก)
+                              </span>{" "}
+                              <Link
+                                className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:underline"
+                                href="/addresses/add"
+                              >
+                                <i className="ft-plus"></i> เพิ่มที่อยู่
+                              </Link>
+                            </div>
+                            <p className="mt-0.5 mb-3 text-sm text-muted break-words">
                               {fullAddress !== "" ? (
                                 fullAddress
                               ) : (
-                                <span className="text-danger">
+                                <span className="text-red-600">
                                   กรุณาเพิ่มที่อยู่ (จำเป็น*)
                                 </span>
                               )}
                             </p>
                             {/* L290-293 — birthday */}
-                            <span className="font-18 font-weight-500">
+                            <span className="text-sm font-semibold text-foreground">
                               เกิดเมื่อ{" "}
                             </span>
-                            <p className="text-muted font-16">
+                            <p className="mt-0.5 mb-3 text-sm text-muted">
                               {userBirthday === "" || userBirthday == null
                                 ? "ยังไม่ระบุ"
                                 : userBirthday}
                             </p>
                             {/* L294-297 — sex */}
-                            <span className="font-18 font-weight-500">เพศ</span>
-                            <p className="text-muted font-16">
+                            <span className="text-sm font-semibold text-foreground">เพศ</span>
+                            <p className="mt-0.5 text-sm text-muted">
                               {userSex === "" || userSex == null
                                 ? "ยังไม่ระบุ"
                                 : userSex}
                             </p>
                           </div>
                         </div>
-                      </div>
-                    </div>
+            </div>
+            {/* / main card */}
+
+            {/* eCommerce statistic — profile.php L306-397. 4 Tailwind stat
+                cards (grid: 1-col phone · 2-col sm · 4-col xl). Same hrefs +
+                tam-counter/data-count hooks + counts. Bootstrap progress bars
+                → thin Tailwind accent bars; theme colours kept per-card. */}
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+              {/* L308-329 — ฝากสั่งซื้อสินค้า → shops/ */}
+              <Link
+                href="/service-order"
+                className="group rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 transition-all hover:shadow-md hover:-translate-y-0.5"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="text-left">
+                    <h2 className="text-2xl font-bold text-[#1e9ff2] tam-counter" data-count={countShops}>{countShops}</h2>
+                    <h4 className="text-sm text-muted">ฝากสั่งซื้อสินค้า</h4>
                   </div>
+                  <i className="icon-basket-loaded text-3xl text-[#1e9ff2]"></i>
                 </div>
-              </div>
+                <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-alt">
+                  <div className="h-full w-full rounded-full bg-gradient-to-r from-[#1e9ff2] to-[#144b7f]"></div>
+                </div>
+              </Link>
+              {/* L330-351 — ฝากนำเข้าสินค้า → forwarder/ */}
+              <Link
+                href="/service-import"
+                className="group rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 transition-all hover:shadow-md hover:-translate-y-0.5"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="text-left">
+                    <h2 className="text-2xl font-bold text-[#ff9149] tam-counter" data-count={countForwarder}>
+                      {countForwarder}
+                    </h2>
+                    <h4 className="text-sm text-muted">ฝากนำเข้าสินค้า</h4>
+                  </div>
+                  <i className="ft-box text-3xl text-[#ff9149]"></i>
+                </div>
+                <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-alt">
+                  <div className="h-full w-full rounded-full bg-gradient-to-r from-[#ff9149] to-[#ff6707]"></div>
+                </div>
+              </Link>
+              {/* L352-373 — ฝากชำระเงิน → payment/ */}
+              <Link
+                href="/service-payment"
+                className="group rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 transition-all hover:shadow-md hover:-translate-y-0.5"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="text-left">
+                    <h2 className="text-2xl font-bold text-[#9c27b0] tam-counter" data-count={countPayment}>
+                      {countPayment}
+                    </h2>
+                    <h4 className="text-sm text-muted">ฝากชำระเงิน</h4>
+                  </div>
+                  <i className="text-[#9c27b0]">
+                    <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="css-i6dzq1">
+                      <line x1="12" y1="1" x2="12" y2="23"></line>
+                      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                    </svg>
+                  </i>
+                </div>
+                <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-alt">
+                  <div className="h-full w-full rounded-full bg-gradient-to-r from-[#9c27b0] to-[#56157c]"></div>
+                </div>
+              </Link>
+              {/* L374-395 — กระเป๋าสตางค์ → wallet/ */}
+              <Link
+                href="/wallet"
+                className="group rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 transition-all hover:shadow-md hover:-translate-y-0.5"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="text-left">
+                    <h2 className="text-2xl font-bold text-[#0cc27e]">
+                      <span className="tam-counter" data-count={walletTotal}>
+                        {walletTotal}
+                      </span>
+                      <span className="text-sm font-medium"> บาท</span>
+                    </h2>
+                    <h4 className="text-sm text-muted">กระเป๋าสตางค์</h4>
+                  </div>
+                  <i className="icon-wallet text-3xl text-[#0cc27e]"></i>
+                </div>
+                <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-alt">
+                  <div className="h-full w-full rounded-full bg-gradient-to-r from-[#0cc27e] to-[#0a8e5e]"></div>
+                </div>
+              </Link>
+            </div>
+            {/* / eCommerce statistic */}
+          </section>
+          {/* Basic Carousel end — L399 */}
 
-              {/* eCommerce statistic — profile.php L306-397 */}
-              <div className="row pt-2">
-                {/* L308-329 — ฝากสั่งซื้อสินค้า → shops/ */}
-                <div className="col-xl-3 col-lg-6 col-12 align-self-center">
-                  <Link href="/service-order">
-                    <div className="card pull-up">
-                      <div className="card-content">
-                        <div className="card-body">
-                          <div className="media d-flex">
-                            <div className="media-body text-left">
-                              <h2 className="info tam-counter" data-count={countShops}>{countShops}</h2>
-                              <h4>ฝากสั่งซื้อสินค้า</h4>
-                            </div>
-                            <div>
-                              <i className="icon-basket-loaded info font-large-2 float-right"></i>
-                            </div>
-                          </div>
-                          <div className="progress progress-sm mt-1 mb-0 box-shadow-2">
-                            <div
-                              className="progress-bar bg-gradient-x-info"
-                              role="progressbar"
-                              style={{ width: "100%" }}
-                              aria-valuenow={100}
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                            ></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                </div>
-                {/* L330-351 — ฝากนำเข้าสินค้า → forwarder/ */}
-                <div className="col-xl-3 col-lg-6 col-12 align-self-center">
-                  <Link href="/service-import">
-                    <div className="card pull-up">
-                      <div className="card-content">
-                        <div className="card-body">
-                          <div className="media d-flex">
-                            <div className="media-body text-left">
-                              <h2 className="warning tam-counter" data-count={countForwarder}>
-                                {countForwarder}
-                              </h2>
-                              <h4>ฝากนำเข้าสินค้า</h4>
-                            </div>
-                            <div>
-                              <i className="ft-box warning font-large-2 float-right"></i>
-                            </div>
-                          </div>
-                          <div className="progress progress-sm mt-1 mb-0 box-shadow-2">
-                            <div
-                              className="progress-bar bg-gradient-x-warning"
-                              role="progressbar"
-                              style={{ width: "100%" }}
-                              aria-valuenow={100}
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                            ></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                </div>
-                {/* L352-373 — ฝากชำระเงิน → payment/ */}
-                <div className="col-xl-3 col-lg-6 col-12 align-self-center">
-                  <Link href="/service-payment">
-                    <div className="card pull-up">
-                      <div className="card-content">
-                        <div className="card-body">
-                          <div className="media d-flex">
-                            <div className="media-body text-left">
-                              <h2 className="purple tam-counter" data-count={countPayment}>
-                                {countPayment}
-                              </h2>
-                              <h4>ฝากชำระเงิน</h4>
-                            </div>
-                            <div>
-                              <i className="purple font-large-2 float-right">
-                                <svg viewBox="0 0 24 24" width="35" height="35" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="css-i6dzq1 font-large-2">
-                                  <line x1="12" y1="1" x2="12" y2="23"></line>
-                                  <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                                </svg>
-                              </i>
-                            </div>
-                          </div>
-                          <div className="progress progress-sm mt-1 mb-0 box-shadow-2">
-                            <div
-                              className="progress-bar bg-gradient-x-purple"
-                              role="progressbar"
-                              style={{ width: "100%" }}
-                              aria-valuenow={100}
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                            ></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                </div>
-                {/* L374-395 — กระเป๋าสตางค์ → wallet/ */}
-                <div className="col-xl-3 col-lg-6 col-12 align-self-center">
-                  <Link href="/wallet">
-                    <div className="card pull-up">
-                      <div className="card-content">
-                        <div className="card-body">
-                          <div className="media d-flex">
-                            <div className="media-body text-left">
-                              <h2 className="success">
-                                <span className="tam-counter" data-count={walletTotal}>
-                                  {walletTotal}
-                                </span>
-                                <span className="font-14"> บาท</span>
-                              </h2>
-                              <h4>กระเป๋าสตางค์</h4>
-                            </div>
-                            <div>
-                              <i className="icon-wallet success font-large-2 float-right"></i>
-                            </div>
-                          </div>
-                          <div className="progress progress-sm mt-1 mb-0 box-shadow-2">
-                            <div
-                              className="progress-bar bg-gradient-x-success"
-                              role="progressbar"
-                              style={{ width: "100%" }}
-                              aria-valuenow={100}
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                            ></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                </div>
-              </div>
-              {/* / eCommerce statistic */}
-            </section>
-            {/* Basic Carousel end — L399 */}
-
-            {/* LINE Notify panel REMOVED 2026-05-26 — service EOL'd
-                2025-03-31. LIFF + Messaging API replacement pending
-                (see task L · docs/learnings/partner-apis-quirks.md
-                "2026-05-26 LINE Notify dead"). */}
-          </div>
-        </div>
+          {/* LINE Notify panel REMOVED 2026-05-26 — service EOL'd
+              2025-03-31. LIFF + Messaging API replacement pending
+              (see task L · docs/learnings/partner-apis-quirks.md
+              "2026-05-26 LINE Notify dead"). */}
       </div>
       {/* END: Content — L403 */}
     </div>

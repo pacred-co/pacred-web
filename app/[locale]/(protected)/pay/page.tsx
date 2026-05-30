@@ -1,19 +1,28 @@
 import Script from "next/script";
-import { Link } from "@/i18n/navigation";
+import { QrCode } from "lucide-react";
 import { requireAuth } from "@/lib/auth/require-auth";
 
 /**
- * PromptPay QR-generator utility — a FAITHFUL 1:1 TRANSCRIPTION of the
- * legacy PCS Cargo `member/pay.php` (D1 / ADR-0017 · the faithful-port
- * transcription workstream · runbook
- * `docs/runbook/faithful-port-transcription.md`).
+ * PromptPay QR-generator utility — ported from the legacy PCS Cargo
+ * `member/pay.php` (D1 / ADR-0017 · the faithful-port workstream ·
+ * runbook `docs/runbook/faithful-port-transcription.md`).
  *
- * This is a transcription, NOT a reinterpretation. The JSX below is the
- * exact HTML markup `pay.php` renders — same elements, same Bootstrap-4
- * class names, same structure, same labels, same order. The visual
- * identity comes from the legacy theme CSS, brought in verbatim as the
+ * ── Tailwind rebuild (2026-05-30 · ปอน) ──
+ * The page's FUNCTION is the legacy pay.php PromptPay-QR generator (same
+ * #pp-id / #amount inputs, same #myBtn, same #myModal QR popup, same
+ * qrcode-pay vendor plugins + inline init script); the CHROME is now our
+ * own Tailwind, mobile-first design (per AGENTS.md §0a — "we copy the
+ * working system, polish the look ourselves"). NO client wiring / id /
+ * script changed — pure presentation. The #myModal stays Bootstrap-4
+ * markup because the inline init script opens it via jQuery `.modal()`
+ * (the vendor bundle the (protected) layout stages); `.pcs-legacy` +
+ * pay.css are kept for that modal + any layout-scope globals.
+ *
+ * Legacy reference (the exact HTML pay.php renders — same elements,
+ * Bootstrap-4 class names, labels, order — preserved as the fidelity
+ * record): visual identity used to come from the legacy theme CSS, the
  * static `.pcs-legacy`-scoped `public/legacy/pcs/pay.css`, loaded via a
- * plain `<link>` so it bypasses the app's Tailwind v4 / PostCSS pipeline.
+ * plain `<link>` so it bypassed the app's Tailwind v4 / PostCSS pipeline.
  *
  * Route: NEW screen `/pay` — `pay.php` is a standalone customer utility
  * (a "สร้าง QR Code รับเงิน" PromptPay-QR generator); it is not a
@@ -100,177 +109,155 @@ export default async function PayPage() {
 
   return (
     <div className="pcs-legacy">
-      {/* Legacy PCS theme CSS — static public/ asset, loaded via a plain
-          <link> so it bypasses the app's Tailwind/PostCSS pipeline. */}
+      {/* Legacy PCS theme CSS — kept for the Bootstrap-4 #myModal (opened
+          by the inline jQuery `.modal()` init script) + layout-scope
+          globals. The visible form below is Tailwind. */}
       <link rel="stylesheet" href="/legacy/pcs/pay.css" />
 
       {/* pay.php <title> L4 (Next.js owns <head> — kept here as a
           comment for the fidelity record):  | Pacred */}
 
-      {/* BEGIN: Content — pay.php L11 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          {/* L15-26 — breadcrumb header. The legacy active crumb is the
-              literal placeholder "ชื่อหน้า" — transcribed verbatim. */}
-          <div className="content-header row">
-            <div className="content-header-left col-12 mb-2">
-              <div className="row breadcrumbs-top ">
-                <div className="breadcrumb-wrapper col-12">
-                  <ol className="breadcrumb ">
-                    <li className="breadcrumb-item">
-                      <Link href="/dashboard">หน้าแรก</Link>
-                    </li>
-                    <li className="breadcrumb-item active">ชื่อหน้า</li>
-                  </ol>
-                </div>
+      {/* Page content — Tailwind rebuild. `.pcs-content-pad` so the
+          (protected) layout's desktop padding (sidebar + FloatingTabs
+          clearance) kicks in. */}
+      <div className="pcs-content-pad w-full px-3 md:px-6 py-3 md:py-6">
+        <section className="mx-auto max-w-[640px] overflow-hidden rounded-2xl border border-border bg-white shadow-sm dark:bg-surface">
+          {/* ── Header ── */}
+          <div className="border-b border-border px-4 py-3 md:px-5 md:py-4">
+            <h1 className="flex items-center gap-2 text-base md:text-xl font-bold text-foreground">
+              <QrCode className="h-5 w-5 md:h-6 md:w-6 shrink-0 text-primary-600" />
+              <span>สร้าง QR Code รับเงิน</span>
+            </h1>
+            <p className="mt-1 text-xs md:text-sm text-muted">
+              สร้างคิวอาร์โค้ดพร้อมเพย์สำหรับรับเงิน
+            </p>
+          </div>
+
+          {/* ── QR-generator form — pay.php L35-62. Same #pp-id / #amount /
+              #myBtn ids the inline init script binds to. ── */}
+          <div className="px-4 py-5 md:px-8 md:py-8">
+            <form className="space-y-4">
+              <div>
+                <label
+                  htmlFor="pp-id"
+                  className="mb-1 block text-sm font-medium text-foreground"
+                >
+                  พร้อมเพย์ ไอดี
+                </label>
+                {/* pay.php L46 puts an inline
+                    `onKeyPress="if(this.value.length==15) return false;"`
+                    on this input (a 15-char cap). A Server Component cannot
+                    carry a JSX event-handler prop, so the cap is wired
+                    identically by the inline page <Script> below (a
+                    keypress listener on #pp-id) — same behaviour, 1:1. */}
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  pattern="\d*"
+                  defaultValue={promptPayId}
+                  className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-foreground placeholder:text-muted transition-colors focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/30 dark:bg-surface"
+                  id="pp-id"
+                  placeholder="เบอร์มือถือ, รหัสประจำตัวประชาชน, TAX ID, e-Wallet"
+                  required
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="amount"
+                  className="mb-1 block text-sm font-medium text-foreground"
+                >
+                  จำนวนเงิน
+                </label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-foreground placeholder:text-muted transition-colors focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/30 dark:bg-surface"
+                  id="amount"
+                  placeholder="1000.00 (Optional)"
+                />
+              </div>
+              <button
+                type="button"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-red-700 active:bg-red-800"
+                id="myBtn"
+              >
+                <QrCode className="h-4 w-4" />
+                สร้าง QR Code รับเงิน
+              </button>
+            </form>
+          </div>
+        </section>
+      </div>
+
+      {/* ── QR-code modal — pay.php L69-94 ──
+          STILL Bootstrap-4 markup: the inline init script opens it with
+          jQuery `.modal()` (vendor bundle from the (protected) layout) and
+          the qrcode-pay plugins fill #qrcode. ids/data-dismiss preserved
+          verbatim. */}
+      <div
+        className="modal fade"
+        id="myModal"
+        tabIndex={-1}
+        role="dialog"
+        aria-labelledby="myModalLabel"
+      >
+        <div className="modal-dialog" role="document">
+          <div className="modal-content">
+            <div className="modal-header">
+              <button
+                type="button"
+                className="close"
+                data-dismiss="modal"
+                aria-label="Close"
+              >
+                <span aria-hidden="true">&times;</span>
+              </button>
+              <h4 className="modal-title" id="myModalLabel">
+                QR Code รับเงิน
+              </h4>
+            </div>
+            <div className="modal-body" style={{ margin: "auto" }}>
+              {/* pay.php L78 points at the legacy img/PromptPay-logo.jpg
+                  which does not exist in the legacy tree (the legacy itself
+                  renders broken here). Reference the official PromptPay
+                  mark — FLAG (B). */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/legacy/pcs/PromptPay-logo.jpg"
+                alt="พร้อมเพย์"
+                style={{ maxWidth: "250px", marginBottom: "10px" }}
+              />
+              <div
+                id="qrcode"
+                style={{ width: "250px", height: "250px" }}
+              ></div>
+              <div
+                id="pp-id-show"
+                style={{ textAlign: "center", marginTop: "10px" }}
+              ></div>
+              <div id="amount-show" style={{ textAlign: "center" }}></div>
+              <div
+                id="info-show"
+                style={{
+                  textAlign: "center",
+                  fontSize: "70%",
+                  marginTop: "10px",
+                  color: "#A6A6A6",
+                }}
+              >
+                สร้าง QR Code เองที่ pp.js.org
               </div>
             </div>
-          </div>
-          {/* L27 — content-body */}
-          <div className="content-body">
-            {/* Basic Carousel start — pay.php L28 */}
-            <section>
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  <div className="card">
-                    <div className="card-content">
-                      <div className="card-body">
-                        {/* ── QR-generator form — pay.php L35-62 ── */}
-                        <section className="text-center" id="generate">
-                          <div className="generate-section">
-                            <div className="container generate-content">
-                              <div className="row generate-form">
-                                <div
-                                  className="col-md-8 mx-auto"
-                                  style={{ marginTop: "90px" }}
-                                >
-                                  <form>
-                                    <div className="form-group">
-                                      <label>พร้อมเพย์ ไอดี</label>
-                                      {/* pay.php L46 puts an inline
-                                          `onKeyPress="if(this.value.length==15)
-                                          return false;"` on this input
-                                          (a 15-char cap). A Server
-                                          Component cannot carry a JSX
-                                          event-handler prop, so the cap
-                                          is wired identically by the
-                                          inline page <Script> below
-                                          (a keypress listener on
-                                          #pp-id) — same behaviour, 1:1. */}
-                                      <input
-                                        type="number"
-                                        inputMode="numeric"
-                                        pattern="\d*"
-                                        defaultValue={promptPayId}
-                                        className="form-control"
-                                        id="pp-id"
-                                        placeholder="เบอร์มือถือ, รหัสประจำตัวประชาชน, TAX ID, e-Wallet"
-                                        required
-                                      />
-                                    </div>
-                                    <div className="form-group error">
-                                      <label>จำนวนเงิน</label>
-                                      <input
-                                        type="number"
-                                        inputMode="decimal"
-                                        step="0.01"
-                                        className="form-control"
-                                        id="amount"
-                                        placeholder="1000.00 (Optional)"
-                                      />
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="btn btn-primary btn-lg"
-                                      id="myBtn"
-                                    >
-                                      สร้าง QR Code รับเงิน
-                                    </button>
-                                  </form>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </section>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {/* ── QR-code modal — pay.php L69-94 ──
-                  Transcribed 1:1. The legacy jQuery `.modal()` open is
-                  driven by the inline script below + the global vendor
-                  bundle; the QR canvas is filled by the qrcode-pay
-                  plugins. */}
-              <div
-                className="modal fade"
-                id="myModal"
-                tabIndex={-1}
-                role="dialog"
-                aria-labelledby="myModalLabel"
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-default close-button"
+                data-dismiss="modal"
               >
-                <div className="modal-dialog" role="document">
-                  <div className="modal-content">
-                    <div className="modal-header">
-                      <button
-                        type="button"
-                        className="close"
-                        data-dismiss="modal"
-                        aria-label="Close"
-                      >
-                        <span aria-hidden="true">&times;</span>
-                      </button>
-                      <h4 className="modal-title" id="myModalLabel">
-                        QR Code รับเงิน
-                      </h4>
-                    </div>
-                    <div className="modal-body" style={{ margin: "auto" }}>
-                      {/* pay.php L78 points at the legacy img/PromptPay-logo.jpg
-                          which does not exist in the legacy tree (the
-                          legacy itself renders broken here). Reference
-                          the official PromptPay mark — FLAG (B). */}
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src="/legacy/pcs/PromptPay-logo.jpg"
-                        alt="พร้อมเพย์"
-                        style={{ maxWidth: "250px", marginBottom: "10px" }}
-                      />
-                      <div
-                        id="qrcode"
-                        style={{ width: "250px", height: "250px" }}
-                      ></div>
-                      <div
-                        id="pp-id-show"
-                        style={{ textAlign: "center", marginTop: "10px" }}
-                      ></div>
-                      <div id="amount-show" style={{ textAlign: "center" }}></div>
-                      <div
-                        id="info-show"
-                        style={{
-                          textAlign: "center",
-                          fontSize: "70%",
-                          marginTop: "10px",
-                          color: "#A6A6A6",
-                        }}
-                      >
-                        สร้าง QR Code เองที่ pp.js.org
-                      </div>
-                    </div>
-                    <div className="modal-footer">
-                      <button
-                        type="button"
-                        className="btn btn-default close-button"
-                        data-dismiss="modal"
-                      >
-                        Close
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {/* Basic Carousel end — pay.php L95 */}
-            </section>
+                Close
+              </button>
+            </div>
           </div>
         </div>
       </div>

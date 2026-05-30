@@ -60,11 +60,11 @@ export function ServiceImportEditAddressForm({
   return (
     <>
       <span id="text-fAddress">
-        <span className="d-inline-block" id="to-edit-fAddress">
+        <span className="inline-block" id="to-edit-fAddress">
           {!open && (
             <a
               href="javascript:void(0)"
-              className="text-info font-10"
+              className="ml-1 text-xs font-medium text-sky-600 hover:underline"
               onClick={(e) => {
                 e.preventDefault();
                 setOpen(true);
@@ -76,71 +76,72 @@ export function ServiceImportEditAddressForm({
         </span>
       </span>
       <div
-        className=""
         id="fAddressForm"
         style={{ display: open ? "block" : "none" }}
+        className="mt-2"
       >
         {isEditable ? (
-          <>
-            <div className="float-right">
+          <form
+            className="rounded-xl border border-border bg-surface-alt/40 p-3"
+            method="POST"
+            action="#"
+            autoComplete="off"
+            onSubmit={handleSubmit}
+            aria-busy={isPending}
+          >
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <label className="block text-xs font-medium text-muted" htmlFor="addressID">
+                ที่อยู่จัดส่ง
+              </label>
               <Link
                 href="/addresses/add"
                 target="_blank"
-                className="text-info font-0_85rem"
+                className="inline-flex items-center gap-1 text-xs font-medium text-sky-600 hover:underline"
               >
                 เพิ่มที่อยู่ใหม่ <i className="fa fa-plus"></i>
               </Link>
             </div>
-            <br />
-            <form
-              className="form-horizontal d-table"
-              method="POST"
-              action="#"
-              autoComplete="off"
-              onSubmit={handleSubmit}
-              aria-busy={isPending}
-            >
-              {error && (
-                <div className="alert alert-danger" role="alert">
-                  {error}
-                </div>
-              )}
-              <input type="hidden" name="ID" value={forwarderId} />
-              <select
-                className="form-control"
-                name="addressID"
-                required
-                defaultValue=""
-              >
-                <option value="">กรุณาเลือกที่อยู่ในการจัดส่ง</option>
-                {options.map((o) => (
-                  <option key={o.addressid} value={o.addressid}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary btn-rounded"
-                  id="to-text-fAddress"
-                  onClick={() => setOpen(false)}
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="submit"
-                  name="update_fAddress"
-                  className="btn btn-color-main btn-rounded"
-                  disabled={isPending}
-                >
-                  บันทึก
-                </button>
+            {error && (
+              <div className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+                {error}
               </div>
-            </form>
-          </>
+            )}
+            <input type="hidden" name="ID" value={forwarderId} />
+            <select
+              className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base md:text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-colors"
+              name="addressID"
+              id="addressID"
+              required
+              defaultValue=""
+            >
+              <option value="">กรุณาเลือกที่อยู่ในการจัดส่ง</option>
+              {options.map((o) => (
+                <option key={o.addressid} value={o.addressid}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-full border border-border bg-white dark:bg-surface px-4 py-2 text-sm font-medium text-foreground hover:bg-surface-alt active:scale-[0.98] transition-all"
+                id="to-text-fAddress"
+                onClick={() => setOpen(false)}
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="submit"
+                name="update_fAddress"
+                className="inline-flex items-center justify-center rounded-full bg-red-600 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-red-700 active:scale-[0.98] transition-all disabled:opacity-60"
+                disabled={isPending}
+              >
+                บันทึก
+              </button>
+            </div>
+          </form>
         ) : (
-          <span className="bg-danger text-white">
+          <span className="inline-flex items-center rounded bg-red-600 px-2 py-1 text-sm text-white">
             ไม่สามารถเปลี่ยนที่อยู่ได้เนื่องจากสินค้าถึงไทยแล้ว
           </span>
         )}

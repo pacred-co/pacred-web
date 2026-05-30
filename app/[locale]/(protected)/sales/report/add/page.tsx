@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveSalesAgent } from "../../team-map";
@@ -201,151 +200,160 @@ export default async function SalesReportAddPage() {
 
   return (
     <div className="pcs-legacy">
-      {/* Legacy PCS theme CSS — static public/ asset via a plain <link>. */}
+      {/* Legacy PCS theme CSS — kept for layout-scope globals; the
+          visible surface below is Tailwind (2026-05-30 rebuild · ปอน). */}
       <link rel="stylesheet" href="/legacy/pcs/report-user-sales.css" />
 
       {/* report-user-sales-add.php <title> L14 (fidelity-record comment):
           รายงานยอดขายทีม {userIDMain} | Pacred */}
 
-      {/* BEGIN: Content — report-user-sales-add.php L30 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          {/* L34-45 — breadcrumb header */}
-          <div className="content-header row">
-            <div className="content-header-left col-12 mb-2">
-              <div className="row breadcrumbs-top ">
-                <div className="breadcrumb-wrapper col-12">
-                  <ol className="breadcrumb ">
-                    <li className="breadcrumb-item">
-                      <Link href="/dashboard">
-                        <span className="menu-home">หน้าแรก</span>
-                      </Link>
-                    </li>
-                    <li className="breadcrumb-item active">
-                      รายงานยอดขายทีม {userIDMain}
-                    </li>
-                  </ol>
-                </div>
-              </div>
-            </div>
+      <div className="pcs-content-pad w-full px-3 md:px-6 pt-3 pb-24 md:py-6">
+        <section className="bg-white dark:bg-surface border border-border rounded-2xl shadow-sm overflow-hidden">
+          {/* ── Header ── */}
+          <div className="border-b border-border px-3 py-3 md:px-5 md:py-4">
+            <h3 className="text-base md:text-xl font-bold text-foreground">
+              รายการที่ยังไม่ได้เบิกเงิน {userIDMain}
+            </h3>
           </div>
-          {/* L46 — content-body */}
-          <div className="content-body pr110">
-            <section id="basic-carousel">
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  <div className="card">
-                    <div className="pt-1 pl-1 pr-1">
-                      <h3 className="">
-                        รายการที่ยังไม่ได้เบิกเงิน {userIDMain}
-                      </h3>
-                    </div>
-                    <div className="card-content">
-                      <div className="card-body pl-1 pr-1 pt-0">
-                        <div className="row">
-                          <div className="col-12">
-                            <h4 className="text-center text-md-left d-inline-block"></h4>
-                            {/* L69-133 — the payout form. Legacy is
-                                method="POST" action="report-user-sales-add/"
-                                — the submit is the deferred Server Action
-                                (see the file header §1/§3); the form
-                                markup is transcribed 1:1. */}
-                            <form
-                              className="form-horizontal"
-                              method="POST"
-                              action="/sales/report/add"
-                              autoComplete="off"
-                            >
-                              <div className="table-responsive ">
-                                <table
-                                  id="myTable"
-                                  className="table display table-bordered table-striped dataTable no-footer dtr-inline"
-                                >
-                                  <thead>
-                                    <tr className="text-center">
-                                      <th>ID</th>
-                                      <th>วันที่สถานะสำเร็จ</th>
-                                      <th>รหัสสมาชิก</th>
-                                      <th>เลขแทรคกิ้ง</th>
-                                      <th>ปริมาตร(CBM)</th>
-                                      <th>น้ำหนัก(Kg)</th>
-                                      <th>ค่าฝากนำเข้าจีน</th>
-                                      <th>สถานะ</th>
-                                      <th>
-                                        สถานะเบิก
-                                        <br />
-                                        เงินส่วนแบ่ง
-                                      </th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {rows.map((row) => (
-                                      <tr key={row.usID}>
-                                        <td>{row.usID}</td>
-                                        <td className="text-center font-12">
-                                          {row.dateLabel} {row.timeLabel} น.
-                                        </td>
-                                        <td>{row.userID}</td>
-                                        <td>{row.fTrackingCHN}</td>
-                                        <td className="text-right">
-                                          {numberFormat(row.fVolume, 5)}{" "}
-                                        </td>
-                                        <td className="text-right">
-                                          {numberFormat(row.fWeight, 2)}{" "}
-                                        </td>
-                                        <td className="text-right">
-                                          {numberFormat(row.fTotalPrice, 2)}{" "}
-                                        </td>
-                                        <td className="text-center">
-                                          {fStatusBadge(row.fStatus)}
-                                        </td>
-                                        <td className="text-center">
-                                          {nameStatusUserPay(row.usStatus)}
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                              {/* L130-132 — the fixed-position payout
-                                  trigger. Legacy: jQuery #select1 click
-                                  → AJAX getListForwarder.php (a deferred
-                                  Server Action — see the file header §3). */}
-                              <div
-                                className="btn-group"
-                                role="group"
-                                aria-label="Basic example"
-                                style={{
-                                  position: "fixed",
-                                  bottom: "20px",
-                                  zIndex: 999,
-                                }}
-                              >
-                                <a href="#">
-                                  <span
-                                    className="btn btn-color-main waves-effect round"
-                                    id="select1"
-                                  >
-                                    ทำรายการเบิกเงินรายการที่เลือก
-                                  </span>
-                                </a>
-                              </div>
-                            </form>
-                            <hr />
+
+          {/* L69-133 — the payout form. Legacy method="POST"
+              action="report-user-sales-add/" — the submit is the deferred
+              Server Action (file header §1/§3). method/action/autoComplete
+              + form id (myTable) + #select1 + #list-forwarder-data are kept
+              verbatim so the legacy select→confirm→pay jQuery still wires. */}
+          <form
+            className="form-horizontal px-3 py-3 md:px-5 md:py-4"
+            method="POST"
+            action="/sales/report/add"
+            autoComplete="off"
+          >
+            {rows.length === 0 ? (
+              <p className="py-12 text-center text-sm text-muted">
+                ไม่มีรายการที่ยังไม่ได้เบิกเงิน
+              </p>
+            ) : (
+              <>
+                {/* ── Mobile: stacked cards (md:hidden) ── */}
+                <div className="space-y-3 md:hidden">
+                  {rows.map((row) => (
+                    <div
+                      key={row.usID}
+                      className="rounded-xl border border-border bg-white dark:bg-surface p-3 shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="min-w-0 break-all font-mono text-sm font-semibold text-foreground">
+                          {row.fTrackingCHN || `#${row.usID}`}
+                        </span>
+                        <span className="shrink-0">{fStatusBadge(row.fStatus)}</span>
+                      </div>
+                      <p className="mt-1 font-mono text-xs text-muted">
+                        ID {row.usID} · {row.userID}
+                      </p>
+                      <div className="mt-2.5 grid grid-cols-3 gap-1 border-t border-dashed border-border pt-2 text-center">
+                        <div>
+                          <div className="text-[10px] text-muted">CBM</div>
+                          <div className="text-sm font-semibold tabular-nums font-mono">
+                            {numberFormat(row.fVolume, 5)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-muted">Kg</div>
+                          <div className="text-sm font-semibold tabular-nums font-mono">
+                            {numberFormat(row.fWeight, 2)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-muted">ค่าฝากนำเข้าจีน</div>
+                          <div className="text-sm font-bold tabular-nums font-mono text-red-600">
+                            {numberFormat(row.fTotalPrice, 2)}
                           </div>
                         </div>
                       </div>
+                      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-dashed border-border pt-2">
+                        <span className="text-[11px] text-muted">
+                          {row.dateLabel} {row.timeLabel} น.
+                        </span>
+                        <span>{nameStatusUserPay(row.usStatus)}</span>
+                      </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              </div>
-            </section>
-            {/* Basic Carousel end */}
-          </div>
-        </div>
+
+                {/* ── Desktop: table (#myTable kept for DataTables JS;
+                    plain div wrapper isolates Tailwind from the legacy
+                    `.dataTable` cascade) ── */}
+                <div className="hidden md:block overflow-x-auto rounded-xl border border-border">
+                  <table id="myTable" className="dataTable w-full text-sm">
+                    <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+                      <tr>
+                        <th className="px-3 py-3 font-medium whitespace-nowrap">ID</th>
+                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">วันที่สถานะสำเร็จ</th>
+                        <th className="px-3 py-3 font-medium whitespace-nowrap">รหัสสมาชิก</th>
+                        <th className="px-3 py-3 font-medium whitespace-nowrap">เลขแทรคกิ้ง</th>
+                        <th className="px-3 py-3 font-medium text-right whitespace-nowrap">ปริมาตร(CBM)</th>
+                        <th className="px-3 py-3 font-medium text-right whitespace-nowrap">น้ำหนัก(Kg)</th>
+                        <th className="px-3 py-3 font-medium text-right whitespace-nowrap">ค่าฝากนำเข้าจีน</th>
+                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">สถานะ</th>
+                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">สถานะเบิกเงินส่วนแบ่ง</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((row) => (
+                        <tr
+                          key={row.usID}
+                          className="border-t border-border hover:bg-surface-alt/30"
+                        >
+                          <td className="px-3 py-2.5 font-mono text-xs text-foreground">{row.usID}</td>
+                          <td className="px-3 py-2.5 text-center text-xs text-muted whitespace-nowrap">
+                            {row.dateLabel} {row.timeLabel} น.
+                          </td>
+                          <td className="px-3 py-2.5 font-mono text-xs text-foreground whitespace-nowrap">
+                            {row.userID}
+                          </td>
+                          <td className="px-3 py-2.5 font-mono text-xs text-foreground whitespace-nowrap">
+                            {row.fTrackingCHN}
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums font-mono text-foreground">
+                            {numberFormat(row.fVolume, 5)}
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums font-mono text-foreground">
+                            {numberFormat(row.fWeight, 2)}
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums font-mono font-semibold text-red-600">
+                            {numberFormat(row.fTotalPrice, 2)}
+                          </td>
+                          <td className="px-3 py-2.5 text-center">{fStatusBadge(row.fStatus)}</td>
+                          <td className="px-3 py-2.5 text-center">{nameStatusUserPay(row.usStatus)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            {/* L130-132 — the fixed-position payout trigger. Legacy:
+                jQuery #select1 click → AJAX getListForwarder.php (deferred
+                Server Action, file header §3). id="select1" preserved;
+                restyled to a Tailwind floating bar (clears FloatingTabs
+                on mobile via bottom-24). */}
+            <div
+              className="btn-group fixed left-1/2 -translate-x-1/2 bottom-24 md:bottom-6 z-[999]"
+              role="group"
+              aria-label="Basic example"
+            >
+              <a href="#">
+                <span
+                  className="inline-flex items-center justify-center rounded-full bg-red-600 text-white px-6 py-3 text-sm font-bold shadow-lg shadow-red-600/30 hover:bg-red-700 active:scale-[0.98] transition-all cursor-pointer whitespace-nowrap"
+                  id="select1"
+                >
+                  ทำรายการเบิกเงินรายการที่เลือก
+                </span>
+              </a>
+            </div>
+          </form>
+        </section>
       </div>
-      {/* END: Content — report-user-sales-add.php L149 */}
       {/* L150 — the jQuery AJAX target div for getListForwarder.php */}
       <div id="list-forwarder-data"></div>
     </div>

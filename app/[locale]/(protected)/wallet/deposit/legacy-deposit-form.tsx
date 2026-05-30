@@ -126,19 +126,22 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
     <form
       ref={formRef}
       onSubmit={handleSubmit}
-      className="form-horizontal"
+      className="w-full"
       method="POST"
       action={action}
       autoComplete="off"
       encType="multipart/form-data"
     >
-      <div className="form-group pt-1">
-        <div className="">
-          <label className="form-control-label" htmlFor="amount">
+      <div className="pt-1">
+        <div>
+          <label
+            className="block text-xs font-medium text-muted mb-1"
+            htmlFor="amount"
+          >
             จำนวนเงิน (บาท)
           </label>
           <input
-            className="form-control form-control-lg text-right"
+            className="w-full rounded-lg border border-border px-3 py-2 text-right text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 disabled:opacity-60"
             placeholder="00.00"
             name="amount"
             id="amount"
@@ -152,7 +155,7 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
           <div className="text-center">
             <button
               type="button"
-              className="btn btn-sm btn-outline-danger round m-1"
+              className="mt-2 inline-flex items-center justify-center rounded-lg border border-red-500 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors disabled:opacity-60"
               id="myBtn"
               onClick={onGenerateQr}
               disabled={pending || qrPending}
@@ -161,14 +164,15 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
             </button>
           </div>
         </div>
-        <div className="mb-1 qrcodeMain text-center">
+        <div className="qrcodeMain mt-3 mb-1 rounded-xl border border-border bg-surface-alt/40 dark:bg-surface p-4 text-center">
           {/* Legacy wallet.php built the QR via a client-side JS lib into
               this `#qrcode` div (a 250×250 canvas). Pacred replaces the
               lib call with `getDepositQr` (which uses the server-side
               `promptpay-qr` + `qrcode` against the canonical
               `PROMPTPAY_ID` env) and renders the returned PNG data URL
               inside the same wrapper so the surrounding layout (account
-              number, PromptPay-id line, company name) is unchanged. */}
+              number, PromptPay-id line, company name) is unchanged.
+              The inline 250×250 size is load-bearing (QR canvas) — kept. */}
           <div
             id="qrcode"
             style={{
@@ -177,6 +181,7 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
               height: "250px",
               display: "inline-block",
             }}
+            className="max-w-full"
           >
             {qrDataUrl ? (
               <Image
@@ -185,27 +190,30 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
                 width={250}
                 height={250}
                 unoptimized
+                className="mx-auto h-auto max-w-full rounded-lg"
               />
             ) : null}
           </div>
           {kind === "credit" ? (
             <>
-              <div style={{ textAlign: "center", marginTop: "10px" }}>
+              <div className="mt-2 text-sm text-foreground">
                 เลขที่บัญชี : <span>225-2-91144-0</span>
               </div>
-              <div style={{ textAlign: "center" }}>
+              <div className="text-sm text-foreground">
                 พร้อมเพย์ :{" "}
                 <span id="pp-id-show2">0-1055-64077-71-6</span>
               </div>
             </>
           ) : null}
-          <h5 className="text-center">บริษัท แพคเรด (ประเทศไทย) จำกัด</h5>
+          <h5 className="mt-2 text-sm font-semibold text-foreground">
+            บริษัท แพคเรด (ประเทศไทย) จำกัด
+          </h5>
           {/* Legacy `#amount-show` was populated client-side from
               $("#amount").val() once the QR rendered. Pacred mirrors that
               by showing the same amount the QR was generated for (so
               there's no drift if the customer edits the input after
               generating). */}
-          <div id="amount-show" style={{ textAlign: "center" }}>
+          <div id="amount-show" className="text-center text-foreground">
             {qrDataUrl && qrAmount != null ? (
               <>
                 <strong>
@@ -214,14 +222,22 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
               </>
             ) : null}
           </div>
-          <div className="text-right">
-            <a href="/wallet/deposit" target="_blank" rel="noreferrer">
+          <div className="mt-2 text-right">
+            <a
+              href="/wallet/deposit"
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm font-medium text-red-600 hover:underline"
+            >
               ดูวิธีการเติมเงิน
             </a>
           </div>
         </div>
-        <div className="mb-1">
-          <label className="form-control-label" htmlFor="imagesSlip">
+        <div className="mt-3 mb-1">
+          <label
+            className="block text-xs font-medium text-muted mb-1"
+            htmlFor="imagesSlip"
+          >
             หลักฐานการโอน (สลิปรายการ)
           </label>
           <div className="fallback">
@@ -229,7 +245,7 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
               type="file"
               name="imagesSlip"
               id="imagesSlip"
-              className="dropify"
+              className="dropify block w-full rounded-lg border border-border px-3 py-2 text-base md:text-sm file:mr-3 file:rounded-md file:border-0 file:bg-red-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 disabled:opacity-60"
               accept="image/*"
               data-max-file-size="9M"
               required
@@ -238,9 +254,11 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
           </div>
         </div>
         {kind === "wallet" && (
-          <div className="mb-1">
-            <div>เงื่อนไขการถอนเงิน ที่ต้องทราบก่อนเติมเงินเข้าระบบ</div>
-            <ol className="">
+          <div className="mt-3 mb-1 rounded-lg border border-border bg-surface-alt/40 dark:bg-surface px-3 py-2.5 text-sm text-muted">
+            <div className="font-medium text-foreground mb-1">
+              เงื่อนไขการถอนเงิน ที่ต้องทราบก่อนเติมเงินเข้าระบบ
+            </div>
+            <ol className="list-decimal space-y-1 pl-5">
               <li>
                 {" "}
                 สามารถถอนเงินได้เมื่อ
@@ -283,10 +301,10 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
             {msg.text}
           </div>
         )}
-        <div className="modal-footer">
+        <div className="mt-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
           <button
             type="button"
-            className="btn btn-outline-secondary round waves-effect"
+            className="inline-flex items-center justify-center rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-surface-alt transition-colors disabled:opacity-60"
             data-dismiss="modal"
             disabled={pending}
           >
@@ -294,7 +312,7 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
           </button>
           <button
             type="submit"
-            className="btn btn-outline-info round waves-effect submit-wait"
+            className="submit-wait inline-flex items-center justify-center rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-red-700 transition-colors disabled:opacity-60"
             name="addData"
             disabled={pending}
           >
