@@ -84,37 +84,42 @@ function invoiceStatuses(typeSlug: string): MenubarItem[] {
 // Used for receipt (3 statuses — สร้าง / ชำระแล้ว / ดูทั้งหมด — legacy
 // has no pending state for receipts).
 //
-// ── 2026-05-30 ภูม flagged #7 (ROUTING FIX) ──
-// The "ใบเสร็จรับเงิน → ฝากนำเข้า แบบเรทราคา / ฝากนำเข้า แบบรายการ" leaves
-// now route at the REAL Pacred page /admin/accounting/forwarder-invoice
-// (the tb_receipt-backed list + add/print page · Wave 29 pivot · the only
-// working accounting doc-flow in Pacred today). Was previously routing
-// from the INVOICE leaf which was misleading. Other (type,service) combos
-// still fall through to the catch-all "🚧 Wave 24+" stub.
+// ── 2026-05-31 sitting-H-fix (ภูม) — receipt leaves consolidate at /receipts ──
+// All 4 service leaves now point at the new PEAK-style 7-tab list at
+// `/admin/accounting/receipts` (the canonical ใบเสร็จรับเงิน landing).
+// `/admin/accounting/forwarder-invoice` (the Wave 29 list) was demoted to a
+// redirect → /receipts in the same commit; its [id] mPDF print page + /add
+// manual-issue form stay live as canonical detail + create endpoints.
 //
-// ── 2026-05-30 sitting-Phase-B (ภูม) — new PEAK-style ใบเสร็จ surface ──
-// `/admin/accounting/receipts` is the NEW PEAK-pattern ใบเสร็จ list with
-// 7-tab nav (ล่าสุด/ทั้งหมด/ร่าง/รอชำระ/ออกแล้ว/ยกเลิก/e-Receipt). It is
-// the canonical landing for "ใบเสร็จรับเงิน" going forward. The legacy
-// forwarder-invoice list still works for service-specific receipts (it's
-// scoped to forwarder rows), but the new page handles ALL receipts in
-// tb_receipt regardless of source. Leaves keep both wired so accounting
-// staff can pick the view they prefer.
-function receiptStatuses(typeSlug: string): MenubarItem[] {
+// Each service leaf carries its own `?service=` query (and `?kind=` for the
+// ฝากนำเข้า เรท vs รายการ split — distinguishable via the existence of
+// `tb_forwarder_item` children, confirmed 2026-05-31 schema audit). The
+// server-side filter for ?service/?kind is staged for Phase H-fix 3 (next
+// turn) — the URLs are wired now so the headmenu reflects the intent and
+// the leaves work as bookmarks when the filter lands.
+//
+// "สร้าง" leaf points at the existing Wave 29 manual-issue form at
+// /admin/accounting/forwarder-invoice/add (kept untouched in the redirect
+// shuffle). Per AGENTS.md §0d every function ships its entry-point.
+function receiptStatuses(): MenubarItem[] {
+  const base = "/admin/accounting/receipts";
+  const addPath = "/admin/accounting/forwarder-invoice/add";
   return SERVICES.map((s) => {
-    const isForwarderReceipt =
-      typeSlug === "receipt" && (s.slug === "forwarder-rate" || s.slug === "forwarder-item");
-    const base = isForwarderReceipt
-      ? "/admin/accounting/forwarder-invoice"
-      : `/admin/accounting/cargo/income/${typeSlug}/${s.slug}`;
-    const newPath = isForwarderReceipt ? `${base}/add` : `${base}/new`;
+    // Service → URL param mapping.
+    let serviceQs = "";
+    switch (s.slug) {
+      case "shop":            serviceQs = "?service=shop";                       break;
+      case "forwarder-rate":  serviceQs = "?service=forwarder&kind=rate";        break;
+      case "forwarder-item":  serviceQs = "?service=forwarder&kind=item";        break;
+      case "payment":         serviceQs = "?service=payment";                    break;
+    }
     return {
       label: s.label,
-      href: base,
+      href: `${base}${serviceQs}`,
       children: [
-        { label: "สร้าง",      href: newPath },
-        { label: "ชำระแล้ว",    href: `${base}?status=paid` },
-        { label: "ดูทั้งหมด",   href: base },
+        { label: "สร้าง",       href: addPath },
+        { label: "ชำระแล้ว",     href: `${base}${serviceQs}${serviceQs ? "&" : "?"}tab=issued` },
+        { label: "ดูทั้งหมด",    href: `${base}${serviceQs}${serviceQs ? "&" : "?"}tab=all` },
       ],
     };
   });
@@ -154,7 +159,7 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       {
         label: "ใบเสร็จรับเงิน",
         href: "/admin/accounting/receipts",  // 2026-05-30 sitting-Phase-B: PEAK 7-tab landing (NEW)
-        children: receiptStatuses("receipt"),
+        children: receiptStatuses(),
       },
       { label: "ใบลดหนี้",                              children: notesStatuses("credit-note") },
       { label: "ใบเพิ่มหนี้",                            children: notesStatuses("debit-note") },
@@ -239,16 +244,11 @@ export const ACCOUNTING_HUB_CARDS = [
     href: "/admin/accounting/closing",
     badge: "live",
   },
-  {
-    // 2026-05-30 ภูม flagged #7: was titled "Forwarder Invoice / ใบกำกับภาษี
-    // ฝากนำเข้า". The destination renders RECEIPT history (Wave 29 pivot —
-    // tb_receipt-backed). Relabelled to "Forwarder Receipt / ประวัติใบเสร็จ
-    // ฝากนำเข้า" so the card truthfully describes the page.
-    title: "Forwarder Receipt",
-    desc: "ประวัติใบเสร็จฝากนำเข้า",
-    href: "/admin/accounting/forwarder-invoice",
-    badge: "live",
-  },
+  // 2026-05-31 sitting-H-fix: removed duplicate "Forwarder Receipt" card.
+  // /admin/accounting/forwarder-invoice now redirects to /admin/accounting/
+  // receipts (the new PEAK 7-tab list) — having both as separate cards on the
+  // hub landing was confusing duplicate UX. The "ใบเสร็จรับเงิน (PEAK style)"
+  // card above is the single canonical entry point.
   {
     title: "งวดบัญชี + กระทบยอด",
     desc: "งวดบัญชี · กระทบยอดประจำเดือน",
