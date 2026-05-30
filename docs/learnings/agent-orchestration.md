@@ -234,3 +234,23 @@ new Promise(r => setTimeout(r, 1500)).then(() => ({
 **Why this matters next time:** ภูม stressed verbatim: "อย่าบอกคลีนแล้วระบบใช้ไม่ได้จริงนะ" (don't say it's clean when the system doesn't actually work). Use this 4-check pattern after every rewrite. Don't trust "TSC + lint clean + route 200" alone.
 
 **Cross-links:** AGENTS.md §0c · [`docs/learnings/verify-deep-flow.md`](verify-deep-flow.md) · today's session (23 click-through verifies before claiming Wave 20 batch done).
+
+---
+
+## [2026-05-30] A file-mutating background Agent MUST use `isolation: "worktree"` — else it tangles your working tree
+
+**What happened.** เดฟ spawned a background `general-purpose` Agent to do the cust-03 forwarder cluster while continuing to edit files in the main session — but forgot `isolation: "worktree"`. The agent ran `git checkout -b claude/cust03-forwarder` **in the shared working directory** and started editing `forwarder.ts` + `service-import/**`. Meanwhile เดฟ was editing `service-order.ts` + `delivery-ack-panel.tsx` for an unrelated ack-removal. Result: ONE branch, ONE working tree, BOTH changesets intermixed + uncommitted (the agent had even staged a file deletion). A `pnpm typecheck` "passed" — but on the *contaminated* tree, so the green signal was meaningless for either change alone.
+
+**Why it tangles.** `git checkout -b` carries uncommitted changes onto the new branch. A background Agent without worktree isolation shares your `cwd` + `.git` index. Two writers, one index = races + a diff that's neither person's clean work. The agent was killed mid-edit ("replace section 3+4 with the picker") → its half-written files would not have built.
+
+**Recovery (clean, no work lost).**
+1. `TaskStop` the agent (halt concurrent writes) — do this FIRST, before any git op.
+2. `git status --short` → split files by lane (mine vs agent's, by path).
+3. Restore the agent's files to clean HEAD: `git restore --staged <staged-deletes>` then `git checkout HEAD -- <agent tracked files>` + `rm <agent untracked files>`. Verify only YOUR files remain changed.
+4. Re-run the FULL gate on the now-clean tree (the contaminated run doesn't count).
+5. Commit your work; ff-merge to the integration branch; delete the agent branch.
+6. Re-spawn the agent **with `isolation: "worktree"`** + the same spec.
+
+**Rule.** ANY background Agent that writes files → `isolation: "worktree"` (the spawn cost ~200-500ms is nothing vs an hour untangling). The ONLY safe non-isolated background agents are read-only (Explore, audits). If you'll keep editing in the main session while it runs, isolation is mandatory, not optional. Bonus: an isolated agent's branch is reviewable as a clean diff before you integrate.
+
+**Cross-links:** AGENTS.md §13 (stale-base / worktree discipline) · the Agent tool's own note: "opts.isolation: 'worktree' … use ONLY when agents mutate files in parallel" — "in parallel" includes *you* editing concurrently, not just sibling agents.
