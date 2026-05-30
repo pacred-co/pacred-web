@@ -3,7 +3,21 @@
 
 ---
 
-# 🟢 2026-05-31 — เดฟ AUTONOMOUS BATCH 2 (P0-23 admin pay-out · corporate-SOT · P1-15) · read FIRST
+# 🟢 2026-05-31 — เดฟ AUTONOMOUS BATCH 2+3 (P0-23 · corporate-SOT · P1-15 · ภูม sitting-H · P1-24) · read FIRST
+
+**Batch-3 add-on (main `1befe969` → `bfb19b70`):**
+- **ภูม sitting-H integrated** — PEAK accounting: tax-invoices 7-tab + receipts explorer (3 commits, clean merge)
+- **P1-24 staff-group LINE notify** — `notifyStaffGroup()` wired into BOTH yuan-create paths (slip + wallet). ⚠️ **no-op จนกว่า owner ตั้ง `LINE_STAFF_GROUP_ID`** (legacy lineNotify ใช้ LINE Notify API ที่ EOL → ต้อง LINE OA group ID ใหม่: เพิ่ม @pacred bot เข้า staff group → อ่าน groupId จาก join webhook)
+- **P1-23 = NOT a real gap** (deep-searched full legacy w/ owner's bypass): legacy yuan-create gates only `walletTotal>0`; ไม่มี never-paid/juristic gate. Pacred createYuanPayment มี pending-aware balance + slip-required แล้ว → ครอบคลุม. customer ฝากโอน self-submit = Pacred-added (legacy = admin สร้างให้ via pcs-admin/payment.php). ไม่ต้องแก้.
+
+**🔑 3 ACTIVATION items รอ owner/teammate (โค้ดพร้อม pluggable):**
+1. **`LINE_STAFF_GROUP_ID`** (owner) → P1-24 staff notify เริ่มยิง
+2. **ภูม สร้าง 13 admins** (`/admin/admins/new`) → P1-15 sales-rep assign เริ่มทำงาน
+3. **ปอน migrate 3 customer-UI corporate readers** (ADR-0021) → ลบ rebuilt `corporate` write ได้
+
+---
+
+# 🟢 2026-05-31 — เดฟ AUTONOMOUS BATCH 2 (P0-23 admin pay-out · corporate-SOT · P1-15)
 
 เดฟ autonomous run ต่อจาก batch ใหญ่. ส่ง main อีก batch (`d3f991ea` → `631713da`):
 - **P0-23 admin pay-out** (agent E) — `/admin/sales-payouts` repoint จาก dead rebuilt → faithful `tb_user_sales_admin_pay` (status 2→3 + slip · `AND status=2` guard กัน double-pay). คู่กับ customer earn→withdraw (D). 10/0 test.
