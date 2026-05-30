@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { Link } from "@/i18n/navigation";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
@@ -6,6 +7,41 @@ import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-me
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
 import { CustomersTable, PendingJuristicReviews, type CustomerTableRow, type JuristicBundle } from "./customers-table";
+
+// P0-21 (ADR-0021 corporate-SOT): the inline juristic review reads the LEGACY
+// `tb_corporate` (keyed by userid = member_code) — the same SOT /admin/juristic-check
+// + verifyJuristic/rejectJuristic/adminConvertToJuristic already use — NOT the
+// rebuilt-empty `corporate` (profile_id UUID). So the 8,898 migrated juristic
+// customers surface here for review. corporatestatus codes (statusComp ·
+// function.php:530): '1'=pending '2'=verified '3'=rejected → the client
+// JuristicBundle keyword. Legacy docs (cert + ภพ20) are bare filenames under the
+// legacy `file` bucket → resolveLegacyUrl(…, "file").
+const CORP_STATUS_TO_KEYWORD: Record<string, "pending" | "verified" | "rejected"> = {
+  "1": "pending", "2": "verified", "3": "rejected",
+};
+function guessLegacyDocMime(filename: string | null): string {
+  if (!filename) return "application/octet-stream";
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "pdf") return "application/pdf";
+  if (ext === "png") return "image/png";
+  if (["jpg", "jpeg"].includes(ext)) return "image/jpeg";
+  if (ext === "webp") return "image/webp";
+  return "application/octet-stream";
+}
+/** Resolve a tb_corporate row's cert + ภพ20 filenames → signed-URL doc entries. */
+async function resolveLegacyCorpDocs(
+  corporatefile: string | null,
+  corporatefile20: string | null,
+): Promise<{ label: string; url: string; mime: string }[]> {
+  const docs: { label: string; url: string; mime: string }[] = [];
+  const [certUrl, vatUrl] = await Promise.all([
+    resolveLegacyUrl(corporatefile, "file"),
+    resolveLegacyUrl(corporatefile20, "file"),
+  ]);
+  if (certUrl) docs.push({ label: "หนังสือรับรองบริษัท", url: certUrl, mime: guessLegacyDocMime(corporatefile) });
+  if (vatUrl) docs.push({ label: "ภ.พ.20", url: vatUrl, mime: guessLegacyDocMime(corporatefile20) });
+  return docs;
+}
 
 // ─────────────────────────────────────────────────────────────────────
 // Page top-menubar — ภูม brief 2026-05-20 ค่ำ.
@@ -120,11 +156,9 @@ const GROUP_CFG: Record<string, { label: string; col?: string }> = {
   comparison: { label: "สมาชิกคิดค่าเทียบ", col: "userComparison" },
 };
 
-const DOC_LABELS: Record<string, string> = {
-  company_affidavit: "หนังสือรับรองบริษัท",
-  vat:               "ภ.พ.20",
-  national_id:       "บัตรประชาชน",
-};
+// P0-21: DOC_LABELS removed with the rebuilt `documents` reads — the LEGACY
+// tb_corporate docs use fixed labels (หนังสือรับรองบริษัท / ภ.พ.20) resolved in
+// resolveLegacyCorpDocs above.
 
 export default async function AdminCustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; type?: string; group?: string; adminidsale?: string }> }) {
   // W-1 (gap-admin H-1/H-7): page-level role gate. Lists every
@@ -244,125 +278,117 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
     }
   }
 
-  // ── Juristic inline-review bundle (owner 2026-05-30) ──────────────
-  // Merge /admin/juristic-check into the customers list: for นิติบุคคล
-  // customers that have a NEW-signup corporate row (docs + DBD review),
-  // pre-fetch the company data + signed document URLs so the row can be
-  // reviewed + approved inline (with hover-zoom) — no separate page.
-  // Legacy juristic customers have no corporate row → no inline review.
-  // Bounded: docs are fetched ONLY for member_codes that resolve to a
-  // corporate row (≈ the handful of new signups), never the full page.
+  // ── Juristic inline-review bundle (owner 2026-05-30 · P0-21 SOT swap) ──
+  // Merge /admin/juristic-check into the customers list: for นิติบุคคล customers
+  // that have a corporate row (docs + DBD review), pre-fetch the company data +
+  // signed document URLs so the row can be reviewed + approved inline (hover-
+  // zoom) — no separate page.
+  //
+  // P0-21 (ADR-0021): reads the LEGACY `tb_corporate` (keyed by userid =
+  // member_code) directly — NOT the rebuilt-empty `corporate` (profile_id UUID).
+  // The visible member_codes ARE the tb_corporate.userid key, so no profiles→
+  // profile_id hop is needed; we resolve profiles ONLY to populate the bundle's
+  // profileId field (best-effort — the juristic actions key on userid, so a
+  // missing profileId is non-fatal). Docs come from tb_corporate's own
+  // corporatefile/corporatefile20 filename columns (legacy `file` bucket), NOT
+  // the rebuilt `documents` table + member-docs storage. Bounded: only the
+  // member_codes with a tb_corporate row (≈ juristic customers) fetch docs.
   const juristicByMember = new Map<string, JuristicBundle>();
-  // Key on ALL visible member_codes (not just legacy userCompany='1'): the
-  // corporate row is the source of truth for "needs juristic review", and the
-  // signup→tb_users backfill didn't always set the legacy userCompany flag.
-  // Resolving every row then filtering to corporate keeps the doc fetch bounded.
   if (userIds.length > 0) {
+    // member_code → profile_id (for the bundle.profileId field only).
     const { data: profs, error: profsErr } = await admin
       .from("profiles")
       .select("id, member_code")
       .in("member_code", userIds);
     if (profsErr) console.error(`[profiles juristic resolve] failed`, { code: profsErr.code, message: profsErr.message });
-    const memberByProfile = new Map<string, string>();
+    const profileIdByMember = new Map<string, string>();
     for (const p of (profs ?? []) as { id: string; member_code: string | null }[]) {
-      if (p.member_code) memberByProfile.set(p.id, p.member_code);
+      if (p.member_code) profileIdByMember.set(p.member_code, p.id);
     }
-    const profileIds = [...memberByProfile.keys()];
-    if (profileIds.length > 0) {
-      const { data: corps, error: corpsErr } = await admin
-        .from("corporate")
-        .select("profile_id, tax_id, company_name, company_address, status")
-        .in("profile_id", profileIds);
-      if (corpsErr) console.error(`[corporate list] failed`, { code: corpsErr.code, message: corpsErr.message });
-      const corpList = (corps ?? []) as {
-        profile_id: string; tax_id: string | null; company_name: string | null;
-        company_address: string | null; status: string | null;
-      }[];
-      const corpProfileIds = corpList.map((c) => c.profile_id);
 
-      // Signed doc URLs ONLY for corporate (review-eligible) profiles.
-      const docsByProfile = new Map<string, { label: string; url: string; mime: string }[]>();
-      if (corpProfileIds.length > 0) {
-        const { data: docs, error: docsErr } = await admin
-          .from("documents")
-          .select("profile_id, doc_type, storage_path, mime_type")
-          .in("profile_id", corpProfileIds);
-        if (docsErr) console.error(`[documents list] failed`, { code: docsErr.code, message: docsErr.message });
-        for (const doc of (docs ?? []) as { profile_id: string; doc_type: string; storage_path: string; mime_type: string }[]) {
-          const { data: signed } = await admin.storage.from("member-docs").createSignedUrl(doc.storage_path, 3600);
-          if (!signed?.signedUrl) continue;
-          const arr = docsByProfile.get(doc.profile_id) ?? [];
-          arr.push({ label: DOC_LABELS[doc.doc_type] ?? doc.doc_type, url: signed.signedUrl, mime: doc.mime_type });
-          docsByProfile.set(doc.profile_id, arr);
-        }
-      }
+    // tb_corporate rows for the visible customers (keyed by userid = member_code).
+    const { data: corps, error: corpsErr } = await admin
+      .from("tb_corporate")
+      .select("userid, corporatenumber, corporatename, corporateaddress, corporatestatus, corporatefile, corporatefile20")
+      .in("userid", userIds);
+    if (corpsErr) console.error(`[tb_corporate inline-review list] failed`, { code: corpsErr.code, message: corpsErr.message });
+    const corpList = (corps ?? []) as {
+      userid: string; corporatenumber: string | null; corporatename: string | null;
+      corporateaddress: string | null; corporatestatus: string | null;
+      corporatefile: string | null; corporatefile20: string | null;
+    }[];
 
-      for (const c of corpList) {
-        const member = memberByProfile.get(c.profile_id);
-        if (!member) continue;
-        juristicByMember.set(member, {
-          profileId: c.profile_id,
-          userid: member, // member_code === legacy tb_users.userID (P0-18 actions key on this)
-          taxId: c.tax_id ?? "",
-          companyName: c.company_name ?? "",
-          companyAddress: c.company_address ?? "",
-          corpStatus: c.status === "verified" || c.status === "rejected" ? c.status : "pending",
-          docs: docsByProfile.get(c.profile_id) ?? [],
-        });
-      }
+    for (const c of corpList) {
+      const docs = await resolveLegacyCorpDocs(c.corporatefile, c.corporatefile20);
+      juristicByMember.set(c.userid, {
+        profileId: profileIdByMember.get(c.userid) ?? "",
+        userid: c.userid, // member_code === legacy tb_users.userID (P0-18 actions key on this)
+        taxId: c.corporatenumber ?? "",
+        companyName: c.corporatename ?? "",
+        companyAddress: c.corporateaddress ?? "",
+        corpStatus: CORP_STATUS_TO_KEYWORD[c.corporatestatus ?? "1"] ?? "pending",
+        docs,
+      });
     }
   }
 
-  // ── Pending juristic review QUEUE (corporate-driven · owner 2026-05-30) ──
-  // Independent of tb_users: reads the corporate review rows directly so EVERY
-  // juristic customer awaiting review surfaces at the top of /admin/customers —
-  // including re-registrations whose tb_users identity is under a different
-  // member_code (phone-dupe) and so never appear in the list below. This is the
-  // inline merge of /admin/juristic-check the owner asked for.
+  // ── Pending juristic review QUEUE (corporate-driven · owner 2026-05-30 · P0-21) ──
+  // Independent of the visible tb_users page: reads the corporate review rows
+  // directly so EVERY juristic customer awaiting review surfaces at the top of
+  // /admin/customers — including re-registrations whose identity is under a
+  // different member_code (phone-dupe) and so never appear in the list below.
+  // This is the inline merge of /admin/juristic-check the owner asked for.
+  //
+  // P0-21 (ADR-0021): reads the LEGACY `tb_corporate` (corporatestatus='1' =
+  // pending) — the SAME SOT /admin/juristic-check uses — NOT the rebuilt-empty
+  // `corporate`. Customer identity (member_code = userid, name) comes from
+  // `tb_users` (camelCase: userID/userName/userLastName); docs from
+  // tb_corporate's own corporatefile/corporatefile20 columns. Faithful to
+  // juristic-check/page.tsx (the shipped pending-queue reader).
   const pendingJuristic: JuristicBundle[] = [];
   {
     const { data: pcorps, error: pcorpsErr } = await admin
-      .from("corporate")
-      .select("profile_id, tax_id, company_name, company_address, status, profile:profiles!profile_id(member_code, first_name, last_name)")
-      .eq("status", "pending")
-      .order("created_at", { ascending: false })
+      .from("tb_corporate")
+      .select("userid, corporatenumber, corporatename, corporateaddress, corporatefile, corporatefile20, cpdatecreate")
+      .eq("corporatestatus", "1")
+      .order("cpdatecreate", { ascending: false })
       .limit(50);
-    if (pcorpsErr) console.error(`[corporate pending] failed`, { code: pcorpsErr.code, message: pcorpsErr.message });
-    type PProf = { member_code: string | null; first_name: string | null; last_name: string | null };
+    if (pcorpsErr) console.error(`[tb_corporate pending] failed`, { code: pcorpsErr.code, message: pcorpsErr.message });
     type PCorp = {
-      profile_id: string; tax_id: string | null; company_name: string | null;
-      company_address: string | null; status: string | null; profile: PProf | PProf[] | null;
+      userid: string; corporatenumber: string | null; corporatename: string | null;
+      corporateaddress: string | null; corporatefile: string | null;
+      corporatefile20: string | null; cpdatecreate: string | null;
     };
     const pcorpList = (pcorps ?? []) as PCorp[];
-    const pProfileIds = pcorpList.map((c) => c.profile_id);
-    const pdocsByProfile = new Map<string, { label: string; url: string; mime: string }[]>();
-    if (pProfileIds.length > 0) {
-      const { data: pdocs, error: pdocsErr } = await admin
-        .from("documents")
-        .select("profile_id, doc_type, storage_path, mime_type")
-        .in("profile_id", pProfileIds);
-      if (pdocsErr) console.error(`[documents pending-juristic] failed`, { code: pdocsErr.code, message: pdocsErr.message });
-      for (const doc of (pdocs ?? []) as { profile_id: string; doc_type: string; storage_path: string; mime_type: string }[]) {
-        const { data: signed } = await admin.storage.from("member-docs").createSignedUrl(doc.storage_path, 3600);
-        if (!signed?.signedUrl) continue;
-        const arr = pdocsByProfile.get(doc.profile_id) ?? [];
-        arr.push({ label: DOC_LABELS[doc.doc_type] ?? doc.doc_type, url: signed.signedUrl, mime: doc.mime_type });
-        pdocsByProfile.set(doc.profile_id, arr);
+
+    // Resolve customer name from tb_users (member_code === userid).
+    const pUserIds = [...new Set(pcorpList.map((c) => c.userid))];
+    const nameByUser = new Map<string, string>();
+    if (pUserIds.length > 0) {
+      const { data: pusers, error: pusersErr } = await admin
+        .from("tb_users")
+        .select("userID, userName, userLastName")
+        .in("userID", pUserIds);
+      if (pusersErr) console.error(`[tb_users pending-juristic] failed`, { code: pusersErr.code, message: pusersErr.message });
+      for (const u of (pusers ?? []) as { userID: string; userName: string | null; userLastName: string | null }[]) {
+        nameByUser.set(u.userID, `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim());
       }
     }
+
     for (const c of pcorpList) {
-      const prof = Array.isArray(c.profile) ? c.profile[0] : c.profile;
+      const docs = await resolveLegacyCorpDocs(c.corporatefile, c.corporatefile20);
+      const customerName = nameByUser.get(c.userid) || undefined;
       pendingJuristic.push({
-        profileId: c.profile_id,
+        profileId: "", // not needed — the juristic actions key on userid (P0-18)
         // member_code === legacy tb_users.userID (P0-18 actions key on this).
-        userid: prof?.member_code ?? "",
-        taxId: c.tax_id ?? "",
-        companyName: c.company_name ?? "",
-        companyAddress: c.company_address ?? "",
+        userid: c.userid,
+        taxId: c.corporatenumber ?? "",
+        companyName: c.corporatename ?? "",
+        companyAddress: c.corporateaddress ?? "",
         corpStatus: "pending",
-        docs: pdocsByProfile.get(c.profile_id) ?? [],
-        memberCode: prof?.member_code ?? undefined,
-        customerName: `${prof?.first_name ?? ""} ${prof?.last_name ?? ""}`.trim() || undefined,
+        docs,
+        memberCode: c.userid || undefined,
+        customerName,
       });
     }
   }
