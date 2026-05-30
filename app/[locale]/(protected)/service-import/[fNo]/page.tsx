@@ -142,22 +142,25 @@ function modifyDmy(dmyStr: string, days: number): string {
 }
 
 // Legacy `statusForwarderBadge($fStatus)` — member/include/function.php L581-592.
+// Bootstrap `badge badge-*` → Tailwind chips, matching the canonical
+// STATUS_CHIP palette in forwarder-row-view.tsx (same tones per status).
+const STATUS_BADGE_CHIP = "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold";
 function statusForwarderBadge(fStatus: string | null) {
   switch (fStatus) {
     case "1":
-      return <span className="badge badge-danger badge-pill">รอสินค้าเข้าโกดังจีน</span>;
+      return <span className={`${STATUS_BADGE_CHIP} bg-amber-100 text-amber-700 border-amber-200`}>รอสินค้าเข้าโกดังจีน</span>;
     case "2":
-      return <span className="badge badge-warning badge-pill">สินค้าถึงโกดังจีนแล้ว</span>;
+      return <span className={`${STATUS_BADGE_CHIP} bg-sky-100 text-sky-700 border-sky-200`}>สินค้าถึงโกดังจีนแล้ว</span>;
     case "3":
-      return <span className="badge badge-warning badge-pill">กำลังส่งมาประเทศไทย</span>;
+      return <span className={`${STATUS_BADGE_CHIP} bg-pink-100 text-pink-700 border-pink-200`}>กำลังส่งมาประเทศไทย</span>;
     case "4":
-      return <span className="badge badge-info badge-pill">สินค้าถึงประเทศไทยแล้ว</span>;
+      return <span className={`${STATUS_BADGE_CHIP} bg-amber-200 text-amber-900 border-amber-300`}>สินค้าถึงประเทศไทยแล้ว</span>;
     case "5":
-      return <span className="badge badge-danger badge-pill">รอชำระเงิน</span>;
+      return <span className={`${STATUS_BADGE_CHIP} bg-red-100 text-red-700 border-red-200`}>รอชำระเงิน</span>;
     case "6":
-      return <span className="badge badge-info badge-pill">เตรียมส่ง</span>;
+      return <span className={`${STATUS_BADGE_CHIP} bg-indigo-100 text-indigo-700 border-indigo-200`}>เตรียมส่ง</span>;
     case "7":
-      return <span className="badge badge-success badge-pill">ส่งแล้ว</span>;
+      return <span className={`${STATUS_BADGE_CHIP} bg-emerald-100 text-emerald-700 border-emerald-200`}>ส่งแล้ว</span>;
     default:
       return null;
   }
@@ -188,13 +191,15 @@ function nameShipBy(fShipBy: string | null): string {
 
 // Legacy `namePayMethod($data)` — function.php L624-633.
 function namePayMethod(data: string | null) {
-  if (data === "2") return <span className="text-white bg-danger">ปลายทาง</span>;
+  if (data === "2")
+    return <span className="inline-flex items-center rounded bg-red-600 px-1.5 py-0.5 text-xs font-medium text-white">ปลายทาง</span>;
   return "ต้นทาง";
 }
 
 // Legacy `nameCrate($data)` — function.php L634-643.
 function nameCrate(data: string | null) {
-  if (data === "1") return <span className="text-white bg-danger">ตีลังไม้</span>;
+  if (data === "1")
+    return <span className="inline-flex items-center rounded bg-red-600 px-1.5 py-0.5 text-xs font-medium text-white">ตีลังไม้</span>;
   return "ไม่ตีลังไม้";
 }
 
@@ -243,15 +248,17 @@ const TAG_PRO: Record<string, { label: string; href?: string }> = {
 function TagPro({ id }: { id: string | null }) {
   if (!id || !TAG_PRO[id]) return null;
   const p = TAG_PRO[id];
+  const chip =
+    "ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 border border-amber-200 align-middle";
   return (
     <>
       {" "}
       {p.href ? (
         <a href={p.href} target="_blank" rel="noreferrer">
-          <span className="badge badge-vip badge-pill">{p.label}</span>
+          <span className={chip}>{p.label}</span>
         </a>
       ) : (
-        <span className="badge badge-vip badge-pill">{p.label}</span>
+        <span className={chip}>{p.label}</span>
       )}
     </>
   );
@@ -792,9 +799,9 @@ export default async function ServiceImportDetailPage({
 
   const refOrderEl =
     row.reforder && row.reforder !== "" ? (
-      <div className="">
+      <div>
         <Link href={`/service-order/${row.reforder}`}>
-          <span className="font-16 badge badge-info badge-pill">
+          <span className="inline-flex items-center rounded-full bg-sky-100 px-3 py-1 text-sm font-medium text-sky-700 border border-sky-200">
             รายการฝากสั่งซื้อ : {row.reforder}
           </span>
         </Link>
@@ -808,428 +815,387 @@ export default async function ServiceImportDetailPage({
 
   return (
     <div className="pcs-legacy pr-forwarder-detail">
-      {/* Legacy PCS theme — same stylesheet the LIST page loads.
-          The `.pr-forwarder-detail` marker scopes the compact-header /
-          tighter-meta / table-density overrides at the end of
-          service-import.css so they apply on the detail page only
-          (not on the list page that shares this stylesheet). */}
+      {/* Legacy PCS theme — kept ONLY for the magnific-popup image viewer
+          hook (`image-popup-vertical-fit`) + any residual legacy class.
+          The page chrome below is a Tailwind rebuild (เดฟ 2026-05-30 —
+          ปอน: "rebuild chrome เป็น tailwind mobile-first ห้ามแก้ relation /
+          query / href / hook"). Every href/id/name/data-* + the inline
+          edit forms + pay button + receipt link wiring preserved verbatim;
+          only Bootstrap-4 presentation classes are swapped for Tailwind. */}
       <link rel="stylesheet" href="/legacy/pcs/service-import.css" />
 
-      {/* forwarder.php L1683-1685 — magnific-popup / switchery / dropify
-          stylesheets. magnific-popup is the popup image viewer used by
-          the cover photo <a class="image-popup-vertical-fit">; rendered
-          statically here (the click-to-zoom needs client JS that's not
-          present — the image still displays). */}
-      {/* forwarder.php L1686-1699 — screen-local <style> overrides. Kept
-          as a plain string injected into the page so the CSS doesn't
-          escape the .pcs-legacy scope. */}
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `.pcs-legacy .content-header-left.col-12.mb-2{margin-bottom:0rem!important;}
-@media screen and (max-width:544px){.pcs-legacy .process-model.pro2 li::before{top:98px;width:82%;}}
-.pcs-legacy .table td,.pcs-legacy .table th{padding:0.25rem 0.5rem;}`,
-        }}
-      />
+      {/* Page content — Tailwind rebuild. Wrapped in `.pcs-content-pad` so
+          the (protected) layout's desktop padding (sidebar + FloatingTabs
+          clearance) kicks in automatically. */}
+      <div className="pcs-content-pad w-full px-3 md:px-6 py-3 md:py-6">
+        {/* L1707-1719 — breadcrumb header */}
+        <nav className="mb-3 flex flex-wrap items-center gap-1.5 text-xs md:text-sm text-muted">
+          <Link href="/dashboard" className="hover:text-red-600 transition-colors">
+            <span className="menu-home">หน้าแรก</span>
+          </Link>
+          <span aria-hidden className="text-border">/</span>
+          <Link href="/service-import" className="hover:text-red-600 transition-colors">
+            รายการฝากนำเข้าสินค้า
+          </Link>
+          <span aria-hidden className="text-border">/</span>
+          <span className="font-medium text-foreground">#{row.id}</span>
+        </nav>
 
-      {/* BEGIN: Content — forwarder.php L1704 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          {/* L1707-1719 — breadcrumb header */}
-          <div className="content-header row">
-            <div className="content-header-left col-12 mb-2">
-              <div className="row breadcrumbs-top ">
-                <div className="breadcrumb-wrapper col-12">
-                  <ol className="breadcrumb ">
-                    <li className="breadcrumb-item">
-                      <Link href="/dashboard">
-                        <span className="menu-home">หน้าแรก</span>
-                      </Link>
-                    </li>
-                    <li className="breadcrumb-item">
-                      <Link href="/service-import">รายการฝากนำเข้าสินค้า</Link>
-                    </li>
-                    <li className="breadcrumb-item active">#{row.id}</li>
-                  </ol>
-                </div>
+        {/* L1720 — detail card */}
+        <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 md:p-6">
+          {/* ── Header row ── forwarder.php L1748-1825 ── */}
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-lg md:text-xl font-bold text-foreground">
+                ออเดอร์นำเข้าสินค้า{" "}
+                <span className="text-red-600">
+                  เลขที่ #{row.id}
+                  <TagPro id={promoIdStr} />
+                </span>
+              </h3>
+              {row.ftrackingchn2 && row.ftrackingchn2 !== "" ? (
+                <p className="mt-1 text-base md:text-lg font-semibold text-red-600 break-all">
+                  เลขแทรคกิ้ง {row.ftrackingchn2}
+                </p>
+              ) : (
+                <p className="mt-1 text-base md:text-lg font-semibold text-red-600 break-all">
+                  เลขแทรคกิ้ง {row.ftrackingchn}
+                </p>
+              )}
+              {row.ftrackingchn &&
+                /^[a-zA-Z0-9-]+$/i.test(row.ftrackingchn) && (
+                  <div>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      className="barcode-forwader"
+                      alt=""
+                      // TODO(barcode): legacy used the live PHP
+                      // generator `member/include/barcode.php?text=...`
+                      // on pcscargo.co.th — that's a live legacy
+                      // server call (brand leak + dependency).
+                      // Replace with a local barcode lib (e.g.
+                      // bwip-js or jsbarcode) routed through a
+                      // Pacred /api/barcode endpoint. Until then,
+                      // hide the image — the tracking number text
+                      // is rendered alongside so this is purely a
+                      // visual aid.
+                      src={undefined}
+                      style={{ display: "none" }}
+                    />
+                  </div>
+                )}
+            </div>
+            <div className="md:text-right shrink-0">
+              {FID_driver2 === 1 ? (
+                <>
+                  <p className="flex items-center gap-2 md:justify-end text-sm md:text-base font-semibold text-foreground">
+                    <b className="font-bold">สถานะ :</b>
+                    <span className="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-100 px-2.5 py-0.5 text-[11px] font-semibold text-cyan-700">
+                      กำลังจัดส่ง
+                    </span>
+                  </p>
+                  {fShipBy === "PCSF" ? (
+                    <p className="mt-1 text-sm text-foreground">
+                      <b className="font-semibold">ส่งสินค้าโดย : </b>
+                      {adminName} โทร.
+                      <a href={`tel:${adminTel}`} className="text-red-600"> {adminTel}</a>
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-sm text-foreground">
+                      <b className="font-semibold">ส่งสินค้าโดย : </b>
+                      {nameShipBy(fShipBy)}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="flex items-center gap-2 md:justify-end text-sm md:text-base font-semibold text-foreground">
+                  <b className="font-bold">สถานะ :</b>
+                  {statusForwarderBadge(fStatusValue)}
+                </p>
+              )}
+              <div>
+                {/* L1788-1804 — receipt link (only when rID is set
+                    AND fStatus>=6, per the legacy `$row['fStatus']<6`
+                    branch which renders nothing). */}
+                {rID && Number(fStatusValue) >= 6 && (
+                  /* Legacy linked to pcscargo.co.th/member/printReceiptF.php
+                     — rewritten to the internal Pacred print route
+                     /freight/receipts/print/{rID} so the customer
+                     stays inside Pacred (no bounce to legacy site). */
+                  <a
+                    href={`/freight/receipts/print/${rID}?type=1`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 active:scale-[0.98] transition-all"
+                  >
+                    <i className="mdi mdi-check-circle-outline"></i>{" "}
+                    ใบเสร็จรับเงิน
+                  </a>
+                )}
               </div>
+              <p className="mt-1 text-xs text-muted">
+                {row.fdateadminstatus &&
+                  dmyHms(row.fdateadminstatus) !==
+                    "00/00/0000 00:00:00" &&
+                  `อัปเดตล่าสุด : ${dmyHms(row.fdateadminstatus)} น.`}
+              </p>
+              {etaFrom !== "" && (
+                <p className="mt-1 text-sm text-foreground">
+                  จะมาถึงไทยประมาณ :{" "}
+                  <span className="text-sky-600">
+                    {etaFrom} ถึง {etaTo}
+                  </span>
+                </p>
+              )}
             </div>
           </div>
 
-          {/* L1720 — content-body */}
-          <div className="content-body pr110">
-            <section>
-              <div className="row">
-                <div className="col-md-12 col-sm-12 p-05">
-                  <div className="card border-black">
-                    <div className="card-content">
-                      <div className="card-body">
-                        {/* ── Header row ── forwarder.php L1748-1825 ── */}
-                        <div className="row">
-                          <div className="col-md-6">
-                            <h3 className="text-center text-md-left">
-                              <b>ออเดอร์นำเข้าสินค้า </b>
-                              <b className="text-color-main">
-                                เลขที่ #{row.id}
-                                <TagPro id={promoIdStr} />
-                              </b>
-                            </h3>
-                            {row.ftrackingchn2 && row.ftrackingchn2 !== "" ? (
-                              <h3 className="text-center text-md-left text-color-main">
-                                เลขแทรคกิ้ง {row.ftrackingchn2}
-                              </h3>
-                            ) : (
-                              <h3 className="text-center text-md-left text-color-main">
-                                เลขแทรคกิ้ง {row.ftrackingchn}
-                              </h3>
-                            )}
-                            {row.ftrackingchn &&
-                              /^[a-zA-Z0-9-]+$/i.test(row.ftrackingchn) && (
-                                <h3 className="text-center text-md-left">
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    className="barcode-forwader"
-                                    alt=""
-                                    // TODO(barcode): legacy used the live PHP
-                                    // generator `member/include/barcode.php?text=...`
-                                    // on pcscargo.co.th — that's a live legacy
-                                    // server call (brand leak + dependency).
-                                    // Replace with a local barcode lib (e.g.
-                                    // bwip-js or jsbarcode) routed through a
-                                    // Pacred /api/barcode endpoint. Until then,
-                                    // hide the image — the tracking number text
-                                    // is rendered alongside so this is purely a
-                                    // visual aid.
-                                    src={undefined}
-                                    style={{ display: "none" }}
-                                  />
-                                </h3>
-                              )}
-                          </div>
-                          <div className="col-md-6 text-center text-md-right">
-                            {FID_driver2 === 1 ? (
-                              <>
-                                <h3>
-                                  {" "}
-                                  <b>สถานะ : </b>
-                                  <span className="badge badge-info2 badge-pill">
-                                    กำลังจัดส่ง
-                                  </span>
-                                </h3>
-                                {fShipBy === "PCSF" ? (
-                                  <h5>
-                                    {" "}
-                                    <b>ส่งสินค้าโดย : </b>
-                                    {adminName} โทร.
-                                    <a href={`tel:${adminTel}`}> {adminTel}</a>
-                                  </h5>
-                                ) : (
-                                  <h5>
-                                    {" "}
-                                    <b>ส่งสินค้าโดย : </b>
-                                    {nameShipBy(fShipBy)}
-                                  </h5>
-                                )}
-                              </>
-                            ) : (
-                              <h3>
-                                {" "}
-                                <b>สถานะ : </b>
-                                {statusForwarderBadge(fStatusValue)}
-                              </h3>
-                            )}
-                            <div>
-                              {/* L1788-1804 — receipt link (only when rID is set
-                                  AND fStatus>=6, per the legacy `$row['fStatus']<6`
-                                  branch which renders nothing). */}
-                              {rID && Number(fStatusValue) >= 6 && (
-                                /* Legacy linked to pcscargo.co.th/member/printReceiptF.php
-                                   — rewritten to the internal Pacred print route
-                                   /freight/receipts/print/{rID} so the customer
-                                   stays inside Pacred (no bounce to legacy site). */
-                                <a
-                                  href={`/freight/receipts/print/${rID}?type=1`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  <div className="btn btn-rounded btn-success">
-                                    <i className="mdi mdi-check-circle-outline"></i>{" "}
-                                    ใบเสร็จรับเงิน
-                                  </div>
-                                </a>
-                              )}
-                            </div>
-                            <span className=" ">
-                              {row.fdateadminstatus &&
-                                dmyHms(row.fdateadminstatus) !==
-                                  "00/00/0000 00:00:00" &&
-                                `อัปเดตล่าสุด : ${dmyHms(row.fdateadminstatus)} น.`}
-                            </span>
-                            {etaFrom !== "" && (
-                              <p className="pt-1">
-                                จะมาถึงไทยประมาณ :{" "}
-                                <span className="text-info">
-                                  {etaFrom} ถึง {etaTo}
-                                </span>
-                              </p>
-                            )}
-                          </div>
-                        </div>
+          {/* ── 7/8-step process tracker ── forwarder.php L1826-1906 ──
+              Rebuilt as a horizontal Tailwind stepper. Step icon images +
+              the per-step data-toggle="tab" / aria-controls hooks kept. On
+              mobile it scrolls horizontally (no squash at 360px). */}
+          <div className="mt-4 -mx-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <ul
+              className="flex min-w-[640px] md:min-w-0"
+              role="tablist"
+            >
+              {STEPS.map((step, i) => {
+                const state = steps[i];
+                const innerSpanClass =
+                  state === "active" ? "active show" : "";
+                const innerIconClass =
+                  state === "active" && i === 3 ? "active show" : "";
+                const done = state === "visited";
+                const active = state === "active";
+                return (
+                  <li
+                    key={step.ctrl}
+                    role="presentation"
+                    className={`relative flex-1 flex flex-col items-center text-center px-1 ${state}`}
+                  >
+                    {/* connector line (behind the icon) */}
+                    {i > 0 && (
+                      <span
+                        aria-hidden
+                        className={`absolute top-5 right-1/2 left-[-50%] h-0.5 ${
+                          done || active ? "bg-red-500" : "bg-border"
+                        }`}
+                      />
+                    )}
+                    <span
+                      aria-controls={step.ctrl}
+                      role="tab"
+                      data-toggle="tab"
+                      className={`relative z-10 flex flex-col items-center ${innerSpanClass}`}
+                    >
+                      <i
+                        aria-hidden="true"
+                        className={`flex h-10 w-10 items-center justify-center rounded-full border-2 ${
+                          active
+                            ? "border-red-600 bg-red-600"
+                            : done
+                              ? "border-red-500 bg-red-50"
+                              : "border-border bg-white dark:bg-surface"
+                        } ${innerIconClass}`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          className={
+                            step.ctrl === "step62"
+                              ? "img-fluid p-img-icon p-0 h-5 w-5 object-contain"
+                              : "img-fluid p-img-icon h-5 w-5 object-contain"
+                          }
+                          src={`${ICON_BASE}${step.icon}`}
+                          alt=""
+                        />
+                      </i>
+                      <p
+                        className={`mt-1.5 text-[11px] leading-tight ${
+                          active
+                            ? "font-bold text-red-600"
+                            : done
+                              ? "font-medium text-foreground"
+                              : "text-muted"
+                        }`}
+                      >
+                        {step.label}
+                      </p>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
 
-                        {/* ── 7-step process tabs ── forwarder.php L1826-1906 ── */}
-                        <div className="row p-1 mb-1">
-                          <ul
-                            className="nav nav-tabs process-model pro2 more-icon-preocess"
-                            role="tablist"
-                            style={{ borderBottom: "unset" }}
-                          >
-                            {STEPS.map((step, i) => {
-                              const state = steps[i];
-                              const innerSpanClass =
-                                state === "active" ? "active show" : "";
-                              const innerIconClass =
-                                state === "active" && i === 3 ? "active show" : "";
-                              return (
-                                <li
-                                  key={step.ctrl}
-                                  role="presentation"
-                                  className={state}
-                                >
-                                  <span
-                                    aria-controls={step.ctrl}
-                                    role="tab"
-                                    data-toggle="tab"
-                                    className={innerSpanClass}
-                                  >
-                                    <i
-                                      aria-hidden="true"
-                                      className={innerIconClass}
-                                    >
-                                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img
-                                        className={
-                                          step.ctrl === "step62"
-                                            ? "img-fluid p-img-icon p-0"
-                                            : "img-fluid p-img-icon"
-                                        }
-                                        src={`${ICON_BASE}${step.icon}`}
-                                        alt=""
-                                      />
-                                    </i>
-                                    <p>{step.label}</p>
-                                  </span>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </div>
-
-                        <div className="hr-dashed mb-1"></div>
+          <hr className="my-4 border-t border-dashed border-border" />
 
                         {/* ── Metadata two-col ── forwarder.php L1909-2124 ── */}
-                        <div className="row">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                           {/* LEFT col — L1910-2064 */}
-                          <div className="col-md-6">
+                          <div className="space-y-2.5">
                             {refOrderEl}
-                            <h5 className="">
-                              <b>วันที่สร้าง : </b>
+                            <p className="text-sm text-foreground">
+                              <b className="font-semibold">วันที่สร้าง : </b>
                               {dmyHms(row.fdate)} น.
-                            </h5>
-                            <h5 className="d-inline-block">
-                              <b>บริษัทขนส่ง : </b>
-                            </h5>
-                            <ServiceImportEditShipByForm
-                              forwarderId={row.id}
-                              currentFShipBy={fShipBy}
-                              currentLabel={nameShipBy(fShipBy)}
-                              options={
-                                /* forwarder.php L1593 → `optionHShipBy2()` —
-                                   legacy lists every carrier from
-                                   NAME_SHIP_BY (function.php L91-143). The
-                                   ZIP-gating the legacy applies is admin-
-                                   only context the customer doesn't see;
-                                   the customer-side dropdown enumerates the
-                                   full list, mirroring the legacy fallback
-                                   behaviour when no ZIP filter applies. */
-                                Object.entries(NAME_SHIP_BY).map(([code, label]) => ({
-                                  code,
-                                  label,
-                                }))
-                              }
-                              isEditable={Number(fStatusValue) < 4}
-                            />
-                            <br />
-                            <h5 className="text-center d-inline-block">
-                              <b>การเก็บเงินค่าขนส่งในไทย : </b>
-                              {namePayMethod(row.paymethod)}
-                            </h5>
-                            <br />
-                            <h5 className="">
-                              <b>ที่อยู่จัดส่งสินค้า : </b>
-                            </h5>
-                            <div className="font-16">
-                              {/* forwarder.php L1663 — CONCAT 'คุณ' addressName … */}
-                              คุณ{row.faddressname} {row.faddresslastname}
-                              <br />
-                              {row.faddressno} ตำบล/แขวง {row.faddresssubdistrict}
-                              <br /> อำเภอ/เขต {row.faddressdistrict} จังหวัด{" "}
-                              {row.faddressprovince} {row.faddresszipcode}
-                              <br />
-                              โทร. {row.faddresstel}, {row.faddresstel2}
-                              <ServiceImportEditAddressForm
+                            </p>
+                            <div className="text-sm">
+                              <b className="font-semibold text-foreground">บริษัทขนส่ง : </b>
+                              <ServiceImportEditShipByForm
                                 forwarderId={row.id}
-                                options={addressOptions}
+                                currentFShipBy={fShipBy}
+                                currentLabel={nameShipBy(fShipBy)}
+                                options={
+                                  /* forwarder.php L1593 → `optionHShipBy2()` —
+                                     legacy lists every carrier from
+                                     NAME_SHIP_BY (function.php L91-143). The
+                                     ZIP-gating the legacy applies is admin-
+                                     only context the customer doesn't see;
+                                     the customer-side dropdown enumerates the
+                                     full list, mirroring the legacy fallback
+                                     behaviour when no ZIP filter applies. */
+                                  Object.entries(NAME_SHIP_BY).map(([code, label]) => ({
+                                    code,
+                                    label,
+                                  }))
+                                }
                                 isEditable={Number(fStatusValue) < 4}
                               />
                             </div>
-                            <h5>
-                              <span className="font-16">
-                                <b>เลขพัสดุในไทย : </b>
-                                {row.ftrackingth}
-                              </span>
-                            </h5>
-                            {multiBillSiblings.length > 0 && (
-                              <>
-                                <h5 className="bg-danger text-white p-1">
-                                  รายการนี้ถูกคิดค่าขนส่งในไทยรวมกับรายการดังต่อไปนี้
-                                </h5>
-                                {multiBillSiblings.map((s, i) => (
-                                  <span key={s.fID}>
-                                    <Link
-                                      href={`/service-import/${s.fID}`}
-                                      target="_blank"
-                                    >
-                                      {i + 1}. รายการเลขที่ #{s.fID} เลขเทรคกิ้ง :{" "}
-                                      {s.fTrackingCHN}
-                                    </Link>
-                                    <br />
-                                  </span>
-                                ))}
-                              </>
-                            )}
-                            <div className="row">
-                              {row.fphotoend && row.fphotoend !== "" && (
-                                <div className="col-md-6">
-                                  <h5>
-                                    <span className="font-16">
-                                      <b>ภาพถ่ายส่งสินค้า : </b>
-                                    </span>
-                                  </h5>
-                                  <a
-                                    className="image-popup-vertical-fit el-link"
-                                    href={legacyMemberUrl(`images/shops/${row.fphotoend}`)}
-                                  >
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img
-                                      src={legacyMemberUrl(`images/shops/${row.fphotoend}`)}
-                                      width="200"
-                                      alt=""
-                                    />
-                                  </a>
-                                </div>
-                              )}
-                              {!row.fphotoend && fStatusValue === "7" && (
-                                <div className="col-md-6">
-                                  <span className="text-danger">ยังไม่ได้ถ่ายรูป</span>
-                                </div>
-                              )}
-                              {driverRow?.fdistatus === "2" && (
-                                <div className="col-md-6">
-                                  ส่งของเวลา : {row.fdatestatus7}
-                                </div>
-                              )}
+                            <p className="text-sm text-foreground">
+                              <b className="font-semibold">การเก็บเงินค่าขนส่งในไทย : </b>
+                              {namePayMethod(row.paymethod)}
+                            </p>
+                            <div className="text-sm">
+                              <b className="font-semibold text-foreground">ที่อยู่จัดส่งสินค้า : </b>
+                              <div className="mt-1 text-foreground leading-relaxed">
+                                {/* forwarder.php L1663 — CONCAT 'คุณ' addressName … */}
+                                คุณ{row.faddressname} {row.faddresslastname}
+                                <br />
+                                {row.faddressno} ตำบล/แขวง {row.faddresssubdistrict}
+                                <br /> อำเภอ/เขต {row.faddressdistrict} จังหวัด{" "}
+                                {row.faddressprovince} {row.faddresszipcode}
+                                <br />
+                                โทร. {row.faddresstel}, {row.faddresstel2}
+                                <ServiceImportEditAddressForm
+                                  forwarderId={row.id}
+                                  options={addressOptions}
+                                  isEditable={Number(fStatusValue) < 4}
+                                />
+                              </div>
                             </div>
+                            <p className="text-sm text-foreground">
+                              <b className="font-semibold">เลขพัสดุในไทย : </b>
+                              {row.ftrackingth}
+                            </p>
+                            {multiBillSiblings.length > 0 && (
+                              <div className="rounded-lg bg-red-50 border border-red-200 p-2.5">
+                                <p className="text-sm font-semibold text-red-700">
+                                  รายการนี้ถูกคิดค่าขนส่งในไทยรวมกับรายการดังต่อไปนี้
+                                </p>
+                                <div className="mt-1 space-y-0.5">
+                                  {multiBillSiblings.map((s, i) => (
+                                    <div key={s.fID}>
+                                      <Link
+                                        href={`/service-import/${s.fID}`}
+                                        target="_blank"
+                                        className="text-sm text-red-600 hover:underline"
+                                      >
+                                        {i + 1}. รายการเลขที่ #{s.fID} เลขเทรคกิ้ง :{" "}
+                                        {s.fTrackingCHN}
+                                      </Link>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {row.fphotoend && row.fphotoend !== "" && (
+                              <div>
+                                <p className="text-sm font-semibold text-foreground">
+                                  ภาพถ่ายส่งสินค้า :
+                                </p>
+                                <a
+                                  className="image-popup-vertical-fit el-link mt-1 inline-block"
+                                  href={legacyMemberUrl(`images/shops/${row.fphotoend}`)}
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={legacyMemberUrl(`images/shops/${row.fphotoend}`)}
+                                    alt=""
+                                    className="w-full max-w-[200px] rounded-lg border border-border object-cover"
+                                  />
+                                </a>
+                              </div>
+                            )}
+                            {!row.fphotoend && fStatusValue === "7" && (
+                              <p className="text-sm text-red-600">ยังไม่ได้ถ่ายรูป</p>
+                            )}
+                            {driverRow?.fdistatus === "2" && (
+                              <p className="text-sm text-foreground">
+                                ส่งของเวลา : {row.fdatestatus7}
+                              </p>
+                            )}
                           </div>
 
                           {/* RIGHT col — L2065-2123 */}
-                          <div className="col-md-6 text-left text-md-right">
-                            <div className="">
-                              <h5 className="">
-                                <span className="font-20">
-                                  <b>เลขพัสดุจีน : </b>
-                                  <span
-                                    className="text-color-main"
-                                    id="text-fTrackingCHN"
-                                  >
-                                    {row.ftrackingchn}
-                                  </span>
-                                </span>
-                              </h5>
-                            </div>
-                            <div className="">
-                              <h5 className="d-inline-block">
-                                <b>รูปแบบขนส่ง จีน-ไทย : </b>
-                              </h5>
-                              <span id="text-fTransportType" className="">
+                          <div className="space-y-2.5 md:text-right">
+                            <p className="text-sm text-foreground">
+                              <b className="font-semibold">เลขพัสดุจีน : </b>
+                              <span className="text-red-600 break-all" id="text-fTrackingCHN">
+                                {row.ftrackingchn}
+                              </span>
+                            </p>
+                            <p className="text-sm text-foreground">
+                              <b className="font-semibold">รูปแบบขนส่ง จีน-ไทย : </b>
+                              <span id="text-fTransportType">
                                 {row.ftransporttype === "1"
                                   ? "ขนส่งทางรถ"
                                   : "ขนส่งทางเรือ"}
                               </span>
-                            </div>
-                            <h5 className="text-center d-inline-block">
-                              <b>การตีลังไม้ : </b>
+                            </p>
+                            <p className="text-sm text-foreground">
+                              <b className="font-semibold">การตีลังไม้ : </b>
                               {nameCrate(row.crate)}
-                            </h5>
-                            <h5 className="">
-                              <span className="font-16">
-                                <b>โกดังประเทศจีน : </b>
-                                {nameWarehouseChina(row.fwarehousechina)}
-                              </span>
-                            </h5>
-                            <h5 className="">
-                              <span className="font-16">
-                                <b>เลขที่ตู้ : </b>
-                                {row.fcabinetnumber}
-                              </span>
-                            </h5>
-                            <h5 className="">
-                              <span className="font-16">
-                                <b>วันที่ปิดตู้ : </b>
-                                {containerCloseStr}
-                              </span>
-                            </h5>
-                            <h5 className="">
-                              <span className="font-16">
-                                <b>จำนวน : </b>
-                                {fAmount} กล่อง
-                              </span>
-                            </h5>
-                            <h5 className="">
-                              <span className="font-16">
-                                <b>ประเภทสินค้า : </b>
-                                {nameProductsType(row.fproductstype)}
-                              </span>
-                            </h5>
-                            <ul className="list-unstyled">
-                              <li className="">
-                                <div className="chat-content">
-                                  <div className="box">
-                                    <p className="font-light mb-0">
-                                      {row.fdetail}
-                                    </p>
-                                    <div className="">
-                                      <a
-                                        className="image-popup-vertical-fit el-link"
-                                        href={coverUrl}
-                                      >
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img src={coverUrl} width="200" alt="" />
-                                      </a>
-                                    </div>
-                                  </div>
-                                </div>
-                              </li>
-                            </ul>
+                            </p>
+                            <p className="text-sm text-foreground">
+                              <b className="font-semibold">โกดังประเทศจีน : </b>
+                              {nameWarehouseChina(row.fwarehousechina)}
+                            </p>
+                            <p className="text-sm text-foreground">
+                              <b className="font-semibold">เลขที่ตู้ : </b>
+                              {row.fcabinetnumber}
+                            </p>
+                            <p className="text-sm text-foreground">
+                              <b className="font-semibold">วันที่ปิดตู้ : </b>
+                              {containerCloseStr}
+                            </p>
+                            <p className="text-sm text-foreground">
+                              <b className="font-semibold">จำนวน : </b>
+                              {fAmount} กล่อง
+                            </p>
+                            <p className="text-sm text-foreground">
+                              <b className="font-semibold">ประเภทสินค้า : </b>
+                              {nameProductsType(row.fproductstype)}
+                            </p>
+                            <div className="rounded-lg border border-border bg-surface-alt/40 p-3 md:text-left">
+                              <p className="text-sm text-foreground">
+                                {row.fdetail}
+                              </p>
+                              <a
+                                className="image-popup-vertical-fit el-link mt-2 inline-block"
+                                href={coverUrl}
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={coverUrl}
+                                  alt=""
+                                  className="w-full max-w-[200px] rounded-lg border border-border object-cover"
+                                />
+                              </a>
+                            </div>
                             {row.fnoteuser === "2" && row.fnote && row.fnote !== "" && (
-                              <>
-                                <div
-                                  className="text-white bg-danger"
-                                  style={{ display: "inline-block" }}
-                                >
-                                  **หมายเหตุ : {row.fnote}
-                                </div>
-                                <br />
-                              </>
+                              <div className="rounded-lg bg-red-600 px-3 py-2 text-sm text-white md:text-left">
+                                **หมายเหตุ : {row.fnote}
+                              </div>
                             )}
                           </div>
                         </div>
@@ -1237,206 +1203,244 @@ export default async function ServiceImportDetailPage({
                         {/* ── Cost / item table ── forwarder.php L2125-2229 ── */}
                         {Number(fStatusValue) >= 5 ? (
                           <>
-                            <div className="hr-dashed mb-1"></div>
-                            <div className="row">
-                              <div className="col-md-6">
-                                <h4 className="text-center text-md-left">
-                                  <b>
-                                    <span className="text-color-main">
-                                      รายละเอียดสินค้า
-                                    </span>
-                                  </b>
-                                </h4>
-                              </div>
-                              <div className="col-md-6">
-                                {fStatusValue === "5" && (
-                                  <ul className="list-inline dl text-center text-md-right">
-                                    <li className="list-inline-item text-info">
-                                      <ServiceImportPayButton
-                                        row={payButtonRow}
-                                        isJuristic={fUserCompany === "1"}
-                                      />
-                                    </li>
-                                  </ul>
-                                )}
-                              </div>
-                              <div className="col-12">
-                                <div className="header-from2"></div>
-                                <div className="table-responsive pt-1">
-                                  <table
-                                    id="myTable"
-                                    className="table display table-bordered table-striped dataTable no-footer dtr-inline pcs-table2"
-                                  >
-                                    <thead>
-                                      <tr className="text-center">
-                                        <th>
-                                          จำนวน
-                                          <br />
-                                          กล่อง
-                                        </th>
-                                        <th>น้ำหนัก</th>
-                                        <th>ปริมาตรรวม</th>
-                                        <th>คิดราคาตาม</th>
-                                        <th>เรทนำเข้า</th>
-                                        <th>ค่านำเข้าจีน-ไทย</th>
-                                        <th>ค่าสินค้า เพิ่ม/ลด</th>
-                                        <th>ค่าตีลัง</th>
-                                        <th>ค่าขนส่งจีน+</th>
-                                        <th>ค่าขนส่งไทย</th>
-                                        <th>ค่าบริการ</th>
-                                        <th>ค่าอื่นๆ</th>
-                                        <th>ส่วนลด</th>
-                                        {fUserCompany === "1" && (
-                                          <th>
-                                            LESS
-                                            <br /> WITHHOLDING <br />
-                                            TAX 1%
-                                          </th>
-                                        )}
-                                        <th>ราคารวม</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      <tr>
-                                        <td className="text-right">{fAmount}</td>
-                                        <td className="text-right">{fWeight} kg.</td>
-                                        <td className="text-right">{fVolume}</td>
-                                        <td className="text-center">
-                                          {nameRefPrice(row.frefprice)}
-                                        </td>
-                                        <td className="text-right">
-                                          ฿{numberFormat2(Number(row.frefrate ?? 0))}
-                                        </td>
-                                        <td className="text-right">
-                                          ฿{numberFormat2(fTotalPrice)}
-                                        </td>
-                                        <td className="text-right">
-                                          ฿{numberFormat2(fPriceUpdate)}
-                                        </td>
-                                        <td className="text-right">
-                                          ฿{numberFormat2(priceCrate)}
-                                        </td>
-                                        <td className="text-right">
-                                          ฿{numberFormat2(fTransportPriceChnThb)}
-                                        </td>
-                                        <td className="text-right">
-                                          ฿{numberFormat2(fTransportPrice)}
-                                        </td>
-                                        <td className="text-right">
-                                          ฿{numberFormat2(fShippingService)}
-                                        </td>
-                                        <td className="text-right">
-                                          ฿{numberFormat2(priceOther)}
-                                        </td>
-                                        <td className="text-right">
-                                          ฿{numberFormat2(fDiscount)}
-                                        </td>
-                                        {fUserCompany === "1" && (
-                                          <td className="text-right">
-                                            ฿
-                                            {numberFormat2(
-                                              (fTotalPrice +
-                                                fTransportPrice +
-                                                fPriceUpdate +
-                                                fShippingService +
-                                                fTransportPriceChnThb +
-                                                priceCrate +
-                                                priceOther -
-                                                fDiscount) *
-                                                0.01,
-                                            )}
-                                          </td>
-                                        )}
-                                        <td className="text-right text-danger">
-                                          ฿{numberFormat2(priceAllUser)}
-                                        </td>
-                                      </tr>
-                                    </tbody>
-                                  </table>
+                            <hr className="my-4 border-t border-dashed border-border" />
+                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                              <h4 className="text-base md:text-lg font-bold text-red-600">
+                                รายละเอียดสินค้า
+                              </h4>
+                              {fStatusValue === "5" && (
+                                <div className="md:text-right">
+                                  <ServiceImportPayButton
+                                    row={payButtonRow}
+                                    isJuristic={fUserCompany === "1"}
+                                  />
                                 </div>
-                              </div>
+                              )}
+                            </div>
+
+                            {/* Mobile: stacked cost card (md:hidden) — same
+                                figures as the desktop table, definition-list
+                                style so it never h-scrolls at 360px. */}
+                            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl border border-border bg-surface-alt/40 p-3 text-sm md:hidden">
+                              <dt className="text-muted">จำนวนกล่อง</dt>
+                              <dd className="text-right font-medium tabular-nums">{fAmount}</dd>
+                              <dt className="text-muted">น้ำหนัก</dt>
+                              <dd className="text-right font-medium tabular-nums">{fWeight} kg.</dd>
+                              <dt className="text-muted">ปริมาตรรวม</dt>
+                              <dd className="text-right font-medium tabular-nums">{fVolume}</dd>
+                              <dt className="text-muted">คิดราคาตาม</dt>
+                              <dd className="text-right font-medium">{nameRefPrice(row.frefprice)}</dd>
+                              <dt className="text-muted">เรทนำเข้า</dt>
+                              <dd className="text-right font-medium tabular-nums">฿{numberFormat2(Number(row.frefrate ?? 0))}</dd>
+                              <dt className="text-muted">ค่านำเข้าจีน-ไทย</dt>
+                              <dd className="text-right font-medium tabular-nums">฿{numberFormat2(fTotalPrice)}</dd>
+                              <dt className="text-muted">ค่าสินค้า เพิ่ม/ลด</dt>
+                              <dd className="text-right font-medium tabular-nums">฿{numberFormat2(fPriceUpdate)}</dd>
+                              <dt className="text-muted">ค่าตีลัง</dt>
+                              <dd className="text-right font-medium tabular-nums">฿{numberFormat2(priceCrate)}</dd>
+                              <dt className="text-muted">ค่าขนส่งจีน+</dt>
+                              <dd className="text-right font-medium tabular-nums">฿{numberFormat2(fTransportPriceChnThb)}</dd>
+                              <dt className="text-muted">ค่าขนส่งไทย</dt>
+                              <dd className="text-right font-medium tabular-nums">฿{numberFormat2(fTransportPrice)}</dd>
+                              <dt className="text-muted">ค่าบริการ</dt>
+                              <dd className="text-right font-medium tabular-nums">฿{numberFormat2(fShippingService)}</dd>
+                              <dt className="text-muted">ค่าอื่นๆ</dt>
+                              <dd className="text-right font-medium tabular-nums">฿{numberFormat2(priceOther)}</dd>
+                              <dt className="text-muted">ส่วนลด</dt>
+                              <dd className="text-right font-medium tabular-nums">฿{numberFormat2(fDiscount)}</dd>
+                              {fUserCompany === "1" && (
+                                <>
+                                  <dt className="text-muted">LESS WITHHOLDING TAX 1%</dt>
+                                  <dd className="text-right font-medium tabular-nums">
+                                    ฿
+                                    {numberFormat2(
+                                      (fTotalPrice +
+                                        fTransportPrice +
+                                        fPriceUpdate +
+                                        fShippingService +
+                                        fTransportPriceChnThb +
+                                        priceCrate +
+                                        priceOther -
+                                        fDiscount) *
+                                        0.01,
+                                    )}
+                                  </dd>
+                                </>
+                              )}
+                              <dt className="font-semibold text-foreground border-t border-border pt-2">ราคารวม</dt>
+                              <dd className="text-right font-bold tabular-nums text-red-600 border-t border-border pt-2">
+                                ฿{numberFormat2(priceAllUser)}
+                              </dd>
+                            </dl>
+
+                            {/* Desktop: full 14/15-column cost table. */}
+                            <div className="mt-3 hidden md:block overflow-x-auto rounded-xl border border-border">
+                              <table
+                                id="myTable"
+                                className="dataTable w-full text-sm border-collapse"
+                              >
+                                <thead>
+                                  <tr className="text-center bg-surface-alt">
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">
+                                      จำนวน
+                                      <br />
+                                      กล่อง
+                                    </th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">น้ำหนัก</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ปริมาตรรวม</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">คิดราคาตาม</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">เรทนำเข้า</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ค่านำเข้าจีน-ไทย</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ค่าสินค้า เพิ่ม/ลด</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ค่าตีลัง</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ค่าขนส่งจีน+</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ค่าขนส่งไทย</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ค่าบริการ</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ค่าอื่นๆ</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ส่วนลด</th>
+                                    {fUserCompany === "1" && (
+                                      <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">
+                                        LESS
+                                        <br /> WITHHOLDING <br />
+                                        TAX 1%
+                                      </th>
+                                    )}
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ราคารวม</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  <tr className="text-foreground">
+                                    <td className="px-2 py-2 text-right tabular-nums border-b border-border">{fAmount}</td>
+                                    <td className="px-2 py-2 text-right tabular-nums border-b border-border">{fWeight} kg.</td>
+                                    <td className="px-2 py-2 text-right tabular-nums border-b border-border">{fVolume}</td>
+                                    <td className="px-2 py-2 text-center border-b border-border">
+                                      {nameRefPrice(row.frefprice)}
+                                    </td>
+                                    <td className="px-2 py-2 text-right tabular-nums border-b border-border">
+                                      ฿{numberFormat2(Number(row.frefrate ?? 0))}
+                                    </td>
+                                    <td className="px-2 py-2 text-right tabular-nums border-b border-border">
+                                      ฿{numberFormat2(fTotalPrice)}
+                                    </td>
+                                    <td className="px-2 py-2 text-right tabular-nums border-b border-border">
+                                      ฿{numberFormat2(fPriceUpdate)}
+                                    </td>
+                                    <td className="px-2 py-2 text-right tabular-nums border-b border-border">
+                                      ฿{numberFormat2(priceCrate)}
+                                    </td>
+                                    <td className="px-2 py-2 text-right tabular-nums border-b border-border">
+                                      ฿{numberFormat2(fTransportPriceChnThb)}
+                                    </td>
+                                    <td className="px-2 py-2 text-right tabular-nums border-b border-border">
+                                      ฿{numberFormat2(fTransportPrice)}
+                                    </td>
+                                    <td className="px-2 py-2 text-right tabular-nums border-b border-border">
+                                      ฿{numberFormat2(fShippingService)}
+                                    </td>
+                                    <td className="px-2 py-2 text-right tabular-nums border-b border-border">
+                                      ฿{numberFormat2(priceOther)}
+                                    </td>
+                                    <td className="px-2 py-2 text-right tabular-nums border-b border-border">
+                                      ฿{numberFormat2(fDiscount)}
+                                    </td>
+                                    {fUserCompany === "1" && (
+                                      <td className="px-2 py-2 text-right tabular-nums border-b border-border">
+                                        ฿
+                                        {numberFormat2(
+                                          (fTotalPrice +
+                                            fTransportPrice +
+                                            fPriceUpdate +
+                                            fShippingService +
+                                            fTransportPriceChnThb +
+                                            priceCrate +
+                                            priceOther -
+                                            fDiscount) *
+                                            0.01,
+                                        )}
+                                      </td>
+                                    )}
+                                    <td className="px-2 py-2 text-right tabular-nums font-bold text-red-600 border-b border-border">
+                                      ฿{numberFormat2(priceAllUser)}
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
                             </div>
                           </>
                         ) : (
                           <>
-                            <div className="hr-dashed mb-1"></div>
-                            <div className="row">
-                              <div className="col-12">
-                                <h4 className="text-center text-md-left">
-                                  <b>
-                                    <span className="text-color-main">
-                                      รายละเอียดสินค้า
-                                    </span>
-                                  </b>
-                                </h4>
-                                <div className="header-from2"></div>
-                                <div className="table-responsive pt-1">
-                                  <table
-                                    id="myTable"
-                                    className="table display table-bordered table-striped dataTable no-footer dtr-inline pcs-table2"
-                                  >
-                                    <thead>
-                                      <tr className="text-center">
-                                        <th>#</th>
-                                        <th>รายละเอียดสินค้า</th>
-                                        <th>จำนวนกล่อง</th>
-                                        <th>น้ำหนัก</th>
-                                        <th>ปริมาตรรวม</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      <tr>
-                                        <td className="text-center">1</td>
-                                        <td title="">{row.fdetail}</td>
-                                        <td className="text-right">{fAmount}</td>
-                                        <td className="text-right">{fWeight} kg.</td>
-                                        <td className="text-right">
-                                          {row.famountcount === "1"
-                                            ? fVolume
-                                            : fVolume * Number(fAmount)}{" "}
-                                          CBM
-                                        </td>
-                                      </tr>
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </div>
+                            <hr className="my-4 border-t border-dashed border-border" />
+                            <h4 className="text-base md:text-lg font-bold text-red-600">
+                              รายละเอียดสินค้า
+                            </h4>
+
+                            {/* Mobile: item card (md:hidden). */}
+                            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl border border-border bg-surface-alt/40 p-3 text-sm md:hidden">
+                              <dt className="text-muted">#</dt>
+                              <dd className="text-right font-medium">1</dd>
+                              <dt className="text-muted">รายละเอียดสินค้า</dt>
+                              <dd className="text-right font-medium break-words">{row.fdetail}</dd>
+                              <dt className="text-muted">จำนวนกล่อง</dt>
+                              <dd className="text-right font-medium tabular-nums">{fAmount}</dd>
+                              <dt className="text-muted">น้ำหนัก</dt>
+                              <dd className="text-right font-medium tabular-nums">{fWeight} kg.</dd>
+                              <dt className="text-muted">ปริมาตรรวม</dt>
+                              <dd className="text-right font-medium tabular-nums">
+                                {row.famountcount === "1"
+                                  ? fVolume
+                                  : fVolume * Number(fAmount)}{" "}
+                                CBM
+                              </dd>
+                            </dl>
+
+                            {/* Desktop: 5-column item table. */}
+                            <div className="mt-3 hidden md:block overflow-x-auto rounded-xl border border-border">
+                              <table
+                                id="myTable"
+                                className="dataTable w-full text-sm border-collapse"
+                              >
+                                <thead>
+                                  <tr className="text-center bg-surface-alt">
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border">#</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border">รายละเอียดสินค้า</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">จำนวนกล่อง</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border">น้ำหนัก</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ปริมาตรรวม</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  <tr className="text-foreground">
+                                    <td className="px-2 py-2 text-center border-b border-border">1</td>
+                                    <td className="px-2 py-2 border-b border-border" title="">{row.fdetail}</td>
+                                    <td className="px-2 py-2 text-right tabular-nums border-b border-border">{fAmount}</td>
+                                    <td className="px-2 py-2 text-right tabular-nums border-b border-border">{fWeight} kg.</td>
+                                    <td className="px-2 py-2 text-right tabular-nums border-b border-border">
+                                      {row.famountcount === "1"
+                                        ? fVolume
+                                        : fVolume * Number(fAmount)}{" "}
+                                      CBM
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
                             </div>
                           </>
                         )}
 
                         {/* ── Footer back button ── forwarder.php L2231-2240 ── */}
-                        <div className="col-md-12 mb-2">
-                          <hr />
+                        <hr className="my-4 border-t border-border" />
+                        <div className="md:text-right">
+                          <Link
+                            href={`/service-import?q=${fStatusValue}`}
+                            className="inline-flex w-full md:w-auto items-center justify-center gap-1.5 rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 active:scale-[0.98] transition-all"
+                          >
+                            <i className="fas fa-arrow-left"></i> ย้อนกลับ
+                          </Link>
                         </div>
-                        <div className="float-md-right">
-                          <ul className="list-inline dl text-center text-md-right">
-                            <li className="list-inline-item text-info ">
-                              <Link
-                                href={`/service-import?q=${fStatusValue}`}
-                              >
-                                <button
-                                  type="button"
-                                  className="btn btn-block btn-rounded btn-warning"
-                                >
-                                  <i className="fas fa-arrow-left"></i> ย้อนกลับ
-                                </button>
-                              </Link>
-                            </li>
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-            {/* forwarder.php L2252 — pay-modal target div (#list-forwarder-data) */}
-            <div id="list-forwarder-data"></div>
-          </div>
-        </div>
+        </section>
+        {/* forwarder.php L2252 — pay-modal target div (#list-forwarder-data) */}
+        <div id="list-forwarder-data"></div>
       </div>
-      {/* END: Content — forwarder.php L2251 */}
     </div>
   );
 }

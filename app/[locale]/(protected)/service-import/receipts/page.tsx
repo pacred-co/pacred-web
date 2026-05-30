@@ -202,176 +202,265 @@ export default async function ServiceImportReceiptsPage({
   // the fixed-bottom bulk-print button renders only then.
   const btn = receipts.length > 0;
 
+  // Tailwind rebuild (ปอน 2026-05-30 — "rebuild chrome เป็น tailwind mobile-
+  // first; ห้ามแตะ data/relation/href/id/name"). Bootstrap-4 chrome
+  // (.card / .table-bordered / .badge-* / .btn-*) rendered UNSTYLED after
+  // the BS CSS was dropped — converted to Tailwind matching the sibling
+  // /service-payment list (card → mobile cards + desktop table). ZERO
+  // query / href / id / name / hook-class changed: the date <input> keeps
+  // `name="date"` + `shawCalRanges`, the print form keeps `#frm-example` +
+  // hidden `#arrID`, the table keeps `#myTable .dataTable`, the bulk button
+  // keeps `#select1` name=type value=1, the wrapper keeps `notranslate` so
+  // the staged jQuery + DataTables vendor bundle still enhances it 1:1.
   return (
     <div className="pcs-legacy">
       {/* Legacy PCS stylesheet — static public/ asset, loaded via a
           plain <link> so it bypasses the Tailwind/PostCSS pipeline. */}
       <link rel="stylesheet" href="/legacy/pcs/receipt-f-hs.css" />
 
-      {/* BEGIN: Content — receipt-f-hs.php L42 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          <div className="content-body pr110">
-            <div className="card">
-              <section>
-                <div className="row">
-                  <div className="col-md-12 col-sm-12">
-                    {/* card-header — receipt-f-hs.php L85-95 */}
-                    <div className="card-header pb-0">
-                      <h3 className="">
-                        <i className="la la-print" style={{ fontSize: "2rem" }}></i>{" "}
-                        ประวัติใบเสร็จรายการฝากนำเข้าสินค้า
-                      </h3>
-                      <form className="" method="GET" action="">
-                        <label className="form-control-label" htmlFor="date">
-                          วันที่ชำระเงิน
-                        </label>
-                        <input
-                          type="text"
-                          className="form-control2 shawCalRanges"
-                          name="date"
-                          defaultValue={`${defaultStart} - ${defaultEnd}`}
-                        />
-                        <button
-                          className="btn btn-outline-success btn-sm btn-rounded"
-                          type="submit"
-                        >
-                          <i className="fas fa-search"></i> ค้นหาข้อมูล
-                        </button>
-                        {/* receipt-f-hs.php L91-93 — search-result caption */}
-                        {hasDateParam ? (
-                          <span className="font-14 text-danger">
-                            ผลลัพธ์การค้นหา {startDate} - {endDate}{" "}
-                          </span>
-                        ) : null}
-                      </form>
-                    </div>
+      {/* BEGIN: Content — receipt-f-hs.php L42. Bottom padding clears the
+          fixed bulk-print bar + the mobile FloatingTabs bottom-nav. */}
+      <div className="pcs-content-pad w-full px-3 md:px-6 pt-3 pb-28 md:py-6 md:pb-24">
+        <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+          {/* ── card-header — receipt-f-hs.php L85-95: title + date filter ── */}
+          <div className="border-b border-border px-3 py-3 md:px-5 md:py-4">
+            <h1 className="flex items-center gap-2 text-base md:text-xl font-bold text-foreground">
+              <i className="la la-print text-xl md:text-2xl text-primary-600" aria-hidden></i>
+              <span>ประวัติใบเสร็จรายการฝากนำเข้าสินค้า</span>
+            </h1>
 
-                    <div className="table-responsive p-05 notranslate">
-                      {/* receipt-f-hs.php L97-146 — the print form +
-                          DataTables-checkbox table. Markup transcribed
-                          VERBATIM so the staged jQuery + DataTables
-                          vendor bundle enhances it 1:1. The bulk-print
-                          form action is the transcribed Pacred print
-                          route (method=GET, default-locale path). */}
-                      <form
-                        className="p-1"
-                        id="frm-example"
-                        action={PRINT_ROUTE}
-                        method="GET"
-                      >
-                        <input type="hidden" name="id" id="arrID" />
-                        <table
-                          id="myTable"
-                          className="table display table-bordered table-striped dataTable no-footer dtr-inline"
-                        >
-                          <thead>
-                            <tr className="text-center bg-white">
-                              <th>ID</th>
-                              <th>วันที่สร้าง</th>
-                              <th>เลขที่ใบเสร็จ</th>
-                              <th>เลขที่ฝากนำเข้า</th>
-                              <th>จำนวนเงิน</th>
-                              <th>พิมพ์ใบเสร็จ</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {/* receipt-f-hs.php L111-143 — one <tr> per
-                                tb_receipt row. */}
-                            {receipts.map((row) => {
-                              const fIds = arrItem[row.rid] ?? [];
-                              return (
-                                <tr key={row.id}>
-                                  <td className="cursor-pointer text-center">
-                                    {row.rid}
-                                  </td>
-                                  <td>{row.rdate}</td>
-                                  <td>
-                                    {/* receipt-f-hs.php L121 — the
-                                        "เลขที่ใบเสร็จ" cell link →
-                                        the transcribed print route. */}
-                                    <Link
-                                      href={`${PRINT_ROUTE}?id=${row.rid}`}
-                                      target="_blank"
-                                    >
-                                      {row.rid}
-                                    </Link>
-                                  </td>
-                                  <td>
-                                    {/* receipt-f-hs.php L123-131 — the
-                                        $arrItem fID links. Legacy points
-                                        at forwarder/detail/<fID>; the
-                                        Pacred equivalent is the
-                                        /service-import/[fNo] route. */}
-                                    {fIds.map((fid) => (
-                                      <span key={fid}>
-                                        <Link
-                                          href={`/service-import/${fid}`}
-                                          target="_blank"
-                                        >
-                                          <span
-                                            className="text-primary"
-                                            style={{ fontSize: "12px" }}
-                                          >
-                                            {fid}
-                                          </span>
-                                        </Link>
-                                        {", "}
-                                      </span>
-                                    ))}
-                                  </td>
-                                  <td className="text-right">
-                                    {numberFormat(Number(row.ramount ?? 0))}
-                                  </td>
-                                  <td className="text-center">
-                                    {/* receipt-f-hs.php L138 — the
-                                        "พิมพ์ใบเสร็จ" badge link →
-                                        the transcribed print route. */}
-                                    <Link
-                                      href={`${PRINT_ROUTE}?id=${row.rid}`}
-                                      target="_blank"
-                                    >
-                                      <span className=" badge badge-warning badge-pill font-14">
-                                        พิมพ์ใบเสร็จ
-                                      </span>
-                                    </Link>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </form>
-                      {/* receipt-f-hs.php L147-155 — the fixed-bottom
-                          bulk-print button; rendered only when $btn==1
-                          (≥1 row). The #select1 handler (page JS
-                          L234-240) opens printReceiptF.php?type=1&id=
-                          <selected csv> — FLAGGED (A)/(B). */}
-                      {btn ? (
-                        <div
-                          className="btn-group"
-                          style={{ position: "fixed", bottom: "20px" }}
-                        >
-                          <button
-                            type="submit"
-                            id="select1"
-                            className="btn btn-success waves-effect round"
-                            name="type"
-                            value="1"
-                          >
-                            <i className="fas fa-box-open"></i> พิมพ์ใบเสร็จ
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              </section>
-            </div>
+            {/* Date-range filter. `name="date"` + the `shawCalRanges` hook
+                class kept verbatim — legacy daterangepicker JS attaches to
+                it; submit GET re-filters by ?date=. */}
+            <form className="mt-3" method="GET" action="">
+              <label
+                className="block text-xs font-medium text-muted mb-1"
+                htmlFor="date"
+              >
+                วันที่ชำระเงิน
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  type="text"
+                  className="shawCalRanges w-full sm:max-w-xs rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-colors"
+                  name="date"
+                  defaultValue={`${defaultStart} - ${defaultEnd}`}
+                />
+                <button
+                  className="inline-flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-full border border-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-600 hover:bg-emerald-50 active:scale-[0.98] transition-all whitespace-nowrap"
+                  type="submit"
+                >
+                  <i className="fas fa-search" aria-hidden></i> ค้นหาข้อมูล
+                </button>
+              </div>
+              {/* receipt-f-hs.php L91-93 — search-result caption */}
+              {hasDateParam ? (
+                <p className="mt-2 text-xs text-red-600">
+                  ผลลัพธ์การค้นหา {startDate} - {endDate}{" "}
+                </p>
+              ) : null}
+            </form>
           </div>
-        </div>
+
+          {/* ── List body. `notranslate` kept (legacy hook). ── */}
+          <div className="px-3 py-3 md:px-5 md:py-4 notranslate">
+            {/* receipt-f-hs.php L97-146 — the print form. Markup hooks kept
+                VERBATIM (`#frm-example`, hidden `#arrID`, `#myTable
+                .dataTable`) so the staged jQuery + DataTables vendor bundle
+                enhances it 1:1. The bulk-print form action is the
+                transcribed Pacred print route (method=GET). */}
+            <form
+              className=""
+              id="frm-example"
+              action={PRINT_ROUTE}
+              method="GET"
+            >
+              <input type="hidden" name="id" id="arrID" />
+
+              {receipts.length === 0 ? (
+                /* Empty state */
+                <div className="flex flex-col items-center gap-2 py-12 text-center">
+                  <i className="la la-print text-4xl text-muted/40" aria-hidden></i>
+                  <p className="text-sm text-muted">
+                    ไม่พบใบเสร็จในช่วงวันที่ที่เลือก
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* ── Mobile: stacked cards (no horizontal scroll) ── */}
+                  <div className="space-y-3 md:hidden">
+                    {receipts.map((row) => {
+                      const fIds = arrItem[row.rid] ?? [];
+                      return (
+                        <div
+                          key={row.id}
+                          className="rounded-xl border border-border bg-white dark:bg-surface p-3 shadow-sm"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <span className="text-[11px] text-muted">
+                                เลขที่ใบเสร็จ
+                              </span>
+                              <Link
+                                href={`${PRINT_ROUTE}?id=${row.rid}`}
+                                target="_blank"
+                                className="block font-mono text-sm font-semibold text-red-600 hover:underline break-all"
+                              >
+                                {row.rid}
+                              </Link>
+                            </div>
+                            <span className="shrink-0 font-mono text-sm font-bold text-red-600 tabular-nums">
+                              {numberFormat(Number(row.ramount ?? 0))}
+                            </span>
+                          </div>
+
+                          {/* receipt-f-hs.php L123-131 — the $arrItem fID
+                              links → /service-import/[fNo]. */}
+                          <div className="mt-2 text-xs text-foreground">
+                            <span className="text-[11px] text-muted">
+                              เลขที่ฝากนำเข้า:{" "}
+                            </span>
+                            {fIds.map((fid) => (
+                              <span key={fid}>
+                                <Link
+                                  href={`/service-import/${fid}`}
+                                  target="_blank"
+                                  className="text-sky-600 hover:underline"
+                                >
+                                  {fid}
+                                </Link>
+                                {", "}
+                              </span>
+                            ))}
+                          </div>
+
+                          <div className="mt-2 flex items-center justify-between gap-2 border-t border-dashed border-border pt-2">
+                            <span className="text-[11px] text-muted">
+                              {row.rdate}
+                            </span>
+                            {/* receipt-f-hs.php L138 — "พิมพ์ใบเสร็จ" link. */}
+                            <Link
+                              href={`${PRINT_ROUTE}?id=${row.rid}`}
+                              target="_blank"
+                              className="inline-flex items-center rounded-full border border-amber-400 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100"
+                            >
+                              พิมพ์ใบเสร็จ
+                            </Link>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* ── Desktop: table (wrapped in plain div so Tailwind
+                      hidden/block isolates from the legacy `.dataTable`
+                      display cascade). `#myTable .dataTable` kept. ── */}
+                  <div className="hidden md:block overflow-x-auto rounded-xl border border-border">
+                    <table
+                      id="myTable"
+                      className="dataTable no-footer dtr-inline w-full text-sm"
+                    >
+                      <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+                        <tr>
+                          <th className="px-4 py-3 text-center font-medium">ID</th>
+                          <th className="px-4 py-3 font-medium">วันที่สร้าง</th>
+                          <th className="px-4 py-3 font-medium">เลขที่ใบเสร็จ</th>
+                          <th className="px-4 py-3 font-medium">เลขที่ฝากนำเข้า</th>
+                          <th className="px-4 py-3 text-right font-medium">จำนวนเงิน</th>
+                          <th className="px-4 py-3 text-center font-medium">พิมพ์ใบเสร็จ</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {/* receipt-f-hs.php L111-143 — one <tr> per
+                            tb_receipt row. */}
+                        {receipts.map((row) => {
+                          const fIds = arrItem[row.rid] ?? [];
+                          return (
+                            <tr
+                              key={row.id}
+                              className="border-t border-border align-top hover:bg-surface-alt/30"
+                            >
+                              <td className="px-4 py-3 text-center font-mono text-xs text-muted">
+                                {row.rid}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-xs text-muted">
+                                {row.rdate}
+                              </td>
+                              <td className="px-4 py-3">
+                                {/* receipt-f-hs.php L121 — "เลขที่ใบเสร็จ"
+                                    cell link → the transcribed print route. */}
+                                <Link
+                                  href={`${PRINT_ROUTE}?id=${row.rid}`}
+                                  target="_blank"
+                                  className="font-mono text-red-600 hover:underline"
+                                >
+                                  {row.rid}
+                                </Link>
+                              </td>
+                              <td className="px-4 py-3 text-xs">
+                                {/* receipt-f-hs.php L123-131 — the $arrItem
+                                    fID links. Legacy points at
+                                    forwarder/detail/<fID>; the Pacred
+                                    equivalent is the /service-import/[fNo]
+                                    route. */}
+                                {fIds.map((fid) => (
+                                  <span key={fid}>
+                                    <Link
+                                      href={`/service-import/${fid}`}
+                                      target="_blank"
+                                      className="text-sky-600 hover:underline"
+                                    >
+                                      {fid}
+                                    </Link>
+                                    {", "}
+                                  </span>
+                                ))}
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono font-bold text-red-600 tabular-nums">
+                                {numberFormat(Number(row.ramount ?? 0))}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                {/* receipt-f-hs.php L138 — the "พิมพ์ใบเสร็จ"
+                                    badge link → the transcribed print route. */}
+                                <Link
+                                  href={`${PRINT_ROUTE}?id=${row.rid}`}
+                                  target="_blank"
+                                  className="inline-flex items-center rounded-full border border-amber-400 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100"
+                                >
+                                  พิมพ์ใบเสร็จ
+                                </Link>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </form>
+          </div>
+        </section>
       </div>
+
+      {/* receipt-f-hs.php L147-155 — the fixed-bottom bulk-print button;
+          rendered only when $btn==1 (≥1 row). The #select1 handler (page
+          JS L234-240) submits #frm-example with the selected csv — id /
+          name / value / type kept verbatim. Mobile: bottom-24 clears the
+          FloatingTabs bottom-nav; desktop flush to the bottom edge. */}
+      {btn ? (
+        <div className="fixed inset-x-0 z-[40] bottom-24 md:bottom-4 flex justify-center md:justify-end px-3 md:px-6 md:pr-[88px]">
+          <button
+            type="submit"
+            id="select1"
+            className="inline-flex items-center gap-2 rounded-full bg-emerald-600 text-white px-5 py-2.5 text-sm font-bold shadow-lg shadow-emerald-600/30 hover:bg-emerald-700 active:scale-[0.98] transition-all"
+            name="type"
+            value="1"
+          >
+            <i className="fas fa-box-open" aria-hidden></i> พิมพ์ใบเสร็จ
+          </button>
+        </div>
+      ) : null}
       {/* END: Content */}
     </div>
   );

@@ -195,296 +195,287 @@ export default async function WalletDepositPage() {
       {/* wallet.php <title> L53 (Next.js owns <head> — kept as fidelity
           comment): กระเป๋าสตางค์ | Pacred */}
 
-      {/* BEGIN: Content — wallet.php L85 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          {/* L89-100 — breadcrumb */}
-          <div className="content-header row">
-            <div className="content-header-left col-12 mb-2">
-              <div className="row breadcrumbs-top ">
-                <div className="breadcrumb-wrapper col-12">
-                  <ol className="breadcrumb ">
-                    <li className="breadcrumb-item">
-                      <Link href="/dashboard">
-                        <span className="menu-home">หน้าแรก</span>
-                      </Link>
-                    </li>
-                    <li className="breadcrumb-item active">กระเป๋าสตางค์ </li>
-                  </ol>
+      {/* BEGIN: Content — wallet.php L85.
+          Tailwind rebuild (เดฟ 2026-05-30 — ปอน: "rebuild css เป็น tailwind
+          mobile-first · ห้ามแก้ relation/href/id/hook/logic"). The Bootstrap-4
+          shell (.app-content > .content-wrapper > .content-body.pr110 + the
+          balance .card) → `.pcs-content-pad` wrapper + Tailwind cards.
+          ⚠️ The 4-tab history panel + the #wallet-add modal KEEP their
+          Bootstrap hook classes (`nav-tabs`/`nav-link`/`active` ·
+          `tab-content`/`tab-pane`/`active` · `data-toggle="tab"` ·
+          `data-dismiss="modal"` · the pane `href="#..."` targets) because
+          the kept <link href="/legacy/pcs/wallet.css"> + the layout's jQuery
+          drive tab show/hide + the auto-open <Script> off exactly those
+          selectors. Visual polish layered via Tailwind around them. */}
+      <div className="pcs-content-pad w-full px-3 md:px-6 py-3 md:py-6">
+        {/* L89-100 — breadcrumb */}
+        <nav aria-label="breadcrumb" className="mb-3 md:mb-4">
+          <ol className="flex flex-wrap items-center gap-1.5 text-sm text-muted">
+            <li>
+              <Link href="/dashboard" className="hover:text-foreground transition-colors">
+                <span className="menu-home">หน้าแรก</span>
+              </Link>
+            </li>
+            <li aria-hidden className="text-border">/</li>
+            <li className="font-medium text-foreground" aria-current="page">
+              กระเป๋าสตางค์
+            </li>
+          </ol>
+        </nav>
+        {/* L101 — content-body */}
+        <section className="max-w-3xl mx-auto">
+          {/* ── Wallet balance card — wallet.php L108-131 ── */}
+          <div className="mx-auto max-w-lg">
+            <div className="rounded-3xl border-2 border-red-500 bg-white dark:bg-surface shadow-md p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="text-left">
+                  <span className="block text-base font-semibold text-foreground">
+                    {fullName}
+                  </span>
+                  <span className="block text-sm text-muted">
+                    กระเป๋าสตางค์ (บาท)
+                  </span>
+                  <span
+                    className="tam-counter notranslate block text-4xl md:text-5xl font-bold text-foreground mt-1"
+                    data-count={walletTotal}
+                  >
+                    {numberFormat2(walletTotal)}
+                  </span>
+                </div>
+                <div className="shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    className="brand-logo logo-wallet w-12 h-auto"
+                    alt="logo"
+                    src="/images/pacred-logo-red.png"
+                  />
+                </div>
+              </div>
+              <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-surface-alt">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-orange-500 to-orange-300"
+                  role="progressbar"
+                  style={{ width: "100%" }}
+                  aria-valuenow={100}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                ></div>
+              </div>
+              <div className="mt-4 text-center">
+                <Link href="/wallet/deposit">
+                  <span className="inline-flex items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-red-600 to-orange-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90 transition-opacity">
+                    <i className="ft-plus"></i> เติมเงินเข้ากระเป๋า
+                  </span>
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* ── 4-tab wallet-history panel — wallet.php L132-227 ──
+              KEEP the Bootstrap tab hooks (`nav nav-tabs` · `nav-item` ·
+              `nav-link`/`active` · `data-toggle="tab"` · `href="#paneId"` ·
+              `role` · `tab-content`/`tab-pane`/`active` · `load_data_*` ids):
+              the kept wallet.css `.tab-content > .tab-pane{display:none}` +
+              the layout jQuery toggle `active` to switch panes. Tailwind only
+              adds the card frame + spacing around them. */}
+          <div className="mt-4">
+            <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+              <ul
+                className="nav nav-tabs customtab tab-wallet flex border-b border-border overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                role="tablist"
+              >
+                <li className="nav-item tab-sm-center flex-1 min-w-max">
+                  <a
+                    className="nav-link active block px-3 py-3 text-center text-sm font-medium whitespace-nowrap"
+                    data-toggle="tab"
+                    href="#history"
+                    role="tab"
+                  >
+                    <span className="hidden-sm-up">
+                      <i className="fas fa-history pr-05"></i>
+                    </span>
+                    <span className="hidden-xs-down">
+                      รายการเดินบัญชี
+                    </span>
+                  </a>
+                </li>
+                <li className="nav-item tab-sm-center flex-1 min-w-max">
+                  <a
+                    className="nav-link block px-3 py-3 text-center text-sm font-medium whitespace-nowrap"
+                    data-toggle="tab"
+                    href="#wallet-hs-add"
+                    role="tab"
+                  >
+                    <span className="hidden-sm-up">
+                      <i className="la la-money pr-05"></i>
+                    </span>
+                    <span className="hidden-xs-down">
+                      รายการเติมเงิน
+                    </span>
+                  </a>
+                </li>
+                <li className="nav-item tab-sm-center flex-1 min-w-max">
+                  <a
+                    className="nav-link block px-3 py-3 text-center text-sm font-medium whitespace-nowrap"
+                    data-toggle="tab"
+                    href="#wallet-payment"
+                    role="tab"
+                  >
+                    <span className="hidden-sm-up">
+                      <i className="far fa-credit-card pr-05"></i>
+                    </span>
+                    <span className="hidden-xs-down">
+                      รายการชำระเงิน
+                    </span>
+                  </a>
+                </li>
+                <li className="nav-item tab-sm-center flex-1 min-w-max">
+                  <a
+                    className="nav-link block px-3 py-3 text-center text-sm font-medium whitespace-nowrap"
+                    data-toggle="tab"
+                    href="#wallet-hs-withdraw"
+                    role="tab"
+                  >
+                    <span className="hidden-sm-up">
+                      <i className="far fa-handshake pr-05"></i>
+                    </span>
+                    <span className="hidden-xs-down">
+                      รายการถอนเงิน
+                    </span>
+                  </a>
+                </li>
+              </ul>
+              <div className="tab-content p-3 md:p-4">
+                <div
+                  className="tab-pane active"
+                  id="history"
+                  role="tabpanel"
+                >
+                  <div id="load_data_wallet_hs" className="space-y-2">
+                    {rowsHistory.length === 0 ? (
+                      <div className="text-center text-no-data text-red-500 py-10">
+                        คุณยังไม่มีรายการ
+                      </div>
+                    ) : (
+                      rowsHistory.map((row) => (
+                        <WalletHsRowView key={row.ID} row={row} />
+                      ))
+                    )}
+                  </div>
+                  <div id="load_data_message_wallet_hs"></div>
+                </div>
+                <div
+                  className="tab-pane"
+                  id="wallet-hs-add"
+                  role="tabpanel"
+                >
+                  <div id="load_data_wallet_hs_add" className="space-y-2">
+                    {rowsAdd.length === 0 ? (
+                      <div className="text-center text-no-data text-red-500 py-10">
+                        คุณยังไม่มีรายการ
+                      </div>
+                    ) : (
+                      rowsAdd.map((row) => (
+                        <WalletHsRowView key={row.ID} row={row} />
+                      ))
+                    )}
+                  </div>
+                  <div id="load_data_message_wallet_hs_add"></div>
+                </div>
+                <div
+                  className="tab-pane"
+                  id="wallet-payment"
+                  role="tabpanel"
+                >
+                  <div id="load_data_wallet_hs_payments" className="space-y-2">
+                    {rowsPayments.length === 0 ? (
+                      <div className="text-center text-no-data text-red-500 py-10">
+                        คุณยังไม่มีรายการ
+                      </div>
+                    ) : (
+                      rowsPayments.map((row) => (
+                        <WalletHsRowView key={row.ID} row={row} />
+                      ))
+                    )}
+                  </div>
+                  <div id="load_data_message_wallet_payments"></div>
+                </div>
+                <div
+                  className="tab-pane"
+                  id="wallet-hs-withdraw"
+                  role="tabpanel"
+                >
+                  <div id="load_data_wallet_hs_withdraw" className="space-y-2">
+                    {rowsWithdraw.length === 0 ? (
+                      <div className="text-center text-no-data text-red-500 py-10">
+                        คุณยังไม่มีรายการ
+                      </div>
+                    ) : (
+                      rowsWithdraw.map((row) => (
+                        <WalletHsRowView key={row.ID} row={row} />
+                      ))
+                    )}
+                  </div>
+                  <div id="load_data_message_wallet_hs_withdraw"></div>
                 </div>
               </div>
             </div>
           </div>
-          {/* L101 — content-body */}
-          <div className="content-body pr110">
-            <section>
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  <div className="card">
-                    <div className="card-content">
-                      <div className="card-body">
-                        {/* ── Wallet balance card — wallet.php L108-131 ── */}
-                        <div className="row">
-                          <div className="col-md-6 offset-md-3">
-                            <div className="card-body border-wallet pb-0">
-                              <div className="media d-flex">
-                                <div className="media-body text-left">
-                                  <h3 className="warning mb-0">
-                                    <span className="text-black-1">{fullName}</span>
-                                    <br />
-                                    <span className="text-black-1 font-14 ">
-                                      กระเป๋าสตางค์ (บาท)
-                                    </span>
-                                    <br />
-                                    <span
-                                      className="tam-counter font-3rem notranslate"
-                                      data-count={walletTotal}
-                                    >
-                                      {numberFormat2(walletTotal)}
-                                    </span>
-                                    <br />
-                                  </h3>
-                                </div>
-                                <div>
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    className="brand-logo logo-wallet"
-                                    alt="logo"
-                                    src="/images/pacred-logo-red.png"
-                                  />
-                                </div>
-                              </div>
-                              <div className="progress progress-sm mt-1 mb-0 box-shadow-2">
-                                <div
-                                  className="progress-bar bg-gradient-x-warning"
-                                  role="progressbar"
-                                  style={{ width: "100%" }}
-                                  aria-valuenow={100}
-                                  aria-valuemin={0}
-                                  aria-valuemax={100}
-                                ></div>
-                              </div>
-                              <div
-                                className="text-center pt-1"
-                                style={{ marginBottom: "-20px" }}
-                              >
-                                <Link href="/wallet/deposit">
-                                  <div className="btn-add-wallet">
-                                    {" "}
-                                    <i className="ft-plus"></i> เติมเงินเข้ากระเป๋า{" "}
-                                  </div>
-                                </Link>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* ── 4-tab wallet-history panel — wallet.php L132-227 ── */}
-                        <div className="row pt-3">
-                          <div className="col-12">
-                            <div className="card">
-                              <div className="pt-0">
-                                <ul
-                                  className="nav nav-tabs customtab tab-wallet"
-                                  role="tablist"
-                                >
-                                  <li className="nav-item tab-sm-center">
-                                    <a
-                                      className="nav-link active"
-                                      data-toggle="tab"
-                                      href="#history"
-                                      role="tab"
-                                    >
-                                      <span className="hidden-sm-up">
-                                        <i className="fas fa-history pr-05"></i>
-                                      </span>
-                                      <span className="hidden-xs-down">
-                                        รายการเดินบัญชี
-                                      </span>
-                                    </a>
-                                  </li>
-                                  <li className="nav-item tab-sm-center">
-                                    <a
-                                      className="nav-link"
-                                      data-toggle="tab"
-                                      href="#wallet-hs-add"
-                                      role="tab"
-                                    >
-                                      <span className="hidden-sm-up">
-                                        <i className="la la-money pr-05"></i>
-                                      </span>
-                                      <span className="hidden-xs-down">
-                                        รายการเติมเงิน
-                                      </span>
-                                    </a>
-                                  </li>
-                                  <li className="nav-item tab-sm-center">
-                                    <a
-                                      className="nav-link"
-                                      data-toggle="tab"
-                                      href="#wallet-payment"
-                                      role="tab"
-                                    >
-                                      <span className="hidden-sm-up">
-                                        <i className="far fa-credit-card pr-05"></i>
-                                      </span>
-                                      <span className="hidden-xs-down">
-                                        รายการชำระเงิน
-                                      </span>
-                                    </a>
-                                  </li>
-                                  <li className="nav-item tab-sm-center">
-                                    <a
-                                      className="nav-link"
-                                      data-toggle="tab"
-                                      href="#wallet-hs-withdraw"
-                                      role="tab"
-                                    >
-                                      <span className="hidden-sm-up">
-                                        <i className="far fa-handshake pr-05"></i>
-                                      </span>
-                                      <span className="hidden-xs-down">
-                                        รายการถอนเงิน
-                                      </span>
-                                    </a>
-                                  </li>
-                                </ul>
-                                <div className="tab-content">
-                                  <div
-                                    className="tab-pane active"
-                                    id="history"
-                                    role="tabpanel"
-                                  >
-                                    <div id="load_data_wallet_hs">
-                                      {rowsHistory.length === 0 ? (
-                                        <div className="text-center text-no-data text-danger">
-                                          คุณยังไม่มีรายการ
-                                        </div>
-                                      ) : (
-                                        rowsHistory.map((row) => (
-                                          <WalletHsRowView key={row.ID} row={row} />
-                                        ))
-                                      )}
-                                    </div>
-                                    <div id="load_data_message_wallet_hs"></div>
-                                  </div>
-                                  <div
-                                    className="tab-pane"
-                                    id="wallet-hs-add"
-                                    role="tabpanel"
-                                  >
-                                    <div id="load_data_wallet_hs_add">
-                                      {rowsAdd.length === 0 ? (
-                                        <div className="text-center text-no-data text-danger">
-                                          คุณยังไม่มีรายการ
-                                        </div>
-                                      ) : (
-                                        rowsAdd.map((row) => (
-                                          <WalletHsRowView key={row.ID} row={row} />
-                                        ))
-                                      )}
-                                    </div>
-                                    <div id="load_data_message_wallet_hs_add"></div>
-                                  </div>
-                                  <div
-                                    className="tab-pane"
-                                    id="wallet-payment"
-                                    role="tabpanel"
-                                  >
-                                    <div id="load_data_wallet_hs_payments">
-                                      {rowsPayments.length === 0 ? (
-                                        <div className="text-center text-no-data text-danger">
-                                          คุณยังไม่มีรายการ
-                                        </div>
-                                      ) : (
-                                        rowsPayments.map((row) => (
-                                          <WalletHsRowView key={row.ID} row={row} />
-                                        ))
-                                      )}
-                                    </div>
-                                    <div id="load_data_message_wallet_payments"></div>
-                                  </div>
-                                  <div
-                                    className="tab-pane"
-                                    id="wallet-hs-withdraw"
-                                    role="tabpanel"
-                                  >
-                                    <div id="load_data_wallet_hs_withdraw">
-                                      {rowsWithdraw.length === 0 ? (
-                                        <div className="text-center text-no-data text-danger">
-                                          คุณยังไม่มีรายการ
-                                        </div>
-                                      ) : (
-                                        rowsWithdraw.map((row) => (
-                                          <WalletHsRowView key={row.ID} row={row} />
-                                        ))
-                                      )}
-                                    </div>
-                                    <div id="load_data_message_wallet_hs_withdraw"></div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+        </section>
+        {/* ── Deposit modal — wallet.php L233-283 ──
+            In legacy, the L294-302 inline <script> auto-opens this
+            via $("#wallet-add").modal("show") because `?page=='add'`.
+            KEEP the Bootstrap modal hooks (`modal`/`modal-dialog`/
+            `modal-content` · `data-dismiss="modal"` · `close`): the
+            layout's jQuery `$.fn.modal` + the auto-open <Script> read
+            exactly those. Tailwind restyles the dialog/header/body frame
+            (Bootstrap modal CSS is not in the kept wallet.css) + centers
+            the deposit form `max-w-xl`.
+            The `addData` POST handler (wallet.php L4-51) is wired via the
+            <LegacyDepositForm> Client Component →
+            actions/wallet.ts::submitLegacyWalletDeposit (INSERT
+            tb_wallet_hs + slip upload to `slips` bucket + in-app notify;
+            LINE Notify replaced by the in-app feed since LINE Notify
+            EOL'd Apr 2025). */}
+        <div
+          id="wallet-add"
+          className="modal fade in fixed inset-0 z-50 overflow-y-auto bg-black/50 p-3 md:p-6"
+          tabIndex={-1}
+          role="dialog"
+          aria-hidden="true"
+        >
+          <div className="modal-dialog mx-auto w-full max-w-xl my-6">
+            <div className="modal-content rounded-2xl border border-border bg-white dark:bg-surface shadow-xl overflow-hidden">
+              <div className="modal-header header-from flex items-center justify-between border-b border-border px-4 py-3 md:px-5 md:py-4">
+                <h4 className="modal-title text-base md:text-lg font-bold text-foreground">
+                  เติมเงินเข้าเป๋าตัง Pacred
+                </h4>
+                <button
+                  type="button"
+                  className="close inline-flex items-center justify-center w-9 h-9 rounded-lg text-muted hover:bg-surface-alt hover:text-foreground transition-colors"
+                  data-dismiss="modal"
+                  aria-hidden="true"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="24"
+                    height="24"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="css-i6dzq1"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
               </div>
-              {/* ── Deposit modal — wallet.php L233-283 ──
-                  In legacy, the L294-302 inline <script> auto-opens this
-                  via $("#wallet-add").modal("show") because `?page=='add'`.
-                  Transcribed 1:1; the auto-open script needs Bootstrap-4
-                  jQuery (loaded by the protected layout) — the modal
-                  markup itself is identical to wallet.php's modal.
-                  The `addData` POST handler (wallet.php L4-51) is wired
-                  via the <LegacyDepositForm> Client Component →
-                  actions/wallet.ts::submitLegacyWalletDeposit (INSERT
-                  tb_wallet_hs + slip upload to `slips` bucket + in-app
-                  notify; LINE Notify replaced by the in-app feed
-                  because LINE Notify EOL'd Apr 2025). */}
-              <div
-                id="wallet-add"
-                className="modal fade in"
-                tabIndex={-1}
-                role="dialog"
-                aria-hidden="true"
-              >
-                <div className="modal-dialog">
-                  <div className="modal-content ">
-                    <div className="modal-header header-from">
-                      <h4 className="modal-title">เติมเงินเข้าเป๋าตัง Pacred</h4>
-                      <button
-                        type="button"
-                        className="close"
-                        data-dismiss="modal"
-                        aria-hidden="true"
-                      >
-                        <svg
-                          viewBox="0 0 24 24"
-                          width="24"
-                          height="24"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          fill="none"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="css-i6dzq1"
-                        >
-                          <line x1="18" y1="6" x2="6" y2="18"></line>
-                          <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
-                      </button>
-                    </div>
-                    <div className="modal-body header-from">
-                      <LegacyDepositForm kind="wallet" />
-                    </div>
-                  </div>
-                </div>
+              <div className="modal-body header-from px-4 py-4 md:px-5">
+                <LegacyDepositForm kind="wallet" />
               </div>
-            </section>
+            </div>
           </div>
         </div>
       </div>
@@ -527,55 +518,61 @@ function WalletHsRowView({ row }: { row: WalletHsRow }) {
   const { date, time } = dateThaiWallet(row.date);
   const nameParts = nameWallet(row.type ?? "").split("\n");
 
+  // amount sign colour — legacy $nameColor (success = เงินเข้า / danger = เงินออก)
+  const amountColor =
+    nameColor === "success" ? "text-emerald-600" : "text-red-600";
+
   return (
-    <div className="pt-1 pl-1 pr-1">
-      <div className="row border-success-2 p-1">
-        <div className="col-6">
-          <div className="text-left">
-            <h4>
-              {nameParts.map((part, i) => (
-                <span key={i}>
-                  {i > 0 && <br />}
-                  {part}
-                </span>
-              ))}
-            </h4>
-            <span className="text-muted font-12">เลขที่รายการ #{row.ID}</span>
-            {row.refOrder != null && row.refOrder !== "" && (
-              <>
-                <br />
-                <span className="text-muted font-12">
-                  เลขที่ออเดอร์{" "}
-                  {row.type === "2" ? (
-                    <a href={`/service-order/detail/${row.refOrder}`} target="_blank">
-                      {row.refOrder}
-                    </a>
-                  ) : row.type === "4" ? (
-                    <a href={`/service-import/detail/${row.refOrder}`} target="_blank">
-                      {row.refOrder}
-                    </a>
-                  ) : (
-                    row.refOrder
-                  )}
-                </span>
-              </>
-            )}
-            <br />
-            {statusBadge(row.status)}
-          </div>
-        </div>
-        <div className="col-6">
-          <div className="text-right">
-            <h4 className={`text-${nameColor}`}>
-              {sign}
-              {numberFormat2(row.amount)}
-            </h4>
-            <span className="font-13">
-              {date}
-              <br />
-              {time}
+    <div className="rounded-xl border border-border bg-white dark:bg-surface px-3 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 text-left">
+          <h4 className="text-sm md:text-base font-semibold text-foreground leading-snug">
+            {nameParts.map((part, i) => (
+              <span key={i}>
+                {i > 0 && <br />}
+                {part}
+              </span>
+            ))}
+          </h4>
+          <span className="block text-xs text-muted mt-0.5">
+            เลขที่รายการ #{row.ID}
+          </span>
+          {row.refOrder != null && row.refOrder !== "" && (
+            <span className="block text-xs text-muted">
+              เลขที่ออเดอร์{" "}
+              {row.type === "2" ? (
+                <a
+                  href={`/service-order/detail/${row.refOrder}`}
+                  target="_blank"
+                  className="text-red-600 hover:underline"
+                >
+                  {row.refOrder}
+                </a>
+              ) : row.type === "4" ? (
+                <a
+                  href={`/service-import/detail/${row.refOrder}`}
+                  target="_blank"
+                  className="text-red-600 hover:underline"
+                >
+                  {row.refOrder}
+                </a>
+              ) : (
+                row.refOrder
+              )}
             </span>
-          </div>
+          )}
+          <div className="mt-1.5">{statusBadge(row.status)}</div>
+        </div>
+        <div className="shrink-0 text-right">
+          <h4 className={`text-base md:text-lg font-bold ${amountColor}`}>
+            {sign}
+            {numberFormat2(row.amount)}
+          </h4>
+          <span className="block text-xs text-muted leading-snug">
+            {date}
+            <br />
+            {time}
+          </span>
         </div>
       </div>
     </div>

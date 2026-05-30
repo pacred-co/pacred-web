@@ -67,48 +67,46 @@ export default async function ChinaAddressPage() {
   return (
     <div className="pcs-legacy">
       {/* Legacy PCS stylesheet — static public/ asset, loaded via a plain
-          <link> so it bypasses the app's Tailwind/PostCSS pipeline. */}
+          <link> so it bypasses the app's Tailwind/PostCSS pipeline. Kept
+          per page even though the chrome below is now Tailwind. */}
       <link rel="stylesheet" href="/legacy/pcs/china-address.css" />
-      {/* BEGIN: Content — china-address.php L9 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          <div className="content-header row">
-            <div className="content-header-left col-12 mb-2">
-              <div className="row breadcrumbs-top ">
-                <div className="breadcrumb-wrapper col-12">
-                  <ol className="breadcrumb ">
-                    <li className="breadcrumb-item">
-                      <Link href="/">หน้าแรก</Link>
-                    </li>
-                    <li className="breadcrumb-item active">ที่อยู่โกดังจีน</li>
-                  </ol>
-                </div>
-              </div>
+      {/* BEGIN: Content — china-address.php L9.
+          Tailwind rebuild (เดฟ 2026-05-30 — ปอน: "rebuild css เป็น tailwind
+          mobile-first · ห้ามแก้ relation/href/logic"). Bootstrap-4 shell
+          (.app-content > .content-wrapper > .content-body + .card chrome)
+          → `.pcs-content-pad` wrapper + a Tailwind card. The legacy
+          card-body stays EMPTY (china-address.php L35-37 — placeholder
+          screen · no SQL · faithful 1:1). Breadcrumb hrefs unchanged. */}
+      <div className="pcs-content-pad w-full px-3 md:px-6 py-3 md:py-6">
+        {/* Breadcrumb — china-address.php L13-23 */}
+        <nav aria-label="breadcrumb" className="mb-3 md:mb-4">
+          <ol className="flex flex-wrap items-center gap-1.5 text-sm text-muted">
+            <li>
+              <Link href="/" className="hover:text-foreground transition-colors">
+                หน้าแรก
+              </Link>
+            </li>
+            <li aria-hidden className="text-border">/</li>
+            <li className="font-medium text-foreground" aria-current="page">
+              ที่อยู่โกดังจีน
+            </li>
+          </ol>
+        </nav>
+
+        {/* Card — china-address.php L26-39 (section#basic-carousel > .card) */}
+        <section id="basic-carousel">
+          <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+            <div className="border-b border-border px-4 py-3 md:px-5 md:py-4">
+              <h3 className="text-base md:text-lg font-bold text-foreground">
+                ที่อยู่โกดังจีน
+              </h3>
             </div>
+            {/* china-address.php L35-37: the legacy card-body is empty — a
+                placeholder screen. Transcribed 1:1, including the empty
+                body (no fields/links added). */}
+            <div className="p-4 md:p-5"></div>
           </div>
-          <div className="content-body">
-            {/* Basic Carousel start — china-address.php L26 */}
-            <section id="basic-carousel">
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  <div className="card">
-                    <div className="card-header">
-                      <h3 className="">ที่อยู่โกดังจีน</h3>
-                    </div>
-                    <div className="card-content">
-                      {/* china-address.php L35-37: the legacy card-body
-                          is empty — a placeholder screen. Transcribed
-                          1:1, including the empty body. */}
-                      <div className="card-body"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-            {/* Basic Carousel end */}
-          </div>
-        </div>
+        </section>
       </div>
       {/* END: Content */}
     </div>

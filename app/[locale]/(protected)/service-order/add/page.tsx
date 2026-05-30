@@ -340,42 +340,39 @@ export default async function ServiceOrderAddPage({
 
   return (
     <div className="pcs-legacy">
-      {/* Legacy PCS stylesheet — static public/ asset, loaded via a plain
-          <link> so it bypasses the app's Tailwind/PostCSS pipeline. */}
+      {/* Legacy PCS stylesheet — kept ONLY for the residual hook classes the
+          client islands + ProBadge still reference. The page chrome below is
+          a Tailwind rebuild (เดฟ 2026-05-30 · ปอน: "rebuild chrome เป็น
+          tailwind ห้ามแตะ relation/ฟังก์ชั่น"). All hrefs / ids / names /
+          form action+method / data-* / hook classes preserved verbatim so the
+          BulkActions client wiring + the print <form> still trigger exactly as
+          before. Modal-free page (this route has no Bootstrap modals). */}
       <link rel="stylesheet" href="/legacy/pcs/shops.css" />
       {/* shops.php L462 — <title>; rebranded PCS Cargo → Pacred. */}
       <title>รายการฝากสั่งซื้อสินค้า | Pacred</title>
 
-      {/* BEGIN: Content — shops.php L695 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          {/* shops.php L700-711 — breadcrumb */}
-          <div className="content-header row">
-            <div className="content-header-left col-12">
-              <div className="row breadcrumbs-top ">
-                <div className="breadcrumb-wrapper col-12">
-                  <ol className="breadcrumb ">
-                    <li className="breadcrumb-item">
-                      <Link href="/dashboard">
-                        <span className="menu-home">หน้าแรก</span>
-                      </Link>
-                    </li>
-                    <li className="breadcrumb-item active">รายการฝากสั่งซื้อสินค้า</li>
-                  </ol>
-                </div>
-              </div>
-            </div>
-          </div>
+      {/* BEGIN: Content — shops.php L695. Wrapped in `.pcs-content-pad` so the
+          (protected) layout's desktop padding (sidebar + FloatingTabs
+          clearance) kicks in automatically. */}
+      <div className="pcs-content-pad w-full px-3 md:px-6 pt-3 pb-[200px] md:py-6 md:pb-24">
+        {/* shops.php L700-711 — breadcrumb */}
+        <nav className="mb-3 text-xs md:text-sm text-muted" aria-label="breadcrumb">
+          <ol className="flex flex-wrap items-center gap-1.5">
+            <li>
+              <Link href="/dashboard" className="hover:text-foreground transition-colors">
+                <span className="menu-home">หน้าแรก</span>
+              </Link>
+            </li>
+            <li aria-hidden className="text-border">/</li>
+            <li className="text-foreground font-medium">รายการฝากสั่งซื้อสินค้า</li>
+          </ol>
+        </nav>
 
-          <div className="content-body pr110">
+        <div className="content-body">
             {corporatePending ? (
               // shops.php L1090 — juristic-pending message.
-              <div className="text-center">
-                <h2
-                  style={{ maxWidth: "670px", margin: "auto", marginTop: "10%" }}
-                  className="text-white bg-danger p-1"
-                >
+              <div className="mx-auto max-w-[670px] mt-16 md:mt-24 text-center">
+                <h2 className="rounded-2xl bg-red-600 text-white px-4 py-6 text-base md:text-lg font-bold leading-relaxed shadow-md">
                   รอเจ้าหน้าที่ดำเนิน อนุมัติการเป็นนิติบุคคล ภายใน 24 ชม. <br /> (ยกเว้นวันอาทิตย์และวันหยุดนักขัตฤกษ์)
                 </h2>
               </div>
@@ -389,121 +386,148 @@ export default async function ServiceOrderAddPage({
                     sees AFTER they've placed orders.  See
                     docs/research/d1-fidelity-customer.md §4 +
                     actions/product-search.ts header. */}
-                <div className="row">
-                  <div className="col-md-12 col-sm-12">
-                    <LinkPasteSearch rsDefault={rsDefault} />
-                  </div>
+                <div className="mb-3">
+                  <LinkPasteSearch rsDefault={rsDefault} />
                 </div>
-                <div className="row">
-                  <div className="col-md-12 col-sm-12">
-                    <div className="card border-black">
+                <div>
+                  <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
                       {/* shops.php L764-782 — header row */}
-                      <div className="pb-0 pl-1 pr-1 row">
-                        <div className="content-header-left col-md-6 col-12">
-                          <div className="text-center text-md-left">
-                            <h3 className="text-center text-md-left">
-                              <span className="font-30 ft-shopping-cart"></span> รายการฝากสั่งซื้อสินค้า
-                            </h3>
-                          </div>
-                        </div>
-                        <div className="content-header-right col-md-6 col-12">
-                          <div className="float-md-right">
-                            <div className="text-center text-md-right">
-                              {/* shops.php L773 — legacy href `cart/add`
-                                  (the add-to-cart screen, cart.php?page=add).
-                                  Routed to the equivalent Pacred cart route. */}
-                              <Link href="/cart">
-                                <button className="btn btn-sm btn-circle btn-success text-white">
-                                  <i className="ft-plus"></i>
-                                </button>
-                                <span className="font-normal text-dark">สั่งสินค้าเพิ่ม</span>
-                              </Link>
-                            </div>
-                          </div>
-                        </div>
+                      <div className="border-b border-border px-3 py-2.5 md:px-4 md:py-3 flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between">
+                        <h3 className="flex items-center gap-2 text-base md:text-lg font-bold text-foreground">
+                          <span className="font-30 ft-shopping-cart"></span> รายการฝากสั่งซื้อสินค้า
+                        </h3>
+                        {/* shops.php L773 — legacy href `cart/add`
+                            (the add-to-cart screen, cart.php?page=add).
+                            Routed to the equivalent Pacred cart route. */}
+                        <Link
+                          href="/cart"
+                          className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-bold transition-colors"
+                        >
+                          <i className="ft-plus"></i>
+                          <span>สั่งสินค้าเพิ่ม</span>
+                        </Link>
                       </div>
 
                       {/* shops.php L841-896 — status-tab counters */}
-                      <div className="row">
-                        <div className="col-md-12">
-                          <div className="pb-0 pl-1 pr-1">
-                            <h4 className="text-color">
-                              <b>สถานะรายการ</b>
-                            </h4>
-                            <ul className="nav nav-tabs nav-underline pcs-tabs">
-                              <li className="nav-item tab-sm-center">
-                                <Link className="nav-link" href="/service-order">
-                                  ทั้งหมด
-                                  {countStatusAll > 0 && (
-                                    <div className="pcs-badge2 badge-info pcs-badge-pill">
-                                      {numberLimit(countStatusAll)}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li className="nav-item tab-sm-center">
-                                <Link className="nav-link" href="/service-order?q=1">
-                                  รอดำเนินการ
-                                  {countStatusF1 > 0 && (
-                                    <div className="pcs-badge2 badge-warning pcs-badge-pill">
-                                      {numberLimit(countStatusF1)}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li className={`nav-item tab-sm-center ${q === "2" ? "active" : ""}`}>
-                                <Link className={`nav-link ${q === "2" ? "active" : ""}`} href="/service-order?q=2">
-                                  รอชำระเงิน
-                                  {countStatusF2 > 0 && (
-                                    <div className="pcs-badge2 badge-danger pcs-badge-pill">
-                                      {numberLimit(countStatusF2)}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li className="nav-item tab-sm-center">
-                                <Link className="nav-link" href="/service-order?q=3">
-                                  สั่งสินค้า
-                                  {countStatusF3 > 0 && (
-                                    <div className="pcs-badge2 badge-warning pcs-badge-pill">
-                                      {numberLimit(countStatusF3)}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li className="nav-item tab-sm-center">
-                                <Link className="nav-link" href="/service-order?q=4">
-                                  รอร้านจีนจัดส่ง
-                                  {countStatusF4 > 0 && (
-                                    <div className="pcs-badge2 badge-warning pcs-badge-pill">
-                                      {numberLimit(countStatusF4)}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li className="nav-item tab-sm-center">
-                                <Link className="nav-link" href="/service-order?q=5">
-                                  สำเร็จ
-                                  {countStatusF5 > 0 && (
-                                    <div className="pcs-badge2 badge-warning pcs-badge-pill">
-                                      {numberLimit(countStatusF5)}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li className="nav-item tab-sm-center">
-                                <Link className="nav-link" href="/service-order?q=6">
-                                  ออเดอร์ที่ยกเลิก
-                                  {countStatusF6 > 0 && (
-                                    <div className="pcs-badge2 badge-warning pcs-badge-pill">
-                                      {numberLimit(countStatusF6)}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                            </ul>
+                      <div className="px-3 py-3 md:px-4 md:py-4">
+                          <h4 className="text-sm md:text-base font-bold text-foreground mb-2.5">
+                            สถานะรายการ
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            <Link
+                              href="/service-order"
+                              aria-current={q === "" ? "page" : undefined}
+                              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs md:text-sm font-medium border transition-colors ${
+                                q === ""
+                                  ? "bg-red-600 text-white border-red-600 shadow-sm"
+                                  : "bg-surface-alt/60 hover:bg-surface-alt text-foreground border-border"
+                              }`}
+                            >
+                              <span>ทั้งหมด</span>
+                              {countStatusAll > 0 && (
+                                <span className={`pcs-badge-pill inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${q === "" ? "bg-white/25 text-white" : "bg-sky-100 text-sky-700"}`}>
+                                  {numberLimit(countStatusAll)}
+                                </span>
+                              )}
+                            </Link>
+                            <Link
+                              href="/service-order?q=1"
+                              aria-current={q === "1" ? "page" : undefined}
+                              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs md:text-sm font-medium border transition-colors ${
+                                q === "1"
+                                  ? "bg-red-600 text-white border-red-600 shadow-sm"
+                                  : "bg-surface-alt/60 hover:bg-surface-alt text-foreground border-border"
+                              }`}
+                            >
+                              <span>รอดำเนินการ</span>
+                              {countStatusF1 > 0 && (
+                                <span className={`pcs-badge-pill inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${q === "1" ? "bg-white/25 text-white" : "bg-amber-100 text-amber-700"}`}>
+                                  {numberLimit(countStatusF1)}
+                                </span>
+                              )}
+                            </Link>
+                            <Link
+                              href="/service-order?q=2"
+                              aria-current={q === "2" ? "page" : undefined}
+                              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs md:text-sm font-medium border transition-colors ${
+                                q === "2"
+                                  ? "bg-red-600 text-white border-red-600 shadow-sm"
+                                  : "bg-surface-alt/60 hover:bg-surface-alt text-foreground border-border"
+                              }`}
+                            >
+                              <span>รอชำระเงิน</span>
+                              {countStatusF2 > 0 && (
+                                <span className={`pcs-badge-pill inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${q === "2" ? "bg-white/25 text-white" : "bg-red-100 text-red-700"}`}>
+                                  {numberLimit(countStatusF2)}
+                                </span>
+                              )}
+                            </Link>
+                            <Link
+                              href="/service-order?q=3"
+                              aria-current={q === "3" ? "page" : undefined}
+                              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs md:text-sm font-medium border transition-colors ${
+                                q === "3"
+                                  ? "bg-red-600 text-white border-red-600 shadow-sm"
+                                  : "bg-surface-alt/60 hover:bg-surface-alt text-foreground border-border"
+                              }`}
+                            >
+                              <span>สั่งสินค้า</span>
+                              {countStatusF3 > 0 && (
+                                <span className={`pcs-badge-pill inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${q === "3" ? "bg-white/25 text-white" : "bg-amber-100 text-amber-700"}`}>
+                                  {numberLimit(countStatusF3)}
+                                </span>
+                              )}
+                            </Link>
+                            <Link
+                              href="/service-order?q=4"
+                              aria-current={q === "4" ? "page" : undefined}
+                              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs md:text-sm font-medium border transition-colors ${
+                                q === "4"
+                                  ? "bg-red-600 text-white border-red-600 shadow-sm"
+                                  : "bg-surface-alt/60 hover:bg-surface-alt text-foreground border-border"
+                              }`}
+                            >
+                              <span>รอร้านจีนจัดส่ง</span>
+                              {countStatusF4 > 0 && (
+                                <span className={`pcs-badge-pill inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${q === "4" ? "bg-white/25 text-white" : "bg-amber-100 text-amber-700"}`}>
+                                  {numberLimit(countStatusF4)}
+                                </span>
+                              )}
+                            </Link>
+                            <Link
+                              href="/service-order?q=5"
+                              aria-current={q === "5" ? "page" : undefined}
+                              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs md:text-sm font-medium border transition-colors ${
+                                q === "5"
+                                  ? "bg-red-600 text-white border-red-600 shadow-sm"
+                                  : "bg-surface-alt/60 hover:bg-surface-alt text-foreground border-border"
+                              }`}
+                            >
+                              <span>สำเร็จ</span>
+                              {countStatusF5 > 0 && (
+                                <span className={`pcs-badge-pill inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${q === "5" ? "bg-white/25 text-white" : "bg-emerald-100 text-emerald-700"}`}>
+                                  {numberLimit(countStatusF5)}
+                                </span>
+                              )}
+                            </Link>
+                            <Link
+                              href="/service-order?q=6"
+                              aria-current={q === "6" ? "page" : undefined}
+                              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs md:text-sm font-medium border transition-colors ${
+                                q === "6"
+                                  ? "bg-red-600 text-white border-red-600 shadow-sm"
+                                  : "bg-surface-alt/60 hover:bg-surface-alt text-foreground border-border"
+                              }`}
+                            >
+                              <span>ออเดอร์ที่ยกเลิก</span>
+                              {countStatusF6 > 0 && (
+                                <span className={`pcs-badge-pill inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${q === "6" ? "bg-white/25 text-white" : "bg-slate-200 text-slate-700"}`}>
+                                  {numberLimit(countStatusF6)}
+                                </span>
+                              )}
+                            </Link>
                           </div>
-                          <div className="hr-dashed"></div>
+                          <hr className="my-3 border-t border-dashed border-border" />
 
                           {/* shops.php L898-1081 — the order table + b-pay bar.
                               Wrapped in <BulkActionsProvider> so row checkboxes,
@@ -515,7 +539,7 @@ export default async function ServiceOrderAddPage({
                             payableHNos={payableHNos}
                             totals={totalsMap}
                           >
-                          <div className="p-1 p-m-0">
+                          <div>
                             {/* shops.php L899 — <form action="printShop/" method="GET">.
                                 printShop is now transcribed to the Pacred
                                 route /service-order/print; the form posts
@@ -530,37 +554,42 @@ export default async function ServiceOrderAddPage({
                                 rows.length > 0 ? (
                                   <>
                                     {countShops2 > 0 && (
-                                      <div className="text-center text-md-left">
+                                      <div className="text-center md:text-left">
                                         <div style={{ position: "relative" }} className="btn-pay-pc"></div>
                                       </div>
                                     )}
-                                    <div className="text-center text-md-left">
+                                    <div className="text-center md:text-left mb-2">
                                       <BulkCancelButton
                                         cancellableHNos={rows
                                           .filter((r) => Number(r.hstatus) <= 2)
                                           .map((r) => r.hno)}
                                       />
                                     </div>
-                                    <div className="table-responsive pt-1 p-1">
+                                    {/* ── Desktop: full table (md+). shops.php L898
+                                        DataTables grid; the `none`-class columns
+                                        were the legacy responsive hides — here the
+                                        whole table is desktop-only, and a card list
+                                        below (md:hidden) is the mobile view. ── */}
+                                    <div className="hidden md:block overflow-x-auto rounded-xl border border-border">
                                       <table
                                         id="myTable"
-                                        className="table display table-bordered table-striped dataTable no-footer dtr-inline"
+                                        className="dataTable w-full text-sm border-collapse"
                                       >
-                                        <thead className="">
-                                          <tr className="text-center bg-danger2">
+                                        <thead>
+                                          <tr className="bg-surface-alt/70 text-center text-xs font-bold text-muted">
                                             {/* Checkbox column — legacy DataTables
                                                 auto-added it via the responsive
                                                 plugin (L1189+). Visible only for
                                                 rows where bulk-cancel or bulk-pay
                                                 applies (hstatus <= 2). */}
-                                            <th className="all" style={{ width: "32px" }}></th>
-                                            <th className="all add-text-all">ID</th>
-                                            <th className="none">วันที่สร้าง</th>
-                                            <th className="none">ออเดอร์เลขที่</th>
-                                            <th className="all">ข้อมูลสินค้า</th>
-                                            <th className="none">สถานะ</th>
-                                            <th className="none">ราคา (บาท)</th>
-                                            <th className="none">ตัวเลือก</th>
+                                            <th className="all px-2 py-2.5 border-b border-border" style={{ width: "32px" }}></th>
+                                            <th className="all add-text-all px-3 py-2.5 border-b border-border">ID</th>
+                                            <th className="none px-3 py-2.5 border-b border-border">วันที่สร้าง</th>
+                                            <th className="none px-3 py-2.5 border-b border-border">ออเดอร์เลขที่</th>
+                                            <th className="all px-3 py-2.5 border-b border-border text-left">ข้อมูลสินค้า</th>
+                                            <th className="none px-3 py-2.5 border-b border-border">สถานะ</th>
+                                            <th className="none px-3 py-2.5 border-b border-border">ราคา (บาท)</th>
+                                            <th className="none px-3 py-2.5 border-b border-border">ตัวเลือก</th>
                                           </tr>
                                         </thead>
                                         <tbody>
@@ -591,23 +620,23 @@ export default async function ServiceOrderAddPage({
                                               <tr
                                                 key={row.hno}
                                                 {...(hNoAnchor && hNoAnchor === row.hno
-                                                  ? { className: "bg-danger2 anchor", id: row.hno }
-                                                  : {})}
+                                                  ? { className: "anchor bg-red-50 dark:bg-red-950/30", id: row.hno }
+                                                  : { className: "even:bg-surface-alt/30" })}
                                               >
                                                 {/* col 0 — row checkbox (legacy
                                                     DataTables auto-injected; gated
                                                     on hstatus<=2 — the legacy
                                                     bulk-cancel + bulk-pay scope). */}
-                                                <td className="text-center" style={{ width: "32px" }}>
+                                                <td className="text-center align-top px-2 py-3 border-b border-border" style={{ width: "32px" }}>
                                                   <RowCheckbox
                                                     hNo={row.hno}
                                                     selectable={Number(row.hstatus) <= 2}
                                                   />
                                                 </td>
                                                 {/* col 1 — ID */}
-                                                <td className="text-center tr1 notranslate">{row.hno}</td>
+                                                <td className="text-center align-top px-3 py-3 border-b border-border tr1 notranslate font-medium">{row.hno}</td>
                                                 {/* col 2 — วันที่สร้าง */}
-                                                <td className="text-center font-12">
+                                                <td className="text-center align-top px-3 py-3 border-b border-border text-xs text-muted whitespace-nowrap">
                                                   {fmtDate(row.hdate)}
                                                   <br />
                                                   {fmtTime(row.hdate)} น.
@@ -617,7 +646,7 @@ export default async function ServiceOrderAddPage({
                                                     — rewritten to the internal Pacred route
                                                     /service-order/{hno} so the customer stays inside
                                                     Pacred (no bounce to the legacy site). */}
-                                                <td className="notranslate">
+                                                <td className="align-top px-3 py-3 border-b border-border notranslate">
                                                   <Link
                                                     href={`/service-order/${row.hno}`}
                                                     className="text-info"
@@ -627,7 +656,7 @@ export default async function ServiceOrderAddPage({
                                                   <ProBadge promoId={promoId} />
                                                 </td>
                                                 {/* col 4 — ข้อมูลสินค้า */}
-                                                <td>
+                                                <td className="align-top px-3 py-3 border-b border-border">
                                                   <div className="d-block d-sm-none">
                                                     วันที่สร้าง :{" "}
                                                     <span className="font-12">{fmtDMYHMS(row.hdate)}</span>
@@ -645,18 +674,18 @@ export default async function ServiceOrderAddPage({
                                                     <br />
                                                     ราคา : <span className="text-danger">{pricePay}</span> บาท
                                                   </div>
-                                                  <div className="float-right">
+                                                  <div className="float-right ml-2">
                                                     <a
                                                       className="image-popup-vertical-fit el-link"
                                                       href={hCover.replace("_150x150.jpg", "")}
                                                     >
                                                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                      <img className="img-fluid" src={hCover} width={60} alt="" />
+                                                      <img className="rounded-lg border border-border" src={hCover} width={60} alt="" />
                                                     </a>
                                                   </div>
                                                   <Link
                                                     href={`/service-order/${row.hno}`}
-                                                    className="text-info"
+                                                    className="text-info font-medium"
                                                   >
                                                     {row.htitle}
                                                     {Number(row.hcount ?? 0) > 1 &&
@@ -671,19 +700,20 @@ export default async function ServiceOrderAddPage({
                                                     </>
                                                   )}
                                                   {row.hnoteuser === "2" && (
-                                                    <div className="text-white bg-danger">
+                                                    <div className="mt-1 rounded-md bg-red-600 text-white text-xs px-2 py-1">
                                                       หมายเหตุ : {row.hnote}
                                                     </div>
                                                   )}
                                                 </td>
                                                 {/* col 5 — สถานะ */}
-                                                <td className="text-center">
+                                                <td className="text-center align-top px-3 py-3 border-b border-border">
                                                   <StatusBadgeAll hStatus={row.hstatus} />
                                                 </td>
                                                 {/* col 6 — ราคา (บาท) */}
-                                                <td className="text-right">{pricePay}</td>
+                                                <td className="text-right align-top px-3 py-3 border-b border-border font-medium whitespace-nowrap">{pricePay}</td>
                                                 {/* col 7 — ตัวเลือก */}
-                                                <td className="text-center">
+                                                <td className="text-center align-top px-3 py-3 border-b border-border">
+                                                  <div className="flex flex-col items-stretch gap-1.5 min-w-[120px]">
                                                   {Number(row.hstatus) <= 2 && (
                                                     // shops.php L1005 — onclick deleteOrder(hNo)
                                                     // → AJAX cancelOrder.php. Now wired to
@@ -692,23 +722,18 @@ export default async function ServiceOrderAddPage({
                                                     <RowCancelButton hNo={row.hno} />
                                                   )}
                                                   <Link href={`/service-order/${row.hno}`}>
-                                                    <p className="btn font-12 btn-outline-success btn-rounded btn-sm">
-                                                      {" "}
-                                                      ดูรายละเอียด{" "}
+                                                    <p className="block rounded-lg border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-xs font-bold px-3 py-1.5 text-center transition-colors">
+                                                      ดูรายละเอียด
                                                     </p>
                                                   </Link>
                                                   {row.hstatus === "2" && (
-                                                    <>
-                                                      <br />
                                                       <Link
                                                         href={`/service-order/${row.hno}?pay=true`}
                                                       >
-                                                        <p className="btn font-12 btn-outline-info btn-rounded btn-sm">
-                                                          {" "}
+                                                        <p className="flex items-center justify-center gap-1 rounded-lg border border-sky-600 text-sky-700 hover:bg-sky-50 text-xs font-bold px-3 py-1.5 text-center transition-colors">
                                                           <i className="mdi mdi-check-circle-outline"></i> ชำระเงิน
                                                         </p>
                                                       </Link>
-                                                    </>
                                                   )}
                                                   {/* shops.php L1012 — "พิมพ์ใบเสร็จ"
                                                       → the transcribed print route
@@ -718,8 +743,7 @@ export default async function ServiceOrderAddPage({
                                                       href={`/service-order/print?print=1&id=${row.hno}`}
                                                       target="_blank"
                                                     >
-                                                      <p className="btn btn-outline-primary btn-sm btn-rounded">
-                                                        {" "}
+                                                      <p className="block rounded-lg border border-indigo-500 text-indigo-600 hover:bg-indigo-50 text-xs font-bold px-3 py-1.5 text-center transition-colors">
                                                         พิมพ์ใบเสร็จ
                                                       </p>
                                                     </Link>
@@ -732,12 +756,12 @@ export default async function ServiceOrderAddPage({
                                                       href={`/service-order/print?print=2&id=${row.hno}`}
                                                       target="_blank"
                                                     >
-                                                      <p className="btn btn-outline-danger btn-sm btn-rounded">
-                                                        {" "}
+                                                      <p className="block rounded-lg border border-red-500 text-red-600 hover:bg-red-50 text-xs font-bold px-3 py-1.5 text-center transition-colors">
                                                         พิมพ์ใบแจ้งหนี้
                                                       </p>
                                                     </Link>
                                                   )}
+                                                  </div>
                                                 </td>
                                               </tr>
                                             );
@@ -745,29 +769,155 @@ export default async function ServiceOrderAddPage({
                                         </tbody>
                                       </table>
                                     </div>
+
+                                    {/* ── Mobile: card list (below md). Mirrors the
+                                        legacy `d-block d-sm-none` summary block —
+                                        same data, same hrefs / ids / hook classes,
+                                        no horizontal scroll at 360px. ── */}
+                                    <div className="md:hidden space-y-3">
+                                      {rows.map((row) => {
+                                        // shops.php L963-964 / L998-1000 — price math
+                                        const pricePayNum =
+                                          (Number(row.htotalpricechn ?? 0) + Number(row.hshippingchn ?? 0)) *
+                                            Number(row.hrate ?? 0) +
+                                          Number(row.hshippingservice ?? 0);
+                                        const pricePay = numberFormat2(pricePayNum);
+
+                                        // shops.php L969-978 — hCover URL resolution
+                                        let hCover: string;
+                                        const cover = row.hcover ?? "";
+                                        if (/https|http/m.test(cover)) {
+                                          const cleaned = cover
+                                            .replace("?x-oss-process=style/alsy", "")
+                                            .replace("?x-oss-process=style/tbsy", "")
+                                            .replace("_250x250.jpg", "");
+                                          hCover = cleaned + "_150x150.jpg";
+                                        } else if (cover !== "") {
+                                          hCover = legacyMemberUrl(`images/shops/${cover}`);
+                                        } else {
+                                          hCover = "/legacy/pcs/shops/default.png";
+                                        }
+                                        const promoId = promoMap.get(row.hno);
+                                        return (
+                                          <div
+                                            key={row.hno}
+                                            className={`rounded-2xl border bg-white dark:bg-surface shadow-sm p-3 ${
+                                              hNoAnchor && hNoAnchor === row.hno
+                                                ? "border-red-400 ring-2 ring-red-500/30"
+                                                : "border-border"
+                                            }`}
+                                          >
+                                            <div className="flex gap-3">
+                                              <a
+                                                className="image-popup-vertical-fit el-link shrink-0"
+                                                href={hCover.replace("_150x150.jpg", "")}
+                                              >
+                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                <img className="rounded-lg border border-border" src={hCover} width={64} alt="" />
+                                              </a>
+                                              <div className="min-w-0 flex-1">
+                                                <div className="flex items-center justify-between gap-2">
+                                                  <span className="notranslate text-xs text-muted">#{row.hno}</span>
+                                                  <StatusBadgeAllM hStatus={row.hstatus} />
+                                                </div>
+                                                <Link
+                                                  href={`/service-order/${row.hno}`}
+                                                  className="text-info font-medium block mt-0.5 line-clamp-2"
+                                                >
+                                                  {row.htitle}
+                                                  {Number(row.hcount ?? 0) > 1 &&
+                                                    ` และอีก ${Math.round(Number(row.hcount) - 1)} รายการ`}
+                                                </Link>
+                                                <div className="mt-1 text-xs text-muted">
+                                                  วันที่สร้าง :{" "}
+                                                  <span className="notranslate">{fmtDMYHMS(row.hdate)}</span>
+                                                </div>
+                                                <div className="mt-0.5 text-sm">
+                                                  ราคา : <span className="text-danger font-bold">{pricePay}</span> บาท
+                                                </div>
+                                                <div className="mt-1">
+                                                  <ProBadge promoId={promoId} />
+                                                </div>
+                                              </div>
+                                            </div>
+                                            {row.hstatus === "2" && (
+                                              <div className="mt-2 text-xs">
+                                                กรุณาชำระเงินก่อน{" "}
+                                                <span className="text-danger">{fmtDMYHMS(row.hdatepayment)}</span>{" "}
+                                                น.
+                                              </div>
+                                            )}
+                                            {row.hnoteuser === "2" && (
+                                              <div className="mt-2 rounded-md bg-red-600 text-white text-xs px-2 py-1">
+                                                หมายเหตุ : {row.hnote}
+                                              </div>
+                                            )}
+                                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                                              {Number(row.hstatus) <= 2 && (
+                                                <RowCancelButton hNo={row.hno} />
+                                              )}
+                                              <Link href={`/service-order/${row.hno}`} className="flex-1 min-w-[120px]">
+                                                <p className="block rounded-lg border border-emerald-600 text-emerald-700 text-xs font-bold px-3 py-2 text-center min-h-[40px] leading-6">
+                                                  ดูรายละเอียด
+                                                </p>
+                                              </Link>
+                                              {row.hstatus === "2" && (
+                                                <Link href={`/service-order/${row.hno}?pay=true`} className="flex-1 min-w-[120px]">
+                                                  <p className="flex items-center justify-center gap-1 rounded-lg border border-sky-600 text-sky-700 text-xs font-bold px-3 py-2 text-center min-h-[40px]">
+                                                    <i className="mdi mdi-check-circle-outline"></i> ชำระเงิน
+                                                  </p>
+                                                </Link>
+                                              )}
+                                              {row.hstatus === "5" && (
+                                                <Link
+                                                  href={`/service-order/print?print=1&id=${row.hno}`}
+                                                  target="_blank"
+                                                  className="flex-1 min-w-[120px]"
+                                                >
+                                                  <p className="block rounded-lg border border-indigo-500 text-indigo-600 text-xs font-bold px-3 py-2 text-center min-h-[40px] leading-6">
+                                                    พิมพ์ใบเสร็จ
+                                                  </p>
+                                                </Link>
+                                              )}
+                                              {Number(row.hstatus) > 1 && Number(row.hstatus) < 6 && (
+                                                <Link
+                                                  href={`/service-order/print?print=2&id=${row.hno}`}
+                                                  target="_blank"
+                                                  className="flex-1 min-w-[120px]"
+                                                >
+                                                  <p className="block rounded-lg border border-red-500 text-red-600 text-xs font-bold px-3 py-2 text-center min-h-[40px] leading-6">
+                                                    พิมพ์ใบแจ้งหนี้
+                                                  </p>
+                                                </Link>
+                                              )}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
                                   </>
                                 ) : (
                                   // shops.php L1022-1029 — filtered query empty
-                                  <div className="text-center">
-                                    <h4 className="text-color-main">คุณยังไม่มีข้อมูลฝากสั่งซื้อ</h4>
+                                  <div className="text-center py-8">
+                                    <h4 className="text-base md:text-lg font-bold text-foreground mb-3">คุณยังไม่มีข้อมูลฝากสั่งซื้อ</h4>
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img className="img-fluid" src="/legacy/pcs/shop-2-300x300.png" alt="" />
+                                    <img className="mx-auto max-w-[240px] w-full h-auto" src="/legacy/pcs/shop-2-300x300.png" alt="" />
                                   </div>
                                 )
                               ) : (
                                 // shops.php L1034-1047 — no orders at all
-                                <div className="text-center">
-                                  <Link href="/cart">
-                                    <h4 className="text-color-main">คุณยังไม่มีรายการฝากสั่งซื้อ</h4>
-                                    <div>
-                                      <span className="btn btn-sm btn-circle btn-success text-white">
-                                        <i className="ft-plus"></i>
-                                      </span>
-                                      <span className="font-normal text-dark">สั่งสินค้าเพิ่ม</span>
+                                <div className="text-center py-8">
+                                  <Link href="/cart" className="inline-block">
+                                    <h4 className="text-base md:text-lg font-bold text-foreground mb-3">คุณยังไม่มีรายการฝากสั่งซื้อ</h4>
+                                    <div className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-bold transition-colors">
+                                      <i className="ft-plus"></i>
+                                      <span>สั่งสินค้าเพิ่ม</span>
                                     </div>
                                   </Link>
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img className="img-fluid" src="/legacy/pcs/shop-2-300x300.png" alt="" />
+                                  <div className="mt-4">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img className="mx-auto max-w-[240px] w-full h-auto" src="/legacy/pcs/shop-2-300x300.png" alt="" />
+                                  </div>
                                 </div>
                               )}
 
@@ -775,14 +925,14 @@ export default async function ServiceOrderAddPage({
                                   (shown only on filtered tabs except q=1/q=6) */}
                               {q !== "" && q !== "1" && q !== "6" && (
                                 <div
-                                  className={`btn-group ${q === "2" ? "t" : ""}`}
+                                  className={`btn-group ${q === "2" ? "t" : ""} fixed left-1/2 -translate-x-1/2 md:left-auto md:translate-x-0 flex gap-2`}
                                   role="group"
                                   aria-label="Basic example"
                                   style={{ position: "fixed", bottom: "20px", zIndex: 999 }}
                                 >
                                   <button
                                     type="submit"
-                                    className="btn btn-color-main round text-white"
+                                    className="bg-red-600 hover:bg-red-700 text-white rounded-lg px-4 py-2 text-sm font-bold shadow-lg transition-colors"
                                     name="print"
                                     value="2"
                                   >
@@ -791,7 +941,7 @@ export default async function ServiceOrderAddPage({
                                   {q === "5" && (
                                     <button
                                       type="submit"
-                                      className="btn btn-color-main round text-white"
+                                      className="bg-red-600 hover:bg-red-700 text-white rounded-lg px-4 py-2 text-sm font-bold shadow-lg transition-colors"
                                       name="print"
                                       value="1"
                                     >
@@ -814,15 +964,13 @@ export default async function ServiceOrderAddPage({
                               insufficient balance see an inline shortfall
                               banner pointing at the wallet top-up flow,
                               same as `pay-from-wallet-button.tsx`. */}
-                          <div className="p-1 p-m-0">
+                          <div>
                             {countShops2 > 0 && (q === "" || q === "2") && (
                               <BulkPayBar walletBalance={walletBalance} />
                             )}
                           </div>
                           </BulkActionsProvider>
-                        </div>
                       </div>
-                    </div>
                   </div>
                 </div>
               </section>
@@ -832,7 +980,6 @@ export default async function ServiceOrderAddPage({
           <div id="list-pay-data"></div>
           <div id="list-pay-data2"></div>
           <div id="resulte"></div>
-        </div>
       </div>
       {/* END: Content */}
     </div>

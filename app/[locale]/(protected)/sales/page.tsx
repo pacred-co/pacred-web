@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
-import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { legacyMemberUrl } from "@/lib/legacy-image";
@@ -258,148 +257,172 @@ export default async function SalesTeamMembersPage() {
 
   return (
     <div className="pcs-legacy">
-      {/* Legacy PCS theme CSS — static public/ asset, loaded via a
-          plain <link> so it bypasses the app's Tailwind/PostCSS pipeline. */}
+      {/* Legacy PCS theme CSS — kept for any layout-scope globals; the
+          visible surface below is Tailwind (2026-05-30 rebuild · ปอน). */}
       <link rel="stylesheet" href="/legacy/pcs/report-user-sales.css" />
 
       {/* user-sales.php <title> L5 (Next.js owns <head> — kept here as
           a fidelity-record comment):  สมาชิกในทีม | Pacred */}
 
-      {/* BEGIN: Content — user-sales.php L19 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          {/* L23-34 — breadcrumb header */}
-          <div className="content-header row">
-            <div className="content-header-left col-12 mb-2">
-              <div className="row breadcrumbs-top ">
-                <div className="breadcrumb-wrapper col-12">
-                  <ol className="breadcrumb ">
-                    <li className="breadcrumb-item">
-                      <Link href="/dashboard">
-                        <span className="menu-home">หน้าแรก</span>
-                      </Link>
-                    </li>
-                    <li className="breadcrumb-item active">สมาชิกในทีม</li>
-                  </ol>
-                </div>
+      <div className="pcs-content-pad w-full px-3 md:px-6 py-3 md:py-6 notranslate">
+        <section className="bg-white dark:bg-surface border border-border rounded-2xl shadow-sm overflow-hidden">
+          {/* ── Header: title + invite-link copy widget ── */}
+          <div className="flex flex-col gap-3 border-b border-border px-3 py-3 md:px-5 md:py-4">
+            <h3 className="text-base md:text-xl font-bold text-foreground">
+              สมาชิกในทีม
+            </h3>
+            {/* L60-65 — the "ลิงก์เชิญเพื่อน" copy widget. The legacy
+                `<span>` carried an inline onclick="copyToClipboard('#text1')"
+                (page-local jQuery, not staged here); the `#text1` id is
+                preserved so the click-to-copy follow-up still targets it. */}
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1" htmlFor="urlRecom">
+                ลิงก์เชิญเพื่อน{" "}
+                <span className="inline-flex items-center rounded-full bg-red-600 text-white px-2.5 py-0.5 text-[11px] font-semibold cursor-pointer">
+                  คัดลอก
+                </span>
+              </label>
+              <div className="rounded-lg border border-border bg-surface-alt/50 px-3 py-2 text-xs md:text-sm text-foreground break-all">
+                <span id="text1">{inviteLink}</span>
               </div>
             </div>
           </div>
-          {/* L35 — content-body */}
-          <div className="content-body pr110 notranslate">
-            <section id="basic-carousel">
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  <div className="card">
-                    {/* L41-69 — card-header: title + invite-link widget */}
-                    <div className="card-header">
-                      <div className="row">
-                        <div className="content-header-left col-md-6 col-12">
-                          <div className="text-center text-md-left">
-                            <h3 className="">สมาชิกในทีม</h3>
-                          </div>
-                        </div>
-                        <div className="content-header-right col-md-6 col-12">
-                          {/* L60-65 — the "ลิงก์เชิญเพื่อน" copy widget.
-                              The legacy `<span>` carries an inline
-                              `onclick="copyToClipboard('#text1')"` (the
-                              jQuery helper defined in user-sales.php's
-                              page `<script>` L178-184). That page-local
-                              JS is not staged here — the markup is
-                              transcribed 1:1 with its classes so the
-                              look is identical; the click-to-copy
-                              behaviour is a deferred client-JS
-                              follow-up (flagged in the report). */}
-                          <div className="float-md-right notranslate">
-                            <label className="form-control-label" htmlFor="urlRecom">
-                              ลิงก์เชิญเพื่อน{" "}
-                              <span className="badge badge-vip badge-pill font-16 cursor-pointer">
-                                {" "}
-                                คัดลอก
-                              </span>
-                            </label>
-                            <div>
-                              <span id="text1">{inviteLink}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    {/* L70-141 — card-body: the team-member table */}
-                    <div className="card-content">
-                      <div className="card-body">
-                        <div className="row">
-                          <div className="col-12">
-                            <div className="table-responsive">
-                              <table
-                                id="myTable"
-                                className="table display table-bordered table-striped dataTable no-footer dtr-inline"
-                              >
-                                <thead>
-                                  <tr className="text-center">
-                                    <th>รหัสสมาชิก</th>
-                                    <th>ชื่อ-นามสกุล</th>
-                                    <th>ที่อยู่</th>
-                                    <th>ข้อมูลติดต่อ</th>
-                                    <th>วันที่สมัครสมาชิก</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {rows.map((row) => (
-                                    <tr key={row.userID}>
-                                      <td>
-                                        {row.userID} <BadgeVIP2 row={row} />
-                                      </td>
-                                      <td>
-                                        <a
-                                          className="image-popup-vertical-fit el-link"
-                                          href={legacyMemberUrl(`images/users/${row.userPicture ?? ""}`)}
-                                        >
-                                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                                          <img
-                                            src={legacyMemberUrl(`images/users/${row.userPicture ?? ""}`)}
-                                            alt="user"
-                                            className="rounded-circle"
-                                            width={35}
-                                          />
-                                        </a>{" "}
-                                        คุณ{row.userName ?? ""} {row.userLastName ?? ""}
-                                        {row.userStatus === "0" && (
-                                          <>
-                                            <br />
-                                            <span className="text-danger">
-                                              {" "}
-                                              บัญชีนี้ถูกลบแล้ว
-                                            </span>
-                                          </>
-                                        )}
-                                      </td>
-                                      <td>
-                                        <MainAddress row={row} />
-                                      </td>
-                                      <td>
-                                        <ContactInfo row={row} />
-                                      </td>
-                                      <td className="text-center">{row.userRegistered}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
+
+          {/* L70-141 — the team-member list */}
+          <div className="px-3 py-3 md:px-5 md:py-4">
+            {rows.length === 0 ? (
+              <p className="py-12 text-center text-sm text-muted">ยังไม่มีสมาชิกในทีม</p>
+            ) : (
+              <>
+                {/* ── Mobile: stacked cards (md:hidden) ── */}
+                <div className="space-y-3 md:hidden">
+                  {rows.map((row) => (
+                    <div
+                      key={row.userID}
+                      className="rounded-xl border border-border bg-white dark:bg-surface p-3 shadow-sm"
+                    >
+                      <div className="flex items-start gap-3">
+                        <a
+                          className="image-popup-vertical-fit el-link shrink-0"
+                          href={legacyMemberUrl(`images/users/${row.userPicture ?? ""}`)}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={legacyMemberUrl(`images/users/${row.userPicture ?? ""}`)}
+                            alt="user"
+                            className="h-11 w-11 rounded-full border border-border object-cover"
+                            width={44}
+                          />
+                        </a>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-foreground">
+                            คุณ{row.userName ?? ""} {row.userLastName ?? ""}
+                          </p>
+                          <p className="mt-0.5 flex flex-wrap items-center gap-1 font-mono text-xs text-muted">
+                            <span>{row.userID}</span> <BadgeVIP2 row={row} />
+                          </p>
+                          {row.userStatus === "0" && (
+                            <span className="mt-1 inline-block text-xs font-medium text-red-600">
+                              บัญชีนี้ถูกลบแล้ว
+                            </span>
+                          )}
                         </div>
                       </div>
+                      <dl className="mt-3 space-y-2 border-t border-dashed border-border pt-2 text-xs">
+                        <div>
+                          <dt className="font-medium text-muted">ที่อยู่</dt>
+                          <dd className="mt-0.5 text-foreground">
+                            <MainAddress row={row} />
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="font-medium text-muted">ข้อมูลติดต่อ</dt>
+                          <dd className="mt-0.5 text-foreground [&_a]:text-red-600 [&_a]:break-all">
+                            <ContactInfo row={row} />
+                          </dd>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <dt className="font-medium text-muted">วันที่สมัครสมาชิก</dt>
+                          <dd className="tabular-nums text-foreground">{row.userRegistered}</dd>
+                        </div>
+                      </dl>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              </div>
-            </section>
-            {/* Basic Carousel end */}
+
+                {/* ── Desktop: table (plain div wrapper isolates Tailwind
+                    from the legacy `.dataTable` cascade) ── */}
+                <div className="hidden md:block overflow-x-auto rounded-xl border border-border">
+                  <table
+                    id="myTable"
+                    className="dataTable w-full text-sm"
+                  >
+                    <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+                      <tr>
+                        <th className="px-4 py-3 font-medium whitespace-nowrap">รหัสสมาชิก</th>
+                        <th className="px-4 py-3 font-medium">ชื่อ-นามสกุล</th>
+                        <th className="px-4 py-3 font-medium">ที่อยู่</th>
+                        <th className="px-4 py-3 font-medium">ข้อมูลติดต่อ</th>
+                        <th className="px-4 py-3 font-medium text-center whitespace-nowrap">วันที่สมัครสมาชิก</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((row) => (
+                        <tr
+                          key={row.userID}
+                          className="border-t border-border align-top hover:bg-surface-alt/30"
+                        >
+                          <td className="px-4 py-3 font-mono text-xs whitespace-nowrap">
+                            <span className="flex flex-wrap items-center gap-1">
+                              <span>{row.userID}</span> <BadgeVIP2 row={row} />
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-foreground">
+                            <span className="flex items-center gap-2">
+                              <a
+                                className="image-popup-vertical-fit el-link shrink-0"
+                                href={legacyMemberUrl(`images/users/${row.userPicture ?? ""}`)}
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={legacyMemberUrl(`images/users/${row.userPicture ?? ""}`)}
+                                  alt="user"
+                                  className="h-9 w-9 rounded-full border border-border object-cover"
+                                  width={35}
+                                />
+                              </a>
+                              <span>
+                                คุณ{row.userName ?? ""} {row.userLastName ?? ""}
+                                {row.userStatus === "0" && (
+                                  <>
+                                    <br />
+                                    <span className="text-xs font-medium text-red-600">
+                                      บัญชีนี้ถูกลบแล้ว
+                                    </span>
+                                  </>
+                                )}
+                              </span>
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-foreground">
+                            <MainAddress row={row} />
+                          </td>
+                          <td className="px-4 py-3 text-xs text-foreground [&_a]:text-red-600 [&_a]:break-all">
+                            <ContactInfo row={row} />
+                          </td>
+                          <td className="px-4 py-3 text-center text-xs tabular-nums text-muted whitespace-nowrap">
+                            {row.userRegistered}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
-        </div>
+        </section>
       </div>
-      {/* END: Content — user-sales.php L150 */}
     </div>
   );
 }
@@ -415,21 +438,23 @@ function BadgeVIP2({ row }: { row: TeamMemberRow }): ReactNode {
   // default → the raw coID.
   const coId = row.coID ?? "";
   const coLabel = coId in CO_ID_BADGE ? CO_ID_BADGE[coId] : coId;
+  // Tailwind chip for the VIP/corporate badge cluster (was the legacy
+  // `badge badge-vip badge-pill`). Amber tone reads as the "VIP" accent.
+  const vipChip =
+    "inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700";
   return (
     <>
-      {coLabel ? (
-        <span className="badge badge-vip badge-pill">{coLabel}</span>
-      ) : null}
+      {coLabel ? <span className={vipChip}>{coLabel}</span> : null}
       {row.hasSvip ? (
         <>
           {" "}
-          <span className="badge badge-vip badge-pill">SVIP</span>
+          <span className={vipChip}>SVIP</span>
         </>
       ) : null}
       {row.hasCorporate ? (
         <>
           {" "}
-          <span className="badge badge-vip badge-pill">บริษัท</span>
+          <span className={vipChip}>บริษัท</span>
         </>
       ) : null}
     </>
