@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import {
@@ -243,6 +242,23 @@ export async function submitCartOrder(input: {
   taxDocTaxId?: string | null;            // 13-digit
   taxDocBillingName?: string | null;      // company name
   taxDocAddress?: string | null;          // billing address snapshot
+  // P0-3/4/5 (D1 cart unification) — inline-address override. The legacy
+  // cart resolves a SAVED tb_address row by addressID. The /service-order/cart
+  // (เดฟ's lane) lets the customer type a fresh delivery address in-form; that
+  // path passes addressID='INLINE' + this snapshot so submitCartOrder writes
+  // the typed address onto the header WITHOUT a tb_address lookup (no row
+  // exists). Mirrors the addr shape the saved-address branch builds.
+  addressSnapshot?: {
+    addressName: string;
+    addressLastname: string;
+    addressTel: string;
+    addressTel2: string;
+    addressNo: string;
+    addressSubDistrict: string;
+    addressDistrict: string;
+    addressProvince: string;
+    addressZIPCode: string;
+  } | null;
 }): Promise<ActionResult<{ hNo: string }>> {
   const impErr = await assertNotImpersonating();
   if (impErr) return impErr;
@@ -351,6 +367,22 @@ export async function submitCartOrder(input: {
       addressZIPCode: ADDRESSES.warehouseTh.postcode,
       addressNote: input.hNote ?? "",
     };
+  } else if (input.addressID === "INLINE" && input.addressSnapshot) {
+    // P0-3/4/5 — typed-in-form delivery address (the /service-order/cart
+    // checkout). No tb_address row exists; snapshot the typed fields straight
+    // onto the header (same addr shape the saved-address branch produces).
+    addr = {
+      addressName: input.addressSnapshot.addressName,
+      addressLastname: input.addressSnapshot.addressLastname,
+      addressTel: input.addressSnapshot.addressTel,
+      addressTel2: input.addressSnapshot.addressTel2,
+      addressNo: input.addressSnapshot.addressNo,
+      addressSubDistrict: input.addressSnapshot.addressSubDistrict,
+      addressDistrict: input.addressSnapshot.addressDistrict,
+      addressProvince: input.addressSnapshot.addressProvince,
+      addressZIPCode: input.addressSnapshot.addressZIPCode,
+      addressNote: input.hNote ?? "",
+    };
   } else {
     const { data: addrRow, error: addrRowErr } = await admin
       .from("tb_address")
@@ -391,14 +423,22 @@ export async function submitCartOrder(input: {
     };
   }
 
-  // shops.php L160-166 — INSERT tb_header_order.
+  // shops.php L96-97 — INSERT tb_header_order.
+  // ⚠️ Postgres-vs-MySQL parity: the legacy INSERT only lists 16 columns and
+  // relies on MySQL's non-strict mode auto-filling every other NOT-NULL-
+  // without-DEFAULT column with its implicit type default ('' for varchar/text,
+  // 0 for numeric). Postgres REJECTS that — so the faithful port MUST supply
+  // those implicit defaults explicitly, or the INSERT 23502-fails on prod.
+  // (Same class as the php-port-patterns "PHP NULL interpolates to ''" rule.)
+  // The pricing/title/cover columns stay 0/'' here and are back-filled by the
+  // rollup UPDATE below (shops.php L208-220) — exactly as legacy does.
   const { error: insertHeaderErr } = await admin
     .from("tb_header_order")
     .insert({
       adminidip: "customer",
       userid: userID,
       crate: input.crate,
-      paymethod: input.payMethod ?? null,
+      paymethod: input.payMethod ?? "",
       fshippingservice: fShippingService,
       hno: hNo,
       // P1 — tax-doc snapshot. 'receipt' (default) snapshots nothing;
@@ -411,9 +451,9 @@ export async function submitCartOrder(input: {
         ? `${taxDocBillingName} · ${taxDocAddress}`
         : null,
       hdate: new Date().toISOString(),
-      hfreeshipping: input.pro === "f" ? "1" : null,
+      hfreeshipping: input.pro === "f" ? "1" : "",
       htransporttype: input.hTransportType,
-      hshipby: hShipBy,
+      hshipby: hShipBy ?? "",
       haddressname: addr.addressName,
       haddresslastname: addr.addressLastname,
       haddressno: addr.addressNo,
@@ -425,6 +465,23 @@ export async function submitCartOrder(input: {
       haddresstel: addr.addressTel,
       haddresstel2: addr.addressTel2,
       hstatus: "1",
+      // ── MySQL-implicit NOT-NULL defaults (Postgres needs them explicit) ──
+      htitle: "",            // back-filled by rollup UPDATE below
+      hcover: "",            // back-filled by rollup UPDATE below
+      hcount: 0,             // back-filled by rollup UPDATE below
+      htotalpricechn: 0,     // back-filled by rollup UPDATE below
+      htotalpriceuser: 0,    // priced by admin update2 when hstatus 1→2
+      hshippingchn: 0,       // priced by admin when goods arrive
+      hpriceupdate: 0,
+      hrate: 0,              // back-filled by rollup UPDATE below
+      hnote: input.hNote ?? "",
+      hnoteuser: "",
+      hnoteuserread: "",
+      hprintbill: "",
+      hprintbill2: "",
+      adminid: "",
+      adminidupdate: "",
+      session: "customer",
     });
   if (insertHeaderErr) {
     return { ok: false, error: insertHeaderErr.message };
@@ -470,6 +527,19 @@ export async function submitCartOrder(input: {
     cdetails: r.cdetails ?? "",
     userid: userID,
     hno: hNo,
+    // MySQL-implicit NOT-NULL defaults (Postgres needs them explicit) — same
+    // parity rule as the header INSERT above. Legacy `addOrder` INSERT
+    // (shops.php) lists only the columns copied from tb_cart; MySQL auto-fills
+    // the rest with '' / 0. These are populated later by the admin price/track
+    // flow (cshippingchn, cpriceupdate, cshippingnumber, ctrackingnumber).
+    cshippingchn: 0,
+    cpriceupdate: 0,
+    cshippingnumber: "",
+    ctrackingnumber: "",
+    crewallet: "",
+    cnote: "",
+    hwarehousename: "",
+    hqc: "",
   }));
   const { error: insertOrderErr } = await admin
     .from("tb_order")
@@ -479,10 +549,13 @@ export async function submitCartOrder(input: {
   }
 
   // shops.php L203 — UPDATE tb_users defaults (last-used picks).
+  // For the INLINE (typed-in-form) path there's no saved tb_address row to
+  // remember, so don't clobber the customer's userAddressID with the sentinel —
+  // only persist ship-by + pay-method (still valid last-used picks).
   await admin
     .from("tb_users")
     .update({
-      userAddressID: input.addressID,
+      ...(input.addressID !== "INLINE" ? { userAddressID: input.addressID } : {}),
       userShipBy: hShipBy ?? "",
       userPayMethod: input.payMethod ?? "",
     })
@@ -544,27 +617,101 @@ export type CartItem = {
 };
 
 // ────────────────────────────────────────────────────────────
-// LIST
+// P0-3/4/5 (D1 cart unification) — Provider enum ⇄ legacy cprovider code
 // ────────────────────────────────────────────────────────────
-export async function listCart(): Promise<ActionResult<CartItem[]>> {
-  const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
-  }
-  if (!user) return { ok: false, error: "not_signed_in" };
+//
+// tb_cart.cprovider is the legacy 1-char code (schema 0081 L883:
+// `cprovider varchar(1) DEFAULT '4'`). The Pacred `Provider` union is the
+// customer-facing label. The READ side (cart.php port + service-order.ts
+// `LEGACY_PROVIDER`) decodes the code → label; the WRITE side here is the
+// inverse, so a customer add lands the SAME code legacy used (and the
+// /cart + /service-order/cart readers render the right logo).
+//   1=1688 · 2=taobao · 3=tmall · 4=shop (default · "Shops") · 5=nice
+const PROVIDER_TO_LEGACY_CODE: Record<Provider, string> = {
+  "1688":   "1",
+  "taobao": "2",
+  "tmall":  "3",
+  "shop":   "4",
+  "nice":   "5",
+};
+function providerToLegacyCode(p: Provider): string {
+  return PROVIDER_TO_LEGACY_CODE[p] ?? "4";
+}
 
-  const { data, error } = await supabase
-    .from("cart_items")
-    .select("id, provider, shop_name, url, title, image_path, color, size, price_cny, amount, details, created_at")
-    .order("created_at", { ascending: false });
-
-  if (error) return { ok: false, error: error.message };
-  return { ok: true, data: (data ?? []) as CartItem[] };
+// Legacy tb_cart row → CartItem (decodes cprovider code → Provider label;
+// inverse of providerToLegacyCode; mirrors the /cart page's render).
+type LegacyCartRow = {
+  id: number;
+  cprovider: string | null;
+  cnameshop: string | null;
+  curl: string | null;
+  ctitle: string | null;
+  cimages: string | null;
+  ccolor: string | null;
+  csize: string | null;
+  cprice: number | string | null;
+  camount: number | string | null;
+  cdetails: string | null;
+};
+const LEGACY_CODE_TO_PROVIDER: Record<string, Provider> = {
+  "1": "1688",
+  "2": "taobao",
+  "3": "tmall",
+  "4": "shop",
+  "5": "nice",
+};
+function legacyCartRowToCartItem(r: LegacyCartRow): CartItem {
+  // cnameshop='pcs' is the legacy sentinel for "no shop name" (schema 0081
+  // L897 comment) — surface it as empty so the UI doesn't print "pcs".
+  const shopName = r.cnameshop && r.cnameshop !== "pcs" ? r.cnameshop : "";
+  return {
+    id:         String(r.id),
+    provider:   LEGACY_CODE_TO_PROVIDER[r.cprovider ?? "4"] ?? "shop",
+    shop_name:  shopName,
+    url:        r.curl && r.curl.trim() ? r.curl : null,
+    title:      r.ctitle && r.ctitle.trim() ? r.ctitle : null,
+    image_path: r.cimages && r.cimages.trim() ? r.cimages : null,
+    color:      r.ccolor && r.ccolor.trim() ? r.ccolor : null,
+    size:       r.csize && r.csize.trim() ? r.csize : null,
+    price_cny:  Number(r.cprice ?? 0),
+    amount:     Number(r.camount ?? 0),
+    details:    r.cdetails && r.cdetails.trim() ? r.cdetails : null,
+    // legacy tb_cart has no created_at column; the auto-increment id is the
+    // ordering proxy (we ORDER BY id DESC at read time). Stamp epoch-0 for
+    // the CartItem type — the UI doesn't render created_at on the cart.
+    created_at: new Date(0).toISOString(),
+  };
 }
 
 // ────────────────────────────────────────────────────────────
-// ADD ONE
+// LIST — D1 cart unification: reads the ported legacy tb_cart (RLS-locked
+// to service_role → admin client; ownership = userid === member_code).
+// Mirrors the /cart page's tb_cart read (app/.../cart/page.tsx L299-310);
+// returns the CartItem shape the /service-order/cart UI consumes.
+// ────────────────────────────────────────────────────────────
+export async function listCart(): Promise<ActionResult<CartItem[]>> {
+  const data = await getCurrentUserWithProfile();
+  if (!data?.profile) return { ok: false, error: "not_signed_in" };
+  const userID = data.profile.member_code ?? "";
+  if (!userID) return { ok: true, data: [] };
+
+  const admin = createAdminClient();
+  const { data: rows, error } = await admin
+    .from("tb_cart")
+    .select("id, cprovider, cnameshop, curl, ctitle, cimages, ccolor, csize, cprice, camount, cdetails")
+    .eq("userid", userID)
+    .order("id", { ascending: false });
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data: ((rows ?? []) as LegacyCartRow[]).map(legacyCartRowToCartItem) };
+}
+
+// ────────────────────────────────────────────────────────────
+// ADD ONE — D1 cart unification: writes legacy tb_cart (was rebuilt
+// `cart_items`). Mirrors the admin twin actions/admin/cart.ts L132-148
+// (adminAddItemToCart) + the legacy cart.php addCart/addCartURL INSERT.
+// All tb_cart columns are NOT NULL (schema 0081 L877-890) — coalesce every
+// optional field to "" / its default so the INSERT never violates NOT NULL.
 // ────────────────────────────────────────────────────────────
 export async function addCartItem(
   input: CartItemInput,
@@ -579,43 +726,61 @@ export async function addCartItem(
   }
   const d = parsed.data;
 
-  const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
-  }
-  if (!user) return { ok: false, error: "not_signed_in" };
+  const data = await getCurrentUserWithProfile();
+  if (!data?.profile) return { ok: false, error: "not_signed_in" };
+  const userID = data.profile.member_code ?? "";
+  if (!userID) return { ok: false, error: "no_member_code" };
 
-  const { data: created, error } = await supabase
-    .from("cart_items")
+  const admin = createAdminClient();
+
+  // Legacy cart cap: COUNT(tb_cart) for this user must stay < 151
+  // (cart.php L17/L76 `151 - countCart`). The rebuilt twin enforced this via
+  // a Postgres trigger on `cart_items`; tb_cart has no such trigger, so we
+  // pre-check in code — keep the customer-visible "151 items" guard.
+  const { count: cartCount, error: countErr } = await admin
+    .from("tb_cart")
+    .select("id", { count: "exact", head: true })
+    .eq("userid", userID);
+  if (countErr) {
+    console.error(`[tb_cart cap count] failed`, { code: countErr.code, message: countErr.message });
+  }
+  if ((cartCount ?? 0) >= 151) {
+    return { ok: false, error: "cart cap reached (151 items)" };
+  }
+
+  const { data: created, error } = await admin
+    .from("tb_cart")
     .insert({
-      profile_id: user.id,
-      provider:   d.provider,
-      shop_name:  d.shop_name,
-      url:        d.url ?? null,
-      title:      d.title ?? null,
-      image_path: d.image_path ?? null,
-      color:      d.color ?? null,
-      size:       d.size ?? null,
-      price_cny:  d.price_cny,
-      amount:     d.amount,
-      details:    d.details ?? null,
+      cdetails:  d.details ?? "",
+      curl:      d.url ?? "",
+      ctitle:    d.title ?? "",
+      cnameshop: d.shop_name && d.shop_name !== "pacred" ? d.shop_name : "pcs",
+      cprovider: providerToLegacyCode(d.provider),
+      cimages:   d.image_path ?? "",
+      cprice:    d.price_cny,
+      camount:   d.amount,
+      ccolor:    d.color ?? "",
+      csize:     d.size ?? "",
+      userid:    userID,
     })
     .select("id")
-    .single();
+    .single<{ id: number }>();
 
-  if (error) {
-    // 151-cap trigger raises "cart cap reached (151 items)"
-    return { ok: false, error: error.message };
+  if (error || !created) {
+    return { ok: false, error: error?.message ?? "insert failed" };
   }
 
   revalidatePath("/service-order/cart");
   revalidatePath("/service-order/add");
-  return { ok: true, data: { id: created.id } };
+  revalidatePath("/cart");
+  return { ok: true, data: { id: String(created.id) } };
 }
 
 // ────────────────────────────────────────────────────────────
-// UPDATE QTY / COLOR / SIZE / details
+// UPDATE QTY / COLOR / SIZE / details — D1 cart unification: patches
+// legacy tb_cart (was rebuilt `cart_items`). id is the stringified tb_cart
+// integer id; ownership-gated by member_code so a stale UI can't patch a
+// foreign row even through the service_role bypass.
 // ────────────────────────────────────────────────────────────
 export async function updateCartItem(
   id: string,
@@ -625,75 +790,106 @@ export async function updateCartItem(
   const impErr = await assertNotImpersonating();
   if (impErr) return impErr;
 
-  const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  const data = await getCurrentUserWithProfile();
+  if (!data?.profile) return { ok: false, error: "not_signed_in" };
+  const userID = data.profile.member_code ?? "";
+  if (!userID) return { ok: false, error: "no_member_code" };
+
+  const cartId = Number(id);
+  if (!Number.isFinite(cartId) || cartId <= 0) {
+    return { ok: false, error: "invalid_id" };
   }
-  if (!user) return { ok: false, error: "not_signed_in" };
 
-  // Build update object with only provided keys (avoid clobbering with null)
+  // Build update object with only provided keys (avoid clobbering NOT NULL
+  // columns with null). Map the CartItem field names → legacy tb_cart columns.
   const update: Record<string, unknown> = {};
-  if (patch.amount    != null) update.amount    = patch.amount;
-  if (patch.color     != null) update.color     = patch.color;
-  if (patch.size      != null) update.size      = patch.size;
-  if (patch.details   != null) update.details   = patch.details;
-  if (patch.price_cny != null) update.price_cny = patch.price_cny;
+  if (patch.amount    != null) update.camount  = patch.amount;
+  if (patch.color     != null) update.ccolor   = patch.color;
+  if (patch.size      != null) update.csize    = patch.size;
+  if (patch.details   != null) update.cdetails = patch.details;
+  if (patch.price_cny != null) update.cprice   = patch.price_cny;
+  if (Object.keys(update).length === 0) return { ok: true };
 
-  const { error } = await supabase.from("cart_items").update(update).eq("id", id);
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("tb_cart")
+    .update(update)
+    .eq("id", cartId)
+    .eq("userid", userID);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/service-order/cart");
+  revalidatePath("/cart");
   return { ok: true };
 }
 
 // ────────────────────────────────────────────────────────────
-// REMOVE
+// REMOVE — D1 cart unification: deletes from legacy tb_cart (was rebuilt
+// `cart_items`). Same ownership-gated pattern as the faithful deleteCartItem
+// above (id + userid predicates so the service_role bypass can't id-guess).
 // ────────────────────────────────────────────────────────────
 export async function removeCartItem(id: string): Promise<ActionResult> {
   // G-4 — impersonation is read-only; refuse customer-facing mutations.
   const impErr = await assertNotImpersonating();
   if (impErr) return impErr;
 
-  const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
-  }
-  if (!user) return { ok: false, error: "not_signed_in" };
+  const data = await getCurrentUserWithProfile();
+  if (!data?.profile) return { ok: false, error: "not_signed_in" };
+  const userID = data.profile.member_code ?? "";
+  if (!userID) return { ok: false, error: "no_member_code" };
 
-  const { error } = await supabase.from("cart_items").delete().eq("id", id);
+  const cartId = Number(id);
+  if (!Number.isFinite(cartId) || cartId <= 0) {
+    return { ok: false, error: "invalid_id" };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("tb_cart")
+    .delete()
+    .eq("id", cartId)
+    .eq("userid", userID);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/service-order/cart");
+  revalidatePath("/cart");
   return { ok: true };
 }
 
+// ────────────────────────────────────────────────────────────
+// CLEAR — D1 cart unification: empties the customer's legacy tb_cart.
+// ────────────────────────────────────────────────────────────
 export async function clearCart(): Promise<ActionResult> {
   // G-4 — impersonation is read-only; refuse customer-facing mutations.
   const impErr = await assertNotImpersonating();
   if (impErr) return impErr;
 
-  const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
-  }
-  if (!user) return { ok: false, error: "not_signed_in" };
+  const data = await getCurrentUserWithProfile();
+  if (!data?.profile) return { ok: false, error: "not_signed_in" };
+  const userID = data.profile.member_code ?? "";
+  if (!userID) return { ok: false, error: "no_member_code" };
 
-  const { error } = await supabase
-    .from("cart_items")
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("tb_cart")
     .delete()
-    .eq("profile_id", user.id);
+    .eq("userid", userID);
 
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/service-order/cart");
+  revalidatePath("/cart");
   return { ok: true };
 }
 
 // ────────────────────────────────────────────────────────────
-// ADD MULTIPLE — bulk-insert rows (used by URL-paste variant grid)
+// ADD MULTIPLE — bulk-insert rows (used by URL-paste variant grid).
+// D1 cart unification: writes legacy tb_cart (was rebuilt `cart_items`).
+// The rebuilt-only variant_label / variant_data / source_product_id /
+// stock_available columns have NO tb_cart equivalent — the SKU axis is
+// folded into tb_cart.ccolor / csize / cdetails at add time (the legacy
+// model has no variant sidecar), so those extra fields are dropped here
+// (the link-paste grid already folds axis-values into color/size/details).
 // ────────────────────────────────────────────────────────────
 export type CartItemBulkRow = CartItemInput & {
   variant_label?: string;
@@ -709,43 +905,52 @@ export async function addCartItemsBulk(rows: CartItemBulkRow[]): Promise<ActionR
 
   if (!Array.isArray(rows) || rows.length === 0) return { ok: false, error: "empty_rows" };
 
-  const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
-  }
-  if (!user) return { ok: false, error: "not_signed_in" };
+  const data = await getCurrentUserWithProfile();
+  if (!data?.profile) return { ok: false, error: "not_signed_in" };
+  const userID = data.profile.member_code ?? "";
+  if (!userID) return { ok: false, error: "no_member_code" };
 
   // Validate each row
-  const validated: Array<CartItemBulkRow & { _ok: true }> = [];
+  const validated: CartItemInput[] = [];
   for (const r of rows) {
     const parsed = cartItemSchema.safeParse(r);
     if (!parsed.success) {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
     }
-    validated.push({ ...parsed.data, variant_label: r.variant_label, variant_data: r.variant_data, source_product_id: r.source_product_id, stock_available: r.stock_available, _ok: true });
+    validated.push(parsed.data);
+  }
+
+  const admin = createAdminClient();
+
+  // Cap-gate the whole batch: existing count + new rows must stay ≤ 151
+  // (legacy cart.php L17/L76). Refuse the batch rather than partial-insert.
+  const { count: cartCount, error: countErr } = await admin
+    .from("tb_cart")
+    .select("id", { count: "exact", head: true })
+    .eq("userid", userID);
+  if (countErr) {
+    console.error(`[tb_cart cap count] failed`, { code: countErr.code, message: countErr.message });
+  }
+  if ((cartCount ?? 0) + validated.length > 151) {
+    return { ok: false, error: "cart cap reached (151 items)" };
   }
 
   const payload = validated.map((d) => ({
-    profile_id:        user.id,
-    provider:          d.provider,
-    shop_name:         d.shop_name,
-    url:               d.url ?? null,
-    title:             d.title ?? null,
-    image_path:        d.image_path ?? null,
-    color:             d.color ?? null,
-    size:              d.size ?? null,
-    price_cny:         d.price_cny,
-    amount:            d.amount,
-    details:           d.details ?? null,
-    variant_label:     d.variant_label ?? null,
-    variant_data:      d.variant_data ?? null,
-    source_product_id: d.source_product_id ?? null,
-    stock_available:   d.stock_available ?? null,
+    cdetails:  d.details ?? "",
+    curl:      d.url ?? "",
+    ctitle:    d.title ?? "",
+    cnameshop: d.shop_name && d.shop_name !== "pacred" ? d.shop_name : "pcs",
+    cprovider: providerToLegacyCode(d.provider),
+    cimages:   d.image_path ?? "",
+    cprice:    d.price_cny,
+    camount:   d.amount,
+    ccolor:    d.color ?? "",
+    csize:     d.size ?? "",
+    userid:    userID,
   }));
 
-  const { error, count } = await supabase
-    .from("cart_items")
+  const { error, count } = await admin
+    .from("tb_cart")
     .insert(payload, { count: "exact" });
 
   if (error) {
@@ -754,6 +959,7 @@ export async function addCartItemsBulk(rows: CartItemBulkRow[]): Promise<ActionR
 
   revalidatePath("/service-order/cart");
   revalidatePath("/service-order/add");
+  revalidatePath("/cart");
   return { ok: true, data: { count: count ?? payload.length } };
 }
 

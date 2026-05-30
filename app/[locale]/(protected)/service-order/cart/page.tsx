@@ -1,41 +1,84 @@
 import { Link } from "@/i18n/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { listCart } from "@/actions/cart";
 import { CartManager } from "./cart-manager";
 import { ShoppingCart, Plus, ChevronRight, Home } from "lucide-react";
 
+// Server Component reading cookies/auth under a layout must be dynamic.
+export const dynamic = "force-dynamic";
+
 export default async function ServiceOrderCartPage() {
+  // D1 cart unification (P0-3/4/5): the cart rows now come from the faithful
+  // listCart() → tb_cart (same source as /cart). The page-level rate + default
+  // address are also pivoted to the ported tb_* schema so a migrated customer
+  // (whose rebuilt `addresses`/`settings` rows are empty) sees real data.
   const cartRes = await listCart();
   const cart    = cartRes.ok ? (cartRes.data ?? []) : [];
 
-  const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  const userData = await getCurrentUserWithProfile();
+  const memberCode = userData?.profile?.member_code ?? "";
+
+  const admin = createAdminClient();
+
+  // Default address (pre-fill checkout form) — the customer's most-recent
+  // saved tb_address (addressStatus='1'), mapped to the cart-manager's
+  // DefaultAddress shape. tb_* is RLS-locked to service_role → admin client;
+  // ownership = userid === member_code.
+  let defaultAddress: {
+    first_name: string; last_name: string; phone: string; phone2: string | null;
+    address_line: string; sub_district: string; district: string; province: string;
+    postal_code: string; note: string | null;
+  } | null = null;
+  if (memberCode) {
+    const { data: addrRow, error: addrErr } = await admin
+      .from("tb_address")
+      .select("addressname, addresslastname, addresstel, addresstel2, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addressnote")
+      .eq("userid", memberCode)
+      .eq("addressstatus", "1")
+      .order("addressid", { ascending: false })
+      .limit(1)
+      .maybeSingle<{
+        addressname: string | null; addresslastname: string | null;
+        addresstel: string | null; addresstel2: string | null;
+        addressno: string | null; addresssubdistrict: string | null;
+        addressdistrict: string | null; addressprovince: string | null;
+        addresszipcode: string | null; addressnote: string | null;
+      }>();
+    if (addrErr) {
+      // Soft-fail — the checkout form just renders blank for the customer to fill.
+      console.error(`[cart default-address lookup] failed`, { code: addrErr.code, message: addrErr.message });
+    }
+    if (addrRow) {
+      defaultAddress = {
+        first_name:   addrRow.addressname ?? "",
+        last_name:    addrRow.addresslastname ?? "",
+        phone:        addrRow.addresstel ?? "",
+        phone2:       addrRow.addresstel2 ?? null,
+        address_line: addrRow.addressno ?? "",
+        sub_district: addrRow.addresssubdistrict ?? "",
+        district:     addrRow.addressdistrict ?? "",
+        province:     addrRow.addressprovince ?? "",
+        postal_code:  addrRow.addresszipcode ?? "",
+        note:         addrRow.addressnote ?? null,
+      };
+    }
   }
 
-  // Default address (pre-fill checkout form)
-  const { data: defaultAddress } = user
-    ? await supabase
-        .from("addresses")
-        .select("first_name, last_name, phone, phone2, address_line, sub_district, district, province, postal_code, note")
-        .eq("profile_id", user.id)
-        .eq("is_default", true)
-        .is("deleted_at", null)
-        .maybeSingle()
-    : { data: null };
-
-  // Yuan rate + service fee from settings singleton
-  const { data: settings, error: settingsErr } = await supabase
-    .from("settings")
-    .select("yuan_rate, service_fee")
+  // Yuan rate from the live legacy settings (tb_settings.rsdefault — the SAME
+  // rate the /cart page uses, cart.php L142-145). serviceFee=0: the legacy cart
+  // shows no flat fee at order time (the order seeds with no price; admin
+  // prices it before payment), so the preview total is just CNY × rate.
+  const { data: settings, error: settingsErr } = await admin
+    .from("tb_settings")
+    .select("rsdefault")
     .eq("id", 1)
-    .maybeSingle<{ yuan_rate: number; service_fee: number }>();
+    .maybeSingle<{ rsdefault: number | string | null }>();
   if (settingsErr) {
-    console.error(`[settings list] failed`, { code: settingsErr.code, message: settingsErr.message });
+    console.error(`[tb_settings list] failed`, { code: settingsErr.code, message: settingsErr.message });
   }
-  const yuanRate    = Number(settings?.yuan_rate ?? 5);
-  const serviceFee  = Number(settings?.service_fee ?? 50);
+  const yuanRate    = Number(settings?.rsdefault ?? 5);
+  const serviceFee  = 0;
 
   return (
     <>
