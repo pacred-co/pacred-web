@@ -2,7 +2,13 @@ import { redirect } from "next/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveSalesAgent } from "../../team-map";
-import { fStatusBadge, nameStatusUserPay, numberFormat } from "../../helpers";
+import { computeCommission } from "@/lib/sales-commission/calc";
+import { WithdrawClient, type UnpaidRowForWithdraw } from "./withdraw-client";
+
+// PHP number_format($n, 2) — shown on the summary card.
+function fmt2(n: number): string {
+  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 /**
  * Sales-rep "รายการที่ยังไม่ได้เบิกเงิน" (unpaid-items payout) screen —
@@ -84,6 +90,8 @@ type UnpaidRow = {
   fVolume: number;
   fWeight: number;
   fTotalPrice: number;
+  /** ftotalprice − fdiscount = the row's gross contribution (getListForwarder.php L97). */
+  fNet: number;
   fStatus: string | null;
   usStatus: string | null;
   dateLabel: string;
@@ -150,13 +158,14 @@ export default async function SalesReportAddPage() {
         fvolume: number | string | null;
         fweight: number | string | null;
         ftotalprice: number | string | null;
+        fdiscount: number | string | null;
         fstatus: string | null;
       }
     >();
     if (forwarderIds.length > 0) {
       const { data: fwdRaw, error: fwdRawErr } = await admin
         .from("tb_forwarder")
-        .select("id, userid, ftrackingchn, fvolume, fweight, ftotalprice, fstatus")
+        .select("id, userid, ftrackingchn, fvolume, fweight, ftotalprice, fdiscount, fstatus")
         .in("id", forwarderIds);
       if (fwdRawErr) {
         console.error(`[tb_forwarder list] failed`, { code: fwdRawErr.code, message: fwdRawErr.message });
@@ -168,6 +177,7 @@ export default async function SalesReportAddPage() {
         fvolume: number | string | null;
         fweight: number | string | null;
         ftotalprice: number | string | null;
+        fdiscount: number | string | null;
         fstatus: string | null;
       }[]) {
         forwarderById.set(f.id, f);
@@ -189,6 +199,7 @@ export default async function SalesReportAddPage() {
           fVolume: Number(f.fvolume ?? 0),
           fWeight: Number(f.fweight ?? 0),
           fTotalPrice: Number(f.ftotalprice ?? 0),
+          fNet: Number(f.ftotalprice ?? 0) - Number(f.fdiscount ?? 0),
           fStatus: f.fstatus,
           usStatus: us.usstatus,
           dateLabel: date,
@@ -197,6 +208,25 @@ export default async function SalesReportAddPage() {
       })
       .filter((r): r is UnpaidRow => r !== null);
   }
+
+  // Map the unpaid rows into the withdraw-client shape (the interactive
+  // selector + commission breakdown + bank/PDF modal). The client computes
+  // the live breakdown; the SERVER recomputes it on submit (anti-tamper).
+  const withdrawRows: UnpaidRowForWithdraw[] = rows.map((r) => ({
+    usID: r.usID,
+    userID: r.userID,
+    fTrackingCHN: r.fTrackingCHN,
+    net: r.fNet,
+    fTotalPrice: r.fTotalPrice,
+  }));
+
+  // ── SUMMARY (P0-23 · ADR-0020) — the total commission AVAILABLE = sum of
+  //   ALL unpaid (usstatus='1') earned rows × 1% − 3% WHT. This is the
+  //   "earned minus already-withdrawn" figure (withdrawn rows have flipped to
+  //   usstatus='2', so they're already excluded). The agent then selects a
+  //   subset to actually claim below. ──
+  const totalGross = withdrawRows.reduce((sum, r) => sum + r.net, 0);
+  const summary = computeCommission(totalGross, agent.percen);
 
   return (
     <div className="pcs-legacy">
@@ -216,146 +246,63 @@ export default async function SalesReportAddPage() {
             </h3>
           </div>
 
-          {/* L69-133 — the payout form. Legacy method="POST"
-              action="report-user-sales-add/" — the submit is the deferred
-              Server Action (file header §1/§3). method/action/autoComplete
-              + form id (myTable) + #select1 + #list-forwarder-data are kept
-              verbatim so the legacy select→confirm→pay jQuery still wires. */}
-          <form
-            className="form-horizontal px-3 py-3 md:px-5 md:py-4"
-            method="POST"
-            action="/sales/report/add"
-            autoComplete="off"
-          >
+          {/* ── SUMMARY card — total commission available (all unpaid rows) ── */}
+          {rows.length > 0 && (
+            <div className="border-b border-border bg-surface-alt/30 px-3 py-3 md:px-5 md:py-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm font-medium text-foreground">
+                  ส่วนแบ่งสะสมที่เบิกได้ทั้งหมด
+                </span>
+                <span className="font-mono text-xl font-bold tabular-nums text-red-600">
+                  {fmt2(summary.net)}{" "}
+                  <span className="text-xs font-normal text-muted">บาท</span>
+                </span>
+              </div>
+              <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted sm:grid-cols-4">
+                <div className="flex justify-between sm:block">
+                  <dt>ค่าขนส่งจีนรวม</dt>
+                  <dd className="font-mono tabular-nums text-foreground sm:mt-0.5">{fmt2(summary.gross)}</dd>
+                </div>
+                <div className="flex justify-between sm:block">
+                  <dt>ส่วนแบ่ง 1%</dt>
+                  <dd className="font-mono tabular-nums text-foreground sm:mt-0.5">{fmt2(summary.commission)}</dd>
+                </div>
+                <div className="flex justify-between sm:block">
+                  <dt>หักภาษี 3%</dt>
+                  <dd className="font-mono tabular-nums text-foreground sm:mt-0.5">{fmt2(summary.wht)}</dd>
+                </div>
+                <div className="flex justify-between sm:block">
+                  <dt>รายการที่เบิกได้</dt>
+                  <dd className="font-mono tabular-nums text-foreground sm:mt-0.5">{rows.length}</dd>
+                </div>
+              </dl>
+              {!summary.eligible && (
+                <p className="mt-2 text-xs text-amber-600">
+                  ยอดส่วนแบ่งสุทธิยังไม่ถึง 1,000 บาท — เลือกรายการเพื่อสะสมยอดให้ครบก่อนทำรายการเบิกเงิน
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* L69-180 — the payout flow (P0-23 · ADR-0020). The legacy
+              `#select1` jQuery button + the AJAX `getListForwarder.php`
+              confirm modal are now a real React island: the agent checks
+              the unpaid rows, sees the live 1% − 3% commission breakdown,
+              then submits the bank info + ID-card PDF via the faithful
+              `submitSalesWithdrawal` Server Action (actions/commissions-tb.ts).
+              Reads/writes the legacy tb_user_sales family, NOT the rebuilt
+              empty sales_commissions tables. */}
+          <div className="px-3 py-3 md:px-5 md:py-4">
             {rows.length === 0 ? (
               <p className="py-12 text-center text-sm text-muted">
                 ไม่มีรายการที่ยังไม่ได้เบิกเงิน
               </p>
             ) : (
-              <>
-                {/* ── Mobile: stacked cards (md:hidden) ── */}
-                <div className="space-y-3 md:hidden">
-                  {rows.map((row) => (
-                    <div
-                      key={row.usID}
-                      className="rounded-xl border border-border bg-white dark:bg-surface p-3 shadow-sm"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="min-w-0 break-all font-mono text-sm font-semibold text-foreground">
-                          {row.fTrackingCHN || `#${row.usID}`}
-                        </span>
-                        <span className="shrink-0">{fStatusBadge(row.fStatus)}</span>
-                      </div>
-                      <p className="mt-1 font-mono text-xs text-muted">
-                        ID {row.usID} · {row.userID}
-                      </p>
-                      <div className="mt-2.5 grid grid-cols-3 gap-1 border-t border-dashed border-border pt-2 text-center">
-                        <div>
-                          <div className="text-[10px] text-muted">CBM</div>
-                          <div className="text-sm font-semibold tabular-nums font-mono">
-                            {numberFormat(row.fVolume, 5)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] text-muted">Kg</div>
-                          <div className="text-sm font-semibold tabular-nums font-mono">
-                            {numberFormat(row.fWeight, 2)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] text-muted">ค่าฝากนำเข้าจีน</div>
-                          <div className="text-sm font-bold tabular-nums font-mono text-red-600">
-                            {numberFormat(row.fTotalPrice, 2)}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-dashed border-border pt-2">
-                        <span className="text-[11px] text-muted">
-                          {row.dateLabel} {row.timeLabel} น.
-                        </span>
-                        <span>{nameStatusUserPay(row.usStatus)}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* ── Desktop: table (#myTable kept for DataTables JS;
-                    plain div wrapper isolates Tailwind from the legacy
-                    `.dataTable` cascade) ── */}
-                <div className="hidden md:block overflow-x-auto rounded-xl border border-border">
-                  <table id="myTable" className="dataTable w-full text-sm">
-                    <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
-                      <tr>
-                        <th className="px-3 py-3 font-medium whitespace-nowrap">ID</th>
-                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">วันที่สถานะสำเร็จ</th>
-                        <th className="px-3 py-3 font-medium whitespace-nowrap">รหัสสมาชิก</th>
-                        <th className="px-3 py-3 font-medium whitespace-nowrap">เลขแทรคกิ้ง</th>
-                        <th className="px-3 py-3 font-medium text-right whitespace-nowrap">ปริมาตร(CBM)</th>
-                        <th className="px-3 py-3 font-medium text-right whitespace-nowrap">น้ำหนัก(Kg)</th>
-                        <th className="px-3 py-3 font-medium text-right whitespace-nowrap">ค่าฝากนำเข้าจีน</th>
-                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">สถานะ</th>
-                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">สถานะเบิกเงินส่วนแบ่ง</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((row) => (
-                        <tr
-                          key={row.usID}
-                          className="border-t border-border hover:bg-surface-alt/30"
-                        >
-                          <td className="px-3 py-2.5 font-mono text-xs text-foreground">{row.usID}</td>
-                          <td className="px-3 py-2.5 text-center text-xs text-muted whitespace-nowrap">
-                            {row.dateLabel} {row.timeLabel} น.
-                          </td>
-                          <td className="px-3 py-2.5 font-mono text-xs text-foreground whitespace-nowrap">
-                            {row.userID}
-                          </td>
-                          <td className="px-3 py-2.5 font-mono text-xs text-foreground whitespace-nowrap">
-                            {row.fTrackingCHN}
-                          </td>
-                          <td className="px-3 py-2.5 text-right tabular-nums font-mono text-foreground">
-                            {numberFormat(row.fVolume, 5)}
-                          </td>
-                          <td className="px-3 py-2.5 text-right tabular-nums font-mono text-foreground">
-                            {numberFormat(row.fWeight, 2)}
-                          </td>
-                          <td className="px-3 py-2.5 text-right tabular-nums font-mono font-semibold text-red-600">
-                            {numberFormat(row.fTotalPrice, 2)}
-                          </td>
-                          <td className="px-3 py-2.5 text-center">{fStatusBadge(row.fStatus)}</td>
-                          <td className="px-3 py-2.5 text-center">{nameStatusUserPay(row.usStatus)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
+              <WithdrawClient rows={withdrawRows} percen={agent.percen} />
             )}
-
-            {/* L130-132 — the fixed-position payout trigger. Legacy:
-                jQuery #select1 click → AJAX getListForwarder.php (deferred
-                Server Action, file header §3). id="select1" preserved;
-                restyled to a Tailwind floating bar (clears FloatingTabs
-                on mobile via bottom-24). */}
-            <div
-              className="btn-group fixed left-1/2 -translate-x-1/2 bottom-24 md:bottom-6 z-[999]"
-              role="group"
-              aria-label="Basic example"
-            >
-              <a href="#">
-                <span
-                  className="inline-flex items-center justify-center rounded-full bg-red-600 text-white px-6 py-3 text-sm font-bold shadow-lg shadow-red-600/30 hover:bg-red-700 active:scale-[0.98] transition-all cursor-pointer whitespace-nowrap"
-                  id="select1"
-                >
-                  ทำรายการเบิกเงินรายการที่เลือก
-                </span>
-              </a>
-            </div>
-          </form>
+          </div>
         </section>
       </div>
-      {/* L150 — the jQuery AJAX target div for getListForwarder.php */}
-      <div id="list-forwarder-data"></div>
     </div>
   );
 }
