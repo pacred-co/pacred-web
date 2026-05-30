@@ -25,6 +25,11 @@ import SpawnForwarderForm from "./spawn-form";
 import { buildSpawnRows } from "./spawn-utils";
 import { MarkPaidTbForm } from "./mark-paid-tb-form";
 import { AdminServiceOrderUpdateForm } from "./update-form";
+import { AdminQuoteShopOrderForm } from "./quote-form";
+import {
+  AdminMarkShopOrderOrderedForm,
+  AdminSpawnToCompletedButton,
+} from "./mark-ordered-form";
 
 // Wave 31 / P0-14 — map legacy `tb_header_order.hstatus` char ('1'..'6') to
 // the rebuilt-string key the update-form Server Action expects. The action
@@ -245,15 +250,41 @@ export async function renderLegacyServiceOrderView(hno: string) {
         </div>
       ) : null}
 
+      {/* P0-13 Phase 1 #1 — QUOTE handler (hstatus '1' → '2').
+          Renders only when hstatus = '1' (รอดำเนินการ). Admin types the THB
+          price; action UPDATEs tb_header_order + sets hdatepayment NOW+5d +
+          4-CH notify customer. Closes legacy-gap S12. */}
+      {status === "1" ? (
+        <AdminQuoteShopOrderForm
+          hNo={r.hno}
+          totalCny={Number(r.htotalpricechn ?? 0)}
+          hrate={Number(r.hrate ?? 0)}
+        />
+      ) : null}
+
       {/* Tier A2 fix · 2026-05-29 — admin "Mark as Paid" against tb_header_order.
           Closes the revenue leak: existing /service-orders/page.tsx's mark-paid
           action wrote to the empty rebuilt service_orders table; this form
-          targets the live tb_header_order + tb_wallet + tb_wallet_hs trio. */}
+          targets the live tb_header_order + tb_wallet + tb_wallet_hs trio.
+          Mounts on status ∈ {'1','2'} per its own internal guard. */}
       <MarkPaidTbForm
         hno={r.hno}
         status={status}
         totalThb={Number(r.htotalpriceuser ?? 0)}
       />
+
+      {/* P0-13 Phase 1 #2 — ORDERED handler (hstatus '3' → '4').
+          Renders only when hstatus = '3' (สั่งสินค้าแล้ว · ลูกค้าได้จ่ายแล้ว).
+          Admin pastes the China shop order number; action UPDATEs every
+          tb_order line + flips header to '4' + 3-CH notify. Closes legacy-gap S13. */}
+      {status === "3" ? <AdminMarkShopOrderOrderedForm hNo={r.hno} /> : null}
+
+      {/* P0-13 Phase 1 #3 — AUTO-SPAWN to completed (hstatus '4' → '5').
+          Renders only when hstatus = '4' (รอจีนจัดส่ง). Admin clicks once after
+          all tracking is on tb_order; action spawns tb_forwarder per shop,
+          carries tb_promotion, flips header to '5', 2-3 CH notify. Closes
+          legacy-gap S14 missing 4→5 + tb_promotion carry. */}
+      {status === "4" ? <AdminSpawnToCompletedButton hNo={r.hno} /> : null}
 
       {/* Wave 31 / P0-14 — admin status flip + cancel + saveNote panel.
           Before this render, all 21,950 real `tb_header_order` rows had no
