@@ -114,6 +114,14 @@ The recurring collision is service-orders + wallet + yuan, where a customer file
 
 11. **Tail:** P1-6/7/9 forwarder detail handlers · P1-11/12 adm-10 shop header-edits (3 of the 13 already shipped in P0-13 batch · 10 remain) · P1-17 userActive queue (ภูม side DONE sitting-E · เดฟ pair-flip P1-16 still pending).
 
+12. ✅ **Sitting-H — PEAK accounting alignment Phase B1 + B2 — DONE 2026-05-30 (`d93b0592` + `61127915`).** Owner directive after pasting full PEAK ใบกำกับภาษีขาย DOM: align Pacred accounting screens with PEAK's 7-tab pattern. 2 parallel agents (no file collision per §2 lane rule):
+
+    **B1 — `/admin/tax-invoices` list rebuild (`d93b0592`)** — replaces 4-chip pending/issued/cancelled/all with PEAK 7-tab nav (ล่าสุด / ทั้งหมด / ร่าง[disabled] / รออนุมัติ / ออกแล้ว / e-Tax Invoice[disabled] / ยกเลิก). Adds date range filter (default current month), search across serial_no + buyer_name + buyer_tax_id, summary footer (Σ total + Σ VAT + Σ subtotal), 10/page server pagination, mobile scrollbar-x-visible, `@media print` chrome-hiding. 2 right-aligned header buttons (สร้าง = info-only placeholder; พิมพ์รายงาน = window.print() via tiny client island `print-button.tsx`). Schema unchanged — 'draft' + e-Tax slots are placeholder tabs surfacing the B2 roadmap so layout doesn't shift when columns land. Next-16 react-hooks/purity quirk handled via `recentSinceIso()` module-scope helper.
+
+    **B2 — `/admin/accounting/receipts` NEW PEAK explorer (`61127915`)** — 4 new files: list page (7 tabs ล่าสุด/ทั้งหมด/ร่าง/รอชำระ/ออกแล้ว/ยกเลิก/e-Receipt[disabled]) + read-only `[rid]` detail page + `actions/admin/accounting-receipts.ts` (getReceiptList + 2 getDetail variants, IN-batch tb_users + tb_receipt_item join) + reachability wired via `lib/admin/accounting-menubar.ts` (parent href + first ACCOUNTING_HUB_CARDS card — 2 channels, ≤2 clicks from sidebar). Reads `tb_receipt` (0081 L4132-4158 · rstatus '1'=ออกแล้ว/'2'=ยกเลิก/'3'=รอชำระ/'0'=ร่าง forward-compat). Detail page "พิมพ์" delegates to Wave 29 mPDF printReceipt page (read-only — no dual-write). Verify: typecheck GREEN (8GB wrapper) + lint GREEN (0 errors, 0 new warnings) + test:unit OK.
+
+    **Phase B follow-ups** (next sitting): B3 = extend same shell to ใบลดหนี้ / ใบเพิ่มหนี้ / ใบแจ้งหนี้ / ใบเสนอราคา / ใบสำคัญจ่าย. B4 = PEAK-style dashboards (รายจ่าย + ลูกหนี้ค้างชำระ). B5 = bulk-action checkbox wiring + grand-total over all matches + page-size selector + e-Tax/e-Receipt ETDA integration (needs ก๊อต).
+
 **Every task ships its entry-point (AGENTS.md §0d) + a `tb_*`-delta unit test, not a route-200.**
 
 ---
