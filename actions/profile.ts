@@ -24,6 +24,7 @@ import {
 import { normalizePhone } from "@/lib/utils/phone";
 import { checkRateLimit, getClientIpFromHeaders } from "@/lib/rate-limit";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
+import { upsertLegacyCorporate } from "@/lib/auth/legacy-bridge-tb-users";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -143,6 +144,45 @@ export async function upsertCorporate(
     .from("profiles")
     .update({ tax_id: d.tax_id, company_name: d.company_name })
     .eq("id", user.id);
+
+  // P0-21 (ADR-0021 corporate-SOT) — DUAL-WRITE to the LEGACY `tb_corporate`
+  // (keyed by userid = member_code), mirroring auth.ts::saveJuristicStep2's
+  // P1-16 pattern. The rebuilt `corporate` upsert above is keyed by profile_id
+  // UUID and is read by the 3 customer-UI surfaces (service-payment, receipt,
+  // register — ปอน's lane); `tb_corporate` is the SOT the admin juristic-check
+  // queue + verify/reject/convert + the migrated receipt/bill-to readers (this
+  // batch) read. WITHOUT this dual-write a customer's self-edited company
+  // details would never reach the admin SOT → invisible to ops + unverifiable.
+  // We keep BOTH writes (not a swap): removing the rebuilt write before ปอน
+  // migrates her 3 readers would be a death gap.
+  //
+  // Best-effort: the customer's auth + profile + rebuilt corporate row are
+  // already committed; a tb_corporate-mirror failure logs LOUD (inside the
+  // helper) but does NOT fail the save (ops can backfill). Resolve member_code
+  // via the admin client (bypass RLS — profiles is the source of the trigger-
+  // minted code). corporatestatus stays '1' (pending) on a fresh row — the
+  // helper preserves the existing row's status on re-edit (UPDATE branch never
+  // touches corporatestatus), so a verified company isn't reset to pending.
+  const admin = createAdminClient();
+  const { data: profileRow, error: memberErr } = await admin
+    .from("profiles")
+    .select("member_code")
+    .eq("id", user.id)
+    .maybeSingle<{ member_code: string | null }>();
+  if (memberErr) {
+    console.error(`[profile upsertCorporate] member_code lookup failed — skipping tb_corporate mirror`, {
+      code: memberErr.code, message: memberErr.message, userId: user.id,
+    });
+  } else if (profileRow?.member_code) {
+    await upsertLegacyCorporate(admin, {
+      memberCode:       profileRow.member_code,
+      corporateNumber:  d.tax_id,
+      corporateName:    d.company_name,
+      corporateAddress: d.company_address,
+    });
+  } else {
+    console.error(`[profile upsertCorporate] no member_code on profile — skipping tb_corporate mirror`, { userId: user.id });
+  }
 
   revalidatePath("/profile");
   return { ok: true };

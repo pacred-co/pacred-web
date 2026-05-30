@@ -53,20 +53,27 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
   const o = data as unknown as Omit<typeof data, "profile"> & { profile: ProfileShape | ProfileShape[] | null };
   const profile = Array.isArray(o.profile) ? o.profile[0] ?? null : o.profile;
 
-  // F-1: for juristic customers, the PDF/receipt uses corporate.company_name as
-  // the default bill-to name. Surface that as the "ชื่อเริ่มต้น" hint in the
-  // override panel so the displayed default matches the actual default.
+  // F-1: for juristic customers, the PDF/receipt uses the company name as the
+  // default bill-to name. Surface it as the "ชื่อเริ่มต้น" hint in the override
+  // panel so the displayed default matches the actual default.
+  //
+  // P0-21 (ADR-0021 corporate-SOT): re-pointed from the rebuilt-empty
+  // `corporate` (keyed by profile_id UUID — mostly empty on prod) to the LEGACY
+  // `tb_corporate` (keyed by `userid` = member_code), so the 8,898 migrated
+  // juristic customers' company name resolves here. The customer join already
+  // surfaced `member_code`; tb_corporate is all-lowercase (corporatename /
+  // userid · NOT in the 0113 camelCase batch).
   let corporateName: string | null = null;
-  if (profile?.account_type === "juristic") {
+  if (profile?.account_type === "juristic" && profile.member_code) {
     const { data: corp, error: corpErr } = await admin
-      .from("corporate")
-      .select("company_name")
-      .eq("profile_id", o.profile_id)
-      .maybeSingle<{ company_name: string | null }>();
+      .from("tb_corporate")
+      .select("corporatename")
+      .eq("userid", profile.member_code)
+      .maybeSingle<{ corporatename: string | null }>();
     if (corpErr) {
-      console.error(`[corporate list] failed`, { code: corpErr.code, message: corpErr.message });
+      console.error(`[tb_corporate bill-to lookup] failed`, { code: corpErr.code, message: corpErr.message });
     }
-    corporateName = corp?.company_name ?? null;
+    corporateName = corp?.corporatename ?? null;
   }
 
   const { data: items, error: itemsErr } = await admin

@@ -488,28 +488,36 @@ export async function getServiceOrderForReceipt(
   const accountType: "personal" | "juristic" =
     legacyUser?.userCompany === "1" ? "juristic" : "personal";
 
-  // Corporate detail (company name / tax id) is a Pacred-native enrichment —
-  // best-effort lookup; the receipt + tax-invoice panel degrade gracefully
-  // when it isn't present for a migrated customer.
+  // Corporate detail (company name / tax id) for the juristic receipt header.
+  //
+  // P0-21 (ADR-0021 corporate-SOT): re-pointed from the rebuilt-empty
+  // `corporate` (keyed by profile_id UUID — mostly empty on prod) to the LEGACY
+  // `tb_corporate` (keyed by `userid` = member_code · the SOT the admin
+  // juristic-check + verify/reject already read), so the 8,898 migrated juristic
+  // customers' receipts resolve their company details. Best-effort: the receipt
+  // + tax-invoice panel degrade gracefully when the row isn't present. tb_* is
+  // RLS-locked to service_role → use the admin client (the customer's own
+  // member_code gates ownership). tb_corporate is all-lowercase: corporatename
+  // / corporatenumber / corporateaddress / userid (NOT in the 0113 camelCase batch).
   let company_name: string | null    = null;
   let tax_id:       string | null    = null;
   let company_address: string | null = null;
   if (accountType === "juristic") {
-    const { data: corp, error: corpErr } = await supabase
-      .from("corporate")
-      .select("company_name, tax_id, company_address")
-      .eq("profile_id", user.id)
+    const { data: corp, error: corpErr } = await admin
+      .from("tb_corporate")
+      .select("corporatename, corporatenumber, corporateaddress")
+      .eq("userid", memberCode)
       .maybeSingle<{
-        company_name:    string | null;
-        tax_id:          string | null;
-        company_address: string | null;
+        corporatename:    string | null;
+        corporatenumber:  string | null;
+        corporateaddress: string | null;
       }>();
     if (corpErr) {
-      console.error(`[corporate list] failed`, { code: corpErr.code, message: corpErr.message });
+      console.error(`[tb_corporate receipt lookup] failed`, { code: corpErr.code, message: corpErr.message });
     }
-    company_name    = corp?.company_name    ?? null;
-    tax_id          = corp?.tax_id          ?? null;
-    company_address = corp?.company_address ?? null;
+    company_name    = corp?.corporatename    ?? null;
+    tax_id          = corp?.corporatenumber  ?? null;
+    company_address = corp?.corporateaddress ?? null;
   }
 
   // 3. Items — exclude refunded lines (legacy crewallet flag = PHP cReWallet).
