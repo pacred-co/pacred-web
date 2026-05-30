@@ -161,6 +161,24 @@ export const CARGO_MENUBAR: MenubarItem[] = [
         href: "/admin/accounting/receipts",  // 2026-05-30 sitting-Phase-B: PEAK 7-tab landing (NEW)
         children: receiptStatuses(),
       },
+      // 2026-05-31 sitting-H-fix #5 (ภูม): ใบกำกับภาษีขาย moved INTO รายรับ
+      // (PEAK structure). Was an orphan sidebar entry via `blockExtTaxInvoices`
+      // in `lib/admin/sidebar-menu.ts` — now removed from sidebar + surfaced
+      // here as the proper accounting menubar leaf. Children map to existing
+      // tax_invoices.status enum (rออนุมัติ / ออกแล้ว / ยกเลิก per migration
+      // 0034 L47). NEXT PHASE: also add "ใบกำกับภาษีซื้อ" under "รายจ่าย"
+      // (ภูม Q3 "phase ถัดไปก็ได้").
+      {
+        label: "ใบกำกับภาษีขาย",
+        href: "/admin/tax-invoices",
+        children: [
+          { label: "สร้าง (จากใบเสร็จ)",  href: "/admin/accounting/receipts" }, // customer requests from /service-* — admin issues from row
+          { label: "รออนุมัติ",            href: "/admin/tax-invoices?tab=pending" },
+          { label: "ออกแล้ว",              href: "/admin/tax-invoices?tab=issued" },
+          { label: "ยกเลิก",               href: "/admin/tax-invoices?tab=cancelled" },
+          { label: "ดูทั้งหมด",             href: "/admin/tax-invoices?tab=all" },
+        ],
+      },
       { label: "ใบลดหนี้",                              children: notesStatuses("credit-note") },
       { label: "ใบเพิ่มหนี้",                            children: notesStatuses("debit-note") },
       { label: "ใบวางบิล",                              children: notesStatuses("billing-note") },
