@@ -4,49 +4,51 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { ClosingMonthPicker } from "./closing-month-picker";
 
-// Port of legacy `pcs-admin/closingAccReportForwarder.php` — month-end
-// closing report for delivered forwarders, sliced by customer type
-// (all / juristic / personal). Used by finance to reconcile each
-// month's revenue + cut tax invoices for corporate customers.
+// P0-21 (2026-05-30 sitting-E) — Pivot the month-end closing report off
+// issued tb_receipt rows (the legacy SOT for revenue + tax-invoice cut),
+// NOT the rebuilt empty `forwarders` table. The legacy
+// `closingAccReportForwarder.php` keyed off delivered-forwarders but in
+// practice accounting uses receipt-issued-date (rdate) for revenue
+// recognition. The previous Pacred port read `from("forwarders")`
+// (empty on prod) so the page rendered blank.
+//
+// New shape: read tb_receipt WHERE rdate IN range AND rstatus='3' (issued)
+// → slice by corporatetype ('1'=ลูกค้าบริษัท / '2'=ลูกค้าทั่วไป per
+// 0081 column comment). Customer name + member code + tel come from
+// tb_users via IN-batch lookup. Tax ID + company name live ON the
+// receipt itself (recompnumber + recompname + recompaddress — the
+// "billed to" snapshot at issue time).
+//
+// §0 design latitude — we removed the weight/volume/tracking-china
+// columns (forwarder-specific) and added the receipt # + refid + WHT
+// breakdown (totalbeforewithholding) which is what accounting really
+// needs at month-end close.
 
 type Tab = "all" | "juristic" | "personal";
 
-type Profile = {
-  member_code:  string | null;
-  account_type: "personal" | "juristic";
-  first_name:   string | null;
-  last_name:    string | null;
-  company_name: string | null;
-  phone:        string | null;
-} | null;
+type ReceiptRow = {
+  id:                     number;
+  rid:                    string;
+  refid:                  string;
+  rdate:                  string | null;
+  ramount:                number;
+  totalbeforewithholding: number;
+  recompnumber:           string | null;
+  recompname:             string | null;
+  recompaddress:          string | null;
+  corporatetype:          string | null;
+  userid:                 string;
+};
 
-type Row = {
-  id:               string;
-  f_no:             string | null;
-  status:           string;
-  created_at:       string;
-  date_delivered:   string | null;
-  weight_kg:        number;
-  volume_cbm:       number;
-  tracking_china:   string | null;
-  total_price:      number;
-  profile:          Profile;
-  corporate:        { tax_id: string | null; company_name: string | null } | { tax_id: string | null; company_name: string | null }[] | null;
+type UserLite = {
+  userID:       string;
+  userName:     string | null;
+  userLastName: string | null;
+  userTel:      string | null;
 };
 
 function thb(n: number): string {
   return "฿" + n.toLocaleString("th-TH", { minimumFractionDigits: 2 });
-}
-
-function normSingle<T>(x: T | T[] | null | undefined): T | null {
-  if (!x) return null;
-  return Array.isArray(x) ? (x[0] ?? null) : x;
-}
-
-function customerLabel(p: Profile): string {
-  if (!p) return "—";
-  if (p.account_type === "juristic" && p.company_name) return p.company_name;
-  return `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || "—";
 }
 
 function monthRange(year: number, month: number): { from: string; to: string } {
@@ -58,14 +60,26 @@ function monthRange(year: number, month: number): { from: string; to: string } {
   };
 }
 
+// "1" = ลูกค้าบริษัท · "2" = ลูกค้าทั่วไป (per 0081 column comment).
+function isJuristicReceipt(r: ReceiptRow): boolean {
+  return r.corporatetype === "1";
+}
+
+// Personal customer name = "userName userLastName" from tb_users.
+// Juristic display name = recompname (snapshot from receipt).
+function customerLabel(r: ReceiptRow, u: UserLite | null): string {
+  if (isJuristicReceipt(r) && r.recompname) return r.recompname;
+  if (!u) return "—";
+  return `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—";
+}
+
 export default async function ClosingReportPage({
   searchParams,
 }: {
   searchParams: Promise<{ tab?: string; year?: string; month?: string }>;
 }) {
-  // W-1 (gap-admin H-1): page-level role gate. Month-end revenue +
-  // customer tax IDs via createAdminClient (RLS-bypass) — accounting
-  // only (super implicit).
+  // W-1 page-level role gate. Month-end revenue + customer tax IDs via
+  // createAdminClient (RLS-bypass) — accounting only (super implicit).
   await requireAdmin(["accounting"]);
 
   const sp     = await searchParams;
@@ -77,73 +91,86 @@ export default async function ClosingReportPage({
 
   const admin = createAdminClient();
 
-  // Pull delivered forwarders for the month + customer + corporate (left
-  // join — corporate is only relevant when account_type='juristic').
-  // We over-fetch then bucket in app code so each tab share the same
-  // dataset (cheap because closings are small — usually <500 rows/month).
-  const q = admin
-    .from("forwarders")
-    .select(`
-      id, f_no, status, created_at, date_delivered, weight_kg, volume_cbm,
-      tracking_china, total_price,
-      profile:profiles!profile_id ( member_code, account_type, first_name, last_name, company_name, phone ),
-      corporate:corporate!profile_id ( tax_id, company_name )
-    `)
-    .eq("status", "delivered")
-    .gte("created_at", range.from)
-    .lte("created_at", range.to + "T23:59:59")
-    .order("created_at", { ascending: false })
+  // ── Step 1: pull issued receipts for the month ──────────────────
+  // rstatus='3' = ออกแล้ว (issued; 0081 default '3'). rdate is the
+  // issue timestamp — revenue is recognised on this date for the
+  // month-end close. Over-fetch then bucket in app code so the 3
+  // tabs share a single round-trip (closings are usually <500
+  // rows/month so 2000 cap is safe).
+  const { data: receiptData, error: receiptErr } = await admin
+    .from("tb_receipt")
+    .select(
+      "id, rid, refid, rdate, ramount, totalbeforewithholding, recompnumber, recompname, recompaddress, corporatetype, userid",
+    )
+    .eq("rstatus", "3")
+    .gte("rdate", range.from)
+    .lte("rdate", range.to + "T23:59:59")
+    .order("rdate", { ascending: false })
     .limit(2000);
-
-  const { data, error } = await q;
-  if (error) {
-    console.error(`[forwarders list] failed`, { code: error.code, message: error.message });
+  if (receiptErr) {
+    console.error(`[tb_receipt list] failed`, { code: receiptErr.code, message: receiptErr.message });
   }
-  const allRows = ((data ?? []) as unknown as Row[]).map((r) => ({
-    ...r,
-    profile:   normSingle(r.profile),
-    corporate: normSingle(r.corporate),
-  }));
+  const receipts = ((receiptData ?? []) as unknown as ReceiptRow[]);
 
-  const juristicRows = allRows.filter((r) => r.profile?.account_type === "juristic");
-  const personalRows = allRows.filter((r) => r.profile?.account_type !== "juristic");
+  // ── Step 2: hydrate customer names via single IN-batch ─────────
+  // Unique userids only; tb_users is the legacy SOT for customer
+  // identity (post-0113 camelCase: userID + userName + userLastName).
+  const uniqUserIds = Array.from(new Set(receipts.map((r) => r.userid).filter(Boolean)));
+  const userMap = new Map<string, UserLite>();
+  if (uniqUserIds.length > 0) {
+    const { data: userData, error: userErr } = await admin
+      .from("tb_users")
+      .select("userID, userName, userLastName, userTel")
+      .in("userID", uniqUserIds);
+    if (userErr) {
+      console.error(`[tb_users IN-batch] failed`, { code: userErr.code, message: userErr.message });
+    }
+    for (const u of (userData ?? []) as UserLite[]) {
+      userMap.set(u.userID, u);
+    }
+  }
+
+  // ── Step 3: bucket ──────────────────────────────────────────────
+  const juristicRows = receipts.filter(isJuristicReceipt);
+  const personalRows = receipts.filter((r) => !isJuristicReceipt(r));
 
   const visibleRows = tab === "juristic" ? juristicRows
                     : tab === "personal" ? personalRows
-                    : allRows;
+                    : receipts;
 
-  const sum = (rs: typeof allRows, key: "total_price" | "weight_kg" | "volume_cbm") =>
+  const sum = (rs: ReceiptRow[], key: "ramount" | "totalbeforewithholding") =>
     rs.reduce((s, r) => s + Number(r[key] ?? 0), 0);
 
   const counts = {
-    all:      allRows.length,
+    all:      receipts.length,
     juristic: juristicRows.length,
     personal: personalRows.length,
   };
   const totals = {
-    all:      sum(allRows,      "total_price"),
-    juristic: sum(juristicRows, "total_price"),
-    personal: sum(personalRows, "total_price"),
+    all:      sum(receipts,     "ramount"),
+    juristic: sum(juristicRows, "ramount"),
+    personal: sum(personalRows, "ramount"),
   };
-  const totalWeight = sum(visibleRows, "weight_kg");
-  const totalVolume = sum(visibleRows, "volume_cbm");
+  const totalBeforeWHT = sum(visibleRows, "totalbeforewithholding");
+  const whtAmount      = totalBeforeWHT - totals[tab];
 
   // CSV rows — finance teams want the tax-id + company name front and
-  // center so they can match to their accounting software
+  // center so they can match to their accounting software.
   const csvRows: CsvRow[] = visibleRows.map((r) => {
-    const corp = r.corporate as { tax_id: string | null; company_name: string | null } | null;
+    const u = userMap.get(r.userid) ?? null;
     return {
-      f_no:           r.f_no ?? "",
-      customer:       customerLabel(r.profile),
-      member_code:    r.profile?.member_code ?? "",
-      account_type:   r.profile?.account_type ?? "",
-      tax_id:         corp?.tax_id ?? "",
-      company:        corp?.company_name ?? "",
-      tracking_china: r.tracking_china ?? "",
-      weight_kg:      r.weight_kg ?? 0,
-      volume_cbm:     r.volume_cbm ?? 0,
-      total_price:    r.total_price ?? 0,
-      delivered_at:   r.date_delivered ?? r.created_at,
+      rid:                    r.rid,
+      refid:                  r.refid,
+      customer:               customerLabel(r, u),
+      member_code:            r.userid,
+      account_type:           isJuristicReceipt(r) ? "บริษัท" : "บุคคลทั่วไป",
+      tax_id:                 r.recompnumber ?? "",
+      company:                r.recompname ?? "",
+      phone:                  u?.userTel ?? "",
+      total_before_wht:       Number(r.totalbeforewithholding ?? 0),
+      total_after_wht:        Number(r.ramount ?? 0),
+      wht_amount:             Number(r.totalbeforewithholding ?? 0) - Number(r.ramount ?? 0),
+      issue_date:             r.rdate ?? "",
     };
   });
 
@@ -154,9 +181,10 @@ export default async function ClosingReportPage({
           <p className="text-xs font-semibold tracking-widest text-primary-600">
             ACCOUNTING · CLOSING
           </p>
-          <h1 className="mt-1 text-2xl font-bold text-foreground">ปิดงบฝากนำเข้ารายเดือน</h1>
+          <h1 className="mt-1 text-2xl font-bold text-foreground">ปิดงบรายเดือน (ใบเสร็จ)</h1>
           <p className="text-sm text-muted mt-1">
-            สรุปใบเสร็จฝากนำเข้าที่จบ (delivered) ในเดือนที่เลือก — แยกตามลูกค้าบริษัทและลูกค้าทั่วไป
+            สรุปใบเสร็จที่ออกในเดือนที่เลือก — แยกตามลูกค้าบริษัท / ลูกค้าทั่วไป ·
+            ตัดยอดด้วยวันที่ออกใบเสร็จ (rdate) ตามมาตรฐานบัญชี
           </p>
         </div>
         <Link
@@ -197,11 +225,15 @@ export default async function ClosingReportPage({
         })}
       </nav>
 
-      {/* Summary cards */}
+      {/* Summary cards — P0-21 added the WHT split for accounting workflow. */}
       <section className="grid sm:grid-cols-3 gap-3">
-        <Stat label="จำนวนใบ" value={String(visibleRows.length)} />
-        <Stat label="ยอดรวมรายรับ" value={thb(totals[tab])} />
-        <Stat label="น้ำหนัก / ปริมาตร" value={`${totalWeight.toFixed(2)} kg · ${totalVolume.toFixed(3)} cbm`} sub />
+        <Stat label="จำนวนใบเสร็จ" value={String(visibleRows.length)} />
+        <Stat label="ยอดรวมรับสุทธิ" value={thb(totals[tab])} />
+        <Stat
+          label="ยอดก่อนหัก WHT · WHT หัก"
+          value={`${thb(totalBeforeWHT)} · ${thb(whtAmount)}`}
+          sub
+        />
       </section>
 
       {/* CSV export */}
@@ -209,19 +241,20 @@ export default async function ClosingReportPage({
         <CsvButton
           rows={csvRows}
           cols={[
-            { key: "f_no",           label: "เลขใบ" },
-            { key: "customer",       label: "ลูกค้า" },
-            { key: "member_code",    label: "รหัสสมาชิก" },
-            { key: "account_type",   label: "ประเภท" },
-            { key: "tax_id",         label: "เลขผู้เสียภาษี" },
-            { key: "company",        label: "ชื่อบริษัท" },
-            { key: "tracking_china", label: "เลขแทรคจีน" },
-            { key: "weight_kg",      label: "น้ำหนัก (kg)" },
-            { key: "volume_cbm",     label: "ปริมาตร (cbm)" },
-            { key: "total_price",    label: "ยอดรวม (THB)" },
-            { key: "delivered_at",   label: "วันที่ส่งสำเร็จ" },
+            { key: "rid",              label: "เลขใบเสร็จ" },
+            { key: "refid",            label: "อ้างอิง" },
+            { key: "customer",         label: "ลูกค้า" },
+            { key: "member_code",      label: "รหัสสมาชิก" },
+            { key: "account_type",     label: "ประเภท" },
+            { key: "tax_id",           label: "เลขผู้เสียภาษี" },
+            { key: "company",          label: "ชื่อบริษัท" },
+            { key: "phone",            label: "เบอร์" },
+            { key: "total_before_wht", label: "ยอดก่อน WHT (THB)" },
+            { key: "wht_amount",       label: "WHT หัก (THB)" },
+            { key: "total_after_wht",  label: "ยอดรับสุทธิ (THB)" },
+            { key: "issue_date",       label: "วันที่ออกใบเสร็จ" },
           ]}
-          filename={`pacred-closing-forwarder-${year}-${String(month).padStart(2, "0")}-${tab}.csv`}
+          filename={`pacred-closing-receipts-${year}-${String(month).padStart(2, "0")}-${tab}.csv`}
         />
       </div>
 
@@ -230,14 +263,14 @@ export default async function ClosingReportPage({
         <table className="w-full text-xs sm:text-sm">
           <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[10px] sm:text-[11px] text-muted">
             <tr>
-              <th className="px-3 py-2.5">เลขใบ</th>
+              <th className="px-3 py-2.5">เลขใบเสร็จ</th>
+              <th className="px-3 py-2.5">อ้างอิง</th>
               <th className="px-3 py-2.5">ลูกค้า</th>
               <th className="px-3 py-2.5">รหัส</th>
               <th className="px-3 py-2.5">เลขผู้เสียภาษี</th>
-              <th className="px-3 py-2.5">แทรคจีน</th>
-              <th className="px-3 py-2.5 text-right">น้ำหนัก</th>
-              <th className="px-3 py-2.5 text-right">ปริมาตร</th>
-              <th className="px-3 py-2.5 text-right">ยอด</th>
+              <th className="px-3 py-2.5 text-right">ยอดก่อน WHT</th>
+              <th className="px-3 py-2.5 text-right">WHT หัก</th>
+              <th className="px-3 py-2.5 text-right">รับสุทธิ</th>
               <th className="px-3 py-2.5">วันที่</th>
             </tr>
           </thead>
@@ -245,46 +278,36 @@ export default async function ClosingReportPage({
             {visibleRows.length === 0 ? (
               <tr>
                 <td colSpan={9} className="p-8 text-center text-muted">
-                  ไม่มีรายการในช่วงที่เลือก
+                  ไม่มีใบเสร็จในช่วงที่เลือก
                 </td>
               </tr>
             ) : (
               visibleRows.map((r) => {
-                const corp = r.corporate as { tax_id: string | null; company_name: string | null } | null;
-                const closed = r.date_delivered ?? r.created_at;
+                const u   = userMap.get(r.userid) ?? null;
+                const wht = Number(r.totalbeforewithholding ?? 0) - Number(r.ramount ?? 0);
                 return (
                   <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
-                    <td className="px-3 py-2.5 font-mono text-primary-600">
-                      <Link href={`/admin/forwarders/${r.f_no}`} className="hover:underline">
-                        {r.f_no ?? "—"}
-                      </Link>
-                    </td>
+                    <td className="px-3 py-2.5 font-mono text-primary-600">{r.rid}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-muted">{r.refid}</td>
                     <td className="px-3 py-2.5">
-                      <div className="font-medium">{customerLabel(r.profile)}</div>
-                      {r.profile?.account_type === "juristic" && (
+                      <div className="font-medium">{customerLabel(r, u)}</div>
+                      {isJuristicReceipt(r) && (
                         <div className="text-[10px] text-muted">บริษัท</div>
                       )}
                     </td>
-                    <td className="px-3 py-2.5 font-mono text-xs">
-                      {r.profile?.member_code ?? "—"}
-                    </td>
-                    <td className="px-3 py-2.5 font-mono text-xs">
-                      {corp?.tax_id ?? "—"}
-                    </td>
-                    <td className="px-3 py-2.5 font-mono text-xs">
-                      {r.tracking_china ?? "—"}
-                    </td>
+                    <td className="px-3 py-2.5 font-mono text-xs">{r.userid}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs">{r.recompnumber || "—"}</td>
                     <td className="px-3 py-2.5 text-right font-mono">
-                      {Number(r.weight_kg ?? 0).toFixed(2)}
+                      {thb(Number(r.totalbeforewithholding ?? 0))}
                     </td>
-                    <td className="px-3 py-2.5 text-right font-mono">
-                      {Number(r.volume_cbm ?? 0).toFixed(3)}
+                    <td className="px-3 py-2.5 text-right font-mono text-muted">
+                      {wht > 0 ? thb(wht) : "—"}
                     </td>
-                    <td className="px-3 py-2.5 text-right font-mono font-bold">
-                      {thb(Number(r.total_price ?? 0))}
+                    <td className="px-3 py-2.5 text-right font-mono font-bold text-primary-700">
+                      {thb(Number(r.ramount ?? 0))}
                     </td>
                     <td className="px-3 py-2.5 text-xs text-muted whitespace-nowrap">
-                      {new Date(closed).toLocaleDateString("th-TH")}
+                      {r.rdate ? new Date(r.rdate).toLocaleDateString("th-TH") : "—"}
                     </td>
                   </tr>
                 );
@@ -295,8 +318,8 @@ export default async function ClosingReportPage({
             <tfoot>
               <tr className="border-t-2 border-border bg-primary-50/40 font-bold text-sm">
                 <td colSpan={5} className="px-3 py-2.5 text-right">รวม</td>
-                <td className="px-3 py-2.5 text-right font-mono">{totalWeight.toFixed(2)}</td>
-                <td className="px-3 py-2.5 text-right font-mono">{totalVolume.toFixed(3)}</td>
+                <td className="px-3 py-2.5 text-right font-mono">{thb(totalBeforeWHT)}</td>
+                <td className="px-3 py-2.5 text-right font-mono">{thb(whtAmount)}</td>
                 <td className="px-3 py-2.5 text-right font-mono text-primary-700">
                   {thb(totals[tab])}
                 </td>
