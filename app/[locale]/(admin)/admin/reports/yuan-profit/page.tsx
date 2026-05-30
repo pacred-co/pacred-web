@@ -35,6 +35,13 @@ const STATUS_LABEL: Record<string, string> = {
   completed:  "สำเร็จ",
 };
 const CHANNEL_LABEL: Record<string, string> = {
+  // P0-20: action now returns raw legacy paytype codes (1=Alipay, 2=Wechat,
+  // 3=Union/bank, 4=USDT) directly from tb_payment.paytype. Keep the slug
+  // aliases too for back-compat with any historic data.
+  "1":    "Alipay",
+  "2":    "WeChat",
+  "3":    "โอนธนาคารจีน",
+  "4":    "USDT",
   alipay: "Alipay",
   wechat: "WeChat",
   bank:   "โอนธนาคารจีน",
