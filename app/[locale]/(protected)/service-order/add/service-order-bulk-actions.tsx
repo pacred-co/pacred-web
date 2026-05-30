@@ -319,7 +319,7 @@ export function BulkPayBar({
 
   return (
     <div
-      className="b-pay fixed inset-x-0 bottom-0 md:bottom-5 z-[999] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-0 md:flex md:justify-center pointer-events-none"
+      className="b-pay fixed inset-x-0 bottom-24 md:bottom-5 z-[999] pl-3 pr-20 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-0 md:flex md:justify-center pointer-events-none"
     >
       <div className="pointer-events-auto mx-auto md:mx-0 w-full md:max-w-2xl rounded-2xl border border-border bg-white dark:bg-surface shadow-lg p-3">
         <div className="flex items-center gap-3">
