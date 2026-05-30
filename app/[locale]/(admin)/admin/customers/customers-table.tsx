@@ -41,6 +41,8 @@ export type DerivedStatus = "active" | "incomplete" | "suspended";
 
 export type JuristicBundle = {
   profileId: string;
+  /** Legacy member code (tb_users.userID) — the key the juristic actions use (P0-18). */
+  userid: string;
   taxId: string;
   companyName: string;
   companyAddress: string;
@@ -432,7 +434,7 @@ function JuristicInlineReview({ bundle }: { bundle: JuristicBundle }) {
   function runDbd() {
     setDbdErr(null);
     startDbd(async () => {
-      const res = await lookupDbdJuristic({ profile_id: bundle.profileId });
+      const res = await lookupDbdJuristic({ userid: bundle.userid });
       if (res.ok) setDbd(res.data ?? null);
       else setDbdErr(res.error ?? "ผิดพลาด");
     });
@@ -511,9 +513,9 @@ function JuristicInlineReview({ bundle }: { bundle: JuristicBundle }) {
             {actErr && <div className="text-[11px] text-red-700">{actErr}</div>}
             {actMsg && <div className="text-[11px] text-green-700">{actMsg}</div>}
             <div className="flex gap-2">
-              <button type="button" disabled={pending} onClick={() => act(() => verifyJuristic({ profile_id: bundle.profileId }))}
+              <button type="button" disabled={pending} onClick={() => act(() => verifyJuristic({ userid: bundle.userid }))}
                 className="rounded bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50">✅ อนุมัติสถานะบริษัท</button>
-              <button type="button" disabled={pending} onClick={() => { if (!reason.trim()) { setActErr("ระบุเหตุผลก่อนปฏิเสธ"); return; } act(() => rejectJuristic({ profile_id: bundle.profileId, reason })); }}
+              <button type="button" disabled={pending} onClick={() => { if (!reason.trim()) { setActErr("ระบุเหตุผลก่อนปฏิเสธ"); return; } act(() => rejectJuristic({ userid: bundle.userid, reason })); }}
                 className="rounded border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">❌ ไม่อนุมัติ</button>
             </div>
             <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="เหตุผลปฏิเสธ (กรอกก่อนกดไม่อนุมัติ)" className="w-full text-[11px] rounded border border-border px-2 py-1" />

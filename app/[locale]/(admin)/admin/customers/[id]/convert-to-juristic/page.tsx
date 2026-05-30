@@ -1,54 +1,65 @@
+/**
+ * /admin/customers/[id]/convert-to-juristic — P0-18 (adm-08 WF#14).
+ *
+ * Re-pointed from the rebuilt `profiles`/`corporate` (UUID) to the LEGACY
+ * `tb_users`/`tb_corporate` (keyed by `userID`). `[id]` is the legacy member
+ * code (e.g. PR2791) — the same id the detail page + customer list pass.
+ * The prior version treated `[id]` as a profiles UUID and read the empty
+ * rebuilt tables → dead for all 8,898 migrated customers.
+ */
 import { notFound, redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { ConvertToJuristicForm } from "./convert-to-juristic-form";
+
+// requireAdmin reads auth cookies → force-dynamic (AGENTS.md §11).
+export const dynamic = "force-dynamic";
 
 export default async function ConvertToJuristicPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireAdmin(["super", "manager", "accounting", "qa", "ops", "sales_admin"]);
+
   const { id } = await params;
+  const userid = id.toUpperCase();
   const admin = createAdminClient();
 
-  const { data: profile, error: profileErr } = await admin
-    .from("profiles")
-    .select("id, member_code, account_type, first_name, last_name, phone, email, created_at, status")
-    .eq("id", id)
-    .maybeSingle();
-  if (profileErr) {
-    console.error(`[profiles lookup] failed`, { code: profileErr.code, message: profileErr.message, details: profileErr.details, hint: profileErr.hint });
-    throw new Error(`Failed to load profiles (${profileErr.code ?? "unknown"}): ${profileErr.message}`);
+  const { data: user, error: userErr } = await admin
+    .from("tb_users")
+    .select("userID, userName, userLastName, userTel, userEmail, userCompany, userRegistered, userStatus")
+    .eq("userID", userid)
+    .maybeSingle<{
+      userID: string; userName: string | null; userLastName: string | null;
+      userTel: string | null; userEmail: string | null; userCompany: string | null;
+      userRegistered: string | null; userStatus: string | null;
+    }>();
+  if (userErr) {
+    console.error(`[convert-to-juristic tb_users] failed`, { userid, code: userErr.code, message: userErr.message });
+    throw new Error(`Failed to load tb_users (${userErr.code ?? "unknown"}): ${userErr.message}`);
   }
-  if (!profile) notFound();
+  if (!user) notFound();
 
-  type Profile = {
-    id: string; member_code: string | null; account_type: "personal" | "juristic";
-    first_name: string | null; last_name: string | null; phone: string | null;
-    email: string | null; created_at: string; status: string;
-  };
-  const p = profile as Profile;
-
-  // If the customer is already juristic, the conversion makes no sense
-  // — bounce them back to the detail page rather than render a confusing
-  // form that would just error on submit.
-  if (p.account_type === "juristic") {
-    redirect(`/admin/customers/${id}`);
-  }
-
-  // Existing draft corporate row (rare — only if someone created it before
-  // a successful conversion). Surface its values so admins can finish what
-  // someone else started instead of typing the tax id twice.
-  const { data: existingCorporate, error: existingCorporateErr } = await admin
-    .from("corporate")
-    .select("tax_id, company_name, company_address, status")
-    .eq("profile_id", id)
-    .maybeSingle<{ tax_id: string | null; company_name: string | null; company_address: string | null; status: string }>();
-  if (existingCorporateErr) {
-    console.error(`[corporate list] failed`, { code: existingCorporateErr.code, message: existingCorporateErr.message });
+  // Existing corporate row → reuse its values (prefill) or, if the customer
+  // is already a verified company, bounce back to the detail page.
+  const { data: corp, error: corpErr } = await admin
+    .from("tb_corporate")
+    .select("corporatenumber, corporatename, corporateaddress, corporatestatus")
+    .eq("userid", userid)
+    .maybeSingle<{ corporatenumber: string | null; corporatename: string | null; corporateaddress: string | null; corporatestatus: string | null }>();
+  if (corpErr) {
+    console.error(`[convert-to-juristic tb_corporate] failed`, { userid, code: corpErr.code, message: corpErr.message });
   }
 
-  const customerName = `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || "ลูกค้า";
+  // Already a company (userCompany='1') WITH a corporate row → nothing to do.
+  if (user.userCompany === "1" && corp) {
+    redirect(`/admin/customers/${userid}`);
+  }
+
+  const customerName = `${user.userName ?? ""} ${user.userLastName ?? ""}`.trim() || "ลูกค้า";
+  const statusActive = user.userStatus === "1" ? "ใช้งานอยู่" : user.userStatus === "0" ? "ระงับ" : (user.userStatus ?? "—");
 
   return (
     <main className="p-6 lg:p-8 space-y-6 max-w-3xl mx-auto">
@@ -61,11 +72,11 @@ export default async function ConvertToJuristicPage({
             เปลี่ยนเป็นบัญชีนิติบุคคล
           </h1>
           <p className="text-sm text-muted mt-1">
-            {customerName} · <span className="font-mono">{p.member_code ?? "—"}</span>
+            {customerName} · <span className="font-mono">{user.userID}</span>
           </p>
         </div>
         <Link
-          href={`/admin/customers/${id}`}
+          href={`/admin/customers/${userid}`}
           className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt"
         >
           ← กลับโปรไฟล์ลูกค้า
@@ -84,22 +95,22 @@ export default async function ConvertToJuristicPage({
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
         <h2 className="font-bold text-sm mb-3">ข้อมูลลูกค้าปัจจุบัน</h2>
         <dl className="grid sm:grid-cols-2 gap-y-2 text-sm">
-          <Field label="ประเภทปัจจุบัน"   value="บุคคลธรรมดา" />
-          <Field label="สถานะ"            value={p.status} />
+          <Field label="ประเภทปัจจุบัน"   value={user.userCompany === "1" ? "นิติบุคคล (ยังไม่มีข้อมูลบริษัท)" : "บุคคลธรรมดา"} />
+          <Field label="สถานะ"            value={statusActive} />
           <Field label="ชื่อ"              value={customerName} />
-          <Field label="รหัสสมาชิก"       value={p.member_code ?? "—"} mono />
-          <Field label="เบอร์"             value={p.phone ?? "—"} />
-          <Field label="อีเมล"             value={p.email ?? "—"} />
-          <Field label="สมัครเมื่อ"        value={new Date(p.created_at).toLocaleDateString("th-TH")} />
+          <Field label="รหัสสมาชิก"       value={user.userID} mono />
+          <Field label="เบอร์"             value={user.userTel ?? "—"} />
+          <Field label="อีเมล"             value={user.userEmail ?? "—"} />
+          <Field label="สมัครเมื่อ"        value={user.userRegistered ? new Date(user.userRegistered).toLocaleDateString("th-TH") : "—"} />
         </dl>
       </section>
 
       <ConvertToJuristicForm
-        profileId={p.id}
-        prefilledTaxId={existingCorporate?.tax_id ?? ""}
-        prefilledCompanyName={existingCorporate?.company_name ?? ""}
-        prefilledCompanyAddress={existingCorporate?.company_address ?? ""}
-        hasExistingDraft={!!existingCorporate}
+        userid={user.userID}
+        prefilledTaxId={corp?.corporatenumber ?? ""}
+        prefilledCompanyName={corp?.corporatename ?? ""}
+        prefilledCompanyAddress={corp?.corporateaddress ?? ""}
+        hasExistingDraft={!!corp}
       />
     </main>
   );

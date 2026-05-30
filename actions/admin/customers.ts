@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { getAdminRoles } from "@/lib/auth/require-admin";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { sendSms } from "@/lib/sms/gateway";
@@ -14,78 +15,204 @@ import {
   buildDbdLookupUrl,
   type DbdLookupData,
 } from "@/lib/dbd/parse-juristic";
+import {
+  CORP_STATUS,
+  updateUserIdentitySchema,
+  convertToJuristicSchema,
+  type UpdateUserIdentityInput,
+  type ConvertToJuristicInput,
+} from "@/lib/admin/customer-identity";
 
-const editCustomerSchema = z.object({
-  id:              z.string().uuid(),
-  first_name:      z.string().trim().max(100).optional(),
-  last_name:       z.string().trim().max(100).optional(),
-  email:           z.string().trim().email().max(255).optional().or(z.literal("")),
-  phone:           z.string().trim().max(20).optional(),
-  customer_group:  z.enum(["normal","vip","special"]).optional(),
-  sex:             z.enum(["M","F","other"]).optional().nullable(),
-  birthday:        z.string().optional().nullable(),
-  line_id:         z.string().trim().max(100).optional().nullable(),
-  recommended_by:  z.string().trim().max(100).optional().nullable(),
-});
-export type EditCustomerInput = z.infer<typeof editCustomerSchema>;
+// ════════════════════════════════════════════════════════════════════════
+// P0-17 — Edit customer identity on the LEGACY tb_users table
+// ════════════════════════════════════════════════════════════════════════
+//
+// adm-08 audit WF#4 / P0-A: the prior `editCustomer` wrote the rebuilt-empty
+// `profiles` table by UUID *and was imported nowhere* → an admin physically
+// could NOT correct any of the 8,898 migrated customers' name/phone/email/
+// birthday. This replaces it with the faithful port keyed by `userID`.
+//
+// Source verified directly from
+//   <legacy>/member/pcs-admin/users.php  (the `update` POST · ~L30-71)
+//   <legacy>/member/pcs-admin/include/pages/users/editUser.php (the modal)
+//
+// Editable fields (ALL departments):  userName · userLastName · userEmail ·
+//   userLineID · userFacebook · userTel · userSex · userBirthday
+// Senior-only fields (legacy CEO/Manager/QAAndQC/Accounting/ITDT):
+//   adminIDSale · coID  → Pacred senior roles: super · manager · accounting · qa
+// Legacy guards reproduced: userName + userLastName required; email-dup check
+//   that allows the customer to keep their OWN current email
+//   (`WHERE userEmail=$new AND userEmail<>$old`); saveHistory(...,13).
+//
+// Column casing verified vs migration 0113 (camelCase pilot, applied prod):
+//   tb_users = camelCase — userID · userName · userLastName · userTel ·
+//   userEmail · userBirthday · userSex · userLineID · userFacebook ·
+//   adminIDSale · coID
+const SENIOR_IDENTITY_ROLES = ["super", "manager", "accounting", "qa"] as const;
 
-export async function editCustomer(input: EditCustomerInput): Promise<AdminActionResult> {
-  const parsed = editCustomerSchema.safeParse(input);
+export async function adminUpdateUserIdentity(
+  input: UpdateUserIdentityInput,
+): Promise<AdminActionResult> {
+  const parsed = updateUserIdentitySchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
-  const { id, ...fields } = parsed.data;
+  const d = parsed.data;
+  const userid = d.userid.toUpperCase();
 
-  return withAdmin(["ops", "super"], async ({ adminId }) => {
+  return withAdmin(["super", "manager", "ops", "accounting", "sales_admin"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before, error: beforeErr } = await admin.from("profiles").select("*").eq("id", id).maybeSingle();
+
+    // Senior-role gate for the two privileged columns (legacy: only
+    // CEO/Manager/QAAndQC/Accounting/ITDT may reassign rep + customer group).
+    const roles = (await getAdminRoles()) ?? [];
+    const isSenior =
+      roles.includes("super") ||
+      roles.some((r) => (SENIOR_IDENTITY_ROLES as readonly string[]).includes(r));
+
+    const { data: before, error: beforeErr } = await admin
+      .from("tb_users")
+      .select("userID, userName, userLastName, userEmail, userTel, userSex, userBirthday, userLineID, userFacebook, adminIDSale, coID")
+      .eq("userID", userid)
+      .maybeSingle<{
+        userID: string;
+        userName: string | null; userLastName: string | null;
+        userEmail: string | null; userTel: string | null;
+        userSex: string | null; userBirthday: string | null;
+        userLineID: string | null; userFacebook: string | null;
+        adminIDSale: string | null; coID: string | null;
+      }>();
     if (beforeErr) {
-      console.error(`[editCustomer profiles read] failed`, { code: beforeErr.code, message: beforeErr.message, id });
+      console.error(`[adminUpdateUserIdentity read] failed`, { userid, code: beforeErr.code, message: beforeErr.message });
       return { ok: false, error: beforeErr.message };
     }
-    if (!before) return { ok: false, error: "not_found" };
+    if (!before) return { ok: false, error: "ไม่พบลูกค้า" };
 
-    const update: Record<string, unknown> = {};
-    if (fields.first_name     !== undefined) update.first_name     = fields.first_name || null;
-    if (fields.last_name      !== undefined) update.last_name      = fields.last_name || null;
-    if (fields.email          !== undefined) update.email          = fields.email || null;
-    if (fields.phone          !== undefined) update.phone          = fields.phone || null;
-    if (fields.customer_group !== undefined) update.customer_group = fields.customer_group;
-    if (fields.sex            !== undefined) update.sex            = fields.sex;
-    if (fields.birthday       !== undefined) update.birthday       = fields.birthday;
-    if (fields.line_id        !== undefined) update.line_id        = fields.line_id;
-    if (fields.recommended_by !== undefined) update.recommended_by = fields.recommended_by;
+    // Email-dup check (legacy: another customer must not already own this
+    // email; the customer may keep their OWN current email).
+    if (d.userEmail) {
+      const { data: dup, error: dupErr } = await admin
+        .from("tb_users")
+        .select("userID")
+        .eq("userEmail", d.userEmail)
+        .neq("userID", userid)
+        .limit(1)
+        .maybeSingle<{ userID: string }>();
+      if (dupErr) {
+        console.error(`[adminUpdateUserIdentity email-dup] failed`, { userid, code: dupErr.code, message: dupErr.message });
+        return { ok: false, error: dupErr.message };
+      }
+      if (dup) return { ok: false, error: "มีอีเมลนี้แล้วในระบบ" };
+    }
 
-    const { error } = await admin.from("profiles").update(update).eq("id", id);
-    if (error) return { ok: false, error: error.message };
+    // Build the UPDATE. NOT-NULL columns (userName/userLastName/userTel) are
+    // always set (zod guarantees them non-empty). Nullable columns store ""
+    // when blank — matching how the legacy PHP wrote empty strings (NEVER
+    // Postgres NULL · see docs/learnings/php-port-patterns.md). userEmail is
+    // the one truly-nullable column; "" → null mirrors the customer-portal.
+    const update: Record<string, unknown> = {
+      userName:     d.userName,
+      userLastName: d.userLastName,
+      userEmail:    d.userEmail || null,
+      userTel:      d.userTel,
+      userSex:      d.userSex ?? "",
+      userBirthday: d.userBirthday || null,
+      userLineID:   d.userLineID ?? "",
+      userFacebook: d.userFacebook ?? "",
+    };
+    if (isSenior) {
+      if (d.adminIDSale !== undefined) update.adminIDSale = d.adminIDSale;
+      if (d.coID        !== undefined) update.coID        = d.coID;
+    }
 
-    await logAdminAction(adminId, "customer.edit", "profile", id, { before, after: update });
+    const { error } = await admin.from("tb_users").update(update).eq("userID", userid);
+    if (error) {
+      console.error(`[adminUpdateUserIdentity update] failed`, { userid, code: error.code, message: error.message });
+      return { ok: false, error: error.message };
+    }
+
+    // saveHistory(...,13) — แก้ไขข้อมูลส่วนตัวสมาชิก.
+    await logAdminAction(adminId, "tb_users.update_identity", "tb_users", userid, {
+      before: {
+        userName: before.userName, userLastName: before.userLastName,
+        userEmail: before.userEmail, userTel: before.userTel,
+        userSex: before.userSex, userBirthday: before.userBirthday,
+        userLineID: before.userLineID, userFacebook: before.userFacebook,
+        ...(isSenior ? { adminIDSale: before.adminIDSale, coID: before.coID } : {}),
+      },
+      after: update,
+    });
     revalidatePath("/admin/customers");
-    revalidatePath(`/admin/customers/${id}`);
+    revalidatePath(`/admin/customers/${userid}`);
     return { ok: true };
   });
 }
 
-const verifyJuristicSchema = z.object({ profile_id: z.string().uuid() });
+// ════════════════════════════════════════════════════════════════════════
+// P0-18 — Juristic verify / reject on the LEGACY tb_corporate table
+// ════════════════════════════════════════════════════════════════════════
+//
+// adm-08 audit WF#12-14 / P0-B: the prior verify/reject wrote the rebuilt-
+// empty `corporate` table by UUID → the 8,898 migrated juristic customers
+// (their data in `tb_corporate`) were invisible/unverifiable. These mirror
+// the already-correct `adminUpdateCorporate` (customer-profile.ts), keying by
+// `userid` on `tb_corporate`.
+//
+// `corporatestatus` codes — verified verbatim from legacy `statusComp()`
+// (pcs-admin/include/function.php:530) + editCompStatus (users.php:866):
+//   '1' = รอตรวจสอบ (pending · initial state on signup; the queue filters =1)
+//   '2' = อนุมัติแล้ว (verified · editCompStatus sets this)
+//   '3' = ไม่ผ่าน (rejected)
+// tb_corporate is all-lowercase (NOT in the 0113 camelCase batch):
+//   id · userid · corporatenumber · corporatename · corporateaddress ·
+//   corporatestatus.
+const JURISTIC_ROLES = ["super", "manager", "ops", "accounting", "qa", "sales_admin"] as const;
+
+const verifyJuristicSchema = z.object({ userid: z.string().trim().min(1).max(20) });
 const rejectJuristicSchema = z.object({
-  profile_id: z.string().uuid(),
-  reason:     z.string().trim().min(1).max(500),
+  userid: z.string().trim().min(1).max(20),
+  reason: z.string().trim().min(1).max(500),
 });
 
 export async function verifyJuristic(input: z.infer<typeof verifyJuristicSchema>): Promise<AdminActionResult> {
   const parsed = verifyJuristicSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const userid = parsed.data.userid.toUpperCase();
 
-  return withAdmin(["ops", "super"], async ({ adminId }) => {
+  return withAdmin([...JURISTIC_ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { error } = await admin
-      .from("corporate")
-      .update({ status: "verified", verified_at: new Date().toISOString(), rejection_reason: null })
-      .eq("profile_id", parsed.data.profile_id);
-    if (error) return { ok: false, error: error.message };
 
-    await admin.from("profiles").update({ status: "active" }).eq("id", parsed.data.profile_id);
-    await logAdminAction(adminId, "juristic.verify", "corporate", parsed.data.profile_id, {});
+    // UPDATE-only: the corporate row must already exist (customer created it
+    // on signup, or via convert-to-juristic).
+    const { data: before, error: beforeErr } = await admin
+      .from("tb_corporate")
+      .select("id, corporatestatus")
+      .eq("userid", userid)
+      .maybeSingle<{ id: number; corporatestatus: string | null }>();
+    if (beforeErr) {
+      console.error(`[verifyJuristic read] failed`, { userid, code: beforeErr.code, message: beforeErr.message });
+      return { ok: false, error: beforeErr.message };
+    }
+    if (!before) return { ok: false, error: "ไม่พบข้อมูลนิติบุคคลของลูกค้านี้" };
+
+    const { error } = await admin
+      .from("tb_corporate")
+      .update({ corporatestatus: CORP_STATUS.VERIFIED })
+      .eq("id", before.id);
+    if (error) {
+      console.error(`[verifyJuristic update] failed`, { userid, code: error.code, message: error.message });
+      return { ok: false, error: error.message };
+    }
+
+    // Legacy editCompStatus path also ensures userCompany='1' (the flag the
+    // juristic queue + customer-portal read). update-corporate set it; keep
+    // it consistent on approve.
+    await admin.from("tb_users").update({ userCompany: "1" }).eq("userID", userid);
+
+    await logAdminAction(adminId, "tb_corporate.verify", "tb_corporate", userid, {
+      before: before.corporatestatus, after: CORP_STATUS.VERIFIED,
+    });
     revalidatePath("/admin/juristic-check");
-    revalidatePath(`/admin/customers/${parsed.data.profile_id}`);
+    revalidatePath("/admin/customers");
+    revalidatePath(`/admin/customers/${userid}`);
     return { ok: true };
   });
 }
@@ -93,97 +220,113 @@ export async function verifyJuristic(input: z.infer<typeof verifyJuristicSchema>
 export async function rejectJuristic(input: z.infer<typeof rejectJuristicSchema>): Promise<AdminActionResult> {
   const parsed = rejectJuristicSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const userid = parsed.data.userid.toUpperCase();
 
-  return withAdmin(["ops", "super"], async ({ adminId }) => {
+  return withAdmin([...JURISTIC_ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { error } = await admin
-      .from("corporate")
-      .update({ status: "rejected", rejection_reason: parsed.data.reason, verified_at: null })
-      .eq("profile_id", parsed.data.profile_id);
-    if (error) return { ok: false, error: error.message };
 
-    await logAdminAction(adminId, "juristic.reject", "corporate", parsed.data.profile_id, { reason: parsed.data.reason });
+    const { data: before, error: beforeErr } = await admin
+      .from("tb_corporate")
+      .select("id, corporatestatus")
+      .eq("userid", userid)
+      .maybeSingle<{ id: number; corporatestatus: string | null }>();
+    if (beforeErr) {
+      console.error(`[rejectJuristic read] failed`, { userid, code: beforeErr.code, message: beforeErr.message });
+      return { ok: false, error: beforeErr.message };
+    }
+    if (!before) return { ok: false, error: "ไม่พบข้อมูลนิติบุคคลของลูกค้านี้" };
+
+    const { error } = await admin
+      .from("tb_corporate")
+      .update({ corporatestatus: CORP_STATUS.REJECTED })
+      .eq("id", before.id);
+    if (error) {
+      console.error(`[rejectJuristic update] failed`, { userid, code: error.code, message: error.message });
+      return { ok: false, error: error.message };
+    }
+
+    await logAdminAction(adminId, "tb_corporate.reject", "tb_corporate", userid, {
+      before: before.corporatestatus, after: CORP_STATUS.REJECTED, reason: parsed.data.reason,
+    });
     revalidatePath("/admin/juristic-check");
-    revalidatePath(`/admin/customers/${parsed.data.profile_id}`);
+    revalidatePath("/admin/customers");
+    revalidatePath(`/admin/customers/${userid}`);
     return { ok: true };
   });
 }
 
 /**
- * DBD juristic-person lookup + compare (legacy check-juristic/compare.php).
+ * DBD juristic-person lookup + compare (legacy check-juristic/compare.php +
+ * check-juristic/home.php). P0-18: re-pointed from the rebuilt `corporate`
+ * (UUID) to the legacy `tb_corporate` (keyed by `userid`) so the lookup works
+ * for the 8,898 migrated juristic customers.
  *
- * Faithful port of the legacy "ตรวจสอบสถานะกับ DBD" button. Given a juristic
- * customer's profile, look up the company at the Department of Business
- * Development (กรมพัฒนาธุรกิจการค้า) by tax id and return both the DBD record
- * and the Pacred-submitted data so the admin can compare them field-by-field
- * before approving (verifyJuristic).
+ * Faithful port of the legacy "ค้นหาข้อมูลนิติบุคคล" / DBD compare. Given a
+ * juristic customer's userID, read their submitted data from `tb_corporate`,
+ * look the company up at the Department of Business Development
+ * (กรมพัฒนาธุรกิจการค้า) by tax id, and return both records so the admin can
+ * compare them field-by-field before approving (verifyJuristic).
+ *
+ * NO DB cache — the legacy `check-juristic/home.php` fetched DBD LIVE on every
+ * search (no persistence); `tb_corporate` has no dbd_payload column, so this
+ * is the faithful behavior (the rebuilt `corporate.dbd_payload` cache was a
+ * Pacred-only addition, dropped here).
  *
  * DBD data source — env `DBD_LOOKUP_URL` (a template, see buildDbdLookupUrl):
- *   - UNSET (default)        → manual-check mode: no external call, the UI links
- *                              to dbd.go.th and the admin verifies by eye against
- *                              the uploaded หนังสือรับรอง + ภพ20. SAFE default —
- *                              we never send a customer's tax id to a third party
- *                              unless ก๊อต deliberately wires an endpoint.
- *   - SET (e.g. the legacy   → fetch + parse + cache the payload to
- *     borrowed scraper, or      corporate.dbd_payload/dbd_fetched_at, then compare.
- *     an official DBD API)      On fetch failure we fall back to any cached payload.
+ *   - UNSET (default) → manual-check mode: no external call, the UI links to
+ *     dbd.go.th and the admin verifies by eye against the uploaded
+ *     หนังสือรับรอง + ภพ20. SAFE default — we never send a customer's tax id to
+ *     a third party unless ก๊อต deliberately wires an endpoint.
+ *   - SET → fetch + parse + compare live (legacy borrowed scraper or an
+ *     official DBD API). On fetch failure, surface a soft warning.
  *
  * The legacy endpoint (a "borrowed" interim API, per docs/runbook/pcs-scrub-plan.md)
  * is documented in .env.example / docs/env.md — switching it on is a ก๊อต call.
  *
  * Gate: the customer-facing review roles (legacy CEO/Manager/QA/Accounting/ITDT).
  */
-const lookupDbdJuristicSchema = z.object({ profile_id: z.string().uuid() });
+const lookupDbdJuristicSchema = z.object({ userid: z.string().trim().min(1).max(20) });
 
 export async function lookupDbdJuristic(
   input: z.infer<typeof lookupDbdJuristicSchema>,
 ): Promise<AdminActionResult<DbdLookupData>> {
   const parsed = lookupDbdJuristicSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const userid = parsed.data.userid.toUpperCase();
 
   return withAdmin<DbdLookupData>(
-    ["super", "manager", "ops", "accounting", "qa", "sales_admin"],
+    [...JURISTIC_ROLES],
     async ({ adminId }) => {
       const admin = createAdminClient();
 
-      // 1. Read the customer's corporate row (Pacred-submitted juristic data).
+      // 1. Read the customer's corporate row (legacy-submitted juristic data).
       const { data: corp, error: corpErr } = await admin
-        .from("corporate")
-        .select("tax_id, company_name, company_address, dbd_payload, dbd_fetched_at")
-        .eq("profile_id", parsed.data.profile_id)
-        .maybeSingle();
+        .from("tb_corporate")
+        .select("corporatenumber, corporatename, corporateaddress")
+        .eq("userid", userid)
+        .maybeSingle<{ corporatenumber: string | null; corporatename: string | null; corporateaddress: string | null }>();
       if (corpErr) {
-        logger.error("dbd-lookup", "corporate read failed", corpErr, {
-          profileId: redactPhone(parsed.data.profile_id),
+        logger.error("dbd-lookup", "tb_corporate read failed", corpErr, {
+          userid: redactPhone(userid),
           code: corpErr.code,
         });
         return { ok: false, error: corpErr.message };
       }
       if (!corp) return { ok: false, error: "not_juristic" };
 
-      const taxId = (corp.tax_id ?? "").trim();
+      const taxId = (corp.corporatenumber ?? "").trim();
       const pacred = {
         taxId,
-        companyName: corp.company_name ?? null,
-        companyAddress: corp.company_address ?? null,
+        companyName: corp.corporatename ?? null,
+        companyAddress: corp.corporateaddress ?? null,
       };
-      const cachedFetchedAt: string | null = corp.dbd_fetched_at ?? null;
-      const cachedDbd = corp.dbd_payload ? parseDbdResponse(corp.dbd_payload) : null;
 
-      // 2. No endpoint configured → manual-check mode (still surface any cached
-      //    payload so a previous lookup stays visible).
+      // 2. No endpoint configured → manual-check mode (UI links to DBD).
       const url = buildDbdLookupUrl(process.env.DBD_LOOKUP_URL, taxId);
       if (!url) {
         return {
           ok: true,
-          data: {
-            configured: false,
-            dbd: cachedDbd,
-            pacred,
-            taxId,
-            cached: cachedDbd !== null,
-            fetchedAt: cachedFetchedAt,
-          },
+          data: { configured: false, dbd: null, pacred, taxId, cached: false, fetchedAt: null },
         };
       }
 
@@ -212,22 +355,18 @@ export async function lookupDbdJuristic(
         fetchWarning = e instanceof Error ? e.message : "DBD fetch failed";
       }
 
-      // 3a. Fetch failed → serve cached payload if we have one.
+      // 3a. Fetch failed → surface a soft warning (no cache to fall back to).
       if (rawBody === null) {
-        logger.warn("dbd-lookup", "live fetch failed — falling back to cache", {
-          taxId,
-          reason: fetchWarning,
-          hasCache: cachedDbd !== null,
-        });
+        logger.warn("dbd-lookup", "live fetch failed", { taxId, reason: fetchWarning });
         return {
           ok: true,
           data: {
             configured: true,
-            dbd: cachedDbd,
+            dbd: null,
             pacred,
             taxId,
-            cached: cachedDbd !== null,
-            fetchedAt: cachedFetchedAt,
+            cached: false,
+            fetchedAt: null,
             warning: fetchWarning ?? "DBD lookup ไม่สำเร็จ",
           },
         };
@@ -236,41 +375,14 @@ export async function lookupDbdJuristic(
       // 3b. Parse the live body. null = ไม่พบข้อมูล (status != 200 / empty).
       const dbd = parseDbdResponse(rawBody);
 
-      // 4. Cache the raw decoded body for audit/anti-tampering + re-display.
-      let cachePayload: unknown = null;
-      try {
-        cachePayload = JSON.parse(rawBody);
-      } catch {
-        cachePayload = { raw: rawBody.slice(0, 4000) };
-      }
-      const nowIso = new Date().toISOString();
-      const { error: cacheErr } = await admin
-        .from("corporate")
-        .update({ dbd_payload: cachePayload, dbd_fetched_at: nowIso })
-        .eq("profile_id", parsed.data.profile_id);
-      if (cacheErr) {
-        // Non-fatal — the lookup still returns; we just didn't persist the cache.
-        logger.warn("dbd-lookup", "dbd_payload cache write failed", {
-          profileId: redactPhone(parsed.data.profile_id),
-          reason: cacheErr.message,
-        });
-      }
-
-      await logAdminAction(adminId, "juristic.dbd_lookup", "corporate", parsed.data.profile_id, {
+      await logAdminAction(adminId, "tb_corporate.dbd_lookup", "tb_corporate", userid, {
         taxId,
         found: dbd !== null,
       });
 
       return {
         ok: true,
-        data: {
-          configured: true,
-          dbd,
-          pacred,
-          taxId,
-          cached: false,
-          fetchedAt: cacheErr ? cachedFetchedAt : nowIso,
-        },
+        data: { configured: true, dbd, pacred, taxId, cached: false, fetchedAt: new Date().toISOString() },
       };
     },
   );
@@ -533,119 +645,143 @@ async function notifyAssignedSalesRep(
   }
 }
 
-// ────────────────────────────────────────────────────────────
-// Convert a personal account to juristic
-// Port of legacy `pcs-admin/api/customers-move-to-juristic/` — used when
-// a customer started as บุคคลธรรมดา then later opened a company and
-// wants the same wallet/history to roll under the corporate identity.
+// ════════════════════════════════════════════════════════════════════════
+// Convert a personal account → juristic  (P0-18 · adm-08 WF#14)
+// ════════════════════════════════════════════════════════════════════════
 //
-// Trigger `guard_corporate_account_type` enforces that corporate rows
-// can only exist where profiles.account_type='juristic', so the update
-// order is non-negotiable:
-//   1. Flip profiles.account_type → 'juristic'
-//   2. Upsert corporate row (insert if absent, else refresh)
-// If step 2 fails, revert step 1 so the two stay consistent.
-// ────────────────────────────────────────────────────────────
-const convertToJuristicSchema = z.object({
-  profile_id:      z.string().uuid(),
-  tax_id:          z.string().trim().regex(/^\d{13}$/, "เลขผู้เสียภาษีต้อง 13 หลัก"),
-  company_name:    z.string().trim().min(1, "กรอกชื่อบริษัท").max(255),
-  company_address: z.string().trim().max(1000).optional().or(z.literal("").transform(() => undefined)),
-  // Admin-issued conversions are treated as already verified (the admin
-  // is the verifier). Skip DBD round-trip; payload field stays null.
-  mark_verified:   z.boolean().default(true),
-});
-export type ConvertToJuristicInput = z.infer<typeof convertToJuristicSchema>;
-
+// Re-pointed from the rebuilt `profiles`/`corporate` (UUID) to the legacy
+// `tb_users`/`tb_corporate` (keyed by `userID`), mirroring the legacy
+// `update-corporate` POST handler (users.php · page=corporation · L810-853):
+//   1. SET tb_users.userCompany='1'
+//   2. INSERT tb_corporate (or UPDATE if a row already exists) with
+//      corporatestatus per the admin decision.
+//
+// `corporatestatus` codes — verified from legacy statusComp() + the signup
+// INSERT (api/otp/check-otp-register.php:101 writes '1' on signup):
+//   '1'=รอตรวจสอบ · '2'=อนุมัติแล้ว · '3'=ไม่ผ่าน.
+// Admin-issued conversions default to verified ('2') — the admin is the
+// verifier; untick mark_verified to leave it pending ('1') for later review.
+//
+// `id` (route param) is the legacy member code (tb_users.userID, e.g. PR2791).
+// Schema + types live in lib/admin/customer-identity.ts (unit-tested).
 export async function adminConvertToJuristic(
   input: ConvertToJuristicInput,
 ): Promise<AdminActionResult> {
   const parsed = convertToJuristicSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   const d = parsed.data;
+  const userid = d.userid.toUpperCase();
 
-  return withAdmin(["ops", "super"], async ({ adminId }) => {
+  return withAdmin([...JURISTIC_ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
+    // Load the customer (must exist) + their current juristic state.
     const { data: before, error: beforeErr } = await admin
-      .from("profiles")
-      .select("id, account_type, member_code, first_name, last_name")
-      .eq("id", d.profile_id)
-      .maybeSingle<{ ID: string; account_type: "personal" | "juristic"; member_code: string | null; first_name: string | null; last_name: string | null }>();
+      .from("tb_users")
+      .select("userID, userCompany, userName, userLastName")
+      .eq("userID", userid)
+      .maybeSingle<{ userID: string; userCompany: string | null; userName: string | null; userLastName: string | null }>();
     if (beforeErr) {
-      console.error(`[adminConvertToJuristic profiles read] failed`, { code: beforeErr.code, message: beforeErr.message, profile_id: d.profile_id });
+      console.error(`[adminConvertToJuristic tb_users read] failed`, { userid, code: beforeErr.code, message: beforeErr.message });
       return { ok: false, error: beforeErr.message };
     }
     if (!before) return { ok: false, error: "not_found" };
-    if (before.account_type === "juristic") return { ok: false, error: "already_juristic" };
 
-    // Block duplicate tax_id collisions early — the partial unique index
-    // on corporate(tax_id) only covers 'verified' rows, so we double-check.
+    // Does a corporate row already exist? (re-conversion / idempotency)
+    const { data: existing, error: exErr } = await admin
+      .from("tb_corporate")
+      .select("id")
+      .eq("userid", userid)
+      .maybeSingle<{ id: number }>();
+    if (exErr) {
+      console.error(`[adminConvertToJuristic tb_corporate read] failed`, { userid, code: exErr.code, message: exErr.message });
+      return { ok: false, error: exErr.message };
+    }
+    if (existing && before.userCompany === "1") return { ok: false, error: "already_juristic" };
+
+    // Block duplicate tax_id collisions (another customer must not own it).
     const { data: clash, error: clashErr } = await admin
-      .from("corporate")
-      .select("profile_id")
-      .eq("tax_id", d.tax_id)
-      .neq("profile_id", d.profile_id)
-      .maybeSingle();
+      .from("tb_corporate")
+      .select("userid")
+      .eq("corporatenumber", d.tax_id)
+      .neq("userid", userid)
+      .limit(1)
+      .maybeSingle<{ userid: string }>();
     if (clashErr) {
-      console.error(`[adminConvertToJuristic corporate clash check] failed`, { code: clashErr.code, message: clashErr.message, tax_id: d.tax_id });
+      console.error(`[adminConvertToJuristic clash check] failed`, { userid, code: clashErr.code, message: clashErr.message });
       return { ok: false, error: clashErr.message };
     }
     if (clash) return { ok: false, error: "tax_id_already_used" };
 
-    // Step 1 — flip account_type so the corporate trigger lets the insert through
-    const { error: profErr } = await admin
-      .from("profiles")
-      .update({ account_type: "juristic" })
-      .eq("id", d.profile_id);
-    if (profErr) {
-      console.error(`[adminConvertToJuristic profiles update] failed`, { code: profErr.code, message: profErr.message, profile_id: d.profile_id });
-      return { ok: false, error: profErr.message };
+    const newStatus = d.mark_verified ? CORP_STATUS.VERIFIED : CORP_STATUS.PENDING;
+
+    // Step 1 — flag the customer as a company (legacy update-corporate L824).
+    const { error: userErr } = await admin
+      .from("tb_users")
+      .update({ userCompany: "1" })
+      .eq("userID", userid);
+    if (userErr) {
+      console.error(`[adminConvertToJuristic tb_users update] failed`, { userid, code: userErr.code, message: userErr.message });
+      return { ok: false, error: userErr.message };
     }
 
-    // Step 2 — upsert the corporate row
-    const corporatePayload: Record<string, unknown> = {
-      profile_id:      d.profile_id,
-      tax_id:          d.tax_id,
-      company_name:    d.company_name,
-      company_address: d.company_address ?? null,
-      status:          d.mark_verified ? "verified" : "pending",
-      verified_at:     d.mark_verified ? new Date().toISOString() : null,
-      verified_by:     d.mark_verified ? adminId : null,
-      rejection_reason: null,
-    };
-    const { error: corpErr } = await admin
-      .from("corporate")
-      .upsert(corporatePayload, { onConflict: "profile_id" });
-
+    // Step 2 — INSERT (legacy) or UPDATE (re-convert) the corporate row. The
+    // NOT-NULL file columns (corporatefile/corporatefile20) get "" on INSERT —
+    // PHP wrote empty strings, never NULL (docs/learnings/php-port-patterns.md).
+    let corpErr;
+    if (existing) {
+      ({ error: corpErr } = await admin
+        .from("tb_corporate")
+        .update({
+          corporatenumber: d.tax_id,
+          corporatename:   d.company_name,
+          corporateaddress: d.company_address ?? "",
+          corporatestatus: newStatus,
+        })
+        .eq("id", existing.id));
+    } else {
+      ({ error: corpErr } = await admin
+        .from("tb_corporate")
+        .insert({
+          userid:          userid,
+          corporatenumber: d.tax_id,
+          corporatename:   d.company_name,
+          corporateaddress: d.company_address ?? "",
+          corporatefile:   "",
+          corporatefile20: "",
+          corporatestatus: newStatus,
+        }));
+    }
     if (corpErr) {
-      // Rollback the account_type flip — best effort, so the trigger
-      // doesn't end up rejecting future updates from a half-state.
-      await admin
-        .from("profiles")
-        .update({ account_type: before.account_type })
-        .eq("id", d.profile_id);
+      // Roll back the userCompany flag so the two stay consistent.
+      await admin.from("tb_users").update({ userCompany: before.userCompany ?? "0" }).eq("userID", userid);
+      console.error(`[adminConvertToJuristic tb_corporate write] failed`, { userid, code: corpErr.code, message: corpErr.message });
       return { ok: false, error: corpErr.message };
     }
 
-    const display = `${before.first_name ?? ""} ${before.last_name ?? ""}`.trim()
-      || d.company_name;
+    const display = `${before.userName ?? ""} ${before.userLastName ?? ""}`.trim() || d.company_name;
 
-    await logAdminAction(adminId, "customer.convert_to_juristic", "profile", d.profile_id, {
-      previous_account_type: before.account_type,
-      tax_id:                d.tax_id,
-      company_name:          d.company_name,
-      mark_verified:         d.mark_verified,
+    await logAdminAction(adminId, "tb_corporate.convert_to_juristic", "tb_corporate", userid, {
+      previous_userCompany: before.userCompany,
+      tax_id:               d.tax_id,
+      company_name:         d.company_name,
+      corporatestatus:      newStatus,
     });
 
-    void sendNotification(d.profile_id, notify.customerConvertedToJuristic({
-      displayName: display,
-      companyName: d.company_name,
-    }));
+    // Notify the customer via the profiles spine (resolver returns null for a
+    // legacy ghost with no profiles row → notification skipped).
+    const profileId = await resolveProfileIdForLegacyUserid(userid);
+    if (profileId) {
+      void sendNotification(profileId, notify.customerConvertedToJuristic({
+        displayName: display,
+        companyName: d.company_name,
+      }));
+    }
 
     revalidatePath("/admin/customers");
-    revalidatePath(`/admin/customers/${d.profile_id}`);
-    revalidatePath(`/admin/customers/${d.profile_id}/convert-to-juristic`);
+    revalidatePath("/admin/juristic-check");
+    revalidatePath(`/admin/customers/${userid}`);
+    revalidatePath(`/admin/customers/${userid}/convert-to-juristic`);
     return { ok: true };
   });
 }

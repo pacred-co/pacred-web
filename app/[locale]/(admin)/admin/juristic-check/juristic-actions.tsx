@@ -12,9 +12,11 @@ import {
 } from "@/lib/dbd/parse-juristic";
 
 type Props = {
-  profileId: string;
+  /** Legacy member code (tb_users.userID / tb_corporate.userid). */
+  userid: string;
+  /** Legacy corporatestatus code: '1'=pending · '2'=verified · '3'=rejected. */
   status: string;
-  /** corporate.tax_id — used for the official DBD link before/without a lookup. */
+  /** tb_corporate.corporatenumber (tax id) — used for the official DBD link. */
   taxId: string;
   docUrls: { label: string; url: string; mime: string }[];
 };
@@ -24,7 +26,7 @@ function dbdPublicUrl(taxId: string): string {
   return `https://datawarehouse.dbd.go.th/company/show/${encodeURIComponent(taxId.trim())}`;
 }
 
-export function JuristicActions({ profileId, status, taxId, docUrls }: Props) {
+export function JuristicActions({ userid, status, taxId, docUrls }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [reason, setReason] = useState("");
@@ -52,7 +54,7 @@ export function JuristicActions({ profileId, status, taxId, docUrls }: Props) {
     setDbd(null);
     dbdRef.current?.showModal();
     startDbd(async () => {
-      const res = await lookupDbdJuristic({ profile_id: profileId });
+      const res = await lookupDbdJuristic({ userid });
       if (res.ok) setDbd(res.data ?? null);
       else setDbdErr(res.error ?? "เกิดข้อผิดพลาด");
     });
@@ -103,18 +105,18 @@ export function JuristicActions({ profileId, status, taxId, docUrls }: Props) {
         🔎 ตรวจสอบกับ DBD
       </button>
 
-      {/* Approve / Reject */}
-      {status === "pending" && (
+      {/* Approve / Reject — only on pending ('1') rows. */}
+      {status === "1" && (
         <div className="space-y-1">
           {err && <div className="text-[10px] text-red-700">{err}</div>}
           {msg && <div className="text-[10px] text-green-700">{msg}</div>}
           <div className="flex gap-1">
-            <Button size="sm" onClick={() => act(() => verifyJuristic({ profile_id: profileId }))} disabled={pending}>
+            <Button size="sm" onClick={() => act(() => verifyJuristic({ userid }))} disabled={pending}>
               ✅ ยืนยัน
             </Button>
             <Button size="sm" variant="outline" onClick={() => {
               if (!reason.trim()) { setErr("ระบุเหตุผลก่อนปฏิเสธ"); return; }
-              act(() => rejectJuristic({ profile_id: profileId, reason }));
+              act(() => rejectJuristic({ userid, reason }));
             }} disabled={pending}>
               ❌ ปฏิเสธ
             </Button>

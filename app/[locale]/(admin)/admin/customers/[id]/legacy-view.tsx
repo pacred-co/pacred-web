@@ -26,11 +26,13 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { Link } from "@/i18n/navigation";
+import { getAdminRoles } from "@/lib/auth/require-admin";
 import { getCustomerRateMatrix } from "@/actions/admin/customer-rate";
 import { getCustomerStatCounts, listSalesAdmins } from "@/actions/admin/customer-profile";
 import { CustomerRateEditor } from "./rate-editor";
 import {
   StatCards,
+  IdentityEditor,
   NoteEditor,
   SaleRepEditor,
   CorporateEditor,
@@ -50,6 +52,12 @@ type URow = {
   adminIDSale: string | null;
   userNote: string | null;
   userPicture: string | null;     // Wave 13: legacy avatar filename (col is `userPicture` not `userimage` — fix Wave 19 BUG#1 2026-05-26)
+  // P0-17: identity-edit fields (faithful editUser modal).
+  userSex: string | null;
+  userBirthday: string | null;
+  userLineID: string | null;
+  userFacebook: string | null;
+  coID: string | null;
 };
 
 type FRow = {
@@ -127,7 +135,7 @@ export async function renderLegacyCustomerView(id: string) {
   const { data: userRaw, error: userErr } = await admin
     .from("tb_users")
     .select(
-      "userID,userName,userLastName,userCompany,userEmail,userTel,userActive,userRegistered,userLastLogin,adminIDSale,userNote,userPicture",
+      "userID,userName,userLastName,userCompany,userEmail,userTel,userActive,userRegistered,userLastLogin,adminIDSale,userNote,userPicture,userSex,userBirthday,userLineID,userFacebook,coID",
     )
     .eq("userID", id)
     .maybeSingle();
@@ -262,6 +270,13 @@ export async function renderLegacyCustomerView(id: string) {
   const salesAdmins = salesAdminsRes.ok ? salesAdminsRes.data?.rows ?? [] : [];
   const walletBalance = Number(wallet?.wallettotal ?? 0);
 
+  // P0-17: the identity editor's senior-only fields (rep + coID) mirror the
+  // legacy CEO/Manager/QAAndQC/Accounting/ITDT gate → Pacred senior roles.
+  const adminRoles = (await getAdminRoles()) ?? [];
+  const isSeniorAdmin =
+    adminRoles.includes("super") ||
+    ["manager", "accounting", "qa"].some((r) => adminRoles.includes(r as never));
+
   return (
     <main className="p-6 lg:p-8 max-w-5xl mx-auto space-y-5">
       <div className="flex items-baseline justify-between flex-wrap gap-2">
@@ -332,6 +347,28 @@ export async function renderLegacyCustomerView(id: string) {
             rebuilt transfer-rep page writes profiles.sales_admin_id). */}
         <SaleRepEditor userid={u.userID} currentRep={u.adminIDSale} admins={salesAdmins} />
       </div>
+
+      {/* Identity editor (P0-17 · adm-08 WF#4) — faithful port of the legacy
+          editUser modal. Writes tb_users core fields (name/email/tel/sex/
+          birthday/lineid/facebook + senior-only rep/coID). This is the
+          "แก้ไขข้อมูลลูกค้า" entry point the owner directive requires (§0d). */}
+      <IdentityEditor
+        userid={u.userID}
+        isSenior={isSeniorAdmin}
+        admins={salesAdmins}
+        initial={{
+          userName:     u.userName ?? "",
+          userLastName: u.userLastName ?? "",
+          userEmail:    u.userEmail ?? "",
+          userTel:      u.userTel ?? "",
+          userSex:      u.userSex ?? "",
+          userBirthday: u.userBirthday ?? "",
+          userLineID:   u.userLineID ?? "",
+          userFacebook: u.userFacebook ?? "",
+          adminIDSale:  u.adminIDSale ?? "",
+          coID:         u.coID ?? "",
+        }}
+      />
 
       {/* Per-customer rate editor (เดฟ 2026-05-30) — faithful port of the
           legacy customer-profile #rate-settings modal. Writes the LIVE

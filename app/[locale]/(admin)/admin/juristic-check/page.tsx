@@ -1,144 +1,214 @@
+/**
+ * /admin/juristic-check — juristic verification queue (P0-18 · adm-08 WF#12).
+ *
+ * Re-pointed from the rebuilt-empty `corporate`+`profiles` (UUID) to the
+ * LEGACY `tb_corporate` (keyed by `userid`) JOIN `tb_users`, so the 8,898
+ * migrated juristic customers (whose data lives in tb_corporate) finally
+ * surface here and can be verified/rejected.
+ *
+ * Legacy source: pcs-admin/users.php?page=corporation → user-corporation.php
+ *   `SELECT ... WHERE u.userCompany='1' AND corporateStatus=1` (the pending
+ *   queue). statusComp() (function.php:530) maps the codes:
+ *     '1'=รอตรวจสอบ(pending) · '2'=อนุมัติแล้ว(verified) · '3'=ไม่ผ่าน(rejected).
+ *
+ * Customer docs: legacy juristic cert (corporateFile) + ภพ20 (corporateFile20)
+ * are bare filenames under the legacy `file` bucket — resolved via
+ * resolveLegacyUrl("…","file").
+ */
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { Link } from "@/i18n/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { JuristicActions } from "./juristic-actions";
 
-export default async function AdminJuristicCheckPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+// requireAdmin reads auth cookies → force-dynamic (AGENTS.md §11).
+export const dynamic = "force-dynamic";
+
+// Legacy corporatestatus codes (function.php statusComp).
+const STATUS_LABEL: Record<string, string> = {
+  "1": "รอตรวจสอบ", "2": "อนุมัติแล้ว", "3": "ไม่ผ่าน",
+};
+const STATUS_BADGE: Record<string, string> = {
+  "1": "bg-amber-50 text-amber-700 border-amber-200",
+  "2": "bg-green-50 text-green-700 border-green-200",
+  "3": "bg-red-50 text-red-700 border-red-200",
+};
+// UI URL ?status= → corporatestatus value (default queue = pending, like legacy).
+const STATUS_PARAM: Record<string, string> = { pending: "1", verified: "2", rejected: "3" };
+
+type CorpRow = {
+  id: number;
+  userid: string;
+  corporatenumber: string | null;
+  corporatename: string | null;
+  corporateaddress: string | null;
+  corporatestatus: string | null;
+  corporatefile: string | null;
+  corporatefile20: string | null;
+  cpdatecreate: string | null;
+};
+type URow = {
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
+  userEmail: string | null;
+};
+
+export default async function AdminJuristicCheckPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
+  // Legacy review roles (CEO/Manager/QA/Accounting/ITDT) → Pacred equivalents.
+  await requireAdmin(["super", "manager", "accounting", "qa", "ops", "sales_admin"]);
+
   const sp = await searchParams;
   const admin = createAdminClient();
 
-  let q = admin.from("corporate")
-    .select(`
-      profile_id, tax_id, company_name, company_address, status,
-      verified_at, rejection_reason, created_at,
-      profile:profiles!profile_id ( member_code, first_name, last_name, phone, email )
-    `)
-    .order("created_at", { ascending: false })
-    .limit(200);
+  // Default to the pending queue (legacy `corporateStatus=1`); chips switch it.
+  const statusFilter = sp.status ? STATUS_PARAM[sp.status] : "1";
 
-  if (sp.status) q = q.eq("status", sp.status);
+  let q = admin
+    .from("tb_corporate")
+    .select("id, userid, corporatenumber, corporatename, corporateaddress, corporatestatus, corporatefile, corporatefile20, cpdatecreate")
+    .order("cpdatecreate", { ascending: false })
+    .limit(200);
+  if (statusFilter) q = q.eq("corporatestatus", statusFilter);
 
   const { data, error } = await q;
   if (error) {
-    console.error(`[corporate list] failed`, { code: error.code, message: error.message });
+    console.error(`[juristic-check tb_corporate list] failed`, { code: error.code, message: error.message });
+    throw new Error(`juristic-check: failed to load tb_corporate — ${error.code ?? "unknown"}: ${error.message}`);
   }
-  type ProfileShape = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null; email: string | null };
-  type RawRow = NonNullable<typeof data>[number] & { profile: ProfileShape | ProfileShape[] | null };
-  const rows = ((data ?? []) as RawRow[]).map((r) => ({
-    ...r,
-    profile_row: Array.isArray(r.profile) ? r.profile[0] ?? null : r.profile,
-  }));
+  const corps = (data ?? []) as unknown as CorpRow[];
 
-  // Fetch documents for all profiles in one query
-  const profileIds = rows.map((r) => r.profile_id);
-  const { data: docs } = profileIds.length > 0
-    ? await admin
-        .from("documents")
-        .select("profile_id, doc_type, storage_path, mime_type")
-        .in("profile_id", profileIds)
-    : { data: [] };
-
-  // Get signed URLs for each document
-  const docMap: Record<string, { label: string; url: string; mime: string }[]> = {};
-  if (docs && docs.length > 0) {
-    const DOC_LABELS: Record<string, string> = {
-      company_affidavit: "หนังสือรับรอง",
-      vat:               "ภ.พ.20",
-      national_id:       "บัตรประชาชน",
-    };
-    for (const doc of docs) {
-      const { data: signed } = await admin.storage
-        .from("member-docs")
-        .createSignedUrl(doc.storage_path, 3600);
-      if (!signed?.signedUrl) continue;
-      if (!docMap[doc.profile_id]) docMap[doc.profile_id] = [];
-      docMap[doc.profile_id].push({
-        label: DOC_LABELS[doc.doc_type] ?? doc.doc_type,
-        url:   signed.signedUrl,
-        mime:  doc.mime_type,
-      });
-    }
+  // Resolve customer identity (tb_users) for the listed corporate rows.
+  const userIds = [...new Set(corps.map((c) => c.userid))];
+  const userMap = new Map<string, URow>();
+  if (userIds.length > 0) {
+    const { data: users, error: usersErr } = await admin
+      .from("tb_users")
+      .select("userID, userName, userLastName, userTel, userEmail")
+      .in("userID", userIds);
+    if (usersErr) console.error(`[juristic-check tb_users] failed`, { code: usersErr.code, message: usersErr.message });
+    for (const u of (users ?? []) as unknown as URow[]) userMap.set(u.userID, u);
   }
 
-  const counts = rows.reduce<Record<string, number>>((acc, r) => { acc[r.status] = (acc[r.status] ?? 0) + 1; return acc; }, {});
+  // Resolve legacy doc files (cert + ภพ20) → signed URLs.
+  const rows = await Promise.all(
+    corps.map(async (c) => {
+      const docs: { label: string; url: string; mime: string }[] = [];
+      const certUrl = await resolveLegacyUrl(c.corporatefile, "file");
+      const vatUrl = await resolveLegacyUrl(c.corporatefile20, "file");
+      if (certUrl) docs.push({ label: "หนังสือรับรอง", url: certUrl, mime: guessMime(c.corporatefile) });
+      if (vatUrl) docs.push({ label: "ภ.พ.20", url: vatUrl, mime: guessMime(c.corporatefile20) });
+      return { corp: c, user: userMap.get(c.userid) ?? null, docs };
+    }),
+  );
 
-  const STATUS_LABEL: Record<string, string> = {
-    pending: "รอตรวจ", verified: "ยืนยันแล้ว", rejected: "ปฏิเสธ",
-  };
-  const STATUS_BADGE: Record<string, string> = {
-    pending:  "bg-amber-50 text-amber-700 border-amber-200",
-    verified: "bg-green-50 text-green-700 border-green-200",
-    rejected: "bg-red-50 text-red-700 border-red-200",
-  };
+  // Counts across ALL statuses for the chips (one cheap grouped read).
+  // Best-effort — a failure degrades the chip counts to 0, never blocks the page.
+  const { data: allStatus, error: countErr } = await admin
+    .from("tb_corporate")
+    .select("corporatestatus")
+    .in("corporatestatus", ["1", "2", "3"]);
+  if (countErr) console.error(`[juristic-check status counts] failed`, { code: countErr.code, message: countErr.message });
+  const counts = ((allStatus ?? []) as { corporatestatus: string | null }[]).reduce<Record<string, number>>(
+    (acc, r) => { const s = r.corporatestatus ?? ""; acc[s] = (acc[s] ?? 0) + 1; return acc; },
+    {},
+  );
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · EXTENSION</p>
-        <h1 className="mt-1 text-2xl font-bold">🏢 เช็คข้อมูลลูกค้านิติบุคคล</h1>
-        <p className="mt-1 text-sm text-muted">ตรวจหนังสือรับรอง + ภ.พ.20 ของลูกค้านิติบุคคล แล้วยืนยันสถานะ</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ลูกค้านิติบุคคล</p>
+        <h1 className="mt-1 text-2xl font-bold">🏢 ตรวจสอบลูกค้านิติบุคคล</h1>
+        <p className="mt-1 text-sm text-muted">ตรวจหนังสือรับรอง + ภ.พ.20 ของลูกค้านิติบุคคล แล้วยืนยัน / ปฏิเสธสถานะ</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Link href="/admin/juristic-check" className={`rounded-full border px-3 py-1 text-xs ${!sp.status ? "bg-primary-500 text-white border-primary-500" : "bg-white border-border"}`}>
-          ทั้งหมด ({rows.length})
-        </Link>
-        {Object.entries(STATUS_LABEL).map(([k, l]) => (
-          <Link key={k} href={`/admin/juristic-check?status=${k}`}
-            className={`rounded-full border px-3 py-1 text-xs ${sp.status === k ? "bg-primary-500 text-white border-primary-500" : "bg-white border-border"}`}>
-            {l} ({counts[k] ?? 0})
-          </Link>
-        ))}
+        {([
+          ["pending", "รอตรวจสอบ", "1"],
+          ["verified", "อนุมัติแล้ว", "2"],
+          ["rejected", "ไม่ผ่าน", "3"],
+        ] as const).map(([key, label, code]) => {
+          const active = (sp.status ?? "pending") === key;
+          return (
+            <Link
+              key={key}
+              href={`/admin/juristic-check?status=${key}`}
+              className={`rounded-full border px-3 py-1 text-xs ${active ? "bg-primary-500 text-white border-primary-500" : "bg-white border-border"}`}
+            >
+              {label} ({counts[code] ?? 0})
+            </Link>
+          );
+        })}
       </div>
 
       <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
         {rows.length === 0 ? (
           <p className="p-12 text-center text-sm text-muted">ไม่มีลูกค้านิติบุคคลที่ตรงตามเกณฑ์</p>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
-              <tr>
-                <th className="px-4 py-3">ลูกค้า</th>
-                <th className="px-4 py-3">เลขผู้เสียภาษี</th>
-                <th className="px-4 py-3">ชื่อบริษัท</th>
-                <th className="px-4 py-3">สถานะ</th>
-                <th className="px-4 py-3">วันที่ส่ง</th>
-                <th className="px-4 py-3 min-w-[200px]">เอกสาร + การจัดการ</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.profile_id} className="border-t border-border align-top">
-                  <td className="px-4 py-3 text-xs">
-                    <div className="font-mono">{r.profile_row?.member_code ?? "—"}</div>
-                    <div>{r.profile_row?.first_name} {r.profile_row?.last_name}</div>
-                    <div className="text-muted">{r.profile_row?.phone}</div>
-                    <Link href={`/admin/customers/${r.profile_id}`} className="text-primary-500 hover:underline text-[10px]">→ ดูโปรไฟล์</Link>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs">{r.tax_id}</td>
-                  <td className="px-4 py-3 text-xs">{r.company_name}</td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE[r.status]}`}>
-                      {STATUS_LABEL[r.status] ?? r.status}
-                    </span>
-                    {r.rejection_reason && <div className="text-[10px] text-red-700 mt-1">{r.rejection_reason}</div>}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
-                    {new Date(r.created_at).toLocaleDateString("th-TH")}
-                  </td>
-                  <td className="px-4 py-3">
-                    <JuristicActions
-                      profileId={r.profile_id}
-                      status={r.status}
-                      taxId={r.tax_id ?? ""}
-                      docUrls={docMap[r.profile_id] ?? []}
-                    />
-                  </td>
+          <div className="overflow-x-auto scrollbar-x-visible">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+                <tr>
+                  <th className="px-4 py-3">ลูกค้า</th>
+                  <th className="px-4 py-3">เลขผู้เสียภาษี</th>
+                  <th className="px-4 py-3">ชื่อบริษัท</th>
+                  <th className="px-4 py-3">สถานะ</th>
+                  <th className="px-4 py-3">วันที่ส่ง</th>
+                  <th className="px-4 py-3 min-w-[220px]">เอกสาร + การจัดการ</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map(({ corp: c, user: u, docs }) => {
+                  const status = c.corporatestatus ?? "1";
+                  return (
+                    <tr key={c.id} className="border-t border-border align-top">
+                      <td className="px-4 py-3 text-xs">
+                        <div className="font-mono">{c.userid}</div>
+                        <div>{u ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() : "—"}</div>
+                        <div className="text-muted">{u?.userTel ?? ""}</div>
+                        <Link href={`/admin/customers/${c.userid}`} className="text-primary-500 hover:underline text-[10px]">→ ดูโปรไฟล์</Link>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs">{c.corporatenumber}</td>
+                      <td className="px-4 py-3 text-xs">{c.corporatename}</td>
+                      <td className="px-4 py-3">
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE[status] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                          {STATUS_LABEL[status] ?? status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
+                        {c.cpdatecreate ? new Date(c.cpdatecreate).toLocaleDateString("th-TH") : "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <JuristicActions
+                          userid={c.userid}
+                          status={status}
+                          taxId={c.corporatenumber ?? ""}
+                          docUrls={docs}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </main>
   );
+}
+
+function guessMime(filename: string | null): string {
+  if (!filename) return "application/octet-stream";
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "pdf") return "application/pdf";
+  if (ext === "png") return "image/png";
+  if (["jpg", "jpeg"].includes(ext)) return "image/jpeg";
+  if (ext === "webp") return "image/webp";
+  return "application/octet-stream";
 }

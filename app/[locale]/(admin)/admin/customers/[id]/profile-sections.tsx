@@ -36,6 +36,7 @@ import {
   type CustomerStatCounts,
   type SalesAdminOption,
 } from "@/actions/admin/customer-profile";
+import { adminUpdateUserIdentity } from "@/actions/admin/customers";
 
 // ── shared types (mirror the legacy-view row shapes) ──────────────────────
 export type ProfileCorp = {
@@ -88,6 +89,166 @@ function ErrBox({ msg }: { msg: string }) {
 }
 function OkBox({ msg }: { msg: string }) {
   return <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">✓ {msg}</div>;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 0) Identity editor — edit tb_users core fields (P0-17 · adm-08 WF#4)
+// Faithful port of the legacy editUser modal + users.php `update` POST.
+// Fields (all roles): name · lastname · email · tel · sex · birthday ·
+//   lineId · facebook. Senior-only (super/manager/accounting/qa): rep + coID.
+// ──────────────────────────────────────────────────────────────────────────
+export type IdentityValues = {
+  userName: string;
+  userLastName: string;
+  userEmail: string;
+  userTel: string;
+  userSex: string;        // "male" | "female" | ""
+  userBirthday: string;   // YYYY-MM-DD | ""
+  userLineID: string;
+  userFacebook: string;
+  adminIDSale: string;
+  coID: string;
+};
+
+export function IdentityEditor({
+  userid,
+  initial,
+  isSenior,
+  admins,
+}: {
+  userid: string;
+  initial: IdentityValues;
+  isSenior: boolean;
+  admins: SalesAdminOption[];
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [editing, setEditing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [v, setV] = useState<IdentityValues>(initial);
+
+  function set<K extends keyof IdentityValues>(k: K, val: IdentityValues[K]) {
+    setV((prev) => ({ ...prev, [k]: val }));
+  }
+
+  function save() {
+    setError(null);
+    if (!v.userName.trim() || !v.userLastName.trim()) { setError("กรอกชื่อและนามสกุล"); return; }
+    if (!/^\d{9,10}$/.test(v.userTel.trim())) { setError("เบอร์โทร 9-10 หลัก (ไม่มีขีด)"); return; }
+    start(async () => {
+      const res = await adminUpdateUserIdentity({
+        userid,
+        userName:     v.userName.trim(),
+        userLastName: v.userLastName.trim(),
+        userEmail:    v.userEmail.trim(),
+        userTel:      v.userTel.trim(),
+        userSex:      (v.userSex as "male" | "female" | ""),
+        userBirthday: v.userBirthday.trim(),
+        userLineID:   v.userLineID.trim(),
+        userFacebook: v.userFacebook.trim(),
+        ...(isSenior ? { adminIDSale: v.adminIDSale.trim(), coID: v.coID.trim() } : {}),
+      });
+      if (!res.ok) { setError(res.error); return; }
+      setEditing(false);
+      router.refresh();
+    });
+  }
+
+  const inputCls =
+    "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
+
+  return (
+    <SectionShell
+      title="ข้อมูลส่วนตัวลูกค้า"
+      action={
+        !editing ? (
+          <button
+            type="button"
+            onClick={() => { setV(initial); setEditing(true); }}
+            className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs hover:bg-surface-alt"
+          >
+            <Pencil className="w-3.5 h-3.5" /> แก้ไขข้อมูลลูกค้า
+          </button>
+        ) : null
+      }
+    >
+      <div className="p-4 space-y-3">
+        {error && <ErrBox msg={error} />}
+        {!editing ? (
+          <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+            <IdField label="ชื่อจริง" value={initial.userName || "—"} />
+            <IdField label="นามสกุล" value={initial.userLastName || "—"} />
+            <IdField label="อีเมล" value={initial.userEmail || "—"} />
+            <IdField label="โทรศัพท์" value={initial.userTel || "—"} />
+            <IdField label="เพศ" value={initial.userSex === "male" ? "ชาย" : initial.userSex === "female" ? "หญิง" : "—"} />
+            <IdField label="วันเกิด" value={initial.userBirthday || "—"} />
+            <IdField label="LINE ID" value={initial.userLineID || "—"} />
+            <IdField label="Facebook" value={initial.userFacebook || "—"} />
+          </dl>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Labeled label="ชื่อจริง *"><input className={inputCls} value={v.userName} onChange={(e) => set("userName", e.target.value)} maxLength={200} /></Labeled>
+            <Labeled label="นามสกุล *"><input className={inputCls} value={v.userLastName} onChange={(e) => set("userLastName", e.target.value)} maxLength={200} /></Labeled>
+            <Labeled label="อีเมล"><input className={inputCls} value={v.userEmail} onChange={(e) => set("userEmail", e.target.value)} type="email" maxLength={100} placeholder="(เว้นว่างได้)" /></Labeled>
+            <Labeled label="โทรศัพท์ *"><input className={inputCls} value={v.userTel} onChange={(e) => set("userTel", e.target.value.replace(/\D/g, "").slice(0, 10))} inputMode="numeric" placeholder="0812345678" /></Labeled>
+            <Labeled label="เพศ">
+              <select className={inputCls} value={v.userSex} onChange={(e) => set("userSex", e.target.value)}>
+                <option value="">— ไม่ระบุ —</option>
+                <option value="male">ชาย</option>
+                <option value="female">หญิง</option>
+              </select>
+            </Labeled>
+            <Labeled label="วันเกิด"><input className={inputCls} value={v.userBirthday} onChange={(e) => set("userBirthday", e.target.value)} type="date" /></Labeled>
+            <Labeled label="LINE ID"><input className={inputCls} value={v.userLineID} onChange={(e) => set("userLineID", e.target.value)} maxLength={50} /></Labeled>
+            <Labeled label="Facebook"><input className={inputCls} value={v.userFacebook} onChange={(e) => set("userFacebook", e.target.value)} maxLength={255} /></Labeled>
+
+            {isSenior && (
+              <>
+                <Labeled label="เซลล์ผู้ดูแล (adminIDSale)">
+                  <select className={inputCls} value={v.adminIDSale} onChange={(e) => set("adminIDSale", e.target.value)}>
+                    <option value="">— ไม่กำหนด —</option>
+                    {admins.map((a) => (
+                      <option key={a.adminID} value={a.adminID}>{a.name} ({a.adminID})</option>
+                    ))}
+                  </select>
+                </Labeled>
+                <Labeled label="กลุ่มลูกค้า (coID)"><input className={inputCls} value={v.coID} onChange={(e) => set("coID", e.target.value)} maxLength={10} placeholder="PCS" /></Labeled>
+              </>
+            )}
+
+            <div className="sm:col-span-2 flex gap-2 pt-1">
+              <Button type="button" onClick={save} disabled={pending}>
+                <Save className="w-4 h-4 mr-1" /> {pending ? "กำลังบันทึก…" : "บันทึก"}
+              </Button>
+              <button type="button" onClick={() => { setEditing(false); setError(null); }} className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-surface-alt">
+                ยกเลิก
+              </button>
+            </div>
+          </div>
+        )}
+        {isSenior ? null : (
+          <p className="text-[11px] text-muted">การเปลี่ยนเซลล์ผู้ดูแล + กลุ่มลูกค้า ทำได้เฉพาะระดับผู้จัดการ/บัญชี/QA</p>
+        )}
+      </div>
+    </SectionShell>
+  );
+}
+
+function IdField({ label, value }: { label: string; value: string }) {
+  return (
+    <>
+      <dt className="text-muted">{label}</dt>
+      <dd className="font-medium break-words">{value}</dd>
+    </>
+  );
+}
+function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block space-y-1 text-sm">
+      <span className="font-medium text-xs text-muted">{label}</span>
+      {children}
+    </label>
+  );
 }
 
 // ──────────────────────────────────────────────────────────────────────────

@@ -300,6 +300,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
         if (!member) continue;
         juristicByMember.set(member, {
           profileId: c.profile_id,
+          userid: member, // member_code === legacy tb_users.userID (P0-18 actions key on this)
           taxId: c.tax_id ?? "",
           companyName: c.company_name ?? "",
           companyAddress: c.company_address ?? "",
@@ -351,6 +352,8 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
       const prof = Array.isArray(c.profile) ? c.profile[0] : c.profile;
       pendingJuristic.push({
         profileId: c.profile_id,
+        // member_code === legacy tb_users.userID (P0-18 actions key on this).
+        userid: prof?.member_code ?? "",
         taxId: c.tax_id ?? "",
         companyName: c.company_name ?? "",
         companyAddress: c.company_address ?? "",

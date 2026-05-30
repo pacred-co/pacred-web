@@ -15,13 +15,13 @@ const ERROR_LABEL: Record<string, string> = {
 };
 
 export function ConvertToJuristicForm({
-  profileId,
+  userid,
   prefilledTaxId,
   prefilledCompanyName,
   prefilledCompanyAddress,
   hasExistingDraft,
 }: {
-  profileId:                string;
+  userid:                   string;
   prefilledTaxId:           string;
   prefilledCompanyName:     string;
   prefilledCompanyAddress:  string;
@@ -51,7 +51,7 @@ export function ConvertToJuristicForm({
 
     startTransition(async () => {
       const res = await adminConvertToJuristic({
-        profile_id:      profileId,
+        userid:          userid,
         tax_id:          taxId.trim(),
         company_name:    coName.trim(),
         company_address: coAddr.trim() || undefined,
@@ -74,7 +74,7 @@ export function ConvertToJuristicForm({
           ลูกค้าจะได้รับ notification ทันที — ใบเสร็จและใบกำกับภาษีจะออกในชื่อบริษัทตั้งแต่บัดนี้
         </p>
         <div className="flex justify-center gap-2 pt-2">
-          <Button type="button" onClick={() => router.push(`/admin/customers/${profileId}`)}>
+          <Button type="button" onClick={() => router.push(`/admin/customers/${userid}`)}>
             ดูโปรไฟล์ลูกค้า
           </Button>
         </div>
@@ -151,8 +151,8 @@ export function ConvertToJuristicForm({
           className="mt-0.5"
         />
         <span>
-          <b>Mark verified</b> — บันทึก corporate.status = &quot;verified&quot; และบันทึก verifier เป็นแอดมินคนนี้
-          (ใช้กรณีเอกสารผ่านการตรวจสอบแล้ว — ปลดเฉพาะถ้าต้องการ pending review)
+          <b>อนุมัติเลย</b> — บันทึกสถานะนิติบุคคล = &quot;อนุมัติแล้ว&quot;
+          (ใช้กรณีเอกสารผ่านการตรวจสอบแล้ว — ปลดเครื่องหมายถ้าต้องการให้รอตรวจสอบก่อน)
         </span>
       </label>
 
@@ -164,8 +164,8 @@ export function ConvertToJuristicForm({
           className="mt-0.5"
         />
         <span>
-          ข้าพเจ้ายืนยันการอัพเกรด — ระบบจะ flip <code className="font-mono">account_type</code> +
-          upsert <code className="font-mono">corporate</code> + audit log + ส่ง notification ให้ลูกค้า
+          ข้าพเจ้ายืนยันการอัพเกรด — ระบบจะตั้ง <code className="font-mono">userCompany=1</code> +
+          บันทึกข้อมูลบริษัทลง <code className="font-mono">tb_corporate</code> + audit log + ส่ง notification ให้ลูกค้า
         </span>
       </label>
 
