@@ -41,13 +41,18 @@ const TRANSPORT_LABEL: Record<string, string> = { truck: "🚚 รถ", ship: "�
 export default async function ForwarderProfitReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string }>;
+  // P0-20 added: `fiveplus` opt-in mirrors legacy report-forwarder-profit.php
+  //   fStatus selector "5plus" option (fStatus > 5 — out-for-delivery +
+  //   delivered). Pass via `?5plus=1` (URL param uses `5plus` to match the
+  //   legacy form name).
+  searchParams: Promise<{ from?: string; to?: string; "5plus"?: string }>;
 }) {
   await requireAdmin(["super", "accounting"]);
 
   const sp = await searchParams;
   const range = resolveDateRange(sp);
-  const res = await getForwarderProfitReport(range);
+  const fiveplus = sp["5plus"] === "1" || sp["5plus"] === "true";
+  const res = await getForwarderProfitReport(range, { fiveplus });
 
   const rows = res.ok ? res.data : [];
   const totalCost   = rows.reduce((s, r) => s + r.cost_total, 0);
