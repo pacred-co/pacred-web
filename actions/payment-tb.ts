@@ -100,6 +100,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { yuanPaymentSchema, type YuanPaymentInput } from "@/lib/validators/payment";
 import { sendNotification } from "@/lib/notifications";
+import { notifyStaffGroup } from "@/lib/notifications/staff-group";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import {
@@ -381,6 +382,15 @@ export async function createYuanPaymentFromWallet(
     reference_type: "yuan_payment",
     reference_id:   String(paymentId),
   });
+
+  // P1-24: ping the staff LINE-OA group (faithful to legacy lineNotify on
+  // create). No-op until LINE_STAFF_GROUP_ID is set — see staff-group.ts.
+  void notifyStaffGroup(
+    `📩 มีรายการฝากโอน/ฝากชำระใหม่ #${paymentId}\n` +
+    `จากลูกค้า: ${memberCode}\n` +
+    `ยอด: ¥${d.yuan_amount.toFixed(2)} = ฿${thb_amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} · ชำระจากกระเป๋า\n` +
+    `สถานะ: รอดำเนินการ`,
+  );
 
   return {
     ok: true,

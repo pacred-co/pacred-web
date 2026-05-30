@@ -9,6 +9,7 @@ import {
   type YuanPaymentInput,
 } from "@/lib/validators/payment";
 import { sendNotification } from "@/lib/notifications";
+import { notifyStaffGroup } from "@/lib/notifications/staff-group";
 import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
@@ -431,6 +432,16 @@ export async function createYuanPayment(
     reference_type: "yuan_payment",
     reference_id:   String(created.id),
   });
+
+  // P1-24: ping the staff LINE-OA group so ops verify the new ฝากโอน promptly
+  // — faithful to legacy pcs-admin/payment.php → lineNotify(...) on create.
+  // No-op until LINE_STAFF_GROUP_ID is configured (see lib/notifications/staff-group.ts).
+  void notifyStaffGroup(
+    `📩 มีรายการฝากโอน/ฝากชำระใหม่ #${created.id}\n` +
+    `จากลูกค้า: ${memberCode}\n` +
+    `ยอด: ¥${d.yuan_amount.toFixed(2)} = ฿${thb_amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}\n` +
+    `สถานะ: รอดำเนินการ`,
+  );
 
   return { ok: true, data: { id: created.id, thb_amount } };
 }
