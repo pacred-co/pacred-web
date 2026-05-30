@@ -54,10 +54,12 @@ interface LegacyUserRow {
   userStatus: string | null;
 }
 
-/** Derive the rebuilt-era status string from the legacy flags. */
+/** Derive the rebuilt-era status string from the legacy flags.
+ *  P1-17 (ADR-0019 D-C transitional): migrated pending = '', native pending = '0'.
+ *  Until เดฟ P1-16 flips register-write '0'→'', BOTH count as incomplete. */
 function deriveStatus(u: LegacyUserRow): string {
   if (u.userStatus === "0") return "suspended";
-  if (u.userActive === "0") return "incomplete";
+  if (u.userActive === "0" || u.userActive === "") return "incomplete";
   return "active";
 }
 

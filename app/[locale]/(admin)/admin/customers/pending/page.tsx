@@ -45,7 +45,10 @@ export default async function AdminCustomersPendingPage() {
       "userID,userName,userLastName,userTel,userEmail,userCompany,userRegistered,userActive",
       { count: "exact" },
     )
-    .eq("userActive", "0")
+    // P1-17 (ADR-0019 D-C transitional): legacy migrated pending = userActive='',
+    // native pending = '0'. Until เดฟ P1-16 flips register-write '0'→'', accept
+    // BOTH so the queue catches every pending row in one filter.
+    .in("userActive", ["", "0"])
     .order("userRegistered", { ascending: false })
     .limit(500);
   if (customersErr) {

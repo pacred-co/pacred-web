@@ -124,12 +124,14 @@ export async function getSidebarCounts(): Promise<BadgeCounts> {
       // ── ลูกค้า ──────────────────────────────────────────────────
       // D1 Wave-2 (_SYNTHESIS §7.4): re-pointed to legacy tb_users.
       // สมาชิกนิติบุคคล รอตรวจ — usercompany='1' (นิติบุคคล) +
-      // useractive='0' (รอ approve) — legacy countComp.
+      // userActive pending — legacy countComp.
+      // P1-17 (ADR-0019 D-C transitional): legacy migrated pending = '',
+      // native pending = '0'. Until เดฟ P1-16 flips '0'→'', accept BOTH.
       admin.from("tb_users").select("ID", { count: "exact", head: true })
-        .eq("userCompany", "1").eq("userActive", "0"),
-      // ลูกค้ารอ approve — userActive='0' = accounts not yet activated.
+        .eq("userCompany", "1").in("userActive", ["", "0"]),
+      // ลูกค้ารอ approve — userActive pending (transitional: '' or '0').
       admin.from("tb_users").select("ID", { count: "exact", head: true })
-        .eq("userActive", "0"),
+        .in("userActive", ["", "0"]),
       // ── ข้อความติดต่อ (lead funnel) ─────────────────────────────
       admin.from("contact_messages").select("id", { count: "exact", head: true })
         .eq("status", "new"),

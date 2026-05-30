@@ -863,7 +863,12 @@ export async function deletePendingCustomer(
   return withAdmin(["super", "ops"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    // 1. Load + GUARD: must be a pending (userActive='0') registration.
+    // 1. Load + GUARD: must be a pending registration.
+    //    P1-17 (ADR-0019 D-C transitional): legacy migrated pending = '',
+    //    native pending = '0'. Until เดฟ P1-16 flips '0'→'', accept BOTH
+    //    so admins can delete migrated-pending old signups too. Approved
+    //    ('1') / suspended (userStatus='0') still refused — plus L890+
+    //    "has orders" guard defends against accidental real-customer wipe.
     const { data: before, error: beforeErr } = await admin
       .from("tb_users")
       .select("userID, userActive, userStatus, userTel, userEmail, userName, userLastName, userCompany")
@@ -878,7 +883,7 @@ export async function deletePendingCustomer(
       return { ok: false, error: beforeErr.message };
     }
     if (!before) return { ok: false, error: "not_found" };
-    if (before.userActive !== "0") {
+    if (before.userActive !== "0" && before.userActive !== "") {
       return { ok: false, error: "ลบได้เฉพาะสมาชิกที่ยังรอ approve เท่านั้น (อนุมัติ/ใช้งานแล้ว ลบถาวรไม่ได้)" };
     }
 

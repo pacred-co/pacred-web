@@ -46,15 +46,17 @@ const CUSTOMERS_MENUBAR: MenubarItem[] = [
 // migrated legacy table `tb_users` (~8,898 PCS customers) — NOT the
 // rebuilt-era `profiles` table (~3 rows). Legacy account state lives in
 // two varchar(1) flags:
-//   useractive  '1'=ใช้งานแล้ว (approved)   · '0'=รอ approve
-//   userstatus  '1'=ใช้งาน                  · '0'=ลบบัญชี (deleted)
-// → derived status: useractive='0' ⇒ incomplete · userstatus='0' ⇒
+//   userActive  '1'=ใช้งานแล้ว (sales-contacted) · ''=migrated pending · '0'=native pending
+//   userStatus  '1'=ใช้งาน                  · '0'=ลบบัญชี (deleted)
+// → derived status: userActive in ('','0') ⇒ incomplete · userStatus='0' ⇒
 //   suspended (deleted) · otherwise active.
+// P1-17 (ADR-0019 D-C transitional): legacy migrated pending = '',
+// native pending = '0'. Until เดฟ P1-16 flips '0'→'', treat BOTH as incomplete.
 type DerivedStatus = "active" | "incomplete" | "suspended";
 
 function deriveStatus(u: { userActive: string | null; userStatus: string | null }): DerivedStatus {
   if (u.userStatus === "0") return "suspended";
-  if (u.userActive === "0") return "incomplete";
+  if (u.userActive === "0" || u.userActive === "") return "incomplete";
   return "active";
 }
 
