@@ -147,14 +147,19 @@ async function resolveLegacyAdminId(): Promise<string> {
  *
  * Terminal/cancelled = explicit error so admin doesn't double-fire.
  */
-export function quoteGuard(status: string | null | undefined): { ok: true } | { ok: false; error: string } {
+// Pure helpers below — NOT exported. Next 16 `"use server"` files reject
+// any non-async-function value export (CLAUDE_TECHNICAL.md / build error
+// "Server Actions must be async functions"). The test file
+// (service-orders-shop-workflow.test.ts) keeps its own private copy of
+// each guard + the deadline helper for assertion-level unit tests.
+function quoteGuard(status: string | null | undefined): { ok: true } | { ok: false; error: string } {
   const s = (status ?? "").trim();
   if (s === "6") return { ok: false, error: "ออเดอร์ยกเลิกแล้ว — ตั้งราคาไม่ได้" };
   if (s === "5") return { ok: false, error: "ออเดอร์เสร็จสมบูรณ์แล้ว — ตั้งราคาไม่ได้" };
   if (s !== "1") return { ok: false, error: `สถานะ ${s || "?"} ไม่ใช่รอดำเนินการ — ตั้งราคาไม่ได้` };
   return { ok: true };
 }
-export function orderedGuard(status: string | null | undefined): { ok: true } | { ok: false; error: string } {
+function orderedGuard(status: string | null | undefined): { ok: true } | { ok: false; error: string } {
   const s = (status ?? "").trim();
   if (s === "6") return { ok: false, error: "ออเดอร์ยกเลิกแล้ว — บันทึกการสั่งซื้อไม่ได้" };
   if (s === "5") return { ok: false, error: "ออเดอร์เสร็จสมบูรณ์แล้ว — บันทึกซ้ำไม่ได้" };
@@ -162,7 +167,7 @@ export function orderedGuard(status: string | null | undefined): { ok: true } | 
   if (s !== "3") return { ok: false, error: `สถานะ ${s || "?"} ต้องเป็น "สั่งสินค้าแล้ว" (3) ก่อนจึงบันทึก tracking ได้` };
   return { ok: true };
 }
-export function spawnGuard(status: string | null | undefined): { ok: true } | { ok: false; error: string } {
+function spawnGuard(status: string | null | undefined): { ok: true } | { ok: false; error: string } {
   const s = (status ?? "").trim();
   if (s === "6") return { ok: false, error: "ออเดอร์ยกเลิกแล้ว — ส่งเข้าโกดังไม่ได้" };
   if (s === "5") return { ok: false, error: "ออเดอร์เสร็จสมบูรณ์แล้ว — ไม่ต้องส่งเข้าโกดังซ้ำ" };
@@ -174,7 +179,7 @@ export function spawnGuard(status: string | null | undefined): { ok: true } | { 
  * Quote-deadline default — NOW + 5 days (legacy shops.php update2 sets
  * hDatePayment = NOW + INTERVAL 5 DAY · "กรุณาชำระก่อนวันที่ X").
  */
-export function defaultQuoteDeadline(now: Date = new Date()): Date {
+function defaultQuoteDeadline(now: Date = new Date()): Date {
   const d = new Date(now);
   d.setDate(d.getDate() + 5);
   return d;
