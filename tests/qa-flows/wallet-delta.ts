@@ -59,6 +59,27 @@
  *          legacy action does NOT have; the real invariant is: reject of a
  *          STILL-PENDING row never touches the balance.)
  *
+ *   ── ADR-0018 NEW money paths shipped this sprint ────────────────────────
+ *   (d) customer WITHDRAW debit-HOLD → admin REJECT refund (the riskiest path)
+ *         SUBMIT  → INSERT tb_wallet_hs type='3' status='1' (pending) AND
+ *                   debit tb_wallet NOW (the hold) → wallettotal -= amount
+ *                   (contract of actions/wallet-tb.ts → submitWithdrawRequest)
+ *         REJECT  → status 1→3 AND refund tb_wallet += amount (balance-BUMP on
+ *                   the SAME row, NOT a type='5' row) → wallettotal restored
+ *                   (contract of actions/admin/wallet-hs.ts → adminRejectWithdraw)
+ *         Asserts BOTH legs: submit-debit (-amount) AND reject-refund (+amount)
+ *         net to ฿0 — a half-state here = real customer money lost.
+ *   (e) customer WITHDRAW debit-HOLD → admin APPROVE (pay out)
+ *         SUBMIT  → same hold as (d): wallettotal -= amount, status='1' type='3'
+ *         APPROVE → status 1→2, **NO further balance move** (the debit already
+ *                   happened at submit; approve just confirms the bank payout)
+ *                   (contract of actions/admin/wallet-hs.ts → adminApproveWithdraw)
+ *         → tb_wallet.wallettotal STAYS down by -amount (the money really left).
+ *   (f) customer YUAN wallet-paid DEBIT (P0-2)
+ *         → INSERT tb_wallet_hs type='6' status='2' AND debit tb_wallet
+ *           -= payTHB at submit → wallettotal -= amount
+ *           (contract of actions/payment-tb.ts → createYuanPaymentFromWallet)
+ *
  * WHY WE RE-IMPLEMENT THE ACTION BODY INSTEAD OF awaiting THE ACTION
  * -----------------------------------------------------------------
  * Every admin wallet action is wrapped in withAdmin() → requireAdmin() →
@@ -112,6 +133,32 @@ import type {
   adminMarkServiceOrderPaidTb,
   AdminMarkServiceOrderPaidTbInput,
 } from "@/actions/admin/service-orders-tb";
+// ── ADR-0018 NEW money paths shipped this sprint (the steps added below) ──
+//   Customer DEBIT-on-submit (D-2 rule 1):
+//     · submitWithdrawRequest (wallet-tb.ts) — withdraw = debit-HOLD: insert
+//       tb_wallet_hs type='3' status='1' AND decrement tb_wallet NOW.
+//     · createYuanPaymentFromWallet (payment-tb.ts · P0-2) — yuan-from-wallet:
+//       insert tb_wallet_hs type='6' status='2' AND decrement tb_wallet NOW.
+//   Admin terminal (D-2 rule 3):
+//     · adminApproveWithdraw — status '1'→'2', NO balance move (paid out;
+//       debit already happened at submit).
+//     · adminRejectWithdraw  — status '1'→'3' AND refund (tb_wallet += amount,
+//       a balance-bump on the SAME row — NOT a new type='5' row · L1736).
+//
+// NOTE the task brief said "createWithdraw"; the FAITHFUL action (the one that
+// writes tb_wallet, per ADR-0018 D-3 #4) is submitWithdrawRequest in
+// actions/wallet-tb.ts. actions/wallet.ts::createWithdraw is the DEAD rebuilt
+// twin (writes wallet_transactions) — we pin the faithful one.
+import type { submitWithdrawRequest } from "@/actions/wallet-tb";
+import type { WithdrawInput } from "@/lib/validators/wallet";
+import type {
+  adminApproveWithdraw,
+  adminRejectWithdraw,
+  AdminApproveWithdrawInput,
+  AdminRejectWithdrawInput,
+} from "@/actions/admin/wallet-hs";
+import type { createYuanPaymentFromWallet } from "@/actions/payment-tb";
+import type { YuanPaymentInput } from "@/lib/validators/payment";
 
 // ────────────────────────────────────────────────────────────────────────
 // COMPILE-TIME CONTRACT PIN — never executed; exists so a renamed/retyped
@@ -120,6 +167,9 @@ import type {
 // contract this gate protects → fix the gate AND re-confirm the money loop.
 // ────────────────────────────────────────────────────────────────────────
 type ActionResult<T> = { ok: true; data?: T } | { ok: false; error: string };
+// Some actions (customer-side) return the variant WITH a required `data`
+// (their success path always carries a payload) — pin those exactly.
+type ActionResultReq<T> = { ok: true; data: T; alreadyDone?: boolean } | { ok: false; error: string };
 const __actionContract = {
   approve: (undefined as unknown as typeof adminApproveWalletHs) satisfies (
     input: AdminApproveWalletHsInput,
@@ -133,6 +183,23 @@ const __actionContract = {
   markServiceOrderPaid: (undefined as unknown as typeof adminMarkServiceOrderPaidTb) satisfies (
     input: AdminMarkServiceOrderPaidTbInput,
   ) => Promise<ActionResult<unknown>>,
+  // ── ADR-0018 new money paths (steps d/e/f below) ──
+  // submitWithdrawRequest — customer withdraw debit-HOLD (wallet-tb.ts L112).
+  submitWithdraw: (undefined as unknown as typeof submitWithdrawRequest) satisfies (
+    input: WithdrawInput,
+  ) => Promise<ActionResultReq<{ id: number; amount: number; new_wallet_balance: number }>>,
+  // adminApproveWithdraw — status 1→2, no balance move (wallet-hs.ts L1519).
+  approveWithdraw: (undefined as unknown as typeof adminApproveWithdraw) satisfies (
+    input: AdminApproveWithdrawInput,
+  ) => Promise<ActionResult<unknown>>,
+  // adminRejectWithdraw — status 1→3 + refund balance-bump (wallet-hs.ts L1641).
+  rejectWithdraw: (undefined as unknown as typeof adminRejectWithdraw) satisfies (
+    input: AdminRejectWithdrawInput,
+  ) => Promise<ActionResult<unknown>>,
+  // createYuanPaymentFromWallet — yuan-from-wallet debit (payment-tb.ts L140).
+  yuanFromWallet: (undefined as unknown as typeof createYuanPaymentFromWallet) satisfies (
+    input: YuanPaymentInput,
+  ) => Promise<ActionResultReq<{ id: number; thb_amount: number; new_wallet_balance: number }>>,
 } as const;
 void __actionContract;
 
@@ -170,14 +237,25 @@ function section(name: string) {
 // ────────────────────────────────────────────────────────────────────────
 const TEST_USERID = "QAFLOWTEST";
 
-// Legacy column conventions (from supabase/migrations/0081_pcs_legacy_schema.sql):
+// Legacy column conventions (from supabase/migrations/0081_pcs_legacy_schema.sql
+// L6213/L6220 + ADR-0018 §D-1 type matrix):
 //   tb_wallet_hs.status  '1'=pending '2'=approved '3'=rejected
-//   tb_wallet_hs.type    '1'/'2'=credit (+)   '4'/'7'=debit (−)   '6'=yuan debit
-// The wallet-delta rule below is lifted verbatim from the real actions
-// (wallet-trans.ts L195-197 · tb-bulk.ts L148-150).
+//   tb_wallet_hs.type    '1'=เติมเงิน (+) · '2'=ฝากสั่งซื้อชำระจาก wallet (the
+//                        deposit-approve credit path maps '2'→+ in the bulk
+//                        action) · '3'=ถอนเงิน (−, customer withdraw) ·
+//                        '4'=สั่งจ่ายค่าคอม / forwarder-pay (−) ·
+//                        '6'=ฝากโอนชำระจาก wallet / yuan (−) · '7'=manual (−).
+// The credit branch ('1'/'2'→+amount) is lifted verbatim from the deposit-
+// approve actions (wallet-trans.ts L195-197 · tb-bulk.ts L148-150). The debit
+// branch covers the customer DEBIT-on-submit types ADR-0018 D-2 rule 1 added:
+// '3' (withdraw) + '6' (yuan-from-wallet), alongside the pre-existing '4'/'7'.
+// NOTE: the steps that mirror a specific action debit the balance EXPLICITLY
+// (-amount) to byte-match that action's body (which computes the move directly,
+// not via a generic map); this helper exists so the type→sign matrix is
+// documented in one place + the credit step keeps using it.
 function walletDeltaForRow(type: string, amount: number): number {
   return (type === "1" || type === "2") ? amount
-       : (type === "4" || type === "7") ? -amount
+       : (type === "3" || type === "4" || type === "6" || type === "7") ? -amount
        : 0;
 }
 
@@ -374,6 +452,165 @@ async function stepRejectLeavesBalanceUnchanged(admin: SupabaseClient, depositAm
 }
 
 // ════════════════════════════════════════════════════════════════════════
+// ADR-0018 NEW money paths shipped this sprint (D-2 rule 1 + rule 3 · P0-2).
+// Each mirrors its action's EXACT mutation (status flip + balance arithmetic),
+// then re-SELECTs the balance. THE RISKIEST is (d): a debit-HOLD on submit
+// that must NET TO ZERO once the reject refunds it — so it asserts BOTH legs.
+// ════════════════════════════════════════════════════════════════════════
+
+/**
+ * (d) WITHDRAW debit-HOLD → REJECT refund — the highest-risk money path.
+ *
+ *     SUBMIT (mirrors actions/wallet-tb.ts::submitWithdrawRequest L189-267):
+ *       INSERT tb_wallet_hs type='3' (ถอนเงิน) status='1' (pending — admin
+ *       must still confirm the bank payout) + DECREMENT tb_wallet NOW (the
+ *       "hold"; the money leaves at submit even though the row stays pending,
+ *       per ADR-0018 D-2 rule 1 STATUS sub-case + file docblock L50-58).
+ *       → assert balance DOWN by exactly -amount.
+ *
+ *     REJECT (mirrors actions/admin/wallet-hs.ts::adminRejectWithdraw
+ *       L1698-1779): flip status '1'→'3' + REFUND tb_wallet += amount (a
+ *       balance-BUMP on the SAME row — NOT a new type='5' row, per the
+ *       legacy code + ADR-0018 D-2 rule 3 correction).
+ *       → assert balance back to the ORIGINAL (refund restores the hold).
+ *
+ *     The whole path must NET TO ZERO: submit-debit (−amount) + reject-refund
+ *     (+amount) = 0. Assert both legs AND the net, plus the row ends status='3'.
+ */
+async function stepWithdrawDebitHoldThenReject(admin: SupabaseClient, amount: number) {
+  section("(d) customer WITHDRAW debit-hold (type='3' status='1') → admin REJECT refunds  →  net ฿0");
+  const before = await readBalance(admin);
+
+  // ── SUBMIT — debit-on-submit / hold (submitWithdrawRequest) ────────────
+  // 1. INSERT the pending withdraw ledger row (type='3' status='1').
+  const hsId = await insertWalletHs(admin, {
+    amount, status: "1", type: "3", typeservice: "1",
+    note: "qa-gate withdraw hold (throwaway)",
+  });
+
+  // 2. DECREMENT tb_wallet immediately — the hold (balance leaves at submit).
+  await applyWalletDelta(admin, walletDeltaForRow("3", amount)); // type='3' → -amount
+
+  // 3. RE-SELECT + assert the hold debited the balance DOWN by -amount.
+  const afterSubmit = await readBalance(admin);
+  assertNum("withdraw SUBMIT debits wallettotal by -amount (the hold)", afterSubmit, before - amount);
+
+  // 4. the held row is status='1' type='3' (pending withdraw, debit applied).
+  const { data: heldRow } = await admin
+    .from("tb_wallet_hs").select("status, type").eq("id", hsId)
+    .maybeSingle<{ status: string; type: string }>();
+  if (heldRow?.status === "1" && heldRow?.type === "3") ok("withdraw hold row is status='1' type='3'");
+  else bad("withdraw hold row shape", `expected status='1' type='3' · actual status='${heldRow?.status}' type='${heldRow?.type}'`);
+
+  // ── REJECT — flip 1→3 + REFUND balance-bump (adminRejectWithdraw) ───────
+  // 5. status '1' → '3' (re-guard on status='1' — the action's race-guard).
+  const { error: updErr } = await admin
+    .from("tb_wallet_hs")
+    .update({ status: "3", adminid: "qa-gate", adminidupdate: "qa-gate", note: "qa-gate reject withdraw" })
+    .eq("id", hsId)
+    .eq("status", "1");
+  if (updErr) { bad("reject withdraw: status 1→3 update", updErr.message); return; }
+
+  // 6. REFUND tb_wallet += amount (balance-bump on the SAME row · L1736).
+  await applyWalletDelta(admin, amount);
+
+  // 7. RE-SELECT + assert the refund RESTORED the balance to the original.
+  const afterReject = await readBalance(admin);
+  assertNum("withdraw REJECT refunds wallettotal back to the original (net ฿0)", afterReject, before);
+
+  // 8. the row ends status='3' (rejected).
+  const { data: rejRow } = await admin
+    .from("tb_wallet_hs").select("status").eq("id", hsId)
+    .maybeSingle<{ status: string }>();
+  if (rejRow?.status === "3") ok("tb_wallet_hs.status is '3' (withdraw rejected)");
+  else bad("tb_wallet_hs.status after withdraw reject", `expected '3' · actual '${rejRow?.status ?? "null"}'`);
+}
+
+/**
+ * (e) WITHDRAW debit-HOLD → APPROVE (pay out, NO further move).
+ *
+ *     SUBMIT (same as (d)): debit the hold + status='1' type='3'.
+ *       → assert balance DOWN by -amount.
+ *
+ *     APPROVE (mirrors actions/admin/wallet-hs.ts::adminApproveWithdraw
+ *       L1576-1585): flip status '1'→'2' + stamp admin · **NO tb_wallet
+ *       change** (the debit already happened at submit; this is "approve to
+ *       pay out", the bank-transfer is the side-effect — ADR-0018 D-2 rule 3 ¶3).
+ *       → assert balance STAYS down by -amount (the money really left) and the
+ *         row ends status='2'.
+ */
+async function stepWithdrawApprove(admin: SupabaseClient, amount: number) {
+  section("(e) customer WITHDRAW debit-hold → admin APPROVE pays out (status='2', NO further move)");
+  const before = await readBalance(admin);
+
+  // ── SUBMIT — debit-on-submit / hold (submitWithdrawRequest) ────────────
+  const hsId = await insertWalletHs(admin, {
+    amount, status: "1", type: "3", typeservice: "1",
+    note: "qa-gate withdraw hold→approve (throwaway)",
+  });
+  await applyWalletDelta(admin, walletDeltaForRow("3", amount)); // -amount hold
+  const afterSubmit = await readBalance(admin);
+  assertNum("withdraw SUBMIT debits wallettotal by -amount (the hold)", afterSubmit, before - amount);
+
+  // ── APPROVE — flip 1→2, NO balance move (adminApproveWithdraw) ──────────
+  // status '1' → '2' (re-guard on status='1'). NO tb_wallet write (rule 3 ¶3).
+  const { error: updErr } = await admin
+    .from("tb_wallet_hs")
+    .update({ status: "2", adminid: "qa-gate", adminidupdate: "qa-gate" })
+    .eq("id", hsId)
+    .eq("status", "1");
+  if (updErr) { bad("approve withdraw: status 1→2 update", updErr.message); return; }
+
+  // RE-SELECT — balance must STAY down by -amount (approve pays out, no move).
+  const afterApprove = await readBalance(admin);
+  assertNum("withdraw APPROVE leaves wallettotal down by -amount (money really left)", afterApprove, before - amount);
+
+  // the row ends status='2' type='3' (approved withdraw — paid out).
+  const { data: appRow } = await admin
+    .from("tb_wallet_hs").select("status, type").eq("id", hsId)
+    .maybeSingle<{ status: string; type: string }>();
+  if (appRow?.status === "2" && appRow?.type === "3") ok("tb_wallet_hs is status='2' type='3' (withdraw paid out)");
+  else bad("withdraw approve row shape", `expected status='2' type='3' · actual status='${appRow?.status}' type='${appRow?.type}'`);
+}
+
+/**
+ * (f) YUAN wallet-paid DEBIT (P0-2) — mirrors
+ *     actions/payment-tb.ts::createYuanPaymentFromWallet (L274-346).
+ *     Customer pays a ฝากโอนหยวน from their wallet:
+ *       INSERT tb_wallet_hs type='6' (ชำระเงินฝากโอน) status='2' (approved —
+ *       customer-initiated debit is auto-approved, the debit is real · L285-286)
+ *       + DECREMENT tb_wallet -= payTHB at submit (L322-346).
+ *     → assert balance DOWN by exactly -amount and the row is type='6' status='2'.
+ */
+async function stepYuanWalletDebit(admin: SupabaseClient, amount: number) {
+  section("(f) customer YUAN wallet-paid debit (type='6' status='2')  →  wallettotal -= amount");
+  const before = await readBalance(admin);
+
+  // 1. INSERT the yuan-from-wallet debit row (type='6' status='2' · approved).
+  //    typeservice='3' (ฝากโอน) mirrors the action (payment-tb.ts L288).
+  const hsId = await insertWalletHs(admin, {
+    amount, status: "2", type: "6", typeservice: "3",
+    reforder: `QAPAY-${Date.now()}`,
+    note: "qa-gate yuan-from-wallet (throwaway)",
+  });
+
+  // 2. DECREMENT wallettotal by the THB amount (the action computes -payTHB
+  //    directly; type='6' → -amount via walletDeltaForRow documents that sign).
+  await applyWalletDelta(admin, walletDeltaForRow("6", amount)); // -amount
+
+  // 3. RE-SELECT + assert the debit reduced the balance DOWN by -amount.
+  const after = await readBalance(admin);
+  assertNum("yuan wallet-paid debit reduces wallettotal by -amount", after, before - amount);
+
+  // 4. the row shape is type='6' status='2' (settled yuan debit, not pending).
+  const { data: hsRow } = await admin
+    .from("tb_wallet_hs").select("status, type").eq("id", hsId)
+    .maybeSingle<{ status: string; type: string }>();
+  if (hsRow?.status === "2" && hsRow?.type === "6") ok("yuan debit ledger row is status='2' type='6'");
+  else bad("yuan debit row shape", `expected status='2' type='6' · actual status='${hsRow?.status}' type='${hsRow?.type}'`);
+}
+
+// ════════════════════════════════════════════════════════════════════════
 // Seed + teardown — strictly scoped to TEST_USERID
 // ════════════════════════════════════════════════════════════════════════
 
@@ -473,20 +710,33 @@ async function main() {
     section("🌱 seed");
     await seed(admin);
 
-    // Run the three contract steps in sequence on the same sentinel wallet.
-    const DEPOSIT = 1500.0;
-    const DEBIT = 500.25;
-    const REJECT_AMT = 999.99;
+    // Run every contract step in sequence on the same sentinel wallet.
+    // Amounts are distinct so a mis-applied delta can't accidentally cancel.
+    const DEPOSIT = 1500.0;       // (a) approve credit
+    const DEBIT = 500.25;         // (b) shop-order wallet debit (settled)
+    const REJECT_AMT = 999.99;    // (c) reject pending deposit (no move)
+    const WITHDRAW_REJ = 300.5;   // (d) withdraw hold→reject (nets ฿0)
+    const WITHDRAW_APP = 222.22;  // (e) withdraw hold→approve (stays debited)
+    const YUAN = 111.11;          // (f) yuan-from-wallet debit (settled)
 
-    await stepApproveCreditsBalance(admin, DEPOSIT);          // (a) +1500.00  → ฿1500.00
-    await stepDebitReducesBalance(admin, DEBIT);             // (b)  -500.25  → ฿ 999.75
-    await stepRejectLeavesBalanceUnchanged(admin, REJECT_AMT); // (c)  ±0      → ฿ 999.75
+    await stepApproveCreditsBalance(admin, DEPOSIT);            // (a) +1500.00  → ฿1500.00
+    await stepDebitReducesBalance(admin, DEBIT);               // (b)  -500.25  → ฿ 999.75
+    await stepRejectLeavesBalanceUnchanged(admin, REJECT_AMT);  // (c)  ±0       → ฿ 999.75
+    await stepWithdrawDebitHoldThenReject(admin, WITHDRAW_REJ); // (d) -300.50+300.50 → ฿ 999.75
+    await stepWithdrawApprove(admin, WITHDRAW_APP);             // (e)  -222.22  → ฿ 777.53
+    await stepYuanWalletDebit(admin, YUAN);                     // (f)  -111.11  → ฿ 666.42
 
-    // Final cross-check: balance equals the sum of approved credits minus
-    // settled debits (DEPOSIT − DEBIT) — the reject contributed nothing.
+    // Final cross-check: balance equals sum(approved credits) − sum(settled
+    // debits). Settled debits = shop (b) + withdraw-paid-out (e) + yuan (f).
+    // The reject (c) and the withdraw-hold-then-reject (d) each net to ZERO,
+    // so they MUST NOT appear in this sum — if either leaked, this assert reds.
     section("final invariant");
     const finalBal = await readBalance(admin);
-    assertNum("final wallettotal = sum(approved credits) − sum(settled debits)", finalBal, DEPOSIT - DEBIT);
+    assertNum(
+      "final wallettotal = approved credits − settled debits (rejected/refunded paths net ฿0)",
+      finalBal,
+      DEPOSIT - DEBIT - WITHDRAW_APP - YUAN,
+    );
   } catch (e) {
     bad("UNCAUGHT during gate run", e instanceof Error ? e.message : String(e));
   } finally {
@@ -502,7 +752,10 @@ async function main() {
     );
     process.exit(1);
   }
-  console.log("\n✅ GATE GREEN — tb_wallet.wallettotal moves correctly on approve / debit / reject.");
+  console.log(
+    "\n✅ GATE GREEN — tb_wallet.wallettotal moves correctly on: deposit-approve / " +
+    "shop-debit / deposit-reject / withdraw-hold→reject-refund / withdraw-hold→approve / yuan-debit.",
+  );
   process.exit(0);
 }
 
