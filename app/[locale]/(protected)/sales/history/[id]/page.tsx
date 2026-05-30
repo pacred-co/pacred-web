@@ -242,219 +242,217 @@ export default async function SalesHistoryDetailPage({
 
   return (
     <div className="pcs-legacy">
-      {/* Legacy PCS theme CSS — static public/ asset via a plain <link>. */}
+      {/* Legacy PCS theme CSS — kept for layout-scope globals; the
+          visible surface below is Tailwind (2026-05-30 rebuild · ปอน). */}
       <link rel="stylesheet" href="/legacy/pcs/report-user-sales.css" />
 
       {/* report-user-sales-history.php detail <title> L303 (fidelity-
           record comment):  ประวัติจ่ายเงินลูกค้าตัวแทน #{ID} | Pacred Admin */}
 
-      {/* BEGIN: Content — report-user-sales-history.php L316 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          {/* L320-332 — breadcrumb header */}
-          <div className="content-header row">
-            <div className="content-header-left col-12">
-              <div className="row breadcrumbs-top">
-                <div className="breadcrumb-wrapper col-12">
-                  <ol className="breadcrumb ">
-                    <li className="breadcrumb-item">
-                      <Link href="/dashboard">
-                        <span className="menu-home">หน้าแรก</span>
-                      </Link>
-                    </li>
-                    <li className="breadcrumb-item">
-                      <Link href="/sales/history">
-                        ประวัติจ่ายเงินลูกค้าตัวแทน
-                      </Link>
-                    </li>
-                    <li className="breadcrumb-item active">#{rowMain.id}</li>
-                  </ol>
+      <div className="pcs-content-pad w-full px-3 md:px-6 py-3 md:py-6">
+        {/* L320-332 — breadcrumb */}
+        <nav className="mb-3 flex flex-wrap items-center gap-1.5 text-xs md:text-sm text-muted">
+          <Link href="/dashboard" className="hover:text-foreground">หน้าแรก</Link>
+          <span aria-hidden>/</span>
+          <Link href="/sales/history" className="hover:text-foreground">
+            ประวัติจ่ายเงินลูกค้าตัวแทน
+          </Link>
+          <span aria-hidden>/</span>
+          <span className="font-medium text-foreground">#{rowMain.id}</span>
+        </nav>
+
+        {/* L338-398 — card #1: the payout summary */}
+        <section className="bg-white dark:bg-surface border border-border rounded-2xl shadow-sm overflow-hidden mb-3 md:mb-4">
+          <div className="px-4 py-4 md:px-6 md:py-5">
+            {/* L344-393 — branch on status: 2 → "รอดำเนินการ" + the
+                card-file link · else → "สำเร็จ" + the slip image. The
+                bank-info block is identical in both. file/slip hrefs +
+                image-popup hook preserved verbatim. */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <dl className="space-y-1.5 text-sm">
+                <div className="flex flex-wrap gap-x-1">
+                  <dt className="text-muted">ชื่อธนาคาร :</dt>
+                  <dd className="font-medium text-foreground">{rowMain.name_blank}</dd>
                 </div>
+                <div className="flex flex-wrap gap-x-1">
+                  <dt className="text-muted">เลขที่บัญชี :</dt>
+                  <dd className="font-mono font-medium text-foreground">{rowMain.no_blank}</dd>
+                </div>
+                <div className="flex flex-wrap gap-x-1">
+                  <dt className="text-muted">ชื่อบัญชี :</dt>
+                  <dd className="font-medium text-foreground">{rowMain.name_account}</dd>
+                </div>
+                <div className="flex flex-wrap items-baseline gap-x-1">
+                  <dt className="text-muted">จำนวนเงิน :</dt>
+                  <dd>
+                    <span className="font-mono text-lg font-bold tabular-nums text-red-600">
+                      {numberFormat(amount, 2)}
+                    </span>{" "}
+                    <span className="text-xs text-muted">บาท</span>
+                  </dd>
+                </div>
+              </dl>
+              <div className="text-sm">
+                {rowMain.status === "2" ? (
+                  <>
+                    <p className="flex items-center gap-2">
+                      <span className="text-muted">สถานะ :</span>
+                      <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700">
+                        รอดำเนินการ
+                      </span>
+                    </p>
+                    <p className="mt-2">
+                      <span className="text-muted">สำเนาบัตร : </span>
+                      <a
+                        href={`${STORAGE}/file/${rowMain.file ?? ""}`}
+                        className="font-medium text-sky-600 hover:underline"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        ดูไฟล์
+                      </a>
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="flex items-center gap-2">
+                      <span className="text-muted">สถานะ :</span>
+                      <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
+                        สำเร็จ
+                      </span>
+                    </p>
+                    <a
+                      className="image-popup-vertical-fit el-link mt-2 inline-block"
+                      href={`${STORAGE}/slip/${rowMain.imagesslip ?? ""}`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        width={120}
+                        src={`${STORAGE}/slip/${rowMain.imagesslip ?? ""}`}
+                        alt=""
+                        className="rounded-lg border border-border"
+                      />
+                    </a>
+                  </>
+                )}
               </div>
             </div>
           </div>
-          {/* L333 — content-body */}
-          <div className="content-body pr110">
-            <section>
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  {/* L338-398 — card #1: the payout summary */}
-                  <div className="card">
-                    <div className="card-content">
-                      <div className="card-body">
-                        <div className="row">
-                          <div className="col-md-6 offset-md-3">
-                            {/* L344-393 — branch on status: 2 →
-                                "รอดำเนินการ" + card-file link · else →
-                                "สำเร็จ" + the slip image. The left
-                                bank-info column is identical in both. */}
-                            <div className="row">
-                              <div className="col-md-6">
-                                <div className="">
-                                  <label
-                                    className="form-control-label"
-                                    htmlFor="name_blank"
-                                  >
-                                    ชื่อธนาคาร : {rowMain.name_blank}
-                                  </label>
-                                </div>
-                                <div className="">
-                                  <label
-                                    className="form-control-label"
-                                    htmlFor="no_blank"
-                                  >
-                                    เลขที่บัญชี : {rowMain.no_blank}{" "}
-                                  </label>
-                                </div>
-                                <div className="">
-                                  <label
-                                    className="form-control-label"
-                                    htmlFor="name_account"
-                                  >
-                                    ชื่อบัญชี : {rowMain.name_account}
-                                  </label>
-                                </div>
-                                <div className="">
-                                  <label className="form-control-label" htmlFor="">
-                                    จำนวนเงิน :{" "}
-                                    <span className="text-danger">
-                                      {numberFormat(amount, 2)}
-                                    </span>{" "}
-                                    บาท
-                                  </label>
-                                </div>
-                              </div>
-                              <div className="col-md-6">
-                                {rowMain.status === "2" ? (
-                                  <>
-                                    สถานะ :{" "}
-                                    <span className="font-12 badge badge-warning badge-pill">
-                                      รอดำเนินการ
-                                    </span>
-                                    <br />
-                                    สำเนาบัตร :{" "}
-                                    <a
-                                      href={`${STORAGE}/file/${rowMain.file ?? ""}`}
-                                      className="text-info"
-                                      target="_blank"
-                                      rel="noreferrer"
-                                    >
-                                      ดูไฟล์
-                                    </a>
-                                  </>
-                                ) : (
-                                  <>
-                                    สถานะ :{" "}
-                                    <span className="font-12 badge badge-success badge-pill">
-                                      สำเร็จ
-                                    </span>
-                                    <a
-                                      className="image-popup-vertical-fit el-link"
-                                      href={`${STORAGE}/slip/${rowMain.imagesslip ?? ""}`}
-                                    >
-                                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img
-                                        width={120}
-                                        src={`${STORAGE}/slip/${rowMain.imagesslip ?? ""}`}
-                                        alt=""
-                                      />
-                                    </a>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+        </section>
 
-                  {/* L400-491 — card #2: the items in this payout */}
-                  <div className="card">
-                    <div className="card-content">
-                      <div className="card-body">
-                        <div className="row">
-                          <div className="content-header-left col-md-6 col-12">
-                            <div className="text-center text-md-left">
-                              <h3 className="text-center text-md-left">
-                                <span className="font-30 ft-users"></span>{" "}
-                                ประวัติจ่ายเงินลูกค้าตัวแทน #{rowMain.id}
-                              </h3>
-                            </div>
+        {/* L400-491 — card #2: the items in this payout */}
+        <section className="bg-white dark:bg-surface border border-border rounded-2xl shadow-sm overflow-hidden">
+          <div className="border-b border-border px-4 py-3 md:px-6 md:py-4">
+            <h3 className="flex items-center gap-2 text-base md:text-xl font-bold text-foreground">
+              <span className="font-30 ft-users" aria-hidden></span>
+              ประวัติจ่ายเงินลูกค้าตัวแทน #{rowMain.id}
+            </h3>
+          </div>
+          <div className="px-3 py-3 md:px-5 md:py-4">
+            {items.length === 0 ? (
+              <p className="py-12 text-center text-sm text-muted">ไม่มีรายการ</p>
+            ) : (
+              <>
+                {/* ── Mobile: stacked cards (md:hidden) ── */}
+                <div className="space-y-3 md:hidden">
+                  {items.map((row, i) => (
+                    <div
+                      key={row.usID}
+                      className="rounded-xl border border-border bg-white dark:bg-surface p-3 shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="min-w-0 break-all font-mono text-sm font-semibold text-foreground">
+                          <span className="mr-1 text-muted">#{i + 1}</span>
+                          {row.fTrackingCHN || `#${row.usID}`}
+                        </span>
+                        <span className="shrink-0">{fStatusBadge(row.fStatus)}</span>
+                      </div>
+                      <p className="mt-1 font-mono text-xs text-muted">{row.userID}</p>
+                      <div className="mt-2.5 grid grid-cols-3 gap-1 border-t border-dashed border-border pt-2 text-center">
+                        <div>
+                          <div className="text-[10px] text-muted">CBM</div>
+                          <div className="text-sm font-semibold tabular-nums font-mono">
+                            {numberFormat(row.fVolume, 5)}
                           </div>
-                          <div className="content-header-right col-md-6 col-12"></div>
                         </div>
-                        <div className="row">
-                          <div className="col-12">
-                            <div className="table-responsive pt-1">
-                              <table
-                                id="myTable"
-                                className="table display table-bordered table-striped dataTable no-footer dtr-inline"
-                              >
-                                <thead>
-                                  <tr className="text-center">
-                                    <th>ลำดับ</th>
-                                    <th>วันที่สำเร็จ</th>
-                                    <th>รหัสสมาชิก</th>
-                                    <th>เลขแทรคกิ้ง</th>
-                                    <th>ปริมาตร(CBM)</th>
-                                    <th>น้ำหนัก(Kg)</th>
-                                    <th>
-                                      ค่าฝากนำ
-                                      <br />
-                                      เข้าจีน
-                                    </th>
-                                    <th>สถานะ</th>
-                                    <th>
-                                      สถานะเบิก
-                                      <br />
-                                      เงินส่วนแบ่ง
-                                    </th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {items.map((row, i) => (
-                                    <tr key={row.usID}>
-                                      <td className="text-center">{i + 1}</td>
-                                      <td className="text-center font-12">
-                                        {row.dateLabel} {row.timeLabel} น.
-                                      </td>
-                                      <td>{row.userID}</td>
-                                      <td>{row.fTrackingCHN}</td>
-                                      <td className="text-right">
-                                        {numberFormat(row.fVolume, 5)}{" "}
-                                      </td>
-                                      <td className="text-right">
-                                        {numberFormat(row.fWeight, 2)}{" "}
-                                      </td>
-                                      <td className="text-right">
-                                        {numberFormat(row.fTotalPrice, 2)}{" "}
-                                      </td>
-                                      <td className="text-center">
-                                        {fStatusBadge(row.fStatus)}
-                                      </td>
-                                      <td className="text-center">
-                                        {nameStatusUserPay(row.usStatus)}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
+                        <div>
+                          <div className="text-[10px] text-muted">Kg</div>
+                          <div className="text-sm font-semibold tabular-nums font-mono">
+                            {numberFormat(row.fWeight, 2)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-muted">ค่าฝากนำเข้าจีน</div>
+                          <div className="text-sm font-bold tabular-nums font-mono text-red-600">
+                            {numberFormat(row.fTotalPrice, 2)}
                           </div>
                         </div>
                       </div>
+                      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-dashed border-border pt-2">
+                        <span className="text-[11px] text-muted">
+                          {row.dateLabel} {row.timeLabel} น.
+                        </span>
+                        <span>{nameStatusUserPay(row.usStatus)}</span>
+                      </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              </div>
-            </section>
-            {/* Basic Carousel end */}
+
+                {/* ── Desktop: table (#myTable kept for DataTables JS;
+                    plain div wrapper isolates Tailwind from the legacy
+                    `.dataTable` cascade) ── */}
+                <div className="hidden md:block overflow-x-auto rounded-xl border border-border">
+                  <table id="myTable" className="dataTable w-full text-sm">
+                    <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+                      <tr>
+                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">ลำดับ</th>
+                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">วันที่สำเร็จ</th>
+                        <th className="px-3 py-3 font-medium whitespace-nowrap">รหัสสมาชิก</th>
+                        <th className="px-3 py-3 font-medium whitespace-nowrap">เลขแทรคกิ้ง</th>
+                        <th className="px-3 py-3 font-medium text-right whitespace-nowrap">ปริมาตร(CBM)</th>
+                        <th className="px-3 py-3 font-medium text-right whitespace-nowrap">น้ำหนัก(Kg)</th>
+                        <th className="px-3 py-3 font-medium text-right whitespace-nowrap">ค่าฝากนำเข้าจีน</th>
+                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">สถานะ</th>
+                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">สถานะเบิกเงินส่วนแบ่ง</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((row, i) => (
+                        <tr
+                          key={row.usID}
+                          className="border-t border-border hover:bg-surface-alt/30"
+                        >
+                          <td className="px-3 py-2.5 text-center text-xs text-muted">{i + 1}</td>
+                          <td className="px-3 py-2.5 text-center text-xs text-muted whitespace-nowrap">
+                            {row.dateLabel} {row.timeLabel} น.
+                          </td>
+                          <td className="px-3 py-2.5 font-mono text-xs text-foreground whitespace-nowrap">
+                            {row.userID}
+                          </td>
+                          <td className="px-3 py-2.5 font-mono text-xs text-foreground whitespace-nowrap">
+                            {row.fTrackingCHN}
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums font-mono text-foreground">
+                            {numberFormat(row.fVolume, 5)}
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums font-mono text-foreground">
+                            {numberFormat(row.fWeight, 2)}
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums font-mono font-semibold text-red-600">
+                            {numberFormat(row.fTotalPrice, 2)}
+                          </td>
+                          <td className="px-3 py-2.5 text-center">{fStatusBadge(row.fStatus)}</td>
+                          <td className="px-3 py-2.5 text-center">{nameStatusUserPay(row.usStatus)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
-        </div>
+        </section>
       </div>
-      {/* END: Content — report-user-sales-history.php L499 */}
     </div>
   );
 }

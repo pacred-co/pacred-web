@@ -278,287 +278,285 @@ export default async function SearchPage({
 
   return (
     <div className="pcs-legacy">
-      {/* Legacy PCS stylesheet — static public/ asset, plain <link>
-          so it bypasses the app's Tailwind/PostCSS pipeline. */}
+      {/* Legacy PCS stylesheet — kept (hook classes product-search /
+          pImages / pcs-tabs still referenced by legacy JS + CSS). The
+          chrome below is a Tailwind rebuild; the stylesheet only backs
+          the remaining hook classes. */}
       <link rel="stylesheet" href="/legacy/pcs/search.css" />
 
-      {/* BEGIN: Content — search.php L29 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          <div className="content-body pr110">
-            {/* search.php L212-257 — sticky search bar + provider tabs */}
-            <div className="card-content bg-white">
-              <div className="card-body pm05">
-                <div className="sticky-search">
-                  <div
-                    className="row pcs-d-m menubar-search pt-05"
-                    id="menubar-search"
+      {/* BEGIN: Content — search.php L29 (Tailwind rebuild · mobile-first).
+          Wrapped in `.pcs-content-pad` so the (protected) layout's desktop
+          padding (sidebar + FloatingTabs clearance) kicks in. */}
+      <div className="pcs-content-pad w-full px-3 md:px-6 py-3 md:py-6">
+        {/* search.php L212-257 — sticky search bar + provider tabs */}
+        <div className="bg-white dark:bg-surface border border-border rounded-2xl shadow-sm overflow-hidden">
+          <div className="p-3 md:p-4">
+            <div
+              className="menubar-search"
+              id="menubar-search"
+            >
+              <form
+                className="flex items-center gap-2"
+                method="GET"
+                action="/search"
+              >
+                <div className="relative flex-1 nav-search">
+                  <input
+                    type="text"
+                    name="url"
+                    defaultValue={getURL}
+                    className="product-search w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:ring-2 focus:ring-red-500/30 focus:border-red-500 outline-none"
+                    id="input-search"
+                    placeholder="พิมค้นหาสั่งซื้อสินค้า+วางลิ้งสินค้า1688 เถาเปา แปลภาษาไทยทันที"
+                  />
+                </div>
+                <button
+                  className="shrink-0 inline-flex items-center justify-center rounded-lg bg-red-600 hover:bg-red-700 text-white h-10 w-10 transition-colors"
+                  type="submit"
+                  aria-label="ค้นหา"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="feather feather-search"
                   >
-                    <div className="col-1">
-                      <div className="nav-icon">
-                        <i className="ft-chevron-left"></i>
-                      </div>
-                    </div>
-                    <div className="col-11">
-                      <form
-                        className="form-inline my-lg-0 justify-content-center"
-                        method="GET"
-                        action="/search"
-                      >
-                        <div className="w-100 nav-search">
-                          <input
-                            type="text"
-                            name="url"
-                            defaultValue={getURL}
-                            className="w-100 form-control product-search br-15"
-                            id="input-search"
-                            placeholder="พิมค้นหาสั่งซื้อสินค้า+วางลิ้งสินค้า1688 เถาเปา แปลภาษาไทยทันที"
-                          />
-                          <button className="btn btn-main" type="submit">
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              className="feather feather-search"
-                            >
-                              <circle cx="11" cy="11" r="8"></circle>
-                              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                            </svg>
-                          </button>
-                        </div>
-                      </form>
-                    </div>
-                    {/* Sprint-3 P2.1 — recent searches strip + a
-                        fire-and-forget logger that closes the legacy
-                        tb_history_key write that the SC port deferred.
-                        Both live behind G8 (actions/search.ts +
-                        migration 0102). */}
-                    <div className="col-12 px-0">
-                      <SearchRecents />
-                      {getURL ? (
-                        <SearchHistoryLogger
-                          query={getURL}
-                          source={dataRe.search ? "china-search.keyword" : "china-search.url"}
-                          resultCount={dataRe.search ? products.length : null}
-                        />
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-                <div className="row ptm-3">
-                  <div className="col-12 p-m-0">
-                    <h4>
-                      <b>
-                        ค้นหา : <span className="text-color">{getURL}</span>
-                      </b>
-                      ตัวเลือกเพิ่มเติม
-                      <select name="order" id="order">
-                        <option className="order-new" value="new">
-                          สินค้ามาใหม่
-                        </option>
-                        <option className="order-pop" value="pop">
-                          กำลังเป็นที่นิยม
-                        </option>
-                        <option className="order-priceLow" value="priceLow">
-                          ราคาจากต่ำไปสูง
-                        </option>
-                        <option
-                          className="order-priceHeight"
-                          value="priceHeight"
-                        >
-                          ราคาจากสูงไปต่ำ
-                        </option>
-                      </select>
-                    </h4>
-                  </div>
-                  <div className="col-12 p-m-0">
-                    <ul className="nav nav-tabs nav-underline pcs-tabs">
-                      <li className="taobao nav-item tab-sm-center">
-                        <a
-                          className="nav-link"
-                          href={`?url=${encodeURIComponent(getURL)}&provider=taobao`}
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            className="img-fluid"
-                            src="/legacy/pcs/shops/tmall-taobao-logo.png"
-                            alt=""
-                          />
-                        </a>
-                      </li>
-                      <li className="p1688 nav-item tab-sm-center">
-                        <a
-                          className="nav-link"
-                          href={`?url=${encodeURIComponent(getURL)}&provider=1688`}
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            className="img-fluid"
-                            src="/legacy/pcs/shops/1688-logo-3.png"
-                            alt=""
-                          />
-                        </a>
-                      </li>
-                      <li className="pcsshop nav-item tab-sm-center">
-                        <a
-                          className="nav-link"
-                          href={`?url=${encodeURIComponent(getURL)}&provider=pcs`}
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            className="img-fluid"
-                            src="/legacy/pcs/shops/pcs-logo.png"
-                            alt=""
-                          />
-                        </a>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                </button>
+              </form>
+              {/* Sprint-3 P2.1 — recent searches strip + a
+                  fire-and-forget logger that closes the legacy
+                  tb_history_key write that the SC port deferred.
+                  Both live behind G8 (actions/search.ts +
+                  migration 0102). */}
+              <div className="mt-2">
+                <SearchRecents />
+                {getURL ? (
+                  <SearchHistoryLogger
+                    query={getURL}
+                    source={dataRe.search ? "china-search.keyword" : "china-search.url"}
+                    resultCount={dataRe.search ? products.length : null}
+                  />
+                ) : null}
               </div>
             </div>
 
-            {/* search.php L258-360 — product grid + pagination */}
-            <div className="bg-white">
-              <div className="row p-1">
-                {provider !== "pcs" ? (
-                  // taobao / 1688 — AkuCargo result handled above; the
-                  // empty-state branch fires when AkuCargo returned no
-                  // hits OR errored (network / rate_limited /
-                  // not_configured), mirroring legacy search.php L292-298
-                  // ($apiERROR2=1).
-                  apiError2 === 1 ? (
-                    <div className="col-12 text-center">
-                      <span className="text-danger">
-                        ไม่พบข้อมูล กรุณาลองค้นหาอีกครั้ง
-                      </span>
-                      <br />
-                      <button
-                        type="button"
-                        className="btn waves-effect waves-light btn-rounded btn-outline-warning m-1"
-                      >
-                        <i className="fas fa-undo-alt"></i> ค้นหาอีกครั้ง
-                      </button>
-                    </div>
-                  ) : null
-                ) : (
-                  // search.php L315-332 — provider=pcs: tb_product rows.
-                  products.map((row) => (
-                    <div
-                      key={row.id}
-                      className="col-6 col-md-2 text-center"
-                    >
-                      <div className="item-product">
-                        <a href={`/search?url=${encodeURIComponent(row.purl ?? "")}`}>
-                          <div>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={row.pimages ?? ""}
-                              className="img-fluid pImages"
-                              alt=""
-                            />
-                            <div className="jss text-pre">พรีออเดอร์</div>
-                          </div>
-                          <div className="text-center p-05">
-                            <h5 className="name-product">
-                              {countText(row.pnameth ?? "", 28)}
-                            </h5>
-                            <span className="text-color font-12rem">
-                              ราคา :{" "}
-                              {numberFormat(Number(row.pprice ?? 0) * rsDefault)}฿
-                            </span>
-                          </div>
-                        </a>
-                      </div>
-                    </div>
-                  ))
-                )}
+            <div className="mt-3">
+              <h4 className="text-sm md:text-base font-bold text-foreground flex flex-wrap items-center gap-2">
+                <span>
+                  ค้นหา : <span className="text-red-600">{getURL}</span>
+                </span>
+                <span className="text-muted font-normal">ตัวเลือกเพิ่มเติม</span>
+                <select
+                  name="order"
+                  id="order"
+                  className="rounded-lg border border-border bg-white dark:bg-surface px-2.5 py-1.5 text-sm text-foreground focus:ring-2 focus:ring-red-500/30 focus:border-red-500 outline-none"
+                >
+                  <option className="order-new" value="new">
+                    สินค้ามาใหม่
+                  </option>
+                  <option className="order-pop" value="pop">
+                    กำลังเป็นที่นิยม
+                  </option>
+                  <option className="order-priceLow" value="priceLow">
+                    ราคาจากต่ำไปสูง
+                  </option>
+                  <option
+                    className="order-priceHeight"
+                    value="priceHeight"
+                  >
+                    ราคาจากสูงไปต่ำ
+                  </option>
+                </select>
+              </h4>
 
-                {/* search.php L336-358 — pagination */}
-                <div className="col-12">
-                  <nav aria-label="Page navigation">
-                    <ul className="pagination justify-content-center pagination-separate pagination-round pagination-flat">
-                      <li className="page-item">
-                        <a
-                          className="page-link"
-                          href={
-                            pageno <= 1
-                              ? "#"
-                              : `?url=${encodeURIComponent(getURL)}&page=${pageno - 1}&provider=${provider}`
-                          }
-                          aria-label="Previous"
-                        >
-                          <span aria-hidden="true">ก่อนหน้า</span>
-                          <span className="sr-only">Previous</span>
-                        </a>
-                      </li>
-                      <li className="page-item active">
-                        <a
-                          className="page-link"
-                          href={
-                            pageno > 1
-                              ? `?url=${encodeURIComponent(getURL)}&page=${pageno - 1}&provider=${provider}`
-                              : `?url=${encodeURIComponent(getURL)}&page=1`
-                          }
-                        >
-                          {pageno > 1 ? pageno : "1"}
-                        </a>
-                      </li>
-                      <li className="page-item">
-                        <a
-                          className="page-link"
-                          href={`?url=${encodeURIComponent(getURL)}&page=${pageno + 1}&provider=${provider}`}
-                        >
-                          {pageno + 1}
-                        </a>
-                      </li>
-                      <li className="page-item">
-                        <a
-                          className="page-link"
-                          href={`?url=${encodeURIComponent(getURL)}&page=${pageno + 2}&provider=${provider}`}
-                        >
-                          {pageno + 2}
-                        </a>
-                      </li>
-                      <li className="page-item">
-                        <a
-                          className="page-link"
-                          href={`?url=${encodeURIComponent(getURL)}&page=${pageno + 3}&provider=${provider}`}
-                        >
-                          {pageno + 3}
-                        </a>
-                      </li>
-                      <li className="page-item">
-                        <a
-                          className="page-link"
-                          href={`?url=${encodeURIComponent(getURL)}&page=${pageno + 4}&provider=${provider}`}
-                        >
-                          {pageno + 4}
-                        </a>
-                      </li>
-                      <li className="page-item">
-                        <a
-                          className="page-link"
-                          href={`?url=${encodeURIComponent(getURL)}&page=${pageno + 1}&provider=${provider}`}
-                          aria-label="Next"
-                        >
-                          <span aria-hidden="true">ถัดไป</span>
-                          <span className="sr-only">Next</span>
-                        </a>
-                      </li>
-                    </ul>
-                  </nav>
-                </div>
-              </div>
+              <ul className="pcs-tabs mt-3 flex items-center gap-2 border-b border-border overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mb-px">
+                <li className="taobao shrink-0">
+                  <a
+                    className="block px-3 py-2 border-b-2 border-transparent hover:border-red-500 transition-colors"
+                    href={`?url=${encodeURIComponent(getURL)}&provider=taobao`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      className="h-7 w-auto"
+                      src="/legacy/pcs/shops/tmall-taobao-logo.png"
+                      alt=""
+                    />
+                  </a>
+                </li>
+                <li className="p1688 shrink-0">
+                  <a
+                    className="block px-3 py-2 border-b-2 border-transparent hover:border-red-500 transition-colors"
+                    href={`?url=${encodeURIComponent(getURL)}&provider=1688`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      className="h-7 w-auto"
+                      src="/legacy/pcs/shops/1688-logo-3.png"
+                      alt=""
+                    />
+                  </a>
+                </li>
+                <li className="pcsshop shrink-0">
+                  <a
+                    className="block px-3 py-2 border-b-2 border-transparent hover:border-red-500 transition-colors"
+                    href={`?url=${encodeURIComponent(getURL)}&provider=pcs`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      className="h-7 w-auto"
+                      src="/legacy/pcs/shops/pcs-logo.png"
+                      alt=""
+                    />
+                  </a>
+                </li>
+              </ul>
             </div>
           </div>
+        </div>
+
+        {/* search.php L258-360 — product grid + pagination (Tailwind) */}
+        <div className="mt-3 md:mt-4">
+          {provider !== "pcs" ? (
+            // taobao / 1688 — AkuCargo result handled above; the
+            // empty-state branch fires when AkuCargo returned no
+            // hits OR errored (network / rate_limited /
+            // not_configured), mirroring legacy search.php L292-298
+            // ($apiERROR2=1).
+            apiError2 === 1 ? (
+              <div className="text-center py-10">
+                <span className="text-red-600">
+                  ไม่พบข้อมูล กรุณาลองค้นหาอีกครั้ง
+                </span>
+                <br />
+                <button
+                  type="button"
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-amber-400 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 px-4 py-2 text-sm font-medium transition-colors"
+                >
+                  <i className="fas fa-undo-alt"></i> ค้นหาอีกครั้ง
+                </button>
+              </div>
+            ) : null
+          ) : (
+            // search.php L315-332 — provider=pcs: tb_product rows.
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {products.map((row) => (
+                <div key={row.id} className="item-product">
+                  <a
+                    href={`/search?url=${encodeURIComponent(row.purl ?? "")}`}
+                    className="group block rounded-xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+                  >
+                    <div className="relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={row.pimages ?? ""}
+                        className="pImages aspect-square object-cover w-full"
+                        alt=""
+                      />
+                      <div className="jss text-pre absolute top-1.5 left-1.5 rounded-md bg-red-600 text-white text-[10px] font-medium px-1.5 py-0.5">
+                        พรีออเดอร์
+                      </div>
+                    </div>
+                    <div className="p-2 text-center">
+                      <h5 className="name-product text-xs md:text-sm text-foreground line-clamp-2 min-h-[2.5rem]">
+                        {countText(row.pnameth ?? "", 28)}
+                      </h5>
+                      <span className="block mt-1 text-red-600 font-semibold text-sm">
+                        ราคา :{" "}
+                        {numberFormat(Number(row.pprice ?? 0) * rsDefault)}฿
+                      </span>
+                    </div>
+                  </a>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* search.php L336-358 — pagination */}
+          <nav aria-label="Page navigation" className="mt-5">
+            <ul className="flex flex-wrap items-center justify-center gap-1.5">
+              <li>
+                <a
+                  className={`inline-flex items-center justify-center min-w-[40px] h-9 px-3 rounded-lg border border-border text-sm transition-colors ${
+                    pageno <= 1
+                      ? "text-muted pointer-events-none opacity-50"
+                      : "text-foreground hover:bg-surface-alt"
+                  }`}
+                  href={
+                    pageno <= 1
+                      ? "#"
+                      : `?url=${encodeURIComponent(getURL)}&page=${pageno - 1}&provider=${provider}`
+                  }
+                  aria-label="Previous"
+                >
+                  <span aria-hidden="true">ก่อนหน้า</span>
+                  <span className="sr-only">Previous</span>
+                </a>
+              </li>
+              <li>
+                <a
+                  className="inline-flex items-center justify-center min-w-[40px] h-9 px-3 rounded-lg border border-red-600 bg-red-600 text-white text-sm font-semibold"
+                  href={
+                    pageno > 1
+                      ? `?url=${encodeURIComponent(getURL)}&page=${pageno - 1}&provider=${provider}`
+                      : `?url=${encodeURIComponent(getURL)}&page=1`
+                  }
+                >
+                  {pageno > 1 ? pageno : "1"}
+                </a>
+              </li>
+              <li>
+                <a
+                  className="inline-flex items-center justify-center min-w-[40px] h-9 px-3 rounded-lg border border-border text-foreground hover:bg-surface-alt text-sm transition-colors"
+                  href={`?url=${encodeURIComponent(getURL)}&page=${pageno + 1}&provider=${provider}`}
+                >
+                  {pageno + 1}
+                </a>
+              </li>
+              <li>
+                <a
+                  className="inline-flex items-center justify-center min-w-[40px] h-9 px-3 rounded-lg border border-border text-foreground hover:bg-surface-alt text-sm transition-colors"
+                  href={`?url=${encodeURIComponent(getURL)}&page=${pageno + 2}&provider=${provider}`}
+                >
+                  {pageno + 2}
+                </a>
+              </li>
+              <li className="hidden sm:block">
+                <a
+                  className="inline-flex items-center justify-center min-w-[40px] h-9 px-3 rounded-lg border border-border text-foreground hover:bg-surface-alt text-sm transition-colors"
+                  href={`?url=${encodeURIComponent(getURL)}&page=${pageno + 3}&provider=${provider}`}
+                >
+                  {pageno + 3}
+                </a>
+              </li>
+              <li className="hidden sm:block">
+                <a
+                  className="inline-flex items-center justify-center min-w-[40px] h-9 px-3 rounded-lg border border-border text-foreground hover:bg-surface-alt text-sm transition-colors"
+                  href={`?url=${encodeURIComponent(getURL)}&page=${pageno + 4}&provider=${provider}`}
+                >
+                  {pageno + 4}
+                </a>
+              </li>
+              <li>
+                <a
+                  className="inline-flex items-center justify-center min-w-[40px] h-9 px-3 rounded-lg border border-border text-foreground hover:bg-surface-alt text-sm transition-colors"
+                  href={`?url=${encodeURIComponent(getURL)}&page=${pageno + 1}&provider=${provider}`}
+                  aria-label="Next"
+                >
+                  <span aria-hidden="true">ถัดไป</span>
+                  <span className="sr-only">Next</span>
+                </a>
+              </li>
+            </ul>
+          </nav>
         </div>
       </div>
       {/* END: Content */}
@@ -610,159 +608,152 @@ function UrlPasteMode({
     <div className="pcs-legacy">
       <link rel="stylesheet" href="/legacy/pcs/search.css" />
 
-      {/* BEGIN: Content — search.php L29 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          <div className="content-body pr110">
-            {/* search.php L57-142 — skeleton product card (MODE A) */}
-            <div className="data-pro-chinna">
-              <div className="card-content bg-white">
-                <div className="card-body p05">
-                  <form
-                    className="form-horizontal"
-                    method="POST"
-                    autoComplete="off"
-                    action=""
-                  >
-                    <input type="hidden" name="cURL" value="" />
-                    <input type="hidden" name="cProvider" value="" />
-                    <input
-                      type="hidden"
-                      name="cTitle"
-                      id="cTitle"
-                      value=""
+      {/* BEGIN: Content — search.php L29 (Tailwind rebuild · mobile-first) */}
+      <div className="pcs-content-pad w-full px-3 md:px-6 py-3 md:py-6">
+        {/* search.php L57-142 — product card (MODE A) */}
+        <div className="data-pro-chinna bg-white dark:bg-surface border border-border rounded-2xl shadow-sm overflow-hidden">
+          <div className="p-3 md:p-4">
+            <form
+              className=""
+              method="POST"
+              autoComplete="off"
+              action=""
+            >
+              <input type="hidden" name="cURL" value="" />
+              <input type="hidden" name="cProvider" value="" />
+              <input
+                type="hidden"
+                name="cTitle"
+                id="cTitle"
+                value=""
+              />
+              <input type="hidden" name="cNameShop" value="" />
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                <div className="hidden md:block md:col-span-12">
+                  <h2 className="text-lg font-bold text-foreground flex flex-wrap items-center gap-2 pb-0">
+                    ผลการค้นหาจาก{" "}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={srcWeb ? `/legacy/pcs/shops/${srcWeb}` : ""}
+                      height={50}
+                      className="h-[50px] w-auto"
+                      alt=""
                     />
-                    <input type="hidden" name="cNameShop" value="" />
-                    <div className="row bg-m-s">
-                      <div className="col-12 pcs-d-pc">
-                        <h2 className="pb-0">
-                          ผลการค้นหาจาก{" "}
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={srcWeb ? `/legacy/pcs/shops/${srcWeb}` : ""}
-                            height={50}
-                            alt=""
-                          />
-                          <span className="font-14" id="urlPro">
-                            {" "}
-                            URL :{" "}
-                            <a
-                              href={urlcut}
-                              className="text-info"
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              {urlcut}
-                            </a>
-                          </span>
-                        </h2>
-                      </div>
-                      <div className="col-md-4 p-2 p-m-05-1">
-                        <div className="main">
-                          <div className="slider slider-for">
-                            {mainImage ? (
+                    <span className="text-sm font-normal text-muted" id="urlPro">
+                      {" "}
+                      URL :{" "}
+                      <a
+                        href={urlcut}
+                        className="text-sky-600 hover:underline break-all"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {urlcut}
+                      </a>
+                    </span>
+                  </h2>
+                </div>
+                <div className="md:col-span-4">
+                  <div className="main">
+                    <div className="slider slider-for">
+                      {mainImage ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={mainImage}
+                          alt={title || "product"}
+                          className="procover w-full h-auto object-cover rounded-lg"
+                        />
+                      ) : (
+                        <div className="pro-preload-effect procover aspect-square w-full rounded-lg"></div>
+                      )}
+                    </div>
+                    <div className="slider slider-nav hidden md:block">
+                      <div className="grid grid-cols-3 gap-2 pt-2">
+                        {[0, 1, 2].map((i) => (
+                          <div key={i}>
+                            {thumbs[i] ? (
                               /* eslint-disable-next-line @next/next/no-img-element */
                               <img
-                                src={mainImage}
-                                alt={title || "product"}
-                                className="procover"
-                                style={{ width: "100%", height: "auto", objectFit: "cover", borderRadius: "8px" }}
+                                src={thumbs[i]}
+                                alt=""
+                                className="w-full h-[100px] object-cover rounded-md"
                               />
                             ) : (
-                              <div className="pro-preload-effect procover"></div>
+                              <div className="pro-preload-effect rounded-md" style={{ height: "100px" }}></div>
                             )}
                           </div>
-                          <div className="slider slider-nav pcs-d-pc">
-                            <div className="row pt-1">
-                              {[0, 1, 2].map((i) => (
-                                <div key={i} className="col-md-4 p-1">
-                                  {thumbs[i] ? (
-                                    /* eslint-disable-next-line @next/next/no-img-element */
-                                    <img
-                                      src={thumbs[i]}
-                                      alt=""
-                                      style={{ width: "100%", height: "100px", objectFit: "cover", borderRadius: "6px" }}
-                                    />
-                                  ) : (
-                                    <div className="pro-preload-effect" style={{ height: "100px" }}></div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
+                        ))}
                       </div>
-                      <div className="col-md-8">
-                        <span
-                          className="pb-1"
-                          id="google_translate_element"
-                        ></span>{" "}
-                        <span className="pcs-d-ib-m">
-                          ผลการค้นหาจาก{" "}
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            style={{}}
-                            src={srcWeb ? `/legacy/pcs/shops/${srcWeb}` : ""}
-                            width={50}
-                            alt=""
-                          />
-                        </span>
-                        <h4 className="p-m-05 bg-white-m-b1 pb-1">
-                          ชื่อสินค้า :{" "}
-                          {title ? (
-                            <span className="title-pro" style={{ fontWeight: 600 }}>{title}</span>
-                          ) : (
-                            <div className="title-pro pro-preload-effect"></div>
-                          )}
-                        </h4>
-                        <div className="price-s bg-main">
-                          <span className="font-18">ราคาสินค้า : </span>
-                          <span className="display-7">
-                            {priceCny > 0 ? `¥${fmt2(priceCny)}` : "¥"}
+                    </div>
+                  </div>
+                </div>
+                <div className="md:col-span-8">
+                  <span
+                    className="pb-1"
+                    id="google_translate_element"
+                  ></span>{" "}
+                  <span className="inline md:hidden">
+                    ผลการค้นหาจาก{" "}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={srcWeb ? `/legacy/pcs/shops/${srcWeb}` : ""}
+                      width={50}
+                      className="inline h-auto w-[50px] align-middle"
+                      alt=""
+                    />
+                  </span>
+                  <h4 className="text-base text-foreground pb-1">
+                    ชื่อสินค้า :{" "}
+                    {title ? (
+                      <span className="title-pro font-semibold">{title}</span>
+                    ) : (
+                      <div className="title-pro pro-preload-effect"></div>
+                    )}
+                  </h4>
+                  <div className="price-s rounded-lg bg-red-600 text-white px-3 py-2 flex flex-wrap items-baseline gap-x-2">
+                    <span className="text-base">ราคาสินค้า : </span>
+                    <span className="text-xl font-bold">
+                      {priceCny > 0 ? `¥${fmt2(priceCny)}` : "¥"}
+                    </span>
+                    {priceCny > 0 && (
+                      <span className="text-sm" style={{ opacity: 0.85 }}>
+                        ≈ <b>{fmt2(priceThb)}</b> ฿
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-2">
+                    <div>
+                      <div className="">
+                        <h4 className="text-base text-foreground">
+                          ชื่อร้าน :{" "}
+                          <span id="nick">
+                            {shopName ? (
+                              <span className="font-semibold">{shopName}</span>
+                            ) : (
+                              <div className="nick-pro pro-preload-effect"></div>
+                            )}
                           </span>
-                          {priceCny > 0 && (
-                            <span className="font-14" style={{ marginLeft: "8px", opacity: 0.85 }}>
-                              ≈ <b>{fmt2(priceThb)}</b> ฿
-                            </span>
-                          )}
-                        </div>
-                        <div className="row p-m-0 pt-05">
-                          <div className="col-md-6">
-                            <div className="p-m-05 bg-white-m-b1">
-                              <h4>
-                                ชื่อร้าน :{" "}
-                                <span id="nick">
-                                  {shopName ? (
-                                    <span style={{ fontWeight: 600 }}>{shopName}</span>
-                                  ) : (
-                                    <div className="nick-pro pro-preload-effect"></div>
-                                  )}
-                                </span>
-                              </h4>
-                            </div>
-                          </div>
-                          <div className="col-md-6">
-                            <div
-                              className="p-m-05 bg-white-m-b1"
-                              style={{ marginTop: "2px" }}
-                            >
-                              <h4>
-                                ลิงค์สินค้า :{" "}
-                                <a
-                                  className="font-14"
-                                  href={urlcut}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  <span className="font-12 badge badge-info badge-pill">
-                                    <i className="fas fa-link"></i> ไปยังเว็บสินค้า
-                                  </span>{" "}
-                                </a>
-                              </h4>
-                            </div>
-                          </div>
-                        </div>
+                        </h4>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="">
+                        <h4 className="text-base text-foreground">
+                          ลิงค์สินค้า :{" "}
+                          <a
+                            className="text-sm"
+                            href={urlcut}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <span className="inline-flex items-center gap-1 rounded-full bg-sky-500 text-white text-xs px-2 py-0.5">
+                              <i className="fas fa-link"></i> ไปยังเว็บสินค้า
+                            </span>{" "}
+                          </a>
+                        </h4>
+                      </div>
+                    </div>
+                  </div>
                         {/* SKU axis selectors — render TAMIT's `sku_axes` if
                             available; otherwise show skeleton strips like
                             the legacy pre-AJAX state. The full sku-picker
@@ -770,7 +761,7 @@ function UrlPasteMode({
                             /service-order/add (the proper place to commit);
                             here we just preview the option labels. */}
                         {detail?.sku_axes && detail.sku_axes.length > 0 ? (
-                          <div className="p-m-05 bg-white-m-b1" style={{ marginTop: "8px" }}>
+                          <div style={{ marginTop: "8px" }}>
                             {detail.sku_axes.map((axis, ai) => (
                               <div key={ai} style={{ marginBottom: "8px" }}>
                                 <h5 style={{ marginBottom: "4px", fontSize: "13px", color: "#666" }}>
@@ -810,57 +801,54 @@ function UrlPasteMode({
                             <div className="pro-preload-effect"></div>
                           </>
                         )}
-                        <hr />
-                        <div
-                          className="border-total-product p-1 p-m-05 pay-c"
-                          style={{ zIndex: 99 }}
+                  <hr className="my-3 border-t border-border" />
+                  <div
+                    className="border-total-product pay-c rounded-xl border border-border bg-surface-alt/50 dark:bg-surface-alt/30 p-3"
+                    style={{ zIndex: 99 }}
+                  >
+                    <div className="grid grid-cols-12 items-center gap-y-2">
+                      <div className="col-span-3 md:col-span-8 text-right">
+                        <h4 className="text-base font-semibold text-foreground">ราคารวม</h4>
+                      </div>
+                      <div className="col-span-9 md:col-span-4 text-left md:text-right notranslate text-sm">
+                        <span id="CHNTotal">{fmt2(priceCny)}</span>¥
+                        <span className="">
+                          &nbsp;x {rsDefault}฿/¥ ={" "}
+                          <b id="THBtotal" className="text-red-600">
+                            {fmt2(priceThb)}
+                          </b>{" "}
+                          ฿
+                        </span>
+                      </div>
+                      <div className="col-span-3 md:col-span-8 text-right">
+                        <h4 className="text-base font-semibold text-foreground">จำนวน </h4>
+                      </div>
+                      <div className="col-span-5 md:col-span-4 text-left md:text-right text-sm">
+                        <span id="cAmount">0</span>
+                        <b className="text-xs">
+                          <span className="text-red-600">
+                            {" "}
+                            (ขั้นต่ำ{" "}
+                            <span className="text-sm" id="minnum"></span>{" "}
+                            ชิ้น)
+                          </span>
+                        </b>
+                      </div>
+                      <div className="col-span-4 md:col-span-12 self-end text-left md:text-right md:pt-1">
+                        <button
+                          type="submit"
+                          id="btnCart"
+                          className="btn-main inline-flex items-center gap-1.5 rounded-full bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-2 transition-colors animate__animated animate__infinite animate__headShake"
+                          name="addCartURL"
                         >
-                          <div className="row">
-                            <div className="col-3 col-md-8 text-right">
-                              <h4>ราคารวม</h4>
-                            </div>
-                            <div className="col-9 col-md-4 text-left text-md-right notranslate">
-                              <span id="CHNTotal">{fmt2(priceCny)}</span>¥
-                              <span className="">
-                                &nbsp;x {rsDefault}฿/¥ ={" "}
-                                <b id="THBtotal" className="text-danger">
-                                  {fmt2(priceThb)}
-                                </b>{" "}
-                                ฿
-                              </span>
-                            </div>
-                            <div className="col-3 col-md-8 text-right">
-                              <h4>จำนวน </h4>
-                            </div>
-                            <div className="col-5 col-md-4 text-left text-md-right ">
-                              <span id="cAmount">0</span>
-                              <b className="font-12">
-                                <span className="text-danger">
-                                  {" "}
-                                  (ขั้นต่ำ{" "}
-                                  <span className="font-14" id="minnum"></span>{" "}
-                                  ชิ้น)
-                                </span>
-                              </b>
-                            </div>
-                            <div className="col-4 col-md-12 align-self-end text-left text-md-right pl-2">
-                              <button
-                                type="submit"
-                                id="btnCart"
-                                className="btn btn-sm btn-main btn-rounded animate__animated animate__infinite animate__headShake"
-                                name="addCartURL"
-                              >
-                                <i className="ft-shopping-cart"></i> หยิบใส่รถเข็น
-                              </button>
-                            </div>
-                          </div>
-                        </div>
+                          <i className="ft-shopping-cart"></i> หยิบใส่รถเข็น
+                        </button>
                       </div>
                     </div>
-                  </form>
+                  </div>
                 </div>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       </div>

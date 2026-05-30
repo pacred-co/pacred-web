@@ -2,37 +2,25 @@ import { redirect } from "next/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { MapPin, Plus, Inbox } from "lucide-react";
 import { addAddressAction } from "./add-address-action";
 
 /**
- * Customer Thai delivery-address screen — a FAITHFUL 1:1 TRANSCRIPTION
- * of the legacy PCS Cargo `member/address.php` (D1 / ADR-0017 · the
- * faithful-port transcription workstream · runbook
+ * Customer Thai delivery-address screen — ported from the legacy PCS Cargo
+ * `member/address.php` (D1 / ADR-0017 · faithful-port workstream · runbook
  * `docs/runbook/faithful-port-transcription.md`).
  *
- * This is a transcription, NOT a reinterpretation. The JSX below is the
- * exact HTML markup `address.php` renders — same elements, same
- * Bootstrap-4 class names, same structure, same labels, same order,
- * same Thai text. The visual identity comes from the legacy CSS,
- * brought in verbatim as the static `.pcs-legacy`-scoped
- * `public/legacy/pcs/address.css`, loaded via a plain `<link>` so it
- * bypasses the app's Tailwind v4 / PostCSS pipeline.
- *
- * `address.php` source structure transcribed here (lines 410-584):
- *   .app-content > .content-wrapper > .content-body.pr110
- *     > section#basic-carousel > .row > .col-md-12 > .card.p-1
- *       1. .row — header: <h3> "ที่อยู่จัดส่งสินค้าในไทย"
- *          + the green circle "เพิ่มที่อยู่" button (links address/add)
- *       2. .card-content > .card-body > .row > .col-12
- *          > .table-responsive > table#myTable — the address LIST
- *          (DataTable; 4 columns: ลำดับ / ชื่อสถานที่ / หมายเหตุ / ตัวเลือก)
- *       3. #add-address .modal — the add-address <form> (POST)
- *       4. #edit-Address (empty — jQuery AJAX target) + .message
- *
- * Like the menu.php pilot, only the legacy `.app-content` content body
- * is transcribed — the legacy navbar / left-menu / footer chrome is the
- * Pacred protected-area app shell (the (protected) layout), not part of
- * this screen.
+ * ── Tailwind rebuild (2026-05-30 · ปอน) ──
+ * The page's WORKFLOW is the legacy address.php list (same data fields,
+ * same address list, same "เพิ่มที่อยู่" → add-address modal, same per-row
+ * ลบ/แก้ไข/ตั้งเป็นที่อยู่หลัก buttons, same add-address <form> POSTing to
+ * `addAddressAction`); the CHROME is now our own Tailwind, mobile-first
+ * design (per AGENTS.md §0a — "we copy the working system, polish the look
+ * ourselves"). Same approach already shipped on /service-payment +
+ * /service-import: list = responsive cards on phone, table on desktop. NO
+ * data / relation / query / href / form contract changed — pure
+ * presentation. `.pcs-legacy` + address.css are kept for any layout-scope
+ * globals; the Bootstrap-4 chrome + #myTable DataTables grid are gone.
  *
  * Data — every `address.php` mysqli query transcribed 1:1 to the ported
  * legacy `tb_*` schema (Supabase). `tb_*` is RLS-locked to service_role,
@@ -56,23 +44,17 @@ import { addAddressAction } from "./add-address-action";
  * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
  * `PR<n>` + Pacred. Nothing else changed.
  *
- * Not strictly 1:1 — documented, never silently diverged:
+ * NOT reproduced (deliberate · flagged for the integrator):
  *   - jQuery DataTables (#myTable search/sort/paginate), jQuery.Thailand
  *     subdistrict→zipcode autocomplete (#demo1), and the Google Maps
  *     pin-drop (#map) are legacy jQuery plugins not present in the app.
- *     The markup is rendered 1:1 (so it is visually identical) but those
- *     interactions are inert — the table is a plain Bootstrap-4 table,
- *     the #demo1 fields stay visible (legacy hides them until the
- *     plugin's onLoad fires), and the #map div is an empty placeholder.
- *   - The add-address modal opens via a jQuery `.modal('show')` in the
- *     legacy. Here the modal markup is transcribed 1:1; with no jQuery
- *     it stays at its CSS default (hidden) — matching the legacy
- *     pre-trigger state. The "เพิ่มที่อยู่" button links to address/add
- *     exactly as the legacy <a href> does.
- *   - editAddress / deleteAddress / setMainAddress are legacy AJAX
- *     calls (page.address.js → include/pages/address/*.php). The three
- *     row buttons are rendered 1:1 but their onclick handlers are not
- *     wired — porting those endpoints is a separate screen/action.
+ *     The #demo1 fields + #map div are rendered (so the add form keeps the
+ *     same fields) but those interactions are inert.
+ *   - editAddress / deleteAddress / setMainAddress are legacy AJAX calls
+ *     (page.address.js → include/pages/address/*.php). The three row
+ *     buttons are rendered; their legacy `onclick` payloads are preserved
+ *     as `data-legacy-onclick` so the integrator can re-wire them when the
+ *     endpoints are ported.
  *   - The success/error SweetAlert popups (address.php L686-724) are the
  *     jQuery SweetAlert2 plugin — not reproduced.
  */
@@ -164,460 +146,544 @@ export default async function AddressesPage({
 
   return (
     <div className="pcs-legacy">
-      {/* Legacy PCS stylesheet — static public/ asset, loaded via a plain
-          <link> so it bypasses the app's Tailwind/PostCSS pipeline. */}
+      {/* Legacy PCS theme CSS — kept for layout-scope globals (.pcs-content-pad
+          padding etc.). The visible surface below is Tailwind. */}
       <link rel="stylesheet" href="/legacy/pcs/address.css" />
 
       {/* address.php <title> L127 (Next.js owns <head> — kept here as a
           comment for the fidelity record):
           ที่อยู่จัดส่งสินค้าในไทย | Pacred */}
 
-      {/* BEGIN: Content — address.php L410 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          <div className="content-body pr110">
-            {/* Basic Carousel start — address.php L415 */}
-            <section id="basic-carousel">
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  <div className="card p-1">
-                    {/* L420-438 — header: title + add-address button.
-                        Pacred-fidelity addition (d1-fidelity-customer.md
-                        §9.2): legacy customers reach "ที่อยู่โกดังจีน" from
-                        the top-bar dropdown. Surface the same link here so
-                        the link is reachable on the addresses screen
-                        itself — it is the most common follow-up action for
-                        a customer who just shipped from a Thai address. */}
-                    <div className="row">
-                      <div className="content-header-left col-md-6 col-12">
-                        <div className="text-center text-md-left">
-                          <h3 className="">ที่อยู่จัดส่งสินค้าในไทย</h3>
-                        </div>
-                      </div>
-                      <div className="content-header-right col-md-6 col-12">
-                        <div className="float-md-right">
-                          <div className="text-center text-md-right d-inline-flex align-items-center" style={{ gap: "1rem" }}>
-                            {/* Pacred fidelity-addition link — see header comment.
-                                Routes to the existing /china-address page. */}
-                            <Link
-                              href="/china-address"
-                              className="d-inline-flex align-items-center text-info"
-                              style={{ gap: "0.35rem" }}
-                            >
-                              <i className="ft-map-pin"></i>
-                              <span className="font-normal">ที่อยู่โกดังจีน</span>
-                            </Link>
-                            {/* address.php L429 — the legacy <a> points at
-                                `address/add`, a URL-rewrite alias of THIS
-                                same address.php screen with the add-modal
-                                pre-opened (the `isset($_GET["page"])` branch,
-                                L590-598). There is no separate add page —
-                                so the link stays on /addresses, carrying the
-                                legacy `?page` flag that the modal-open JS
-                                keyed off. */}
-                            {/* Legacy nested <button> inside the <Link>
-                                anchor is invalid HTML5 (interactive nested in
-                                interactive) → browser renders the inner button
-                                wrong size + may swallow the parent's nav click.
-                                Drop the inner <button>; style the anchor body
-                                directly. Same visual, valid HTML, single click
-                                target for the Next.js Link nav. */}
-                            <Link
-                              href="/addresses?page=1"
-                              className="d-inline-flex align-items-center"
-                              style={{ gap: "0.5rem" }}
-                            >
-                              <span
-                                className="btn btn-sm btn-circle btn-success text-white d-inline-flex align-items-center justify-content-center"
-                                role="presentation"
-                              >
-                                <i className="ft-plus"></i>
-                              </span>
-                              <span className="font-normal text-dark">เพิ่มที่อยู่</span>
-                            </Link>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    {/* L439-487 — the address list table */}
-                    <div className="card-content">
-                      <div className="card-body">
-                        <div className="row">
-                          <div className="col-12">
-                            <div className="table-responsive ml--10">
-                              <table
-                                id="myTable"
-                                className="table display table-bordered table-striped no-wrap dataTable no-footer dtr-inline"
-                              >
-                                <thead>
-                                  <tr className="text-center">
-                                    <th>ลำดับ</th>
-                                    <th>ชื่อสถานที่</th>
-                                    <th>หมายเหตุ</th>
-                                    <th>ตัวเลือก</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {/* address.php L454-480 — one <tr> per
-                                      tb_address row. The legacy builds
-                                      `fullAddress` (with <br>) + the
-                                      onclick payload `fullAddress2` in
-                                      SQL CONCAT; reproduced identically. */}
-                                  {/* The three row buttons carry legacy
-                                      `onclick="deleteAddress(…)/editAddress(…)/
-                                      setMainAddress(…)"` HTML attributes that
-                                      invoke jQuery AJAX (page.address.js).
-                                      Those handlers are NOT ported — the
-                                      buttons are rendered 1:1 visually; the
-                                      inert `onclick` string is omitted (a
-                                      string is not a valid React handler and
-                                      would not run anyway). The `data-*`
-                                      onclick payload is kept on a `data-`
-                                      attribute so the integrator can re-wire
-                                      it when the endpoints are ported. */}
-                                  {addresses.map((row, idx) => {
-                                    const no = idx + 1;
-                                    // fullAddress — the legacy CONCAT
-                                    // (address.php L455), with <br>:
-                                    const fullAddress =
-                                      `คุณ${row.addressname ?? ""} ${row.addresslastname ?? ""}<br>` +
-                                      `${row.addressno ?? ""} ตำบล/แขวง ${row.addresssubdistrict ?? ""}<br>` +
-                                      ` อำเภอ/เขต ${row.addressdistrict ?? ""} จังหวัด ${row.addressprovince ?? ""} ${row.addresszipcode ?? ""}<br>` +
-                                      `โทร. ${row.addresstel ?? ""}, ${row.addresstel2 ?? ""}`;
-                                    // fullAddress2 — the onclick CONCAT
-                                    // (address.php L455), no <br>:
-                                    const fullAddress2 =
-                                      `คุณ${row.addressname ?? ""} ${row.addresslastname ?? ""} ` +
-                                      `${row.addressno ?? ""} ตำบล/แขวง ${row.addresssubdistrict ?? ""} ` +
-                                      `อำเภอ/เขต ${row.addressdistrict ?? ""} จังหวัด ${row.addressprovince ?? ""} ${row.addresszipcode ?? ""}`;
-                                    const isMain = mainAddressID === row.addressid;
-                                    return (
-                                      <tr key={row.addressid}>
-                                        <td>{no}</td>
-                                        <td
-                                          dangerouslySetInnerHTML={{ __html: fullAddress }}
-                                        ></td>
-                                        <td>{row.addressnote}</td>
-                                        <td className="text-center">
-                                          <button
-                                            type="button"
-                                            className="mb-1 btn btn-outline-danger btn-rounded btn-sm waves-effect waves-light"
-                                            data-address-id={row.addressid}
-                                            data-full-address={fullAddress2}
-                                            data-legacy-onclick={`deleteAddress('${row.addressid}','${fullAddress2}')`}
-                                            title="ลบข้อมูล"
-                                          >
-                                            ลบที่อยู่
-                                          </button>
-                                          <button
-                                            type="button"
-                                            className="mb-1 btn btn-outline-warning btn-rounded btn-sm waves-effect waves-light"
-                                            data-address-id={row.addressid}
-                                            data-legacy-onclick={`editAddress('${row.addressid}')`}
-                                            title="แก้ไขข้อมูล"
-                                          >
-                                            {" "}
-                                            แก้ไขที่อยู่{" "}
-                                          </button>
-                                          <div
-                                            id={`btnAddressMain${row.addressid}`}
-                                            style={{ display: "inline-block" }}
-                                          >
-                                            {isMain ? (
-                                              // address.php L605 — the main
-                                              // address shows a static
-                                              // "ที่อยู่หลัก" button.
-                                              <button className=" mb-1 btn btn-sm waves-effect waves-light btn-outline-danger btn-rounded">
-                                                ที่อยู่หลัก
-                                              </button>
-                                            ) : (
-                                              <button
-                                                type="button"
-                                                className="mb-1 btn btn-sm waves-effect waves-light btn-outline-info btn-rounded"
-                                                data-address-id={row.addressid}
-                                                data-full-address={fullAddress2}
-                                                data-legacy-onclick={`setMainAddress('${row.addressid}','${fullAddress2}')`}
-                                              >
-                                                ตั้งเป็นที่อยู่หลัก
-                                              </button>
-                                            )}
-                                          </div>
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+      <div className="pcs-content-pad w-full px-3 md:px-6 pt-3 pb-24 md:py-6">
+        <section className="bg-white dark:bg-surface border border-border rounded-2xl shadow-sm overflow-hidden">
+          {/* ── Header: title + ที่อยู่โกดังจีน link + เพิ่มที่อยู่ CTA ──
+              Pacred-fidelity addition (d1-fidelity-customer.md §9.2): legacy
+              customers reach "ที่อยู่โกดังจีน" from the top-bar dropdown.
+              Surface the same link here — the most common follow-up action
+              for a customer who just shipped from a Thai address. */}
+          <div className="flex flex-col gap-2.5 border-b border-border px-3 py-3 md:flex-row md:items-center md:justify-between md:px-5 md:py-4">
+            <h1 className="flex items-center gap-2 text-base md:text-xl font-bold text-foreground">
+              <MapPin className="h-5 w-5 md:h-6 md:w-6 shrink-0 text-primary-600" />
+              <span>ที่อยู่จัดส่งสินค้าในไทย</span>
+            </h1>
+            <div className="flex items-center gap-3">
+              {/* Pacred fidelity-addition link — routes to the existing
+                  /china-address page. */}
+              <Link
+                href="/china-address"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-sky-600 hover:text-sky-700 hover:underline"
+              >
+                <MapPin className="h-4 w-4" />
+                <span>ที่อยู่โกดังจีน</span>
+              </Link>
+              {/* address.php L429 — the legacy <a> points at `address/add`,
+                  a URL-rewrite alias of THIS same screen with the add-modal
+                  pre-opened. The link stays on /addresses, carrying the
+                  legacy `?page` flag that the modal-open logic keys off. */}
+              <Link
+                href="/addresses?page=1"
+                className="inline-flex items-center gap-2 rounded-full bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 py-2 pl-2 pr-4 text-sm font-semibold text-white shadow-sm transition-colors"
+              >
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-white/25">
+                  <Plus className="h-4 w-4" />
+                </span>
+                เพิ่มที่อยู่
+              </Link>
+            </div>
+          </div>
 
-                    {/* L489-573 — the add-address modal. Transcribed 1:1.
-                        Legacy opens it via jQuery `.modal('show')` (URL
-                        ?page=1 → page.address.js hook). Without jQuery,
-                        we toggle .show + inline display: block based on
-                        the searchParam so the modal opens on direct URL
-                        navigation (e.g. clicking "เพิ่มที่อยู่"). */}
-                    {isAddModalOpen && (
-                      <div className="modal-backdrop fade show" />
-                    )}
-                    <div
-                      id="add-address"
-                      className={`modal fade ${isAddModalOpen ? "in show" : "in"}`}
-                      tabIndex={-1}
-                      role="dialog"
-                      aria-hidden={!isAddModalOpen}
-                      style={isAddModalOpen ? { display: "block" } : undefined}
-                    >
-                      <div className="modal-dialog">
-                        <div className="modal-content header-from">
-                          <div className="modal-header">
-                            <h4 className="modal-title">เพิ่มที่อยู่จัดส่งสินค้า</h4>
-                            <button
-                              type="button"
-                              className="close"
-                              data-dismiss="modal"
-                              aria-hidden="true"
-                            >
-                              <svg
-                                viewBox="0 0 24 24"
-                                width="24"
-                                height="24"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                fill="none"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                className="css-i6dzq1"
+          {/* ── The address list ── */}
+          <div className="px-3 py-3 md:px-5 md:py-4">
+            {addresses.length === 0 ? (
+              /* Empty state */
+              <div className="flex flex-col items-center gap-2 py-12 text-center">
+                <Inbox className="h-10 w-10 text-muted/50" />
+                <p className="text-sm text-muted">ยังไม่มีที่อยู่จัดส่ง</p>
+                <Link
+                  href="/addresses?page=1"
+                  className="mt-1 text-sm font-semibold text-emerald-600 hover:underline"
+                >
+                  + เพิ่มที่อยู่แรก
+                </Link>
+              </div>
+            ) : (
+              <>
+                {/* ── Mobile: stacked cards (no horizontal scroll) ── */}
+                <div className="space-y-3 md:hidden">
+                  {addresses.map((row, idx) => {
+                    const no = idx + 1;
+                    // fullAddress — the legacy CONCAT (address.php L455),
+                    // with <br>:
+                    const fullAddress =
+                      `คุณ${row.addressname ?? ""} ${row.addresslastname ?? ""}<br>` +
+                      `${row.addressno ?? ""} ตำบล/แขวง ${row.addresssubdistrict ?? ""}<br>` +
+                      ` อำเภอ/เขต ${row.addressdistrict ?? ""} จังหวัด ${row.addressprovince ?? ""} ${row.addresszipcode ?? ""}<br>` +
+                      `โทร. ${row.addresstel ?? ""}, ${row.addresstel2 ?? ""}`;
+                    // fullAddress2 — the onclick CONCAT (address.php L455),
+                    // no <br>:
+                    const fullAddress2 =
+                      `คุณ${row.addressname ?? ""} ${row.addresslastname ?? ""} ` +
+                      `${row.addressno ?? ""} ตำบล/แขวง ${row.addresssubdistrict ?? ""} ` +
+                      `อำเภอ/เขต ${row.addressdistrict ?? ""} จังหวัด ${row.addressprovince ?? ""} ${row.addresszipcode ?? ""}`;
+                    const isMain = mainAddressID === row.addressid;
+                    return (
+                      <div
+                        key={row.addressid}
+                        className="rounded-xl border border-border bg-white dark:bg-surface p-3 shadow-sm"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-xs font-semibold text-muted">
+                            ลำดับ {no}
+                          </span>
+                          {isMain && (
+                            <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-700">
+                              ที่อยู่หลัก
+                            </span>
+                          )}
+                        </div>
+                        <p
+                          className="mt-1.5 text-sm leading-relaxed text-foreground"
+                          dangerouslySetInnerHTML={{ __html: fullAddress }}
+                        />
+                        {row.addressnote && (
+                          <p className="mt-1.5 border-t border-dashed border-border pt-1.5 text-xs text-muted">
+                            หมายเหตุ: {row.addressnote}
+                          </p>
+                        )}
+                        <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-dashed border-border pt-2.5">
+                          <button
+                            type="button"
+                            className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                            data-address-id={row.addressid}
+                            data-full-address={fullAddress2}
+                            data-legacy-onclick={`deleteAddress('${row.addressid}','${fullAddress2}')`}
+                            title="ลบข้อมูล"
+                          >
+                            ลบที่อยู่
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-full border border-amber-300 px-3 py-1 text-xs font-medium text-amber-600 hover:bg-amber-50"
+                            data-address-id={row.addressid}
+                            data-legacy-onclick={`editAddress('${row.addressid}')`}
+                            title="แก้ไขข้อมูล"
+                          >
+                            แก้ไขที่อยู่
+                          </button>
+                          <div
+                            id={`btnAddressMain${row.addressid}`}
+                            className="inline-block"
+                          >
+                            {isMain ? (
+                              // address.php L605 — the main address shows a
+                              // static "ที่อยู่หลัก" button.
+                              <button className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-600">
+                                ที่อยู่หลัก
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="rounded-full border border-sky-300 px-3 py-1 text-xs font-medium text-sky-600 hover:bg-sky-50"
+                                data-address-id={row.addressid}
+                                data-full-address={fullAddress2}
+                                data-legacy-onclick={`setMainAddress('${row.addressid}','${fullAddress2}')`}
                               >
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                              </svg>
-                            </button>
+                                ตั้งเป็นที่อยู่หลัก
+                              </button>
+                            )}
                           </div>
-                          <div className="modal-body header-from">
-                            {/* address.php L497 — the legacy form POSTs
-                                to address/; here it submits to the
-                                addAddressAction Server Action. */}
-                            <form
-                              className="form-horizontal"
-                              action={addAddressAction}
-                              autoComplete="off"
-                            >
-                              <input type="hidden" name="latitude" id="latitude" />
-                              <input type="hidden" name="longitude" id="longitude" />
-                              <div className="form-group">
-                                <div className="row">
-                                  <div className="col-6">
-                                    <div className="mb-1">
-                                      <label className="form-control-label" htmlFor="addressName">
-                                        ชื่อจริง
-                                      </label>
-                                      <input
-                                        className="form-control "
-                                        name="addressName"
-                                        type="text"
-                                        defaultValue={userName}
-                                        placeholder="ชื่อจริง"
-                                        maxLength={200}
-                                        required
-                                      />
-                                    </div>
-                                  </div>
-                                  <div className="col-6">
-                                    <div className="mb-1">
-                                      <label
-                                        className="form-control-label"
-                                        htmlFor="addressLastname"
-                                      >
-                                        นามสกุล
-                                      </label>
-                                      <input
-                                        className="form-control "
-                                        name="addressLastname"
-                                        type="text"
-                                        defaultValue={userLastName}
-                                        placeholder="นามสกุล"
-                                        maxLength={200}
-                                        required
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="row">
-                                  <div className="col-6">
-                                    <div className="mb-1">
-                                      <label className="form-control-label" htmlFor="addressTel">
-                                        เบอร์โทรศัพท์ (สำหรับแจ้งส่งพัสดุ)
-                                      </label>
-                                      <input
-                                        className="form-control "
-                                        name="addressTel"
-                                        type="tel"
-                                        pattern="\d*"
-                                        defaultValue={userTel}
-                                        placeholder="เบอร์โทร"
-                                        minLength={10}
-                                        maxLength={10}
-                                        required
-                                      />
-                                    </div>
-                                  </div>
-                                  <div className="col-6">
-                                    <div className="mb-1">
-                                      <label className="form-control-label" htmlFor="addressTel2">
-                                        เบอร์โทรศัพท์สำรอง (ไม่จำเป็น)
-                                      </label>
-                                      <input
-                                        className="form-control "
-                                        name="addressTel2"
-                                        type="tel"
-                                        pattern="\d*"
-                                        placeholder="เบอร์โทร"
-                                        minLength={10}
-                                        maxLength={10}
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="mb-1">
-                                  <label className="form-control-label" htmlFor="addressNo">
-                                    ทึ่อยู่{" "}
-                                    <span className="text-danger">
-                                      ชื่อหมู่บ้านและหมู่ที่*
-                                    </span>
-                                  </label>
-                                  <input
-                                    className="form-control "
-                                    name="addressNo"
-                                    type="text"
-                                    placeholder="บ้านเลขที่ ถนน ซอย ชื่อหมู่บ้านและหมู่ที่*"
-                                    maxLength={200}
-                                    required
-                                  />
-                                  <div className="input-info">
-                                    {" "}
-                                    กรุณากรอกบ้านเลขที่ ถนน ซอย ชื่อหมู่บ้านและหมู่ที่
-                                  </div>
-                                </div>
-                                <div
-                                  id="demo1"
-                                  className="demo"
-                                  style={{ display: "none" }}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* ── Desktop: table. Wrapper carries hidden/block so the
+                    legacy `.dataTable` display cascade (address.css) cannot
+                    override it. ── */}
+                <div className="hidden md:block overflow-x-auto rounded-xl border border-border">
+                  <table
+                    id="myTable"
+                    className="dataTable w-full text-sm"
+                  >
+                    <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+                      <tr>
+                        <th className="px-4 py-3 font-medium">ลำดับ</th>
+                        <th className="px-4 py-3 font-medium">ชื่อสถานที่</th>
+                        <th className="px-4 py-3 font-medium">หมายเหตุ</th>
+                        <th className="px-4 py-3 text-center font-medium">ตัวเลือก</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* address.php L454-480 — one <tr> per tb_address row.
+                          The legacy builds `fullAddress` (with <br>) + the
+                          onclick payload `fullAddress2` in SQL CONCAT;
+                          reproduced identically. The three row buttons carry
+                          legacy `onclick` payloads as `data-legacy-onclick`
+                          (page.address.js) so the integrator can re-wire them
+                          when the endpoints are ported. */}
+                      {addresses.map((row, idx) => {
+                        const no = idx + 1;
+                        const fullAddress =
+                          `คุณ${row.addressname ?? ""} ${row.addresslastname ?? ""}<br>` +
+                          `${row.addressno ?? ""} ตำบล/แขวง ${row.addresssubdistrict ?? ""}<br>` +
+                          ` อำเภอ/เขต ${row.addressdistrict ?? ""} จังหวัด ${row.addressprovince ?? ""} ${row.addresszipcode ?? ""}<br>` +
+                          `โทร. ${row.addresstel ?? ""}, ${row.addresstel2 ?? ""}`;
+                        const fullAddress2 =
+                          `คุณ${row.addressname ?? ""} ${row.addresslastname ?? ""} ` +
+                          `${row.addressno ?? ""} ตำบล/แขวง ${row.addresssubdistrict ?? ""} ` +
+                          `อำเภอ/เขต ${row.addressdistrict ?? ""} จังหวัด ${row.addressprovince ?? ""} ${row.addresszipcode ?? ""}`;
+                        const isMain = mainAddressID === row.addressid;
+                        return (
+                          <tr
+                            key={row.addressid}
+                            className="border-t border-border align-top hover:bg-surface-alt/30"
+                          >
+                            <td className="px-4 py-3 text-xs text-muted">{no}</td>
+                            <td
+                              className="px-4 py-3 text-sm leading-relaxed text-foreground"
+                              dangerouslySetInnerHTML={{ __html: fullAddress }}
+                            ></td>
+                            <td className="px-4 py-3 text-xs text-muted">
+                              {row.addressnote}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <div className="flex flex-wrap items-center justify-center gap-2">
+                                <button
+                                  type="button"
+                                  className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                                  data-address-id={row.addressid}
+                                  data-full-address={fullAddress2}
+                                  data-legacy-onclick={`deleteAddress('${row.addressid}','${fullAddress2}')`}
+                                  title="ลบข้อมูล"
                                 >
-                                  <div className="mb-1">
-                                    <label className="form-control-label" htmlFor="district">
-                                      ตำบล/แขวง
-                                    </label>
-                                    <input
-                                      id="district"
-                                      className="form-control "
-                                      name="district"
-                                      type="text"
-                                      placeholder="ตำบล/แขวง"
-                                      required
-                                    />
-                                  </div>
-                                  <div className="mb-1">
-                                    <label className="form-control-label" htmlFor="amphoe">
-                                      อำเภอ/เขต
-                                    </label>
-                                    <input
-                                      id="amphoe"
-                                      className="form-control "
-                                      name="amphoe"
-                                      type="text"
-                                      placeholder="อำเภอ/เขต"
-                                      required
-                                    />
-                                  </div>
-                                  <div className="mb-1">
-                                    <label className="form-control-label" htmlFor="province">
-                                      จังหวัด
-                                    </label>
-                                    <input
-                                      id="province"
-                                      className="form-control "
-                                      name="province"
-                                      type="text"
-                                      placeholder="จังหวัด"
-                                      required
-                                    />
-                                  </div>
-                                  <div className="mb-1">
-                                    <label className="form-control-label" htmlFor="zipcode">
-                                      รหัสไปรษณีย์
-                                    </label>
-                                    <input
-                                      id="zipcode"
-                                      className="form-control "
-                                      name="zipcode"
-                                      type="text"
-                                      pattern="\d*"
-                                      placeholder="รหัสไปรษณีย์"
-                                      required
-                                    />
-                                  </div>
-                                </div>
-                                <div>
-                                  <div className="bg-danger2 p-05">
-                                    <h5>ปักหมุดตำแหน่งของคุณ</h5>
-                                    เราจะจัดส่งสินค้าไปยังตำแหน่งที่ปักหมุดไว้
-                                    กรุณาตรวจสอบตำแหน่งของคุณ หากปักหมุดไม่ตรง
-                                    กรุณาคลิกที่หมุดเพื่อแก้ไข
-                                  </div>
-                                  <div id="map" className="gmaps" style={{ height: "350px" }}></div>
-                                </div>
-                                <div className="mb-1">
-                                  <label className="form-control-label" htmlFor="addressNote">
-                                    หมายเหตุ (ไม่จำเป็น)
-                                  </label>
-                                  <textarea
-                                    className="form-control"
-                                    rows={3}
-                                    name="addressNote"
-                                    placeholder="หมายเหตุ"
-                                    maxLength={500}
-                                  ></textarea>
-                                </div>
-
-                                <div className="modal-footer">
-                                  <button
-                                    type="button"
-                                    className="btn btn-outline-secondary round btn-min-width waves-effect"
-                                    data-dismiss="modal"
-                                  >
-                                    ยกเลิก
-                                  </button>
-                                  <button
-                                    type="submit"
-                                    name="add"
-                                    className="btn btn-outline-info round btn-min-width waves-effect"
-                                  >
-                                    บันทึก
-                                  </button>
+                                  ลบที่อยู่
+                                </button>
+                                <button
+                                  type="button"
+                                  className="rounded-full border border-amber-300 px-3 py-1 text-xs font-medium text-amber-600 hover:bg-amber-50"
+                                  data-address-id={row.addressid}
+                                  data-legacy-onclick={`editAddress('${row.addressid}')`}
+                                  title="แก้ไขข้อมูล"
+                                >
+                                  แก้ไขที่อยู่
+                                </button>
+                                <div
+                                  id={`btnAddressMain${row.addressid}`}
+                                  className="inline-block"
+                                >
+                                  {isMain ? (
+                                    // address.php L605 — the main address
+                                    // shows a static "ที่อยู่หลัก" button.
+                                    <button className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-600">
+                                      ที่อยู่หลัก
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="rounded-full border border-sky-300 px-3 py-1 text-xs font-medium text-sky-600 hover:bg-sky-50"
+                                      data-address-id={row.addressid}
+                                      data-full-address={fullAddress2}
+                                      data-legacy-onclick={`setMainAddress('${row.addressid}','${fullAddress2}')`}
+                                    >
+                                      ตั้งเป็นที่อยู่หลัก
+                                    </button>
+                                  )}
                                 </div>
                               </div>
-                            </form>
-                          </div>
-                        </div>
-                      </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+      </div>
+
+      {/* ── The add-address modal. Restyled to a clean Tailwind dialog, but
+          the `id="add-address"` + `modal fade` classes + `data-dismiss`
+          attrs + the `isAddModalOpen` show logic are KEPT verbatim so the
+          legacy Bootstrap-4 jQuery (`.modal('show')` via ?page=1) still
+          opens/closes it. The <form action={addAddressAction}> contract +
+          every input name/id/type/defaultValue/pattern/required + the hidden
+          lat/long + #demo1 + #map are preserved 1:1. ── */}
+      {isAddModalOpen && (
+        <div className="modal-backdrop fixed inset-0 z-[1040] bg-black/50" />
+      )}
+      <div
+        id="add-address"
+        className={`modal fade ${isAddModalOpen ? "in show" : "in"} ${
+          isAddModalOpen
+            ? "fixed inset-0 z-[1050] flex items-start justify-center overflow-y-auto p-3 md:p-6"
+            : ""
+        }`}
+        tabIndex={-1}
+        role="dialog"
+        aria-hidden={!isAddModalOpen}
+        style={isAddModalOpen ? { display: "block" } : undefined}
+      >
+        <div className="modal-dialog mx-auto w-full max-w-[640px]">
+          <div className="modal-content header-from rounded-2xl border border-border bg-white dark:bg-surface shadow-xl">
+            <div className="modal-header flex items-center justify-between border-b border-border px-4 py-3 md:px-5 md:py-4">
+              <h4 className="modal-title text-base md:text-lg font-bold text-foreground">
+                เพิ่มที่อยู่จัดส่งสินค้า
+              </h4>
+              <button
+                type="button"
+                className="close inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-surface-alt hover:text-foreground"
+                data-dismiss="modal"
+                aria-hidden="true"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="22"
+                  height="22"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="css-i6dzq1"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+            <div className="modal-body header-from px-4 py-4 md:px-5">
+              {/* address.php L497 — the legacy form POSTs to address/; here
+                  it submits to the addAddressAction Server Action. */}
+              <form
+                className="form-horizontal"
+                action={addAddressAction}
+                autoComplete="off"
+              >
+                <input type="hidden" name="latitude" id="latitude" />
+                <input type="hidden" name="longitude" id="longitude" />
+                <div className="form-group space-y-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label
+                        className="block text-xs font-medium text-muted mb-1"
+                        htmlFor="addressName"
+                      >
+                        ชื่อจริง
+                      </label>
+                      <input
+                        className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
+                        name="addressName"
+                        type="text"
+                        defaultValue={userName}
+                        placeholder="ชื่อจริง"
+                        maxLength={200}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label
+                        className="block text-xs font-medium text-muted mb-1"
+                        htmlFor="addressLastname"
+                      >
+                        นามสกุล
+                      </label>
+                      <input
+                        className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
+                        name="addressLastname"
+                        type="text"
+                        defaultValue={userLastName}
+                        placeholder="นามสกุล"
+                        maxLength={200}
+                        required
+                      />
                     </div>
                   </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label
+                        className="block text-xs font-medium text-muted mb-1"
+                        htmlFor="addressTel"
+                      >
+                        เบอร์โทรศัพท์ (สำหรับแจ้งส่งพัสดุ)
+                      </label>
+                      <input
+                        className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
+                        name="addressTel"
+                        type="tel"
+                        pattern="\d*"
+                        defaultValue={userTel}
+                        placeholder="เบอร์โทร"
+                        minLength={10}
+                        maxLength={10}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label
+                        className="block text-xs font-medium text-muted mb-1"
+                        htmlFor="addressTel2"
+                      >
+                        เบอร์โทรศัพท์สำรอง (ไม่จำเป็น)
+                      </label>
+                      <input
+                        className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
+                        name="addressTel2"
+                        type="tel"
+                        pattern="\d*"
+                        placeholder="เบอร์โทร"
+                        minLength={10}
+                        maxLength={10}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label
+                      className="block text-xs font-medium text-muted mb-1"
+                      htmlFor="addressNo"
+                    >
+                      ทึ่อยู่{" "}
+                      <span className="text-red-600">ชื่อหมู่บ้านและหมู่ที่*</span>
+                    </label>
+                    <input
+                      className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
+                      name="addressNo"
+                      type="text"
+                      placeholder="บ้านเลขที่ ถนน ซอย ชื่อหมู่บ้านและหมู่ที่*"
+                      maxLength={200}
+                      required
+                    />
+                    <div className="input-info mt-1 text-xs text-muted">
+                      {" "}
+                      กรุณากรอกบ้านเลขที่ ถนน ซอย ชื่อหมู่บ้านและหมู่ที่
+                    </div>
+                  </div>
+                  <div id="demo1" className="demo space-y-3" style={{ display: "none" }}>
+                    <div>
+                      <label
+                        className="block text-xs font-medium text-muted mb-1"
+                        htmlFor="district"
+                      >
+                        ตำบล/แขวง
+                      </label>
+                      <input
+                        id="district"
+                        className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
+                        name="district"
+                        type="text"
+                        placeholder="ตำบล/แขวง"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label
+                        className="block text-xs font-medium text-muted mb-1"
+                        htmlFor="amphoe"
+                      >
+                        อำเภอ/เขต
+                      </label>
+                      <input
+                        id="amphoe"
+                        className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
+                        name="amphoe"
+                        type="text"
+                        placeholder="อำเภอ/เขต"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label
+                        className="block text-xs font-medium text-muted mb-1"
+                        htmlFor="province"
+                      >
+                        จังหวัด
+                      </label>
+                      <input
+                        id="province"
+                        className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
+                        name="province"
+                        type="text"
+                        placeholder="จังหวัด"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label
+                        className="block text-xs font-medium text-muted mb-1"
+                        htmlFor="zipcode"
+                      >
+                        รหัสไปรษณีย์
+                      </label>
+                      <input
+                        id="zipcode"
+                        className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
+                        name="zipcode"
+                        type="text"
+                        pattern="\d*"
+                        placeholder="รหัสไปรษณีย์"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="bg-danger2 rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-700">
+                      <h5 className="text-sm font-bold text-red-700">
+                        ปักหมุดตำแหน่งของคุณ
+                      </h5>
+                      เราจะจัดส่งสินค้าไปยังตำแหน่งที่ปักหมุดไว้
+                      กรุณาตรวจสอบตำแหน่งของคุณ หากปักหมุดไม่ตรง
+                      กรุณาคลิกที่หมุดเพื่อแก้ไข
+                    </div>
+                    <div
+                      id="map"
+                      className="gmaps mt-2 rounded-lg border border-border"
+                      style={{ height: "350px" }}
+                    ></div>
+                  </div>
+                  <div>
+                    <label
+                      className="block text-xs font-medium text-muted mb-1"
+                      htmlFor="addressNote"
+                    >
+                      หมายเหตุ (ไม่จำเป็น)
+                    </label>
+                    <textarea
+                      className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
+                      rows={3}
+                      name="addressNote"
+                      placeholder="หมายเหตุ"
+                      maxLength={500}
+                    ></textarea>
+                  </div>
+
+                  <div className="modal-footer flex items-center justify-end gap-2 border-t border-border pt-3">
+                    <button
+                      type="button"
+                      className="rounded-lg border border-border bg-white dark:bg-surface px-4 py-2 text-sm font-medium text-foreground hover:bg-surface-alt"
+                      data-dismiss="modal"
+                    >
+                      ยกเลิก
+                    </button>
+                    <button
+                      type="submit"
+                      name="add"
+                      className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-red-700"
+                    >
+                      บันทึก
+                    </button>
+                  </div>
                 </div>
-              </div>
-              {/* address.php L577-578 — jQuery AJAX targets */}
-              <div id="edit-Address"></div>
-              <div className="message"></div>
-            </section>
-            {/* Basic Carousel end — address.php L580 */}
+              </form>
+            </div>
           </div>
         </div>
       </div>
-      {/* END: Content — address.php L584 */}
+
+      {/* address.php L577-578 — jQuery AJAX targets (kept verbatim). */}
+      <div id="edit-Address"></div>
+      <div className="message"></div>
     </div>
   );
 }

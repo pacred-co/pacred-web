@@ -120,15 +120,25 @@ function numberFormat2(n: number): string {
   });
 }
 
-// load_wallet_hs.php L21 — the legacy status badge for a wallet-hs row.
+// load_wallet_hs.php L21 — the wallet-hs row status badge (Tailwind chip).
 function statusBadge(status: string | null) {
+  const base =
+    "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap";
   if (status === "1") {
-    return <span className="badge badge-warning badge-pill">รอตรวจสอบ</span>;
+    return (
+      <span className={`${base} bg-amber-100 text-amber-700 border-amber-200`}>
+        รอตรวจสอบ
+      </span>
+    );
   }
   if (status === "2") {
-    return <span className="badge badge-info badge-pill">สำเร็จ</span>;
+    return (
+      <span className={`${base} bg-sky-100 text-sky-700 border-sky-200`}>สำเร็จ</span>
+    );
   }
-  return <span className="badge badge-danger badge-pill">ไม่สำเร็จ</span>;
+  return (
+    <span className={`${base} bg-red-100 text-red-700 border-red-200`}>ไม่สำเร็จ</span>
+  );
 }
 
 // A single wallet-hs row as load_wallet_hs.php L22-43 renders it.
@@ -225,168 +235,136 @@ export default async function WalletPage() {
   return (
     <div className="pcs-legacy">
       {/* Legacy PCS theme CSS — static public/ asset, loaded via a plain
-          <link> so it bypasses the app's Tailwind/PostCSS pipeline. */}
+          <link> so it bypasses the app's Tailwind/PostCSS pipeline. Kept
+          for the in-page Bootstrap-JS tab mechanism (.tab-content/.tab-pane
+          display rules wallet.css L182-184) + the #wallet-add modal hooks. */}
       <link rel="stylesheet" href="/legacy/pcs/wallet.css" />
 
       {/* wallet.php <title> L53 (Next.js owns <head> — kept here as a
           comment for fidelity record):  กระเป๋าสตางค์ | Pacred */}
 
-      {/* BEGIN: Content — wallet.php L85 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          {/* L89-100 — breadcrumb header */}
-          <div className="content-header row">
-            <div className="content-header-left col-12 mb-2">
-              <div className="row breadcrumbs-top ">
-                <div className="breadcrumb-wrapper col-12">
-                  <ol className="breadcrumb ">
-                    <li className="breadcrumb-item">
-                      <Link href="/dashboard">
-                        <span className="menu-home">หน้าแรก</span>
-                      </Link>
-                    </li>
-                    <li className="breadcrumb-item active">กระเป๋าสตางค์ </li>
-                  </ol>
-                </div>
-              </div>
-            </div>
-          </div>
-          {/* L101 — content-body */}
-          <div className="content-body pr110">
-            <section>
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  <div className="card">
-                    <div className="card-content">
-                      <div className="card-body">
-                        {/* ── Wallet balance card — wallet.php L108-131 ── */}
-                        <div className="row">
-                          <div className="col-md-6 offset-md-3">
-                            <div className="card-body border-wallet pb-0">
-                              <div className="media d-flex">
-                                <div className="media-body text-left">
-                                  <h3 className="warning mb-0">
-                                    <span className="text-black-1">{fullName}</span>
-                                    <br />
-                                    <span className="text-black-1 font-14 ">
-                                      กระเป๋าสตางค์ (บาท)
-                                    </span>
-                                    <br />
-                                    <span
-                                      className="tam-counter font-3rem notranslate"
-                                      data-count={walletTotal}
-                                    >
-                                      {numberFormat2(walletTotal)}
-                                    </span>
-                                    <br />
-                                  </h3>
-                                </div>
-                                <div>
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    className="brand-logo logo-wallet"
-                                    alt="logo"
-                                    src="/images/pacred-logo-red.png"
-                                  />
-                                </div>
-                              </div>
-                              <div className="progress progress-sm mt-1 mb-0 box-shadow-2">
-                                <div
-                                  className="progress-bar bg-gradient-x-warning"
-                                  role="progressbar"
-                                  style={{ width: "100%" }}
-                                  aria-valuenow={100}
-                                  aria-valuemin={0}
-                                  aria-valuemax={100}
-                                ></div>
-                              </div>
-                              <div
-                                className="text-center pt-1"
-                                style={{ marginBottom: "-20px" }}
-                              >
-                                <Link href="/wallet/deposit">
-                                  <div className="btn-add-wallet">
-                                    {" "}
-                                    <i className="ft-plus"></i> เติมเงินเข้ากระเป๋า{" "}
-                                  </div>
-                                </Link>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+      {/* Page content — Tailwind rebuild matching /service-payment + /service-import
+          page.tsx. Wrapped in `.pcs-content-pad` so the (protected) layout's
+          desktop padding (sidebar clearance + FloatingTabs clearance) kicks in. */}
+      <div className="pcs-content-pad w-full px-3 md:px-6 py-3 md:py-6">
+        <div className="mx-auto w-full max-w-2xl">
+          {/* breadcrumb — wallet.php L89-100 */}
+          <nav className="mb-3 flex items-center gap-1.5 text-xs text-muted md:text-sm">
+            <Link href="/dashboard" className="hover:text-foreground transition-colors">
+              หน้าแรก
+            </Link>
+            <span className="text-muted/60">/</span>
+            <span className="font-medium text-foreground">กระเป๋าสตางค์</span>
+          </nav>
 
-                        {/* ── 4-tab wallet-history panel — wallet.php L132-227 ── */}
-                        <div className="row pt-3">
-                          <div className="col-12">
-                            <div className="card">
-                              <div className="pt-0">
+          {/* ── Wallet balance summary — prominent Tailwind card.
+              wallet.php L108-131. Keeps `tam-counter` + `data-count` so
+              tam-it.js's count-up animation still runs, and the
+              /wallet/deposit CTA. ── */}
+          <section className="overflow-hidden rounded-2xl border-2 border-red-500/70 bg-gradient-to-br from-white to-red-50/40 shadow-lg shadow-red-500/10 dark:from-surface dark:to-red-950/20">
+            <div className="flex items-start justify-between gap-3 px-5 pt-5 md:px-6 md:pt-6">
+              <div className="min-w-0">
+                <p className="truncate text-base font-bold text-foreground md:text-lg">
+                  {fullName}
+                </p>
+                <p className="mt-1 text-xs font-medium text-muted md:text-sm">
+                  กระเป๋าสตางค์ (บาท)
+                </p>
+                <p className="mt-1 flex items-baseline gap-1 leading-none">
+                  <span
+                    className="tam-counter notranslate font-mono text-4xl font-extrabold tabular-nums text-red-600 md:text-5xl"
+                    data-count={walletTotal}
+                  >
+                    {numberFormat2(walletTotal)}
+                  </span>
+                  <span className="text-sm font-semibold text-muted">บาท</span>
+                </p>
+              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                className="brand-logo logo-wallet h-12 w-12 shrink-0 object-contain md:h-14 md:w-14"
+                alt="logo"
+                src="/images/pacred-logo-red.png"
+              />
+            </div>
+
+            {/* gold accent bar — legacy progress band (purely decorative) */}
+            <div className="mt-4 h-1.5 w-full bg-gradient-to-r from-[#ff7216] to-[#ffb07c]" />
+
+            <div className="px-5 py-4 text-center md:px-6">
+              <Link
+                href="/wallet/deposit"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#cc3333] to-[#f15a24] px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-red-600/25 transition-all hover:brightness-110 active:scale-[0.98]"
+              >
+                <span className="text-lg leading-none" aria-hidden>
+                  +
+                </span>
+                เติมเงินเข้ากระเป๋า
+              </Link>
+            </div>
+          </section>
+
+                        {/* ── 4-tab wallet-history panel — wallet.php L132-227 ──
+                            In-page Bootstrap-JS tabs (vendors.min.js toggles
+                            `.active`; wallet.css L182-184 drives the pane
+                            show/hide). The tab MECHANISM is preserved verbatim:
+                            `data-toggle="tab"`, the `href="#paneId"` anchors,
+                            `role`, and `nav-link`/`active` classes are kept so
+                            the switch keeps working — only Tailwind chip styling
+                            is layered on top (active = red, per the brief). ── */}
+                        <section className="mt-4 overflow-hidden rounded-2xl border border-border bg-white shadow-sm dark:bg-surface">
+                          <div className="px-3 pt-3 md:px-4 md:pt-4">
                                 <ul
-                                  className="nav nav-tabs customtab tab-wallet"
+                                  className="nav nav-tabs customtab tab-wallet flex flex-wrap gap-2"
                                   role="tablist"
                                 >
-                                  <li className="nav-item tab-sm-center">
+                                  <li className="nav-item">
                                     <a
-                                      className="nav-link active"
+                                      className="nav-link active group inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors md:text-sm [&.active]:border-red-600 [&.active]:bg-red-600 [&.active]:text-white [&:not(.active)]:border-border [&:not(.active)]:bg-surface-alt/60 [&:not(.active)]:text-foreground [&:not(.active)]:hover:bg-surface-alt"
                                       data-toggle="tab"
                                       href="#history"
                                       role="tab"
                                     >
-                                      <span className="hidden-sm-up">
-                                        <i className="fas fa-history pr-05"></i>
-                                      </span>
-                                      <span className="hidden-xs-down">
-                                        รายการเดินบัญชี
-                                      </span>
+                                      <i className="fas fa-history" aria-hidden></i>
+                                      รายการเดินบัญชี
                                     </a>
                                   </li>
-                                  <li className="nav-item tab-sm-center">
+                                  <li className="nav-item">
                                     <a
-                                      className="nav-link"
+                                      className="nav-link group inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors md:text-sm [&.active]:border-red-600 [&.active]:bg-red-600 [&.active]:text-white [&:not(.active)]:border-border [&:not(.active)]:bg-surface-alt/60 [&:not(.active)]:text-foreground [&:not(.active)]:hover:bg-surface-alt"
                                       data-toggle="tab"
                                       href="#wallet-hs-add"
                                       role="tab"
                                     >
-                                      <span className="hidden-sm-up">
-                                        <i className="la la-money pr-05"></i>
-                                      </span>
-                                      <span className="hidden-xs-down">
-                                        รายการเติมเงิน
-                                      </span>
+                                      <i className="la la-money" aria-hidden></i>
+                                      รายการเติมเงิน
                                     </a>
                                   </li>
-                                  <li className="nav-item tab-sm-center">
+                                  <li className="nav-item">
                                     <a
-                                      className="nav-link"
+                                      className="nav-link group inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors md:text-sm [&.active]:border-red-600 [&.active]:bg-red-600 [&.active]:text-white [&:not(.active)]:border-border [&:not(.active)]:bg-surface-alt/60 [&:not(.active)]:text-foreground [&:not(.active)]:hover:bg-surface-alt"
                                       data-toggle="tab"
                                       href="#wallet-payment"
                                       role="tab"
                                     >
-                                      <span className="hidden-sm-up">
-                                        <i className="far fa-credit-card pr-05"></i>
-                                      </span>
-                                      <span className="hidden-xs-down">
-                                        รายการชำระเงิน
-                                      </span>
+                                      <i className="far fa-credit-card" aria-hidden></i>
+                                      รายการชำระเงิน
                                     </a>
                                   </li>
-                                  <li className="nav-item tab-sm-center">
+                                  <li className="nav-item">
                                     <a
-                                      className="nav-link"
+                                      className="nav-link group inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors md:text-sm [&.active]:border-red-600 [&.active]:bg-red-600 [&.active]:text-white [&:not(.active)]:border-border [&:not(.active)]:bg-surface-alt/60 [&:not(.active)]:text-foreground [&:not(.active)]:hover:bg-surface-alt"
                                       data-toggle="tab"
                                       href="#wallet-hs-withdraw"
                                       role="tab"
                                     >
-                                      <span className="hidden-sm-up">
-                                        <i className="far fa-handshake pr-05"></i>
-                                      </span>
-                                      <span className="hidden-xs-down">
-                                        รายการถอนเงิน
-                                      </span>
+                                      <i className="far fa-handshake" aria-hidden></i>
+                                      รายการถอนเงิน
                                     </a>
                                   </li>
                                 </ul>
-                                <div className="tab-content">
+                                <hr className="mt-3 border-t border-dashed border-border" />
+                                <div className="tab-content py-3">
                                   {/* Tab 1 — รายการเดินบัญชี (type='all') */}
                                   <div
                                     className="tab-pane active"
@@ -395,7 +373,7 @@ export default async function WalletPage() {
                                   >
                                     <div id="load_data_wallet_hs">
                                       {rowsHistory.length === 0 ? (
-                                        <div className="text-center text-no-data text-danger">
+                                        <div className="py-12 text-center text-sm text-muted">
                                           คุณยังไม่มีรายการ
                                         </div>
                                       ) : (
@@ -414,7 +392,7 @@ export default async function WalletPage() {
                                   >
                                     <div id="load_data_wallet_hs_add">
                                       {rowsAdd.length === 0 ? (
-                                        <div className="text-center text-no-data text-danger">
+                                        <div className="py-12 text-center text-sm text-muted">
                                           คุณยังไม่มีรายการ
                                         </div>
                                       ) : (
@@ -433,7 +411,7 @@ export default async function WalletPage() {
                                   >
                                     <div id="load_data_wallet_hs_payments">
                                       {rowsPayments.length === 0 ? (
-                                        <div className="text-center text-no-data text-danger">
+                                        <div className="py-12 text-center text-sm text-muted">
                                           คุณยังไม่มีรายการ
                                         </div>
                                       ) : (
@@ -452,7 +430,7 @@ export default async function WalletPage() {
                                   >
                                     <div id="load_data_wallet_hs_withdraw">
                                       {rowsWithdraw.length === 0 ? (
-                                        <div className="text-center text-no-data text-danger">
+                                        <div className="py-12 text-center text-sm text-muted">
                                           คุณยังไม่มีรายการ
                                         </div>
                                       ) : (
@@ -464,20 +442,27 @@ export default async function WalletPage() {
                                     <div id="load_data_message_wallet_hs_withdraw"></div>
                                   </div>
                                 </div>
-                              </div>
-                            </div>
                           </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {/* ── Deposit modal — wallet.php L233-283 ──
-                  Transcribed 1:1. The legacy jQuery behaviours
-                  (Bootstrap .modal('show'), dropify, PromptPay QR,
-                  SweetAlert) need client JS not present here — the
-                  modal renders statically (see the file header §3). */}
+                        </section>
+                        {/* ═══ END 4-tab wallet-history panel ═══ */}
+        </div>
+      </div>
+
+      {/* ── Deposit modal — wallet.php L233-283 ──
+          Markup kept 1:1 so the legacy hooks stay wired: Bootstrap
+          `.modal('show')` (vendors.min.js) is opened from elsewhere via
+          `#wallet-add` + `data-dismiss="modal"`, dropify binds the file
+          input, the PromptPay QR fills `#qrcode` on `#myBtn` click, and the
+          form POSTs to /wallet/. Only the container chrome is Tailwind-styled;
+          every id / name / data-* / hook class is preserved verbatim. */}
+              {/* Restore Bootstrap's `.modal { display:none }` default (the
+                  dropped bootstrap.css used to provide it). This page has no
+                  trigger that opens #wallet-add — the deposit flow lives at
+                  /wallet/deposit — so the modal must stay hidden instead of
+                  dumping its form inline. Bootstrap JS `.modal('show')` sets an
+                  inline `display:block` that still overrides this if ever fired,
+                  so every hook keeps working. */}
+              <style>{`.pcs-legacy .modal.fade{display:none;}`}</style>
               <div
                 id="wallet-add"
                 className="modal fade in"
@@ -485,13 +470,13 @@ export default async function WalletPage() {
                 role="dialog"
                 aria-hidden="true"
               >
-                <div className="modal-dialog">
-                  <div className="modal-content ">
-                    <div className="modal-header header-from">
-                      <h4 className="modal-title">เติมเงินเข้าเป๋าตัง Pacred</h4>
+                <div className="modal-dialog fixed inset-0 z-[100] m-0 flex items-end justify-center p-0 sm:items-center sm:p-4">
+                  <div className="modal-content relative max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-border bg-white shadow-2xl dark:bg-surface sm:max-w-md sm:rounded-2xl">
+                    <div className="modal-header header-from flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+                      <h4 className="modal-title text-base font-bold text-foreground">เติมเงินเข้าเป๋าตัง Pacred</h4>
                       <button
                         type="button"
-                        className="close"
+                        className="close grid h-8 w-8 place-items-center rounded-full text-muted transition-colors hover:bg-surface-alt hover:text-foreground"
                         data-dismiss="modal"
                         aria-hidden="true"
                       >
@@ -511,7 +496,7 @@ export default async function WalletPage() {
                         </svg>
                       </button>
                     </div>
-                    <div className="modal-body header-from">
+                    <div className="modal-body header-from px-4 py-4">
                       <form
                         className="form-horizontal"
                         method="POST"
@@ -520,12 +505,12 @@ export default async function WalletPage() {
                         encType="multipart/form-data"
                       >
                         <div className="form-group pt-1">
-                          <div className="">
-                            <label className="form-control-label" htmlFor="amount">
+                          <div>
+                            <label className="form-control-label mb-1 block text-sm font-medium text-foreground" htmlFor="amount">
                               จำนวนเงิน (บาท)
                             </label>
                             <input
-                              className="form-control form-control-lg text-right"
+                              className="form-control form-control-lg w-full rounded-lg border border-border bg-white px-3 py-2.5 text-right text-lg font-semibold tabular-nums text-foreground focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/30 dark:bg-surface"
                               placeholder="00.00"
                               name="amount"
                               id="amount"
@@ -535,17 +520,17 @@ export default async function WalletPage() {
                               step="0.01"
                               required
                             />
-                            <div className="text-center">
+                            <div className="mt-2 text-center">
                               <button
                                 type="button"
-                                className="btn btn-sm btn-outline-danger round m-1"
+                                className="btn btn-sm btn-outline-danger round m-1 inline-flex items-center justify-center rounded-full border border-red-500 px-4 py-1.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
                                 id="myBtn"
                               >
                                 สร้าง QR Code ชำระเงิน
                               </button>
                             </div>
                           </div>
-                          <div className="mb-1 qrcodeMain text-center">
+                          <div className="mb-1 qrcodeMain mt-3 text-center">
                             <div
                               id="qrcode"
                               style={{
@@ -562,26 +547,26 @@ export default async function WalletPage() {
                               </a>
                             </div>
                           </div>
-                          <div className="mb-1">
-                            <label className="form-control-label" htmlFor="imagesSlip">
+                          <div className="mb-1 mt-3">
+                            <label className="form-control-label mb-1 block text-sm font-medium text-foreground" htmlFor="imagesSlip">
                               หลักฐานการโอน (สลิปรายการ)
                             </label>
                             <div className="fallback">
                               <input
                                 type="file"
                                 name="imagesSlip"
-                                className="dropify"
+                                className="dropify block w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground file:mr-3 file:rounded-md file:border-0 file:bg-red-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-red-600 dark:bg-surface"
                                 accept="image/*"
                                 data-max-file-size="9M"
                                 required
                               />
                             </div>
                           </div>
-                          <div className="mb-1">
-                            <div>
+                          <div className="mb-1 mt-4 rounded-lg border border-border bg-surface-alt/40 p-3">
+                            <div className="text-sm font-semibold text-foreground">
                               เงื่อนไขการถอนเงิน ที่ต้องทราบก่อนเติมเงินเข้าระบบ
                             </div>
-                            <ol className="">
+                            <ol className="mt-1.5 list-decimal space-y-1 pl-5 text-xs text-muted">
                               <li>
                                 {" "}
                                 สามารถถอนเงินได้เมื่อ
@@ -611,17 +596,17 @@ export default async function WalletPage() {
                               </li>
                             </ol>
                           </div>
-                          <div className="modal-footer">
+                          <div className="modal-footer mt-4 flex items-center justify-end gap-2 border-t border-border pt-3">
                             <button
                               type="button"
-                              className="btn btn-outline-secondary round waves-effect"
+                              className="btn btn-outline-secondary round waves-effect inline-flex items-center justify-center rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface-alt"
                               data-dismiss="modal"
                             >
                               ยกเลิก
                             </button>
                             <button
                               type="submit"
-                              className="btn btn-outline-info round waves-effect submit-wait"
+                              className="btn btn-outline-info round waves-effect submit-wait inline-flex items-center justify-center rounded-full bg-red-600 px-5 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-red-700"
                               name="addData"
                             >
                               เติมเงิน
@@ -633,10 +618,6 @@ export default async function WalletPage() {
                   </div>
                 </div>
               </div>
-            </section>
-          </div>
-        </div>
-      </div>
       {/* END: Content — wallet.php L288 */}
     </div>
   );
@@ -657,56 +638,61 @@ function WalletHsRowView({ row }: { row: WalletHsRow }) {
   // `<br>`); split on the `\n` marker to reproduce the line break.
   const nameParts = nameWallet(row.type ?? "").split("\n");
 
+  // Amount tone — credit (type 1/5) = green, everything else = red.
+  const amountClass =
+    nameColor === "success" ? "text-emerald-600" : "text-red-600";
+
   return (
-    <div className="pt-1 pl-1 pr-1">
-      <div className="row border-success-2 p-1">
-        <div className="col-6">
-          <div className="text-left">
-            <h4>
-              {nameParts.map((part, i) => (
-                <span key={i}>
-                  {i > 0 && <br />}
-                  {part}
-                </span>
-              ))}
-            </h4>
-            <span className="text-muted font-12">เลขที่รายการ #{row.ID}</span>
-            {row.refOrder != null && row.refOrder !== "" && (
-              <>
-                <br />
-                <span className="text-muted font-12">
-                  เลขที่ออเดอร์{" "}
-                  {row.type === "2" ? (
-                    <a href={`/shops/detail/${row.refOrder}`} target="_blank">
-                      {row.refOrder}
-                    </a>
-                  ) : row.type === "4" ? (
-                    <a href={`/forwarder/detail/${row.refOrder}`} target="_blank">
-                      {row.refOrder}
-                    </a>
-                  ) : (
-                    row.refOrder
-                  )}
-                </span>
-              </>
-            )}
-            <br />
-            {statusBadge(row.status)}
-          </div>
-        </div>
-        <div className="col-6">
-          <div className="text-right">
-            <h4 className={`text-${nameColor}`}>
-              {sign}
-              {numberFormat2(row.amount)}
-            </h4>
-            <span className="font-13">
-              {date}
-              <br />
-              {time}
+    <div className="mb-2 flex items-start justify-between gap-3 rounded-xl border border-border bg-white p-3 shadow-sm dark:bg-surface">
+      {/* Left — transaction type + meta + status */}
+      <div className="min-w-0 text-left">
+        <p className="text-sm font-semibold leading-snug text-foreground">
+          {nameParts.map((part, i) => (
+            <span key={i}>
+              {i > 0 && <br />}
+              {part}
             </span>
-          </div>
-        </div>
+          ))}
+        </p>
+        <p className="mt-0.5 text-[11px] text-muted">เลขที่รายการ #{row.ID}</p>
+        {row.refOrder != null && row.refOrder !== "" && (
+          <p className="text-[11px] text-muted">
+            เลขที่ออเดอร์{" "}
+            {row.type === "2" ? (
+              <a
+                href={`/shops/detail/${row.refOrder}`}
+                target="_blank"
+                className="font-mono text-red-600 hover:underline"
+              >
+                {row.refOrder}
+              </a>
+            ) : row.type === "4" ? (
+              <a
+                href={`/forwarder/detail/${row.refOrder}`}
+                target="_blank"
+                className="font-mono text-red-600 hover:underline"
+              >
+                {row.refOrder}
+              </a>
+            ) : (
+              <span className="font-mono">{row.refOrder}</span>
+            )}
+          </p>
+        )}
+        <div className="mt-1.5">{statusBadge(row.status)}</div>
+      </div>
+
+      {/* Right — signed amount (+/- colour) + date/time */}
+      <div className="shrink-0 text-right">
+        <p className={`font-mono text-base font-bold tabular-nums ${amountClass}`}>
+          {sign}
+          {numberFormat2(row.amount)}
+        </p>
+        <p className="mt-0.5 text-[11px] leading-tight text-muted">
+          {date}
+          <br />
+          {time}
+        </p>
       </div>
     </div>
   );

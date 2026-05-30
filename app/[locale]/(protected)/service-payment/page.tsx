@@ -1,140 +1,115 @@
 import { redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
+import { CircleDollarSign, Plus, Inbox } from "lucide-react";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
- * Customer ฝากชำระ / โอนหยวน screen — a FAITHFUL 1:1 TRANSCRIPTION of
- * the legacy PCS Cargo `member/payment.php` (the default `page` branch
- * — no `?page` query, or `?page=add`; lines 4-540) (D1 / ADR-0017 ·
- * the faithful-port transcription workstream · runbook
- * `docs/runbook/faithful-port-transcription.md`).
+ * Customer ฝากชำระ / โอนหยวน screen — the customer ฝากโอนหยวน list,
+ * ported from the legacy PCS Cargo `member/payment.php` default branch
+ * (D1 / ADR-0017 · faithful-port workstream).
  *
- * This is a transcription, NOT a reinterpretation. The JSX below is the
- * exact HTML markup `payment.php` renders — same elements, same
- * Bootstrap-4 class names, same structure, same labels, same order. The
- * visual identity comes from the legacy theme CSS, brought in verbatim
- * as the static `.pcs-legacy`-scoped `public/legacy/pcs/payment.css`,
- * loaded via a plain `<link>` so it bypasses the app's Tailwind v4 /
- * PostCSS pipeline.
- *
- * `payment.php` source structure transcribed here (lines 251-540):
- *   .app-content > .content-wrapper > .content-body.pr110
- *     The page renders ONE of three states (legacy L256-452):
- *      A. nิติบุคคล pending  — a red bg-danger block (L450) shown when
- *         the customer HAS a `tb_corporate` row with corporateStatus=1.
- *      B. never-paid block   — a red bg-danger block (L278-280) shown
- *         when the customer has NOT used ฝากสั่งซื้อ/ฝากนำเข้า before.
- *      C. the list view (L284-444) — the normal screen:
- *         - .card.border-black header row: title + "เพิ่มรายการ" btn
- *           (opens the #add-payment modal)
- *         - .nav.nav-tabs.nav-underline status-filter tabs (ทั้งหมด /
- *           รอดำเนินการ / สำเร็จ / ไม่สำเร็จ) with pcs-badge counts
- *         - the #myTable DataTables list of tb_payment rows
- *   #add-payment — the "สร้างออเดอร์ฝากชำระสินค้า" Bootstrap modal
- *     (L457-530): a wallet card + the payType / payDetail /
- *     certifiedTrueCopy / payYuan form.
+ * ── Tailwind rebuild (2026-05-30 · ปอน) ──
+ * The page's WORKFLOW is the legacy payment.php list (same data fields,
+ * same `?q=` status filter, same "เพิ่มรายการ" → /service-payment/add,
+ * same per-row "ดูรายละเอียด" → /service-payment/[id]); the CHROME is now
+ * our own Tailwind, mobile-first design (per AGENTS.md §0a — "we copy the
+ * working system, polish the look ourselves"). Same approach already
+ * shipped on /service-import: list = responsive cards on phone, table on
+ * desktop. NO data / relation / query / href changed — pure presentation.
+ * `.pcs-legacy` + payment.css are kept for any layout-scope globals; the
+ * Bootstrap-4 markup + #myTable DataTables grid are gone.
  *
  * Data — every `payment.php` mysqli query transcribed 1:1 to the ported
  * legacy `tb_*` schema (Supabase). `tb_*` is RLS-locked to service_role,
  * so reads go through the admin client; the join key is
  * `tb_*.userid === profile.member_code` (the customer's "PR<n>" code).
- * The `tb_*` map is `docs/research/wave-1-fidelity/_SYNTHESIS.md` §7.
  *   - juristic check  → tb_corporate.corporatestatus  (payment.php L258)
  *   - used-forwarder  → tb_forwarder WHERE fstatus>5   (payment.php L264)
  *   - used-shop       → tb_header_order WHERE hstatus>3 AND <>6 (L270)
- *   - rate            → tb_settings.rpdefault          (payment.php L246)
  *   - status counts   → tb_payment.paystatus           (payment.php L313)
  *   - the list rows   → tb_payment                     (payment.php L379)
- *   - $userName etc.  → tb_users.username / userlastname (header.php L33)
- *   - $walletTotal    → tb_wallet.wallettotal          (header.php L86-92)
- *   - numberPaymemt   → tb_settings.numberpaymemt      (payment.php L487)
  *
  * The `?q=` URL filter (all / 1 / 2 / 3 → the four status tabs) is the
  * legacy `$_GET['q']` (L380-390) — exposed here as `searchParams`.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand → `PR<n>`.
  *
- * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
- * `PR<n>` + Pacred. Nothing else changed.
+ * ── NOT reproduced (deliberate · flagged for the integrator) ──
+ *  1. payment.php L4-215 POST handler (image→webp + INSERT tb_wallet_hs +
+ *     INSERT tb_payment) — a Server Component render is a PURE READ.
+ *  2. header.php L75-85 auto-expire UPDATE — render-time write, not reproduced.
+ *  3. F2 (2026-05-29): the in-page #add-payment modal was removed; the real
+ *     create form lives at `/service-payment/add` (YuanPaymentForm +
+ *     createYuanPayment) and "เพิ่มรายการ" links straight there.
  *
- * ── NOT transcribed (deliberate · flagged for the integrator) ──
- *  1. payment.php L4-215 — the `if(isset($_POST["payment"]))` handler:
- *     a multi-branch render-time write (image→webp cURL upload + INSERT
- *     tb_wallet_hs + INSERT tb_payment). A Server Component render must
- *     be a PURE READ — this render-time mutation is NOT reproduced.
- *  2. header.php L75-85 runs an `UPDATE tb_header_order` on every page
- *     load (auto-expire overdue orders) — likewise NOT reproduced.
- *  3. payment.php L611 `saveHS(...)` is a visit-log INSERT — NOT
- *     reproduced (render-time write).
- *  4. F2 (2026-05-29): the in-page #add-payment modal was REMOVED.
- *     The transcribed BS4 modal's POST submit was UNWIRED — it would
- *     404 on submit. The real create form lives at `/service-payment/add`
- *     (YuanPaymentForm + createYuanPayment server action), and the
- *     "เพิ่มรายการ" button is now a `<Link href="/service-payment/add">`
- *     so customers can actually submit. Workflow preserved; the modal
- *     markup is dropped per design-philosophy §0a (logic-loop fidelity
- *     beats pixel fidelity when pixel fidelity ships a broken submit).
- *  5. The `#myTable` DataTables JS (sort / paginate / search) is not
- *     ported — the table renders statically with the legacy classes so
- *     it looks identical at rest; the `?q=` status filter is server-side.
- *
- * The legacy `?page=detail&id=X` branch (payment.php L614-805) is a
- * separate screen → a separate Next.js route (`/service-payment/[id]`),
- * transcribed separately — same split as the wallet.php pilot.
+ * The legacy `?page=detail&id=X` branch is the separate `/service-payment/[id]` route.
  */
 
 // Server Components reading cookies/auth under a layout must be dynamic.
 export const dynamic = "force-dynamic";
 
-// payment.php L379 — the four status-filter tabs. Legacy `$_GET['q']`
-// is sanitised `preg_replace("/[^a-z\d]/i", '', …)` then switched on
-// "1" / "2" / "3"; anything else = all. payStatus enum: 1=รอดำเนินการ
-// 2=สำเร็จ 3=ไม่สำเร็จ.
+// payment.php L379 — the four status-filter tabs. payStatus enum:
+// 1=รอดำเนินการ 2=สำเร็จ 3=ไม่สำเร็จ.
 type PayQ = "1" | "2" | "3";
 
-// payment.php L396-399 — the payType badge (วิธีการชำระ column).
+// payment.php L396-399 — the payType pill (วิธีการชำระ column). Tailwind rebuild.
 function payTypeBadge(payType: string | null) {
+  const base =
+    "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium border";
   switch (payType) {
     case "1":
       return (
-        <span className="font-11 badge badge-primary badge-pill">
+        <span className={`${base} bg-blue-50 text-blue-700 border-blue-200`}>
           จ่ายผ่านเว็บไซต์จีน
         </span>
       );
     case "2":
       return (
-        <span className="font-11 badge badge-info badge-pill">
+        <span className={`${base} bg-sky-50 text-sky-700 border-sky-200`}>
           โอนเข้าบัญชี Alipay ร้านค้าจีน
         </span>
       );
     case "3":
       return (
-        <span className="font-11 badge badge-dark badge-pill"> อื่นๆ </span>
+        <span className={`${base} bg-slate-100 text-slate-600 border-slate-200`}>
+          อื่นๆ
+        </span>
       );
     default:
       return null;
   }
 }
 
-// payment.php L400-404 — the payStatus badge (สถานะ column).
+// payment.php L400-404 — the payStatus pill (สถานะ column). Tailwind rebuild
+// with clean semantic colours (รอ=amber · สำเร็จ=emerald · ไม่สำเร็จ=red).
 function payStatusBadge(payStatus: string | null) {
+  const base =
+    "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold border";
   switch (payStatus) {
     case "1":
       return (
-        <span className="badge badge-warning badge-pill">รอดำเนินการ</span>
+        <span className={`${base} bg-amber-50 text-amber-700 border-amber-200`}>
+          รอดำเนินการ
+        </span>
       );
     case "2":
-      return <span className="badge badge-info badge-pill">สำเร็จ</span>;
+      return (
+        <span className={`${base} bg-emerald-50 text-emerald-700 border-emerald-200`}>
+          สำเร็จ
+        </span>
+      );
     case "3":
       return (
-        <span className="badge badge-danger badge-pill"> ไม่สำเร็จ </span>
+        <span className={`${base} bg-red-50 text-red-700 border-red-200`}>
+          ไม่สำเร็จ
+        </span>
       );
     default:
       return null;
   }
 }
 
-// Legacy `numberLimit($limit)` — member/include/function.php L10-13.
-// Caps a tab count at "99+".
+// Legacy `numberLimit($limit)` — member/include/function.php L10-13. Caps at "99+".
 function numberLimit(limit: number): string {
   return limit > 99 ? "99+" : String(limit);
 }
@@ -215,12 +190,6 @@ export default async function ServicePaymentPage({
   // payment.php L270: SELECT ID FROM tb_header_order WHERE userID=…
   //                   AND hStatus>3 AND hStatus<>6
   // payment.php L313: SELECT payStatus FROM tb_payment WHERE userID=…
-  //
-  // F2 fix (2026-05-29): the wallet-balance, settings.rpDefault,
-  // numberPaymemt, and tb_users name queries were here only to render
-  // the in-page #add-payment modal, which has been removed (the real
-  // create flow is /service-payment/add). Dropped them so we don't
-  // pull data we don't render.
   const [
     corporateRes,
     forwarderRes,
@@ -314,255 +283,235 @@ export default async function ServicePaymentPage({
       payDetail: r.paydetail,
       payTHB: Number(r.paythb ?? 0),
     }));
+    // legacy DataTables default order [[0,'desc']] = newest first.
+    rows.sort((a, b) => {
+      const ta = a.payDate ? new Date(a.payDate.replace(" ", "T")).getTime() : 0;
+      const tb = b.payDate ? new Date(b.payDate.replace(" ", "T")).getTime() : 0;
+      return tb - ta;
+    });
   }
+
+  // Status-filter chips (payment.php L330-362 tabs → Tailwind pills). Same
+  // hrefs + counts as the legacy nav-tabs; active = solid red.
+  const statusChips: {
+    href: string;
+    label: string;
+    count: number;
+    active: boolean;
+    chip: string;
+  }[] = [
+    { href: "/service-payment",      label: "ทั้งหมด",      count: countStatusAll, active: q === null, chip: "bg-slate-100 text-slate-700" },
+    { href: "/service-payment?q=1",  label: "รอดำเนินการ",  count: countStatusF1,  active: q === "1",  chip: "bg-amber-100 text-amber-700" },
+    { href: "/service-payment?q=2",  label: "สำเร็จ",        count: countStatusF2,  active: q === "2",  chip: "bg-emerald-100 text-emerald-700" },
+    { href: "/service-payment?q=3",  label: "ไม่สำเร็จ",     count: countStatusF3,  active: q === "3",  chip: "bg-red-100 text-red-700" },
+  ];
 
   return (
     <div className="pcs-legacy">
-      {/* Legacy PCS theme CSS — static public/ asset, loaded via a plain
-          <link> so it bypasses the app's Tailwind/PostCSS pipeline. */}
+      {/* Legacy PCS theme CSS — kept for layout-scope globals (.pcs-content-pad
+          padding etc.). The visible surface below is Tailwind. */}
       <link rel="stylesheet" href="/legacy/pcs/payment.css" />
 
-      {/* payment.php <title> L217 (Next.js owns <head> — kept here as a
-          comment for fidelity record):  รายการฝากชำระเงิน | Pacred */}
+      {/* payment.php <title> L217 (Next.js owns <head>):  รายการฝากชำระเงิน | Pacred */}
 
-      {/* BEGIN: Content — payment.php L251 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          <div className="content-body pr110">
-            {!statusCheckJuristic ? (
-              /* payment.php L448-451 — the customer has an active
-                 tb_corporate row → waiting for staff approval. */
-              <div className="text-center">
-                <h2
-                  style={{
-                    maxWidth: "670px",
-                    margin: "auto",
-                    marginTop: "10%",
-                  }}
-                  className="text-white bg-danger p-1"
-                >
-                  รอเจ้าหน้าที่ดำเนิน อนุมัติการเป็นนิติบุคคล ภายใน 24 ชม.{" "}
-                  <br /> (ยกเว้นวันอาทิตย์และวันหยุดนักขัตฤกษ์)
-                </h2>
-              </div>
-            ) : showNeverPaidBlock ? (
-              /* payment.php L278-280 — the customer has not used
-                 ฝากสั่งซื้อ / ฝากนำเข้า before. */
-              <div className="text-center">
-                <h2
-                  style={{
-                    maxWidth: "600px",
-                    margin: "auto",
-                    marginTop: "15%",
-                  }}
-                  className="text-white bg-danger p-1"
-                >
-                  คุณต้องเคยชำระเงินบริการ
-                  <br />
-                  ฝากสั่งซื้อ หรือ ฝากนำเข้าสินค้ามาก่อน
-                  <br /> <br />
-                  ถึงจะสามารถทำฝากโอนหยวน/ฝากชำระเงินได้
-                </h2>
-              </div>
-            ) : (
-              /* payment.php L284-444 — the list view. */
-              <section>
-                <div className="row">
-                  <div className="col-md-12 col-sm-12">
-                    <div className="card border-black">
-                      {/* L288-307 — header row: title + เพิ่มรายการ btn */}
-                      <div className="p-1 row">
-                        <div className="content-header-left col-md-6 col-12">
-                          <div className="text-center text-md-left">
-                            <h3 className="text-center text-md-left">
-                              <span className="font-30 ">
-                                <svg
-                                  viewBox="0 0 24 24"
-                                  width="24"
-                                  height="24"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  fill="none"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  className="css-i6dzq1"
-                                >
-                                  <line x1="12" y1="1" x2="12" y2="23"></line>
-                                  <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                                </svg>
-                              </span>{" "}
-                              รายการฝากชำระสินค้า/ฝากโอนหยวน
-                            </h3>
-                          </div>
-                        </div>
-                        <div className="content-header-right col-md-6 col-12">
-                          <div className="float-md-right">
-                            <div className="text-center text-md-right">
-                              {/* F2 fix (2026-05-29): the legacy
-                                  payment.php L298 opened an in-place
-                                  modal with `data-toggle="modal"`. The
-                                  transcribed modal here was UNWIRED
-                                  (file-header §4) — submit was a no-op
-                                  because the create-payment server
-                                  action + the slip-upload pipeline only
-                                  exist on the dedicated /add screen.
-                                  Wire the button straight to that
-                                  screen instead of opening the dead
-                                  modal so customers can actually submit. */}
-                              <Link href="/service-payment/add">
-                                <button className="btn btn-sm btn-circle btn-success text-white">
-                                  <i className="ft-plus"></i>
-                                </button>
-                                <span className="font-normal text-dark">
-                                  เพิ่มรายการ
-                                </span>
-                              </Link>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* L328-440 — status tabs + the #myTable list */}
-                      <div className="row">
-                        <div className="col-md-12">
-                          {/* L330-362 — status-filter tabs */}
-                          <div className="p-1">
-                            <h5>สถานะรายการ</h5>
-                            <ul className="nav nav-tabs nav-underline pcs-tabs no-hover-bg">
-                              <li className="nav-item">
-                                <Link className="nav-link" href="/service-payment">
-                                  ทั้งหมด
-                                  {countStatusAll > 0 && (
-                                    <div className="pcs-badge badge-info pcs-badge-pill">
-                                      {numberLimit(countStatusAll)}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li className="nav-item">
-                                <Link
-                                  className="nav-link"
-                                  href="/service-payment?q=1"
-                                >
-                                  รอดำเนินการ
-                                  {countStatusF1 > 0 && (
-                                    <div className="pcs-badge badge-warning pcs-badge-pill">
-                                      {numberLimit(countStatusF1)}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li className="nav-item">
-                                <Link
-                                  className="nav-link"
-                                  href="/service-payment?q=2"
-                                >
-                                  สำเร็จ
-                                  {countStatusF2 > 0 && (
-                                    <div className="pcs-badge badge-danger pcs-badge-pill">
-                                      {numberLimit(countStatusF2)}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li className="nav-item">
-                                <Link
-                                  className="nav-link"
-                                  href="/service-payment?q=3"
-                                >
-                                  ไม่สำเร็จ
-                                  {countStatusF3 > 0 && (
-                                    <div className="pcs-badge badge-warning pcs-badge-pill">
-                                      {numberLimit(countStatusF3)}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                            </ul>
-                          </div>
-                          {/* L363-438 — the #myTable DataTables list */}
-                          <div className="p-1">
-                            <div className="table-responsive">
-                              <table
-                                id="myTable"
-                                className="table display table-bordered table-striped dataTable no-footer dtr-inline"
-                              >
-                                <thead>
-                                  <tr className="text-center">
-                                    <th>วันที่สร้าง</th>
-                                    <th>เลขที่ออเดอร์</th>
-                                    <th>รายละเอียด</th>
-                                    <th>วิธีการชำระ</th>
-                                    <th>ยอดรวม(บาท)</th>
-                                    <th>สถานะ</th>
-                                    <th>ตัวเลือก</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {rows.map((row) => {
-                                    const { date, time } = splitDateTime(
-                                      row.payDate,
-                                    );
-                                    return (
-                                      <tr key={row.ID}>
-                                        <td className="text-center">
-                                          {date}
-                                          <br />
-                                          {time + " น."}
-                                        </td>
-                                        <td>{row.ID}</td>
-                                        <td title={row.payDetail ?? ""}>
-                                          {countText(row.payDetail, 120)}
-                                        </td>
-                                        <td className="text-center">
-                                          {payTypeBadge(row.payType)}
-                                        </td>
-                                        <td className="text-right text-danger">
-                                          <b>-{numberFormat2(row.payTHB)}</b>
-                                        </td>
-                                        <td className="text-center">
-                                          {payStatusBadge(row.payStatus)}
-                                        </td>
-                                        <td className="text-center">
-                                          <Link
-                                            href={`/service-payment/${row.ID}`}
-                                          >
-                                            <p className="btn font-12 btn-sm btn-outline-success btn-rounded">
-                                              {" "}
-                                              ดูรายละเอียด{" "}
-                                            </p>
-                                          </Link>
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
-            )}
+      <div className="pcs-content-pad w-full px-3 md:px-6 pt-3 pb-24 md:py-6">
+        {!statusCheckJuristic ? (
+          /* payment.php L448-451 — active tb_corporate row → awaiting approval. */
+          <div className="mx-auto max-w-[640px] mt-16 md:mt-24 text-center">
+            <h2 className="rounded-2xl bg-red-600 text-white px-4 py-6 text-base md:text-lg font-bold leading-relaxed shadow-md">
+              รอเจ้าหน้าที่ดำเนิน อนุมัติการเป็นนิติบุคคล ภายใน 24 ชม.
+              <br />
+              <span className="text-sm font-normal opacity-90">
+                (ยกเว้นวันอาทิตย์และวันหยุดนักขัตฤกษ์)
+              </span>
+            </h2>
           </div>
-        </div>
-      </div>
-      {/* END: Content — payment.php L456 */}
+        ) : showNeverPaidBlock ? (
+          /* payment.php L278-280 — never used ฝากสั่งซื้อ / ฝากนำเข้า before. */
+          <div className="mx-auto max-w-[600px] mt-16 md:mt-24 text-center">
+            <h2 className="rounded-2xl bg-red-600 text-white px-4 py-6 text-base md:text-lg font-bold leading-relaxed shadow-md">
+              คุณต้องเคยชำระเงินบริการ
+              <br />
+              ฝากสั่งซื้อ หรือ ฝากนำเข้าสินค้ามาก่อน
+              <br />
+              <span className="mt-2 inline-block text-sm font-normal opacity-90">
+                ถึงจะสามารถทำฝากโอนหยวน / ฝากชำระเงินได้
+              </span>
+            </h2>
+          </div>
+        ) : (
+          /* payment.php L284-444 — the list view. */
+          <section className="bg-white dark:bg-surface border border-border rounded-2xl shadow-sm overflow-hidden">
+            {/* ── Header: title + เพิ่มรายการ CTA ── */}
+            <div className="flex flex-col gap-2.5 border-b border-border px-3 py-3 md:flex-row md:items-center md:justify-between md:px-5 md:py-4">
+              <h1 className="flex items-center gap-2 text-base md:text-xl font-bold text-foreground">
+                <CircleDollarSign className="h-5 w-5 md:h-6 md:w-6 shrink-0 text-primary-600" />
+                <span>รายการฝากชำระสินค้า/ฝากโอนหยวน</span>
+              </h1>
+              <Link
+                href="/service-payment/add"
+                className="self-start md:self-auto shrink-0 inline-flex items-center gap-2 rounded-full bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 py-2 pl-2 pr-4 text-sm font-semibold text-white shadow-sm transition-colors"
+              >
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-white/25">
+                  <Plus className="h-4 w-4" />
+                </span>
+                เพิ่มรายการ
+              </Link>
+            </div>
 
-      {/* ── #add-payment modal — REMOVED 2026-05-29 F2 fix ──
-          The legacy `payment.php L457-530` modal was transcribed 1:1
-          but the form's POST submit (the legacy create-payment action)
-          was UNWIRED — it would 404 on submit because there's no
-          /service-payment/ POST handler. The real create form lives at
-          /service-payment/add (YuanPaymentForm + createYuanPayment
-          server action) and the "เพิ่มรายการ" button now navigates
-          there directly. Removed the dead modal block to keep the loop
-          unambiguous; design-philosophy §0a — "workflow + polish, not
-          1:1 markup" — applies. */}
+            {/* ── Status filter chips ── */}
+            <div className="px-3 py-3 md:px-5 md:py-4">
+              <h2 className="mb-2.5 text-sm md:text-base font-bold text-foreground">
+                สถานะรายการ
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {statusChips.map((chip) => (
+                  <Link
+                    key={chip.href}
+                    href={chip.href}
+                    aria-current={chip.active ? "page" : undefined}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs md:text-sm font-medium transition-colors ${
+                      chip.active
+                        ? "border-red-600 bg-red-600 text-white shadow-sm"
+                        : "border-border bg-surface-alt/60 text-foreground hover:bg-surface-alt"
+                    }`}
+                  >
+                    <span>{chip.label}</span>
+                    {chip.count > 0 && (
+                      <span
+                        className={`inline-flex h-5 min-w-[22px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold ${
+                          chip.active ? "bg-white/25 text-white" : chip.chip
+                        }`}
+                      >
+                        {numberLimit(chip.count)}
+                      </span>
+                    )}
+                  </Link>
+                ))}
+              </div>
+
+              <hr className="my-3 border-t border-dashed border-border" />
+
+              {/* ── Empty state ── */}
+              {rows.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-12 text-center">
+                  <Inbox className="h-10 w-10 text-muted/50" />
+                  <p className="text-sm text-muted">ยังไม่มีรายการฝากชำระ</p>
+                  <Link
+                    href="/service-payment/add"
+                    className="mt-1 text-sm font-semibold text-emerald-600 hover:underline"
+                  >
+                    + เพิ่มรายการแรก
+                  </Link>
+                </div>
+              ) : (
+                <>
+                  {/* ── Mobile: stacked cards (≥1 col, no horizontal scroll) ── */}
+                  <div className="space-y-3 md:hidden">
+                    {rows.map((row) => {
+                      const { date, time } = splitDateTime(row.payDate);
+                      return (
+                        <div
+                          key={row.ID}
+                          className="rounded-xl border border-border bg-white dark:bg-surface p-3 shadow-sm"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="font-mono text-xs text-muted">
+                              ออเดอร์ #{row.ID}
+                            </span>
+                            {payStatusBadge(row.payStatus)}
+                          </div>
+                          {row.payDetail && (
+                            <p
+                              className="mt-1.5 text-sm text-foreground line-clamp-2"
+                              title={row.payDetail}
+                            >
+                              {countText(row.payDetail, 120)}
+                            </p>
+                          )}
+                          <div className="mt-2 flex items-center justify-between gap-2">
+                            <span>{payTypeBadge(row.payType)}</span>
+                            <span className="font-mono text-sm font-bold text-red-600">
+                              -{numberFormat2(row.payTHB)} ฿
+                            </span>
+                          </div>
+                          <div className="mt-2 flex items-center justify-between gap-2 border-t border-dashed border-border pt-2">
+                            <span className="text-[11px] text-muted">
+                              {date} {time && `· ${time} น.`}
+                            </span>
+                            <Link
+                              href={`/service-payment/${row.ID}`}
+                              className="rounded-full border border-emerald-500 px-3 py-1 text-xs font-medium text-emerald-600 hover:bg-emerald-50"
+                            >
+                              ดูรายละเอียด
+                            </Link>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* ── Desktop: table ── */}
+                  <div className="hidden md:block overflow-x-auto rounded-xl border border-border">
+                    <table className="w-full text-sm">
+                      <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+                        <tr>
+                          <th className="px-4 py-3 font-medium">วันที่สร้าง</th>
+                          <th className="px-4 py-3 font-medium">เลขที่ออเดอร์</th>
+                          <th className="px-4 py-3 font-medium">รายละเอียด</th>
+                          <th className="px-4 py-3 font-medium">วิธีการชำระ</th>
+                          <th className="px-4 py-3 text-right font-medium">ยอดรวม (บาท)</th>
+                          <th className="px-4 py-3 text-center font-medium">สถานะ</th>
+                          <th className="px-4 py-3 text-center font-medium">ตัวเลือก</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((row) => {
+                          const { date, time } = splitDateTime(row.payDate);
+                          return (
+                            <tr
+                              key={row.ID}
+                              className="border-t border-border align-top hover:bg-surface-alt/30"
+                            >
+                              <td className="px-4 py-3 whitespace-nowrap text-xs text-muted">
+                                {date}
+                                <br />
+                                {time && `${time} น.`}
+                              </td>
+                              <td className="px-4 py-3 font-mono text-xs">{row.ID}</td>
+                              <td
+                                className="px-4 py-3 max-w-[280px] text-xs"
+                                title={row.payDetail ?? ""}
+                              >
+                                {countText(row.payDetail, 120)}
+                              </td>
+                              <td className="px-4 py-3">{payTypeBadge(row.payType)}</td>
+                              <td className="px-4 py-3 text-right font-mono font-bold text-red-600">
+                                -{numberFormat2(row.payTHB)}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                {payStatusBadge(row.payStatus)}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <Link
+                                  href={`/service-payment/${row.ID}`}
+                                  className="inline-block rounded-full border border-emerald-500 px-3 py-1 text-xs font-medium text-emerald-600 hover:bg-emerald-50"
+                                >
+                                  ดูรายละเอียด
+                                </Link>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
+        )}
+      </div>
     </div>
   );
 }

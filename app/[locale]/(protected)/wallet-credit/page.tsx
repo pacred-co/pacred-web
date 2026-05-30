@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { CreditCard, CircleDollarSign, History, Inbox } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -87,15 +88,30 @@ import { LegacyDepositForm } from "../wallet/deposit/legacy-deposit-form";
 // Server Components reading cookies/auth under a layout must be dynamic.
 export const dynamic = "force-dynamic";
 
-// load_wallet_hs.php L21 — status badge.
+// load_wallet_hs.php L21 — status badge. Tailwind rebuild with clean
+// semantic colours (รอ=amber · สำเร็จ=sky · ไม่สำเร็จ=red).
 function statusBadge(status: string | null) {
+  const base =
+    "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold";
   if (status === "1") {
-    return <span className="badge badge-warning badge-pill">รอตรวจสอบ</span>;
+    return (
+      <span className={`${base} border-amber-200 bg-amber-50 text-amber-700`}>
+        รอตรวจสอบ
+      </span>
+    );
   }
   if (status === "2") {
-    return <span className="badge badge-info badge-pill">สำเร็จ</span>;
+    return (
+      <span className={`${base} border-sky-200 bg-sky-50 text-sky-700`}>
+        สำเร็จ
+      </span>
+    );
   }
-  return <span className="badge badge-danger badge-pill">ไม่สำเร็จ</span>;
+  return (
+    <span className={`${base} border-red-200 bg-red-50 text-red-700`}>
+      ไม่สำเร็จ
+    </span>
+  );
 }
 
 // PHP `number_format($n, 2)` — 2 decimals, comma thousands separator.
@@ -235,191 +251,134 @@ export default async function WalletCreditPage() {
 
   return (
     <div className="pcs-legacy">
-      {/* Legacy PCS theme CSS — same stylesheet wallet.php uses (the
-          credit screen reuses the wallet card / tab / modal styles). */}
+      {/* Legacy PCS theme CSS — kept for the Bootstrap-4 #wallet-add deposit
+          modal (the <LegacyDepositForm> island + jQuery .modal()) and any
+          layout-scope globals. The visible surface below is Tailwind. */}
       <link rel="stylesheet" href="/legacy/pcs/wallet.css" />
 
       {/* wallet-credit.php <title> L53 (Next.js owns <head> — kept as a
           fidelity comment): กระเป๋าสตางค์เครดิต | Pacred */}
 
-      {/* BEGIN: Content — wallet-credit.php L76 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          {/* L80-91 — breadcrumb header */}
-          <div className="content-header row">
-            <div className="content-header-left col-12 mb-2">
-              <div className="row breadcrumbs-top ">
-                <div className="breadcrumb-wrapper col-12">
-                  <ol className="breadcrumb ">
-                    <li className="breadcrumb-item">
-                      <Link href="/dashboard">
-                        <span className="menu-home">หน้าแรก</span>
-                      </Link>
-                    </li>
-                    <li className="breadcrumb-item active">
-                      กระเป๋าสตางค์เครดิต{" "}
-                    </li>
-                  </ol>
-                </div>
+      {/* Page content — Tailwind rebuild. `.pcs-content-pad` so the
+          (protected) layout's desktop padding (sidebar + FloatingTabs
+          clearance) kicks in. */}
+      <div className="pcs-content-pad w-full px-3 md:px-6 pt-3 pb-24 md:py-6">
+        {/* ── Credit balance card — wallet-credit.php L99-124 ── */}
+        <div className="mx-auto max-w-[640px]">
+          <div className="overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-red-600 to-red-700 text-white shadow-sm">
+            <div className="flex items-start justify-between gap-3 px-4 py-4 md:px-6 md:py-5">
+              <div className="min-w-0">
+                <p className="flex items-center gap-1.5 text-sm font-semibold">
+                  <CreditCard className="h-4 w-4 shrink-0" />
+                  <span className="truncate">
+                    กระเป๋าสตางค์เครดิต ({fullName})
+                  </span>
+                </p>
+                <p className="mt-2 text-xs text-white/80">
+                  วงเงินเครดิตที่ใช้งานได้ (บาท)
+                </p>
+                {/* `tam-counter` + data-count kept as the legacy count-up
+                    hook (animation JS may attach later). */}
+                <p
+                  className="tam-counter mt-0.5 font-mono text-3xl font-bold tabular-nums md:text-4xl"
+                  data-count={creditAvailable}
+                >
+                  {numberFormat2(creditAvailable)}
+                </p>
+                <p className="mt-2 text-xs text-white/80">
+                  ยอดเครดิตค้างชำระ :{" "}
+                  <span className="font-mono tabular-nums">
+                    {numberFormat2(creditValue)}
+                  </span>{" "}
+                  (บาท)
+                </p>
+                <p className="mt-0.5 text-xs text-white/80">
+                  กระเป๋าสตางค์เงินสด :{" "}
+                  <span className="font-mono tabular-nums">
+                    {numberFormat2(walletTotal)}
+                  </span>{" "}
+                  (บาท)
+                </p>
               </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                className="h-10 w-auto shrink-0 rounded bg-white/95 p-1 md:h-12"
+                alt="logo"
+                src="/images/pacred-logo-red.png"
+              />
+            </div>
+            {/* progress bar — legacy 100% warning gradient → Tailwind */}
+            <div className="mx-4 mb-3 h-1.5 overflow-hidden rounded-full bg-white/25 md:mx-6">
+              <div
+                className="h-full rounded-full bg-amber-300"
+                role="progressbar"
+                style={{ width: "100%" }}
+                aria-valuenow={100}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              ></div>
+            </div>
+            {/* L120 — `forwarder/?q=c` rebrands to `/service-import?q=c`
+                per AGENTS.md transcription-rules step §8. */}
+            <div className="border-t border-white/15 px-4 py-3 text-center md:px-6">
+              <Link
+                href="/service-import?q=c"
+                className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2 text-sm font-bold text-red-700 shadow-sm transition-colors hover:bg-red-50"
+              >
+                <CircleDollarSign className="h-4 w-4" />
+                ชำระเงินเครดิต
+              </Link>
             </div>
           </div>
-          {/* L92 — content-body */}
-          <div className="content-body pr110">
-            <section>
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  <div className="card">
-                    <div className="card-content">
-                      <div className="card-body">
-                        {/* ── Credit balance card — wallet-credit.php L99-124 ── */}
-                        <div className="row">
-                          <div className="col-md-6 offset-md-3">
-                            <div className="card-body border-wallet pb-0">
-                              <div className="media d-flex">
-                                <div className="media-body text-left">
-                                  <h3 className="danger mb-0">
-                                    <span className="text-black-1">
-                                      กระเป๋าสตางค์เครดิต ({fullName})
-                                    </span>
-                                    <br />
-                                    <span className="text-black-1 font-14 ">
-                                      วงเงินเครดิตที่ใช้งานได้ (บาท)
-                                    </span>
-                                    <br />
-                                    <span
-                                      className="tam-counter font-3rem"
-                                      data-count={creditAvailable}
-                                    >
-                                      {numberFormat2(creditAvailable)}
-                                    </span>
-                                    <br />
-                                    <span className="text-black-1 font-14 ">
-                                      ยอดเครดิตค้างชำระ :{" "}
-                                      {numberFormat2(creditValue)} (บาท)
-                                    </span>
-                                    <br />
-                                    <span className="text-black-1 font-14 ">
-                                      กระเป๋าสตางค์เงินสด :{" "}
-                                      {numberFormat2(walletTotal)} (บาท)
-                                    </span>
-                                  </h3>
-                                </div>
-                                <div>
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    className="brand-logo logo-wallet"
-                                    alt="logo"
-                                    src="/images/pacred-logo-red.png"
-                                  />
-                                </div>
-                              </div>
-                              <div className="progress progress-sm mt-1 mb-0 box-shadow-2">
-                                <div
-                                  className="progress-bar bg-gradient-x-warning"
-                                  role="progressbar"
-                                  style={{ width: "100%" }}
-                                  aria-valuenow={100}
-                                  aria-valuemin={0}
-                                  aria-valuemax={100}
-                                ></div>
-                              </div>
-                              <div
-                                className="text-center pt-1"
-                                style={{ marginBottom: "-20px" }}
-                              >
-                                {/* L120 — `forwarder/?q=c` rebrands to
-                                    `/service-import?q=c` per AGENTS.md
-                                    transcription-rules step §8. */}
-                                <Link href="/service-import?q=c">
-                                  <div className="btn-add-wallet">
-                                    {" "}
-                                    <i className="la la-money"></i>{" "}
-                                    ชำระเงินเครดิต{" "}
-                                  </div>
-                                </Link>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+        </div>
 
-                        {/* ── Single-tab history panel — wallet-credit.php L125-157 ── */}
-                        <div className="row pt-3">
-                          <div className="col-12">
-                            <div className="card">
-                              <div className="pt-0">
-                                <ul
-                                  className="nav nav-tabs customtab tab-wallet"
-                                  role="tablist"
-                                >
-                                  <li className="nav-item tab-sm-center">
-                                    <a
-                                      className="nav-link active"
-                                      data-toggle="tab"
-                                      href="#history"
-                                      role="tab"
-                                    >
-                                      <span className="hidden-sm-up">
-                                        <i className="fas fa-history pr-05"></i>
-                                      </span>
-                                      <span className="hidden-xs-down">
-                                        รายการเดินบัญชี
-                                      </span>
-                                    </a>
-                                  </li>
-                                </ul>
-                                <div className="tab-content">
-                                  <div
-                                    className="tab-pane active"
-                                    id="history"
-                                    role="tabpanel"
-                                  >
-                                    <div id="load_data_wallet_hs">
-                                      {rowsHistory.length === 0 ? (
-                                        <div className="text-center text-no-data text-danger">
-                                          คุณยังไม่มีรายการ
-                                        </div>
-                                      ) : (
-                                        rowsHistory.map((row) => (
-                                          <WalletHsRowView
-                                            key={row.ID}
-                                            row={row}
-                                          />
-                                        ))
-                                      )}
-                                    </div>
-                                    <div id="load_data_message_wallet_hs"></div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+        {/* ── Single-tab history panel — wallet-credit.php L125-157 ── */}
+        <div className="mx-auto mt-4 max-w-[640px]">
+          <section className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm dark:bg-surface">
+            {/* one tab: "รายการเดินบัญชี" (active red underline) */}
+            <div className="border-b border-border px-4 pt-3 md:px-5">
+              <span className="inline-flex items-center gap-1.5 border-b-2 border-red-600 px-1 pb-2.5 text-sm font-bold text-red-600 md:text-base">
+                <History className="h-4 w-4" />
+                รายการเดินบัญชี
+              </span>
+            </div>
+            <div className="px-3 py-3 md:px-4 md:py-4">
+              <div id="load_data_wallet_hs" className="space-y-2.5">
+                {rowsHistory.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 py-12 text-center">
+                    <Inbox className="h-10 w-10 text-muted/50" />
+                    <p className="text-sm text-muted">คุณยังไม่มีรายการ</p>
                   </div>
-                </div>
+                ) : (
+                  rowsHistory.map((row) => (
+                    <WalletHsRowView key={row.ID} row={row} />
+                  ))
+                )}
               </div>
+              <div id="load_data_message_wallet_hs"></div>
+            </div>
+          </section>
+        </div>
+      </div>
 
-              {/* ── Deposit modal — wallet-credit.php L163-222 ──
-                  Transcribed 1:1. The legacy jQuery behaviours
-                  (Bootstrap .modal('show') triggered by ?page=='add',
-                  dropify file input, PromptPay QR-code generation,
-                  SweetAlert result popups) need client JS not present
-                  here — the modal renders statically.
-                  The addData POST handler (wallet-credit.php L4-51) is
-                  wired via the <LegacyDepositForm kind="credit"/> Client
-                  Component → actions/wallet.ts::submitLegacyWalletDeposit
-                  (INSERT tb_wallet_hs with wusercredit='1' + slip upload
-                  to `slips` bucket + in-app notify). */}
-              <div
-                id="wallet-add"
-                className="modal fade in"
-                tabIndex={-1}
-                role="dialog"
-                aria-hidden="true"
-              >
+      {/* ── Deposit modal — wallet-credit.php L163-222 ──
+          STILL Bootstrap-4 markup: opened by jQuery `.modal('show')`
+          (vendor bundle from the (protected) layout) and the
+          <LegacyDepositForm> client island handles the dropify uploader +
+          submit. id="wallet-add" + data-dismiss + #text1/#text2 +
+          data-toggle/data-placement preserved verbatim.
+          The addData POST handler (wallet-credit.php L4-51) is wired via
+          the <LegacyDepositForm kind="credit"/> Client Component →
+          actions/wallet.ts::submitLegacyWalletDeposit (INSERT tb_wallet_hs
+          with wusercredit='1' + slip upload to `slips` bucket + in-app
+          notify). */}
+      <div
+        id="wallet-add"
+        className="modal fade in"
+        tabIndex={-1}
+        role="dialog"
+        aria-hidden="true"
+      >
                 <div className="modal-dialog">
                   <div className="modal-content ">
                     <div className="modal-header header-from">
@@ -505,10 +464,6 @@ export default async function WalletCreditPage() {
                   </div>
                 </div>
               </div>
-            </section>
-          </div>
-        </div>
-      </div>
       {/* END: Content — wallet-credit.php L227 */}
     </div>
   );
@@ -527,64 +482,60 @@ function WalletHsRowView({ row }: { row: WalletHsRow }) {
   const { date, time } = dateThaiWallet(row.date);
   const nameParts = nameWallet(row.type ?? "").split("\n");
 
+  // load_wallet_hs.php L20 → Tailwind amount colour (credit green / debit red).
+  const amountClass =
+    nameColor === "success" ? "text-emerald-600" : "text-red-600";
+
   return (
-    <div className="pt-1 pl-1 pr-1">
-      <div className="row border-success-2 p-1">
-        <div className="col-6">
-          <div className="text-left">
-            <h4>
-              {nameParts.map((part, i) => (
-                <span key={i}>
-                  {i > 0 && <br />}
-                  {part}
-                </span>
-              ))}
-            </h4>
-            <span className="text-muted font-12">เลขที่รายการ #{row.ID}</span>
-            {row.refOrder != null && row.refOrder !== "" && (
-              <>
-                <br />
-                <span className="text-muted font-12">
-                  เลขที่ออเดอร์{" "}
-                  {row.type === "2" ? (
-                    <a
-                      href={`/service-order/detail/${row.refOrder}`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {row.refOrder}
-                    </a>
-                  ) : row.type === "4" ? (
-                    <a
-                      href={`/service-import/detail/${row.refOrder}`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {row.refOrder}
-                    </a>
-                  ) : (
-                    row.refOrder
-                  )}
-                </span>
-              </>
-            )}
-            <br />
-            {statusBadge(row.status)}
-          </div>
-        </div>
-        <div className="col-6">
-          <div className="text-right">
-            <h4 className={`text-${nameColor}`}>
-              {sign}
-              {numberFormat2(row.amount)}
-            </h4>
-            <span className="font-13">
-              {date}
-              <br />
-              {time}
+    <div className="flex items-start justify-between gap-3 rounded-xl border border-border bg-white p-3 shadow-sm dark:bg-surface">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold leading-snug text-foreground">
+          {nameParts.map((part, i) => (
+            <span key={i}>
+              {i > 0 && <br />}
+              {part}
             </span>
-          </div>
-        </div>
+          ))}
+        </p>
+        <p className="mt-1 text-[11px] text-muted">เลขที่รายการ #{row.ID}</p>
+        {row.refOrder != null && row.refOrder !== "" && (
+          <p className="text-[11px] text-muted">
+            เลขที่ออเดอร์{" "}
+            {row.type === "2" ? (
+              <a
+                href={`/service-order/detail/${row.refOrder}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sky-600 hover:underline"
+              >
+                {row.refOrder}
+              </a>
+            ) : row.type === "4" ? (
+              <a
+                href={`/service-import/detail/${row.refOrder}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sky-600 hover:underline"
+              >
+                {row.refOrder}
+              </a>
+            ) : (
+              row.refOrder
+            )}
+          </p>
+        )}
+        <div className="mt-1.5">{statusBadge(row.status)}</div>
+      </div>
+      <div className="shrink-0 text-right">
+        <p className={`font-mono text-base font-bold tabular-nums ${amountClass}`}>
+          {sign}
+          {numberFormat2(row.amount)}
+        </p>
+        <p className="mt-0.5 text-[11px] leading-tight text-muted">
+          {date}
+          <br />
+          {time}
+        </p>
       </div>
     </div>
   );

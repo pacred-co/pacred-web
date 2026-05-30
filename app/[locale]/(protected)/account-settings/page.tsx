@@ -101,72 +101,55 @@ export default async function AccountSettingsPage() {
   return (
     <div className="pcs-legacy">
       {/* Legacy PCS theme CSS — static public/ asset, loaded via a plain
-          <link> so it bypasses the app's Tailwind/PostCSS pipeline. */}
+          <link> so it bypasses the app's Tailwind/PostCSS pipeline. Kept
+          for the password-form SweetAlert result popup (`.pcs-swal-*`),
+          which is styled here and has no Tailwind equivalent. The page
+          chrome below is a Tailwind rebuild (เดฟ 2026-05-30 — Bootstrap-4
+          markup rendered unstyled after Bootstrap CSS was dropped). */}
       <link rel="stylesheet" href="/legacy/pcs/account-settings.css" />
 
       {/* account-settings.php <title> L39 (Next.js owns <head> — kept
           here as a comment for fidelity record):
           ตั้งค่าบัญชีผู้ใช้งาน <userID> | Pacred */}
 
-      {/* BEGIN: Content — account-settings.php L44 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          {/* L48-59 — breadcrumb header */}
-          <div className="content-header row">
-            <div className="content-header-left col-12 mb-2">
-              <div className="row breadcrumbs-top ">
-                <div className="breadcrumb-wrapper col-12">
-                  <ol className="breadcrumb ">
-                    <li className="breadcrumb-item">
-                      <Link href="/dashboard">
-                        <span className="menu-home">หน้าแรก</span>
-                      </Link>
-                    </li>
-                    <li className="breadcrumb-item active">ตั้งค่าบัญชีผู้ใช้</li>
-                  </ol>
-                </div>
-              </div>
-            </div>
-          </div>
-          {/* L60 — content-body */}
-          <div className="content-body pr110">
-            {/* Basic Carousel start — L61-62 */}
-            <section id="basic-carousel">
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  <div className="card border-black">
-                    <div className="card-content">
-                      <div className="card-body">
-                        {/* L68-74 — avatar + name + member code */}
-                        <div className="text-center">
-                          <span className="image-popup-vertical-fit el-link">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={userPicture} className="rounded-circle" width={150} alt="" />
-                          </span>
-                          <h2 className="pt-2">
-                            <span className="d-inline-block">{fullName}</span>
-                          </h2>
-                          <h5 className="">
-                            รหัสสมาชิก : <span>{userID}</span>
-                            <span></span>
-                          </h5>
-                        </div>
-                        {/* L75-115 — change-password form */}
-                        <div className="row">
-                          <div className="col-md-6 offset-md-3">
-                            <PasswordForm />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-            {/* Basic Carousel end — L123 */}
-          </div>
+      {/* BEGIN: Content — account-settings.php L44. Wrapped in
+          `.pcs-content-pad` so the (protected) layout's desktop padding
+          (sidebar + FloatingTabs clearance) kicks in automatically. */}
+      <div className="pcs-content-pad w-full px-3 md:px-6 py-3 md:py-6 max-w-[960px] mx-auto">
+        {/* L48-59 — breadcrumb header */}
+        <div className="flex items-center gap-2 text-[11px] text-muted mb-3">
+          <Link href="/dashboard" className="hover:text-foreground transition-colors">
+            หน้าแรก
+          </Link>
+          <span>/</span>
+          <span className="text-foreground font-medium">ตั้งค่าบัญชีผู้ใช้</span>
         </div>
+
+        {/* L60-123 — content-body · the account card */}
+        <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 md:p-6">
+          {/* L68-74 — avatar + name + member code */}
+          <div className="text-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={userPicture}
+              className="mx-auto rounded-full object-cover w-[120px] h-[120px] md:w-[150px] md:h-[150px] border border-border"
+              width={150}
+              height={150}
+              alt=""
+            />
+            <h2 className="pt-3 text-lg md:text-xl font-bold text-foreground break-words">
+              {fullName}
+            </h2>
+            <h5 className="text-sm text-muted mt-1">
+              รหัสสมาชิก : <span className="text-foreground font-medium">{userID}</span>
+            </h5>
+          </div>
+
+          {/* L75-115 — change-password form (centered, narrower on desktop) */}
+          <div className="mx-auto w-full max-w-[480px] mt-4">
+            <PasswordForm />
+          </div>
+        </section>
       </div>
       {/* END: Content — L127 */}
     </div>

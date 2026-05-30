@@ -60,13 +60,13 @@ export function ServiceImportEditShipByForm({
 
   return (
     <>
-      <span id="text-fShipBy" className="">
+      <span id="text-fShipBy">
         {currentLabel}{" "}
         {isEditable && !open && (
-          <span className="" id="to-edit-fShipBy">
+          <span id="to-edit-fShipBy">
             <a
               href="javascript:void(0)"
-              className="text-info font-10"
+              className="ml-1 text-xs font-medium text-sky-600 hover:underline"
               onClick={(e) => {
                 e.preventDefault();
                 setOpen(true);
@@ -79,10 +79,10 @@ export function ServiceImportEditShipByForm({
       </span>
       {/* forwarder.php L1937-1948 — the slide-down edit form (initially
           display:none in the legacy). */}
-      <div id="fShipByForm" style={{ display: open ? "block" : "none" }}>
+      <div id="fShipByForm" style={{ display: open ? "block" : "none" }} className="mt-2">
         {currentFShipBy !== "F" ? (
           <form
-            className="form-horizontal d-table"
+            className="rounded-xl border border-border bg-surface-alt/40 p-3"
             method="POST"
             action="#"
             autoComplete="off"
@@ -92,13 +92,16 @@ export function ServiceImportEditShipByForm({
             {isEditable ? (
               <>
                 {error && (
-                  <div className="alert alert-danger" role="alert">
+                  <div className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
                     {error}
                   </div>
                 )}
                 <input type="hidden" name="ID" value={forwarderId} />
+                <label className="block text-xs font-medium text-muted mb-1" htmlFor="fShipBy">
+                  บริษัทขนส่ง
+                </label>
                 <select
-                  className="form-control"
+                  className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base md:text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-colors"
                   name="fShipBy"
                   id="fShipBy"
                   defaultValue={currentFShipBy}
@@ -110,10 +113,10 @@ export function ServiceImportEditShipByForm({
                     </option>
                   ))}
                 </select>
-                <div className="modal-footer">
+                <div className="mt-3 flex justify-end gap-2">
                   <button
                     type="button"
-                    className="btn btn-outline-secondary btn-rounded"
+                    className="inline-flex items-center justify-center rounded-full border border-border bg-white dark:bg-surface px-4 py-2 text-sm font-medium text-foreground hover:bg-surface-alt active:scale-[0.98] transition-all"
                     id="to-text-fShipBy"
                     onClick={() => setOpen(false)}
                   >
@@ -122,26 +125,26 @@ export function ServiceImportEditShipByForm({
                   <button
                     type="submit"
                     name="update_fShipBy"
-                    className="btn btn-color-main btn-rounded"
+                    className="inline-flex items-center justify-center rounded-full bg-red-600 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-red-700 active:scale-[0.98] transition-all disabled:opacity-60"
                     disabled={isPending}
                   >
                     บันทึก
                   </button>
                 </div>
-                <p className="text-danger font-12 pt-1">
+                <p className="mt-2 text-xs text-red-600">
                   หมายเหตุ : บริษัทขนส่งจะขึ้นอยู่กับพื้นที่ในการจัดส่ง
                   ซึ่งเงื่อนไขเป็นไปตามที่บริษัทกำหนด
                 </p>
               </>
             ) : (
-              <span className="bg-danger text-white">
+              <span className="inline-flex items-center rounded bg-red-600 px-2 py-1 text-sm text-white">
                 ไม่สามารถเปลี่ยนที่อยู่ได้เนื่องจากสินค้าถึงไทยแล้ว
                 <span></span>
               </span>
             )}
           </form>
         ) : (
-          <p className="text-danger">
+          <p className="text-sm text-red-600">
             สั่งสินค้าในช่วงโปรโมชันฟรี ค่าขนส่งในไทย
             ทางบริษัทขอสงวนสิทธิ์ในการเลือกบริษัทขนส่ง
           </p>

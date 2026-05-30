@@ -504,7 +504,7 @@ function EmptyState({ title, showCta }: { title: string; showCta: boolean }) {
 /* ─────────────────────────── PAYMENT BOTTOM BAR ─────────────────────────── */
 function PaymentBar({ count }: { count: number }) {
   return (
-    <div className="fixed bottom-20 md:bottom-6 left-3 right-3 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-[640px] z-40">
+    <div className="fixed bottom-24 md:bottom-6 left-3 right-20 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-[640px] z-40">
       <div className="rounded-2xl bg-gradient-to-br from-primary-600 to-primary-700 text-white px-4 py-3 shadow-2xl shadow-primary-600/40 flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-[11px] opacity-90">มีรายการรอชำระ</p>

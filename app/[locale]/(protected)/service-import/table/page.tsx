@@ -544,7 +544,7 @@ export default async function ForwarderTablePage({
               <li>
                 <Link
                   href="/service-import"
-                  className="shrink-0 inline-flex items-end gap-2 px-4 pb-2.5 text-base md:text-2xl font-medium text-muted hover:text-foreground border-b-[3px] border-transparent hover:border-border whitespace-nowrap transition-colors"
+                  className="shrink-0 inline-flex items-end gap-2 px-4 pb-2.5 text-base md:text-xl font-medium text-muted hover:text-foreground border-b-[3px] border-transparent hover:border-border whitespace-nowrap transition-colors"
                 >
                   <span aria-hidden className="ft-box" />
                   ฝากนำเข้าสินค้าแบบเต็ม
@@ -553,7 +553,7 @@ export default async function ForwarderTablePage({
               <li>
                 <Link
                   href="/service-import/table"
-                  className="shrink-0 inline-flex items-end gap-2 px-4 pb-2.5 text-base md:text-2xl font-bold text-red-600 border-b-[3px] border-red-600 whitespace-nowrap"
+                  className="shrink-0 inline-flex items-end gap-2 px-4 pb-2.5 text-base md:text-xl font-bold text-red-600 border-b-[3px] border-red-600 whitespace-nowrap"
                 >
                   <span aria-hidden className="fas fa-table" />
                   ฝากนำเข้าสินค้าแบบตาราง
@@ -692,6 +692,94 @@ export default async function ForwarderTablePage({
               `.countPay` + `.price-all`. */}
           <form id="frm-example2" className="flex min-h-0 flex-1 flex-col">
               <div className="table-responsive2 min-h-0 flex-1 overflow-auto">
+                {/* ── Mobile: easy-read cards (md:hidden) — same `rows` as the
+                    desktop table, one card per forwarder, tap → detail.
+                    ปอน 2026-05-30 "มือถือ ทำให้ดูง่ายๆ". ── */}
+                <div className="space-y-2.5 p-2 md:hidden">
+                  {rows.length === 0 ? (
+                    <p className="py-10 text-center text-sm text-muted">ไม่พบรายการ</p>
+                  ) : (
+                    rows.map((row) => {
+                      const fStatusDriver = arrFIDDriver.has(row.id) ? 1 : 0;
+                      const cover = resolveCover(row.fcover);
+                      const net = rowNet.get(row.id) ?? 0;
+                      const isAnchor = anchorID && anchorID === String(row.id);
+                      return (
+                        <div
+                          key={row.id}
+                          className={`rounded-xl border p-3 shadow-sm ${
+                            isAnchor ? "border-red-300 bg-red-50" : "border-border bg-white dark:bg-surface"
+                          }`}
+                          {...(isAnchor ? { id: `F${row.id}` } : {})}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <Link
+                              href={`/service-import/${row.id}`}
+                              className="min-w-0 break-all font-mono text-sm font-semibold text-red-600 hover:underline"
+                            >
+                              {row.ftrackingchn2 || row.ftrackingchn || `#${row.id}`}
+                            </Link>
+                            <span className="shrink-0">
+                              {statusForwarderAll4(row.fstatus ?? "", fStatusDriver)}
+                            </span>
+                          </div>
+                          <div className="mt-2 flex items-center gap-2.5">
+                            <a href={cover} className="image-popup-vertical-fit el-link shrink-0">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={cover}
+                                alt=""
+                                className="h-11 w-11 rounded-lg border border-border object-cover"
+                              />
+                            </a>
+                            <div className="min-w-0">
+                              <p className="truncate text-xs text-foreground">
+                                {countText(row.fdetail, 40) || "—"}
+                              </p>
+                              <p className="mt-0.5 text-[11px] text-muted">
+                                {row.ftransporttype === "1" ? "รถ" : "เรือ"}
+                                {row.fcabinetnumber
+                                  ? ` · ล๊อต ${countText(row.fcabinetnumber.replace(/รถ /g, "").replace(/大/g, ""), 16)}`
+                                  : ""}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="mt-2.5 grid grid-cols-4 gap-1 border-t border-dashed border-border pt-2 text-center">
+                            <div>
+                              <div className="text-[10px] text-muted">ลัง</div>
+                              <div className="text-sm font-semibold tabular-nums">
+                                {(row.famount ?? 0) > 0 ? row.famount : "-"}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-[10px] text-muted">หนัก</div>
+                              <div className="text-sm font-semibold tabular-nums">
+                                {(row.fweight ?? 0) > 0 ? numberFormat(row.fweight!, 2) : "-"}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-[10px] text-muted">คิว</div>
+                              <div className="text-sm font-semibold tabular-nums">
+                                {(row.fvolume ?? 0) > 0 ? numberFormat(row.fvolume!, 3) : "-"}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-[10px] text-muted">ราคา</div>
+                              <div className="text-sm font-bold tabular-nums text-red-600">
+                                {numberFormat(net, 2)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* ── Desktop: full table. Wrapper isolates Tailwind hidden/block
+                    from the legacy `.dataTable` display cascade (forwarder-table.css
+                    loads after Tailwind). ── */}
+                <div className="hidden md:block">
                 <table
                   id="myTable"
                   className="dataTable w-full text-xs md:text-sm border-collapse"
@@ -915,6 +1003,7 @@ export default async function ForwarderTablePage({
                                       })}
                   </tbody>
                 </table>
+                </div>
               </div>
               <div id="example-console-rows"></div>
             </form>
@@ -929,7 +1018,7 @@ export default async function ForwarderTablePage({
                `check-all c6` + `countPay` + `price-all` classes that
                the legacy DataTables JS reads/writes. */}
       {arrStatus[5] > 0 && (
-        <div className="fixed left-2 right-2 md:left-0 md:right-0 z-[40] bottom-24 md:bottom-0 bg-white/95 dark:bg-surface/95 backdrop-blur-md border border-border md:border-0 md:border-t rounded-2xl md:rounded-none shadow-[0_-6px_24px_rgba(0,0,0,0.12)] md:shadow-[0_-6px_20px_rgba(0,0,0,0.08)] overflow-hidden">
+        <div className="fixed left-2 right-20 md:left-0 md:right-0 z-[44] bottom-24 md:bottom-0 bg-white/95 dark:bg-surface/95 backdrop-blur-md border border-border md:border-0 md:border-t rounded-2xl md:rounded-none shadow-[0_-6px_24px_rgba(0,0,0,0.12)] md:shadow-[0_-6px_20px_rgba(0,0,0,0.08)] overflow-hidden">
           <div className="flex items-center gap-2 md:gap-3 px-3 py-2 md:px-6 md:py-3 md:pl-[280px] md:pr-[88px]">
             <label className="flex items-center gap-1.5 shrink-0 cursor-pointer">
               <input

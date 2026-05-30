@@ -138,139 +138,145 @@ export default async function SalesHistoryPage() {
 
   return (
     <div className="pcs-legacy">
-      {/* Legacy PCS theme CSS — static public/ asset via a plain <link>. */}
+      {/* Legacy PCS theme CSS — kept for layout-scope globals; the
+          visible surface below is Tailwind (2026-05-30 rebuild · ปอน). */}
       <link rel="stylesheet" href="/legacy/pcs/report-user-sales.css" />
 
       {/* report-user-sales-history.php <title> L113 (fidelity-record
           comment):  ประวัติจ่ายเงินลูกค้าตัวแทน | Pacred */}
 
-      {/* BEGIN: Content — report-user-sales-history.php L129 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          {/* L133-144 — breadcrumb header */}
-          <div className="content-header row">
-            <div className="content-header-left col-12">
-              <div className="row breadcrumbs-top ">
-                <div className="breadcrumb-wrapper col-12">
-                  <ol className="breadcrumb ">
-                    <li className="breadcrumb-item">
-                      <Link href="/dashboard">
-                        <span className="menu-home">หน้าแรก</span>
-                      </Link>
-                    </li>
-                    <li className="breadcrumb-item active">
-                      ประวัติจ่ายเงินลูกค้าตัวแทน
-                    </li>
-                  </ol>
-                </div>
-              </div>
-            </div>
+      <div className="pcs-content-pad w-full px-3 md:px-6 py-3 md:py-6">
+        <section className="bg-white dark:bg-surface border border-border rounded-2xl shadow-sm overflow-hidden">
+          {/* L153-171 — title + the "ทำรายการเบิกเงิน" CTA */}
+          <div className="flex flex-col gap-2.5 border-b border-border px-3 py-3 md:flex-row md:items-center md:justify-between md:px-5 md:py-4">
+            <h3 className="flex items-center gap-2 text-base md:text-xl font-bold text-foreground">
+              <span className="font-30 ft-users" aria-hidden></span>
+              ประวัติจ่ายเงินลูกค้าตัวแทน
+            </h3>
+            <Link
+              href="/sales/report/add"
+              className="self-start md:self-auto shrink-0 inline-flex items-center gap-2 rounded-full bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 py-2 pl-2 pr-4 text-sm font-semibold text-white shadow-sm transition-colors"
+            >
+              <span className="grid h-6 w-6 place-items-center rounded-full bg-white/25">
+                <i className="ft-plus" aria-hidden></i>
+              </span>
+              ทำรายการเบิกเงิน
+            </Link>
           </div>
-          {/* L145 — content-body */}
-          <div className="content-body pr110">
-            <section>
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  <div className="card">
-                    <div className="card-content">
-                      <div className="card-body">
-                        {/* L153-171 — title + the "ทำรายการเบิกเงิน" button */}
-                        <div className="row">
-                          <div className="content-header-left col-md-6 col-12">
-                            <div className="text-center text-md-left">
-                              <h3 className="text-center text-md-left">
-                                <span className="font-30 ft-users"></span>{" "}
-                                ประวัติจ่ายเงินลูกค้าตัวแทน
-                              </h3>
-                            </div>
-                          </div>
-                          <div className="content-header-right col-md-6 col-12">
-                            <div className="float-md-right">
-                              <div className="text-center text-md-right">
-                                <Link href="/sales/report/add">
-                                  <button className="btn btn-sm btn-circle btn-success text-white">
-                                    <i className="ft-plus"></i>
-                                  </button>{" "}
-                                  <span className="font-normal text-dark">
-                                    ทำรายการเบิกเงิน
-                                  </span>
-                                </Link>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        {/* L172-221 — the payout-history table */}
-                        <div className="row">
-                          <div className="col-12">
-                            <div className="table-responsive">
-                              <table
-                                id="myTable"
-                                className="table display table-bordered table-striped dataTable no-footer dtr-inline"
-                              >
-                                <thead>
-                                  <tr className="text-center">
-                                    <th>วันที่ทำรายการ</th>
-                                    <th>รหัสตัวแทนขาย</th>
-                                    <th>จำนวนเงิน</th>
-                                    <th>สลิป</th>
-                                    <th>สถานะรายการ</th>
-                                    <th>ตัวเลือก</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {rows.map((row) => (
-                                    <tr key={row.ID}>
-                                      <td className="text-center font-12">
-                                        {row.dateLabel} {row.timeLabel} น.
-                                      </td>
-                                      <td className="text-center">
-                                        {row.userIDMain}
-                                      </td>
-                                      <td className="text-right">
-                                        {numberFormat(row.amount, 2)}
-                                      </td>
-                                      <td className="text-center">
-                                        {/* L199-204 — the slip link shows
-                                            only when status==3. */}
-                                        {row.status === "3" && (
-                                          <a
-                                            className="image-popup-vertical-fit el-link"
-                                            href={legacyMemberUrl(`storage/slip/${row.imagesSlip ?? ""}`)}
-                                          >
-                                            ดูสลิป
-                                          </a>
-                                        )}
-                                      </td>
-                                      <td className="text-center">
-                                        {nameStatusUserPay(row.status)}
-                                      </td>
-                                      <td className="text-center">
-                                        <Link href={`/sales/history/${row.ID}`}>
-                                          <span className="btn btn-sm font-12 btn-outline-success btn-rounded">
-                                            {" "}
-                                            ดูรายละเอียด{" "}
-                                          </span>
-                                        </Link>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
+
+          {/* L172-221 — the payout-history list */}
+          <div className="px-3 py-3 md:px-5 md:py-4">
+            {rows.length === 0 ? (
+              <p className="py-12 text-center text-sm text-muted">
+                ยังไม่มีประวัติการจ่ายเงิน
+              </p>
+            ) : (
+              <>
+                {/* ── Mobile: stacked cards (md:hidden) ── */}
+                <div className="space-y-3 md:hidden">
+                  {rows.map((row) => (
+                    <div
+                      key={row.ID}
+                      className="rounded-xl border border-border bg-white dark:bg-surface p-3 shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-mono text-xs text-muted">
+                          {row.userIDMain}
+                        </span>
+                        {nameStatusUserPay(row.status)}
+                      </div>
+                      <div className="mt-1.5 font-mono text-lg font-bold tabular-nums text-red-600">
+                        {numberFormat(row.amount, 2)}{" "}
+                        <span className="text-xs font-normal text-muted">บาท</span>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between gap-2 border-t border-dashed border-border pt-2">
+                        <span className="text-[11px] text-muted">
+                          {row.dateLabel} {row.timeLabel} น.
+                        </span>
+                        <div className="flex items-center gap-3">
+                          {/* L199-204 — slip link shows only when status==3. */}
+                          {row.status === "3" && (
+                            <a
+                              className="image-popup-vertical-fit el-link text-xs font-medium text-sky-600 hover:underline"
+                              href={legacyMemberUrl(`storage/slip/${row.imagesSlip ?? ""}`)}
+                            >
+                              ดูสลิป
+                            </a>
+                          )}
+                          <Link
+                            href={`/sales/history/${row.ID}`}
+                            className="rounded-full border border-emerald-500 px-3 py-1 text-xs font-medium text-emerald-600 hover:bg-emerald-50"
+                          >
+                            ดูรายละเอียด
+                          </Link>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              </div>
-            </section>
-            {/* Basic Carousel end */}
+
+                {/* ── Desktop: table (#myTable kept for DataTables JS;
+                    plain div wrapper isolates Tailwind from the legacy
+                    `.dataTable` cascade) ── */}
+                <div className="hidden md:block overflow-x-auto rounded-xl border border-border">
+                  <table id="myTable" className="dataTable w-full text-sm">
+                    <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+                      <tr>
+                        <th className="px-4 py-3 font-medium text-center whitespace-nowrap">วันที่ทำรายการ</th>
+                        <th className="px-4 py-3 font-medium text-center whitespace-nowrap">รหัสตัวแทนขาย</th>
+                        <th className="px-4 py-3 font-medium text-right whitespace-nowrap">จำนวนเงิน</th>
+                        <th className="px-4 py-3 font-medium text-center whitespace-nowrap">สลิป</th>
+                        <th className="px-4 py-3 font-medium text-center whitespace-nowrap">สถานะรายการ</th>
+                        <th className="px-4 py-3 font-medium text-center whitespace-nowrap">ตัวเลือก</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((row) => (
+                        <tr
+                          key={row.ID}
+                          className="border-t border-border hover:bg-surface-alt/30"
+                        >
+                          <td className="px-4 py-3 text-center text-xs text-muted whitespace-nowrap">
+                            {row.dateLabel} {row.timeLabel} น.
+                          </td>
+                          <td className="px-4 py-3 text-center font-mono text-xs text-foreground">
+                            {row.userIDMain}
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums font-mono font-semibold text-red-600">
+                            {numberFormat(row.amount, 2)}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {/* L199-204 — the slip link shows only when status==3. */}
+                            {row.status === "3" && (
+                              <a
+                                className="image-popup-vertical-fit el-link text-xs font-medium text-sky-600 hover:underline"
+                                href={legacyMemberUrl(`storage/slip/${row.imagesSlip ?? ""}`)}
+                              >
+                                ดูสลิป
+                              </a>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {nameStatusUserPay(row.status)}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <Link
+                              href={`/sales/history/${row.ID}`}
+                              className="inline-block rounded-full border border-emerald-500 px-3 py-1 text-xs font-medium text-emerald-600 hover:bg-emerald-50"
+                            >
+                              ดูรายละเอียด
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
-        </div>
+        </section>
       </div>
-      {/* END: Content — report-user-sales-history.php L232 */}
     </div>
   );
 }
