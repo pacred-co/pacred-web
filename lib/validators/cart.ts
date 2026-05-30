@@ -96,7 +96,14 @@ export const cartItemSchema = z.object({
 export type CartItemInput = z.infer<typeof cartItemSchema>;
 
 export const placeOrderSchema = z.object({
-  cart_item_ids:    z.array(z.string().uuid()).min(1, "เลือกอย่างน้อย 1 รายการ"),
+  // D1 cart unification (P0-3/4/5): cart ids are now the stringified legacy
+  // tb_cart integer id (was a rebuilt cart_items UUID). Accept a numeric
+  // string (1..n digits) so placeServiceOrder can map it → number for the
+  // faithful submitCartOrder delegation.
+  cart_item_ids:    z.array(z.string().regex(/^\d+$/, "รหัสสินค้าไม่ถูกต้อง")).min(1, "เลือกอย่างน้อย 1 รายการ"),
+  // warehouse_china kept in the schema (the cart UI still sends it) but the
+  // legacy order-create flow does NOT set hwarehousechina — admin assigns the
+  // China warehouse when goods arrive. placeServiceOrder ignores this field.
   warehouse_china:  z.enum(["guangzhou", "yiwu"]),
   transport_type:   z.enum(["truck", "ship", "air"]).default("truck"),
   ship_by:          z.string().trim().max(50).optional().or(z.literal("").transform(() => undefined)),

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { placeOrderSchema, type PlaceOrderInput, type Provider } from "@/lib/validators/cart";
+import { submitCartOrder } from "@/actions/cart";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
@@ -599,9 +600,46 @@ export async function getServiceOrderForReceipt(
 }
 
 // ────────────────────────────────────────────────────────────
-// PLACE ORDER from cart
+// PLACE ORDER from cart — D1 cart unification (P0-3/4/5)
+// ────────────────────────────────────────────────────────────
+//
+// FAITHFUL pivot: the previous body wrote the REBUILT empty `service_orders` +
+// `service_order_items` + read the rebuilt `cart_items` (all dead on prod →
+// green toast, 0 real rows). It now DELEGATES to the faithful `submitCartOrder`
+// (actions/cart.ts — the complete shops.php port: hNo gen, hShipBy resolve,
+// tb_promotion, address snapshot, tax-doc, tb_header_order + tb_order insert
+// seeding hStatus='1', tb_cart clear). We map this action's input onto
+// submitCartOrder's shape rather than re-port shops.php a second time.
+//
+// What changed for the caller (cart-manager.tsx): the return shape is preserved
+// ({ id, h_no, total_thb, payment_due_at }). `id` is now the hNo (legacy uses
+// hNo as the join key — there's no separate UUID). `total_thb` is 0 at submit:
+// the legacy order seeds hStatus='1' (รอดำเนินการ) with NO price — admin prices
+// it (update2 → hStatus='2' รอชำระเงิน) before the customer pays. `payment_due_at`
+// is a best-effort 24h hint (the real hDatePayment is stamped at pricing time).
+//
+// Status seed = '1' (NOT '2'): the legacy review step. Verified against
+// shops.php (INSERT has no hStatus → DB default '1') + submitCartOrder.
+//
+// Reachability (§0d): sidebar "ฝากสั่งซื้อ" → /service-order/cart (this cart,
+// reads tb_cart) → "สั่งซื้อสินค้า" button → THIS action → tb_header_order.
 // ────────────────────────────────────────────────────────────
 const PAYMENT_DUE_HOURS = 24;       // legacy hDatePayment timer (24h)
+
+// transport_type label → legacy htransporttype 1-char code (1=land/EK,
+// 2=sea/SEA, 3=air). submitCartOrder stores the code verbatim; getServiceOrder
+// reads it back as the code.
+const TRANSPORT_TO_LEGACY: Record<string, string> = {
+  truck: "1",
+  ship:  "2",
+  air:   "3",
+};
+// pay_method label → legacy paymethod 1-char code (1=origin/เก็บต้นทาง,
+// 2=destination/เก็บปลายทาง). getServiceOrder reads paymethod==='2'→destination.
+const PAYMETHOD_TO_LEGACY: Record<string, string> = {
+  origin:      "1",
+  destination: "2",
+};
 
 export async function placeServiceOrder(
   input: PlaceOrderInput,
@@ -616,169 +654,162 @@ export async function placeServiceOrder(
   }
   const d = parsed.data;
 
-  const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
-  }
-  if (!user) return { ok: false, error: "not_signed_in" };
+  // Resolve the signed-in user up front (for the notification). submitCartOrder
+  // does its own auth + ownership gate, so this is only for the notify target.
+  const userData = await getCurrentUserWithProfile();
+  if (!userData?.user) return { ok: false, error: "not_signed_in" };
 
-  // Load the cart items (RLS ensures we only get our own)
-  const { data: cartRows, error: cartErr } = await supabase
-    .from("cart_items")
-    .select("id, provider, shop_name, url, title, image_path, color, size, price_cny, amount, details")
-    .in("id", d.cart_item_ids);
-
-  if (cartErr) return { ok: false, error: cartErr.message };
-  if (!cartRows || cartRows.length === 0) {
-    return { ok: false, error: "cart_empty" };
-  }
-  if (cartRows.length !== d.cart_item_ids.length) {
-    return { ok: false, error: "some_cart_items_missing" };
+  // Map cart_item_ids (now stringified tb_cart integer ids) → number[].
+  const ids = d.cart_item_ids
+    .map((s) => Number(s))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (ids.length === 0 || ids.length !== d.cart_item_ids.length) {
+    return { ok: false, error: "invalid_cart_item_ids" };
   }
 
-  // Fetch current yuan rate from settings
-  const { data: settings, error: settingsErr } = await supabase
-    .from("settings")
-    .select("yuan_rate, service_fee")
-    .eq("id", 1)
-    .maybeSingle<{ yuan_rate: number; service_fee: number }>();
-  if (settingsErr) {
-    console.error(`[settings list] failed`, { code: settingsErr.code, message: settingsErr.message });
-  }
-  const yuan_rate   = Number(settings?.yuan_rate ?? 5);
-  const service_fee = Number(settings?.service_fee ?? 50);
+  // Legacy free-shipping (BKK + metro ZIPs) → pro='f' (PCSF, +50฿ ship) in the
+  // submitCartOrder contract, which sets hShipBy='PCSF' + hfreeshipping='1'.
+  const pro = isFreeShippingZip(d.ship_postal_code) ? "f" : null;
 
-  // Compute subtotal (CNY) and total (THB)
-  const subtotal_cny = cartRows.reduce(
-    (sum, r) => sum + Number(r.price_cny) * Number(r.amount),
-    0,
-  );
-  const free_shipping = isFreeShippingZip(d.ship_postal_code);
-  const total_thb     = Math.round((subtotal_cny * yuan_rate + service_fee) * 100) / 100;
+  // Delegate to the faithful shops.php port with a mapped input + an INLINE
+  // address snapshot (the customer typed a fresh address in the cart form;
+  // there's no saved tb_address row to resolve).
+  const res = await submitCartOrder({
+    ids,
+    hTransportType: TRANSPORT_TO_LEGACY[d.transport_type] ?? "1",
+    // crate boolean → legacy code: true (ตีลังไม้) = '1', false = '2'
+    // (matches the /cart RadioCard values; submitCartOrder stores it verbatim
+    // and getServiceOrder reads crate==='1'→true).
+    crate: d.crate ? "1" : "2",
+    addressID: "INLINE",
+    hShipBy: d.ship_by ?? null,
+    payMethod: PAYMETHOD_TO_LEGACY[d.pay_method] ?? "1",
+    pro,
+    hNote: d.note_user ?? null,
+    addressSnapshot: {
+      addressName:        d.ship_first_name,
+      addressLastname:    d.ship_last_name,
+      addressTel:         d.ship_phone,
+      addressTel2:        d.ship_phone2 ?? "",
+      addressNo:          d.ship_address_line,
+      addressSubDistrict: d.ship_sub_district,
+      addressDistrict:    d.ship_district,
+      addressProvince:    d.ship_province,
+      addressZIPCode:     d.ship_postal_code,
+    },
+  });
 
-  // Build cover from first item with image
-  const firstWithImage = cartRows.find((r) => r.image_path);
-  const cover_image_path = firstWithImage?.image_path ?? null;
-  const title = cartRows[0]?.title ?? cartRows[0]?.shop_name ?? "ออเดอร์";
-
-  const now = new Date();
-  const due = new Date(now.getTime() + PAYMENT_DUE_HOURS * 3600_000);
-
-  // Insert header
-  const { data: created, error: hdrErr } = await supabase
-    .from("service_orders")
-    .insert({
-      profile_id:        user.id,
-      status:            "awaiting_payment",
-      title,
-      cover_image_path,
-      item_count:        cartRows.length,
-      warehouse_china:   d.warehouse_china,
-      transport_type:    d.transport_type,
-      // 'PACRED_FREE' for orders eligible for free shipping in the
-      // BKK + 5 metro zones (replaces legacy PCSF code).
-      ship_by:           free_shipping ? "PACRED_FREE" : (d.ship_by ?? null),
-      pay_method:        d.pay_method,
-      crate:             d.crate,
-      free_shipping,
-      yuan_rate_locked:  yuan_rate,
-      subtotal_cny,
-      service_fee,
-      total_thb,
-      ship_first_name:    d.ship_first_name,
-      ship_last_name:     d.ship_last_name,
-      ship_phone:         d.ship_phone,
-      ship_phone2:        d.ship_phone2 ?? null,
-      ship_address_line:  d.ship_address_line,
-      ship_sub_district:  d.ship_sub_district,
-      ship_district:      d.ship_district,
-      ship_province:      d.ship_province,
-      ship_postal_code:   d.ship_postal_code,
-      ship_note:          d.ship_note ?? null,
-      note_user:          d.note_user ?? null,
-      date_awaiting_payment: now.toISOString(),
-      payment_due_at:        due.toISOString(),
-    })
-    .select("id, h_no")
-    .single<{ id: string; h_no: string }>();
-
-  if (hdrErr) return { ok: false, error: hdrErr.message };
-
-  // Snapshot cart rows → service_order_items
-  const itemRows = cartRows.map((r) => ({
-    service_order_id: created.id,
-    provider:         r.provider,
-    shop_name:        r.shop_name,
-    url:              r.url,
-    title:            r.title,
-    image_path:       r.image_path,
-    color:            r.color,
-    size:             r.size,
-    price_cny:        r.price_cny,
-    amount:           r.amount,
-    details:          r.details,
-  }));
-  const { error: itemsErr } = await supabase.from("service_order_items").insert(itemRows);
-  if (itemsErr) {
-    // best-effort: rollback header (RLS allows owner deletion via update,
-    // not delete; we instead mark cancelled so the row doesn't dangle)
-    await supabase.from("service_orders").update({ status: "cancelled" }).eq("id", created.id);
-    return { ok: false, error: `items_insert_failed: ${itemsErr.message}` };
-  }
-
-  // Clear placed items out of the cart
-  await supabase.from("cart_items").delete().in("id", d.cart_item_ids);
+  if (!res.ok) return { ok: false, error: res.error };
+  const hNo = res.data!.hNo;
 
   revalidatePath("/service-order");
   revalidatePath("/service-order/cart");
   revalidatePath("/service-order/pending");
+  revalidatePath("/cart");
 
-  // Notification (fire and forget — don't block the action result)
-  void sendNotification(user.id, notify.serviceOrderPlaced({
-    hNo:       created.h_no,
-    orderId:   created.id,
-    itemCount: d.cart_item_ids.length,
-    totalThb:  total_thb,
+  // Notification (fire and forget — don't block the action result). total_thb
+  // is 0 at submit (legacy seeds hStatus='1' with no price — admin prices it
+  // before payment); the notification just confirms the order landed.
+  void sendNotification(userData.user.id, notify.serviceOrderPlaced({
+    hNo,
+    orderId:   hNo,
+    itemCount: ids.length,
+    totalThb:  0,
   }));
 
+  const due = new Date(Date.now() + PAYMENT_DUE_HOURS * 3600_000);
   return {
     ok: true,
     data: {
-      id: created.id,
-      h_no: created.h_no,
-      total_thb,
+      id: hNo,            // legacy join key (no separate UUID)
+      h_no: hNo,
+      total_thb: 0,       // priced by admin at hStatus 1→2 (รอชำระเงิน)
       payment_due_at: due.toISOString(),
     },
   };
 }
 
 // ────────────────────────────────────────────────────────────
-// SELF-CANCEL (only while pending or awaiting_payment)
+// SELF-CANCEL — D1 cart unification (P0-3/4/5)
+// ────────────────────────────────────────────────────────────
+//
+// FAITHFUL pivot: the previous body wrote the REBUILT empty `service_orders`
+// (status='cancelled' · dead on prod). It now writes the legacy tb_header_order:
+// 1:1 of member/include/pages/shops/cancelOrder.php —
+//   UPDATE tb_header_order SET hStatus='6', adminIDUpdate='$userID'
+//   WHERE hStatus<3 AND hNo=? AND userID=?;
+//
+// Status values from legacy, NOT training: cancel = '6' (one char), guard
+// hStatus<3 (customer can only cancel while รอดำเนินการ '1' / รอชำระเงิน '2';
+// once admin places the order '3'+ it's locked). Ownership-gated by member_code.
+// Idempotent: a row already terminal (hStatus≥3 or ='6') matches 0 rows under
+// the guard → we treat that as already-done (ok:true) rather than an error.
+//
+// Reachability (§0d): sidebar "ฝากสั่งซื้อ" → /service-order → order detail →
+// cancel button → THIS action.
 // ────────────────────────────────────────────────────────────
 export async function cancelServiceOrder(hNo: string): Promise<ActionResult> {
   // G-4 — impersonation is read-only; refuse customer-facing mutations.
   const impErr = await assertNotImpersonating();
   if (impErr) return impErr;
 
-  const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  if (!hNo || !hNo.trim()) return { ok: false, error: "invalid_hno" };
+
+  // Resolve the customer's legacy member code (the tb_* ownership/join key).
+  const userData = await getCurrentUserWithProfile();
+  if (!userData?.user) return { ok: false, error: "not_signed_in" };
+  if (!userData.profile?.member_code) {
+    return { ok: false, error: "ยังไม่ได้รับ member_code — กรุณาติดต่อทีมงาน" };
   }
-  if (!user) return { ok: false, error: "not_signed_in" };
+  const memberCode = userData.profile.member_code;
 
-  const { error } = await supabase
-    .from("service_orders")
-    .update({ status: "cancelled" })
-    .eq("h_no", hNo)
-    .eq("profile_id", user.id)
-    .in("status", ["pending", "awaiting_payment"]);
+  const admin = createAdminClient();
 
-  if (error) return { ok: false, error: error.message };
+  // 1. Load the header (ownership-gated) to make the action idempotent + to
+  // distinguish "already terminal" (ok) from "not yours / not found" (error).
+  const { data: header, error: headerErr } = await admin
+    .from("tb_header_order")
+    .select("id, hno, hstatus")
+    .eq("hno", hNo)
+    .eq("userid", memberCode)               // ownership gate
+    .maybeSingle<{ id: number; hno: string; hstatus: string | null }>();
+  if (headerErr) {
+    console.error(`[tb_header_order cancel lookup] failed`, {
+      code: headerErr.code, message: headerErr.message, hno: hNo, userid: memberCode,
+    });
+    return { ok: false, error: `db_error:${headerErr.code ?? "unknown"}` };
+  }
+  if (!header) return { ok: false, error: "not_found" };
+
+  const status = (header.hstatus ?? "").trim();
+  // Already cancelled → idempotent success.
+  if (status === "6") {
+    revalidatePath("/service-order");
+    return { ok: true };
+  }
+  // Past the cancellable window (hStatus≥3) → refuse (legacy guard hStatus<3).
+  if (!(status === "1" || status === "2")) {
+    return { ok: false, error: "order_not_cancellable" };
+  }
+
+  // 2. cancelOrder.php — UPDATE hStatus='6', adminIDUpdate=userID WHERE
+  // hStatus<3 (re-checked in the predicate so a concurrent admin-place loses
+  // the race safely) AND hNo + userID.
+  const { error: updErr } = await admin
+    .from("tb_header_order")
+    .update({ hstatus: "6", adminidupdate: memberCode })
+    .eq("id", header.id)
+    .in("hstatus", ["1", "2"]);            // legacy hStatus<3 guard
+  if (updErr) {
+    console.error(`[tb_header_order cancel update] failed`, {
+      code: updErr.code, message: updErr.message, hno: hNo,
+    });
+    return { ok: false, error: updErr.message };
+  }
 
   revalidatePath("/service-order");
   revalidatePath("/service-order/pending");
+  revalidatePath(`/service-order/${header.hno}`);
   return { ok: true };
 }
 
