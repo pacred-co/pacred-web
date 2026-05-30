@@ -216,9 +216,14 @@ export async function adminUpdateServiceOrder(input: AdminUpdateServiceOrderInpu
     }
     if (d.note_admin != null && !isRollback) {
       // note_admin maps to legacy hnote (the staff/admin note column).
-      // Empty string → null (matches the rebuilt prior behaviour). Stamp
-      // hnotedate per shops.php L725 saveNote handler.
-      update.hnote     = d.note_admin.length > 0 ? d.note_admin : null;
+      // Sitting-G bug fix: tb_header_order.hnote is NOT NULL (legacy
+      // schema 0081 — every row needs a real string, default ''). The
+      // prior "rebuilt → null" mapping crashed prod with "null value in
+      // column 'hnote' violates not-null constraint" when an admin
+      // cleared the field (browser-verified P22305). Empty string is
+      // the legacy "no note" marker. Stamp hnotedate per shops.php L725
+      // saveNote handler.
+      update.hnote     = d.note_admin.length > 0 ? d.note_admin : "";
       update.hnotedate = nowIso;
     }
 

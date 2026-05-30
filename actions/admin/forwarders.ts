@@ -7,6 +7,7 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
+import { fireUserSalesEarnTriggerOnDelivery } from "./earn-trigger-tb-user-sales";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
 import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 import { getCargoBillingGate } from "@/lib/forwarder/billing-gate";
@@ -738,6 +739,37 @@ export async function adminBulkUpdateForwarderTbStatus(
         // Resolver-level failure (e.g. DB error during bulk lookup) —
         // log + continue. The bulk UPDATE already succeeded.
         logger.warn("forwarder.bulk_update_tb", "notification resolver failed (bulk update OK, notifications skipped)", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // P1-5 earn-trigger (2026-05-30 night · ภูม · ADR-0019 D-B · master gap
+    // P1-5 · cust-07 P0-2). When this bulk flipped any rows to fstatus='7'
+    // (ส่งสำเร็จ · delivered), INSERT a tb_user_sales row for each one
+    // whose customer's tb_users.coid is in the 4 VIP teams (THADA.VIP /
+    // SIN.VIP / OOAEOM.VIP / SWAN). Idempotent — re-flipping the same row
+    // won't double-accrue. Best-effort — a failed earn-trigger does NOT
+    // roll back the status flip that already succeeded above.
+    if (fstatus === "7" && changed.length > 0) {
+      try {
+        const earnResult = await fireUserSalesEarnTriggerOnDelivery(
+          admin,
+          changed.map((r) => r.id),
+        );
+        if (earnResult.errors.length > 0 || earnResult.inserted > 0) {
+          logger.info("forwarder.bulk_update_tb", `tb_user_sales earn-trigger inserted=${earnResult.inserted} skipped=${earnResult.skipped} errors=${earnResult.errors.length}`, {
+            adminId:  redactId(adminId),
+            inserted: earnResult.inserted,
+            skipped:  earnResult.skipped,
+            errors:   earnResult.errors,
+          });
+        }
+      } catch (err) {
+        // Belt-and-suspenders: the helper already swallows its own errors
+        // into the result envelope, but a thrown error here would still
+        // not roll back the flip — log + continue.
+        logger.warn("forwarder.bulk_update_tb", "tb_user_sales earn-trigger threw (bulk update OK, commission rows skipped)", {
           error: err instanceof Error ? err.message : String(err),
         });
       }

@@ -366,18 +366,21 @@ export async function adminBulkApproveYuanPayments(
 }
 
 // ────────────────────────────────────────────────────────────
-// Phase C QoL #4 (G-5 fix): mark yuan_payment as refunded WITH slip.
+// P1-13 (2026-05-30 sitting-F · re-pointed to tb_payment) — mark
+// tb_payment row as refunded WITH slip + cascade wallet refund.
 // ────────────────────────────────────────────────────────────
 //
-// Per `docs/research/gap-schema-security.md` G-5 — the legacy
-// adminUpdateYuanPayment refund branch lets admins flip status →
-// 'refunded' without ANY evidence the money moved back. Migration
-// 0074 added refund_slip_path + refunded_at + refunded_by_admin_id.
-// This action is the slip-enforcing entry point; the slip storage
-// path must be non-empty, both timestamps + admin id get stamped
-// atomically, the wallet debit (if paid_via_wallet) gets reversed
-// the same way adminUpdateYuanPayment does, and a notification is
-// fired to the customer.
+// History: this used to write the REBUILT (empty) yuan_payments +
+// wallet_transactions tables. With P0-11 mounting YuanPaymentActions
+// on the legacy /admin/yuan-payments/[id] detail page, the refund
+// modal became reachable and would have errored "not_found" on every
+// legacy row. This pass pivots to tb_payment + the legacy
+// tb_wallet_hs / tb_wallet refund pattern (same shape as
+// adminUpdateYuanPayment's refund branch above — ADR-0018 D-2 rule 3).
+//
+// Slip handling: tb_payment.imagesslipadmin (varchar(250) per 0081)
+// is the legacy "admin-attached proof" column; we stamp the storage
+// path there at the same time as the status flip.
 //
 // Status-transition guard is the SAME allow-list adminUpdateYuanPayment
 // uses (only completed → refunded · pending → refunded · processing →
@@ -387,7 +390,7 @@ export async function adminBulkApproveYuanPayments(
 // UI uploads first, then passes the returned path here.
 
 const markRefundedSchema = z.object({
-  id:                z.string().uuid(),
+  id:                z.string().regex(/^\d+$/, "id ต้องเป็นเลขใบ tb_payment (จำนวนเต็มบวก)"),
   refund_slip_path:  z.string().trim().min(1, "ต้องแนบสลิปการคืนเงิน").max(500),
   note:              z.string().trim().max(1000).optional(),
 });
@@ -399,82 +402,169 @@ export async function adminMarkYuanPaymentRefunded(
   const parsed = markRefundedSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   const d = parsed.data;
+  const idNum = Number(d.id);
 
   return withAdmin<{ refunded_at: string }>(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
+    const legacyAdminId = await resolveLegacyAdminId();
+
     const { data: existing, error: existingErr } = await admin
-      .from("yuan_payments")
-      .select("id, profile_id, status, yuan_amount, thb_amount, paid_via_wallet, refund_slip_path")
-      .eq("id", d.id)
+      .from("tb_payment")
+      .select("id, userid, paystatus, payyuan, paythb, paydeposit, imagesslipadmin")
+      .eq("id", idNum)
       .maybeSingle<{
-        id: string; profile_id: string; status: string;
-        yuan_amount: number; thb_amount: number;
-        paid_via_wallet: boolean; refund_slip_path: string | null;
+        id: number; userid: string; paystatus: string;
+        payyuan: number; paythb: number;
+        paydeposit: string | null; imagesslipadmin: string | null;
       }>();
     if (existingErr) {
-      console.error(`[yuan_payments mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
+      console.error(`[tb_payment mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
       return { ok: false, error: `db_error:${existingErr.code ?? "unknown"}` };
     }
     if (!existing) return { ok: false, error: "not_found" };
 
-    if (!isYuanTransitionAllowed(existing.status, "refunded")) {
+    // Probe for an existing wallet refund row so we can map the legacy
+    // paystatus to the right Pacred-string status — and so we don't
+    // double-credit on re-run.
+    const { data: existingRefund, error: refundProbeErr } = await admin
+      .from("tb_wallet_hs")
+      .select("id")
+      .eq("type", "5")
+      .eq("reforder", String(existing.id))
+      .eq("userid", existing.userid)
+      .limit(1)
+      .maybeSingle<{ id: number }>();
+    if (refundProbeErr) {
+      console.error(`[tb_wallet_hs refund probe] failed`, { code: refundProbeErr.code, message: refundProbeErr.message });
+    }
+    const existingStatus = paystatusToPacred(existing.paystatus, Boolean(existingRefund?.id));
+    const paidViaWallet  = existing.paydeposit === "1";
+
+    if (!isYuanTransitionAllowed(existingStatus, "refunded")) {
       return {
         ok: false,
-        error: `เปลี่ยนสถานะ ${STATUS_LABEL[existing.status as keyof typeof STATUS_LABEL] ?? existing.status} → คืนเงินแล้ว ไม่ได้ — สถานะนี้ห้ามคืน (เลือก refund ได้เฉพาะ pending / processing / completed)`,
+        error: `เปลี่ยนสถานะ ${STATUS_LABEL[existingStatus] ?? existingStatus} → คืนเงินแล้ว ไม่ได้ — สถานะนี้ห้ามคืน (เลือก refund ได้เฉพาะ pending / processing / completed)`,
       };
     }
 
     const refundedAt = new Date().toISOString();
-    const update: Record<string, unknown> = {
-      status:               "refunded",
-      refund_slip_path:     d.refund_slip_path,
-      refunded_at:          refundedAt,
-      refunded_by_admin_id: adminId,
-      admin_id_update:      adminId,
-    };
 
+    // ── Step 1: UPDATE tb_payment.paystatus → '3' + stamp slip ──────
+    // Legacy: paystatus='3' covers both refund + failed; the wallet
+    // refund row (type='5') is what distinguishes them.
     const { error: updErr } = await admin
-      .from("yuan_payments")
-      .update(update)
+      .from("tb_payment")
+      .update({
+        paystatus:       "3",
+        paydateadmin:    refundedAt,
+        adminid:         legacyAdminId,
+        adminidupdate:   legacyAdminId,
+        imagesslipadmin: d.refund_slip_path,
+      })
       .eq("id", existing.id);
     if (updErr) return { ok: false, error: updErr.message };
 
-    // Reverse the wallet debit (same logic as adminUpdateYuanPayment's
-    // refund branch — covers both pending + completed debits per H-2).
-    if (existing.paid_via_wallet) {
-      const { error: reverseErr } = await admin
-        .from("wallet_transactions")
-        .update({ status: "cancelled", admin_id_update: adminId })
-        .eq("reference_type", "yuan_payment")
-        .eq("reference_id", existing.id)
-        .in("status", ["pending", "completed"]);
-      if (reverseErr) {
+    // ── Step 2: cascade refund to wallet (only if paid from wallet) ──
+    // Idempotency: skip if a type='5' row already exists for this id.
+    if (paidViaWallet && !existingRefund?.id) {
+      const refundAmount = Number(existing.paythb);
+
+      const { error: hsErr } = await admin
+        .from("tb_wallet_hs")
+        .insert({
+          date:            refundedAt,
+          dateslip:        refundedAt,
+          amount:          refundAmount,
+          status:          "2",
+          type:            "5",                          // 5 = refund (legacy)
+          typenew:         "1",
+          typeservice:     "1",
+          paydeposit:      "0",
+          imagesslip:      d.refund_slip_path,
+          depositnamebank: "",
+          nameuserbank:    "",
+          nouserbank:      "",
+          note:            d.note ?? "คืนเงินฝากโอนหยวน + สลิปแนบ",
+          adminid:         legacyAdminId,
+          adminidupdate:   legacyAdminId,
+          session:         "admin-refund-with-slip",
+          reforder:        String(existing.id),
+          whno:            "",
+          wusercredit:     "0",
+          userid:          existing.userid,
+          adminidcrate:    legacyAdminId,
+        });
+      if (hsErr) {
         return {
           ok: false,
-          error: `payment marked refunded but wallet debit reversal failed (debit for ${existing.id} stands): ${reverseErr.message}`,
+          error: `tb_payment คืนสถานะแล้ว แต่บันทึก tb_wallet_hs ล้มเหลว: ${hsErr.message}`,
         };
       }
+
+      // Balance-bump tb_wallet (ADR-0018 D-2 rule 3 refund pattern).
+      const { data: wRow, error: wRowErr } = await admin
+        .from("tb_wallet")
+        .select("userid, wallettotal")
+        .eq("userid", existing.userid)
+        .maybeSingle<{ userid: string; wallettotal: number }>();
+      if (wRowErr) {
+        console.error(`[tb_wallet refund lookup] failed`, { code: wRowErr.code, message: wRowErr.message });
+      }
+      if (!wRow) {
+        const { error: walletInsErr } = await admin
+          .from("tb_wallet")
+          .insert({ userid: existing.userid, wallettotal: refundAmount });
+        if (walletInsErr) {
+          return {
+            ok: false,
+            error: `คืนเงินสำเร็จ (tb_wallet_hs) แต่ tb_wallet insert ล้มเหลว: ${walletInsErr.message}`,
+          };
+        }
+      } else {
+        const newTotal = Number(wRow.wallettotal) + refundAmount;
+        const { error: walletUpdErr } = await admin
+          .from("tb_wallet")
+          .update({ wallettotal: newTotal })
+          .eq("userid", existing.userid);
+        if (walletUpdErr) {
+          return {
+            ok: false,
+            error: `คืนเงินสำเร็จ (tb_wallet_hs) แต่ tb_wallet update ล้มเหลว: ${walletUpdErr.message}`,
+          };
+        }
+      }
     }
+    // If !paidViaWallet — no wallet bump needed (refund is "yuan return"
+    // from the customer's already-confirmed payment, the THB side never
+    // moved). Legacy reports treat both cases as paystatus='3'; the
+    // type='5' wallet_hs row is what distinguishes the wallet-credit
+    // sub-case.
 
-    await logAdminAction(adminId, "yuan_payment.mark_refunded", "yuan_payment", existing.id, {
-      before:              { status: existing.status, refund_slip_path: existing.refund_slip_path },
-      after:               { status: "refunded", refund_slip_path: d.refund_slip_path, refunded_at: refundedAt },
-      paid_via_wallet:     existing.paid_via_wallet,
-      note:                d.note ?? null,
+    // ── Step 3: audit + notify ─────────────────────────────────────
+    await logAdminAction(adminId, "tb_payment.mark_refunded", "tb_payment", String(existing.id), {
+      before:           { paystatus: existing.paystatus, imagesslipadmin: existing.imagesslipadmin },
+      after:            { paystatus: "3", imagesslipadmin: d.refund_slip_path, refunded_at: refundedAt },
+      paid_via_wallet:  paidViaWallet,
+      already_refunded: Boolean(existingRefund?.id),
+      note:             d.note ?? null,
     });
 
-    void sendNotification(existing.profile_id, {
-      category:       "yuan_payment",
-      severity:       "warning",
-      title:          "ฝากโอนหยวน — คืนเงินแล้ว",
-      body:           `¥${Number(existing.yuan_amount).toFixed(2)} = ฿${Number(existing.thb_amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}${d.note ? ` — ${d.note}` : ""}`,
-      link_href:      "/service-payment",
-      reference_type: "yuan_payment",
-      reference_id:   existing.id,
-    });
+    const profileId = await resolveProfileIdForLegacyUserid(existing.userid);
+    if (profileId) {
+      void sendNotification(profileId, {
+        category:       "yuan_payment",
+        severity:       "warning",
+        title:          "ฝากโอนหยวน — คืนเงินแล้ว",
+        body:           `¥${Number(existing.payyuan).toFixed(2)} = ฿${Number(existing.paythb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}${d.note ? ` — ${d.note}` : ""}`,
+        link_href:      "/service-payment",
+        reference_type: "yuan_payment",
+        reference_id:   String(existing.id),
+      });
+    }
 
     revalidatePath("/admin/yuan-payments");
     revalidatePath(`/admin/yuan-payments/${existing.id}`);
+    revalidatePath("/admin");
     return { ok: true, data: { refunded_at: refundedAt } };
   });
 }
@@ -491,8 +581,8 @@ export async function uploadYuanRefundSlip(
   yuanPaymentId: string,
   file: File,
 ): Promise<AdminActionResult<{ storage_path: string }>> {
-  if (!yuanPaymentId || typeof yuanPaymentId !== "string") {
-    return { ok: false, error: "invalid_input" };
+  if (!yuanPaymentId || typeof yuanPaymentId !== "string" || !/^\d+$/.test(yuanPaymentId)) {
+    return { ok: false, error: "invalid_input: id ต้องเป็นเลขใบ tb_payment" };
   }
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, error: "no_file" };
@@ -506,24 +596,37 @@ export async function uploadYuanRefundSlip(
     return { ok: false, error: "invalid_mime_type" };
   }
 
+  const idNum = Number(yuanPaymentId);
+
   return withAdmin<{ storage_path: string }>(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
 
+    // P1-13 — read tb_payment (legacy), not rebuilt yuan_payments.
     const { data: row, error: rowErr } = await admin
-      .from("yuan_payments")
-      .select("id, status")
-      .eq("id", yuanPaymentId)
-      .maybeSingle<{ id: string; status: string }>();
+      .from("tb_payment")
+      .select("id, paystatus")
+      .eq("id", idNum)
+      .maybeSingle<{ id: number; paystatus: string }>();
     if (rowErr) {
-      console.error(`[yuan_payments mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
+      console.error(`[tb_payment mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
       return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
     }
     if (!row) return { ok: false, error: "not_found" };
-    // Slip is meaningful for non-final states (we may upload before the
-    // actual refund-status flip in the same admin click). Accept any
-    // non-failed status — adminMarkYuanPaymentRefunded re-checks the
-    // transition allow-list at flip time.
-    if (row.status === "failed") {
+    // Slip is meaningful for non-failed states (we may upload before the
+    // actual refund-status flip in the same admin click). Legacy
+    // paystatus='3' covers BOTH refund + failed; if there's no wallet
+    // refund row, it's failed (can't refund again).
+    const { data: refundProbe, error: refundProbeErr } = await admin
+      .from("tb_wallet_hs")
+      .select("id")
+      .eq("type", "5")
+      .eq("reforder", String(row.id))
+      .limit(1)
+      .maybeSingle<{ id: number }>();
+    if (refundProbeErr) {
+      console.error(`[tb_wallet_hs refund probe] failed`, { code: refundProbeErr.code, message: refundProbeErr.message });
+    }
+    if (row.paystatus === "3" && !refundProbe?.id) {
       return { ok: false, error: "ห้ามอัพโหลดสลิป refund บนรายการที่ failed (ไม่มีเงินที่ต้องคืน)" };
     }
 
@@ -542,7 +645,7 @@ export async function uploadYuanRefundSlip(
       return { ok: false, error: `upload_failed: ${uploadErr.message}` };
     }
 
-    await logAdminAction(adminId, "yuan_payment.refund_slip_upload", "yuan_payment", row.id, {
+    await logAdminAction(adminId, "tb_payment.refund_slip_upload", "tb_payment", String(row.id), {
       storage_path: path,
       filename:     file.name,
       size_bytes:   file.size,
@@ -571,7 +674,7 @@ function inferExtension(file: File): string {
 // ────────────────────────────────────────────────────────────
 
 const yuanSlipSignedSchema = z.object({
-  id:   z.string().uuid(),
+  id:   z.string().regex(/^\d+$/, "id ต้องเป็นเลขใบ tb_payment"),
   kind: z.enum(["customer", "id_doc", "refund"]),
 });
 
@@ -585,21 +688,31 @@ export async function adminGetYuanPaymentSlipSignedUrl(
     ["super", "accounting"],
     async () => {
       const admin = createAdminClient();
+      // P1-13 — pivot to tb_payment. Legacy has 2 slip columns:
+      // imagesslip = customer slip, imagesslipadmin = admin slip
+      // (also where the refund slip lands per the refund flow).
+      // certifiedtruecopy is the id_doc equivalent.
+      const idNum = Number(parsed.data.id);
       const { data: row, error: rowErr } = await admin
-        .from("yuan_payments")
-        .select("id, slip_url, id_doc_url, refund_slip_path")
-        .eq("id", parsed.data.id)
-        .maybeSingle<{ id: string; slip_url: string | null; id_doc_url: string | null; refund_slip_path: string | null }>();
+        .from("tb_payment")
+        .select("id, imagesslip, imagesslipadmin, certifiedtruecopy")
+        .eq("id", idNum)
+        .maybeSingle<{
+          id: number;
+          imagesslip: string | null;
+          imagesslipadmin: string | null;
+          certifiedtruecopy: string | null;
+        }>();
       if (rowErr) {
-        console.error(`[yuan_payments mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
+        console.error(`[tb_payment mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
         return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
       }
       if (!row) return { ok: false, error: "not_found" };
 
       const path =
-        parsed.data.kind === "refund"   ? row.refund_slip_path :
-        parsed.data.kind === "id_doc"   ? row.id_doc_url :
-        row.slip_url;
+        parsed.data.kind === "refund"   ? row.imagesslipadmin :
+        parsed.data.kind === "id_doc"   ? row.certifiedtruecopy :
+        row.imagesslip;
       if (!path) return { ok: true, data: { url: null, mime: null } };
 
       const { data: signed, error: sErr } = await admin.storage
