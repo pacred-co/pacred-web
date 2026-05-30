@@ -3,8 +3,15 @@
 Last reviewed: 2026-05-24 (strategy reset — **V3 UNLOCKED** · admin 1:1 lane moved to ก๊อต)
 Branch: **`Poom-pacred`** (V3 continuation, active) — `Poom` (pre-1:1) is the FROZEN archive
 
-> ## 🎯 2026-05-30 MASTER GAP AUDIT — your lane (read FIRST)
-> Full audit: **[`docs/research/legacy-gap-2026-05-30/_MASTER.md`](../research/legacy-gap-2026-05-30/_MASTER.md)** §6 (your 14 admin-backend tasks) + §7. You own admin server-actions + `tb_*` queries. **Wallet-write tasks wait on เดฟ's wallet-SOT ADR (§6 เดฟ Task 1).**
+> ## 🆕 2026-05-30 NIGHT — RE-SPLIT + HANDOFF (read FIRST, supersedes the audit-lane block below)
+> **[`docs/research/handoff-2026-05-30-night-resplit.md`](../research/handoff-2026-05-30-night-resplit.md)** — consolidated status + the tightened เดฟ↔ภูม no-collision boundary + your ordered pickup list. **First: `git merge origin/dave-pacred`** (you're 7 commits behind; your Wave 27-30 work is already in there, nothing lost).
+>
+> **What's CLOSED since the audit** (don't redo): the whole money loop (P0-2/6/7/8/9/10 + P1-25/26 via ADR-0018), identity+juristic (P0-17/18), OTP. **Your START-HERE** (isolated dead-write retargets, zero wait): P0-22 4 crons · task#41 forwarder list-bar · P0-14 finish · P0-11/12 yuan per-row. **WAIT-on-เดฟ:** P0-13 5-tab shop (id-model decision) + P1-5 earn-trigger (commission decision).
+>
+> **The boundary:** you never edit the customer `(protected)/*` write-path or `actions/{cart,service-order,wallet-tb,payment-tb}.ts`; เดฟ never edits `actions/admin/*`. **Reuse เดฟ's ADR-0018 spine** (the `*-tb.ts` convention · `lib/payment/wallet-math.ts` · `resolveLegacyAdminId` · idempotency+rollback · grep-schema-before-typing). Full detail in the handoff §2-5.
+>
+> ## (superseded) 🎯 2026-05-30 MASTER GAP AUDIT — your lane
+> Full audit: **[`docs/research/legacy-gap-2026-05-30/_MASTER.md`](../research/legacy-gap-2026-05-30/_MASTER.md)** §6 + §7 — still the canonical task-source; the handoff above re-orders it for what's now done.
 >
 > **Start with the cheap landmines (Sprint 0, zero wallet dependency, highest correctness-per-minute):**
 > 1. **P0-10** yuan bulk-approve UUID one-liner — `resolveLegacyAdminId()` before the `tb_payment` UPDATE (`actions/admin/tb-bulk.ts:318`) — ship immediately.
