@@ -348,8 +348,13 @@ export default async function ReceiptsListPage({
                         />
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
+                        {/* 2026-05-31 sitting-H-fix: row link → mPDF print page
+                            (canonical detail). The orphan [rid] summary was dropped
+                            since the print page already shows all the same data.
+                            Uses numeric tb_receipt.id since the print page route
+                            is /admin/accounting/forwarder-invoice/[id]. */}
                         <Link
-                          href={`/admin/accounting/receipts/${encodeURIComponent(r.rid)}`}
+                          href={`/admin/accounting/forwarder-invoice/${r.id}`}
                           className="font-medium text-primary-700 hover:underline"
                         >
                           {r.rid}
