@@ -2,16 +2,24 @@
 
 /**
  * P0-19 — Admin pay-on-behalf client form.
- * Search a customer → show wallet balance + unpaid ฝากสั่ง orders →
- * select → debit the customer's wallet for the selected orders.
+ *
+ * Search a customer → show wallet balance + two payable lanes:
+ *   • ฝากสั่ง orders (shop · adminPayOrdersOnBehalf · hStatus 2→3)
+ *   • ฝากนำเข้า forwarders (Phase 2 · adminPayForwardersOnBehalf · fStatus 5→6)
+ * Each lane has its own checkbox list + total + pay button (mirrors the
+ * legacy two-form `paymentOrder` / `paymentForwarderNew` split). Both lanes
+ * draw from the same wallet — each pay re-fetches the context so the balance
+ * + remaining lists stay correct after a partial payment.
  */
 
 import { useState, useTransition } from "react";
 import {
   getPayUserContext,
   adminPayOrdersOnBehalf,
+  adminPayForwardersOnBehalf,
   type PayUserContext,
   type PayOnBehalfResult,
+  type PayForwardersOnBehalfResult,
 } from "@/actions/admin/pay-user";
 
 function thb(n: number): string {
@@ -21,17 +29,30 @@ function thb(n: number): string {
 export function PayUserClient() {
   const [code, setCode] = useState("");
   const [ctx, setCtx] = useState<PayUserContext | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [err, setErr] = useState<string | null>(null);
-  const [result, setResult] = useState<PayOnBehalfResult | null>(null);
   const [searching, startSearch] = useTransition();
-  const [paying, startPay] = useTransition();
+
+  // shop lane
+  const [selOrders, setSelOrders] = useState<Set<string>>(new Set());
+  const [orderResult, setOrderResult] = useState<PayOnBehalfResult | null>(null);
+  const [payingOrders, startPayOrders] = useTransition();
+
+  // forwarder lane
+  const [selFwds, setSelFwds] = useState<Set<string>>(new Set());
+  const [fwdResult, setFwdResult] = useState<PayForwardersOnBehalfResult | null>(null);
+  const [payingFwds, startPayFwds] = useTransition();
+
+  function resetAll() {
+    setErr(null);
+    setOrderResult(null);
+    setFwdResult(null);
+    setCtx(null);
+    setSelOrders(new Set());
+    setSelFwds(new Set());
+  }
 
   function search() {
-    setErr(null);
-    setResult(null);
-    setCtx(null);
-    setSelected(new Set());
+    resetAll();
     const c = code.trim();
     if (!c) { setErr("กรุณากรอกรหัสลูกค้า (เช่น PR124)"); return; }
     startSearch(async () => {
@@ -41,37 +62,67 @@ export function PayUserClient() {
     });
   }
 
-  function toggle(hno: string) {
-    setSelected((prev) => {
+  async function refresh() {
+    if (!ctx) return;
+    const fresh = await getPayUserContext(ctx.user.userid);
+    if (fresh.ok) setCtx(fresh.data ?? null);
+  }
+
+  // ── shop ──
+  function toggleOrder(hno: string) {
+    setSelOrders((prev) => {
       const next = new Set(prev);
-      if (next.has(hno)) next.delete(hno);
-      else next.add(hno);
+      if (next.has(hno)) next.delete(hno); else next.add(hno);
       return next;
     });
   }
+  const selectedOrders = ctx?.orders.filter((o) => selOrders.has(o.hno)) ?? [];
+  const ordersTotal = selectedOrders.reduce((s, o) => s + o.price_thb, 0);
+  const ordersInsufficient = ctx ? ordersTotal > ctx.wallet_balance : false;
 
-  function selectAll() {
-    if (!ctx) return;
-    setSelected(new Set(ctx.orders.map((o) => o.hno)));
+  function payOrders() {
+    setErr(null);
+    setOrderResult(null);
+    if (!ctx || selOrders.size === 0) { setErr("เลือกออเดอร์ฝากสั่งอย่างน้อย 1 รายการ"); return; }
+    if (ordersInsufficient) { setErr(`ยอดเงินไม่พอ — ต้องการ ${thb(ordersTotal)} มี ${thb(ctx.wallet_balance)}`); return; }
+    startPayOrders(async () => {
+      const res = await adminPayOrdersOnBehalf({ userId: ctx.user.userid, hNos: Array.from(selOrders) });
+      if (res.ok) {
+        setOrderResult(res.data ?? null);
+        setSelOrders(new Set());
+        await refresh();
+      } else {
+        setErr(res.error);
+      }
+    });
   }
 
-  const selectedOrders = ctx?.orders.filter((o) => selected.has(o.hno)) ?? [];
-  const selectedTotal = selectedOrders.reduce((s, o) => s + o.price_thb, 0);
-  const insufficient = ctx ? selectedTotal > ctx.wallet_balance : false;
+  // ── forwarder ──
+  function toggleFwd(fid: string) {
+    setSelFwds((prev) => {
+      const next = new Set(prev);
+      if (next.has(fid)) next.delete(fid); else next.add(fid);
+      return next;
+    });
+  }
+  const selectedFwds = ctx?.forwarders.filter((f) => selFwds.has(f.fid)) ?? [];
+  // Indicative total — the server recomputes authoritatively on the selected
+  // subset (corporate 1% / PCSF first-item depend on the exact selection), so
+  // the charged amount can differ by ≤1% or ฿50 from this preview.
+  const fwdsTotal = selectedFwds.reduce((s, f) => s + f.price_thb, 0);
+  const fwdsInsufficient = ctx ? fwdsTotal > ctx.wallet_balance : false;
 
-  function pay() {
+  function payFwds() {
     setErr(null);
-    setResult(null);
-    if (!ctx || selected.size === 0) { setErr("เลือกออเดอร์อย่างน้อย 1 รายการ"); return; }
-    if (insufficient) { setErr(`ยอดเงินไม่พอ — ต้องการ ${thb(selectedTotal)} มี ${thb(ctx.wallet_balance)}`); return; }
-    startPay(async () => {
-      const res = await adminPayOrdersOnBehalf({ userId: ctx.user.userid, hNos: Array.from(selected) });
+    setFwdResult(null);
+    if (!ctx || selFwds.size === 0) { setErr("เลือกรายการฝากนำเข้าอย่างน้อย 1 รายการ"); return; }
+    if (fwdsInsufficient) { setErr(`ยอดเงินไม่พอ — ต้องการ ${thb(fwdsTotal)} มี ${thb(ctx.wallet_balance)}`); return; }
+    startPayFwds(async () => {
+      const res = await adminPayForwardersOnBehalf({ userId: ctx.user.userid, fIds: Array.from(selFwds) });
       if (res.ok) {
-        setResult(res.data ?? null);
-        // re-fetch context to reflect new balance + drop paid orders
-        const fresh = await getPayUserContext(ctx.user.userid);
-        if (fresh.ok) setCtx(fresh.data ?? null);
-        setSelected(new Set());
+        setFwdResult(res.data ?? null);
+        setSelFwds(new Set());
+        await refresh();
       } else {
         setErr(res.error);
       }
@@ -106,17 +157,17 @@ export function PayUserClient() {
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{err}</div>
       )}
 
-      {result && (
+      {orderResult && (
         <div className="rounded-lg border border-green-300 bg-green-50 p-4 text-sm">
           <p className="font-semibold text-green-900">
-            ✅ ชำระสำเร็จ {result.paid.length} รายการ · ตัดเงินรวม {thb(result.total_debited)}
+            ✅ ชำระฝากสั่งสำเร็จ {orderResult.paid.length} รายการ · ตัดเงินรวม {thb(orderResult.total_debited)}
           </p>
-          {result.paid.length > 0 && (
-            <p className="mt-1 text-green-800">ออเดอร์: {result.paid.join(", ")}</p>
+          {orderResult.paid.length > 0 && (
+            <p className="mt-1 text-green-800">ออเดอร์: {orderResult.paid.join(", ")}</p>
           )}
-          {result.skipped.length > 0 && (
+          {orderResult.skipped.length > 0 && (
             <ul className="mt-2 list-disc pl-5 text-amber-800">
-              {result.skipped.map((s) => (
+              {orderResult.skipped.map((s) => (
                 <li key={s.hno}>{s.hno}: {s.reason}</li>
               ))}
             </ul>
@@ -124,14 +175,33 @@ export function PayUserClient() {
         </div>
       )}
 
-      {/* customer + orders */}
+      {fwdResult && (
+        <div className="rounded-lg border border-green-300 bg-green-50 p-4 text-sm">
+          <p className="font-semibold text-green-900">
+            ✅ ชำระฝากนำเข้าสำเร็จ {fwdResult.paid.length} รายการ · ตัดเงินรวม {thb(fwdResult.total_debited)}
+          </p>
+          {fwdResult.paid.length > 0 && (
+            <p className="mt-1 text-green-800">รายการ: {fwdResult.paid.join(", ")}</p>
+          )}
+          {fwdResult.skipped.length > 0 && (
+            <ul className="mt-2 list-disc pl-5 text-amber-800">
+              {fwdResult.skipped.map((s) => (
+                <li key={s.fid}>#{s.fid}: {s.reason}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* customer header */}
       {ctx && (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-3">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="font-semibold text-gray-900">{ctx.user.name}</p>
               <p className="text-xs text-gray-500">
                 {ctx.user.userid}{ctx.user.tel ? ` · ${ctx.user.tel}` : ""}
+                {ctx.is_corporate ? " · นิติบุคคล (ลด 1% เมื่อยอด ≥ ฿1,000)" : ""}
               </p>
             </div>
             <div className="text-right">
@@ -139,22 +209,27 @@ export function PayUserClient() {
               <p className="text-lg font-bold font-mono text-gray-900">{thb(ctx.wallet_balance)}</p>
             </div>
           </div>
+        </div>
+      )}
 
+      {/* shop orders lane */}
+      {ctx && (
+        <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
+          <p className="text-sm font-semibold text-gray-800">ฝากสั่ง (orders) รอชำระ ({ctx.orders.length})</p>
           {ctx.orders.length === 0 ? (
-            <p className="py-6 text-center text-sm text-gray-500">ไม่มีออเดอร์ฝากสั่งที่รอชำระเงิน</p>
+            <p className="py-4 text-center text-sm text-gray-500">ไม่มีออเดอร์ฝากสั่งที่รอชำระเงิน</p>
           ) : (
             <>
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-gray-700">รายการรอชำระ ({ctx.orders.length})</p>
-                <button onClick={selectAll} className="text-xs text-primary-600 hover:underline">เลือกทั้งหมด</button>
+              <div className="flex items-center justify-end">
+                <button onClick={() => setSelOrders(new Set(ctx.orders.map((o) => o.hno)))} className="text-xs text-primary-600 hover:underline">เลือกทั้งหมด</button>
               </div>
               <div className="divide-y divide-gray-100 rounded-lg border border-gray-100">
                 {ctx.orders.map((o) => (
                   <label key={o.hno} className="flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-gray-50">
                     <input
                       type="checkbox"
-                      checked={selected.has(o.hno)}
-                      onChange={() => toggle(o.hno)}
+                      checked={selOrders.has(o.hno)}
+                      onChange={() => toggleOrder(o.hno)}
                       className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                     />
                     <span className="flex-1 text-sm font-medium text-gray-900">#{o.hno}</span>
@@ -167,20 +242,68 @@ export function PayUserClient() {
                   </label>
                 ))}
               </div>
-
-              {/* total + pay */}
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-3">
                 <div className="text-sm">
-                  <span className="text-gray-500">เลือก {selected.size} รายการ · รวม </span>
-                  <span className={`font-mono font-bold ${insufficient ? "text-red-600" : "text-gray-900"}`}>{thb(selectedTotal)}</span>
-                  {insufficient && <span className="ml-2 text-xs text-red-600">(ยอดเงินไม่พอ)</span>}
+                  <span className="text-gray-500">เลือก {selOrders.size} รายการ · รวม </span>
+                  <span className={`font-mono font-bold ${ordersInsufficient ? "text-red-600" : "text-gray-900"}`}>{thb(ordersTotal)}</span>
+                  {ordersInsufficient && <span className="ml-2 text-xs text-red-600">(ยอดเงินไม่พอ)</span>}
                 </div>
                 <button
-                  onClick={pay}
-                  disabled={paying || selected.size === 0 || insufficient}
+                  onClick={payOrders}
+                  disabled={payingOrders || selOrders.size === 0 || ordersInsufficient}
                   className="rounded-lg bg-primary-600 px-6 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
                 >
-                  {paying ? "กำลังตัดเงิน..." : `ชำระเงินแทนลูกค้า ${selected.size ? `(${thb(selectedTotal)})` : ""}`}
+                  {payingOrders ? "กำลังตัดเงิน..." : `ชำระฝากสั่ง ${selOrders.size ? `(${thb(ordersTotal)})` : ""}`}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* forwarder lane */}
+      {ctx && (
+        <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
+          <p className="text-sm font-semibold text-gray-800">ฝากนำเข้า (forwarder) รอชำระ ({ctx.forwarders.length})</p>
+          {ctx.forwarders.length === 0 ? (
+            <p className="py-4 text-center text-sm text-gray-500">ไม่มีรายการฝากนำเข้าที่รอชำระเงิน</p>
+          ) : (
+            <>
+              <div className="flex items-center justify-end">
+                <button onClick={() => setSelFwds(new Set(ctx.forwarders.map((f) => f.fid)))} className="text-xs text-primary-600 hover:underline">เลือกทั้งหมด</button>
+              </div>
+              <div className="divide-y divide-gray-100 rounded-lg border border-gray-100">
+                {ctx.forwarders.map((f) => (
+                  <label key={f.fid} className="flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-gray-50">
+                    <input
+                      type="checkbox"
+                      checked={selFwds.has(f.fid)}
+                      onChange={() => toggleFwd(f.fid)}
+                      className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span className="text-sm font-medium text-gray-900">#{f.fid}</span>
+                    {f.ftracking && f.ftracking !== "-" && (
+                      <span className="text-xs text-gray-400 truncate max-w-[160px]">{f.ftracking}</span>
+                    )}
+                    {f.is_credit && (
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">เครดิต</span>
+                    )}
+                    <span className="ml-auto text-sm font-mono font-semibold text-gray-900">{thb(f.price_thb)}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-3">
+                <div className="text-sm">
+                  <span className="text-gray-500">เลือก {selFwds.size} รายการ · รวม </span>
+                  <span className={`font-mono font-bold ${fwdsInsufficient ? "text-red-600" : "text-gray-900"}`}>{thb(fwdsTotal)}</span>
+                  {fwdsInsufficient && <span className="ml-2 text-xs text-red-600">(ยอดเงินไม่พอ)</span>}
+                </div>
+                <button
+                  onClick={payFwds}
+                  disabled={payingFwds || selFwds.size === 0 || fwdsInsufficient}
+                  className="rounded-lg bg-primary-600 px-6 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
+                >
+                  {payingFwds ? "กำลังตัดเงิน..." : `ชำระฝากนำเข้า ${selFwds.size ? `(${thb(fwdsTotal)})` : ""}`}
                 </button>
               </div>
             </>
