@@ -41,6 +41,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { uploadToBucket } from "@/lib/storage/upload";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
+import { fireUserSalesEarnTriggerOnDelivery } from "./earn-trigger-tb-user-sales";
 import type { AdminRole } from "@/lib/auth/require-admin";
 
 // fdistatus values are CHAR(1) strings per the legacy schema
@@ -302,6 +303,30 @@ async function transitionItemStatus(
             "7",
             String(adminId).slice(0, 50),
           );
+
+          // P1-5 earn-trigger (2026-05-30 night · ภูม · ADR-0019 D-B · master gap
+          // P1-5 · cust-07 P0-2). On a driver-delivered fstatus 6→7 transition,
+          // INSERT a tb_user_sales row when the customer's tb_users.coid is in
+          // the 4 VIP teams (THADA.VIP / SIN.VIP / OOAEOM.VIP / SWAN).
+          // Idempotent — the helper checks for an existing row by `idf`.
+          // Best-effort — failure does NOT roll back the delivery flip.
+          try {
+            const earnResult = await fireUserSalesEarnTriggerOnDelivery(
+              admin,
+              [authz.row.fid],
+            );
+            if (earnResult.errors.length > 0 || earnResult.inserted > 0) {
+              console.info(`[driver-work tb_user_sales earn-trigger] inserted=${earnResult.inserted} skipped=${earnResult.skipped}`, {
+                fid:      authz.row.fid,
+                errors:   earnResult.errors,
+              });
+            }
+          } catch (err) {
+            console.error(`[driver-work tb_user_sales earn-trigger threw]`, {
+              fid:   authz.row.fid,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
         }
       }
     }
