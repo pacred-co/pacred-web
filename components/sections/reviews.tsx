@@ -189,29 +189,10 @@ function ReviewsCarousel({ reviews, t, typeConfig }: { reviews: Review[]; t: Rev
 
   return (
     <div className="relative">
-      {/* Edge fade gradient — left */}
-      <div
-        aria-hidden
-        className={[
-          "pointer-events-none absolute left-0 top-0 bottom-0 w-12 md:w-16 z-[5] transition-opacity duration-500",
-          canPrev ? "opacity-100" : "opacity-0",
-        ].join(" ")}
-        style={{
-          background: "linear-gradient(90deg, var(--color-background) 0%, transparent 100%)",
-        }}
-      />
-
-      {/* Edge fade gradient — right */}
-      <div
-        aria-hidden
-        className={[
-          "pointer-events-none absolute right-0 top-0 bottom-0 w-12 md:w-16 z-[5] transition-opacity duration-500",
-          canNext ? "opacity-100" : "opacity-0",
-        ].join(" ")}
-        style={{
-          background: "linear-gradient(270deg, var(--color-background) 0%, transparent 100%)",
-        }}
-      />
+      {/* Edge-fade gradients removed — the white var(--color-background) fade
+          overlaid the rightmost card as a white "กินขอบ" strip on the right
+          (ปอน 2026-05-30 · confirmed via DevTools elementsFromPoint + display:none
+          toggle). canPrev/canNext still drive the prev/next arrow buttons below. */}
 
       <button
         type="button"
@@ -292,12 +273,8 @@ function ReviewCard({ review, index = 0, t, typeConfig }: { review: Review; inde
       href={`/reviews/${review.id}`}
       data-review-card
       aria-label={title}
-      style={{
-        animation: "card-in 0.55s cubic-bezier(0.22,0.61,0.36,1) both",
-        animationDelay: `${Math.min(index, 8) * 60}ms`,
-        contain: "layout paint",
-      }}
-      className="group relative shrink-0 w-[220px] sm:w-[240px] md:w-[260px] aspect-[3/4] rounded-[22px] overflow-hidden bg-gradient-to-br from-gray-200 via-gray-400 to-gray-700 dark:from-surface-alt dark:via-surface dark:to-background shadow-[0_8px_22px_rgba(15,23,42,0.10)] hover:shadow-[0_22px_44px_rgba(15,23,42,0.22)] hover:-translate-y-1.5 transition-[transform,box-shadow,ring-color] duration-300 cursor-pointer ring-1 ring-black/5 hover:ring-primary-400/30 snap-start transform-gpu backface-hidden"
+      style={{ contain: "layout paint" }}
+      className="group relative shrink-0 w-[220px] sm:w-[240px] md:w-[260px] aspect-[3/4] rounded-[22px] overflow-hidden bg-gradient-to-br from-gray-200 via-gray-400 to-gray-700 dark:from-surface-alt dark:via-surface dark:to-background shadow-[0_8px_22px_rgba(15,23,42,0.10)] hover:shadow-[0_22px_44px_rgba(15,23,42,0.22)] hover:-translate-y-1.5 transition-[transform,box-shadow,ring-color] duration-300 cursor-pointer ring-1 ring-black/5 hover:ring-primary-400/30 snap-start"
     >
       {/* Background — placeholder pattern or image */}
       {review.image ? (
@@ -305,8 +282,9 @@ function ReviewCard({ review, index = 0, t, typeConfig }: { review: Review; inde
           src={review.image}
           alt={title}
           fill
-          sizes="(max-width: 767px) 50vw, 260px"
-          className="object-cover transition-transform duration-700 group-hover:scale-110"
+          quality={92}
+          sizes="(max-width: 767px) 75vw, 320px"
+          className="object-cover"
         />
       ) : (
         <>

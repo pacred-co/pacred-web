@@ -15,6 +15,11 @@ import { Link } from "@/i18n/navigation";
  * consumed by `createLegacyForwarder` (actions/forwarder-legacy.ts). The
  * submit footer is owned by `<ServiceImportAddForm>`, not here.
  *
+ * `compact` (the list-view modal) packs the four sections into a 2-column
+ * grid on `sm+` with tighter spacing so the dialog fits the viewport without
+ * scrolling (ปอน 2026-05-30). The full-page form leaves `compact` unset and
+ * keeps its roomy single-column layout, byte-for-byte unchanged.
+ *
  * The address <select> is rendered from pre-resolved options passed by the
  * parent (each page loads tb_address its own faithful way); this component
  * never touches the DB.
@@ -22,34 +27,47 @@ import { Link } from "@/i18n/navigation";
 
 export type AddrOption = { addressid: number; full: string };
 
-const inputClass =
-  "w-full rounded-lg border border-border bg-white px-3 py-2.5 text-base text-foreground placeholder:text-muted focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-600/20";
+const inputBase =
+  "w-full rounded-lg border border-border bg-white px-3 text-base text-foreground placeholder:text-muted focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-600/20";
 const labelClass = "mb-1 block text-sm font-medium text-foreground";
 
 export function ServiceImportAddFields({
   mainAddr,
   others,
+  compact = false,
 }: {
   mainAddr: AddrOption | null;
   others: AddrOption[];
+  compact?: boolean;
 }) {
   const hasAddress = Boolean(mainAddr) || others.length > 0;
 
-  return (
+  // Spacing scales down in compact (modal) mode; identical to the original
+  // roomy values otherwise (full-page form is untouched).
+  const sectionCls = `rounded-2xl border border-border bg-white shadow-sm ${
+    compact ? "p-3.5" : "p-4 sm:p-5"
+  }`;
+  const headCls = `flex items-center gap-2 text-base font-semibold text-foreground ${
+    compact ? "mb-3" : "mb-4"
+  }`;
+  const fieldMb = compact ? "mb-3" : "mb-4";
+  const inputCls = `${inputBase} ${compact ? "py-2" : "py-2.5"}`;
+
+  const sections = (
     <>
       {/* ── 1. ข้อมูลการฝากนำเข้า ── */}
-      <section className="rounded-2xl border border-border bg-white p-4 shadow-sm sm:p-5">
-        <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
+      <section className={sectionCls}>
+        <h2 className={headCls}>
           <Box className="h-5 w-5 text-primary-600" />
           ข้อมูลการฝากนำเข้า
         </h2>
 
-        <div className="mb-4">
+        <div className={fieldMb}>
           <label className={labelClass} htmlFor="fTrackingCHN">
             เลข Tracking
           </label>
           <input
-            className={inputClass}
+            className={inputCls}
             name="fTrackingCHN"
             id="fTrackingCHN"
             type="text"
@@ -59,13 +77,13 @@ export function ServiceImportAddFields({
           />
         </div>
 
-        <div className="mb-4">
+        <div className={fieldMb}>
           <label className={labelClass} htmlFor="fDetail">
             รายละเอียดสินค้า
           </label>
           <textarea
-            className={inputClass}
-            rows={4}
+            className={inputCls}
+            rows={compact ? 2 : 4}
             name="fDetail"
             id="fDetail"
             placeholder="เช่น เสื้อผ้า 3 ตัว, อะไหล่รถ ฯลฯ"
@@ -79,7 +97,7 @@ export function ServiceImportAddFields({
             จำนวนกล่อง
           </label>
           <input
-            className={`${inputClass} max-w-[140px]`}
+            className={`${inputCls} max-w-[140px]`}
             name="fAmount"
             id="fAmount"
             type="number"
@@ -94,8 +112,8 @@ export function ServiceImportAddFields({
       </section>
 
       {/* ── 2. การขนส่งจากจีนมาไทย ── */}
-      <section className="rounded-2xl border border-border bg-white p-4 shadow-sm sm:p-5">
-        <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
+      <section className={sectionCls}>
+        <h2 className={headCls}>
           <Ship className="h-5 w-5 text-primary-600" />
           การขนส่งจากจีนมาไทย
         </h2>
@@ -104,8 +122,9 @@ export function ServiceImportAddFields({
         <p className="mb-2 text-sm font-medium text-foreground">
           รูปแบบการขนส่งจีน-ไทย
         </p>
-        <div className="mb-5 grid grid-cols-2 gap-3">
+        <div className={`grid grid-cols-2 gap-3 ${compact ? "mb-3" : "mb-5"}`}>
           <RadioCard
+            compact={compact}
             name="hTransportType"
             value="1"
             img="/images/Iconistpack/car.png"
@@ -113,6 +132,7 @@ export function ServiceImportAddFields({
             subtitle="5-7 วัน"
           />
           <RadioCard
+            compact={compact}
             name="hTransportType"
             value="2"
             img="/images/Iconistpack/ship.png"
@@ -128,6 +148,7 @@ export function ServiceImportAddFields({
         </p>
         <div className="grid grid-cols-2 gap-3">
           <RadioCard
+            compact={compact}
             name="crate"
             value="2"
             img="/images/Iconistpack/unbox.png"
@@ -135,6 +156,7 @@ export function ServiceImportAddFields({
             defaultChecked
           />
           <RadioCard
+            compact={compact}
             name="crate"
             value="1"
             img="/images/Iconistpack/box.png"
@@ -145,8 +167,12 @@ export function ServiceImportAddFields({
       </section>
 
       {/* ── 3. ที่อยู่ในการจัดส่งในไทย ── */}
-      <section className="rounded-2xl border border-border bg-white p-4 shadow-sm sm:p-5">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <section className={sectionCls}>
+        <div
+          className={`flex flex-wrap items-center justify-between gap-2 ${
+            compact ? "mb-3" : "mb-4"
+          }`}
+        >
           <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
             <MapPin className="h-5 w-5 text-primary-600" />
             ที่อยู่ในการจัดส่งในไทย
@@ -162,7 +188,7 @@ export function ServiceImportAddFields({
         </div>
 
         <select
-          className={inputClass}
+          className={inputCls}
           name="addressID"
           id="addressID"
           required
@@ -196,7 +222,11 @@ export function ServiceImportAddFields({
           </p>
         )}
 
-        <p className="mt-3 rounded-lg bg-surface px-3 py-2 text-[13px] text-muted">
+        <p
+          className={`rounded-lg bg-surface px-3 py-2 text-[13px] text-muted ${
+            compact ? "mt-2" : "mt-3"
+          }`}
+        >
           หมายเหตุ : หากพื้นที่นอกเขตขนส่งของ Pacred
           ทางบริษัทจะเก็บเงินปลายทางเท่านั้น ยกเว้น แฟลช เอ็กซ์เพรส และ เจแอนด์ที
           เอ็กซ์เพรส ที่เก็บต้นทางเท่านั้น{" "}
@@ -212,8 +242,8 @@ export function ServiceImportAddFields({
       </section>
 
       {/* ── 4. โปรโมชันสำหรับคุณ ── */}
-      <section className="rounded-2xl border border-border bg-white p-4 shadow-sm sm:p-5">
-        <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
+      <section className={sectionCls}>
+        <h2 className={headCls}>
           <BadgePercent className="h-5 w-5 text-primary-600" />
           โปรโมชันสำหรับคุณ
         </h2>
@@ -232,7 +262,9 @@ export function ServiceImportAddFields({
           <span className="min-w-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              className="mb-2 w-full max-w-[240px] rounded-lg"
+              className={`mb-2 w-full rounded-lg ${
+                compact ? "max-w-[150px]" : "max-w-[240px]"
+              }`}
               src="/legacy/pcs/theme/free50-3.png"
               alt="โปรโมชัน Pacred เหมา ๆ"
             />
@@ -247,13 +279,26 @@ export function ServiceImportAddFields({
           </span>
         </label>
 
-        <p className="mt-3 text-[13px] text-muted">
+        <p
+          className={`text-[13px] text-muted ${compact ? "mt-2" : "mt-3"}`}
+        >
           *หากสินค้ามีขนาดเล็ก บริษัทแนะนำให้เลือกขนส่ง Flash Express (เริ่มต้น
           30 บ.)
         </p>
       </section>
     </>
   );
+
+  // Compact (modal): 2-column grid on sm+ so all four sections fit without
+  // scrolling. Full-page: plain fragment — the parent <form> spaces them.
+  if (compact) {
+    return (
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+        {sections}
+      </div>
+    );
+  }
+  return sections;
 }
 
 /**
@@ -269,6 +314,7 @@ function RadioCard({
   title,
   subtitle,
   defaultChecked,
+  compact,
 }: {
   name: string;
   value: string;
@@ -276,6 +322,7 @@ function RadioCard({
   title: string;
   subtitle?: string;
   defaultChecked?: boolean;
+  compact?: boolean;
 }) {
   return (
     <label className="relative block cursor-pointer">
@@ -286,9 +333,17 @@ function RadioCard({
         defaultChecked={defaultChecked}
         className="peer sr-only"
       />
-      <div className="flex h-full flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-border bg-white p-3 text-center transition peer-checked:border-primary-600 peer-checked:bg-primary-50 peer-checked:ring-2 peer-checked:ring-primary-600/20 hover:border-primary-300">
+      <div
+        className={`flex h-full flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-border bg-white text-center transition peer-checked:border-primary-600 peer-checked:bg-primary-50 peer-checked:ring-2 peer-checked:ring-primary-600/20 hover:border-primary-300 ${
+          compact ? "p-2" : "p-3"
+        }`}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={img} className="h-10 w-10 object-contain" alt="" />
+        <img
+          src={img}
+          className={`object-contain ${compact ? "h-8 w-8" : "h-10 w-10"}`}
+          alt=""
+        />
         <div className="text-sm font-medium text-foreground">{title}</div>
         {subtitle && <div className="text-xs text-muted">{subtitle}</div>}
       </div>

@@ -80,7 +80,7 @@ export function AddForwarderModal({
               role="dialog"
               aria-modal="true"
               aria-labelledby="add-forwarder-title"
-              className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-surface shadow-2xl sm:max-w-2xl sm:rounded-2xl"
+              className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-surface shadow-2xl sm:max-w-3xl sm:rounded-2xl"
             >
               <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-white px-4 py-3">
                 <h2
@@ -99,12 +99,16 @@ export function AddForwarderModal({
                 </button>
               </header>
 
-              <div className="overflow-y-auto px-4 py-4 sm:px-5">
+              <div className="overflow-y-auto px-4 py-3 sm:px-5">
                 <ServiceImportAddForm
                   onCancel={() => setOpen(false)}
                   onSuccess={() => setOpen(false)}
                 >
-                  <ServiceImportAddFields mainAddr={mainAddr} others={others} />
+                  <ServiceImportAddFields
+                    mainAddr={mainAddr}
+                    others={others}
+                    compact
+                  />
                 </ServiceImportAddForm>
               </div>
             </div>

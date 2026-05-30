@@ -93,6 +93,14 @@ export async function addAddressAction(formData: FormData): Promise<void> {
     latitude:           latitudeRaw === "" ? 0 : Number(latitudeRaw),
     longitude:          longitudeRaw === "" ? 0 : Number(longitudeRaw),
     userid:             userID,
+    // tb_address.adminid is varchar(30) NOT NULL with NO column default in the
+    // migrated schema. A customer-added address has no admin, so write the
+    // empty string — legacy MySQL stored '' for this case (PHP NULL → '' on
+    // string interpolation · see docs/learnings/php-port-patterns.md). OMITTING
+    // it → "null value in column adminid violates not-null constraint" → the
+    // INSERT fails → redirect ?error=save → the new address never appears in
+    // the list. This was THE bug ปอน hit 2026-05-30 ("กดเพิ่มแล้วข้อมูลไม่เข้า").
+    adminid:            "",
   });
 
   if (insertError) {
@@ -131,6 +139,110 @@ export async function addAddressAction(formData: FormData): Promise<void> {
         .from("tb_address_main")
         .insert({ addressid: lastRow.addressid, userid: userID });
     }
+  }
+
+  // Legacy: $sweetalert = 'successSave' then re-renders the page.
+  revalidatePath("/addresses");
+  redirect("/addresses?saved=1");
+}
+
+/**
+ * Server Action for the `address.php` edit-address form — the faithful
+ * counterpart to addAddressAction above (D1 / ADR-0017 · faithful-port
+ * workstream).
+ *
+ * Legacy address.php opened an edit modal (`editAddress.php` AJAX) that
+ * UPDATEs an existing tb_address row by its addressID. This mirrors
+ * addAddressAction field-for-field (SAME formData keys · SAME required-field
+ * guard · SAME lat/long mapping · SAME column-name conventions) but issues an
+ * UPDATE instead of an INSERT, and reads an extra hidden `addressId` to target
+ * the row.
+ *
+ * SECURITY — the UPDATE is scoped `.eq("addressid", addressId).eq("userid",
+ * userID)`: the `userid` predicate is REQUIRED so a customer can never edit
+ * another customer's address by POSTing a foreign addressId (the admin client
+ * bypasses RLS, so this WHERE clause is the only ownership check).
+ *
+ * addressstatus / userid / adminid are NOT written — they are preserved as-is
+ * (this action only touches the editable address fields, like the legacy edit
+ * modal). tb_address_main is untouched (editing an address does not change
+ * which one is the main address).
+ */
+export async function editAddressAction(formData: FormData): Promise<void> {
+  const data = await getCurrentUserWithProfile();
+  if (!data?.profile) redirect("/complete-profile");
+  const userID = data.profile.member_code ?? "";
+
+  // The hidden row id the edit modal targets (editAddress.php $addressID).
+  const addressId = Number(formData.get("addressId") ?? "");
+
+  // address.php L17-28 — read the POST fields (same keys as addAddressAction).
+  const addressName        = String(formData.get("addressName") ?? "").trim();
+  const addressLastname    = String(formData.get("addressLastname") ?? "").trim();
+  const addressTel         = String(formData.get("addressTel") ?? "").trim();
+  const addressTel2        = String(formData.get("addressTel2") ?? "").trim();
+  const addressNo          = String(formData.get("addressNo") ?? "").trim();
+  const addressSubDistrict = String(formData.get("district") ?? "").trim();
+  const addressDistrict    = String(formData.get("amphoe") ?? "").trim();
+  const addressProvince    = String(formData.get("province") ?? "").trim();
+  const addressZIPCode     = String(formData.get("zipcode") ?? "").trim();
+  const addressNote        = String(formData.get("addressNote") ?? "").trim();
+  const latitudeRaw        = String(formData.get("latitude") ?? "").trim();
+  const longitudeRaw       = String(formData.get("longitude") ?? "").trim();
+
+  // address.php L6-14 — required-field guard (addressTel2 + addressNote
+  // are optional; latitude/longitude come from the map pin).
+  if (
+    !addressName ||
+    !addressLastname ||
+    !addressTel ||
+    !addressNo ||
+    !addressSubDistrict ||
+    !addressDistrict ||
+    !addressProvince ||
+    !addressZIPCode
+  ) {
+    // Legacy: echo '<script>alert("กรุณากรอกข้อมูลให้ครบ")</script>'.
+    redirect("/addresses?error=incomplete");
+  }
+
+  // Guard the row id — a non-positive / NaN addressId can never own a row.
+  if (!Number.isFinite(addressId) || addressId <= 0) {
+    redirect("/addresses?error=save");
+  }
+
+  const admin = createAdminClient();
+
+  // editAddress.php — UPDATE tb_address SET … WHERE addressID=… AND userID=…
+  // The userID predicate is the ownership guard (see header comment).
+  // addressstatus / userid / adminid are intentionally NOT in the SET — they
+  // are preserved.
+  const { error: updateError } = await admin
+    .from("tb_address")
+    .update({
+      addressname:        addressName,
+      addresslastname:    addressLastname,
+      addresstel:         addressTel,
+      addresstel2:        addressTel2,
+      addressno:          addressNo,
+      addresssubdistrict: addressSubDistrict,
+      addressdistrict:    addressDistrict,
+      addressprovince:    addressProvince,
+      addresszipcode:     addressZIPCode,
+      addressnote:        addressNote,
+      latitude:           latitudeRaw === "" ? 0 : Number(latitudeRaw),
+      longitude:          longitudeRaw === "" ? 0 : Number(longitudeRaw),
+    })
+    .eq("addressid", addressId)
+    .eq("userid", userID);
+
+  if (updateError) {
+    // Legacy: $sweetalert = 'errorSave'.
+    console.error(`[tb_address update] failed`, {
+      code: updateError.code,
+      message: updateError.message,
+    });
+    redirect("/addresses?error=save");
   }
 
   // Legacy: $sweetalert = 'successSave' then re-renders the page.

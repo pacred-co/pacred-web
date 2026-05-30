@@ -185,6 +185,23 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
           <SubLink href="/service-payment/add">เพิ่มรายการฝากชำระ</SubLink>
         </PcsLeftMenuAccordion>
 
+        {/* รายการที่ต้องชำระ — aggregated payment-due across every service
+            (ปอน 2026-05-30). A single page (not an accordion); the red badge
+            shows countPaymentDue = order(hstatus=2) + forwarder(fstatus=5)
+            + payment(paystatus=1). */}
+        <Link
+          href="/payment-due"
+          className="nav-item flex items-center gap-3 px-4 py-3 text-sm font-medium text-foreground hover:bg-gray-50 active:bg-gray-100"
+        >
+          <img
+            src="/images/home/iconfloating/pcs-payment.png"
+            alt=""
+            className="pcs-icon h-6 w-6"
+          />
+          <span>รายการที่ต้องชำระ</span>
+          <MenuBadge n={data.countPaymentDue} />
+        </Link>
+
         {/* กระเป๋าสตางค์เงินสด */}
         <PcsLeftMenuAccordion
           icon="/images/home/iconfloating/pcs-wallet.png"

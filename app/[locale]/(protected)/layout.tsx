@@ -227,7 +227,7 @@ export default async function ProtectedLayout({
           mobile bottom nav since the legacy `.nav-footer-pcs` is hidden in
           legacy-overrides.css §0). Auto-hides itself on /admin /login /register
           /forgot-password via its own isHidden check, so adding it here is safe. */}
-      <FloatingTabs />
+      <FloatingTabs payDueCount={chrome.countPaymentDue} />
 
       {/* 7. Legacy JS bundle — rendered last so the full chrome DOM exists
             when it runs. jQuery → Popper → Bootstrap-4 (vendors.min.js) → the

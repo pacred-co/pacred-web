@@ -15,6 +15,14 @@ import { createClient } from "@/lib/supabase/client";
 import { NotificationBell } from "@/components/notification-bell";
 import { CartBadge } from "@/components/cart-badge";
 import { TopMenu, TopMenuMobile } from "@/components/sections/top-menu";
+import { SOCIAL } from "@/components/seo/site";
+import {
+  LineIcon,
+  FacebookIcon,
+  YouTubeIcon,
+  InstagramIcon,
+  TikTokIcon,
+} from "@/components/icons/social-icons";
 
 type ProfileLite = {
   member_code: string | null;
@@ -142,7 +150,7 @@ export function NavBar() {
 
       {/* ── Main navbar ── */}
       <div className="bg-[#B91C1C]">
-        <div className="mx-auto flex h-[56px] max-w-[1440px] items-center justify-between gap-4 px-4 xl:pl-2 xl:pr-6">
+        <div className="flex h-[56px] w-full items-center justify-between gap-4 px-4 xl:pl-3 xl:pr-6">
 
           {/* Logo — clicks back to home (replaces former social cluster, per ปอน 2026-05-22) */}
           <Link
@@ -159,6 +167,32 @@ export function NavBar() {
               className="h-10 md:h-12 w-auto object-contain"
             />
           </Link>
+
+          {/* ติดตามเราบน + social icons — placed right after the logo (ปอน
+              2026-05-30). Desktop-only (xl) so the tight mobile bar stays
+              untouched. SOCIAL URLs from components/seo/site.ts. */}
+          <div className="hidden xl:flex shrink-0 items-center gap-2.5">
+            <span className="whitespace-nowrap text-[12px] font-medium text-white/85">
+              {t("followUs")}
+            </span>
+            <div className="flex items-center gap-2 [&_svg_path]:fill-current">
+              <a href={SOCIAL.line} target="_blank" rel="noreferrer" aria-label="LINE" className="text-white/80 transition-colors hover:text-white">
+                <LineIcon className="h-[17px] w-[17px]" />
+              </a>
+              <a href={SOCIAL.facebook} target="_blank" rel="noreferrer" aria-label="Facebook" className="text-white/80 transition-colors hover:text-white">
+                <FacebookIcon className="h-[17px] w-[17px]" />
+              </a>
+              <a href={SOCIAL.youtube} target="_blank" rel="noreferrer" aria-label="YouTube" className="text-white/80 transition-colors hover:text-white">
+                <YouTubeIcon className="h-[17px] w-[17px]" />
+              </a>
+              <a href={SOCIAL.instagram} target="_blank" rel="noreferrer" aria-label="Instagram" className="text-white/80 transition-colors hover:text-white">
+                <InstagramIcon className="h-[17px] w-[17px]" />
+              </a>
+              <a href={SOCIAL.tiktok} target="_blank" rel="noreferrer" aria-label="TikTok" className="text-white/80 transition-colors hover:text-white">
+                <TikTokIcon className="h-[17px] w-[17px]" />
+              </a>
+            </div>
+          </div>
 
           {/* Desktop nav — TopMenu with dropdowns */}
           <div className="hidden xl:flex flex-1 justify-center">

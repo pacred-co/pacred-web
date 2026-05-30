@@ -60,6 +60,10 @@ export type PcsChromeData = {
   countShops: number;
   countShops2: number;
   countPayment: number;
+  /** Aggregate "ต้องชำระ/รอดำเนินการ" across services — powers the
+   *  "รายการที่ต้องชำระ" sidebar badge + the /payment-due page.
+   *  = order(hstatus=2) + forwarder(fstatus=5) + payment(paystatus=1). */
+  countPaymentDue: number;
   countCart: number;
   keywords: string[];
   sales: PcsSalesRep;
@@ -104,6 +108,7 @@ const EMPTY_CHROME: PcsChromeData = {
   countShops: 0,
   countShops2: 0,
   countPayment: 0,
+  countPaymentDue: 0,
   countCart: 0,
   keywords: [],
   sales: { ...SALES_FALLBACK },
@@ -201,6 +206,7 @@ async function loadPcsChromeDataUncached(
       hoAll,
       ho2,
       payAll,
+      pay1,
       cartAll,
       keywordRes,
       svipRes,
@@ -262,6 +268,13 @@ async function loadPcsChromeDataUncached(
         .eq("userid", uid)
         .eq("hstatus", "2"),
       admin.from("tb_payment").select("*", { count: "exact", head: true }).eq("userid", uid),
+      // tb_payment awaiting processing (paystatus=1) — the ฝากชำระ slice of
+      // countPaymentDue. (countPayment above counts ALL payment rows.)
+      admin
+        .from("tb_payment")
+        .select("*", { count: "exact", head: true })
+        .eq("userid", uid)
+        .eq("paystatus", "1"),
       admin.from("tb_cart").select("*", { count: "exact", head: true }).eq("userid", uid),
       admin
         .from("tb_keyword_product")
@@ -295,6 +308,8 @@ async function loadPcsChromeDataUncached(
       countShops: hoAll.count ?? 0,
       countShops2: ho2.count ?? 0,
       countPayment: payAll.count ?? 0,
+      countPaymentDue:
+        (ho2.count ?? 0) + (fwd5.count ?? 0) + (pay1.count ?? 0),
       countCart: cartAll.count ?? 0,
       keywords: keywordRows.map((r) => r.keyword ?? "").filter((k) => k !== ""),
       sales,
