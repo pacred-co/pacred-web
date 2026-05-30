@@ -3,6 +3,43 @@
 
 ---
 
+# 🚀 2026-05-31 — POOM-PACRED INTEGRATE + MAIN SHIP · read FIRST
+
+เดฟ session — owner สั่ง "เอามาทำเอง ไม่ต้องรอ ก๊อต". รวม ภูม Poom-pacred (11 commits, clean merge no conflict) → run qa-flow ก่อน push → push main.
+
+**📦 ที่ ship (main `a58a6893` → `ba1cb477`):**
+- ภูม **P0-13** 5-tab admin shop UPDATE workflow + tb_promotion carry (1079 LOC + 468 tests)
+- ภูม **P0-16** per-item refund shop-order line items (346 LOC + 215 tests)
+- ภูม **P1-5** tb_user_sales earn-trigger on forwarder delivery (4 agent codes)
+- ภูม **P1-10** tab-4 spawn auto-flip 4→5 + promo carry
+- ภูม **P1-13** refund-modal repointed `yuan_payments` → `tb_payment` (faithful)
+- ภูม **§0d UX** 4 sitting-F handlers mounted on legacy-view (reachability rule)
+- ภูม **bug#2** `tb_header_order.hnote` NOT NULL violation fix + regression test
+- ws polyfill for qa-flow Node<22 compat
+
+**🟢 GATE GREEN — qa-flow wallet-delta 17 pass / 0 fail:**
+deposit-approve · shop-debit · deposit-reject · withdraw-hold→reject-refund · withdraw-hold→approve · yuan-debit — assert REAL `tb_wallet.wallettotal` delta per ADR-0018.
+
+**🔐 ENV — ขอ user set บน Vercel prod:**
+- `CRON_SECRET=594bf48b18fa3750369ccb0cbb9ef0a98d9c40ff47f2bd63c185fbc1db52106a` (generated 2026-05-30 · already in `.env.local`)
+- `EMERGENCY_OTP_BYPASS` — ✅ **already env-gated correctly** at `actions/otp.ts:51` (fail-closed when unset). Master gap audit was wrong; no code fix needed. แค่อย่า set `true` บน prod.
+
+**🗺 Branch state (post-push):**
+| Branch | HEAD | สถานะ |
+|---|---|---|
+| `main` | `ba1cb477` | **production · Vercel auto-deploys** |
+| `dave-pacred` | `ba1cb477` | = main (0/0) |
+| `Poom-pacred` | `61bca6b7` (origin) | fully absorbed via merge `6d8da245` — ภูม sync `git pull origin main` ตอนกลับมา |
+| `InwPond007`/`podeng` | own lane | ปอน customer frontend |
+
+**🎯 Pickup options for next session:**
+- **A** P0-12 yuan manual-create self-approve bypass + notify (ภูม · ~2h)
+- **B** P0-19 Phase 3 insufficient-balance slip top-up (เดฟ · WIP @ `worktree-agent-ae275c01…`)
+- **C** P0-23 commission earn-trigger E2E architecture (เดฟ+ภูม · partial via P1-5)
+- **D** เดฟ P1 batch: register inversion (P1-16) · getShipBy carrier picker (P1-18) · QRPay shortfall (P1-22)
+
+---
+
 # 🎯 2026-05-30 night — MASTER GAP AUDIT + WORK-SPLIT · read FIRST
 
 17-agent exhaustive legacy-vs-Pacred audit (14 subsystem lanes + 2 critics + synthesis). **Canonical SOT for what's broken + who does what: [`docs/research/legacy-gap-2026-05-30/_MASTER.md`](docs/research/legacy-gap-2026-05-30/_MASTER.md)** (+ 14 per-lane `cust-*`/`adm-*` docs + 2 critics in that folder).
