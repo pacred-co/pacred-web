@@ -277,3 +277,7 @@ assertEq("status=null → error",                     withdrawStatusBranch(null,
 // ────────────────────────────────────────────────────────────
 console.log(`\n${pass} pass · ${fail} fail`);
 if (fail > 0) process.exit(1);
+
+// Force ESM module mode — without this, top-level `pass`/`fail`/`assertEq`
+// collide with sibling `.test.ts` files in tsc's project graph (TS 2393/2451).
+export {};
