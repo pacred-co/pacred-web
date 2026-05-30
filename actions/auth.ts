@@ -33,7 +33,11 @@ import {
 } from "@/lib/validators/auth";
 import { requestOtp, verifyOtp } from "./otp";
 import { logger } from "@/lib/logger";
-import { insertLegacyTbUserRow, findLegacyUserIdByPhone } from "@/lib/auth/legacy-bridge-tb-users";
+import {
+  insertLegacyTbUserRow,
+  findLegacyUserIdByPhone,
+  upsertLegacyCorporate,
+} from "@/lib/auth/legacy-bridge-tb-users";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -466,6 +470,47 @@ export async function saveJuristicStep2(
     .from("profiles")
     .update({ tax_id: data.taxId, company_name: data.companyName })
     .eq("id", user.id);
+
+  // P1-16 (2026-05-30) — ALSO write the LEGACY `tb_corporate` row (keyed by
+  // userid = member_code). The rebuilt `corporate` table above is keyed by
+  // profile_id UUID and is mostly empty on prod; the legacy admin surfaces +
+  // tax-invoice eligibility read `tb_corporate` (keyed by userid). Without
+  // this, a Pacred-native juristic customer's company data was a silent
+  // dead-write — invisible to ops + never verifiable. Faithful port of
+  // check-otp-register.php L101-103 (deferred from the legacy single-step
+  // register to here, the moment the corporate data exists).
+  //
+  // Best-effort: a failure logs loud (inside the helper) but does NOT fail
+  // the step-2 save — the customer's auth + profile + rebuilt corporate row
+  // are already committed; ops can backfill tb_corporate by hand. Resolve the
+  // member_code via the admin client (bypass RLS — profiles is the source of
+  // the trigger-minted code).
+  const admin = createAdminClient();
+  const { data: profileRow, error: profileErr } = await admin
+    .from("profiles")
+    .select("member_code")
+    .eq("id", user.id)
+    .maybeSingle<{ member_code: string | null }>();
+  if (profileErr) {
+    logger.error("auth", "saveJuristicStep2: member_code lookup failed — skipping tb_corporate mirror", profileErr, {
+      userId: user.id,
+      code: profileErr.code,
+    });
+  } else if (profileRow?.member_code) {
+    await upsertLegacyCorporate(admin, {
+      memberCode:       profileRow.member_code,
+      corporateNumber:  data.taxId,
+      corporateName:    data.companyName,
+      corporateAddress: companyAddress,
+    });
+  } else {
+    logger.error(
+      "auth",
+      "saveJuristicStep2: no member_code on profile — skipping tb_corporate mirror",
+      undefined,
+      { userId: user.id },
+    );
+  }
 
   return { ok: true };
 }

@@ -228,7 +228,136 @@ export async function insertLegacyTbUserRow(
     memberCode,
     accountType,
   });
+
+  // P1-16 (2026-05-30) — seed the customer's legacy money-plane rows so a
+  // Pacred-native signup is a FULL citizen of tb_*, not a functional orphan.
+  // Legacy `check-otp-register.php` L117-120 runs these two INSERTs right
+  // after the tb_users INSERT succeeds (same order). Without them a new
+  // customer has NO tb_wallet ledger row (migrated customers all do) — every
+  // wallet read (lib/legacy/pcs-chrome.ts badge · /wallet) falls through to
+  // ฿0-or-missing, and the wallet-money-loop (ADR-0018) has no row to
+  // debit/credit. Best-effort (mirrors the bridge's no-throw philosophy): a
+  // failure here logs loud but never rolls back the already-committed
+  // tb_users + profile.
+  await seedLegacyWalletRows(admin, memberCode);
+
   return { ok: true };
+}
+
+/**
+ * Seed the two legacy money-plane rows for a brand-new customer — the faithful
+ * port of `check-otp-register.php` L117-120:
+ *
+ *     INSERT INTO tb_wallet    (userID) VALUE ('$userID');   // wallettotal → 0.00 default
+ *     INSERT INTO tb_cash_back (userID) VALUE ('$userID');   // cbtotal → 0 (see note)
+ *
+ * Schema (0081_pcs_legacy_schema.sql · all-lowercase, NOT in the 0113
+ * camelCase batch — verified no later migration renamed these):
+ *   tb_wallet    (userid varchar(10) NOT NULL, wallettotal numeric(10,2) DEFAULT 0.00)
+ *   tb_cash_back (userid varchar(10) NOT NULL, cbtotal     numeric(10,2) NOT NULL)
+ *
+ * `cbtotal` is NOT NULL with NO column default. Legacy MySQL's non-strict mode
+ * filled the omitted column with an implicit 0; Postgres has no implicit
+ * default, so we set `cbtotal: 0` explicitly to (a) not trip the NOT NULL
+ * constraint and (b) reproduce legacy's effective result. `tb_wallet` does
+ * carry a DEFAULT 0.00, so wallettotal is left to the default for fidelity.
+ *
+ * Idempotent: pre-checks each row and no-ops if it already exists (rerun of
+ * the register bridge, or a customer that was partially seeded before). Each
+ * insert is independent — a failure on one is logged but does NOT block the
+ * other (a missing cashback row must not prevent the wallet row, and vice
+ * versa). Returns which rows are now present so callers/tests can assert.
+ */
+export async function seedLegacyWalletRows(
+  admin: SupabaseClient,
+  memberCode: string,
+): Promise<{ wallet: boolean; cashBack: boolean }> {
+  const result = { wallet: false, cashBack: false };
+  if (!memberCode) {
+    logger.error(SCOPE, "seedLegacyWalletRows: missing memberCode — skipping", undefined, {});
+    return result;
+  }
+
+  // ── tb_wallet ──────────────────────────────────────────────────────────
+  const { data: existingWallet, error: walletReadErr } = await admin
+    .from("tb_wallet")
+    .select("userid")
+    .eq("userid", memberCode)
+    .maybeSingle();
+  if (walletReadErr) {
+    logger.warn(SCOPE, "tb_wallet existence pre-check failed — continuing to insert", {
+      memberCode,
+      reason: walletReadErr.message,
+    });
+  }
+  if (existingWallet) {
+    result.wallet = true;
+    logger.info(SCOPE, "tb_wallet row already exists — skipping seed (idempotent)", { memberCode });
+  } else {
+    // Insert userid only — wallettotal rides its DEFAULT 0.00 (legacy parity).
+    const { error: walletInsErr } = await admin
+      .from("tb_wallet")
+      .insert({ userid: memberCode });
+    if (walletInsErr) {
+      if (walletInsErr.code === "23505") {
+        // Lost the race to a concurrent seed — the row exists, that's fine.
+        result.wallet = true;
+        logger.info(SCOPE, "tb_wallet insert hit unique constraint — already seeded (no orphan)", {
+          memberCode,
+        });
+      } else {
+        logger.error(SCOPE, "tb_wallet seed failed — new customer has no wallet ledger row", walletInsErr, {
+          memberCode,
+          code: walletInsErr.code,
+          message: walletInsErr.message,
+        });
+      }
+    } else {
+      result.wallet = true;
+      logger.info(SCOPE, "tb_wallet row seeded for new signup", { memberCode });
+    }
+  }
+
+  // ── tb_cash_back ───────────────────────────────────────────────────────
+  const { data: existingCashBack, error: cbReadErr } = await admin
+    .from("tb_cash_back")
+    .select("userid")
+    .eq("userid", memberCode)
+    .maybeSingle();
+  if (cbReadErr) {
+    logger.warn(SCOPE, "tb_cash_back existence pre-check failed — continuing to insert", {
+      memberCode,
+      reason: cbReadErr.message,
+    });
+  }
+  if (existingCashBack) {
+    result.cashBack = true;
+    logger.info(SCOPE, "tb_cash_back row already exists — skipping seed (idempotent)", { memberCode });
+  } else {
+    // cbtotal is NOT NULL with no default — set 0 explicitly (see docblock).
+    const { error: cbInsErr } = await admin
+      .from("tb_cash_back")
+      .insert({ userid: memberCode, cbtotal: 0 });
+    if (cbInsErr) {
+      if (cbInsErr.code === "23505") {
+        result.cashBack = true;
+        logger.info(SCOPE, "tb_cash_back insert hit unique constraint — already seeded (no orphan)", {
+          memberCode,
+        });
+      } else {
+        logger.error(SCOPE, "tb_cash_back seed failed — new customer has no cashback row", cbInsErr, {
+          memberCode,
+          code: cbInsErr.code,
+          message: cbInsErr.message,
+        });
+      }
+    } else {
+      result.cashBack = true;
+      logger.info(SCOPE, "tb_cash_back row seeded for new signup", { memberCode });
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -264,6 +393,124 @@ export async function findLegacyUserIdByPhone(
   // should NOT block a fresh signup (the customer genuinely starts over).
   if (data && data.userStatus !== "0") return data.userID;
   return null;
+}
+
+/**
+ * P1-16 (2026-05-30) — write the legacy `tb_corporate` row for a juristic
+ * signup, keyed by `userid` = member_code. This is the faithful port of
+ * `check-otp-register.php` L101-103:
+ *
+ *     INSERT INTO tb_corporate
+ *       (userID, corporateNumber, corporateName, corporateAddress,
+ *        corporateFile, corporateFile20, cpDateCreate, corporateStatus)
+ *     VALUES ('$userID', '$corporateNumber', '$corporateName',
+ *        '$corporateAddress', '$corporateFile', '$corporateFile20',
+ *        NOW(), '1');
+ *
+ * BUG it fixes: Pacred's `saveJuristicStep2` upserted ONLY the REBUILT empty
+ * `corporate` table (keyed by profile_id UUID, migration 0004) — a silent
+ * dead-write. The legacy admin surfaces + tax-invoice eligibility read
+ * `tb_corporate` (keyed by userid), so a native juristic customer's company
+ * data was invisible to ops + never verifiable.
+ *
+ * Flow-order note: the legacy single-step register had all corporate fields
+ * at once. Pacred's juristic signup is 3-step — step 1 creates auth+profile
+ * (no corporate data yet), step 2 collects taxId/companyName/address, step 3
+ * uploads the affidavit file. So this lands at STEP 2 (the moment the data
+ * exists). The NOT-NULL file columns get `""` on insert (the affidavit is
+ * uploaded in step 3) — legacy PHP wrote empty strings, never NULL
+ * (docs/learnings/php-port-patterns.md). corporatestatus='1' = PENDING
+ * (CORP_STATUS.PENDING · lib/admin/customer-identity.ts).
+ *
+ * Mirrors `adminConvertToJuristic` (actions/admin/customers.ts L728-754):
+ * INSERT if no row, UPDATE if a row already exists (re-edit of step 2).
+ * tb_corporate is all-lowercase (NOT in the 0113 camelCase batch).
+ *
+ * Best-effort: logs + returns `{ok:false}` on failure, never throws — the
+ * caller has already committed the customer's auth + profile; losing the
+ * tb_corporate mirror is bad but recoverable by ops, not a reason to error
+ * the whole step-2 save.
+ */
+export async function upsertLegacyCorporate(
+  admin: SupabaseClient,
+  input: {
+    /** member_code (`PR<n>`) — the legacy tb_corporate.userid key. */
+    memberCode: string;
+    /** 13-digit corporate/tax number → tb_corporate.corporatenumber. */
+    corporateNumber: string;
+    /** Company name → tb_corporate.corporatename. */
+    corporateName: string;
+    /** Full address string → tb_corporate.corporateaddress. */
+    corporateAddress: string;
+  },
+): Promise<{ ok: boolean; error?: string }> {
+  const { memberCode, corporateNumber, corporateName, corporateAddress } = input;
+  if (!memberCode) {
+    logger.error(SCOPE, "upsertLegacyCorporate: missing memberCode — skipping", undefined, {});
+    return { ok: false, error: "missing_member_code" };
+  }
+
+  // INSERT vs UPDATE — does a tb_corporate row already exist for this member?
+  const { data: existing, error: existErr } = await admin
+    .from("tb_corporate")
+    .select("id")
+    .eq("userid", memberCode)
+    .maybeSingle<{ id: number }>();
+  if (existErr) {
+    // Not fatal — the write below re-surfaces a real problem. Log + continue
+    // as an INSERT (the more common case for a fresh signup).
+    logger.warn(SCOPE, "tb_corporate existence pre-check failed — continuing as insert", {
+      memberCode,
+      reason: existErr.message,
+    });
+  }
+
+  let writeErr;
+  if (existing) {
+    // Re-edit of step 2 — UPDATE the existing pending row (don't touch the
+    // file columns; the affidavit is managed by step 3). Mirrors
+    // adminConvertToJuristic's UPDATE branch.
+    ({ error: writeErr } = await admin
+      .from("tb_corporate")
+      .update({
+        corporatenumber: corporateNumber,
+        corporatename: corporateName,
+        corporateaddress: corporateAddress,
+      })
+      .eq("id", existing.id));
+  } else {
+    // Fresh signup — INSERT. corporatefile/corporatefile20 = "" (uploaded in
+    // step 3), corporatestatus = "1" (PENDING), cpdatecreate rides its
+    // DEFAULT CURRENT_TIMESTAMP (legacy NOW()).
+    ({ error: writeErr } = await admin
+      .from("tb_corporate")
+      .insert({
+        userid: memberCode,
+        corporatenumber: corporateNumber,
+        corporatename: corporateName,
+        corporateaddress: corporateAddress,
+        corporatefile: "",
+        corporatefile20: "",
+        corporatestatus: "1",
+      }));
+  }
+
+  if (writeErr) {
+    logger.error(SCOPE, "tb_corporate write failed — juristic company data not mirrored to legacy", writeErr, {
+      memberCode,
+      mode: existing ? "update" : "insert",
+      code: writeErr.code,
+      message: writeErr.message,
+      details: writeErr.details,
+    });
+    return { ok: false, error: writeErr.message };
+  }
+
+  logger.info(SCOPE, "tb_corporate row written for juristic signup", {
+    memberCode,
+    mode: existing ? "update" : "insert",
+  });
+  return { ok: true };
 }
 
 /**
