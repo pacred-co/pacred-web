@@ -3,7 +3,28 @@
 
 ---
 
-# 🔱 2026-05-31 — 4-AGENT PARALLEL SPRINT + 3-BATCH SHIP · read FIRST
+# 🟢 2026-05-31 — เดฟ AUTONOMOUS BATCH 2 (P0-23 admin pay-out · corporate-SOT · P1-15) · read FIRST
+
+เดฟ autonomous run ต่อจาก batch ใหญ่. ส่ง main อีก batch (`d3f991ea` → `631713da`):
+- **P0-23 admin pay-out** (agent E) — `/admin/sales-payouts` repoint จาก dead rebuilt → faithful `tb_user_sales_admin_pay` (status 2→3 + slip · `AND status=2` guard กัน double-pay). คู่กับ customer earn→withdraw (D). 10/0 test.
+- **Corporate SOT** (agent F) — migrate 4 เดฟ-lane readers (`/admin/customers` inline juristic queue + service-orders/[hNo] + service-order.ts + profile.ts) จาก rebuilt `corporate` (profile_id) → legacy `tb_corporate` (userid) ให้ตรง P0-18 ที่ ship แล้ว · **ADR-0021**. 8,898 migrated juristic เห็นได้แล้ว. 9/0 test.
+- **P1-15** (เดฟ) — assign sales-rep ตอน **register** ไม่ใช่ approve (`lib/admin/assign-sales-rep.ts` shared · faithful check-otp-register.php). 3/0 test.
+
+**🟢 GATE GREEN:** `pnpm verify` EXIT 0 · DB tests 42 pass/0 (E10·F9·P1-15:3·register-seed23 regression... ) + qa-flow 17 · `pnpm build` EXIT 0.
+
+**⚠️ 2 FINDINGS (action needed):**
+1. **P1-15 gated on data:** prod `admins` มี **0 active sales-rep** ที่มี legacy_admin_id → assignment คืน null จนกว่า **ภูม สร้าง 13 admins** (B-3 pending). โค้ด pluggable — พอมี sales admin assignment ทำงานทันที.
+2. **Corporate cleanup ยังไม่จบ 100%:** rebuilt `corporate` write ยังอยู่ (B + profile.ts dual-write) — **ลบไม่ได้จนกว่า ปอน migrate 3 customer-UI readers** (service-payment/[id] · service-import/[fNo]/receipt · register/page.tsx) → ADR-0021 checklist. ลบก่อน = migrated juristic เห็น blank บนใบเสร็จ (death gap).
+
+**🔴 เดฟ-backend lane "ครบ" แล้วเท่าที่ทำ solo ได้** — ที่เหลือติด lane/source (ดู §ด้านล่าง batch report):
+- P1-23/P1-24 (yuan gate + staff-notify): customer `payment.php` front-controller **หายจาก extract** — ห้ามเดา · target LINE group ต้อง owner ตัดสิน
+- P1-3 forwarder [fNo] dual-mode: **ภูม adm-09 lane** (big rewrite · ต้อง coord)
+- P1-19/22/29/30 + /add gates: **customer UI = ปอน lane**
+- P1-20 forwarder cluster: มี preserved WIP branch (reconcile ระวัง)
+
+---
+
+# 🔱 2026-05-31 — 4-AGENT PARALLEL SPRINT + 3-BATCH SHIP
 
 เดฟ session — owner "เอามาทำเอง ไม่ต้องรอ ก๊อต · แยกร่างรุมทำ". ส่ง main 3 batch จบในรอบเดียว.
 
