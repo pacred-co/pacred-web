@@ -4,12 +4,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { assertOwnedProfileId } from "@/lib/auth/owned-write";
 import { placeOrderSchema, type PlaceOrderInput, type Provider } from "@/lib/validators/cart";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
-import { getWalletAvailableBalance } from "@/lib/wallet/balance";
+import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
+import { computeShopOrderDebitTotal } from "@/lib/service-order/debit-total";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { type LegacyOrderCode } from "@/lib/legacy-status-map";
 
@@ -786,17 +786,89 @@ export async function cancelServiceOrder(hNo: string): Promise<ActionResult> {
 // PAY FROM WALLET — customer self-service (closes cargo loop)
 // ────────────────────────────────────────────────────────────
 //
-// Without this, every order requires admin to manually call
-// adminMarkServiceOrderPaid → admin bottleneck per order.  With this,
-// the customer self-pays once they have wallet balance ≥ total.
+// D1 / ADR-0017 Phase-B faithful port — implements ADR-0018 §D-2 rule 1
+// (customer DEBIT-on-submit, shop-from-wallet sub-case). Closes the
+// cust-02 P0-6 audit gap (legacy gap 2026-05-30 §3 P0-6): the previous
+// body SELECT'd the REBUILT empty `service_orders` table → not_found for
+// every migrated order, and debited the rebuilt `wallet_transactions`
+// (empty on prod). Both dead on prod. The 8,898 customers' real orders
+// live in `tb_header_order`; their real balances in `tb_wallet` +
+// `tb_wallet_hs`.
 //
-// Mirror of adminMarkServiceOrderPaid but customer-initiated:
-//   - status MUST be 'awaiting_payment' (no super flow like admin)
-//   - no allow_overdraw (customer must have sufficient main bucket)
-//   - no admin_id (null on wallet_tx; customer-initiated)
-//   - ownership re-verified via RLS-protected fetch BEFORE admin client mutations
+// ── Why pivot in-place (NOT a new service-order-tb.ts) ──────────────
 //
-// Idempotent: re-click returns existing tx without double-debit.
+//   The customer action stays here; its admin twin already lives in
+//   `actions/admin/service-orders-tb.ts::adminMarkServiceOrderPaidTb`.
+//   This customer-side action is the MIRROR of that admin action — same
+//   tb_wallet_hs shape (type='2', typenew='3', typeservice='1',
+//   status='2'), same tb_header_order flip (hstatus 2→3, hdate3=NOW,
+//   paydeposit='1'). The only differences: customer-initiated (adminID
+//   empty · adminIDcrate = the customer's own member_code), no
+//   allow_overdraw (customer must have balance), ownership re-verified.
+//
+// ── Legacy contract (pcs-admin/pay-users.php L48-83 + L162-180) ─────
+//
+//   1. Pre-check: SELECT walletTotal FROM tb_wallet WHERE userID=?
+//      Refuse if walletTotal < pricePay (legacy `if($walletTotal>=$pricePay)`,
+//      else sweetalert='eWallet').
+//   2. UPDATE tb_wallet SET walletTotal = walletTotal - pricePay.
+//   3. INSERT tb_wallet_hs (date, status='2', amount=pricePay, type='2',
+//      userID, refOrder=hNo, adminIDCrate).
+//   4. UPDATE tb_header_order SET hStatus='3', hDate3=NOW(),
+//      paydeposit='1', hDateUpdate=NOW() WHERE hNo=? AND userID=?.
+//
+//   pricePay = the order's stored total `htotalpriceuser` (set by the
+//   legacy update2 flow when admin prices the order at hStatus 2). We
+//   reuse `computeShopOrderDebitTotal` (READ-ONLY) — same helper the
+//   admin twin uses — so we charge the SAME amount the customer was
+//   quoted (no recompute drift, refund adjustments propagate).
+//
+// ── Payable status (verified against the live detail page + legacy) ─
+//
+//   Customer self-pay is gated to hstatus='2' (รอชำระเงิน) ONLY. The
+//   detail page (`service-order/[hNo]/page.tsx` L44, L144) mounts the
+//   PayFromWalletButton solely when `o.status === "2"` and reads the
+//   balance from tb_wallet there too. At hstatus='1' the order has no
+//   price yet (admin update2 sets htotalpriceuser + hStatus='2'); at
+//   '3'+ payment already landed. So '2' is the only payable state for
+//   the customer; '3'+ → idempotent already-done; everything else →
+//   refuse. (The admin twin additionally allows '1' because admin can
+//   force-pay; the customer cannot.)
+//
+// ── Idempotency (the legacy double-pay guard) ───────────────────────
+//
+//   update.php L919 / pay-users.php L13 gate re-pay by checking
+//   tb_wallet_hs WHERE refOrder=hNo AND type='2' AND status='2'. We
+//   probe that BEFORE inserting; a hit → return { already_paid:true }
+//   (re-click from flaky network / two browser tabs is safe).
+//
+// ── Partial-failure rollback (Supabase REST has no real txn) ────────
+//
+//   - tb_wallet_hs INSERT fails (nothing else written) → return error.
+//   - tb_wallet UPDATE fails after the hs INSERT → DELETE the hs row
+//     (mirror of payment-tb.ts / Tier-A recovery — keep books balanced).
+//   - tb_header_order UPDATE fails after both → surface a LOUD error
+//     carrying the hs id + order id so ops reconcile (the wallet already
+//     moved; auto-rollback would race downstream readers — same stance
+//     as adminMarkServiceOrderPaidTb).
+//
+// Schema reference: supabase/migrations/0081_pcs_legacy_schema.sql
+//   L2506 (tb_header_order), L6135 (tb_wallet), L6159 (tb_wallet_hs).
+//
+// tb_wallet_hs type/status legend (0081 L6213 + L6220):
+//   type='2' = รายการชำระเงินฝากสั่ง (shop-order paid from wallet)
+//   status='2' = สำเร็จ (approved — customer DEBIT-on-submit is final)
+//
+// Return shape stays { tx_id, already_paid } (tx_id = the tb_wallet_hs
+// id as string) so both call-sites (the detail-page button + the bulk
+// pay loop in /service-order/add) keep working unchanged — they read
+// only res.ok / res.error.
+//
+// Reachability (AGENTS.md §0d): sidebar "ฝากสั่งซื้อ" → /service-order
+// (listServiceOrders, tb_header_order) → click an order at รอชำระเงิน →
+// /service-order/[hNo] (getServiceOrder, tb_header_order) → the yellow
+// payment-due card renders PayFromWalletButton (mounted iff hstatus='2'),
+// which calls THIS action. ≤3 clicks from the sidebar.
 export async function payServiceOrderFromWallet(
   hNo: string,
 ): Promise<ActionResult<{ tx_id: string; already_paid: boolean }>> {
@@ -804,148 +876,249 @@ export async function payServiceOrderFromWallet(
   const impErr = await assertNotImpersonating();
   if (impErr) return impErr;
 
-  const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  // Resolve the customer's legacy member code (the tb_* join key) — same
+  // helper actions/payment-tb.ts uses for the yuan wallet-paid flow.
+  const userData = await getCurrentUserWithProfile();
+  if (!userData?.user) return { ok: false, error: "not_signed_in" };
+  if (!userData.profile?.member_code) {
+    return { ok: false, error: "ยังไม่ได้รับ member_code — กรุณาติดต่อทีมงาน" };
   }
-  if (!user) return { ok: false, error: "not_signed_in" };
+  const userId     = userData.user.id;
+  const memberCode = userData.profile.member_code;   // PR####
 
-  // 1. Verify ownership + status + total via RLS-protected fetch
-  const { data: order, error: orderErr } = await supabase
-    .from("service_orders")
-    .select("id, h_no, status, total_thb")
-    .eq("h_no", hNo)
-    .maybeSingle<{ id: string; h_no: string; status: string; total_thb: number }>();
-  if (orderErr) {
-    console.error(`[service_orders mutation lookup] failed`, { code: orderErr.code, message: orderErr.message });
-    return { ok: false, error: `db_error:${orderErr.code ?? "unknown"}` };
-  }
-  if (!order)                                  return { ok: false, error: "not_found" };
-  if (order.status !== "awaiting_payment")     return { ok: false, error: "order_not_payable" };
-  const totalThb = Number(order.total_thb);
-  if (!(totalThb > 0))                         return { ok: false, error: "total_thb_invalid" };
-
-  // 2. Idempotency: existing completed payment tx for this order?
-  const { data: existingTx, error: existingTxErr } = await supabase
-    .from("wallet_transactions")
-    .select("id")
-    .eq("reference_type", "order_header")
-    .eq("reference_id", order.h_no)
-    .eq("kind", "order_payment")
-    .eq("status", "completed")
-    .maybeSingle<{ id: string }>();
-  if (existingTxErr) {
-    console.error(`[wallet_transactions list] failed`, { code: existingTxErr.code, message: existingTxErr.message });
-  }
-  if (existingTx) {
-    // Status mismatch shouldn't happen, but return success — let UI refresh.
-    return { ok: true, data: { tx_id: existingTx.id, already_paid: true } };
-  }
-
-  // 3. Balance check — PENDING-AWARE available balance. The raw
-  //    wallet.balance (0007 trigger) sums only completed rows, so it
-  //    ignores this customer's other not-yet-approved withdraw / yuan
-  //    debits (gap-customer.md §H-1). RLS scopes the read to own wallet.
-  const available = await getWalletAvailableBalance(supabase, user.id);
-  if (available === null) {
-    return { ok: false, error: "wallet_balance_unavailable — ตรวจสอบยอดเงินไม่สำเร็จ ลองใหม่อีกครั้ง" };
-  }
-  if (available < totalThb) {
-    return {
-      ok: false,
-      error: `wallet_insufficient — มี ฿${available.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ต้อง ฿${totalThb.toLocaleString("th-TH", { minimumFractionDigits: 2 })} เติมเงินก่อนชำระ`,
-    };
-  }
-
-  // 4. Debit + status flip — admin client (gated by ownership check above)
   const admin = createAdminClient();
 
-  // F-11 / G9 — wrap INSERT to catch the partial-unique violation from
-  // migration 0049 (wallet_tx_order_payment_uniq). Under concurrent
-  // submits (2 tabs / back-button), the check-then-act SELECT above
-  // may miss a still-committing peer INSERT — the DB-level guard
-  // raises 23505, we re-SELECT, and return as if we were the second
-  // arrival in normal idempotent flow.
-  // W-1/S-2: assertOwnedProfileId makes the ownership check un-skippable
-  // — if a future edit sets profile_id from an untrusted input, this
-  // throws instead of writing a cross-customer wallet debit.
-  const { data: insertedTx, error: txErr } = await admin
-    .from("wallet_transactions")
-    .insert(assertOwnedProfileId(user.id, {
-      profile_id:     user.id,
-      bucket:         "main",
-      amount:         -totalThb,
-      kind:           "order_payment",
-      status:         "completed",
-      reference_type: "order_header",
-      reference_id:   order.h_no,
-      admin_id:       null,
-      note:           `ชำระค่าฝากสั่ง ${order.h_no} (ตัดจาก wallet โดยลูกค้า)`,
-    }))
-    .select("id")
-    .maybeSingle<{ id: string }>();
-
-  if (txErr && (txErr.code === "23505" || /duplicate|unique/i.test(txErr.message))) {
-    // Concurrent peer beat us — re-SELECT the canonical row.
-    const { data: peerTx, error: peerTxErr } = await admin
-      .from("wallet_transactions")
-      .select("id")
-      .eq("reference_type", "order_header")
-      .eq("reference_id", order.h_no)
-      .eq("kind", "order_payment")
-      .eq("status", "completed")
-      .maybeSingle<{ id: string }>();
-    if (peerTxErr) {
-      console.error(`[wallet_transactions list] failed`, { code: peerTxErr.code, message: peerTxErr.message });
-    }
-    if (!peerTx) {
-      // 23505 fired but no row visible — partial-index predicate mismatch
-      // or unexpected race. Surface so admin can investigate.
-      return { ok: false, error: `wallet insert race: 23505 but no peer tx found for ${order.h_no}` };
-    }
-    revalidatePath(`/service-order/${order.h_no}`);
-    revalidatePath("/service-order");
-    return { ok: true, data: { tx_id: peerTx.id, already_paid: true } };
+  // ── 1. Load the order from tb_header_order (ownership-gated) ─────
+  // Ownership = the order's userid must equal the signed-in customer's
+  // member_code (a customer can only ever pay their own PR<n> rows).
+  const { data: header, error: headerErr } = await admin
+    .from("tb_header_order")
+    .select(
+      "id,hno,userid,hstatus,htotalpriceuser,htotalpricechn,hshippingchn,hshippingservice,hrate",
+    )
+    .eq("hno", hNo)
+    .eq("userid", memberCode)                        // ownership gate
+    .maybeSingle<{
+      id: number;
+      hno: string;
+      userid: string;
+      hstatus: string | null;
+      htotalpriceuser: number | string | null;
+      htotalpricechn: number | string | null;
+      hshippingchn: number | string | null;
+      hshippingservice: number | string | null;
+      hrate: number | string | null;
+    }>();
+  if (headerErr) {
+    console.error(`[tb_header_order pay-from-wallet lookup] failed`, {
+      code: headerErr.code, message: headerErr.message, hno: hNo, userid: memberCode,
+    });
+    return { ok: false, error: `db_error:${headerErr.code ?? "unknown"}` };
   }
-  if (txErr || !insertedTx) {
-    return { ok: false, error: `wallet insert: ${txErr?.message ?? "no row"}` };
-  }
-  const tx = insertedTx;
+  if (!header) return { ok: false, error: "not_found" };
 
-  const { error: ordErr } = await admin
-    .from("service_orders")
-    .update({
-      status:       "ordered",
-      date_ordered: new Date().toISOString(),
-    })
-    .eq("id", order.id);
-  if (ordErr) {
-    // Don't roll back the wallet tx — preserve audit trail (mirror of
-    // adminMarkServiceOrderPaid behavior). Admin can reconcile from
-    // /admin/service-orders/<hNo>.
+  const status = (header.hstatus ?? "").trim();
+  // Already paid (hstatus >= 3) → idempotent success (let the UI refresh).
+  if (status === "3" || status === "4" || status === "5") {
+    return { ok: true, data: { tx_id: "", already_paid: true } };
+  }
+  // Customer self-pay is allowed ONLY at hstatus='2' (รอชำระเงิน). '1'
+  // has no price yet; '6' is cancelled. (Admin can force-pay '1' via the
+  // admin twin; the customer cannot.)
+  if (status !== "2") {
+    return { ok: false, error: "order_not_payable" };
+  }
+
+  // ── 2. Compute the debit amount (READ-ONLY helper) ──────────────
+  // Prefer the stored htotalpriceuser; fall back to the legacy formula.
+  // NaN / ≤0 → refuse (silently substituting 0 would advance the order
+  // with zero cash collected).
+  const priceToPay = computeShopOrderDebitTotal(header);
+  if (!Number.isFinite(priceToPay) || priceToPay <= 0) {
+    return { ok: false, error: "total_thb_invalid" };
+  }
+
+  // ── 3. Read tb_wallet + pre-check balance (legacy L51-55) ───────
+  const { data: walletBefore, error: walletReadErr } = await admin
+    .from("tb_wallet")
+    .select("userid, wallettotal")
+    .eq("userid", memberCode)
+    .maybeSingle<{ userid: string; wallettotal: number | string | null }>();
+  if (walletReadErr) {
+    console.error(`[tb_wallet pay-from-wallet read] failed`, {
+      code: walletReadErr.code, message: walletReadErr.message, userid: memberCode,
+    });
+    return { ok: false, error: `db_error:${walletReadErr.code ?? "unknown"}` };
+  }
+  const currentBalance = Number(walletBefore?.wallettotal ?? 0);
+  if (!(currentBalance >= priceToPay)) {
     return {
       ok: false,
-      error: `order update failed AFTER wallet debit (tx ${tx.id} stays): ${ordErr.message}`,
+      error: `wallet_insufficient — มี ฿${currentBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ต้อง ฿${priceToPay.toLocaleString("th-TH", { minimumFractionDigits: 2 })} เติมเงินก่อนชำระ`,
     };
   }
 
-  // 5. Notify customer (self-action confirmation)
-  void sendNotification(user.id, notify.walletTxStatusChanged({
-    kind:   "order_payment",
-    status: "completed",
-    amount: -totalThb,
-    note:   `ออเดอร์ ${order.h_no}`,
-    txId:   tx.id,
-  }));
+  const nowIso = new Date().toISOString();
 
-  revalidatePath(`/service-order/${order.h_no}`);
+  // ── 4. Idempotency probe — already paid via wallet? ─────────────
+  // Legacy double-pay guard (pay-users.php L13 / update.php L919):
+  // tb_wallet_hs WHERE refOrder=hNo AND type='2' AND status='2'.
+  const { data: existingHs, error: existingHsErr } = await admin
+    .from("tb_wallet_hs")
+    .select("id")
+    .eq("userid", memberCode)
+    .eq("type", "2")
+    .eq("reforder", header.hno)
+    .eq("status", "2")
+    .limit(1)
+    .maybeSingle<{ id: number }>();
+  if (existingHsErr) {
+    console.error(`[tb_wallet_hs idempotency probe] failed`, {
+      code: existingHsErr.code, message: existingHsErr.message, hno: header.hno, userid: memberCode,
+    });
+    return { ok: false, error: `db_error:${existingHsErr.code ?? "unknown"}` };
+  }
+  if (existingHs) {
+    // Already debited by a prior call. Best-effort nudge the header to 3
+    // if it's still sitting at 2 (covers a half-state where the wallet
+    // moved but the header update failed previously).
+    const { error: nudgeErr } = await admin
+      .from("tb_header_order")
+      .update({ hstatus: "3", hdate3: nowIso, hdateupdate: nowIso, paydeposit: "1" })
+      .eq("id", header.id)
+      .eq("hstatus", "2");
+    if (nudgeErr) {
+      console.error(`[tb_header_order idempotency-nudge] failed`, {
+        code: nudgeErr.code, message: nudgeErr.message, hno: header.hno,
+      });
+    }
+    revalidatePath(`/service-order/${header.hno}`);
+    revalidatePath("/service-order");
+    return { ok: true, data: { tx_id: String(existingHs.id), already_paid: true } };
+  }
+
+  // ── 5. INSERT tb_wallet_hs (type='2', status='2') ───────────────
+  // Mirror of adminMarkServiceOrderPaidTb's row (the admin twin), minus
+  // the admin identity — customer-initiated, so adminID empty +
+  // adminIDcrate = the customer's own member_code (matches payment-tb.ts
+  // customer-self pattern). amount POSITIVE; debit direction encoded by
+  // type='2' per the schema comment + legacy pay-users.php L65.
+  const { data: hsRow, error: hsInsErr } = await admin
+    .from("tb_wallet_hs")
+    .insert({
+      date:            nowIso,
+      amount:          priceToPay,
+      status:          "2",                       // approved (customer DEBIT-on-submit is final)
+      type:            "2",                       // รายการชำระเงินฝากสั่ง (0081 L6220)
+      typenew:         "3",                       // ชำระฝากสั่ง (0081 L6227)
+      typeservice:     "1",                       // ฝากสั่งซื้อ (0081 L6234)
+      paydeposit:      "1",                       // paid-from-wallet (matches legacy self-pay branch)
+      imagesslip:      "",                        // wallet-paid → no slip
+      depositnamebank: "WALLET",
+      nameuserbank:    "",
+      nouserbank:      "",
+      note:            `รายการชำระเงิน ฝากสั่งสินค้า #${header.hno} (ตัดจาก wallet โดยลูกค้า)`,
+      adminid:         "",                        // no admin involved
+      adminidupdate:   "",
+      session:         "customer-self",
+      reforder:        header.hno,                // refOrder = hNo (legacy pay-users.php L65)
+      whno:            "",                         // NOT NULL — no warehouse # for shop-order debit
+      wusercredit:     "0",                        // NOT NULL — not a VIP-credit topup
+      userid:          memberCode,
+      adminidcrate:    memberCode,                 // NOT NULL — customer self-initiated
+    })
+    .select("id")
+    .single<{ id: number }>();
+  if (hsInsErr || !hsRow) {
+    console.error(`[tb_wallet_hs pay-from-wallet insert] failed`, {
+      code: hsInsErr?.code, message: hsInsErr?.message, hno: header.hno, userid: memberCode,
+    });
+    return {
+      ok: false,
+      error: `บันทึก tb_wallet_hs ล้มเหลว: ${hsInsErr?.message ?? "no row returned"}`,
+    };
+  }
+
+  // ── 6. UPDATE tb_wallet (read-modify-write; INSERT-if-no-row) ───
+  // The pre-check guaranteed walletBefore exists for any positive
+  // priceToPay (missing row → balance 0 → refuse), so the INSERT branch
+  // is purely defensive against a delete-race (impossible in practice).
+  const newBalance = Math.round((currentBalance - priceToPay) * 100) / 100;
+  if (!walletBefore) {
+    const { error: walletInsErr } = await admin
+      .from("tb_wallet")
+      .insert({ userid: memberCode, wallettotal: -priceToPay });
+    if (walletInsErr) {
+      // Roll back the hs row — the debit never landed.
+      await admin.from("tb_wallet_hs").delete().eq("id", hsRow.id);
+      console.error(`[tb_wallet pay-from-wallet insert] failed`, {
+        code: walletInsErr.code, message: walletInsErr.message, hno: header.hno, userid: memberCode,
+      });
+      return { ok: false, error: `บันทึกยอดกระเป๋าล้มเหลว · ยกเลิกรายการ: ${walletInsErr.message}` };
+    }
+  } else {
+    const { error: walletUpdErr } = await admin
+      .from("tb_wallet")
+      .update({ wallettotal: newBalance })
+      .eq("userid", memberCode);
+    if (walletUpdErr) {
+      // Roll back the hs row — keep books balanced (payment-tb.ts pattern).
+      await admin.from("tb_wallet_hs").delete().eq("id", hsRow.id);
+      console.error(`[tb_wallet pay-from-wallet update] failed`, {
+        code: walletUpdErr.code, message: walletUpdErr.message, hno: header.hno,
+        userid: memberCode, before: currentBalance, target: newBalance,
+      });
+      return { ok: false, error: `หักยอดกระเป๋าล้มเหลว · ยกเลิกรายการ: ${walletUpdErr.message}` };
+    }
+  }
+
+  // ── 7. Flip header status 2 → 3 + stamp hdate3 + paydeposit='1' ─
+  // Matches pay-users.php L166 (self-pay branch): hStatus='3',
+  // hDate3=NOW, paydeposit='1', hDateUpdate=NOW.
+  const { error: ordErr } = await admin
+    .from("tb_header_order")
+    .update({
+      hstatus:     "3",
+      hdate3:      nowIso,
+      hdateupdate: nowIso,
+      paydeposit:  "1",
+    })
+    .eq("id", header.id);
+  if (ordErr) {
+    // tb_wallet_hs already wrote + tb_wallet already debited; don't
+    // auto-rollback (would race downstream readers). Surface LOUD so ops
+    // reconcile (mirror of adminMarkServiceOrderPaidTb + payment-tb.ts).
+    console.error(`[tb_header_order pay-from-wallet status flip] FAILED post-debit`, {
+      code: ordErr.code, message: ordErr.message,
+      hno: header.hno, userid: memberCode, tb_wallet_hs_id: hsRow.id, amount: priceToPay,
+    });
+    return {
+      ok: false,
+      error: `ชำระเงินสำเร็จ แต่อัพเดทสถานะออเดอร์ล้มเหลว (กระเป๋าถูกหัก ฿${priceToPay} แล้ว · tb_wallet_hs id=${hsRow.id} · ออเดอร์ ${header.hno}) — ติดต่อทีมงาน: ${ordErr.message}`,
+    };
+  }
+
+  // ── 8. Refresh customer-visible surfaces + notify ───────────────
+  revalidatePath(`/service-order/${header.hno}`);
   revalidatePath("/service-order");
   revalidatePath("/service-order/pending");
+  revalidatePath("/pay");
   revalidatePath("/wallet");
   revalidatePath("/wallet/history");
 
-  return { ok: true, data: { tx_id: tx.id, already_paid: false } };
+  console.info(`[payServiceOrderFromWallet] hno=${header.hno} userid=${memberCode} priceToPay=${priceToPay} balance ${currentBalance} → ${newBalance} · tb_wallet_hs=${hsRow.id}`);
+
+  void sendNotification(userId, {
+    category:       "order",
+    severity:       "success",
+    title:          `ชำระค่าฝากสั่งสำเร็จ ${header.hno}`,
+    body:           `฿${priceToPay.toLocaleString("th-TH", { minimumFractionDigits: 2 })} · ตัดจากกระเป๋าเงิน`,
+    link_href:      `/service-order/${header.hno}`,
+    reference_type: "service_order",
+    reference_id:   String(header.id),
+  });
+
+  return { ok: true, data: { tx_id: String(hsRow.id), already_paid: false } };
 }
 
 // ────────────────────────────────────────────────────────────
