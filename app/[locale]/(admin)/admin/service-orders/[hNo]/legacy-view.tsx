@@ -24,6 +24,23 @@ import { Link } from "@/i18n/navigation";
 import SpawnForwarderForm from "./spawn-form";
 import { buildSpawnRows } from "./spawn-utils";
 import { MarkPaidTbForm } from "./mark-paid-tb-form";
+import { AdminServiceOrderUpdateForm } from "./update-form";
+
+// Wave 31 / P0-14 — map legacy `tb_header_order.hstatus` char ('1'..'6') to
+// the rebuilt-string key the update-form Server Action expects. The action
+// `adminUpdateServiceOrder` (actions/admin/service-orders.ts) re-maps this
+// back to the legacy char on write via REBUILT_TO_LEGACY_HSTATUS — single
+// source of truth, see service-orders.ts L119-126. Without this mapping the
+// form would push a legacy code into a Zod enum that only accepts the
+// rebuilt-string keys → invalid_input.
+const LEGACY_TO_REBUILT_KEY: Record<string, string> = {
+  "1": "pending",
+  "2": "awaiting_payment",
+  "3": "ordered",
+  "4": "awaiting_chn_dispatch",
+  "5": "completed",
+  "6": "cancelled",
+};
 
 const STATUS_LABEL: Record<string, string> = {
   "1": "รอดำเนินการ",
@@ -164,7 +181,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
             ) : null}
           </div>
           <p className="text-xs text-muted mt-1">
-            Wave 7 read-only · status mutate + items list → Wave 8
+            Wave 31 / P0-14 · admin status/cancel/note now writes tb_header_order for 21,950 legacy orders
           </p>
         </div>
         <Link href="/admin/service-orders" className="text-xs text-primary-600 hover:underline">
@@ -235,6 +252,21 @@ export async function renderLegacyServiceOrderView(hno: string) {
       <MarkPaidTbForm
         hno={r.hno}
         status={status}
+        totalThb={Number(r.htotalpriceuser ?? 0)}
+      />
+
+      {/* Wave 31 / P0-14 — admin status flip + cancel + saveNote panel.
+          Before this render, all 21,950 real `tb_header_order` rows had no
+          editable form on the legacy path — staff fell back to legacy PHP.
+          `adminUpdateServiceOrder` (actions/admin/service-orders.ts) already
+          targets tb_header_order correctly (Tier A4); this just mounts the
+          existing form. Status is mapped legacy char → rebuilt-string key
+          because the action's Zod enum accepts the rebuilt vocabulary; the
+          action re-maps back to the legacy char on write. */}
+      <AdminServiceOrderUpdateForm
+        hNo={r.hno}
+        status={LEGACY_TO_REBUILT_KEY[r.hstatus ?? "1"] ?? "pending"}
+        note_admin={r.hnote ?? null}
         totalThb={Number(r.htotalpriceuser ?? 0)}
       />
 
