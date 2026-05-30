@@ -1,5 +1,6 @@
 import { BadgePercent, Box, MapPin, Plus, Ship } from "lucide-react";
 import { Link } from "@/i18n/navigation";
+import { ServiceImportShipBySelect } from "./service-import-shipby-select";
 
 /**
  * The four form-field sections of the "เพิ่มรายการนำเข้า" (forwarder add)
@@ -207,6 +208,12 @@ export function ServiceImportAddFields({
           ))}
           <option value="PCS">รับเองหน้าโกดัง Pacred กทม</option>
         </select>
+
+        {/* P1-18 — carrier (#hShipBy) picker. Repopulates when the address
+            above changes (server action → tb_address ZIP → free-area list).
+            TODO(ปอน): style the ship-by select + free-area hint to match
+            design. */}
+        <ServiceImportShipBySelect compact={compact} />
 
         {!hasAddress && (
           <p className="mt-2 text-[13px] text-muted">
