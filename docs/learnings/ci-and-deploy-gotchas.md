@@ -4,6 +4,35 @@ Topics: GitHub Actions, Vercel build/deploy, pnpm action-setup, Next 16 build ou
 
 ---
 
+## [2026-05-31] NEVER `rm -rf .next` while a dev server is running on it — Turbopack DB corruption → false 500s
+
+**Context.** After merging a teammate commit I cleared the Next build cache (`rm -rf .next`) to drop a stale type reference to a deleted route. But a **preview dev server was still running on port 3000** (started earlier, sharing the same `.next` dir). Minutes later, browsing `/admin/reports` returned **`Internal Server Error`** with `body.innerText === "Internal Server Error"`. I almost filed it as a real reports-hub bug — it was NOT.
+
+**Root cause.** `rm -rf .next` deleted the Turbopack persistent-cache SST files (`.next/dev/cache/turbopack/<hash>/*.sst`) **out from under the live server's open file handles**. The server kept serving from its in-memory task graph but every compile/persist then failed:
+```
+FATAL: An unexpected Turbopack error occurred
+TurbopackInternalError: Failed to restore task data (corrupted database or bug): Data for TaskId …
+  Failed to open SST file /…/.next/dev/cache/turbopack/<hash>/000012xx.sst: No such file or directory (os error 2)
+ENOENT: … open '/…/.next/dev/server/app/[locale]/(…)/page/build-manifest.json'
+```
+Every route the corrupted server hadn't already cached → 500. **A false alarm masquerading as a code bug** — `pnpm verify` + `typecheck` were green the whole time; the hub page compiled fine.
+
+**The fix.** Kill ALL `next dev` processes FIRST, THEN clear the cache, THEN restart one clean server:
+```bash
+pkill -f "next dev" ; pkill -f "next/dist/bin/next dev"
+# force any stragglers: ps aux | grep "next dev" | awk '{print $2}' | xargs kill -9
+rm -rf .next            # only now — nothing holds the dir
+# restart: preview_start (or pnpm dev)
+```
+After a clean restart the same route rendered `200` with `is500:false`.
+
+**Rules.**
+- Two dev servers must NEVER share one `.next` dir. If port 3000 is taken and `pnpm dev` auto-bumps to 3001, both still write the SAME `.next/` → one clearing it corrupts the other. Stop the old one first.
+- Before believing a dev-only 500, check `preview_logs --level error` for `TurbopackInternalError` / `ENOENT … .next/…`. If present → it's a stale/corrupted cache, not your code. Restart-clean before debugging.
+- Distinguish: a **prod** 500 (real, gated by §11 `next start` smoke) vs a **dev** 500 from Turbopack cache churn (transient, restart fixes). Don't conflate.
+
+---
+
 ## [2026-05-30] After a multi-agent merge, run the FULL `ci.yml` gate sequence locally — per-file checks are NOT enough
 
 **Context.** Merged a 6-agent Tier-A batch (octopus merge, 20 files) into `dave-pacred` + `main`, then pushed. **Vercel build failed** on a TS error (`yuan-payments.ts:423` — `STATUS_LABEL[existing.status]` indexing a `Record<union,string>` with a plain `string`). Pushed a fix. Then **GitHub Actions `pnpm audit:all` failed** on a *different* gate (`MOMO_SYNC_PROPAGATE_STATUS` used in code but not declared in `.env.example`). Two consecutive red CI runs from one merge — exactly the "check thoroughly, make it done" frustration.
