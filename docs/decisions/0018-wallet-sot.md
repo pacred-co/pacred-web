@@ -49,8 +49,11 @@ The three transitions:
 
 1. **Customer DEBIT on submit (synchronous, fail-closed).** Examples: pay-from-wallet on shop order (cust-02 P0-6), wallet-paid yuan transfer (cust-04 P0-2), customer withdraw request (cust-05 P0-7).
    - Pre-check: `tb_wallet.wallettotal >= debit`. If not → `{ ok:false, reason:'insufficient_balance' }` (no rows touched).
-   - INSERT `tb_wallet_hs` row: `status='2'` (approved — customer-initiated debits are auto-approved at submit, mirrors legacy `payment.php`), the matching `type` per the matrix (yuan-from-wallet=`6`, shop-from-wallet=`2`, withdraw=`3`), positive `amount` (direction encoded by `type`), `refOrder` = the parent record (`tb_header_order.hno` / `tb_payment.id` / withdraw row id), `userID` = customer's `tb_users.userID`, `adminID` = `null` (no admin yet), `adminIDcrate` = customer's userID.
-   - UPDATE `tb_wallet.wallettotal -= debit` (read-modify-write; INSERT-if-no-row mirrors `wallet-hs.ts` upsert).
+   - INSERT `tb_wallet_hs` row: `status` per the sub-case below, the matching `type` per the matrix (yuan-from-wallet=`6`, shop-from-wallet=`2`, **customer-withdraw=`3`**), positive `amount` (direction encoded by `type`), `refOrder` = the parent record (`tb_header_order.hno` / `tb_payment.id` / withdraw row id), `userID` = customer's `tb_users.userID`, `adminID` = `null` (no admin yet), `adminIDcrate` = customer's userID.
+   - UPDATE `tb_wallet.wallettotal -= debit` (read-modify-write; INSERT-if-no-row mirrors `wallet-hs.ts` upsert). **The balance is debited at SUBMIT for ALL three cases** — the money leaves the wallet now; the only difference is whether a second admin step follows.
+   - **STATUS sub-case (verified against legacy admin `wallet.php` L744-807, 2026-05-30):**
+     - **yuan-from-wallet (`6`) + shop-from-wallet (`2`): `status='2'`** — no second admin step on the wallet leg (the transfer/order is its own workflow); the debit is final at submit, mirrors legacy `payment.php` synchronous debit.
+     - **customer-withdraw (`3`): `status='1'` (pending), but STILL debit `tb_wallet` at submit (a "hold").** Legacy debits the wallet immediately on the withdraw request yet leaves the row pending because the admin must still confirm the bank payout. Proof it's debited-at-submit: the REJECT path (L795-807) reads `tb_wallet.walletTotal` and ADDS the amount back — a refund only makes sense if the money already left. So: withdraw = debit-on-submit + `status='1'`; admin approve (1→2) does NOT touch the balance (rule 3); admin reject (1→3) refunds (`tb_wallet += amount`, rule 3). This is the "debit-hold" model the audit P1-26 named.
    - On any rollback after the insert succeeds → DELETE the inserted `tb_wallet_hs` row (the Tier-A1 recovery pattern: Supabase REST has no real tx; the action owns the rollback). Document each call-site's rollback path.
 
 2. **Customer CREDIT on submit (deposit slip uploaded).**
@@ -66,7 +69,11 @@ The three transitions:
 
 **Idempotency (every approve/reject path).** Before mutating, SELECT for the target row's current status. If already terminal (`2` or `3`) → `{ ok:true, alreadyDone:true }`. This is what `actions/admin/yuan-payments.ts` adminUpdateYuanPayment (Tier-A5) already does on `tb_wallet_hs WHERE type='5' AND refOrder=id` for refund.
 
-**Type-enum drift (audit P1-25).** Pacred's `wallet-hs.ts` documents withdraw as `type='7'`; legacy `wallet.php` uses `type='3'` for withdraw. **The settle contract uses LEGACY values** — `3` = ถอน. `wallet-hs.ts` must be patched to match (one-line, in the same PR as the withdraw approve/refund engine).
+**Type-enum (audit P1-25 — refined 2026-05-30 against legacy admin `wallet.php`).** Legacy uses TWO withdraw types, NOT one:
+- **`type='3'` = customer-initiated withdraw request** (`wallet.php?page=withdraw` reads `WHERE type='3' AND status='1'` at L775/L795). **The customer withdraw flow (cust-05 P0-7) MUST use `type='3'`.**
+- **`type='7'` = admin-manual withdraw entry** (the existing `wallet-hs.ts` manual-add path; legacy L598 context). This is a DIFFERENT flow (accounting records a withdraw the auto-flow couldn't) and `type='7'` for it may be correct.
+
+So the audit's "patch `7`→`3`" is too blunt: the customer withdraw action uses `3`; whether the `wallet-hs.ts` *manual* path should stay `7` or move to `3` (history-tab placement) is a question the implementing agent **verifies against legacy + the live history-tab filter** before changing — do NOT blanket-rename. The settle contract value for the **customer** withdraw flow is `type='3'`, `typenew` per the legacy schema comment.
 
 **Paydeposit cascade (cust-05 P1-27).** A single approved deposit slip can link to N orders via `tb_wallet_paydeposit (hs_id, refOrder)`. Approve = also iterate the links and flip each `tb_header_order.hStatus='3'` (paid) / `tb_forwarder.fStatus='6'` (เตรียมส่ง) per legacy `wallet.php` cascade. Reject = DELETE the link rows, leave the parent orders in their prior state.
 
