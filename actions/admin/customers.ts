@@ -10,6 +10,7 @@ import { notify } from "@/lib/notifications/templates";
 import { sendSms } from "@/lib/sms/gateway";
 import { logger, redactPhone } from "@/lib/logger";
 import { resolveProfileIdForLegacyUserid } from "@/lib/auth/tb-users-resolver";
+import { pickLeastLoadedSalesRep } from "@/lib/admin/assign-sales-rep";
 import {
   parseDbdResponse,
   buildDbdLookupUrl,
@@ -406,7 +407,7 @@ export async function approveCustomer(id: string): Promise<AdminActionResult> {
     const admin = createAdminClient();
     const { data: before, error: beforeErr } = await admin
       .from("tb_users")
-      .select("userID, userActive, userStatus, userTel, userName, userLastName")
+      .select("userID, userActive, userStatus, userTel, userName, userLastName, adminIDSale")
       .eq("userID", id)
       .maybeSingle<{
         userID: string;
@@ -415,6 +416,7 @@ export async function approveCustomer(id: string): Promise<AdminActionResult> {
         userTel: string | null;
         userName: string | null;
         userLastName: string | null;
+        adminIDSale: string | null;
       }>();
     if (beforeErr) {
       console.error(`[approveCustomer tb_users read] failed`, { code: beforeErr.code, message: beforeErr.message, id });
@@ -424,11 +426,17 @@ export async function approveCustomer(id: string): Promise<AdminActionResult> {
     // No-op when already active (userActive='1' and not deleted).
     if (before.userActive === "1" && before.userStatus !== "0") return { ok: true };
 
-    // E2E loop fix · Agent F1 · 2026-05-29 (Gap #3 part 2):
-    // Auto-assign a sales rep BEFORE flipping useractive so the customer's
-    // first touch already has owner attribution. If no sales rep is
-    // available, leave adminidsale unchanged (don't fail the approve).
-    const assignedLegacyAdminId = await pickLeastLoadedSalesRep(admin);
+    // P1-15 (2026-05-31): the sales rep is now assigned at REGISTER time
+    // (lib/auth/legacy-bridge-tb-users.ts → pickLeastLoadedSalesRep) so a new
+    // lead is owned the moment they sign up — matching legacy
+    // check-otp-register.php. Here we only assign if the register-time pick
+    // came back empty (no rep available then) — NEVER re-assign an
+    // already-owned customer (that would steal the lead from the rep who's
+    // been calling them). Original behaviour (Agent F1 · 2026-05-29 Gap #3)
+    // assigned unconditionally at approve; that window is now closed.
+    const assignedLegacyAdminId = before.adminIDSale
+      ? null
+      : await pickLeastLoadedSalesRep(admin);
 
     const updatePayload: Record<string, unknown> = {
       userActive: "1",
@@ -494,100 +502,9 @@ export async function approveCustomer(id: string): Promise<AdminActionResult> {
   });
 }
 
-/**
- * Pick the least-loaded sales rep (sales / sales_admin / super) — the
- * one currently owning the fewest customer rows in tb_users.adminIDSale.
- * Returns the rep's legacy_admin_id string (the value the column stores)
- * or null when no sales rep is available (Pacred-native admins with NULL
- * legacy_admin_id can't own legacy tb_users rows — adminIDSale is
- * varchar(20) holding the legacy string).
- *
- * Round-robin via "fewest customers wins" — gives newer reps a chance
- * before piling onto the senior rep. Fallback to null on lookup failure.
- *
- * E2E loop fix · Agent F1 · 2026-05-29 (Gap #3 part 2).
- */
-async function pickLeastLoadedSalesRep(
-  admin: ReturnType<typeof createAdminClient>,
-): Promise<string | null> {
-  // Step 1 — enumerate active sales reps (or super) with a non-null
-  // legacy_admin_id (= bridge value the legacy column accepts).
-  const { data: roles, error: rolesErr } = await admin
-    .from("admins")
-    .select("profile_id, role, is_active")
-    .in("role", ["sales", "sales_admin", "super"])
-    .eq("is_active", true);
-  if (rolesErr) {
-    logger.warn("approveCustomer", "admins lookup for auto-assign failed", { reason: rolesErr.message });
-    return null;
-  }
-  const profileIds = (roles ?? [])
-    .map((r) => (r as { profile_id: string }).profile_id)
-    .filter(Boolean);
-  if (profileIds.length === 0) return null;
-
-  const { data: extras, error: extrasErr } = await admin
-    .from("admin_contact_extras")
-    .select("profile_id, legacy_admin_id, ended_at, suspended_at")
-    .in("profile_id", profileIds);
-  if (extrasErr) {
-    logger.warn("approveCustomer", "admin_contact_extras lookup for auto-assign failed", { reason: extrasErr.message });
-    return null;
-  }
-  const candidateIds: string[] = [];
-  for (const e of (extras ?? [])) {
-    const row = e as {
-      legacy_admin_id: string | null;
-      ended_at: string | null;
-      suspended_at: string | null;
-    };
-    if (!row.legacy_admin_id) continue;
-    if (row.ended_at) continue;          // permanently left
-    if (row.suspended_at) continue;      // temporarily paused
-    candidateIds.push(row.legacy_admin_id);
-  }
-  if (candidateIds.length === 0) return null;
-
-  // Step 2 — count current customer load per legacy_admin_id (only
-  // currently-owned, active customers). Use a single query with the
-  // .in() filter + group it client-side (PostgREST has no GROUP BY in
-  // standard select; counting per id with .head + count would be N
-  // round-trips, which is wasteful for ~10 candidates).
-  const { data: owned, error: ownedErr } = await admin
-    .from("tb_users")
-    .select("adminIDSale")
-    .in("adminIDSale", candidateIds)
-    .eq("userActive", "1")
-    .eq("userStatus", "1");
-  if (ownedErr) {
-    logger.warn("approveCustomer", "tb_users load count for auto-assign failed", { reason: ownedErr.message });
-    // Fall through to picking the first candidate — better than no
-    // assignment at all.
-    return candidateIds[0] ?? null;
-  }
-
-  const counts = new Map<string, number>();
-  for (const id of candidateIds) counts.set(id, 0);
-  for (const r of (owned ?? [])) {
-    const sale = (r as { adminIDSale: string | null }).adminIDSale;
-    if (!sale) continue;
-    counts.set(sale, (counts.get(sale) ?? 0) + 1);
-  }
-
-  // Tie-broken by insertion order (the admin list order) — deterministic
-  // enough for round-robin semantics; no need for randomness when "fewest
-  // wins" already balances over time.
-  let winner: string | null = null;
-  let winnerCount = Number.POSITIVE_INFINITY;
-  for (const id of candidateIds) {
-    const c = counts.get(id) ?? 0;
-    if (c < winnerCount) {
-      winnerCount = c;
-      winner = id;
-    }
-  }
-  return winner;
-}
+// pickLeastLoadedSalesRep moved to lib/admin/assign-sales-rep.ts (P1-15) so the
+// register path (legacy-bridge-tb-users.ts) shares the same round-robin and a
+// new lead is OWNED at signup, not first at approval. Imported at top of file.
 
 /**
  * Notify the auto-assigned sales rep via SMS to their work phone (if any).

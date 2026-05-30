@@ -38,6 +38,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logger, redactPhone } from "@/lib/logger";
+import { pickLeastLoadedSalesRep } from "@/lib/admin/assign-sales-rep";
 
 const SCOPE = "legacy-bridge-tb-users";
 
@@ -168,6 +169,15 @@ export async function insertLegacyTbUserRow(
   // the user signs in via the legacy /member/login.php flow, which Pacred users
   // never use (they go through Supabase auth on /login). The bridge sign-in
   // (`pcs-legacy-bridge.ts`) operates the OTHER direction — legacy → Supabase.
+  //
+  // P1-15 (2026-05-31): assign a sales rep AT REGISTER (faithful to legacy
+  // check-otp-register.php L60-95). Before this, leads were rep-less until an
+  // admin approved them — breaking "ทีมเซลล์จะโทรหา" (the rep can't call a
+  // lead they don't yet own). The new customer is userActive='0' so it's not
+  // counted in the round-robin's own load tally. Best-effort: a null pick
+  // (no active rep) leaves adminIDSale='' and approveCustomer assigns later.
+  const assignedSalesRep = await pickLeastLoadedSalesRep(admin);
+
   const payload: Record<string, unknown> = {
     userID:               memberCode,
     userTel:              legacyTel,
@@ -197,6 +207,7 @@ export async function insertLegacyTbUserRow(
     userNote:             "",
     userLineIDOA:         "",
     companyCustomer:      "0",
+    adminIDSale:          assignedSalesRep ?? "",  // P1-15: rep owned at signup
   };
 
   const { error: insertErr } = await admin.from("tb_users").insert(payload);
