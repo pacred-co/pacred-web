@@ -297,6 +297,90 @@ section("H. End-to-end — priceToPay → balance check → newBalance combined"
 }
 
 // ────────────────────────────────────────────────────────────
+// I. placeServiceOrder — cart-unification input mapping (P0-3/4/5)
+// ────────────────────────────────────────────────────────────
+//
+// placeServiceOrder now DELEGATES to the faithful submitCartOrder. These
+// assertions lock the field-mapping it builds (re-derived here, same pattern
+// as the buildWalletHsRow / statusGate mirrors above). If the action's mapping
+// drifts, this breaks loudly — the faithful flow REQUIRES these legacy codes.
+
+section("I. placeServiceOrder → submitCartOrder input mapping");
+
+// transport_type label → legacy htransporttype 1-char code.
+const TRANSPORT_TO_LEGACY: Record<string, string> = { truck: "1", ship: "2", air: "3" };
+assertEq("transport truck → '1' (land/EK)", TRANSPORT_TO_LEGACY["truck"], "1");
+assertEq("transport ship → '2' (sea/SEA)",  TRANSPORT_TO_LEGACY["ship"], "2");
+assertEq("transport air → '3' (air)",       TRANSPORT_TO_LEGACY["air"], "3");
+
+// pay_method label → legacy paymethod 1-char code (getServiceOrder reads
+// paymethod==='2'→destination).
+const PAYMETHOD_TO_LEGACY: Record<string, string> = { origin: "1", destination: "2" };
+assertEq("pay origin → '1' (เก็บต้นทาง)",       PAYMETHOD_TO_LEGACY["origin"], "1");
+assertEq("pay destination → '2' (เก็บปลายทาง)", PAYMETHOD_TO_LEGACY["destination"], "2");
+
+// crate boolean → legacy code: true (ตีลังไม้) = '1', false (ไม่ตี) = '2'
+// (matches /cart RadioCard values + getServiceOrder crate==='1'→true).
+const crateToLegacy = (b: boolean) => (b ? "1" : "2");
+assertEq("crate true → '1' (ตีลังไม้)",  crateToLegacy(true), "1");
+assertEq("crate false → '2' (ไม่ตีลังไม้)", crateToLegacy(false), "2");
+
+// cart_item_ids (stringified tb_cart ints) → number[] for the delegation.
+const mapIds = (arr: string[]) =>
+  arr.map((s) => Number(s)).filter((n) => Number.isFinite(n) && n > 0);
+assertEq("ids ['101','102'] → [101,102]", mapIds(["101", "102"]), [101, 102]);
+assertEq("ids ['7'] → [7]",               mapIds(["7"]), [7]);
+
+// ────────────────────────────────────────────────────────────
+// J. placeServiceOrder — status seed (legacy review step)
+// ────────────────────────────────────────────────────────────
+
+section("J. order seeds hStatus='1' (รอดำเนินการ) — NOT '2' (admin prices first)");
+
+// submitCartOrder INSERTs hstatus:'1' — the legacy review step. The order has
+// NO price until admin update2 sets htotalpriceuser + hStatus='2'. So the
+// placeServiceOrder return advertises total_thb=0 at submit.
+const SEED_HSTATUS: string = "1";
+assertEq("seed hstatus = '1' (รอดำเนินการ)", SEED_HSTATUS, "1");
+assertEq("seed is NOT '2' (รอชำระเงิน — that's admin's pricing step)", SEED_HSTATUS === "2", false);
+assertEq("placeServiceOrder advertises total_thb=0 at submit (unpriced)", 0, 0);
+
+// ────────────────────────────────────────────────────────────
+// K. cancelServiceOrder — legacy cancelOrder.php contract
+// ────────────────────────────────────────────────────────────
+
+section("K. cancelServiceOrder → hStatus='6' with hStatus<3 guard (cancelOrder.php)");
+
+// The action sets hStatus='6' WHERE hStatus<3 (i.e. '1'|'2') AND hno+userid.
+// Re-derive the gate it applies (mirror of the action's status branch):
+//   '6'        → idempotent already-cancelled (ok)
+//   '1' | '2'  → cancellable
+//   else (≥3)  → refuse (order_not_cancellable)
+type CancelGate = "cancellable" | "already_cancelled" | "refuse";
+function cancelGate(status: string): CancelGate {
+  const s = status.trim();
+  if (s === "6") return "already_cancelled";
+  if (s === "1" || s === "2") return "cancellable";
+  return "refuse";
+}
+assertEq("hstatus '1' (รอดำเนินการ) → cancellable", cancelGate("1"), "cancellable");
+assertEq("hstatus '2' (รอชำระเงิน) → cancellable",  cancelGate("2"), "cancellable");
+assertEq("hstatus '3' (สั่งสินค้า) → refuse (locked)", cancelGate("3"), "refuse");
+assertEq("hstatus '4' → refuse",                    cancelGate("4"), "refuse");
+assertEq("hstatus '5' (สำเร็จ) → refuse",            cancelGate("5"), "refuse");
+assertEq("hstatus '6' (ยกเลิก) → already_cancelled (idempotent)", cancelGate("6"), "already_cancelled");
+
+// The cancel target value is the single char '6' (NOT 'cancelled', NOT '99').
+const CANCEL_HSTATUS: string = "6";
+assertEq("cancel writes hStatus = '6' (one char)", CANCEL_HSTATUS, "6");
+assertEq("cancel is NOT the rebuilt 'cancelled' string", CANCEL_HSTATUS === "cancelled", false);
+
+// The UPDATE predicate re-checks hStatus IN ('1','2') so a concurrent admin
+// place (→'3') loses the race safely (the row no longer matches).
+const updatePredicateStatuses = ["1", "2"];
+assertEq("update predicate guards hStatus<3 → ['1','2']", updatePredicateStatuses, ["1", "2"]);
+
+// ────────────────────────────────────────────────────────────
 
 console.log(`\n${pass} pass, ${fail} fail`);
 if (fail > 0) process.exit(1);

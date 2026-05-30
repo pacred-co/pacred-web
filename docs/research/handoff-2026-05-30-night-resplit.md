@@ -67,11 +67,13 @@ The recurring collision is service-orders + wallet + yuan, where a customer file
 
 ---
 
-## 4. The 3 เดฟ↔ภูม handshakes (the only coordination points)
+## 4. The 3 เดฟ↔ภูม handshakes — ✅ ALL RESOLVED 2026-05-30 in [ADR-0019](../decisions/0019-customer-backend-arch-decisions-2026-05-30.md)
 
-- **A — `[hNo]`/`[fNo]` detail-page id model.** เดฟ decides: retire the empty-UUID branch, make legacy numeric id canonical (closes P1-3 + unblocks P0-13/14). ภูม waits for this before the 5-tab `[hNo]` surgery. *(เดฟ: write the call into ADR or a one-paragraph note; ping ภูม.)*
-- **B — commission architecture.** เดฟ picks Path A (faithful `tb_user_sales`) + specs the earn-trigger; ภูม implements P1-5 on it. ภูม waits.
-- **C — `tb_users.userActive` value.** เดฟ's register-write (P1-16) + ภูม's pending-queue filter (P1-17) must agree on `''` for native signups — do it in one shared sitting, not two guesses.
+> **ภูม: these are no longer blockers — read ADR-0019 and proceed.**
+
+- **A — `[hNo]`/`[fNo]` detail-page id model** → ✅ **legacy `hNo`/`fNo` canonical; retire the rebuilt-UUID-first dual mode.** Read `tb_header_order`/`tb_forwarder` directly, full editor on the legacy path. **Unblocks P0-14 (render the form in legacy-view — it's now THE view) + P0-13 + P1-3.** (ADR-0019 D-A)
+- **B — commission architecture** → ✅ **Path A `tb_user_sales` canonical; retire rebuilt `sales_commissions`/`sales_payouts`.** Earn-trigger spec for ภูม P1-5 in ADR-0019 D-B (INSERT `tb_user_sales` on `fStatus→'7'` for the 4 agent codes — READ legacy `takePhoto.php`+`getListForwarder.php` for the codes + %, don't guess). (ADR-0019 D-B)
+- **C — `tb_users.userActive` value** → ✅ **native signups write `''` (legacy-faithful); queue filters `WHERE userActive=''`.** Pair: เดฟ P1-16 register-write `'0'→''`, ภูม P1-17 queue filter. Align the value in one sitting. (ADR-0019 D-C)
 
 ---
 

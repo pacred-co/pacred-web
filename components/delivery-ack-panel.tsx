@@ -4,8 +4,15 @@
  * U4-3a — Delivery acknowledgement panel (customer-self-serve).
  *
  * Renders on:
- *   /service-import/[fNo] when status='delivered'  + acknowledged_at IS NULL
- *   /service-order/[hNo]  when status='completed'  + acknowledged_at IS NULL
+ *   /service-import/[fNo] when status='delivered' + acknowledged_at IS NULL
+ *
+ * NOTE (2026-05-30): the /service-order (ฝากสั่ง) ack flow was REMOVED — legacy
+ * PCS has no customer-acknowledge-on-delivery for shop orders (admin flips
+ * hStatus→'5' via pcs-admin shops/update5.php; customer never confirms receipt).
+ * It was a Pacred-native enhancement writing the rebuilt empty `service_orders`
+ * table — a silent dead-write (Potemkin). Deferred to Phase C.
+ * ⚠️ The forwarder-side twin below is the SAME pattern (writes rebuilt
+ * `forwarders`); flagged for the same removal once forwarder.ts is collision-free.
  *
  * Pressing the button calls the matching action (forwarder vs order) which
  * stamps acknowledged_at (now) + optional note. Idempotent — re-press returns
@@ -16,15 +23,14 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { customerAcknowledgeForwarderDelivery } from "@/actions/forwarder";
-import { customerAcknowledgeServiceOrderDelivery } from "@/actions/service-order";
 
 type Props = {
-  kind:   "forwarder" | "service_order";
-  /** f_no for forwarder, h_no for service_order. */
+  kind:   "forwarder";
+  /** f_no for forwarder. */
   refNo:  string;
 };
 
-export function DeliveryAckPanel({ kind, refNo }: Props) {
+export function DeliveryAckPanel({ refNo }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [note, setNote] = useState("");
@@ -34,10 +40,10 @@ export function DeliveryAckPanel({ kind, refNo }: Props) {
   function fire() {
     setErr(null);
     startTransition(async () => {
-      const res =
-        kind === "forwarder"
-          ? await customerAcknowledgeForwarderDelivery({ f_no: refNo, note: note.trim() || undefined })
-          : await customerAcknowledgeServiceOrderDelivery({ h_no: refNo, note: note.trim() || undefined });
+      const res = await customerAcknowledgeForwarderDelivery({
+        f_no: refNo,
+        note: note.trim() || undefined,
+      });
       if (res.ok) {
         router.refresh();
       } else {

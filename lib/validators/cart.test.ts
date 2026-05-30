@@ -84,7 +84,9 @@ section("placeOrderSchema — required address + enum fields");
 // ────────────────────────────────────────────────────────────
 
 const validOrder = {
-  cart_item_ids:     ["00000000-0000-4000-8000-000000000001"],
+  // D1 cart unification (P0-3/4/5): cart ids are now stringified tb_cart
+  // integer ids (was rebuilt cart_items UUIDs).
+  cart_item_ids:     ["101"],
   warehouse_china:   "guangzhou" as const,
   transport_type:    "truck" as const,
   pay_method:        "origin" as const,
@@ -107,11 +109,15 @@ assertOk  ("pay_method=destination",      placeOrderSchema, { ...validOrder, pay
 assertOk  ("crate=true",                  placeOrderSchema, { ...validOrder, crate: true });
 assertOk  ("with ship_phone2",            placeOrderSchema, { ...validOrder, ship_phone2: "0822334455" });
 assertOk  ("with note_user",              placeOrderSchema, { ...validOrder, note_user: "ส่งบ้านพ่อ" });
-assertOk  ("multiple cart_item_ids",      placeOrderSchema, { ...validOrder, cart_item_ids: [
-  "00000000-0000-4000-8000-000000000001",
-  "00000000-0000-4000-8000-000000000002",
-  "00000000-0000-4000-8000-000000000003",
+assertOk  ("multiple cart_item_ids (numeric strings)", placeOrderSchema, { ...validOrder, cart_item_ids: [
+  "101",
+  "102",
+  "103",
 ]});
+// D1 cart unification: a rebuilt-style UUID is now rejected (ids are tb_cart ints).
+assertFail("UUID cart_item_id rejected",  placeOrderSchema, { ...validOrder, cart_item_ids: ["00000000-0000-4000-8000-000000000001"] });
+assertFail("non-numeric cart_item_id rejected", placeOrderSchema, { ...validOrder, cart_item_ids: ["abc"] });
+assertFail("empty cart_item_ids rejected", placeOrderSchema, { ...validOrder, cart_item_ids: [] });
 
 // ────────────────────────────────────────────────────────────
 section("placeOrderSchema — Thai phone regex (0\\d{8,9})");
