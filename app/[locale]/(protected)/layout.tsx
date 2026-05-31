@@ -150,6 +150,11 @@ const CSS_BUNDLE: string[] = [
 /** The legacy `member/include/all-script.php` JS bundle (L85-96), in order. */
 const JS_BUNDLE: string[] = [
   `${PCS}/js/vendors/js/vendors.min.js`,
+  // js.cookie.js MUST load before app.min.js — `app.min.js` L240 reads the
+  // `Cookies` global at init; loading it later (it used to sit after app.min.js)
+  // threw "ReferenceError: Cookies is not defined" on every protected page
+  // (same load-order class as the jQuery-before-vendors note below).
+  `${PCS}/js/js.cookie.js`,
   // headroom.min.js — Modern-Admin theme's `app.min.js` calls
   // `$(...).headroom()` on the navbar at init; legacy PCS loaded the plugin
   // inline on each member page, but the bundle list never picked it up. The
@@ -160,7 +165,6 @@ const JS_BUNDLE: string[] = [
   `${PCS}/js/core/app-menu.min.js`,
   `${PCS}/js/core/app.min.js`,
   `${PCS}/js/tam-it.js`,
-  `${PCS}/js/js.cookie.js`,
   `${PCS}/plugins/sweetalert/js/sweetalert2.all.min.js`,
   `${PCS}/plugins/sweetalert/js/polyfill.min.js`,
   `${PCS}/plugins/magnific-popup/dist/jquery.magnific-popup.min.js`,
