@@ -9,8 +9,9 @@ import { notify } from "@/lib/notifications/templates";
 import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
 import { fireUserSalesEarnTriggerOnDelivery } from "./earn-trigger-tb-user-sales";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
-import { getWalletAvailableBalance } from "@/lib/wallet/balance";
-import { getCargoBillingGate } from "@/lib/forwarder/billing-gate";
+// NOTE: getWalletAvailableBalance + getCargoBillingGate were only used by the
+// now-tombstoned adminMarkForwarderPaid (rebuilt-table dead-write). The faithful
+// forwarder-payment lives in actions/admin/pay-user.ts. Imports removed 2026-05-31.
 import { logger, redactId } from "@/lib/logger";
 import { getAdminRoles } from "@/lib/auth/require-admin";
 import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
@@ -261,228 +262,37 @@ export async function adminMarkForwarderPaid(
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   const d = parsed.data;
 
-  return withAdmin<MarkForwarderPaidData>(["super", "accounting"], async ({ adminId }) => {
-    const admin = createAdminClient();
-
-    const { data: forwarder, error: forwarderErr } = await admin
-      .from("forwarders")
-      .select("id, profile_id, f_no, status, total_price")
-      .eq("f_no", d.f_no)
-      .maybeSingle<{ id: string; profile_id: string; f_no: string; status: string; total_price: number }>();
-    if (forwarderErr) {
-      console.error("[adminPayForwarder forwarder lookup] f_no=", d.f_no, { code: forwarderErr.code, message: forwarderErr.message });
-      return { ok: false, error: `db_error:${forwarderErr.code}` };
-    }
-    if (!forwarder) return { ok: false, error: "not_found" };
-
-    if (forwarder.status === "cancelled") {
-      return { ok: false, error: "ฝากนำเข้าถูกยกเลิกแล้ว — บันทึกชำระไม่ได้" };
-    }
-    if (forwarder.status === "delivered") {
-      return { ok: false, error: "ฝากนำเข้าส่งสำเร็จแล้ว — ไม่ต้องบันทึกชำระซ้ำ" };
-    }
-    // pending_payment is the canonical pre-payment state. We allow other
-    // pre-delivered statuses too in case the row was status-flipped without
-    // payment recorded (legacy/recovery path).
-
-    // U1-3 arrival→billing gate. Post-arrival statuses must have a closed
-    // container linked (final CBM measured) before any wallet debit lands,
-    // per datanew L-3 (MOMO vs PCS ~31% CBM disagreement). The bypass flag
-    // is for the admin-only "I confirmed CBM out-of-band" path — logged
-    // separately so reports can flag override frequency. The gate itself
-    // is read-only; the bypass uses the same in-flight forwarder row.
-    if (!d.allow_unverified_billing) {
-      const gate = await getCargoBillingGate(admin, forwarder.f_no);
-      if (gate.blocked) {
-        const errMsg =
-          gate.reason === "no_container_linked"
-            ? `ฝากนำเข้านี้ยังไม่ผูกตู้ — ต้องผูก cargo container ก่อนบันทึกชำระหลังถึงไทย (${forwarder.f_no})`
-            : `ตู้ยังไม่ปิด — ต้องรอ "ตัดตู้" (สถานะตู้ปัจจุบัน: ${gate.container_status ?? "?"}) ก่อนบันทึกชำระตามค่า CBM จริง · ถ้ายืนยัน CBM นอกระบบแล้ว กดยืนยันด้วย allow_unverified_billing`;
-        // Best-effort audit before bailing — failure to log shouldn't block.
-        await logAdminAction(
-          adminId,
-          "forwarder.pay_blocked_by_billing_gate",
-          "forwarder",
-          forwarder.id,
-          {
-            f_no:             forwarder.f_no,
-            forwarder_status: forwarder.status,
-            reason:           gate.reason,
-            container_status: gate.container_status,
-          },
-        );
-        return { ok: false, error: errMsg };
-      }
-    }
-
-    // Idempotency check — §0c CRITICAL: must refuse-to-proceed on DB error.
-    // If Supabase fails silently (PgBouncer timeout / transient) and we treat
-    // it as "no existing tx", we'd INSERT a duplicate → DOUBLE-CHARGE the
-    // customer's wallet. Errors here MUST bubble up; the 23505 partial-unique
-    // index (0061) is the only safety net we have and it can't catch races
-    // through silent-null returns. Wave 19 BUG#1 sweep added the destructure.
-    const { data: existingTx, error: existingTxErr } = await admin
-      .from("wallet_transactions")
-      .select("id")
-      .eq("reference_type", "forwarder")
-      .eq("reference_id",   forwarder.f_no)
-      .eq("kind",           "import_payment")
-      .eq("status",         "completed")
-      .maybeSingle<{ id: string }>();
-    if (existingTxErr) {
-      console.error("[forwarders.adminPayForwarder] idempotency lookup failed", {
-        f_no: forwarder.f_no,
-        code: existingTxErr.code,
-        message: existingTxErr.message,
-        details: existingTxErr.details,
-      });
-      // REFUSE the payment — admin should retry. Better to error than risk
-      // a double-charge from a silent null.
-      return { ok: false, error: `ตรวจสอบรายการชำระเดิมไม่สำเร็จ — ลองใหม่อีกครั้ง (db:${existingTxErr.code})` };
-    }
-    if (existingTx) {
-      // Already paid — nudge status forward if still pending_payment
-      if (forwarder.status === "pending_payment") {
-        await admin
-          .from("forwarders")
-          .update({ status: "shipped_china", admin_id_update: adminId })
-          .eq("id", forwarder.id);
-      }
-      return { ok: true, data: { tx_id: existingTx.id, already_paid: true } };
-    }
-
-    const totalThb = Number(forwarder.total_price);
-    if (!(totalThb > 0)) return { ok: false, error: "total_price ไม่ถูกต้อง — บันทึกชำระไม่ได้" };
-
-    // Balance check (skip if admin overrides via cash/bank-direct path).
-    // Pending-aware available balance — the raw wallet.balance column
-    // (0007 trigger) is blind to the customer's open pending debits (§H-1).
-    if (!d.allow_overdraw) {
-      const available = await getWalletAvailableBalance(admin, forwarder.profile_id);
-      if (available === null) {
-        return { ok: false, error: "ตรวจสอบยอด wallet ไม่สำเร็จ — ลองใหม่อีกครั้ง" };
-      }
-      if (available < totalThb) {
-        return {
-          ok: false,
-          error: `ยอด wallet ไม่พอ (มี ฿${available.toLocaleString()} ต้อง ฿${totalThb.toLocaleString()}) — ถ้ารับเงินสด/โอนตรง กดยืนยันด้วย allow_overdraw`,
-        };
-      }
-    }
-
-    // Insert debit wallet_tx (admin_id stamped — distinguishes from
-    // customer self-pay which uses null)
-    const { data: tx, error: txErr } = await admin
-      .from("wallet_transactions")
-      .insert({
-        profile_id:     forwarder.profile_id,
-        bucket:         "main",
-        amount:         -totalThb,
-        kind:           "import_payment",
-        status:         "completed",
-        reference_type: "forwarder",
-        reference_id:   forwarder.f_no,
-        admin_id:       adminId,
-        note:           `ชำระค่าฝากนำเข้า ${forwarder.f_no}${d.allow_overdraw ? " (admin override — รับเงินสด/โอนตรง)" : ""}`,
-      })
-      .select("id")
-      .single<{ id: string }>();
-    if (txErr) {
-      // 23505 = the 0061 partial-unique guard (wallet_tx_import_payment_uniq)
-      // caught a concurrent double-debit. Re-SELECT the winning tx + nudge
-      // status forward — mirrors the idempotency branch above.
-      if (txErr.code === "23505" || /duplicate|unique/i.test(txErr.message)) {
-        const { data: raced, error: racedErr } = await admin
-          .from("wallet_transactions")
-          .select("id")
-          .eq("reference_type", "forwarder")
-          .eq("reference_id", forwarder.f_no)
-          .eq("kind", "import_payment")
-          .eq("status", "completed")
-          .maybeSingle<{ id: string }>();
-        if (racedErr) {
-          console.error("[forwarders.adminPayForwarder] post-23505 raced lookup failed", {
-            f_no: forwarder.f_no,
-            code: racedErr.code,
-            message: racedErr.message,
-          });
-          // Fall through to the original 23505 wallet-insert error — at least
-          // the operator sees a real db error instead of "lucky" success.
-        }
-        if (raced) {
-          if (forwarder.status === "pending_payment") {
-            await admin
-              .from("forwarders")
-              .update({ status: "shipped_china", admin_id_update: adminId })
-              .eq("id", forwarder.id);
-          }
-          return { ok: true, data: { tx_id: raced.id, already_paid: true } };
-        }
-      }
-      return { ok: false, error: `wallet insert: ${txErr.message}` };
-    }
-
-    // Status flip pending_payment → shipped_china (matches customer flow)
-    const { error: fwdErr } = await admin
-      .from("forwarders")
-      .update({
-        status:           "shipped_china",
-        admin_id_update:  adminId,
-        date_shipped_china: new Date().toISOString(),
-      })
-      .eq("id", forwarder.id);
-    if (fwdErr) {
-      // Don't auto-rollback the wallet tx — admin can resolve manually +
-      // we surface the error so the audit trail is complete.
-      return {
-        ok: false,
-        error: `forwarder update failed AFTER wallet debit (tx ${tx.id} stays): ${fwdErr.message}`,
-      };
-    }
-
-    await logAdminAction(adminId, "forwarder.mark_paid", "forwarder", forwarder.id, {
-      f_no:                     forwarder.f_no,
-      total_thb:                totalThb,
-      tx_id:                    tx.id,
-      allow_overdraw:           !!d.allow_overdraw,
-      allow_unverified_billing: !!d.allow_unverified_billing,
-      before:                   { status: forwarder.status },
-      after:                    { status: "shipped_china" },
-    });
-
-    // U1-3 distinct audit when admin used the gate override — separate
-    // event makes it cheap to query "how often did the team bypass the
-    // arrival→billing gate?" for governance reporting.
-    if (d.allow_unverified_billing) {
-      await logAdminAction(
-        adminId,
-        "forwarder.pay_with_unverified_billing_override",
-        "forwarder",
-        forwarder.id,
-        {
-          f_no:             forwarder.f_no,
-          total_thb:        totalThb,
-          tx_id:            tx.id,
-          forwarder_status: forwarder.status,
-        },
-      );
-    }
-
-    void sendNotification(forwarder.profile_id, {
-      category: "forwarder",
-      severity: "success",
-      title:    `ชำระเงินสำเร็จ — ${forwarder.f_no}`,
-      body:     `รับเงิน ฿${totalThb.toLocaleString()} แล้ว — ระบบเริ่มดำเนินการสั่งสินค้า`,
-      link_href: `/service-import/${forwarder.f_no}`,
-      reference_type: "forwarder",
-      reference_id:   forwarder.id,
-    });
-
-    revalidatePath("/admin/forwarders");
-    revalidatePath(`/admin/forwarders/${forwarder.f_no}`);
-    revalidatePath("/admin/wallet");
-    return { ok: true, data: { tx_id: tx.id, already_paid: false } };
-  });
+  // 🪦 TOMBSTONE 2026-05-31 (Theme A · เดฟ · owner "ปิด money dead-write")
+  // ---------------------------------------------------------------------------
+  // The previous body was a money DEAD-WRITE: it read the REBUILT, prod-empty
+  // `forwarders` table (→ `not_found` on every one of the 8,898 customers'
+  // real `tb_forwarder` rows) and debited the REBUILT, prod-empty
+  // `wallet_transactions` ledger. On prod it could never run; if a future
+  // `[fNo]` repoint ever fed it a real row, it would debit the WRONG ledger
+  // (the migrated balances live in `tb_wallet`), i.e. silently credit nothing.
+  //
+  // The FAITHFUL admin forwarder-payment already exists AND is reachable:
+  //   `adminPayForwardersOnBehalf` (actions/admin/pay-user.ts) — debits the
+  //   legacy `tb_wallet`, writes the settled `tb_wallet_hs` row
+  //   (type='4' / typenew='6' / typeservice='2', reforder=fID), flips
+  //   `tb_forwarder.fstatus` 5→6 (+ fdatestatus6/fdateadminstatus), with
+  //   idempotency + rollback. Faithful to legacy pay-users.php L463-469.
+  //   Wired to /admin/wallet/pay-user AND (2026-05-31) the [fNo] detail
+  //   payment panel (TbForwarderPaymentPanel → adminPayForwardersOnBehalf).
+  //
+  // Keeping a SECOND money path through the rebuilt tables = double-spend risk
+  // + the exact dead-write landmine the 2026-05-31 re-sweep flagged. So this is
+  // now a HARD NO-OP that points the operator at the faithful path. The
+  // signature is kept only so the dead rebuilt-branch importer
+  // (`[fNo]/update-form.tsx`, which renders solely on the empty-UUID branch and
+  // never on real rows) still compiles.
+  void d;
+  return {
+    ok: false,
+    error:
+      "ปิดการใช้งานแล้ว — ใช้ปุ่ม 'บันทึกชำระเงิน (ตัดกระเป๋า)' ในหน้ารายละเอียดฝากนำเข้า " +
+      "หรือหน้า 'ตัดเงินลูกค้า' (/admin/wallet/pay-user) ซึ่งเขียน tb_wallet / tb_wallet_hs จริง",
+  };
 }
 
 // ── Bulk status update — tb_forwarder (Wave 5 P0) ────────────────────────────

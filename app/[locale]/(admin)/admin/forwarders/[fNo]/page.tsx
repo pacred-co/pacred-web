@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { AdminForwarderUpdateForm } from "./update-form";
 import { TbForwarderActionPanel } from "./tb-action-panel";
+import { TbForwarderPaymentPanel } from "./tb-payment-panel";
 import { DriverAssignForm } from "./driver-assign-form";
 import { CostAdjustmentsPanel, type CostAdjustmentRow } from "./cost-adjustments-panel";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
@@ -379,6 +380,21 @@ async function renderLegacyForwarderView(
     userPicture: string | null; adminIDSale: string | null;
   } | null;
 
+  // Theme A (2026-05-31): wallet balance for the payment panel (display only —
+  // adminPayForwardersOnBehalf re-reads + is authoritative). tb_wallet is
+  // lowercase-columns (wallettotal) keyed by the legacy userid.
+  const { data: walletRow, error: walletErr } = await admin
+    .from("tb_wallet")
+    .select("wallettotal")
+    .eq("userid", r.userid)
+    .maybeSingle<{ wallettotal: number | string | null }>();
+  if (walletErr) {
+    console.error(`[tb_wallet detail] failed`, { code: walletErr.code, message: walletErr.message, userid: r.userid });
+  }
+  const walletBalance = Number(walletRow?.wallettotal ?? 0);
+  // Payable = legacy gate `.or("fstatus.eq.5,fcredit.eq.1")` (รอชำระเงิน OR credit).
+  const isPayable = r.fstatus === "5" || (r.fcredit ?? "").trim() === "1";
+
   // Resolve cover image — shop-spawned rows may have a live alicdn URL
   // (https://...), legacy local filename (PCS prefix), or empty.
   const coverHref = r.fcover && r.fcover.trim() !== ""
@@ -686,6 +702,23 @@ async function renderLegacyForwarderView(
               )}
             </dl>
           </section>
+
+          {/* Payment panel — Theme A (2026-05-31 · เดฟ): faithful single-row
+              "record payment (debit wallet)" routed through the SAME tested
+              action as /admin/wallet/pay-user (adminPayForwardersOnBehalf →
+              tb_wallet + tb_wallet_hs + fstatus 5→6). Replaces the tombstoned
+              rebuilt-table dead-write. Only shows when payable (fStatus=5 /
+              fCredit=1). */}
+          {isPayable && (
+            <TbForwarderPaymentPanel
+              fId={r.id}
+              userId={r.userid}
+              customerName={`คุณ${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim()}
+              amountEstimate={Number(r.ftotalprice ?? 0)}
+              walletBalance={walletBalance}
+              isCredit={(r.fcredit ?? "").trim() === "1"}
+            />
+          )}
 
           {/* Action panel — Wave 23 P0 (2026-05-27 ภูม flag · close
               workflow gap): status + cabinet + tracking-TH + note + save
