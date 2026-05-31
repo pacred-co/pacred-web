@@ -13,11 +13,13 @@
  * Pacred UI (Tailwind) per AGENTS.md §0a — legacy logic, our design.
  */
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   adminPickForwarderAddress,
   adminUpdateForwarderTransportType,
+  adminReassignForwarderOwner,
+  adminUpdateForwarderCover,
 } from "@/actions/admin/forwarders-field-edits";
 
 export type SavedAddressOption = {
@@ -54,6 +56,10 @@ export function TbForwarderEditPanel(p: Props) {
   );
   // transport
   const [transport, setTransport] = useState<TransportType>(p.currentTransportType);
+  // owner reassign
+  const [newOwner, setNewOwner] = useState<string>("");
+  // cover upload
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>, okText: string) {
     setMsg(null);
@@ -76,6 +82,26 @@ export function TbForwarderEditPanel(p: Props) {
     if (transport === p.currentTransportType) { setMsg({ kind: "err", text: "ไม่มีการเปลี่ยนแปลง" }); return; }
     if (!window.confirm("เปลี่ยนประเภทขนส่ง ? (ราคาจะไม่อัพเดทอัตโนมัติ — กด 'แก้ไขขนาด/น้ำหนัก' เพื่อคำนวณเรทใหม่)")) return;
     run(() => adminUpdateForwarderTransportType({ fId: p.fId, transportType: transport }), "เปลี่ยนประเภทขนส่งสำเร็จ");
+  }
+
+  function onReassign() {
+    const code = newOwner.trim().toUpperCase();
+    if (!code) { setMsg({ kind: "err", text: "กรอกรหัสลูกค้าปลายทาง" }); return; }
+    if (!window.confirm(
+      `⚠ ย้ายรายการฝากนำเข้านี้ไปเป็นของลูกค้า "${code}" ?\n\n` +
+      `การเงิน/ที่อยู่/รายการสินค้าจะติดไปด้วย · ที่อยู่จัดส่งจะยังเป็นของเดิม (ควรเลือกที่อยู่ใหม่หลังย้าย)\n` +
+      `ทำเฉพาะกรณีสร้างผิดบัญชีเท่านั้น`,
+    )) return;
+    run(() => adminReassignForwarderOwner({ fId: p.fId, newUserId: code }), `ย้ายเจ้าของไปยัง ${code} สำเร็จ`);
+  }
+
+  function onUploadCover() {
+    const file = coverInputRef.current?.files?.[0];
+    if (!file) { setMsg({ kind: "err", text: "กรุณาเลือกไฟล์รูป" }); return; }
+    const fd = new FormData();
+    fd.append("fId", String(p.fId));
+    fd.append("file", file);
+    run(() => adminUpdateForwarderCover(fd), "อัปโหลดรูปปกสำเร็จ");
   }
 
   return (
@@ -150,6 +176,58 @@ export function TbForwarderEditPanel(p: Props) {
           ⚠ เปลี่ยนแล้วราคาไม่อัพเดทอัตโนมัติ — กด <b>“แก้ไขขนาด/น้ำหนัก”</b> เพื่อคำนวณเรทใหม่
         </p>
       </div>
+
+      {/* Cover image (update_fCover) */}
+      <div className="space-y-2 border-t border-border pt-3">
+        <label htmlFor="te_cover" className="block text-xs font-medium text-muted">
+          เปลี่ยนรูปปกสินค้า (fCover)
+        </label>
+        <input
+          id="te_cover"
+          ref={coverInputRef}
+          type="file"
+          accept="image/png,image/jpeg"
+          disabled={pending}
+          className="w-full text-xs file:mr-2 file:rounded-md file:border-0 file:bg-primary-50 file:px-3 file:py-1.5 file:text-primary-700 file:text-xs disabled:opacity-60"
+        />
+        <button
+          type="button"
+          onClick={onUploadCover}
+          disabled={pending}
+          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm hover:bg-surface-alt disabled:opacity-50"
+        >
+          🖼️ อัปโหลดรูปปก
+        </button>
+      </div>
+
+      {/* Owner reassign (update_fUserID) — sensitive, data-fix only */}
+      <details className="border-t border-border pt-3">
+        <summary className="cursor-pointer text-xs font-medium text-red-700 select-none">
+          ⚠ ย้ายเจ้าของรายการ (เฉพาะกรณีสร้างผิดบัญชี)
+        </summary>
+        <div className="mt-2 space-y-2">
+          <input
+            type="text"
+            value={newOwner}
+            onChange={(e) => setNewOwner(e.target.value)}
+            disabled={pending}
+            maxLength={10}
+            placeholder="รหัสลูกค้าปลายทาง เช่น PR1234"
+            className={`${INPUT_CLS} font-mono`}
+          />
+          <button
+            type="button"
+            onClick={onReassign}
+            disabled={pending || !newOwner.trim()}
+            className="w-full rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 font-medium hover:bg-red-100 disabled:opacity-50"
+          >
+            🔀 ย้ายเจ้าของ
+          </button>
+          <p className="text-[10px] text-muted">
+            การเงิน/รายการสินค้าจะติดไปด้วย · ที่อยู่จัดส่งยังเป็นของเดิม — เลือกที่อยู่ใหม่หลังย้าย
+          </p>
+        </div>
+      </details>
 
       {msg && (
         <div className={`rounded-md border px-3 py-2 text-xs ${
