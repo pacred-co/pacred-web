@@ -4,29 +4,41 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import {
   ChevronRight, Home, Megaphone, MapPin, Wallet, Briefcase,
-  Calendar, Pause, CheckCircle2, Archive,
+  Calendar, CheckCircle2, Archive, Users, FileText, Clock,
 } from "lucide-react";
 import {
-  PostingStatusToggle, AddApplicantInline, ApplicantActions,
+  postCompanyLabel, postAdminTypeLabel, postDepartmentLabel, postSectionLabel,
+  postingIsActive,
+} from "../../_legacy-labels";
+import {
+  DeletePostingButton, AddApplicantInline, ApplicantActions,
 } from "./posting-actions";
 
+/**
+ * D1 faithful port of post-job-hs.php detail — reads the migrated legacy
+ * `tb_post_job` row. The applicant pipeline below is a Pacred enhancement
+ * (legacy has no applicant table) — bannered as such.
+ */
+
 type Stage = "applied" | "screening" | "interviewing" | "offered" | "hired" | "rejected";
-type Status = "draft" | "open" | "paused" | "closed";
 
 type Posting = {
-  id: string;
-  slug: string;
-  title: string;
-  status: Status;
-  openings_count: number;
-  salary_range_text: string | null;
-  location: string | null;
+  id: number;
+  companytype: string;
+  admintype: string;
+  department: string;
+  section: string;
+  jobtitle: string;
+  amount: number;
+  salary: string | null;
   description: string | null;
-  employment_type: string;
-  posted_at: string | null;
-  closed_at: string | null;
-  created_at: string;
-  position: { name: string; section: { name: string; branch: { name: string; color_tone: string } | null } | { name: string; branch: { name: string; color_tone: string } | null }[] | null } | { name: string; section: { name: string; branch: { name: string; color_tone: string } | null } | { name: string; branch: { name: string; color_tone: string } | null }[] | null }[] | null;
+  qualifications: string | null;
+  welfarebenefit: string | null;
+  workingtime: string | null;
+  startdate: string | null;
+  enddate: string | null;
+  admincreate: string | null;
+  date: string | null;
 };
 type Applicant = {
   id: string;
@@ -46,16 +58,6 @@ type Applicant = {
   hired_at: string | null;
 };
 
-const STATUS_LABEL: Record<Status, { label: string; cls: string; Icon: typeof CheckCircle2 }> = {
-  draft:  { label: "ร่าง",   cls: "bg-gray-50 text-gray-700 border-gray-200", Icon: Archive },
-  open:   { label: "เปิดรับ", cls: "bg-emerald-500 text-white border-emerald-600", Icon: CheckCircle2 },
-  paused: { label: "พักรับ", cls: "bg-amber-500 text-white border-amber-600", Icon: Pause },
-  closed: { label: "ปิดรับ", cls: "bg-red-500 text-white border-red-600", Icon: Archive },
-};
-const TYPE_LABEL: Record<string, string> = {
-  full_time: "ประจำ", probation: "ทดลองงาน", contract: "สัญญาจ้าง",
-  daily: "รายวัน", intern: "ฝึกงาน", partner: "พาร์ทเนอร์",
-};
 const SOURCE_LABEL: Record<string, string> = {
   walk_in: "Walk-in", website: "เว็บไซต์", line: "LINE OA",
   facebook: "Facebook", referral: "เพื่อนแนะนำ", jobsdb: "JobsDB", other: "อื่นๆ",
@@ -73,37 +75,34 @@ const STAGE_ORDER: Stage[] = ["applied", "screening", "interviewing", "offered",
 export default async function PostingDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin();
   const { id } = await params;
+  const numericId = Number(id);
+  if (!Number.isInteger(numericId) || numericId <= 0) notFound();
   const admin = createAdminClient();
 
   const [postingRes, applicantsRes] = await Promise.all([
     admin
-      .from("job_postings")
-      .select(`
-        id, slug, title, status, openings_count, salary_range_text, location, description, employment_type,
-        posted_at, closed_at, created_at,
-        position:org_positions!position_id (
-          name,
-          section:org_sections!section_id (
-            name,
-            branch:org_branches!branch_id ( name, color_tone )
-          )
-        )
-      `)
-      .eq("id", id)
+      .from("tb_post_job")
+      .select("id, companytype, admintype, department, section, jobtitle, amount, salary, description, qualifications, welfarebenefit, workingtime, startdate, enddate, admincreate, date")
+      .eq("id", numericId)
       .maybeSingle(),
     admin
       .from("job_applicants")
       .select("id, first_name, last_name, nickname, phone, email, source, source_note, applied_at, stage, notes, interview_scheduled_at, interview_location, rejected_reason, hired_at")
-      .eq("posting_id", id)
+      .eq("posting_id", numericId)
       .order("applied_at", { ascending: false }),
   ]);
 
+  if (postingRes.error) {
+    console.error(`[tb_post_job detail] failed`, { code: postingRes.error.code, message: postingRes.error.message });
+    throw new Error("ไม่สามารถโหลดประกาศได้");
+  }
   if (!postingRes.data) notFound();
-  const posting = postingRes.data as unknown as Posting;
-  const pos = Array.isArray(posting.position) ? posting.position[0] ?? null : posting.position;
-  const sec = pos?.section ? (Array.isArray(pos.section) ? pos.section[0] ?? null : pos.section) : null;
-  const br  = sec?.branch  ? (Array.isArray(sec.branch)  ? sec.branch[0]  ?? null : sec.branch)  : null;
+  const posting = postingRes.data as Posting;
+  const active = postingIsActive(posting.startdate, posting.enddate);
 
+  if (applicantsRes.error) {
+    console.error(`[job_applicants list] failed`, { code: applicantsRes.error.code, message: applicantsRes.error.message });
+  }
   const applicants = (applicantsRes.data ?? []) as Applicant[];
 
   // Group by stage
@@ -114,9 +113,11 @@ export default async function PostingDetailPage({ params }: { params: Promise<{ 
   const totalApplicants = applicants.length;
   const inPipeline = applicants.filter((a) => !["hired", "rejected"].includes(a.stage)).length;
   const hiredCount = byStage.get("hired")!.length;
-  const fillRatio = posting.openings_count > 0 ? Math.min(100, (hiredCount / posting.openings_count) * 100) : 0;
+  const fillRatio = posting.amount > 0 ? Math.min(100, (hiredCount / posting.amount) * 100) : 0;
 
-  const cfg = STATUS_LABEL[posting.status];
+  const cfg = active
+    ? { label: "กำลังประกาศ", cls: "bg-emerald-500 text-white border-emerald-600", Icon: CheckCircle2 }
+    : { label: "หมดเวลาแล้ว", cls: "bg-red-500 text-white border-red-600", Icon: Archive };
 
   return (
     <main className="p-4 lg:p-6 space-y-5">
@@ -127,9 +128,9 @@ export default async function PostingDetailPage({ params }: { params: Promise<{ 
         <ChevronRight className="w-3 h-3" />
         <Link href="/admin/hr" className="hover:text-primary-600">ฝ่ายทรัพยากรบุคคล</Link>
         <ChevronRight className="w-3 h-3" />
-        <Link href="/admin/hr/recruitment" className="hover:text-primary-600">สรรหา</Link>
+        <Link href="/admin/hr/recruitment" className="hover:text-primary-600">ลงประกาศรับสมัครงาน</Link>
         <ChevronRight className="w-3 h-3" />
-        <span className="text-foreground font-medium truncate max-w-[300px]">{posting.title}</span>
+        <span className="text-foreground font-medium truncate max-w-[300px]">{posting.jobtitle}</span>
       </nav>
 
       {/* Header */}
@@ -148,37 +149,38 @@ export default async function PostingDetailPage({ params }: { params: Promise<{ 
                     {cfg.label}
                   </span>
                   <span className="rounded-full border border-white/30 bg-white/10 backdrop-blur-sm px-2 py-0.5 text-[10px] font-medium">
-                    {TYPE_LABEL[posting.employment_type] ?? posting.employment_type}
+                    {postCompanyLabel(posting.companytype)}
+                  </span>
+                  <span className="rounded-full border border-white/30 bg-white/10 backdrop-blur-sm px-2 py-0.5 text-[10px] font-medium">
+                    {postAdminTypeLabel(posting.admintype)}
                   </span>
                   <span className="rounded-full border border-white/30 bg-white/10 backdrop-blur-sm px-2 py-0.5 text-[10px] font-bold">
-                    รับ {posting.openings_count} คน
+                    รับ {posting.amount} อัตรา
                   </span>
                 </div>
-                <h1 className="text-xl sm:text-2xl font-bold">{posting.title}</h1>
+                <h1 className="text-xl sm:text-2xl font-bold">{posting.jobtitle}</h1>
                 <div className="mt-1 flex flex-wrap items-center gap-3 text-xs opacity-90">
-                  {pos?.name && (
-                    <span className="inline-flex items-center gap-1">
-                      <Briefcase className="w-3 h-3" />
-                      {br?.name ? `${br.name} · ` : ""}{sec?.name ? `${sec.name} · ` : ""}{pos.name}
-                    </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Briefcase className="w-3 h-3" />
+                    {postDepartmentLabel(posting.companytype, posting.department)} · {postSectionLabel(posting.companytype, posting.section)}
+                  </span>
+                  {posting.salary && (
+                    <span className="inline-flex items-center gap-1"><Wallet className="w-3 h-3" /> {posting.salary}</span>
                   )}
-                  {posting.salary_range_text && (
-                    <span className="inline-flex items-center gap-1"><Wallet className="w-3 h-3" /> {posting.salary_range_text}</span>
-                  )}
-                  {posting.location && (
-                    <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" /> {posting.location}</span>
-                  )}
-                  {posting.posted_at && (
+                  {posting.startdate && posting.enddate && (
                     <span className="inline-flex items-center gap-1">
                       <Calendar className="w-3 h-3" />
-                      ลง {new Date(posting.posted_at).toLocaleDateString("th-TH")}
+                      {new Date(posting.startdate).toLocaleDateString("th-TH")} ถึง {new Date(posting.enddate).toLocaleDateString("th-TH")}
                     </span>
+                  )}
+                  {posting.admincreate && (
+                    <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" /> โดย {posting.admincreate}</span>
                   )}
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <PostingStatusToggle postingId={posting.id} status={posting.status} />
+              <DeletePostingButton postingId={posting.id} />
               <Link
                 href="/admin/hr/recruitment"
                 className="rounded-lg bg-white/15 backdrop-blur-sm border border-white/20 px-3 py-2 text-xs font-medium hover:bg-white/25"
@@ -191,7 +193,7 @@ export default async function PostingDetailPage({ params }: { params: Promise<{ 
           {/* Progress bar */}
           <div className="rounded-lg bg-white/10 backdrop-blur-sm p-3 space-y-1.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold opacity-90">รับแล้ว {hiredCount} / {posting.openings_count} คน</span>
+              <span className="font-semibold opacity-90">รับแล้ว {hiredCount} / {posting.amount} อัตรา</span>
               <span className="opacity-80">ผู้สมัครรวม {totalApplicants} · ในกระบวนการ {inPipeline}</span>
             </div>
             <div className="h-2 rounded-full bg-white/15 overflow-hidden">
@@ -201,13 +203,21 @@ export default async function PostingDetailPage({ params }: { params: Promise<{ 
         </div>
       </div>
 
-      {/* Description */}
-      {posting.description && (
-        <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
-          <h2 className="font-bold text-sm text-foreground mb-2">รายละเอียดงาน</h2>
-          <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{posting.description}</p>
-        </div>
-      )}
+      {/* Posting full text (legacy fields) */}
+      <div className="grid gap-3 md:grid-cols-2">
+        <DetailCard icon={FileText} title="รายละเอียดงาน" body={posting.description} />
+        <DetailCard icon={Users} title="คุณสมบัติผู้สมัคร" body={posting.qualifications} />
+        <DetailCard icon={Wallet} title="สวัสดิการ" body={posting.welfarebenefit} />
+        <DetailCard icon={Clock} title="เวลาทำงาน" body={posting.workingtime} />
+      </div>
+
+      {/* Pacred-original ATS banner */}
+      <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-xs text-amber-800 flex items-start gap-2">
+        <Users className="w-4 h-4 mt-0.5 shrink-0" />
+        <span>
+          <b>ระบบติดตามผู้สมัคร (ส่วนเสริม Pacred)</b> — legacy PCS เก็บเฉพาะตัวประกาศ ไม่มีตารางผู้สมัคร · ส่วนนี้ Pacred เพิ่มให้ HR คัดเลือก-นัดสัมภาษณ์-รับเข้าทำงาน
+        </span>
+      </div>
 
       {/* Inline add applicant */}
       <AddApplicantInline postingId={posting.id} />
@@ -216,7 +226,7 @@ export default async function PostingDetailPage({ params }: { params: Promise<{ 
       {STAGE_ORDER.map((s) => {
         const arr = byStage.get(s)!;
         const info = STAGE_INFO[s];
-        if (arr.length === 0 && (s === "rejected" || s === "hired")) return null;   // hide empty terminal columns
+        if (arr.length === 0 && (s === "rejected" || s === "hired")) return null;
         return (
           <section key={s} className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
             <header className="flex items-center justify-between px-5 py-3 bg-surface-alt/50 border-b border-border">
@@ -280,8 +290,19 @@ export default async function PostingDetailPage({ params }: { params: Promise<{ 
       })}
 
       <div className="rounded-2xl border border-dashed border-border p-4 text-center text-xs text-muted">
-        เมื่อกด <b>รับเข้าทำงาน</b> ระบบจะแค่ตั้ง stage = hired — ขั้นถัดไป HR ต้องไปที่ <Link href="/admin/admins" className="text-primary-600 hover:underline">/admin/admins</Link> เพื่อเปิดสิทธิ์ admin + แก้ฟิลด์ HR ของพนักงานใหม่
+        เมื่อกด <b>รับเข้าทำงาน</b> ระบบจะตั้ง stage = hired — ขั้นถัดไป HR ไปที่ <Link href="/admin/admins" className="text-primary-600 hover:underline">/admin/admins</Link> เพื่อเปิดสิทธิ์ admin ให้พนักงานใหม่
       </div>
     </main>
+  );
+}
+
+function DetailCard({ icon: Icon, title, body }: { icon: typeof FileText; title: string; body: string | null }) {
+  return (
+    <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
+      <h2 className="font-bold text-sm text-foreground mb-2 inline-flex items-center gap-1.5">
+        <Icon className="w-4 h-4 text-primary-600" /> {title}
+      </h2>
+      <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{body || "—"}</p>
+    </div>
   );
 }
