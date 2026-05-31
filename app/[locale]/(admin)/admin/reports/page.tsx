@@ -87,6 +87,16 @@ const REPORTS_MENUBAR: MenubarItem[] = [
       { label: "ยืนยัน OTP สำเร็จ", href: "/admin/reports/otp-success" },
     ],
   },
+  // Re-sweep A2 #24 (2026-05-31 · §0d reachability): 2 monitoring reports
+  // that had NO Pacred equivalent — faithful ports of report-search.php +
+  // report-api-sms.php. Wired here so staff reach them in ≤3 clicks.
+  {
+    label: "มอนิเตอร์",
+    children: [
+      { label: "ค้นหาสินค้า (ดีมานด์)", href: "/admin/reports/search-demand" },
+      { label: "การใช้ API SMS",        href: "/admin/reports/sms-usage" },
+    ],
+  },
   {
     label: "ปริมาณ",
     children: [
