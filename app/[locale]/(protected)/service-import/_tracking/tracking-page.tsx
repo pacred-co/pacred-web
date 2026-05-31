@@ -959,7 +959,7 @@ function ContainerItemRow({
         </Link>
         {(row.fstatus === "5" || row.fcredit === "1") && (
           <Link
-            href={`/service-import/${row.id}&pay=true/`}
+            href={`/service-import/${row.id}?pay=true`}
             className="inline-flex items-center gap-1 h-9 px-3 rounded-lg bg-red-600 text-white text-sm font-bold hover:bg-red-700 active:scale-[0.98] transition-all shadow-sm"
           >
             ชำระเงิน <ChevronRight className="h-3.5 w-3.5" />
