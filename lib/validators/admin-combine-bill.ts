@@ -100,3 +100,66 @@ export const deleteCombineBillSchema = z.object({
     ),
 });
 export type DeleteCombineBillInput = z.input<typeof deleteCombineBillSchema>;
+
+// ────────────────────────────────────────────────────────────
+// DETAIL/EDIT — Pacred re-sweep A2 #9 (no separate legacy mode)
+// ────────────────────────────────────────────────────────────
+//
+// The combine-bill detail page (`/admin/forwarders/combine-bill/[id]`)
+// lets staff edit ONE bill's line items in place. These two schemas
+// back the in-place edit actions; both reuse the same `tb_bill_item`
+// model the legacy add-handler writes (forwarder-bill.php L32-39),
+// just scoped to an EXISTING billID instead of minting a new one.
+
+const billIdField = z
+  .union([z.string(), z.number()])
+  .transform((v) => Number(v))
+  .refine(
+    (n) => Number.isFinite(n) && Number.isInteger(n) && n > 0,
+    { message: "billId ไม่ถูกต้อง" },
+  );
+
+const singleForwarderIdField = z
+  .union([z.string(), z.number()])
+  .transform((v) => Number(v))
+  .refine(
+    (n) => Number.isFinite(n) && Number.isInteger(n) && n > 0,
+    { message: "เลขที่ออเดอร์ไม่ถูกต้อง" },
+  );
+
+/** Add one-or-more forwarder IDs to an EXISTING bill. Same CSV/array
+ *  shape + dedupe as `createCombineBillSchema`, plus the target billId. */
+export const addForwardersToBillSchema = z.object({
+  billId: billIdField,
+  forwarderIds: z
+    .union([z.string(), z.array(z.number().int().positive())])
+    .transform((v, ctx) => {
+      try {
+        const arr = Array.isArray(v) ? v : parseForwarderIdsCsv(v);
+        if (arr.length === 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "กรุณากรอกเลขที่ออเดอร์อย่างน้อย 1 รายการ",
+          });
+          return z.NEVER;
+        }
+        return Array.from(new Set(arr));
+      } catch (e) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: e instanceof Error ? e.message : "ID ไม่ถูกต้อง",
+        });
+        return z.NEVER;
+      }
+    }),
+});
+export type AddForwardersToBillInput = z.input<typeof addForwardersToBillSchema>;
+
+/** Remove ONE forwarder ID from a bill (delete a single `tb_bill_item`). */
+export const removeForwarderFromBillSchema = z.object({
+  billId: billIdField,
+  forwarderId: singleForwarderIdField,
+});
+export type RemoveForwarderFromBillInput = z.input<
+  typeof removeForwarderFromBillSchema
+>;

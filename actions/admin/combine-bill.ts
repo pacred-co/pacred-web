@@ -18,6 +18,14 @@
  *     called by deleteForwarder() at forwarder-bill.php L319-351).
  *     DELETEs `tb_bill_item` rows then the `tb_bill` row (hard delete —
  *     legacy has no soft-delete column on either table).
+ *   - adminAddForwardersToBill / adminRemoveForwarderFromBill —
+ *     Pacred re-sweep A2 #9 (no separate legacy mode). The editable
+ *     per-bill detail page (`/admin/forwarders/combine-bill/[id]`) needs
+ *     to add/remove individual line items in place; both reuse the same
+ *     `tb_bill_item` model + collision guard as the add-handler, scoped
+ *     to an EXISTING billID. (The legacy `forwarder-bill.php?page=detail`
+ *     mode is the driver-run screen on `tb_forwarder_driver`, NOT a
+ *     tb_bill detail — that mode is ported at `/admin/drivers/[id]`.)
  *   - buildPrintHref           — stub URL builder for the @react-pdf
  *     follow-up. Returns the legacy-shape `id[]=…&id[]=…` query string
  *     so the list-page link survives the cutover.
@@ -54,8 +62,12 @@ import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import {
   createCombineBillSchema,
   deleteCombineBillSchema,
+  addForwardersToBillSchema,
+  removeForwarderFromBillSchema,
   type CreateCombineBillInput,
   type DeleteCombineBillInput,
+  type AddForwardersToBillInput,
+  type RemoveForwarderFromBillInput,
 } from "@/lib/validators/admin-combine-bill";
 
 // ────────────────────────────────────────────────────────────
@@ -307,6 +319,198 @@ export async function adminDeleteCombineBill(
 
       revalidatePath("/admin/forwarders/combine-bill");
       return { ok: true };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// ADD-TO-EXISTING — Pacred re-sweep A2 #9 detail-page edit
+// ────────────────────────────────────────────────────────────
+//
+// Append one-or-more forwarder IDs to an EXISTING bill. This is the
+// per-bill edit half of the legacy add-handler (forwarder-bill.php
+// L32-39 `INSERT INTO tb_bill_item(billID, fID) VALUES …`) — same
+// collision guard (L10-19), same FK pre-check, but scoped to a billID
+// that already exists instead of minting a new tb_bill row.
+//
+// Faithful to the legacy data model: a forwarder can be on at most ONE
+// bill (the legacy `EID` SweetAlert enforces this globally), so the
+// collision check spans ALL bills, not just this one.
+
+export async function adminAddForwardersToBill(
+  input: AddForwardersToBillInput,
+): Promise<AdminActionResult<{ billId: number; added: number[] }>> {
+  const parsed = addForwardersToBillSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "invalid_input",
+    };
+  }
+  const { billId, forwarderIds } = parsed.data;
+
+  return withAdmin<{ billId: number; added: number[] }>(
+    ["super", "ops", "warehouse", "accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+
+      // ── (a) Confirm the target bill exists ──
+      const { data: billRow, error: billErr } = await admin
+        .from("tb_bill")
+        .select("billid")
+        .eq("billid", billId)
+        .maybeSingle<{ billid: number }>();
+      if (billErr) return { ok: false, error: billErr.message };
+      if (!billRow) return { ok: false, error: "ไม่พบบิลรวมนี้" };
+
+      // ── (b) Legacy collision check (forwarder-bill.php L10-19) ──
+      // A forwarder already on ANY bill (including this one) is rejected.
+      const { data: existing, error: dupErr } = await admin
+        .from("tb_bill_item")
+        .select("billid, fid")
+        .in("fid", forwarderIds);
+      if (dupErr) return { ok: false, error: dupErr.message };
+      if ((existing?.length ?? 0) > 0) {
+        const dupFids = (existing ?? []).map((r) => r.fid).join(", ");
+        const dupBillId = existing?.[0]?.billid ?? "?";
+        return {
+          ok: false,
+          error: `มีเลขที่รายการไม่ถูกต้อง เลขที่รายการซ้ำ ${dupFids} รายการนี้อยู่ในบิลเลขที่ ${dupBillId}`,
+        };
+      }
+
+      // ── (c) FK pre-check — every fID must exist in tb_forwarder ──
+      const { data: knownForwarders, error: fErr } = await admin
+        .from("tb_forwarder")
+        .select("id")
+        .in("id", forwarderIds);
+      if (fErr) return { ok: false, error: fErr.message };
+      const knownIds = new Set(
+        (knownForwarders ?? []).map((r) => Number(r.id)),
+      );
+      const missing = forwarderIds.filter((id) => !knownIds.has(id));
+      if (missing.length > 0) {
+        return {
+          ok: false,
+          error: `ไม่พบเลขที่ออเดอร์: ${missing.join(", ")}`,
+        };
+      }
+
+      // ── (d) INSERT tb_bill_item × N (forwarder-bill.php L36-39) ──
+      const itemRows = forwarderIds.map((fid) => ({ billid: billId, fid }));
+      const { error: itemErr } = await admin
+        .from("tb_bill_item")
+        .insert(itemRows);
+      if (itemErr) return { ok: false, error: itemErr.message };
+
+      await logAdminAction(
+        adminId,
+        "combine_bill.add_items",
+        "tb_bill",
+        String(billId),
+        { forwarder_ids: forwarderIds },
+      );
+
+      revalidatePath("/admin/forwarders/combine-bill");
+      revalidatePath(`/admin/forwarders/combine-bill/${billId}`);
+      return { ok: true, data: { billId, added: forwarderIds } };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// REMOVE-ONE-LINE — Pacred re-sweep A2 #9 detail-page edit
+// ────────────────────────────────────────────────────────────
+//
+// Remove a SINGLE forwarder from a bill (delete one tb_bill_item row).
+// The legacy list only had a WHOLE-bill delete (deleteForwarder.php);
+// this is the finer-grained edit the detail page needs.
+//
+// Faithful guard: if removing the last line leaves the bill empty, we
+// also delete the now-orphan tb_bill header — an empty bill prints
+// nothing and can't be reached from the list's print link (which is
+// disabled when fids.length === 0). This mirrors the whole-bill delete
+// outcome rather than leaving a dangling header.
+
+export async function adminRemoveForwarderFromBill(
+  input: RemoveForwarderFromBillInput,
+): Promise<AdminActionResult<{ billId: number; billDeleted: boolean }>> {
+  const parsed = removeForwarderFromBillSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "invalid_input",
+    };
+  }
+  const { billId, forwarderId } = parsed.data;
+
+  return withAdmin<{ billId: number; billDeleted: boolean }>(
+    ["super", "ops", "warehouse", "accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+
+      // ── (a) Confirm the line item exists on THIS bill ──
+      const { data: line, error: lineErr } = await admin
+        .from("tb_bill_item")
+        .select("id")
+        .eq("billid", billId)
+        .eq("fid", forwarderId)
+        .maybeSingle<{ id: number }>();
+      if (lineErr) return { ok: false, error: lineErr.message };
+      if (!line) {
+        return { ok: false, error: "ไม่พบรายการนี้ในบิล" };
+      }
+
+      // ── (b) DELETE the single tb_bill_item row (by its PK) ──
+      const { error: delErr } = await admin
+        .from("tb_bill_item")
+        .delete()
+        .eq("id", line.id);
+      if (delErr) return { ok: false, error: delErr.message };
+
+      // ── (c) If the bill is now empty, drop the orphan header ──
+      const { count, error: countErr } = await admin
+        .from("tb_bill_item")
+        .select("id", { count: "exact", head: true })
+        .eq("billid", billId);
+      if (countErr) {
+        console.error(`[tb_bill_item count] failed`, {
+          code: countErr.code,
+          message: countErr.message,
+          billId,
+        });
+      }
+
+      let billDeleted = false;
+      if ((count ?? 0) === 0) {
+        const { error: billDelErr } = await admin
+          .from("tb_bill")
+          .delete()
+          .eq("billid", billId);
+        if (billDelErr) {
+          // Non-fatal — the line was removed; surface the dangling
+          // header in the audit log for manual cleanup.
+          console.error(`[tb_bill delete-empty] failed`, {
+            code: billDelErr.code,
+            message: billDelErr.message,
+            billId,
+          });
+        } else {
+          billDeleted = true;
+        }
+      }
+
+      await logAdminAction(
+        adminId,
+        billDeleted ? "combine_bill.remove_item_emptied" : "combine_bill.remove_item",
+        "tb_bill",
+        String(billId),
+        { forwarder_id: forwarderId, bill_deleted: billDeleted },
+      );
+
+      revalidatePath("/admin/forwarders/combine-bill");
+      revalidatePath(`/admin/forwarders/combine-bill/${billId}`);
+      return { ok: true, data: { billId, billDeleted } };
     },
   );
 }
