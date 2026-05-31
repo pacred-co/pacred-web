@@ -20,7 +20,7 @@
 - **register phone-exists** code reveal · staff-purge **ADR-0022** + script (review-only).
 
 **📌 REMAINING = ONLY owner-ACTIVATION + ก๊อต partner-API (no codeable-solo faithful work left):**
-1. **LINE_STAFF_GROUP_ID** (owner) — add @pacred bot to the real staff LINE group → read groupId from webhook (the `C61f…` from chat.line.biz is the OA-Manager id, NOT pushable · wire-test 404). → P1-24 fires.
+1. **LINE_STAFF_GROUP_ID** (owner + ปอน) — bot IS now in staff group "SA PACRED(15)" ✅. **2026-06-01 re-verified live:** the `C61f…` from the chat.line.biz URL = OA-Manager chat-thread id, **HTTP 404 from Messaging API → NOT pushable** (re-tested). Real groupId only arrives via a webhook event — which goes to **ปอน's Cloudflare Worker** (`podenglineworker…workers.dev`), not our app (line_* tables = 0 rows). **Build-on-top path (owner directive: ต่อยอด ไม่ปิดกั้นน้อง):** ปอน adds a ~6-line best-effort fan-out in his Worker → our `/api/webhooks/line` (already captures groupId in `line_webhook_events.raw_payload`) → query real groupId → set env + flip `LINE_PUSH_BYPASS=false`. Full runbook: **`docs/setup/line-staff-group-activation.md`**. → P1-24 fires. (ห้าม repoint webhook ออกจาก Worker ปอน / ห้าม rewrite route ปอน.)
 2. **Recreate 13 admins + run staff-purge** (owner/ภูม · ADR-0022 + `scripts/staff-purge-analysis.mjs`) → unblocks P1-15 sales-rep + report rep-names + HR adminid. (`admin_contact_extras` EMPTY + zero old↔new code overlap — confirmed.)
 3. **ปอน migrate 3 corporate readers** (ADR-0021) → rebuilt `corporate` write removable.
 4. **TTP + MK/MX/Sang sheet adapters** (ก๊อต partner-API).
