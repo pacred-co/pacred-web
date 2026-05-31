@@ -21,8 +21,14 @@ const inputCls =
 type Props = {
   /** member_code of the currently-selected driver ("" = none). */
   value:        string;
-  /** Notify parent with (member_code, displayLabel) on pick / clear. */
-  onChange:     (memberCode: string, display: string | null) => void;
+  /**
+   * Notify parent with (member_code, displayLabel, profileId) on pick / clear.
+   * `profileId` is the picked driver's `profiles.id` (UUID) — callers that
+   * drive a profile_id-keyed action (e.g. bulkAssignDriver) use it; the
+   * member_code-keyed caller (driver-assign-form) ignores it. On clear all
+   * three are emitted empty/null.
+   */
+  onChange:     (memberCode: string, display: string | null, profileId: string | null) => void;
   /** Disable the input (e.g. during submit). */
   disabled?:    boolean;
   /** Placeholder. */
@@ -76,7 +82,7 @@ export function DriverCombobox({
   }, [query]);
 
   function pick(hit: DriverSearchHit) {
-    onChange(hit.member_code ?? "", hit.display);
+    onChange(hit.member_code ?? "", hit.display, hit.profile_id);
     setQuery("");
     setHits([]);
     setOpen(false);
@@ -85,7 +91,7 @@ export function DriverCombobox({
   }
 
   function clear() {
-    onChange("", null);
+    onChange("", null, null);
     setQuery("");
     setHits([]);
     setOpen(false);
