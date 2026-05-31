@@ -24,6 +24,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { adminPayForwardersOnBehalf } from "@/actions/admin/pay-user";
+import { adminMarkForwarderCredit } from "@/actions/admin/forwarders-field-edits";
 
 type Props = {
   fId: number;            // tb_forwarder.id
@@ -39,8 +40,30 @@ export function TbForwarderPaymentPanel(p: Props) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [creditDate, setCreditDate] = useState<string>("");
 
   const shortfall = !p.isCredit && p.walletBalance < p.amountEstimate;
+
+  // Credit-out: grant credit instead of debiting the wallet (forwarder.php
+  // fStatus='c' branch). Faithful: gated on the customer's tb_users.userCreditValue
+  // limit; adds the order to tb_credit.creditvalue. Only offered when not already
+  // on credit.
+  function onCredit() {
+    setError(null);
+    setSuccess(null);
+    if (!creditDate) { setError("กรุณาเลือกวันครบกำหนดชำระ (เครดิต)"); return; }
+    if (!window.confirm(
+      `ให้เครดิตรายการ #${p.fId} แก่ ${p.customerName} [${p.userId}] ?\n\n` +
+      `ระบบจะบันทึกเป็นหนี้ค้างในวงเงินเครดิตลูกค้า (tb_credit) + เลื่อนสถานะเป็น 'เตรียมส่ง' โดยยังไม่ตัดเงิน\n` +
+      `ครบกำหนดชำระ: ${creditDate}`,
+    )) return;
+    startTransition(async () => {
+      const res = await adminMarkForwarderCredit({ fId: p.fId, creditDueDate: creditDate });
+      if (!res.ok) { setError(res.error ?? "ให้เครดิตไม่สำเร็จ"); return; }
+      setSuccess(`ให้เครดิตสำเร็จ ฿${(res.data?.priceCredited ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })} — ยอดค้างรวม ฿${(res.data?.outstanding ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`);
+      router.refresh();
+    });
+  }
 
   function onPay() {
     setError(null);
@@ -138,6 +161,35 @@ export function TbForwarderPaymentPanel(p: Props) {
         <code className="mx-1 rounded bg-surface-alt px-1 font-mono">adminPayForwardersOnBehalf</code>
         (เดียวกับหน้าตัดเงินลูกค้า)
       </p>
+
+      {/* Credit-out alternative (forwarder.php fStatus='c') — only when not already on credit. */}
+      {!p.isCredit && (
+        <div className="border-t border-emerald-200 pt-3 space-y-2">
+          <p className="text-xs font-semibold text-amber-800">💳 หรือ ให้เครดิต (จ่ายทีหลัง)</p>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={creditDate}
+              onChange={(e) => setCreditDate(e.target.value)}
+              disabled={pending}
+              className="flex-1 rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-xs disabled:opacity-60"
+              aria-label="วันครบกำหนดชำระ"
+            />
+            <button
+              type="button"
+              onClick={onCredit}
+              disabled={pending || !creditDate}
+              className="rounded-lg border border-amber-400 bg-amber-50 px-3 py-1.5 text-xs text-amber-800 font-medium hover:bg-amber-100 disabled:opacity-50"
+            >
+              💳 ติดเครดิต
+            </button>
+          </div>
+          <p className="text-[10px] text-muted">
+            ตามวงเงิน <code className="rounded bg-surface-alt px-1 font-mono">tb_users.userCreditValue</code> ·
+            บันทึกหนี้ <code className="rounded bg-surface-alt px-1 font-mono">tb_credit</code> · ไม่ตัดเงินกระเป๋า
+          </p>
+        </div>
+      )}
     </section>
   );
 }

@@ -564,3 +564,155 @@ export async function adminUpdateForwarderAmountCount(
     return { ok: true };
   });
 }
+
+// ── fCredit credit-out — grant credit instead of payment (forwarder.php L1395-1435)
+// ─────────────────────────────────────────────────────────────────────────────
+// MONEY/DEBT flow (owner-authorized 2026-05-31). Legacy "เครดิต" branch: instead
+// of debiting the wallet, mark the forwarder paid-on-credit + add the amount to
+// the customer's outstanding `tb_credit.creditvalue`, gated by their credit LIMIT
+// (`tb_users.userCreditValue`).
+//
+// Faithful flow (L1399-1431):
+//   pricePay = (ftotalprice + ftransportprice + fpriceupdate + fshippingservice
+//               + pricecrate + ftransportpricechnthb + priceother) − fdiscount
+//   if userCompany=='1': pricePay −= pricePay*0.01   (corporate 1% allowance)
+//   headroom = userCreditValue − creditValue(outstanding)
+//   GATE: headroom >= pricePay  (else วงเงินไม่พอ)
+//   UPDATE tb_forwarder: paydeposit='2', fcredit='1', fcreditdate=<due>,
+//                        fstatus='6', fdateadminstatus, fdatestatus5, adminid, adminidupdate
+//   creditValue += pricePay → UPSERT tb_credit (legacy UPDATE silently dropped the
+//   debt when no row existed — only 76/8,898 have one — so we INSERT if missing).
+//
+// Casing: tb_forwarder + tb_credit lowercase; tb_users camelCase (userCreditValue,
+// userCompany). tb_credit cols: userid, creditvalue.
+const creditOutSchema = z.object({
+  fId:         z.number().int().positive(),
+  creditDueDate: z.string().trim().min(1).max(40), // admin-entered due date (legacy $_POST['userCreditDate'])
+});
+export type AdminMarkForwarderCreditInput = z.infer<typeof creditOutSchema>;
+
+function numCol(v: number | string | null | undefined): number {
+  if (v === null || v === undefined) return 0;
+  const n = typeof v === "number" ? v : parseFloat(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+export async function adminMarkForwarderCredit(
+  rawInput: AdminMarkForwarderCreditInput,
+): Promise<AdminActionResult<{ priceCredited: number; outstanding: number }>> {
+  const parsed = creditOutSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin<{ priceCredited: number; outstanding: number }>(["accounting", "super"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+    const nowIso = new Date().toISOString();
+
+    // 1. Read the forwarder price components + state (legacy L1402-1404).
+    const { data: fwd, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, userid, fstatus, fcredit, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount")
+      .eq("id", d.fId)
+      .maybeSingle<{
+        id: number; userid: string; fstatus: string | null; fcredit: string | null;
+        ftotalprice: number | string | null; ftransportprice: number | string | null;
+        fpriceupdate: number | string | null; fshippingservice: number | string | null;
+        pricecrate: number | string | null; ftransportpricechnthb: number | string | null;
+        priceother: number | string | null; fdiscount: number | string | null;
+      }>();
+    if (fwdErr) {
+      console.error(`[adminMarkForwarderCredit tb_forwarder] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
+      return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
+    }
+    if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+    if ((fwd.fcredit ?? "").trim() === "1") return { ok: false, error: "รายการนี้เป็นเครดิตอยู่แล้ว" };
+    // Legacy grants credit on the unpaid (รอชำระเงิน) state; guard fstatus<=5.
+    if (!["1", "2", "3", "4", "5"].includes((fwd.fstatus ?? "").trim())) {
+      return { ok: false, error: `สถานะปัจจุบัน (${fwd.fstatus}) ให้เครดิตไม่ได้ — ต้องเป็นรายการที่ยังไม่ส่ง` };
+    }
+
+    // 2. Read the customer's credit LIMIT + corporate flag (tb_users · camelCase).
+    const { data: u, error: uErr } = await admin
+      .from("tb_users")
+      .select("userID, userCreditValue, userCompany")
+      .eq("userID", fwd.userid)
+      .maybeSingle<{ userID: string; userCreditValue: number | string | null; userCompany: string | null }>();
+    if (uErr) {
+      console.error(`[adminMarkForwarderCredit tb_users] failed`, { code: uErr.code, message: uErr.message, userid: fwd.userid });
+      return { ok: false, error: `อ่านข้อมูลลูกค้าไม่สำเร็จ: ${uErr.message}` };
+    }
+    const creditLimit = numCol(u?.userCreditValue);
+    if (!(creditLimit > 0)) {
+      return { ok: false, error: "ลูกค้ารายนี้ไม่มีวงเงินเครดิต (userCreditValue = 0) — เปิดวงเงินก่อน" };
+    }
+
+    // 3. Read current outstanding (tb_credit · may be missing → treat as 0).
+    const { data: creditRow, error: creditErr } = await admin
+      .from("tb_credit")
+      .select("creditvalue")
+      .eq("userid", fwd.userid)
+      .maybeSingle<{ creditvalue: number | string | null }>();
+    if (creditErr) {
+      console.error(`[adminMarkForwarderCredit tb_credit] failed`, { code: creditErr.code, message: creditErr.message, userid: fwd.userid });
+      return { ok: false, error: `อ่านยอดเครดิตไม่สำเร็จ: ${creditErr.message}` };
+    }
+    const outstanding = numCol(creditRow?.creditvalue);
+
+    // 4. Compute pricePay (legacy L1424) + corporate 1% allowance.
+    let pricePay =
+      numCol(fwd.ftotalprice) + numCol(fwd.ftransportprice) + numCol(fwd.fpriceupdate) +
+      numCol(fwd.fshippingservice) + numCol(fwd.pricecrate) + numCol(fwd.ftransportpricechnthb) +
+      numCol(fwd.priceother) - numCol(fwd.fdiscount);
+    if ((u?.userCompany ?? "").trim() === "1") pricePay = pricePay - pricePay * 0.01;
+    pricePay = Math.round(pricePay * 100) / 100;
+    if (!(pricePay > 0)) return { ok: false, error: "ยอดรายการไม่ถูกต้อง" };
+
+    // 5. GATE — remaining headroom must cover this order (legacy L1429).
+    const headroom = creditLimit - outstanding;
+    if (headroom < pricePay) {
+      return {
+        ok: false,
+        error: `วงเงินเครดิตไม่พอ — เหลือ ฿${headroom.toLocaleString()} (วงเงิน ฿${creditLimit.toLocaleString()} − ค้าง ฿${outstanding.toLocaleString()}) ต้อง ฿${pricePay.toLocaleString()}`,
+      };
+    }
+
+    // 6. Flip tb_forwarder to credit (legacy L1431).
+    const { error: updErr } = await admin
+      .from("tb_forwarder")
+      .update({
+        paydeposit: "2", fcredit: "1", fcreditdate: d.creditDueDate, fstatus: "6",
+        fdateadminstatus: nowIso, fdatestatus5: nowIso, adminid: legacyAdminId, adminidupdate: legacyAdminId,
+      })
+      .eq("id", d.fId);
+    if (updErr) {
+      console.error(`[adminMarkForwarderCredit forwarder flip] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
+      return { ok: false, error: `บันทึกเครดิตไม่สำเร็จ: ${updErr.message}` };
+    }
+
+    // 7. UPSERT tb_credit (legacy UPDATE-only silently dropped the debt for the
+    //    ~98% of customers with no row — we INSERT if missing). Rollback the
+    //    forwarder flip if the debt write fails (keep books consistent).
+    const newOutstanding = Math.round((outstanding + pricePay) * 100) / 100;
+    const { error: creditUpErr } = creditRow
+      ? await admin.from("tb_credit").update({ creditvalue: newOutstanding }).eq("userid", fwd.userid)
+      : await admin.from("tb_credit").insert({ userid: fwd.userid, creditvalue: newOutstanding });
+    if (creditUpErr) {
+      // rollback the forwarder flip
+      await admin.from("tb_forwarder").update({
+        paydeposit: "", fcredit: "", fcreditdate: null, fstatus: fwd.fstatus,
+      }).eq("id", d.fId);
+      console.error(`[adminMarkForwarderCredit tb_credit upsert] failed — rolled back flip`, { code: creditUpErr.code, message: creditUpErr.message, userid: fwd.userid });
+      return { ok: false, error: `บันทึกยอดเครดิตไม่สำเร็จ (ยกเลิกรายการแล้ว): ${creditUpErr.message}` };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder.mark_credit", "tb_forwarder", String(d.fId), {
+      userid: fwd.userid, priceCredited: pricePay, outstanding_before: outstanding, outstanding_after: newOutstanding,
+      credit_limit: creditLimit, due_date: d.creditDueDate,
+    });
+
+    revalidatePath(`/admin/forwarders/${d.fId}`);
+    revalidatePath("/admin/forwarders");
+    return { ok: true, data: { priceCredited: pricePay, outstanding: newOutstanding } };
+  });
+}
