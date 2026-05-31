@@ -677,12 +677,66 @@ export default async function ForwarderInvoicePrintPage({
     },
   );
 
+  // ── DATA-SYNC FALLBACK (2026-05-31 sitting-H-fix · ภูม flag #4) ──
+  // ภูม screenshot of FRG2605-00219 showed "ไม่พบรายการ" + Total = 0.00 even
+  // though the receipt header had a real ramount. Root cause: tb_receipt_item
+  // rows are missing for that receipt (likely Wave 28 PR-format pollution OR
+  // a legacy migration where items were stored differently). Without items,
+  // the per-line `computedItems` reduce sums to 0, and the legacy receipt
+  // chrome prints blank totals — useless to staff.
+  //
+  // Graceful degradation: when itemCount=0 BUT the receipt header itself
+  // carries a non-zero amount (the source-of-record for the money), surface
+  // the header amount on the totals row + flag the data gap with an
+  // amber banner (only visible on screen, not in print — staff who reprint
+  // see the warning; the customer copy stays clean).
+  //
+  // Sources of truth for the fallback:
+  //   - tb_receipt.totalbeforewithholding = pre-WHT raw sum (preferred)
+  //   - tb_receipt.ramount               = post-WHT net (what customer paid)
+  // Both columns are populated by auto-issue-receipt.ts at insert time, so
+  // when items go missing the header still has the answer.
+  const headerTotalBefore  = toNumber(receipt.totalbeforewithholding);
+  const headerRamount      = toNumber(receipt.ramount);
+  const itemsMissing       = computedItems.length === 0 && (headerTotalBefore > 0 || headerRamount > 0);
+
   // WHT 1% — legacy: only for corporate AND totalbeforewithholding ≥ 1000
-  const totalBeforeWithholding = toNumber(receipt.totalbeforewithholding) || totals.totalLineSum;
+  const totalBeforeWithholding = headerTotalBefore || totals.totalLineSum;
   const showWht = isCorporate && totalBeforeWithholding >= 1000;
-  const whtAmount = showWht ? totals.totalLineSum * 0.01 : 0;
-  const grandTotal = totals.totalLineSum - whtAmount;
+  // When items are missing, derive WHT from the header difference instead of
+  // re-applying the 1% rule (the header values are post-fact authoritative).
+  const whtAmount =
+    itemsMissing
+      ? Math.max(0, headerTotalBefore - headerRamount)
+      : showWht
+        ? totals.totalLineSum * 0.01
+        : 0;
+  const grandTotal =
+    itemsMissing
+      ? headerRamount
+      : totals.totalLineSum - whtAmount;
   const grandTotalThaiWord = readThaiBaht(grandTotal);
+
+  // When items are missing, also patch the totals BREAKDOWN to put the
+  // header total under "Total" (the most-prominent row) — the per-leg
+  // breakdown (CHN/TH/Other/Discount) stays zero because we have no way to
+  // reconstruct it without the items. Staff will see "Total = ฿N" and "all
+  // other rows = ฿0" — clear signal that this receipt has missing details.
+  const totalsForRender = itemsMissing
+    ? {
+        fTotal:           headerTotalBefore,
+        fTransport:       0,
+        fTransportCHNTHB: 0,
+        priceOther:       0,
+        fDiscount:        0,
+      }
+    : {
+        fTotal:           totals.fTotal,
+        fTransport:       totals.fTransport,
+        fTransportCHNTHB: totals.fTransportCHNTHB,
+        priceOther:       totals.priceOther,
+        fDiscount:        totals.fDiscount,
+      };
 
   // ── 8. Issuer address (legacy printReceipt.php:293-297 conditional) ──
   // After 2025-03-20 the new address; before, the old one.
@@ -719,14 +773,8 @@ export default async function ForwarderInvoicePrintPage({
     customerName,
     customerTaxId,
     customerAddress,
-    totals: {
-      fTotal:           totals.fTotal,
-      fTransportCHNTHB: totals.fTransportCHNTHB,
-      fTransport:       totals.fTransport,
-      priceOther:       totals.priceOther,
-      fDiscount:        totals.fDiscount,
-    },
-    showWht,
+    totals:              totalsForRender,
+    showWht:             showWht || (itemsMissing && whtAmount > 0),
     whtAmount,
     grandTotal,
     grandTotalThaiWord,
@@ -816,6 +864,27 @@ export default async function ForwarderInvoicePrintPage({
               <b>ตัวอย่างก่อนพิมพ์</b> — ใบเสร็จจะออกมา <b>2 หน้า</b> (ต้นฉบับ + สำเนา) เมื่อกดพิมพ์ ·
               กดปุ่ม &ldquo;พิมพ์ใบเสร็จ&rdquo; ด้านบนเพื่อบันทึกสถานะ <code>statusPrint=1</code> และเปิดหน้าต่างพิมพ์
             </div>
+
+            {/* 2026-05-31 sitting-H-fix #4 (ภูม): data-gap banner.
+                Shows ONLY on screen (not print). Surfaces the missing
+                tb_receipt_item case so staff don't print a "blank" receipt
+                without knowing the breakdown is reconstructed from header. */}
+            {itemsMissing && (
+              <div className="mb-3 rounded border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-900">
+                <b>⚠️ รายการพัสดุไม่พบใน tb_receipt_item</b> — ระบบจึงดึงยอดรวมจาก
+                <code className="mx-1 px-1 bg-rose-100 rounded">tb_receipt.totalbeforewithholding</code>
+                + <code className="mx-1 px-1 bg-rose-100 rounded">tb_receipt.ramount</code>
+                มาแสดงในแถว Total / WHT / Total Amount แทน (รายละเอียดต่อ leg ขนส่งจีน-ไทย
+                แสดงเป็น 0 เพราะไม่มี source).<br />
+                <span className="text-rose-700 mt-1 inline-block">
+                  สาเหตุที่เป็นไปได้: (1) Wave 28 PR-format pollution ·
+                  (2) legacy migration ที่ tb_receipt_item ไม่ได้ port มาด้วย ·
+                  (3) Wave 29 manual-create flow มี bug ตอน batch INSERT items.
+                  ดูเพิ่ม <code>docs/runbook/wave-29-tb-receipt-pollution-audit.md</code>
+                  หรือ query <code>tb_receipt_item WHERE rid=&lsquo;{receipt.rid}&rsquo;</code> ก่อน reprint.
+                </span>
+              </div>
+            )}
           </div>
 
           {/* ── 2-side document — Originals first, then Copies ──

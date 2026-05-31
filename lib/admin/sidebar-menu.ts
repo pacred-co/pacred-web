@@ -616,9 +616,11 @@ const blockExtContactMessages: MenuItem = {
   labelKey: "extension.contactMessages", href: "/admin/contact-messages",
   icon: "MessageSquare", badge: "contactMessages", phase: 2,
 };
-const blockExtTaxInvoices: MenuItem = {
-  labelKey: "extension.taxInvoices", href: "/admin/tax-invoices", icon: "FileText", phase: 2,
-};
+// 2026-05-31 sitting-H-fix #5 (ภูม): blockExtTaxInvoices DELETED. ใบกำกับภาษี
+// ขาย belongs in the accounting headmenu "รายรับ" (PEAK structure · per
+// `lib/admin/accounting-menubar.ts`), not in the sidebar Extension drawer.
+// The page itself (/admin/tax-invoices) is unchanged + reachable via the
+// menubar + the accounting dashboard Stat-card link.
 const blockExtWorkboard: MenuItem = {
   labelKey: "extension.workboard", href: "/admin/board", icon: "KanbanSquare", phase: 2,
 };
@@ -729,7 +731,12 @@ const menuSuper: MenuSection[] = [
     blockExtInbox,
     blockExtContactMessages,
     blockExtBroadcasts,
-    blockExtTaxInvoices,
+    // 2026-05-31 sitting-H-fix #5 (ภูม): blockExtTaxInvoices removed from
+    // the sidebar Extension section. PEAK structure places ใบกำกับภาษีขาย
+    // under "รายรับ" headmenu (CARGO_MENUBAR · accounting-menubar.ts) — the
+    // sidebar entry was a parallel orphan. The page itself
+    // (/admin/tax-invoices) stays live and reachable via the menubar +
+    // /admin/accounting accounting-dashboard Stat-card link.
     blockExtWithdrawalsAll,
     blockExtJuristic,
     blockExtThaiTransport,
@@ -786,7 +793,12 @@ const menuManager: MenuSection[] = [
     blockExtInbox,
     blockExtContactMessages,
     blockExtBroadcasts,
-    blockExtTaxInvoices,
+    // 2026-05-31 sitting-H-fix #5 (ภูม): blockExtTaxInvoices removed from
+    // the sidebar Extension section. PEAK structure places ใบกำกับภาษีขาย
+    // under "รายรับ" headmenu (CARGO_MENUBAR · accounting-menubar.ts) — the
+    // sidebar entry was a parallel orphan. The page itself
+    // (/admin/tax-invoices) stays live and reachable via the menubar +
+    // /admin/accounting accounting-dashboard Stat-card link.
     blockExtWithdrawalsAll,
     blockExtJuristic,
     blockExtThaiTransport,
