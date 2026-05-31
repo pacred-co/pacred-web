@@ -622,6 +622,15 @@ const blockExtContactMessages: MenuItem = {
 // `lib/admin/accounting-menubar.ts`), not in the sidebar Extension drawer.
 // The page itself (/admin/tax-invoices) is unchanged + reachable via the
 // menubar + the accounting dashboard Stat-card link.
+// 2026-06-01 (เดฟ · P1 ต่อยอด) — LINE inbox / CRM dashboard. Reads ปอน's
+// Cloudflare-Worker-captured LINE OA data (Podeng_customers_line +
+// Podeng_line_messages). A monitoring/CRM surface, so it lives in the
+// Extension drawer next to contactMessages (the website lead funnel) — same
+// "customer comms" family. phase: 2 → super-only for now, matching the rest of
+// the comms/CRM extensions until the broader launch.
+const blockExtLineInbox: MenuItem = {
+  labelKey: "extension.lineInbox", href: "/admin/line-inbox", icon: "MessageCircle", phase: 2,
+};
 const blockExtWorkboard: MenuItem = {
   labelKey: "extension.workboard", href: "/admin/board", icon: "KanbanSquare", phase: 2,
 };
@@ -734,6 +743,7 @@ const menuSuper: MenuSection[] = [
     blockExtWorkboard,
     blockExtInbox,
     blockExtContactMessages,
+    blockExtLineInbox,
     blockExtBroadcasts,
     // 2026-05-31 sitting-H-fix #5 (ภูม): blockExtTaxInvoices removed from
     // the sidebar Extension section. PEAK structure places ใบกำกับภาษีขาย
@@ -799,6 +809,7 @@ const menuManager: MenuSection[] = [
     blockExtWorkboard,
     blockExtInbox,
     blockExtContactMessages,
+    blockExtLineInbox,
     blockExtBroadcasts,
     // 2026-05-31 sitting-H-fix #5 (ภูม): blockExtTaxInvoices removed from
     // the sidebar Extension section. PEAK structure places ใบกำกับภาษีขาย
