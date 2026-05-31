@@ -198,7 +198,10 @@ export async function registerPersonal(
   const existingUserId = await findLegacyUserIdByPhone(admin, phone);
   if (existingUserId) {
     logger.info("auth", "registerPersonal blocked — phone already registered", { existingUserID: existingUserId });
-    return { ok: false, error: "phone_exists" };
+    // Surface the existing member code so the UI can tell the customer
+    // "เบอร์นี้มีรหัสอยู่แล้ว: PRxxx". Safe to reveal — the OTP above proved
+    // they own this phone (so it's their own code, not an enumeration leak).
+    return { ok: false, error: `phone_exists:${existingUserId}` };
   }
 
   // Create auth user (skip provider's own SMS — we already verified ourselves)
@@ -335,7 +338,8 @@ export async function registerJuristicStep1(
   const existingUserId = await findLegacyUserIdByPhone(admin, phone);
   if (existingUserId) {
     logger.info("auth", "registerJuristicStep1 blocked — phone already registered", { existingUserID: existingUserId });
-    return { ok: false, error: "phone_exists" };
+    // OTP-gated above → safe to reveal the customer's own code (see registerPersonal).
+    return { ok: false, error: `phone_exists:${existingUserId}` };
   }
 
   const { data: created, error: createErr } = await admin.auth.admin.createUser({

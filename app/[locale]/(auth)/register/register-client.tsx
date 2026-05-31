@@ -71,6 +71,22 @@ const ERR: Record<string, string> = {
 };
 
 /**
+ * Map a server error code → a user message. Handles the `phone_exists:PRxxx`
+ * shape (registerPersonal / registerJuristicStep1 append the customer's
+ * existing member code after the colon — OTP-gated, so it's their own code)
+ * by surfacing the code: "เบอร์นี้มีรหัสอยู่แล้ว: PRxxx — เข้าสู่ระบบ…".
+ */
+function mapErr(error: string): string {
+  if (error.startsWith("phone_exists")) {
+    const code = error.split(":")[1]?.trim();
+    return code
+      ? `เบอร์นี้มีรหัสอยู่แล้ว: ${code} — กรุณาเข้าสู่ระบบด้วยรหัสผ่านเดิม (ลืมรหัสผ่าน กดลืมรหัสผ่านที่หน้าเข้าสู่ระบบ)`
+      : ERR.phone_exists;
+  }
+  return ERR[error] ?? error;
+}
+
+/**
  * Open-redirect guard for the `?next=` post-signup destination — used when a
  * guest is routed here from the booking calculator's "เปิดออเดอร์ราคานี้"
  * CTA. Only an internal absolute path is honoured.
@@ -353,7 +369,7 @@ function PersonalForm({ recom }: { recom: string | null }) {
       // brief fix A2: non-admin signups expect to see the signed-in shell.
       window.location.replace(nextUrl ?? "/dashboard");
     } else {
-      setError(ERR[res.error] ?? res.error);
+      setError(mapErr(res.error));
       captchaRef.current?.reset();
     }
   }
@@ -366,7 +382,7 @@ function PersonalForm({ recom }: { recom: string | null }) {
     startTransition(async () => {
       const req = await requestOtp(phone, "register");
       if (!req.ok) {
-        setError(ERR[req.error] ?? req.error);
+        setError(mapErr(req.error));
         return;
       }
       if (req.bypass) {
@@ -399,7 +415,7 @@ function PersonalForm({ recom }: { recom: string | null }) {
     setError(null);
     startTransition(async () => {
       const req = await requestOtp(phone, "register");
-      if (!req.ok) { setError(ERR[req.error] ?? req.error); return; }
+      if (!req.ok) { setError(mapErr(req.error)); return; }
       setOtpCode("");
       setResendIn(60);
     });
@@ -668,7 +684,7 @@ function JuristicForm({
       setStep1Phase("form");
       setOtpCode("");
     } else {
-      setError(ERR[res.error] ?? res.error);
+      setError(mapErr(res.error));
       captchaRef.current?.reset();
     }
   }
@@ -679,7 +695,7 @@ function JuristicForm({
     startTransition(async () => {
       const req = await requestOtp(phone, "register");
       if (!req.ok) {
-        setError(ERR[req.error] ?? req.error);
+        setError(mapErr(req.error));
         return;
       }
       if (req.bypass) {
@@ -709,7 +725,7 @@ function JuristicForm({
     setError(null);
     startTransition(async () => {
       const req = await requestOtp(phone, "register");
-      if (!req.ok) { setError(ERR[req.error] ?? req.error); return; }
+      if (!req.ok) { setError(mapErr(req.error)); return; }
       setOtpCode("");
       setResendIn(60);
     });
@@ -726,7 +742,7 @@ function JuristicForm({
         postcode,
       });
       if (res.ok) setStep(3);
-      else setError(ERR[res.error] ?? res.error);
+      else setError(mapErr(res.error));
     });
   }
 
