@@ -406,7 +406,9 @@ const blockSettingsCargo: MenuItem = {
       icon: "SlidersHorizontal",
       children: [
         { labelKey: "settingsCargo.rateGeneral", href: "/admin/rates/general", icon: "Users" },
-        { labelKey: "settingsCargo.rateVip",     href: "/admin/rates/vip",     icon: "Users" },
+        // rateVip removed 2026-06-01 (Wave-A §0e) — it pointed at /admin/rates/vip which
+        // wrote the DEAD rebuilt `rate_vip`; the live VIP-group editor is rateCustomUser
+        // below (→ tb_rate_vip_*). /admin/rates/vip now redirects there.
         { labelKey: "settingsCargo.rateCustomUser", href: "/admin/rates/custom-user", icon: "Users" },
         { labelKey: "settingsCargo.rateCustomHs",   href: "/admin/rates/custom-hs",   icon: "Users" },
       ],

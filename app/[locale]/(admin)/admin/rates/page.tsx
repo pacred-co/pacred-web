@@ -127,11 +127,11 @@ export default async function AdminRatesPage() {
             <p className="text-[11px] text-primary-600 mt-1">แก้ได้ →</p>
           </Link>
           <Link
-            href="/admin/rates/vip"
+            href="/admin/rates/custom-user"
             className="rounded-2xl border border-primary-200 bg-primary-50 p-4 text-center hover:bg-primary-100 transition"
           >
-            <p className="text-sm font-semibold text-primary-700">VIP rate</p>
-            <p className="text-[11px] text-primary-600 mt-1">แก้ได้ →</p>
+            <p className="text-sm font-semibold text-primary-700">VIP rate (ตามกลุ่ม)</p>
+            <p className="text-[11px] text-primary-600 mt-1">แก้ได้ → tb_rate_vip_*</p>
           </Link>
           <Link
             href="/admin/rates/custom-user"
