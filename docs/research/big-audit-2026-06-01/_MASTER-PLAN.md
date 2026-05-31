@@ -110,6 +110,14 @@ product-categories inert. LINE+FB CRM + ad-touchpoints captured → no ROAS. **T
 - **HR self-service** (attendance/leave/recruitment/training on `tas_*` — repointed this session; add staff UI). (M · P2)
 - **Free observability dashboard** — `platform_incidents` (77) + `cron_invocations` (1,881) already capture rich JSON → cron success / MOMO drift / JS-error fingerprints. (S · P2)
 
+### Theme 7 — Supply-chain platform / CargoThai (owner+ภูม demo · the GTM moat) ⭐
+The China-warehouse worker app (`pacred demo cargothai.html`) → run our own warehouse, then partner-portal +
+API-as-a-service, all on the existing `tb_forwarder`/`tb_forwarder_item`/`tb_cnt`/`momo_sack_*` spine.
+**USP = real-time goods/container/job tracking, no phone calls ("กินขาดทั้งตลาด").** Full blueprint + 4-phase
+plan: **`docs/research/cargothai-warehouse-ops-blueprint-2026-06-01.md`**.
+- **P1 own-warehouse intake MVP** (เดฟ+ภูม · the "อีกไม่กี่เดือน" China deploy) · **P2 public `/track/{code}` + ETA + push** (the moat) · **P3 multi-tenant partner portal** (ภูม · needs RBAC) · **P4 API-as-a-service lease** (ก๊อต+เดฟ · inverse of our MOMO consumption · Upstash rate-limit + metering).
+- Belongs at the TOP next to BI — internal efficiency + go-to-market moat in one.
+
 ---
 
 ## §5 — Sequencing (waves) + ownership
