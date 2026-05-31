@@ -36,7 +36,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { buildCombineBillPrintHref } from "@/lib/admin/combine-bill-urls";
+import { buildCombineBillPrintHref, buildCombineBillDetailHref } from "@/lib/admin/combine-bill-urls";
 import { CombineBillRowActions } from "./combine-bill-row-actions";
 // ^ Wired client island (delete + print buttons). Kept on the page so super
 //   role retains the existing functional delete; visual chrome of the
@@ -337,30 +337,24 @@ export default async function CombineBillPage({
                 {bills.map((row) => {
                   const fids = itemsByBill.get(row.billid) ?? [];
                   const printHref = buildCombineBillPrintHref(fids);
-                  // Wave 23 P0 fix #2 (Task #153): bill # is now a link to
-                  // the print route — the canonical "view this bill"
-                  // surface (no dedicated detail page exists; the print
-                  // view shows every forwarder ID + the consignee).
-                  // Disabled (rendered as muted text) when fids is empty
-                  // so we never link to a 404 print page.
+                  const detailHref = buildCombineBillDetailHref(row.billid);
+                  // re-sweep A2 #9 (2026-06-01): bill # now links to the
+                  // editable detail page (`combine-bill/[id]`) — the
+                  // canonical "view/edit this bill" surface. The detail
+                  // page works for empty bills too (shows the add-items
+                  // form), so the link is never disabled. Print stays its
+                  // own button (it 404s on empty, so that one is gated).
                   return (
                     <tr key={row.billid} className="border-t border-border align-top hover:bg-surface-alt/40">
                       <td className="px-4 py-3 text-xs font-mono text-muted">{row.billid}</td>
                       <td className="px-4 py-3 text-xs font-mono font-semibold">
-                        {fids.length > 0 ? (
-                          <Link
-                            href={printHref}
-                            target="_blank"
-                            className="text-primary-600 hover:text-primary-700 hover:underline"
-                            title="เปิดบิลรวม (พิมพ์ได้)"
-                          >
-                            #{row.billid}
-                          </Link>
-                        ) : (
-                          <span className="text-muted" title="บิลนี้ไม่มีรายการฝากนำเข้า — ไม่สามารถเปิดบิลได้">
-                            #{row.billid}
-                          </span>
-                        )}
+                        <Link
+                          href={detailHref}
+                          className="text-primary-600 hover:text-primary-700 hover:underline"
+                          title="ดู/แก้ไขบิลรวมนี้"
+                        >
+                          #{row.billid}
+                        </Link>
                       </td>
                       <td className="px-4 py-3 text-xs">
                         {fids.length === 0 ? (
@@ -388,13 +382,21 @@ export default async function CombineBillPage({
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="inline-flex flex-wrap gap-1 justify-end">
-                          {canMutate ? (
+                          {/* ดู/แก้ไข — reachable for ALL admin roles (§0d).
+                              view-only roles can open the detail to inspect;
+                              mutate roles get the add/remove/delete controls
+                              inside it. */}
+                          <Link
+                            href={detailHref}
+                            className="rounded-md border border-border bg-white px-2.5 py-1 text-xs font-medium text-primary-700 hover:bg-primary-50"
+                          >
+                            ดู/แก้ไข
+                          </Link>
+                          {canMutate && (
                             <CombineBillRowActions
                               billId={row.billid}
                               printHref={printHref}
                             />
-                          ) : (
-                            <span className="text-[10px] text-muted">view-only</span>
                           )}
                         </div>
                       </td>
