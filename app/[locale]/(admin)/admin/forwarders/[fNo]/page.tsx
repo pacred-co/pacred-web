@@ -6,6 +6,7 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { AdminForwarderUpdateForm } from "./update-form";
 import { TbForwarderActionPanel } from "./tb-action-panel";
 import { TbForwarderPaymentPanel } from "./tb-payment-panel";
+import { TbForwarderEditPanel, type SavedAddressOption } from "./tb-edit-panel";
 import { DriverAssignForm } from "./driver-assign-form";
 import { CostAdjustmentsPanel, type CostAdjustmentRow } from "./cost-adjustments-panel";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
@@ -395,6 +396,33 @@ async function renderLegacyForwarderView(
   // Payable = legacy gate `.or("fstatus.eq.5,fcredit.eq.1")` (รอชำระเงิน OR credit).
   const isPayable = r.fstatus === "5" || (r.fcredit ?? "").trim() === "1";
 
+  // Theme A cont (2026-05-31): the customer's saved address book for the
+  // re-pick editor (faithful update_fAddress). tb_address is lowercase-columns,
+  // keyed by userid, addressstatus='1' = active (legacy L1724).
+  const { data: addrRows, error: addrErr } = await admin
+    .from("tb_address")
+    .select("addressid, addressname, addresslastname, addressno, addressprovince")
+    .eq("userid", r.userid)
+    .eq("addressstatus", "1")
+    .order("addressid", { ascending: false })
+    .limit(50);
+  if (addrErr) {
+    console.error(`[tb_address list] failed`, { code: addrErr.code, message: addrErr.message, userid: r.userid });
+  }
+  const savedAddresses: SavedAddressOption[] = ((addrRows ?? []) as Array<{
+    addressid: number; addressname: string | null; addresslastname: string | null;
+    addressno: string | null; addressprovince: string | null;
+  }>).map((a) => ({
+    addressId: a.addressid,
+    label: [
+      `${a.addressname ?? ""} ${a.addresslastname ?? ""}`.trim(),
+      (a.addressno ?? "").slice(0, 30),
+      a.addressprovince ?? "",
+    ].filter(Boolean).join(" · ") || `ที่อยู่ #${a.addressid}`,
+  }));
+  const isPcsPickup = (r.fshipby ?? "").trim() === "PCS";
+  const transportTypeForEdit = (["1", "2", "3"].includes(r.ftransporttype) ? r.ftransporttype : "1") as "1" | "2" | "3";
+
   // Resolve cover image — shop-spawned rows may have a live alicdn URL
   // (https://...), legacy local filename (PCS prefix), or empty.
   const coverHref = r.fcover && r.fcover.trim() !== ""
@@ -731,6 +759,16 @@ async function renderLegacyForwarderView(
             currentCabinet={r.fcabinetnumber ?? ""}
             currentTrackingTh={r.ftrackingth ?? ""}
             currentNote={r.fnote ?? ""}
+          />
+
+          {/* Edit panel — Theme A cont (2026-05-31 · เดฟ): re-pick delivery
+              address from the customer's tb_address book + swap transport mode.
+              Faithful tb_forwarder writes (update_fAddress / update_fTransportType). */}
+          <TbForwarderEditPanel
+            fId={r.id}
+            isPcs={isPcsPickup}
+            addresses={savedAddresses}
+            currentTransportType={transportTypeForEdit}
           />
 
           {/* Secondary action buttons */}
