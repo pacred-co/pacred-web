@@ -7,6 +7,7 @@ import { AdminForwarderUpdateForm } from "./update-form";
 import { TbForwarderActionPanel } from "./tb-action-panel";
 import { TbForwarderPaymentPanel } from "./tb-payment-panel";
 import { TbForwarderEditPanel, type SavedAddressOption } from "./tb-edit-panel";
+import { TbForwarderDriverAssignPanel, type DriverAssignmentState } from "./tb-driver-assign-panel";
 import { DriverAssignForm } from "./driver-assign-form";
 import { CostAdjustmentsPanel, type CostAdjustmentRow } from "./cost-adjustments-panel";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
@@ -420,6 +421,40 @@ async function renderLegacyForwarderView(
       a.addressprovince ?? "",
     ].filter(Boolean).join(" · ") || `ที่อยู่ #${a.addressid}`,
   }));
+  // re-sweep adm-09 (2026-06-01): latest driver-assignment for this forwarder.
+  // tb_forwarder_driver_item (lowercase cols) keyed by `fid` = tb_forwarder.id.
+  // NB: legacy schema declares NO FK between item.fdid → driver.id (0081), so a
+  // PostgREST embed (`!fdid`) would 500 with PGRST200 — do TWO reads instead:
+  // (1) most-recent item by id desc, then (2) its parent batch by id.
+  let driverAssignment: DriverAssignmentState | null = null;
+  const { data: assignItemRow, error: assignItemErr } = await admin
+    .from("tb_forwarder_driver_item")
+    .select("id, fdid, fdistatus")
+    .eq("fid", r.id)
+    .order("id", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ id: number; fdid: number; fdistatus: string | null }>();
+  if (assignItemErr) {
+    console.error(`[tb_forwarder_driver_item detail] failed`, { code: assignItemErr.code, message: assignItemErr.message, fid: r.id });
+  }
+  if (assignItemRow) {
+    const { data: parentRow, error: parentErr } = await admin
+      .from("tb_forwarder_driver")
+      .select("id, fdadminid, fddate, fdstatus")
+      .eq("id", assignItemRow.fdid)
+      .maybeSingle<{ id: number; fdadminid: string | null; fddate: string | null; fdstatus: string | null }>();
+    if (parentErr) {
+      console.error(`[tb_forwarder_driver detail] failed`, { code: parentErr.code, message: parentErr.message, fdid: assignItemRow.fdid });
+    }
+    driverAssignment = {
+      fdistatus:  (assignItemRow.fdistatus ?? "").trim(),
+      batchId:    assignItemRow.fdid,
+      driverCode: parentRow?.fdadminid ?? null,
+      assignedAt: parentRow?.fddate ?? null,
+      batchOpen:  (parentRow?.fdstatus ?? "").trim() === "1",
+    };
+  }
+
   const isPcsPickup = (r.fshipby ?? "").trim() === "PCS";
   const transportTypeForEdit = (["1", "2", "3"].includes(r.ftransporttype) ? r.ftransporttype : "1") as "1" | "2" | "3";
   // famountcount: '1' = ราคาต่อกล่อง · anything else = รวม (legacy default).
@@ -761,6 +796,20 @@ async function renderLegacyForwarderView(
             currentCabinet={r.fcabinetnumber ?? ""}
             currentTrackingTh={r.ftrackingth ?? ""}
             currentNote={r.fnote ?? ""}
+          />
+
+          {/* Driver-assign panel — re-sweep adm-09 (2026-06-01 · close the
+              single-row dispatch gap on real tb_forwarder rows): assign a
+              driver right here instead of leaving for the list bulk-bar.
+              Reuses the faithful bulkAssignDriver with fids:[id]. Render
+              condition + per-row gate match legacy forwarder-driver.php
+              (fstatus='6' · paydeposit<>1 · no open batch). */}
+          <TbForwarderDriverAssignPanel
+            fId={r.id}
+            fNo={String(r.id)}
+            fstatus={r.fstatus}
+            paydeposit={r.paydeposit ?? ""}
+            current={driverAssignment}
           />
 
           {/* Edit panel — Theme A cont (2026-05-31 · เดฟ): re-pick delivery
