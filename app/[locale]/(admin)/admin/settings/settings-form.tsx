@@ -15,7 +15,6 @@ type Props = {
   crate_fee_base: number;
   free_shipping_enabled: boolean;
   free_shipping_threshold: number | null;
-  yuan_rate: number;
 };
 
 export function SettingsForm(initial: Props) {
@@ -27,7 +26,6 @@ export function SettingsForm(initial: Props) {
   const [crateFee,      setCrateFee]      = useState(String(initial.crate_fee_base));
   const [freeShipEn,    setFreeShipEn]    = useState(initial.free_shipping_enabled);
   const [freeShipMin,   setFreeShipMin]   = useState(initial.free_shipping_threshold != null ? String(initial.free_shipping_threshold) : "");
-  const [yuanRate,      setYuanRate]      = useState(String(initial.yuan_rate));
   const [error, setError] = useState<string | null>(null);
   const [msg,   setMsg]   = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -58,7 +56,6 @@ export function SettingsForm(initial: Props) {
         crate_fee_base:              Number(crateFee) || 0,
         free_shipping_enabled:       freeShipEn,
         free_shipping_threshold:     freeShipMin ? Number(freeShipMin) : null,
-        yuan_rate:                   Number(yuanRate) || 0,
         ...(confirmUnusualRate ? { confirm_unusual_rate: true } : {}),
       });
       if (res.ok) {
@@ -84,12 +81,6 @@ export function SettingsForm(initial: Props) {
     <form onSubmit={onSubmit} className="rounded-2xl border border-border bg-white dark:bg-surface p-6 shadow-sm space-y-4 max-w-2xl">
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
       {msg   && <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{msg}</div>}
-
-      <Group title="เรทแลกเปลี่ยน">
-        <Field label="เรท CNY → THB" hint="ใช้ตอนคำนวณยอดบาทใน /service-payment + /service-order">
-          <input type="number" min="0" step="0.0001" value={yuanRate} onChange={(e) => setYuanRate(e.target.value)} className={inputCls} required />
-        </Field>
-      </Group>
 
       <Group title="ค่าธรรมเนียม">
         <Field label="ค่าบริการ Pacred ต่อออเดอร์ (บาท)" hint="default 50 บาท">
