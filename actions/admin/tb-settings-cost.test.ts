@@ -154,10 +154,9 @@ async function main() {
   // ── (5) LIVE read-only: registry vs prod tb_settings ─────────────────────
   console.log("\n[5] built columns ALL exist on prod tb_settings (read-only)");
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_SERVICE_ROLE ||
-    process.env.SUPABASE_SERVICE_KEY;
+  // Canonical env name only (audit:env enforces .env.example parity — the
+  // SUPABASE_SERVICE_ROLE / SUPABASE_SERVICE_KEY fallbacks tripped it).
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
     console.warn("  ⚠ SKIP live check — no SUPABASE env (pass --env-file=.env.local)");
   } else {

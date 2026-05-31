@@ -53,7 +53,10 @@ export default async function SalesMonthlyReportPage({
   const data: ReportData = {
     columns: [
       { key: "month",          label: "เดือน",          align: "left" },
-      { key: "rep_id",         label: "ชื่อ-นามสกุล (Sale)", align: "left" },
+      // Theme-reports (2026-05-31): show the resolved rep name ("Name [id]" when
+      // tb_admin matches, else the raw code). Names resolve fully once the 13
+      // admins are recreated (sradminidsale↔adminID reconciliation · ADR-0022).
+      { key: "rep_name",       label: "ชื่อ-นามสกุล (Sale)", align: "left" },
       { key: "order_count",    label: "จำนวนออเดอร์",     align: "right", format: (v) => intTh(v as number) },
       { key: "volume_cbm",     label: "ปริมาตร (CBM)",   align: "right", format: (v) => decTh(v as number, 5) },
       { key: "weight_kg",      label: "น้ำหนัก (Kg)",     align: "right", format: (v) => decTh(v as number, 2) },
