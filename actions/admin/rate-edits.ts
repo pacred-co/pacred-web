@@ -206,6 +206,149 @@ export async function adminUpdateVipRateCells(
 }
 
 // ────────────────────────────────────────────────────────────
+// 1b. GENERAL-tier matrix edit (Theme B · 2026-05-31 · เดฟ)
+//
+// THE MONEY P0: the rebuilt `/admin/rates/general` editor (rates.ts
+// adminUpsertGeneralRate) writes the REBUILT, prod-empty `rate_general` table,
+// but the pricing engine (lib/forwarder/resolve-rate.ts · used by
+// forwarders-edit.ts L222-238) READS `tb_rate_g_kg` / `tb_rate_g_cbm`. So an
+// admin "changing the general rates" changed NOTHING the engine used. This
+// action writes the tables the engine actually reads — the faithful twin of
+// adminUpdateVipRateCells, but for the GENERAL bucket (tiered: 3 KG tiers +
+// 3 CBM tiers per cell).
+//
+// Legacy ref: rate.php (the general rate screen · tb_rate_g_kg/cbm). The
+// general bucket is keyed by coid='PCS' (the PCS<n>→PR<n> rebrand keeps the
+// legacy 'PCS' coid token for the general/non-VIP customers — verified: prod
+// tb_rate_g_kg has coid='PCS', 16 rows).
+//
+// Cell identity: (coid, sourcewarehouse '1'กวางโจว/'2'อี้อู, rgtransporttype
+// '1'รถ/'2'เรือ/'3'อากาศ, rgproductstype '1'ทั่วไป/'2'มอก/'3'อย/'4'พิเศษ).
+// Tiers: rgkg1/2/3 (KG weight breaks) + rgcbm1/2/3 (CBM breaks). resolve-rate.ts
+// reads all three tiers (ResolveRateCandidates.generalKg = {tier1,tier2,tier3}).
+// ────────────────────────────────────────────────────────────
+
+const generalCellSchema = z.object({
+  sourcewarehouse: z.enum(["1", "2"]),
+  rgtransporttype: z.enum(["1", "2", "3"]),
+  rgproductstype: z.enum(["1", "2", "3", "4"]),
+  // KG tiers (null = leave that tier untouched / not set)
+  kg1: z.number().nonnegative().max(100_000).nullable(),
+  kg2: z.number().nonnegative().max(100_000).nullable(),
+  kg3: z.number().nonnegative().max(100_000).nullable(),
+  // CBM tiers
+  cbm1: z.number().nonnegative().max(1_000_000).nullable(),
+  cbm2: z.number().nonnegative().max(1_000_000).nullable(),
+  cbm3: z.number().nonnegative().max(1_000_000).nullable(),
+});
+const generalUpdateSchema = z.object({
+  coid:  z.string().trim().min(1).max(10),     // 'PCS' = the general bucket
+  cells: z.array(generalCellSchema).min(1).max(48), // 2 wh × 3 tt × 4 prod = 24
+});
+export type AdminUpdateGeneralRateCellsInput = z.infer<typeof generalUpdateSchema>;
+
+export async function adminUpdateGeneralRateCells(
+  input: AdminUpdateGeneralRateCellsInput,
+): Promise<AdminActionResult<{ kg_writes: number; cbm_writes: number }>> {
+  const parsed = generalUpdateSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin<{ kg_writes: number; cbm_writes: number }>(
+    ["accounting", "super"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const legacyAdminId = await resolveLegacyAdminId();
+
+      // Load existing rows for this coid (≤24 cells — cheap).
+      const [{ data: kgRaw }, { data: cbmRaw }] = await Promise.all([
+        admin.from("tb_rate_g_kg")
+          .select("id,sourcewarehouse,rgtransporttype,rgproductstype,rgkg1,rgkg2,rgkg3").eq("coid", d.coid),
+        admin.from("tb_rate_g_cbm")
+          .select("id,sourcewarehouse,rgtransporttype,rgproductstype,rgcbm1,rgcbm2,rgcbm3").eq("coid", d.coid),
+      ]);
+      type ExistKg = { id: number; sourcewarehouse: string; rgtransporttype: string; rgproductstype: string; rgkg1: number | null; rgkg2: number | null; rgkg3: number | null };
+      type ExistCbm = { id: number; sourcewarehouse: string; rgtransporttype: string; rgproductstype: string; rgcbm1: number | null; rgcbm2: number | null; rgcbm3: number | null };
+      const key = (r: { sourcewarehouse: string; rgtransporttype: string; rgproductstype: string }) =>
+        `${r.sourcewarehouse}|${r.rgtransporttype}|${r.rgproductstype}`;
+      const kgIndex = new Map<string, ExistKg>(((kgRaw ?? []) as unknown as ExistKg[]).map((r) => [key(r), r]));
+      const cbmIndex = new Map<string, ExistCbm>(((cbmRaw ?? []) as unknown as ExistCbm[]).map((r) => [key(r), r]));
+
+      let kgWrites = 0;
+      let cbmWrites = 0;
+      const diffs: Array<{ key: string; kind: "kg" | "cbm"; op: "update" | "insert" }> = [];
+      const numOrNull = (v: number | null) => (v == null ? null : v);
+
+      for (const c of d.cells) {
+        const k = key(c);
+
+        // KG tiers — write only if ANY tier provided AND differs from existing.
+        if (c.kg1 != null || c.kg2 != null || c.kg3 != null) {
+          const ex = kgIndex.get(k);
+          const same =
+            ex != null &&
+            Number(ex.rgkg1 ?? NaN) === Number(c.kg1 ?? NaN) &&
+            Number(ex.rgkg2 ?? NaN) === Number(c.kg2 ?? NaN) &&
+            Number(ex.rgkg3 ?? NaN) === Number(c.kg3 ?? NaN);
+          if (!same) {
+            if (ex) {
+              const { error } = await admin.from("tb_rate_g_kg")
+                .update({ rgkg1: numOrNull(c.kg1), rgkg2: numOrNull(c.kg2), rgkg3: numOrNull(c.kg3), adminidupdate: legacyAdminId })
+                .eq("id", ex.id);
+              if (error) return { ok: false, error: `KG update failed [${k}]: ${error.message}` };
+              diffs.push({ key: k, kind: "kg", op: "update" });
+            } else {
+              const { error } = await admin.from("tb_rate_g_kg").insert({
+                coid: d.coid, sourcewarehouse: c.sourcewarehouse, rgtransporttype: c.rgtransporttype, rgproductstype: c.rgproductstype,
+                rgkg1: numOrNull(c.kg1), rgkg2: numOrNull(c.kg2), rgkg3: numOrNull(c.kg3), adminidupdate: legacyAdminId,
+              });
+              if (error) return { ok: false, error: `KG insert failed [${k}]: ${error.message}` };
+              diffs.push({ key: k, kind: "kg", op: "insert" });
+            }
+            kgWrites++;
+          }
+        }
+
+        // CBM tiers
+        if (c.cbm1 != null || c.cbm2 != null || c.cbm3 != null) {
+          const ex = cbmIndex.get(k);
+          const same =
+            ex != null &&
+            Number(ex.rgcbm1 ?? NaN) === Number(c.cbm1 ?? NaN) &&
+            Number(ex.rgcbm2 ?? NaN) === Number(c.cbm2 ?? NaN) &&
+            Number(ex.rgcbm3 ?? NaN) === Number(c.cbm3 ?? NaN);
+          if (!same) {
+            if (ex) {
+              const { error } = await admin.from("tb_rate_g_cbm")
+                .update({ rgcbm1: numOrNull(c.cbm1), rgcbm2: numOrNull(c.cbm2), rgcbm3: numOrNull(c.cbm3), adminidupdate: legacyAdminId })
+                .eq("id", ex.id);
+              if (error) return { ok: false, error: `CBM update failed [${k}]: ${error.message}` };
+              diffs.push({ key: k, kind: "cbm", op: "update" });
+            } else {
+              const { error } = await admin.from("tb_rate_g_cbm").insert({
+                coid: d.coid, sourcewarehouse: c.sourcewarehouse, rgtransporttype: c.rgtransporttype, rgproductstype: c.rgproductstype,
+                rgcbm1: numOrNull(c.cbm1), rgcbm2: numOrNull(c.cbm2), rgcbm3: numOrNull(c.cbm3), adminidupdate: legacyAdminId,
+              });
+              if (error) return { ok: false, error: `CBM insert failed [${k}]: ${error.message}` };
+              diffs.push({ key: k, kind: "cbm", op: "insert" });
+            }
+            cbmWrites++;
+          }
+        }
+      }
+
+      await logAdminAction(adminId, "tb_rate_g.update", "tb_rate_g", d.coid, {
+        coid: d.coid, kg_writes: kgWrites, cbm_writes: cbmWrites, diffs,
+      });
+
+      revalidatePath("/admin/rates/general");
+      revalidatePath("/admin/rates");
+      return { ok: true, data: { kg_writes: kgWrites, cbm_writes: cbmWrites } };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────
 // 2. Per-customer HS-style rates edit
 // ────────────────────────────────────────────────────────────
 

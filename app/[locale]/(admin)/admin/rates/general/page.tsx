@@ -1,65 +1,75 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { GeneralRateRow, NewGeneralRateRow } from "./row-form";
+import { GeneralRateMatrix, type GeneralMatrix } from "./general-rate-matrix";
 
-// LP-1: admin edit for rate_general — the per-(group × warehouse × transport
-// × product × basis) tiered price table that drives the forwarder calc
-// engine (lib/forwarder/calc-price.ts). Read-only summary lives at
-// /admin/rates; the full edit table is here.
+// Theme B (2026-05-31 · เดฟ) — FAITHFUL general-rate editor.
+//
+// REPOINTED from the rebuilt `rate_general` (empty on prod · the pricing engine
+// never read it → "admin changes the rate, nothing happens") to the legacy
+// `tb_rate_g_kg` / `tb_rate_g_cbm` that lib/forwarder/resolve-rate.ts ACTUALLY
+// reads (see forwarders-edit.ts L222-238). Edits here now take effect on the
+// next forwarder re-price.
+//
+// The general bucket = coid 'PCS' (the PCS<n>→PR<n> rebrand kept the legacy
+// 'PCS' coid token for non-VIP/general customers; resolve-rate.ts gates
+// isGeneral on coID==='PCS'). Per-customer-group VIP rates live in
+// /admin/rates/* (tb_rate_vip_* via rate-edits.ts adminUpdateVipRateCells).
 
-type CustomerGroup = { code: string; name: string };
+export const dynamic = "force-dynamic";
 
-export type Row = {
-  id:                 string;
-  customer_group:     string;
-  source_warehouse:   string;
-  transport_type:     string;
-  product_type:       string;
-  basis:              string;
-  tier1:              number | null;
-  tier2:              number | null;
-  tier3:              number | null;
-  admin_id_update:    string | null;
-  updated_at:         string;
-};
+const GENERAL_COID = "PCS";
 
-const WAREHOUSE_LABEL: Record<string, string> = { guangzhou: "กวางโจว", yiwu: "อี้อู" };
-const TRANSPORT_LABEL: Record<string, string> = { truck: "🚚 รถ", ship: "🚢 เรือ", air: "✈️ เครื่องบิน" };
-const PRODUCT_LABEL:   Record<string, string> = { general: "ทั่วไป", tisi: "มอก.", fda: "อย.", special: "พิเศษ" };
-const BASIS_LABEL:     Record<string, string> = { kg: "กก.", cbm: "CBM" };
+type KgRow = { sourcewarehouse: string; rgtransporttype: string; rgproductstype: string; rgkg1: number | string | null; rgkg2: number | string | null; rgkg3: number | string | null };
+type CbmRow = { sourcewarehouse: string; rgtransporttype: string; rgproductstype: string; rgcbm1: number | string | null; rgcbm2: number | string | null; rgcbm3: number | string | null };
 
-type SP = { group?: string };
+function n(v: number | string | null): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const x = Number(v);
+  return Number.isFinite(x) ? x : null;
+}
 
-export default async function AdminRatesGeneralPage({
-  searchParams,
-}: {
-  searchParams: Promise<SP>;
-}) {
+export default async function AdminRatesGeneralPage() {
   await requireAdmin(["super", "accounting"]);
-  const sp = await searchParams;
   const admin = createAdminClient();
 
-  const [{ data: groupsData }, { data: ratesData }] = await Promise.all([
-    admin.from("customer_groups").select("code, name").order("code"),
-    admin.from("rate_general").select("*").order("customer_group").order("source_warehouse").order("transport_type").order("product_type").order("basis"),
+  const [{ data: kgData, error: kgErr }, { data: cbmData, error: cbmErr }] = await Promise.all([
+    admin.from("tb_rate_g_kg")
+      .select("sourcewarehouse, rgtransporttype, rgproductstype, rgkg1, rgkg2, rgkg3")
+      .eq("coid", GENERAL_COID),
+    admin.from("tb_rate_g_cbm")
+      .select("sourcewarehouse, rgtransporttype, rgproductstype, rgcbm1, rgcbm2, rgcbm3")
+      .eq("coid", GENERAL_COID),
   ]);
+  if (kgErr) console.error(`[tb_rate_g_kg list] failed`, { code: kgErr.code, message: kgErr.message });
+  if (cbmErr) console.error(`[tb_rate_g_cbm list] failed`, { code: cbmErr.code, message: cbmErr.message });
 
-  const groups = (groupsData ?? []) as CustomerGroup[];
-  const allRows = (ratesData ?? []) as Row[];
+  // Build the cell matrix (join KG + CBM by cell key).
+  const key = (wh: string, tt: string, pt: string) => `${wh}|${tt}|${pt}`;
+  const matrix: GeneralMatrix = {};
+  const ensure = (k: string) => (matrix[k] ??= { kg1: null, kg2: null, kg3: null, cbm1: null, cbm2: null, cbm3: null });
+  for (const r of (kgData ?? []) as KgRow[]) {
+    const c = ensure(key(r.sourcewarehouse, r.rgtransporttype, r.rgproductstype));
+    c.kg1 = n(r.rgkg1); c.kg2 = n(r.rgkg2); c.kg3 = n(r.rgkg3);
+  }
+  for (const r of (cbmData ?? []) as CbmRow[]) {
+    const c = ensure(key(r.sourcewarehouse, r.rgtransporttype, r.rgproductstype));
+    c.cbm1 = n(r.rgcbm1); c.cbm2 = n(r.rgcbm2); c.cbm3 = n(r.rgcbm3);
+  }
 
-  const activeGroup = sp.group ?? (groups[0]?.code ?? "PR");
-  const rows = allRows.filter((r) => r.customer_group === activeGroup);
+  const cellCount = Object.keys(matrix).length;
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · อัตราขนส่ง (general)</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · อัตราขนส่ง (General)</p>
           <h1 className="mt-1 text-2xl font-bold">ตารางเรท General — แก้ไขได้</h1>
           <p className="mt-1 text-sm text-muted">
-            เรทตั้งต้นตาม (กลุ่มลูกค้า × โกดัง × ขนส่ง × ประเภทสินค้า × หน่วยคิด) — ใช้ใน
-            <code className="ml-1 rounded bg-surface-alt px-1 py-0.5 text-[10px]">lib/forwarder/calc-price.ts</code>
+            เรทลูกค้าทั่วไป (coid <code className="rounded bg-surface-alt px-1 text-[10px]">{GENERAL_COID}</code>) ตาม
+            (โกดัง × ขนส่ง × ประเภทสินค้า) × 3 tier — เขียน
+            <code className="mx-1 rounded bg-surface-alt px-1 py-0.5 text-[10px]">tb_rate_g_kg / tb_rate_g_cbm</code>
+            ที่ engine คำนวณราคาใช้จริง
           </p>
         </div>
         <Link href="/admin/rates" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
@@ -67,75 +77,16 @@ export default async function AdminRatesGeneralPage({
         </Link>
       </div>
 
-      {/* Customer group tabs */}
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className="text-muted font-medium">กลุ่มลูกค้า:</span>
-        {groups.map((g) => (
-          <Link
-            key={g.code}
-            href={`/admin/rates/general?group=${encodeURIComponent(g.code)}`}
-            className={`rounded-full border px-3 py-1 ${
-              g.code === activeGroup
-                ? "bg-primary-500 text-white border-primary-500"
-                : "bg-white border-border hover:bg-surface-alt"
-            }`}
-          >
-            {g.code} <span className="opacity-80">— {g.name}</span>
-          </Link>
-        ))}
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs text-emerald-800">
+        ✅ แก้ไขเรทในตารางนี้ <b>มีผลทันที</b>กับการคำนวณราคาฝากนำเข้า (waterfall: custom-HS → SVIP → VIP →
+        <b> general</b>). พบ {cellCount} ช่องที่ตั้งค่าไว้.
       </div>
 
-      {/* Table */}
-      <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
-        <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-          <h2 className="font-bold text-sm">
-            {activeGroup} — {rows.length} แถว
-          </h2>
-          <span className="text-[10px] text-muted">tier1 → tier2 → tier3 = ราคา/หน่วย ตามปริมาณที่ขึ้น</span>
-        </div>
-        {rows.length === 0 ? (
-          <p className="p-12 text-center text-sm text-muted">
-            ยังไม่มีเรทใน {activeGroup} — เพิ่มแถวแรกด้านล่าง
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
-                <tr>
-                  <th className="px-4 py-3">โกดัง</th>
-                  <th className="px-4 py-3">ขนส่ง</th>
-                  <th className="px-4 py-3">ประเภท</th>
-                  <th className="px-4 py-3">หน่วย</th>
-                  <th className="px-4 py-3 text-right">tier1</th>
-                  <th className="px-4 py-3 text-right">tier2</th>
-                  <th className="px-4 py-3 text-right">tier3</th>
-                  <th className="px-4 py-3">อัพเดทล่าสุด</th>
-                  <th className="px-4 py-3"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <GeneralRateRow
-                    key={r.id}
-                    row={r}
-                    warehouseLabel={WAREHOUSE_LABEL[r.source_warehouse] ?? r.source_warehouse}
-                    transportLabel={TRANSPORT_LABEL[r.transport_type] ?? r.transport_type}
-                    productLabel={PRODUCT_LABEL[r.product_type] ?? r.product_type}
-                    basisLabel={BASIS_LABEL[r.basis] ?? r.basis}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Add new row */}
-      <NewGeneralRateRow defaultGroup={activeGroup} />
+      <GeneralRateMatrix coid={GENERAL_COID} initial={matrix} />
 
       <p className="text-[11px] text-muted">
-        การคำนวณราคา: เรทที่เลือกไหลตาม waterfall <code>custom_hs → custom_user → vip → general</code>.
-        ดู [lib/forwarder/calc-price.ts](#) สำหรับรายละเอียด tier selection logic.
+        tier1 → tier2 → tier3 = ราคา/หน่วย ตามช่วงปริมาณที่สูงขึ้น · ปล่อยว่าง = ไม่ตั้งค่า tier นั้น ·
+        เรท VIP รายกลุ่ม/รายลูกค้าอยู่ที่หน้าโปรไฟล์ลูกค้า + /admin/rates
       </p>
     </main>
   );
