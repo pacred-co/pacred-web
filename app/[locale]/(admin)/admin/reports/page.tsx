@@ -69,12 +69,30 @@ const REPORTS_MENUBAR: MenubarItem[] = [
       { label: "เบิกเงินส่วนแบ่งร้านค้า",   href: "/admin/reports/shops-profit-pay" },
     ],
   },
-  { label: "การเข้าถึงระบบ", href: "/admin/reports/system" },
+  // Theme B reachability (2026-05-31 · เดฟ · §0d): the 5 profit/analysis
+  // reports read real tb_* now (P0-20) but were ORPHANS — no inbound link.
+  // Wired into the menubar here so staff can reach them in ≤3 clicks.
+  {
+    label: "กำไร",
+    children: [
+      { label: "กำไรฝากนำเข้า", href: "/admin/reports/forwarder-profit" },
+      { label: "กำไรฝากสั่งซื้อ", href: "/admin/reports/shops-profit" },
+      { label: "กำไรฝากโอนหยวน", href: "/admin/reports/yuan-profit" },
+    ],
+  },
+  {
+    label: "การเข้าถึงระบบ",
+    children: [
+      { label: "เข้าใช้ระบบ",       href: "/admin/reports/system" },
+      { label: "ยืนยัน OTP สำเร็จ", href: "/admin/reports/otp-success" },
+    ],
+  },
   {
     label: "ปริมาณ",
     children: [
       { label: "ฝากนำเข้า (volume)", href: "/admin/reports/forwarder-volume" },
       { label: "sales-by-rep",       href: "/admin/reports/sales-by-rep" },
+      { label: "ยอดพนักงานขาย (รายเดือน)", href: "/admin/reports/sales-monthly" },
       // Wave 7.3 (2026-05-22): wired containers-hs orphan per ภูม decision
       // in page-inventory-2026-05-21-night.md §🔴 DEAD.
       { label: "ตู้ตาม HS code",      href: "/admin/reports/containers-hs" },

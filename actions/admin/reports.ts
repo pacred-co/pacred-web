@@ -510,7 +510,11 @@ export async function getShopsProfitReport(range: DateRange): Promise<Result<Sho
         cost_thb:     cost,
         sale_thb:     sale,
         service_fee:  profit,
-        vat7:         0, // P0-20: invented column removed; back-compat 0
+        // Theme B fidelity (2026-05-31 · owner #2 "VAT7 = legacy · shops-only"):
+        // legacy report-shops-profit.php L255 shows VAT7 = profit*0.07 on the
+        // shops report (and ONLY shops — forwarder/yuan have no VAT column).
+        // Restored here; the forwarder/yuan reports drop the column entirely.
+        vat7:         Math.round(profit * 0.07 * 100) / 100,
         status:       HSTATUS_MAP[r.hstatus] ?? r.hstatus,
         created_at:   r.hdate ?? "",
       };

@@ -288,37 +288,39 @@ assertEq("yuan profit — payprofitthb=0 → computed (paythb-paythbcost = 5000-
   yuanProfit({ paythb: 5000, paythbcost: 4500, payprofitthb: 0 }), 500);
 
 // ════════════════════════════════════════════════════════════════════════
-// F. Invented `vat7` column REMOVED — every row's vat7 is 0.
+// F. VAT7 column — legacy fidelity (Theme B · 2026-05-31 · owner #2).
 // ════════════════════════════════════════════════════════════════════════
 //
-// Per adm-13-reports.md L123-126 + L164:
-//   "Pacred adds VAT7 (not in legacy)" — invented column, never existed
-//   on tb_header_order or anywhere in 0081. The P0-20 rewrite holds vat7
-//   at 0 on every row for back-compat with the existing page's column
-//   render (the cell shows "—" via the page's `format` predicate which
-//   tests `Number(v) > 0`).
+// Owner decision 2026-05-31: "VAT7 = ตาม legacy ไปก่อน". Verified vs legacy:
+//   - report-shops-profit.php L255 SHOWS VAT7 = profit * 0.07 (the ONLY report
+//     with a VAT column). RESTORED on the shops report.
+//   - report-forwarder-profit.php + report-payments-profit.php have NO VAT
+//     column. DROPPED from those two pages (the row field stays 0, the page no
+//     longer renders it).
+// (Earlier P0-20 had zeroed VAT everywhere — that over-removed the legit shops
+//  one; this restores fidelity.)
 
-section("F. Invented vat7 column — REMOVED (held at 0 for page back-compat)");
+section("F. VAT7 — shops-only (legacy fidelity · owner #2)");
 
-const sampleForwarderRow = {
-  vat7: 0, profit: 400, sale_total: 1000, cost_total: 500,
-};
-const sampleShopRow = {
-  vat7: 0, service_fee: 400, sale_thb: 1000, cost_thb: 500,
-};
-const sampleYuanRow = {
-  vat7: 0, profit: 500, sale_thb: 5000, cost_thb: 4500,
-};
+// Shops: VAT7 = service_fee (profit) * 0.07, rounded to 2dp (legacy L255).
+function shopVat7(profit: number): number {
+  return Math.round(profit * 0.07 * 100) / 100;
+}
+const sampleForwarderRow = { vat7: 0, profit: 400, sale_total: 1000, cost_total: 500 };
+const sampleShopRow      = { service_fee: 400, sale_thb: 1000, cost_thb: 500, vat7: shopVat7(400) };
+const sampleYuanRow      = { vat7: 0, profit: 500, sale_thb: 5000, cost_thb: 4500 };
 
-assertEq("forwarder vat7 always 0 (was profit*0.07 — REMOVED)", sampleForwarderRow.vat7, 0);
-assertEq("shop      vat7 always 0 (was profit*0.07 — REMOVED)", sampleShopRow.vat7,       0);
-assertEq("yuan      vat7 always 0 (was profit*0.07 — REMOVED)", sampleYuanRow.vat7,       0);
+assertEq("forwarder vat7 = 0 (no VAT column · dropped)", sampleForwarderRow.vat7, 0);
+assertEq("yuan      vat7 = 0 (no VAT column · dropped)",  sampleYuanRow.vat7,      0);
+assertEq("shop      vat7 = profit*0.07 (RESTORED · legacy L255)", sampleShopRow.vat7, 28);
+assertEq("shop      vat7 rounds to 2dp", shopVat7(333.33), 23.33);
 
-// Existing pages format vat7 with `Number(v) > 0 ? thb(v) : "—"` → "—" appears
+// The page formats vat7 with `Number(v) > 0 ? thb(v) : "—"`: forwarder/yuan
+// dropped the column entirely; shops now shows the real value.
 function pageVat7Display(v: number): string {
   return Number(v) > 0 ? `฿${v.toFixed(2)}` : "—";
 }
-assertEq("page displays '—' for vat7=0 (back-compat)", pageVat7Display(0), "—");
+assertEq("shops page shows the VAT value", pageVat7Display(28), "฿28.00");
 
 // ════════════════════════════════════════════════════════════════════════
 // G. Daily series contract — bucket by YYYY-MM-DD, sum profit + count.

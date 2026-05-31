@@ -63,7 +63,8 @@ export default async function YuanProfitReportPage({
   const totalCost   = rows.reduce((s, r) => s + r.cost_thb, 0);
   const totalSale   = rows.reduce((s, r) => s + r.sale_thb, 0);
   const totalProfit = rows.reduce((s, r) => s + r.profit, 0);
-  const totalVat    = rows.reduce((s, r) => s + r.vat7, 0);
+  // Theme B fidelity (2026-05-31 · owner #2): legacy report-payments-profit.php
+  // has NO VAT column (VAT7 is shops-only). Column dropped.
   const rowsWithCost = rows.filter((r) => r.cost_thb > 0).length;
 
   const data: ReportData = {
@@ -77,7 +78,6 @@ export default async function YuanProfitReportPage({
       { key: "cost_thb",     label: "ราคาต้นทุน (บาท)", align: "right", format: (v) => Number(v) > 0 ? thb(v as number) : "—" },
       { key: "sale_thb",     label: "ราคาขาย (บาท)",  align: "right", format: (v) => thb(v as number) },
       { key: "profit",       label: "กำไร (บาท)",     align: "right", format: (v) => Number(v) > 0 ? thb(v as number) : "—" },
-      { key: "vat7",         label: "ภาษีฯ 7% (บาท)", align: "right", format: (v) => Number(v) > 0 ? thb(v as number) : "—" },
       { key: "status",       label: "สถานะ",         format: (v) => STATUS_LABEL[String(v)] ?? String(v) },
     ],
     rows: rows.map((r) => ({
@@ -91,7 +91,6 @@ export default async function YuanProfitReportPage({
       cost_thb:      r.cost_thb,
       sale_thb:      r.sale_thb,
       profit:        r.profit,
-      vat7:          r.vat7,
       status:        r.status,
     })),
     totals: {
@@ -100,7 +99,6 @@ export default async function YuanProfitReportPage({
       cost_thb:   thb(totalCost),
       sale_thb:   thb(totalSale),
       profit:     thb(totalProfit),
-      vat7:       thb(totalVat),
     },
   };
 
