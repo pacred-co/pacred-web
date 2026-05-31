@@ -2824,6 +2824,7 @@
       "csvImports": "CSV bulk import",
       "tools": "Tools",
       "orgEmail": "Organization email",
+      "orgChannels": "Organization channels",
       "adminUsers": "Admin users"
     },
     "userCargo": {

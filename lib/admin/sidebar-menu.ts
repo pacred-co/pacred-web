@@ -425,8 +425,9 @@ const blockSettingsCargo: MenuItem = {
       labelKey: "settingsCargo.tools",
       icon: "Wrench",
       children: [
-        { labelKey: "settingsCargo.orgEmail",   href: "/admin/organization-email", icon: "MessageCircle" },
-        { labelKey: "settingsCargo.adminUsers", href: "/admin/admins",             icon: "UserCog" },
+        { labelKey: "settingsCargo.orgEmail",    href: "/admin/organization-email",    icon: "MessageCircle" },
+        { labelKey: "settingsCargo.orgChannels", href: "/admin/organization-channels", icon: "Smartphone" },
+        { labelKey: "settingsCargo.adminUsers",  href: "/admin/admins",                icon: "UserCog" },
       ],
     },
   ],
