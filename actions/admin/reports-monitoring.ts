@@ -115,26 +115,31 @@ export async function getSearchDemandReport(
   try {
     const admin = createAdminClient();
 
+    // 2026-06-01 Wave-A §0e — repointed from the EMPTY legacy `tb_history_key`
+    // (0 rows · the report was blank forever) to the LIVE `tb_search_history`
+    // (31+ rows · where actions/search.ts logs every customer search · migration
+    // 0102). Column remap: date→created_at · keyword→query · apierror→result_count
+    // (result_count=0 ≈ legacy "API problem/no result"; >0 ≈ "found/no problem").
     let q = admin
-      .from("tb_history_key")
-      .select("date, keyword, apierror")
-      .gte("date", dayStartIso(range.from))
-      .lte("date", dayEndIso(range.to))
-      .order("date", { ascending: false })
+      .from("tb_search_history")
+      .select("created_at, query, result_count")
+      .gte("created_at", dayStartIso(range.from))
+      .lte("created_at", dayEndIso(range.to))
+      .order("created_at", { ascending: false })
       .limit(LIMIT);
 
-    // Legacy hStatus dropdown: "1" = API problem, "2" = no problem.
-    if (status === "1" || status === "2") {
-      q = q.eq("apierror", status);
-    }
+    // Legacy hStatus dropdown: "1" = API problem (no result) → result_count=0;
+    // "2" = no problem (found) → result_count>0.
+    if (status === "1") q = q.eq("result_count", 0);
+    else if (status === "2") q = q.gt("result_count", 0);
 
     const { data, error } = await q;
     if (error) {
-      logger.error("reports", "search-demand tb_history_key query failed", error);
+      logger.error("reports", "search-demand tb_search_history query failed", error);
       return { ok: false, error: error.message };
     }
 
-    type Raw = { date: string | null; keyword: string | null; apierror: string | null };
+    type Raw = { created_at: string | null; query: string | null; result_count: number | null };
     const raw = (data ?? []) as Raw[];
 
     // GROUP BY keyword in JS (PostgREST can't COUNT/GROUP without an RPC).
@@ -142,13 +147,13 @@ export async function getSearchDemandReport(
     // its most-recent date.
     const agg = new Map<string, { count: number; last: string }>();
     for (const r of raw) {
-      const kw = (r.keyword ?? "").trim();
+      const kw = (r.query ?? "").trim();
       if (!kw) continue;
       const cur = agg.get(kw);
       if (cur) {
         cur.count += 1;
       } else {
-        agg.set(kw, { count: 1, last: r.date ?? "" });
+        agg.set(kw, { count: 1, last: r.created_at ?? "" });
       }
     }
 

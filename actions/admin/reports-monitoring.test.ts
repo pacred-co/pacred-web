@@ -46,14 +46,17 @@ console.log("=== A2 #24 monitoring reports — table/column + aggregation contra
 section("A. Table + date-column contract (legacy tb_* · lowercase per 0081)");
 
 const EXPECTED_TABLES: Record<string, string> = {
-  getSearchDemandReport: "tb_history_key",
+  // 2026-06-01 Wave-A §0e: repointed from the EMPTY legacy tb_history_key (0 rows
+  // · report was blank forever) to the LIVE tb_search_history (where actions/search.ts
+  // logs every customer search · migration 0102).
+  getSearchDemandReport: "tb_search_history",
   getSmsUsageReport:     "tb_sms_hs",
 };
-assertEq("getSearchDemandReport targets tb_history_key", EXPECTED_TABLES.getSearchDemandReport, "tb_history_key");
-assertEq("getSmsUsageReport     targets tb_sms_hs",      EXPECTED_TABLES.getSmsUsageReport,     "tb_sms_hs");
+assertEq("getSearchDemandReport targets tb_search_history", EXPECTED_TABLES.getSearchDemandReport, "tb_search_history");
+assertEq("getSmsUsageReport     targets tb_sms_hs",         EXPECTED_TABLES.getSmsUsageReport,     "tb_sms_hs");
 
-// Both tables key the date-range filter off the `date` column (0081).
-assertEq("both fetchers filter on `date` column", ["date", "date"], ["date", "date"]);
+// search-demand filters on `created_at` (tb_search_history · 0102); sms on `date` (tb_sms_hs · 0081).
+assertEq("date-range columns", ["created_at", "date"], ["created_at", "date"]);
 
 // ════════════════════════════════════════════════════════════════════════
 // B. Column-name fidelity — 0081 lowercase (NOT the legacy PHP camelCase).
@@ -66,19 +69,20 @@ assertEq("both fetchers filter on `date` column", ["date", "date"], ["date", "da
 section("B. Column-name fidelity — 0081 lowercase");
 
 const COL_CONTRACT: Record<string, string[]> = {
-  tb_history_key: ["id", "date", "keyword", "userid", "type", "apierror", "categoryname"],
-  tb_sms_hs:      ["id", "date", "msisdn", "message", "status"],
+  // tb_search_history (0102) — the LIVE search log getSearchDemandReport now reads.
+  tb_search_history: ["id", "created_at", "query", "result_count", "user_id", "source"],
+  tb_sms_hs:         ["id", "date", "msisdn", "message", "status"],
 };
 for (const [table, cols] of Object.entries(COL_CONTRACT)) {
   for (const col of cols) {
-    assertEq(`${table}.${col} is lowercase (0081)`, col === col.toLowerCase(), true);
+    assertEq(`${table}.${col} is lowercase`, col === col.toLowerCase(), true);
   }
 }
-// Explicitly assert the migrated name is `keyword`, NOT the legacy `keyWord`.
-assertEq("search keyword column is `keyword` (NOT `keyWord`)",
-  COL_CONTRACT.tb_history_key.includes("keyword"), true);
-assertEq("search keyword column does NOT use camelCase `keyWord`",
-  COL_CONTRACT.tb_history_key.includes("keyWord"), false);
+// The search term lives in tb_search_history.query (NOT the empty legacy tb_history_key.keyword/keyWord).
+assertEq("search term column is `query`",
+  COL_CONTRACT.tb_search_history.includes("query"), true);
+assertEq("search log does NOT use legacy camelCase `keyWord`",
+  COL_CONTRACT.tb_search_history.includes("keyWord"), false);
 
 // ════════════════════════════════════════════════════════════════════════
 // C. Label maps — match legacy helpers verbatim.
