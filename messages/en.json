@@ -2889,6 +2889,7 @@
     },
     "warehouse": {
       "containers": "Containers",
+      "printLabels": "Print box labels (cabinet)",
       "bulletin": "Daily container bulletin",
       "qaInspect": "QA inspections",
       "csvImports": "Bulk CSV import"

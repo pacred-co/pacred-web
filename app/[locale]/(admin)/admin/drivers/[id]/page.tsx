@@ -26,7 +26,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
 import {
   Truck, Clock, CheckCircle2, XCircle, MapPin, Phone,
-  Package, AlertTriangle, ArrowLeft,
+  Package, AlertTriangle, ArrowLeft, Printer,
 } from "lucide-react";
 import { BatchCountdown } from "./batch-countdown";
 import { BatchActions } from "./batch-actions";
@@ -370,6 +370,17 @@ export default async function AdminDriverBatchDetailPage({
               Google นำทาง (ทุกจุด)
             </a>
           )}
+          {/* re-sweep #12 — driver A4 picking slip (faithful port of
+              legacy printDriver.php). Opens in a new tab so the driver
+              keeps the batch detail open while printing. */}
+          <Link
+            href={`/admin/drivers/${batch.id}/print`}
+            target="_blank"
+            className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 border border-primary-200 text-primary-700 px-3 py-1.5 text-xs font-medium hover:bg-primary-100"
+          >
+            <Printer className="h-3.5 w-3.5" />
+            พิมพ์ใบส่งสินค้า
+          </Link>
           {isOpsOverride && fdstatus === "1" && deliveredCount === 0 && (
             <BatchActions batchId={batch.id} />
           )}
