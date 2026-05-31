@@ -1,42 +1,53 @@
 "use server";
 
 /**
- * V-G3 — Admin broadcasts (push popup to customers).
+ * Admin broadcasts — the customer login-popup announcement.
  *
- * Per port-spec [docs/port-specs/admin-polish-bundle.md] §V-G3.
+ * ── 2026-06-01 — REPOINTED to legacy `tb_notify` (re-sweep M-1 · FG-1) ───────
+ * Faithful port of `pcs-admin/popup.php` (the "รายการ pop up ประกาศ" screen):
+ * an admin creates ONE `tb_notify` row and EVERY active customer sees it at
+ * login (filtered by the `datestart..dateexp` display window) until each one
+ * acknowledges it — which inserts a `tb_notify_read` receipt (userid + popid).
  *
- * Status lifecycle:
- *   draft → scheduled → sending → sent (terminal)
- *                                ↘ cancelled (terminal — can branch from draft or scheduled)
+ * This reaches ALL 8,898 migrated customers because the customer popup reads
+ * `tb_notify` directly (join key = the customer's `userid` = profile.member_code).
+ * The previous rebuilt fan-out wrote one `notifications` row per `profiles` row,
+ * which only covered the small subset of customers that had logged in to the
+ * rebuilt app.
  *
- * V1 actions:
- *   - adminCreateBroadcast      → draft
- *   - adminScheduleBroadcast    → draft → scheduled (V-G3.1 cron will fire)
- *   - adminSendBroadcastNow     → draft → sending → sent (immediate fan-out)
- *   - adminCancelBroadcast      → draft|scheduled → cancelled
+ * Legacy SQL (popup.php L31-33):
+ *   INSERT INTO `tb_notify`(`title`,`content`,`dateExp`,`dateStart`,`url`,`adminID`)
+ *   VALUES ('$title','$content','$dateExp','$dateStart','$url','$adminID')
+ * `tb_notify` columns (migration 0081, all lowercase): id · title varchar(400)
+ *   · content varchar(100) · datestart · dateexp · url varchar(400) NOT NULL
+ *   · adminid varchar(10) NOT NULL.
  *
- * Fan-out (adminSendBroadcastNow):
- *   1. Resolve target profile_ids from `audience` filter
- *   2. Bulk insert notifications rows (1 per target, all linked back via
- *      notifications.broadcast_id FK from migration 0055)
- *   3. Update broadcasts.sent_count = N + status='sent' + sent_at
+ * ── AUDIENCE MAPPING (legacy has none) ──────────────────────────────────────
+ * Legacy `tb_notify` has NO audience/targeting column — a popup is always shown
+ * to ALL active customers. The rebuilt form's `audience` field (all /
+ * juristic_only / personal_only / specific_ids) has no faithful equivalent and
+ * is dropped from the create flow. If per-segment popups are ever needed, that
+ * is a Phase-C enhancement (would require a new column + a customer-side filter).
  *
- * V1 limitations (deferred to V-G3.1):
- *   - LINE push fan-out (V1 = in-app via notifications rows only)
- *   - Per-second rate limiting (V1 = single bulk insert which is fast)
- *   - Scheduled cron worker (V1 = "Send Now" only; admin manually fires
- *     scheduled rows; the table + status are in place for the cron)
+ * ── DEAD TWIN (removable — kept this pass, do NOT extend) ─────────────────────
+ * `adminScheduleBroadcast` / `adminSendBroadcastNow` / `adminCancelBroadcast`
+ * below still operate on the rebuilt `broadcasts` + `notifications` tables and
+ * are now orphaned (the create flow no longer produces `broadcasts` rows). The
+ * cron at `/api/cron/send-scheduled-broadcasts` is likewise dormant. They are
+ * left in place so this pass is reversible; delete them (and the rebuilt
+ * `broadcasts`/`notifications`/`notification_reads` tables) when the rebuilt
+ * notification stack is retired.
  *
- * RBAC: super + sales_admin (per spec §"Open question for ก๊อต" default).
- *
- * Audit: every mutation writes admin_audit_log per ADR-0014.
+ * RBAC: super + sales_admin. Audit: every mutation writes admin_audit_log.
  */
 
 import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import {
-  createBroadcastSchema,   type CreateBroadcastInput,
+  createNotifySchema,      type CreateNotifyInput,
+  deleteNotifySchema,      type DeleteNotifyInput,
   scheduleBroadcastSchema, type ScheduleBroadcastInput,
   sendBroadcastNowSchema,  type SendBroadcastNowInput,
   cancelBroadcastSchema,   type CancelBroadcastInput,
@@ -45,13 +56,40 @@ import {
 const ROLES = ["super", "sales_admin"] as const;
 
 // ────────────────────────────────────────────────────────────
-// 1) Create draft
+// Resolve current admin's legacy id (tb_notify.adminid is varchar(10)).
+// Same helper as the other repointed actions (forwarder-cost.ts etc.) —
+// kept local; the legacy admin code is short (e.g. "admin_nat") so cap at 10.
+// ────────────────────────────────────────────────────────────
+async function resolveLegacyAdminId(): Promise<string> {
+  const supabase = await createClient();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase getUser] failed`, { code: dataErr.code, message: dataErr.message });
+  }
+  const email = user?.email ?? null;
+  if (!email) return "system";
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("tb_admin")
+    .select("adminID")
+    .eq("adminEmail", email)
+    .maybeSingle<{ adminID: string | null }>();
+  if (error) {
+    console.error(`[tb_admin lookup] failed`, { code: error.code, message: error.message });
+  }
+  if (data?.adminID) return data.adminID.slice(0, 10);
+  return email.slice(0, 10);
+}
+
+// ────────────────────────────────────────────────────────────
+// 1) Create a tb_notify popup (faithful — popup.php save_notify)
 // ────────────────────────────────────────────────────────────
 
 export async function adminCreateBroadcast(
-  input: CreateBroadcastInput,
+  input: CreateNotifyInput,
 ): Promise<AdminActionResult<{ id: string }>> {
-  const parsed = createBroadcastSchema.safeParse(input);
+  const parsed = createNotifySchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
@@ -59,38 +97,95 @@ export async function adminCreateBroadcast(
 
   return withAdmin([...ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
+    const adminLegacyId = await resolveLegacyAdminId();
 
+    // Display window: default to "show from now, for 1 year" when the admin
+    // doesn't pin a window (legacy required both, but our UI keeps them
+    // optional so a quick announcement just works).
+    const now = new Date();
+    const datestart = d.datestart ?? now.toISOString();
+    const dateexp =
+      d.dateexp ??
+      new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
+
+    // `url` + `content` are NOT NULL / capped in the legacy schema — coalesce
+    // to "" exactly like the legacy PHP string-interpolation did (a missing
+    // PHP value interpolates to the empty string, never SQL NULL).
     const { data: inserted, error: insErr } = await admin
-      .from("broadcasts")
+      .from("tb_notify")
       .insert({
-        title:               d.title,
-        body:                d.body,
-        link_href:           d.link_href ?? null,
-        audience:            d.audience,
-        audience_ids:        d.audience === "specific_ids" ? d.audience_ids ?? [] : null,
-        status:              "draft",
-        created_by_admin_id: adminId,
+        title:     d.title,
+        content:   d.content ?? "",
+        url:       d.url ?? "",
+        datestart,
+        dateexp,
+        adminid:   adminLegacyId,
       })
       .select("id")
-      .single<{ id: string }>();
+      .single<{ id: number }>();
     if (insErr || !inserted) {
       return { ok: false, error: `insert_failed: ${insErr?.message ?? "no_row"}` };
     }
 
-    await logAdminAction(adminId, "broadcast.create", "broadcast", inserted.id, {
-      title:    d.title,
-      audience: d.audience,
-      audience_size: d.audience === "specific_ids" ? d.audience_ids?.length ?? 0 : null,
+    await logAdminAction(adminId, "notify.create", "tb_notify", String(inserted.id), {
+      title:     d.title,
+      datestart,
+      dateexp,
     });
 
     revalidatePath("/admin/broadcasts");
-    return { ok: true, data: { id: inserted.id } };
+    return { ok: true, data: { id: String(inserted.id) } };
   });
 }
 
 // ────────────────────────────────────────────────────────────
-// 2) Schedule (draft → scheduled)
+// 2) Delete a tb_notify popup + its read receipts (faithful — popup/delete.php)
 // ────────────────────────────────────────────────────────────
+
+export async function adminDeleteNotify(
+  input: DeleteNotifyInput,
+): Promise<AdminActionResult<void>> {
+  const parsed = deleteNotifySchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { id } = parsed.data;
+
+  return withAdmin([...ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    // Legacy deletes the notify row first, then its read receipts.
+    const { error: delErr } = await admin.from("tb_notify").delete().eq("id", id);
+    if (delErr) return { ok: false, error: `delete_failed: ${delErr.message}` };
+
+    const { error: delReadErr } = await admin
+      .from("tb_notify_read")
+      .delete()
+      .eq("popid", id);
+    if (delReadErr) {
+      // Non-fatal — the popup is already gone; orphan receipts are harmless.
+      console.error(`[tb_notify_read delete] failed`, {
+        code: delReadErr.code,
+        message: delReadErr.message,
+        popid: id,
+      });
+    }
+
+    await logAdminAction(adminId, "notify.delete", "tb_notify", String(id), {});
+
+    revalidatePath("/admin/broadcasts");
+    return { ok: true };
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+// DEAD TWIN — rebuilt `broadcasts` fan-out (orphaned 2026-06-01)
+//
+// These act on the rebuilt `broadcasts` + `notifications` tables. The create
+// flow no longer produces `broadcasts` rows, so nothing reaches them — they are
+// kept only to make this pass reversible. Do NOT extend; delete with the rebuilt
+// notification stack. See file header.
+// ════════════════════════════════════════════════════════════
 
 export async function adminScheduleBroadcast(
   input: ScheduleBroadcastInput,
@@ -136,10 +231,6 @@ export async function adminScheduleBroadcast(
   });
 }
 
-// ────────────────────────────────────────────────────────────
-// 3) Send now (draft → sending → sent + fan-out)
-// ────────────────────────────────────────────────────────────
-
 export async function adminSendBroadcastNow(
   input: SendBroadcastNowInput,
 ): Promise<AdminActionResult<{ sent_count: number; failed_count: number }>> {
@@ -182,22 +273,14 @@ export async function adminSendBroadcastNow(
     if (bc.audience === "specific_ids") {
       targetIds = bc.audience_ids ?? [];
     } else {
-      // AUDIT-FOLLOWUP (Agent F LOW #4) — page through profiles so the
-      // audience isn't silently truncated past 100k customers. Supabase
-      // PostgREST has a hard 1000-row cap per request even with
-      // .limit(100000) — we MUST use .range() to walk past it.
       const PAGE = 1000;
       let from = 0;
-      // Defensive global cap — if Pacred ever has >1M active customers
-      // we'd want chunked notification writes anyway (current chunk=1000
-      // means 1M rows would be 1000 chunks — safer to add a separate
-      // batch-job worker at that scale; raise here when needed).
       const GLOBAL_CAP = 1_000_000;
       while (from < GLOBAL_CAP) {
         let query = admin
           .from("profiles")
           .select("id")
-          .eq("status", "active")                                        // skip suspended/incomplete
+          .eq("status", "active")
           .order("id", { ascending: true })
           .range(from, from + PAGE - 1);
         if (bc.audience === "juristic_only") {
@@ -207,7 +290,6 @@ export async function adminSendBroadcastNow(
         }
         const { data: page, error: profErr } = await query;
         if (profErr) {
-          // Roll back to draft so admin can retry.
           await admin.from("broadcasts").update({ status: "draft" }).eq("id", d.id);
           return { ok: false, error: `audience_resolve_failed: ${profErr.message}` };
         }
@@ -221,7 +303,6 @@ export async function adminSendBroadcastNow(
     }
 
     if (targetIds.length === 0) {
-      // No targets — flip to sent with 0 count.
       await admin
         .from("broadcasts")
         .update({
@@ -239,9 +320,6 @@ export async function adminSendBroadcastNow(
       return { ok: true, data: { sent_count: 0, failed_count: 0 } };
     }
 
-    // Fan-out: bulk insert notifications rows.
-    // category='promo' matches existing enum; broadcast_id links each row
-    // back per migration 0055 FK.
     type NotifPayload = {
       profile_id:    string;
       category:      string;
@@ -261,7 +339,6 @@ export async function adminSendBroadcastNow(
       broadcast_id: bc.id,
     }));
 
-    // Supabase bulk insert is atomic per chunk — chunk to 1000 rows to be safe.
     let totalInserted = 0;
     let totalFailed   = 0;
     const CHUNK = 1000;
@@ -280,7 +357,6 @@ export async function adminSendBroadcastNow(
       }
     }
 
-    // Mark sent.
     await admin
       .from("broadcasts")
       .update({
@@ -303,10 +379,6 @@ export async function adminSendBroadcastNow(
     return { ok: true, data: { sent_count: totalInserted, failed_count: totalFailed } };
   });
 }
-
-// ────────────────────────────────────────────────────────────
-// 4) Cancel (draft|scheduled → cancelled)
-// ────────────────────────────────────────────────────────────
 
 export async function adminCancelBroadcast(
   input: CancelBroadcastInput,

@@ -3,34 +3,44 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { adminCreateBroadcast } from "@/actions/admin/broadcasts";
-import {
-  BROADCAST_AUDIENCES, BROADCAST_AUDIENCE_LABEL,
-  type BroadcastAudience,
-} from "@/lib/validators/broadcast";
 
+/**
+ * Faithful create form for a `tb_notify` popup (legacy `popup/add.php`).
+ *
+ * Legacy fields: title (ชื่อเรื่องประกาศ) · dateStart (วันเริ่มต้นการแสดงผล) ·
+ * dateExp (วันหมดอายุการแสดงผล) · content (รูปภาพสำหรับ Popup — image filename) ·
+ * url (ลิงก์อ่านเพิ่มเติม). We keep `content` as a short text-line OR image URL
+ * (varchar(100)); image upload to storage is a follow-up (Pacred-design polish).
+ *
+ * The legacy popup is shown to ALL active customers — there is no audience
+ * picker (the old rebuilt one is dropped, see actions/admin/broadcasts.ts).
+ */
 export function NewBroadcastForm() {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  const [title,       setTitle]       = useState("");
-  const [body,        setBody]        = useState("");
-  const [linkHref,    setLinkHref]    = useState("");
-  const [audience,    setAudience]    = useState<BroadcastAudience>("all");
-  const [audienceIds, setAudienceIds] = useState(""); // comma-sep
-  const [err,         setErr]         = useState<string | null>(null);
+  const [title,     setTitle]     = useState("");
+  const [content,   setContent]   = useState("");
+  const [url,       setUrl]       = useState("");
+  const [dateStart, setDateStart] = useState(""); // datetime-local
+  const [dateExp,   setDateExp]   = useState(""); // datetime-local
+  const [err,       setErr]       = useState<string | null>(null);
+
+  function localToIso(v: string): string | undefined {
+    if (!v) return undefined;
+    const d = new Date(v); // datetime-local is interpreted in the browser TZ
+    return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+  }
 
   function fire() {
     setErr(null);
-    const idList = audience === "specific_ids"
-      ? audienceIds.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean)
-      : undefined;
     startTransition(async () => {
       const res = await adminCreateBroadcast({
-        title:        title.trim(),
-        body:         body.trim(),
-        link_href:    linkHref.trim() || undefined,
-        audience,
-        audience_ids: idList,
+        title:     title.trim(),
+        content:   content.trim() || undefined,
+        url:       url.trim() || undefined,
+        datestart: localToIso(dateStart),
+        dateexp:   localToIso(dateExp),
       });
       if (res.ok) {
         router.push(`/admin/broadcasts/${res.data!.id}`);
@@ -41,81 +51,75 @@ export function NewBroadcastForm() {
   }
 
   return (
-    <form
-      className="space-y-5"
-      onSubmit={(e) => { e.preventDefault(); fire(); }}
-    >
+    <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); fire(); }}>
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3">
-        <Field label="หัวข้อ" required>
+        <Field label="ชื่อเรื่องประกาศ" required>
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            maxLength={200}
+            maxLength={400}
             placeholder="เช่น ปิดทำการสงกรานต์ 13-15 เม.ย."
             className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
             required
           />
-          <span className="text-[10px] text-muted">{title.length} / 200</span>
+          <span className="text-[10px] text-muted">{title.length} / 400</span>
         </Field>
 
-        <Field label="เนื้อหา" required>
-          <textarea
-            rows={5}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            maxLength={2000}
-            placeholder="เขียนข้อความที่ลูกค้าจะเห็นใน popup..."
+        <Field label="ข้อความ / ลิงก์รูปภาพสำหรับ Popup">
+          <input
+            type="text"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            maxLength={100}
+            placeholder="ข้อความสั้น หรือ URL รูป https://…/promo.jpg"
             className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
-            required
           />
-          <span className="text-[10px] text-muted">{body.length} / 2000</span>
+          <span className="text-[10px] text-muted">
+            {content.length} / 100 — ถ้าเป็น URL รูป (.png/.jpg) จะแสดงเป็นรูปใน popup
+          </span>
         </Field>
 
         <Field label="ลิงก์ปลายทาง (optional)">
           <input
             type="text"
-            value={linkHref}
-            onChange={(e) => setLinkHref(e.target.value)}
-            maxLength={500}
-            placeholder="/promo/songkran หรือ /dashboard"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            maxLength={400}
+            placeholder="/promo/songkran หรือ https://…"
             className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm font-mono"
           />
         </Field>
       </section>
 
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3">
-        <Field label="กลุ่มลูกค้าเป้าหมาย" required>
-          <select
-            value={audience}
-            onChange={(e) => setAudience(e.target.value as BroadcastAudience)}
-            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
-          >
-            {BROADCAST_AUDIENCES.map((a) => (
-              <option key={a} value={a}>{BROADCAST_AUDIENCE_LABEL[a]}</option>
-            ))}
-          </select>
-        </Field>
-
-        {audience === "specific_ids" && (
-          <Field label="Profile UUIDs (คั่นด้วย comma หรือ newline)">
-            <textarea
-              rows={4}
-              value={audienceIds}
-              onChange={(e) => setAudienceIds(e.target.value)}
-              placeholder="uuid1, uuid2, uuid3"
-              className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs font-mono"
+        <h2 className="text-sm font-bold">ช่วงเวลาแสดงผล</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="วันเริ่มแสดงผล">
+            <input
+              type="datetime-local"
+              value={dateStart}
+              onChange={(e) => setDateStart(e.target.value)}
+              className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
             />
-            <span className="text-[10px] text-muted">
-              {audienceIds.split(/[\s,]+/).filter(Boolean).length} ลูกค้า
-            </span>
           </Field>
-        )}
+          <Field label="วันหมดอายุการแสดงผล">
+            <input
+              type="datetime-local"
+              value={dateExp}
+              onChange={(e) => setDateExp(e.target.value)}
+              className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
+            />
+          </Field>
+        </div>
+        <p className="text-[11px] text-muted">
+          เว้นว่าง = แสดงตั้งแต่ตอนนี้ ยาว 1 ปี.
+        </p>
       </section>
 
-      <p className="text-[11px] text-muted">
-        💡 บันทึกเป็น draft ก่อน → ในหน้า detail กด &quot;ส่งทันที&quot; หรือ &quot;กำหนดเวลา&quot;
-      </p>
+      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-[11px] text-blue-800">
+        📢 ประกาศนี้จะแสดงให้ <strong>ลูกค้าทุกคน</strong> เห็นตอน login (ไม่มีการเลือกกลุ่ม — ตรงกับระบบเดิม).
+      </div>
 
       {err && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{err}</div>
@@ -124,10 +128,10 @@ export function NewBroadcastForm() {
       <div className="flex gap-3 pt-2 border-t border-border">
         <button
           type="submit"
-          disabled={pending || title.trim().length === 0 || body.trim().length === 0}
+          disabled={pending || title.trim().length === 0}
           className="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50"
         >
-          {pending ? "กำลังบันทึก..." : "✓ บันทึก draft + ไปหน้า detail"}
+          {pending ? "กำลังบันทึก..." : "✓ บันทึก Pop-up"}
         </button>
         <button
           type="button"

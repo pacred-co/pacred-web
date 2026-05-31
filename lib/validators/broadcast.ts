@@ -1,16 +1,64 @@
 /**
- * Zod schemas for V-G3 admin broadcasts.
+ * Zod schemas for admin broadcasts.
  *
- * Per port-spec [docs/port-specs/admin-polish-bundle.md] §V-G3.
+ * ── 2026-06-01 — REPOINTED to legacy `tb_notify` (re-sweep M-1 · FG-1) ───────
+ * The customer login-popup announcement is the legacy `pcs-admin/popup.php`
+ * flow: an admin creates ONE `tb_notify` row, and EVERY active customer sees
+ * it at login (filtered by the `datestart..dateexp` window) until each marks it
+ * read in `tb_notify_read`. There is no draft/schedule/send lifecycle and no
+ * audience targeting in legacy — the date window IS the schedule, and the
+ * audience is always "all customers".
  *
- * V1 audience modes: all | juristic_only | personal_only | specific_ids
- * V1 deferred: specific_segment (JSONB filter, V-G3.2)
+ * `tb_notify` columns (migration 0081, all lowercase):
+ *   id bigint · title varchar(400) · content varchar(100) · datestart timestamp
+ *   · dateexp timestamp · url varchar(400) NOT NULL · adminid varchar(10) NOT NULL
+ * `tb_notify_read` columns: id bigint · userid varchar(10) · popid bigint
+ *   (popid = the tb_notify.id the customer acknowledged).
  *
- * V1 scheduling: admin can save as draft OR "send now" (cron picks up
- * scheduled rows in V-G3.1).
+ * The faithful create/delete schemas are `createNotifySchema` + `deleteNotifySchema`.
+ *
+ * ── DEAD TWIN (removable — kept this pass, do NOT extend) ─────────────────────
+ * The old rebuilt fan-out model (one `notifications` row per `profiles` target,
+ * with draft→scheduled→sending→sent + audience filters) lives in the `broadcasts`
+ * + `notifications` tables. Its schemas below (`scheduleBroadcastSchema`,
+ * `sendBroadcastNowSchema`, `cancelBroadcastSchema`) + the cron at
+ * `/api/cron/send-scheduled-broadcasts` are now orphaned — the create flow no
+ * longer produces `broadcasts` rows for them to act on. Safe to delete once the
+ * rebuilt `notifications`/`notification_reads`/`broadcasts` stack is retired.
  */
 
 import { z } from "zod";
+
+// ────────────────────────────────────────────────────────────
+// FAITHFUL — tb_notify (popup.php) create + delete
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Create a `tb_notify` row (one popup, shown to all active customers within
+ * the display window). Mirrors `popup.php`'s save_notify handler.
+ *
+ * `content` is varchar(100) in legacy and held an uploaded image filename
+ * (`images/notify/<content>`). We keep the column semantics: it is the popup's
+ * visual — either a short text line OR an image URL (the popup renders an
+ * <img> when it looks like an image URL, otherwise renders the text). Capped at
+ * 100 to match the column so there is no silent truncation.
+ */
+export const createNotifySchema = z.object({
+  title:     z.string().trim().min(1, "ระบุชื่อเรื่องประกาศ").max(400),
+  content:   z.string().trim().max(100, "ข้อความ/ลิงก์รูป ยาวได้ไม่เกิน 100 ตัวอักษร").optional(),
+  url:       z.string().trim().max(400).optional(),
+  /** Display window start (ISO). Defaults to now in the action when omitted. */
+  datestart: z.string().datetime("วันเริ่มต้นต้องเป็น ISO timestamp").optional(),
+  /** Display window end (ISO). Defaults to +1 year in the action when omitted. */
+  dateexp:   z.string().datetime("วันหมดอายุต้องเป็น ISO timestamp").optional(),
+});
+export type CreateNotifyInput = z.infer<typeof createNotifySchema>;
+
+/** Delete a `tb_notify` row (+ its `tb_notify_read` receipts). Mirrors `popup/delete.php`. */
+export const deleteNotifySchema = z.object({
+  id: z.coerce.number().int().positive(),
+});
+export type DeleteNotifyInput = z.infer<typeof deleteNotifySchema>;
 
 export const BROADCAST_AUDIENCES = [
   "all",
