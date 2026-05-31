@@ -141,7 +141,11 @@ export default async function AdminLegacyRatesPage() {
             <li>
               <code className="rounded bg-white px-1 py-0.5 font-mono">hratecostdefault</code> = ปัจจุบัน{" "}
               <span className="font-mono">{hratecostdefault.toFixed(4)}</span> (cost-rate สำหรับ admin คำนวณ
-              margin · แก้ผ่าน raw SQL ตอนนี้ — UI editor รอ Wave ต่อไป)
+              margin) · แก้ได้ที่{" "}
+              <Link href="/admin/settings/forwarder-costs" className="underline font-medium">
+                เรทต้นทุนฝากนำเข้า
+              </Link>{" "}
+              (พร้อม matrix ต้นทุนค่าขนส่งต่อตู้ของทุกขนส่ง)
             </li>
           )}
         </ul>
