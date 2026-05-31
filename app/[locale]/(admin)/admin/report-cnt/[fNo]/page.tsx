@@ -502,6 +502,14 @@ export default async function AdminReportCntDetailPage({
             </div>
 
             <div className="flex flex-col items-end gap-2">
+              {/* re-sweep A2 #8 — print all box-labels for this cabinet in one motion (printAll port). */}
+              <Link
+                href={`/admin/printAll?cabinet=${encodeURIComponent(fCabinetNumber)}`}
+                target="_blank"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-primary-500 bg-primary-50 px-3 py-1.5 text-sm text-primary-700 font-medium hover:bg-primary-100"
+              >
+                🖨 พิมพ์ป้ายกล่องทั้งตู้
+              </Link>
               {canEditCost && (
                 <CostRateModal
                   fCabinetNumber={fCabinetNumber}
