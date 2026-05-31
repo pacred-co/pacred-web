@@ -109,6 +109,11 @@ const REPORTS_MENUBAR: MenubarItem[] = [
     ],
   },
   { label: "ลูกค้า", href: "/admin/reports/user-sales-history" },
+  // Re-sweep A2 #22 (2026-05-31 · §0d reachability): the agent-commission
+  // PAYOUT report — port of report-user-sales.php + report-user-sales-history.php.
+  // (The "ลูกค้า" leaf above is the name-collision per-customer cohort SUM, NOT
+  // this.) Wired here so staff reach it in ≤2 clicks.
+  { label: "ตัวแทน/คอมมิชชั่น", href: "/admin/reports/agent-payouts" },
   { label: "คนขับ", href: "/admin/driver-runs" },
 ];
 
