@@ -94,6 +94,7 @@ Severity legend (same as the d1-fidelity docs):
 - [ ] **Every legacy button exists** — same label (rebranded), same position, same action.
 - [ ] **Every legacy form field exists** — same fields, same order, same required/optional.
 - [ ] **Workflow order matches** — status tabs, step order, and the pay-point all in the legacy sequence (e.g. import = ship → arrive → **pay**, never pay-first).
+- [ ] **No dead-write trap (AGENTS.md §0e)** — for every write/edit surface, the table the WRITE targets == the table the CONSUMER reads. A reachable edit that writes a 0-row rebuilt twin while the reader reads the live `tb_*` = green-toast-no-effect (worse than missing). Grep both sides; repoint write→`tb_*`, or remove, or banner.
 - [ ] **Navigation matches** — the menu / entry-point a legacy user reaches for is where they expect it.
 - [ ] **Rebrand only** — `PCS`→`PR`/`Pacred` everywhere; no literal `PCS` left in customer-visible strings; no other "improvement" mixed in.
 - [ ] **Extras are owned** — every 🟢 Pacred-only element is intentional, recorded, and not crowding the legacy surface.

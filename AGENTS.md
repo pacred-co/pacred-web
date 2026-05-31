@@ -108,6 +108,22 @@ Full lesson: [`docs/learnings/verify-deep-flow.md`](docs/learnings/verify-deep-f
 
 ---
 
+## 0e. Reachable dead-write TRAPS — verify the CONSUMER's table before trusting an edit (2026-06-01 · from the big audit)
+
+The big audit (`docs/research/big-audit-2026-06-01/_MASTER-PLAN.md`) found the most dangerous residual bug class: a **reachable admin surface wired to a 0-row rebuilt table** while the real consumers read the legacy `tb_*` twin. Staff edit → green toast → **nothing changes** (silent wrong-data). Worse than a missing feature — it erodes trust + can mis-state money. Confirmed live: `/admin/settings` yuan_rate (fixed this session), `/admin/rates/vip`, the 3 commission pages (`/admin/commissions`·`/withdrawals`·`/forwarder-sales` — 4,104 real earns invisible).
+
+**Rule — before claiming an admin write-surface "works", or when porting/reviewing one:**
+1. Grep what table the WRITE action targets (`from("X")` / `.update` / `.insert`).
+2. Grep what table the READER/consumer reads (the customer page, the cron, the pricing engine, the report).
+3. If they differ (write→rebuilt twin, read→`tb_*`) → it's a dead-write trap. Repoint the write to the live `tb_*`, OR remove the surface, OR banner it. Never leave a reachable edit that no-ops.
+4. Quick prod check: a rebuilt table with **0 rows** is almost always the dead twin; the populated `tb_*` is canonical (147 of 263 tables are rebuilt — most are empty seeds).
+
+This sharpens §0c (verify-deep-flow) + §0d (reachability): a surface can be reachable AND render AND 200 AND still silently write nothing. The cheapest trust win is a "Potemkin sweep" of these.
+
+> **New long-term SOT:** the faithful-port era is closing (legacy `tb_*` canonical, money loop closed, forwarder ~90%). The next era = activate the data (BI + omni-CRM + automation + the CargoThai supply-chain platform). Plan: `docs/research/big-audit-2026-06-01/_MASTER-PLAN.md`; per-lane handoff: `docs/handoff-2026-06-01-waves.md`.
+
+---
+
 ## 0. Current direction — D1: Pacred is a faithful PCS Cargo port
 
 On **2026-05-18 the owner rejected the rebuilt-from-scratch Pacred app** — its UI and workflow look nothing like the legacy **PCS Cargo** system that staff and ~8,898 customers use daily. The direction is now **D1: Pacred becomes the legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`.** This is the canonical lens for every task. Three phases:

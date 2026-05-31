@@ -3,6 +3,26 @@
 
 ---
 
+# 🧭 2026-06-01 PM — BIG AUDIT + MASTER PLAN + WAVE HANDOFF · read FIRST (supersedes-but-keeps the MARATHON section below)
+
+**main = `dave-pacred` = `49368172`+ (0/0 · prod · Vercel auto-deploys) · all pushed.** Cross-machine resume: `git pull origin main` → read this section → **[`docs/research/big-audit-2026-06-01/_MASTER-PLAN.md`](docs/research/big-audit-2026-06-01/_MASTER-PLAN.md)** (THE canonical long-term plan) + per-lane briefs in [`docs/briefs/`](docs/briefs/).
+
+**🚀 Shipped this PM (all verified + pushed):** LINE staff-notify **LIVE on prod** (real groupId resolved via ปอน's Worker data · Flex cards + deep-links · Vercel env) · **NEW `/admin/line-inbox`** dashboard (reads ปอน's `Podeng_*` LINE data) · Notify Flex upgrade · **env yกเครื่อง** (full Vercel↔local inventory `docs/runbook/env-inventory.md` · +5 china-search vendor vars to prod · **MOMO_API_* creds set + token verified**) · **`/admin/settings` yuan_rate dead-write removed** (real rate = `/admin/settings/legacy-rates` → `tb_settings` rpdefault 4.93/rsdefault 4.97) · **404 `/service-import/…&pay=true`→`?pay=true`** + **`Cookies is not defined`** legacy-JS-order fix (both browser-verified via Chrome). ⚠️ OTP env untouched (owner cmd).
+
+**🔬 THE BIG AUDIT (6 parallel agents · all 263 Supabase tables):** `docs/research/big-audit-2026-06-01/` — `_MASTER-PLAN.md` + 6 cluster docs + `_CONTEXT.md`. **Headline:** faithful port **substantially DONE** (legacy `tb_*` canonical · 147 rebuilt twins mostly 0-row · money loop closed · forwarder ~90%). 3 cross-cutting patterns: **(A)** Potemkin twins (mostly repointed) · **(B) reachable dead-write TRAPS** (admin edits→green toast→no effect: VIP-rate page, 3 commission pages — must sweep) · **(C) unmined data goldmine** (47,636 forwarder orders×114 cols w/ profit+timestamps · 104k wallet ledger · 6,937 never-contacted leads · 77k china categories — almost nothing analyzed → where 10× value is).
+
+**📦 CargoThai blueprint** (owner+ภูม demo decoded): [`docs/research/cargothai-warehouse-ops-blueprint-2026-06-01.md`](docs/research/cargothai-warehouse-ops-blueprint-2026-06-01.md) — China-warehouse worker-app maps onto existing `tb_forwarder`/`tb_forwarder_item`/`tb_cnt`/`momo_sack` (~80% data ours). 4-phase: own-warehouse intake MVP → public `/track/{code}` (the GTM moat) → partner portal → API-as-a-service (inverse of MOMO consumption). = master-plan **Theme 7**.
+
+**🗂 WAVE PLAN + per-lane handoff (everyone runs long):** [`docs/handoff-2026-06-01-waves.md`](docs/handoff-2026-06-01-waves.md)
+- **เดฟ (เรา):** Wave A trust-sweep (Potemkin dead-write sweep + cashback + credit + config-split ADR) → Wave C BI/profit-analytics (the 10× · data all present) + CargoThai P1/P2 with ภูม/ปอน.
+- **ปอน (frontend):** [`docs/briefs/podeng-wave-2026-06-01.md`](docs/briefs/podeng-wave-2026-06-01.md) — address delete/set-main · public `/track` · CRM omni-inbox · ad-ROAS · lead win-back.
+- **ภูม (accounting/PEAK):** [`docs/briefs/poom-wave-2026-06-01.md`](docs/briefs/poom-wave-2026-06-01.md) — repoint 3 Potemkin commission pages (4,104 invisible earns) · port 2 legacy payout systems · PEAK-style accounting (receipts/tax-invoice/WHT/AR-aging/period-close) · e-Tax RD-86.
+- **ก๊อต:** partner-API (GOGO/JMF/TTP) + CargoThai P4 API-as-a-service + LINE webhook consolidation co-decide.
+
+**🔐 Owner-provided tokens (machine-local `/tmp/.cf-tok`,`.vc-tok`,`.momo-tok` · never committed):** Cloudflare + Vercel + MOMO — owner can revoke (kept this session for env/Worker work).
+
+---
+
 # 🟢 2026-06-01 — เดฟ MARATHON: faithful-port backlog CLEARED · read FIRST
 
 **main = `dave-pacred` = `acc852d0` (0/0 · prod · deploy `dpl_833Gv…` READY) · all pushed.** Cross-machine resume: `git pull origin main` → read **[`docs/research/save-point-2026-06-01-dave-backlog-cleared.md`](docs/research/save-point-2026-06-01-dave-backlog-cleared.md)** (canonical) + **[`docs/research/legacy-resweep-2026-05-31/_MASTER-FRESH.md`](docs/research/legacy-resweep-2026-05-31/_MASTER-FRESH.md)** (verified gap status).
