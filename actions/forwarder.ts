@@ -1402,6 +1402,124 @@ export async function customerAcknowledgeForwarderDelivery(
 }
 
 // ────────────────────────────────────────────────────────────
+// P1-19 · CUSTOMER SELF-CANCEL of an own forwarder (ฝากนำเข้า)
+// ────────────────────────────────────────────────────────────
+//
+// Faithful 1:1 transcription of the legacy AJAX endpoint
+// `member/include/pages/forwarder/deleteForwarder.php`. The customer
+// pressed "ลบรายการ" / "ยกเลิกรายการ" on a forwarder row in
+// `member/forwarder.php`; the legacy jQuery posts the row ID here and
+// the PHP does:
+//
+//   deleteForwarder.php L5  — gate (the row must exist AND match all of):
+//       SELECT ID FROM tb_forwarder
+//        WHERE fStatus='1' AND ID='$ID' AND refOrder='' AND userID='$userID'
+//   deleteForwarder.php L8  — on pass, HARD DELETE the row:
+//       DELETE FROM tb_forwarder WHERE ID='$ID' AND userID='$userID'
+//   echo '1' on success · '3' when the gate row doesn't exist · '2' on
+//   a db error.
+//
+// The gate means a customer can only cancel a forwarder that is:
+//   - fStatus='1'  → still "รอสินค้าเข้าโกดังจีน" (not yet processed)
+//   - refOrder=''  → NOT spawned from a ฝากสั่ง order (shop-spawned rows
+//                    are admin-owned; the customer must not delete them)
+//   - userID=self  → their own row (ownership)
+//
+// Port decision: legacy DELETEs the row (it is a hard delete, not a
+// status-flip). We reproduce the hard delete faithfully. RLS on
+// `tb_forwarder` is service_role-locked, so reads + the delete go
+// through the admin client, but ownership is enforced in code exactly
+// as the legacy `WHERE userID='$userID'` predicate does, AND the gate
+// (fStatus='1' AND refOrder='') is re-asserted INSIDE the DELETE
+// predicate (defence against a concurrent admin write that processed
+// the row between our gate-read and the delete).
+
+const cancelForwarderSchema = z.object({
+  // forwarder.php passes the integer row ID (tb_forwarder.id). Accept a
+  // number or a numeric string (the client sends `data-forwarder-id`).
+  fNo: z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]),
+});
+export type CancelForwarderInput = z.infer<typeof cancelForwarderSchema>;
+
+export async function cancelOwnForwarder(
+  input: CancelForwarderInput,
+): Promise<ActionResult<{ id: number }>> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
+  const parsed = cancelForwarderSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const id = Number(parsed.data.fNo);
+
+  // Ownership — the customer's PR<n> member_code is the legacy userID.
+  const data = await getCurrentUserWithProfile();
+  if (!data?.profile) return { ok: false, error: "not_signed_in" };
+  const userID = data.profile.member_code ?? "";
+  if (!userID) return { ok: false, error: "no_member_code" };
+
+  const admin = createAdminClient();
+
+  // deleteForwarder.php L5 — the gate: the row must exist and satisfy
+  // fStatus='1' AND refOrder='' AND userID='$userID' AND ID='$ID'.
+  const { data: gateRow, error: gateErr } = await admin
+    .from("tb_forwarder")
+    .select("id, fstatus, reforder, userid")
+    .eq("id", id)
+    .eq("userid", userID)
+    .maybeSingle<{ id: number; fstatus: string | null; reforder: string | null; userid: string | null }>();
+  if (gateErr) {
+    console.error(`[tb_forwarder cancel gate] failed`, { id, code: gateErr.code, message: gateErr.message });
+    return { ok: false, error: `db_error:${gateErr.code ?? "unknown"}` };
+  }
+  // deleteForwarder.php L17-19 — gate row not found → echo '3'.
+  if (!gateRow) return { ok: false, error: "not_found" };
+  if (gateRow.fstatus !== "1") return { ok: false, error: "not_cancellable" };
+  if (gateRow.reforder && gateRow.reforder !== "") {
+    // refOrder set → shop-spawned; the customer must not delete it.
+    return { ok: false, error: "not_cancellable" };
+  }
+
+  // deleteForwarder.php L8 — HARD DELETE WHERE ID='$ID' AND userID='$userID'.
+  // The legacy delete keys only on ID + userID (the gate is the SELECT
+  // above). We re-assert fStatus='1' inside the predicate as a lightweight
+  // concurrency guard (fStatus is never NULL for these rows) so a row that
+  // an admin processed between our gate-read and here can't be deleted out
+  // from under the workflow. We intentionally do NOT add a `reforder`
+  // predicate here: legacy stored refOrder as '' but migrated rows can be
+  // NULL, and `.eq("reforder","")` would not match NULL — the SELECT gate
+  // already proved refOrder is empty-or-null + ownership.
+  const { error: delErr, count } = await admin
+    .from("tb_forwarder")
+    .delete({ count: "exact" })
+    .eq("id", id)
+    .eq("userid", userID)
+    .eq("fstatus", "1");
+  if (delErr) {
+    // deleteForwarder.php L14-15 — db error → echo '2'.
+    console.error(`[tb_forwarder cancel delete] failed`, { id, code: delErr.code, message: delErr.message });
+    return { ok: false, error: `delete_failed:${delErr.code ?? "unknown"}` };
+  }
+  if (!count) {
+    // The row no longer matched the gate at delete time (concurrent
+    // processing). Treat as not-cancellable rather than a hard error.
+    return { ok: false, error: "not_cancellable" };
+  }
+
+  // Refresh the list pages. The sidebar badge counts (loadPcsChromeData)
+  // are served from the 60s-TTL pcs-chrome cache; we do NOT revalidateTag
+  // it here — Next 16's revalidateTag now requires a cache-profile arg
+  // (see actions/admin/forwarders-edit.ts L596-600). A ≤60s-stale "รอ
+  // สินค้าเข้าโกดังจีน" badge after a self-cancel is acceptable.
+  revalidatePath("/service-import");
+  revalidatePath("/service-import/pending");
+
+  return { ok: true, data: { id } };
+}
+
+// ────────────────────────────────────────────────────────────
 // 0092 · CUSTOMER RECONFIRM-DECISION on a cost adjustment
 // ────────────────────────────────────────────────────────────
 //
