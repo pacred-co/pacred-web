@@ -323,7 +323,7 @@ async function renderLegacyForwarderView(
       "faddresstel, faddresstel2, faddressnote, " +
       // Notes + meta + source
       "fnote, fdetail, fcover, fcredit, reforder, " +
-      "adminid, adminidcreator, adminidupdate, paymethod, paydeposit, crate, fpallet",
+      "adminid, adminidcreator, adminidupdate, paymethod, paydeposit, crate, fpallet, fbilltoname",
     )
     .limit(1);
   tbq = isId ? tbq.eq("id", asNumber) : tbq.eq("fidorco", fNo);
@@ -364,6 +364,7 @@ async function renderLegacyForwarderView(
     adminid: string | null; adminidcreator: string | null; adminidupdate: string | null;
     paymethod: string | null; paydeposit: string | null;
     crate: string | null; fpallet: number | null;
+    fbilltoname: string | null;
   };
 
   // Customer name lookup — now also pulls adminIDSale (the customer's
@@ -825,6 +826,16 @@ async function renderLegacyForwarderView(
             currentPriceUpdate={priceUpdate}
             currentPriceOther={otherCost}
             currentDiscount={discount}
+          />
+
+          {/* Bill-to override — Theme bill-to (2026-06-01 · เดฟ): the one
+              Pacred-original forwarder field. Repointed to tb_forwarder.fbilltoname
+              (migration 0132). Override the invoice/receipt "bill to" name. */}
+          <BillToOverridePanel
+            kind="forwarder"
+            fNo={String(r.id)}
+            defaultName={`${r.faddressname ?? ""} ${r.faddresslastname ?? ""}`.trim()}
+            current={r.fbilltoname}
           />
 
           {/* Secondary action buttons */}

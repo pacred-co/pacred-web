@@ -5,7 +5,7 @@
 
 ---
 
-## 🔢 NEXT FREE NUMBER = **0132**
+## 🔢 NEXT FREE NUMBER = **0133**
 
 ใครจะเขียน migration ใหม่ → ใช้ `0132_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
 
@@ -34,6 +34,7 @@
 | 0129 | `forwarder_tax_invoice` | เดฟ (P2) | ✅ applied 2026-05-30 (935ms · 3 ตาราง tb_*-native: `tb_forwarder_tax_invoice` + `_item` + `tb_forwarder_wht_entry` · per-class WHT · live-lane ใบกำกับ) | main |
 | 0130 | `momo_cabinet_join_field` | ภูม/main | ✅ in main | main |
 | 0131 | `line_oa_inbox` | ปอน | ✅ **applied prod** (re-probe 2026-05-30 = HTTP 200 ×4 tables · ไม่กระทบ legacy · idempotent) — **renumbered 0125→0131** ตอน integrate InwPond007 2026-05-30 (ชน เดฟ `customer_usage_split`) · 4 ตาราง isolated: `customers_line`/`line_lead_sources`/`line_messages`/`line_webhook_events` · RLS service_role | main (ex-InwPond007) |
+| 0132 | `forwarder_bill_to_name` | เดฟ | ✅ **applied prod 2026-06-01 (106ms · metadata-only ADD COLUMN nullable)** · `tb_forwarder.fbilltoname varchar(200)` · Pacred-original bill-to override (no legacy col) · faithful target of rebuilt `forwarders.bill_to_name_override` · `adminSetForwarderBillToOverride` repointed | main |
 
 ---
 

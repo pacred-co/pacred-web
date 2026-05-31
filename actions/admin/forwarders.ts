@@ -616,23 +616,33 @@ export async function adminSetForwarderBillToOverride(
     ["super", "ops", "accounting"],
     async ({ adminId }) => {
       const admin = createAdminClient();
-      const { data: before, error: readErr } = await admin
-        .from("forwarders")
-        .select("id, bill_to_name_override")
-        .eq("f_no", d.f_no)
-        .maybeSingle<{ id: string; bill_to_name_override: string | null }>();
-      if (readErr) return { ok: false, error: readErr.message };
+      // Theme bill-to (2026-06-01): repointed from the rebuilt, prod-empty
+      // `forwarders.bill_to_name_override` → the legacy `tb_forwarder.fbilltoname`
+      // (migration 0132 · the faithful target). f_no resolves like the [fNo]
+      // detail page: numeric → tb_forwarder.id, else fidorco.
+      const asNum = Number(d.f_no);
+      const isId = Number.isFinite(asNum) && Number.isInteger(asNum) && asNum > 0;
+      let q = admin.from("tb_forwarder").select("id, fbilltoname").limit(1);
+      q = isId ? q.eq("id", asNum) : q.eq("fidorco", d.f_no);
+      const { data: before, error: readErr } = await q.maybeSingle<{ id: number; fbilltoname: string | null }>();
+      if (readErr) {
+        console.error(`[adminSetForwarderBillToOverride tb_forwarder read] failed`, { code: readErr.code, message: readErr.message, f_no: d.f_no });
+        return { ok: false, error: readErr.message };
+      }
       if (!before) return { ok: false, error: "not_found" };
 
       const { error: updErr } = await admin
-        .from("forwarders")
-        .update({ bill_to_name_override: next })
+        .from("tb_forwarder")
+        .update({ fbilltoname: next })
         .eq("id", before.id);
-      if (updErr) return { ok: false, error: updErr.message };
+      if (updErr) {
+        console.error(`[adminSetForwarderBillToOverride update] failed`, { code: updErr.code, message: updErr.message, id: before.id });
+        return { ok: false, error: updErr.message };
+      }
 
-      await logAdminAction(adminId, "forwarder.set_bill_to_override", "forwarder", before.id, {
+      await logAdminAction(adminId, "forwarder.set_bill_to_override", "tb_forwarder", String(before.id), {
         f_no:   d.f_no,
-        before: before.bill_to_name_override,
+        before: before.fbilltoname,
         after:  next,
       });
 
