@@ -437,10 +437,14 @@ export async function createYuanPayment(
   // — faithful to legacy pcs-admin/payment.php → lineNotify(...) on create.
   // No-op until LINE_STAFF_GROUP_ID is configured (see lib/notifications/staff-group.ts).
   void notifyStaffGroup(
-    `📩 มีรายการฝากโอน/ฝากชำระใหม่ #${created.id}\n` +
     `จากลูกค้า: ${memberCode}\n` +
     `ยอด: ¥${d.yuan_amount.toFixed(2)} = ฿${thb_amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}\n` +
     `สถานะ: รอดำเนินการ`,
+    {
+      title:    `📩 ฝากโอน/ฝากชำระใหม่ #${created.id}`,
+      url:      `/admin/yuan-payments/${created.id}`,
+      urlLabel: "ดูรายการฝากโอน",
+    },
   );
 
   return { ok: true, data: { id: created.id, thb_amount } };

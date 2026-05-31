@@ -945,7 +945,12 @@ export async function adminSaveForwarderNote(
         // routes admin-only notes to the staff LINE OA group (no-op until
         // LINE_STAFF_GROUP_ID is configured — see staff-group.ts).
         void notifyStaffGroup(
-          `เลขที่ออเดอร์ : ${fNo}\nประเภทการแจ้งเตือน : แอดมินเท่านั้น\nรหัสสมาชิก : ${row.userid ?? "-"}\nรายละเอียด : ${noteLine}\nจากแอดมิน : ${adminIdSafe}`,
+          `รหัสสมาชิก : ${row.userid ?? "-"}\nรายละเอียด : ${noteLine}\nจากแอดมิน : ${adminIdSafe}`,
+          {
+            title:    `📝 หมายเหตุแอดมิน — ออเดอร์ ${fNo}`,
+            url:      `/admin/forwarders/${fNo}`,
+            urlLabel: "เปิดออเดอร์",
+          },
         );
       } else {
         // Customer-visible note → in-app + LINE OA push + email.

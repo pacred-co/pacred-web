@@ -44,11 +44,72 @@ import { logger } from "@/lib/logger";
 
 const SCOPE = "staff-group-notify";
 
+/** Optional rich-card options for a staff-group ping. */
+export type StaffGroupNotifyOpts = {
+  /** Deep-link target — absolute https URL, or an app-relative path ("/admin/…")
+   *  which is prefixed with the site base. Adds a tappable button to the card. */
+  url?: string;
+  /** Button label (default "เปิดดูในระบบ"). */
+  urlLabel?: string;
+  /** Card header title (default "แจ้งเตือนทีมงาน Pacred"). */
+  title?: string;
+};
+
+const SITE_BASE = (process.env.NEXT_PUBLIC_SITE_URL || "https://pacred.co.th").replace(/\/$/, "");
+
+/** Resolve opts.url (absolute or "/relative") → https deep-link, or null. */
+function resolveDeepLink(url?: string): string | null {
+  if (!url) return null;
+  const full = url.startsWith("http")
+    ? url
+    : `${SITE_BASE}${url.startsWith("/") ? "" : "/"}${url}`;
+  return full.startsWith("https://") ? full : null; // LINE uri buttons require https
+}
+
+/** Build a LINE Flex bubble: brand header · message body · deep-link button. */
+function buildStaffCard(message: string, deepLink: string | null, opts: StaffGroupNotifyOpts) {
+  const bodyLines = message
+    .split("\n")
+    .filter((l) => l.trim().length > 0)
+    .map((line) => ({ type: "text", text: line, size: "sm", color: "#333333", wrap: true }));
+
+  const bubble: Record<string, unknown> = {
+    type: "bubble",
+    header: {
+      type: "box", layout: "vertical", backgroundColor: "#B30000", paddingAll: "12px",
+      contents: [{
+        type: "text", text: opts.title || "แจ้งเตือนทีมงาน Pacred",
+        color: "#FFFFFF", weight: "bold", size: "md", wrap: true,
+      }],
+    },
+    body: { type: "box", layout: "vertical", spacing: "sm", paddingAll: "14px", contents: bodyLines },
+  };
+
+  if (deepLink) {
+    bubble.footer = {
+      type: "box", layout: "vertical", paddingAll: "10px",
+      contents: [{
+        type: "button", style: "primary", color: "#B30000", height: "sm",
+        action: { type: "uri", label: (opts.urlLabel || "เปิดดูในระบบ").slice(0, 20), uri: deepLink },
+      }],
+    };
+  }
+
+  const altText = (message.split("\n")[0] || opts.title || "แจ้งเตือน Pacred").slice(0, 380);
+  return { type: "flex", altText, contents: bubble };
+}
+
 /**
- * Push a plain-text alert to the internal staff LINE-OA group.
- * Returns true only when a real push was sent + accepted.
+ * Push an alert to the internal staff LINE-OA group.
+ * - `notifyStaffGroup(text)` → plain-text bubble (backward-compatible).
+ * - `notifyStaffGroup(text, { url, urlLabel, title })` → a Flex card with a tappable
+ *   deep-link button (url may be absolute https or an app-relative "/admin/…" path).
+ * Returns true only when a real push was sent + accepted. Never throws.
  */
-export async function notifyStaffGroup(message: string): Promise<boolean> {
+export async function notifyStaffGroup(
+  message: string,
+  opts: StaffGroupNotifyOpts = {},
+): Promise<boolean> {
   const groupId = process.env.LINE_STAFF_GROUP_ID;
   const token   = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
@@ -63,6 +124,12 @@ export async function notifyStaffGroup(message: string): Promise<boolean> {
     return false;
   }
 
+  const deepLink = resolveDeepLink(opts.url);
+  // Send a Flex card when there's a deep-link or an explicit title; else plain text.
+  const messages = deepLink || opts.title
+    ? [buildStaffCard(message, deepLink, opts)]
+    : [{ type: "text", text: message }];
+
   try {
     const res = await fetch("https://api.line.me/v2/bot/message/push", {
       method:  "POST",
@@ -70,10 +137,7 @@ export async function notifyStaffGroup(message: string): Promise<boolean> {
         "Content-Type": "application/json",
         Authorization:  `Bearer ${token}`,
       },
-      body: JSON.stringify({
-        to:       groupId,
-        messages: [{ type: "text", text: message }],
-      }),
+      body: JSON.stringify({ to: groupId, messages }),
     });
     if (!res.ok) {
       logger.warn(SCOPE, "staff-group push non-OK", { status: res.status });

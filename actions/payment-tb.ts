@@ -386,10 +386,14 @@ export async function createYuanPaymentFromWallet(
   // P1-24: ping the staff LINE-OA group (faithful to legacy lineNotify on
   // create). No-op until LINE_STAFF_GROUP_ID is set — see staff-group.ts.
   void notifyStaffGroup(
-    `📩 มีรายการฝากโอน/ฝากชำระใหม่ #${paymentId}\n` +
     `จากลูกค้า: ${memberCode}\n` +
     `ยอด: ¥${d.yuan_amount.toFixed(2)} = ฿${thb_amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} · ชำระจากกระเป๋า\n` +
     `สถานะ: รอดำเนินการ`,
+    {
+      title:    `📩 ฝากโอน/ฝากชำระใหม่ #${paymentId}`,
+      url:      `/admin/yuan-payments/${paymentId}`,
+      urlLabel: "ดูรายการฝากโอน",
+    },
   );
 
   return {
