@@ -422,6 +422,8 @@ async function renderLegacyForwarderView(
   }));
   const isPcsPickup = (r.fshipby ?? "").trim() === "PCS";
   const transportTypeForEdit = (["1", "2", "3"].includes(r.ftransporttype) ? r.ftransporttype : "1") as "1" | "2" | "3";
+  // famountcount: '1' = ราคาต่อกล่อง · anything else = รวม (legacy default).
+  const amountCountForEdit = ((r.famountcount ?? "").trim() === "1" ? "1" : "2") as "1" | "2";
 
   // Resolve cover image — shop-spawned rows may have a live alicdn URL
   // (https://...), legacy local filename (PCS prefix), or empty.
@@ -769,6 +771,11 @@ async function renderLegacyForwarderView(
             isPcs={isPcsPickup}
             addresses={savedAddresses}
             currentTransportType={transportTypeForEdit}
+            currentShipBy={(r.fshipby ?? "").trim()}
+            currentAmountCount={amountCountForEdit}
+            currentPriceUpdate={priceUpdate}
+            currentPriceOther={otherCost}
+            currentDiscount={discount}
           />
 
           {/* Secondary action buttons */}

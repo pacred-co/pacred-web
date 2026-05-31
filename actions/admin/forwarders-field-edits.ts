@@ -27,6 +27,22 @@
  *   - update_fCover         (forwarder.php L1480-1528) — replace the cover image.
  *     Legacy resizes to 450px then writes the filename; we reuse uploadToBucket
  *     (bucket `forwarder-covers`, same as forwarders-new.ts) and store the key.
+ *   - update_fShipBy        (forwarder.php L1579-1631) — change the courier /
+ *     ship-by carrier. When fStatus<=5, legacy re-prices fTransportPrice by the
+ *     PCS-family carrier (PCSF→0, PCSE→max(fVolume*120, 50), PCS→0); then writes
+ *     fShipBy; and if fShipBy='PCS' it ALSO copies the fixed PCS-warehouse pickup
+ *     address into fAddress* (verbatim depot strings from L1612-1626). We match
+ *     all three behaviours + a re-price-staleness hint in the UI.
+ *   - update_fAmountCount   (forwarder.php L2450-2459) — toggle the pricing basis
+ *     ('1' = ราคาต่อกล่อง per-box · other = รวม total). Column-only write +
+ *     re-price hint (affects cbmProduct in the next dimension re-save).
+ *
+ * Pacred-ADDED (no standalone legacy handler):
+ *   - adminUpdateForwarderCostAdjust — edit the 3 manual money columns
+ *     (fPriceUpdate / priceOther / fDiscount). Legacy edits these only via the
+ *     update_data re-pricing path / pay flow (no dedicated POST handler); the
+ *     owner blessed a standalone manual-adjust surface 2026-05-31. Column-only
+ *     write + adminIDUpdate; the detail page already renders the full breakdown.
  *
  * NOTE — fCredit credit-out (forwarder.php L1407-1435) is deliberately NOT
  * ported here: it's a MONEY/debt flow (writes tb_credit.creditvalue) on the
@@ -322,6 +338,228 @@ export async function adminUpdateForwarderCover(
     });
 
     revalidatePath(`/admin/forwarders/${fId}`);
+    revalidatePath("/admin/forwarders");
+    return { ok: true };
+  });
+}
+
+// ── update_fShipBy — change the courier / ship-by carrier (forwarder.php L1579) ─
+// fShipBy is a free string (external carrier name or a PCS-family code). When the
+// row is still pre-payment (fStatus<=5), legacy re-prices fTransportPrice by the
+// three PCS-family carriers; then writes fShipBy; and for 'PCS' (รับเองที่โกดัง)
+// copies the fixed PCS-warehouse pickup address into fAddress* (depot strings are
+// VERBATIM from forwarder.php L1612-1626 · also mirrored in
+// actions/forwarder-legacy.ts updateLegacyForwarderShipBy for the customer side).
+const FPCS_DEPOT_ADDRESS = {
+  faddressname:        "รับที่โกดัง PCS กทม",
+  faddresslastname:    "",
+  faddressno:          "12 ซอย เพชรเกษม 77 แยก 3-6",
+  faddresssubdistrict: "หนองค้างพลู",
+  faddressdistrict:    "หนองแขม",
+  faddressprovince:    "กรุงเทพมหานคร",
+  faddresszipcode:     "10160",
+  faddressnote:        "",
+  faddresstel:         "02-444-7046",
+  faddresstel2:        "",
+} as const;
+
+const shipBySchema = z.object({
+  fId:     z.number().int().positive(),
+  fShipBy: z.string().trim().min(1).max(50),
+});
+export type AdminUpdateForwarderShipByInput = z.infer<typeof shipBySchema>;
+
+export async function adminUpdateForwarderShipBy(
+  rawInput: AdminUpdateForwarderShipByInput,
+): Promise<AdminActionResult> {
+  const parsed = shipBySchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+  const fShipBy = d.fShipBy.trim();
+
+  // forwarder.php updateLegacyForwarderShipBy guard: 'F' = free-shipping promo
+  // sentinel, never a real carrier the admin should set.
+  if (fShipBy === "F") return { ok: false, error: "รหัสผู้ขนส่งไม่ถูกต้อง (F สงวนไว้)" };
+
+  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+
+    // 1. Read fStatus + fVolume (legacy L1586-1592 reads these to decide re-price).
+    const { data: fwd, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, fstatus, fvolume, fshipby")
+      .eq("id", d.fId)
+      .maybeSingle<{ id: number; fstatus: string | null; fvolume: number | string | null; fshipby: string | null }>();
+    if (fwdErr) {
+      console.error(`[adminUpdateForwarderShipBy read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
+      return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
+    }
+    if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+    if ((fwd.fshipby ?? "").trim() === fShipBy) {
+      return { ok: false, error: "ไม่มีการเปลี่ยนแปลง (ผู้ขนส่งเดิม)" };
+    }
+
+    // 2. Build the UPDATE. fShipBy + adminIDUpdate always; conditionally
+    //    fTransportPrice + the PCS depot address (legacy L1595-1627).
+    const fStatusInt = parseInt(fwd.fstatus ?? "0", 10);
+    const fVolume = Number(fwd.fvolume ?? 0);
+    const update: Record<string, string | number> = {
+      fshipby: fShipBy,
+      adminidupdate: legacyAdminId,
+    };
+
+    // Legacy L1595: only re-price while still pre-payment (fStatus<=5).
+    if (fStatusInt <= 5) {
+      if (fShipBy === "PCSF") {
+        update.ftransportprice = 0; // ส่งฟรี
+      } else if (fShipBy === "PCSE") {
+        update.ftransportprice = Math.max(fVolume * 120, 50); // ส่งด่วน · floor 50
+      } else if (fShipBy === "PCS") {
+        update.ftransportprice = 0; // รับเองที่โกดัง
+      }
+    }
+
+    // Legacy L1612-1626: 'PCS' rewrites the snapshot address to the depot.
+    if (fShipBy === "PCS") Object.assign(update, FPCS_DEPOT_ADDRESS);
+
+    const { error: updErr } = await admin
+      .from("tb_forwarder")
+      .update(update)
+      .eq("id", d.fId);
+    if (updErr) {
+      console.error(`[adminUpdateForwarderShipBy update] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
+      return { ok: false, error: `บันทึกผู้ขนส่งไม่สำเร็จ: ${updErr.message}` };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder.update_ship_by", "tb_forwarder", String(d.fId), {
+      before: fwd.fshipby, after: fShipBy,
+      reprice: fStatusInt <= 5 && ["PCS", "PCSF", "PCSE"].includes(fShipBy)
+        ? update.ftransportprice : "unchanged",
+      pcsDepotAddr: fShipBy === "PCS",
+    });
+
+    revalidatePath(`/admin/forwarders/${d.fId}`);
+    revalidatePath("/admin/forwarders");
+    return { ok: true };
+  });
+}
+
+// ── adminUpdateForwarderCostAdjust — Pacred-added manual money-adjust ──────────
+// Edits the 3 manual money columns on tb_forwarder: fPriceUpdate (ค่าสินค้า/ปรับ),
+// priceOther (ค่าอื่นๆ), fDiscount (ส่วนลด). There is NO dedicated legacy POST
+// handler for these as a standalone trio — legacy mutates them via the update_data
+// re-pricing path / pay flow. Owner blessed a standalone manual-adjust surface
+// 2026-05-31. We DO NOT recompute/persist ftotalprice (that = the transport leg,
+// owned by the dimension re-pricing path); the detail-page DISPLAYED grand total is
+//   ftotalprice + fpriceupdate + fshippingservice + ftransportpricechnthb
+//   + pricecrate + priceother + ftransportprice − fdiscount
+// (formula mirrored from forwarders-edit.ts L452-461). Column-only write + audit.
+const costAdjustSchema = z.object({
+  fId:          z.number().int().positive(),
+  fpriceupdate: z.number().finite().min(0).max(99_999_999),
+  priceother:   z.number().finite().min(0).max(99_999_999),
+  fdiscount:    z.number().finite().min(0).max(99_999_999),
+});
+export type AdminUpdateForwarderCostAdjustInput = z.infer<typeof costAdjustSchema>;
+
+export async function adminUpdateForwarderCostAdjust(
+  rawInput: AdminUpdateForwarderCostAdjustInput,
+): Promise<AdminActionResult> {
+  const parsed = costAdjustSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+
+    // Capture before-values for the audit (+ confirm the row exists).
+    const { data: fwd, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, fpriceupdate, priceother, fdiscount")
+      .eq("id", d.fId)
+      .maybeSingle<{ id: number; fpriceupdate: number | string | null; priceother: number | string | null; fdiscount: number | string | null }>();
+    if (fwdErr) {
+      console.error(`[adminUpdateForwarderCostAdjust read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
+      return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
+    }
+    if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+
+    const { error: updErr } = await admin
+      .from("tb_forwarder")
+      .update({
+        fpriceupdate:  d.fpriceupdate,
+        priceother:    d.priceother,
+        fdiscount:     d.fdiscount,
+        adminidupdate: legacyAdminId,
+      })
+      .eq("id", d.fId);
+    if (updErr) {
+      console.error(`[adminUpdateForwarderCostAdjust update] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
+      return { ok: false, error: `บันทึกค่าใช้จ่ายไม่สำเร็จ: ${updErr.message}` };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder.update_cost_adjust", "tb_forwarder", String(d.fId), {
+      before: { fpriceupdate: Number(fwd.fpriceupdate ?? 0), priceother: Number(fwd.priceother ?? 0), fdiscount: Number(fwd.fdiscount ?? 0) },
+      after:  { fpriceupdate: d.fpriceupdate, priceother: d.priceother, fdiscount: d.fdiscount },
+    });
+
+    revalidatePath(`/admin/forwarders/${d.fId}`);
+    revalidatePath("/admin/forwarders");
+    return { ok: true };
+  });
+}
+
+// ── update_fAmountCount — pricing basis toggle (forwarder.php L2450-2459) ──────
+// '1' = ราคาต่อกล่อง (per-box) · other = รวม (total). Legacy writes ONLY the
+// column (+ adminIDUpdate). Affects the pricing basis (cbmProduct) the NEXT time
+// dimensions are re-priced — so we add a re-price-staleness hint in the UI.
+const amountCountSchema = z.object({
+  fId:         z.number().int().positive(),
+  famountcount: z.enum(["1", "2"] as const), // '1' per-box · '2' total
+});
+export type AdminUpdateForwarderAmountCountInput = z.infer<typeof amountCountSchema>;
+
+export async function adminUpdateForwarderAmountCount(
+  rawInput: AdminUpdateForwarderAmountCountInput,
+): Promise<AdminActionResult> {
+  const parsed = amountCountSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+
+    const { data: fwd, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, famountcount")
+      .eq("id", d.fId)
+      .maybeSingle<{ id: number; famountcount: string | null }>();
+    if (fwdErr) {
+      console.error(`[adminUpdateForwarderAmountCount read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
+      return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
+    }
+    if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+    if ((fwd.famountcount ?? "").trim() === d.famountcount) {
+      return { ok: false, error: "ไม่มีการเปลี่ยนแปลง (ฐานราคาเดิม)" };
+    }
+
+    const { error: updErr } = await admin
+      .from("tb_forwarder")
+      .update({ famountcount: d.famountcount, adminidupdate: legacyAdminId })
+      .eq("id", d.fId);
+    if (updErr) {
+      console.error(`[adminUpdateForwarderAmountCount update] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
+      return { ok: false, error: `บันทึกฐานราคาไม่สำเร็จ: ${updErr.message}` };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder.update_amount_count", "tb_forwarder", String(d.fId), {
+      before: fwd.famountcount, after: d.famountcount,
+    });
+
+    revalidatePath(`/admin/forwarders/${d.fId}`);
     revalidatePath("/admin/forwarders");
     return { ok: true };
   });
