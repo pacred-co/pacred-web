@@ -37,7 +37,7 @@ Classified by whether the code reads them at **runtime** (→ real prod gap) or 
 | `PACRED_AKUCARGO_API_URL` | `lib/china-search/akucargo.ts` | ✅ **ADDED** (china product search) |
 | `PACRED_TAMIT_CACHE_URL` | `lib/china-search/short-url-cache.ts` | ✅ **ADDED** (TAMIT tracking) |
 | `PACRED_TAMIT_DETAIL_URL` | `lib/china-search/index.ts` | ✅ **ADDED** |
-| `MOMO_TOKEN` | none found in app/actions/lib | 🟡 **HELD** — grep found no runtime read (MOMO cron may use a different name/mechanism · ภูม lane). Verify before adding. |
+| `MOMO_TOKEN` | none (wrong name) | ✅ **RESOLVED** — code reads `MOMO_API_TOKEN` (not `MOMO_TOKEN`). Owner provided real creds 2026-06-01 → **set in Vercel prod + local**: `MOMO_API_BASE_URL=https://api.momocargo.com:8080` · `MOMO_API_TOKEN` (JWT) · `MOMO_CARGO_SACK_TOKEN` (same JWT). Live-tested: import/track + container/closed + sack/info all `auth:true` (sack `CBX251111-EK04` returned full data). Cron `/api/cron/momo-sync` (every 10min, vercel.json) + admin api-forwarder-momo pages now work. The old misnamed `MOMO_TOKEN` in local is dead (unread) — left as a harmless note. |
 | `SUPABASE_S3_ACCESS_KEY_ID` | scripts only | ⚪ not a gap (one-time image-upload migration; runtime reads storage via supabase client) |
 | `SUPABASE_S3_SECRET_ACCESS_KEY` | scripts only | ⚪ not a gap |
 | `SUPABASE_S3_ENDPOINT` | scripts only | ⚪ not a gap |
@@ -49,9 +49,9 @@ Classified by whether the code reads them at **runtime** (→ real prod gap) or 
 — they were missing, so **reverse-image search / china product search / TAMIT tracking were broken in prod**.
 Take effect on next redeploy.
 
-**Owner to confirm (2 held):**
-1. `NEXT_PUBLIC_YUAN_RATE` — what's the correct prod value? (then add + rebuild; `NEXT_PUBLIC` needs a build)
-2. `MOMO_TOKEN` — is it used in prod? (grep found no runtime reader — verify with ภูม)
+**Resolved since:**
+1. `NEXT_PUBLIC_YUAN_RATE` — ✅ NOT needed. The daily yuan rate is set in admin at `/admin/settings/legacy-rates` → legacy `tb_settings` (rpdefault 4.93 / rsdefault 4.97 / hratecostdefault 4.84), read by `payment.ts` + `/cart`. The env var is only a logged-warn fallback. The dead-write `settings.yuan_rate` field on `/admin/settings` was removed.
+2. `MOMO_API_TOKEN` (+ `MOMO_API_BASE_URL` + `MOMO_CARGO_SACK_TOKEN`) — ✅ set in Vercel prod + local 2026-06-01 (owner creds, live-tested). MOMO cron + sync now functional.
 
 ---
 
