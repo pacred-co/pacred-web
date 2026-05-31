@@ -46,6 +46,11 @@ export default async function AdminSettingsPage() {
             → เรท CNY-THB ของ tb_settings (ฝากชำระ + ฝากสั่ง)
           </Link>
         </p>
+        <p className="mt-2 text-xs">
+          <Link href="/admin/settings/forwarder-costs" className="text-primary-600 underline">
+            → เรทต้นทุนฝากนำเข้า ค่าเริ่มต้น (เติมอัตโนมัติลง forwarder ใหม่)
+          </Link>
+        </p>
       </div>
 
       <SettingsForm {...s} />

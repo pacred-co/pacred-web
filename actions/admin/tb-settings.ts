@@ -4,6 +4,14 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import {
+  ALL_COST_COLUMNS_SET,
+  MASTER_NUMERIC_COLUMNS,
+  COST_RATE_MIN,
+  COST_RATE_MAX,
+  COST_CELL_MIN,
+  COST_CELL_MAX,
+} from "@/app/[locale]/(admin)/admin/settings/forwarder-costs/costs-model";
 
 /**
  * V-A4 (D1 faithful-port) — rate-entry validation guard for tb_settings.
@@ -303,6 +311,227 @@ export async function adminSetTbRateCustomCbm(
 
       revalidatePath("/admin/rates");
       return { ok: true, data: { id } };
+    },
+  );
+}
+
+/**
+ * Re-sweep A2 #28 (money P0) — admin editor for the DEFAULT forwarder-cost
+ * matrix on the `tb_settings` singleton (id=1).
+ *
+ * Legacy reference: `pcs-admin/settings.php` — the "ตั้งค่าเรทนำเข้าสินค้า
+ * <CARRIER>" sections. Each carrier × transport × product-type × warehouse-city
+ * cell is one `tb_settings` cost column (144 total · all lowercase on prod);
+ * the legacy UI had one `update_<col>` POST per cell. These auto-fill a NEW
+ * forwarder row's per-tier cost when an order lands (the read side is
+ * `actions/admin/report-cnt-detail.ts:warehouseSegment()`), so a wrong value
+ * here silently under/over-costs every future forwarder of that lane → margin
+ * leak. Before this action the matrix could only be edited by raw SQL.
+ *
+ * This is the natural Wave-2 sibling of `adminSetTbSettingsRates` (CNY rates).
+ * It writes:
+ *   • any subset of the 144 cost columns (`costs` map), each [0, 100000]
+ *   • the two master cost-rate columns hratecostdefault / hratecostsale
+ *     ([2.0, 8.0] CNY-per-THB guard, same class as the rate editor)
+ *   • numberpaymemt (text running number — เลขที่ฝากจ่าย)
+ *   • freeshipping ("1" on | "2" off)
+ *
+ * Faithful: the value lands in the exact same `tb_settings` column the legacy
+ * wrote; we only add an allow-list (reject unknown keys), a typo range-guard,
+ * read-before-write, and an audit row. rs/rp/rgdefault are intentionally NOT
+ * writable here — they have their own editor (`/admin/settings/legacy-rates`)
+ * to avoid two writers for the same field.
+ *
+ * RBAC: super + accounting (mirrors adminSetTbSettingsRates). Only super may
+ * `force_override` an out-of-range master cost-rate.
+ */
+
+const costColumnRecordSchema = z
+  .record(z.string(), z.number())
+  .refine(
+    (rec) => Object.keys(rec).every((k) => ALL_COST_COLUMNS_SET.has(k)),
+    { message: "พบคอลัมน์ต้นทุนที่ไม่รู้จัก (ไม่อยู่ใน allow-list ของ tb_settings)" },
+  )
+  .refine(
+    (rec) =>
+      Object.values(rec).every(
+        (v) => Number.isFinite(v) && v >= COST_CELL_MIN && v <= COST_CELL_MAX,
+      ),
+    {
+      message:
+        `ค่าต้นทุนต้องอยู่ในช่วง ${COST_CELL_MIN.toLocaleString()} - ${COST_CELL_MAX.toLocaleString()}`,
+    },
+  );
+
+const setTbSettingsForwarderCostsSchema = z
+  .object({
+    // partial map: only columns the admin actually changed are sent
+    costs: costColumnRecordSchema.optional(),
+    hratecostdefault: z.number().positive().optional(),
+    hratecostsale: z.number().positive().optional(),
+    // เลขที่ฝากจ่าย — free text (legacy stores e.g. "123412345")
+    numberpaymemt: z.string().trim().max(50).optional(),
+    // ฟรีค่าขนส่ง — legacy "1"=on, "2"=off
+    freeshipping: z.enum(["1", "2"]).optional(),
+    force_override: z.boolean().optional(),
+  })
+  .refine(
+    (d) =>
+      (d.costs && Object.keys(d.costs).length > 0) ||
+      d.hratecostdefault !== undefined ||
+      d.hratecostsale !== undefined ||
+      d.numberpaymemt !== undefined ||
+      d.freeshipping !== undefined,
+    { message: "ไม่มีค่าที่จะบันทึก" },
+  );
+
+export type SetTbSettingsForwarderCostsInput = z.infer<
+  typeof setTbSettingsForwarderCostsSchema
+>;
+
+// The master cost-rate columns that carry the [2.0, 8.0] CNY-per-THB guard.
+const MASTER_RATE_COLS = MASTER_NUMERIC_COLUMNS.map((m) => m.col);
+
+export async function adminSetTbSettingsForwarderCosts(
+  input: SetTbSettingsForwarderCostsInput,
+): Promise<AdminActionResult<{ updated: string[] }>> {
+  const parsed = setTbSettingsForwarderCostsSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  // Range guard for the two master cost-rates (same typo class as rsdefault).
+  const rateFailures: string[] = [];
+  for (const col of MASTER_RATE_COLS) {
+    const v = d[col as "hratecostdefault" | "hratecostsale"];
+    if (v !== undefined && (v < COST_RATE_MIN || v > COST_RATE_MAX)) {
+      rateFailures.push(
+        `เรทผิดปกติ ${col}=${v}. ` +
+          `ช่วงที่ยอมรับ ${COST_RATE_MIN.toFixed(2)} - ${COST_RATE_MAX.toFixed(2)}. ` +
+          `ถ้าตั้งใจให้ใช้ค่านี้จริง ต้องติดต่อ super admin`,
+      );
+    }
+  }
+  if (rateFailures.length > 0 && !d.force_override) {
+    return { ok: false, error: rateFailures.join(" · ") };
+  }
+
+  return withAdmin<{ updated: string[] }>(
+    ["super", "accounting"],
+    async ({ adminId }) => {
+      // super-only bypass for out-of-band master cost-rate (accounting cannot).
+      if (rateFailures.length > 0 && d.force_override) {
+        const adminCheck = createAdminClient();
+        const { data: rolesRows, error: rolesErr } = await adminCheck
+          .from("admins")
+          .select("role")
+          .eq("profile_id", adminId)
+          .eq("is_active", true);
+        if (rolesErr) {
+          console.error(`[tb-settings adminSetTbSettingsForwarderCosts] roles lookup failed`, {
+            code: rolesErr.code, message: rolesErr.message, adminId,
+          });
+          return { ok: false, error: `roles lookup failed: ${rolesErr.message}` };
+        }
+        const roles = (rolesRows ?? []).map((r: { role: string }) => r.role);
+        if (!roles.includes("super")) {
+          return {
+            ok: false,
+            error: "เฉพาะ super admin เท่านั้นที่ bypass การตรวจช่วงเรทได้",
+          };
+        }
+      }
+
+      // Build the full update payload (cost cells + master config).
+      const updatePayload: Record<string, number | string> = {};
+      if (d.costs) {
+        for (const [col, val] of Object.entries(d.costs)) updatePayload[col] = val;
+      }
+      if (d.hratecostdefault !== undefined) updatePayload.hratecostdefault = d.hratecostdefault;
+      if (d.hratecostsale !== undefined) updatePayload.hratecostsale = d.hratecostsale;
+      if (d.numberpaymemt !== undefined) updatePayload.numberpaymemt = d.numberpaymemt;
+      if (d.freeshipping !== undefined) updatePayload.freeshipping = d.freeshipping;
+
+      const changedCols = Object.keys(updatePayload);
+
+      const admin = createAdminClient();
+
+      // Read-before-write — fetch ONLY the columns we're about to change, so
+      // the audit row captures a precise before/after diff and we can skip
+      // no-op writes.
+      const { data: before, error: readErr } = await admin
+        .from("tb_settings")
+        .select(changedCols.join(", "))
+        .eq("id", 1)
+        .maybeSingle<Record<string, number | string | null>>();
+      if (readErr) {
+        console.error(`[tb-settings adminSetTbSettingsForwarderCosts] read-before-write failed`, {
+          code: readErr.code, message: readErr.message,
+        });
+        return { ok: false, error: readErr.message };
+      }
+      if (!before) return { ok: false, error: "tb_settings row id=1 not found" };
+
+      // Compute the genuinely-changed columns (string-vs-number safe compare).
+      const updated: string[] = [];
+      const beforeDiff: Record<string, number | string | null> = {};
+      const afterDiff: Record<string, number | string> = {};
+      for (const col of changedCols) {
+        const newVal = updatePayload[col];
+        const oldRaw = before[col];
+        // Numeric columns compare by Number(); text columns by string.
+        const isNumeric = typeof newVal === "number";
+        const changed = isNumeric
+          ? Number(oldRaw ?? NaN) !== newVal
+          : String(oldRaw ?? "") !== String(newVal);
+        if (changed) {
+          updated.push(col);
+          beforeDiff[col] = oldRaw ?? null;
+          afterDiff[col] = newVal;
+        }
+      }
+
+      if (updated.length === 0) {
+        return { ok: true, data: { updated: [] } };
+      }
+
+      // Write ONLY the changed columns.
+      const writePayload: Record<string, number | string> = {};
+      for (const col of updated) writePayload[col] = updatePayload[col];
+
+      const { error: updErr } = await admin
+        .from("tb_settings")
+        .update(writePayload)
+        .eq("id", 1);
+      if (updErr) {
+        console.error(`[tb-settings adminSetTbSettingsForwarderCosts] update failed`, {
+          code: updErr.code, message: updErr.message,
+        });
+        return { ok: false, error: updErr.message };
+      }
+
+      await logAdminAction(
+        adminId,
+        "tb_settings.set_forwarder_costs",
+        "tb_settings",
+        "1",
+        {
+          changed_count: updated.length,
+          before: beforeDiff,
+          after: afterDiff,
+          ...(rateFailures.length > 0 && d.force_override
+            ? { __range_guard_bypassed: true, range_failures: rateFailures }
+            : {}),
+        },
+      );
+
+      // The cost matrix auto-fills NEW forwarder rows; refresh the editor +
+      // the rate-cost sibling so accounting sees the change immediately.
+      revalidatePath("/admin/settings/forwarder-costs");
+      revalidatePath("/admin/settings/legacy-rates");
+      revalidatePath("/admin/settings");
+      return { ok: true, data: { updated } };
     },
   );
 }
