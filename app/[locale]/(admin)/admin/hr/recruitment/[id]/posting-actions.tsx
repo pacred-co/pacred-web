@@ -4,16 +4,15 @@ import { useState, useTransition } from "react";
 import { useRouter } from "@/i18n/navigation";
 import {
   ArrowRight, CalendarCheck2, X, UserPlus, Trash2, Loader2,
-  CheckCheck, XCircle, ChevronDown, Phone, Mail,
+  CheckCheck, XCircle, Phone, Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   adminCreateApplicant, adminAdvanceApplicant, adminScheduleInterview,
-  adminDeleteApplicant, adminUpdatePosting,
+  adminDeleteApplicant, adminDeletePosting,
 } from "@/actions/admin/recruitment";
 
 type Stage = "applied" | "screening" | "interviewing" | "offered" | "hired" | "rejected";
-type Status = "draft" | "open" | "paused" | "closed";
 
 const STAGE_NEXT: Record<Stage, Stage | null> = {
   applied:      "screening",
@@ -31,58 +30,38 @@ const STAGE_LABEL: Record<Stage, string> = {
 const inputCls = "w-full rounded-lg border border-border bg-surface-alt/30 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary-500/40";
 
 // ────────────────────────────────────────────────────────────
-// Posting status toggle (open / pause / close)
+// Delete posting (legacy has no status flip — close = delete row)
 // ────────────────────────────────────────────────────────────
-export function PostingStatusToggle({ postingId, status }: { postingId: string; status: Status }) {
+export function DeletePostingButton({ postingId }: { postingId: number }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [open, setOpen] = useState(false);
 
-  function flip(to: Status) {
-    if (to === status) { setOpen(false); return; }
-    if (to === "closed" && !confirm("ปิดประกาศนี้?")) return;
+  function remove() {
+    if (!confirm("ลบประกาศรับสมัครงานนี้?")) return;
     startTransition(async () => {
-      const res = await adminUpdatePosting({ id: postingId, status: to });
-      if (res.ok) router.refresh();
+      const res = await adminDeletePosting({ id: postingId });
+      if (res.ok) router.push("/admin/hr/recruitment" as Parameters<typeof router.push>[0]);
       else alert(res.error);
-      setOpen(false);
     });
   }
 
-  const options: Status[] = ["open", "paused", "closed", "draft"];
   return (
-    <div className="relative inline-block">
-      <button
-        type="button"
-        disabled={pending}
-        onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1 rounded-lg border border-white/30 bg-white/15 backdrop-blur-sm px-3 py-1.5 text-xs font-medium hover:bg-white/25"
-      >
-        {pending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronDown className="w-3.5 h-3.5" />}
-        เปลี่ยนสถานะ
-      </button>
-      {open && (
-        <div className="absolute right-0 mt-1 w-40 rounded-lg border border-border bg-white dark:bg-surface shadow-lg z-10 overflow-hidden">
-          {options.map((o) => (
-            <button
-              key={o}
-              type="button"
-              onClick={() => flip(o)}
-              className={`block w-full text-left px-3 py-2 text-xs hover:bg-surface-alt ${o === status ? "bg-primary-50 text-primary-700 font-bold" : "text-foreground"}`}
-            >
-              {o === "open" ? "เปิดรับ" : o === "paused" ? "พักรับ" : o === "closed" ? "ปิดรับ" : "ร่าง"}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <button
+      type="button"
+      disabled={pending}
+      onClick={remove}
+      className="inline-flex items-center gap-1 rounded-lg border border-white/30 bg-white/15 backdrop-blur-sm px-3 py-2 text-xs font-medium hover:bg-white/25 disabled:opacity-50"
+    >
+      {pending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+      ลบประกาศ
+    </button>
   );
 }
 
 // ────────────────────────────────────────────────────────────
-// Quick add applicant inline
+// Quick add applicant inline (Pacred ATS — job_applicants)
 // ────────────────────────────────────────────────────────────
-export function AddApplicantInline({ postingId }: { postingId: string }) {
+export function AddApplicantInline({ postingId }: { postingId: number }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({

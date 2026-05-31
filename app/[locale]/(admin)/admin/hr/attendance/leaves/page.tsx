@@ -3,47 +3,53 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { ChevronRight, Home, FileText, Plane, Calendar, Clock } from "lucide-react";
 import { LeaveDecideActions, NewLeaveButton } from "./leave-actions";
+import { LEAVE_TYPE_LABEL, LEAVE_DURATION_LABEL, LEAVE_STATUS_LABEL } from "../../_legacy-labels";
 
-type Profile = {
-  id: string;
-  member_code: string | null;
-  first_name: string | null;
-  last_name: string | null;
-  avatar_url: string | null;
-};
+/**
+ * D1 faithful port of time-attendance-system.php case 'leave-record' — reads
+ * the migrated legacy `tas_leave` joined to `tb_admin` for the employee name
+ * (verbatim to leave-record/home.php SQL: LEFT JOIN tb_admin ON adminID=adminid).
+ *
+ * tas_leave columns (lowercase): id, type(1-4), startdate, enddate, duration(1-3),
+ * reason, filename, adminid, date, status(1-4), adminidcreate, adminidceo, adminidhr.
+ * status: 1=รอ HR ตรวจสอบ 2=รอผู้บริหารอนุมัติ 3=อนุมัติ 4=ไม่อนุมัติ.
+ */
+
 type LeaveRow = {
-  id: string;
-  profile_id: string;
-  leave_type: string;
-  start_date: string;
-  end_date: string;
-  days_count: number;
+  id: number;
+  type: string;
+  startdate: string | null;
+  enddate: string | null;
+  duration: string;
   reason: string | null;
-  status: "pending" | "approved" | "rejected" | "cancelled";
-  approved_by: string | null;
-  approved_at: string | null;
-  approval_note: string | null;
-  created_at: string;
-  profile: Profile | Profile[] | null;
+  adminid: string | null;
+  date: string | null;
+  status: string;
+  adminidcreate: string | null;
+};
+type AdminRow = {
+  adminID: string;
+  adminName: string | null;
+  adminLastName: string | null;
+  adminNickname: string | null;
+  adminStatusA: string | null;
+  section: string | null;
+  adminType: string | null;
 };
 
 type Filter = "pending" | "approved" | "rejected" | "all";
 
-const TYPE_LABEL: Record<string, { label: string; cls: string }> = {
-  vacation:  { label: "ลาพักร้อน", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  sick:      { label: "ลาป่วย",    cls: "bg-red-50 text-red-700 border-red-200" },
-  personal:  { label: "ลากิจ",     cls: "bg-amber-50 text-amber-700 border-amber-200" },
-  maternity: { label: "ลาคลอด",   cls: "bg-pink-50 text-pink-700 border-pink-200" },
-  marriage:  { label: "ลาสมรส",   cls: "bg-purple-50 text-purple-700 border-purple-200" },
-  funeral:   { label: "ลาฌาปนกิจ", cls: "bg-gray-50 text-gray-700 border-gray-200" },
-  unpaid:    { label: "ลาไม่รับค่าจ้าง", cls: "bg-orange-50 text-orange-700 border-orange-200" },
-  other:     { label: "อื่นๆ",     cls: "bg-cyan-50 text-cyan-700 border-cyan-200" },
+const STATUS_CLS: Record<string, string> = {
+  "1": "bg-amber-50 text-amber-700 border-amber-200",
+  "2": "bg-blue-50 text-blue-700 border-blue-200",
+  "3": "bg-emerald-50 text-emerald-700 border-emerald-200",
+  "4": "bg-red-50 text-red-700 border-red-200",
 };
-const STATUS_LABEL: Record<LeaveRow["status"], { label: string; cls: string }> = {
-  pending:   { label: "รออนุมัติ", cls: "bg-amber-50 text-amber-700 border-amber-200" },
-  approved:  { label: "อนุมัติ",   cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  rejected:  { label: "ไม่อนุมัติ", cls: "bg-red-50 text-red-700 border-red-200" },
-  cancelled: { label: "ยกเลิก",    cls: "bg-gray-50 text-gray-700 border-gray-200" },
+const TYPE_CLS: Record<string, string> = {
+  "1": "bg-red-50 text-red-700 border-red-200",
+  "2": "bg-emerald-50 text-emerald-700 border-emerald-200",
+  "3": "bg-amber-50 text-amber-700 border-amber-200",
+  "4": "bg-pink-50 text-pink-700 border-pink-200",
 };
 
 export default async function AdminHRLeavesPage({
@@ -58,46 +64,66 @@ export default async function AdminHRLeavesPage({
 
   const [leavesRes, adminsRes] = await Promise.all([
     admin
-      .from("leave_requests")
-      .select(`
-        id, profile_id, leave_type, start_date, end_date, days_count,
-        reason, status, approved_by, approved_at, approval_note, created_at,
-        profile:profiles!profile_id ( id, member_code, first_name, last_name, avatar_url )
-      `)
-      .order("created_at", { ascending: false })
+      .from("tas_leave")
+      .select("id, type, startdate, enddate, duration, reason, adminid, date, status, adminidcreate")
+      .order("date", { ascending: false })
       .limit(500),
-    // Pre-load active admins as candidates for "new leave" dropdown
+    // tb_admin roster — for name resolution of ALL leave rows (display) AND
+    // the "เพิ่มการลางาน" dropdown (which the legacy add.php filters to active
+    // staff: adminStatusA<>'0' AND section<>'0' AND adminType IN 1..4).
     admin
-      .from("admins")
-      .select(`profile_id,
-               profile:profiles!profile_id ( id, member_code, first_name, last_name )`)
-      .eq("is_active", true),
+      .from("tb_admin")
+      .select("adminID, adminName, adminLastName, adminNickname, adminStatusA, section, adminType"),
   ]);
 
-  const rows = ((leavesRes.data ?? []) as LeaveRow[]).map((r) => ({
-    ...r,
-    profile_one: Array.isArray(r.profile) ? r.profile[0] ?? null : r.profile,
-  }));
+  if (leavesRes.error) {
+    console.error(`[tas_leave list] failed`, { code: leavesRes.error.code, message: leavesRes.error.message });
+    throw new Error("ไม่สามารถโหลดข้อมูลการลางานได้");
+  }
+  if (adminsRes.error) {
+    console.error(`[tb_admin roster] failed`, { code: adminsRes.error.code, message: adminsRes.error.message });
+  }
+
+  const adminMap = new Map<string, AdminRow>();
+  for (const a of (adminsRes.data ?? []) as AdminRow[]) adminMap.set(a.adminID, a);
+
+  const rows = (leavesRes.data ?? []) as LeaveRow[];
 
   const visible = rows.filter((r) => {
     if (filter === "all") return true;
-    if (filter === "pending") return r.status === "pending";
-    return r.status === filter;
+    if (filter === "pending") return r.status === "1" || r.status === "2";   // awaiting (HR or exec)
+    if (filter === "approved") return r.status === "3";
+    return r.status === "4"; // rejected
   });
 
   const totals = {
-    pending:  rows.filter((r) => r.status === "pending").length,
-    approved: rows.filter((r) => r.status === "approved").length,
-    rejected: rows.filter((r) => r.status === "rejected" || r.status === "cancelled").length,
+    pending:  rows.filter((r) => r.status === "1" || r.status === "2").length,
+    approved: rows.filter((r) => r.status === "3").length,
+    rejected: rows.filter((r) => r.status === "4").length,
     all:      rows.length,
   };
 
-  type AdminRow = { profile_id: string; profile: Profile | Profile[] | null };
-  const employees = ((adminsRes.data ?? []) as AdminRow[]).map((a) => {
-    const p = Array.isArray(a.profile) ? a.profile[0] ?? null : a.profile;
-    const full = `${p?.first_name ?? ""} ${p?.last_name ?? ""}`.trim() || "—";
-    return { id: a.profile_id, label: `${p?.member_code ?? "—"} · ${full}` };
-  }).sort((a, b) => a.label.localeCompare(b.label, "th"));
+  // Employee dropdown options — legacy add.php filter (active staff with a
+  // section, adminType 1-4): adminStatusA<>'0' AND section<>'0' AND adminType IN 1..4.
+  const employees = ((adminsRes.data ?? []) as AdminRow[])
+    .filter((a) =>
+      a.adminStatusA !== "0" &&
+      (a.section ?? "0") !== "0" &&
+      ["1", "2", "3", "4"].includes(a.adminType ?? ""))
+    .map((a) => {
+      const full = `${a.adminName ?? ""} ${a.adminLastName ?? ""}`.trim() || a.adminID;
+      const nick = a.adminNickname ? `(${a.adminNickname}) ` : "";
+      return { id: a.adminID, label: `${nick}${full}` };
+    })
+    .sort((a, b) => a.label.localeCompare(b.label, "th"));
+
+  const fullName = (adminid: string | null): string => {
+    if (!adminid) return "—";
+    const a = adminMap.get(adminid);
+    if (!a) return adminid;
+    const full = `${a.adminName ?? ""} ${a.adminLastName ?? ""}`.trim() || adminid;
+    return a.adminNickname ? `(${a.adminNickname}) ${full}` : full;
+  };
 
   const tabHref = (s: Filter) =>
     `/admin/hr/attendance/leaves${s === "pending" ? "" : `?status=${s}`}`;
@@ -111,9 +137,9 @@ export default async function AdminHRLeavesPage({
         <ChevronRight className="w-3 h-3" />
         <Link href="/admin/hr" className="hover:text-primary-600">ฝ่ายทรัพยากรบุคคล</Link>
         <ChevronRight className="w-3 h-3" />
-        <Link href="/admin/hr/attendance" className="hover:text-primary-600">เข้างาน</Link>
+        <Link href="/admin/hr/attendance" className="hover:text-primary-600">บันทึกเวลางาน</Link>
         <ChevronRight className="w-3 h-3" />
-        <span className="text-foreground font-medium">คำขอลา</span>
+        <span className="text-foreground font-medium">การลางาน</span>
       </nav>
 
       {/* Header */}
@@ -125,10 +151,10 @@ export default async function AdminHRLeavesPage({
               <FileText className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-[10px] font-bold tracking-widest opacity-80">HR · LEAVE REQUESTS</p>
-              <h1 className="text-xl sm:text-2xl font-bold">คำขอลา</h1>
+              <p className="text-[10px] font-bold tracking-widest opacity-80">HR · LEAVE RECORDS</p>
+              <h1 className="text-xl sm:text-2xl font-bold">การลางาน</h1>
               <p className="text-xs opacity-80 mt-0.5">
-                ทั้งหมด {totals.all} คำขอ · รออนุมัติ {totals.pending} · อนุมัติแล้ว {totals.approved} · ไม่อนุมัติ/ยกเลิก {totals.rejected}
+                ทั้งหมด {totals.all} รายการ · รออนุมัติ {totals.pending} · อนุมัติแล้ว {totals.approved} · ไม่อนุมัติ {totals.rejected}
               </p>
             </div>
           </div>
@@ -138,7 +164,7 @@ export default async function AdminHRLeavesPage({
               href="/admin/hr/attendance"
               className="rounded-lg bg-white/15 backdrop-blur-sm border border-white/20 px-3 py-2 text-xs sm:text-sm font-medium hover:bg-white/25"
             >
-              ← เข้างาน
+              ← วันหยุด
             </Link>
           </div>
         </div>
@@ -158,49 +184,44 @@ export default async function AdminHRLeavesPage({
       {visible.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border p-12 text-center text-sm text-muted">
           <Plane className="w-12 h-12 mx-auto mb-2 opacity-30" />
-          {filter === "pending" ? "ไม่มีคำขอลาที่รออนุมัติ — เคลียร์หมดแล้ว 🎉" : "ไม่พบคำขอลาในเงื่อนไขที่เลือก"}
+          {filter === "pending" ? "ไม่มีคำขอลาที่รออนุมัติ — เคลียร์หมดแล้ว 🎉" : "ไม่พบรายการลาในเงื่อนไขที่เลือก"}
         </div>
       ) : (
         <div className="space-y-3">
           {visible.map((r) => {
-            const t = TYPE_LABEL[r.leave_type] ?? { label: r.leave_type, cls: "bg-gray-50 text-gray-700 border-gray-200" };
-            const s = STATUS_LABEL[r.status];
-            const p = r.profile_one;
-            const full = `${p?.first_name ?? ""} ${p?.last_name ?? ""}`.trim() || "—";
+            const typeLabel = LEAVE_TYPE_LABEL[r.type] ?? r.type;
+            const statusLabel = LEAVE_STATUS_LABEL[r.status] ?? r.status;
+            const durationLabel = LEAVE_DURATION_LABEL[r.duration] ?? r.duration;
             return (
               <article key={r.id} className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm flex flex-wrap items-start gap-4">
-                <Avatar src={p?.avatar_url ?? null} name={full} />
+                <Avatar name={fullName(r.adminid)} />
 
                 <div className="flex-1 min-w-0 space-y-1.5">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-bold text-foreground">{full}</span>
-                    <span className="font-mono text-[10px] text-muted">{p?.member_code ?? "—"}</span>
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${t.cls}`}>{t.label}</span>
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${s.cls}`}>{s.label}</span>
+                    <span className="font-bold text-foreground">{fullName(r.adminid)}</span>
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${TYPE_CLS[r.type] ?? "bg-gray-50 text-gray-700 border-gray-200"}`}>{typeLabel}</span>
+                    <span className="rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[10px] font-medium">{durationLabel}</span>
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${STATUS_CLS[r.status] ?? "bg-gray-50 text-gray-700 border-gray-200"}`}>{statusLabel}</span>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
                     <span className="inline-flex items-center gap-1">
                       <Calendar className="w-3 h-3" />
-                      {new Date(r.start_date).toLocaleDateString("th-TH")}
-                      {" → "}
-                      {new Date(r.end_date).toLocaleDateString("th-TH")}
+                      {r.startdate ? new Date(r.startdate).toLocaleDateString("th-TH") : "—"}
+                      {r.enddate && r.enddate !== r.startdate ? ` → ${new Date(r.enddate).toLocaleDateString("th-TH")}` : ""}
                     </span>
-                    <span className="inline-flex items-center gap-1 font-semibold text-foreground">
-                      <Clock className="w-3 h-3" />
-                      {r.days_count} วัน
-                    </span>
-                    <span className="text-[10px]">ยื่นเมื่อ {new Date(r.created_at).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}</span>
+                    {r.date && (
+                      <span className="inline-flex items-center gap-1 text-[10px]">
+                        <Clock className="w-3 h-3" />
+                        ยื่นเมื่อ {new Date(r.date).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}
+                      </span>
+                    )}
+                    {r.adminidcreate && <span className="text-[10px]">บันทึกโดย {r.adminidcreate}</span>}
                   </div>
 
                   {r.reason && (
                     <p className="text-xs text-foreground bg-surface-alt/50 border border-border rounded-md px-2 py-1.5">
                       💬 {r.reason}
-                    </p>
-                  )}
-                  {r.approval_note && (
-                    <p className={`text-xs rounded-md px-2 py-1.5 border ${r.status === "rejected" ? "bg-red-50 text-red-700 border-red-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"}`}>
-                      🗒 {r.approval_note}
                     </p>
                   )}
                 </div>
@@ -215,7 +236,7 @@ export default async function AdminHRLeavesPage({
       )}
 
       <div className="rounded-2xl border border-dashed border-border p-4 text-center text-xs text-muted">
-        เมื่ออนุมัติคำขอลา ระบบจะ mark ตาราง attendance ของวันที่ลาให้อัตโนมัติ (status = leave) ผ่าน Postgres trigger
+        เกณฑ์การอนุมัติ (legacy): รอ HR ตรวจสอบ → รอผู้บริหารอนุมัติ → อนุมัติ / ไม่อนุมัติ
       </div>
     </main>
   );
@@ -244,16 +265,10 @@ function TabPill({
   );
 }
 
-function Avatar({ src, name }: { src: string | null; name: string }) {
-  if (src) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={src} alt={name} className="h-10 w-10 rounded-full object-cover ring-1 ring-border shrink-0" />
-    );
-  }
+function Avatar({ name }: { name: string }) {
   return (
     <div className="h-10 w-10 rounded-full bg-surface-alt ring-1 ring-border flex items-center justify-center text-sm font-bold text-muted shrink-0">
-      {name.charAt(0).toUpperCase() || "?"}
+      {name.replace(/[()]/g, "").trim().charAt(0).toUpperCase() || "?"}
     </div>
   );
 }

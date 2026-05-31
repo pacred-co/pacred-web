@@ -2,86 +2,42 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "@/i18n/navigation";
-import { LogIn, LogOut, Pencil, Loader2, Save, X } from "lucide-react";
+import { Plus, Loader2, Save, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { adminQuickClock, adminUpsertAttendance } from "@/actions/admin/attendance";
+import { adminAddHoliday, adminDeleteHoliday } from "@/actions/admin/attendance";
 
-const inputCls = "rounded-md border border-border bg-surface-alt/30 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary-500/40";
+const inputCls = "w-full rounded-lg border border-border bg-surface-alt/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500/40";
 
-export function ClockButton({
-  profileId, workDate, field, hasValue,
-}: { profileId: string; workDate: string; field: "clock_in" | "clock_out"; hasValue: boolean }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-
-  function click() {
-    if (hasValue && !confirm(`เขียนทับเวลา ${field === "clock_in" ? "เข้า" : "ออก"} ใหม่?`)) return;
-    startTransition(async () => {
-      const res = await adminQuickClock({ profile_id: profileId, work_date: workDate, field });
-      if (res.ok) router.refresh();
-      else alert(res.error);
-    });
-  }
-
-  const Icon = field === "clock_in" ? LogIn : LogOut;
-  const cls = field === "clock_in"
-    ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-    : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100";
-  return (
-    <button
-      type="button"
-      onClick={click}
-      disabled={pending}
-      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-bold transition-colors disabled:opacity-50 ${cls}`}
-      title={field === "clock_in" ? "บันทึกเข้างาน (ตอนนี้)" : "บันทึกออกงาน (ตอนนี้)"}
-    >
-      {pending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Icon className="w-3 h-3" />}
-      {field === "clock_in" ? "เข้า" : "ออก"}
-    </button>
-  );
-}
-
-type EditProps = {
-  profileId: string;
-  workDate: string;
-  initial: {
-    clock_in:  string | null;
-    clock_out: string | null;
-    status:    string;
-    note:      string | null;
-  };
-};
-
-export function EditAttendanceButton({ profileId, workDate, initial }: EditProps) {
+// ────────────────────────────────────────────────────────────
+// Add holiday (faithful: time-attendance-system.php case 'add-holiday' form)
+// ────────────────────────────────────────────────────────────
+export function AddHolidayButton() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({
-    clock_in:  initial.clock_in ?  isoToLocal(initial.clock_in) : "",
-    clock_out: initial.clock_out ? isoToLocal(initial.clock_out) : "",
-    status:    initial.status,
-    note:      initial.note ?? "",
-  });
+  const [form, setForm] = useState({ holiday_name: "", holiday_date: "", note: "" });
   const [err, setErr] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  function isoToLocal(iso: string): string {
-    // strip Z and seconds to fit datetime-local input
-    return iso.slice(0, 16);
-  }
-
-  function save() {
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
     setErr(null);
+    if (!form.holiday_name.trim() || !form.holiday_date) {
+      setErr("กรุณากรอกชื่อวันหยุดและวันที่");
+      return;
+    }
     startTransition(async () => {
-      const res = await adminUpsertAttendance({
-        profile_id: profileId,
-        work_date:  workDate,
-        clock_in:   form.clock_in  ? new Date(form.clock_in).toISOString()  : null,
-        clock_out:  form.clock_out ? new Date(form.clock_out).toISOString() : null,
-        status:     form.status as "present" | "late" | "early_leave" | "absent" | "leave" | "holiday" | "off",
-        note:       form.note || null,
+      const res = await adminAddHoliday({
+        holiday_name: form.holiday_name,
+        holiday_date: form.holiday_date,
+        note: form.note || null,
       });
-      if (res.ok) { setOpen(false); router.refresh(); }
-      else setErr(res.error);
+      if (res.ok) {
+        setForm({ holiday_name: "", holiday_date: "", note: "" });
+        setOpen(false);
+        router.refresh();
+      } else {
+        setErr(res.error === "duplicate" ? "มีวันหยุดชื่อนี้ในวันเดียวกันอยู่แล้ว" : res.error);
+      }
     });
   }
 
@@ -90,59 +46,81 @@ export function EditAttendanceButton({ profileId, workDate, initial }: EditProps
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 text-amber-700 px-2 py-1 text-[10px] font-bold hover:bg-amber-100"
-        title="แก้ไขเวลา/สถานะ"
+        className="inline-flex items-center gap-1.5 rounded-lg bg-white text-primary-700 px-3 py-2 text-xs sm:text-sm font-bold hover:bg-white/90 shadow"
       >
-        <Pencil className="w-3 h-3" />
-        แก้
+        <Plus className="w-4 h-4" />
+        เพิ่มวันหยุด
       </button>
     );
   }
 
   return (
-    <div className="absolute right-0 mt-1 w-72 rounded-xl border border-border bg-white dark:bg-surface shadow-lg p-3 z-20 space-y-2">
-      <div className="flex items-center justify-between">
-        <h4 className="text-xs font-bold">แก้ไขการเข้างาน {workDate}</h4>
-        <button type="button" onClick={() => setOpen(false)} className="text-muted hover:text-foreground">
-          <X className="w-3.5 h-3.5" />
-        </button>
-      </div>
-      {err && <div className="rounded-md border border-red-200 bg-red-50 p-1.5 text-[11px] text-red-700">{err}</div>}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+      <form onSubmit={submit} className="w-full max-w-lg rounded-2xl bg-white dark:bg-surface border border-border shadow-xl p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-base text-foreground">ฟอร์มวันหยุดประเพณีบริษัท</h3>
+          <button type="button" onClick={() => setOpen(false)} className="text-muted hover:text-foreground">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        {err && <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">{err}</div>}
 
-      <label className="block space-y-0.5">
-        <span className="text-[10px] font-semibold text-muted">เข้างาน</span>
-        <input type="datetime-local" value={form.clock_in}
-          onChange={(e) => setForm((f) => ({ ...f, clock_in: e.target.value }))}
-          className={`${inputCls} w-full`} />
-      </label>
-      <label className="block space-y-0.5">
-        <span className="text-[10px] font-semibold text-muted">ออกงาน</span>
-        <input type="datetime-local" value={form.clock_out}
-          onChange={(e) => setForm((f) => ({ ...f, clock_out: e.target.value }))}
-          className={`${inputCls} w-full`} />
-      </label>
-      <label className="block space-y-0.5">
-        <span className="text-[10px] font-semibold text-muted">override สถานะ</span>
-        <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className={`${inputCls} w-full`}>
-          <option value="present">มาทำงาน (auto)</option>
-          <option value="absent">ขาด (auto)</option>
-          <option value="leave">ลา</option>
-          <option value="holiday">วันหยุดประเภท</option>
-          <option value="off">วันหยุดประจำ</option>
-        </select>
-      </label>
-      <label className="block space-y-0.5">
-        <span className="text-[10px] font-semibold text-muted">หมายเหตุ</span>
-        <textarea rows={2} value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} className={`${inputCls} w-full`} />
-      </label>
+        <label className="block space-y-1">
+          <span className="text-xs font-semibold text-muted">ชื่อวันหยุด *</span>
+          <input value={form.holiday_name} maxLength={255} required
+            onChange={(e) => setForm((f) => ({ ...f, holiday_name: e.target.value }))}
+            className={inputCls} placeholder="เช่น วันขึ้นปีใหม่" />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-xs font-semibold text-muted">วันหยุด (หากมากกว่า 1 วันให้เพิ่มใหม่อีกรายการ) *</span>
+          <input type="date" value={form.holiday_date} required
+            onChange={(e) => setForm((f) => ({ ...f, holiday_date: e.target.value }))}
+            className={inputCls} />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-xs font-semibold text-muted">โน๊ตช่วยจำ</span>
+          <textarea rows={3} value={form.note}
+            onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+            className={inputCls} />
+        </label>
 
-      <div className="flex items-center justify-end gap-1">
-        <Button type="button" size="sm" variant="outline" onClick={() => setOpen(false)}>ยกเลิก</Button>
-        <Button type="button" size="sm" onClick={save} disabled={pending}>
-          {pending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-          บันทึก
-        </Button>
-      </div>
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+          <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>ยกเลิก</Button>
+          <Button type="submit" size="sm" disabled={pending || !form.holiday_name.trim() || !form.holiday_date}>
+            {pending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            บันทึก
+          </Button>
+        </div>
+      </form>
     </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// Delete holiday (faithful: add-holiday/deleteHoliday.php)
+// ────────────────────────────────────────────────────────────
+export function DeleteHolidayButton({ id, name }: { id: number; name: string }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  function remove() {
+    if (!confirm(`ลบวันหยุด "${name}"?`)) return;
+    startTransition(async () => {
+      const res = await adminDeleteHoliday({ id });
+      if (res.ok) router.refresh();
+      else alert(res.error);
+    });
+  }
+
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={remove}
+      className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 text-red-700 px-2 py-1 text-[10px] font-medium hover:bg-red-100 disabled:opacity-50"
+    >
+      {pending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+      ลบรายการ
+    </button>
   );
 }
