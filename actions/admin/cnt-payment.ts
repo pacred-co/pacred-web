@@ -52,6 +52,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { uploadToBucket } from "@/lib/storage/upload";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
 // ────────────────────────────────────────────────────────────
@@ -437,4 +438,197 @@ function sanitiseFilename(name: string): string {
     .replace(/[\\/]/g, "_")
     .replace(/[^A-Za-z0-9._-]/g, "_")
     .slice(0, 100);
+}
+
+// ════════════════════════════════════════════════════════════
+// SINGLE-CONTAINER cnt-payment WITH SLIP — report-cnt.php L741-808
+// (the `?id=<cabinet>` drill-down `add` POST handler)
+// ════════════════════════════════════════════════════════════
+//
+// re-sweep A2 #5 / P1-9. DISTINCT from `adminCreateCntPayment` (bulk):
+//   - operates on ONE container (the drill-down you're already viewing)
+//   - stores a bank-slip IMAGE (jpg/png) in `tb_cnt.cntimagesslip`
+//     — NOT the bulk path's PDF `cntfile`
+//   - legacy collects NO bank-account fields on this path (`nameBlank` /
+//     `noBlank` / `nameAccount` are absent in the `?id=` mode form), so we
+//     write "" for those NOT NULL varchars (legacy PHP-NULL → '' coercion).
+//
+// Legacy flow (verbatim L768-805):
+//   1. `SELECT ID FROM tb_cnt WHERE fCabinetNumber='<cab>'` dup-guard
+//      → eRe (ทำรายการซ้ำ) if a row already exists.
+//   2. Harvest fIDorCO + fTrackingCHN from tb_forwarder for this cabinet,
+//      bulk-INSERT into tb_cnt_pay_idorco + tb_cnt_pay_trackingchn.
+//   3. INSERT tb_cnt (fCabinetNumber, cntAmount, cntImagesSlip, date, adminID).
+//   4. move_uploaded_file the slip AFTER the INSERT succeeds.
+//
+// Pacred parity decisions:
+//   - dup-guard uses `tb_cnt_item` (the canonical "is this cabinet paid"
+//     marker the drill-down's `cabinetIsPaid` flag reads) — same guard the
+//     bulk path uses. This also writes the tb_cnt_item join row so the
+//     "จ่ายแล้ว" badge flips, matching the bulk path (legacy's single-add
+//     path did NOT write tb_cnt_item, but the Pacred UI derives paid-state
+//     from it, so we MUST write it for the badge — faithful-to-result).
+//   - cntStatus='1' (รอดำเนินการ) — same as the bulk path.
+//   - the slip image lands in the `slips` bucket via `uploadToBucket`
+//     (admin/cnt-slip prefix); `cntimagesslip` stores the returned path.
+//   - money path: every query destructures `error`; on slip-upload failure
+//     the tb_cnt row stands (faithful — legacy ignored move_uploaded_file's
+//     return) and we audit-log it.
+//
+// Reachability (§0d): rendered as the "จ่ายเงินค่าตู้ + แนบสลิป" panel on
+// the container drill-down (/admin/report-cnt/[fNo]) — visible only to
+// money-tier roles when the container is NOT yet paid.
+
+const createCntPaymentSingleSchema = z.object({
+  /** The ONE cabinet number (`tb_forwarder.fcabinetnumber`) being paid. */
+  cabinetNumber: z.string().trim().min(1, { message: "กรุณาระบุหมายเลขตู้" }).max(300),
+  /** จำนวนเงินที่จ่าย — numeric(10,2). */
+  cntAmount: z
+    .union([z.string(), z.number()])
+    .transform((v) => Number(v))
+    .refine((n) => Number.isFinite(n) && n > 0, { message: "จำนวนเงินไม่ถูกต้อง" }),
+});
+export type CreateCntPaymentSingleInput = z.input<typeof createCntPaymentSingleSchema>;
+
+export async function adminCreateCntPaymentSingle(
+  input: CreateCntPaymentSingleInput,
+  slip: File | null,
+): Promise<AdminActionResult<{ cntId: number; cabinetNumber: string; slipPath: string | null }>> {
+  const parsed = createCntPaymentSingleSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { cabinetNumber, cntAmount } = parsed.data;
+
+  // Slip precheck — legacy L750-755 requires a PNG/JPEG image (exif_imagetype).
+  if (!slip || !(slip instanceof File) || slip.size === 0) {
+    return { ok: false, error: "กรุณาเลือกรูปสลิปการโอนเงิน" };
+  }
+  if (!/^image\/(png|jpeg|jpg)$/i.test(slip.type)) {
+    return { ok: false, error: "ไฟล์รูปไม่ถูกต้อง (รับเฉพาะ PNG/JPEG)" };
+  }
+
+  return withAdmin<{ cntId: number; cabinetNumber: string; slipPath: string | null }>(
+    ["super", "ops", "accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+
+      // ── (a) Dup-guard — cabinet already paid? (tb_cnt_item presence) ──
+      const { data: existing, error: dupErr } = await admin
+        .from("tb_cnt_item")
+        .select("ID")
+        .eq("fCabinetNumber", cabinetNumber)
+        .limit(1);
+      if (dupErr) return { ok: false, error: dupErr.message };
+      if ((existing?.length ?? 0) > 0) {
+        return { ok: false, error: `เลขตู้ ${cabinetNumber} มีการจ่ายเงินไปแล้ว` };
+      }
+
+      // ── (b) Upload the slip image FIRST (need a path for the INSERT) ──
+      // Faithful-to-result diverges from legacy's INSERT-then-move ordering:
+      // PostgREST has no "move file after row exists" hook, and uploading
+      // first lets us store the real path in one INSERT. If the INSERT later
+      // fails we orphan one slip file — acceptable (legacy orphaned the row
+      // on upload failure; we orphan a file on the rarer insert failure).
+      const upload = await uploadToBucket(slip, "slips", `admin/cnt-slip/${cabinetNumber}`);
+      if (!upload.ok) {
+        return { ok: false, error: upload.error };
+      }
+      const slipPath = upload.filename;
+
+      // ── (c) Resolve the legacy admin username ──
+      const legacyAdminId = await resolveLegacyAdminId();
+      const nowIso = new Date().toISOString();
+
+      // ── (d) INSERT tb_cnt ── (legacy L797-798)
+      // cntname carries the cabinet number (legacy stored $_POST['arrID'] /
+      // fCabinetNumber here). Bank fields absent on this path → "" (NOT NULL).
+      const { data: cntRow, error: cntErr } = await admin
+        .from("tb_cnt")
+        .insert({
+          cntName:        cabinetNumber,
+          cntStatus:      "1",
+          cntAmount:      cntAmount,
+          cntImagesSlip:  slipPath,
+          date:           nowIso,
+          adminIDCreate:  legacyAdminId,
+          nameBlank:      "",
+          noBlank:        "",
+          nameAccount:    "",
+          cntFile:        "",
+          dateUpdate:     null,
+          adminIDUpdate:  "",
+        })
+        .select("ID")
+        .single<{ ID: number }>();
+      if (cntErr || !cntRow) {
+        // Audit the orphaned slip so it can be reaped later.
+        await logAdminAction(adminId, "cnt_payment.single.insert_failed", "tb_cnt", cabinetNumber, {
+          slip_path: slipPath,
+          error:     cntErr?.message ?? "insert_failed",
+        });
+        return { ok: false, error: cntErr?.message ?? "insert_failed" };
+      }
+      const cntId = Number(cntRow.ID);
+
+      // ── (e) Harvest fIDorCO + fTrackingCHN, fan-out to pay tables ──
+      // (legacy L771-795)
+      const { data: forwarderRows, error: fwdErr } = await admin
+        .from("tb_forwarder")
+        .select("fidorco, ftrackingchn")
+        .eq("fcabinetnumber", cabinetNumber);
+      if (fwdErr) {
+        await logAdminAction(adminId, "cnt_payment.single.forwarder_lookup_failed", "tb_cnt", String(cntId), {
+          cabinet: cabinetNumber,
+          error:   fwdErr.message,
+        });
+      }
+
+      const idorcoRows: Array<{ fidorco: string; fcabinetnumber: string }> = [];
+      const trackingRows: Array<{ ftrackingchn: string; fcabinetnumber: string }> = [];
+      for (const r of (forwarderRows ?? []) as Array<{ fidorco: string | null; ftrackingchn: string | null }>) {
+        if (r.fidorco) idorcoRows.push({ fidorco: r.fidorco, fcabinetnumber: cabinetNumber });
+        if (r.ftrackingchn) trackingRows.push({ ftrackingchn: r.ftrackingchn, fcabinetnumber: cabinetNumber });
+      }
+      if (idorcoRows.length > 0) {
+        const { error: idorcoErr } = await admin.from("tb_cnt_pay_idorco").insert(idorcoRows);
+        if (idorcoErr) {
+          await logAdminAction(adminId, "cnt_payment.single.idorco_insert_failed", "tb_cnt", String(cntId), {
+            error: idorcoErr.message, rows: idorcoRows.length,
+          });
+        }
+      }
+      if (trackingRows.length > 0) {
+        const { error: trkErr } = await admin.from("tb_cnt_pay_trackingchn").insert(trackingRows);
+        if (trkErr) {
+          await logAdminAction(adminId, "cnt_payment.single.tracking_insert_failed", "tb_cnt", String(cntId), {
+            error: trkErr.message, rows: trackingRows.length,
+          });
+        }
+      }
+
+      // ── (f) Write the tb_cnt_item join row so the "จ่ายแล้ว" badge flips ──
+      const { error: itemErr } = await admin
+        .from("tb_cnt_item")
+        .insert({ fCabinetNumber: cabinetNumber, cntID: cntId });
+      if (itemErr) {
+        await logAdminAction(adminId, "cnt_payment.single.item_insert_failed", "tb_cnt", String(cntId), {
+          cabinet: cabinetNumber, error: itemErr.message,
+        });
+        return { ok: false, error: itemErr.message };
+      }
+
+      await logAdminAction(adminId, "cnt_payment.single.create", "tb_cnt", String(cntId), {
+        legacy_admin_id: legacyAdminId,
+        cabinet:         cabinetNumber,
+        cnt_amount:      cntAmount,
+        slip_path:       slipPath,
+      });
+
+      revalidatePath(`/admin/report-cnt/${cabinetNumber}`);
+      revalidatePath("/admin/report-cnt");
+      revalidatePath("/admin/cnt-hs");
+      return { ok: true, data: { cntId, cabinetNumber, slipPath } };
+    },
+  );
 }

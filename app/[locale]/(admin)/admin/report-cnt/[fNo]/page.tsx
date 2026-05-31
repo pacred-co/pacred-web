@@ -43,6 +43,7 @@ import {
   type DetailRow,
 } from "./container-detail-client";
 import { CostUpdateView } from "./cost-update-view";
+import { CntPaySlipPanel } from "./cnt-pay-slip-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -500,22 +501,29 @@ export default async function AdminReportCntDetailPage({
               )}
             </div>
 
-            {canEditCost && (
-              <CostRateModal
-                fCabinetNumber={fCabinetNumber}
-                warehouseLabel={warehouseLabel}
-                warehouseChinaLabel={warehouseChinaLabel}
-                transportLabel={transportLabel}
-                currentMode={derivedMode}
-                mixedMode={mixedMode}
-                defaults={{
-                  fProductsType1: p1,
-                  fProductsType2: p2,
-                  fProductsType3: p3,
-                  fProductsType4: p4,
-                }}
-              />
-            )}
+            <div className="flex flex-col items-end gap-2">
+              {canEditCost && (
+                <CostRateModal
+                  fCabinetNumber={fCabinetNumber}
+                  warehouseLabel={warehouseLabel}
+                  warehouseChinaLabel={warehouseChinaLabel}
+                  transportLabel={transportLabel}
+                  currentMode={derivedMode}
+                  mixedMode={mixedMode}
+                  defaults={{
+                    fProductsType1: p1,
+                    fProductsType2: p2,
+                    fProductsType3: p3,
+                    fProductsType4: p4,
+                  }}
+                />
+              )}
+              {/* re-sweep A2 #5 — single-container cnt-payment + slip image.
+                  Shown only to money-tier roles when the cabinet is unpaid. */}
+              {showMoney && !cabinetIsPaid && (
+                <CntPaySlipPanel fCabinetNumber={fCabinetNumber} suggestedAmount={totalCost} />
+              )}
+            </div>
           </div>
         </section>
 

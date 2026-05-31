@@ -8,7 +8,8 @@ import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
 import { fireUserSalesEarnTriggerOnDelivery } from "./earn-trigger-tb-user-sales";
-import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
+import { resolveProfileIdsForLegacyUserids, resolveProfileIdForLegacyUserid } from "@/lib/auth/tb-users-resolver";
+import { notifyStaffGroup } from "@/lib/notifications/staff-group";
 // NOTE: getWalletAvailableBalance + getCargoBillingGate were only used by the
 // now-tombstoned adminMarkForwarderPaid (rebuilt-table dead-write). The faithful
 // forwarder-payment lives in actions/admin/pay-user.ts. Imports removed 2026-05-31.
@@ -834,6 +835,137 @@ export async function adminRestoreForwarderFromSpecial(
 
       revalidatePath("/admin/forwarders");
       return { ok: true, data: { restored: eligible.length } };
+    },
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// adminSaveForwarderNote — forwarder.php saveNote (L1166-1231)
+// ════════════════════════════════════════════════════════════
+//
+// re-sweep A2 #7 / P1-6. A NOTE-ONLY save (no status change) on a
+// tb_forwarder row, WITH the push that legacy fired. The existing
+// `adminBulkUpdateForwarderTbStatus` pushes only when fstatus changes,
+// so a pure note edit never reached the customer/staff — this closes
+// that gap. (The rebuilt-table `adminUpdateForwarder` writes the dead
+// `forwarders.note_admin` and is unrelated.)
+//
+// Legacy flow (verbatim L1166-1231):
+//   fNoteUser=1  → "เห็นเฉพาะแอดมิน" : fNoteUserRead=''   + push to staff LINE group
+//   fNoteUser≠1  → "ลูกค้าและแอดมิน" : fNoteUserRead='1'  + push to the customer
+//   UPDATE tb_forwarder SET fNoteDate=NOW(), fNoteUser, fNoteUserRead,
+//                           fNote, adminIDUpdate WHERE ID=<ID>
+//
+// Pacred notify mapping (legacy LINE-Notify is dead — Apr-2025 EOL):
+//   - admin-only note  → notifyStaffGroup() (no-op until LINE_STAFF_GROUP_ID
+//     is set — same pluggable pattern as the yuan staff-notify, P1-24).
+//   - customer note    → sendNotification() (in-app + LINE OA push + email),
+//     resolving the legacy userid → profiles.id via the tb-users resolver.
+//
+// fnote=text · fnoteuser=varchar(1) NOT NULL · fnoteuserread=varchar(1)
+// NOT NULL · fnotedate=timestamp · adminidupdate=varchar(10) NOT NULL
+// (all lowercase — tb_forwarder is NOT in the camelCase family).
+
+const saveForwarderNoteSchema = z.object({
+  fID: z.union([z.string(), z.number()]).transform((v) => Number(v)).refine(
+    (n) => Number.isFinite(n) && n > 0,
+    { message: "fID ไม่ถูกต้อง" },
+  ),
+  /** หมายเหตุ — legacy `fNote` (text). Empty string allowed (legacy "แก้ไขเรียบร้อยแล้ว"). */
+  fNote: z.string().trim().max(5000).default(""),
+  /** "1" = เห็นเฉพาะแอดมิน · anything else = ลูกค้าและแอดมิน (legacy fNoteUser varchar(1)). */
+  fNoteUser: z.union([z.string(), z.number()]).transform((v) => String(v).trim()).default("0"),
+});
+export type SaveForwarderNoteInput = z.input<typeof saveForwarderNoteSchema>;
+
+export async function adminSaveForwarderNote(
+  input: SaveForwarderNoteInput,
+): Promise<AdminActionResult<{ fID: number; adminOnly: boolean }>> {
+  const parsed = saveForwarderNoteSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { fID, fNote } = parsed.data;
+  const adminOnly = parsed.data.fNoteUser === "1";
+
+  // Roles: a note can be added by any ops-floor role (legacy gated only on
+  // being logged into pcs-admin). Mirror the wide bulk-update union.
+  return withAdmin<{ fID: number; adminOnly: boolean }>(
+    ["ops", "super", "manager", "warehouse", "accounting", "driver"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+
+      // Read the row for userid + identifiers (push targeting).
+      const { data: row, error: rowErr } = await admin
+        .from("tb_forwarder")
+        .select("id, userid, fidorco")
+        .eq("id", fID)
+        .maybeSingle<{ id: number; userid: string | null; fidorco: string | null }>();
+      if (rowErr) return { ok: false, error: rowErr.message };
+      if (!row) return { ok: false, error: "not_found" };
+
+      // Legacy fNoteUserRead: admin-only note → '' (customer never sees it);
+      // customer note → '1' (customer has an UNREAD note).
+      const fNoteUserRead = adminOnly ? "" : "1";
+      const adminIdSafe = String(adminId).slice(0, 10);
+
+      const { error: updErr } = await admin
+        .from("tb_forwarder")
+        .update({
+          fnote:         fNote || null,
+          fnoteuser:     adminOnly ? "1" : "0",
+          fnoteuserread: fNoteUserRead,
+          fnotedate:     new Date().toISOString(),
+          adminidupdate: adminIdSafe,
+        })
+        .eq("id", fID);
+      if (updErr) return { ok: false, error: updErr.message };
+
+      await logAdminAction(adminId, "forwarder.save_note", "tb_forwarder", String(fID), {
+        admin_only: adminOnly,
+        has_note:   fNote.length > 0,
+      });
+
+      const fNo = row.fidorco ?? String(fID);
+      const noteLine = fNote || "แก้ไขเรียบร้อยแล้ว";
+
+      // Push — best-effort, never blocks the note save.
+      if (adminOnly) {
+        // Legacy fired the hardcoded LINE-Notify staff token (dead). Pacred
+        // routes admin-only notes to the staff LINE OA group (no-op until
+        // LINE_STAFF_GROUP_ID is configured — see staff-group.ts).
+        void notifyStaffGroup(
+          `เลขที่ออเดอร์ : ${fNo}\nประเภทการแจ้งเตือน : แอดมินเท่านั้น\nรหัสสมาชิก : ${row.userid ?? "-"}\nรายละเอียด : ${noteLine}\nจากแอดมิน : ${adminIdSafe}`,
+        );
+      } else {
+        // Customer-visible note → in-app + LINE OA push + email.
+        const legacyUserId = String(row.userid ?? "");
+        if (legacyUserId) {
+          try {
+            const profileId = await resolveProfileIdForLegacyUserid(legacyUserId);
+            if (profileId) {
+              await sendNotification(profileId, {
+                category:       "forwarder",
+                severity:       "info",
+                title:          `ฝากนำเข้า ${fNo} มีหมายเหตุใหม่`,
+                body:           noteLine,
+                link_href:      `/service-import/${fNo}`,
+                reference_type: "forwarder",
+                reference_id:   String(fID),
+              });
+            }
+          } catch (err) {
+            logger.warn("forwarder.save_note", "customer notify failed (note saved)", {
+              fid:   fID,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+      }
+
+      revalidatePath("/admin/forwarders");
+      revalidatePath(`/admin/forwarders/${fNo}`);
+      return { ok: true, data: { fID, adminOnly } };
     },
   );
 }

@@ -28,6 +28,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { sendNotification } from "@/lib/notifications";
+import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
+import { resolveProfileIdForLegacyUserid } from "@/lib/auth/tb-users-resolver";
+import { logger } from "@/lib/logger";
 
 // ─────────────────────────────────────────────────────────────────────
 // Schema — the 4-rate payload from the modal form.
@@ -409,4 +413,234 @@ export async function adminReportCntAddCheck(fIDs: number[]): Promise<AdminActio
       data: { inserted: toInsert.length, skipped: parsed.data.fIDs.length - toInsert.length },
     };
   });
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// adminReportCntBillToCustomer — report-cnt.php L835-911
+//   `update_forwarder_to5` — bill ONE customer's forwarder from the
+//   container drill-down: flip tb_forwarder.fstatus 4→5 (รอชำระเงิน),
+//   stamp fdatestatus5, recompute the promo discount, then notify the
+//   customer of the outstanding balance.
+// ═════════════════════════════════════════════════════════════════════
+//
+// re-sweep A2 #6 / P1-7. The legacy "ตัวหลักในการชำระเงิน" — moving a row
+// to fStatus=5 is what makes it payable by the customer + surfaces the
+// "ยอดค้างชำระ". DISTINCT from the generic `adminBulkUpdateForwarderTbStatus`
+// (actions/admin/forwarders.ts): that bulk action flips status + notifies
+// but does NOT run the legacy promo-discount recompute that this billing
+// transition performs (L860-878). This handler is the faithful per-row
+// billing action wired into the report-cnt drill-down.
+//
+// Legacy promo recompute (L862-878):
+//   SELECT promoID FROM tb_promotion WHERE fID=<ID>
+//   if promoID==3  → fDiscount = fTotalPrice * 0.10
+//   if promoID==4  → fDiscount = fTotalPrice * 0.07
+//   else            → keep the row's existing fDiscount
+//   UPDATE tb_forwarder SET fDiscount=<recomputed>
+//
+// Outstanding balance shown to the customer (legacy L880):
+//   pricePay = (fTotalPrice + fTransportPrice + fPriceUpdate
+//               + fShippingService) - fDiscount
+//
+// Notify: legacy fired SMS + email + LINE-Notify. Pacred uses the modern
+// `sendNotification` (in-app + LINE OA push + email fallback) — legacy
+// LINE-Notify is dead (Apr-2025 EOL). The legacy `userid` (text) is bridged
+// to a profiles.id via the tb-users-resolver; if the customer has no profile
+// row, the status flip still lands (best-effort notify).
+//
+// Money path: every query destructures `error`; the flip is verified with a
+// before-read so an already-billed (fstatus≥5) row is a no-op (idempotent),
+// never a double-bill. Status-log row appended (4→5) so the history view
+// matches legacy.
+//
+// Reachability (§0d): per-row "แจ้งหนี้ลูกค้า (4→5)" button in the container
+// drill-down (/admin/report-cnt/[fNo]), shown only on rows whose fstatus<5
+// to money-tier roles.
+
+// Promo discount rates — legacy report-cnt.php L870-874.
+const PROMO_DISCOUNT_RATE: Record<string, number> = {
+  "3": 0.10,
+  "4": 0.07,
+};
+
+const billToCustomerSchema = z.object({
+  fID: z.union([z.string(), z.number()]).transform((v) => Number(v)).refine(
+    (n) => Number.isFinite(n) && n > 0,
+    { message: "fID ไม่ถูกต้อง" },
+  ),
+});
+export type BillToCustomerInput = z.input<typeof billToCustomerSchema>;
+
+/**
+ * Pure billing math for the 4→5 transition — faithful to report-cnt.php
+ * L862-880. Exported `async` (so it can live in this `"use server"` file
+ * AND be unit-tested) but performs NO IO.
+ *
+ *   - promo discount: promoID 3 → fTotalPrice × 10% · promoID 4 → × 7% ·
+ *     else keep the row's existing fDiscount (legacy default branch).
+ *   - pricePay (ยอดค้างชำระ): fTotalPrice + fTransportPrice + fPriceUpdate
+ *     + fShippingService − fDiscount.
+ */
+export async function computeBillToCustomerAmounts(row: {
+  ftotalprice: number | null;
+  ftransportprice: number | null;
+  fpriceupdate: number | null;
+  fshippingservice: number | null;
+  fdiscount: number | null;
+  promoId: string | null;
+}): Promise<{ fDiscount: number; pricePay: number }> {
+  const fTotalPrice = Number(row.ftotalprice ?? 0);
+  const promoRate = PROMO_DISCOUNT_RATE[row.promoId ?? ""];
+  const fDiscount =
+    promoRate !== undefined
+      ? Math.round(fTotalPrice * promoRate * 100) / 100
+      : Number(row.fdiscount ?? 0);
+  const pricePay =
+    fTotalPrice +
+    Number(row.ftransportprice ?? 0) +
+    Number(row.fpriceupdate ?? 0) +
+    Number(row.fshippingservice ?? 0) -
+    fDiscount;
+  return { fDiscount, pricePay };
+}
+
+export async function adminReportCntBillToCustomer(
+  input: BillToCustomerInput,
+): Promise<AdminActionResult<{ fID: number; pricePay: number; alreadyBilled: boolean }>> {
+  const parsed = billToCustomerSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const fID = parsed.data.fID;
+
+  return withAdmin<{ fID: number; pricePay: number; alreadyBilled: boolean }>(
+    ["super", "ops", "accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+
+      // ── (a) Read the row's pricing + status BEFORE the flip ──
+      const { data: row, error: rowErr } = await admin
+        .from("tb_forwarder")
+        .select(
+          "id, fstatus, userid, fidorco, ftrackingchn, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, fdiscount",
+        )
+        .eq("id", fID)
+        .maybeSingle<{
+          id: number;
+          fstatus: string | null;
+          userid: string | null;
+          fidorco: string | null;
+          ftrackingchn: string | null;
+          ftotalprice: number | null;
+          ftransportprice: number | null;
+          fpriceupdate: number | null;
+          fshippingservice: number | null;
+          fdiscount: number | null;
+        }>();
+      if (rowErr) return { ok: false, error: rowErr.message };
+      if (!row) return { ok: false, error: "not_found" };
+
+      const fromStatus = String(row.fstatus ?? "");
+
+      // Idempotency: legacy had no guard, but re-billing a row already at
+      // fstatus≥5 would re-stamp fdatestatus5 + re-notify "ยอดค้างชำระ" — a
+      // double-bill ping. Refuse it cleanly (money path). For the already-billed
+      // case we report the existing balance WITHOUT re-running the promo recompute
+      // (the discount is already on the row).
+      if (Number(fromStatus) >= 5) {
+        const { pricePay: pricePayExisting } = await computeBillToCustomerAmounts({
+          ...row,
+          promoId: null,
+        });
+        return {
+          ok:   true,
+          data: { fID, pricePay: pricePayExisting, alreadyBilled: true },
+        };
+      }
+
+      // ── (b) Recompute the promo discount (legacy L862-878) ──
+      const { data: promoRow, error: promoErr } = await admin
+        .from("tb_promotion")
+        .select("promoid")
+        .eq("fid", fID)
+        .limit(1)
+        .maybeSingle<{ promoid: number | null }>();
+      if (promoErr) {
+        // Non-fatal — keep the existing fDiscount (the legacy default branch).
+        console.error("[adminReportCntBillToCustomer] tb_promotion lookup failed", {
+          fid: fID, code: promoErr.code, message: promoErr.message,
+        });
+      }
+      const promoId = promoRow?.promoid == null ? "" : String(promoRow.promoid);
+      const { fDiscount, pricePay } = await computeBillToCustomerAmounts({ ...row, promoId });
+
+      // ── (c) Flip fstatus 4→5 + stamp fdatestatus5 + recomputed fDiscount ──
+      const nowIso = new Date().toISOString();
+      const adminIdSafe = String(adminId).slice(0, 10); // adminidupdate varchar(10)
+      const { error: updErr } = await admin
+        .from("tb_forwarder")
+        .update({
+          fstatus:          "5",
+          fdatestatus5:     nowIso,
+          fdateadminstatus: nowIso,
+          adminidupdate:    adminIdSafe,
+          fdiscount:        fDiscount,
+        })
+        .eq("id", fID);
+      if (updErr) return { ok: false, error: updErr.message };
+
+      await logAdminAction(adminId, "report_cnt.bill_to_customer", "tb_forwarder", String(fID), {
+        from_status: fromStatus,
+        to_status:   "5",
+        promo_id:    promoId || null,
+        f_discount:  fDiscount,
+        price_pay:   pricePay,
+      });
+
+      // ── (e) Status-log row (4→5) — matches legacy saveHistory($sql,41) ──
+      // Best-effort: a log failure does NOT roll back the flip above.
+      await appendStatusLog(admin, fID, fromStatus, "5", adminIdSafe);
+
+      // ── (f) Notify the customer of the outstanding balance ──
+      // Legacy fired SMS + email + LINE-Notify; Pacred uses sendNotification
+      // (in-app + LINE OA push + email). Resolve userid → profiles.id; if the
+      // customer has no profile, the flip still stands (best-effort).
+      const legacyUserId = String(row.userid ?? "");
+      if (legacyUserId) {
+        try {
+          const profileId = await resolveProfileIdForLegacyUserid(legacyUserId);
+          if (profileId) {
+            const fNo = row.fidorco ?? String(fID);
+            // Custom payload — the legacy 4→5 notify is specifically the
+            // "ยอดค้างชำระ" billing ping, not the generic status-change line.
+            await sendNotification(profileId, {
+              category:       "forwarder",
+              severity:       "info",
+              title:          `ฝากนำเข้า ${fNo} รอชำระเงิน`,
+              body:           `ยอดค้างชำระ ${pricePay.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`,
+              link_href:      `/service-import/${fNo}`,
+              reference_type: "forwarder",
+              reference_id:   String(fID),
+            });
+          } else {
+            logger.info("report_cnt.bill_to_customer", "no profile for userid — flip OK, notify skipped", {
+              fid: fID,
+            });
+          }
+        } catch (err) {
+          logger.warn("report_cnt.bill_to_customer", "notification failed (flip OK)", {
+            fid:   fID,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      // The drill-down client calls router.refresh() after a successful flip;
+      // revalidate the list + forwarders surfaces too (the per-cabinet path is
+      // refreshed client-side since this action only has fID, not the cabinet).
+      revalidatePath("/admin/report-cnt", "layout");
+      revalidatePath("/admin/forwarders");
+      return { ok: true, data: { fID, pricePay, alreadyBilled: false } };
+    },
+  );
 }

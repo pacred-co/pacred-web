@@ -25,7 +25,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
-import { adminReportCntAddCheck } from "@/actions/admin/report-cnt-detail";
+import { adminReportCntAddCheck, adminReportCntBillToCustomer } from "@/actions/admin/report-cnt-detail";
 import { Link } from "@/i18n/navigation";
 import { ForwarderCostEditButton } from "@/components/admin/forwarder-cost-edit-button";
 import {
@@ -578,6 +578,13 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                         </Link>
                       </div>
                     )}
+                    {/* re-sweep A2 #6 — per-row bill-to-customer (4→5). Money-tier
+                        only, and only when the row hasn't been billed yet. */}
+                    {showMoney && Number(r.fstatus) < 5 && (
+                      <div className="mt-1">
+                        <BillToCustomerButton fID={r.id} />
+                      </div>
+                    )}
                   </td>
                   <td className="px-2 py-2 text-center">
                     <span
@@ -629,6 +636,54 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
         </div>
       )}
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Per-row bill-to-customer (4→5) button — calls adminReportCntBillToCustomer.
+// Confirms before billing (money action) + shows the resulting balance.
+// ─────────────────────────────────────────────────────────────────────
+
+function BillToCustomerButton({ fID }: { fID: number }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [done, setDone] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  function bill() {
+    if (!window.confirm(`แจ้งหนี้ลูกค้า (ย้ายไปสถานะรอชำระเงิน) สำหรับรายการ #${fID}?`)) return;
+    setMsg(null);
+    start(async () => {
+      const res = await adminReportCntBillToCustomer({ fID });
+      if (!res.ok) {
+        setMsg(res.error);
+        return;
+      }
+      setDone(true);
+      setMsg(
+        res.data?.alreadyBilled
+          ? "รายการนี้แจ้งหนี้ไปแล้ว"
+          : `แจ้งหนี้แล้ว · ยอดค้างชำระ ${(res.data?.pricePay ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บ.`,
+      );
+      router.refresh();
+    });
+  }
+
+  if (done) {
+    return <span className="inline-block text-[9px] text-amber-700">{msg}</span>;
+  }
+  return (
+    <>
+      <button
+        type="button"
+        onClick={bill}
+        disabled={pending}
+        className="inline-block rounded-full bg-amber-500 text-amber-50 border border-amber-700 text-[9px] px-1.5 py-0.5 hover:bg-amber-600 disabled:opacity-50"
+      >
+        {pending ? "กำลังแจ้ง…" : "แจ้งหนี้ (4→5)"}
+      </button>
+      {msg && <div className="mt-0.5 text-[9px] text-red-600">{msg}</div>}
+    </>
   );
 }
 

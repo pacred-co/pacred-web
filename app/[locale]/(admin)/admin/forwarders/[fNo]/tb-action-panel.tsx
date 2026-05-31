@@ -23,7 +23,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { adminBulkUpdateForwarderTbStatus } from "@/actions/admin/forwarders";
+import { adminBulkUpdateForwarderTbStatus, adminSaveForwarderNote } from "@/actions/admin/forwarders";
 
 type Status = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "99";
 
@@ -122,6 +122,7 @@ export function TbForwarderActionPanel(p: Props) {
   const isRollback = parseInt(status, 10) < parseInt(p.currentStatus, 10) && p.currentStatus !== "99";
 
   return (
+    <div className="space-y-3">
     <form onSubmit={onSubmit} className="space-y-3 rounded-2xl border border-primary-200 bg-primary-50/30 p-4">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="rounded-full bg-primary-100 text-primary-700 px-2.5 py-0.5 text-[11px] font-semibold">
@@ -224,6 +225,110 @@ export function TbForwarderActionPanel(p: Props) {
         <code className="mx-1 rounded bg-surface-alt px-1 font-mono">tb_forwarder #{p.fNo}</code>
         พร้อม stamp fdatestatusN · adminidupdate · audit log อัตโนมัติ
       </p>
+    </form>
+
+    {/* re-sweep A2 #7 — note-only save WITH push (legacy forwarder.php
+        saveNote). The status form above only pushes when fstatus changes; a
+        pure note edit needs this dedicated path to actually notify. */}
+    <NotePushForm fId={p.fId} fNo={p.fNo} currentNote={p.currentNote} />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// <NotePushForm> — faithful port of forwarder.php saveNote (note-only +
+// push). Lets the admin save a note AND notify either the staff group
+// (admin-only) or the customer (in-app + LINE OA + email). Calls
+// adminSaveForwarderNote (actions/admin/forwarders.ts) → writes
+// tb_forwarder.fnote/fnoteuser/fnoteuserread/fnotedate.
+// ─────────────────────────────────────────────────────────────────────
+
+function NotePushForm({ fId, fNo, currentNote }: { fId: number; fNo: string; currentNote: string }) {
+  const router = useRouter();
+  const [note, setNote] = useState<string>(currentNote);
+  const [adminOnly, setAdminOnly] = useState<boolean>(true);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    const target = adminOnly ? "แอดมินเท่านั้น" : "ลูกค้าและแอดมิน";
+    if (!window.confirm(`บันทึกหมายเหตุ + แจ้งเตือน (${target}) สำหรับ #${fNo}?`)) return;
+    startTransition(async () => {
+      const result = await adminSaveForwarderNote({
+        fID:       fId,
+        fNote:     note,
+        fNoteUser: adminOnly ? "1" : "0",
+      });
+      if (!result.ok) {
+        setError(result.error ?? "บันทึกไม่สำเร็จ");
+        return;
+      }
+      setSuccess(adminOnly ? "บันทึก + แจ้งทีมงานแล้ว" : "บันทึก + แจ้งลูกค้าแล้ว");
+      router.refresh();
+      setTimeout(() => setSuccess(null), 5000);
+    });
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50/40 p-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="rounded-full bg-amber-100 text-amber-800 px-2.5 py-0.5 text-[11px] font-semibold">
+          หมายเหตุ + แจ้งเตือน
+        </span>
+        <h3 className="text-sm font-semibold tracking-wide">📝 บันทึกหมายเหตุ (ไม่เปลี่ยนสถานะ)</h3>
+      </div>
+
+      <textarea
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        disabled={pending}
+        maxLength={5000}
+        rows={2}
+        placeholder="หมายเหตุ (เว้นว่าง = แจ้ง 'แก้ไขเรียบร้อยแล้ว')"
+        className={INPUT_CLS}
+      />
+
+      <div className="flex items-center gap-4 text-xs">
+        <label className="inline-flex items-center gap-1.5 cursor-pointer">
+          <input
+            type="radio"
+            name={`noteuser-${fId}`}
+            checked={adminOnly}
+            onChange={() => setAdminOnly(true)}
+            disabled={pending}
+          />
+          <span>แอดมินเท่านั้น (ลูกค้าไม่เห็น)</span>
+        </label>
+        <label className="inline-flex items-center gap-1.5 cursor-pointer">
+          <input
+            type="radio"
+            name={`noteuser-${fId}`}
+            checked={!adminOnly}
+            onChange={() => setAdminOnly(false)}
+            disabled={pending}
+          />
+          <span>แจ้งลูกค้า</span>
+        </label>
+      </div>
+
+      {error && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">⚠ {error}</div>
+      )}
+      {success && (
+        <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">✓ {success}</div>
+      )}
+
+      <button
+        type="submit"
+        disabled={pending}
+        className="w-full rounded-lg bg-amber-600 text-white px-4 py-2.5 text-sm font-semibold hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {pending ? "กำลังบันทึก..." : "💾 บันทึกหมายเหตุ + แจ้งเตือน"}
+      </button>
     </form>
   );
 }
