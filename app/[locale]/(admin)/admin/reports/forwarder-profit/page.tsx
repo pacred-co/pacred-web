@@ -20,7 +20,8 @@
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { ReportShell } from "@/components/admin/reports/report-shell";
-import { getForwarderProfitReport } from "@/actions/admin/reports";
+import { getForwarderProfitReport, getForwarderProfitDailySeries } from "@/actions/admin/reports";
+import { DailyProfitChart } from "../_components/daily-profit-chart";
 import {
   resolveDateRange, thb, dateTh, intTh, type ReportData,
 } from "@/lib/admin/reports/types";
@@ -52,7 +53,12 @@ export default async function ForwarderProfitReportPage({
   const sp = await searchParams;
   const range = resolveDateRange(sp);
   const fiveplus = sp["5plus"] === "1" || sp["5plus"] === "true";
-  const res = await getForwarderProfitReport(range, { fiveplus });
+  const [res, seriesRes] = await Promise.all([
+    getForwarderProfitReport(range, { fiveplus }),
+    // Daily realised-profit series (legacy graph: fStatus=7 SUM(fProfitTotal) GROUP BY day).
+    getForwarderProfitDailySeries(range),
+  ]);
+  const series = seriesRes.ok ? seriesRes.data : [];
 
   const rows = res.ok ? res.data : [];
   const totalCost   = rows.reduce((s, r) => s + r.cost_total, 0);
@@ -95,24 +101,29 @@ export default async function ForwarderProfitReportPage({
   };
 
   return (
-    <ReportShell
-      title="กำไรฝากนำเข้า"
-      subtitle="ระบบจะแสดงข้อมูลเฉพาะออเดอร์ที่มีการกรอกราคาต้นทุน"
-      range={range}
-      pathname="/admin/reports/forwarder-profit"
-      summary={[
-        { label: "ออเดอร์ทั้งหมด",            value: intTh(rows.length) },
-        { label: "กรอกต้นทุนแล้ว",           value: `${intTh(rowsWithCost)} / ${intTh(rows.length)}` },
-        { label: "ราคาขายรวม",               value: thb(totalSale) },
-        { label: "ค่าบริการ (กำไรรวม)",       value: thb(totalProfit), tone: "primary" },
-      ]}
-      data={data}
-      csvSlug="forwarder-profit"
-      sourceNote={
-        res.ok
-          ? "Source: forwarders (ทุก status ยกเว้น cancelled) — port of report-forwarder-profit.php"
-          : `❌ โหลดข้อมูลล้มเหลว: ${res.error}`
-      }
-    />
+    <>
+      <div className="px-6 pt-6 lg:px-8 lg:pt-8">
+        <DailyProfitChart points={series} label="กราฟกำไรรายวัน (ฝากนำเข้า · เฉพาะสถานะส่งสำเร็จ)" />
+      </div>
+      <ReportShell
+        title="กำไรฝากนำเข้า"
+        subtitle="ระบบจะแสดงข้อมูลเฉพาะออเดอร์ที่มีการกรอกราคาต้นทุน"
+        range={range}
+        pathname="/admin/reports/forwarder-profit"
+        summary={[
+          { label: "ออเดอร์ทั้งหมด",            value: intTh(rows.length) },
+          { label: "กรอกต้นทุนแล้ว",           value: `${intTh(rowsWithCost)} / ${intTh(rows.length)}` },
+          { label: "ราคาขายรวม",               value: thb(totalSale) },
+          { label: "ค่าบริการ (กำไรรวม)",       value: thb(totalProfit), tone: "primary" },
+        ]}
+        data={data}
+        csvSlug="forwarder-profit"
+        sourceNote={
+          res.ok
+            ? "Source: tb_forwarder (ทุก status ยกเว้น cancelled) — port of report-forwarder-profit.php · graph: fStatus=7"
+            : `❌ โหลดข้อมูลล้มเหลว: ${res.error}`
+        }
+      />
+    </>
   );
 }

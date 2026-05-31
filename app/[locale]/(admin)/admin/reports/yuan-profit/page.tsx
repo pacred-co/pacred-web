@@ -22,7 +22,8 @@
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { ReportShell } from "@/components/admin/reports/report-shell";
-import { getYuanProfitReport } from "@/actions/admin/reports";
+import { getYuanProfitReport, getYuanProfitDailySeries } from "@/actions/admin/reports";
+import { DailyProfitChart } from "../_components/daily-profit-chart";
 import {
   resolveDateRange, thb, dateTh, intTh, decTh, type ReportData,
 } from "@/lib/admin/reports/types";
@@ -56,7 +57,12 @@ export default async function YuanProfitReportPage({
 
   const sp = await searchParams;
   const range = resolveDateRange(sp);
-  const res = await getYuanProfitReport(range);
+  const [res, seriesRes] = await Promise.all([
+    getYuanProfitReport(range),
+    // Daily profit series (legacy graph: payStatus=2 SUM(payProfitTHB) GROUP BY day).
+    getYuanProfitDailySeries(range),
+  ]);
+  const series = seriesRes.ok ? seriesRes.data : [];
 
   const rows = res.ok ? res.data : [];
   const totalYuan   = rows.reduce((s, r) => s + r.yuan_amount, 0);
@@ -103,24 +109,29 @@ export default async function YuanProfitReportPage({
   };
 
   return (
-    <ReportShell
-      title="กำไรฝากโอน/ชำระเงิน (หยวน)"
-      subtitle="ราคาขายและราคาต้นทุนหยวนของรายการฝากโอน (ไม่นับสถานะยกเลิก / ปฏิเสธ / ล้มเหลว)"
-      range={range}
-      pathname="/admin/reports/yuan-profit"
-      summary={[
-        { label: "รายการทั้งหมด",        value: intTh(rows.length) },
-        { label: "กรอกต้นทุนแล้ว",       value: `${intTh(rowsWithCost)} / ${intTh(rows.length)}` },
-        { label: "ราคาขายรวม",           value: thb(totalSale) },
-        { label: "กำไรรวม",              value: thb(totalProfit), tone: "primary" },
-      ]}
-      data={data}
-      csvSlug="yuan-profit"
-      sourceNote={
-        res.ok
-          ? "Source: yuan_payments — port of report-payments-profit.php"
-          : `❌ โหลดข้อมูลล้มเหลว: ${res.error}`
-      }
-    />
+    <>
+      <div className="px-6 pt-6 lg:px-8 lg:pt-8">
+        <DailyProfitChart points={series} label="กราฟกำไรรายวัน (ฝากโอน · เฉพาะรายการที่อนุมัติแล้ว)" />
+      </div>
+      <ReportShell
+        title="กำไรฝากโอน/ชำระเงิน (หยวน)"
+        subtitle="ราคาขายและราคาต้นทุนหยวนของรายการฝากโอน (ไม่นับสถานะยกเลิก / ปฏิเสธ / ล้มเหลว)"
+        range={range}
+        pathname="/admin/reports/yuan-profit"
+        summary={[
+          { label: "รายการทั้งหมด",        value: intTh(rows.length) },
+          { label: "กรอกต้นทุนแล้ว",       value: `${intTh(rowsWithCost)} / ${intTh(rows.length)}` },
+          { label: "ราคาขายรวม",           value: thb(totalSale) },
+          { label: "กำไรรวม",              value: thb(totalProfit), tone: "primary" },
+        ]}
+        data={data}
+        csvSlug="yuan-profit"
+        sourceNote={
+          res.ok
+            ? "Source: tb_payment — port of report-payments-profit.php · graph: payStatus=2"
+            : `❌ โหลดข้อมูลล้มเหลว: ${res.error}`
+        }
+      />
+    </>
   );
 }

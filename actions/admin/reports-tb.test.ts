@@ -57,23 +57,32 @@ console.log("=== P0-20 reports retarget — tb_* tables + correct filters ===");
 section("A. Table contract — fetcher → legacy tb_* table");
 
 const EXPECTED_TABLES: Record<string, string> = {
-  getSalesMonthlyReport:           "tb_forwarder",
+  // Theme-reports (2026-05-31): sales-monthly now reads the SNAPSHOT table
+  // `tb_sales_report` (faithful to legacy report-sale.php), JOIN tb_forwarder
+  // + tb_admin. (Was `tb_forwarder` direct scan in P0-20.)
+  getSalesMonthlyReport:           "tb_sales_report",
+  backfillSalesReport:             "tb_sales_report",
   getForwarderProfitReport:        "tb_forwarder",
   getForwarderProfitDailySeries:   "tb_forwarder",
   getShopsProfitReport:            "tb_header_order",
+  getShopsProfitDailySeries:       "tb_header_order",
   getYuanProfitReport:             "tb_payment",
   getYuanProfitDailySeries:        "tb_payment",
   getOtpSuccessReport:             "tb_users_otp",
 };
 
-assertEq("getSalesMonthlyReport       targets tb_forwarder",
-  EXPECTED_TABLES.getSalesMonthlyReport, "tb_forwarder");
+assertEq("getSalesMonthlyReport       targets tb_sales_report (snapshot)",
+  EXPECTED_TABLES.getSalesMonthlyReport, "tb_sales_report");
+assertEq("backfillSalesReport         targets tb_sales_report",
+  EXPECTED_TABLES.backfillSalesReport, "tb_sales_report");
 assertEq("getForwarderProfitReport    targets tb_forwarder",
   EXPECTED_TABLES.getForwarderProfitReport, "tb_forwarder");
 assertEq("getForwarderProfitDailySeries targets tb_forwarder",
   EXPECTED_TABLES.getForwarderProfitDailySeries, "tb_forwarder");
 assertEq("getShopsProfitReport        targets tb_header_order",
   EXPECTED_TABLES.getShopsProfitReport, "tb_header_order");
+assertEq("getShopsProfitDailySeries   targets tb_header_order",
+  EXPECTED_TABLES.getShopsProfitDailySeries, "tb_header_order");
 assertEq("getYuanProfitReport         targets tb_payment",
   EXPECTED_TABLES.getYuanProfitReport, "tb_payment");
 assertEq("getYuanProfitDailySeries    targets tb_payment",
@@ -100,9 +109,9 @@ type FilterShape = {
 };
 
 const EXPECTED_FILTERS: Record<string, FilterShape> = {
-  getSalesMonthlyReport: {
-    column: "fstatus", op: "in", value: ["6", "7"],
-  },
+  // sales-monthly: primary query pulls ALL tb_sales_report in the srdate window
+  // (no fstatus filter on it); the legacy `WHERE f.fStatus=7` is applied on the
+  // JOINED forwarder in-memory (verified in section D below).
   getForwarderProfitReportDefault: {
     // Default mode: include all but soft-deleted (.neq("fstatus","0"))
     column: "fstatus", op: "neq", value: "0",
@@ -116,17 +125,20 @@ const EXPECTED_FILTERS: Record<string, FilterShape> = {
   getShopsProfitReport: {
     column: "hstatus", op: "neq", value: "6",
   },
+  getShopsProfitDailySeries: {
+    column: "hstatus", op: "eq", value: "5",   // legacy graph: hStatus=5 (สำเร็จ)
+  },
   getYuanProfitReport: {
     column: "paystatus", op: "eq", value: "2",
   },
   getYuanProfitDailySeries: {
     column: "paystatus", op: "eq", value: "2",
   },
+  backfillSalesReport: {
+    column: "fstatus", op: "eq", value: "7",   // eligible delivered forwarders
+  },
 };
 
-assertEq("sales-monthly  .in('fstatus', ['6','7'])",
-  EXPECTED_FILTERS.getSalesMonthlyReport,
-  { column: "fstatus", op: "in", value: ["6", "7"] });
 assertEq("forwarder-profit default .neq('fstatus','0')",
   EXPECTED_FILTERS.getForwarderProfitReportDefault,
   { column: "fstatus", op: "neq", value: "0" });
@@ -139,12 +151,18 @@ assertEq("forwarder daily-series .eq('fstatus','7')",
 assertEq("shops-profit .neq('hstatus','6') exclude cancelled",
   EXPECTED_FILTERS.getShopsProfitReport,
   { column: "hstatus", op: "neq", value: "6" });
+assertEq("shops daily-series .eq('hstatus','5') succeeded-only (legacy graph)",
+  EXPECTED_FILTERS.getShopsProfitDailySeries,
+  { column: "hstatus", op: "eq", value: "5" });
 assertEq("yuan-profit .eq('paystatus','2') approved-only",
   EXPECTED_FILTERS.getYuanProfitReport,
   { column: "paystatus", op: "eq", value: "2" });
 assertEq("yuan daily-series .eq('paystatus','2')",
   EXPECTED_FILTERS.getYuanProfitDailySeries,
   { column: "paystatus", op: "eq", value: "2" });
+assertEq("backfillSalesReport .eq('fstatus','7') eligible delivered",
+  EXPECTED_FILTERS.backfillSalesReport,
+  { column: "fstatus", op: "eq", value: "7" });
 
 // ════════════════════════════════════════════════════════════════════════
 // C. Date column contract — each fetcher uses the legacy date column.
@@ -153,22 +171,29 @@ assertEq("yuan daily-series .eq('paystatus','2')",
 section("C. Date column — legacy column per table (range filter)");
 
 const EXPECTED_DATE_COLS: Record<string, string> = {
-  getSalesMonthlyReport:           "fdate",       // tb_forwarder.fdate (created)
+  // sales-monthly now keys off tb_sales_report.srdate (= delivery date /
+  // fdatestatus7 snapshot) — legacy report-sale.php buckets MONTH(srDate).
+  getSalesMonthlyReport:           "srdate",
   getForwarderProfitReport:        "fdate",
   getForwarderProfitDailySeries:   "fdate",
   getShopsProfitReport:            "hdate",       // tb_header_order.hdate
+  getShopsProfitDailySeries:       "hdate",
   getYuanProfitReport:             "paydate",     // tb_payment.paydate
   getYuanProfitDailySeries:        "paydate",
   getOtpSuccessReport:             "date",        // tb_users_otp.date
+  // backfill scans eligible delivered forwarders keyed on fdatestatus7 >= 2022-02-01
+  backfillSalesReport:             "fdatestatus7",
 };
 
-assertEq("sales-monthly  .gte/.lte('fdate', ...)",         EXPECTED_DATE_COLS.getSalesMonthlyReport,         "fdate");
+assertEq("sales-monthly  .gte/.lte('srdate', ...)",        EXPECTED_DATE_COLS.getSalesMonthlyReport,         "srdate");
 assertEq("forwarder-profit .gte/.lte('fdate', ...)",        EXPECTED_DATE_COLS.getForwarderProfitReport,      "fdate");
 assertEq("forwarder daily .gte/.lte('fdate', ...)",         EXPECTED_DATE_COLS.getForwarderProfitDailySeries, "fdate");
 assertEq("shops-profit  .gte/.lte('hdate', ...)",           EXPECTED_DATE_COLS.getShopsProfitReport,          "hdate");
+assertEq("shops daily   .gte/.lte('hdate', ...)",           EXPECTED_DATE_COLS.getShopsProfitDailySeries,     "hdate");
 assertEq("yuan-profit   .gte/.lte('paydate', ...)",         EXPECTED_DATE_COLS.getYuanProfitReport,           "paydate");
 assertEq("yuan daily    .gte/.lte('paydate', ...)",         EXPECTED_DATE_COLS.getYuanProfitDailySeries,      "paydate");
 assertEq("otp-success   .gte/.lte('date', ...)",            EXPECTED_DATE_COLS.getOtpSuccessReport,           "date");
+assertEq("backfill      .gte('fdatestatus7','2022-02-01')", EXPECTED_DATE_COLS.backfillSalesReport,           "fdatestatus7");
 
 // ════════════════════════════════════════════════════════════════════════
 // D. Aggregation contract — sales-monthly per-(month, rep) row sum.
@@ -178,45 +203,65 @@ assertEq("otp-success   .gte/.lte('date', ...)",            EXPECTED_DATE_COLS.g
 // any change to the math breaks the test loudly. Stand-in fixture matches
 // the legacy report's column shape.
 
-section("D. sales-monthly aggregation — group by (month, rep) + commission 1%");
+section("D. sales-monthly aggregation — tb_sales_report snapshot · revenue 3-col sum · group by (month(srdate), sradminidsale) · commission 1% · fstatus=7 gate");
 
-type SalesFixture = { userid: string; fdate: string; ftotalprice: number; fweight: number; fvolume: number };
+// Theme-reports (2026-05-31): legacy report-sale.php builds on tb_sales_report.
+// Revenue = SUM(fTotalPrice)+SUM(fTransportPrice)+SUM(fPriceUpdate) (3 cols);
+// bucket key = MONTH(srDate) + sradminidsale; only rows whose joined forwarder
+// is fStatus=7 count (legacy WHERE f.fStatus=7).
+type SnapFixture = { srdate: string; fid: number; sradminidsale: string };
+type FwFixture = {
+  id: number; fstatus: string;
+  ftotalprice: number; ftransportprice: number; fpriceupdate: number;
+  fweight: number; fvolume: number;
+};
 type SalesMonthlyRow = {
-  rep_id: string; month: string;
+  rep_id: string; rep_name: string; month: string;
   order_count: number; weight_kg: number; volume_cbm: number;
   revenue_thb: number; commission_thb: number;
 };
 
-// Fixture forwarder rows + the user→rep map admin would resolve from tb_users.
-const fixture: SalesFixture[] = [
-  { userid: "PR1", fdate: "2026-05-15T10:00:00", ftotalprice: 1000, fweight: 5,  fvolume: 0.5 },
-  { userid: "PR1", fdate: "2026-05-20T10:00:00", ftotalprice: 2000, fweight: 8,  fvolume: 0.7 },
-  { userid: "PR2", fdate: "2026-05-22T10:00:00", ftotalprice: 5000, fweight: 12, fvolume: 1.2 },
-  { userid: "PR3", fdate: "2026-04-10T10:00:00", ftotalprice:  500, fweight: 2,  fvolume: 0.1 },
+const snapFixture: SnapFixture[] = [
+  { srdate: "2026-05-15T10:00:00", fid: 1, sradminidsale: "admin_a" },
+  { srdate: "2026-05-20T10:00:00", fid: 2, sradminidsale: "admin_a" },
+  { srdate: "2026-05-22T10:00:00", fid: 3, sradminidsale: "admin_a" },
+  { srdate: "2026-04-10T10:00:00", fid: 4, sradminidsale: "admin_b" },
+  { srdate: "2026-05-25T10:00:00", fid: 5, sradminidsale: "admin_b" }, // fw not fstatus=7 → excluded
 ];
-const userToRep = new Map<string, string>([
-  ["PR1", "admin_a"],
-  ["PR2", "admin_a"], // same rep, 2 customers
-  ["PR3", "admin_b"],
+const fwById = new Map<number, FwFixture>([
+  [1, { id: 1, fstatus: "7", ftotalprice: 1000, ftransportprice: 100, fpriceupdate: 0,  fweight: 5,  fvolume: 0.5 }],
+  [2, { id: 2, fstatus: "7", ftotalprice: 2000, ftransportprice: 0,   fpriceupdate: 50, fweight: 8,  fvolume: 0.7 }],
+  [3, { id: 3, fstatus: "7", ftotalprice: 5000, ftransportprice: 200, fpriceupdate: 0,  fweight: 12, fvolume: 1.2 }],
+  [4, { id: 4, fstatus: "7", ftotalprice: 500,  ftransportprice: 50,  fpriceupdate: 0,  fweight: 2,  fvolume: 0.1 }],
+  [5, { id: 5, fstatus: "6", ftotalprice: 9999, ftransportprice: 999, fpriceupdate: 99, fweight: 99, fvolume: 9.9 }], // NOT delivered
+]);
+const repName = new Map<string, string>([
+  ["admin_a", "Alice A [admin_a]"],
+  ["admin_b", "Bob B [admin_b]"],
 ]);
 
-// Replicate the aggregation logic — line-for-line with reports.ts so test
-// catches a regression in the bucket math.
-function aggregate(rows: SalesFixture[]): SalesMonthlyRow[] {
+// Replicate the aggregation logic — line-for-line with reports.ts.
+function aggregate(snaps: SnapFixture[]): SalesMonthlyRow[] {
   const aggMap = new Map<string, SalesMonthlyRow>();
-  for (const f of rows) {
-    const rep   = userToRep.get(f.userid) ?? "(ไม่มี sales rep)";
-    const month = f.fdate.slice(0, 7);
-    const key   = `${month}::${rep}`;
+  for (const s of snaps) {
+    const fw = fwById.get(s.fid);
+    if (!fw || fw.fstatus !== "7") continue;           // legacy WHERE f.fStatus=7
+    const repId = s.sradminidsale || "";
+    const month = s.srdate.slice(0, 7);
+    const key   = `${month}::${repId}`;
     const a = aggMap.get(key) ?? {
-      rep_id: rep, month,
+      rep_id: repId || "(ไม่มี sales rep)",
+      rep_name: repName.get(repId) || (repId || "(ไม่มี sales rep)"),
+      month,
       order_count: 0, weight_kg: 0, volume_cbm: 0,
       revenue_thb: 0, commission_thb: 0,
     };
-    a.order_count    += 1;
-    a.weight_kg      += Number(f.fweight     ?? 0);
-    a.volume_cbm     += Number(f.fvolume     ?? 0);
-    a.revenue_thb    += Number(f.ftotalprice ?? 0);
+    a.order_count += 1;
+    a.weight_kg   += Number(fw.fweight ?? 0);
+    a.volume_cbm  += Number(fw.fvolume ?? 0);
+    a.revenue_thb += Number(fw.ftotalprice ?? 0)
+                   + Number(fw.ftransportprice ?? 0)
+                   + Number(fw.fpriceupdate ?? 0);
     a.commission_thb = a.revenue_thb * 0.01;
     aggMap.set(key, a);
   }
@@ -226,24 +271,31 @@ function aggregate(rows: SalesFixture[]): SalesMonthlyRow[] {
   });
 }
 
-const agg = aggregate(fixture);
+const agg = aggregate(snapFixture);
 
-// Expected: 3 buckets (May admin_a, May admin_b? no — May admin_a × 2 orders
-// from PR1 + 1 from PR2 = 3 orders; April admin_b × 1 order from PR3)
+// Expected: 2 buckets (May admin_a × 3 delivered orders; Apr admin_b × 1).
+// The May admin_b snapshot (fid=5) is EXCLUDED — its forwarder is fstatus='6'.
 assertEq("aggregate length = 2 buckets (May admin_a, Apr admin_b)", agg.length, 2);
 
 const mayA = agg.find((r) => r.month === "2026-05" && r.rep_id === "admin_a");
 assertEq("May admin_a exists",                         Boolean(mayA), true);
 assertEq("May admin_a order_count = 3",                mayA?.order_count, 3);
-assertEq("May admin_a revenue_thb = 1000+2000+5000 = 8000", mayA?.revenue_thb, 8000);
-assertEq("May admin_a commission_thb = 80 (1% of 8000)",    mayA?.commission_thb, 80);
+// revenue = (1000+100+0) + (2000+0+50) + (5000+200+0) = 1100 + 2050 + 5200 = 8350
+assertEq("May admin_a revenue = 3-col sum = 8350",     mayA?.revenue_thb, 8350);
+assertEq("May admin_a commission = 83.5 (1% of 8350)", mayA?.commission_thb, 83.5);
 assertEq("May admin_a weight_kg = 5+8+12 = 25",        mayA?.weight_kg, 25);
+assertEq("May admin_a rep_name = 'Alice A [admin_a]'", mayA?.rep_name, "Alice A [admin_a]");
 
 const aprB = agg.find((r) => r.month === "2026-04" && r.rep_id === "admin_b");
 assertEq("Apr admin_b exists",                         Boolean(aprB), true);
 assertEq("Apr admin_b order_count = 1",                aprB?.order_count, 1);
-assertEq("Apr admin_b revenue_thb = 500",              aprB?.revenue_thb, 500);
-assertEq("Apr admin_b commission_thb = 5 (1% of 500)", aprB?.commission_thb, 5);
+// revenue = 500 + 50 + 0 = 550
+assertEq("Apr admin_b revenue = 500+50 = 550",         aprB?.revenue_thb, 550);
+assertEq("Apr admin_b commission = 5.5 (1% of 550)",   aprB?.commission_thb, 5.5);
+
+// fstatus!=7 snapshot is excluded — no May admin_b bucket.
+assertEq("May admin_b excluded (forwarder fstatus=6)",
+  agg.some((r) => r.month === "2026-05" && r.rep_id === "admin_b"), false);
 
 // Sort: newest month first → May before April.
 assertEq("sort: 2026-05 before 2026-04", agg[0]?.month, "2026-05");
@@ -369,6 +421,101 @@ assertEq("2026-05-21 profit = 150",     series[2].profit, 150);
 assertEq("2026-05-21 count = 1",        series[2].count, 1);
 
 // ════════════════════════════════════════════════════════════════════════
+// G2. Shops daily-series — STORED cols, hStatus=5, SUM(htotalpriceuser)−SUM(hcostallth).
+// ════════════════════════════════════════════════════════════════════════
+//
+// Legacy report-shops-profit.php L82 GRAPH uses the STORED columns (NOT the
+// live CNY×rate recompute the TABLE does): SUM(hTotalPriceUser)−SUM(hCostAllTH)
+// WHERE hStatus=5 GROUP BY DATE(hDate). Mirror that for the shops graph.
+
+section("G2. Shops daily-series — stored cols (htotalpriceuser − hcostallth), bucket by day");
+
+type ShopDailyFixture = { hdate: string; htotalpriceuser: number; hcostallth: number };
+function bucketShopDaily(rows: ShopDailyFixture[]): Array<{ date: string; profit: number; count: number }> {
+  const bucket = new Map<string, { profit: number; count: number }>();
+  for (const r of rows) {
+    if (!r.hdate) continue;
+    const day = r.hdate.slice(0, 10);
+    const profit = Number(r.htotalpriceuser ?? 0) - Number(r.hcostallth ?? 0);
+    const cur = bucket.get(day) ?? { profit: 0, count: 0 };
+    cur.profit += profit;
+    cur.count  += 1;
+    bucket.set(day, cur);
+  }
+  return Array.from(bucket.entries())
+    .map(([date, v]) => ({ date, profit: v.profit, count: v.count }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+const shopDailyFx: ShopDailyFixture[] = [
+  { hdate: "2026-05-10T10:00:00", htotalpriceuser: 3102.4, hcostallth: 2875.5 }, // profit 226.9
+  { hdate: "2026-05-10T12:00:00", htotalpriceuser: 1009.8, hcostallth: 962.24 }, // profit 47.56
+  { hdate: "2026-05-11T10:00:00", htotalpriceuser: 500,    hcostallth: 400 },     // profit 100
+];
+const shopSeries = bucketShopDaily(shopDailyFx);
+assertEq("shop series length = 2 days", shopSeries.length, 2);
+assertEq("shop 2026-05-10 profit = 226.9 + 47.56 = 274.46",
+  Math.round(shopSeries[0].profit * 100) / 100, 274.46);
+assertEq("shop 2026-05-10 count = 2", shopSeries[0].count, 2);
+assertEq("shop 2026-05-11 profit = 100", shopSeries[1].profit, 100);
+
+// ════════════════════════════════════════════════════════════════════════
+// G3. Shops LIVE recompute — table re-derives sale/cost from CNY×rate.
+// ════════════════════════════════════════════════════════════════════════
+//
+// Legacy report-shops-profit.php L226-232 (the TABLE — NOT the graph):
+//   if (hCostAll != 0) {
+//     priceUser = round_up((hTotalPriceCHN + hShippingCHN) * hRate, 2);  // SALE
+//     pricePCS  = round_up(hRateCost * hCostAll, 2);                     // COST
+//     profit    = priceUser - pricePCS;
+//   } else: "รอคำนวณ" + EXCLUDED from totals.
+// round_up (include/function.php L86-90) = ceil(x*100)/100 (true round-UP).
+
+section("G3. Shops live-recompute — round_up(ceil) sale/cost, hcostall==0 → รอคำนวณ");
+
+// Mirror reports.ts roundUp2 exactly.
+function roundUp2(v: number): number { return Math.ceil(Number(v || 0) * 100) / 100; }
+
+type ShopRowFx = { htotalpricechn: number; hshippingchn: number; hrate: number; hratecost: number; hcostall: number };
+function recomputeShop(r: ShopRowFx): { sale: number; cost: number; profit: number; vat7: number; awaiting: boolean } {
+  const awaiting = Number(r.hcostall) === 0;
+  const sale = awaiting ? 0 : roundUp2((Number(r.htotalpricechn) + Number(r.hshippingchn)) * Number(r.hrate));
+  const cost = awaiting ? 0 : roundUp2(Number(r.hratecost) * Number(r.hcostall));
+  const profit = awaiting ? 0 : sale - cost;
+  const vat7 = awaiting ? 0 : Math.round(profit * 0.07 * 100) / 100;
+  return { sale, cost, profit, vat7, awaiting };
+}
+
+// Prod sample ONS220101-1: (550+10)*5.54 = 3102.4 ; 5.4*532.5 = 2875.5
+const ons1 = recomputeShop({ htotalpricechn: 550, hshippingchn: 10, hrate: 5.54, hratecost: 5.4, hcostall: 532.5 });
+assertEq("shops sale = round_up((550+10)*5.54) = 3102.4", ons1.sale, 3102.4);
+assertEq("shops cost = round_up(5.4*532.5) = 2875.5",     ons1.cost, 2875.5);
+assertEq("shops profit = 3102.4 - 2875.5 = 226.9",        Math.round(ons1.profit * 100) / 100, 226.9);
+assertEq("shops not awaiting (hcostall != 0)",            ons1.awaiting, false);
+
+// round_up is CEIL — verify a fractional case rounds UP not to-nearest.
+const ceilCase = recomputeShop({ htotalpricechn: 100, hshippingchn: 0, hrate: 5.001, hratecost: 0, hcostall: 1 });
+// (100+0)*5.001 = 500.1 → ceil to 2dp = 500.1 (already 1dp). Use a true tie:
+assertEq("round_up ceils 500.101 → 500.11", roundUp2(500.101), 500.11);
+assertEq("round_up ceils 500.001 → 500.01", roundUp2(500.001), 500.01);
+assertEq("ceilCase cost = round_up(0*1) = 0", ceilCase.cost, 0);
+
+// hcostall == 0 → รอคำนวณ, money fields 0, excluded from totals.
+const awaitingRow = recomputeShop({ htotalpricechn: 500, hshippingchn: 50, hrate: 5.5, hratecost: 0, hcostall: 0 });
+assertEq("shops awaiting when hcostall=0",  awaitingRow.awaiting, true);
+assertEq("shops awaiting sale = 0",         awaitingRow.sale, 0);
+assertEq("shops awaiting cost = 0",         awaitingRow.cost, 0);
+assertEq("shops awaiting profit = 0",       awaitingRow.profit, 0);
+assertEq("shops awaiting vat7 = 0",         awaitingRow.vat7, 0);
+
+// VAT7 = profit * 0.07 (legacy L255) on a costed row.
+assertEq("shops vat7 = round(226.9*0.07,2) = 15.88", ons1.vat7, Math.round(226.9 * 0.07 * 100) / 100);
+
+// Totals EXCLUDE awaiting rows (legacy only sums hCostAll != 0).
+const mixedRows = [ons1, awaitingRow];
+const totalProfit = mixedRows.filter((r) => !r.awaiting).reduce((s, r) => s + r.profit, 0);
+assertEq("shops totals exclude awaiting row", Math.round(totalProfit * 100) / 100, 226.9);
+
+// ════════════════════════════════════════════════════════════════════════
 // H. 5plus filter — opt-in maps to `.in('fstatus',['6','7'])`.
 // ════════════════════════════════════════════════════════════════════════
 
@@ -402,18 +549,24 @@ assertEq("opts undefined      → .neq('fstatus','0')",
 section("I. Column-name fidelity — 0081 lowercase for non-pilot tables");
 
 const COL_CONTRACT = {
-  tb_forwarder:    ["id", "userid", "fdate", "fstatus", "ftotalprice", "fdiscount", "fcosttotalprice", "fprofittotal", "fweight", "fvolume", "fwarehousechina", "ftransporttype"],
-  tb_header_order: ["id", "userid", "hno", "hstatus", "htitle", "hcount", "htotalpriceuser", "hcostallth", "hdate"],
+  // sales-monthly raw revenue cols (3-col sum) + shops live-recompute cols.
+  tb_forwarder:    ["id", "userid", "fdate", "fstatus", "fdatestatus7", "ftotalprice", "ftransportprice", "fpriceupdate", "fdiscount", "fcosttotalprice", "fprofittotal", "fweight", "fvolume", "fwarehousechina", "ftransporttype"],
+  tb_header_order: ["id", "userid", "hno", "hstatus", "htitle", "hcount", "htotalpricechn", "hshippingchn", "hrate", "hratecost", "hcostall", "htotalpriceuser", "hcostallth", "hdate"],
   tb_payment:      ["id", "userid", "paystatus", "paytype", "payyuan", "payrate", "payratecost", "paythb", "paythbcost", "payprofitthb", "paydate"],
   tb_users_otp:    ["id", "userid", "date"],
-  // tb_users (post-0113) = camelCase
+  // tb_sales_report (snapshot, 0081) = lowercase
+  tb_sales_report: ["id", "srdate", "fid", "sradminidsale"],
+  // tb_users / tb_admin (post-0113) = camelCase
   tb_users:        ["userID", "userName", "userLastName", "userTel", "adminIDSale"],
+  tb_admin:        ["adminID", "adminName", "adminLastName"],
 };
+
+const CAMEL_TABLES = new Set(["tb_users", "tb_admin"]);
 
 for (const [table, cols] of Object.entries(COL_CONTRACT)) {
   for (const col of cols) {
-    if (table === "tb_users") {
-      // post-0113 camelCase tables — first char lowercase, contains upper
+    if (CAMEL_TABLES.has(table)) {
+      // post-0113 camelCase tables — contains an uppercase letter
       assertEq(`${table}.${col} is camelCase (post-0113)`,
         /[A-Z]/.test(col), true);
     } else {

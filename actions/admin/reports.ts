@@ -74,102 +74,255 @@ type Result<T> = Ok<T> | Err;
 
 const LIMIT = 10_000;
 
+/**
+ * Legacy `round_up($value, 2)` — `include/function.php` L86-90:
+ *   ceil($value * pow(10,2)) / pow(10,2)
+ * It is a true round-UP (ceiling) to 2 dp, NOT round-half-up. JS `Math.round`
+ * differs (and would mis-round penny ties); `Math.ceil` matches legacy
+ * penny-for-penny. Mirrors the existing precedent in actions/admin/cart.ts:514
+ * + service-orders-spawn.ts:203 (`Math.ceil(x * 100) / 100`).
+ */
+function roundUp2(value: number): number {
+  return Math.ceil(Number(value || 0) * 100) / 100;
+}
+
 // ════════════════════════════════════════════════════════════════════════
-// 1) Monthly sales-by-rep — legacy: report-sale.php / report-sale-new.php
-//    SQL group: (MONTH(fdate), tb_users.adminIDSale). Commission = 1% of
-//    revenue (legacy: row.price * 0.01).
+// 1) Monthly sales-by-rep (ยอดพนักงานขาย) — legacy: report-sale.php
 //
-//    P0-20: was `from("forwarders")` (REBUILT, empty) → now reads
-//    `tb_forwarder` joined to `tb_users.adminIDSale` via the lowercase
-//    `userid` FK. Filter `fstatus IN ('6','7')` mirrors vw_sales_by_rep
-//    (migration 0094 L60) and legacy report-sale-new.php revenue gates.
+//    🔧 Theme-reports (2026-05-31 · owner #4 "เอาตาม legacy ก่อน"):
+//    legacy is built on `tb_sales_report` — a denormalised SNAPSHOT table, NOT
+//    a live `tb_forwarder` scan. report-sale.php:
+//      • Step A (L7-34) — backfill on page load: for every `tb_forwarder`
+//        where `fStatus='7' AND fDateStatus7 >= '2022-02-01'` not already in
+//        tb_sales_report → INSERT (srDate=fDateStatus7, fID=ID,
+//        srAdminIDSale=adminIDSale). Snapshots the rep AT DELIVERY + the
+//        delivery date. → `backfillSalesReport()` below.
+//      • Step B (L112-128) — list query:
+//          SELECT YEAR/MONTH(srDate), COUNT(sr.ID), adminName, adminLastName,
+//                 adminID, SUM(fWeight), SUM(fVolume),
+//                 SUM(fTotalPrice)+SUM(fTransportPrice)+SUM(fPriceUpdate) AS price
+//          FROM tb_sales_report sr
+//          LEFT JOIN tb_admin     a ON a.adminID = sr.srAdminIDSale
+//          LEFT JOIN tb_forwarder f ON f.ID = sr.fID
+//          WHERE f.fStatus=7
+//          GROUP BY MONTH(srDate), sr.srAdminIDSale ORDER BY sr.ID DESC
+//        Revenue = ΣfTotalPrice + ΣfTransportPrice + ΣfPriceUpdate (3 cols).
+//        Commission = price × 0.01 (1%, L142). Bucket key = MONTH(srDate).
+//        Rep = tb_sales_report.srAdminIDSale (snapshot) → tb_admin for name.
+//
+//    Columns: tb_sales_report / tb_forwarder = lowercase (0081);
+//             tb_admin = camelCase (0113: adminID, adminName, adminLastName).
 // ════════════════════════════════════════════════════════════════════════
 
 export type SalesMonthlyRow = {
-  rep_id:        string;        // tb_users.adminIDSale
-  month:         string;        // YYYY-MM
+  rep_id:        string;        // tb_sales_report.sradminidsale (snapshot at delivery)
+  rep_name:      string;        // legacy: "adminName adminLastName [adminID]"
+  month:         string;        // YYYY-MM (from srdate)
   order_count:   number;
   weight_kg:     number;
   volume_cbm:    number;
-  revenue_thb:   number;        // tb_forwarder.ftotalprice
-  commission_thb: number;       // 1% of revenue (legacy: row.price * 0.01)
+  revenue_thb:   number;        // Σftotalprice + Σftransportprice + Σfpriceupdate
+  commission_thb: number;       // 1% of revenue (legacy: price * 0.01)
 };
+
+/** Fetch all `tb_forwarder` rows for a set of ids in `.in()`-safe chunks. */
+async function fetchForwardersByIds(
+  admin: ReturnType<typeof createAdminClient>,
+  ids: number[],
+  cols: string,
+): Promise<{ data: Record<string, unknown>[]; error: string | null }> {
+  const CHUNK = 300;
+  const out: Record<string, unknown>[] = [];
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const slice = ids.slice(i, i + CHUNK);
+    const { data, error } = await admin
+      .from("tb_forwarder")
+      .select(cols)
+      .in("id", slice);
+    if (error) return { data: [], error: error.message };
+    out.push(...((data ?? []) as unknown as Record<string, unknown>[]));
+  }
+  return { data: out, error: null };
+}
+
+/**
+ * Port of report-sale.php Step A (L7-34) — idempotent backfill of the
+ * `tb_sales_report` snapshot table. For every delivered forwarder
+ * (`fstatus='7' AND fdatestatus7 >= '2022-02-01'`) not yet snapshotted,
+ * INSERT one row (srdate=fdatestatus7, fid=ID, sradminidsale=adminIDSale of
+ * the customer's current rep). Only inserts MISSING rows — safe to call on
+ * every page load. Returns the number of rows inserted.
+ */
+export async function backfillSalesReport(): Promise<Result<{ inserted: number }>> {
+  try {
+    const admin = createAdminClient();
+
+    // 1) Eligible delivered forwarders (id + userid + delivery date).
+    const { data: fRows, error: fErr } = await admin
+      .from("tb_forwarder")
+      .select("id, userid, fdatestatus7")
+      .eq("fstatus", "7")
+      .gte("fdatestatus7", "2022-02-01")
+      .limit(100_000);
+    if (fErr) {
+      logger.error("reports", "backfillSalesReport tb_forwarder scan failed", fErr);
+      return { ok: false, error: fErr.message };
+    }
+    type FRow = { id: number; userid: string | null; fdatestatus7: string | null };
+    const eligible = (fRows ?? []) as FRow[];
+    if (eligible.length === 0) return { ok: true, data: { inserted: 0 } };
+
+    // 2) Already-snapshotted fids (so we only insert the missing ones).
+    const { data: srRows, error: srErr } = await admin
+      .from("tb_sales_report")
+      .select("fid")
+      .limit(200_000);
+    if (srErr) {
+      logger.error("reports", "backfillSalesReport tb_sales_report scan failed", srErr);
+      return { ok: false, error: srErr.message };
+    }
+    const existing = new Set<number>(((srRows ?? []) as Array<{ fid: number | null }>)
+      .map((r) => Number(r.fid)).filter((n) => Number.isFinite(n)));
+
+    const missing = eligible.filter((f) => !existing.has(Number(f.id)));
+    if (missing.length === 0) return { ok: true, data: { inserted: 0 } };
+
+    // 3) Resolve the customer's current rep (adminIDSale) for the missing rows.
+    const userids = Array.from(new Set(
+      missing.map((f) => f.userid).filter((u): u is string => Boolean(u)),
+    ));
+    const userToRep = new Map<string, string>();
+    const UCHUNK = 300;
+    for (let i = 0; i < userids.length; i += UCHUNK) {
+      const slice = userids.slice(i, i + UCHUNK);
+      const { data: uRows, error: uErr } = await admin
+        .from("tb_users")
+        .select("userID, adminIDSale")
+        .in("userID", slice);
+      if (uErr) {
+        logger.error("reports", "backfillSalesReport tb_users lookup failed", uErr);
+        return { ok: false, error: uErr.message };
+      }
+      for (const u of (uRows ?? []) as Array<{ userID: string; adminIDSale: string | null }>) {
+        userToRep.set(u.userID, u.adminIDSale ?? "");
+      }
+    }
+
+    // 4) INSERT the missing snapshot rows in batches.
+    const payload = missing.map((f) => ({
+      srdate:        f.fdatestatus7,
+      fid:           f.id,
+      sradminidsale: (f.userid ? userToRep.get(f.userid) : "") || "",
+    }));
+    let inserted = 0;
+    const ICHUNK = 500;
+    for (let i = 0; i < payload.length; i += ICHUNK) {
+      const slice = payload.slice(i, i + ICHUNK);
+      const { error: insErr } = await admin.from("tb_sales_report").insert(slice);
+      if (insErr) {
+        logger.error("reports", "backfillSalesReport insert failed", insErr);
+        return { ok: false, error: insErr.message };
+      }
+      inserted += slice.length;
+    }
+    return { ok: true, data: { inserted } };
+  } catch (e) {
+    const err = e instanceof Error ? e : new Error(String(e));
+    logger.error("reports", "backfillSalesReport threw", err);
+    return { ok: false, error: err.message };
+  }
+}
 
 export async function getSalesMonthlyReport(range: DateRange): Promise<Result<SalesMonthlyRow[]>> {
   try {
     const admin = createAdminClient();
 
-    // Step 1 — pull delivered/dispatched forwarders in window (the orders
-    // that pay sales commission per legacy report-sale.php).
-    // `fdate` is the order creation timestamp (0081 L1600) — the legacy
-    // report keys monthly buckets off this column (matches vw_sales_by_rep
-    // migration 0094 L52).
-    const { data: fRows, error: fErr } = await admin
-      .from("tb_forwarder")
-      .select("id, userid, fdate, fweight, fvolume, ftotalprice, fstatus")
-      .in("fstatus", ["6", "7"])
-      .gte("fdate", dayStartIso(range.from))
-      .lte("fdate", dayEndIso(range.to))
-      .limit(LIMIT);
-
-    if (fErr) {
-      logger.error("reports", "sales-monthly tb_forwarder query failed", fErr);
-      return { ok: false, error: fErr.message };
+    // Step 1 — pull the snapshot rows in the window (keyed on srdate =
+    // delivery date), per legacy report-sale.php L112-128.
+    const { data: srData, error: srErr } = await admin
+      .from("tb_sales_report")
+      .select("id, srdate, fid, sradminidsale")
+      .gte("srdate", dayStartIso(range.from))
+      .lte("srdate", dayEndIso(range.to))
+      .limit(100_000);
+    if (srErr) {
+      logger.error("reports", "sales-monthly tb_sales_report query failed", srErr);
+      return { ok: false, error: srErr.message };
     }
-    const forwarders = (fRows ?? []) as Array<{
-      id: number;
-      userid: string | null;
-      fdate: string | null;
-      fweight: number | null;
-      fvolume: number | null;
-      ftotalprice: number | null;
-      fstatus: string;
-    }>;
+    type SrRow = { id: number; srdate: string | null; fid: number | null; sradminidsale: string | null };
+    const snapshots = (srData ?? []) as SrRow[];
+    if (snapshots.length === 0) return { ok: true, data: [] };
 
-    // Step 2 — resolve each customer's assigned sales rep (tb_users.adminIDSale).
-    // We pull only the userids that appeared in the forwarder window — cheaper
-    // than a full users scan.
-    const userids = Array.from(new Set(
-      forwarders.map((f) => f.userid).filter((u): u is string => Boolean(u)),
+    // Step 2 — JOIN tb_forwarder on fid=id (require fstatus='7', pull the
+    // 3 revenue columns + weight/volume). Chunked `.in()` over fids.
+    const fids = Array.from(new Set(
+      snapshots.map((s) => s.fid).filter((n): n is number => Number.isFinite(n as number)),
     ));
-    let userToRep = new Map<string, string>();
-    if (userids.length > 0) {
-      const { data: uRows, error: uErr } = await admin
-        .from("tb_users")
-        .select("userID, adminIDSale")
-        .in("userID", userids)
-        .limit(LIMIT);
-      if (uErr) {
-        logger.error("reports", "sales-monthly tb_users lookup failed", uErr);
-        return { ok: false, error: uErr.message };
+    const { data: fData, error: fErr } = await fetchForwardersByIds(
+      admin, fids,
+      "id, fstatus, ftotalprice, ftransportprice, fpriceupdate, fweight, fvolume",
+    );
+    if (fErr) {
+      logger.error("reports", "sales-monthly tb_forwarder join failed", new Error(fErr));
+      return { ok: false, error: fErr };
+    }
+    type FRow = {
+      id: number; fstatus: string;
+      ftotalprice: number | null; ftransportprice: number | null; fpriceupdate: number | null;
+      fweight: number | null; fvolume: number | null;
+    };
+    const fwById = new Map<number, FRow>(
+      (fData as unknown as FRow[]).map((f) => [Number(f.id), f]),
+    );
+
+    // Step 3 — resolve rep name from tb_admin (camelCase) by sradminidsale.
+    const repIds = Array.from(new Set(
+      snapshots.map((s) => s.sradminidsale).filter((r): r is string => Boolean(r)),
+    ));
+    const repName = new Map<string, string>();
+    if (repIds.length > 0) {
+      const ACHUNK = 300;
+      for (let i = 0; i < repIds.length; i += ACHUNK) {
+        const slice = repIds.slice(i, i + ACHUNK);
+        const { data: aRows, error: aErr } = await admin
+          .from("tb_admin")
+          .select("adminID, adminName, adminLastName")
+          .in("adminID", slice);
+        if (aErr) {
+          logger.error("reports", "sales-monthly tb_admin lookup failed", aErr);
+          // non-fatal — fall back to raw id
+        }
+        for (const a of (aRows ?? []) as Array<{ adminID: string; adminName: string | null; adminLastName: string | null }>) {
+          const full = [a.adminName, a.adminLastName].filter(Boolean).join(" ");
+          repName.set(a.adminID, full ? `${full} [${a.adminID}]` : a.adminID);
+        }
       }
-      type URow = { userID: string; adminIDSale: string | null };
-      userToRep = new Map(
-        (uRows ?? []).map((u: URow) => [u.userID, u.adminIDSale ?? ""]),
-      );
     }
 
-    // Step 3 — aggregate per (month, rep_id).
-    function monthOf(iso: string | null): string {
-      if (!iso) return "—";
-      return iso.slice(0, 7); // YYYY-MM
-    }
-
+    // Step 4 — aggregate per (month(srdate), sradminidsale). Only count rows
+    // whose joined forwarder is fstatus='7' (legacy WHERE f.fStatus=7).
     const aggMap = new Map<string, SalesMonthlyRow>();
-    for (const f of forwarders) {
-      const rep   = (f.userid ? userToRep.get(f.userid) : "") || "(ไม่มี sales rep)";
-      const month = monthOf(f.fdate);
-      const key   = `${month}::${rep}`;
+    for (const s of snapshots) {
+      const fw = s.fid != null ? fwById.get(Number(s.fid)) : undefined;
+      if (!fw || fw.fstatus !== "7") continue;          // legacy WHERE f.fStatus=7
+      const repId = s.sradminidsale || "";
+      const month = s.srdate ? s.srdate.slice(0, 7) : "—";
+      const key   = `${month}::${repId}`;
       const a = aggMap.get(key) ?? {
-        rep_id: rep, month,
+        rep_id:   repId || "(ไม่มี sales rep)",
+        rep_name: repName.get(repId) || (repId || "(ไม่มี sales rep)"),
+        month,
         order_count: 0, weight_kg: 0, volume_cbm: 0,
         revenue_thb: 0, commission_thb: 0,
       };
-      a.order_count    += 1;
-      a.weight_kg      += Number(f.fweight     ?? 0);
-      a.volume_cbm     += Number(f.fvolume     ?? 0);
-      a.revenue_thb    += Number(f.ftotalprice ?? 0);
-      a.commission_thb = a.revenue_thb * 0.01;       // legacy: 1 %
+      a.order_count += 1;
+      a.weight_kg   += Number(fw.fweight ?? 0);
+      a.volume_cbm  += Number(fw.fvolume ?? 0);
+      // Revenue = fTotalPrice + fTransportPrice + fPriceUpdate (legacy 3-col sum).
+      a.revenue_thb += Number(fw.ftotalprice ?? 0)
+                     + Number(fw.ftransportprice ?? 0)
+                     + Number(fw.fpriceupdate ?? 0);
+      a.commission_thb = a.revenue_thb * 0.01;          // legacy: 1 %
       aggMap.set(key, a);
     }
 
@@ -407,11 +560,22 @@ export async function getForwarderProfitDailySeries(range: DateRange): Promise<R
 // ════════════════════════════════════════════════════════════════════════
 // 3) Shops profit — legacy: report-shops-profit.php
 //    Order-by-order P&L for ฝากสั่งซื้อ.
-//    Sale (priceUser) = (hTotalPriceCHN + hShippingCHN) × hRate   — legacy
-//                     ≈ tb_header_order.htotalpriceuser            — Pacred
-//    Cost (pricePCS)  = hRateCost × hCostAll                       — legacy
-//                     ≈ tb_header_order.hcostallth                 — Pacred
-//    Profit = sale - cost. P0-20: vat7 set to 0 (invented column removed).
+//
+//    🔧 Theme-reports (2026-05-31 · owner #3 "คำนวณสดในตาราง + มีไกด์แนะนำ"):
+//    legacy report-shops-profit.php L226-232 RECOMPUTES sale + cost LIVE from
+//    the raw CNY/rate columns on every render — it does NOT read the stored
+//    `hTotalPriceUser`/`hCostAllTH`:
+//        if (hCostAll != 0) {
+//          priceUser = round_up((hTotalPriceCHN + hShippingCHN) * hRate, 2);  // SALE
+//          pricePCS  = round_up(hRateCost * hCostAll, 2);                     // COST
+//          profit    = priceUser - pricePCS;
+//        }  // else → row shows "รอคำนวณ" and is EXCLUDED from totals
+//    Rows with `hcostall == 0` (cost not yet entered) show as "รอคำนวณ" and are
+//    excluded from the footer totals. We surface this via `awaiting_cost: true`
+//    + zeroed money fields so the page can render "รอคำนวณ" and skip the totals.
+//
+//    VAT7 (L255): per-row `profit * 0.07` — the ONE legacy report with a VAT
+//    column (forwarder/yuan have none). Kept (restored Theme B · owner #2).
 //
 //    P0-20: was `from("service_orders")` (REBUILT, empty) → `tb_header_order`.
 //    Filter `hstatus <> '6'` per legacy (exclude cancelled only).
@@ -424,10 +588,11 @@ export type ShopsProfitRow = {
   customer_name: string;
   title:         string;
   item_count:    number;
-  cost_thb:      number;
-  sale_thb:      number;
-  service_fee:   number;      // profit (legacy: priceUser - pricePCS)
-  vat7:          number;      // P0-20: REMOVED — kept at 0 for back-compat
+  cost_thb:      number;      // live: round_up(hratecost * hcostall, 2) — 0 if awaiting cost
+  sale_thb:      number;      // live: round_up((htotalpricechn + hshippingchn) * hrate, 2)
+  service_fee:   number;      // profit (legacy: priceUser - pricePCS) — 0 if awaiting cost
+  vat7:          number;      // legacy L255: service_fee * 0.07 (shops-only)
+  awaiting_cost: boolean;     // legacy: hcostall == 0 → "รอคำนวณ" + excluded from totals
   status:        string;
   created_at:    string;
 };
@@ -444,9 +609,13 @@ const HSTATUS_MAP: Record<string, string> = {
 export async function getShopsProfitReport(range: DateRange): Promise<Result<ShopsProfitRow[]>> {
   try {
     const admin = createAdminClient();
+    // Select the RAW CNY/rate columns the legacy report recomputes from
+    // (htotalpricechn, hshippingchn, hrate, hratecost, hcostall) — NOT the
+    // stored htotalpriceuser/hcostallth (which the legacy table ignores).
     const { data, error } = await admin
       .from("tb_header_order")
-      .select(`id, userid, hno, hstatus, htitle, hcount, htotalpriceuser, hcostallth, hdate`)
+      .select(`id, userid, hno, hstatus, htitle, hcount,
+        htotalpricechn, hshippingchn, hrate, hratecost, hcostall, hdate`)
       .neq("hstatus", "6") // exclude cancelled
       .gte("hdate", dayStartIso(range.from))
       .lte("hdate", dayEndIso(range.to))
@@ -465,8 +634,11 @@ export async function getShopsProfitReport(range: DateRange): Promise<Result<Sho
       hstatus: string;
       htitle: string | null;
       hcount: number | null;
-      htotalpriceuser: number | null;
-      hcostallth: number | null;
+      htotalpricechn: number | null;
+      hshippingchn: number | null;
+      hrate: number | null;
+      hratecost: number | null;
+      hcostall: number | null;
       hdate: string | null;
     };
     const orders = (data ?? []) as HRow[];
@@ -497,9 +669,18 @@ export async function getShopsProfitReport(range: DateRange): Promise<Result<Sho
 
     const rows: ShopsProfitRow[] = orders.map((r) => {
       const u = r.userid ? userMap.get(r.userid) : undefined;
-      const sale = Number(r.htotalpriceuser ?? 0);
-      const cost = Number(r.hcostallth      ?? 0);
-      const profit = sale - cost;
+      const hCostAll = Number(r.hcostall ?? 0);
+      // Legacy L226: only rows with a cost entered are priced; the rest show
+      // "รอคำนวณ" and are excluded from the footer totals.
+      const awaitingCost = hCostAll === 0;
+      // Legacy L227-229 (recompute LIVE — true round-UP to 2dp):
+      //   priceUser = round_up((hTotalPriceCHN + hShippingCHN) * hRate, 2)
+      //   pricePCS  = round_up(hRateCost * hCostAll, 2)
+      const sale = awaitingCost
+        ? 0
+        : roundUp2((Number(r.htotalpricechn ?? 0) + Number(r.hshippingchn ?? 0)) * Number(r.hrate ?? 0));
+      const cost = awaitingCost ? 0 : roundUp2(Number(r.hratecost ?? 0) * hCostAll);
+      const profit = awaitingCost ? 0 : sale - cost;
       return {
         id: String(r.id),
         h_no: r.hno ?? `PR-S${r.id}`,
@@ -513,8 +694,8 @@ export async function getShopsProfitReport(range: DateRange): Promise<Result<Sho
         // Theme B fidelity (2026-05-31 · owner #2 "VAT7 = legacy · shops-only"):
         // legacy report-shops-profit.php L255 shows VAT7 = profit*0.07 on the
         // shops report (and ONLY shops — forwarder/yuan have no VAT column).
-        // Restored here; the forwarder/yuan reports drop the column entirely.
-        vat7:         Math.round(profit * 0.07 * 100) / 100,
+        vat7:         awaitingCost ? 0 : Math.round(profit * 0.07 * 100) / 100,
+        awaiting_cost: awaitingCost,
         status:       HSTATUS_MAP[r.hstatus] ?? r.hstatus,
         created_at:   r.hdate ?? "",
       };
@@ -524,6 +705,51 @@ export async function getShopsProfitReport(range: DateRange): Promise<Result<Sho
   } catch (e) {
     const err = e instanceof Error ? e : new Error(String(e));
     logger.error("reports", "shops-profit threw", err);
+    return { ok: false, error: err.message };
+  }
+}
+
+// Daily-profit series for the shops-profit page (Theme-reports · owner #1).
+// Legacy: report-shops-profit.php L79-85
+//   SUM(hTotalPriceUser) - SUM(hCostAllTH) WHERE hStatus=5 GROUP BY DATE(hDate)
+// ⚠️ The legacy GRAPH uses the STORED hTotalPriceUser/hCostAllTH columns
+// (NOT the live CNY×rate recompute the TABLE does). We mirror the graph
+// faithfully — stored columns, hstatus='5' (สำเร็จ) only.
+export async function getShopsProfitDailySeries(range: DateRange): Promise<Result<DailyProfitPoint[]>> {
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("tb_header_order")
+      .select("hdate, htotalpriceuser, hcostallth")
+      .eq("hstatus", "5")
+      .gte("hdate", dayStartIso(range.from))
+      .lte("hdate", dayEndIso(range.to))
+      .limit(LIMIT);
+
+    if (error) {
+      logger.error("reports", "shops daily-series query failed", error);
+      return { ok: false, error: error.message };
+    }
+
+    const bucket = new Map<string, { profit: number; count: number }>();
+    type R = { hdate: string | null; htotalpriceuser: number | null; hcostallth: number | null };
+    for (const r of (data ?? []) as R[]) {
+      if (!r.hdate) continue;
+      const day = r.hdate.slice(0, 10);
+      const profit = Number(r.htotalpriceuser ?? 0) - Number(r.hcostallth ?? 0);
+      const cur = bucket.get(day) ?? { profit: 0, count: 0 };
+      cur.profit += profit;
+      cur.count  += 1;
+      bucket.set(day, cur);
+    }
+    const series = Array.from(bucket.entries())
+      .map(([date, v]) => ({ date, profit: v.profit, count: v.count }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return { ok: true, data: series };
+  } catch (e) {
+    const err = e instanceof Error ? e : new Error(String(e));
+    logger.error("reports", "shops daily-series threw", err);
     return { ok: false, error: err.message };
   }
 }
