@@ -6,6 +6,13 @@
 > - **§0c customer-flow verification** (main e…/c4ad777d era + the popup test): verified with a real customer session (PR112) — the login **popup WORKS** (test tb_notify → modal on /dashboard, confirms M-1/FG-1), /search image-panel renders, /service-import self-cancel page renders + button gated. Cleaned up (test tb_notify deleted, PR015 email reverted; PR015 test-account password was reset this turn — harmless test account). Not click-tested: destructive cancel (needs fstatus=1) + image-upload result (Laonet vendor may 403 from prod egress).
 > - **bill-to** (last forwarder-editor field, Pacred-original): chose COLUMN over side-table → **migration 0132** `tb_forwarder.fbilltoname varchar(200)` **applied prod (106ms, metadata-only)** · `adminSetForwarderBillToOverride` repointed (rebuilt→tb_forwarder) · BillToOverridePanel on real-row [fNo] · write-path round-trip verified.
 > → **The admin-backend + forwarder-editor faithful-port backlog is now FULLY cleared.**
+>
+> **PM addendum — LINE/comms ต่อยอด batch (owner gave CF+Vercel API tokens · main → `acc852d0`):**
+> - **P1-24 staff-notify LIVE on prod** — real groupId `C09344be50f51abbfb8ca9fddb24e10f9` ("SA-MKT-PR Pacred") resolved by READING ปอน's Cloudflare-Worker data (`Podeng_line_webhook_events`); the `C61f…` in prod env was a chat.line.biz OA-Manager id (404). Vercel env set + redeployed + push-tested 200.
+> - **Notify Flex+deep-link** — `notifyStaffGroup(text,{url,title})` → brand-red card + button to `/admin/yuan-payments/[id]` · `/admin/forwarders/[fNo]`. Flex push-tested 200.
+> - **NEW `/admin/line-inbox`** dashboard (worktree agent · reads `Podeng_*`: 52 cust/212 msg) — 307-gated on prod, DB-layer verified.
+> - **Env yกเครื่อง** — `docs/runbook/env-inventory.md` (full Vercel↔local) + **5 china-search vendor vars added to Vercel prod** (Laonet/Akucargo/TAMIT — were broken in prod). Strategy: `docs/research/line-comms-strategy-2026-06-01.md`.
+> - ⚠️ **OTP untouched** (owner cmd). Held for owner: `NEXT_PUBLIC_YUAN_RATE` (price-sensitive) + `MOMO_TOKEN`. **Owner: revoke CF+Vercel tokens when done** (machine-local, never committed).
 
 This was a marathon multi-wave session (owner: "ลุยมาให้จบให้ครบก่อน ค่อยลุยส่วนตัดสินใจ" / "แยกร่างทำได้เลย ทั้งของภูมิกับปอน"). The whole **admin-backend faithful-port backlog is essentially cleared** — what remains is owner DECISIONS + ACTIVATION, not codeable-solo work.
 

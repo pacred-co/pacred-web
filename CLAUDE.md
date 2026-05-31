@@ -5,7 +5,9 @@
 
 # 🟢 2026-06-01 — เดฟ MARATHON: faithful-port backlog CLEARED · read FIRST
 
-**main = `dave-pacred` = `53cd23c9` (0/0 · prod) · 49 commits this session · all pushed.** Cross-machine resume: `git pull origin main` → read **[`docs/research/save-point-2026-06-01-dave-backlog-cleared.md`](docs/research/save-point-2026-06-01-dave-backlog-cleared.md)** (canonical) + **[`docs/research/legacy-resweep-2026-05-31/_MASTER-FRESH.md`](docs/research/legacy-resweep-2026-05-31/_MASTER-FRESH.md)** (verified gap status).
+**main = `dave-pacred` = `acc852d0` (0/0 · prod · deploy `dpl_833Gv…` READY) · all pushed.** Cross-machine resume: `git pull origin main` → read **[`docs/research/save-point-2026-06-01-dave-backlog-cleared.md`](docs/research/save-point-2026-06-01-dave-backlog-cleared.md)** (canonical) + **[`docs/research/legacy-resweep-2026-05-31/_MASTER-FRESH.md`](docs/research/legacy-resweep-2026-05-31/_MASTER-FRESH.md)** (verified gap status).
+
+**➕ LINE/comms ต่อยอด batch (2026-06-01 PM · owner gave CF+Vercel API tokens):** **P1-24 staff-notify LIVE on prod** (groupId resolved + Flex cards + deep-links — see item 1 below) · **NEW `/admin/line-inbox` dashboard** (reads ปอน's `Podeng_*` LINE data — 52 customers/212 msgs · verified 307-gated + DB-layer-tested on prod) · **Notify Flex+deep-link upgrade** (`notifyStaffGroup(text,{url,title})`) · **env ykrueang**: full Vercel↔local inventory (`docs/runbook/env-inventory.md`) + **5 china-search vendor vars added to Vercel prod** (Laonet/Akucargo/TAMIT — were missing → search/reverse-image/tracking were broken in prod). Strategy: **[`docs/research/line-comms-strategy-2026-06-01.md`](docs/research/line-comms-strategy-2026-06-01.md)**. ⚠️ **OTP_BYPASS/OTP_PEPPER NOT touched** (owner: ห้ามแตะจนคอนเฟิม) · held for owner: `NEXT_PUBLIC_YUAN_RATE` (price-sensitive) + `MOMO_TOKEN` (verify usage) · CF+Vercel tokens machine-local+revocable.
 
 **🔑 The 2026-05-30 "23 P0" was ~80% STALE** — re-verified at HEAD: money loop CLOSED (no double-spend), OTP NOT bypassed, settle paths work. This session then cleared the rest.
 
