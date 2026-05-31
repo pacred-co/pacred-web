@@ -6,6 +6,7 @@ import type { AkucargoPlatform } from "@/lib/china-search/akucargo-helpers";
 import { convertProductUrlDetail, type ChinaProductDetail } from "@/lib/china-search";
 import { SearchRecents } from "./search-recents";
 import { SearchHistoryLogger } from "./search-history-logger";
+import { SearchImagePanel } from "./search-image-panel";
 
 /**
  * China product search / search-results screen — a FAITHFUL 1:1
@@ -347,6 +348,12 @@ export default async function SearchPage({
                   />
                 ) : null}
               </div>
+
+              {/* P1-30 — reverse-image / camera "find-similar" search.
+                  Wires the existing /api/china-search/image backend
+                  (faithful to legacy searchIMG.php). Renders the hits in
+                  the same card grid the keyword search uses. */}
+              <SearchImagePanel rsDefault={rsDefault} />
             </div>
 
             <div className="mt-3">

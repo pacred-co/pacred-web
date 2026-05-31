@@ -22,7 +22,18 @@
  * The new render is a flex card that scales: desktop sees image-left +
  * details-right + price/actions footer; mobile stacks the same blocks
  * vertically without needing a separate mobile-only branch.
+ *
+ * P1-19 — the legacy "#delete-forwarder" jQuery hook (deleteForwarder())
+ * is now a real client button (CancelForwarderButton below) that calls
+ * the `cancelOwnForwarder` Server Action (faithful port of
+ * deleteForwarder.php). Shown only when fStatus='1' AND refOrder=''
+ * (the legacy gate), so the customer can cancel a not-yet-processed,
+ * non-shop-spawned own forwarder.
  */
+
+import { useState, useTransition } from "react";
+import { useRouter } from "@/i18n/navigation";
+import { cancelOwnForwarder } from "@/actions/forwarder";
 
 // ────────────────────────────────────────────────────────────────────
 //  Status badge — legacy `statusForwarderAll2($fStatus,$fStatusDriver)`
@@ -282,6 +293,60 @@ export type ForwarderRow = {
 };
 
 // ────────────────────────────────────────────────────────────────────
+//  CancelForwarderButton — P1-19. Replaces the dead legacy
+//  "#delete-forwarder" jQuery hook with a real Server-Action call.
+//  Faithful to deleteForwarder.php: a confirm prompt, then a hard
+//  delete of the customer's own not-yet-processed forwarder. On
+//  success the row's list revalidates (Server Action) + a client
+//  refresh repaints. Tap target is ≥44px tall on mobile (h-9 + py).
+// ────────────────────────────────────────────────────────────────────
+function CancelForwarderButton({ id }: { id: number }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  function handleCancel() {
+    // Legacy used a plain confirm() gate before the AJAX delete; match it.
+    if (!window.confirm(`ยืนยันยกเลิกรายการนำเข้า #${id} ?\nรายการที่ยกเลิกแล้วจะถูกลบถาวร`)) {
+      return;
+    }
+    setErrorMsg(null);
+    startTransition(async () => {
+      const res = await cancelOwnForwarder({ fNo: id });
+      if (res.ok) {
+        router.refresh();
+      } else {
+        setErrorMsg(
+          res.error === "not_cancellable"
+            ? "ไม่สามารถยกเลิกได้ (รายการถูกดำเนินการแล้ว)"
+            : res.error === "not_found"
+              ? "ไม่พบรายการ"
+              : "เกิดข้อผิดพลาด กรุณาลองใหม่",
+        );
+      }
+    });
+  }
+
+  return (
+    <span className="inline-flex flex-col items-end gap-0.5">
+      <button
+        type="button"
+        onClick={handleCancel}
+        disabled={pending}
+        className="inline-flex items-center rounded-full bg-red-600 text-white px-3 py-2 min-h-[36px] text-xs font-bold hover:bg-red-700 active:scale-[0.98] transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+      >
+        {pending ? "กำลังยกเลิก…" : "ยกเลิกรายการ"}
+      </button>
+      {errorMsg && (
+        <span className="text-[10px] text-red-600 max-w-[160px] text-right leading-tight">
+          {errorMsg}
+        </span>
+      )}
+    </span>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
 //  ForwarderRowView — Tailwind card rebuild.
 //
 //  Props:
@@ -521,15 +586,10 @@ export function ForwarderRowView({
 
         {/* Right — actions */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          {/* Delete — only on status=1 and not from order ref */}
+          {/* Cancel — only on status=1 and not from order ref (legacy
+              deleteForwarder.php gate). P1-19 — calls cancelOwnForwarder. */}
           {row.fstatus === "1" && (!row.reforder || row.reforder === "") && (
-            <a
-              href="#delete-forwarder"
-              data-forwarder-id={row.id}
-              className="inline-flex items-center rounded-full bg-red-600 text-white px-3 py-1.5 text-xs font-bold hover:bg-red-700 active:scale-[0.98] transition-all shadow-sm"
-            >
-              ลบรายการ
-            </a>
+            <CancelForwarderButton id={row.id} />
           )}
           {/* View details */}
           <a
