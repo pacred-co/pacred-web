@@ -187,6 +187,12 @@ export const CARGO_MENUBAR: MenubarItem[] = [
   {
     label: "รายจ่าย",
     children: [
+      // 2026-06-01 (re-sweep A2 #23): admin-PUSH shop-affiliate disbursement
+      // — faithful port of report-shops-profit-pay.php. Selects paid shop
+      // orders (tb_header_order) → batches into tb_shop_pay_h + sub → flips
+      // hShopPay. The "เบิกจ่ายค่าสินค้า" (China-cost pay-out) leaf. §0d.
+      { label: "เบิกจ่ายค่าสินค้า (ฝากสั่งซื้อ)", href: "/admin/shop-disbursement" },
+      { label: "ประวัติเบิกจ่ายค่าสินค้า", href: "/admin/shop-disbursement/history" },
       // TODO — legacy `acc-system-cargo.php` (header-menu/index.php L204-363):
       // ดูภาพรวม / ใบสั่งซื้อ / ใบจ่ายเงินมัดจำ / บันทึกค่าใช้จ่าย / ใบกำกับ
       // ภาษีซื้อ / รับใบลดหนี้ / รับใบเพิ่มหนี้ / นำเข้าเอกสาร.
@@ -254,6 +260,13 @@ export const ACCOUNTING_HUB_CARDS = [
     title: "ใบลด/ใบจ่าย (Disbursements)",
     desc: "ใบเบิกจ่าย + เบิกเงิน",
     href: "/admin/accounting/disbursements",
+    badge: "live",
+  },
+  // 2026-06-01 (re-sweep A2 #23): admin-PUSH shop-affiliate disbursement.
+  {
+    title: "เบิกจ่ายค่าสินค้า (ฝากสั่งซื้อ)",
+    desc: "ทำรายการเบิกเงินจ่ายต้นทุนจีน · ออเดอร์ฝากสั่งที่ชำระแล้ว → tb_shop_pay_h",
+    href: "/admin/shop-disbursement",
     badge: "live",
   },
   {
