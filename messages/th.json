@@ -2824,6 +2824,7 @@
       "csvImports": "นำเข้าข้อมูล (CSV)",
       "tools": "เครื่องมือ",
       "orgEmail": "อีเมลในองค์กร",
+      "orgChannels": "ช่องทางองค์กร",
       "adminUsers": "พนักงาน admin"
     },
     "userCargo": {
