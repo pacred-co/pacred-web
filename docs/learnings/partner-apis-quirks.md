@@ -6,6 +6,36 @@ Topics: MOMO JMF (TH warehouse partner) · TAM (china-search interim) · ThaiBul
 
 ---
 
+## 2026-06-01 · LINE staff-group push — the chat.line.biz URL id is NOT a pushable groupId
+
+**Symptom.** `LINE_STAFF_GROUP_ID` was set to `C61f60d763a766e4f391812381281e3d9` (copied from the chat.line.biz
+URL after adding @pacred to the staff group), but staff-notify never fired. `GET /v2/bot/group/<that id>/summary`
+→ **HTTP 404 "Not found"** (also 404 on members/count). Pushing to it would silently fail.
+
+**Root cause.** `chat.line.biz` is the **LINE OA Manager (Chat console)** UI. The `C…` id in its URL is the
+console's internal **chat-thread id** — a DIFFERENT namespace from the Messaging API `source.groupId`. LINE has
+no "list my groups" API on purpose — the real, pushable `groupId` only ever arrives inside a **webhook event**
+(`join` / `memberJoined` / `message` → `event.source.groupId`). Both start with `C` but are NOT interchangeable.
+
+**What to do.**
+- Get the real groupId from a webhook event, not the URL. Verify any candidate with
+  `GET /v2/bot/group/<id>/summary` → **200 + groupName = pushable**; 404 = wrong id.
+- Member-count sanity: the LINE API count EXCLUDES the bot, so `(N shown in the LINE app) = API count + 1`
+  (we saw API 14 → app "(15)"). A `memberJoined` event timestamp in UTC also cross-checks the join you saw (×+7 = ICT).
+- **Reusable pattern (ต่อยอด > rebuild):** when a teammate already runs an inbound integration (here ปอน's
+  Cloudflare Worker logging every event to Supabase `Podeng_line_webhook_events.raw_payload`), the fastest fix is
+  to **READ their data**, not re-instrument. The real groupId was already sitting in their table. Map the partner's
+  schema first (`Podeng_*` ≠ our unused 0131 `line_*`) before building anything.
+
+**Flex push gotcha.** A malformed Flex message → LINE **400** → staff get NOTHING (worse than plain text). Always
+push-test the exact Flex JSON to the group once (expect 200 + `sentMessages`) before shipping the code path.
+
+**Env-on-Vercel gotcha.** Runtime env vars are snapshotted into a deployment at creation — changing
+`LINE_STAFF_GROUP_ID` / `LINE_PUSH_BYPASS` in the Vercel UI does NOT affect the running prod until a **redeploy**.
+And Vercel's API never returns `sensitive`-type values (only `encrypted`/`plain`) — you can read back a groupId/flag but not a secret key.
+
+---
+
 ## 2026-05-27 · DBD lookup — Pacred has a working route handler; the client was bypassing it
 
 **Symptom.** Every juristic signup landed in the "ระบบค้นหาไม่พร้อม — กรอกด้วยตนเอง" branch — customers always typed company info manually. d1-deep-audit-2026-05-24 listed this as Gap #5 "TAMIT (Thai ID) identity verification — none, DBD/RD stubbed but not equivalent."
