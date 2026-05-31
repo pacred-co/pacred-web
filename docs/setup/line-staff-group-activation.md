@@ -10,20 +10,20 @@ and fires with **zero code change** the moment the prod env below is set.
 
 ---
 
-## ✅ THE ANSWER
+## ✅ THE ANSWER — DONE + LIVE on prod (2026-06-01)
 
 ```
 LINE_STAFF_GROUP_ID = C09344be50f51abbfb8ca9fddb24e10f9     # "SA-MKT-PR Pacred" (staff group)
 LINE_PUSH_BYPASS    = false                                 # Production scope
 ```
 
-**Owner action (Vercel · the only step left):**
-1. Vercel → Pacred app → Settings → Environment Variables (**Production** scope):
-   - set `LINE_STAFF_GROUP_ID` = `C09344be50f51abbfb8ca9fddb24e10f9` (replaces the wrong `C61f…`)
-   - set `LINE_PUSH_BYPASS` = `false`
-2. Redeploy (or wait for next auto-deploy). Done — staff group starts getting "มีรายการฝากชำระใหม่ …" pings.
+**Applied to Vercel prod (เดฟ · via Vercel API token, owner-provided):**
+- Both vars PATCHed on project `pacred-web` (Production) + decrypt-verified = correct.
+- Production redeployed → `dpl_3JxNNSAiG6PuDzcsqDmT7wyhoZhx` READY · `pacred.co.th` `/`+`/login` 200.
+- **`OTP_BYPASS` / `OTP_PEPPER` NOT touched** (owner: ห้ามแตะ OTP จนคอนเฟิม).
+- → staff group now gets "มีรายการฝากชำระใหม่ …" on every new yuan/forwarder/shop submit. **No further action.**
 
-`.env.local` (this machine) already has the correct groupId · **kept `LINE_PUSH_BYPASS=true` for dev**
+`.env.local` (this machine) has the correct groupId · **kept `LINE_PUSH_BYPASS=true` for dev**
 so local/dev never spams the real staff group.
 
 ---
