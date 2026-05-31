@@ -2889,6 +2889,7 @@
     },
     "warehouse": {
       "containers": "ตู้คอนเทนเนอร์",
+      "printLabels": "พิมพ์ป้ายกล่อง (ตู้)",
       "bulletin": "บุลเลตินตู้รายวัน",
       "qaInspect": "ตรวจสอบคุณภาพ (QA)",
       "csvImports": "ปรับรายการอัตโนมัติ (CSV)"

@@ -715,6 +715,9 @@ const menuSuper: MenuSection[] = [
       // top-level flat, matching legacy menu-barcode.php line 10. The
       // deeper blockBarcode toolbox stays as the comprehensive nested menu.
       itemBarcodeRecordIntakeFlat,
+      // re-sweep A2 #8/#17 — print all box labels for a scanned cabinet
+      // (faithful port of legacy `printAll.php`).
+      { labelKey: "warehouse.printLabels", href: "/admin/printAll", icon: "Printer" },
       blockPayment,
       itemReportsAll,
       blockAccounting,
@@ -780,6 +783,9 @@ const menuManager: MenuSection[] = [
       // 2026-05-30 (Wave 29 #5 · Agent A) — flat barcode-intake shortcut.
       // Matches the menuSuper / menuWarehouse / menuDriver placement.
       itemBarcodeRecordIntakeFlat,
+      // re-sweep A2 #8/#17 — print all box labels for a scanned cabinet
+      // (faithful port of legacy `printAll.php`).
+      { labelKey: "warehouse.printLabels", href: "/admin/printAll", icon: "Printer" },
       blockPayment,
       itemReportsAll,
       blockAccounting,
@@ -947,6 +953,10 @@ const menuWarehouse: MenuSection[] = [
       // `report-cnt.php`. Spine page at `/admin/warehouse/containers` retired
       // (tombstoned · redirects to /admin/report-cnt).
       { labelKey: "warehouse.containers", href: "/admin/report-cnt", icon: "Package" },
+      // re-sweep A2 #8/#17 — warehouse "scan a cabinet → print all box labels"
+      // (faithful port of legacy `printAll.php` box-label modes). The guide
+      // page accepts `?cabinet=` so report-cnt can deep-link to it per row.
+      { labelKey: "warehouse.printLabels", href: "/admin/printAll", icon: "Printer" },
       // 2026-05-30 (Wave 29 #5 · Agent A) — flat barcode-intake shortcut.
       // The warehouse role uses this daily (legacy `barcode-d-import.php`).
       // The deeper blockBarcode toolbox below also keeps it, two levels in;
