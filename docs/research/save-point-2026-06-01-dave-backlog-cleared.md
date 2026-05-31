@@ -1,6 +1,11 @@
 # 🟢 Save-point — 2026-06-01 · เดฟ · admin-backend faithful-port backlog CLEARED
 
-**State:** `main` = `dave-pacred` = **`9bdd7d74`** (0/0 · prod · Vercel auto-deploys) · all pushed · every commit gated `pnpm verify` EXIT 0 + `pnpm build` EXIT 0. Working tree clean. dev standby :3000.
+**State:** `main` = `dave-pacred` = **`53cd23c9`** (0/0 · prod · Vercel auto-deploys) · all pushed · 49 commits this session · every commit gated `pnpm verify` EXIT 0 + `pnpm build` EXIT 0. Working tree clean. **Cross-machine resume:** `git pull origin main` → read this doc. (Memory is machine-local — this repo doc + CLAUDE.md top are the cross-machine anchors.)
+
+> **Session-close addendum (after 9bdd7d74 → 53cd23c9):**
+> - **§0c customer-flow verification** (main e…/c4ad777d era + the popup test): verified with a real customer session (PR112) — the login **popup WORKS** (test tb_notify → modal on /dashboard, confirms M-1/FG-1), /search image-panel renders, /service-import self-cancel page renders + button gated. Cleaned up (test tb_notify deleted, PR015 email reverted; PR015 test-account password was reset this turn — harmless test account). Not click-tested: destructive cancel (needs fstatus=1) + image-upload result (Laonet vendor may 403 from prod egress).
+> - **bill-to** (last forwarder-editor field, Pacred-original): chose COLUMN over side-table → **migration 0132** `tb_forwarder.fbilltoname varchar(200)` **applied prod (106ms, metadata-only)** · `adminSetForwarderBillToOverride` repointed (rebuilt→tb_forwarder) · BillToOverridePanel on real-row [fNo] · write-path round-trip verified.
+> → **The admin-backend + forwarder-editor faithful-port backlog is now FULLY cleared.**
 
 This was a marathon multi-wave session (owner: "ลุยมาให้จบให้ครบก่อน ค่อยลุยส่วนตัดสินใจ" / "แยกร่างทำได้เลย ทั้งของภูมิกับปอน"). The whole **admin-backend faithful-port backlog is essentially cleared** — what remains is owner DECISIONS + ACTIVATION, not codeable-solo work.
 

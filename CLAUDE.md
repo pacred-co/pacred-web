@@ -3,6 +3,36 @@
 
 ---
 
+# 🟢 2026-06-01 — เดฟ MARATHON: faithful-port backlog CLEARED · read FIRST
+
+**main = `dave-pacred` = `53cd23c9` (0/0 · prod) · 49 commits this session · all pushed.** Cross-machine resume: `git pull origin main` → read **[`docs/research/save-point-2026-06-01-dave-backlog-cleared.md`](docs/research/save-point-2026-06-01-dave-backlog-cleared.md)** (canonical) + **[`docs/research/legacy-resweep-2026-05-31/_MASTER-FRESH.md`](docs/research/legacy-resweep-2026-05-31/_MASTER-FRESH.md)** (verified gap status).
+
+**🔑 The 2026-05-30 "23 P0" was ~80% STALE** — re-verified at HEAD: money loop CLOSED (no double-spend), OTP NOT bypassed, settle paths work. This session then cleared the rest.
+
+**SHIPPED (verify+build EXIT 0 each · pattern: flat Agent + isolation:worktree + disjoint files + tsc/tsx-only + merge-serial + verify-once):**
+- **Forwarder `[fNo]` editor** (was dead on real rows): tombstone money dead-write `adminMarkForwarderPaid` + payment (ตัดกระเป๋า via faithful `adminPayForwardersOnBehalf`) + address re-pick + transport + cover + owner-reassign + cost-adjust + fShipBy + amountCount + **fCredit** (UPSERT fixes legacy 98%-silent-drop) + single-row driver-assign + **bill-to** (migration 0132 `tb_forwarder.fbilltoname`).
+- **Theme B** general-rate editor → `tb_rate_g_*` (the engine tables; admin rate edits now take effect).
+- **Reports:** VAT7 shops-only fidelity + 5-orphan reachability + daily-profit SVG graph + shops recompute-live + sales-monthly (tb_sales_report) + 2 monitoring reports (search/SMS) + agent-commission payout report.
+- **Settings:** 144-cell forwarder default-cost matrix editor (tb_settings).
+- **Forwarder-ops:** single-container cnt-payment+slip · bill-to-customer 4→5 · saveNote push · combine-bill editable detail · printAll/printDriver.
+- **Customer (ปอน lane, owner-authorized):** forwarder self-cancel · reverse-image search · tb_notify broadcast + login-popup (M-1/FG-1) — **popup VERIFIED working** (customer-session test).
+- **#23 admin-push shop disbursement** (tb_shop_pay_h/sub) · **HR pivot** attendance/leave/recruitment → tas_*/tb_post_job.
+- **register phone-exists** code reveal · staff-purge **ADR-0022** + script (review-only).
+
+**📌 REMAINING = ONLY owner-ACTIVATION + ก๊อต partner-API (no codeable-solo faithful work left):**
+1. **LINE_STAFF_GROUP_ID** (owner) — add @pacred bot to the real staff LINE group → read groupId from webhook (the `C61f…` from chat.line.biz is the OA-Manager id, NOT pushable · wire-test 404). → P1-24 fires.
+2. **Recreate 13 admins + run staff-purge** (owner/ภูม · ADR-0022 + `scripts/staff-purge-analysis.mjs`) → unblocks P1-15 sales-rep + report rep-names + HR adminid. (`admin_contact_extras` EMPTY + zero old↔new code overlap — confirmed.)
+3. **ปอน migrate 3 corporate readers** (ADR-0021) → rebuilt `corporate` write removable.
+4. **TTP + MK/MX/Sang sheet adapters** (ก๊อต partner-API).
+5. **OTP bypass** (owner · waiting ThaiBulkSMS corporate-route speed).
+6. Phase-C: HR work-time-clock (tas_historydataold CSV) + applicant-tracking.
+
+**⚠️ §0c note:** customer flows (popup/image/self-cancel) verified render+no-crash with a customer session; NOT click-tested for destructive cancel (needs fstatus=1 data) + image-upload result (Laonet vendor may 403 from prod egress). Migrations 0132 applied prod. Test account PR015 password reset this turn (harmless test account).
+
+**🧹 Local-only (won't follow to the work computer):** stale locked agent worktrees + dev server :3000. On the work computer just `git pull origin main` — everything is in the repo.
+
+---
+
 # 🟢 2026-05-31 — เดฟ AUTONOMOUS BATCH 2+3 (P0-23 · corporate-SOT · P1-15 · ภูม sitting-H · P1-24) · read FIRST
 
 **Batch-3 add-on (main `1befe969` → `bfb19b70`):**
