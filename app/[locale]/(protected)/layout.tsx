@@ -10,6 +10,7 @@ import { PcsChromeInit } from "@/components/legacy/pcs-chrome-init";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { FloatingTabs } from "@/components/sections/floating-tabs";
+import { NotifyPopup } from "./_notify-popup/notify-popup";
 
 /**
  * Layout for the (protected) customer portal — the D1 faithful PCS Cargo port.
@@ -212,6 +213,12 @@ export default async function ProtectedLayout({
 
       {/* 5. The per-screen `.app-content` body. */}
       {children}
+
+      {/* Customer login-popup announcement — faithful port of all-script.php's
+          tb_notify popup (reaches all migrated customers via tb_notify /
+          tb_notify_read). Renders nothing when there's no unread, in-window
+          announcement. */}
+      <NotifyPopup memberCode={memberCode} />
 
       {/* 6. Legacy right rail (`.nav-right-pcs`) — kept per ปอน 2026-05-23.
             The bundled legacy mobile bottom-nav `.nav-footer-pcs` is hidden
