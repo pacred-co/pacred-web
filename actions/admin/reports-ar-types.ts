@@ -54,6 +54,23 @@ export type BucketTotal = {
   count: number;
 };
 
+/**
+ * A single sales rep holding outstanding debt (rep-attribution rows).
+ * Folded in from the former /admin/accounting/ar-aging twin (deduped 2026-06-02)
+ * so the canonical report keeps its rep-attribution view. Source =
+ * tb_sales_report.sradminidsale joined over the outstanding fids → tb_admin name.
+ */
+export type RepAgingRow = {
+  /** tb_admin.adminID — the rep who closed the sale. */
+  adminID: string;
+  /** "ชื่อ สกุล" of the rep, or null if unresolved. */
+  repName: string | null;
+  /** Σ outstanding THB across this rep's attributed outstanding orders. */
+  amount: number;
+  /** Number of outstanding orders attributed to this rep. */
+  orders: number;
+};
+
 /** A single debtor customer (the debtor-table rows). */
 export type DebtorRow = {
   /** tb_users.userID (e.g. PR10843) — also the React key. */
@@ -84,6 +101,8 @@ export type ArAgingReport = {
   debtorCount: number;
   /** Top-N debtors by amount (worst-first). */
   topDebtors: DebtorRow[];
+  /** Top-10 sales reps by outstanding debt held (attribution via tb_sales_report). */
+  topReps: RepAgingRow[];
   /** True if the capped pull hit the row LIMIT (totals may understate). */
   capped: boolean;
 };

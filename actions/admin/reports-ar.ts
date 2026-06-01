@@ -46,6 +46,7 @@ import {
   type ArAgingReport,
   type BucketTotal,
   type DebtorRow,
+  type RepAgingRow,
 } from "./reports-ar-types";
 
 type Ok<T> = { ok: true; data: T };
@@ -155,10 +156,14 @@ export async function getArAgingReport(topN = DEFAULT_TOP_N): Promise<Result<ArA
     let grandTotal = 0;
     let grandCount = 0;
     const debtors = new Map<string, DebtorAcc>();
+    // Per-row (id + outstanding amount) captured for the rep-attribution rollup
+    // below (folded in from the deduped /admin/accounting/ar-aging twin).
+    const rowAmounts: { id: number; amount: number }[] = [];
 
     for (const r of rows) {
       const amount = calcForwarderOutstanding(r);
       if (amount <= 0) continue; // nothing owed → not a receivable
+      rowAmounts.push({ id: r.id, amount });
       const fdateMs = r.fdate ? new Date(r.fdate).getTime() : NaN;
       const age = ageDays(r.fdate, nowMs);
       const bkt = bucketForAge(age);
@@ -239,9 +244,72 @@ export async function getArAgingReport(topN = DEFAULT_TOP_N): Promise<Result<ArA
       };
     });
 
+    // ── Rep attribution (top-10 reps holding the outstanding debt) ───────────
+    // Folded in from the deduped /admin/accounting/ar-aging twin (2026-06-02):
+    // join the outstanding fids → the rep who closed each sale via
+    // tb_sales_report.sradminidsale, roll up outstanding THB per rep, hydrate
+    // tb_admin names. Read-only — never affects the money totals above.
+    const amtByFid = new Map<number, number>(rowAmounts.map((x) => [x.id, x.amount] as [number, number]));
+    const repByFid = new Map<number, string>();
+    const fids = rowAmounts.map((x) => x.id);
+    if (fids.length > 0) {
+      const { data: srRows, error: srErr } = await admin
+        .from("tb_sales_report")
+        .select("fid, sradminidsale")
+        .in("fid", fids)
+        .limit(LIMIT);
+      if (srErr) {
+        // Non-fatal — rep attribution degrades to empty.
+        logger.error("reports", "ar-aging tb_sales_report lookup failed", srErr);
+      }
+      for (const s of (srRows ?? []) as { fid: number; sradminidsale: string | null }[]) {
+        // First-write-wins: one forwarder shouldn't attribute to two reps.
+        if (s.sradminidsale && !repByFid.has(s.fid)) repByFid.set(s.fid, s.sradminidsale);
+      }
+    }
+
+    const repAcc = new Map<string, { amount: number; orders: number }>();
+    for (const [fid, repID] of repByFid) {
+      const amt = amtByFid.get(fid) ?? 0;
+      if (amt <= 0) continue;
+      const cur = repAcc.get(repID) ?? { amount: 0, orders: 0 };
+      cur.amount += amt;
+      cur.orders += 1;
+      repAcc.set(repID, cur);
+    }
+
+    const repIDs = Array.from(repAcc.keys());
+    const repNames = new Map<string, string>();
+    if (repIDs.length > 0) {
+      const { data: aRows, error: aErr2 } = await admin
+        .from("tb_admin")
+        .select("adminID, adminFirstName, adminLastName")
+        .in("adminID", repIDs);
+      if (aErr2) {
+        logger.error("reports", "ar-aging tb_admin lookup failed", aErr2);
+      }
+      for (const a of (aRows ?? []) as {
+        adminID: string;
+        adminFirstName: string | null;
+        adminLastName: string | null;
+      }[]) {
+        repNames.set(a.adminID, [a.adminFirstName, a.adminLastName].filter(Boolean).join(" ").trim());
+      }
+    }
+
+    const topReps: RepAgingRow[] = Array.from(repAcc.entries())
+      .map(([adminID, agg]) => ({
+        adminID,
+        repName: repNames.get(adminID) || null,
+        amount: Math.round(agg.amount * 100) / 100,
+        orders: agg.orders,
+      }))
+      .sort((x, y) => y.amount - x.amount)
+      .slice(0, 10);
+
     return {
       ok: true,
-      data: { buckets, grandTotal, grandCount, debtorCount, topDebtors, capped },
+      data: { buckets, grandTotal, grandCount, debtorCount, topDebtors, topReps, capped },
     };
   } catch (e) {
     const err = e instanceof Error ? e : new Error(String(e));
