@@ -68,7 +68,7 @@ const REPORTS_MENUBAR: MenubarItem[] = [
     label: "BI / ผู้บริหาร",
     children: [
       { label: "🧭 แดชบอร์ดผู้บริหาร", href: "/admin/reports/cockpit" },
-      { label: "💰 ลูกหนี้การค้า (AR-aging)", href: "/admin/reports/ar-aging" },
+      { label: "💰 ลูกหนี้การค้า (AR-aging)", href: "/admin/accounting/ar-aging" },
     ],
   },
   {

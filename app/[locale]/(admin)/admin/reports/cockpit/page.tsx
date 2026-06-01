@@ -95,7 +95,7 @@ export default async function ExecCockpitPage() {
         <Stat label="ยอดค้างชำระ (AR)" value={thb(r.arTotal)} valueClass={r.arTotal > 0 ? "text-red-600" : undefined} sub={`${intTh(r.arOrders)} ออเดอร์`} />
         <Stat label="ยอดเงินในกระเป๋าลูกค้า" value={thb(r.walletSystemTotal)} sub="ภาระเงินฝากรวม" />
         <Stat label="ลีดที่ยังไม่ติดต่อ" value={intTh(r.openLeads)} sub="userActive='' + มีเบอร์" link="/admin/leads" />
-        <Stat label="ดูลูกหนี้ตามอายุ" value="AR-aging →" link="/admin/reports/ar-aging" small />
+        <Stat label="ดูลูกหนี้ตามอายุ" value="AR-aging →" link="/admin/accounting/ar-aging" small />
       </section>
 
       {/* Pricing-health soft advisory (CEO §4 · ≤15k/ตู้) — NEVER blocks, just a nudge */}
