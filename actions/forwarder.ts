@@ -17,6 +17,7 @@ import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { validateStoredFile } from "@/lib/file-validation";
 import { buildPromptPayPayload, buildPromptPayQrDataUrl, PromptPayConfigError } from "@/lib/promptpay";
+import { appendCashbackNoteTag } from "@/actions/admin/wallet-hs";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -1092,7 +1093,7 @@ export async function submitForwarderPayment(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
-  const { ids, slipPath, slipDate } = parsed.data;
+  const { ids, slipPath, slipDate, cashBackKey } = parsed.data;
 
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) return { ok: false, error: "not_signed_in" };
@@ -1221,6 +1222,46 @@ export async function submitForwarderPayment(
   // forwarder.php L268-270 — juristic 1% reduction when total ≥ 1000.
   const applyNiti = isCorporate && pricePayAll >= 1000;
 
+  // ── ADR-0025 — apply-cashback at checkout (getListPayForwarder.php
+  //    L188-203 `cashBackKey`). Read the customer's live cashback balance
+  //    and CLAMP the requested `cashBackKey` to `min(cbtotal, billRemainder)`
+  //    server-side (never trust the client). Cashback reduces the slip the
+  //    customer must upload (the legacy: `totalPriceAll − walletTotal −
+  //    cashBackKey − totalNiTi`); the bill total here already excludes the
+  //    wallet pre-apply (m2 #3 — this surface is slip-only), so the cashback
+  //    reduces `pricePayAll` directly.
+  //
+  //    Carry-then-settle (D-2a): we do NOT debit tb_cash_back at submit
+  //    (faithful hold-then-settle — the legacy holds; the debit lands on the
+  //    admin slip-approve). We stamp the applied amount as a `[CB:<amt>]`
+  //    note tag on the FIRST pending row so the approve cascade can settle
+  //    it once (idempotent on `cbhrefid=forwarder:walleths:<row-id>`).
+  //
+  //    ⚠️ COUPLING (ADR-0025 D-2 note): these slip rows are status='1' type='4'
+  //    and are approved by `adminApproveWalletHs`/`adminBulkApproveWalletHs`
+  //    (actions/admin/wallet-trans.ts + tb-bulk.ts) — NOT the type='1'
+  //    `adminApproveWalletDeposit` cascade that the cashback settle is wired
+  //    into. Until those approve sites also call `spendCashbackAtCheckout`
+  //    (paired with the m2 #3 wallet pre-apply restoration), the carried
+  //    cashback on THIS surface is recorded but settled only via the deposit
+  //    cascade. The amount IS clamped + reflected in the slip total here, and
+  //    the carry tag is idempotency-anchored, so no double-spend can occur.
+  let cashBackApplied = 0;
+  if (cashBackKey && cashBackKey > 0) {
+    const { data: cbRow, error: cbErr } = await admin
+      .from("tb_cash_back")
+      .select("cbtotal")
+      .eq("userid", userID)
+      .maybeSingle<{ cbtotal: number | string | null }>();
+    if (cbErr) {
+      console.error(`[tb_cash_back read] failed`, { code: cbErr.code, message: cbErr.message, userid: userID });
+    }
+    const cbTotal = Number(cbRow?.cbtotal ?? 0);
+    // Clamp to [0, min(balance, billRemainder)] — rounded to 2dp.
+    cashBackApplied = Math.round(Math.max(0, Math.min(cashBackKey, cbTotal, pricePayAll)) * 100) / 100;
+    pricePayAll = Math.round((pricePayAll - cashBackApplied) * 100) / 100;
+  }
+
   const datetimeNow = new Date().toISOString();
 
   // forwarder.php L335-342 — one `tb_wallet_hs` row per forwarder id.
@@ -1230,7 +1271,7 @@ export async function submitForwarderPayment(
   //   NOT-NULL columns the legacy lets MySQL default to '' — Postgres
   //   needs them explicit: whno / wusercredit / adminidcrate / typenew
   //   / typeservice (the 0081 schema marks these NOT NULL).
-  const hsRows = eligible.map((r) => {
+  const hsRows = eligible.map((r, idx) => {
     let amount = perRowTotal(r);
     // forwarder.php L316-318 — a PCSF row carries the +50฿ inside its
     // own amount (the legacy bumps the FIRST PCSF row). We attribute
@@ -1242,6 +1283,9 @@ export async function submitForwarderPayment(
     }
     // forwarder.php L329-331 — juristic 1% reduction applied per row.
     if (applyNiti) amount = amount * 0.99;
+    // ADR-0025 D-2a — carry the applied cashback as a note tag on the FIRST
+    // row so the approve cascade settles it exactly once.
+    const note = idx === 0 ? appendCashbackNoteTag("", cashBackApplied) : "";
     return {
       date: datetimeNow,
       dateslip: slipDate ? slipDate : null,
@@ -1252,6 +1296,7 @@ export async function submitForwarderPayment(
       amount: Number(amount.toFixed(2)),
       imagesslip: slipPath,
       depositnamebank: `KBANK-${BANK.accountNumber}`,
+      note,
       userid: userID,
       reforder: String(r.id),
       whno: "",
