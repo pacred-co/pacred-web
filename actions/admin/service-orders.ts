@@ -6,7 +6,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
-import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
 import {
@@ -297,211 +296,17 @@ export async function adminUpdateServiceOrder(input: AdminUpdateServiceOrderInpu
 }
 
 // ────────────────────────────────────────────────────────────
-// T-P1: MARK service-order PAID — debit wallet + flip status
+// (removed) adminMarkServiceOrderPaid — Potemkin dead-read
 // ────────────────────────────────────────────────────────────
-//
-// The plain `adminUpdateServiceOrder({ status: "ordered" })` flow flips
-// status but doesn't move money in the wallet ledger.  Per Part T-P1,
-// admin needs an explicit "ลูกค้าจ่ายเงินแล้ว" action that:
-//
-//   1. Validates the order is in awaiting_payment (or pending) state
-//   2. Validates customer has enough wallet balance (main bucket)
-//      — admin can override by passing allow_overdraw=true
-//      (e.g. "received cash directly, will reconcile later")
-//   3. Creates wallet_transactions row:
-//        kind='order_payment', amount=-total_thb, status='completed',
-//        reference_type='order_header', reference_id=h_no
-//      The wallet_recompute_balance trigger debits the main bucket.
-//   4. Flips order status awaiting_payment → ordered, stamps date_ordered
-//   5. Logs audit + notifies customer
-//
-// Idempotency: if a wallet_transaction with the same (reference_type,
-// reference_id, kind, status='completed') already exists, skip the
-// double-debit and just ensure status is 'ordered'.
-
-const markPaidSchema = z.object({
-  h_no:           z.string(),
-  allow_overdraw: z.boolean().optional(),
-});
-export type AdminMarkServiceOrderPaidInput = z.infer<typeof markPaidSchema>;
-
-type MarkPaidData = { tx_id: string; already_paid: boolean };
-export async function adminMarkServiceOrderPaid(
-  input: AdminMarkServiceOrderPaidInput,
-): Promise<AdminActionResult<MarkPaidData>> {
-  const parsed = markPaidSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
-  const d = parsed.data;
-
-  // Accounting role gate per ADR-0005 K-7 — wallet movements are
-  // accounting work, not ops.  Super gets it too (full powers).
-  return withAdmin<MarkPaidData>(["super", "accounting"], async ({ adminId }) => {
-    const admin = createAdminClient();
-
-    const { data: order, error: orderErr } = await admin
-      .from("service_orders")
-      .select("id, profile_id, h_no, status, total_thb")
-      .eq("h_no", d.h_no)
-      .maybeSingle<{ id: string; profile_id: string; h_no: string; status: string; total_thb: number }>();
-    if (orderErr) {
-      console.error(`[service_orders mutation lookup] failed`, { code: orderErr.code, message: orderErr.message });
-      return { ok: false, error: `db_error:${orderErr.code ?? "unknown"}` };
-    }
-    if (!order) return { ok: false, error: "not_found" };
-
-    if (order.status === "cancelled") {
-      return { ok: false, error: "ออเดอร์ยกเลิกแล้ว — ไม่สามารถบันทึกชำระได้" };
-    }
-    if (order.status === "completed") {
-      return { ok: false, error: "ออเดอร์เสร็จสมบูรณ์แล้ว — ไม่ต้องบันทึกชำระซ้ำ" };
-    }
-
-    // Idempotency: did this order already have a completed payment tx?
-    const { data: existingTx, error: existingTxErr } = await admin
-      .from("wallet_transactions")
-      .select("id")
-      .eq("reference_type", "order_header")
-      .eq("reference_id", order.h_no)
-      .eq("kind", "order_payment")
-      .eq("status", "completed")
-      .maybeSingle<{ id: string }>();
-    if (existingTxErr) {
-      console.error(`[wallet_transactions list] failed`, { code: existingTxErr.code, message: existingTxErr.message });
-    }
-    if (existingTx) {
-      // Already paid — just nudge status forward if it isn't already
-      if (order.status === "awaiting_payment" || order.status === "pending") {
-        await admin
-          .from("service_orders")
-          .update({
-            status:       "ordered",
-            date_ordered: new Date().toISOString(),
-            admin_id_update: adminId,
-          })
-          .eq("id", order.id);
-      }
-      return { ok: true, data: { tx_id: existingTx.id, already_paid: true } };
-    }
-
-    const totalThb = Number(order.total_thb);
-    if (!(totalThb > 0)) return { ok: false, error: "total_thb invalid — ไม่สามารถบันทึกชำระได้" };
-
-    // Balance check (skip if admin overrides). Pending-aware available
-    // balance — the raw wallet.balance column (0007 trigger) is blind to
-    // the customer's own open pending debits (gap-customer §H-1).
-    if (!d.allow_overdraw) {
-      const available = await getWalletAvailableBalance(admin, order.profile_id);
-      if (available === null) {
-        return { ok: false, error: "ตรวจสอบยอด wallet ไม่สำเร็จ — ลองใหม่อีกครั้ง" };
-      }
-      if (available < totalThb) {
-        return {
-          ok: false,
-          error: `ยอด wallet ไม่พอ (มี ฿${available.toLocaleString()} ต้อง ฿${totalThb.toLocaleString()}) — ถ้ารับเงินสด/โอนตรง กดยืนยันด้วย allow_overdraw`,
-        };
-      }
-    }
-
-    // Create the debit wallet_transaction.
-    // F-11 / G9 — wrap INSERT to catch the partial-unique violation from
-    // migration 0049 (wallet_tx_order_payment_uniq). Under concurrent
-    // submits (admin double-click / 2 tabs / customer-side race), the
-    // check-then-act SELECT above may miss a still-committing peer — the
-    // DB-level guard raises 23505, we re-SELECT, return as if we were the
-    // second arrival in normal idempotent flow.
-    const { data: insertedTx, error: txErr } = await admin
-      .from("wallet_transactions")
-      .insert({
-        profile_id:     order.profile_id,
-        bucket:         "main",
-        amount:         -totalThb,             // debit
-        kind:           "order_payment",
-        status:         "completed",
-        reference_type: "order_header",
-        reference_id:   order.h_no,
-        admin_id:       adminId,
-        note:           `ชำระค่าฝากสั่ง ${order.h_no}${d.allow_overdraw ? " (admin override — รับเงินสด/โอนตรง)" : ""}`,
-      })
-      .select("id")
-      .maybeSingle<{ id: string }>();
-
-    if (txErr && (txErr.code === "23505" || /duplicate|unique/i.test(txErr.message))) {
-      // Concurrent peer beat us — re-SELECT canonical row.
-      const { data: peerTx, error: peerTxErr } = await admin
-        .from("wallet_transactions")
-        .select("id")
-        .eq("reference_type", "order_header")
-        .eq("reference_id", order.h_no)
-        .eq("kind", "order_payment")
-        .eq("status", "completed")
-        .maybeSingle<{ id: string }>();
-      if (peerTxErr) {
-        console.error(`[wallet_transactions list] failed`, { code: peerTxErr.code, message: peerTxErr.message });
-      }
-      if (!peerTx) {
-        return { ok: false, error: `wallet insert race: 23505 but no peer tx found for ${order.h_no}` };
-      }
-      // Nudge order status forward if not yet (mirror existing fast-path logic).
-      if (order.status === "awaiting_payment" || order.status === "pending") {
-        await admin
-          .from("service_orders")
-          .update({
-            status:           "ordered",
-            date_ordered:     new Date().toISOString(),
-            admin_id_update:  adminId,
-          })
-          .eq("id", order.id);
-      }
-      revalidatePath("/admin/service-orders");
-      revalidatePath(`/admin/service-orders/${order.h_no}`);
-      revalidatePath("/admin/wallet");
-      return { ok: true, data: { tx_id: peerTx.id, already_paid: true } };
-    }
-    if (txErr || !insertedTx) {
-      return { ok: false, error: `wallet insert: ${txErr?.message ?? "no row"}` };
-    }
-    const tx = insertedTx;
-
-    // Flip the order status forward
-    const { error: ordErr } = await admin
-      .from("service_orders")
-      .update({
-        status:           "ordered",
-        date_ordered:     new Date().toISOString(),
-        admin_id_update:  adminId,
-      })
-      .eq("id", order.id);
-    if (ordErr) {
-      // Don't roll back the wallet tx automatically — admin can decide
-      // whether to cancel the tx or fix the order row. Surface the error.
-      return { ok: false, error: `order update failed AFTER wallet debit (tx ${tx.id} stays): ${ordErr.message}` };
-    }
-
-    await logAdminAction(adminId, "service_order.mark_paid", "service_order", order.id, {
-      h_no:           order.h_no,
-      total_thb:      totalThb,
-      tx_id:          tx.id,
-      allow_overdraw: !!d.allow_overdraw,
-      before:         { status: order.status },
-      after:          { status: "ordered" },
-    });
-
-    void sendNotification(order.profile_id, {
-      category: "order",
-      severity: "success",
-      title:    `ชำระเงินสำเร็จ — ${order.h_no}`,
-      body:     `รับเงิน ฿${totalThb.toLocaleString()} แล้ว — ระบบจะสั่งสินค้าให้ต่อไป`,
-      link_href: `/service-order/${order.h_no}`,
-      reference_type: "service_order",
-      reference_id:   order.id,
-    });
-
-    revalidatePath("/admin/service-orders");
-    revalidatePath(`/admin/service-orders/${order.h_no}`);
-    revalidatePath("/admin/wallet");
-    return { ok: true, data: { tx_id: tx.id, already_paid: false } };
-  });
-}
+// This T-P1 action read+wrote the rebuilt `service_orders` table, which is
+// 0-row on prod after the D1 pivot → it returned `not_found` for EVERY real
+// order. Its only caller was the duplicate mark-paid block in
+// `[hNo]/update-form.tsx` (removed in the same change). The LIVE mark-paid
+// path is `adminMarkServiceOrderPaidTb` (actions/admin/service-orders-tb.ts),
+// surfaced by <MarkPaidTbForm> on the legacy-view — it debits the real
+// tb_wallet/tb_wallet_hs + flips tb_header_order.hstatus. Deleted to remove
+// the dead-write trap (§0e). The `getWalletAvailableBalance` import this used
+// was dropped; `sendNotification` stays (adminUpdateServiceOrder uses it).
 
 // ────────────────────────────────────────────────────────────
 // V-C2: set bill_to_name_override on a service_order
