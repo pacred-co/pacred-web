@@ -1,116 +1,73 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { z } from "zod";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import type { AdminActionResult } from "./common";
 
-// V-A4 (cargo forensics): 'rate-entry validation — block the "เรทเบิ้ล"
-// (doubled-rate) class of error'. Schema bounds tightened: yuan_rate
-// realistic range is ~4-7 THB/CNY (extreme crisis ~ 8-9). Allowing 100
-// would let a typo of "50" through. Now bounded (0, 20]; the further
-// per-field SUSPICIOUS_FACTOR check catches accidental ×2/×10 changes
-// even within range by comparing against the previous saved value.
-const updateSchema = z.object({
-  service_fee:                 z.number().min(0).max(10000),
-  juristic_discount_threshold: z.number().min(0).max(1000000),
-  juristic_discount_pct:       z.number().min(0).max(1),       // 0-1 (e.g. 0.01 = 1%)
-  qc_fee_per_item:             z.number().min(0).max(10000),
-  crate_fee_base:              z.number().min(0).max(100000),
-  free_shipping_enabled:       z.boolean(),
-  free_shipping_threshold:     z.number().min(0).max(1000000).optional().nullable(),
-  // V-A4: when admin really wants to apply an unusual jump (e.g., real
-  // exchange-rate spike), set true to bypass the suspicious-change check.
-  // Audit log records when this bypass was used.
-  confirm_unusual_rate:        z.boolean().optional(),
-});
-export type AdminUpdateSettingsInput = z.infer<typeof updateSchema>;
+// ════════════════════════════════════════════════════════════
+// ADR-0024 — config / settings SOT.  NEUTRALIZED 2026-06-01.
+// ════════════════════════════════════════════════════════════
+//
+// This action USED to write the rebuilt `settings` table (singleton id=1:
+// service_fee · juristic_discount_* · qc_fee_per_item · crate_fee_base ·
+// free_shipping_enabled/_threshold; yuan_rate was already removed earlier).
+//
+// The 2026-06-01 big audit (docs/decisions/0024-config-settings-sot.md)
+// confirmed every one of those fields is a DEAD-WRITE for the live customer
+// money path (verified per-consumer · §0e):
+//
+//   • Yuan rate              → live path reads tb_settings.rpdefault/rsdefault
+//                              (getCurrentYuanRate, cart.ts). Edit at
+//                              /admin/settings/legacy-rates.
+//   • Free shipping          → live forwarder/receipt path reads
+//                              tb_settings.freeshipping (1/2). Edit at
+//                              /admin/settings/forwarder-costs.
+//   • service_fee / juristic / QC / crate
+//                            → read ONLY by the rebuilt actions/forwarder.ts
+//                              lane (service-import/add, near-zero data) and
+//                              the display-only /api/settings-rate preview.
+//                              The live forwarder pricing uses
+//                              resolve-rate.ts + tb_rate_* + the tb_settings
+//                              cost matrix — NOT these fields. (Scoped to the
+//                              rebuilt lane per ADR-0024 D-3a; that lane's
+//                              banner is a separate follow-up.)
+//
+// So writing rebuilt `settings` gave staff a green toast that changed
+// nothing on the live path — the same trust trap as the /admin/rates/vip
+// dead-write (AGENTS.md §0e). Per ADR-0024 D-2/D-4 #1 (recommended) the
+// /admin/settings page is now a READ-THROUGH HUB linking the three canonical
+// editors; this write action is retired.
+//
+// Kept as a loud-failing stub (not deleted) so any stray caller surfaces a
+// clear redirect instead of silently succeeding. The only in-repo caller
+// (settings-form.tsx) no longer invokes it.
 
-// V-A4 thresholds: a new value within RATIO×prev is "expected"; beyond
-// requires confirm_unusual_rate=true. yuan_rate is the most common typo
-// source so tightest. Discount % gets widest because policy intentional.
-const SUSPICIOUS_FACTOR: Record<string, number> = {
-  service_fee:                 2.0,    // ±100% — service fee tweaks are policy
-  qc_fee_per_item:             2.0,
-  crate_fee_base:              2.0,
-  juristic_discount_pct:       3.0,    // ±200% — discount tweaks intentional
+export type AdminUpdateSettingsInput = {
+  service_fee?: number;
+  juristic_discount_threshold?: number;
+  juristic_discount_pct?: number;
+  qc_fee_per_item?: number;
+  crate_fee_base?: number;
+  free_shipping_enabled?: boolean;
+  free_shipping_threshold?: number | null;
+  confirm_unusual_rate?: boolean;
 };
 
-function isSuspiciousChange(field: string, oldValue: number, newValue: number): boolean {
-  if (oldValue <= 0) return false;                // first-time set, no baseline
-  if (newValue === oldValue) return false;
-  if (newValue <= 0) return false;                // setting to 0 = explicit, not typo
-  const factor = SUSPICIOUS_FACTOR[field];
-  if (!factor) return false;
-  const ratio = Math.max(oldValue, newValue) / Math.min(oldValue, newValue);
-  return ratio > factor;
-}
-
-export async function adminUpdateSettings(input: AdminUpdateSettingsInput): Promise<AdminActionResult> {
-  const parsed = updateSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
-  const d = parsed.data;
-
-  return withAdmin(["super"], async ({ adminId }) => {
-    const admin = createAdminClient();
-
-    // V-A4: fetch previous values to compare against new for suspicious-change detection
-    const { data: prev, error: prevErr } = await admin
-      .from("settings")
-      .select("service_fee, qc_fee_per_item, crate_fee_base, juristic_discount_pct")
-      .eq("id", 1)
-      .maybeSingle<{
-        service_fee: number;
-        qc_fee_per_item: number;
-        crate_fee_base: number;
-        juristic_discount_pct: number;
-      }>();
-    if (prevErr) {
-      console.error(`[settings list] failed`, { code: prevErr.code, message: prevErr.message });
-    }
-
-    if (prev && !d.confirm_unusual_rate) {
-      const suspicious: string[] = [];
-      const checks: Array<[string, number, number]> = [
-        ["service_fee",           Number(prev.service_fee),           d.service_fee],
-        ["qc_fee_per_item",       Number(prev.qc_fee_per_item),       d.qc_fee_per_item],
-        ["crate_fee_base",        Number(prev.crate_fee_base),        d.crate_fee_base],
-        ["juristic_discount_pct", Number(prev.juristic_discount_pct), d.juristic_discount_pct],
-      ];
-      for (const [field, oldV, newV] of checks) {
-        if (isSuspiciousChange(field, oldV, newV)) {
-          suspicious.push(`${field} ${oldV} → ${newV}`);
-        }
-      }
-      if (suspicious.length > 0) {
-        return {
-          ok: false,
-          error: `⚠ ตรวจพบการเปลี่ยนค่าผิดปกติ (อาจเป็น typo): ${suspicious.join(" · ")}. ` +
-                 `ถ้าตั้งใจ ให้กดยืนยันอีกครั้ง (UI จะถาม) เพื่อ bypass.`,
-        };
-      }
-    }
-
-    const { error } = await admin
-      .from("settings")
-      .update({
-        service_fee:                 d.service_fee,
-        juristic_discount_threshold: d.juristic_discount_threshold,
-        juristic_discount_pct:       d.juristic_discount_pct,
-        qc_fee_per_item:             d.qc_fee_per_item,
-        crate_fee_base:              d.crate_fee_base,
-        free_shipping_enabled:       d.free_shipping_enabled,
-        free_shipping_threshold:     d.free_shipping_threshold ?? null,
-      })
-      .eq("id", 1);
-
-    if (error) return { ok: false, error: error.message };
-
-    await logAdminAction(adminId, "settings.update", "settings", "1", {
-      ...d,
-      ...(d.confirm_unusual_rate ? { __suspicious_change_bypassed: true } : {}),
-    });
-    revalidatePath("/admin/settings");
-    return { ok: true };
-  });
+/**
+ * @deprecated ADR-0024 — the rebuilt `settings` table is not the canonical
+ * home for any config field. Use the canonical editors instead:
+ *   • yuan rate     → /admin/settings/legacy-rates (tb_settings.rpdefault/rsdefault)
+ *   • free shipping + cost matrix → /admin/settings/forwarder-costs (tb_settings)
+ *   • tax / OTP / wallet / flags  → /admin/settings/business-config (business_config)
+ * This stub no longer writes anything and returns an error pointing there.
+ */
+export async function adminUpdateSettings(
+  _input: AdminUpdateSettingsInput,
+): Promise<AdminActionResult> {
+  void _input;
+  return {
+    ok: false,
+    error:
+      "หน้าตั้งค่านี้เลิกแก้ค่าโดยตรงแล้ว (ADR-0024) — เรทหยวนแก้ที่ " +
+      "“ปรับเรทหยวนรายวัน”, ส่งฟรี/ต้นทุนที่ “เรทต้นทุนฝากนำเข้า”, " +
+      "ภาษี/OTP/กระเป๋าที่ “Business Config”.",
+  };
 }
