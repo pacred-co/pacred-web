@@ -5,9 +5,11 @@
 
 ---
 
-## 🔢 NEXT FREE NUMBER = **0136**
+## 🔢 NEXT FREE NUMBER = **0137**
 
-ใครจะเขียน migration ใหม่ → ใช้ `0136_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
+ใครจะเขียน migration ใหม่ → ใช้ `0137_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
+
+> 2026-06-02 PM-6: **0136** = `partners` (external logistics/business partner directory · staff-CRUD gap §PM-6 #3 — 1 NEW isolated table, NO FK to legacy, RLS service_role/admin-only · mirrors carriers/freight_quote). ⏳ **NOT applied prod yet** — เดฟ applies (direct-DB back up · pure DDL · idempotent `create … if not exists`).
 
 > 2026-06-01 PM-5: **0135** = `import_promo_banner_config` (seed 6 business_config keys `import.promo.*` for the configurable ฝากนำเข้า "โปรเหมาๆ" banner). ⏳ **NOT applied prod yet** — เดฟ applies (idempotent `on conflict do nothing` seed · zero schema change).
 
@@ -42,6 +44,7 @@
 | 0133 | `lead_call_log` | เดฟ | ✅ **applied prod 2026-06-01** · CEO §6 acquisition call-queue activity log · 1 NEW isolated table `lead_call_log` (id/userid/admin_id/status/note/called_at · NO FK · service_role-only RLS · 3 indexes) · powers `/admin/leads` · idempotent | dave-pacred (acquisition) |
 | 0134 | `freight_quote` | เดฟ | ✅ **applied prod 2026-06-01** · public freight RFQ lead-capture (AX BOOKING funnel) · 1 ตาราง `freight_quote` (singular · ≠ plural `freight_quotes` admin quotation in 0048) · RLS public-insert + admin-read (mirrors `contact_messages`) · idempotent · เปิด FREIGHT revenue line | dave-pacred (freight-quote MVP) |
 | 0135 | `import_promo_banner_config` | เดฟ | ✅ **applied prod 2026-06-01 via PostgREST** (IPv6 direct-DB was down on the home machine → applied the 6 INSERTs through `POST /rest/v1/business_config` + `Prefer: resolution=ignore-duplicates` · the REST/IPv4 path works for seed/DML when direct-DB times out; DDL still needs direct-DB / SQL-editor) · seed 6 `business_config` keys `import.promo.{enabled,headline,text,amount_thb,end_date,image_url}` (category "Promo") → configurable ฝากนำเข้า "โปรเหมาๆ" banner editable at `/admin/settings/business-config` · defaults = previous hardcoded banner · idempotent `on conflict do nothing` (zero schema change) | dave-pacred (service-import promo) |
+| 0136 | `partners` | เดฟ | ⏳ **NOT applied prod yet** (เดฟ applies — direct-DB back up · pure DDL) · 1 NEW isolated table `partners` (external logistics/business partner directory — GOGO/JMF/TTP/MOMO/CargoThai/warehouse/customs/messenger/api_provider) · `id/code(unique)/name/name_en/partner_type(CHECK 8 vals)/contact_*/note/is_active/sort/timestamps` · NO FK to legacy (like carriers/freight_quote) · RLS `is_admin(['super'])` only · staff-CRUD gap §PM-6 #3 MVP · admin CRUD at `/admin/partners` (super) · `set_updated_at()` trigger · idempotent `create … if not exists` | dave-pacred (partner directory MVP) |
 
 ---
 

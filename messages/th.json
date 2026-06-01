@@ -2827,7 +2827,8 @@
       "tools": "เครื่องมือ",
       "orgEmail": "อีเมลในองค์กร",
       "orgChannels": "ช่องทางองค์กร",
-      "adminUsers": "พนักงาน admin"
+      "adminUsers": "พนักงาน admin",
+      "partners": "พาร์ทเนอร์"
     },
     "userCargo": {
       "title": "ระบบจัดการลูกค้า",

@@ -431,6 +431,7 @@ const blockSettingsCargo: MenuItem = {
         { labelKey: "settingsCargo.orgEmail",    href: "/admin/organization-email",    icon: "MessageCircle" },
         { labelKey: "settingsCargo.orgChannels", href: "/admin/organization-channels", icon: "Smartphone" },
         { labelKey: "settingsCargo.adminUsers",  href: "/admin/admins",                icon: "UserCog" },
+        { labelKey: "settingsCargo.partners",    href: "/admin/partners",              icon: "Handshake" },
       ],
     },
   ],

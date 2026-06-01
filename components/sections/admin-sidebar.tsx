@@ -33,7 +33,7 @@ import {
   SlidersHorizontal, Network, ListOrdered, Barcode, ScanLine, Camera,
   Printer, Calculator, BadgeCheck, ShieldAlert, UserCheck, Wand2, RefreshCw,
   Banknote, KanbanSquare, Smartphone, Save,
-  Ban, AlertCircle, Gauge, PhoneCall, Megaphone,
+  Ban, AlertCircle, Gauge, PhoneCall, Megaphone, Handshake,
   ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
@@ -114,6 +114,8 @@ const ICONS: Record<string, LucideIcon> = {
   PhoneCall,       // blockExtLeads — /admin/leads (pre-existing miss, fixed here)
   // 2026-06-01 (เดฟ) — promo-banner manager (/admin/settings/promos).
   Megaphone,       // settingsCargo.promos
+  // 2026-06-02 (เดฟ) — partner directory (/admin/partners · staff-CRUD gap §PM-6).
+  Handshake,       // settingsCargo.partners
 };
 
 function Icon({ name, active }: { name?: string; active: boolean }) {

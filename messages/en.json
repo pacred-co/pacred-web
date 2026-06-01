@@ -2827,7 +2827,8 @@
       "tools": "Tools",
       "orgEmail": "Organization email",
       "orgChannels": "Organization channels",
-      "adminUsers": "Admin users"
+      "adminUsers": "Admin users",
+      "partners": "Partners"
     },
     "userCargo": {
       "title": "Customer management",
