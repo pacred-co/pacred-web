@@ -252,12 +252,23 @@ function DropdownPanelWithActiveChild({
 }) {
   const [activeChildIdx, setActiveChildIdx] = useState<number | null>(null);
 
+  // 2026-06-02 sitting-I-fix #2: visibility differs by depth.
+  //   L1 (depth=1) — opens on hover of the TopItem `group` OR when pinned.
+  //   L2+         — opens ONLY when this parent says we're active (isPinned).
+  //                 No CSS group-hover here — that's what caused all
+  //                 sibling L2 panels to open simultaneously when L1 was
+  //                 hovered (the "cascade trap" ภูม flagged).
+  const visibilityCls =
+    depth === 1
+      ? (isPinned ? "block" : "hidden group-hover:block")
+      : (isPinned ? "block" : "hidden");
+
   return (
     <DropdownPanel
       open={isPinned}
       side={side}
       depth={depth}
-      className={`${isPinned ? "block" : "hidden group-hover:block group-hover/sub:block"}`}
+      className={visibilityCls}
       onMouseLeave={() => setActiveChildIdx(null)}
     >
       {items.map((child, idx) => (
