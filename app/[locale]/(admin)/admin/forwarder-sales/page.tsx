@@ -5,312 +5,408 @@ import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
-import { LeaderPicker } from "./leader-picker";
 
-// Port of legacy `pcs-admin/forwarder-sale.php` — sales commission
-// dashboard for admins (cross-team view). PHP filtered by the logged-in
-// admin's own ID; the Pacred version exposes a leader picker so super /
-// accounting / management can drill into any team leader.
-//
-// Data source = `sales_commissions` (rows auto-emitted by Postgres
-// trigger when a forwarder/service_order completes — see migration
-// 0013). Each row already has the team leader + the customer + the
-// base amount + locked commission percentage + status.
+/**
+ * /admin/forwarder-sales — sales-rep attribution report.
+ *
+ * REPOINTED 2026-06-02 per ADR-0026 from the DEAD rebuilt `sales_commissions`
+ * + `team_leaders` + `profiles` joins (0 rows on prod) onto the LIVE legacy
+ * `tb_sales_report` (17,027 rep-attribution rows) — per the brief
+ * `docs/briefs/poom-wave-2026-06-01.md` §1.
+ *
+ * `tb_sales_report` schema (0081 L4411):
+ *   • id            — pk
+ *   • srdate        — วันที่ลูกค้าชำระ
+ *   • fid           — เลขที่ออเดอร์ฝากนำเข้า (→ tb_forwarder.id)
+ *   • sradminidsale — adminID of the sales rep who closed the deal
+ *
+ * This page = WHO closed WHICH forwarder + the resulting revenue (joined live
+ * from `tb_forwarder.ftotalprice − fdiscount`). Different from
+ * `/admin/commissions` (sales-rep payout queue from `tb_user_sales*`) — this is
+ * the ATTRIBUTION report for cross-team review by accounting / sales admin.
+ *
+ * Legacy reference: `pcs-admin/forwarder-sale.php` filtered by the logged-in
+ * admin's own ID; Pacred exposes a rep picker so super / accounting / sales_admin
+ * can drill into any rep.
+ *
+ * Roles per ADR-0006 §1.4: accounting | sales_admin (super implicit).
+ */
 
-type Status = "all" | "unpaid" | "paid" | "cancelled";
+export const dynamic = "force-dynamic";
 
-type Profile = {
-  member_code:  string | null;
-  first_name:   string | null;
-  last_name:    string | null;
-  company_name: string | null;
+type RepOption = {
+  adminID: string;
+  display: string;
 };
-type Leader = {
-  team_code: string;
-  commission_pct: number;
-  profile: Profile | Profile[] | null;
-};
-type Row = {
-  id:                  string;
-  team_leader_id:      string;
-  reference_type:      "forwarder" | "service_order";
-  reference_id:        string;
-  customer_profile_id: string;
-  base_amount:         number;
-  commission_pct:      number;
-  commission_amount:   number;
-  status:              "unpaid" | "paid" | "cancelled";
-  earned_at:           string;
-  paid_at:             string | null;
-  customer:            Profile | Profile[] | null;
-  team_leader:         Leader | Leader[] | null;
+
+type ReportRow = {
+  id:           number;
+  srdate:       string | null;
+  fid:          number;
+  sradminidsale: string;
+  customer:     string | null;
+  ftotalprice:  number;
+  fdiscount:    number;
+  fstatus:      string | null;
+  fTrackingCHN: string | null;
 };
 
 function thb(n: number): string {
   return "฿" + n.toLocaleString("th-TH", { minimumFractionDigits: 2 });
 }
-function normSingle<T>(x: T | T[] | null | undefined): T | null {
-  if (!x) return null;
-  return Array.isArray(x) ? (x[0] ?? null) : x;
-}
-function customerLabel(p: Profile | null): string {
-  if (!p) return "—";
-  return p.company_name?.trim() || `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || "—";
-}
-
-const STATUS_BADGE: Record<string, string> = {
-  unpaid:    "bg-amber-50 text-amber-700 border-amber-200",
-  paid:      "bg-green-50  text-green-700  border-green-200",
-  cancelled: "bg-gray-50   text-gray-700   border-gray-200",
-};
 
 export default async function AdminForwarderSalesPage({
   searchParams,
 }: {
   searchParams: Promise<{
-    leader?:     string;
-    status?:     string;
+    rep?:        string;
     date_from?:  string;
     date_to?:    string;
   }>;
 }) {
-  // W-1 (gap-admin H-1): page-level role gate. Cross-team sales
-  // commission dashboard (money) via createAdminClient (RLS-bypass) —
-  // accounting + sales_admin (super implicit).
   await requireAdmin(["accounting", "sales_admin"]);
-
   const sp = await searchParams;
+  const repId = (sp.rep ?? "").trim();
 
-  const status: Status = (sp.status === "unpaid" || sp.status === "paid" || sp.status === "cancelled")
-    ? sp.status
-    : "all";
-  const leaderId  = sp.leader ?? "";
-
-  // Default to current month if no range supplied — same convention as
-  // the legacy PHP screen.
-  const now    = new Date();
-  const ym     = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, "0")}`;
+  // Default to current month (legacy convention).
+  const now = new Date();
+  const ym  = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, "0")}`;
   const defaultFrom = `${ym}-01`;
   const defaultTo   = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
-  const dateFrom = sp.date_from ?? defaultFrom;
-  const dateTo   = sp.date_to   ?? defaultTo;
+  const dateFrom = (sp.date_from && /^\d{4}-\d{2}-\d{2}$/.test(sp.date_from)) ? sp.date_from : defaultFrom;
+  const dateTo   = (sp.date_to   && /^\d{4}-\d{2}-\d{2}$/.test(sp.date_to))   ? sp.date_to   : defaultTo;
 
   const admin = createAdminClient();
 
-  // List of all active leaders (for the picker)
-  const { data: leadersRaw, error: leadersRawErr } = await admin
-    .from("team_leaders")
-    .select(`
-      id, team_code, commission_pct, is_active,
-      profile:profiles!profile_id ( member_code, first_name, last_name, company_name )
-    `)
-    .eq("is_active", true)
-    .order("team_code");
-  if (leadersRawErr) {
-    console.error(`[team_leaders list] failed`, { code: leadersRawErr.code, message: leadersRawErr.message });
-  }
-
-  type LeaderRow = { id: string; team_code: string; commission_pct: number; profile: Profile | Profile[] | null };
-  const leaders = ((leadersRaw ?? []) as LeaderRow[]).map((l) => ({
-    id:             l.id,
-    team_code:      l.team_code,
-    commission_pct: Number(l.commission_pct),
-    display:        `${l.team_code} · ${customerLabel(normSingle(l.profile))}`,
-  }));
-
-  // Commissions query
-  let q = admin
-    .from("sales_commissions")
-    .select(`
-      id, team_leader_id, reference_type, reference_id, customer_profile_id,
-      base_amount, commission_pct, commission_amount, status, earned_at, paid_at,
-      customer:profiles!customer_profile_id ( member_code, first_name, last_name, company_name ),
-      team_leader:team_leaders!team_leader_id (
-        team_code, commission_pct,
-        profile:profiles!profile_id ( member_code, first_name, last_name, company_name )
-      )
-    `)
-    .gte("earned_at", dateFrom)
-    .lte("earned_at", dateTo + "T23:59:59")
-    .order("earned_at", { ascending: false })
+  // ── 1. Rep picker — distinct sradminidsale values + JOIN tb_admin for name ──
+  const { data: distinctReps, error: distinctErr } = await admin
+    .from("tb_sales_report")
+    .select("sradminidsale")
+    .gte("srdate", `${dateFrom}T00:00:00`)
+    .lte("srdate", `${dateTo}T23:59:59`)
     .limit(2000);
-
-  if (leaderId) q = q.eq("team_leader_id", leaderId);
-  if (status !== "all") q = q.eq("status", status);
-
-  const { data, error } = await q;
-  if (error) {
-    console.error(`[sales_commissions list] failed`, { code: error.code, message: error.message });
+  if (distinctErr) {
+    console.error("[tb_sales_report distinct] failed", { code: distinctErr.code, message: distinctErr.message });
   }
-  const rows = ((data ?? []) as unknown as Row[]).map((r) => ({
-    ...r,
-    customer:    normSingle(r.customer),
-    team_leader: normSingle(r.team_leader),
-  }));
+  const repSet = new Set<string>();
+  for (const r of ((distinctReps ?? []) as Array<{ sradminidsale: string }>)) {
+    if (r.sradminidsale) repSet.add(r.sradminidsale);
+  }
+  const repIdsInWindow = Array.from(repSet);
 
-  // Totals
-  const totalCommission = rows.reduce((s, r) => s + Number(r.commission_amount), 0);
-  const totalBase       = rows.reduce((s, r) => s + Number(r.base_amount), 0);
-  const unpaidTotal     = rows.filter((r) => r.status === "unpaid")
-                              .reduce((s, r) => s + Number(r.commission_amount), 0);
-  const paidTotal       = rows.filter((r) => r.status === "paid")
-                              .reduce((s, r) => s + Number(r.commission_amount), 0);
+  // Hydrate rep names from tb_admin (camelCase per php-port-patterns.md).
+  type AdminRow = { adminID: string; adminFirstName: string | null; adminLastName: string | null };
+  let adminByID = new Map<string, AdminRow>();
+  if (repIdsInWindow.length > 0) {
+    const { data: adminsRaw, error: adminsErr } = await admin
+      .from("tb_admin")
+      .select("adminID, adminFirstName, adminLastName")
+      .in("adminID", repIdsInWindow);
+    if (adminsErr) {
+      console.error("[tb_admin reps] failed", { code: adminsErr.code, message: adminsErr.message });
+    }
+    adminByID = new Map(((adminsRaw ?? []) as AdminRow[]).map((a) => [a.adminID, a]));
+  }
+  const repOptions: RepOption[] = repIdsInWindow
+    .map((id) => {
+      const a = adminByID.get(id);
+      const name = a ? [a.adminFirstName, a.adminLastName].filter(Boolean).join(" ").trim() : "";
+      return {
+        adminID: id,
+        display: name ? `${id} · ${name}` : id,
+      };
+    })
+    .sort((a, b) => a.display.localeCompare(b.display, "th"));
 
-  const csvRows: CsvRow[] = rows.map((r) => {
-    const cust   = r.customer as Profile | null;
-    const leader = r.team_leader as Leader | null;
-    const lp     = normSingle((leader?.profile ?? null) as Profile | Profile[] | null);
+  // ── 2. Main report query ──
+  let reportQ = admin
+    .from("tb_sales_report")
+    .select("id, srdate, fid, sradminidsale")
+    .gte("srdate", `${dateFrom}T00:00:00`)
+    .lte("srdate", `${dateTo}T23:59:59`)
+    .order("srdate", { ascending: false })
+    .limit(2000);
+  if (repId) reportQ = reportQ.eq("sradminidsale", repId);
+  const { data: reportRaw, error: reportErr } = await reportQ;
+  if (reportErr) {
+    console.error("[tb_sales_report list] failed", { code: reportErr.code, message: reportErr.message });
+  }
+  type SrRow = { id: number; srdate: string | null; fid: number; sradminidsale: string };
+  const srRows = (reportRaw ?? []) as SrRow[];
+
+  // ── 3. Batch-hydrate tb_forwarder for fid set ──
+  type FwdRow = {
+    id: number;
+    userid: string | null;
+    ftotalprice: number | string | null;
+    fdiscount: number | string | null;
+    fstatus: string | null;
+    ftrackingchn: string | null;
+  };
+  const fIds = Array.from(new Set(srRows.map((r) => r.fid)));
+  let fwdById = new Map<number, FwdRow>();
+  if (fIds.length > 0) {
+    const { data: fwdRaw, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, userid, ftotalprice, fdiscount, fstatus, ftrackingchn")
+      .in("id", fIds);
+    if (fwdErr) {
+      console.error("[tb_forwarder list] failed", { code: fwdErr.code, message: fwdErr.message });
+    }
+    fwdById = new Map(((fwdRaw ?? []) as FwdRow[]).map((f) => [f.id, f]));
+  }
+
+  // ── 4. Optional: customer name via tb_users (camelCase: userID) ──
+  type UserRow = { userID: string; userName: string | null; userLastName: string | null };
+  const userIds = Array.from(new Set([...fwdById.values()].map((f) => f.userid).filter((v): v is string => !!v)));
+  let userByID = new Map<string, UserRow>();
+  if (userIds.length > 0) {
+    const { data: usersRaw, error: usersErr } = await admin
+      .from("tb_users")
+      .select("userID, userName, userLastName")
+      .in("userID", userIds);
+    if (usersErr) {
+      console.error("[tb_users names] failed", { code: usersErr.code, message: usersErr.message });
+    }
+    userByID = new Map(((usersRaw ?? []) as UserRow[]).map((u) => [u.userID, u]));
+  }
+
+  // ── 5. Assemble rows ──
+  const rows: ReportRow[] = srRows.map((r) => {
+    const f = fwdById.get(r.fid);
+    const u = f?.userid ? userByID.get(f.userid) : null;
+    const customer = u
+      ? [u.userID, u.userName, u.userLastName].filter(Boolean).join(" ").trim() || u.userID
+      : f?.userid ?? null;
     return {
-      earned_at:         new Date(r.earned_at).toLocaleString("th-TH"),
-      reference:         r.reference_type === "forwarder" ? `Forwarder ${r.reference_id}` : `Order ${r.reference_id}`,
-      customer:          customerLabel(cust),
-      customer_code:     cust?.member_code ?? "",
-      team_code:         leader?.team_code ?? "",
-      leader_name:       customerLabel(lp),
-      base_amount:       r.base_amount,
-      commission_pct:    (Number(r.commission_pct) * 100).toFixed(2) + "%",
-      commission_amount: r.commission_amount,
-      status:            r.status,
-      paid_at:           r.paid_at ?? "",
+      id:            r.id,
+      srdate:        r.srdate,
+      fid:           r.fid,
+      sradminidsale: r.sradminidsale,
+      customer,
+      ftotalprice:   Number(f?.ftotalprice ?? 0),
+      fdiscount:     Number(f?.fdiscount   ?? 0),
+      fstatus:       f?.fstatus ?? null,
+      fTrackingCHN:  f?.ftrackingchn ?? null,
     };
   });
+
+  // ── 6. Per-rep rollup + totals ──
+  const repAgg = new Map<string, { count: number; gross: number; net: number }>();
+  let totalGross = 0;
+  let totalNet   = 0;
+  for (const r of rows) {
+    const slot = repAgg.get(r.sradminidsale) ?? { count: 0, gross: 0, net: 0 };
+    const net = r.ftotalprice - r.fdiscount;
+    slot.count += 1;
+    slot.gross += r.ftotalprice;
+    slot.net   += net;
+    totalGross += r.ftotalprice;
+    totalNet   += net;
+    repAgg.set(r.sradminidsale, slot);
+  }
+  const repBoard = Array.from(repAgg.entries())
+    .map(([id, agg]) => {
+      const opt = repOptions.find((o) => o.adminID === id);
+      return {
+        adminID: id,
+        display: opt?.display ?? id,
+        count:   agg.count,
+        gross:   agg.gross,
+        net:     agg.net,
+      };
+    })
+    .sort((a, b) => b.net - a.net);
+
+  // ── 7. CSV ──
+  const csvRows: CsvRow[] = rows.map((r) => ({
+    srdate:        r.srdate ? new Date(r.srdate).toLocaleString("th-TH") : "",
+    rep:           r.sradminidsale,
+    fid:           r.fid,
+    tracking:      r.fTrackingCHN ?? "",
+    customer:      r.customer ?? "",
+    ftotalprice:   r.ftotalprice,
+    fdiscount:     r.fdiscount,
+    net:           r.ftotalprice - r.fdiscount,
+    fstatus:       r.fstatus ?? "",
+  }));
 
   return (
     <>
       <PageTopMenubar items={DISBURSEMENT_MENUBAR} activeHref="/admin/forwarder-sales" />
       <main className="p-6 lg:p-8 space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · SALES</p>
-          <h1 className="mt-1 text-2xl font-bold">รายงานค่าคอมมิชชันฝากนำเข้า</h1>
-          <p className="text-sm text-muted mt-1">
-            ติดตาม commission ที่เกิดจากออเดอร์ + forwarder ของลูกค้าในทีม — auto-emit เมื่อ status เปลี่ยนเป็น delivered/completed
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · SALES ATTRIBUTION</p>
+            <h1 className="mt-1 text-2xl font-bold">รายงานยอดขาย Sales Rep (ฝากนำเข้า)</h1>
+            <p className="text-sm text-muted mt-1">
+              ใครปิดออเดอร์ไหน · {rows.length.toLocaleString("th-TH")} forwarder ในช่วงที่เลือก ·
+              อ้างอิงจาก <code className="bg-surface-alt px-1 rounded text-xs">tb_sales_report</code> ของจริง
+            </p>
+            <p className="text-[10px] text-muted mt-1">
+              📊 ADR-0026 repoint จาก dead <code>sales_commissions</code> · ค่าคอมจ่ายอยู่ที่ <Link href="/admin/commissions" className="underline">/admin/commissions</Link>
+            </p>
+          </div>
         </div>
-        <Link
-          href="/admin/team-leaders"
-          className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt"
-        >
-          🧑‍💼 จัดการ Team Leaders
-        </Link>
-      </div>
 
-      {/* Filters */}
-      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm space-y-3">
-        <LeaderPicker
-          leaders={leaders}
-          currentLeaderId={leaderId}
-          status={status}
-          dateFrom={dateFrom}
-          dateTo={dateTo}
-        />
-        <AdminDateFilter
-          tab={`leader=${encodeURIComponent(leaderId)}&status=${status}`}
-          dateFrom={dateFrom}
-          dateTo={dateTo}
-        />
-      </section>
+        {/* Filters */}
+        <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm space-y-3">
+          <form method="GET" action="/admin/forwarder-sales" className="flex flex-wrap items-end gap-3">
+            <input type="hidden" name="date_from" value={dateFrom} />
+            <input type="hidden" name="date_to" value={dateTo} />
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] uppercase tracking-wider text-muted">Sales rep</span>
+              <select
+                name="rep"
+                defaultValue={repId}
+                className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-xs min-w-[200px]"
+              >
+                <option value="">— ทุกคน —</option>
+                {repOptions.map((o) => (
+                  <option key={o.adminID} value={o.adminID}>{o.display}</option>
+                ))}
+              </select>
+            </label>
+            <button type="submit" className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700">
+              กรอง
+            </button>
+            {repId && (
+              <Link
+                href={`/admin/forwarder-sales?date_from=${dateFrom}&date_to=${dateTo}`}
+                className="text-xs text-muted hover:text-foreground"
+              >
+                ล้าง
+              </Link>
+            )}
+          </form>
+          <AdminDateFilter
+            tab={`rep=${encodeURIComponent(repId)}`}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+          />
+        </section>
 
-      {/* Summary cards */}
-      <section className="grid sm:grid-cols-4 gap-3">
-        <Stat label="จำนวนรายการ" value={String(rows.length)} />
-        <Stat label="ยอดฐาน (Base)" value={thb(totalBase)} small />
-        <Stat label="ค่าคอม (รวม)" value={thb(totalCommission)} />
-        <Stat label="ยังไม่เบิก / เบิกแล้ว" value={`${thb(unpaidTotal)} / ${thb(paidTotal)}`} small />
-      </section>
+        {/* Summary cards */}
+        <section className="grid sm:grid-cols-4 gap-3">
+          <Stat label="จำนวนรายการ" value={rows.length.toLocaleString("th-TH")} />
+          <Stat label="Reps ที่ active" value={repBoard.length.toLocaleString("th-TH")} />
+          <Stat label="ยอดขายรวม (gross)" value={thb(totalGross)} small />
+          <Stat label="หลังหักส่วนลด (net)" value={thb(totalNet)} />
+        </section>
 
-      {/* CSV */}
-      <div className="flex justify-end">
-        <CsvButton
-          rows={csvRows}
-          cols={[
-            { key: "earned_at",         label: "วันที่เกิด commission" },
-            { key: "reference",         label: "อ้างอิง" },
-            { key: "customer",          label: "ลูกค้า" },
-            { key: "customer_code",     label: "รหัสสมาชิก" },
-            { key: "team_code",         label: "ทีม" },
-            { key: "leader_name",       label: "หัวหน้าทีม" },
-            { key: "base_amount",       label: "ฐาน (THB)" },
-            { key: "commission_pct",    label: "%" },
-            { key: "commission_amount", label: "ค่าคอม (THB)" },
-            { key: "status",            label: "สถานะ" },
-            { key: "paid_at",           label: "วันที่จ่าย" },
-          ]}
-          filename={`pacred-forwarder-sales-${dateFrom}-to-${dateTo}-${status}.csv`}
-        />
-      </div>
+        {/* Leaderboard */}
+        {repBoard.length > 0 && (
+          <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
+            <h2 className="font-bold text-sm mb-3">🏆 อันดับ Sales Rep ในช่วงนี้</h2>
+            <div className="overflow-x-auto scrollbar-x-visible">
+              <table className="w-full min-w-[600px] text-sm">
+                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                  <tr>
+                    <th className="px-3 py-2">#</th>
+                    <th className="px-3 py-2">Sales Rep</th>
+                    <th className="px-3 py-2 text-right">จำนวนออเดอร์</th>
+                    <th className="px-3 py-2 text-right">ยอดขาย (gross)</th>
+                    <th className="px-3 py-2 text-right">หลังหักลด (net)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {repBoard.slice(0, 20).map((r, idx) => (
+                    <tr key={r.adminID} className="border-t border-border">
+                      <td className="px-3 py-2 text-xs font-mono">{idx + 1}</td>
+                      <td className="px-3 py-2 text-xs">{r.display}</td>
+                      <td className="px-3 py-2 text-right font-mono text-xs">{r.count.toLocaleString("th-TH")}</td>
+                      <td className="px-3 py-2 text-right font-mono text-xs">{thb(r.gross)}</td>
+                      <td className="px-3 py-2 text-right font-mono text-xs font-bold text-primary-700">{thb(r.net)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
-      {/* Table */}
-      <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-x-auto">
-        <table className="w-full text-xs sm:text-sm">
-          <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[10px] sm:text-[11px] text-muted">
-            <tr>
-              <th className="px-3 py-2.5">วันที่</th>
-              <th className="px-3 py-2.5">อ้างอิง</th>
-              <th className="px-3 py-2.5">ลูกค้า</th>
-              <th className="px-3 py-2.5">ทีม</th>
-              <th className="px-3 py-2.5 text-right">ฐาน</th>
-              <th className="px-3 py-2.5 text-right">%</th>
-              <th className="px-3 py-2.5 text-right">ค่าคอม</th>
-              <th className="px-3 py-2.5">สถานะ</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="p-8 text-center text-muted">
-                  ไม่มี commission ในช่วงที่เลือก
-                </td>
-              </tr>
-            ) : (
-              rows.map((r) => {
-                const cust   = r.customer as Profile | null;
-                const leader = r.team_leader as Leader | null;
-                const lp     = normSingle((leader?.profile ?? null) as Profile | Profile[] | null);
-                const refLink = r.reference_type === "forwarder"
-                  ? `/admin/forwarders/${r.reference_id}`
-                  : `/admin/service-orders/${r.reference_id}`;
-                return (
-                  <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
-                    <td className="px-3 py-2.5 whitespace-nowrap text-xs">
-                      {new Date(r.earned_at).toLocaleDateString("th-TH")}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <Link href={refLink} className="text-primary-600 hover:underline font-mono text-xs">
-                        {r.reference_type === "forwarder" ? "F" : "O"} {r.reference_id.slice(0, 8)}
-                      </Link>
-                      <div className="text-[10px] text-muted">{r.reference_type}</div>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <div className="font-medium">{customerLabel(cust)}</div>
-                      <div className="text-[10px] text-muted font-mono">{cust?.member_code ?? "—"}</div>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <div className="font-mono text-xs">{leader?.team_code ?? "—"}</div>
-                      <div className="text-[10px] text-muted">{customerLabel(lp)}</div>
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-mono">
-                      {thb(Number(r.base_amount))}
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-xs">
-                      {(Number(r.commission_pct) * 100).toFixed(2)}%
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-mono font-bold text-primary-700">
-                      {thb(Number(r.commission_amount))}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE[r.status]}`}>
-                        {r.status === "unpaid" ? "รอเบิก" : r.status === "paid" ? "เบิกแล้ว" : "ยกเลิก"}
-                      </span>
+        {/* CSV */}
+        <div className="flex justify-end">
+          <CsvButton
+            rows={csvRows}
+            cols={[
+              { key: "srdate",      label: "วันที่ลูกค้าชำระ" },
+              { key: "rep",         label: "Sales Rep" },
+              { key: "fid",         label: "Forwarder ID" },
+              { key: "tracking",    label: "Tracking CHN" },
+              { key: "customer",    label: "ลูกค้า" },
+              { key: "ftotalprice", label: "ยอดขาย (gross)" },
+              { key: "fdiscount",   label: "ส่วนลด" },
+              { key: "net",         label: "หลังหักลด" },
+              { key: "fstatus",     label: "fStatus" },
+            ]}
+            filename={`pacred-forwarder-sales-${dateFrom}-to-${dateTo}${repId ? `-${repId}` : ""}.csv`}
+          />
+        </div>
+
+        {/* Detail table */}
+        <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+          <div className="px-5 py-3 border-b border-border">
+            <h2 className="font-bold text-sm">📋 รายการ ({rows.length.toLocaleString("th-TH")})</h2>
+          </div>
+          <div className="overflow-x-auto scrollbar-x-visible">
+            <table className="w-full min-w-[800px] text-xs sm:text-sm">
+              <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[10px] sm:text-[11px] text-muted">
+                <tr>
+                  <th className="px-3 py-2.5">วันที่ชำระ</th>
+                  <th className="px-3 py-2.5">Forwarder</th>
+                  <th className="px-3 py-2.5">Tracking CHN</th>
+                  <th className="px-3 py-2.5">ลูกค้า</th>
+                  <th className="px-3 py-2.5">Sales Rep</th>
+                  <th className="px-3 py-2.5 text-right">ยอดขาย</th>
+                  <th className="px-3 py-2.5 text-right">หลังหักลด</th>
+                  <th className="px-3 py-2.5">fStatus</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="p-8 text-center text-muted">
+                      ไม่มี <code className="bg-surface-alt px-1 rounded text-xs">tb_sales_report</code> ในช่วงที่เลือก
                     </td>
                   </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </section>
-    </main>
+                ) : (
+                  rows.map((r) => (
+                    <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
+                      <td className="px-3 py-2.5 whitespace-nowrap text-xs">
+                        {r.srdate ? new Date(r.srdate).toLocaleDateString("th-TH") : "—"}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <Link href={`/admin/forwarders/${r.fid}`} className="text-primary-600 hover:underline font-mono text-xs">
+                          #{r.fid}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2.5 font-mono text-[10px] text-muted whitespace-nowrap">
+                        {r.fTrackingCHN ?? "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-xs">
+                        {r.customer ?? "—"}
+                      </td>
+                      <td className="px-3 py-2.5 font-mono text-xs">
+                        {r.sradminidsale}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono text-xs">{thb(r.ftotalprice)}</td>
+                      <td className="px-3 py-2.5 text-right font-mono text-xs font-bold text-primary-700">
+                        {thb(r.ftotalprice - r.fdiscount)}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className="rounded-full bg-surface-alt text-foreground border border-border px-2 py-0.5 text-[10px]">
+                          {r.fstatus ?? "—"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
     </>
   );
 }

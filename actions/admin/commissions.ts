@@ -1,7 +1,30 @@
 "use server";
 
 /**
- * V-E8/H1/H2 — Commission admin + staff actions.
+ * ⚠️⚠️⚠️ TOMBSTONED 2026-06-02 per ADR-0026 — DO NOT CALL ⚠️⚠️⚠️
+ *
+ * Every export below writes the DEAD rebuilt `commission_*` stack
+ * (`commission_withdrawals` · `commission_accruals` · `commission_tiers`)
+ * which is 0-rows on prod. ADR-0020 locked canonical commission SOT onto
+ * `tb_user_sales*` (Path A). ADR-0026 closes the admin loop by repointing
+ * `/admin/commissions` + `/admin/commissions/[id]` to the LIVE faithful
+ * surface at `actions/admin/sales-payouts-tb.ts` + `/admin/sales-payouts/[id]`.
+ *
+ * Active callers as of 2026-06-02:
+ *   - `/admin/commissions/tiers/*` — still a Potemkin (commission_tiers
+ *     table has 0 rows · separate cleanup ADR). Banner-flagged there.
+ *   - `/admin/commissions/[id]/withdrawal-actions-client.tsx` — UNREACHABLE
+ *     since [id]/page.tsx is now a redirect to /admin/sales-payouts/[id].
+ *   - `(protected)/commissions/me/*` — DEAD customer surface (เดฟ lane;
+ *     real customer withdrawal is /sales/report/add per ADR-0020 D-3).
+ *   - `api/commission-withdrawal/[id]/route.tsx` — slip serve route; reads
+ *     the dead `commission_withdrawals.slip_path` (returns 404 since 0 rows).
+ *
+ * Don't fix the body — repointing those 4 surfaces + dropping the dead
+ * tables is the cleanup. This file stays as a TS-compatible shell so the
+ * dead callers continue to compile until they're deleted.
+ *
+ * V-E8/H1/H2 — Commission admin + staff actions (HISTORIC).
  *
  * Per port-spec [docs/port-specs/commission-withdrawal.md] +
  * ADR-0015 Q3 + Phase I2 RBAC ack 2026-05-17.

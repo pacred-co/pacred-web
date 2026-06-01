@@ -3,69 +3,64 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
-import {
-  WITHDRAWAL_STATUSES,
-  WITHDRAWAL_STATUS_LABEL,
-  ROLE_KIND_LABEL,
-  type WithdrawalStatus,
-  type RoleKind,
-} from "@/lib/validators/commission";
+import { computeCommission } from "@/lib/sales-commission/calc";
 
 /**
- * V-E8 — /admin/commissions list page.
+ * /admin/commissions — sales-rep commission queue + top earners.
  *
- * Three panels:
- *   1. Pending accruals overview (top earners by unpaid balance)
- *   2. Withdrawal queue — filter by status
- *   3. History
+ * REPOINTED 2026-06-02 per ADR-0026 from the DEAD rebuilt
+ * `commission_withdrawals` + `commission_accruals` stack (0 rows on prod —
+ * silent dead-write per AGENTS.md §0e) onto the LIVE legacy
+ * `tb_user_sales` family (the real 4,104 earns + 5 payout history).
  *
- * Roles: super, accounting.
+ * Path A canonical per ADR-0020 + ADR-0026:
+ *   • tb_user_sales         — per-row earned ledger (usstatus 1=unpaid · 2=pending · 3=paid)
+ *   • tb_user_sales_admin_pay — withdrawal-request header (status 2=pending · 3=paid out)
+ *   • tb_user_sales_pay     — link rows
+ *
+ * Commission math is the legacy 1% × (1 − 3% WHT) — see lib/sales-commission/calc.ts
+ * (ADR-0020 D-2 + report-user-sales-history.php L405). Match what the customer
+ * sees on /sales/report so the admin queue and the customer summary reconcile.
+ *
+ * Roles per ADR-0006 §1.4: super | accounting.
  */
 
 export const dynamic = "force-dynamic";
 
-const STATUS_BADGE: Record<WithdrawalStatus, string> = {
-  pending:  "bg-amber-50 text-amber-700 border-amber-200",
-  approved: "bg-blue-50 text-blue-700 border-blue-200",
-  paid:     "bg-green-50 text-green-700 border-green-200",
-  rejected: "bg-red-50 text-red-700 border-red-200",
+const STATUS_LABEL: Record<string, string> = {
+  "2": "รอจ่าย",
+  "3": "จ่ายแล้ว",
+};
+const STATUS_BADGE: Record<string, string> = {
+  "2": "bg-amber-50 text-amber-700 border-amber-200",
+  "3": "bg-green-50 text-green-700 border-green-200",
 };
 
-type WithdrawalRow = {
-  id:                   string;
-  withdrawal_no:        string;
-  status:               WithdrawalStatus;
-  earner_admin_id:      string;
-  role_kind:            RoleKind;
-  title:                string;
-  gross_thb:            number;
-  net_thb:              number;
-  requested_at:         string;
-  earner: {
-    member_code: string | null;
-    first_name:  string | null;
-    last_name:   string | null;
-  } | null;
+const SALES_PERCEN = 0.01; // ADR-0020 D-1 — all 4 VIP teams hardcode 0.01
+
+type TopEarnerRow = {
+  useridmain:        string;
+  unpaidCount:       number;
+  gross:             number;
+  commission:        number;
+  wht:               number;
+  net:               number;
+  eligible:          boolean;
 };
 
-type EarnerBalanceRow = {
-  earner_admin_id:     string;
-  total_unpaid_thb:    number;
-  accrual_count:       number;
-  member_code:         string | null;
-  first_name:          string | null;
-  last_name:           string | null;
+type PayoutRow = {
+  id:           number;
+  date:         string | null;
+  useridmain:   string;
+  amount:       number;
+  imagesslip:   string;
+  status:       string;
+  admincreate:  string | null;
+  dateslip:     string | null;
 };
 
 function thb(n: number): string {
   return "฿" + Number(n || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 });
-}
-
-function earnerName(e: { member_code: string | null; first_name: string | null; last_name: string | null } | null): string {
-  if (!e) return "—";
-  const name = [e.first_name, e.last_name].filter(Boolean).join(" ");
-  if (e.member_code && name) return `${e.member_code} · ${name}`;
-  return e.member_code ?? name ?? "—";
 }
 
 export default async function AdminCommissionsPage({
@@ -75,219 +70,288 @@ export default async function AdminCommissionsPage({
 }) {
   await requireAdmin(["super", "accounting"]);
   const sp = await searchParams;
-  const status = (WITHDRAWAL_STATUSES as readonly string[]).includes(sp.status ?? "")
-    ? (sp.status as WithdrawalStatus)
-    : null;
+  const status = sp.status === "2" || sp.status === "3" ? sp.status : null;
 
   const admin = createAdminClient();
 
-  // ── Withdrawals (filtered list) ──
-  let query = admin
-    .from("commission_withdrawals")
-    .select(`
-      id, withdrawal_no, status, earner_admin_id, role_kind, title,
-      gross_thb, net_thb, requested_at,
-      earner:profiles!earner_admin_id ( member_code, first_name, last_name )
-    `)
-    .order("requested_at", { ascending: false })
-    .limit(200);
-  if (status) query = query.eq("status", status);
-  const { data: rowsRaw, error: rowsRawErr } = await query;
-  if (rowsRawErr) {
-    console.error(`[commission_withdrawals list] failed`, { code: rowsRawErr.code, message: rowsRawErr.message });
+  // ── 1. Top earners — aggregate tb_user_sales (unpaid usstatus='1') by team ──
+  //
+  // Legacy reference: report-user-sales-history.php L46-55 + L405 — the per-
+  // team 1% commission on the unpaid earns. We re-derive it server-side so
+  // the queue matches what the customer's withdrawal modal will compute.
+  const { data: unpaidRaw, error: unpaidErr } = await admin
+    .from("tb_user_sales")
+    .select("id, useridmain, idf, date")
+    .eq("usstatus", "1");
+  if (unpaidErr) {
+    console.error("[tb_user_sales unpaid] failed", { code: unpaidErr.code, message: unpaidErr.message });
   }
-  type RawWithdrawal = Omit<WithdrawalRow, "earner"> & {
-    earner: WithdrawalRow["earner"] | WithdrawalRow["earner"][] | null;
-  };
-  const withdrawals: WithdrawalRow[] = ((rowsRaw ?? []) as unknown as RawWithdrawal[]).map((r) => ({
-    ...r,
-    earner: Array.isArray(r.earner) ? r.earner[0] ?? null : r.earner,
+  type UnpaidRow = { id: number; useridmain: string; idf: number; date: string | null };
+  const unpaid = (unpaidRaw ?? []) as UnpaidRow[];
+
+  // Collect all forwarder ids → batch-query tb_forwarder for ftotalprice + fdiscount
+  const fIds = Array.from(new Set(unpaid.map((r) => r.idf)));
+  type FwdAmount = { id: number; ftotalprice: number | string | null; fdiscount: number | string | null };
+  let fwdById = new Map<number, FwdAmount>();
+  if (fIds.length > 0) {
+    const { data: fwdRaw, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, ftotalprice, fdiscount")
+      .in("id", fIds);
+    if (fwdErr) {
+      console.error("[tb_forwarder ftotalprice] failed", { code: fwdErr.code, message: fwdErr.message });
+    }
+    fwdById = new Map(((fwdRaw ?? []) as FwdAmount[]).map((f) => [f.id, f]));
+  }
+
+  // Group by useridmain → compute the breakdown via the same calc.ts the
+  // customer side uses (anti-reconciliation-drift).
+  const teamMap = new Map<string, { rows: UnpaidRow[]; gross: number }>();
+  for (const r of unpaid) {
+    const f = fwdById.get(r.idf);
+    if (!f) continue; // earn-row orphaned from its forwarder — skip (would be data corruption)
+    const line = Number(f.ftotalprice ?? 0) - Number(f.fdiscount ?? 0);
+    const slot = teamMap.get(r.useridmain) ?? { rows: [], gross: 0 };
+    slot.rows.push(r);
+    slot.gross += line;
+    teamMap.set(r.useridmain, slot);
+  }
+  const topEarners: TopEarnerRow[] = Array.from(teamMap.entries())
+    .map(([useridmain, agg]) => {
+      const b = computeCommission(agg.gross, SALES_PERCEN);
+      return {
+        useridmain,
+        unpaidCount: agg.rows.length,
+        gross:       b.gross,
+        commission:  b.commission,
+        wht:         b.wht,
+        net:         b.net,
+        eligible:    b.eligible,
+      };
+    })
+    .sort((a, b) => b.net - a.net);
+
+  // ── 2. Withdrawal queue — tb_user_sales_admin_pay (status='2' pending · '3' paid) ──
+  let q = admin
+    .from("tb_user_sales_admin_pay")
+    .select("id, date, useridmain, amount, imagesslip, status, admincreate, dateslip")
+    .order("date", { ascending: false })
+    .limit(200);
+  if (status) q = q.eq("status", status);
+  const { data: payoutsRaw, error: payoutsErr } = await q;
+  if (payoutsErr) {
+    console.error("[tb_user_sales_admin_pay queue] failed", { code: payoutsErr.code, message: payoutsErr.message });
+  }
+  const payouts: PayoutRow[] = ((payoutsRaw ?? []) as Array<{
+    id: number;
+    date: string | null;
+    useridmain: string;
+    amount: number | string | null;
+    imagesslip: string | null;
+    status: string;
+    admincreate: string | null;
+    dateslip: string | null;
+  }>).map((r) => ({
+    id:           r.id,
+    date:         r.date,
+    useridmain:   r.useridmain,
+    amount:       Number(r.amount ?? 0),
+    imagesslip:   r.imagesslip ?? "",
+    status:       r.status,
+    admincreate:  r.admincreate,
+    dateslip:     r.dateslip,
   }));
 
-  // ── Status counts (for filter chips) ──
-  const counts: Record<WithdrawalStatus, number> = {} as Record<WithdrawalStatus, number>;
-  for (const s of WITHDRAWAL_STATUSES) counts[s] = 0;
-  const { data: countRows, error: countRowsErr } = await admin
-    .from("commission_withdrawals")
+  // ── 3. Status counts (filter chips) ──
+  const { data: countRowsRaw, error: countErr } = await admin
+    .from("tb_user_sales_admin_pay")
     .select("status");
-  if (countRowsErr) {
-    console.error(`[commission_withdrawals list] failed`, { code: countRowsErr.code, message: countRowsErr.message });
+  if (countErr) {
+    console.error("[tb_user_sales_admin_pay counts] failed", { code: countErr.code, message: countErr.message });
   }
-  for (const r of (countRows ?? []) as Array<{ status: WithdrawalStatus }>) {
+  const counts: Record<string, number> = { "2": 0, "3": 0 };
+  for (const r of ((countRowsRaw ?? []) as Array<{ status: string }>)) {
     counts[r.status] = (counts[r.status] ?? 0) + 1;
   }
+  const totalCount = (counts["2"] ?? 0) + (counts["3"] ?? 0);
 
-  // ── Top earners with unpaid balance ──
-  // Aggregate via SQL — sum(accrued_amount_thb) where withdrawal_item_id is null.
-  // RLS bypassed via admin client.
-  const { data: unpaidRaw, error: unpaidRawErr } = await admin
-    .from("commission_accruals")
-    .select("earner_admin_id, accrued_amount_thb")
-    .is("withdrawal_item_id", null)
-    .limit(2000);
-  if (unpaidRawErr) {
-    console.error(`[commission_accruals list] failed`, { code: unpaidRawErr.code, message: unpaidRawErr.message });
-  }
-
-  const earnerMap = new Map<string, { total: number; count: number }>();
-  for (const r of (unpaidRaw ?? []) as Array<{ earner_admin_id: string; accrued_amount_thb: number }>) {
-    const cur = earnerMap.get(r.earner_admin_id) ?? { total: 0, count: 0 };
-    cur.total += Number(r.accrued_amount_thb);
-    cur.count += 1;
-    earnerMap.set(r.earner_admin_id, cur);
-  }
-  const earnerIds = Array.from(earnerMap.keys());
-  let earnerBalances: EarnerBalanceRow[] = [];
-  if (earnerIds.length > 0) {
-    const { data: profilesRaw, error: profilesRawErr } = await admin
-      .from("profiles")
-      .select("id, member_code, first_name, last_name")
-      .in("id", earnerIds);
-    if (profilesRawErr) {
-      console.error(`[profiles list] failed`, { code: profilesRawErr.code, message: profilesRawErr.message });
-    }
-    const profiles = (profilesRaw ?? []) as Array<{
-      id: string; member_code: string | null; first_name: string | null; last_name: string | null;
-    }>;
-    const pmap = new Map(profiles.map((p) => [p.id, p]));
-    earnerBalances = earnerIds
-      .map((id) => {
-        const agg = earnerMap.get(id);
-        const p = pmap.get(id);
-        return {
-          earner_admin_id:    id,
-          total_unpaid_thb:   Math.round((agg?.total ?? 0) * 100) / 100,
-          accrual_count:      agg?.count ?? 0,
-          member_code:        p?.member_code ?? null,
-          first_name:         p?.first_name ?? null,
-          last_name:          p?.last_name ?? null,
-        };
-      })
-      .sort((a, b) => b.total_unpaid_thb - a.total_unpaid_thb)
-      .slice(0, 20);
-  }
+  // Totals over the filtered queue (for the summary band).
+  const sumAmount = payouts.reduce((s, p) => s + p.amount, 0);
+  const grandUnpaidNet = topEarners.reduce((s, t) => s + t.net, 0);
 
   return (
     <>
       <PageTopMenubar items={DISBURSEMENT_MENUBAR} activeHref="/admin/commissions" />
       <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
-      <header className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ค่าคอม + Payouts</p>
-          <h1 className="mt-1 text-2xl font-bold">ค่าคอม + Payouts (V-E8)</h1>
-          <p className="text-xs text-muted mt-1">
-            ระบบจ่ายค่าคอมล่ามจีน + Sales rep · workflow: pending → approved → paid (slip required)
-          </p>
-        </div>
-        <Link
-          href="/admin/commissions/tiers"
-          className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
-        >
-          ⚙️ จัดการอัตราค่าคอม (Tiers)
-        </Link>
-      </header>
-
-      {/* Pending accruals — top unpaid earners */}
-      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
-        <h2 className="font-bold text-sm mb-3">💰 ยอดสะสมรอเบิก (top 20 earners)</h2>
-        {earnerBalances.length === 0 ? (
-          <p className="text-xs text-muted">ยังไม่มี accrual ค้าง</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
-              <tr>
-                <th className="px-3 py-2">Earner</th>
-                <th className="px-3 py-2 text-right">จำนวน accruals</th>
-                <th className="px-3 py-2 text-right">ยอดสะสมรวม</th>
-              </tr>
-            </thead>
-            <tbody>
-              {earnerBalances.map((e) => (
-                <tr key={e.earner_admin_id} className="border-t border-border">
-                  <td className="px-3 py-2">{earnerName(e)}</td>
-                  <td className="px-3 py-2 text-right font-mono text-xs">{e.accrual_count}</td>
-                  <td className="px-3 py-2 text-right font-mono font-bold text-primary-700">{thb(e.total_unpaid_thb)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-
-      {/* Status filter chips */}
-      <nav className="flex flex-wrap gap-2">
-        <Link
-          href="/admin/commissions"
-          className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
-            status === null ? "bg-primary-600 text-white" : "bg-surface-alt text-foreground hover:bg-surface-alt/80"
-          }`}
-        >
-          ทั้งหมด <span className="ml-1 text-[10px]">({Object.values(counts).reduce((s, n) => s + n, 0)})</span>
-        </Link>
-        {WITHDRAWAL_STATUSES.map((s) => (
+        <header className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ค่าคอม + Payouts</p>
+            <h1 className="mt-1 text-2xl font-bold">ค่าคอม + Payouts</h1>
+            <p className="text-xs text-muted mt-1">
+              Sales-rep ค่าคอมจาก {topEarners.reduce((s, t) => s + t.unpaidCount, 0).toLocaleString("th-TH")} รายการที่ยังไม่ได้เบิก ·
+              workflow: ลูกค้าส่งคำขอ → admin จ่ายเงิน + upload slip ({STATUS_LABEL["2"]} → {STATUS_LABEL["3"]})
+            </p>
+            <p className="text-[10px] text-muted mt-1">
+              📊 อ่านจาก <code className="bg-surface-alt px-1 rounded">tb_user_sales</code> + <code className="bg-surface-alt px-1 rounded">tb_user_sales_admin_pay</code> (ADR-0026 repoint จาก dead rebuilt) ·
+              คำนวณค่าคอม 1% − WHT 3% per ADR-0020.
+            </p>
+          </div>
           <Link
-            key={s}
-            href={`/admin/commissions?status=${s}`}
-            className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
-              s === status ? STATUS_BADGE[s] : "bg-white text-foreground border-border hover:bg-surface-alt"
+            href="/admin/sales-payouts"
+            className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700"
+          >
+            → ดูคิวจ่ายเงิน (faithful queue)
+          </Link>
+        </header>
+
+        {/* Top earners — top 20 teams with unpaid commissions */}
+        <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
+          <div className="flex items-baseline justify-between gap-3 mb-3">
+            <h2 className="font-bold text-sm">💰 ทีมที่มีค่าคอมรอเบิก ({topEarners.length} ทีม)</h2>
+            <p className="text-xs text-muted">
+              รวม net <span className="font-mono font-bold text-primary-700">{thb(grandUnpaidNet)}</span>
+            </p>
+          </div>
+          {topEarners.length === 0 ? (
+            <p className="text-xs text-muted text-center py-8">
+              ยังไม่มี <code className="bg-surface-alt px-1 rounded">tb_user_sales</code> ที่ usstatus=&apos;1&apos; ·
+              earn-trigger ยังไม่ INSERT (ดู actions/admin/earn-trigger-tb-user-sales.ts)
+            </p>
+          ) : (
+            <div className="overflow-x-auto scrollbar-x-visible">
+              <table className="w-full min-w-[700px] text-sm">
+                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                  <tr>
+                    <th className="px-3 py-2">ทีม (useridmain)</th>
+                    <th className="px-3 py-2 text-right">#รายการ</th>
+                    <th className="px-3 py-2 text-right">รวมยอดขาย CHN</th>
+                    <th className="px-3 py-2 text-right">ค่าคอม 1%</th>
+                    <th className="px-3 py-2 text-right">หัก WHT 3%</th>
+                    <th className="px-3 py-2 text-right">รับสุทธิ</th>
+                    <th className="px-3 py-2 text-center">เบิกได้?</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topEarners.slice(0, 20).map((t) => (
+                    <tr key={t.useridmain} className="border-t border-border">
+                      <td className="px-3 py-2 font-mono text-xs">{t.useridmain}</td>
+                      <td className="px-3 py-2 text-right font-mono text-xs">{t.unpaidCount.toLocaleString("th-TH")}</td>
+                      <td className="px-3 py-2 text-right font-mono text-xs">{thb(t.gross)}</td>
+                      <td className="px-3 py-2 text-right font-mono text-xs">{thb(t.commission)}</td>
+                      <td className="px-3 py-2 text-right font-mono text-xs text-muted">{thb(t.wht)}</td>
+                      <td className="px-3 py-2 text-right font-mono text-xs font-bold text-primary-700">{thb(t.net)}</td>
+                      <td className="px-3 py-2 text-center text-xs">
+                        {t.eligible ? (
+                          <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[10px]">
+                            ≥ ฿1,000
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 text-[10px]">
+                            &lt; ฿1,000
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="mt-3 text-[10px] text-muted">
+            net ≥ ฿1,000 = ทีมเบิกค่าคอมได้แล้ว (legacy <code>getListForwarder.php</code> L174) · ลูกค้าจะเห็นปุ่ม &quot;ทำรายการเบิกเงิน&quot; ใน /sales/report
+          </p>
+        </section>
+
+        {/* Status filter chips */}
+        <nav className="flex flex-wrap gap-2">
+          <Link
+            href="/admin/commissions"
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
+              status === null ? "bg-primary-600 text-white" : "bg-surface-alt text-foreground hover:bg-surface-alt/80"
             }`}
           >
-            {WITHDRAWAL_STATUS_LABEL[s]} <span className="ml-1 text-[10px] opacity-75">({counts[s]})</span>
+            ทั้งหมด <span className="ml-1 text-[10px]">({totalCount})</span>
           </Link>
-        ))}
-      </nav>
+          {(["2", "3"] as const).map((s) => (
+            <Link
+              key={s}
+              href={`/admin/commissions?status=${s}`}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
+                s === status ? STATUS_BADGE[s] : "bg-white text-foreground border-border hover:bg-surface-alt"
+              }`}
+            >
+              {STATUS_LABEL[s]} <span className="ml-1 text-[10px] opacity-75">({counts[s] ?? 0})</span>
+            </Link>
+          ))}
+        </nav>
 
-      {/* Withdrawal queue/history */}
-      <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
-        <div className="px-5 py-3 border-b border-border">
-          <h2 className="font-bold text-sm">📋 คำขอเบิกค่าคอม</h2>
+        {/* Withdrawal queue/history */}
+        <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
+          <div className="px-5 py-3 border-b border-border flex items-baseline justify-between gap-3">
+            <h2 className="font-bold text-sm">📋 คำขอเบิกค่าคอม</h2>
+            {payouts.length > 0 && (
+              <p className="text-xs text-muted">
+                {payouts.length} แถว · รวม <span className="font-mono font-bold text-primary-700">{thb(sumAmount)}</span>
+              </p>
+            )}
+          </div>
+          {payouts.length === 0 ? (
+            <p className="p-12 text-center text-sm text-muted">
+              ไม่มีคำขอเบิก{status && ` สถานะ "${STATUS_LABEL[status]}"`}
+            </p>
+          ) : (
+            <div className="overflow-x-auto scrollbar-x-visible">
+              <table className="w-full min-w-[700px] text-sm">
+                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                  <tr>
+                    <th className="px-3 py-2">เลขที่</th>
+                    <th className="px-3 py-2">ทีม</th>
+                    <th className="px-3 py-2">ผู้สร้าง</th>
+                    <th className="px-3 py-2 text-right">รับสุทธิ</th>
+                    <th className="px-3 py-2 text-center">สถานะ</th>
+                    <th className="px-3 py-2">ขอเมื่อ</th>
+                    <th className="px-3 py-2">จ่ายเมื่อ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payouts.map((p) => (
+                    <tr key={p.id} className="border-t border-border hover:bg-surface-alt/30">
+                      <td className="px-3 py-2">
+                        <Link
+                          href={`/admin/sales-payouts/${p.id}`}
+                          className="font-mono text-xs text-primary-600 hover:underline"
+                          title="ดูรายละเอียด (faithful /admin/sales-payouts)"
+                        >
+                          #{p.id}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2 font-mono text-xs">{p.useridmain}</td>
+                      <td className="px-3 py-2 font-mono text-[10px] text-muted">{p.admincreate ?? "—"}</td>
+                      <td className="px-3 py-2 text-right font-mono text-xs font-bold">{thb(p.amount)}</td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE[p.status]}`}>
+                          {STATUS_LABEL[p.status] ?? p.status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">
+                        {p.date ? new Date(p.date).toLocaleDateString("th-TH") : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">
+                        {p.dateslip ? new Date(p.dateslip).toLocaleDateString("th-TH") : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-        {withdrawals.length === 0 ? (
-          <p className="p-12 text-center text-sm text-muted">
-            ไม่มีคำขอเบิก{status && ` สถานะ "${WITHDRAWAL_STATUS_LABEL[status]}"`}
-          </p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
-              <tr>
-                <th className="px-3 py-2">เลขที่</th>
-                <th className="px-3 py-2">Earner</th>
-                <th className="px-3 py-2">บทบาท</th>
-                <th className="px-3 py-2">หัวข้อ</th>
-                <th className="px-3 py-2 text-right">ยอดรวม</th>
-                <th className="px-3 py-2 text-right">สุทธิ</th>
-                <th className="px-3 py-2">สถานะ</th>
-                <th className="px-3 py-2">ขอเมื่อ</th>
-              </tr>
-            </thead>
-            <tbody>
-              {withdrawals.map((w) => (
-                <tr key={w.id} className="border-t border-border hover:bg-surface-alt/30">
-                  <td className="px-3 py-2">
-                    <Link href={`/admin/commissions/${w.id}`} className="font-mono text-xs text-primary-600 hover:underline">
-                      {w.withdrawal_no}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2 text-xs">{earnerName(w.earner)}</td>
-                  <td className="px-3 py-2 text-xs">{ROLE_KIND_LABEL[w.role_kind]}</td>
-                  <td className="px-3 py-2 text-xs">{w.title}</td>
-                  <td className="px-3 py-2 text-right font-mono text-xs">{thb(w.gross_thb)}</td>
-                  <td className="px-3 py-2 text-right font-mono text-xs font-bold">{thb(w.net_thb)}</td>
-                  <td className="px-3 py-2">
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE[w.status]}`}>
-                      {WITHDRAWAL_STATUS_LABEL[w.status]}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-xs text-muted">
-                    {new Date(w.requested_at).toLocaleDateString("th-TH")}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </main>
+
+        <p className="text-[10px] text-muted">
+          🔗 รายละเอียดทุกแถวเปิดที่ <Link href="/admin/sales-payouts" className="underline">/admin/sales-payouts</Link> (faithful detail + pay-out workflow) ·
+          earn ทุกครั้งที่ส่งสำเร็จไหลผ่าน <code>earn-trigger-tb-user-sales.ts</code>
+        </p>
+      </main>
     </>
   );
 }
