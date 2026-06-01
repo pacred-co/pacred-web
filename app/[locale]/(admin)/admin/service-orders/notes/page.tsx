@@ -2,48 +2,55 @@
  * Admin > Service Orders > "หมายเหตุฝากสั่ง" — standalone notes-list page.
  *
  * Legacy source: `pcs-admin/forwarder-action.php?action=NoteShop`
- *   - L*: SELECT * FROM tb_header_order WHERE hNote <> '' [+ optional hStatus filter]
+ *   - SELECT * FROM tb_header_order WHERE hNote <> '' [+ optional hStatus filter]
  *
  * Before this commit the sidebar item ALSO labelled "หมายเหตุฝากสั่ง" linked
  * to `/admin/service-orders?q=note` which the list page does NOT handle —
  * the filter was silently dropped, and the link rendered the unfiltered
  * order list. Owner flagged this. Fix = a dedicated `/notes` route.
  *
- * Pacred-native schema: the legacy `tb_header_order.hNote` lives as
- * `service_orders.note` (text, nullable, migration 0011 L224). Same field,
- * Pacred column-case.
+ * §0e Potemkin fix (2026-06-01): this page previously read the rebuilt
+ * `service_orders` table (0-row on prod after the D1 pivot) → it ALWAYS
+ * rendered 0 notes. Re-pointed to the live `tb_header_order` (where all
+ * 21,950 real shop-order headers + their `hnote`/`hnoteuser` live), with a
+ * 2nd `tb_users` query for the customer name (the canonical pattern from
+ * `/admin/service-orders/page.tsx` + the sibling `/admin/forwarders/notes`).
+ * Detail link now uses `hno` (the legacy key the detail route resolves) — was
+ * the rebuilt uuid.
+ *
+ * Casing: `tb_header_order` is all-lowercase (hno/hstatus/hnote/hnoteuser/
+ * hdateupdate · migration 0081). `tb_users` keeps camelCase (userID/userName/
+ * userLastName · CLAUDE.md exception).
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { LEGACY_ORDER_STATUS, legacyOrderStatusThai, type LegacyOrderCode } from "@/lib/legacy-status-map";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_LABEL: Record<string, string> = {
-  pending_payment: "รอชำระเงิน",
-  paid:            "ชำระแล้ว",
-  processing:      "กำลังดำเนินการ",
-  shipped:         "ส่งแล้ว",
-  arrived_thailand: "ถึงไทย",
-  delivered:       "สำเร็จ",
-  cancelled:       "ยกเลิก",
+// Raw row shape from tb_header_order — the columns we read.
+type RawOrderRow = {
+  id:           number;
+  hno:          string;
+  hstatus:      string | null;
+  hnote:        string | null;
+  hnoteuser:    string | null;
+  hnotedate:    string | null;
+  hdateupdate:  string | null;
+  hdate:        string | null;
+  htotalpriceuser: number | string | null;
+  userid:       string;
 };
 
-type ServiceOrder = {
-  id:        string;
-  order_no:  string | null;
-  status:    string;
-  note:      string | null;
-  created_at: string;
-  updated_at: string | null;
-  total_thb: number | null;
-  profile: {
-    member_code: string | null;
-    first_name:  string | null;
-    last_name:   string | null;
-    phone:       string | null;
-  } | null;
+// tb_users — camelCase columns (CLAUDE.md exception). userid (lowercase) on
+// tb_header_order joins to userID (camelCase) here.
+type RawUserRow = {
+  userID:       string;
+  userName:     string | null;
+  userLastName: string | null;
+  userTel:      string | null;
 };
 
 export default async function ServiceOrderNotesPage({
@@ -58,32 +65,65 @@ export default async function ServiceOrderNotesPage({
   const sp = await searchParams;
   const admin = createAdminClient();
 
-  // legacy: WHERE hNote<>'' (+ optional hStatus). Pacred: note IS NOT NULL
-  // AND note <> ''. Sorted hDateUpdate DESC to match the legacy "ล่าสุด" view.
-  let q = admin.from("service_orders")
-    .select(`
-      id, order_no, status, note, created_at, updated_at, total_thb,
-      profile:profiles!profile_id ( member_code, first_name, last_name, phone )
-    `)
-    .not("note", "is", null)
-    .neq("note", "")
-    .order("updated_at", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false })
+  // legacy: WHERE hNote<>'' (+ optional hStatus). On tb_header_order we widen
+  // to "either hnote OR hnoteuser has content" so both the staff note and the
+  // customer note surface. Sorted hdateupdate DESC to match the legacy
+  // "ล่าสุด" view. Limit 500 (parity with the prior page cap).
+  let q = admin
+    .from("tb_header_order")
+    .select(
+      "id,hno,hstatus,hnote,hnoteuser,hnotedate,hdateupdate,hdate,htotalpriceuser,userid",
+    )
+    // Supabase `.or()` combines "neq empty" predicates — same proven pattern as
+    // the sibling /admin/forwarders/notes page. `neq.` already excludes both
+    // NULL and '' (the legacy "no note" marker); the client-side filter below
+    // is the belt-and-braces guard for whitespace-only rows.
+    .or("hnote.neq.,hnoteuser.neq.")
+    .order("hdateupdate", { ascending: false, nullsFirst: false })
+    .order("id", { ascending: false })
     .limit(500);
 
-  if (sp.status) q = q.eq("status", sp.status);
+  // Optional status filter — accepts the legacy single-char code '1'..'6'.
+  const statusFilter =
+    sp.status && (sp.status as LegacyOrderCode) in LEGACY_ORDER_STATUS
+      ? (sp.status as LegacyOrderCode)
+      : null;
+  if (statusFilter) q = q.eq("hstatus", statusFilter);
 
-  type RawRow = Omit<ServiceOrder, "profile"> & {
-    profile: ServiceOrder["profile"] | ServiceOrder["profile"][];
-  };
   const { data, error } = await q;
   if (error) {
-    console.error(`[service_orders list] failed`, { code: error.code, message: error.message });
+    console.error(`[service-orders/notes tb_header_order list] failed`, {
+      code: error.code, message: error.message,
+    });
   }
-  const rows = ((data ?? []) as RawRow[]).map((r) => ({
-    ...r,
-    profile: Array.isArray(r.profile) ? r.profile[0] ?? null : r.profile,
-  }));
+  const raw = (data ?? []) as unknown as RawOrderRow[];
+
+  // Defensive client-side filter: keep only rows with a real (non-empty,
+  // trimmed) note in EITHER column. The .or() above is the DB-side cut; this
+  // guards against whitespace-only legacy rows.
+  const rows = raw.filter(
+    (r) => (r.hnote ?? "").trim() !== "" || (r.hnoteuser ?? "").trim() !== "",
+  );
+
+  // 2nd query: tb_users for customer name + phone (canonical pattern from
+  // /admin/service-orders/page.tsx — tb_header_order has no embeddable FK to
+  // tb_users so we resolve via a keyed Map).
+  const uniqueUserIds = Array.from(new Set(rows.map((r) => r.userid).filter(Boolean)));
+  const usersByUserId = new Map<string, RawUserRow>();
+  if (uniqueUserIds.length > 0) {
+    const { data: userRows, error: userErr } = await admin
+      .from("tb_users")
+      .select("userID,userName,userLastName,userTel")
+      .in("userID", uniqueUserIds);
+    if (userErr) {
+      console.error(`[service-orders/notes tb_users join] failed`, {
+        code: userErr.code, message: userErr.message,
+      });
+    }
+    for (const u of ((userRows ?? []) as unknown as RawUserRow[])) {
+      usersByUserId.set(u.userID, u);
+    }
+  }
 
   return (
     <div className="pcs-legacy">
@@ -108,17 +148,17 @@ export default async function ServiceOrderNotesPage({
           </p>
         </div>
 
-        {/* Filter chips — รวม + filter by status */}
+        {/* Filter chips — รวม + filter by legacy hstatus code */}
         <div className="flex flex-wrap gap-2 items-center">
           <span className="text-xs text-muted mr-1">สถานะ:</span>
-          <FilterChip active={!sp.status} href="/admin/service-orders/notes">ทั้งหมด</FilterChip>
-          {Object.entries(STATUS_LABEL).map(([k, label]) => (
+          <FilterChip active={!statusFilter} href="/admin/service-orders/notes">ทั้งหมด</FilterChip>
+          {(Object.keys(LEGACY_ORDER_STATUS) as LegacyOrderCode[]).map((code) => (
             <FilterChip
-              key={k}
-              active={sp.status === k}
-              href={`/admin/service-orders/notes?status=${k}`}
+              key={code}
+              active={statusFilter === code}
+              href={`/admin/service-orders/notes?status=${code}`}
             >
-              {label}
+              {LEGACY_ORDER_STATUS[code].thai}
             </FilterChip>
           ))}
         </div>
@@ -132,7 +172,7 @@ export default async function ServiceOrderNotesPage({
               <p className="text-xs text-muted">ลองล้าง/เปลี่ยนตัวกรองสถานะด้านบน</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full text-sm">
                 <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                   <tr>
@@ -147,32 +187,47 @@ export default async function ServiceOrderNotesPage({
                 </thead>
                 <tbody>
                   {rows.map((r) => {
-                    const updated = r.updated_at ?? r.created_at;
+                    const updated = r.hdateupdate ?? r.hnotedate ?? r.hdate;
+                    const user = usersByUserId.get(r.userid);
+                    const customerName = user
+                      ? `${user.userName ?? ""} ${user.userLastName ?? ""}`.trim()
+                      : "";
+                    const staffNote = (r.hnote ?? "").trim();
+                    const userNote  = (r.hnoteuser ?? "").trim();
                     return (
                       <tr key={r.id} className="border-t border-border align-top">
                         <td className="px-4 py-3 text-xs whitespace-nowrap text-muted">
-                          {new Date(updated).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
-                        </td>
-                        <td className="px-4 py-3 text-xs font-mono font-semibold">{r.order_no ?? r.id.slice(0, 8)}</td>
-                        <td className="px-4 py-3 text-xs">
-                          <div className="font-mono font-semibold">{r.profile?.member_code ?? "—"}</div>
-                          <div className="text-muted">{r.profile?.first_name} {r.profile?.last_name}</div>
-                          <div className="text-[10px] text-muted">{r.profile?.phone}</div>
-                        </td>
-                        <td className="px-4 py-3 text-xs">{STATUS_LABEL[r.status] ?? r.status}</td>
-                        <td className="px-4 py-3 text-right font-mono text-xs">
-                          {r.total_thb != null
-                            ? Number(r.total_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })
+                          {updated
+                            ? new Date(updated).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })
                             : "—"}
                         </td>
-                        <td className="px-4 py-3 text-xs max-w-[320px]">
-                          <div className="rounded bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 px-2 py-1">
-                            📝 {r.note}
-                          </div>
+                        <td className="px-4 py-3 text-xs font-mono font-semibold">{r.hno}</td>
+                        <td className="px-4 py-3 text-xs">
+                          <div className="font-mono font-semibold">{r.userid || "—"}</div>
+                          <div className="text-muted">{customerName || "—"}</div>
+                          <div className="text-[10px] text-muted">{user?.userTel}</div>
+                        </td>
+                        <td className="px-4 py-3 text-xs">{legacyOrderStatusThai(r.hstatus) || "—"}</td>
+                        <td className="px-4 py-3 text-right font-mono text-xs">
+                          {r.htotalpriceuser != null
+                            ? Number(r.htotalpriceuser).toLocaleString("th-TH", { minimumFractionDigits: 2 })
+                            : "—"}
+                        </td>
+                        <td className="px-4 py-3 text-xs max-w-[320px] space-y-1">
+                          {staffNote && (
+                            <div className="rounded bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 px-2 py-1">
+                              📝 {staffNote}
+                            </div>
+                          )}
+                          {userNote && (
+                            <div className="rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-2 py-1">
+                              👤 {userNote}
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right text-xs">
                           <Link
-                            href={`/admin/service-orders/${r.id}`}
+                            href={`/admin/service-orders/${r.hno}`}
                             className="text-primary-500 hover:underline whitespace-nowrap"
                           >
                             เปิด →

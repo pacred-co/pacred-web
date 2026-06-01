@@ -136,9 +136,10 @@ export function SearchBar({ embedded = false, hideOnMobile = false, defaultColla
             </button>
           </div>
 
-          {/* Cart */}
+          {/* Cart — unified on the faithful /cart (D1 cart unification;
+              /service-order/cart now redirect()s here). */}
           <Link
-            href="/service-order/cart"
+            href="/cart"
             aria-label={t("cartAria")}
             className="shrink-0 flex items-center justify-center w-[44px] h-[44px] rounded-full border border-gray-200 dark:border-border bg-gray-50 dark:bg-background hover:border-red-300 hover:bg-red-50 transition-colors duration-200 text-gray-500 dark:text-muted hover:text-red-600"
           >

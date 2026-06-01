@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { adminUpdateServiceOrder, adminMarkServiceOrderPaid } from "@/actions/admin/service-orders";
+import { adminUpdateServiceOrder } from "@/actions/admin/service-orders";
 
 const inputCls = "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
 
@@ -15,7 +15,10 @@ const STATUS_FLOW = [
   { value: "completed",            label: "สำเร็จ" },
 ] as const;
 
-export function AdminServiceOrderUpdateForm({ hNo, status, note_admin, totalThb }: { hNo: string; status: string; note_admin: string | null; totalThb: number }) {
+// `totalThb` is accepted (both mounts still pass it) but no longer read here —
+// the mark-paid amount + debit now lives entirely in the adjacent
+// <MarkPaidTbForm> after the dead adminMarkServiceOrderPaid path was removed.
+export function AdminServiceOrderUpdateForm({ hNo, status, note_admin }: { hNo: string; status: string; note_admin: string | null; totalThb?: number }) {
   const router = useRouter();
   const [st, setSt]   = useState(status);
   const [note, setNote] = useState(note_admin ?? "");
@@ -63,26 +66,6 @@ export function AdminServiceOrderUpdateForm({ hNo, status, note_admin, totalThb 
     });
   }
 
-  function markPaid(allowOverdraw: boolean) {
-    setMsg(null); setError(null);
-    startTransition(async () => {
-      const res = await adminMarkServiceOrderPaid({
-        h_no: hNo,
-        allow_overdraw: allowOverdraw,
-      });
-      if (res.ok) {
-        setSt("ordered");
-        setMsg(
-          res.data?.already_paid
-            ? "ออเดอร์นี้ชำระไปแล้ว — เปลี่ยนสถานะให้แล้ว"
-            : `ชำระสำเร็จ — หัก wallet ลูกค้า ฿${totalThb.toLocaleString()} แล้ว ลูกค้าได้รับการแจ้งเตือน`,
-        );
-        router.refresh();
-        setTimeout(() => setMsg(null), 5000);
-      } else setError(res.error);
-    });
-  }
-
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null); setError(null);
@@ -123,37 +106,11 @@ export function AdminServiceOrderUpdateForm({ hNo, status, note_admin, totalThb 
       {msg && <div className="rounded-lg border border-green-200 bg-green-50 p-2 text-xs text-green-700">{msg}</div>}
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{error}</div>}
 
-      {/* T-P1: explicit "mark paid" — debits wallet + flips status atomically */}
-      {(st === "pending" || st === "awaiting_payment") && (
-        <div className="rounded-lg border border-primary-200 bg-primary-50/50 dark:bg-primary-950/20 p-3 space-y-2">
-          <p className="text-xs font-medium">บันทึกการชำระเงิน (T-P1)</p>
-          <p className="text-xs text-muted">
-            ยอด ฿{totalThb.toLocaleString()} — กดเพื่อหัก wallet ลูกค้า + เปลี่ยนสถานะเป็น &ldquo;สั่งแล้ว&rdquo;
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => markPaid(false)}
-              disabled={pending}
-              className="rounded-lg bg-green-600 text-white px-3 py-1.5 text-xs font-medium hover:bg-green-700 disabled:opacity-50"
-            >
-              💰 บันทึกชำระจาก wallet
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (confirm("รับเงินสด/โอนตรงโดยไม่หัก wallet ใช่ไหม? (ใช้เมื่อลูกค้าโอนนอกระบบ)")) {
-                  markPaid(true);
-                }
-              }}
-              disabled={pending}
-              className="rounded-lg border border-amber-300 text-amber-700 px-3 py-1.5 text-xs hover:bg-amber-50 disabled:opacity-50"
-            >
-              💵 รับเงินสด/นอกระบบ (override)
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Mark-paid lives in the adjacent <MarkPaidTbForm> (→ adminMarkServiceOrderPaidTb,
+          writes the live tb_wallet/tb_wallet_hs/tb_header_order trio). The old block
+          here called adminMarkServiceOrderPaid which read the 0-row rebuilt
+          `service_orders` → `not_found` for every real order (a Potemkin
+          dead-read). Removed so each order shows ONE working "บันทึกชำระ" button. */}
 
       {/* Quick workflow */}
       <div className="space-y-2">
