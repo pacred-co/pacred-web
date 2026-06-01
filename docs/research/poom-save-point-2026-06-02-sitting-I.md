@@ -2,9 +2,11 @@
 
 > **Purpose:** ปิดวัน · ส่งต่อให้พรุ่งนี้. งานที่ landed ใน 1 sitting + remaining queue + resume commands.
 >
-> **Branch state:** `Poom-pacred = c128a7ae` · synced กับ origin · was at `55ec389b` ตอนเริ่ม session
+> **Branch state:** `Poom-pacred = a57e8df5` · synced กับ origin · was at `55ec389b` ตอนเริ่ม session
 >
-> **Total:** **11 commits today** (initial 6 features + 1 save-point + 2 menubar fixes + 1 PEAK CSV export + this final save-point update)
+> **Total:** **13 commits today** — 6 initial features + 1 save-point + 2 menubar fixes + §3.5 PEAK CSV + save-point v2 + **§3.4 e-Tax export + this final save-point v3**
+>
+> **🏆 PEAK module §3: 5/5 sub-surfaces COMPLETE.**
 
 ---
 
@@ -22,7 +24,9 @@
 | 8 | `71c72624` | sitting-I-fix #1 | menubar cascade-trap fix attempt #1 + wire 4 orphan pages into CARGO_MENUBAR (รายจ่าย + การบัญชี) |
 | 9 | `459f5984` | sitting-I-fix #2 | menubar fix attempt #2 — depth-gate `group-hover` (L1 hover-open · L2+ click-only state) ← **THE working fix** |
 | 10 | `c128a7ae` | **§3.5** | PEAK / FlowAccount CSV export hub — 4 datasets · date range · download buttons |
-| 11 | (this commit) | docs | Save-point doc rev — sitting-I close-out v2 |
+| 11 | `ef9c1c85` | docs | Save-point v2 close-out |
+| 12 | `a57e8df5` | **§3.4** | e-Tax (RD Code 86) export hub — tb_forwarder_tax_invoice list · per-row XML preview download · CSV bundle · 4 Phase-C deferrals documented |
+| 13 | (this commit) | docs | Save-point v3 — §3 PEAK module fully closed (5/5 sub-surfaces) |
 
 **Net diff:** ~+3,500 LOC across 23 files (5 actions + 9 pages + menubar component + 2 docs + i18n/sidebar)
 
@@ -35,12 +39,14 @@
 | **1** | Potemkin commission repoint | M | **P0** | ✅ shipped 2602a0da |
 | **5a** | Commission-SOT ADR | S | **P0** | ✅ shipped 2602a0da (ADR-0026) |
 | **2** | Batch payouts port | L | P1 | 🟡 MVP read-only · ⚠️ CREATE+PAY write side defer (ก๊อต co-sign) |
-| **3** | PEAK module (5 sub-surfaces) | L | P1 | 🟡 **3/5 done** · §3.1 lifecycle hub ✅ · §3.2 AR-aging = §4 ✅ · §3.3 period close ✅ (already shipped V-E9) · §3.4 e-Tax · §3.5 PEAK export ✅ |
+| **3** | PEAK module (5 sub-surfaces) | L | P1 | ✅ **5/5 DONE** · §3.1 lifecycle hub ✅ · §3.2 AR-aging = §4 ✅ · §3.3 period close ✅ (already shipped V-E9) · §3.4 e-Tax ✅ · §3.5 PEAK export ✅ |
 | **4** | AR-aging cockpit | M | P1 | ✅ shipped 5b6cbc0a |
 | **5b** | Auto-commission accrual trigger | M | P1 | ⏸ defer (touches wallet flow · เดฟ coord) |
 | **6** | TH-transport grouping | M | P1 | 🟡 MVP read-only · ⚠️ CREATE write side defer |
 
-**Coverage:** 3 fully done · 3 MVP-shipped (write side deferred) · **§3 sub-surfaces 4/5 done** (only §3.4 e-Tax remains)
+**Coverage:** 4 fully done (incl. PEAK module ALL 5) · 3 MVP-shipped (write side deferred) · 1 pending coord (§5b)
+
+**📊 Brief task progress: 4 P0/P1 ✅ · 3 MVP/L-defer · 1 needs-coord. PEAK module = 100%.**
 
 ---
 
@@ -73,8 +79,11 @@
 ### ต้อง เดฟ coord (touches wallet flow)
 3. **§5b Auto-commission accrual trigger** — INSERT typed accrual row on `tb_wallet_hs` paid
 
-### Brief §3 remaining
-4. **§3.4 e-Tax XML/PDF export** — `tb_forwarder_tax_invoice*` RD Code 86 XML + PDF + submit-to-RD stub (L · needs RD format spec)
+### §3.4 e-Tax follow-up (Phase-C extensions per a57e8df5 banner)
+4. **XAdES-BES digital signature** envelope on the XML (real RD acceptance)
+5. **Submit-to-RD** via e-Tax-by-Email (RD-INET) or RD-API (RD-MAP) · needs RD credentials
+6. **50-ทวิ cert chasing UI** for `tb_forwarder_wht_entry.cert_status='pending'`
+7. **xs:schema validation** on the generated XML before download
 
 ---
 
