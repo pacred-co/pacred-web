@@ -112,9 +112,11 @@ export async function getSidebarCounts(): Promise<BadgeCounts> {
         .eq("fstatus", "6"),
       // ── ฝากโอน/ชำระ (yuan) ──────────────────────────────────────
       // D1 Wave-2 (_SYNTHESIS §7.4): re-pointed to legacy tb_payment.
-      // paystatus '1'=pending '2'=processing.
+      // paystatus '1'=pending '2'=completed '3'=failed/refunded.
+      // Badge = work-to-do count → pending ONLY ('1'). Previously also
+      // counted '2' (completed) which over-counted the queue.
       admin.from("tb_payment").select("id", { count: "exact", head: true })
-        .in("paystatus", ["1", "2"]),
+        .eq("paystatus", "1"),
       // ── เบิกเงิน (payouts) ──────────────────────────────────────
       admin.from("sales_payouts").select("id", { count: "exact", head: true })
         .eq("status", "pending"),
