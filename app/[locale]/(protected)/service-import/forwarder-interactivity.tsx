@@ -60,22 +60,21 @@ export type ForwarderInteractivityProps = {
   /** Column count — kept in the API for compat; the card list doesn't
    *  use it anymore. */
   columnCount: number;
-  /** Admin-editable "โปรเหมาๆ" banner config (business_config · resolved
-   *  server-side in page.tsx). When `enabled` is false / past its end-date
-   *  the strip is hidden regardless of `showMaoStrip`. */
-  maoPromo: MaoPromoConfig;
+  /** Admin-editable promo banners for this page (location='import') —
+   *  resolved server-side in page.tsx via getActivePromoBanners (already
+   *  filtered to enabled + in-date + sorted; may be the legacy single promo
+   *  via the backward-compat fallback). The legacy `showMaoStrip` condition
+   *  still gates whether the strips render at all. */
+  maoPromos: MaoPromoCard[];
 }
 
-/** Resolved "โปรเหมาๆ" promo-banner config — see business_config keys
- *  `import.promo.*` (migration 0135). All fields plain-serializable so
- *  they cross the RSC boundary cleanly. */
-export type MaoPromoConfig = {
-  enabled: boolean;
+/** One resolved promo card — see lib/promo/banners.ts. All fields
+ *  plain-serializable so they cross the RSC boundary cleanly. The
+ *  enabled/date gating is done server-side, so only display fields cross. */
+export type MaoPromoCard = {
   headline: string;
   text: string;
   amount: number;
-  /** ISO date (YYYY-MM-DD) or "" for no end date. */
-  endDate: string;
   /** Image URL or "" for none. */
   imageUrl: string;
 };
@@ -88,7 +87,7 @@ export function ForwarderInteractivity({
   showPayBar,
   showMaoStrip,
   showPayStrip,
-  maoPromo,
+  maoPromos,
   // columnCount kept in the prop type for binary compat with page.tsx;
   // the card list doesn't need it.
 }: ForwarderInteractivityProps) {
@@ -194,49 +193,44 @@ export function ForwarderInteractivity({
     return () => document.body.classList.remove("has-import-paybar");
   }, [showPayBar]);
 
-  // ── BUG #3 — resolve whether the admin-configured "โปรเหมาๆ" banner
-  //    should actually render: enabled flag AND (no end-date OR today is
-  //    on/before it). `new Date()` is computed once in a lazy initializer
-  //    (NOT in render — `react-hooks/purity` rejects `new Date()` in the
-  //    render body). The legacy visibility condition (showMaoStrip) still
-  //    gates it too, so the strip only shows when there ARE status-5 rows.
-  const [maoPromoActive] = useState(() => {
-    if (!maoPromo.enabled) return false;
-    if (maoPromo.endDate === "") return true;
-    // YYYY-MM-DD strings compare lexicographically === chronologically.
-    const todayYmd = new Date().toISOString().slice(0, 10);
-    return todayYmd <= maoPromo.endDate;
-  });
+  // The promo banners are resolved server-side (enabled + in-date + sorted)
+  // in page.tsx via getActivePromoBanners — no client-side date math needed.
+  // The legacy visibility condition (showMaoStrip) still gates whether the
+  // strip renders at all, so it only shows when there ARE status-5 rows.
 
   return (
     <>
-      {/* ── (cond.) "โปรเหมาๆ" strip — forwarder.php L600. Tailwind
+      {/* ── (cond.) "โปรเหมาๆ" strips — forwarder.php L600. Tailwind
               rebuild of the headShake legacy strip (animation kept by
               `animate__animated animate__headShake` classes — vendor
-              CSS still loads it). ── */}
-      {showMaoStrip && maoPromoActive && (
-        <div className="my-3 mx-auto max-w-[640px]">
-          <div className="rounded-2xl bg-red-600 text-white text-center px-4 py-3 shadow-md shadow-red-600/20 animate__animated animate__infinite animate__headShake">
-            {maoPromo.imageUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={maoPromo.imageUrl}
-                alt=""
-                className="mx-auto mb-2 max-h-24 w-auto object-contain"
-              />
-            )}
-            <div className="text-sm font-bold mb-1">{maoPromo.headline}</div>
-            <div className="text-[12px] leading-snug whitespace-pre-line">
-              {maoPromo.text}
-            </div>
-            {maoPromo.amount > 0 && (
-              <div className="mt-1.5 text-[11px] font-semibold opacity-90">
-                ส่วนลดสูงสุด {numberFormat2(maoPromo.amount)} บาท
+              CSS still loads it). Now renders MULTIPLE admin-managed promos
+              (multi-promo manager · /admin/settings/promos). ── */}
+      {showMaoStrip &&
+        maoPromos.map((promo, i) => (
+          <div key={i} className="my-3 mx-auto max-w-[640px]">
+            <div className="rounded-2xl bg-red-600 text-white text-center px-4 py-3 shadow-md shadow-red-600/20 animate__animated animate__infinite animate__headShake">
+              {promo.imageUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={promo.imageUrl}
+                  alt=""
+                  className="mx-auto mb-2 max-h-24 w-auto object-contain"
+                />
+              )}
+              {promo.headline && (
+                <div className="text-sm font-bold mb-1">{promo.headline}</div>
+              )}
+              <div className="text-[12px] leading-snug whitespace-pre-line">
+                {promo.text}
               </div>
-            )}
+              {promo.amount > 0 && (
+                <div className="mt-1.5 text-[11px] font-semibold opacity-90">
+                  ส่วนลดสูงสุด {numberFormat2(promo.amount)} บาท
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        ))}
 
       {/* ── Card list — `<form id="frm-example2">` kept so any legacy
               CSS rule targeting the form id still applies. The legacy

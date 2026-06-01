@@ -58,6 +58,11 @@ export default async function AdminSettingsPage() {
             → ตั้งค่าการแจ้งเตือนของฉัน (รวม Sales Daily Digest)
           </Link>
         </p>
+        <p className="mt-1 text-xs">
+          <Link href="/admin/settings/promos" className="text-primary-600 underline">
+            → จัดการแบนเนอร์โปรโมชัน (เพิ่ม/แก้/อัปโหลดรูป หลายอัน)
+          </Link>
+        </p>
       </div>
 
       {/* Live daily yuan rates (legacy tb_settings) — READ-ONLY here; edited at

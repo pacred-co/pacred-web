@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getBusinessConfig } from "@/lib/business-config";
+import { getActivePromoBanners } from "@/lib/promo/banners";
 import { ForwarderInteractivity } from "./forwarder-interactivity";
 import { type ForwarderRow } from "./forwarder-row-view";
 import { AddForwarderModal } from "./add/add-forwarder-modal";
@@ -404,37 +404,21 @@ export default async function ServiceImportPage({
   const showPayBar =
     (countForwarder5 ?? 0) > 0 || q === "" || q === "5" || q === "c";
 
-  // ── BUG #3 — admin-configurable "โปรเหมาๆ" banner (business_config ·
-  //    migration 0135 seeds these keys). Defaults reproduce the previous
-  //    HARDCODED banner exactly, so behaviour is unchanged until an admin
-  //    edits it at /admin/settings/business-config (tab "Promo"). getBusiness-
-  //    Config falls back to the default on a missing/unseeded key, so this is
-  //    safe even before 0135 is applied to prod.
-  const LEGACY_MAO_TEXT =
-    "“หากลูกค้าชำระค่าขนส่งในไทยก่อนเวลา 00.00 น. บริษัทฯ จะจัดส่งสินค้าให้ภายใน 1-3 วันทำการ นับจากวันที่ชำค่าขนส่ง”";
-  const [
-    promoEnabled,
-    promoHeadline,
-    promoText,
-    promoAmount,
-    promoEndDate,
-    promoImageUrl,
-  ] = await Promise.all([
-    getBusinessConfig<boolean>("import.promo.enabled", true),
-    getBusinessConfig<string>("import.promo.headline", "โปรเหมาๆ"),
-    getBusinessConfig<string>("import.promo.text", LEGACY_MAO_TEXT),
-    getBusinessConfig<number>("import.promo.amount_thb", 100),
-    getBusinessConfig<string>("import.promo.end_date", ""),
-    getBusinessConfig<string>("import.promo.image_url", ""),
-  ]);
-  const maoPromo = {
-    enabled: promoEnabled,
-    headline: promoHeadline,
-    text: promoText,
-    amount: Number(promoAmount) || 0,
-    endDate: promoEndDate,
-    imageUrl: promoImageUrl,
-  };
+  // ── Multi-promo banner (เดฟ 2026-06-01 · multi-promo manager) ──
+  // The owner can now manage MULTIPLE promo banners + upload an image at
+  // /admin/settings/promos. The list lives as a JSON array in business_config
+  // key `promo.banners` (location='import' shows here). getActivePromoBanners
+  // returns only enabled + in-date promos, sorted; if the array is empty it
+  // FALLS BACK to the legacy single promo (the 6 `import.promo.*` keys ·
+  // migration 0135) so the live banner never disappears (backward-compat).
+  // Every field is plain-serializable so it crosses the RSC boundary cleanly.
+  const importPromos = await getActivePromoBanners("import");
+  const maoPromos = importPromos.map((p) => ({
+    headline: p.headline,
+    text: p.text,
+    amount: Number(p.amount_thb) || 0,
+    imageUrl: p.image_url,
+  }));
 
   // Tailwind rebuild (เดฟ 2026-05-27 — ปอน: "rebuild css เป็น tailwind ให้
   // หน่อย ห้ามแก้ relation อะไร ต้องให้ฟังก์ชั่นทุกอย่างทำงานเหมือนเดิม").
@@ -598,7 +582,7 @@ export default async function ServiceImportPage({
                   (countPricePCSFDatabase ?? 0) > 1
                 }
                 columnCount={q === "c" ? 10 : 8}
-                maoPromo={maoPromo}
+                maoPromos={maoPromos}
               />
             </div>
           </section>

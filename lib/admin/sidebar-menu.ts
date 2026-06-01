@@ -401,6 +401,7 @@ const blockSettingsCargo: MenuItem = {
     { labelKey: "settingsCargo.general",   href: "/admin/settings",                  icon: "Settings" },
     { labelKey: "settingsCargo.homeNotice", href: "/admin/settings/notifications",   icon: "MessageCircle" },
     { labelKey: "settingsCargo.popup",     href: "/admin/settings/business-config",  icon: "MessageCircle" },
+    { labelKey: "settingsCargo.promos",    href: "/admin/settings/promos",           icon: "Megaphone" },
     {
       labelKey: "settingsCargo.rates",
       icon: "SlidersHorizontal",

@@ -33,7 +33,7 @@ import {
   SlidersHorizontal, Network, ListOrdered, Barcode, ScanLine, Camera,
   Printer, Calculator, BadgeCheck, ShieldAlert, UserCheck, Wand2, RefreshCw,
   Banknote, KanbanSquare, Smartphone, Save,
-  Ban, AlertCircle, Gauge, PhoneCall,
+  Ban, AlertCircle, Gauge, PhoneCall, Megaphone,
   ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
@@ -112,6 +112,8 @@ const ICONS: Record<string, LucideIcon> = {
   // names were referenced from sidebar-menu.ts but absent here → blank spacer.
   Gauge,           // blockExtCockpit — /admin/reports/cockpit
   PhoneCall,       // blockExtLeads — /admin/leads (pre-existing miss, fixed here)
+  // 2026-06-01 (เดฟ) — promo-banner manager (/admin/settings/promos).
+  Megaphone,       // settingsCargo.promos
 };
 
 function Icon({ name, active }: { name?: string; active: boolean }) {
