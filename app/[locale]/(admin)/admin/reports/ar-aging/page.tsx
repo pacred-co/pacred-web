@@ -65,7 +65,6 @@ export default async function ArAgingReportPage() {
         grandCount: 0,
         debtorCount: 0,
         topDebtors: [],
-        topReps: [],
         capped: false,
       };
 
@@ -177,45 +176,6 @@ export default async function ArAgingReportPage() {
           </table>
         </div>
       </section>
-
-      {/* Top reps holding the debt (attribution via tb_sales_report) */}
-      {report.topReps.length > 0 && (
-        <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
-          <div className="border-b border-border px-4 py-3">
-            <h2 className="text-sm font-semibold">
-              เซลล์ที่ถือหนี้ค้างมากสุด (สูงสุด 10 ราย)
-            </h2>
-            <p className="mt-0.5 text-[11px] text-muted">
-              attribution จาก tb_sales_report — ใครเป็นคนปิดการขายออเดอร์ที่ยังค้างชำระ
-            </p>
-          </div>
-          <div className="overflow-x-auto scrollbar-x-visible">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[10px] text-muted">
-                <tr>
-                  <th className="px-3 py-2.5">#</th>
-                  <th className="px-3 py-2.5">เซลล์</th>
-                  <th className="px-3 py-2.5 text-right">ออเดอร์ค้าง</th>
-                  <th className="px-3 py-2.5 text-right">ยอดค้างรวม</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.topReps.map((r, idx) => (
-                  <tr key={r.adminID} className="border-t border-border">
-                    <td className="px-3 py-2 font-mono text-xs">{idx + 1}</td>
-                    <td className="px-3 py-2">
-                      <span className="font-mono text-xs">{r.adminID}</span>
-                      {r.repName && <span className="ml-2 text-muted">· {r.repName}</span>}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono">{intTh(r.orders)}</td>
-                    <td className="px-3 py-2 text-right font-mono font-semibold">{thb(r.amount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
 
       <p className="text-[11px] text-muted">
         ยอดค้าง = ราคาเต็มฝากนำเข้า (ผลรวมค่าขนส่ง/บริการ − ส่วนลด − ส่วนลดนิติ 1%) ·
