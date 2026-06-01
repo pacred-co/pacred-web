@@ -238,6 +238,9 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       // 2026-06-02 sitting-I §3.4 Phase-C: 50-ทวิ cert tracking · juristic
       // customers withhold + send cert · admin marks received / waived.
       { label: "ติดตาม 50-ทวิ (WHT certs)",      href: "/admin/accounting/wht-certs" },
+      // 2026-06-02 sitting-I · CEO directive 2026-06-01: profit-cap ≤ 15k/ตู้
+      // retrospective monitor (forward quote-comparison tool = next surface).
+      { label: "Margin Monitor (CEO ≤ ฿15k cap)", href: "/admin/accounting/margin-monitor" },
       // Wave 7.3 (2026-05-22): wired 2 orphan accounting pages here per
       // ภูม decision in page-inventory-2026-05-21-night.md §🔴 DEAD.
       { label: "งวดบัญชี",  href: "/admin/accounting/periods" },
