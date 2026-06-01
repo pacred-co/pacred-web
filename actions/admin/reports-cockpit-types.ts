@@ -53,6 +53,12 @@ export type CockpitReport = {
   topCarriers: VolumeRow[];
   /** Top China warehouses by MTD volume (fwarehousename). */
   topWarehouses: VolumeRow[];
+  /** MTD orders whose profit exceeds the soft ฿15k/ตู้ guidance (CEO §4 · advisory, never blocks). */
+  marginOverCount: number;
+  /** Σ profit of those over-guidance orders (THB). */
+  marginOverProfit: number;
+  /** The soft profit cap applied (THB · from lib/pricing/margin-advisory). */
+  marginCapThb: number;
   /** True if the MTD pull hit the row cap (volume/MTD totals may understate). */
   capped: boolean;
 };

@@ -40,6 +40,9 @@ export default async function ExecCockpitPage() {
         openLeads: 0,
         topCarriers: [],
         topWarehouses: [],
+        marginOverCount: 0,
+        marginOverProfit: 0,
+        marginCapThb: 15000,
         capped: false,
       };
 
@@ -94,6 +97,24 @@ export default async function ExecCockpitPage() {
         <Stat label="ลีดที่ยังไม่ติดต่อ" value={intTh(r.openLeads)} sub="userActive='' + มีเบอร์" link="/admin/leads" />
         <Stat label="ดูลูกหนี้ตามอายุ" value="AR-aging →" link="/admin/reports/ar-aging" small />
       </section>
+
+      {/* Pricing-health soft advisory (CEO §4 · ≤15k/ตู้) — NEVER blocks, just a nudge */}
+      {res.ok && (
+        r.marginOverCount > 0 ? (
+          <div role="note" className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <span className="select-none">💡</span>
+            <span>
+              ออเดอร์ฝากนำเข้าที่กำไรเกินแนวทาง <b>฿{intTh(r.marginCapThb)}/ตู้</b> เดือนนี้:{" "}
+              <b>{intTh(r.marginOverCount)}</b> ออเดอร์ (รวมกำไร {thb(r.marginOverProfit)}) — พิจารณาปรับให้ลูกค้าคุ้มค่ายิ่งขึ้น{" "}
+              <span className="text-amber-600">(คำแนะนำ ไม่บังคับ)</span>
+            </span>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs text-emerald-700">
+            ✓ เดือนนี้ยังไม่มีออเดอร์ที่กำไรเกินแนวทาง ฿{intTh(r.marginCapThb)}/ตู้
+          </div>
+        )
+      )}
 
       {/* Orders funnel */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">

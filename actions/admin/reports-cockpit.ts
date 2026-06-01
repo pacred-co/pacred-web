@@ -28,6 +28,7 @@ import {
   WAREHOUSE_NAME_LABEL,
 } from "./reports-profit-types";
 import { getArAgingReport } from "./reports-ar";
+import { MARGIN_CAP_PER_CONTAINER_THB } from "@/lib/pricing/margin-advisory";
 import type {
   CockpitReport,
   FunnelStage,
@@ -129,6 +130,8 @@ export async function getCockpitReport(): Promise<Result<CockpitReport>> {
     let mtdRevenue = 0;
     let mtdProfit = 0;
     let mtdOrders = 0;
+    let marginOverCount = 0;   // CEO §4 — MTD orders over the soft ฿15k/ตู้ guidance (advisory)
+    let marginOverProfit = 0;
     const byCarrier = new Map<string, number>();
     const byWarehouse = new Map<string, number>();
     let capped = false;
@@ -146,6 +149,10 @@ export async function getCockpitReport(): Promise<Result<CockpitReport>> {
         mtdRevenue += revenue;
         mtdProfit += profit;
         mtdOrders += 1;
+        if (profit > MARGIN_CAP_PER_CONTAINER_THB) {
+          marginOverCount += 1;
+          marginOverProfit += profit;
+        }
         const carrierKey = (r.fshipby ?? "").trim() || "(ไม่ระบุ)";
         const whKey = (r.fwarehousename ?? "").trim() || "(ไม่ระบุ)";
         byCarrier.set(carrierKey, (byCarrier.get(carrierKey) ?? 0) + 1);
@@ -197,6 +204,9 @@ export async function getCockpitReport(): Promise<Result<CockpitReport>> {
         openLeads: leadErr ? 0 : leadCount ?? 0,
         topCarriers: topVolume(byCarrier, (k) => SHIP_BY_LABEL[k] ?? (k === "(ไม่ระบุ)" ? k : `รหัส ${k}`), TOP_VOLUME_N),
         topWarehouses: topVolume(byWarehouse, (k) => WAREHOUSE_NAME_LABEL[k] ?? k, TOP_VOLUME_N),
+        marginOverCount,
+        marginOverProfit,
+        marginCapThb: MARGIN_CAP_PER_CONTAINER_THB,
         capped,
       },
     };
