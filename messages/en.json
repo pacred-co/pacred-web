@@ -2723,7 +2723,8 @@
       "whHistory": "TH warehouse intake history",
       "assignDriver": "Assign driver jobs",
       "driverWork": "Driver work-list (mobile)",
-      "combineBill": "Combine bills"
+      "combineBill": "Combine bills",
+      "tranTh": "TH-transport batches"
     },
     "forwarderImport": {
       "title": "Import service",

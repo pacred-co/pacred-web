@@ -193,6 +193,12 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       // hShopPay. The "เบิกจ่ายค่าสินค้า" (China-cost pay-out) leaf. §0d.
       { label: "เบิกจ่ายค่าสินค้า (ฝากสั่งซื้อ)", href: "/admin/shop-disbursement" },
       { label: "ประวัติเบิกจ่ายค่าสินค้า", href: "/admin/shop-disbursement/history" },
+      // 2026-06-02 sitting-I-fix (ภูม flagged "ไม่มีทางเข้า nav"): batch payout
+      // surfaces wired into PEAK รายจ่าย topic (matches PEAK pattern where
+      // withdrawals = expense). Each leaf shows the historical 25 sale + 46
+      // interpreter batches surfaced 2026-06-02 by commit 101e75dc.
+      { label: "เบิกค่าคอม Sales (batch รายเดือน)",  href: "/admin/accounting/withdraw/comm-sale" },
+      { label: "เบิกค่าคอมล่าม (batch รายเดือน)",   href: "/admin/accounting/withdraw/comm-interpreter" },
       // TODO — legacy `acc-system-cargo.php` (header-menu/index.php L204-363):
       // ดูภาพรวม / ใบสั่งซื้อ / ใบจ่ายเงินมัดจำ / บันทึกค่าใช้จ่าย / ใบกำกับ
       // ภาษีซื้อ / รับใบลดหนี้ / รับใบเพิ่มหนี้ / นำเข้าเอกสาร.
@@ -217,6 +223,21 @@ export const CARGO_MENUBAR: MenubarItem[] = [
   {
     label: "การบัญชี",
     children: [
+      // 2026-06-02 sitting-I-fix (ภูม flagged "ไม่มีทางเข้า nav"): PEAK module
+      // surfaces wired into PEAK การบัญชี topic. Pages shipped sitting-I
+      // (commits afa15f1c + 5b6cbc0a).
+      { label: "เอกสารบัญชี (Lifecycle)",      href: "/admin/accounting/documents" },
+      { label: "ลูกหนี้ค้างชำระ (AR Aging)",   href: "/admin/accounting/ar-aging" },
+      // 2026-06-02 sitting-I §3.5 (ภูม poom-wave brief): PEAK/FlowAccount
+      // CSV export hub — 4 datasets (receipts · bills · sale/interp comm batches).
+      { label: "ส่งออก CSV (PEAK/FlowAccount)", href: "/admin/accounting/peak-export" },
+      // 2026-06-02 sitting-I §3.4 (ภูม poom-wave brief): e-Tax (RD Code 86) hub.
+      // Lists issued tb_forwarder_tax_invoice + XML/CSV download · MVP preview
+      // shape (full XAdES-BES sig + RD-API submit DEFERRED).
+      { label: "ส่งออก e-Tax (RD Code 86)",     href: "/admin/accounting/etax" },
+      // 2026-06-02 sitting-I §3.4 Phase-C: 50-ทวิ cert tracking · juristic
+      // customers withhold + send cert · admin marks received / waived.
+      { label: "ติดตาม 50-ทวิ (WHT certs)",      href: "/admin/accounting/wht-certs" },
       // Wave 7.3 (2026-05-22): wired 2 orphan accounting pages here per
       // ภูม decision in page-inventory-2026-05-21-night.md §🔴 DEAD.
       { label: "งวดบัญชี",  href: "/admin/accounting/periods" },
@@ -242,6 +263,22 @@ export const ACCOUNTING_HUB_CARDS = [
     title: "ใบเสร็จรับเงิน (PEAK style)",
     desc: "7-tab nav · ล่าสุด/รอชำระ/ออกแล้ว/ยกเลิก · default current month",
     href: "/admin/accounting/receipts",
+    badge: "live",
+  },
+  // 2026-06-02 (poom-wave §4 · ภูม) — AR-aging cockpit · ลูกหนี้ค้างชำระ
+  // bucketed 0-30/30-60/60-90/90+ days. Surfaces ~457 outstanding rows
+  // for collection-team follow-up.
+  {
+    title: "ลูกหนี้ค้างชำระ (AR Aging)",
+    desc: "Bucket 0-30/30-60/60-90/90+ วัน · top customers + rep attribution",
+    href: "/admin/accounting/ar-aging",
+    badge: "live",
+  },
+  // 2026-06-02 (poom-wave §3.1 · ภูม) — PEAK documents lifecycle hub
+  {
+    title: "เอกสารบัญชี (Lifecycle)",
+    desc: "ใบเสนอราคา→ใบแจ้งหนี้→ใบเสร็จ→ใบกำกับ→ใบลด/เพิ่มหนี้ · stats เดือนปัจจุบัน",
+    href: "/admin/accounting/documents",
     badge: "live",
   },
   {

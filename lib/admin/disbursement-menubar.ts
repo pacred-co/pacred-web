@@ -25,4 +25,9 @@ export const DISBURSEMENT_MENUBAR: MenubarItem[] = [
   { label: "เบิกกระเป๋าร้าน",            href: "/admin/shop-payouts" },
   { label: "งานคนขับ",                   href: "/admin/driver-runs" },
   { label: "ค่าคอมฝากนำเข้า",           href: "/admin/forwarder-sales" },
+  // 2026-06-02 sitting-I (ภูม · poom-wave §2): batch payouts MVP read-only.
+  // Surfaces 25 + 46 historical batches that had zero Pacred reader pre-ADR-0026.
+  // CREATE/PAY actions DEFERRED — money-safe write needs ก๊อต co-sign.
+  { label: "🆕 Batch · Sales",           href: "/admin/accounting/withdraw/comm-sale" },
+  { label: "🆕 Batch · ล่าม",           href: "/admin/accounting/withdraw/comm-interpreter" },
 ];
