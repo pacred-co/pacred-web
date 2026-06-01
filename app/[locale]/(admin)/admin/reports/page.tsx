@@ -78,6 +78,9 @@ const REPORTS_MENUBAR: MenubarItem[] = [
       { label: "กำไรฝากนำเข้า", href: "/admin/reports/forwarder-profit" },
       { label: "กำไรฝากสั่งซื้อ", href: "/admin/reports/shops-profit" },
       { label: "กำไรฝากโอนหยวน", href: "/admin/reports/yuan-profit" },
+      // Wave C BI (2026-06-01 · §0d): aggregated profit/margin analytics
+      // (กำไร/ต้นทุน/margin ตาม carrier·warehouse·mode) — Theme 1.
+      { label: "📊 วิเคราะห์กำไร/มาร์จิ้น", href: "/admin/reports/profit-analytics" },
     ],
   },
   {
@@ -95,6 +98,9 @@ const REPORTS_MENUBAR: MenubarItem[] = [
     children: [
       { label: "ค้นหาสินค้า (ดีมานด์)", href: "/admin/reports/search-demand" },
       { label: "การใช้ API SMS",        href: "/admin/reports/sms-usage" },
+      // Wave C BI (2026-06-01 · §0d): per-stage dwell + stuck-order alerts
+      // (fdatestatus2..7) — Theme 1 SLA/cycle-time intelligence.
+      { label: "⏱ SLA / เวลาต่อสเตจ", href: "/admin/reports/sla-cycle-time" },
     ],
   },
   {
