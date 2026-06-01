@@ -3,6 +3,29 @@
 
 ---
 
+# 🏢 2026-06-02 PM-6 — SESSION CLOSE + MACHINE MOVE (→ คอมบริษัท) · read FIRST → then `docs/research/RESUME-machine-move-2026-06-02.md`
+
+**main = `dave-pacred` = `origin/main` = `37078633`+ · all pushed · typecheck EXIT 0 · prod (Vercel auto-deploys `pacred.co.th`) LIVE.** Closing the home session to continue on the company computer. Resume: `git fetch origin && git pull origin main` → read [`docs/research/RESUME-machine-move-2026-06-02.md`](docs/research/RESUME-machine-move-2026-06-02.md) FIRST (carries the machine-local paths · the **5 phone-collision + login-verify pending** · the FB-token checklist · working-style — none of which travel with git).
+
+**🚀 Shipped this session (all pushed + deployed):**
+- **🔴 ADMIN OVERHAUL (the headline · owner directive)** — cleared the legacy-admin mess + provisioned a clean **15-admin roster** (`admin_pop/dev/pond/got/poom/win/nat/vam/web/jane/aom/may/pee/ploy/gring`) on prod: each = auth + profiles + `admins`(super) + `admin_contact_extras`(legacy_admin_id bridge) + `tb_admin` (the unification — login SOT = `admins`, sales-attribution SOT = `tb_admin`, linked via `legacy_admin_id`). **Login flexible** (เบอร์ + email `admin_xxx@pacred.co.th` + PR-code · pw `123456`). Created **`admin_center`** ("เซลส่วนกลาง" · routing bucket, no login) · **reset all 8,900 customers' `adminIDSale`→admin_center** (backup `scripts/backup-adminIDSale-*.json` · reversible) · **deleted 10 old messy `tb_admin`** (admin_admin_*, admin_ploypr01, admin_Warehouse). Code: **round-robin sales auto-assign** (legacy `tb_admin.adminStatusSale='1'` model · pool = พี `admin_pee` + เมย์ `admin_may`) + **register success popup** (PR-code + เซล + เบอร์) + **killed the sales-rep-change "death"** (all reassign paths now write live `tb_users.adminIDSale`; CRM accepts legacy rep). Scripts: `scripts/provision-admins-2026-06-02.mjs` + `reset-clear-admins-2026-06-02.mjs` (dry-run default · `--apply`). Roster + flow spec: [`docs/setup/staff-admin-provisioning-2026-06-02.md`](docs/setup/staff-admin-provisioning-2026-06-02.md).
+- **AR-aging dedup** — canonical = ภูม's `/admin/accounting/ar-aging` (reconciled after his CSV enhancement); `/admin/reports/ar-aging` redirects there.
+- **A+D receipt+tax-invoice** — removed dead forwarder-receipt orphan stack (orphan→redirect, deleted PDF route + `getForwarderByNo`, repointed 3 notifications→/invoice); rewired customer tax-invoice → ภูม's World-B `tb_forwarder_tax_invoice` (forwarder; shop/yuan deferred-banner); **ADR-0027** (`docs/decisions/0027-tax-invoice-sot.md`).
+- **forwarder self-pickup address** → Pacred warehouse (สมุทรสาคร · 7 write-path files · legacy rows untouched).
+- **/search add-to-cart** wired (dead RSC button → client island calling `addCartItem`).
+- **margin-monitor "use server" fix** (caught via browser QA — a const-array value export blanked the page; tsc can't catch it → **always browser-verify after merge**).
+- **ภูม sitting-I v4+v5 merged** — margin-monitor (CEO profit-cap ≤15k/ตู้) + quote-compare + margin-flag cron + e-Tax bulk XML + 2 withdraw payouts + ar-aging CSV + forwarders/[fNo] collapsible panels + MOMO PR99 scripts. **No work lost** (cherry-picked; ภูม pulls main when he resumes).
+- **FB/IG integration guide** (owner directive · waiting on tokens) → [`docs/setup/facebook-integration-guide-2026-06-02.md`](docs/setup/facebook-integration-guide-2026-06-02.md). Found: Meta Pixel fires the **App ID** not a real Dataset (Events Manager empty → ads don't track) + no FB webhook (CRM FB/IG inbox = stub). Owner provides 8 env (`FACEBOOK_*` + real `NEXT_PUBLIC_FB_PIXEL_ID`) → scaffold `/api/webhooks/facebook` (mirror LINE).
+
+**🔴 PENDING (next session · company computer):**
+1. **VERIFY admin login** — `admin_pee` / `123456` (เบอร์ or email) → confirm login works + `/admin/admins` shows the clean 15. **NOT yet click-tested** (provision created the auth rows; login path unverified).
+2. **5 phone-collisions** — ภูม/กอต/แนท/พลอย/กริ้ง are **email-only login** (their phone is held by an empty 0-order customer/test/orphan: PR10901/PR130/PR147/PR114 + 1 orphan). Owner sign-off → free the phones → phone login. (Detail in RESUME-2026-06-02 §collisions.)
+3. **CRUD: partner** (no table/role/page yet — build) + admin-create-customer + admin-hard-delete (gaps; per the staff-CRUD audit).
+4. **QA full-loop** (CEO ask) — member-side 3 systems verified; admin-side + the 🔴 tax-invoice issuance + slip-approve mark-paid still need the owner's prod spot-check.
+5. **Owner to provide:** FB 8 env tokens · approve real test slips on prod (mark-paid + tax-invoice mutate money/RD).
+
+---
+
 # 🧳 2026-06-01 PM-5 — SESSION CLOSE + MACHINE MOVE · read FIRST → then `docs/research/RESUME-machine-move-2026-06-01.md`
 
 **main = `dave-pacred` = `55e247be` · pushed · build EXIT 0 · prod LIVE.** Closing the home-machine session to continue on the work computer. Owner types only `sync main / pull dave-pacred มาทำงานต่อ` → **read [`docs/research/RESUME-machine-move-2026-06-01.md`](docs/research/RESUME-machine-move-2026-06-01.md) FIRST** (it carries everything that does NOT travel with git: machine-local paths, the owner-token inventory, the login protocol, env pointers, and the working-style/memory facts).

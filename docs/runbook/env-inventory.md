@@ -75,3 +75,9 @@ PACRED_TAMIT_CACHE_URL · PACRED_TAMIT_DETAIL_URL (all encrypted, production).
 > **OTP_BYPASS / OTP_PEPPER — NOT touched** (owner: ห้ามแตะ OTP จนคอนเฟิมเด็ดขาด).
 > CF + Vercel API tokens = owner-provided this session · stored machine-local (`/tmp/.cf-tok`, `/tmp/.vc-tok`) ·
 > never committed · owner can revoke anytime.
+
+## 2026-06-02 — Facebook/IG integration (PENDING · owner provides → เดฟ scaffolds webhook)
+8 env to add — full guide: [`docs/setup/facebook-integration-guide-2026-06-02.md`](../setup/facebook-integration-guide-2026-06-02.md) §A:
+`FACEBOOK_APP_ID`=27209891118650099 (known) · `FACEBOOK_APP_SECRET`(sens · webhook sig) · `FACEBOOK_PAGE_ACCESS_TOKEN`(sens · System User = never-expire) · `FACEBOOK_PAGE_ID`=100690994769905 · `INSTAGRAM_ACCOUNT_ID` · `FACEBOOK_WEBHOOK_VERIFY_TOKEN`(self-set) · `FACEBOOK_CAPI_TOKEN`(optional) · **`NEXT_PUBLIC_FB_PIXEL_ID`** = a REAL Events-Manager Dataset id (⚠️ code now fires the App ID `27209891118650099` which is NOT a pixel → Events Manager empty → ads untracked; this fixes it).
+
+> **2026-06-02 admin provisioning** created 15 staff auth.users (pw `123456`) — NOT an env change. 5 staff phones collide with empty customer accounts → those admins are **email-only login** until reconciled (RESUME-machine-move-2026-06-02 §3.2).
