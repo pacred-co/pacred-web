@@ -228,6 +228,9 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       // (commits afa15f1c + 5b6cbc0a).
       { label: "เอกสารบัญชี (Lifecycle)",      href: "/admin/accounting/documents" },
       { label: "ลูกหนี้ค้างชำระ (AR Aging)",   href: "/admin/accounting/ar-aging" },
+      // 2026-06-02 sitting-I §3.5 (ภูม poom-wave brief): PEAK/FlowAccount
+      // CSV export hub — 4 datasets (receipts · bills · sale/interp comm batches).
+      { label: "ส่งออก CSV (PEAK/FlowAccount)", href: "/admin/accounting/peak-export" },
       // Wave 7.3 (2026-05-22): wired 2 orphan accounting pages here per
       // ภูม decision in page-inventory-2026-05-21-night.md §🔴 DEAD.
       { label: "งวดบัญชี",  href: "/admin/accounting/periods" },
