@@ -43,11 +43,13 @@ import {
   deriveTransportTypeFromMomoRaw,
   extractMetricsFromMomoRaw,
 } from "@/lib/admin/momo-raw-helpers";
+import { ADDRESSES } from "@/components/seo/site";
 
 // ────────────────────────────────────────────────────────────
-// PCS pickup address — the canonical block also used in
-// api-forwarder-manual.ts. `addresstel` digits-only (varchar(10) in
-// tb_forwarder) per Wave 23 bug-fix.
+// Self-pickup address — Pacred's TH receiving warehouse (สมุทรสาคร,
+// ADDRESSES.warehouseTh — same depot the shop path + api-forwarder-manual.ts
+// use). Legacy hard-coded the old Bangkok PCS depot. `addresstel` digits-only
+// (tb_forwarder.faddresstel is varchar(10)) per Wave 23 bug-fix.
 // ────────────────────────────────────────────────────────────
 export type ResolvedAddress = {
   addressname:        string;
@@ -63,15 +65,15 @@ export type ResolvedAddress = {
 };
 
 export const PCS_PICKUP_ADDRESS: ResolvedAddress = {
-  addressname:        "รับที่โกดัง PCS กทม",
+  addressname:        "รับที่โกดัง Pacred",
   addresslastname:    "",
-  addresstel:         "024447046",
+  addresstel:         "0224213325",
   addresstel2:        "",
-  addressno:          "12 ซอย เพชรเกษม 77 แยก 3-6",
-  addresssubdistrict: "หนองค้างพลู",
-  addressdistrict:    "หนองแขม",
-  addressprovince:    "กรุงเทพมหานคร",
-  addresszipcode:     "10160",
+  addressno:          ADDRESSES.warehouseTh.line,
+  addresssubdistrict: ADDRESSES.warehouseTh.subDistrict,
+  addressdistrict:    ADDRESSES.warehouseTh.district,
+  addressprovince:    ADDRESSES.warehouseTh.province,
+  addresszipcode:     ADDRESSES.warehouseTh.postcode,
   addressnote:        "",
 };
 

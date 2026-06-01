@@ -21,12 +21,14 @@
  *   9. fTransportType       (1=รถ · 2=เรือ — only these two in legacy modal)
  *
  * Address handling — KEY INSIGHT FROM LEGACY:
- *   - When fShipBy='PCS' → use hardcoded "รับที่โกดัง PCS กทม" address
- *     (12 ซอย เพชรเกษม 77 แยก 3-6 · หนองค้างพลู · หนองแขม · กทม · 10160 · 02-444-7046)
+ *   - When fShipBy='PCS' → use the hardcoded self-pickup address "รับที่โกดัง
+ *     Pacred" (= Pacred's TH receiving warehouse, ADDRESSES.warehouseTh,
+ *     สมุทรสาคร — the same depot the shop path uses). Legacy hard-coded the
+ *     old Bangkok PCS depot; under D1 self-pickup is the Pacred warehouse.
  *   - Otherwise → look up tb_address WHERE addressID=<picked> (the user's
  *     saved address) and unpack into the 11 fAddress* columns.
  *   - The admin DOES NOT type the address — they pick from the customer's
- *     saved addresses (or get "PCS pickup" if shipBy='PCS').
+ *     saved addresses (or get the Pacred self-pickup address if shipBy='PCS').
  *
  * Cascading data — provided by these helper actions:
  *   - fetchUsersByCoid(coid)           → user picker repopulates
@@ -47,6 +49,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { uploadToBucket } from "@/lib/storage/upload";
+import { ADDRESSES } from "@/components/seo/site";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — clip to 10 chars (tb_forwarder.adminid* is varchar(10)).
@@ -183,25 +186,26 @@ export async function fetchAddressesByUserid(
 }
 
 // ────────────────────────────────────────────────────────────
-// PCS pickup address — exactly the legacy hardcoded values
-// (forwarder.php L77-87). Used when fShipBy='PCS' (รับเองโกดัง PCS กทม).
+// Self-pickup address — Pacred's TH receiving warehouse (สมุทรสาคร,
+// ADDRESSES.warehouseTh — the same depot the shop path writes in
+// actions/cart.ts). Used when fShipBy='PCS' (รับเองที่โกดัง Pacred).
+// Legacy PHP (forwarder.php L77-87) hard-coded the old Bangkok PCS depot.
 // ────────────────────────────────────────────────────────────
 const PCS_PICKUP_ADDRESS = {
-  addressname:        "รับที่โกดัง PCS กทม",
+  addressname:        "รับที่โกดัง Pacred",
   addresslastname:    "",
   // tb_forwarder.faddresstel is varchar(10) — digits-only (no dashes/spaces)
-  // matches legacy pcsc_main data shape. "02-444-7046" with dashes = 11
-  // chars and triggers Postgres "value too long for type character
-  // varying(10)" on INSERT. Strip to 9 chars = OK. (Wave 23 bug-fix
-  // 2026-05-27 — ภูม flag · forwarders/new "เปิดออเดอร์" failed when
-  // shipBy=PCS.)
-  addresstel:         "024447046",
+  // matches legacy pcsc_main data shape. Pacred company line "02-421-3325"
+  // with dashes = 11 chars and triggers Postgres "value too long for type
+  // character varying(10)" on INSERT → store digits-only "0224213325"
+  // (10 chars). (varchar(10) trap = Wave 23 bug-fix 2026-05-27 · ภูม flag.)
+  addresstel:         "0224213325",
   addresstel2:        "",
-  addressno:          "12 ซอย เพชรเกษม 77 แยก 3-6",
-  addresssubdistrict: "หนองค้างพลู",
-  addressdistrict:    "หนองแขม",
-  addressprovince:    "กรุงเทพมหานคร",
-  addresszipcode:     "10160",
+  addressno:          ADDRESSES.warehouseTh.line,
+  addresssubdistrict: ADDRESSES.warehouseTh.subDistrict,
+  addressdistrict:    ADDRESSES.warehouseTh.district,
+  addressprovince:    ADDRESSES.warehouseTh.province,
+  addresszipcode:     ADDRESSES.warehouseTh.postcode,
   addressnote:        "",
 } as const;
 

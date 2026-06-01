@@ -44,6 +44,7 @@ import {
   isCarrierKey,
 } from "@/lib/carrier/registry";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { ADDRESSES } from "@/components/seo/site";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — clip to 10 chars (`tb_forwarder.adminid*` = varchar(10)).
@@ -72,20 +73,23 @@ async function resolveLegacyAdminId(): Promise<string> {
 }
 
 // ────────────────────────────────────────────────────────────
-// PCS pickup address (legacy api-sheets-ctt.php L104-114 — identical across the
-// 4 carrier files). Same constant lives in `actions/admin/forwarders-new.ts`;
-// kept here as a local copy so this module is self-contained.
+// Self-pickup address — Pacred's TH receiving warehouse (สมุทรสาคร,
+// ADDRESSES.warehouseTh — same depot the shop path + forwarders-new.ts use).
+// Used when fShipBy='PCS' (รับเองที่โกดัง). Legacy api-sheets-ctt.php L104-114
+// hard-coded the old Bangkok PCS depot. This `addresstel` flows into
+// tb_forwarder.faddresstel (varchar(10)) below → digits-only "0224213325"
+// (Pacred company line "02-421-3325" minus dashes = 10 chars).
 // ────────────────────────────────────────────────────────────
 const PCS_PICKUP_ADDRESS = {
-  addressname:        "รับที่โกดัง PCS กทม",
+  addressname:        "รับที่โกดัง Pacred",
   addresslastname:    "",
-  addresstel:         "02-444-7046",
+  addresstel:         "0224213325",
   addresstel2:        "",
-  addressno:           "12 ซอย เพชรเกษม 77 แยก 3-6",
-  addresssubdistrict:  "หนองค้างพลู",
-  addressdistrict:     "หนองแขม",
-  addressprovince:     "กรุงเทพมหานคร",
-  addresszipcode:      "10160",
+  addressno:           ADDRESSES.warehouseTh.line,
+  addresssubdistrict:  ADDRESSES.warehouseTh.subDistrict,
+  addressdistrict:     ADDRESSES.warehouseTh.district,
+  addressprovince:     ADDRESSES.warehouseTh.province,
+  addresszipcode:      ADDRESSES.warehouseTh.postcode,
   addressnote:         "",
 } as const;
 

@@ -47,6 +47,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
+import { ADDRESSES, CONTACT } from "@/components/seo/site";
 import {
   adminAddItemToCartSchema,
   adminAddCartUserSchema,
@@ -63,19 +64,22 @@ import {
 // RBAC union for admin cart flows — see file-level comment.
 const CART_ROLES = ["super", "ops", "sales_admin"] as const;
 
-// Static PCS Cargo HQ address — legacy shops.php L26-36 hardcodes this when
-// hshipby='PCS' (warehouse pickup). Verbatim, no rebrand (sender address of
-// physical warehouse — the PCS-scrub stays API-switchover-gated per CLAUDE.md).
+// Self-pickup address — Pacred's TH receiving warehouse (สมุทรสาคร,
+// ADDRESSES.warehouseTh — the SAME depot the customer shop path writes in
+// actions/cart.ts). Legacy shops.php L26-36 hard-coded the old Bangkok PCS
+// depot when hshipby='PCS' (warehouse pickup). tb_header_order.haddresstel
+// holds the dashed display format (matching the shop path) — no varchar(10)
+// trap on this table (that constraint is tb_forwarder-only).
 const PCS_PICKUP_ADDRESS = {
-  haddressname:         "รับที่โกดัง PCS กทม",
+  haddressname:         "รับที่โกดัง Pacred",
   haddresslastname:     "",
-  haddressno:           "12 ซอย เพชรเกษม 77 แยก 3-6",
-  haddresssubdistrict:  "หนองค้างพลู",
-  haddressdistrict:     "หนองแขม",
-  haddressprovince:     "กรุงเทพมหานคร",
-  haddresszipcode:      "10160",
+  haddressno:           ADDRESSES.warehouseTh.line,
+  haddresssubdistrict:  ADDRESSES.warehouseTh.subDistrict,
+  haddressdistrict:     ADDRESSES.warehouseTh.district,
+  haddressprovince:     ADDRESSES.warehouseTh.province,
+  haddresszipcode:      ADDRESSES.warehouseTh.postcode,
   haddressnote:         "",
-  haddresstel:          "02-444-7046",
+  haddresstel:          CONTACT.phoneCompanyDisplay,
   haddresstel2:         "",
 } as const;
 

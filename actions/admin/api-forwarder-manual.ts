@@ -30,6 +30,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { ADDRESSES } from "@/components/seo/site";
 
 // ────────────────────────────────────────────────────────────
 // Carrier discriminator. Both MOMO + CargoCenter use the same legacy
@@ -137,16 +138,20 @@ type ResolvedAddress = {
   addressnote:        string;
 };
 
+// Self-pickup = Pacred's TH receiving warehouse (สมุทรสาคร, ADDRESSES.warehouseTh
+// — same depot the shop path + forwarders-new.ts use). Legacy hard-coded the old
+// Bangkok PCS depot. `addresstel` flows into tb_forwarder.faddresstel (varchar(10))
+// below → digits-only "0224213325" (Pacred line "02-421-3325" minus dashes).
 const PCS_PICKUP_ADDRESS: ResolvedAddress = {
-  addressname:        "รับที่โกดัง PCS กทม",
+  addressname:        "รับที่โกดัง Pacred",
   addresslastname:    "",
-  addresstel:         "02-444-7046",
+  addresstel:         "0224213325",
   addresstel2:        "",
-  addressno:          "12 ซอย เพชรเกษม 77 แยก 3-6",
-  addresssubdistrict: "หนองค้างพลู",
-  addressdistrict:    "หนองแขม",
-  addressprovince:    "กรุงเทพมหานคร",
-  addresszipcode:     "10160",
+  addressno:          ADDRESSES.warehouseTh.line,
+  addresssubdistrict: ADDRESSES.warehouseTh.subDistrict,
+  addressdistrict:    ADDRESSES.warehouseTh.district,
+  addressprovince:    ADDRESSES.warehouseTh.province,
+  addresszipcode:     ADDRESSES.warehouseTh.postcode,
   addressnote:        "",
 };
 
