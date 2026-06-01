@@ -52,6 +52,8 @@ async function resolveLegacyCorpDocs(
 // ─────────────────────────────────────────────────────────────────────
 const CUSTOMERS_MENUBAR: MenubarItem[] = [
   { label: "หน้าหลัก", href: "/admin/customers" },
+  // staff-CRUD gap (§PM-6 #3.3): admin-create-customer entry (no self-register).
+  { label: "+ เพิ่มลูกค้า", href: "/admin/customers/new" },
   // Wave 28 (2026-05-29 · ภูม flagged): "รออนุมัติ" was buried 2-levels deep
   // under "งาน" submenu — staff couldn't find new-signup queue. Promoted
   // to a top-level tab since the E2E loop step 2 ("เซลรับลูกค้า") starts here.
@@ -442,6 +444,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
           ) : null}
         </div>
         <div className="flex gap-2 flex-wrap items-center">
+          <Link href="/admin/customers/new" className="rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-700 inline-flex items-center gap-1.5">+ เพิ่มลูกค้า</Link>
           <Link href="/admin/customers/recently-active" className="rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-medium text-primary-700 hover:bg-primary-100">📈 ลูกค้า active ล่าสุด</Link>
           <Link href="/admin/customers/transfer-rep" className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-surface-alt inline-flex items-center gap-1.5">⇄ ย้ายเซลล์ผู้ดูแล</Link>
           <Link href="/admin/customers/transfer-bulk" className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-surface-alt inline-flex items-center gap-1.5">⇄ ย้ายเซลล์ (มีเหตุผล)</Link>
