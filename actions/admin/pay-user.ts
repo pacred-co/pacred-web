@@ -63,12 +63,15 @@ import {
 import { uploadToBucket } from "@/lib/storage/upload";
 import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
 import { logger } from "@/lib/logger";
+import { BANK } from "@/components/seo/site";
 
-// Legacy `pcs-admin/pay-users.php` hardcodes this destination bank on every
-// slip-top-up INSERT (shop L103 + forwarder L360/L578). Mirrored verbatim so
-// the deposit row that `adminApproveWalletDeposit` later reviews looks
-// identical to a legacy-created one.
-const PAYUSER_DEPOSIT_NAMEBANK = "KBANK-064-174-3836";
+// Destination bank stamped on every slip-top-up deposit row (shop
+// pay-users.php L103 + forwarder L360/L578). 2026-06-01 brand swap (owner GO):
+// points at the Pacred account (components/seo/site.ts BANK) instead of the
+// legacy PCS `064-174-3836`. Format kept identical ("KBANK-<acct>"), matching
+// the customer-self deposit path in actions/wallet.ts so admin- and
+// customer-created deposit rows record the same account.
+const PAYUSER_DEPOSIT_NAMEBANK = `KBANK-${BANK.accountNumber}`;
 
 // The exact tb_forwarder pricing columns the debit helper reads (lowercase =
 // PostgREST casing, verified against actions/admin/forwarders-bulk.ts +
