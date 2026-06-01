@@ -3,6 +3,17 @@
 
 ---
 
+# 🟢 2026-06-01 PM-4 — CEO "6 core systems done?" DEEP-AUDIT + FIX SPRINT · read FIRST
+
+**main = `dave-pacred` = `685dd44b`+ · pushed · build EXIT 0 · no new migrations.** CEO asked if the 6 revenue systems (ฝากสั่งซื้อ·ฝากนำเข้า·โอนหยวน·ออกบิล·แจ้งเก็บเงิน·ออกใบเสร็จ) are TRULY done. Ran **4 read-only audit agents** (legacy PHP source + code + §0e) → **5 fix agents** (flat-Agent worktree pattern). **Verdict: all 6 money loops CLOSED + correct (no leak/double-spend) — but route-200 testing missed real gaps.** Shipped:
+- 🔴 **#1 CEO-visible bug — paid forwarders stuck at fstatus=5 "รอชำระเงิน" → AR ฿917k overstated.** "mark-paid" was split (slip-approve minted receipt but no status flip; pay-on-behalf flipped but no receipt). **Fixed ALL approve paths** to advance fstatus 5→6 + mint receipt: `adminBulkApproveWalletHs` (tb-bulk · LIVE bulk) · `adminApproveWalletDeposit` (wallet-hs · LIVE single-row — was ERRORING on type='4', now full direct-slip branch) · `adminPayForwardersOnBehalf` (pay-user · +receipt). credit→clear fcredit (legacy L467/469) · idempotent eq-guard · best-effort. `adminApproveWalletHs` (wallet-trans) = DEAD (0 callers · tombstone).
+- 🔴 **forwarder `/invoice` dead-write pay-button REMOVED** + customer rebuilt-twin orphan cleanup (-1424 LOC).
+- 🔴 **shop dup dead "mark paid" button REMOVED** (read empty service_orders) + notes page repointed→tb_header_order + split-brain cart unified→/cart.
+- 🟠 **yuan detail-approve** fixed (pending→อนุมัติสำเร็จ direct · drop phantom processing) + badge `.eq(paystatus,'1')`.
+- money diffs (forwarder fstatus + wallet-hs type='4') reviewed line-by-line before merge. **Owner go/no-go: receipt still shows PCS Cargo brand** (not Pacred). Deferred: shop per-line pricing engine (big build). Detail: memory `big_audit_master_plan_2026_06_01.md` §PM-4.
+
+---
+
 # 🟢 2026-06-01 PM-3 — CRM + 3 MONEY ADRs + BI + pricing-guard SHIPPED · read FIRST
 
 **main = `dave-pacred` = `1fb8ee6f`+ · all pushed · build EXIT 0 · typecheck/i18n 0 · NO new migrations** (all repoint/neutralize existing `tb_*`). Owner approved a batch + said run-long-parallel-ask-once-at-end. Ran **5 worktree agents** (proven pattern) + 2 self-built pieces:
