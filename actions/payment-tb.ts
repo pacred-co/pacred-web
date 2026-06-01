@@ -103,9 +103,9 @@ import { sendNotification } from "@/lib/notifications";
 import { notifyStaffGroup } from "@/lib/notifications/staff-group";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
+import { spendCashbackAtCheckout, refundCashbackOnReject, cashbackRefId } from "@/actions/admin/wallet-hs";
 import {
   computePayThb,
-  canDebit,
   computeNewBalance,
 } from "@/lib/payment/wallet-math";
 
@@ -140,6 +140,11 @@ function channelToPaytype(ch: YuanPaymentInput["channel"]): "1" | "2" | "3" {
  */
 export async function createYuanPaymentFromWallet(
   input: YuanPaymentInput,
+  // ADR-0025 — optional apply-cashback (the ฝากโอน pay-now path). When > 0 the
+  // cashback is spent FIRST (debit-on-submit · settles immediately, no admin
+  // step), then the wallet covers the remainder. Existing call-sites pass no
+  // opts → cashback unused → behaviour unchanged.
+  opts?: { cashBackApplied?: number },
 ): Promise<ActionResult<{ id: number; thb_amount: number; new_wallet_balance: number }>> {
   // G-4 — impersonation is read-only; refuse customer-facing mutations.
   const impErr = await assertNotImpersonating();
@@ -183,10 +188,31 @@ export async function createYuanPaymentFromWallet(
     return { ok: false, error: `db_error:${walletReadErr.code ?? "unknown"}` };
   }
   const currentBalance = Number(walletBefore?.wallettotal ?? 0);
-  if (!canDebit(currentBalance, thb_amount)) {
+
+  // ── ADR-0025 — clamp the requested apply-cashback (pre-check only).
+  // The actual debit happens after tb_payment is minted (so cbhrefid can
+  // anchor on the payment id). Here we cap to `min(cbtotal, thb_amount)` and
+  // require the wallet to cover the remainder.
+  let cashBackRequested = Math.max(0, Number(opts?.cashBackApplied) || 0);
+  if (cashBackRequested > 0) {
+    const { data: cbRow, error: cbErr } = await admin
+      .from("tb_cash_back")
+      .select("cbtotal")
+      .eq("userid", memberCode)
+      .maybeSingle<{ cbtotal: number | string | null }>();
+    if (cbErr) {
+      console.error(`[tb_cash_back read] failed`, { code: cbErr.code, message: cbErr.message, userid: memberCode });
+    }
+    cashBackRequested = Math.round(Math.max(0, Math.min(cashBackRequested, Number(cbRow?.cbtotal ?? 0), thb_amount)) * 100) / 100;
+  }
+  const walletNeeded = Math.round((thb_amount - cashBackRequested) * 100) / 100;
+  // Wallet must cover the remainder. (When cashback fully covers the bill,
+  // walletNeeded=0 → no wallet debit required; canDebit's `amount>0` guard
+  // would reject 0, so gate on `>= walletNeeded` directly here.)
+  if (!(currentBalance >= walletNeeded)) {
     return {
       ok: false,
-      error: `insufficient_balance: ยอดกระเป๋า ฿${currentBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ไม่พอชำระ ฿${thb_amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
+      error: `insufficient_balance: ยอดกระเป๋า ฿${currentBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ไม่พอชำระ ฿${walletNeeded.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
     };
   }
 
@@ -272,17 +298,32 @@ export async function createYuanPaymentFromWallet(
     };
   }
 
+  // ── Step 3b — ADR-0025: spend the applied cashback NOW (debit-on-submit).
+  // Idempotent on `cbhrefid=yuan:<paymentId>`. `applied` is the real amount
+  // debited; the wallet covers `thb_amount − applied`.
+  let cashBackApplied = 0;
+  if (cashBackRequested > 0) {
+    const cbRefId = cashbackRefId("yuan", String(paymentId));
+    const cbRes = await spendCashbackAtCheckout(admin, {
+      userid: memberCode, requested: cashBackRequested, cbhrefid: cbRefId, nowIso,
+    });
+    cashBackApplied = cbRes.applied;
+  }
+  const walletDebit = Math.round((thb_amount - cashBackApplied) * 100) / 100;
+  const cbRefIdYuan = cashbackRefId("yuan", String(paymentId));
+
   // ── Step 4 — INSERT tb_wallet_hs (type='6', status='2') ─────────
   // type='6' = ชำระเงินฝากโอน (0081 L6220). status='2' (approved) per
   // ADR-0018 D-2 rule 1 (customer DEBIT-on-submit is auto-approved —
   // the debit is real, the row is the receipt of that movement).
   // amount is POSITIVE; debit direction encoded by type='6' per the
-  // schema comment + Tier-A1 precedent.
+  // schema comment + Tier-A1 precedent. ADR-0025: amount = the WALLET
+  // portion (thb_amount − cashbackApplied); cashback recorded separately.
   const { error: hsErr } = await admin
     .from("tb_wallet_hs")
     .insert({
       date:            nowIso,
-      amount:          thb_amount,
+      amount:          walletDebit,
       status:          "2",                       // approved (customer-initiated debit)
       type:            "6",                       // ชำระเงินฝากโอน
       typenew:         "7",                       // ชำระเงินฝากโอน (0081 L6227)
@@ -292,7 +333,7 @@ export async function createYuanPaymentFromWallet(
       depositnamebank: "",
       nameuserbank:    "",
       nouserbank:      "",
-      note:            "ชำระค่าโอนหยวนจากกระเป๋า (customer-self)",
+      note:            `ชำระค่าโอนหยวนจากกระเป๋า (customer-self)${cashBackApplied > 0 ? ` + แคชแบ็ก ฿${cashBackApplied}` : ""}`,
       adminid:         "",                        // no admin yet
       adminidupdate:   "",
       session:         "customer-self",
@@ -303,10 +344,13 @@ export async function createYuanPaymentFromWallet(
       adminidcrate:    memberCode,                // customer self-initiated
     });
   if (hsErr) {
-    // Rollback the tb_payment row — silent half-state is the bug we
-    // are closing. Mirror of Tier-A1 recovery (yuan-payments-tb.ts
-    // L262-269).
+    // Rollback the tb_payment row + the cashback spend — silent half-state
+    // is the bug we are closing. Mirror of Tier-A1 recovery (yuan-payments
+    // -tb.ts L262-269).
     await admin.from("tb_payment").delete().eq("id", paymentId);
+    if (cashBackApplied > 0) {
+      await refundCashbackOnReject(admin, { userid: memberCode, cbhrefid: cbRefIdYuan, nowIso: new Date().toISOString() });
+    }
     return {
       ok: false,
       error: `บันทึก tb_wallet_hs ล้มเหลว · ยกเลิก tb_payment เพื่อรักษาสถานะ: ${hsErr.message}`,
@@ -315,29 +359,29 @@ export async function createYuanPaymentFromWallet(
 
   // ── Step 5 — UPDATE tb_wallet (or INSERT if no row) ─────────────
   // Read-modify-write. The pre-check guaranteed walletBefore exists
-  // for any positive paythb (currentBalance < paythb → refuse, and
-  // missing row → currentBalance=0 → refuse since paythb > 0), so the
-  // INSERT-if-missing branch is purely defensive against a race where
-  // tb_wallet row got deleted between the SELECT and now (impossible
-  // in practice — Pacred doesn't delete wallet rows).
-  const newBalance = computeNewBalance(currentBalance, thb_amount);
+  // for any positive walletDebit (currentBalance < walletDebit → refuse,
+  // and missing row → currentBalance=0 → refuse since walletNeeded > 0
+  // unless cashback fully covered), so the INSERT-if-missing branch is
+  // purely defensive against a race where the tb_wallet row got deleted
+  // between the SELECT and now (impossible in practice).
+  const newBalance = computeNewBalance(currentBalance, walletDebit);
 
   if (!walletBefore) {
     const { error: walletInsErr } = await admin
       .from("tb_wallet")
-      .insert({ userid: memberCode, wallettotal: -thb_amount });
+      .insert({ userid: memberCode, wallettotal: -walletDebit });
     if (walletInsErr) {
       // tb_payment + tb_wallet_hs already wrote — ops must reconcile.
       // Cannot cleanly undo tb_wallet_hs at this point.
       console.error(`[tb_wallet insert] FAILED post-hs`, {
         tb_payment_id: paymentId,
         userid:        memberCode,
-        amount:        thb_amount,
+        amount:        walletDebit,
         message:       walletInsErr.message,
       });
       return {
         ok: false,
-        error: `tb_payment id=${paymentId} + tb_wallet_hs สำเร็จ · แต่ tb_wallet insert ล้มเหลว: ${walletInsErr.message} (กระเป๋ายังไม่หัก — ติดต่อ ops)`,
+        error: `tb_payment id=${paymentId} + tb_wallet_hs สำเร็จ · แต่ tb_wallet insert ล้มเหลว: ${walletInsErr.message} (กระเป๋ายังไม่หัก${cashBackApplied > 0 ? ` · แคชแบ็ก ฿${cashBackApplied} ถูกหักแล้ว (cbhrefid=${cbRefIdYuan})` : ""} — ติดต่อ ops)`,
       };
     }
   } else {
@@ -347,16 +391,18 @@ export async function createYuanPaymentFromWallet(
       .eq("userid", memberCode);
     if (walletUpdErr) {
       console.error(`[tb_wallet update] FAILED post-hs`, {
-        tb_payment_id: paymentId,
-        userid:        memberCode,
-        amount:        thb_amount,
-        before:        currentBalance,
-        target:        newBalance,
-        message:       walletUpdErr.message,
+        tb_payment_id:    paymentId,
+        userid:           memberCode,
+        amount:           walletDebit,
+        cashbackApplied:  cashBackApplied,
+        cbhrefid:         cbRefIdYuan,
+        before:           currentBalance,
+        target:           newBalance,
+        message:          walletUpdErr.message,
       });
       return {
         ok: false,
-        error: `tb_payment id=${paymentId} + tb_wallet_hs สำเร็จ · แต่ tb_wallet update ล้มเหลว: ${walletUpdErr.message} (กระเป๋ายังไม่หัก — ติดต่อ ops)`,
+        error: `tb_payment id=${paymentId} + tb_wallet_hs สำเร็จ · แต่ tb_wallet update ล้มเหลว: ${walletUpdErr.message} (กระเป๋ายังไม่หัก${cashBackApplied > 0 ? ` · แคชแบ็ก ฿${cashBackApplied} ถูกหักแล้ว (cbhrefid=${cbRefIdYuan})` : ""} — ติดต่อ ops)`,
       };
     }
   }

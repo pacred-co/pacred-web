@@ -48,6 +48,11 @@ export type PcsChromeData = {
   userPicture: string;
   coID: string;
   walletTotal: number;
+  /** Spendable cashback balance (`tb_cash_back.cbtotal`). ADR-0025: this is
+   *  the SOT the customer pay screens read to render the "ใช้แคชแบ็ก" apply
+   *  input (capped to this value) + the wallet/cashback panel. The spend side
+   *  (debit at checkout / on admin slip-approve) lives in
+   *  actions/admin/wallet-hs.ts (`spendCashbackAtCheckout`). */
   cbTotal: number;
   creditValue: number;
   creditUser: boolean;
