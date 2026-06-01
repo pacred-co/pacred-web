@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Inbox } from "lucide-react";
 import { AddAddressModal } from "./add-address-modal";
 import { EditAddressModal } from "./edit-address-modal";
+import { DeleteAddressButton } from "./delete-address-button";
+import { SetMainAddressButton } from "./set-main-address-button";
 import { AddressBook, type Warehouse } from "./address-book";
 
 /**
@@ -235,12 +237,8 @@ export default async function AddressesPage() {
                       `${row.addressno ?? ""} ตำบล/แขวง ${row.addresssubdistrict ?? ""}<br>` +
                       ` อำเภอ/เขต ${row.addressdistrict ?? ""} จังหวัด ${row.addressprovince ?? ""} ${row.addresszipcode ?? ""}<br>` +
                       `โทร. ${row.addresstel ?? ""}, ${row.addresstel2 ?? ""}`;
-                    // fullAddress2 — the onclick CONCAT (address.php L455),
-                    // no <br>:
-                    const fullAddress2 =
-                      `คุณ${row.addressname ?? ""} ${row.addresslastname ?? ""} ` +
-                      `${row.addressno ?? ""} ตำบล/แขวง ${row.addresssubdistrict ?? ""} ` +
-                      `อำเภอ/เขต ${row.addressdistrict ?? ""} จังหวัด ${row.addressprovince ?? ""} ${row.addresszipcode ?? ""}`;
+                    // (legacy `fullAddress2` onclick-CONCAT removed with the inert
+                    // delete/set-main buttons — now wired via the action components.)
                     const isMain = mainAddressID === row.addressid;
                     return (
                       <div
@@ -267,16 +265,7 @@ export default async function AddressesPage() {
                           </p>
                         )}
                         <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-dashed border-border pt-2.5">
-                          <button
-                            type="button"
-                            className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
-                            data-address-id={row.addressid}
-                            data-full-address={fullAddress2}
-                            data-legacy-onclick={`deleteAddress('${row.addressid}','${fullAddress2}')`}
-                            title="ลบข้อมูล"
-                          >
-                            ลบที่อยู่
-                          </button>
+                          <DeleteAddressButton addressId={row.addressid} />
                           <EditAddressModal address={row} />
                           <div
                             id={`btnAddressMain${row.addressid}`}
@@ -289,15 +278,7 @@ export default async function AddressesPage() {
                                 ที่อยู่หลัก
                               </button>
                             ) : (
-                              <button
-                                type="button"
-                                className="rounded-full border border-sky-300 px-3 py-1 text-xs font-medium text-sky-600 hover:bg-sky-50"
-                                data-address-id={row.addressid}
-                                data-full-address={fullAddress2}
-                                data-legacy-onclick={`setMainAddress('${row.addressid}','${fullAddress2}')`}
-                              >
-                                ตั้งเป็นที่อยู่หลัก
-                              </button>
+                              <SetMainAddressButton addressId={row.addressid} />
                             )}
                           </div>
                         </div>
@@ -337,10 +318,6 @@ export default async function AddressesPage() {
                           `${row.addressno ?? ""} ตำบล/แขวง ${row.addresssubdistrict ?? ""}<br>` +
                           ` อำเภอ/เขต ${row.addressdistrict ?? ""} จังหวัด ${row.addressprovince ?? ""} ${row.addresszipcode ?? ""}<br>` +
                           `โทร. ${row.addresstel ?? ""}, ${row.addresstel2 ?? ""}`;
-                        const fullAddress2 =
-                          `คุณ${row.addressname ?? ""} ${row.addresslastname ?? ""} ` +
-                          `${row.addressno ?? ""} ตำบล/แขวง ${row.addresssubdistrict ?? ""} ` +
-                          `อำเภอ/เขต ${row.addressdistrict ?? ""} จังหวัด ${row.addressprovince ?? ""} ${row.addresszipcode ?? ""}`;
                         const isMain = mainAddressID === row.addressid;
                         return (
                           <tr
@@ -357,16 +334,7 @@ export default async function AddressesPage() {
                             </td>
                             <td className="px-4 py-3 text-center">
                               <div className="flex flex-wrap items-center justify-center gap-2">
-                                <button
-                                  type="button"
-                                  className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
-                                  data-address-id={row.addressid}
-                                  data-full-address={fullAddress2}
-                                  data-legacy-onclick={`deleteAddress('${row.addressid}','${fullAddress2}')`}
-                                  title="ลบข้อมูล"
-                                >
-                                  ลบที่อยู่
-                                </button>
+                                <DeleteAddressButton addressId={row.addressid} />
                                 <EditAddressModal address={row} />
                                 <div
                                   id={`btnAddressMain${row.addressid}`}
@@ -379,15 +347,7 @@ export default async function AddressesPage() {
                                       ที่อยู่หลัก
                                     </button>
                                   ) : (
-                                    <button
-                                      type="button"
-                                      className="rounded-full border border-sky-300 px-3 py-1 text-xs font-medium text-sky-600 hover:bg-sky-50"
-                                      data-address-id={row.addressid}
-                                      data-full-address={fullAddress2}
-                                      data-legacy-onclick={`setMainAddress('${row.addressid}','${fullAddress2}')`}
-                                    >
-                                      ตั้งเป็นที่อยู่หลัก
-                                    </button>
+                                    <SetMainAddressButton addressId={row.addressid} />
                                   )}
                                 </div>
                               </div>
