@@ -5,9 +5,11 @@
 
 ---
 
-## 🔢 NEXT FREE NUMBER = **0133**
+## 🔢 NEXT FREE NUMBER = **0135**
 
-ใครจะเขียน migration ใหม่ → ใช้ `0132_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
+ใครจะเขียน migration ใหม่ → ใช้ `0135_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
+
+> ⚠️ **0133 จองไว้ให้ Wave-A money lane** (ADR-0023/0025 · credit-line / cashback). เดฟ freight-quote lane ใช้ **0134** ตาม task brief เพื่อกันชน — ถ้า 0133 ไม่ได้ใช้จริง ปล่อยเป็น gap ได้ (ไม่กระทบ).
 
 > 0118-0129 ครอง prod แล้ว (ปอน 0118-0122 MOMO · ภูม 0123-0124 admins+momo-commit · เดฟ 0125 customer-usage-split · เดฟ 0126 tax-rates-seed · เดฟ 0127 order-tax-doc-pref · เดฟ 0128 tax-rates-rental-goods · เดฟ 0129 forwarder-tax-invoice · all applied 2026-05-30).
 
@@ -35,6 +37,7 @@
 | 0130 | `momo_cabinet_join_field` | ภูม/main | ✅ in main | main |
 | 0131 | `line_oa_inbox` | ปอน | ✅ **applied prod** (re-probe 2026-05-30 = HTTP 200 ×4 tables · ไม่กระทบ legacy · idempotent) — **renumbered 0125→0131** ตอน integrate InwPond007 2026-05-30 (ชน เดฟ `customer_usage_split`) · 4 ตาราง isolated: `customers_line`/`line_lead_sources`/`line_messages`/`line_webhook_events` · RLS service_role | main (ex-InwPond007) |
 | 0132 | `forwarder_bill_to_name` | เดฟ | ✅ **applied prod 2026-06-01 (106ms · metadata-only ADD COLUMN nullable)** · `tb_forwarder.fbilltoname varchar(200)` · Pacred-original bill-to override (no legacy col) · faithful target of rebuilt `forwarders.bill_to_name_override` · `adminSetForwarderBillToOverride` repointed | main |
+| 0134 | `freight_quote` | เดฟ | 🟡 **written 2026-06-01 — NOT yet applied prod** · public freight RFQ lead-capture (AX BOOKING funnel) · 1 ตาราง `freight_quote` (singular · ≠ plural `freight_quotes` admin quotation in 0048) · RLS public-insert + admin-read (mirrors `contact_messages`) · idempotent · เปิด FREIGHT revenue line | dave-pacred (freight-quote MVP) |
 
 ---
 

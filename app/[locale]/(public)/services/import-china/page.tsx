@@ -325,8 +325,19 @@ export default async function ImportChinaPage({
 
             <TrustStatsStrip className="mt-3 md:mt-4" />
 
+            {/* Freight quote-funnel CTA — opens the FCL/LCL/air/customs RFQ wizard */}
+            <Link
+              href="/freight-quote"
+              aria-label="ขอราคา freight นำเข้า FCL/LCL"
+              data-cta="freight_quote_hero"
+              className="mt-4 md:mt-6 inline-flex items-center justify-center gap-2 h-12 px-5 rounded-xl border-2 border-primary-600 text-primary-700 dark:text-primary-300 font-black text-[14px] md:text-[15px] hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors max-w-[640px] w-full"
+            >
+              ขอราคา Freight — FCL · LCL · แอร์ · เคลียร์ศุลกากร
+              <ArrowRight className="w-4 h-4" strokeWidth={2.6} />
+            </Link>
+
             {/* Primary CTA row — "ใช้บริการ" (register) + "ปรึกษาฟรี" (LINE) */}
-            <div className="mt-4 md:mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-[640px]">
+            <div className="mt-3 md:mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-[640px]">
               <Link
                 href="/register"
                 aria-label="ใช้บริการนำเข้าจีน — สมัครฟรี"
