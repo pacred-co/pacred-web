@@ -253,6 +253,13 @@ export const ACCOUNTING_HUB_CARDS = [
     href: "/admin/accounting/ar-aging",
     badge: "live",
   },
+  // 2026-06-02 (poom-wave §3.1 · ภูม) — PEAK documents lifecycle hub
+  {
+    title: "เอกสารบัญชี (Lifecycle)",
+    desc: "ใบเสนอราคา→ใบแจ้งหนี้→ใบเสร็จ→ใบกำกับ→ใบลด/เพิ่มหนี้ · stats เดือนปัจจุบัน",
+    href: "/admin/accounting/documents",
+    badge: "live",
+  },
   {
     title: "ฝากนำเข้า (รายงานบัญชี)",
     desc: "Report 1:1 ของ acc-forwarder.php — ledger ฝากนำเข้าที่ชำระแล้ว",
