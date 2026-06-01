@@ -190,6 +190,14 @@ function TopItem({
   }
 
   // Parent with children — hover OR click toggles a dropdown.
+  //
+  // 2026-06-02 sitting-I-fix (ภูม flagged "Submenu Panel ผิด · เป็นหลายอัน"):
+  // The L1 dropdown owns an `activeChildIdx` state — only ONE L2 child can be
+  // "active" (i.e. show its sub-panel) at a time. Hovering a sibling L2 row
+  // (`onMouseEnter`) reassigns activeChildIdx to that row, which causes the
+  // previous L2 sub-panel to hide instantly. This fixes the cascade-cursor
+  // trap where overlapping absolute panels would let the wrong L2 submenu
+  // "stick" while user tried to hover a sibling.
   return (
     <li className="group relative flex">
       <button
@@ -207,22 +215,66 @@ function TopItem({
 
       {/* Level-1 dropdown panel — opens below this top-item.
          Visible when: pinned (click) OR group-hover (mouse over). */}
-      <DropdownPanel
-        open={isPinned}
+      <DropdownPanelWithActiveChild
+        isPinned={isPinned}
         side="below"
-        className={`${isPinned ? "block" : "hidden group-hover:block"}`}
-      >
-        {item.children!.map((child, idx) => (
-          <NestedItem
-            key={`${child.label}-${idx}`}
-            item={child}
-            depth={1}
-            activeHref={activeHref}
-            onLeafClick={onLeafClick}
-          />
-        ))}
-      </DropdownPanel>
+        items={item.children!}
+        depth={1}
+        activeHref={activeHref}
+        onLeafClick={onLeafClick}
+      />
     </li>
+  );
+}
+
+/**
+ * Internal helper: a DropdownPanel that owns the "activeChildIdx" state for
+ * its NestedItem children, ensuring at most ONE child sub-panel is visible
+ * at a time. This is the sitting-I-fix for the cascade-cursor trap.
+ *
+ * Used at L1 (TopItem children) AND L2+ (NestedItem children) — same
+ * coordination problem at every level.
+ */
+function DropdownPanelWithActiveChild({
+  isPinned,
+  side,
+  items,
+  depth,
+  activeHref,
+  onLeafClick,
+}: {
+  isPinned:    boolean;
+  side:        "below" | "right";
+  items:       MenubarItem[];
+  depth:       number;
+  activeHref?: string;
+  onLeafClick: () => void;
+}) {
+  const [activeChildIdx, setActiveChildIdx] = useState<number | null>(null);
+
+  return (
+    <DropdownPanel
+      open={isPinned}
+      side={side}
+      depth={depth}
+      className={`${isPinned ? "block" : "hidden group-hover:block group-hover/sub:block"}`}
+      onMouseLeave={() => setActiveChildIdx(null)}
+    >
+      {items.map((child, idx) => (
+        <NestedItem
+          key={`${child.label}-${idx}`}
+          item={child}
+          depth={depth}
+          activeHref={activeHref}
+          onLeafClick={() => {
+            setActiveChildIdx(null);
+            onLeafClick();
+          }}
+          isActiveFromParent={activeChildIdx === idx}
+          onActivateFromParent={() => setActiveChildIdx(idx)}
+        />
+      ))}
+    </DropdownPanel>
   );
 }
 
@@ -233,19 +285,31 @@ function NestedItem({
   depth,
   activeHref,
   onLeafClick,
+  isActiveFromParent,
+  onActivateFromParent,
 }: {
   item: MenubarItem;
   depth: number;
   activeHref?: string;
   onLeafClick: () => void;
+  /**
+   * Parent-controlled active flag (sitting-I fix). When the parent renders
+   * this NestedItem via DropdownPanelWithActiveChild, it sets this to true
+   * for the ONE child that's currently active and false for the rest.
+   * Undefined = root-level call (NestedItem isn't being coordinated by a
+   * parent — falls back to local hover-only behaviour).
+   */
+  isActiveFromParent?:   boolean;
+  /** Parent-controlled "activate me" callback — fires on mouseEnter the row. */
+  onActivateFromParent?: () => void;
 }) {
-  const [isPinned, setIsPinned] = useState(false);
   const hasChildren = !!item.children && item.children.length > 0;
-  const isActive = !!item.href && item.href === activeHref;
+  const isActive    = !!item.href && item.href === activeHref;
+  const showSubPanel = isActiveFromParent === true;
 
   if (!hasChildren) {
     return (
-      <li>
+      <li onMouseEnter={onActivateFromParent}>
         <Link
           href={item.href ?? "#"}
           onClick={onLeafClick}
@@ -263,25 +327,26 @@ function NestedItem({
 
   // Parent — open cascading sub-menu to the right.
   //
-  // Wave 28 fix (2026-05-29 · ภูม flagged "topmenubar buggy เข้าไม่ได้"):
-  // L1+ parents were hover-only — `group-hover/sub:block` CSS required real
-  // mouse hover in a precise area; cursor leaving the chain mid-flight closed
-  // the panel before the user could click a 3rd-level leaf. Added local
-  // click-pin state (like TopItem at L0): clicking a parent OPENS the panel
-  // and keeps it open until clicked again, until cursor exits the entire
-  // <li> subtree, or until a leaf is clicked. Hover still opens (backward
-  // compatible).
+  // 2026-06-02 sitting-I-fix (ภูม flagged "เป็นหลายอัน"): visibility is now
+  // PARENT-CONTROLLED via `isActiveFromParent`. The parent's
+  // `DropdownPanelWithActiveChild` tracks `activeChildIdx` and ensures only
+  // ONE sibling submenu is visible at a time. `onMouseEnter` on this row
+  // tells the parent "I'm the active one now" — instantly hiding the
+  // previously-active sibling's submenu. Wave-28 click-pin behaviour is
+  // dropped (the parent state covers both hover and intentional clicks).
   return (
     <li
-      className="group/sub relative"
-      onMouseLeave={() => setIsPinned(false)}
+      className="relative"
+      onMouseEnter={onActivateFromParent}
     >
-      {/* Parent row — clickable if it has its own href, else click toggles pin */}
+      {/* Parent row — clickable if it has its own href, else click toggles
+          the activation (so non-href parents are keyboard/click-accessible). */}
       {item.href ? (
         <Link
           href={item.href}
           onClick={onLeafClick}
           aria-haspopup="true"
+          aria-expanded={showSubPanel}
           className="flex items-center justify-between px-4 py-2 text-sm text-gray-800 hover:bg-primary-50 hover:text-primary-900"
         >
           <span>{item.label}</span>
@@ -290,9 +355,9 @@ function NestedItem({
       ) : (
         <button
           type="button"
-          onClick={() => setIsPinned((p) => !p)}
+          onClick={onActivateFromParent}
           aria-haspopup="true"
-          aria-expanded={isPinned}
+          aria-expanded={showSubPanel}
           className="flex w-full items-center justify-between px-4 py-2 text-sm text-gray-800 hover:bg-primary-50 hover:text-primary-900"
         >
           <span>{item.label}</span>
@@ -300,27 +365,17 @@ function NestedItem({
         </button>
       )}
 
-      {/* Sub-dropdown — opens to the right on hover OR click-pin. Depth-aware
-          offset so deep cascades don't overlap their parents. */}
-      <DropdownPanel
-        open={isPinned}
+      {/* Sub-dropdown — parent-controlled visibility (sitting-I fix). The
+          NESTED DropdownPanelWithActiveChild then tracks its OWN
+          activeChildIdx so this chain repeats at L3, L4, ... */}
+      <DropdownPanelWithActiveChild
+        isPinned={showSubPanel}
         side="right"
-        className={isPinned ? "block" : "hidden group-hover/sub:block group-focus-within/sub:block"}
-        depth={depth}
-      >
-        {item.children!.map((child, idx) => (
-          <NestedItem
-            key={`${child.label}-${idx}`}
-            item={child}
-            depth={depth + 1}
-            activeHref={activeHref}
-            onLeafClick={() => {
-              setIsPinned(false);
-              onLeafClick();
-            }}
-          />
-        ))}
-      </DropdownPanel>
+        items={item.children!}
+        depth={depth + 1}
+        activeHref={activeHref}
+        onLeafClick={onLeafClick}
+      />
     </li>
   );
 }
@@ -332,12 +387,15 @@ function DropdownPanel({
   side,
   className = "",
   depth = 0,
+  onMouseLeave,
   children,
 }: {
   open: boolean;
   side: "below" | "right";
   className?: string;
   depth?: number;
+  /** 2026-06-02 sitting-I-fix: clear the parent's activeChildIdx so submenus close. */
+  onMouseLeave?: () => void;
   children: React.ReactNode;
 }) {
   // Position: level-1 sits below the top button; level-2+ sits to the
@@ -354,6 +412,7 @@ function DropdownPanel({
   return (
     <ul
       role={open ? "menu" : undefined}
+      onMouseLeave={onMouseLeave}
       className={`${positionCls} z-50 min-w-[14rem] max-w-[20rem] rounded-lg border border-gray-200 bg-white py-1 text-gray-800 shadow-xl ${className}`}
     >
       {children}

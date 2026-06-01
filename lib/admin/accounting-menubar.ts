@@ -193,6 +193,12 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       // hShopPay. The "เบิกจ่ายค่าสินค้า" (China-cost pay-out) leaf. §0d.
       { label: "เบิกจ่ายค่าสินค้า (ฝากสั่งซื้อ)", href: "/admin/shop-disbursement" },
       { label: "ประวัติเบิกจ่ายค่าสินค้า", href: "/admin/shop-disbursement/history" },
+      // 2026-06-02 sitting-I-fix (ภูม flagged "ไม่มีทางเข้า nav"): batch payout
+      // surfaces wired into PEAK รายจ่าย topic (matches PEAK pattern where
+      // withdrawals = expense). Each leaf shows the historical 25 sale + 46
+      // interpreter batches surfaced 2026-06-02 by commit 101e75dc.
+      { label: "เบิกค่าคอม Sales (batch รายเดือน)",  href: "/admin/accounting/withdraw/comm-sale" },
+      { label: "เบิกค่าคอมล่าม (batch รายเดือน)",   href: "/admin/accounting/withdraw/comm-interpreter" },
       // TODO — legacy `acc-system-cargo.php` (header-menu/index.php L204-363):
       // ดูภาพรวม / ใบสั่งซื้อ / ใบจ่ายเงินมัดจำ / บันทึกค่าใช้จ่าย / ใบกำกับ
       // ภาษีซื้อ / รับใบลดหนี้ / รับใบเพิ่มหนี้ / นำเข้าเอกสาร.
@@ -217,6 +223,11 @@ export const CARGO_MENUBAR: MenubarItem[] = [
   {
     label: "การบัญชี",
     children: [
+      // 2026-06-02 sitting-I-fix (ภูม flagged "ไม่มีทางเข้า nav"): PEAK module
+      // surfaces wired into PEAK การบัญชี topic. Pages shipped sitting-I
+      // (commits afa15f1c + 5b6cbc0a).
+      { label: "เอกสารบัญชี (Lifecycle)",      href: "/admin/accounting/documents" },
+      { label: "ลูกหนี้ค้างชำระ (AR Aging)",   href: "/admin/accounting/ar-aging" },
       // Wave 7.3 (2026-05-22): wired 2 orphan accounting pages here per
       // ภูม decision in page-inventory-2026-05-21-night.md §🔴 DEAD.
       { label: "งวดบัญชี",  href: "/admin/accounting/periods" },
