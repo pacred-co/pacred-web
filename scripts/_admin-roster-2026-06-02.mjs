@@ -250,8 +250,8 @@ export const CENTER = {
   nick: "เซลส่วนกลาง",
   nameFirst: "เซลส่วนกลาง",
   nameLast: "Pacred",
-  phone: "+66617799299", // route to head-of-sales line until a dedicated central line exists
-  phoneDigits: "0617799299",
+  phone: "+6624213325", // Pacred company main line 02-421-3325 (central · unique adminTel · tb_admin-only, no auth)
+  phoneDigits: "0224213325",
   email: "admin_center@pacred.co.th",
 };
 

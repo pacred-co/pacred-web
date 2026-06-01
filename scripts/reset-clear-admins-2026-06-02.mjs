@@ -157,13 +157,27 @@ async function main() {
     );
     profiles = res.rows;
   }
-  const oldAdminProfiles = profiles.filter((p) => !KEEP_MEMBER_CODES.has(p.member_code));
+  // KEEP every roster admin. An admin profile is kept if its admin_contact_extras
+  // legacy_admin_id ∈ the new roster (KEEP_ADMIN_IDS) OR it is one of the 3 pre-existing
+  // (KEEP_MEMBER_CODES). After provisioning, the admins table IS exactly the 15 roster,
+  // so this selects 0 to delete — the old mess lived in tb_admin only (d.1). This guards
+  // against the bug where comparing ONLY member_code would have deleted the 12 freshly
+  // provisioned admins (whose codes are PR018/PR019/… not the original PR132/112/009).
+  const extrasMap = new Map();
+  if (adminProfileIds.length) {
+    const exInList = adminProfileIds.join(",");
+    const exRes = await db.rest(`admin_contact_extras?select=profile_id,legacy_admin_id&profile_id=in.(${exInList})`);
+    for (const e of exRes.rows) extrasMap.set(e.profile_id, e.legacy_admin_id);
+  }
+  const isRosterAdmin = (p) =>
+    KEEP_MEMBER_CODES.has(p.member_code) || KEEP_ADMIN_IDS.has(extrasMap.get(p.id));
+  const oldAdminProfiles = profiles.filter((p) => !isRosterAdmin(p));
   log(`\n  admins table: ${adminRoleRows.length} role rows across ${adminProfileIds.length} profiles`);
   log(`  admin profiles to DELETE (∉ ${[...KEEP_MEMBER_CODES].join("/")}): ${oldAdminProfiles.length}`);
   for (const p of oldAdminProfiles) {
     log(`    delete admin profile ${p.id} member_code=${p.member_code} name="${p.first_name ?? ""} ${p.last_name ?? ""}" email=${p.email ?? "-"}`);
   }
-  const keptProfiles = profiles.filter((p) => KEEP_MEMBER_CODES.has(p.member_code));
+  const keptProfiles = profiles.filter((p) => isRosterAdmin(p));
   log(`  KEEP (existing admins): ${keptProfiles.map((p) => p.member_code).join(", ") || "(none found yet)"}`);
 
   if (!APPLY) {
