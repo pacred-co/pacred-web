@@ -59,6 +59,18 @@ export const dynamic = "force-dynamic";
 // ─────────────────────────────────────────────────────────────────────
 const REPORTS_MENUBAR: MenubarItem[] = [
   { label: "หน้าหลัก", href: "/admin/reports" },
+  // Wave C BI (2026-06-01 · §0d) — the exec/finance BI surfaces. The exec
+  // cockpit (at-a-glance MTD revenue/profit/funnel/wallet/AR/leads) + AR-aging
+  // (ลูกหนี้การค้าตามอายุหนี้) both read LIVE tb_*. Placed first after "หน้าหลัก"
+  // so leadership reaches the cockpit in ≤3 clicks (sidebar ออกรายงาน → BI →
+  // cockpit). Sibling profit-analytics + sla-cycle-time stay in กำไร/มอนิเตอร์.
+  {
+    label: "BI / ผู้บริหาร",
+    children: [
+      { label: "🧭 แดชบอร์ดผู้บริหาร", href: "/admin/reports/cockpit" },
+      { label: "💰 ลูกหนี้การค้า (AR-aging)", href: "/admin/reports/ar-aging" },
+    ],
+  },
   {
     label: "ฝั่งบัญชี",
     children: [

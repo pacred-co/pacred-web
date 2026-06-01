@@ -2881,6 +2881,7 @@
       "history": "บันทึกการทำรายการแอดมิน",
       "incidents": "แจ้งเตือนระบบ (Incident)",
       "kpi": "แดชบอร์ด KPI",
+      "cockpit": "แดชบอร์ดผู้บริหาร",
       "contactMessages": "ข้อความติดต่อจากลูกค้า",
       "leads": "โทรตามลูกค้า (Leads)",
       "lineInbox": "กล่องข้อความ LINE",

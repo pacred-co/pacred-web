@@ -33,7 +33,7 @@ import {
   SlidersHorizontal, Network, ListOrdered, Barcode, ScanLine, Camera,
   Printer, Calculator, BadgeCheck, ShieldAlert, UserCheck, Wand2, RefreshCw,
   Banknote, KanbanSquare, Smartphone, Save,
-  Ban, AlertCircle,
+  Ban, AlertCircle, Gauge, PhoneCall,
   ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
@@ -108,6 +108,10 @@ const ICONS: Record<string, LucideIcon> = {
   // Wave 26 (2026-05-28 ดึก) — 11 QA queue leaves under blockQAQueues.
   Ban,             // order-cancellations
   AlertCircle,     // 8 alert queues that don't otherwise have an icon
+  // 2026-06-01 (เดฟ) — Wave C BI cockpit + the leads call-queue. Both icon
+  // names were referenced from sidebar-menu.ts but absent here → blank spacer.
+  Gauge,           // blockExtCockpit — /admin/reports/cockpit
+  PhoneCall,       // blockExtLeads — /admin/leads (pre-existing miss, fixed here)
 };
 
 function Icon({ name, active }: { name?: string; active: boolean }) {
