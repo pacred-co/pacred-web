@@ -244,6 +244,15 @@ export const ACCOUNTING_HUB_CARDS = [
     href: "/admin/accounting/receipts",
     badge: "live",
   },
+  // 2026-06-02 (poom-wave §4 · ภูม) — AR-aging cockpit · ลูกหนี้ค้างชำระ
+  // bucketed 0-30/30-60/60-90/90+ days. Surfaces ~457 outstanding rows
+  // for collection-team follow-up.
+  {
+    title: "ลูกหนี้ค้างชำระ (AR Aging)",
+    desc: "Bucket 0-30/30-60/60-90/90+ วัน · top customers + rep attribution",
+    href: "/admin/accounting/ar-aging",
+    badge: "live",
+  },
   {
     title: "ฝากนำเข้า (รายงานบัญชี)",
     desc: "Report 1:1 ของ acc-forwarder.php — ledger ฝากนำเข้าที่ชำระแล้ว",
