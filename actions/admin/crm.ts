@@ -357,8 +357,17 @@ function emptyCustomer360(): Customer360 {
 // the legacy column stores · same contract as lib/admin/assign-sales-rep.ts
 // and actions/admin/customers.ts). Pass legacyId='' to clear ownership.
 //
-// We validate the target rep exists + is active + has a legacy_admin_id before
-// writing (don't strand a customer on a non-rep). Logged via admin_audit_log.
+// We validate the target rep exists + is active before writing (don't strand a
+// customer on a non-rep). Logged via admin_audit_log.
+//
+// 🔴 2026-06-02 — DEATH FIX. The rep was ONLY validated against
+// admin_contact_extras.legacy_admin_id — which is EMPTY on prod (the 13-admin
+// recreate · ADR-0022 · hasn't happened), so EVERY CRM reassign returned
+// invalid_rep. We now ALSO accept the LEGACY model: a `tb_admin.adminID` that
+// is active + sales-eligible (adminStatusA='1' AND adminStatusSale='1') — the
+// exact rep set the inline profile editor (actions/admin/customer-profile.ts
+// listSalesAdmins) offers. So CRM reassign works on prod today, and keeps
+// working through the Pacred bridge once admins are recreated.
 export async function setCustomerSalesRep(input: {
   userid: string;
   /** Rep's legacy_admin_id; "" to unassign. */
@@ -383,9 +392,18 @@ export async function setCustomerSalesRep(input: {
     }
     if (!customer) return { ok: false, error: "customer_not_found" };
 
-    // When assigning (not clearing), validate the rep is real + active + has a
-    // legacy id (so the column value actually resolves to someone).
+    // When assigning (not clearing), validate the rep is real + active.
+    // Accept EITHER model (whichever the prod data supports today):
+    //   (A) Pacred bridge — admin_contact_extras.legacy_admin_id active +
+    //       an active sales/super role grant in `admins`.
+    //   (B) Legacy — tb_admin.adminID active + sales-eligible
+    //       (adminStatusA='1' AND adminStatusSale='1'). This is the set the
+    //       inline profile editor (listSalesAdmins) offers, and it's populated
+    //       on prod TODAY (unlike admin_contact_extras).
+    // The rep is valid if EITHER path validates.
     if (legacyId) {
+      // (A) Pacred bridge path.
+      let validViaBridge = false;
       const { data: rep, error: repErr } = await admin
         .from("admin_contact_extras")
         .select("profile_id, legacy_admin_id, ended_at, suspended_at")
@@ -400,23 +418,43 @@ export async function setCustomerSalesRep(input: {
         console.error("[crm setRep:rep lookup] failed", { code: repErr.code, message: repErr.message, legacyId });
         return { ok: false, error: `query_failed: ${repErr.message}` };
       }
-      if (!rep || rep.ended_at || rep.suspended_at) {
+      if (rep && !rep.ended_at && !rep.suspended_at) {
+        const { data: roleRow, error: roleErr } = await admin
+          .from("admins")
+          .select("role")
+          .eq("profile_id", rep.profile_id)
+          .in("role", [...REP_ROLES])
+          .eq("is_active", true)
+          .limit(1)
+          .maybeSingle<{ role: string }>();
+        if (roleErr) {
+          console.error("[crm setRep:role check] failed", { code: roleErr.code, message: roleErr.message });
+          return { ok: false, error: `query_failed: ${roleErr.message}` };
+        }
+        validViaBridge = Boolean(roleRow);
+      }
+
+      // (B) Legacy tb_admin path — only checked if the bridge didn't validate
+      // (saves a query once the bridge is populated).
+      let validViaLegacy = false;
+      if (!validViaBridge) {
+        const { data: legacyRep, error: legacyErr } = await admin
+          .from("tb_admin")
+          .select("adminID, adminStatusA, adminStatusSale")
+          .eq("adminID", legacyId)
+          .maybeSingle<{ adminID: string; adminStatusA: string | null; adminStatusSale: string | null }>();
+        if (legacyErr) {
+          console.error("[crm setRep:legacy tb_admin lookup] failed", { code: legacyErr.code, message: legacyErr.message, legacyId });
+          return { ok: false, error: `query_failed: ${legacyErr.message}` };
+        }
+        validViaLegacy = Boolean(
+          legacyRep && legacyRep.adminStatusA === "1" && legacyRep.adminStatusSale === "1",
+        );
+      }
+
+      if (!validViaBridge && !validViaLegacy) {
         return { ok: false, error: "invalid_rep" };
       }
-      // Confirm the rep's profile carries an active sales/super role.
-      const { data: roleRow, error: roleErr } = await admin
-        .from("admins")
-        .select("role")
-        .eq("profile_id", rep.profile_id)
-        .in("role", [...REP_ROLES])
-        .eq("is_active", true)
-        .limit(1)
-        .maybeSingle<{ role: string }>();
-      if (roleErr) {
-        console.error("[crm setRep:role check] failed", { code: roleErr.code, message: roleErr.message });
-        return { ok: false, error: `query_failed: ${roleErr.message}` };
-      }
-      if (!roleRow) return { ok: false, error: "invalid_rep" };
     }
 
     // Write. Empty string clears ownership (legacy stores '' for "no rep").

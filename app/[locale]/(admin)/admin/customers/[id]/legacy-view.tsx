@@ -343,8 +343,9 @@ export async function renderLegacyCustomerView(id: string) {
           label="ล่าสุดล็อกอิน"
           value={u.userLastLogin ? new Date(u.userLastLogin).toLocaleString("th-TH") : "-"}
         />
-        {/* editSale — write tb_users.adminIDSale (legacy-correct side; the
-            rebuilt transfer-rep page writes profiles.sales_admin_id). */}
+        {/* editSale — write tb_users.adminIDSale (canonical reassign). The
+            per-customer + bulk transfer-rep pages were repointed 2026-06-02 to
+            also write this live column (was profiles.sales_admin_id death). */}
         <SaleRepEditor userid={u.userID} currentRep={u.adminIDSale} admins={salesAdmins} />
       </div>
 

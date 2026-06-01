@@ -8,6 +8,14 @@ import { CONTACT } from "@/components/seo/site";
  * profiles.sales_admin_id → joined profile + admin_contact_extras.
  *
  * Renders nothing if customer has no rep assigned.
+ *
+ * ⚠️ 2026-06-02 — ORPHAN (no importers). The MOUNTED customer-facing rep
+ * surface is lib/admin/sales-rep-contact.ts (on /service-import/[fNo]/invoice),
+ * which reads the LIVE tb_users.adminIDSale → tb_admin. This card still reads
+ * the rebuilt `profiles.sales_admin_id` — kept in sync by
+ * adminTransferSalesRep's dual-write, so it wouldn't show a stale rep if
+ * re-mounted; but a future re-mount should switch to the tb_users.adminIDSale
+ * chain to read the canonical column directly.
  */
 export async function SalesRepCard({ profileId }: { profileId: string }) {
   const supabase = await createClient();

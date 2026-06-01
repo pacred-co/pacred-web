@@ -14,11 +14,12 @@
  *   GROUP BY MONTH(srDate), srAdminIDSale
  *   ORDER BY sr.ID DESC;
  *
- * Pacred mapping:
- *   - tb_forwarder.fStatus=7         → forwarders.status='delivered'
- *   - tb_forwarder.fDateStatus7      → forwarders.date_delivered
- *   - tb_admin.adminID (sales rep)   → profiles.sales_admin_id
- *   - fTotalPrice + fTransportPrice  → forwarders.total_price (already summed)
+ * Data path (LIVE legacy tables — see actions/admin/reports.ts:getSalesMonthlyReport):
+ *   - tb_sales_report.sradminidsale  → the rep SNAPSHOT taken at delivery
+ *   - tb_forwarder (fstatus='7')     → revenue + weight/volume per delivered order
+ *   - tb_admin.adminID               → rep name resolution
+ *   The rep is read from the LIVE `tb_users.adminIDSale` chain (snapshotted into
+ *   tb_sales_report at delivery) — NOT the rebuilt `profiles.sales_admin_id`.
  *
  * Date range via ?from=YYYY-MM-DD&to=YYYY-MM-DD (default last 30 days).
  */
@@ -90,7 +91,7 @@ export default async function SalesMonthlyReportPage({
       csvSlug="sales-monthly"
       sourceNote={
         res.ok
-          ? "Source: forwarders (status=delivered) ± profiles.sales_admin_id — port of report-sale.php"
+          ? "Source: tb_sales_report (rep snapshot) ⋈ tb_forwarder (fstatus=7) — rep from LIVE tb_users.adminIDSale, port of report-sale.php"
           : `❌ โหลดข้อมูลล้มเหลว: ${res.error}`
       }
     />
