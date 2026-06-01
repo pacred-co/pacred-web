@@ -38,10 +38,43 @@ import {
   findLegacyUserIdByPhone,
   upsertLegacyCorporate,
 } from "@/lib/auth/legacy-bridge-tb-users";
+import { getSalesRepContactForUserid } from "@/lib/admin/sales-rep-contact";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
   | { ok: false; error: string; retryAfterSeconds?: number };
+
+/**
+ * Payload for the register success popup (2026-06-02). After a signup commits,
+ * the customer is shown their minted member code + the sales rep who now owns
+ * them (round-robin · lib/admin/assign-sales-rep.ts → tb_users.adminIDSale)
+ * so "ทีมงานจะติดต่อกลับ" is concrete, not abstract.
+ */
+export type RegisterSuccess = {
+  /** Minted member code, e.g. `PR12345`. */
+  memberCode: string;
+  /** Assigned sales rep display name (or Pacred CS fallback). */
+  repName: string;
+  /** Assigned sales rep phone — display form (or Pacred CS fallback). */
+  repPhone: string;
+};
+
+/**
+ * Resolve the register success-popup payload for a freshly-committed member
+ * code. The sales rep is read back from `tb_users.adminIDSale` (written by the
+ * round-robin in insertLegacyTbUserRow) → tb_admin via
+ * getSalesRepContactForUserid, which already falls back to Pacred CS when no
+ * rep is on file. Best-effort: never throws — a lookup hiccup just yields the
+ * CS fallback contact so the popup still renders (the signup already succeeded).
+ */
+async function buildRegisterSuccess(memberCode: string): Promise<RegisterSuccess> {
+  const rep = await getSalesRepContactForUserid(memberCode);
+  return {
+    memberCode,
+    repName:  rep.name,
+    repPhone: rep.phoneDisplay,
+  };
+}
 
 // ─────────────────────────────────────────────────────────────
 // Sign In
@@ -167,7 +200,7 @@ export async function signOutAction(): Promise<never> {
 // ─────────────────────────────────────────────────────────────
 export async function registerPersonal(
   input: RegisterPersonalInput,
-): Promise<ActionResult> {
+): Promise<ActionResult<RegisterSuccess>> {
   const parsed = registerPersonalSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -300,6 +333,13 @@ export async function registerPersonal(
   });
   if (signInErr) return { ok: false, error: "signin_failed" };
 
+  // 2026-06-02 — return the success-popup payload (member code + assigned
+  // sales rep) so the client shows "สมัครสำเร็จ · รหัสสมาชิก PRxxx · เซลที่ดูแล …"
+  // instead of bouncing straight to /dashboard. The rep was written into
+  // tb_users.adminIDSale by the bridge above (round-robin); we read it back.
+  if (profileRow?.member_code) {
+    return { ok: true, data: await buildRegisterSuccess(profileRow.member_code) };
+  }
   return { ok: true };
 }
 
@@ -600,7 +640,7 @@ export async function uploadJuristicDoc(
   return { ok: true, data: { storage_path: path } };
 }
 
-export async function completeJuristicRegistration(): Promise<ActionResult> {
+export async function completeJuristicRegistration(): Promise<ActionResult<RegisterSuccess>> {
   const supabase = await createClient();
   const { data: { user }, error: dataErr } = await supabase.auth.getUser();
   if (dataErr) {
@@ -608,10 +648,16 @@ export async function completeJuristicRegistration(): Promise<ActionResult> {
   }
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  const { error } = await supabase
+  // Flip status=active AND read back the minted member_code (the user owns
+  // their own profiles row via RLS) so we can build the success popup
+  // (2026-06-02). The sales rep was assigned at step 1 (insertLegacyTbUserRow
+  // round-robin → tb_users.adminIDSale); we resolve it now for the popup.
+  const { data: updated, error } = await supabase
     .from("profiles")
     .update({ status: "active" })
-    .eq("id", user.id);
+    .eq("id", user.id)
+    .select("member_code")
+    .maybeSingle<{ member_code: string | null }>();
   if (error) {
     logger.error("auth", "juristic-complete profiles status=active failed", error, {
       userId: user.id,
@@ -620,6 +666,9 @@ export async function completeJuristicRegistration(): Promise<ActionResult> {
     return { ok: false, error: "update_failed" };
   }
 
+  if (updated?.member_code) {
+    return { ok: true, data: await buildRegisterSuccess(updated.member_code) };
+  }
   return { ok: true };
 }
 
