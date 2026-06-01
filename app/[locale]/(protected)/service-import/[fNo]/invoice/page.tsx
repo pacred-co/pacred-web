@@ -2,12 +2,10 @@ import { notFound, redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { requireAuth } from "@/lib/auth/require-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import { PrintButton } from "@/components/print-button";
 import { CONTACT, ADDRESSES, TAX_ID } from "@/components/seo/site";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { getSalesRepContactForUserid } from "@/lib/admin/sales-rep-contact";
-import { PayFromWalletButton } from "../pay-from-wallet-button";
 
 /**
  * Customer-side ใบแจ้งหนี้ (invoice) view —
@@ -323,33 +321,11 @@ export default async function ServiceImportInvoicePage({
     ? await getSalesRepContactForUserid(customerOwnerUserid)
     : null;
 
-  // ── 5. Wallet balance — only relevant if receipt exists + pending ──
-  const receiptPending = receipt && receipt.rstatus !== "1" && receipt.rstatus !== "2";
-  let walletBalance: number | null = null;
-  if (receiptPending) {
-    const supabase = await createClient();
-    const { data: { user }, error: authErr } = await supabase.auth.getUser();
-    if (authErr) {
-      console.error(`[invoice/[fNo] auth.getUser] failed`, {
-        message: authErr.message,
-      });
-    }
-    if (user) {
-      const { data: wallet, error: walletErr } = await admin
-        .from("tb_wallet")
-        .select("wallettotal")
-        .eq("userid", memberCode)
-        .maybeSingle<{ wallettotal: number }>();
-      if (walletErr) {
-        console.error(`[invoice/[fNo] tb_wallet lookup] failed`, {
-          code: walletErr.code, message: walletErr.message,
-        });
-      }
-      walletBalance = Number(wallet?.wallettotal ?? 0);
-    }
-  }
-
-  // ── 6. Totals — items rollup, fallback to current forwarder calc ──
+  // ── 5. Totals — items rollup, fallback to current forwarder calc ──
+  // (Pay-from-wallet was removed — §0e: it debited the rebuilt 0-row
+  //  `wallet_transactions`/`forwarders` twins, never the live
+  //  `tb_wallet`/`tb_forwarder`. The real pay path is the slip upload
+  //  via `submitForwarderPayment`; this page stays a read-only ใบแจ้งหนี้.)
   const itemsTotal = receiptItems.length > 0
     ? receiptItems.reduce((sum, r) => sum + r._amountThb, 0)
     : 0;
@@ -448,13 +424,6 @@ export default async function ServiceImportInvoicePage({
             {/* Action bar — hidden on print */}
             <div className="no-print flex flex-wrap items-center justify-end gap-2">
               <PrintButton label="📄 พิมพ์ / บันทึก PDF" />
-              {receiptPending && walletBalance !== null && grandTotal > 0 && (
-                <PayFromWalletButton
-                  fNo={String(idNum)}
-                  totalThb={grandTotal}
-                  walletBalance={walletBalance}
-                />
-              )}
             </div>
 
             <article className="invoice-card rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -594,22 +563,6 @@ export default async function ServiceImportInvoicePage({
                   </div>
                 </div>
 
-                {/* Pending hint */}
-                {receiptPending && walletBalance !== null && (
-                  <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50 p-4 no-print">
-                    <p className="text-sm font-semibold text-primary-900">
-                      💳 จ่ายจากกระเป๋า Pacred Wallet ของท่าน
-                    </p>
-                    <p className="text-xs text-primary-800 mt-1">
-                      ยอดในกระเป๋า: ฿{numberFormat2(walletBalance)}{" "}
-                      {walletBalance < grandTotal && (
-                        <>· ขาดอีก ฿{numberFormat2(grandTotal - walletBalance)}{" "}
-                          <Link href="/wallet/deposit" className="underline font-medium">เติมเงิน →</Link>
-                        </>
-                      )}
-                    </p>
-                  </div>
-                )}
               </div>
 
               {/* Footer */}
