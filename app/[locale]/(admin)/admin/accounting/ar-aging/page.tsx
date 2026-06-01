@@ -2,6 +2,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import {
   getForwarderAgingReport,
   type AgingBucket,
@@ -51,6 +52,20 @@ export default async function AdminARAgingPage() {
     timeStyle: "short",
   });
 
+  // CSV rows — flatten top-customer table for accounting collection workflow
+  const csvRows: CsvRow[] = report.topCustomers.map((c, idx) => ({
+    "#":                  idx + 1,
+    "รหัสลูกค้า":         c.userid,
+    "ชื่อ":               c.customerName ?? "",
+    "จำนวนรายการค้าง":   c.count,
+    "ค้างนานสุด (วัน)":   c.oldestDays,
+    "0-30 วัน":           c.byBucket["0-30"],
+    "31-60 วัน":          c.byBucket["30-60"],
+    "61-90 วัน":          c.byBucket["60-90"],
+    "เกิน 90 วัน":        c.byBucket["90+"],
+    "ยอดค้างรวม (บาท)":  c.sumOutstanding,
+  }));
+
   return (
     <>
       <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting/ar-aging" />
@@ -99,9 +114,27 @@ export default async function AdminARAgingPage() {
 
         {/* Top customers */}
         <section className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
-          <div className="px-5 py-3 border-b border-border flex items-baseline justify-between gap-3">
+          <div className="px-5 py-3 border-b border-border flex items-baseline justify-between gap-3 flex-wrap">
             <h2 className="font-bold text-sm">🏢 ลูกค้าที่ค้างมากที่สุด (top 20)</h2>
-            <p className="text-xs text-muted">เรียงจากยอดค้างสูง→ต่ำ</p>
+            <div className="flex items-center gap-3">
+              <p className="text-xs text-muted">เรียงจากยอดค้างสูง→ต่ำ</p>
+              <CsvButton
+                rows={csvRows}
+                cols={[
+                  { key: "#",                  label: "#" },
+                  { key: "รหัสลูกค้า",         label: "รหัสลูกค้า" },
+                  { key: "ชื่อ",               label: "ชื่อ" },
+                  { key: "จำนวนรายการค้าง",   label: "จำนวนรายการค้าง" },
+                  { key: "ค้างนานสุด (วัน)",   label: "ค้างนานสุด (วัน)" },
+                  { key: "0-30 วัน",           label: "0-30 วัน" },
+                  { key: "31-60 วัน",          label: "31-60 วัน" },
+                  { key: "61-90 วัน",          label: "61-90 วัน" },
+                  { key: "เกิน 90 วัน",        label: "เกิน 90 วัน" },
+                  { key: "ยอดค้างรวม (บาท)",  label: "ยอดค้างรวม (บาท)" },
+                ]}
+                filename={`pacred-ar-aging-${report.asOf.slice(0, 10)}.csv`}
+              />
+            </div>
           </div>
           {report.topCustomers.length === 0 ? (
             <p className="p-12 text-center text-sm text-muted">
