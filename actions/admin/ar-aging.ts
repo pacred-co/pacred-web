@@ -40,7 +40,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export type AgingBucket = "0-30" | "30-60" | "60-90" | "90+";
 
-export const AGING_BUCKETS: AgingBucket[] = ["0-30", "30-60", "60-90", "90+"];
+// 2026-06-02 (Next-16 quirk · docs/learnings/nextjs-16-quirks.md):
+// `"use server"` files reject ALL non-async-function value exports — even
+// a typed const array crashes at module-evaluation time with "A 'use server'
+// file can only export async functions, found object." Keep this array
+// internal to the module; AgingBucket type covers the public surface.
+const AGING_BUCKETS_INTERNAL: AgingBucket[] = ["0-30", "30-60", "60-90", "90+"];
 
 export type AgingBucketStats = {
   bucket:        AgingBucket;
@@ -165,7 +170,7 @@ export async function getForwarderAgingReport(): Promise<AgingReport> {
     bucketAgg[e.bucket].count += 1;
     bucketAgg[e.bucket].sum   += e.outstanding;
   }
-  const buckets: AgingBucketStats[] = AGING_BUCKETS.map((b) => ({
+  const buckets: AgingBucketStats[] = AGING_BUCKETS_INTERNAL.map((b) => ({
     bucket:         b,
     count:          bucketAgg[b].count,
     sumOutstanding: Math.round(bucketAgg[b].sum * 100) / 100,
