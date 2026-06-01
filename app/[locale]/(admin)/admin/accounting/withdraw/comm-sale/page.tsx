@@ -1,0 +1,207 @@
+import { Link } from "@/i18n/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
+import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
+import { getBatchList } from "@/actions/admin/withdraw-comm-batch";
+
+/**
+ * /admin/accounting/withdraw/comm-sale — Sales-rep batch payouts (legacy
+ * `tb_withdraw_comm_sale_h` × 25 batches · `_item` × 3,204 line items).
+ *
+ * Per `docs/briefs/poom-wave-2026-06-01.md` §2 — the LEGACY batch-payout system
+ * was 0% ported (no Pacred reader/writer at all). This page makes the 25 real
+ * historical batches visible. CREATE + PAY actions DEFERRED next sitting
+ * (money-sensitive · needs ก๊อต co-sign + legacy PHP source verified).
+ *
+ * Legacy PHP: `pcs-admin/withdraw-commission-sale.php` +
+ *             `include/pages/withdraw-commission-sale/home.php`
+ *
+ * Status legend:
+ *   '1' = สร้างแล้ว · รอแนบสลิป (draft after create)
+ *   '2' = รอจ่าย (slip uploaded · pending bank push)
+ *   '3' = จ่ายแล้ว (paid out)
+ *
+ * Roles per ADR-0006 §1.4: accounting | sales_admin (super implicit).
+ */
+
+export const dynamic = "force-dynamic";
+
+const STATUS_LABEL: Record<string, string> = {
+  "1": "สร้างแล้ว",
+  "2": "รอจ่าย",
+  "3": "จ่ายแล้ว",
+};
+const STATUS_BADGE: Record<string, string> = {
+  "1": "bg-slate-100 text-slate-700 border border-slate-300",
+  "2": "bg-amber-50 text-amber-700 border border-amber-200",
+  "3": "bg-green-50 text-green-700 border border-green-200",
+};
+
+function thb(n: number): string {
+  return "฿" + n.toLocaleString("th-TH", { minimumFractionDigits: 2 });
+}
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("th-TH", { year: "numeric", month: "2-digit", day: "2-digit" });
+}
+
+export default async function AdminWithdrawCommSalePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string; rep?: string }>;
+}) {
+  await requireAdmin(["accounting", "sales_admin"]);
+  const sp = await searchParams;
+  const status = sp.status === "1" || sp.status === "2" || sp.status === "3" ? sp.status : undefined;
+  const repId = (sp.rep ?? "").trim() || undefined;
+
+  const result = await getBatchList({
+    kind: "sale",
+    status,
+    adminId: repId,
+    limit: 500,
+  });
+
+  const total = (result.counts["1"] ?? 0) + (result.counts["2"] ?? 0) + (result.counts["3"] ?? 0);
+  const sumCommBefore = result.rows.reduce((s, r) => s + r.commbefore, 0);
+  const sumWHT        = result.rows.reduce((s, r) => s + r.withholding, 0);
+
+  return (
+    <>
+      <PageTopMenubar items={DISBURSEMENT_MENUBAR} activeHref="/admin/accounting/withdraw/comm-sale" />
+      <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
+        <header className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · BATCH PAYOUT</p>
+            <h1 className="mt-1 text-2xl font-bold">เบิกค่าคอม Sales Rep (batch รายเดือน)</h1>
+            <p className="text-xs text-muted mt-1">
+              ระบบจ่ายค่าคอมยกชุดสำหรับ Sales rep · 1% ของ <code className="bg-surface-alt px-1 rounded">fTotalPriceNetAll</code> หัก WHT 3%
+            </p>
+            <p className="text-[10px] text-muted mt-1">
+              📊 อ่านจาก <code className="bg-surface-alt px-1 rounded">tb_withdraw_comm_sale_h</code> + <code className="bg-surface-alt px-1 rounded">_item</code>
+              {" "}(legacy 25 batches · 3,204 รายการ) · NEW MVP read-only ตาม brief §2 ·
+              ⚠️ สร้าง batch + จ่ายเงิน DEFER ครั้งหน้า (ต้องคุย ก๊อต · money-sensitive)
+            </p>
+          </div>
+          <span
+            className="cursor-not-allowed rounded-lg border border-border bg-surface-alt/40 px-3 py-2 text-xs font-medium text-muted"
+            title="DEFERRED · สร้าง batch ต้องคุย ก๊อต ก่อน + ต้องดู legacy PHP source"
+          >
+            + สร้าง batch (เร็วๆ นี้)
+          </span>
+        </header>
+
+        {/* Summary band */}
+        <section className="grid sm:grid-cols-4 gap-3">
+          <Stat label="ทั้งหมด" value={total.toLocaleString("th-TH")} />
+          <Stat label="ในตาราง" value={result.rows.length.toLocaleString("th-TH")} />
+          <Stat label="ค่าคอมรวม (ก่อนหัก)" value={thb(sumCommBefore)} small />
+          <Stat label="WHT รวม" value={thb(sumWHT)} small />
+        </section>
+
+        {/* Status filter chips */}
+        <nav className="flex flex-wrap gap-2">
+          <Link
+            href="/admin/accounting/withdraw/comm-sale"
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
+              !status ? "bg-primary-600 text-white" : "bg-surface-alt text-foreground hover:bg-surface-alt/80"
+            }`}
+          >
+            ทั้งหมด <span className="ml-1 text-[10px]">({total})</span>
+          </Link>
+          {(["1", "2", "3"] as const).map((s) => (
+            <Link
+              key={s}
+              href={`/admin/accounting/withdraw/comm-sale?status=${s}`}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
+                s === status ? STATUS_BADGE[s] : "bg-white text-foreground border-border hover:bg-surface-alt"
+              }`}
+            >
+              {STATUS_LABEL[s]} <span className="ml-1 text-[10px] opacity-75">({result.counts[s] ?? 0})</span>
+            </Link>
+          ))}
+        </nav>
+
+        {/* Batches table */}
+        <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
+          <div className="px-5 py-3 border-b border-border flex items-baseline justify-between gap-3">
+            <h2 className="font-bold text-sm">📋 รายการ batch</h2>
+            {result.rows.length > 0 && (
+              <p className="text-xs text-muted">
+                {result.rows.length} แถว · รวม <span className="font-mono font-bold text-primary-700">{thb(result.sumAmount)}</span>
+              </p>
+            )}
+          </div>
+          {result.rows.length === 0 ? (
+            <p className="p-12 text-center text-sm text-muted">
+              ไม่มี batch {status && ` (status='${status}' = ${STATUS_LABEL[status]})`} ·
+              {total === 0 ? " ยังไม่มี historical data" : " ลองเปลี่ยน filter"}
+            </p>
+          ) : (
+            <div className="overflow-x-auto scrollbar-x-visible">
+              <table className="w-full min-w-[800px] text-sm">
+                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                  <tr>
+                    <th className="px-3 py-2">#</th>
+                    <th className="px-3 py-2">วันที่</th>
+                    <th className="px-3 py-2">ผู้รับเงิน</th>
+                    <th className="px-3 py-2">หัวข้อ</th>
+                    <th className="px-3 py-2 text-right">ค่าคอม (ก่อน WHT)</th>
+                    <th className="px-3 py-2 text-right">หัก WHT</th>
+                    <th className="px-3 py-2 text-right">รับสุทธิ</th>
+                    <th className="px-3 py-2 text-center">สถานะ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.rows.map((b) => (
+                    <tr key={b.id} className="border-t border-border hover:bg-surface-alt/30">
+                      <td className="px-3 py-2">
+                        <Link
+                          href={`/admin/accounting/withdraw/comm-sale/${b.id}`}
+                          className="font-mono text-xs text-primary-600 hover:underline"
+                        >
+                          #{b.id}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">{fmtDate(b.date)}</td>
+                      <td className="px-3 py-2 font-mono text-xs">{b.adminid}</td>
+                      <td className="px-3 py-2 text-xs">{b.title || "—"}</td>
+                      <td className="px-3 py-2 text-right font-mono text-xs">{thb(b.commbefore)}</td>
+                      <td className="px-3 py-2 text-right font-mono text-xs text-muted">{thb(b.withholding)}</td>
+                      <td className="px-3 py-2 text-right font-mono text-xs font-bold text-primary-700">{thb(b.amount)}</td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE[b.status]}`}>
+                          {STATUS_LABEL[b.status] ?? b.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <p className="text-[10px] text-muted">
+          🔗 sibling: <Link href="/admin/accounting/withdraw/comm-interpreter" className="underline">เบิกค่าคอมล่าม</Link>
+          {" · "}
+          ค่าคอมต่อรายการ: <Link href="/admin/commissions" className="underline">/admin/commissions</Link>
+        </p>
+      </main>
+    </>
+  );
+}
+
+function Stat({ label, value, small }: { label: string; value: string; small?: boolean }) {
+  return (
+    <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
+      <p className="text-xs font-medium text-muted">{label}</p>
+      <p className={`mt-1 font-bold font-mono text-foreground ${small ? "text-sm" : "text-xl"}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
