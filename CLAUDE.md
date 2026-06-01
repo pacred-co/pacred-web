@@ -3,6 +3,21 @@
 
 ---
 
+# 🟢 2026-06-01 PM-3 — CRM + 3 MONEY ADRs + BI + pricing-guard SHIPPED · read FIRST
+
+**main = `dave-pacred` = `1fb8ee6f`+ · all pushed · build EXIT 0 · typecheck/i18n 0 · NO new migrations** (all repoint/neutralize existing `tb_*`). Owner approved a batch + said run-long-parallel-ask-once-at-end. Ran **5 worktree agents** (proven pattern) + 2 self-built pieces:
+- **CRM core** `/admin/crm` — omni-inbox (LINE real via ปอน's `Podeng_*`; **FB stubbed — no FB table in DB**) + customer-360 + **sales-rep routing** (`tb_users.adminIDSale` · new `actions/admin/crm.ts`) + funnel→`/admin/leads`. LINE↔customer mostly "ยังไม่ผูก" til manual-link; rep dropdown gated on 13-admin recreate.
+- **ADR-0023 credit** ✅ — `getMyCredit`→`tb_users.userCreditValue`−`tb_credit.creditvalue`; paydown idempotent. 🛑 **prod-verify caught 2 agent bugs** (ห้ามเดา paid off): hs `type='3'` was a withdrawal-tab COLLISION (641 rows)→`'8'`; + missing NOT NULL `typenew`/`typeservice` (runtime INSERT fail).
+- **ADR-0024 config** ✅ — `/admin/settings` neutralized→read-through hub (6 dead-write fields). chip: `/admin/rates` dead-read.
+- **ADR-0025 cashback** ✅ (spend-side) — debit `tb_cash_back`+hs idempotent; shop/yuan/deposit settle full. ⚠️ forwarder-slip approve carries-but-not-debits yet (no double-spend) → **chip filed**.
+- **BI** `/admin/reports/{cockpit,ar-aging}` — exec cockpit + AR-aging (buckets · top-50 debtors).
+- **pricing-guard** — `lib/pricing/margin-advisory.ts` + `<MarginAdvisoryNote>` (`blocks:false` ALWAYS · 6 tests). ⏳ **reusable block shipped, NOT wired** — ≤15k/ตู้ unit = freight per-container (Theme 8 unbuilt) not cargo per-order → **OPEN Q for owner: where to surface it**.
+- build-gate catch: cashback sync helpers broke `pnpm build` ("use server" only-async-exports, typecheck missed it) → moved to `lib/cashback/note-tag.ts`.
+
+**🔓 OPEN for owner:** Q1 pricing-guard surface · 2 chips (cashback-slip · /admin/rates) · 13-admin recreate still gates CRM rep-routing + credit/commission visibility. Detail: memory `big_audit_master_plan_2026_06_01.md` §PM-3.
+
+---
+
 # 🧭 2026-06-01 PM — BIG AUDIT + MASTER PLAN + WAVE HANDOFF · read FIRST (supersedes-but-keeps the MARATHON section below)
 
 **main = `dave-pacred` = `49368172`+ (0/0 · prod · Vercel auto-deploys) · all pushed.** Cross-machine resume: `git pull origin main` → read this section → **[`docs/research/big-audit-2026-06-01/_MASTER-PLAN.md`](docs/research/big-audit-2026-06-01/_MASTER-PLAN.md)** (THE canonical long-term plan) + per-lane briefs in [`docs/briefs/`](docs/briefs/).

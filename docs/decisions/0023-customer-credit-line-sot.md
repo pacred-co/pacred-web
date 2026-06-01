@@ -1,6 +1,6 @@
 # ADR-0023 — Customer credit-line SOT = legacy `tb_users.userCreditValue` (limit) + `tb_credit.creditvalue` (outstanding)
 
-**Status:** PROPOSED 2026-06-01 (เดฟ — plan for owner review; **nothing executed**). Awaiting เดฟ/owner approval before any code change.
+**Status:** ✅ ACCEPTED + IMPLEMENTED 2026-06-01 (owner approved; shipped main `1fb8ee6f`). Option A (faithful) — getMyCredit → `tb_users.userCreditValue` − `tb_credit.creditvalue`; paydown debits wallet + writes hs + decrements credit (idempotent/rollback). ⚠️ post-impl prod-verify fixed 2 agent bugs: paydown `tb_wallet_hs.type` 3→8 (3 = withdrawal-tab collision, 641 real rows) + added missing NOT NULL `typenew`/`typeservice` (INSERT would have failed at runtime).
 **Source:** 2026-06-01 big audit — [`docs/research/big-audit-2026-06-01/03-shop-order-money.md`](../research/big-audit-2026-06-01/03-shop-order-money.md) §3a (m2 #9) + §2 (`v_customer_credit_outstanding` = DEAD) + [`_MASTER-PLAN.md`](../research/big-audit-2026-06-01/_MASTER-PLAN.md) §3 P1 #5.
 **Domain:** the customer credit-line ("เครดิตสินค้า" / pay-later). Sits next to, but is **separate from**, the wallet SOT decided in [ADR-0018](0018-wallet-sot.md) (cash balance) and the cashback decision in [ADR-0025](0025-cashback-at-checkout.md).
 **Companion ADRs:** ADR-0018 (wallet SOT · `tb_wallet`/`tb_wallet_hs`) — this ADR is the credit-line analogue: ratify the legacy half that is already live, retire the rebuilt twin.
