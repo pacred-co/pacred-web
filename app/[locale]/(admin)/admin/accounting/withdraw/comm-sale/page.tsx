@@ -2,6 +2,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { getBatchList } from "@/actions/admin/withdraw-comm-batch";
 
 /**
@@ -69,6 +70,26 @@ export default async function AdminWithdrawCommSalePage({
   const sumCommBefore = result.rows.reduce((s, r) => s + r.commbefore, 0);
   const sumWHT        = result.rows.reduce((s, r) => s + r.withholding, 0);
 
+  // CSV rows for accounting reconciliation export
+  const csvRows: CsvRow[] = result.rows.map((b) => ({
+    "Batch #":                 b.id,
+    "วันที่สร้าง":             b.date ? new Date(b.date).toLocaleDateString("th-TH") : "",
+    "ผู้รับเงิน":              b.adminid,
+    "หัวข้อ":                  b.title,
+    "ค่าคอม (ก่อน WHT)":       b.commbefore,
+    "หัก WHT":                 b.withholding,
+    "รับสุทธิ":                b.amount,
+    "สถานะ":                   STATUS_LABEL[b.status] ?? b.status,
+    "ธนาคารผู้รับ":            b.nameuserbank,
+    "เลขที่บัญชี":             b.nouserbank,
+    "สลิป":                    b.imagesslip,
+  }));
+  const csvCols = [
+    "Batch #", "วันที่สร้าง", "ผู้รับเงิน", "หัวข้อ",
+    "ค่าคอม (ก่อน WHT)", "หัก WHT", "รับสุทธิ",
+    "สถานะ", "ธนาคารผู้รับ", "เลขที่บัญชี", "สลิป",
+  ];
+
   return (
     <>
       <PageTopMenubar items={DISBURSEMENT_MENUBAR} activeHref="/admin/accounting/withdraw/comm-sale" />
@@ -127,13 +148,20 @@ export default async function AdminWithdrawCommSalePage({
 
         {/* Batches table */}
         <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
-          <div className="px-5 py-3 border-b border-border flex items-baseline justify-between gap-3">
+          <div className="px-5 py-3 border-b border-border flex items-baseline justify-between gap-3 flex-wrap">
             <h2 className="font-bold text-sm">📋 รายการ batch</h2>
-            {result.rows.length > 0 && (
-              <p className="text-xs text-muted">
-                {result.rows.length} แถว · รวม <span className="font-mono font-bold text-primary-700">{thb(result.sumAmount)}</span>
-              </p>
-            )}
+            <div className="flex items-center gap-3">
+              {result.rows.length > 0 && (
+                <p className="text-xs text-muted">
+                  {result.rows.length} แถว · รวม <span className="font-mono font-bold text-primary-700">{thb(result.sumAmount)}</span>
+                </p>
+              )}
+              <CsvButton
+                rows={csvRows}
+                cols={csvCols.map((k) => ({ key: k, label: k }))}
+                filename={`pacred-comm-sale-batches-${new Date().toISOString().slice(0, 10)}.csv`}
+              />
+            </div>
           </div>
           {result.rows.length === 0 ? (
             <p className="p-12 text-center text-sm text-muted">

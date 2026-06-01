@@ -6,6 +6,7 @@ import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { getEtaxBundle } from "@/actions/admin/etax-export";
 import { buildEtaxXml } from "@/lib/etax/build-xml";
 import { EtaxRowDownloads } from "./etax-row-downloads";
+import { EtaxBulkDownload } from "./etax-bulk-download";
 
 /**
  * /admin/accounting/etax — e-Tax (RD Code 86) export hub.
@@ -143,8 +144,14 @@ export default async function AdminEtaxPage({
           <Stat label="รับสุทธิรวม" value={`฿${thb(bundle.totalIssued.net)}`} sub={`WHT ฿${thb(bundle.totalIssued.wht)}`} />
         </section>
 
-        {/* Bulk CSV */}
-        <div className="flex flex-wrap justify-end gap-2">
+        {/* Bulk CSV + XML downloads */}
+        <div className="flex flex-wrap justify-end items-center gap-2">
+          <EtaxBulkDownload
+            xmls={bundle.rows.map((r) => ({
+              serialNo: r.serial_no ?? `TI-${r.id}`,
+              xml:      xmlByInvoiceId.get(r.id) ?? "",
+            }))}
+          />
           <CsvButton
             rows={csvRows}
             cols={csvCols.map((k) => ({ key: k, label: k }))}
