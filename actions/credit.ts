@@ -47,16 +47,20 @@ export type CustomerCreditState = {
 
 // ADR-0023 D-5 #2 — the tb_wallet_hs.type for a standalone credit paydown.
 // The legacy NEVER had this flow, so there is no exact precedent. The
-// credit-history tab (load_wallet_hs.php type='c') filters purely on
-// wUserCredit=1 and colours the row by `type`: type 1 or 5 → green/"+",
-// everything else → red/"−". A paydown is a wallet DEBIT, so it MUST read
-// red (not 1/5). We also avoid the types that hyperlink refOrder to an
-// order page (2 → ฝากสั่ง, 4 → ฝากนำเข้า — load_wallet_hs.php L30) and the
-// yuan/topup debits (6/7). type='3' (รายการถอนเงิน) is the closest clean
-// red-debit label that does NOT mislink; the customer-facing `note` carries
-// the true "ชำระยอดค้างเครดิต" description. This is an INTRODUCED convention
-// (flagged in the change summary), not a legacy value.
-const CREDIT_PAYDOWN_HS_TYPE = "3" as const;
+// credit-history tab (wallet-credit/page.tsx) filters purely on
+// wusercredit='1' and colours the row by `type`: type 1 or 5 → green/"+",
+// everything else → red/"−" — so the credit tab surfaces this row REGARDLESS
+// of `type` (it is wusercredit-keyed, not type-keyed). A paydown is a wallet
+// DEBIT, so it reads red (not 1/5).
+// ⚠️ Verified against prod 2026-06-01: types 1-7 are ALL in use and each maps
+// to a /wallet tab — in particular type='3' is the WITHDRAWAL tab
+// (wallet/page.tsx:233 `rowsWithdraw = r.type === "3"`, 641 real legacy rows),
+// so tagging a paydown '3' would make it masquerade as a customer withdrawal.
+// type='8' is unused across all ~104k tb_wallet_hs rows and appears in NONE of
+// the /wallet add/payment/withdraw filters → it surfaces ONLY in the dedicated
+// credit tab (its correct home). The customer-facing `note` carries the
+// "ชำระยอดค้างเครดิต" description. INTRODUCED convention, not a legacy value.
+const CREDIT_PAYDOWN_HS_TYPE = "8" as const;
 
 // ── resolveMemberCode ───────────────────────────────────────────────
 // tb_users / tb_credit / tb_wallet all key on `userid` = the customer's
@@ -273,6 +277,8 @@ export async function customerPayCreditFromWallet(
       amount:          amountToPay,
       status:          "2",
       type:            CREDIT_PAYDOWN_HS_TYPE,
+      typenew:         "",                        // NOT NULL on prod — no legacy sub-type for a paydown
+      typeservice:     "",                        // NOT NULL on prod — no legacy service-class for a paydown
       paydeposit:      "1",                       // paid-from-wallet
       imagesslip:      "",
       depositnamebank: "",
