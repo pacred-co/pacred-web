@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { calculateForwarderTotal } from "@/actions/forwarder";
 import {
   ForwarderRowView,
@@ -60,6 +60,24 @@ export type ForwarderInteractivityProps = {
   /** Column count — kept in the API for compat; the card list doesn't
    *  use it anymore. */
   columnCount: number;
+  /** Admin-editable "โปรเหมาๆ" banner config (business_config · resolved
+   *  server-side in page.tsx). When `enabled` is false / past its end-date
+   *  the strip is hidden regardless of `showMaoStrip`. */
+  maoPromo: MaoPromoConfig;
+}
+
+/** Resolved "โปรเหมาๆ" promo-banner config — see business_config keys
+ *  `import.promo.*` (migration 0135). All fields plain-serializable so
+ *  they cross the RSC boundary cleanly. */
+export type MaoPromoConfig = {
+  enabled: boolean;
+  headline: string;
+  text: string;
+  amount: number;
+  /** ISO date (YYYY-MM-DD) or "" for no end date. */
+  endDate: string;
+  /** Image URL or "" for none. */
+  imageUrl: string;
 };
 
 export function ForwarderInteractivity({
@@ -70,6 +88,7 @@ export function ForwarderInteractivity({
   showPayBar,
   showMaoStrip,
   showPayStrip,
+  maoPromo,
   // columnCount kept in the prop type for binary compat with page.tsx;
   // the card list doesn't need it.
 }: ForwarderInteractivityProps) {
@@ -163,19 +182,58 @@ export function ForwarderInteractivity({
   const displayTotal =
     serverTotal !== null ? serverTotal : numberFormat2(optimisticTotal);
 
+  // ── BUG #1/#2 fix — when the sticky pay-bar is on screen, flag the body
+  //    so the global FloatingTabs lifts its LINE bubble above the pay-bar
+  //    (globals.css `body.has-import-paybar`). Without this the LINE
+  //    bubble (z-51) overlapped the pay-bar and stole the "ชำระเงิน" tap.
+  //    The class is removed on unmount / when the bar hides so every other
+  //    page is unaffected (same pattern as `no-bottom-tabs`).
+  useEffect(() => {
+    if (!showPayBar) return;
+    document.body.classList.add("has-import-paybar");
+    return () => document.body.classList.remove("has-import-paybar");
+  }, [showPayBar]);
+
+  // ── BUG #3 — resolve whether the admin-configured "โปรเหมาๆ" banner
+  //    should actually render: enabled flag AND (no end-date OR today is
+  //    on/before it). `new Date()` is computed once in a lazy initializer
+  //    (NOT in render — `react-hooks/purity` rejects `new Date()` in the
+  //    render body). The legacy visibility condition (showMaoStrip) still
+  //    gates it too, so the strip only shows when there ARE status-5 rows.
+  const [maoPromoActive] = useState(() => {
+    if (!maoPromo.enabled) return false;
+    if (maoPromo.endDate === "") return true;
+    // YYYY-MM-DD strings compare lexicographically === chronologically.
+    const todayYmd = new Date().toISOString().slice(0, 10);
+    return todayYmd <= maoPromo.endDate;
+  });
+
   return (
     <>
       {/* ── (cond.) "โปรเหมาๆ" strip — forwarder.php L600. Tailwind
               rebuild of the headShake legacy strip (animation kept by
               `animate__animated animate__headShake` classes — vendor
               CSS still loads it). ── */}
-      {showMaoStrip && (
+      {showMaoStrip && maoPromoActive && (
         <div className="my-3 mx-auto max-w-[640px]">
           <div className="rounded-2xl bg-red-600 text-white text-center px-4 py-3 shadow-md shadow-red-600/20 animate__animated animate__infinite animate__headShake">
-            <div className="text-sm font-bold mb-1">โปรเหมาๆ</div>
-            <div className="text-[12px] leading-snug">
-              &ldquo;หากลูกค้าชำระค่าขนส่งในไทยก่อนเวลา 00.00 น. บริษัทฯ จะจัดส่งสินค้าให้ภายใน 1-3 วันทำการ นับจากวันที่ชำค่าขนส่ง&rdquo;
+            {maoPromo.imageUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={maoPromo.imageUrl}
+                alt=""
+                className="mx-auto mb-2 max-h-24 w-auto object-contain"
+              />
+            )}
+            <div className="text-sm font-bold mb-1">{maoPromo.headline}</div>
+            <div className="text-[12px] leading-snug whitespace-pre-line">
+              {maoPromo.text}
             </div>
+            {maoPromo.amount > 0 && (
+              <div className="mt-1.5 text-[11px] font-semibold opacity-90">
+                ส่วนลดสูงสุด {numberFormat2(maoPromo.amount)} บาท
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -223,17 +281,27 @@ export function ForwarderInteractivity({
         </div>
       )}
 
-      {/* ── Bottom pay-bar — forwarder.php L840-862. Tailwind rebuild:
-            ·  Mobile: lifts to bottom-[96px] to clear the FloatingTabs
-               bottom-nav (~88px tall) + the centred FAB that protrudes
-               ~20px above it; rounded top corners + backdrop-blur for a
-               floating-card look that doesn't touch the bottom-nav edge.
+      {/* ── Bottom pay-bar — forwarder.php L840-862. Tailwind rebuild.
+            🔧 BUG #1/#2 fix (2026-06-01): the bar now owns the highest
+               stacking context near the bottom (`z-[55]`) so its
+               "ชำระเงิน" button always receives the tap — previously it
+               sat at z-[44], BELOW the FloatingTabs bottom-nav (z-50) AND
+               the floating LINE bubble (z-51), so a transparent overlap
+               with the LINE bubble silently stole the click (the owner's
+               "กดไม่ได้" report). The mobile bar is now FULL-WIDTH
+               (`left-2 right-2`) instead of the awkward `right-20` dodge
+               — the LINE bubble is lifted above it via the
+               `body.has-import-paybar` signal (globals.css), so they no
+               longer overlap.
+            ·  Mobile: `bottom-[92px]` sits just above the FloatingTabs
+               bottom-nav (~88px incl. safe-area); rounded top corners +
+               backdrop-blur floating-card look.
             ·  Desktop: `md:bottom-0` flush to the viewport bottom edge
-               (FloatingTabs is a vertical bar on the right side at md+,
-               so there's nothing at the bottom to clear).
+               (FloatingTabs is a vertical right-rail at md+, nothing at
+               the bottom to clear). z-[55] > desktop LINE bubble (z-51).
             ·  Hidden on auth/admin via the route group. */}
       {showPayBar && (
-        <div className="fixed left-2 right-20 md:left-0 md:right-0 z-[44] bottom-24 md:bottom-0 bg-white/95 dark:bg-surface/95 backdrop-blur-md border border-border md:border-0 md:border-t rounded-2xl md:rounded-none shadow-[0_-6px_24px_rgba(0,0,0,0.12)] md:shadow-[0_-6px_20px_rgba(0,0,0,0.08)] overflow-hidden">
+        <div className="fixed left-2 right-2 md:left-0 md:right-0 z-[55] bottom-[92px] md:bottom-0 bg-white/95 dark:bg-surface/95 backdrop-blur-md border border-border md:border-0 md:border-t rounded-2xl md:rounded-none shadow-[0_-6px_24px_rgba(0,0,0,0.12)] md:shadow-[0_-6px_20px_rgba(0,0,0,0.08)] overflow-hidden">
           <div className="flex items-center gap-2 md:gap-3 px-3 py-2 md:px-6 md:py-3 md:pl-[280px] md:pr-[88px]">
             {/* Select-all — icon-only on tight viewports, label appears ≥360px */}
             <label className="flex items-center gap-1.5 shrink-0 cursor-pointer">
