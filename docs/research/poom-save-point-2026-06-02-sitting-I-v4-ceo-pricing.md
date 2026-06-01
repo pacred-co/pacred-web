@@ -4,7 +4,7 @@
 >
 > **Branch state:** `Poom-pacred = 06feb98e` · synced กับ origin · was at `a57e8df5` ตอนเริ่ม continuation
 >
-> **Total this run:** 3 commits (2 surfaces + 1 lint fix) — Margin Monitor (retrospective) + Sales Quote Comparison (forward-looking)
+> **Total this run:** 4 commits — Margin Monitor (retrospective) + Sales Quote Comparison (forward-looking) + save-point docs + Margin-flag cron (closes review loop)
 
 ---
 
@@ -15,12 +15,14 @@
 | 14 | (folded into 15) | A-tier polish | `prefer-const` lint fix in margin-monitor (was hold from prior compaction) |
 | 15 | `3096df7f` | **CEO directive A** | **Margin Monitor** — retrospective profit-cap monitor (≤฿15k/ตู้ policy) · buckets 0/0-5k/5-10k/10-15k/15k+ · top-20 over-cap + top-20 negative + per-rep leaderboard · CSV export |
 | 16 | `06feb98e` | **CEO directive B** | **Sales Quote Comparison** — forward-looking pricing tool · 9-carrier side-by-side · sale rate resolved via SVIP→VIP→general waterfall · cost rates from tb_settings · CEO cap warnings · sharable GET-URL quotes |
+| 17 | `084c6af9` | save-point docs | This file (v4) |
+| 18 | `2a0e53c5` | **CEO loop close** | **Daily margin-flag cron** — `/api/cron/margin-flag` runs 00:10 ICT · scans yesterday's deliveries · pushes over-cap + loss orders to LINE staff group with deep-link to Margin Monitor dashboard |
 
 **Net diff:** ~+1,175 LOC across 5 files (2 actions + 2 pages + menubar)
 
 ---
 
-## 🎖 CEO pricing directive — FULLY CLOSED
+## 🎖 CEO pricing directive — FULLY CLOSED (with review loop)
 
 CLAUDE.md PM section quote: *"pricing profit-cap ≤15k฿/ตู้ + sales quote-comparison tool"*
 
@@ -28,6 +30,7 @@ CLAUDE.md PM section quote: *"pricing profit-cap ≤15k฿/ตู้ + sales quo
 |---|---|---|---|
 | 🔁 **Retrospective** | Margin Monitor | `/admin/accounting/margin-monitor` | ✅ shipped 3096df7f |
 | 🔮 **Forward-looking** | Sales Quote Comparison | `/admin/accounting/quote-compare` | ✅ shipped 06feb98e |
+| 🔔 **Review loop** | Daily LINE staff-group flag | `/api/cron/margin-flag` (00:10 ICT) | ✅ shipped 2a0e53c5 |
 
 **Pair coverage:**
 
