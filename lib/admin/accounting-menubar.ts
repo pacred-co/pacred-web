@@ -231,6 +231,10 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       // 2026-06-02 sitting-I §3.5 (ภูม poom-wave brief): PEAK/FlowAccount
       // CSV export hub — 4 datasets (receipts · bills · sale/interp comm batches).
       { label: "ส่งออก CSV (PEAK/FlowAccount)", href: "/admin/accounting/peak-export" },
+      // 2026-06-02 sitting-I §3.4 (ภูม poom-wave brief): e-Tax (RD Code 86) hub.
+      // Lists issued tb_forwarder_tax_invoice + XML/CSV download · MVP preview
+      // shape (full XAdES-BES sig + RD-API submit DEFERRED).
+      { label: "ส่งออก e-Tax (RD Code 86)",     href: "/admin/accounting/etax" },
       // Wave 7.3 (2026-05-22): wired 2 orphan accounting pages here per
       // ภูม decision in page-inventory-2026-05-21-night.md §🔴 DEAD.
       { label: "งวดบัญชี",  href: "/admin/accounting/periods" },
