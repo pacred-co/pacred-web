@@ -175,7 +175,7 @@ export async function getBatchList(opts: {
     nouserbank: string;
     imagesslip: string;
   };
-  const rows: BatchHeaderRow[] = ((rowsRaw ?? []) as RawRow[]).map((r) => ({
+  const rows: BatchHeaderRow[] = ((rowsRaw ?? []) as unknown as RawRow[]).map((r) => ({
     id:             r.id,
     date:           r.date,
     dateupdate:     r.dateupdate,
@@ -244,7 +244,7 @@ export async function getBatchDetail(
     adminid: string; adminidcreate: string; adminidupdate: string;
     namebank: string; nameuserbank: string; nouserbank: string; imagesslip: string;
   };
-  const h = headRaw as RawH;
+  const h = headRaw as unknown as RawH;
   const header: BatchHeaderRow = {
     id:             h.id,
     date:           h.date,

@@ -209,7 +209,7 @@ export async function getTranThDetail(id: number): Promise<TranThDetail | null> 
     if (fwdErr) {
       console.error("[tb_forwarder tran-th batch] failed", { code: fwdErr.code, message: fwdErr.message });
     }
-    fwdById = new Map(((fwdRaw ?? []) as FwdRow[]).map((f) => [f.id, f]));
+    fwdById = new Map(((fwdRaw ?? []) as unknown as FwdRow[]).map((f) => [f.id, f]));
   }
 
   const items: TranThItemRow[] = subs.map((s) => {

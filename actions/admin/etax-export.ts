@@ -122,7 +122,7 @@ export async function getEtaxBundle(range: EtaxRange): Promise<EtaxBundle> {
   if (error) {
     console.error("[etax-export tb_forwarder_tax_invoice] failed", { code: error.code, message: error.message });
   }
-  const rows: EtaxInvoiceRow[] = ((rawRows ?? []) as Raw[]).map((r) => ({
+  const rows: EtaxInvoiceRow[] = ((rawRows ?? []) as unknown as Raw[]).map((r) => ({
     id:                  r.id,
     serial_no:           r.serial_no,
     userid:              r.userid,

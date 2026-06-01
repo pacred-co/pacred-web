@@ -92,7 +92,7 @@ export async function getWhtCertQueue(opts: {
     cert_received_at: string | null;
     created_at:      string;
   };
-  const rows = (raw ?? []) as Raw[];
+  const rows = (raw ?? []) as unknown as Raw[];
 
   // Hydrate invoice serial — batched IN query
   const invoiceIds = Array.from(new Set(rows.map((r) => r.invoice_id).filter((v): v is number => v != null)));
