@@ -2723,7 +2723,8 @@
       "whHistory": "ประวัติเข้าโกดังไทย",
       "assignDriver": "มอบงานคนขับรถ",
       "driverWork": "ดูงานคนขับ (มือถือ)",
-      "combineBill": "รวมบิลสินค้า"
+      "combineBill": "รวมบิลสินค้า",
+      "tranTh": "ใบจัดส่งในไทย (Batch)"
     },
     "forwarderImport": {
       "title": "บริการฝากนำเข้า",
