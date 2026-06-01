@@ -2,9 +2,9 @@
 
 > **คอมที่ทำงานอ่านอันนี้ตอนเช้า — sync แล้วเริ่มต่อได้ทันที.**
 >
-> **Branch state:** `Poom-pacred = 819c283d` · pushed · origin synced
+> **Branch state:** `Poom-pacred = 147105e5` · pushed · origin synced (0/0)
 >
-> **Total session: 19+ commits today** — sitting-I v1-v3 (PEAK module 5/5) → v4 (CEO pricing pair + cron) → v5 (ภูม UX P0 fix)
+> **Total session: 21+ commits today** — sitting-I v1-v3 (PEAK module 5/5) → v4 (CEO pricing pair + cron) → v5 (ภูม UX P0 fix) → **v5-after MOMO Q1+Q2** (ภูม flag ค่ำ · scripts + answer doc)
 
 ---
 
@@ -58,6 +58,31 @@ Wrap each interactive panel in CollapsibleCard (server-side `<details>` · no JS
 | 🧾 ชื่อผู้รับใบกำกับ | closed | rare edit · open on demand |
 
 Each card has icon + title + smart hint (e.g. "สถานะปัจจุบัน: 5" / "ใช้ชื่อผู้รับ default") + chevron-rotates-on-open. Added "⚡ Actions" section divider above the cards for visual hierarchy.
+
+### Sitting-I after-hours — **ภูม MOMO review flag** (Q1+Q2)
+
+ภูม flag 2026-06-02 ค่ำ (ที่ /admin/api-forwarder-momo/review):
+
+**Q1 — PR99 candidate hunt:**
+MOMO ส่ง userid "PR99" → ระบบขึ้น "ไม่มี PR99 ในระบบ" สีแดง (ตาม pattern 2026-05-30 ดึก ที่ PR9370→PR005 · PR1282→PR032 · PR1321→PR116)
+
+Shipped 2 scripts (`147105e5`):
+- **`scripts/investigate-pr99-candidate.mjs`** — READ-ONLY probe · list candidates · cross-ref tb_forwarder + MOMO raw
+- **`scripts/rename-userid-to-pr99.mjs`** — ATOMIC rename 9 tables (tb_users + 8 FK refs) · idempotent · y/n confirm · collision check
+
+**ภูม ต้องรันที่ prod ที่ทำงานพรุ่งนี้** (ผมไม่มี DB direct access):
+```bash
+pnpm tsx scripts/investigate-pr99-candidate.mjs       # หา candidate
+# → แก้ const OLD_USERID ใน rename script
+pnpm tsx scripts/rename-userid-to-pr99.mjs            # rename atomic
+```
+
+**Q2 — "ยังไม่ join cabinet (รอ container_closed sync)":**
+อธิบายในเอกสาร `docs/research/momo-review-2-questions-2026-06-02.md`:
+- คือ tracking ยังไม่ link real cabinet (cid · เช่น `GZS260525-2`)
+- รอ MOMO ส่ง `container_closed` event มา + sync step 2.5 propagate
+- **ใช้งานปกติได้** — admin commit ได้ · `fcabinetnumber` เป็น MOMO routing batch ก่อน · propagation overwrite อัตโนมัติทีหลัง
+- แก้ได้ 3 ทาง: รอ cron 5 min / manual sync / date-range override
 
 ---
 
@@ -154,7 +179,40 @@ pnpm dev   # port 3000
 # 3. /admin/forwarders/51986 — เห็น collapsible Actions (Status open default · Driver/Edit closed)
 #    + click "📝 อัปเดตสถานะ" expand/collapse · same for "🚚 มอบหมายคนขับ" etc
 
+# 🟦 MOMO Q1+Q2 follow-up (ภูม flag ค่ำ):
+# 4. /admin/api-forwarder-momo/review — เห็น PR99 row + "ไม่มี PR99 ในระบบ" สีแดง
+#    Q1: รัน 2 scripts ตามลำดับ — investigate ก่อน → rename
+#    Q2: เข้าใจ "รอ container_closed sync" แล้ว · ใช้งานได้ปกติ · ถ้ารีบ manual sync
+# 5. อ่าน docs/research/momo-review-2-questions-2026-06-02.md (full explanation + scripts usage)
+
 # Pick from §"Pickup options" above (A-G) ตามอารมณ์ตอนเช้า
+```
+
+---
+
+## 🟦 MOMO follow-up steps (ภูม Q1 ที่ทำงานพรุ่งนี้)
+
+```bash
+# Step 1 — Investigate PR99 candidate (READ-ONLY · ปลอดภัย รันบน prod)
+pnpm tsx scripts/investigate-pr99-candidate.mjs
+
+# ดูผล → เลือก candidate ที่ดูคุ้น (ปกติเป็น PR99xx ที่มี recent forwarder activity)
+
+# Step 2 — แก้ rename script · ใส่ OLD_USERID
+# เปิด scripts/rename-userid-to-pr99.mjs · แก้ const OLD_USERID = "PR99XX" → ตัวจริง
+
+# Step 3 — รัน rename (atomic 9-table · y/n confirm · idempotent)
+pnpm tsx scripts/rename-userid-to-pr99.mjs
+
+# Step 4 — refresh review page · เห็น "พบใน tb_users" สีเขียว · กดสร้างใหม่ได้
+```
+
+**Q2 ไม่ต้องทำอะไร** — `⏳ ยังไม่ join cabinet` ใช้งานได้ปกติ · แค่ informational. ถ้ารีบ:
+```bash
+# Manual sync ที่ /admin/api-forwarder-momo/sync · กด "Sync MOMO ตอนนี้"
+# หรือ date-range override:
+curl 'http://localhost:3000/api/cron/momo-sync?start=2026-05-01&end=2026-06-02' \
+  -H 'Authorization: Bearer $CRON_SECRET'
 ```
 
 ---
@@ -165,8 +223,9 @@ pnpm dev   # port 3000
 - **PEAK module §3 ปิด 5/5** (sitting-I v1-v3)
 - **CEO pricing directive ปิดเต็ม loop** (sitting-I v4 — retrospective + forward-looking + cron review)
 - **ภูม UX P0 ปิด** (sitting-I v5 — collapsible action panels)
+- **MOMO Q1+Q2 ตอบ + 2 scripts ให้รัน** (v5-after — PR99 hunt + container_closed สาเหตุ)
 
-19+ commits · 5 P0/P1 brief tasks done · 2 MVP-shipped · 1 needs-coord.
+21+ commits · 5 P0/P1 brief tasks done · 2 MVP-shipped · 1 needs-coord · 1 ภูม follow-up flag (PR99 rename).
 
 **ภูม พักได้แล้ว · เช้าจะมีงาน clean สำหรับเริ่มต่อ — สงวนเวลาเปิดดูบราว์เซอร์ verify ก่อน · แล้วเลือก pickup option A-G ตามอารมณ์ตอนเช้า** ⚡
 
