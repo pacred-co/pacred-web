@@ -1,25 +1,27 @@
 "use server";
 
 // ────────────────────────────────────────────────────────────────────
-// U4-2 · Admin actions for customer credit line (เครดิตสินค้า)
+// Admin actions for the customer credit line · ADR-0023 (legacy-SOT repoint)
 // ────────────────────────────────────────────────────────────────────
-// Two surfaces:
+// SOT (ADR-0023 D-1): limit = tb_users.userCreditValue (camelCase, per
+// userID); outstanding = tb_credit.creditvalue (lowercase, per userid).
+// The rebuilt profiles.credit_limit/credit_days/credit_enabled +
+// wallet_transactions bucket='credit' model is FROZEN (empty on prod) and
+// retires in a later cleanup — no new writes here.
 //
-//   1. adminSetCustomerCreditLimit — set the per-customer cap (THB)
-//      and term days (e.g. 30). super + accounting only. The actual
-//      column writes go to profiles.credit_limit / profiles.credit_days
-//      (existing columns from migration 0003; column comments in
-//      migration 0071 explain the mapping to upgrade-plan wording).
+//   1. adminSetCustomerCreditLimit — set the per-customer cap (THB) on
+//      tb_users.userCreditValue. super + accounting only. 0 = feature off
+//      (userCreditValue>0 is the "enabled" signal — no separate boolean).
+//      Reachable at /admin/customers/[id]. (ADR-0023 D-5 #4.)
 //
-//   2. adminChargeToCredit — staff places an order on the customer's
-//      behalf using their credit line (e.g. a phone-in order, or a
-//      "ลงไว้ก่อน เดี๋ยวจ่ายสิ้นเดือน" arrangement). Inserts a
-//      wallet_transactions row kind='credit_charge', bucket='credit',
-//      amount=-thb. Refuses if (outstanding + amount > credit_limit)
-//      so the cap is enforced at the write boundary, not just by the
-//      v_customer_credit_outstanding view at read time.
-//
-// Both audit-log via logAdminAction (forwarder.* / customer.* pattern).
+//   2. adminChargeToCredit — DEPRECATED (ADR-0023 D-5 #5). The live,
+//      reachable, faithful grant is adminMarkForwarderCredit
+//      (actions/admin/forwarders-field-edits.ts) which UPSERTs
+//      tb_credit.creditvalue on a real forwarder bill with a headroom gate.
+//      A second generic "charge to credit" wrote the DEAD wallet_transactions
+//      bucket='credit' model (0 rows on prod) → a silent dead-write trap
+//      (AGENTS.md §0e). It is now a no-op stub that refuses + points callers
+//      at the real grant. (No UI invoked it — verified zero consumers.)
 // ────────────────────────────────────────────────────────────────────
 
 import { revalidatePath } from "next/cache";
@@ -28,9 +30,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
 // ── adminSetCustomerCreditLimit ─────────────────────────────────────
-// super + accounting can set a customer's credit cap and terms. The
-// profiles columns already exist (0003) — this action gates +
-// audit-logs the writes and notifies the customer when meaningful.
+// super + accounting set a customer's credit cap. ADR-0023 D-5 #4: the
+// canonical limit column is tb_users.userCreditValue (NOT the dead
+// profiles.credit_limit). Resolve profile_id → member_code, then write the
+// legacy column. credit_terms_days is accepted for signature stability but
+// NOT persisted — the legacy has no global terms-days column (D-2/D-5 #1);
+// the per-grant due date lives on tb_forwarder.fcreditdate via
+// adminMarkForwarderCredit. We log it in the audit payload for traceability.
 
 const setCreditLimitSchema = z.object({
   profile_id:         z.string().uuid(),
@@ -51,48 +57,56 @@ export async function adminSetCustomerCreditLimit(
   return withAdmin(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: before, error: readErr } = await admin
+    // Resolve profile_id → member_code (PR-code = tb_users.userID).
+    const { data: profileRow, error: profileErr } = await admin
       .from("profiles")
-      .select("id, credit_limit, credit_days, credit_enabled, member_code")
+      .select("id, member_code")
       .eq("id", d.profile_id)
-      .maybeSingle<{
-        id: string;
-        credit_limit: number | null;
-        credit_days: number | null;
-        credit_enabled: boolean | null;
-        member_code: string | null;
-      }>();
-    if (readErr) return { ok: false, error: readErr.message };
-    if (!before) return { ok: false, error: "not_found" };
-
-    // Setting limit > 0 implies the customer has the feature on; a
-    // zero limit turns it off. We mirror that to credit_enabled so
-    // legacy reports that key off the boolean keep working.
-    const update: Record<string, unknown> = {
-      credit_limit:   d.credit_limit_thb,
-      credit_enabled: d.credit_limit_thb > 0,
-    };
-    if (d.credit_terms_days !== undefined) {
-      update.credit_days = d.credit_terms_days;
-    } else if (d.credit_limit_thb > 0 && (before.credit_days ?? 0) <= 0) {
-      // First-time enable with no explicit terms → default 30 days
-      // (matches the upgrade-plan default).
-      update.credit_days = 30;
+      .maybeSingle<{ id: string; member_code: string | null }>();
+    if (profileErr) {
+      console.error(`[profiles read] failed`, { code: profileErr.code, message: profileErr.message, profile_id: d.profile_id });
+      return { ok: false, error: profileErr.message };
+    }
+    if (!profileRow) return { ok: false, error: "not_found" };
+    const memberCode = profileRow.member_code ?? "";
+    if (!memberCode) {
+      return { ok: false, error: "no_member_code — ลูกค้ายังไม่มีรหัส PR (ยังไม่ migrate)" };
     }
 
-    const { error: updErr } = await admin
-      .from("profiles")
-      .update(update)
-      .eq("id", d.profile_id);
-    if (updErr) return { ok: false, error: updErr.message };
+    // Read the current legacy limit for the before/after audit (tb_users · camelCase).
+    const { data: before, error: readErr } = await admin
+      .from("tb_users")
+      .select("userID, userCreditValue")
+      .eq("userID", memberCode)
+      .maybeSingle<{ userID: string; userCreditValue: number | string | null }>();
+    if (readErr) {
+      console.error(`[tb_users credit read] failed`, { code: readErr.code, message: readErr.message, userid: memberCode });
+      return { ok: false, error: readErr.message };
+    }
+    if (!before) {
+      return { ok: false, error: "tb_users_not_found — ไม่พบบัญชีลูกค้าในระบบเดิม" };
+    }
+    const prevLimit = Number(before.userCreditValue ?? 0);
 
-    await logAdminAction(adminId, "customer.credit_limit_set", "profile", d.profile_id, {
-      before: {
-        credit_limit:   Number(before.credit_limit ?? 0),
-        credit_days:    Number(before.credit_days ?? 0),
-        credit_enabled: Boolean(before.credit_enabled),
-      },
-      after: update,
+    // Write the canonical legacy limit. userCreditValue>0 IS the enabled
+    // signal (no separate boolean) — setting 0 turns the credit line off.
+    const { error: updErr } = await admin
+      .from("tb_users")
+      .update({ userCreditValue: d.credit_limit_thb })
+      .eq("userID", memberCode);
+    if (updErr) {
+      console.error(`[tb_users credit update] failed`, { code: updErr.code, message: updErr.message, userid: memberCode });
+      return { ok: false, error: updErr.message };
+    }
+
+    await logAdminAction(adminId, "customer.credit_limit_set", "tb_users", memberCode, {
+      profile_id:        d.profile_id,
+      member_code:       memberCode,
+      // credit_terms_days has no legacy home — recorded for traceability only
+      // (the binding due date is per-order on tb_forwarder.fcreditdate).
+      credit_terms_days: d.credit_terms_days ?? null,
+      before:            { userCreditValue: prevLimit },
+      after:             { userCreditValue: d.credit_limit_thb },
     });
 
     revalidatePath("/admin/customers");
@@ -101,16 +115,16 @@ export async function adminSetCustomerCreditLimit(
   });
 }
 
-// ── adminChargeToCredit ─────────────────────────────────────────────
-// Staff bills an in-flight cost to the customer's credit line. Writes
-// a completed credit_charge row (bucket='credit', negative amount) so
-// the outstanding goes UP by the charged amount. Refuses if the new
-// outstanding would exceed credit_limit — the cap is the write-time
-// floor, not a read-time hint.
-//
-// Idempotency: caller may pass a stable reference_id (e.g. the order
-// number or forwarder f_no the credit was used for). When supplied, we
-// re-SELECT first and return the existing row instead of double-charging.
+// ── adminChargeToCredit — DEPRECATED (ADR-0023 D-5 #5) ──────────────
+// The faithful, reachable grant is adminMarkForwarderCredit (it UPSERTs
+// tb_credit.creditvalue on a real forwarder bill with a `userCreditValue −
+// creditvalue >= pricePay` headroom gate, reachable at
+// /admin/forwarders/[fNo]). This generic "charge to credit" wrote the DEAD
+// wallet_transactions bucket='credit' model (0 rows on prod) — a silent
+// dead-write trap. It is intentionally retained as a refusing stub (zero UI
+// consumers today) so any future caller fails loudly toward the real path
+// instead of silently writing nothing. The input schema is preserved so the
+// signature is stable.
 
 const REFERENCE_TYPES = ["order_header", "forwarder", "manual"] as const;
 
@@ -128,115 +142,15 @@ type ChargeToCreditData = { tx_id: string; already_charged: boolean; new_outstan
 export async function adminChargeToCredit(
   input: AdminChargeToCreditInput,
 ): Promise<AdminActionResult<ChargeToCreditData>> {
-  const parsed = chargeToCreditSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
-  }
-  const d = parsed.data;
-
-  return withAdmin<ChargeToCreditData>(["super", "accounting"], async ({ adminId }) => {
-    const admin = createAdminClient();
-
-    // 1) Read the customer's current credit window from the view
-    //    (single SQL source of truth). If the row doesn't exist (no
-    //    credit_limit set, no prior credit txns) the customer is
-    //    NOT enrolled in credit — bail out clearly.
-    const { data: state, error: stateErr } = await admin
-      .from("v_customer_credit_outstanding")
-      .select("credit_limit_thb, outstanding_thb, available_credit_thb")
-      .eq("profile_id", d.profile_id)
-      .maybeSingle<{
-        credit_limit_thb: number;
-        outstanding_thb: number;
-        available_credit_thb: number;
-      }>();
-    if (stateErr) return { ok: false, error: stateErr.message };
-    if (!state || Number(state.credit_limit_thb) <= 0) {
-      return {
-        ok: false,
-        error: "credit_not_enabled — ลูกค้ายังไม่ได้เปิดวงเงินเครดิต (credit_limit = 0)",
-      };
-    }
-
-    const limit       = Number(state.credit_limit_thb);
-    const outstanding = Number(state.outstanding_thb);
-    const projected   = outstanding + d.amount_thb;
-    if (projected > limit) {
-      return {
-        ok: false,
-        error: `credit_over_limit — ยอดเครดิตเกินวงเงิน (มียอดค้าง ฿${outstanding.toLocaleString("th-TH", { minimumFractionDigits: 2 })} + ชาร์จใหม่ ฿${d.amount_thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })} = ฿${projected.toLocaleString("th-TH", { minimumFractionDigits: 2 })} > วงเงิน ฿${limit.toLocaleString("th-TH", { minimumFractionDigits: 2 })})`,
-      };
-    }
-
-    // 2) Idempotency probe — only meaningful when caller supplied a
-    //    reference. A bare "charge ฿500 reason=manual" has no anchor
-    //    to dedupe against, so we always insert in that case.
-    if (d.reference_type && d.reference_id) {
-      const { data: existingTx, error: existingTxErr } = await admin
-        .from("wallet_transactions")
-        .select("id, amount")
-        .eq("profile_id",     d.profile_id)
-        .eq("reference_type", d.reference_type)
-        .eq("reference_id",   d.reference_id)
-        .eq("kind",           "credit_charge")
-        .eq("status",         "completed")
-        .maybeSingle<{ id: string; amount: number }>();
-      if (existingTxErr) {
-        console.error(`[wallet_transactions list] failed`, { code: existingTxErr.code, message: existingTxErr.message });
-      }
-      if (existingTx) {
-        return {
-          ok: true,
-          data: {
-            tx_id:                existingTx.id,
-            already_charged:      true,
-            new_outstanding_thb:  outstanding,
-          },
-        };
-      }
-    }
-
-    // 3) Insert the credit_charge debit (negative amount on the
-    //    credit bucket). The 0007 trigger will recompute
-    //    wallet.credit_balance accordingly.
-    const { data: tx, error: txErr } = await admin
-      .from("wallet_transactions")
-      .insert({
-        profile_id:     d.profile_id,
-        bucket:         "credit",
-        amount:         -d.amount_thb,
-        kind:           "credit_charge",
-        status:         "completed",
-        reference_type: d.reference_type ?? null,
-        reference_id:   d.reference_id   ?? null,
-        admin_id:       adminId,
-        note:           d.reason,
-      })
-      .select("id")
-      .single<{ id: string }>();
-    if (txErr) return { ok: false, error: `wallet insert: ${txErr.message}` };
-
-    await logAdminAction(adminId, "customer.credit_charged", "profile", d.profile_id, {
-      tx_id:          tx.id,
-      amount_thb:     d.amount_thb,
-      reason:         d.reason,
-      reference_type: d.reference_type ?? null,
-      reference_id:   d.reference_id   ?? null,
-      before: { outstanding_thb: outstanding },
-      after:  { outstanding_thb: projected },
-    });
-
-    revalidatePath("/admin/customers");
-    revalidatePath(`/admin/customers/${d.profile_id}`);
-    revalidatePath("/wallet/history");
-
-    return {
-      ok: true,
-      data: {
-        tx_id:                tx.id,
-        already_charged:      false,
-        new_outstanding_thb:  projected,
-      },
-    };
-  });
+  // Deprecated per ADR-0023 D-5 #5. Validate the shape (keeps the schema +
+  // exported type live), then REFUSE — do NOT write the dead
+  // wallet_transactions bucket='credit' model. Direct the caller to the
+  // faithful grant (adminMarkForwarderCredit on the forwarder bill).
+  chargeToCreditSchema.safeParse(input);
+  return {
+    ok: false,
+    error:
+      "deprecated — ใช้การให้เครดิตจากรายการฝากนำเข้า (/admin/forwarders/[fNo] → ให้เครดิต) " +
+      "ซึ่งบันทึก tb_credit.creditvalue โดยตรง (ADR-0023). adminChargeToCredit เลิกใช้แล้ว.",
+  };
 }

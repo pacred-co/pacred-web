@@ -1,32 +1,35 @@
 "use server";
 
 // ────────────────────────────────────────────────────────────────────
-// U4-2 · Customer-side credit-line actions
+// Customer-side credit-line actions · ADR-0023 (legacy-SOT repoint)
 // ────────────────────────────────────────────────────────────────────
-// One read + one write:
+// SOT (ADR-0023 D-1): the credit-line is the LEGACY pair
+//   limit       = tb_users.userCreditValue   (camelCase · per userID)
+//   outstanding = tb_credit.creditvalue      (lowercase  · per userid; missing row = 0)
+//   available   = limit − outstanding        (computed; never stored)
+// The rebuilt model (v_customer_credit_outstanding · wallet_transactions
+// bucket='credit' · profiles.credit_limit) was EMPTY on prod (0 rows) while
+// 24 real customers carry a tb_credit.creditvalue>0 → they saw ฿0 here.
+// This repoints both reads onto the live legacy columns the grant
+// (adminMarkForwarderCredit) + settle (wallet-hs.ts decrement) already use.
 //
-//   getMyCredit() — reads v_customer_credit_outstanding (RLS-gated to
-//     own row via security_invoker). Returns limit / outstanding /
-//     available / terms. Used by the wallet UI to render the credit
-//     panel — and to gate the "pay credit from wallet" button.
+//   getMyCredit() — read limit/outstanding/available from the legacy
+//     columns (resolved by member_code, the tb_*.userid join key). Used
+//     by wallet-credit/page.tsx + the /wallet/history credit panel.
 //
-//   customerPayCreditFromWallet({ amount_thb? }) — settles the
-//     outstanding (or a partial amount, if provided) using the main
-//     wallet bucket. Writes a PAIR of completed rows that share a
-//     reference_id (the credit_payment row's id):
-//       credit_payment             bucket='credit', amount=+amount_thb
-//       wallet_to_credit_transfer  bucket='main',   amount=-amount_thb
-//     Idempotent: the 0071 partial-unique index
-//     wallet_tx_credit_settlement_uniq prevents the wallet-leg pair
-//     from doubling on retry.
+//   customerPayCreditFromWallet({ amount_thb? }) — standalone wallet→credit
+//     paydown (ADR-0023 D-4a). Debits tb_wallet.wallettotal + INSERTs a
+//     tb_wallet_hs settle row (wusercredit='1' so it lands in the credit
+//     tab) + decrements tb_credit.creditvalue (UPSERT, clamp ≥0). Money-safe
+//     per ADR-0018: pending-aware balance pre-check, rollback on partial
+//     failure (PostgREST has no real tx — the action owns the rollback).
 // ────────────────────────────────────────────────────────────────────
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { assertOwnedProfileId } from "@/lib/auth/owned-write";
-import { getWalletAvailableBalance, isWalletOverdrawError } from "@/lib/wallet/balance";
+import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
@@ -42,50 +45,120 @@ export type CustomerCreditState = {
   available_credit_thb:  number;
 };
 
+// ADR-0023 D-5 #2 — the tb_wallet_hs.type for a standalone credit paydown.
+// The legacy NEVER had this flow, so there is no exact precedent. The
+// credit-history tab (load_wallet_hs.php type='c') filters purely on
+// wUserCredit=1 and colours the row by `type`: type 1 or 5 → green/"+",
+// everything else → red/"−". A paydown is a wallet DEBIT, so it MUST read
+// red (not 1/5). We also avoid the types that hyperlink refOrder to an
+// order page (2 → ฝากสั่ง, 4 → ฝากนำเข้า — load_wallet_hs.php L30) and the
+// yuan/topup debits (6/7). type='3' (รายการถอนเงิน) is the closest clean
+// red-debit label that does NOT mislink; the customer-facing `note` carries
+// the true "ชำระยอดค้างเครดิต" description. This is an INTRODUCED convention
+// (flagged in the change summary), not a legacy value.
+const CREDIT_PAYDOWN_HS_TYPE = "3" as const;
+
+// ── resolveMemberCode ───────────────────────────────────────────────
+// tb_users / tb_credit / tb_wallet all key on `userid` = the customer's
+// PR-code (profiles.member_code), NOT the auth uuid. Resolve it once.
+async function resolveMemberCode(userId: string): Promise<string | null> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("profiles")
+    .select("member_code")
+    .eq("id", userId)
+    .maybeSingle<{ member_code: string | null }>();
+  if (error) {
+    console.error(`[profiles member_code lookup] failed`, { code: error.code, message: error.message, profile_id: userId });
+    return null;
+  }
+  return data?.member_code ?? null;
+}
+
 // ── getMyCredit ─────────────────────────────────────────────────────
-// Reads the customer's own credit-line state through the
-// security_invoker view (RLS gates to own row). Returns a zeroed
-// state — NOT an error — if the customer isn't enrolled, so the UI
-// can render a "ยังไม่มีวงเงินเครดิต" panel cleanly.
+// ADR-0023 D-3: read the LIVE legacy columns by member_code (the same
+// join key wallet-credit/page.tsx uses). Returns a zeroed state — NOT an
+// error — when the customer has no credit line (limit 0) so the UI renders
+// a "ยังไม่มีวงเงินเครดิต" panel cleanly.
+//
+// credit_terms_days: there is NO legacy global terms-days column (the due
+// date lives per-order on tb_forwarder.fcreditdate). Per ADR-0023 D-5 #1
+// we return 0 (the panel drops the chip when 0) rather than invent a value.
 export async function getMyCredit(): Promise<ActionResult<CustomerCreditState>> {
   const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr) {
+    console.error(`[auth.getUser] failed`, { code: authErr.code, message: authErr.message });
   }
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  const { data, error } = await supabase
-    .from("v_customer_credit_outstanding")
-    .select("credit_limit_thb, credit_terms_days, outstanding_thb, available_credit_thb")
-    .eq("profile_id", user.id)
-    .maybeSingle<CustomerCreditState>();
+  const memberCode = await resolveMemberCode(user.id);
+  if (memberCode === null) {
+    // member_code lookup FAILED (read error) → fail safe.
+    return { ok: false, error: "member_code_lookup_failed" };
+  }
+  if (memberCode === "") {
+    // Brand-new account mid-signup with no PR-code yet → no legacy credit
+    // row can exist. Return a zeroed state (not an error).
+    return {
+      ok: true,
+      data: { credit_limit_thb: 0, credit_terms_days: 0, outstanding_thb: 0, available_credit_thb: 0 },
+    };
+  }
 
-  if (error) return { ok: false, error: error.message };
+  const admin = createAdminClient();
+  const [limitRes, creditRes] = await Promise.all([
+    // tb_users.userCreditValue (camelCase) — the per-customer cap.
+    admin
+      .from("tb_users")
+      .select("userCreditValue")
+      .eq("userID", memberCode)
+      .maybeSingle<{ userCreditValue: number | string | null }>(),
+    // tb_credit.creditvalue (lowercase) — current outstanding (missing ⇒ 0).
+    admin
+      .from("tb_credit")
+      .select("creditvalue")
+      .eq("userid", memberCode)
+      .maybeSingle<{ creditvalue: number | string | null }>(),
+  ]);
+
+  if (limitRes.error) {
+    console.error(`[tb_users credit read] failed`, { code: limitRes.error.code, message: limitRes.error.message, userid: memberCode });
+    return { ok: false, error: limitRes.error.message };
+  }
+  if (creditRes.error) {
+    console.error(`[tb_credit read] failed`, { code: creditRes.error.code, message: creditRes.error.message, userid: memberCode });
+    return { ok: false, error: creditRes.error.message };
+  }
+
+  const limit       = Number(limitRes.data?.userCreditValue ?? 0);
+  const outstanding = Number(creditRes.data?.creditvalue ?? 0);
 
   return {
     ok: true,
-    data: data ?? {
-      credit_limit_thb:     0,
-      credit_terms_days:    0,
-      outstanding_thb:      0,
-      available_credit_thb: 0,
+    data: {
+      credit_limit_thb:     limit,
+      credit_terms_days:    0,                    // ADR-0023 D-5 #1 — no legacy global terms-days
+      outstanding_thb:      outstanding,
+      available_credit_thb: Math.round((limit - outstanding) * 100) / 100,
     },
   };
 }
 
 // ── customerPayCreditFromWallet ─────────────────────────────────────
-// Customer settles their outstanding credit from main wallet. Writes
-// a paired credit_payment + wallet_to_credit_transfer with a shared
-// reference_id (the credit_payment row id). Idempotent via the 0071
-// wallet_tx_credit_settlement_uniq partial index.
+// ADR-0023 D-4a: standalone wallet→credit paydown on the LEGACY columns.
+//   1. pending-aware available-balance pre-check (getWalletAvailableBalance)
+//   2. INSERT tb_wallet_hs settle row (wusercredit='1', debit type)
+//   3. UPDATE tb_wallet.wallettotal −= amount
+//   4. UPSERT tb_credit.creditvalue −= amount (clamp ≥0)
+// Rollback discipline (PostgREST has no real tx): if a later step fails we
+// undo the earlier ones so we never leave a half-state (balance debited but
+// creditvalue unchanged, or vice-versa). A half-state is worse than the dead
+// state we are closing.
 //
-// amount_thb is OPTIONAL — when omitted, we settle the full
-// outstanding. Caller (UI) typically just calls with no arg from a
-// "ชำระยอดค้างเครดิต ฿X" confirm dialog. Passing a positive value
-// lets a customer partial-pay (e.g. they only have ฿1000 in wallet
-// but owe ฿2000) — which is the desired UX per the U4-2 edge-case
-// question: "let them pay partial?" — YES.
+// amount_thb OPTIONAL — omitted = settle full outstanding; a positive value
+// lets a customer partial-pay (e.g. ฿1000 in wallet but ฿2000 owed). An
+// explicit amount is clamped to outstanding (overpaying credit is meaningless).
 
 const payCreditSchema = z.object({
   amount_thb: z.coerce.number().positive().max(10_000_000).optional(),
@@ -93,7 +166,7 @@ const payCreditSchema = z.object({
 export type CustomerPayCreditInput = z.infer<typeof payCreditSchema>;
 
 type PayCreditData = {
-  pair_id:               string;
+  hs_id:                 number;
   amount_paid_thb:       number;
   new_outstanding_thb:   number;
   already_settled:       boolean;
@@ -102,7 +175,7 @@ type PayCreditData = {
 export async function customerPayCreditFromWallet(
   input?: CustomerPayCreditInput,
 ): Promise<ActionResult<PayCreditData>> {
-  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  // Impersonation is read-only — refuse customer-facing money mutations.
   const impErr = await assertNotImpersonating();
   if (impErr) return impErr;
 
@@ -113,47 +186,46 @@ export async function customerPayCreditFromWallet(
   const requestedAmount = parsed.data.amount_thb ?? null;
 
   const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr) {
+    console.error(`[auth.getUser] failed`, { code: authErr.code, message: authErr.message });
   }
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  // 1) Read current credit state (RLS-gated to own row via view).
-  const { data: state, error: stateErr } = await supabase
-    .from("v_customer_credit_outstanding")
-    .select("credit_limit_thb, outstanding_thb")
-    .eq("profile_id", user.id)
-    .maybeSingle<{ credit_limit_thb: number; outstanding_thb: number }>();
-  if (stateErr) return { ok: false, error: stateErr.message };
+  const memberCode = await resolveMemberCode(user.id);
+  if (!memberCode) {
+    return { ok: false, error: "no_member_code — บัญชียังไม่มีรหัสลูกค้า" };
+  }
 
-  const outstanding = Number(state?.outstanding_thb ?? 0);
+  const admin = createAdminClient();
+
+  // 1) Read current outstanding (tb_credit · missing ⇒ 0).
+  const { data: creditRow, error: creditReadErr } = await admin
+    .from("tb_credit")
+    .select("creditvalue")
+    .eq("userid", memberCode)
+    .maybeSingle<{ creditvalue: number | string | null }>();
+  if (creditReadErr) {
+    console.error(`[tb_credit read] failed`, { code: creditReadErr.code, message: creditReadErr.message, userid: memberCode });
+    return { ok: false, error: creditReadErr.message };
+  }
+  const outstanding = Number(creditRow?.creditvalue ?? 0);
   if (outstanding <= 0) {
     return { ok: false, error: "no_outstanding — ไม่มียอดเครดิตค้างชำระ" };
   }
 
-  // Resolve the actual amount we'll settle:
-  //   - explicit amount: clamp to outstanding (overpaying credit
-  //     makes no sense; we silently cap to what's owed)
-  //   - implicit: full outstanding
+  // Resolve the settle amount: explicit (clamped to outstanding) or full.
   const amountToPay = requestedAmount === null
     ? outstanding
     : Math.min(requestedAmount, outstanding);
-
   if (amountToPay <= 0) {
     return { ok: false, error: "amount_invalid — จำนวนเงินไม่ถูกต้อง" };
   }
 
-  // 2) Pending-aware available-balance check on the main wallet
-  //    (mirrors actions/forwarder.ts:payForwarderFromWallet). The
-  //    raw wallet.balance is blind to open pending withdraws / yuan
-  //    debits (§H-1); we use the same helper as the rest of the
-  //    money-out paths. If main balance < requested amount, we DO
-  //    NOT silently partial-pay against the available balance — that
-  //    would mask "you don't have enough" with a quiet smaller debit.
-  //    Edge-case per the U4-2 spec: customer with wallet.balance <
-  //    outstanding still wants to pay partial — they must request the
-  //    smaller amount explicitly via the input.
+  // 2) Pending-aware available-balance check on the main wallet (same helper
+  //    every money-out path uses — blind raw balance would mask open pending
+  //    withdraws/yuan debits). We do NOT silently partial-pay against the
+  //    available balance; the customer must request a smaller amount.
   const available = await getWalletAvailableBalance(supabase, user.id);
   if (available === null) {
     return { ok: false, error: "wallet_balance_unavailable — ตรวจสอบยอดเงินไม่สำเร็จ" };
@@ -165,135 +237,123 @@ export async function customerPayCreditFromWallet(
     };
   }
 
-  // 3) Write the pair. Use admin client because the credit-bucket
-  //    insert is NOT in the 0007 self-serve insert policy (which only
-  //    allows kind='deposit'|'withdraw' on bucket='main'). The
-  //    ownership-check above (auth.getUser + view RLS) gates this;
-  //    assertOwnedProfileId makes the structural guard un-skippable.
-  const admin = createAdminClient();
-
-  //   3a. Insert the credit_payment row FIRST — its id becomes the
-  //       pair_id we anchor everything else on. amount is POSITIVE
-  //       (a credit on the credit bucket reduces outstanding).
-  const { data: paymentRow, error: payErr } = await admin
-    .from("wallet_transactions")
-    .insert(assertOwnedProfileId(user.id, {
-      profile_id:     user.id,
-      bucket:         "credit" as const,
-      amount:         amountToPay,
-      kind:           "credit_payment" as const,
-      status:         "completed" as const,
-      reference_type: "credit_settlement" as const,
-      // reference_id self-set below after we know the id; we leave
-      // null on the credit_payment row itself — the index is on the
-      // wallet_to_credit_transfer slice, not this side.
-      reference_id:   null,
-      admin_id:       null,
-      note:           `ชำระยอดค้างเครดิต ฿${amountToPay.toLocaleString("th-TH", { minimumFractionDigits: 2 })} (ตัดจาก wallet โดยลูกค้า)`,
-    }))
-    .select("id")
-    .single<{ id: string }>();
-  if (payErr) {
-    return { ok: false, error: `wallet insert (credit_payment): ${payErr.message}` };
+  // 3) Read the wallet balance for the read-modify-write debit.
+  const { data: walletBefore, error: walletReadErr } = await admin
+    .from("tb_wallet")
+    .select("userid, wallettotal")
+    .eq("userid", memberCode)
+    .maybeSingle<{ userid: string; wallettotal: number | string | null }>();
+  if (walletReadErr) {
+    console.error(`[tb_wallet read] failed`, { code: walletReadErr.code, message: walletReadErr.message, userid: memberCode });
+    return { ok: false, error: walletReadErr.message };
   }
-  const pairId = paymentRow.id;
-
-  //   3b. Insert the wallet_to_credit_transfer row — the main-wallet
-  //       debit half of the pair. reference_id = pairId so the
-  //       partial-unique guard (0071 wallet_tx_credit_settlement_uniq)
-  //       can dedupe a retry on this slice. 23505 → re-SELECT the
-  //       existing pair + return idempotently.
-  const { data: transferRow, error: tfrErr } = await admin
-    .from("wallet_transactions")
-    .insert(assertOwnedProfileId(user.id, {
-      profile_id:     user.id,
-      bucket:         "main" as const,
-      amount:         -amountToPay,
-      kind:           "wallet_to_credit_transfer" as const,
-      status:         "completed" as const,
-      reference_type: "credit_settlement" as const,
-      reference_id:   pairId,
-      admin_id:       null,
-      note:           `ชำระยอดค้างเครดิต ฿${amountToPay.toLocaleString("th-TH", { minimumFractionDigits: 2 })} (cross-bucket settlement)`,
-    }))
-    .select("id")
-    .single<{ id: string }>();
-
-  if (tfrErr) {
-    if (tfrErr.code === "23505" || /duplicate|unique/i.test(tfrErr.message)) {
-      // The wallet-leg already exists for this pair_id — a retry of
-      // the same logical settlement. Roll back our just-inserted
-      // credit_payment row so the outstanding math doesn't double-
-      // credit; return the existing pair canonically.
-      await admin.from("wallet_transactions").delete().eq("id", pairId);
-
-      const { data: existing, error: existingErr } = await admin
-        .from("wallet_transactions")
-        .select("reference_id")
-        .eq("reference_type", "credit_settlement")
-        .eq("kind",           "wallet_to_credit_transfer")
-        .eq("status",         "completed")
-        .eq("profile_id",     user.id)
-        .order("created_at",  { ascending: false })
-        .limit(1)
-        .maybeSingle<{ reference_id: string | null }>();
-      if (existingErr) {
-        console.error(`[wallet_transactions list] failed`, { code: existingErr.code, message: existingErr.message });
-      }
-
-      const existingPairId = existing?.reference_id ?? pairId;
-      return {
-        ok: true,
-        data: {
-          pair_id:              existingPairId,
-          amount_paid_thb:      amountToPay,
-          new_outstanding_thb:  outstanding,   // unchanged — retry
-          already_settled:      true,
-        },
-      };
-    }
-    if (isWalletOverdrawError(tfrErr)) {
-      // The 0064 hard overdraw guard caught us (concurrent race past
-      // the app-layer check). Roll back the credit_payment leg so we
-      // don't leave a phantom credit on the customer's account, then
-      // surface the standard friendly message.
-      await admin.from("wallet_transactions").delete().eq("id", pairId);
-      return { ok: false, error: "ยอดเงินในกระเป๋าไม่พอ (รวมรายการที่รออนุมัติ)" };
-    }
-    // Any other error: roll back credit_payment so we don't leave a
-    // phantom outstanding-reduction without the matching main debit.
-    await admin.from("wallet_transactions").delete().eq("id", pairId);
-    return { ok: false, error: `wallet insert (transfer): ${tfrErr.message}` };
+  const currentBalance = Number(walletBefore?.wallettotal ?? 0);
+  // Defensive re-check against the settled balance (available already
+  // accounts for pending overhang; this guards the raw debit too).
+  if (currentBalance < amountToPay) {
+    return {
+      ok: false,
+      error: `wallet_insufficient — ยอดกระเป๋า ฿${currentBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ไม่พอชำระ ฿${amountToPay.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
+    };
   }
 
-  // 4) Backfill credit_payment.reference_id with pairId so the pair
-  //    is queryable both directions. Best-effort: the partial-unique
-  //    guard is on the transfer side, so a failure here doesn't
-  //    threaten the money invariant.
-  await admin
-    .from("wallet_transactions")
-    .update({ reference_id: pairId })
-    .eq("id", pairId);
+  const nowIso = new Date().toISOString();
+  const noteText = `ชำระยอดค้างเครดิตจากกระเป๋า ฿${amountToPay.toLocaleString("th-TH", { minimumFractionDigits: 2 })} (customer-self)`;
 
-  // 5) Notify the customer of the successful settlement.
+  // 4) INSERT tb_wallet_hs settle row FIRST — wusercredit='1' lands it in the
+  //    credit-history tab; CREDIT_PAYDOWN_HS_TYPE renders it as a red debit.
+  //    status='2' (approved) per ADR-0018 D-2 (customer-initiated debit is
+  //    auto-approved — the movement is real). amount POSITIVE (direction is
+  //    encoded by type, per the legacy schema convention). reforder backfilled
+  //    to its own id below for a stable receipt reference.
+  const { data: hsRow, error: hsInsErr } = await admin
+    .from("tb_wallet_hs")
+    .insert({
+      date:            nowIso,
+      amount:          amountToPay,
+      status:          "2",
+      type:            CREDIT_PAYDOWN_HS_TYPE,
+      paydeposit:      "1",                       // paid-from-wallet
+      imagesslip:      "",
+      depositnamebank: "",
+      nameuserbank:    "",
+      nouserbank:      "",
+      note:            noteText,
+      adminid:         "",
+      adminidupdate:   "",
+      session:         "customer-self",
+      reforder:        "",                        // backfilled to its own id below
+      whno:            "",
+      wusercredit:     "1",                       // → credit-history tab
+      userid:          memberCode,
+      adminidcrate:    memberCode,                // customer self-initiated
+    })
+    .select("id")
+    .single<{ id: number }>();
+  if (hsInsErr || !hsRow) {
+    console.error(`[tb_wallet_hs insert] failed`, { code: hsInsErr?.code, message: hsInsErr?.message, userid: memberCode });
+    return { ok: false, error: hsInsErr?.message ?? "wallet_hs_insert_failed" };
+  }
+  const hsId = hsRow.id;
+
+  // Backfill reforder = own id (best-effort; the row already exists as the
+  // movement receipt — a failure here doesn't threaten the money invariant).
+  await admin.from("tb_wallet_hs").update({ reforder: String(hsId) }).eq("id", hsId);
+
+  // 5) UPDATE tb_wallet.wallettotal −= amount. On failure, roll back the hs
+  //    row so we don't leave a phantom receipt for a debit that never happened.
+  const newBalance = Math.round((currentBalance - amountToPay) * 100) / 100;
+  const walletUpd = walletBefore
+    ? await admin.from("tb_wallet").update({ wallettotal: newBalance }).eq("userid", memberCode)
+    : await admin.from("tb_wallet").insert({ userid: memberCode, wallettotal: newBalance });
+  if (walletUpd.error) {
+    await admin.from("tb_wallet_hs").delete().eq("id", hsId);
+    console.error(`[tb_wallet debit] failed — rolled back hs row`, { code: walletUpd.error.code, message: walletUpd.error.message, userid: memberCode, hsId });
+    return { ok: false, error: `wallet_debit_failed (ยกเลิกรายการแล้ว): ${walletUpd.error.message}` };
+  }
+
+  // 6) Decrement tb_credit.creditvalue (UPSERT · clamp ≥0). On failure, roll
+  //    back BOTH the wallet debit and the hs row — the customer keeps their
+  //    money and we keep the books consistent.
+  const newOutstanding = Math.max(0, Math.round((outstanding - amountToPay) * 100) / 100);
+  const creditUpd = creditRow
+    ? await admin.from("tb_credit").update({ creditvalue: newOutstanding }).eq("userid", memberCode)
+    : await admin.from("tb_credit").insert({ userid: memberCode, creditvalue: newOutstanding });
+  if (creditUpd.error) {
+    // rollback wallet debit + hs row
+    if (walletBefore) {
+      await admin.from("tb_wallet").update({ wallettotal: currentBalance }).eq("userid", memberCode);
+    } else {
+      await admin.from("tb_wallet").delete().eq("userid", memberCode);
+    }
+    await admin.from("tb_wallet_hs").delete().eq("id", hsId);
+    console.error(`[tb_credit decrement] failed — rolled back wallet + hs`, { code: creditUpd.error.code, message: creditUpd.error.message, userid: memberCode, hsId });
+    return { ok: false, error: `credit_decrement_failed (ยกเลิกรายการแล้ว): ${creditUpd.error.message}` };
+  }
+
+  // 7) Notify + refresh surfaces.
   void sendNotification(user.id, notify.walletTxStatusChanged({
     kind:   "credit_payment",
     status: "completed",
     amount: amountToPay,
-    note:   `ชำระยอดค้างเครดิต (เหลือค้าง ฿${(outstanding - amountToPay).toLocaleString("th-TH", { minimumFractionDigits: 2 })})`,
-    txId:   transferRow.id,
+    note:   `ชำระยอดค้างเครดิต (เหลือค้าง ฿${newOutstanding.toLocaleString("th-TH", { minimumFractionDigits: 2 })})`,
+    txId:   String(hsId),
   }));
 
+  console.info(`[customerPayCreditFromWallet] userid=${memberCode} paid=${amountToPay} balance ${currentBalance} → ${newBalance} outstanding ${outstanding} → ${newOutstanding} hs=${hsId}`);
+
+  revalidatePath("/wallet-credit");
   revalidatePath("/wallet/history");
+  revalidatePath("/wallet");
   revalidatePath("/dashboard");
 
   return {
     ok: true,
     data: {
-      pair_id:              pairId,
-      amount_paid_thb:      amountToPay,
-      new_outstanding_thb:  outstanding - amountToPay,
-      already_settled:      false,
+      hs_id:               hsId,
+      amount_paid_thb:     amountToPay,
+      new_outstanding_thb: newOutstanding,
+      already_settled:     false,
     },
   };
 }
