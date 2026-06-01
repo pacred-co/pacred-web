@@ -161,9 +161,10 @@ export async function customerUploadWhtCert(
     });
   }
 
-  // Revalidate the receipt page(s) so customer sees updated banner.
+  // Revalidate the invoice/receipt page(s) so customer sees updated banner.
+  // Forwarder: …/receipt redirects → …/invoice (live tb_forwarder⋈tb_receipt).
   if (row.forwarder_f_no) {
-    revalidatePath(`/service-import/${row.forwarder_f_no}/receipt`);
+    revalidatePath(`/service-import/${row.forwarder_f_no}/invoice`);
   }
   if (row.order_h_no) {
     revalidatePath(`/service-order/${row.order_h_no}/receipt`);

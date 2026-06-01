@@ -43,9 +43,13 @@ type Props = {
   /** Whether the customer is eligible at all (must have profile.tax_id OR
    *  juristic.tax_id; otherwise we hide the panel + show a hint). */
   eligible: boolean;
+  /** ADR-0027: shop (tb_header_order) + yuan (tb_payment) tax-invoice request
+   *  is deferred (no World-B cross-type store yet) → render a "coming soon"
+   *  banner instead of the request form. Forwarder is live. */
+  deferred?: boolean;
 };
 
-export function TaxInvoiceRequestPanel({ orderType, orderId, defaults, existing, eligible }: Props) {
+export function TaxInvoiceRequestPanel({ orderType, orderId, defaults, existing, eligible, deferred }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -81,6 +85,20 @@ export function TaxInvoiceRequestPanel({ orderType, orderId, defaults, existing,
         setErr(translateError(res.error));
       }
     });
+  }
+
+  // ── Deferred type (shop / yuan) — ADR-0027 "coming soon" banner ──
+  // No World-B cross-type tax-invoice store yet; only forwarder is live.
+  if (deferred) {
+    return (
+      <section className="no-print rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">
+        <h3 className="font-bold mb-1">ขอใบกำกับภาษี</h3>
+        <p className="text-xs text-amber-800">
+          ใบกำกับภาษีสำหรับ{orderType === "yuan_payment" ? "ฝากโอน" : "ฝากสั่งซื้อ"} กำลังพัฒนา —
+          กรุณาแจ้งทีมงาน (LINE @pacred) เพื่อขอใบกำกับภาษีสำหรับรายการนี้
+        </p>
+      </section>
+    );
   }
 
   // ── Existing invoice — show status card ──
@@ -267,6 +285,9 @@ function translateError(code: string): string {
     case "order_cancelled":    return "ออเดอร์ยกเลิกแล้ว — ขอใบกำกับภาษีไม่ได้";
     case "order_not_paid_yet": return "ออเดอร์ยังไม่ได้ชำระ — ขอใบกำกับภาษีหลังชำระเงิน";
     case "order_has_no_total": return "ออเดอร์ไม่มียอดเงิน — ขอใบกำกับภาษีไม่ได้";
+    // ADR-0027 — shop/yuan tax-invoice deferred (no World-B cross-type store yet).
+    case "not_yet_supported":  return "ใบกำกับภาษีสำหรับบริการนี้กำลังพัฒนา — กรุณาแจ้งทีมงาน (LINE @pacred)";
+    case "no_member_code":     return "บัญชียังไม่มีรหัสลูกค้า — กรุณาติดต่อทีมงาน";
     default:                   return code;
   }
 }

@@ -437,7 +437,8 @@ function revalidateParent(
 ): void {
   if (orderType === "forwarder") {
     revalidatePath(`/admin/forwarders/${orderId}`);
-    revalidatePath(`/service-import/${orderId}/receipt`);
+    // …/receipt redirects → …/invoice (live tb_forwarder⋈tb_receipt view).
+    revalidatePath(`/service-import/${orderId}/invoice`);
   } else if (orderType === "service_order") {
     revalidatePath(`/admin/service-orders/${orderId}`);
     revalidatePath(`/service-order/${orderId}/receipt`);

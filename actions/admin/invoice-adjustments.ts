@@ -73,11 +73,12 @@ async function resolveInvoiceTarget(
     return {
       ok: true,
       profile_id: data.profile_id,
-      link_href: `/service-import/${data.f_no}/receipt`,
+      // …/receipt is now a redirect → …/invoice (live tb_forwarder⋈tb_receipt view).
+      link_href: `/service-import/${data.f_no}/invoice`,
       revalidate_paths: [
         `/admin/forwarders/${data.f_no}`,
         `/service-import/${data.f_no}`,
-        `/service-import/${data.f_no}/receipt`,
+        `/service-import/${data.f_no}/invoice`,
       ],
     };
   }

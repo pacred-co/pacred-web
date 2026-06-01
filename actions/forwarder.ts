@@ -214,105 +214,15 @@ export type ForwarderSummary = {
 };
 
 // ────────────────────────────────────────────────────────────
-// READ ONE (detail page)
+// SUMMARY column set — shared by listForwarders.
+// (The forwarder detail reader `getForwarderByNo` + its `ForwarderDetail`
+//  type were removed 2026-06-02 — they read the rebuilt 0-row `forwarders`
+//  table and powered only the dead receipt orphan + its PDF route, both now
+//  gone. The live forwarder ใบแจ้งหนี้ is the HTML page at
+//  /service-import/[fNo]/invoice reading tb_forwarder ⋈ tb_receipt. See ADR-0027.)
 // ────────────────────────────────────────────────────────────
-export type ForwarderDetail = ForwarderSummary & {
-  pay_method: "origin" | "destination";
-  rate_basis: "kg" | "cbm" | "auto";
-  ship_by: string | null;
-  width_cm: number;
-  length_cm: number;
-  height_cm: number;
-  crate: boolean;
-  crate_price: number;
-  qc: boolean;
-  qc_price: number;
-  domestic_china_thb: number;
-  thailand_delivery_thb: number;
-  other_price: number;
-  service_fee: number;
-  transport_price: number;
-  ship_first_name: string;
-  ship_last_name: string;
-  ship_phone: string;
-  ship_phone2: string | null;
-  ship_address_line: string;
-  ship_sub_district: string;
-  ship_district: string;
-  ship_province: string;
-  ship_postal_code: string;
-  ship_note: string | null;
-  cabinet_number: string | null;
-  tracking_chn2: string | null;
-  detail: string | null;
-  note_user: string | null;
-  bill_to_name_override: string | null;        // V-C2
-  acknowledged_at:   string | null;            // U4-3a
-  acknowledged_note: string | null;            // U4-3a
-  items: Array<{
-    id: string;
-    product_name: string;
-    product_tracking: string | null;
-    product_qty: number;
-    weight_per_item_kg: number | null;
-  }>;
-  images: Array<{
-    id: string;
-    image_path: string;
-    is_cover: boolean;
-  }>;
-};
-
 const SUMMARY_FORWARDER_COLS =
   "id, f_no, status, source_warehouse, transport_type, product_type, box_count, weight_kg, volume_cbm, total_price, tracking_chn, tracking_th, created_at, date_arrived_thailand, date_delivered";
-
-export async function getForwarderByNo(fNo: string): Promise<ActionResult<ForwarderDetail>> {
-  const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "not_signed_in" };
-
-  const { data, error } = await supabase
-    .from("forwarders")
-    .select(
-      `${SUMMARY_FORWARDER_COLS}, pay_method, rate_basis, ship_by,
-       width_cm, length_cm, height_cm, crate, crate_price, qc, qc_price,
-       domestic_china_thb, thailand_delivery_thb, other_price, service_fee, transport_price,
-       ship_first_name, ship_last_name, ship_phone, ship_phone2, ship_address_line,
-       ship_sub_district, ship_district, ship_province, ship_postal_code, ship_note,
-       cabinet_number, tracking_chn2, detail, note_user, bill_to_name_override,
-       acknowledged_at, acknowledged_note`,
-    )
-    .eq("f_no", fNo)
-    .maybeSingle();
-
-  if (error)  return { ok: false, error: error.message };
-  if (dataErr) {
-    console.error(`[supabase mutation lookup] failed`, { code: dataErr.code, message: dataErr.message });
-    return { ok: false, error: `db_error:${dataErr.code ?? "unknown"}` };
-  }
-  if (!data)  return { ok: false, error: "not_found" };
-
-  const id = (data as { id: string }).id;
-  const [{ data: items }, { data: images }] = await Promise.all([
-    supabase.from("forwarder_items")
-      .select("id, product_name, product_tracking, product_qty, weight_per_item_kg")
-      .eq("forwarder_id", id)
-      .order("created_at"),
-    supabase.from("forwarder_images")
-      .select("id, image_path, is_cover")
-      .eq("forwarder_id", id)
-      .order("sort_order"),
-  ]);
-
-  return {
-    ok: true,
-    data: {
-      ...(data as unknown as Omit<ForwarderDetail, "items" | "images">),
-      items:  (items  ?? []) as ForwarderDetail["items"],
-      images: (images ?? []) as ForwarderDetail["images"],
-    },
-  };
-}
 
 // ────────────────────────────────────────────────────────────
 // LIST / READ
@@ -1054,7 +964,8 @@ export async function customerDecideCostAdjustment(
 
   if (fNo) {
     revalidatePath(`/service-import/${fNo}`);
-    revalidatePath(`/service-import/${fNo}/receipt`);
+    // …/receipt is now a redirect → …/invoice (the live tb_forwarder⋈tb_receipt view).
+    revalidatePath(`/service-import/${fNo}/invoice`);
     revalidatePath(`/admin/forwarders/${fNo}`);
   }
 

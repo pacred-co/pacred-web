@@ -8,8 +8,13 @@
  * throwing OR producing empty buffers.
  *
  * Test surface (no DB):
- *   1. ForwarderReceipt — base + edge address case
- *   2. TaxInvoice — base + cancelled (watermark) variant
+ *   1. TaxInvoice — base + cancelled (watermark) variant
+ *   2. ShopOrderReceipt + FreightReceipt
+ *
+ * (ForwarderReceipt PDF removed 2026-06-02 — the forwarder receipt PDF route
+ *  + component were a dead orphan stack reading the rebuilt 0-row `forwarders`
+ *  table. The live forwarder ใบแจ้งหนี้ is the HTML page at
+ *  /service-import/[fNo]/invoice — see ADR-0027.)
  *
  * What "passing" means:
  *   - renderToBuffer resolves to a Buffer
@@ -25,7 +30,6 @@
 import path from "node:path";
 import { Font, renderToBuffer, type DocumentProps } from "@react-pdf/renderer";
 import type { ReactElement } from "react";
-import { ForwarderReceipt, type ForwarderReceiptData } from "@/components/pdf/forwarder-receipt";
 import { TaxInvoice, type TaxInvoiceData } from "@/components/pdf/tax-invoice";
 import { ShopOrderReceipt } from "@/components/pdf/shop-order-receipt";
 import { FreightReceipt, type FreightReceiptData } from "@/components/pdf/freight-receipt";
@@ -66,52 +70,6 @@ const EDGE_BUYER_TAX_ID = "0105560123459";
 // ────────────────────────────────────────────────────────────
 // Fixtures
 // ────────────────────────────────────────────────────────────
-
-function baseForwarder(): ForwarderReceiptData {
-  return {
-    f_no:        "F260516001",
-    created_at:  "2026-05-16T10:30:00Z",
-    ship_first_name: "สมชาย",
-    ship_last_name:  "ใจดี",
-    ship_phone:      "0812345678",
-    ship_phone2:     null,
-    ship_address_line: "123 ถนนสุขุมวิท",
-    ship_sub_district: "คลองตัน",
-    ship_district:     "คลองเตย",
-    ship_province:     "กรุงเทพฯ",
-    ship_postal_code:  "10110",
-    source_warehouse: "yiwu",
-    transport_type:   "truck",
-    box_count:        5,
-    weight_kg:        12.5,
-    volume_cbm:       0.345,
-    transport_price:  1500,
-    service_fee:      150,
-    crate:            true,
-    crate_price:      200,
-    qc:               false,
-    qc_price:         0,
-    domestic_china_thb:    0,
-    thailand_delivery_thb: 100,
-    other_price:           0,
-    total_price:           1950,
-    items: [
-      { id: "i1", product_name: "เสื้อยืด", product_qty: 10, weight_per_item_kg: 0.25 },
-    ],
-  };
-}
-
-function edgeForwarder(): ForwarderReceiptData {
-  const f = baseForwarder();
-  f.ship_first_name   = "สมชาย ก่ก้";
-  f.ship_last_name    = "ใจดี ๆ";
-  f.ship_address_line = EDGE_ADDRESS.split("\n").join(" ");
-  f.items = [
-    { id: "i1", product_name: "เสื้อยืดสั่งทำ ฯลฯ ๒๓ สี", product_qty: 100, weight_per_item_kg: 0.25 },
-    { id: "i2", product_name: "หน้ากากผ้าฤดูร้อน",       product_qty: 50,  weight_per_item_kg: null },
-  ];
-  return f;
-}
 
 function baseTaxInvoice(): TaxInvoiceData {
   return {
@@ -322,10 +280,6 @@ async function renderAndAssert(label: string, doc: ReactElement<DocumentProps>):
 
   // Sarabun registered once globally — react-pdf caches.
   registerSarabunForTest();
-
-  console.log("  ForwarderReceipt");
-  await renderAndAssert("base case",        <ForwarderReceipt data={baseForwarder()} />);
-  await renderAndAssert("edge Thai chars",  <ForwarderReceipt data={edgeForwarder()} />);
 
   console.log("  TaxInvoice");
   await renderAndAssert("base issued",      <TaxInvoice data={baseTaxInvoice()} />);

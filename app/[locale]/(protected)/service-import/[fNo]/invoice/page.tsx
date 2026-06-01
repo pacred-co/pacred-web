@@ -3,6 +3,8 @@ import { Link } from "@/i18n/navigation";
 import { requireAuth } from "@/lib/auth/require-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
+import { TaxInvoiceRequestPanel } from "@/components/tax-invoice-request-panel";
+import { getMyTaxInvoiceForOrder } from "@/actions/tax-invoices";
 import { CONTACT, ADDRESSES, TAX_ID } from "@/components/seo/site";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { getSalesRepContactForUserid } from "@/lib/admin/sales-rep-contact";
@@ -334,6 +336,20 @@ export default async function ServiceImportInvoicePage({
   // grandTotal = ยอดที่ลูกค้าต้องชำระ (after withholding tax cut).
   const grandTotal    = receipt ? rAmount : calcForwarderOutstanding(forwarder);
 
+  // ── 6. ใบกำกับภาษี (RD Code 86) request panel — World-B (ADR-0027) ──
+  // Moved here from the old …/receipt orphan. The customer-request action
+  // (requestTaxInvoice) + this lookup both go through World-B
+  // (tb_forwarder_tax_invoice via issueForwarderTaxInvoice). Shown once the
+  // order is PAID (legacy fstatus '6'=เตรียมส่ง · '7'=ส่งแล้ว — past รอชำระเงิน).
+  const isPaid = fStatus === "6" || fStatus === "7";
+  const taxInv = isPaid ? await getMyTaxInvoiceForOrder("forwarder", String(idNum)) : null;
+  const existingTaxInvoice = taxInv?.ok ? taxInv.data : null;
+  // Eligible = has a 13-digit tax id (juristic). The World-B engine snapshots
+  // the buyer from tb_corporate/tb_users itself, so the form values are
+  // informational — the panel hint tells the customer to keep their company
+  // profile up to date.
+  const taxEligible = custTaxId.replace(/\D/g, "").length === 13;
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Print-only CSS — hide chrome on @media print. */}
@@ -572,6 +588,22 @@ export default async function ServiceImportInvoicePage({
               </div>
             </article>
           </>
+        )}
+
+        {/* ใบกำกับภาษี request panel — World-B (ADR-0027). Paid orders only;
+            hidden on print (the panel self-marks no-print). */}
+        {isPaid && (
+          <TaxInvoiceRequestPanel
+            orderType="forwarder"
+            orderId={String(idNum)}
+            defaults={{
+              name:    custName,
+              address: custAddr,
+              taxId:   custTaxId,
+            }}
+            existing={existingTaxInvoice}
+            eligible={taxEligible}
+          />
         )}
       </main>
     </div>
