@@ -40,6 +40,10 @@
     {
       "path": "/api/cron/sheets-sync-ctt",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/margin-flag",
+      "schedule": "10 17 * * *"
     }
   ]
 }
