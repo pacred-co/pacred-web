@@ -615,6 +615,17 @@ const blockExtIncidents: MenuItem = {
 const blockExtKpi: MenuItem = {
   labelKey: "extension.kpi", href: "/admin/kpi", icon: "BarChart3", phase: 2,
 };
+// 2026-06-01 (เดฟ · Wave C BI) — the exec cockpit (แดชบอร์ดผู้บริหาร · MTD
+// revenue/profit · orders funnel · wallet total · AR · cold-leads · top
+// carriers/warehouses — all reading LIVE tb_*). A leadership at-a-glance
+// dashboard, so it lives in the Extension drawer next to the KPI dashboard
+// (same exec-analytics family). phase: 2 → super sees it in the sidebar; the
+// finance roles (accounting/manager) also reach it + the AR-aging report via
+// the reports-hub "BI / ผู้บริหาร" menubar group. The page gates RBAC to
+// super/accounting itself.
+const blockExtCockpit: MenuItem = {
+  labelKey: "extension.cockpit", href: "/admin/reports/cockpit", icon: "Gauge", phase: 2,
+};
 const blockExtContactMessages: MenuItem = {
   labelKey: "extension.contactMessages", href: "/admin/contact-messages",
   icon: "MessageSquare", badge: "contactMessages", phase: 2,
@@ -760,6 +771,7 @@ const menuSuper: MenuSection[] = [
   // withdrawalsAll. All phase: 2 — non-super doesn't see them.
   extensionSection([
     blockExtKpi,
+    blockExtCockpit,
     blockExtWorkboard,
     blockExtInbox,
     blockExtLeads,
@@ -828,6 +840,7 @@ const menuManager: MenuSection[] = [
   learningSection,
   extensionSection([
     blockExtKpi,
+    blockExtCockpit,
     blockExtWorkboard,
     blockExtInbox,
     blockExtLeads,
@@ -894,7 +907,9 @@ const menuAccounting: MenuSection[] = [
   },
   { header: "Settings", items: [blockSettingsCargo] },
   learningSection,
-  extensionSection([blockExtJuristic, blockExtIncidents]),
+  // 2026-06-01 (เดฟ · Wave C BI) — accounting gets the exec cockpit (finance
+  // headline: MTD revenue/profit · AR · wallet liability). phase:2 in-sidebar.
+  extensionSection([blockExtCockpit, blockExtJuristic, blockExtIncidents]),
 ];
 
 /**

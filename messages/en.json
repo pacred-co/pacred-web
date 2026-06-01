@@ -2882,6 +2882,7 @@
       "incidents": "System incidents",
       "kpi": "KPI Dashboard",
       "crm": "CRM (Customer relations)",
+      "cockpit": "Exec cockpit",
       "contactMessages": "Customer contact messages",
       "leads": "Call leads (Leads)",
       "lineInbox": "LINE Inbox",
