@@ -241,6 +241,10 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       // 2026-06-02 sitting-I · CEO directive 2026-06-01: profit-cap ≤ 15k/ตู้
       // retrospective monitor (forward quote-comparison tool = next surface).
       { label: "Margin Monitor (CEO ≤ ฿15k cap)", href: "/admin/accounting/margin-monitor" },
+      // 2026-06-02 sitting-I · CEO directive 2026-06-01: forward-looking pair
+      // to Margin Monitor — sales reps compare 9 carriers' projected margin
+      // BEFORE pitching, route via best carrier per CEO cap policy.
+      { label: "Sales Quote Comparison",  href: "/admin/accounting/quote-compare" },
       // Wave 7.3 (2026-05-22): wired 2 orphan accounting pages here per
       // ภูม decision in page-inventory-2026-05-21-night.md §🔴 DEAD.
       { label: "งวดบัญชี",  href: "/admin/accounting/periods" },
