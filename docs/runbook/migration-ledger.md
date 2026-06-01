@@ -9,7 +9,7 @@
 
 ใครจะเขียน migration ใหม่ → ใช้ `0135_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
 
-> 2026-06-01 PM-2: **0133** = `lead_call_log` (acquisition call-queue · A) · **0134** = `freight_quote` (freight RFQ · B). ทั้งคู่ written · **ยังไม่ apply prod** (worktree builds) → apply ทั้ง 2 หลัง merge.
+> 2026-06-01 PM-2: **0133** = `lead_call_log` (acquisition call-queue) · **0134** = `freight_quote` (freight RFQ). ✅ **ทั้งคู่ applied prod 2026-06-01** (tables `lead_call_log` + `freight_quote` created).
 
 > 0118-0129 ครอง prod แล้ว (ปอน 0118-0122 MOMO · ภูม 0123-0124 admins+momo-commit · เดฟ 0125 customer-usage-split · เดฟ 0126 tax-rates-seed · เดฟ 0127 order-tax-doc-pref · เดฟ 0128 tax-rates-rental-goods · เดฟ 0129 forwarder-tax-invoice · all applied 2026-05-30).
 
@@ -37,8 +37,8 @@
 | 0130 | `momo_cabinet_join_field` | ภูม/main | ✅ in main | main |
 | 0131 | `line_oa_inbox` | ปอน | ✅ **applied prod** (re-probe 2026-05-30 = HTTP 200 ×4 tables · ไม่กระทบ legacy · idempotent) — **renumbered 0125→0131** ตอน integrate InwPond007 2026-05-30 (ชน เดฟ `customer_usage_split`) · 4 ตาราง isolated: `customers_line`/`line_lead_sources`/`line_messages`/`line_webhook_events` · RLS service_role | main (ex-InwPond007) |
 | 0132 | `forwarder_bill_to_name` | เดฟ | ✅ **applied prod 2026-06-01 (106ms · metadata-only ADD COLUMN nullable)** · `tb_forwarder.fbilltoname varchar(200)` · Pacred-original bill-to override (no legacy col) · faithful target of rebuilt `forwarders.bill_to_name_override` · `adminSetForwarderBillToOverride` repointed | main |
-| 0133 | `lead_call_log` | เดฟ | ⏳ **NOT yet applied** (apply after merge) · CEO §6 acquisition call-queue activity log · 1 NEW isolated table `lead_call_log` (id/userid/admin_id/status/note/called_at · NO FK · service_role-only RLS · 3 indexes) · powers `/admin/leads` · idempotent | dave-pacred (acquisition) |
-| 0134 | `freight_quote` | เดฟ | ⏳ **NOT yet applied** (apply after merge) · public freight RFQ lead-capture (AX BOOKING funnel) · 1 ตาราง `freight_quote` (singular · ≠ plural `freight_quotes` admin quotation in 0048) · RLS public-insert + admin-read (mirrors `contact_messages`) · idempotent · เปิด FREIGHT revenue line | dave-pacred (freight-quote MVP) |
+| 0133 | `lead_call_log` | เดฟ | ✅ **applied prod 2026-06-01** · CEO §6 acquisition call-queue activity log · 1 NEW isolated table `lead_call_log` (id/userid/admin_id/status/note/called_at · NO FK · service_role-only RLS · 3 indexes) · powers `/admin/leads` · idempotent | dave-pacred (acquisition) |
+| 0134 | `freight_quote` | เดฟ | ✅ **applied prod 2026-06-01** · public freight RFQ lead-capture (AX BOOKING funnel) · 1 ตาราง `freight_quote` (singular · ≠ plural `freight_quotes` admin quotation in 0048) · RLS public-insert + admin-read (mirrors `contact_messages`) · idempotent · เปิด FREIGHT revenue line | dave-pacred (freight-quote MVP) |
 
 ---
 
