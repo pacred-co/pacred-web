@@ -1,37 +1,48 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
-import { notFound } from "next/navigation";
 
-type Settings = {
-  yuan_rate: number;
-  service_fee: number;
-  juristic_discount_threshold: number;
-  juristic_discount_pct: number;
-  qc_fee_per_item: number;
-  crate_fee_base: number;
-  free_shipping_enabled: boolean;
-  free_shipping_threshold: number | null;
+export const dynamic = "force-dynamic";
+
+// ADR-0024 §0e — the LIVE pricing engine reads the single-row legacy
+// `tb_settings`, NOT the rebuilt `settings` Potemkin twin (0-row/stale). This
+// read-only "อัตราค่าบริการ" display was a dead-READ trap (showed rebuilt
+// `settings`); repointed to `tb_settings` so it reflects what the system uses.
+//   • rpdefault → เรทฝากชำระ/ฝากโอน (CNY→THB) — /service-payment, /admin/yuan-payments
+//   • rsdefault → เรทฝากสั่ง (CNY→THB) — /cart, /service-order
+//   • hratecostdefault → เรทต้นทุน H (cost)
+//   • freeshipping → flag ("1" = เปิด); the rebuilt per-item fees
+//     (service/qc/crate) + baht threshold have NO live legacy home → dropped,
+//     pointed at the real cost editor /admin/settings/forwarder-costs.
+type TbSettings = {
+  rpdefault: number | string | null;
+  rsdefault: number | string | null;
+  hratecostdefault: number | string | null;
+  freeshipping: string | null;
 };
 
 export default async function AdminRatesPage() {
   const admin = createAdminClient();
   const { data, error } = await admin
-    .from("settings")
-    .select(`
-      yuan_rate, service_fee,
-      juristic_discount_threshold, juristic_discount_pct,
-      qc_fee_per_item, crate_fee_base,
-      free_shipping_enabled, free_shipping_threshold
-    `)
-    .eq("id", 1)
+    .from("tb_settings")
+    .select("rpdefault, rsdefault, hratecostdefault, freeshipping")
+    .limit(1)
     .maybeSingle();
 
   if (error) {
-    console.error(`[settings lookup] failed`, { code: error.code, message: error.message, details: error.details, hint: error.hint });
-    throw new Error(`Failed to load settings (${error.code ?? "unknown"}): ${error.message}`);
+    console.error(`[tb_settings rates lookup] failed`, {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+    throw new Error(`Failed to load tb_settings (${error.code ?? "unknown"}): ${error.message}`);
   }
-  if (!data) notFound();
-  const s = data as Settings;
+
+  const s = (data ?? {}) as TbSettings;
+  const rp = Number(s.rpdefault ?? 0);
+  const rs = Number(s.rsdefault ?? 0);
+  const hcost = Number(s.hratecostdefault ?? 0);
+  const freeShippingOn = String(s.freeshipping ?? "") === "1";
 
   return (
     <main className="p-6 lg:p-8 space-y-6 max-w-3xl">
@@ -40,83 +51,80 @@ export default async function AdminRatesPage() {
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
           <h1 className="mt-1 text-2xl font-bold">อัตราค่าบริการ</h1>
-          <p className="mt-1 text-sm text-muted">อัตราปัจจุบันที่ใช้คำนวณราคาออเดอร์ใหม่</p>
+          <p className="mt-1 text-sm text-muted">
+            อัตราจริงที่ระบบใช้คำนวณราคา — อ่านสดจาก{" "}
+            <code className="rounded bg-surface-alt px-1 text-xs">tb_settings</code> (id=1)
+          </p>
         </div>
         <Link
-          href="/admin/settings"
+          href="/admin/settings/legacy-rates"
           className="rounded-xl border border-border bg-white px-4 py-2 text-sm font-medium hover:bg-surface-alt"
         >
-          แก้ไขค่า →
+          ปรับเรทหยวน →
         </Link>
       </div>
 
-      {/* Exchange rate */}
-      <RateSection title="อัตราแลกเปลี่ยน">
-        <BigRateCard
-          label="อัตราหยวน (CNY → THB)"
-          value={`1 ¥ = ฿${Number(s.yuan_rate).toFixed(4)}`}
-          note="ใช้ทุกครั้งที่คำนวณค่าฝากโอนหยวน"
-        />
-      </RateSection>
-
-      {/* Service fees */}
-      <RateSection title="ค่าบริการ (Service fees)">
-        <div className="grid sm:grid-cols-3 gap-3">
-          <RateCard
-            label="ค่าดำเนินการ"
-            value={`฿${Number(s.service_fee).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}
-            note="ต่อรายการ"
+      {/* Exchange rate — the two live yuan rates (rp = ฝากโอน · rs = ฝากสั่ง) */}
+      <RateSection title="อัตราแลกเปลี่ยนหยวน (CNY → THB)">
+        <div className="grid sm:grid-cols-2 gap-3">
+          <BigRateCard
+            label="เรทฝากโอน / ฝากชำระ (rpdefault)"
+            value={`1 ¥ = ฿${rp.toFixed(4)}`}
+            note="ใช้กับ ฝากโอนหยวน · /service-payment · /admin/yuan-payments"
           />
-          <RateCard
-            label="ค่า QC / ตรวจของ"
-            value={`฿${Number(s.qc_fee_per_item).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}
-            note="ต่อชิ้น"
-          />
-          <RateCard
-            label="ค่าไม้ + กล่อง"
-            value={`฿${Number(s.crate_fee_base).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}
-            note="ฐาน (ขึ้นอยู่กับน้ำหนัก)"
+          <BigRateCard
+            label="เรทฝากสั่ง (rsdefault)"
+            value={`1 ¥ = ฿${rs.toFixed(4)}`}
+            note="ใช้กับ ฝากสั่งซื้อ · /cart · /service-order"
           />
         </div>
-      </RateSection>
-
-      {/* Juristic discount */}
-      <RateSection title="ส่วนลดลูกค้านิติบุคคล">
         <div className="grid sm:grid-cols-2 gap-3">
           <RateCard
-            label="ยอดขั้นต่ำที่ได้ส่วนลด"
-            value={`฿${Number(s.juristic_discount_threshold).toLocaleString("th-TH")}`}
-            note="ต่อออเดอร์"
-          />
-          <RateCard
-            label="เปอร์เซ็นต์ส่วนลด"
-            value={`${Number(s.juristic_discount_pct).toFixed(1)}%`}
-            note="หักจากค่าดำเนินการ"
+            label="เรทต้นทุนหยวน (hratecostdefault)"
+            value={`1 ¥ = ฿${hcost.toFixed(4)}`}
+            note="ต้นทุนภายใน (cost floor)"
           />
         </div>
       </RateSection>
 
-      {/* Free shipping */}
+      {/* Service fees + cost matrix — the LIVE source is the cost matrix in
+          tb_settings (not flat per-item fees). Point at the real editor. */}
+      <RateSection title="ค่าขนส่ง + ค่าบริการ (Cost matrix)">
+        <Link
+          href="/admin/settings/forwarder-costs"
+          className="block rounded-2xl border border-primary-200 bg-primary-50 p-4 hover:bg-primary-100 transition"
+        >
+          <p className="text-sm font-semibold text-primary-700">
+            ตารางต้นทุน/ค่าขนส่ง 144 ช่อง (tb_settings) — แก้ได้ →
+          </p>
+          <p className="text-[11px] text-primary-600 mt-1">
+            ค่าขนส่งต่อ กก./คิว แยกตามขนส่ง × ประเภทสินค้า · ค่าบริการ · ค่าตีลัง — นี่คือค่าที่ระบบใช้จริง
+          </p>
+        </Link>
+      </RateSection>
+
+      {/* Free shipping — live flag in tb_settings.freeshipping ("1" = on) */}
       <RateSection title="ค่าขนส่งฟรี (Promo)">
-        <div className="flex items-center gap-4">
-          <div className={`rounded-xl border px-4 py-3 text-sm font-semibold ${
-            s.free_shipping_enabled
-              ? "border-green-200 bg-green-50 text-green-700"
-              : "border-gray-200 bg-gray-50 text-gray-500"
-          }`}>
-            {s.free_shipping_enabled ? "✓ เปิดใช้งาน" : "ปิดใช้งาน"}
+        <div className="flex items-center gap-4 flex-wrap">
+          <div
+            className={`rounded-xl border px-4 py-3 text-sm font-semibold ${
+              freeShippingOn
+                ? "border-green-200 bg-green-50 text-green-700"
+                : "border-gray-200 bg-gray-50 text-gray-500"
+            }`}
+          >
+            {freeShippingOn ? "✓ เปิดใช้งาน" : "ปิดใช้งาน"}
           </div>
-          {s.free_shipping_enabled && s.free_shipping_threshold != null && (
-            <div className="text-sm text-muted">
-              ยอดสั่งซื้อ ≥ <span className="font-semibold text-foreground">
-                ฿{Number(s.free_shipping_threshold).toLocaleString("th-TH")}
-              </span> รับค่าขนส่งฟรี
-            </div>
-          )}
+          <p className="text-xs text-muted">
+            เปิด/ปิด + พื้นที่ส่งฟรี ตั้งค่าที่{" "}
+            <Link href="/admin/settings/forwarder-costs" className="text-primary-500 hover:underline">
+              ตารางต้นทุน/ค่าขนส่ง
+            </Link>
+          </p>
         </div>
       </RateSection>
 
-      {/* Shipping rate table — LP-1 phase 1 (general live) */}
+      {/* Shipping rate table — tb_rate_* editors (live) */}
       <RateSection title="ตารางอัตราขนส่ง (Shipping rates)">
         <div className="grid sm:grid-cols-3 gap-3">
           <Link
@@ -152,13 +160,17 @@ export default async function AdminRatesPage() {
         </div>
       </RateSection>
 
-      {/* Last updated note */}
+      {/* Footer note — the real editors */}
       <p className="text-xs text-muted">
         แก้ไขอัตราได้ที่{" "}
-        <Link href="/admin/settings" className="text-primary-500 hover:underline">
-          Admin → ตั้งค่าระบบ
-        </Link>
-        {" "}— การเปลี่ยนแปลงมีผลกับออเดอร์ใหม่ทันที
+        <Link href="/admin/settings/legacy-rates" className="text-primary-500 hover:underline">
+          เรทหยวน (legacy-rates)
+        </Link>{" "}
+        ·{" "}
+        <Link href="/admin/settings/forwarder-costs" className="text-primary-500 hover:underline">
+          ตารางต้นทุน/ค่าขนส่ง
+        </Link>{" "}
+        — การเปลี่ยนแปลงมีผลกับออเดอร์ใหม่ทันที
       </p>
     </main>
   );
