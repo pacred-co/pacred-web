@@ -619,6 +619,15 @@ const blockExtContactMessages: MenuItem = {
   labelKey: "extension.contactMessages", href: "/admin/contact-messages",
   icon: "MessageSquare", badge: "contactMessages", phase: 2,
 };
+// 2026-06-01 (เดฟ · CEO opening-day §6) — the acquisition CALL-QUEUE. Sales+CS
+// work this list top-down to phone the 6,936 never-activated cold leads
+// (tb_users.userActive='') + the big-PCS owners. It's the revenue-now surface
+// the CEO asked to "START NOW", so phase 1 (visible to all admin staff — the
+// /admin/leads action itself gates RBAC to super/sales/ops). Lives in the
+// Extension "customer comms / CRM" family next to contactMessages.
+const blockExtLeads: MenuItem = {
+  labelKey: "extension.leads", href: "/admin/leads", icon: "PhoneCall",
+};
 // 2026-05-31 sitting-H-fix #5 (ภูม): blockExtTaxInvoices DELETED. ใบกำกับภาษี
 // ขาย belongs in the accounting headmenu "รายรับ" (PEAK structure · per
 // `lib/admin/accounting-menubar.ts`), not in the sidebar Extension drawer.
@@ -744,6 +753,7 @@ const menuSuper: MenuSection[] = [
     blockExtKpi,
     blockExtWorkboard,
     blockExtInbox,
+    blockExtLeads,
     blockExtContactMessages,
     blockExtLineInbox,
     blockExtBroadcasts,
@@ -810,6 +820,7 @@ const menuManager: MenuSection[] = [
     blockExtKpi,
     blockExtWorkboard,
     blockExtInbox,
+    blockExtLeads,
     blockExtContactMessages,
     blockExtLineInbox,
     blockExtBroadcasts,
@@ -855,7 +866,7 @@ const menuOps: MenuSection[] = [
     ],
   },
   learningSection,
-  extensionSection([blockExtJuristic, blockExtThaiTransport, blockExtIncidents]),
+  extensionSection([blockExtLeads, blockExtJuristic, blockExtThaiTransport, blockExtIncidents]),
 ];
 
 /**
@@ -931,7 +942,8 @@ const menuSalesAdmin: MenuSection[] = [
     ],
   },
   learningSection,
-  extensionSection([blockExtJuristic, blockExtIncidents]),
+  // 2026-06-01 (CEO §6) — sales reps live in the acquisition call-queue.
+  extensionSection([blockExtLeads, blockExtJuristic, blockExtIncidents]),
 ];
 
 /**
