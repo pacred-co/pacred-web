@@ -3,6 +3,25 @@
 
 ---
 
+# 🌙 2026-06-02 PM-7 — OVERNIGHT AUTONOMOUS RUN (owner asleep · staff-CRUD backlog) · read FIRST
+
+**main = `dave-pacred` = `6b183aef`+ · all pushed · build EXIT 0 each wave · prod LIVE · migrations 0136 applied.** Owner moved to the company computer, said "หยิบงาน code รันยาวยันเช้า · เดี๋ยวตื่นมาสรุป" → ran the §PM-6 #3.3 staff-CRUD backlog autonomously (codeable items that need NO owner login/token/decision). Pattern: flat Agent + worktree + disjoint + build-gate + push-per-wave (clean state always).
+
+**🚀 Shipped overnight (each its own wave · merged + built + pushed + migration applied):**
+- **CRUD: partner** (`daa0d73f`) — NEW `partners` table (**migration 0136 APPLIED prod** · isolated · RLS super-only) + admin directory CRUD at **`/admin/partners`** (list/add/edit/toggle/hard-delete · super) + sidebar (Handshake). MVP = external logistics/business partner directory (GOGO/JMF/TTP/MOMO/CargoThai/warehouse/customs/messenger/api_provider · 8 partner_type CHECK). 🟠 **3 OPEN-Q for owner:** (1) partner-portal *login role*? (built admin-internal only) (2) the 8 partner_type buckets right? (`last_mile` overlaps `carriers`) (3) link partner `code` ↔ MOMO/JMF integration configs? — answer → wire later (no schema change).
+- **admin-create-customer + guarded hard-delete** (`6b183aef`) — `/admin/customers/new` (admin creates a customer w/o self-register/OTP: phone-collision guard → `auth.admin.createUser` → profiles → tb_users seed incl. round-robin sales + wallet + cashback · juristic→tb_corporate · reveal pw once) + a **hard-delete** danger-zone on `/admin/customers/[id]` (super-only · type-the-PR-code confirm · **REFUSES if the account has any orders / wallet balance / wallet history** → only truly-empty test/orphan rows · full audit snapshot). Closes the staff-CRUD gap (was soft-toggle only).
+
+**🔴 STILL PENDING (need owner — kept for when พี่ wakes · all in `docs/research/RESUME-machine-move-2026-06-02.md`):**
+1. **admin-login-verify** — `admin_pee` / `123456` (Claude can't type pw — owner logs in → confirm `/admin/admins` shows 15).
+2. **5 phone-collisions** — owner sign-off per row → free the phones (detail table in RESUME §3.2).
+3. **prod money spot-check** — approve 2-3 real test slips → confirm fstatus 5→6 + AR decrement + tax-invoice issuance (mutates real money/RD).
+4. **partner CRUD 3 open-Q** (above) · **FB 8 env tokens** → scaffold `/api/webhooks/facebook`.
+5. **QA full-loop admin-side** (member-side verified · `docs/research/qa-6systems-2026-06-01.md`).
+
+> 🟢 Codeable backlog still open for a fresh run (no owner needed): freight_quote admin-review page (close the public freight funnel) · sales quote-comparison tool (CEO pricing) · more BI. ⚠️ This conversation hit context limit after 2 clean waves — a fresh session continues the loop with full headroom.
+
+---
+
 # 🏢 2026-06-02 PM-6 — SESSION CLOSE + MACHINE MOVE (→ คอมบริษัท) · read FIRST → then `docs/research/RESUME-machine-move-2026-06-02.md`
 
 **main = `dave-pacred` = `origin/main` = `37078633`+ · all pushed · typecheck EXIT 0 · prod (Vercel auto-deploys `pacred.co.th`) LIVE.** Closing the home session to continue on the company computer. Resume: `git fetch origin && git pull origin main` → read [`docs/research/RESUME-machine-move-2026-06-02.md`](docs/research/RESUME-machine-move-2026-06-02.md) FIRST (carries the machine-local paths · the **5 phone-collision + login-verify pending** · the FB-token checklist · working-style — none of which travel with git).
