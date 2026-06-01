@@ -111,9 +111,11 @@ export async function adminBulkApproveWalletHs(
       // 1. Fetch all candidate rows in one query (filter to pending only).
       //    Wave 29: include typeservice + reforder + dateslip so we can fire
       //    the auto-receipt hook for any forwarder payment in the batch.
+      //    P0 mark-paid symmetry: also read wusercredit so the per-row
+      //    fStatus 5→6 settle below can pick the credit vs non-credit branch.
       const { data: rows, error: readErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, amount, type, status, typeservice, reforder, dateslip, note")
+        .select("id, userid, amount, type, status, typeservice, reforder, dateslip, note, wusercredit")
         .in("id", ids)
         .eq("status", "1");
       if (readErr) return { ok: false, error: readErr.message };
@@ -131,6 +133,7 @@ export async function adminBulkApproveWalletHs(
         reforder: string | null;
         dateslip: string | null;
         note: string | null;
+        wusercredit: string | null;
       };
       const candidates = rows as Row[];
 
@@ -235,6 +238,42 @@ export async function adminBulkApproveWalletHs(
         if (r.typeservice === "2" && r.reforder) {
           const fid = Number(r.reforder);
           if (Number.isFinite(fid) && fid > 0) {
+            // P0 mark-paid symmetry — settle tb_forwarder for this paid row
+            // (per-row · inside the loop). submitForwarderPayment leaves the
+            // forwarder at fStatus=5; the slip-approve is where it settles —
+            // else paid forwarders stay "รอชำระเงิน" + the AR cockpit never
+            // decrements. Same branch split as adminApproveWalletHs
+            // (wallet-trans.ts · legacy pay-users.php L467/L469):
+            //   standard   → fstatus='6' + fdateadminstatus + fdatestatus6 (guard fstatus='5')
+            //   credit row → fcredit='' + fdateadminstatus (NO fstatus flip · guard fcredit='1')
+            // Idempotent via the eq-guard; best-effort + logged — a flip
+            // failure must NOT fail the row (the money already moved).
+            const nowIso = new Date().toISOString();
+            const isCredit = (r.wusercredit ?? "").trim() === "1";
+            let flipErrMsg: string | null = null;
+            if (isCredit) {
+              const { error: flipErr } = await admin
+                .from("tb_forwarder")
+                .update({ fcredit: "", fdateadminstatus: nowIso })
+                .eq("id", fid)
+                .eq("userid", r.userid)
+                .eq("fcredit", "1");
+              flipErrMsg = flipErr?.message ?? null;
+            } else {
+              const { error: flipErr } = await admin
+                .from("tb_forwarder")
+                .update({ fstatus: "6", fdateadminstatus: nowIso, fdatestatus6: nowIso })
+                .eq("id", fid)
+                .eq("userid", r.userid)
+                .eq("fstatus", "5");
+              flipErrMsg = flipErr?.message ?? null;
+            }
+            if (flipErrMsg) {
+              logger.warn("tb-bulk", "forwarder settle flip failed (non-fatal · money already moved)", {
+                wallet_hs_id: r.id, userid: r.userid, fid, isCredit, error: flipErrMsg,
+              });
+            }
+
             const dt = r.dateslip ? new Date(r.dateslip) : new Date();
             const dayKey = `${r.userid}|${dt.toISOString().slice(0, 10)}`;
             const existing = receiptBatches.get(dayKey);

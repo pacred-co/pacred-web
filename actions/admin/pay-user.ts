@@ -61,6 +61,8 @@ import {
   type ForwarderDebitRow,
 } from "@/lib/forwarder/forwarder-debit-total";
 import { uploadToBucket } from "@/lib/storage/upload";
+import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
+import { logger } from "@/lib/logger";
 
 // Legacy `pcs-admin/pay-users.php` hardcodes this destination bank on every
 // slip-top-up INSERT (shop L103 + forwarder L360/L578). Mirrored verbatim so
@@ -684,6 +686,35 @@ export async function adminPayForwardersOnBehalf(
 
       paid.push(fid);
       totalDebited += price;
+
+      // P0 mark-paid symmetry — mint the auto-receipt for this paid forwarder
+      // so the wallet-pay-on-behalf path ALSO produces a receipt (the slip-
+      // approve paths in wallet-trans.ts / tb-bulk.ts already do via the same
+      // helper). Without this, staff who settle a phone customer's ฝากนำเข้า
+      // straight from the wallet left NO tb_receipt behind — the audit-of-record
+      // for money already taken. Mirrors the autoIssueReceiptOnPaymentLand call
+      // shape from wallet-trans.ts (~L297): best-effort + logged — a receipt
+      // failure must NOT roll back the settled wallet leg (money already moved).
+      // dateSlip = now (a wallet pay-on-behalf settles instantly; there is no
+      // bank-slip date on this path).
+      {
+        const fidNum = Number(fid);
+        const r = await autoIssueReceiptOnPaymentLand(admin, {
+          userid: userId,
+          fids:   [fidNum],
+          dateSlip: new Date(),
+          source: "pay-user.onbehalf",
+        });
+        if (!r.ok && !r.alreadyIssued) {
+          logger.warn("pay-user", "auto-receipt failed (non-fatal · money already moved)", {
+            fid: fidNum, userId, tb_wallet_hs_id: hsRow.id, error: r.error,
+          });
+        }
+        if (r.ok) {
+          revalidatePath(`/admin/accounting/forwarder-invoice/${r.data.receiptId}`);
+          revalidatePath(`/service-import/${fidNum}/invoice`);
+        }
+      }
 
       if (profileId) {
         void sendNotification(profileId, {

@@ -176,10 +176,12 @@ export async function adminApproveWalletHs(
 
       // 1. Read the pending row. Includes typeservice + reforder + dateslip
       //    so we can detect a forwarder-payment (typeservice='2') and trigger
-      //    the auto-receipt hook after wallet update succeeds.
+      //    the auto-receipt hook after wallet update succeeds. `wusercredit`
+      //    is read too so the fStatus 5→6 flip below can pick the credit vs
+      //    non-credit branch (submitForwarderPayment stamps it per row).
       const { data: row, error: rowErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, amount, type, status, typeservice, reforder, dateslip, note")
+        .select("id, userid, amount, type, status, typeservice, reforder, dateslip, note, wusercredit")
         .eq("id", id)
         .maybeSingle<{
           id: number;
@@ -191,6 +193,7 @@ export async function adminApproveWalletHs(
           reforder: string | null;
           dateslip: string | null;
           note: string | null;
+          wusercredit: string | null;
         }>();
       if (rowErr) {
         console.error(`[tb_wallet_hs list] failed`, { code: rowErr.code, message: rowErr.message });
@@ -293,6 +296,48 @@ export async function adminApproveWalletHs(
       if (row.typeservice === "2" && row.reforder) {
         const fid = Number(row.reforder);
         if (Number.isFinite(fid) && fid > 0) {
+          // P0 mark-paid symmetry — settle tb_forwarder for the paid row.
+          // submitForwarderPayment (actions/forwarder.ts) does NOT flip fstatus
+          // at submit (legacy keeps fStatus=5 until staff confirm the slip), so
+          // the slip-approve is where the order must settle — otherwise paid
+          // forwarders are stuck at "รอชำระเงิน" forever + the AR cockpit never
+          // decrements. Mirror the pure-wallet flip in pay-user.ts L574-576
+          // (legacy pay-users.php L467/L469):
+          //   standard    → fstatus='6' + fdateadminstatus + fdatestatus6
+          //                  (guard fstatus='5' → idempotent 5→6 advance)
+          //   credit row  → fcredit='' + fdateadminstatus  (NO fstatus/fdatestatus6
+          //                  flip — credit rows settle without the 6 stamp; guard
+          //                  fcredit='1' → idempotent, a credit row reaches the
+          //                  payable set via fCredit='1' and may NOT be at fstatus=5).
+          // wusercredit is stamped per row by submitForwarderPayment. Best-effort
+          // + logged like the auto-receipt — a flip failure must NOT roll back the
+          // wallet leg (the money already moved).
+          const nowIso = new Date().toISOString();
+          const isCredit = (row.wusercredit ?? "").trim() === "1";
+          let flipErrMsg: string | null = null;
+          if (isCredit) {
+            const { error: flipErr } = await admin
+              .from("tb_forwarder")
+              .update({ fcredit: "", fdateadminstatus: nowIso })
+              .eq("id", fid)
+              .eq("userid", row.userid)
+              .eq("fcredit", "1");
+            flipErrMsg = flipErr?.message ?? null;
+          } else {
+            const { error: flipErr } = await admin
+              .from("tb_forwarder")
+              .update({ fstatus: "6", fdateadminstatus: nowIso, fdatestatus6: nowIso })
+              .eq("id", fid)
+              .eq("userid", row.userid)
+              .eq("fstatus", "5");
+            flipErrMsg = flipErr?.message ?? null;
+          }
+          if (flipErrMsg) {
+            logger.warn("wallet-trans", "forwarder settle flip failed (non-fatal · money already moved)", {
+              wallet_hs_id: id, userid: row.userid, fid, isCredit, error: flipErrMsg,
+            });
+          }
+
           const dateSlip = row.dateslip ? new Date(row.dateslip) : new Date();
           const r = await autoIssueReceiptOnPaymentLand(admin, {
             userid: row.userid,
