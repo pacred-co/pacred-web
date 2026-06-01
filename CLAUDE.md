@@ -8,13 +8,13 @@
 **main = `dave-pacred` = `1fb8ee6f`+ · all pushed · build EXIT 0 · typecheck/i18n 0 · NO new migrations** (all repoint/neutralize existing `tb_*`). Owner approved a batch + said run-long-parallel-ask-once-at-end. Ran **5 worktree agents** (proven pattern) + 2 self-built pieces:
 - **CRM core** `/admin/crm` — omni-inbox (LINE real via ปอน's `Podeng_*`; **FB stubbed — no FB table in DB**) + customer-360 + **sales-rep routing** (`tb_users.adminIDSale` · new `actions/admin/crm.ts`) + funnel→`/admin/leads`. LINE↔customer mostly "ยังไม่ผูก" til manual-link; rep dropdown gated on 13-admin recreate.
 - **ADR-0023 credit** ✅ — `getMyCredit`→`tb_users.userCreditValue`−`tb_credit.creditvalue`; paydown idempotent. 🛑 **prod-verify caught 2 agent bugs** (ห้ามเดา paid off): hs `type='3'` was a withdrawal-tab COLLISION (641 rows)→`'8'`; + missing NOT NULL `typenew`/`typeservice` (runtime INSERT fail).
-- **ADR-0024 config** ✅ — `/admin/settings` neutralized→read-through hub (6 dead-write fields). chip: `/admin/rates` dead-read.
+- **ADR-0024 config** ✅ — `/admin/settings` neutralized→read-through hub (6 dead-write fields). **+ `/admin/rates` dead-read FIXED** → live `tb_settings` (ฝากโอน 4.93/ฝากสั่ง 4.97/ต้นทุน 4.84 · freeshipping flag · dropped rebuilt-only fee cards). browser-verified.
 - **ADR-0025 cashback** ✅ (spend-side) — debit `tb_cash_back`+hs idempotent; shop/yuan/deposit settle full. ⚠️ forwarder-slip approve carries-but-not-debits yet (no double-spend) → **chip filed**.
-- **BI** `/admin/reports/{cockpit,ar-aging}` — exec cockpit + AR-aging (buckets · top-50 debtors).
-- **pricing-guard** — `lib/pricing/margin-advisory.ts` + `<MarginAdvisoryNote>` (`blocks:false` ALWAYS · 6 tests). ⏳ **reusable block shipped, NOT wired** — ≤15k/ตู้ unit = freight per-container (Theme 8 unbuilt) not cargo per-order → **OPEN Q for owner: where to surface it**.
-- build-gate catch: cashback sync helpers broke `pnpm build` ("use server" only-async-exports, typecheck missed it) → moved to `lib/cashback/note-tag.ts`.
+- **BI** `/admin/reports/{cockpit,ar-aging}` — exec cockpit (AR ฿917k · funnel) + AR-aging (buckets · top-50 debtors w/ phones). browser-verified real data.
+- **pricing-guard** ✅ — `lib/pricing/margin-advisory.ts` + `<MarginAdvisoryNote>` (`blocks:false` ALWAYS · 6 tests). **Owner chose cockpit portfolio signal** → wired into `/admin/reports/cockpit` (MTD orders > ฿15k/ตู้: amber nudge if >0 else green · verified). Reusable block still plugs into freight per-container pricing (Theme 8) later.
+- build-gate catch: cashback sync helpers broke `pnpm build` ("use server" only-async-exports, typecheck missed it) → moved to `lib/cashback/note-tag.ts`. Also: **prod deploys from branch `main`** (not dave-pacred) → `git push origin dave-pacred:main`.
 
-**🔓 OPEN for owner:** Q1 pricing-guard surface · 2 chips (cashback-slip · /admin/rates) · 13-admin recreate still gates CRM rep-routing + credit/commission visibility. Detail: memory `big_audit_master_plan_2026_06_01.md` §PM-3.
+**🔓 STILL OPEN (not เดฟ-solo):** 1 chip = cashback forwarder-slip completion · **13-admin recreate (ADR-0022) gates CRM rep-routing + credit/commission visibility** (owner/ภูม) · FB omni-inbox waits ปอน's FB webhook. Detail: memory `big_audit_master_plan_2026_06_01.md` §PM-3.
 
 ---
 
