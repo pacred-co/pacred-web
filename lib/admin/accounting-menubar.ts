@@ -235,6 +235,9 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       // Lists issued tb_forwarder_tax_invoice + XML/CSV download · MVP preview
       // shape (full XAdES-BES sig + RD-API submit DEFERRED).
       { label: "ส่งออก e-Tax (RD Code 86)",     href: "/admin/accounting/etax" },
+      // 2026-06-02 sitting-I §3.4 Phase-C: 50-ทวิ cert tracking · juristic
+      // customers withhold + send cert · admin marks received / waived.
+      { label: "ติดตาม 50-ทวิ (WHT certs)",      href: "/admin/accounting/wht-certs" },
       // Wave 7.3 (2026-05-22): wired 2 orphan accounting pages here per
       // ภูม decision in page-inventory-2026-05-21-night.md §🔴 DEAD.
       { label: "งวดบัญชี",  href: "/admin/accounting/periods" },
