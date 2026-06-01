@@ -3,6 +3,20 @@
 
 ---
 
+# 🧳 2026-06-01 PM-5 — SESSION CLOSE + MACHINE MOVE · read FIRST → then `docs/research/RESUME-machine-move-2026-06-01.md`
+
+**main = `dave-pacred` = `55e247be` · pushed · build EXIT 0 · prod LIVE.** Closing the home-machine session to continue on the work computer. Owner types only `sync main / pull dave-pacred มาทำงานต่อ` → **read [`docs/research/RESUME-machine-move-2026-06-01.md`](docs/research/RESUME-machine-move-2026-06-01.md) FIRST** (it carries everything that does NOT travel with git: machine-local paths, the owner-token inventory, the login protocol, env pointers, and the working-style/memory facts).
+
+**Shipped in this close (all pushed):**
+- **Promo manager** — owner can now เพิ่ม/แก้/เปิด-ปิดโปร + **อัปโหลดรูป** at **`/admin/settings/promos`** (Megaphone · multi-promo JSON in `business_config.promo.banners` · image→`avatars` public bucket · `/service-import` banner reads active promos, falls back to the legacy single promo). **Migration 0135 APPLIED prod via PostgREST** (IPv6 direct-DB was down → seed via `POST /rest/v1/business_config`; DDL still needs direct-DB/SQL-editor — see ledger + RESUME §2).
+- **Member `/service-import` UX (from owner screenshot):** floating widgets decluttered (LINE bubble z-48 below pay-bar) · **pay-bar "ชำระเงิน" FIXED** (root cause = z-index: pay-bar z-44 sat *below* the LINE bubble z-51 → transparent overlap stole the tap → raised pay-bar to z-55; browser-verified click → pay modal opens with the 5 รอชำระ orders) · promo banner configurable.
+- **Brand sweep** — admin receipt issuer → Pacred (TaxID `0105564077716` · KBANK `225-2-91144-0` · via site.ts). ⚠️ owner-TODO: **ตราปั๊ม+ลายเซ็น Pacred image assets** (still legacy PCS scans) · self-pickup **warehouse address** (ก๊อต confirm · no China warehouse addr in code) — owner bringing images.
+- **ภูม sitting-I INTEGRATED** (Poom-pacred 14 commits · merged CLEAN · zero money-path overlap): commission Potemkin repoint (`/admin/commissions`+`/forwarder-sales` → live `tb_user_sales*` · **4,104 invisible earns now surface** · ADR-0026) · PEAK documents+CSV hubs · `/admin/accounting/ar-aging` · `/admin/forwarders/tran-th` (TH-transport batch) · menubar/orphan-wiring. **Build-fix:** his 5 `x as T[]` casts (written on a 34-behind base) failed typecheck against the newer base → `as unknown as T[]`. 🟠 **follow-up (non-blocker): DUPLICATE AR-aging** — dave `/admin/reports/ar-aging` vs ภูม `/admin/accounting/ar-aging` (both work · pick one canonical, redirect the other).
+- **QA:** full-loop tester plan + proven env (Chrome + PR321 + admin auth, screenshots) in [`docs/research/qa-6systems-2026-06-01.md`](docs/research/qa-6systems-2026-06-01.md) — flow #1 (member ฝากนำเข้า/status/pay-bar) + the pay-button fix browser-verified; the rest TODO on the work computer (login protocol agreed).
+- **Owner spot-check on prod (recommended):** approve 2-3 real test slips → confirm fstatus 5→6 advance + AR cockpit decrements (the PM-4 mark-paid fix · not click-tested by me = mutates real money).
+
+---
+
 # 🟢 2026-06-01 PM-4 — CEO "6 core systems done?" DEEP-AUDIT + FIX SPRINT · read FIRST
 
 **main = `dave-pacred` = `685dd44b`+ · pushed · build EXIT 0 · no new migrations.** CEO asked if the 6 revenue systems (ฝากสั่งซื้อ·ฝากนำเข้า·โอนหยวน·ออกบิล·แจ้งเก็บเงิน·ออกใบเสร็จ) are TRULY done. Ran **4 read-only audit agents** (legacy PHP source + code + §0e) → **5 fix agents** (flat-Agent worktree pattern). **Verdict: all 6 money loops CLOSED + correct (no leak/double-spend) — but route-200 testing missed real gaps.** Shipped:
