@@ -31,6 +31,12 @@
 
 ## TASK 1 — M-1 · Customer address delete + set-main (P0 defect · S)
 
+> ✅ **เดฟ shipped the 2 server actions 2026-06-01** (Wave A): `deleteAddressAction` (faithful
+> soft-delete addressstatus '1'→'0', ownership-scoped, clears the main-pointer if it was main) +
+> `setMainAddressAction` (upserts the single `tb_address_main` pointer, ownership-checked) — both in
+> `app/[locale]/(protected)/addresses/add-address-action.ts`, same `<form action={…}>` + hidden
+> `addressId` convention as `editAddressAction`. **ปอน: just wire the two buttons to these.**
+
 **Goal:** the three per-row buttons on `/addresses` (ลบที่อยู่ · แก้ไข · ตั้งเป็นที่อยู่หลัก) all work. แก้ไข already works (`editAddressAction`). **ลบ** and **ตั้งเป็นที่อยู่หลัก** are dead — they render `data-legacy-onclick="deleteAddress(...)"` / `setMainAddress(...)` markers with **no handler**.
 
 **Data / tables (state explicitly):**

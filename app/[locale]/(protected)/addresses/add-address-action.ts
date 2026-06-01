@@ -249,3 +249,114 @@ export async function editAddressAction(formData: FormData): Promise<void> {
   revalidatePath("/addresses");
   redirect("/addresses?saved=1");
 }
+
+/**
+ * Server Action — SOFT-DELETE an address (legacy address.php delete branch).
+ * 2026-06-01 Wave-A / M-1: the address-book delete button was inert
+ * (`data-legacy-onclick`, no action) → customers couldn't remove a wrong
+ * address (wrong-parcel risk). This is the faithful delete handler.
+ *
+ * FAITHFUL SOFT-DELETE — legacy hides addresses via `addressstatus` ('1'=active,
+ * '0'=deleted); the /addresses read filters `.eq("addressstatus","1")`. So we
+ * set addressstatus='0' (NOT a hard DELETE) — hides it from the list while
+ * preserving the row for any order/FK references that point at this addressid.
+ *
+ * SECURITY — scoped `.eq("addressid", addressId).eq("userid", userID)`; the
+ * userid predicate is the ownership guard (the admin client bypasses RLS, so
+ * this WHERE is the only check — a customer can never delete a foreign row).
+ * If the deleted row was the customer's main address, its tb_address_main
+ * pointer is removed so a hidden address isn't shown as main (they re-pick via
+ * setMainAddressAction).
+ *
+ * Wired by the /addresses UI as `<form action={deleteAddressAction}>` with a
+ * hidden `addressId` (same convention as editAddressAction).
+ */
+export async function deleteAddressAction(formData: FormData): Promise<void> {
+  const data = await getCurrentUserWithProfile();
+  if (!data?.profile) redirect("/complete-profile");
+  const userID = data.profile.member_code ?? "";
+
+  const addressId = Number(formData.get("addressId") ?? "");
+  if (!Number.isFinite(addressId) || addressId <= 0) {
+    redirect("/addresses?error=save");
+  }
+
+  const admin = createAdminClient();
+
+  // Soft-delete: addressstatus '1' → '0' (the list reads only '1').
+  const { error: delError } = await admin
+    .from("tb_address")
+    .update({ addressstatus: "0" })
+    .eq("addressid", addressId)
+    .eq("userid", userID);
+  if (delError) {
+    console.error(`[tb_address soft-delete] failed`, { code: delError.code, message: delError.message });
+    redirect("/addresses?error=save");
+  }
+
+  // Drop a dangling main-pointer if this was the main address.
+  await admin
+    .from("tb_address_main")
+    .delete()
+    .eq("userid", userID)
+    .eq("addressid", addressId);
+
+  revalidatePath("/addresses");
+  redirect("/addresses?saved=1");
+}
+
+/**
+ * Server Action — SET an address as the customer's main/default
+ * (legacy "ตั้งเป็นที่อยู่หลัก"). 2026-06-01 Wave-A / M-1: the set-main button
+ * was inert. tb_address_main holds ONE pointer row per user (userID → addressID).
+ *
+ * SECURITY — the target address must belong to the customer (verified against
+ * tb_address by `userid`) before main is pointed at it; a foreign/missing
+ * addressId is refused. Wired as `<form action={setMainAddressAction}>` with a
+ * hidden `addressId`.
+ */
+export async function setMainAddressAction(formData: FormData): Promise<void> {
+  const data = await getCurrentUserWithProfile();
+  if (!data?.profile) redirect("/complete-profile");
+  const userID = data.profile.member_code ?? "";
+
+  const addressId = Number(formData.get("addressId") ?? "");
+  if (!Number.isFinite(addressId) || addressId <= 0) {
+    redirect("/addresses?error=save");
+  }
+
+  const admin = createAdminClient();
+
+  // Ownership — the address must be this customer's own row.
+  const { data: owned, error: ownErr } = await admin
+    .from("tb_address")
+    .select("addressid")
+    .eq("addressid", addressId)
+    .eq("userid", userID)
+    .maybeSingle<{ addressid: number }>();
+  if (ownErr) {
+    console.error(`[tb_address own-check] failed`, { code: ownErr.code, message: ownErr.message });
+    redirect("/addresses?error=save");
+  }
+  if (!owned) redirect("/addresses?error=save");
+
+  // Upsert the single main-pointer row for this user (UPDATE if exists, else INSERT).
+  const { data: mainRow, error: mainErr } = await admin
+    .from("tb_address_main")
+    .select("id")
+    .eq("userid", userID)
+    .limit(1)
+    .maybeSingle<{ id: number }>();
+  if (mainErr) {
+    console.error(`[tb_address_main list] failed`, { code: mainErr.code, message: mainErr.message });
+  }
+
+  if (mainRow) {
+    await admin.from("tb_address_main").update({ addressid: addressId }).eq("id", mainRow.id);
+  } else {
+    await admin.from("tb_address_main").insert({ addressid: addressId, userid: userID });
+  }
+
+  revalidatePath("/addresses");
+  redirect("/addresses?saved=1");
+}
