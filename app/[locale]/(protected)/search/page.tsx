@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { akucargoSearch } from "@/lib/china-search/akucargo";
@@ -7,6 +8,7 @@ import { convertProductUrlDetail, type ChinaProductDetail } from "@/lib/china-se
 import { SearchRecents } from "./search-recents";
 import { SearchHistoryLogger } from "./search-history-logger";
 import { SearchImagePanel } from "./search-image-panel";
+import { UrlPasteAddToCart } from "./url-paste-add-to-cart";
 
 /**
  * China product search / search-results screen — a FAITHFUL 1:1
@@ -620,21 +622,7 @@ function UrlPasteMode({
         {/* search.php L57-142 — product card (MODE A) */}
         <div className="data-pro-chinna bg-white dark:bg-surface border border-border rounded-2xl shadow-sm overflow-hidden">
           <div className="p-3 md:p-4">
-            <form
-              className=""
-              method="POST"
-              autoComplete="off"
-              action=""
-            >
-              <input type="hidden" name="cURL" value="" />
-              <input type="hidden" name="cProvider" value="" />
-              <input
-                type="hidden"
-                name="cTitle"
-                id="cTitle"
-                value=""
-              />
-              <input type="hidden" name="cNameShop" value="" />
+            <div className="">
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                 <div className="hidden md:block md:col-span-12">
                   <h2 className="text-lg font-bold text-foreground flex flex-wrap items-center gap-2 pb-0">
@@ -809,53 +797,42 @@ function UrlPasteMode({
                           </>
                         )}
                   <hr className="my-3 border-t border-border" />
-                  <div
-                    className="border-total-product pay-c rounded-xl border border-border bg-surface-alt/50 dark:bg-surface-alt/30 p-3"
-                    style={{ zIndex: 99 }}
-                  >
-                    <div className="grid grid-cols-12 items-center gap-y-2">
-                      <div className="col-span-3 md:col-span-8 text-right">
-                        <h4 className="text-base font-semibold text-foreground">ราคารวม</h4>
-                      </div>
-                      <div className="col-span-9 md:col-span-4 text-left md:text-right notranslate text-sm">
-                        <span id="CHNTotal">{fmt2(priceCny)}</span>¥
-                        <span className="">
-                          &nbsp;x {rsDefault}฿/¥ ={" "}
-                          <b id="THBtotal" className="text-red-600">
-                            {fmt2(priceThb)}
-                          </b>{" "}
-                          ฿
-                        </span>
-                      </div>
-                      <div className="col-span-3 md:col-span-8 text-right">
-                        <h4 className="text-base font-semibold text-foreground">จำนวน </h4>
-                      </div>
-                      <div className="col-span-5 md:col-span-4 text-left md:text-right text-sm">
-                        <span id="cAmount">0</span>
-                        <b className="text-xs">
-                          <span className="text-red-600">
-                            {" "}
-                            (ขั้นต่ำ{" "}
-                            <span className="text-sm" id="minnum"></span>{" "}
-                            ชิ้น)
-                          </span>
-                        </b>
-                      </div>
-                      <div className="col-span-4 md:col-span-12 self-end text-left md:text-right md:pt-1">
-                        <button
-                          type="submit"
-                          id="btnCart"
-                          className="btn-main inline-flex items-center gap-1.5 rounded-full bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-2 transition-colors animate__animated animate__infinite animate__headShake"
-                          name="addCartURL"
+                  {/* search.php L113-141 — the total + qty + "หยิบใส่รถเข็น"
+                      block. Legacy wired this to a jQuery $.ajax → cart.php
+                      (never ported). Here it is a real client island that
+                      reads the server-fetched `detail` + calls the wired
+                      `addCartItem` action. When `detail` is null (TAMIT
+                      down → skeleton above), we offer the manual cart
+                      fallback instead of a dead CTA. */}
+                  {detail ? (
+                    <UrlPasteAddToCart
+                      provider={detail.provider}
+                      title={detail.title}
+                      imageUrl={mainImage}
+                      shopName={detail.shop_name}
+                      priceCny={priceCny}
+                      sourceUrl={detail.url || urlcut}
+                      rsDefault={rsDefault}
+                    />
+                  ) : (
+                    <div
+                      className="border-total-product pay-c rounded-xl border border-border bg-surface-alt/50 dark:bg-surface-alt/30 p-3"
+                      style={{ zIndex: 99 }}
+                    >
+                      <p className="text-sm text-foreground">
+                        กำลังโหลดข้อมูลสินค้า... หากข้อมูลไม่ขึ้น{" "}
+                        <Link
+                          href="/cart"
+                          className="text-red-600 underline underline-offset-2 hover:text-red-700"
                         >
-                          <i className="ft-shopping-cart"></i> หยิบใส่รถเข็น
-                        </button>
-                      </div>
+                          ไปที่ตะกร้าเพื่อกรอกเอง
+                        </Link>
+                      </p>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       </div>
