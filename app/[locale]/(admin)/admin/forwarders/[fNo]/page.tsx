@@ -769,77 +769,114 @@ async function renderLegacyForwarderView(
             </dl>
           </section>
 
-          {/* Payment panel — Theme A (2026-05-31 · เดฟ): faithful single-row
-              "record payment (debit wallet)" routed through the SAME tested
-              action as /admin/wallet/pay-user (adminPayForwardersOnBehalf →
-              tb_wallet + tb_wallet_hs + fstatus 5→6). Replaces the tombstoned
-              rebuilt-table dead-write. Only shows when payable (fStatus=5 /
-              fCredit=1). */}
+          {/* ── ACTIONS section (2026-06-02 ภูม UX flag · v4 refactor) ──
+              Wave 23 → re-sweep adm-09 → Theme bill-to: 4 action panels
+              accreted on top of each other as separate ship-of-Theseus
+              additions. ภูม flagged the stack ดู "กากกว่า PCS" — too tall,
+              no hierarchy, all expanded at once.
+
+              Fix: wrap each interactive panel in a collapsible <details>
+              card. Smart defaults so the right one is open when you arrive:
+                · Payment    → open if payable     (most urgent action)
+                · Status     → open default        (most-used action)
+                · Driver     → open if ready (fstatus=6)
+                · Edit       → closed              (rare edits)
+                · Bill-to    → closed              (rare edits)
+
+              Native <details> = no JS, server-component-friendly,
+              keyboard-accessible. */}
+          <div className="space-y-2 pt-2">
+            <h2 className="text-xs font-bold text-muted uppercase tracking-widest px-1">⚡ Actions</h2>
+          </div>
+
+          {/* Payment — auto-open when payable (urgent action) */}
           {isPayable && (
-            <TbForwarderPaymentPanel
-              fId={r.id}
-              userId={r.userid}
-              customerName={`คุณ${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim()}
-              amountEstimate={Number(r.ftotalprice ?? 0)}
-              walletBalance={walletBalance}
-              isCredit={(r.fcredit ?? "").trim() === "1"}
-            />
+            <CollapsibleCard
+              title="ชำระเงิน (หักกระเป๋า)"
+              icon="💰"
+              tone="primary"
+              hint={`฿${Number(r.ftotalprice ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}
+              defaultOpen
+            >
+              <TbForwarderPaymentPanel
+                fId={r.id}
+                userId={r.userid}
+                customerName={`คุณ${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim()}
+                amountEstimate={Number(r.ftotalprice ?? 0)}
+                walletBalance={walletBalance}
+                isCredit={(r.fcredit ?? "").trim() === "1"}
+              />
+            </CollapsibleCard>
           )}
 
-          {/* Action panel — Wave 23 P0 (2026-05-27 ภูม flag · close
-              workflow gap): status + cabinet + tracking-TH + note + save
-              in one place so admin doesn't have to leave detail → list
-              → bulk-bar for single-row work. */}
-          <TbForwarderActionPanel
-            fId={r.id}
-            fNo={String(r.id)}
-            currentStatus={(r.fstatus as "1" | "2" | "3" | "4" | "5" | "6" | "7" | "99") || "1"}
-            currentCabinet={r.fcabinetnumber ?? ""}
-            currentTrackingTh={r.ftrackingth ?? ""}
-            currentNote={r.fnote ?? ""}
-          />
+          {/* Status + cabinet + tracking + note — open by default (most-used) */}
+          <CollapsibleCard
+            title="อัปเดตสถานะ + ตู้ + Tracking + หมายเหตุ"
+            icon="📝"
+            hint={`สถานะปัจจุบัน: ${r.fstatus ?? "—"}`}
+            defaultOpen
+          >
+            <TbForwarderActionPanel
+              fId={r.id}
+              fNo={String(r.id)}
+              currentStatus={(r.fstatus as "1" | "2" | "3" | "4" | "5" | "6" | "7" | "99") || "1"}
+              currentCabinet={r.fcabinetnumber ?? ""}
+              currentTrackingTh={r.ftrackingth ?? ""}
+              currentNote={r.fnote ?? ""}
+            />
+          </CollapsibleCard>
 
-          {/* Driver-assign panel — re-sweep adm-09 (2026-06-01 · close the
-              single-row dispatch gap on real tb_forwarder rows): assign a
-              driver right here instead of leaving for the list bulk-bar.
-              Reuses the faithful bulkAssignDriver with fids:[id]. Render
-              condition + per-row gate match legacy forwarder-driver.php
-              (fstatus='6' · paydeposit<>1 · no open batch). */}
-          <TbForwarderDriverAssignPanel
-            fId={r.id}
-            fNo={String(r.id)}
-            fstatus={r.fstatus}
-            paydeposit={r.paydeposit ?? ""}
-            current={driverAssignment}
-          />
+          {/* Driver assign — auto-open when fstatus='6' (ready-to-dispatch) */}
+          <CollapsibleCard
+            title="มอบหมายคนขับ"
+            icon="🚚"
+            hint={r.fstatus === "6" ? "พร้อมจัดส่ง" : "(สถานะต้อง 'เตรียมส่ง')"}
+            defaultOpen={r.fstatus === "6"}
+          >
+            <TbForwarderDriverAssignPanel
+              fId={r.id}
+              fNo={String(r.id)}
+              fstatus={r.fstatus}
+              paydeposit={r.paydeposit ?? ""}
+              current={driverAssignment}
+            />
+          </CollapsibleCard>
 
-          {/* Edit panel — Theme A cont (2026-05-31 · เดฟ): re-pick delivery
-              address from the customer's tb_address book + swap transport mode.
-              Faithful tb_forwarder writes (update_fAddress / update_fTransportType). */}
-          <TbForwarderEditPanel
-            fId={r.id}
-            isPcs={isPcsPickup}
-            addresses={savedAddresses}
-            currentTransportType={transportTypeForEdit}
-            currentShipBy={(r.fshipby ?? "").trim()}
-            currentAmountCount={amountCountForEdit}
-            currentPriceUpdate={priceUpdate}
-            currentPriceOther={otherCost}
-            currentDiscount={discount}
-          />
+          {/* Edit address + transport + ship-by + pricing — closed default (rare) */}
+          <CollapsibleCard
+            title="แก้ไขที่อยู่ / การขนส่ง / ราคา"
+            icon="✏️"
+            hint="เปิดเมื่อต้องแก้"
+          >
+            <TbForwarderEditPanel
+              fId={r.id}
+              isPcs={isPcsPickup}
+              addresses={savedAddresses}
+              currentTransportType={transportTypeForEdit}
+              currentShipBy={(r.fshipby ?? "").trim()}
+              currentAmountCount={amountCountForEdit}
+              currentPriceUpdate={priceUpdate}
+              currentPriceOther={otherCost}
+              currentDiscount={discount}
+            />
+          </CollapsibleCard>
 
-          {/* Bill-to override — Theme bill-to (2026-06-01 · เดฟ): the one
-              Pacred-original forwarder field. Repointed to tb_forwarder.fbilltoname
-              (migration 0132). Override the invoice/receipt "bill to" name. */}
-          <BillToOverridePanel
-            kind="forwarder"
-            fNo={String(r.id)}
-            defaultName={`${r.faddressname ?? ""} ${r.faddresslastname ?? ""}`.trim()}
-            current={r.fbilltoname}
-          />
+          {/* Bill-to override — closed default (rare) */}
+          <CollapsibleCard
+            title="ชื่อผู้รับใบกำกับ (Bill-to)"
+            icon="🧾"
+            hint={r.fbilltoname ? `กำหนดเอง: ${r.fbilltoname}` : "ใช้ชื่อผู้รับ default"}
+          >
+            <BillToOverridePanel
+              kind="forwarder"
+              fNo={String(r.id)}
+              defaultName={`${r.faddressname ?? ""} ${r.faddresslastname ?? ""}`.trim()}
+              current={r.fbilltoname}
+            />
+          </CollapsibleCard>
 
           {/* Secondary action buttons */}
-          <div className="space-y-2">
+          <div className="space-y-2 pt-3">
             <Link
               href={`/admin/forwarders/${encodeURIComponent(fNo)}/edit`}
               className="block w-full rounded-lg border border-primary-500 bg-primary-50 px-3 py-2 text-sm text-primary-700 font-medium hover:bg-primary-100 text-center"
@@ -898,5 +935,55 @@ function LegacyKV({ label, value, mono, href }: { label: string; value: string; 
         <span className={mono ? "font-mono" : ""}>{value}</span>
       )}
     </div>
+  );
+}
+
+/**
+ * Collapsible action card — wraps an interactive panel in a server-component
+ * <details>/<summary> with no JS dep. Visual hierarchy:
+ *   · summary header  → icon + title + hint + chevron
+ *   · body            → the panel itself, separated by a faint border
+ *
+ * 2026-06-02 ภูม UX P0 — fixes the "right column too tall, all panels
+ * stacked + expanded" complaint by giving each interactive panel its own
+ * collapsible card with smart defaultOpen logic per action context.
+ */
+function CollapsibleCard({
+  title,
+  icon,
+  hint,
+  defaultOpen,
+  tone = "neutral",
+  children,
+}: {
+  title: string;
+  icon?: string;
+  hint?: string;
+  defaultOpen?: boolean;
+  tone?: "neutral" | "primary" | "warn";
+  children: React.ReactNode;
+}) {
+  const toneCls =
+    tone === "primary" ? "border-primary-200 bg-primary-50/30 dark:bg-primary-950/20" :
+    tone === "warn"    ? "border-amber-200 bg-amber-50/30 dark:bg-amber-950/20" :
+    "border-border bg-white dark:bg-surface";
+  // Native <details>: pass `open` only when defaultOpen (React rejects open={false}).
+  const openProps = defaultOpen ? { open: true } : {};
+  return (
+    <details className={`rounded-2xl border ${toneCls} group shadow-sm overflow-hidden`} {...openProps}>
+      <summary className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer select-none hover:bg-surface-alt/40 transition-colors list-none [&::-webkit-details-marker]:hidden">
+        <div className="flex items-center gap-2 min-w-0">
+          {icon && <span className="text-base flex-shrink-0" aria-hidden>{icon}</span>}
+          <span className="text-sm font-semibold truncate">{title}</span>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {hint && <span className="text-[10px] text-muted truncate max-w-[140px]">{hint}</span>}
+          <span className="text-muted text-[10px] group-open:rotate-180 transition-transform" aria-hidden>▼</span>
+        </div>
+      </summary>
+      <div className="px-4 pb-4 pt-3 border-t border-border/50 bg-white/60 dark:bg-surface/60">
+        {children}
+      </div>
+    </details>
   );
 }
