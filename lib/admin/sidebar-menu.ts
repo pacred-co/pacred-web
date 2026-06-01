@@ -642,6 +642,15 @@ const blockExtLeads: MenuItem = {
 const blockExtLineInbox: MenuItem = {
   labelKey: "extension.lineInbox", href: "/admin/line-inbox", icon: "MessageCircle", phase: 2,
 };
+// 2026-06-01 (เดฟ · CEO opening-day · CRM core) — the omni-inbox + customer-360 +
+// sales-rep routing hub ("ลูกค้าคนนี้ เซลไหนดูแล"). The CEO's scale-blocker #1.
+// Reads ปอน's LINE data (Podeng_*) + tb_users/tb_wallet/tb_forwarder/lead_call_log;
+// the ONE write is tb_users.adminIDSale (rep routing). Lives in the Extension
+// "customer comms / CRM" family next to leads + lineInbox. phase 1 so all admin
+// staff can reach it — actions/admin/crm.ts gates RBAC (super/manager/sales/ops).
+const blockExtCrm: MenuItem = {
+  labelKey: "extension.crm", href: "/admin/crm", icon: "MessageSquare",
+};
 const blockExtWorkboard: MenuItem = {
   labelKey: "extension.workboard", href: "/admin/board", icon: "KanbanSquare", phase: 2,
 };
@@ -754,6 +763,7 @@ const menuSuper: MenuSection[] = [
     blockExtWorkboard,
     blockExtInbox,
     blockExtLeads,
+    blockExtCrm,
     blockExtContactMessages,
     blockExtLineInbox,
     blockExtBroadcasts,
@@ -821,6 +831,7 @@ const menuManager: MenuSection[] = [
     blockExtWorkboard,
     blockExtInbox,
     blockExtLeads,
+    blockExtCrm,
     blockExtContactMessages,
     blockExtLineInbox,
     blockExtBroadcasts,
@@ -866,7 +877,7 @@ const menuOps: MenuSection[] = [
     ],
   },
   learningSection,
-  extensionSection([blockExtLeads, blockExtJuristic, blockExtThaiTransport, blockExtIncidents]),
+  extensionSection([blockExtLeads, blockExtCrm, blockExtJuristic, blockExtThaiTransport, blockExtIncidents]),
 ];
 
 /**
@@ -943,7 +954,7 @@ const menuSalesAdmin: MenuSection[] = [
   },
   learningSection,
   // 2026-06-01 (CEO §6) — sales reps live in the acquisition call-queue.
-  extensionSection([blockExtLeads, blockExtJuristic, blockExtIncidents]),
+  extensionSection([blockExtLeads, blockExtCrm, blockExtJuristic, blockExtIncidents]),
 ];
 
 /**

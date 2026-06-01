@@ -2881,6 +2881,7 @@
       "history": "Admin action log",
       "incidents": "System incidents",
       "kpi": "KPI Dashboard",
+      "crm": "CRM (Customer relations)",
       "contactMessages": "Customer contact messages",
       "leads": "Call leads (Leads)",
       "lineInbox": "LINE Inbox",
