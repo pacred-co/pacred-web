@@ -61,6 +61,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { uploadToBucket } from "@/lib/storage/upload";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { cashbackRefId, parseCashbackNoteTag } from "@/lib/cashback/note-tag";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — same helper as actions/admin/warehouse-history.ts
@@ -127,13 +128,8 @@ async function resolveLegacyAdminId(): Promise<string> {
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
-/** ADR-0025 `cbhrefid` prefix per pay surface — keeps the spend trail's
- *  idempotency anchor namespaced so a forwarder id and a shop hNo can never
- *  collide as refids. */
-export type CashbackRefKind = "forwarder" | "shop" | "yuan";
-export function cashbackRefId(kind: CashbackRefKind, ref: string): string {
-  return `${kind}:${ref}`;
-}
+// cashbackRefId + CashbackRefKind moved to lib/cashback/note-tag.ts (a
+// "use server" module may only export async fns) — imported above.
 
 export type CashbackSpendResult = {
   applied: number;          // amount actually debited (clamped · ≥ 0)
@@ -635,35 +631,10 @@ type CascadedRow = {
   note?: string;
 };
 
-// ────────────────────────────────────────────────────────────
-// ADR-0025 D-2a — carry the applied cashback on the pending topup row.
-//
-// The customer pay-screen records the applied cashback as a note tag on
-// the pending `tb_wallet_hs` topup/pay row (no schema migration needed —
-// `note` is free-text and already populated). The approve/reject cascade
-// parses it back out to settle the cashback on the same transition as the
-// wallet/credit legs.
-//
-// Format: a single `[CB:<amount>]` token appended to the note (amount is a
-// plain decimal, 2dp). A missing token ⇒ no cashback applied.
-// ────────────────────────────────────────────────────────────
-const CASHBACK_NOTE_RE = /\[CB:(\d+(?:\.\d+)?)\]/;
-
-/** Append the `[CB:<amount>]` carry tag to a note (for the submit side). */
-export function appendCashbackNoteTag(note: string, applied: number): string {
-  const amt = Math.round((Number(applied) || 0) * 100) / 100;
-  if (amt <= 0) return note;
-  const tag = `[CB:${amt}]`;
-  return note ? `${note} ${tag}` : tag;
-}
-
-/** Parse the carried applied-cashback amount out of a note (0 if absent). */
-export function parseCashbackNoteTag(note: string | null | undefined): number {
-  const m = CASHBACK_NOTE_RE.exec(note ?? "");
-  if (!m) return 0;
-  const n = Number(m[1]);
-  return Number.isFinite(n) && n > 0 ? n : 0;
-}
+// ADR-0025 D-2a — the applied cashback rides the pending row's `note` as a
+// `[CB:<amount>]` tag (free-text, no migration); the approve/reject cascade
+// parses it back out via parseCashbackNoteTag (imported from
+// lib/cashback/note-tag.ts — pure helpers can't live in a "use server" file).
 
 type ApproveResult = {
   ok: true;

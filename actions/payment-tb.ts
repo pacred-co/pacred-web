@@ -103,7 +103,8 @@ import { sendNotification } from "@/lib/notifications";
 import { notifyStaffGroup } from "@/lib/notifications/staff-group";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
-import { spendCashbackAtCheckout, refundCashbackOnReject, cashbackRefId } from "@/actions/admin/wallet-hs";
+import { spendCashbackAtCheckout, refundCashbackOnReject } from "@/actions/admin/wallet-hs";
+import { cashbackRefId } from "@/lib/cashback/note-tag";
 import {
   computePayThb,
   computeNewBalance,

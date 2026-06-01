@@ -17,7 +17,7 @@ import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { validateStoredFile } from "@/lib/file-validation";
 import { buildPromptPayPayload, buildPromptPayQrDataUrl, PromptPayConfigError } from "@/lib/promptpay";
-import { appendCashbackNoteTag } from "@/actions/admin/wallet-hs";
+import { appendCashbackNoteTag } from "@/lib/cashback/note-tag";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }

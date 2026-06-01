@@ -10,7 +10,8 @@ import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { computeShopOrderDebitTotal } from "@/lib/service-order/debit-total";
-import { spendCashbackAtCheckout, refundCashbackOnReject, cashbackRefId } from "@/actions/admin/wallet-hs";
+import { spendCashbackAtCheckout, refundCashbackOnReject } from "@/actions/admin/wallet-hs";
+import { cashbackRefId } from "@/lib/cashback/note-tag";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { type LegacyOrderCode } from "@/lib/legacy-status-map";
 
