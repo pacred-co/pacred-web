@@ -28,6 +28,8 @@ import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
 import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
+import { spendCashbackAtCheckout } from "./wallet-hs";
+import { cashbackRefId, parseCashbackNoteTag } from "@/lib/cashback/note-tag";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — duplicated from wallet-trans.ts L49 (fourth caller).
@@ -111,7 +113,7 @@ export async function adminBulkApproveWalletHs(
       //    the auto-receipt hook for any forwarder payment in the batch.
       const { data: rows, error: readErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, amount, type, status, typeservice, reforder, dateslip")
+        .select("id, userid, amount, type, status, typeservice, reforder, dateslip, note")
         .in("id", ids)
         .eq("status", "1");
       if (readErr) return { ok: false, error: readErr.message };
@@ -128,6 +130,7 @@ export async function adminBulkApproveWalletHs(
         typeservice: string | null;
         reforder: string | null;
         dateslip: string | null;
+        note: string | null;
       };
       const candidates = rows as Row[];
 
@@ -204,6 +207,25 @@ export async function adminBulkApproveWalletHs(
         }
 
         processed++;
+
+        // ADR-0025 — settle carried cashback ([CB:] tag) for forwarder-payment
+        // slips in this batch. Idempotent on cbhrefid (re-approve can't double-
+        // debit); best-effort — never fails the row (money already moved).
+        const cbReq = parseCashbackNoteTag(r.note);
+        if (cbReq > 0) {
+          try {
+            await spendCashbackAtCheckout(admin, {
+              userid: r.userid,
+              requested: cbReq,
+              cbhrefid: cashbackRefId("forwarder", `walleths:${r.id}`),
+              nowIso: new Date().toISOString(),
+            });
+          } catch (e) {
+            logger.warn("tb-bulk", "cashback settle failed (non-fatal)", {
+              wallet_hs_id: r.id, userid: r.userid, error: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
 
         // Wave 29: queue forwarder-payment rows for the auto-receipt
         // hook (typeservice='2' + reforder = a tb_forwarder.id). Group

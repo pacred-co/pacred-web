@@ -51,6 +51,8 @@ import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
 import { logger } from "@/lib/logger";
+import { spendCashbackAtCheckout, refundCashbackOnReject } from "./wallet-hs";
+import { cashbackRefId, parseCashbackNoteTag } from "@/lib/cashback/note-tag";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — duplicated from wallet-hs.ts L54 (third caller —
@@ -177,7 +179,7 @@ export async function adminApproveWalletHs(
       //    the auto-receipt hook after wallet update succeeds.
       const { data: row, error: rowErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, amount, type, status, typeservice, reforder, dateslip")
+        .select("id, userid, amount, type, status, typeservice, reforder, dateslip, note")
         .eq("id", id)
         .maybeSingle<{
           id: number;
@@ -188,6 +190,7 @@ export async function adminApproveWalletHs(
           typeservice: string | null;
           reforder: string | null;
           dateslip: string | null;
+          note: string | null;
         }>();
       if (rowErr) {
         console.error(`[tb_wallet_hs list] failed`, { code: rowErr.code, message: rowErr.message });
@@ -248,6 +251,30 @@ export async function adminApproveWalletHs(
               error: `อนุมัติ tb_wallet_hs สำเร็จ (id=${id}) แต่ tb_wallet update ล้มเหลว: ${updWErr.message}`,
             };
           }
+        }
+      }
+
+      // ADR-0025 — settle any carried cashback ([CB:<amt>] tag stamped by
+      // submitForwarderPayment). Mirror of the deposit-cascade settle in
+      // wallet-hs.ts: idempotent on cbhrefid, clamped to live balance. The slip
+      // `amount` was already reduced by the applied cashback at submit, so this
+      // only debits tb_cash_back + logs tb_cash_back_hs (no wallet double-count).
+      const cashbackRequested = parseCashbackNoteTag(row.note);
+      if (cashbackRequested > 0) {
+        try {
+          const cbRes = await spendCashbackAtCheckout(admin, {
+            userid: row.userid,
+            requested: cashbackRequested,
+            cbhrefid: cashbackRefId("forwarder", `walleths:${id}`),
+            nowIso: new Date().toISOString(),
+          });
+          logger.info("wallet-trans", "cashback settled on slip approve", {
+            wallet_hs_id: id, userid: row.userid, applied: cbRes.applied, alreadySpent: cbRes.alreadySpent,
+          });
+        } catch (e) {
+          logger.warn("wallet-trans", "cashback settle failed (non-fatal · money already moved)", {
+            wallet_hs_id: id, userid: row.userid, error: e instanceof Error ? e.message : String(e),
+          });
         }
       }
 
@@ -325,9 +352,9 @@ export async function adminRejectWalletHs(
 
       const { data: row, error: rowErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, status")
+        .select("id, userid, status, note")
         .eq("id", id)
-        .maybeSingle<{ id: number; userid: string; status: string | null }>();
+        .maybeSingle<{ id: number; userid: string; status: string | null; note: string | null }>();
       if (rowErr) {
         console.error(`[tb_wallet_hs list] failed`, { code: rowErr.code, message: rowErr.message });
         return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
@@ -352,6 +379,24 @@ export async function adminRejectWalletHs(
       if (updErr) {
         console.error(`[tb_wallet_hs mutation] failed`, { code: updErr.code, message: updErr.message });
         return { ok: false, error: updErr.message };
+      }
+
+      // ADR-0025 — refund any carried cashback if the slip is rejected. Reads
+      // the ORIGINAL row.note (the [CB:] tag), not the rejection-reason `note`.
+      // refundCashbackOnReject is idempotent + no-ops cleanly if no prior spend
+      // landed (reject-before-approve), so it is safe on every reject.
+      if (parseCashbackNoteTag(row.note) > 0) {
+        try {
+          await refundCashbackOnReject(admin, {
+            userid: row.userid,
+            cbhrefid: cashbackRefId("forwarder", `walleths:${id}`),
+            nowIso: new Date().toISOString(),
+          });
+        } catch (e) {
+          logger.warn("wallet-trans", "cashback refund failed (non-fatal)", {
+            wallet_hs_id: id, userid: row.userid, error: e instanceof Error ? e.message : String(e),
+          });
+        }
       }
 
       await logAdminAction(adminId, "tb_wallet_hs.reject", "tb_wallet_hs", String(id), {
