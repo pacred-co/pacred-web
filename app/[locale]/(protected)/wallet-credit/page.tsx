@@ -3,6 +3,7 @@ import { CreditCard, CircleDollarSign, History, Inbox } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getMyCredit } from "@/actions/credit";
 import { BANK } from "@/components/seo/site";
 import { LegacyDepositForm } from "../wallet/deposit/legacy-deposit-form";
 
@@ -171,23 +172,35 @@ export default async function WalletCreditPage() {
   const admin = createAdminClient();
   const memberCode = profile.member_code ?? "";
 
-  // ── Transcribed queries ──────────────────────────────────────
-  const [walletRes, userRowRes, cbRes, creditRes, hsRes] = await Promise.all([
+  // ── Credit limit / outstanding / available ────────────────────
+  // ADR-0023 D-3 de-dup: the limit (tb_users.userCreditValue) + outstanding
+  // (tb_credit.creditvalue) reads are shared with the /wallet/history credit
+  // panel via the ONE helper getMyCredit() (one query shape, one SOT). We no
+  // longer re-query tb_users.userCreditValue + tb_credit inline here — the
+  // helper reads the same legacy columns by member_code.
+  const creditState = await getMyCredit();
+  const creditValue = creditState.ok ? creditState.data!.outstanding_thb : 0;
+  // wallet-credit.php L107: $userCreditValue - $creditValue → available credit
+  // (computed by getMyCredit as available_credit_thb).
+  const creditAvailable = creditState.ok ? creditState.data!.available_credit_thb : 0;
+
+  // ── Transcribed queries (wallet balance · name · cashback · history) ──
+  const [walletRes, userRowRes, cbRes, hsRes] = await Promise.all([
     // header.php L86-92: SELECT walletTotal FROM tb_wallet WHERE userID=…
     admin
       .from("tb_wallet")
       .select("wallettotal")
       .eq("userid", memberCode)
       .maybeSingle<{ wallettotal: number | string | null }>(),
-    // wallet-credit.php L67-74 + header.php L33-38: tb_users
+    // wallet-credit.php L67-74 + header.php L33-38: tb_users (display name only;
+    // the credit value now comes from getMyCredit per ADR-0023 D-3).
     admin
       .from("tb_users")
-      .select("userName, userLastName, userCreditValue")
+      .select("userName, userLastName")
       .eq("userID", memberCode)
       .maybeSingle<{
         userName: string | null;
         userLastName: string | null;
-        userCreditValue: number | string | null;
       }>(),
     // wallet-credit.php L59-66: SELECT cbTotal FROM tb_cash_back WHERE userID=…
     admin
@@ -195,12 +208,6 @@ export default async function WalletCreditPage() {
       .select("cbtotal")
       .eq("userid", memberCode)
       .maybeSingle<{ cbtotal: number | string | null }>(),
-    // header.php L113-120: SELECT creditValue FROM tb_credit WHERE userID=…
-    admin
-      .from("tb_credit")
-      .select("creditvalue")
-      .eq("userid", memberCode)
-      .maybeSingle<{ creditvalue: number | string | null }>(),
     // load_wallet_hs.php L8 (type='c' branch): SELECT … FROM tb_wallet_hs
     //   WHERE userID=… AND wUserCredit=1 ORDER BY ID DESC
     admin
@@ -212,10 +219,6 @@ export default async function WalletCreditPage() {
   ]);
 
   const walletTotal = Number(walletRes.data?.wallettotal ?? 0);
-  const userCreditValue = Number(userRowRes.data?.userCreditValue ?? 0);
-  // wallet-credit.php L107: $userCreditValue - $creditValue → available credit
-  const creditValue = Number(creditRes.data?.creditvalue ?? 0);
-  const creditAvailable = userCreditValue - creditValue;
   // wallet-credit.php L105: $userName . ' ' . $userLastName
   const legacyName = [userRowRes.data?.userName, userRowRes.data?.userLastName]
     .filter((s): s is string => !!s && s.trim() !== "")
