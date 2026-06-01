@@ -62,6 +62,8 @@ import { createClient } from "@/lib/supabase/server";
 import { uploadToBucket } from "@/lib/storage/upload";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { cashbackRefId, parseCashbackNoteTag } from "@/lib/cashback/note-tag";
+import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
+import { logger } from "@/lib/logger";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — same helper as actions/admin/warehouse-history.ts
@@ -681,10 +683,13 @@ export async function adminApproveWalletDeposit(
       // ──────────────────────────────────────────────
       // 1. Read the topup row + idempotency check.
       //    `note` carries the ADR-0025 D-2a `[CB:<amt>]` applied-cashback tag.
+      //    P0 mark-paid symmetry: `typeservice` / `reforder` / `wusercredit`
+      //    let the DIRECT forwarder-slip branch below (type='4') settle the
+      //    forwarder fStatus 5→6 — mirrors the bulk path in tb-bulk.ts.
       // ──────────────────────────────────────────────
       const { data: rowRaw, error: rowErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, amount, type, status, note")
+        .select("id, userid, amount, type, status, note, typeservice, reforder, dateslip, wusercredit")
         .eq("id", id)
         .maybeSingle<{
           id: number;
@@ -693,6 +698,10 @@ export async function adminApproveWalletDeposit(
           type: string | null;
           status: string | null;
           note: string | null;
+          typeservice: string | null;
+          reforder: string | null;
+          dateslip: string | null;
+          wusercredit: string | null;
         }>();
       if (rowErr) {
         console.error(`[tb_wallet_hs list] failed`, { code: rowErr.code, message: rowErr.message });
@@ -721,10 +730,200 @@ export async function adminApproveWalletDeposit(
       if (rowRaw.status !== "1") {
         return { ok: false, error: `รายการนี้สถานะไม่ใช่ 'รอตรวจสอบ' (status=${rowRaw.status ?? "null"})` };
       }
-      // Per task: only handle deposit (type='1') — withdraw approve is a
-      // separate function (rule 3 paragraph 3) and out of scope here.
+
+      // ──────────────────────────────────────────────
+      // 1b. DIRECT forwarder-payment slip (type='4', typeservice='2',
+      //     reforder=<tb_forwarder.id>, NO tb_wallet_paydeposit links).
+      //
+      //     P0 mark-paid symmetry. `submitForwarderPayment` (actions/forwarder.ts
+      //     L714-725) inserts the slip as status='1' type='4' typeservice='2'
+      //     reforder=<fid> and DELIBERATELY does NOT flip tb_forwarder.fstatus
+      //     (legacy keeps fStatus=5 until staff confirm the slip). The detail
+      //     page (wallet/[id]/page.tsx:607) routes every non-type-3 row here as
+      //     kind="deposit" → so a type='4' slip lands in THIS function. Before
+      //     this branch it hit the `type!=='1'` guard and errored out → the
+      //     single-row approve never settled the wallet debit NOR advanced the
+      //     forwarder, leaving paid orders stuck at "รอชำระเงิน" + the AR cockpit
+      //     never decrementing (the #1 CEO bug). The BULK path (tb-bulk.ts
+      //     adminBulkApproveWalletHs L150-287) already settles these per-row;
+      //     this branch is the single-row mirror of that exact contract:
+      //       1. flip the slip status 1→2
+      //       2. debit tb_wallet.wallettotal −= amount (type='4' is a debit)
+      //       3. settle carried cashback ([CB:] tag · idempotent · best-effort)
+      //       4. advance tb_forwarder fStatus 5→6 (or fcredit-clear for credit
+      //          rows) — idempotent via the eq-guard; best-effort + logged so a
+      //          flip failure never rolls back the wallet leg (money has moved)
+      //       5. fire the auto-receipt hook (best-effort)
+      //     Direct slips have no paydeposit links, so we short-circuit (the
+      //     link-cascade below is for the type='1' topup-and-pay shape only).
+      // ──────────────────────────────────────────────
+      if (rowRaw.type === "4" && rowRaw.typeservice === "2" && rowRaw.reforder) {
+        const amount = Number(rowRaw.amount ?? 0);
+        const userid = rowRaw.userid;
+        const cascadedRows: CascadedRow[] = [];
+
+        // (i) Flip the slip row 1→2.
+        const { error: updHsErr } = await admin
+          .from("tb_wallet_hs")
+          .update({ status: "2", adminid: legacyAdminId, adminidupdate: legacyAdminId })
+          .eq("id", id)
+          .eq("status", "1");
+        if (updHsErr) {
+          console.error(`[tb_wallet_hs mutation] failed`, { code: updHsErr.code, message: updHsErr.message });
+          return { ok: false, error: updHsErr.message };
+        }
+        cascadedRows.push({ table: "tb_wallet_hs", id: String(id), fromStatus: "1", toStatus: "2", note: "direct forwarder-pay (type=4)" });
+
+        // (ii) Debit tb_wallet.wallettotal −= amount (type='4' is a spend;
+        //      matches tb-bulk.ts delta rule). Read-then-update, upsert if missing.
+        let walletBefore = 0;
+        let walletAfter = 0;
+        const { data: wRow, error: wRowErr } = await admin
+          .from("tb_wallet")
+          .select("userid, wallettotal")
+          .eq("userid", userid)
+          .maybeSingle<{ userid: string; wallettotal: number }>();
+        if (wRowErr) {
+          console.error(`[tb_wallet list] failed`, { code: wRowErr.code, message: wRowErr.message });
+        }
+        if (!wRow) {
+          walletBefore = 0;
+          walletAfter = -amount;
+          const { error: walletInsErr } = await admin
+            .from("tb_wallet")
+            .insert({ userid, wallettotal: walletAfter });
+          if (walletInsErr) {
+            return { ok: false, error: `อนุมัติ tb_wallet_hs สำเร็จ (id=${id}) แต่ tb_wallet insert ล้มเหลว: ${walletInsErr.message}` };
+          }
+        } else {
+          walletBefore = Number(wRow.wallettotal);
+          walletAfter = walletBefore - amount;
+          const { error: walletUpdErr } = await admin
+            .from("tb_wallet")
+            .update({ wallettotal: walletAfter })
+            .eq("userid", userid);
+          if (walletUpdErr) {
+            return { ok: false, error: `อนุมัติ tb_wallet_hs สำเร็จ (id=${id}) แต่ tb_wallet update ล้มเหลว: ${walletUpdErr.message}` };
+          }
+        }
+
+        // (iii) Settle carried cashback ([CB:] tag). Idempotent on cbhrefid;
+        //       best-effort — never fails the row (the money already moved).
+        const cbReq = parseCashbackNoteTag(rowRaw.note);
+        if (cbReq > 0) {
+          try {
+            const cbRes = await spendCashbackAtCheckout(admin, {
+              userid,
+              requested: cbReq,
+              cbhrefid: cashbackRefId("forwarder", `walleths:${id}`),
+              nowIso,
+            });
+            cascadedRows.push({
+              table: "tb_cash_back",
+              id: userid,
+              fromStatus: `cbtotal=${cbRes.cbTotalBefore}`,
+              toStatus: `cbtotal=${cbRes.cbTotalAfter}`,
+              note: cbRes.alreadySpent ? `cashback already spent (idempotent · ฿${cbRes.applied})` : `cashback spent ฿${cbRes.applied} on approve`,
+            });
+          } catch (e) {
+            logger.warn("wallet-hs", "cashback settle failed (non-fatal · money already moved)", {
+              wallet_hs_id: id, userid, error: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
+
+        // (iv) P0 mark-paid symmetry — advance the forwarder. MIRROR of
+        //      tb-bulk.ts L252-275 + wallet-trans.ts L316-339:
+        //        standard   → fstatus='6' + fdateadminstatus + fdatestatus6 (guard fstatus='5')
+        //        credit row → fcredit='' + fdateadminstatus (NO fstatus flip · guard fcredit='1')
+        //      Idempotent via the eq-guard → if some other path already advanced
+        //      this forwarder, the WHERE matches nothing = harmless no-op (NO
+        //      double-effect). Best-effort + logged; NEVER throw (money moved).
+        const fid = Number(rowRaw.reforder);
+        if (Number.isFinite(fid) && fid > 0) {
+          const isCredit = (rowRaw.wusercredit ?? "").trim() === "1";
+          let flipErrMsg: string | null = null;
+          if (isCredit) {
+            const { error: flipErr } = await admin
+              .from("tb_forwarder")
+              .update({ fcredit: "", fdateadminstatus: nowIso })
+              .eq("id", fid)
+              .eq("userid", userid)
+              .eq("fcredit", "1");
+            flipErrMsg = flipErr?.message ?? null;
+          } else {
+            const { error: flipErr } = await admin
+              .from("tb_forwarder")
+              .update({ fstatus: "6", fdateadminstatus: nowIso, fdatestatus6: nowIso })
+              .eq("id", fid)
+              .eq("userid", userid)
+              .eq("fstatus", "5");
+            flipErrMsg = flipErr?.message ?? null;
+          }
+          if (flipErrMsg) {
+            logger.warn("wallet-hs", "forwarder settle flip failed (non-fatal · money already moved)", {
+              wallet_hs_id: id, userid, fid, isCredit, error: flipErrMsg,
+            });
+          }
+          cascadedRows.push({
+            table: "tb_forwarder",
+            id: String(fid),
+            fromStatus: isCredit ? "fcredit=1" : "fstatus=5",
+            toStatus: isCredit ? "fcredit=" : "fstatus=6",
+            note: flipErrMsg ? `settle flip failed: ${flipErrMsg}` : (isCredit ? "approve · credit branch" : "approve · fStatus 5→6"),
+          });
+
+          // (v) Auto-receipt hook (best-effort — receipt failure does NOT
+          //     roll back the settle; matches tb-bulk.ts / wallet-trans.ts).
+          const dateSlip = rowRaw.dateslip ? new Date(rowRaw.dateslip) : new Date();
+          const rcpt = await autoIssueReceiptOnPaymentLand(admin, {
+            userid,
+            fids: [fid],
+            dateSlip,
+            source: "wallet_hs.approve_deposit.direct",
+          });
+          if (!rcpt.ok && !rcpt.alreadyIssued) {
+            logger.warn("wallet-hs", "auto-receipt failed (non-fatal)", { wallet_hs_id: id, userid, fid, error: rcpt.error });
+          }
+          if (rcpt.ok) {
+            revalidatePath(`/admin/accounting/forwarder-invoice/${rcpt.data.receiptId}`);
+            revalidatePath("/admin/accounting/forwarder-invoice");
+            revalidatePath(`/service-import/${fid}/invoice`);
+          }
+        }
+
+        await logAdminAction(adminId, "tb_wallet_hs.approve_deposit", "tb_wallet_hs", String(id), {
+          userid,
+          amount,
+          before: { wallettotal: walletBefore },
+          after:  { wallettotal: walletAfter },
+          directForwarderSlip: true,
+          forwarderId: fid,
+          cascade: cascadedRows,
+        });
+
+        revalidatePath(`/admin/wallet/${id}`);
+        revalidatePath("/admin/wallet");
+        revalidatePath("/admin");
+        revalidatePath(`/admin/forwarders/${fid}`);
+
+        return {
+          ok: true,
+          data: {
+            ok: true,
+            walletHsId: id,
+            customer: { userid, walletTotalBefore: walletBefore, walletTotalAfter: walletAfter },
+            cascadedRows,
+            hadPaydepositLinks: false,
+          },
+        };
+      }
+
+      // The remaining cascade logic (link-driven topup-and-pay) only handles
+      // the deposit (type='1') shape — withdraw approve (type='3') is a separate
+      // function (adminApproveWithdraw). Reject anything else explicitly.
       if (rowRaw.type !== "1") {
-        return { ok: false, error: `ฟังก์ชันนี้รองรับเฉพาะรายการเติมเงิน (type='1') · พบ type='${rowRaw.type ?? "null"}'` };
+        return { ok: false, error: `ฟังก์ชันนี้รองรับรายการเติมเงิน (type='1') หรือสลิปจ่ายค่าฝากนำเข้า (type='4') · พบ type='${rowRaw.type ?? "null"}'` };
       }
 
       const amount = Number(rowRaw.amount ?? 0);
