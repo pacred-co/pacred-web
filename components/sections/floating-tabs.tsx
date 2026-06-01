@@ -304,9 +304,17 @@ export function FloatingTabs({ payDueCount = 0 }: { payDueCount?: number }) {
         </div>
       </nav>
 
-      {/* Floating LINE bubble — sits above mobile bottom nav */}
-      <div className="fixed bottom-[84px] right-3 md:bottom-6 md:right-6 z-[51] flex items-center gap-2 md:gap-3">
-        <span className="hidden sm:block rounded-full bg-white dark:bg-surface shadow-md px-4 py-2 text-sm font-medium text-foreground border border-border">
+      {/* Floating LINE bubble — sits above mobile bottom nav.
+          ·  `pacred-line-bubble` is a CSS hook: globals.css lifts it via
+             `body.has-import-paybar` so it clears the /service-import
+             sticky pay-bar (declutters the bottom-right pile-up — BUG #1).
+          ·  z-[48] keeps it BELOW the pay-bar (z-[55]) so it can never
+             steal the "ชำระเงิน" tap (BUG #2), while still floating above
+             page content + the bottom-nav border.
+          ·  The "สอบถามเพิ่มเติม" pill is desktop-only (`md:block`) — on
+             phones it was extra clutter beside the rail + nav + bubble. */}
+      <div className="pacred-line-bubble fixed bottom-[84px] right-3 md:bottom-6 md:right-6 z-[48] flex items-center gap-2 md:gap-3">
+        <span className="hidden md:block rounded-full bg-white dark:bg-surface shadow-md px-4 py-2 text-sm font-medium text-foreground border border-border">
           {t("askMore")}
         </span>
         <TrackedExternalLink
@@ -314,10 +322,10 @@ export function FloatingTabs({ payDueCount = 0 }: { payDueCount?: number }) {
           cta="line_consult"
           surface="floating_tabs"
           suppressHydrationWarning
-          className="w-[52px] h-[52px] md:w-[70px] md:h-[70px] rounded-full bg-[#06C755] shadow-lg flex items-center justify-center hover:bg-[#05a548] transition-colors shrink-0 text-white"
+          className="w-[48px] h-[48px] md:w-[70px] md:h-[70px] rounded-full bg-[#06C755] shadow-lg flex items-center justify-center hover:bg-[#05a548] transition-colors shrink-0 text-white"
           aria-label={t("chatAria")}
         >
-          <LineIcon className="h-7 w-7 md:h-9 md:w-9" />
+          <LineIcon className="h-6 w-6 md:h-9 md:w-9" />
         </TrackedExternalLink>
       </div>
     </>

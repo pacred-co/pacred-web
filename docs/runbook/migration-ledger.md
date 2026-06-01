@@ -5,9 +5,11 @@
 
 ---
 
-## 🔢 NEXT FREE NUMBER = **0135**
+## 🔢 NEXT FREE NUMBER = **0136**
 
-ใครจะเขียน migration ใหม่ → ใช้ `0135_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
+ใครจะเขียน migration ใหม่ → ใช้ `0136_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
+
+> 2026-06-01 PM-5: **0135** = `import_promo_banner_config` (seed 6 business_config keys `import.promo.*` for the configurable ฝากนำเข้า "โปรเหมาๆ" banner). ⏳ **NOT applied prod yet** — เดฟ applies (idempotent `on conflict do nothing` seed · zero schema change).
 
 > 2026-06-01 PM-2: **0133** = `lead_call_log` (acquisition call-queue) · **0134** = `freight_quote` (freight RFQ). ✅ **ทั้งคู่ applied prod 2026-06-01** (tables `lead_call_log` + `freight_quote` created).
 
@@ -39,6 +41,7 @@
 | 0132 | `forwarder_bill_to_name` | เดฟ | ✅ **applied prod 2026-06-01 (106ms · metadata-only ADD COLUMN nullable)** · `tb_forwarder.fbilltoname varchar(200)` · Pacred-original bill-to override (no legacy col) · faithful target of rebuilt `forwarders.bill_to_name_override` · `adminSetForwarderBillToOverride` repointed | main |
 | 0133 | `lead_call_log` | เดฟ | ✅ **applied prod 2026-06-01** · CEO §6 acquisition call-queue activity log · 1 NEW isolated table `lead_call_log` (id/userid/admin_id/status/note/called_at · NO FK · service_role-only RLS · 3 indexes) · powers `/admin/leads` · idempotent | dave-pacred (acquisition) |
 | 0134 | `freight_quote` | เดฟ | ✅ **applied prod 2026-06-01** · public freight RFQ lead-capture (AX BOOKING funnel) · 1 ตาราง `freight_quote` (singular · ≠ plural `freight_quotes` admin quotation in 0048) · RLS public-insert + admin-read (mirrors `contact_messages`) · idempotent · เปิด FREIGHT revenue line | dave-pacred (freight-quote MVP) |
+| 0135 | `import_promo_banner_config` | เดฟ | ⏳ **NOT applied prod yet** · seed 6 `business_config` keys `import.promo.{enabled,headline,text,amount_thb,end_date,image_url}` (category "Promo") → configurable ฝากนำเข้า "โปรเหมาๆ" banner editable at `/admin/settings/business-config` · defaults = previous hardcoded banner · idempotent `on conflict do nothing` (zero schema change) | dave-pacred (service-import promo) |
 
 ---
 
