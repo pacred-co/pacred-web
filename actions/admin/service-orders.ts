@@ -506,7 +506,26 @@ export async function adminMarkServiceOrderPaid(
 // ────────────────────────────────────────────────────────────
 // V-C2: set bill_to_name_override on a service_order
 // ────────────────────────────────────────────────────────────
-// Mirror of adminSetForwarderBillToOverride. Empty string clears.
+// Mirror of adminSetForwarderBillToOverride.
+//
+// 🚨 Tier-A "silent dead-write" partial-fix (2026-06-02):
+//   The prior implementation read + wrote `.from("service_orders")` — the
+//   REBUILT UUID table, EMPTY on prod after the D1 pivot. Every "บันทึก"
+//   press in the bill-to-override panel returned `not_found` (no real
+//   service_orders rows) OR silently succeeded on a stray rebuilt row that
+//   nobody else read. The real ~21,950 orders sit in `tb_header_order`.
+//
+//   `tb_forwarder` got a Pacred-native bill-to column in migration 0132
+//   (`fbilltoname varchar(200)` · NULL = use ship-to). The equivalent
+//   `tb_header_order.hbilltoname` column does NOT yet exist — a future
+//   migration must add it (next free = 0135+; see migration-ledger.md).
+//
+// Tombstoned for now: returns a clear error so callers (the bill-to-override
+//   panel on /admin/service-orders/[hNo]) see "feature pending migration"
+//   rather than green-toast → no-op. Once the migration lands, swap the
+//   body back to a real `tb_header_order.update({ hbilltoname: next })`.
+//
+// Empty string clears.
 
 const setOrderBillToOverrideSchema = z.object({
   h_no:     z.string().trim().min(1),
@@ -519,36 +538,19 @@ export async function adminSetOrderBillToOverride(
 ): Promise<AdminActionResult<{ h_no: string; bill_to_name_override: string | null }>> {
   const parsed = setOrderBillToOverrideSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
-  const d = parsed.data;
-  const next = d.override.length > 0 ? d.override : null;
+  const _d = parsed.data;
+  void _d;
 
-  return withAdmin<{ h_no: string; bill_to_name_override: string | null }>(
-    ["super", "ops", "accounting"],
-    async ({ adminId }) => {
-      const admin = createAdminClient();
-      const { data: before, error: readErr } = await admin
-        .from("service_orders")
-        .select("id, bill_to_name_override")
-        .eq("h_no", d.h_no)
-        .maybeSingle<{ id: string; bill_to_name_override: string | null }>();
-      if (readErr) return { ok: false, error: readErr.message };
-      if (!before) return { ok: false, error: "not_found" };
-
-      const { error: updErr } = await admin
-        .from("service_orders")
-        .update({ bill_to_name_override: next })
-        .eq("id", before.id);
-      if (updErr) return { ok: false, error: updErr.message };
-
-      await logAdminAction(adminId, "service_order.set_bill_to_override", "service_order", before.id, {
-        h_no:   d.h_no,
-        before: before.bill_to_name_override,
-        after:  next,
-      });
-
-      revalidatePath(`/admin/service-orders/${d.h_no}`);
-      revalidatePath(`/service-order/${d.h_no}/receipt`);
-      return { ok: true, data: { h_no: d.h_no, bill_to_name_override: next } };
-    },
+  // Reject loudly — silent dead-write to rebuilt `service_orders` is the bug
+  // we're closing. Replace this body with a tb_header_order update once
+  // migration `ALTER TABLE tb_header_order ADD COLUMN hbilltoname varchar(200)`
+  // ships (migration 0135+ · author = ภูม / accounting lane).
+  console.warn(
+    "[service-orders] adminSetOrderBillToOverride called — tombstoned pending "
+    + "tb_header_order.hbilltoname column. Add migration + restore the live body.",
   );
+  return {
+    ok: false,
+    error: "feature_pending_migration: ใบกำกับ override บนฝากสั่ง รอเพิ่มคอลัมน์ hbilltoname บน tb_header_order — ตอนนี้ยังใช้ไม่ได้",
+  };
 }
