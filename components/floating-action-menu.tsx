@@ -16,7 +16,7 @@ export function FloatingActionMenu() {
     { href: "/wallet/history",   label: "กระเป๋า",     Icon: Wallet,      match: ["/wallet"] },
     { href: "/wallet/deposit",   label: "เติมเงิน",    Icon: PlusCircle,  match: ["/wallet/deposit"], primary: true },
     { href: "/service-order/pending",   label: "ชำระสินค้า",  Icon: CreditCard,  match: ["/service-order"] },
-    { href: "/service-import/pending",  label: "ขนส่ง",       Icon: Truck,       match: ["/service-import"] },
+    { href: "/service-import",          label: "ขนส่ง",       Icon: Truck,       match: ["/service-import"] },
   ];
 
   const isActive = (m: string[]) => m.some((p) => pathname.includes(p));

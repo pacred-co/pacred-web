@@ -193,67 +193,16 @@ function numberFormatLegacy(n: number): string {
   });
 }
 
-export type ForwarderSummary = {
-  id: string;
-  f_no: string | null;
-  status:
-    | "pending_payment" | "shipped_china" | "in_transit" | "arrived_thailand"
-    | "out_for_delivery" | "delivered" | "cancelled";
-  source_warehouse: string;
-  transport_type:   string;
-  product_type:     string;
-  box_count:        number;
-  weight_kg:        number;
-  volume_cbm:       number;
-  total_price:      number;
-  tracking_chn:     string | null;
-  tracking_th:      string | null;
-  created_at:       string;
-  date_arrived_thailand: string | null;
-  date_delivered:        string | null;
-};
-
 // ────────────────────────────────────────────────────────────
-// SUMMARY column set — shared by listForwarders.
-// (The forwarder detail reader `getForwarderByNo` + its `ForwarderDetail`
-//  type were removed 2026-06-02 — they read the rebuilt 0-row `forwarders`
-//  table and powered only the dead receipt orphan + its PDF route, both now
-//  gone. The live forwarder ใบแจ้งหนี้ is the HTML page at
-//  /service-import/[fNo]/invoice reading tb_forwarder ⋈ tb_receipt. See ADR-0027.)
+// LIST / READ — REMOVED 2026-06-02 (Wave A trust sweep · big-audit §0e)
+//  `listForwarders` + its `ForwarderSummary` type + the unused
+//  `SUMMARY_FORWARDER_COLS` const + the `<ForwarderList>` component
+//  (service-import/forwarder-list.tsx) all read the rebuilt, 0-row
+//  `forwarders` table and backed ONLY the dead `/service-import/pending`
+//  view (now a redirect → `/service-import?q=5`). The live forwarder list is
+//  the faithful tb_forwarder transcription at `/service-import` (page.tsx).
+//  Removed to kill the silent dead-read + the re-wire landmine.
 // ────────────────────────────────────────────────────────────
-const SUMMARY_FORWARDER_COLS =
-  "id, f_no, status, source_warehouse, transport_type, product_type, box_count, weight_kg, volume_cbm, total_price, tracking_chn, tracking_th, created_at, date_arrived_thailand, date_delivered";
-
-// ────────────────────────────────────────────────────────────
-// LIST / READ
-// ────────────────────────────────────────────────────────────
-export async function listForwarders(opts?: {
-  status?: ForwarderSummary["status"][];
-  limit?: number;
-}): Promise<ActionResult<ForwarderSummary[]>> {
-  const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
-  }
-  if (!user) return { ok: false, error: "not_signed_in" };
-
-  let q = supabase
-    .from("forwarders")
-    .select(
-      "id, f_no, status, source_warehouse, transport_type, product_type, box_count, weight_kg, volume_cbm, total_price, tracking_chn, tracking_th, created_at, date_arrived_thailand, date_delivered",
-    )
-    .order("created_at", { ascending: false })
-    .limit(opts?.limit ?? 100);
-
-  if (opts?.status && opts.status.length) {
-    q = q.in("status", opts.status);
-  }
-
-  const { data, error } = await q;
-  if (error) return { ok: false, error: error.message };
-  return { ok: true, data: (data ?? []) as ForwarderSummary[] };
-}
 
 // ────────────────────────────────────────────────────────────
 // LEGACY (D1 / ADR-0017) — getForwarderPaymentQr

@@ -2,13 +2,15 @@
  * Re-sweep A2 #24 — รายงานค้นหาสินค้า (search demand)
  *
  * Faithful port of legacy `pcs-admin/report-search.php`. Shows what
- * customers search for (keyword demand) — aggregated from `tb_history_key`
- * (the search-query log written by actions/search.ts). Useful for:
+ * customers search for (keyword demand) — aggregated from `tb_search_history`
+ * (the LIVE search-query log written by actions/search.ts · migration 0102).
+ * Repointed 2026-06-01 Wave-A from the EMPTY legacy `tb_history_key` (0 rows ·
+ * report was blank forever) — see actions/admin/reports-monitoring.ts. Useful for:
  *   - Spotting high-demand products to stock / promote.
- *   - Catching API-error spikes (apierror filter) on the China search.
+ *   - Catching API-error spikes (result_count=0 filter) on the China search.
  *
  * Legacy SQL: SELECT *, COUNT(ID) FROM tb_history_key GROUP BY keyWord
- *   ordered by COUNT desc (aaSorting [[2,"desc"]]).
+ *   → now reads tb_search_history GROUP BY query (aggregated in JS).
  *
  * Data layer: actions/admin/reports-monitoring.ts → getSearchDemandReport.
  * Filters (mirror the legacy form): date range + apierror status dropdown.
@@ -118,7 +120,7 @@ export default async function SearchDemandReportPage({
       }
       sourceNote={
         res.ok
-          ? "Source: tb_history_key GROUP BY keyword — port of report-search.php"
+          ? "Source: tb_search_history GROUP BY keyword (repointed from empty tb_history_key · 2026-06-01) — port of report-search.php"
           : `❌ โหลดข้อมูลล้มเหลว: ${res.error}`
       }
     />
