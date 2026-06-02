@@ -31,7 +31,7 @@
  * as the keyword grid in page.tsx.
  */
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Hit = {
   provider: "1688" | "taobao" | "tmall";
@@ -62,12 +62,32 @@ function countText(text: string, num: number): string {
   return text ?? "";
 }
 
-export function SearchImagePanel({ rsDefault }: { rsDefault: number }) {
+export function SearchImagePanel({
+  rsDefault,
+  highlight = false,
+}: {
+  rsDefault: number;
+  highlight?: boolean;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [hits, setHits] = useState<Hit[] | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // M-5: arrived via the search-bar camera button (?img=1) → draw the eye to
+  // the panel + scroll it into view. (A programmatic file-picker open here
+  // would be blocked — no user gesture survives the navigation — so we
+  // highlight the "เลือก / ถ่ายรูป" button for the customer to tap instead.)
+  // Pulse starts ON from the prop (no synchronous setState in the effect body —
+  // react-hooks/set-state-in-effect); the effect only scrolls + fades it off.
+  const [pulse, setPulse] = useState(highlight);
+  useEffect(() => {
+    if (!highlight) return;
+    rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const t = setTimeout(() => setPulse(false), 2400);
+    return () => clearTimeout(t);
+  }, [highlight]);
 
   async function handleFile(file: File) {
     // Mirror the API route's 5 MB cap + give a friendly message early.
@@ -120,7 +140,14 @@ export function SearchImagePanel({ rsDefault }: { rsDefault: number }) {
   }
 
   return (
-    <div className="mt-3 rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+    <div
+      ref={rootRef}
+      className={`mt-3 scroll-mt-24 rounded-2xl border bg-white dark:bg-surface shadow-sm overflow-hidden transition-all duration-500 ${
+        pulse
+          ? "border-red-400 ring-2 ring-red-300 ring-offset-2"
+          : "border-border"
+      }`}
+    >
       <div className="p-3 md:p-4">
         <div className="flex flex-col sm:flex-row sm:items-center gap-2">
           <div className="flex-1 min-w-0">

@@ -35,6 +35,39 @@ export type LineCustomer = {
   raw_profile: unknown;
   created_at: string | null;
   updated_at: string | null;
+  // CRM columns (Task 3) — the Worker provisions them but mostly leaves them
+  // null until a staff member links/qualifies the contact.
+  customer_code: string | null;
+  phone: string | null;
+  email: string | null;
+  company_name: string | null;
+  lead_source_name: string | null;
+  lead_quality: string | null;
+  service_interest: string | null;
+  assigned_agent_id: string | null;
+};
+
+/** One row of `Podeng_cs_agents` (the CS / sales agent roster). */
+export type CsAgent = {
+  id: string;
+  agent_code: string | null;
+  display_name: string | null;
+  role: string | null;
+  is_active: boolean | null;
+};
+
+/**
+ * A read-only snapshot of the `tb_users` account a LINE contact is linked to
+ * (Task 3 · "ดึงลูกค้าไว้ในระบบ"). Surfaced in-chat so the agent sees the
+ * customer's real wallet/shipments without leaving the inbox.
+ */
+export type MemberChatSnapshot = {
+  memberCode: string;
+  name: string | null;
+  tel: string | null;
+  walletTotal: number;
+  forwarderTotal: number;
+  forwarderInTransit: number;
 };
 
 /** One row of `Podeng_line_messages`. */

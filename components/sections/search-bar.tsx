@@ -112,17 +112,21 @@ export function SearchBar({ embedded = false, hideOnMobile = false, defaultColla
               suppressHydrationWarning
               className="w-full h-[44px] rounded-full border border-gray-200 dark:border-border bg-gray-50 dark:bg-background pl-5 pr-[92px] text-[13px] font-medium text-gray-900 dark:text-foreground placeholder:text-gray-400 dark:placeholder:text-muted outline-none transition-all duration-200 focus:bg-white dark:focus:bg-surface focus:border-red-300 focus:shadow-[0_0_0_3px_#fef2f2]"
             />
-            <button
-              type="button"
+            {/* M-5 — reverse-image / camera search. Links to the /search
+                image panel (?img=1 auto-scrolls + highlights it there); the
+                upload + 1688 reverse-search backend already lives on that
+                page (SearchImagePanel → /api/china-search/image). An <a>
+                inside the form does not submit it (the camera ≠ text search). */}
+            <Link
+              href="/search?img=1"
               aria-label={t("imageSearchAria")}
-              suppressHydrationWarning
               className="absolute right-[48px] top-1/2 -translate-y-1/2 w-[30px] h-[30px] flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
                 <circle cx="12" cy="13" r="3" />
               </svg>
-            </button>
+            </Link>
             <button
               type="submit"
               aria-label={t("searchAria")}
