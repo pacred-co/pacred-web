@@ -42,6 +42,21 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
   const { fNo } = await params;
   const admin = createAdminClient();
 
+  // 2026-06-02 — Primary path = tb_forwarder (legacy, ~47K rows on prod).
+  // The list page (/admin/forwarders) reads tb_forwarder and sends `r.id`
+  // as the URL segment, so every row click lands here with a tb_forwarder
+  // id. Renders the full CollapsibleCard UX (ภูม UX P0 · commit 819c283d):
+  // 5 collapsible action panels (Payment · Status · Driver · Edit · Bill-to)
+  // with smart defaults per row state.
+  //
+  // The rebuilt `forwarders` table (UUID-based) is the fallback for any
+  // legacy bookmark/URL that still uses the rebuilt schema's UUID f_no —
+  // an empty-on-prod escape hatch we keep for back-compat.
+  const tbResult = await tryRenderTbForwarder(fNo, admin);
+  if (tbResult) return tbResult;
+
+  // Fallback — try the rebuilt `forwarders` table (UUID-based · empty on
+  // prod but kept for any legacy UUID URLs that may still float around).
   const { data, error } = await admin
     .from("forwarders")
     .select(`
@@ -59,18 +74,12 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
     .eq("f_no", fNo)
     .maybeSingle();
   if (error) {
-    console.error(`[forwarders list] failed`, { code: error.code, message: error.message });
+    console.error(`[forwarders fallback] failed`, { code: error.code, message: error.message });
   }
 
   if (!data) {
-    // Wave 3 P0 #1 fallback (2026-05-21): the list page reads tb_forwarder
-    // (legacy · 47K rows on prod) while this detail page reads the rebuilt
-    // forwarders (EMPTY on prod). Row clicks that came from the list will
-    // miss here. Look up the row in tb_forwarder by id or fidorco and render
-    // a minimal read-only legacy view + link to /admin/report-cnt for the
-    // container info. Full editable detail = Wave 5 (rewrite of update form
-    // + cost adjustments + driver assign + bill-to over tb_forwarder).
-    return await renderLegacyForwarderView(fNo, admin);
+    // Neither tb_forwarder NOR rebuilt forwarders had this `fNo` → 404.
+    notFound();
   }
   type ProfileShape = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null; email: string | null };
   const f = data as unknown as Omit<typeof data, "profile"> & { profile: ProfileShape | ProfileShape[] | null };
@@ -283,9 +292,12 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
   );
 }
 
-// Wave 3 P0 #1 fallback + Wave 20 P1 enrichment — legacy tb_forwarder
-// detail view, enhanced to match the PCS layout that ภูม flagged on
-// 2026-05-25 ค่ำ. Adds:
+// 2026-06-02 — Renamed from renderLegacyForwarderView → tryRenderTbForwarder.
+// Now the PRIMARY path (was the fallback). Returns null on miss so the
+// caller can try the rebuilt-forwarders fallback before 404'ing.
+//
+// Wave 3 P0 #1 fallback + Wave 20 P1 enrichment + Wave 23 collapsible-cards
+// (ภูม UX P0 · commit 819c283d) — full editable tb_forwarder detail view:
 //   · 7-step status timeline (icons + completed-when based on fdatestatus*)
 //   · Sale rep + admin creator badges (joined from tb_users.adminidsale)
 //   · Product detail block — cover image + Chinese name when shop-spawned
@@ -293,8 +305,9 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
 //   · ค่าใช้จ่ายแบบแยก (transport + service + crate + qc + other) instead
 //     of just one ftotalprice number
 //   · paydeposit / pay-method / credit-line state line
-//   · Note block (read-only for now; write form = Wave 20 P1.1)
-async function renderLegacyForwarderView(
+//   · Note block
+//   · 5 CollapsibleCard action panels (Payment · Status · Driver · Edit · Bill-to)
+async function tryRenderTbForwarder(
   fNo: string,
   admin: ReturnType<typeof createAdminClient>,
 ) {
@@ -333,7 +346,9 @@ async function renderLegacyForwarderView(
       code: tbRowErr.code, message: tbRowErr.message,
     });
   }
-  if (!tbRow) notFound();
+  // 2026-06-02 — Return null (not notFound) so caller can fall through to
+  // the rebuilt-forwarders path for legacy UUID URLs.
+  if (!tbRow) return null;
   const r = tbRow as unknown as {
     id: number; fidorco: string | null; userid: string; fstatus: string;
     fdate: string | null;
