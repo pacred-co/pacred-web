@@ -29,7 +29,7 @@
  *   - primary CTA (red, full-width on mobile) thumb-reachable
  */
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { ShoppingCart, Plus, Minus, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { addCartItem } from "@/actions/cart";
@@ -37,6 +37,26 @@ import { addCartItem } from "@/actions/cart";
 // Mirrors PROVIDERS in lib/validators/cart.ts L7 (only these 5 are
 // accepted by the cart Zod schema).
 type Provider = "1688" | "taobao" | "tmall" | "shop" | "nice";
+
+// Mirrors ChinaProductDetail.sku_axes / sku_map (lib/china-search/types.ts).
+// Re-declared here so the client component bundle doesn't drag
+// `server-only`-flagged modules into the browser.
+export type SkuAxis = {
+  name: string;
+  values: Array<{ label: string; image?: string; data?: string; is_image?: boolean }>;
+};
+export type SkuRow = {
+  sku_id:     string;
+  prop_path:  Record<string, string>;
+  price_cny:  number;
+  stock:      number;
+  image?:     string;
+};
+
+// Heuristic column-axis detectors — copy of admin's COLOR_AXIS_RE +
+// SIZE_AXIS_RE so the cart `ccolor`/`csize` columns get populated.
+const COLOR_AXIS_RE = /(colou?r|颜色|色|สี|seleksi.*warna)/i;
+const SIZE_AXIS_RE  = /(size|尺寸|尺码|码|ขนาด|ไซ?ส์|ยาว|กว้าง|ส่วนสูง)/i;
 
 export function UrlPasteAddToCart({
   url,
@@ -50,6 +70,10 @@ export function UrlPasteAddToCart({
   minQty,
   maxQty,
   detailAvailable,
+  skuAxes,
+  skuMap,
+  basePriceCny,
+  promoPriceCny,
 }: {
   url:        string;
   provider:   Provider;
@@ -66,6 +90,15 @@ export function UrlPasteAddToCart({
    *  When false the island shows an error fallback + link to the
    *  proper manual-entry workflow at /service-order/add. */
   detailAvailable: boolean;
+  /** SKU axes (color, size, style, etc.) — mirrors admin pattern. */
+  skuAxes?:       SkuAxis[];
+  /** Flattened SKU rows with per-combination price + stock. */
+  skuMap?:        SkuRow[];
+  /** Underlying TAMIT base + promo (the prop `priceCny` above is
+   *  already the precomputed promo|base; these are passed so the
+   *  island can show ราคาเริ่มต้น vs ราคา SKU ที่เลือก). */
+  basePriceCny?:  number;
+  promoPriceCny?: number;
 }) {
   const minClamp = Math.max(1, minQty);
   const maxClamp = Math.max(minClamp, maxQty || 999);
@@ -80,24 +113,70 @@ export function UrlPasteAddToCart({
   const [color,      setColor]      = useState<string>("");
   const [size,       setSize]       = useState<string>("");
   const [details,    setDetails]    = useState<string>("");
-  // Manual price override — when TAMIT didn't return a CNY price
-  // (Tmall blocks price scraping on many SKUs), the customer fills
-  // it in. Pre-filled with TAMIT's value when present.
+  // SKU picker state — keyed by axis.name, value = the selected
+  // axis-value label. Mirrors the admin pattern at
+  // app/[locale]/(admin)/admin/service-orders/cart/add/link-paste-search.tsx L151.
+  const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
+  // Manual price override — only relevant when no SKU is selected AND
+  // TAMIT didn't return base/promo. Pre-filled with TAMIT's value
+  // when present.
   const [manualPrice, setManualPrice] = useState<string>(priceCny > 0 ? String(priceCny) : "");
   const [error,      setError]      = useState<string | null>(null);
   const [success,    setSuccess]    = useState<boolean>(false);
   const [pending,    startTransition] = useTransition();
 
+  // ── Derived: matched SKU + effective price/image ──────────────────
+  const matchedSku = useMemo<SkuRow | undefined>(() => {
+    if (!skuAxes || skuAxes.length === 0 || !skuMap || skuMap.length === 0) return undefined;
+    if (skuAxes.some((ax) => !selectedVariants[ax.name])) return undefined;
+    return skuMap.find((row) =>
+      skuAxes.every((ax) => row.prop_path[ax.name] === selectedVariants[ax.name]),
+    );
+  }, [skuAxes, skuMap, selectedVariants]);
+
+  const matchedSkuImage = useMemo<string | undefined>(() => {
+    if (matchedSku?.image) return matchedSku.image;
+    if (!skuAxes) return undefined;
+    for (const ax of skuAxes) {
+      const valLabel = selectedVariants[ax.name];
+      if (!valLabel) continue;
+      const val = ax.values.find((v) => v.label === valLabel);
+      if (val?.image) return val.image;
+    }
+    return undefined;
+  }, [matchedSku, skuAxes, selectedVariants]);
+
+  // Auto-compose color/size strings from selected axes — saves the
+  // customer from re-typing what the picker already says.
+  const composedFromAxes = useMemo(() => {
+    if (!skuAxes || skuAxes.length === 0) return { ccolor: "", csize: "", other: "" };
+    let cc = "", cs = "";
+    const other: string[] = [];
+    for (const ax of skuAxes) {
+      const val = selectedVariants[ax.name];
+      if (!val) continue;
+      if (!cc && COLOR_AXIS_RE.test(ax.name))      cc = val;
+      else if (!cs && SIZE_AXIS_RE.test(ax.name))  cs = val;
+      else                                          other.push(`${ax.name}: ${val}`);
+    }
+    return { ccolor: cc, csize: cs, other: other.join(" · ") };
+  }, [skuAxes, selectedVariants]);
+
+  // axesIncomplete = true when SKU axes exist but not all are picked.
+  // Lets the button switch from "หยิบใส่รถเข็น" → "เลือกตัวเลือกก่อน".
+  const axesIncomplete = !!skuAxes && skuAxes.length > 0
+    && skuAxes.some((ax) => !selectedVariants[ax.name]);
+
   // Render fallback only when TAMIT failed COMPLETELY — no image AND
-  // no usable title. If we got the product card (image + title +
-  // shop), even without a price, the customer can confirm it's the
-  // right product and type the price they see on the merchant's site.
-  // (Tmall blocks price-scraping on ~70% of SKUs; the legacy admin
-  // form at /admin/service-orders/cart/add has the same pattern.)
+  // no usable title AND no SKU data. If we got ANY of: the product
+  // card (image + title), or skuMap (admin gets ¥188 by picking a SKU
+  // even when base price is blank — same here), let the customer
+  // proceed.
   const hasUsableTitle = title.trim().length > 0
     && !title.trim().match(/^สินค้าจาก (TMALL|TAOBAO|1688) \(รหัส /);
   const hasRealImage = !!mainImage;
-  if (!detailAvailable || (!hasRealImage && !hasUsableTitle)) {
+  const hasSkuData   = !!skuMap && skuMap.length > 0;
+  if (!detailAvailable || (!hasRealImage && !hasUsableTitle && !hasSkuData)) {
     return (
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3" role="alert">
         <div className="flex items-start gap-3">
@@ -127,15 +206,27 @@ export function UrlPasteAddToCart({
     );
   }
 
-  // 2) Detail loaded → render island. Price uses TAMIT value when
-  //    present, otherwise the customer's manual input.
+  // 2) Detail loaded → render island. Price resolution order
+  //    (mirrors admin/link-paste-search.tsx L177):
+  //    matched SKU price → TAMIT promo → TAMIT base → priceCny prop
+  //    → customer's manual input. The manual input is only displayed
+  //    when every prior source is 0 (skipping the picker).
   const effectivePriceCny = (() => {
+    if (matchedSku?.price_cny && matchedSku.price_cny > 0) return matchedSku.price_cny;
+    if (promoPriceCny && promoPriceCny > 0)                return promoPriceCny;
+    if (basePriceCny  && basePriceCny  > 0)                return basePriceCny;
+    if (priceCny      && priceCny      > 0)                return priceCny;
     const n = Number(manualPrice);
     return Number.isFinite(n) && n > 0 ? n : 0;
   })();
   const effectivePriceThb = effectivePriceCny * rsDefault;
-  const priceMissing      = priceCny === 0;
-  const isReady           = effectivePriceCny > 0 && title.trim().length > 0;
+  // Show the manual price input only when SKU picker can't supply a
+  // price (no axes OR axes complete but matched row has 0) AND TAMIT
+  // didn't give us a base/promo either.
+  const priceMissing =
+    effectivePriceCny === 0
+    || (!matchedSku && !promoPriceCny && !basePriceCny && priceCny === 0);
+  const isReady = effectivePriceCny > 0 && title.trim().length > 0 && !axesIncomplete;
 
   function adjQty(delta: number) {
     setQty((q) => {
@@ -147,6 +238,10 @@ export function UrlPasteAddToCart({
   }
 
   function onSubmit() {
+    if (axesIncomplete) {
+      setError("เลือกตัวเลือกสินค้าให้ครบก่อน");
+      return;
+    }
     if (effectivePriceCny <= 0) {
       setError("ยังไม่ใส่ราคา CNY · กรอกราคาก่อน");
       return;
@@ -156,25 +251,35 @@ export function UrlPasteAddToCart({
       return;
     }
     setError(null); setSuccess(false);
+    // SKU-aware compose: color/size first from explicit inputs,
+    // fall through to auto-detected from axes. details gets the
+    // "other" axes appended so admin sees the full picker context.
+    const finalColor    = color.trim() || composedFromAxes.ccolor || undefined;
+    const finalSize     = size.trim()  || composedFromAxes.csize  || undefined;
+    const detailsParts  = [details.trim(), composedFromAxes.other].filter(Boolean);
+    const finalDetails  = detailsParts.length > 0 ? detailsParts.join(" · ") : undefined;
+    const finalImage    = matchedSkuImage ?? mainImage ?? undefined;
     startTransition(async () => {
       const res = await addCartItem({
         provider,
         shop_name:  shopName || "pacred",
         url:        url || undefined,
         title:      title || undefined,
-        image_path: mainImage ?? undefined,
-        color:      color.trim() || undefined,
-        size:       size.trim() || undefined,
+        image_path: finalImage,
+        color:      finalColor,
+        size:       finalSize,
         price_cny:  effectivePriceCny,
         amount:     qty,
-        details:    details.trim() || undefined,
+        details:    finalDetails,
       });
       if (res.ok) {
         setSuccess(true);
         // Clear form so customer can paste another URL without stale qty.
         // Keep manualPrice — TAMIT often fails on a whole shop, so the
         // next URL from the same vendor likely shares the price posture.
+        // Clear SKU picks too — next product has different axes.
         setQty(minClamp); setColor(""); setSize(""); setDetails("");
+        setSelectedVariants({});
         setTimeout(() => setSuccess(false), 4000);
       } else {
         // Translate the few error codes the customer cares about.
@@ -193,11 +298,87 @@ export function UrlPasteAddToCart({
 
   return (
     <div className="space-y-3">
-      {/* Manual price input — required when TAMIT didn't return a CNY
-          price (Tmall blocks the scrape). Pre-filled with TAMIT's
-          value when available; the field is always editable so the
-          customer can override (TAMIT often shows base price but the
-          shop discounts further). */}
+      {/* ── SKU PICKER — clickable axes (color · size · style · ...) ─
+          Mirrors admin pattern at
+          /admin/service-orders/cart/add/link-paste-search.tsx L428-490.
+          Each axis renders a row of clickable button chips; selecting
+          one updates state, looks up the matched SKU in skuMap, and
+          re-computes effectivePriceCny. Image thumbs render on chips
+          that are themselves images (rare — Taobao colour swatches). */}
+      {skuAxes && skuAxes.length > 0 && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 space-y-3">
+          <p className="text-sm font-semibold text-emerald-900">
+            เลือกตัวเลือกสินค้า{" "}
+            {axesIncomplete && (
+              <span className="text-red-600 font-bold ml-1">(จำเป็น)</span>
+            )}
+            {matchedSku && (
+              <span className="text-emerald-700 ml-2 text-xs font-normal">
+                ✓ เลือกครบ · ราคา ¥{matchedSku.price_cny.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            )}
+          </p>
+          {skuAxes.map((axis) => {
+            const selectedLabel = selectedVariants[axis.name];
+            return (
+              <div key={axis.name}>
+                <p className="text-sm text-emerald-800 mb-1.5">
+                  <strong className="text-foreground">{axis.name}</strong>
+                  {selectedLabel && (
+                    <span className="ml-2 text-primary-600 font-medium">: {selectedLabel}</span>
+                  )}
+                  <span className="ml-1.5 text-xs text-emerald-600">({axis.values.length} ตัวเลือก)</span>
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {axis.values.map((v) => {
+                    const isSelected = selectedLabel === v.label;
+                    const showThumb  = v.is_image && v.image;
+                    return (
+                      <button
+                        key={v.label}
+                        type="button"
+                        onClick={() => {
+                          setSelectedVariants((prev) => {
+                            // Toggle: clicking the selected chip clears it.
+                            if (prev[axis.name] === v.label) {
+                              const next = { ...prev };
+                              delete next[axis.name];
+                              return next;
+                            }
+                            return { ...prev, [axis.name]: v.label };
+                          });
+                          setError(null);
+                          setSuccess(false);
+                        }}
+                        disabled={pending}
+                        title={v.label}
+                        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm min-h-[44px] transition ${
+                          isSelected
+                            ? "border-primary-500 bg-primary-50 text-primary-700 ring-2 ring-primary-500/30 font-semibold"
+                            : "border-border bg-white hover:border-primary-300 text-foreground"
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                      >
+                        {showThumb && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={v.image}
+                            alt=""
+                            className="h-7 w-7 rounded object-contain bg-white border border-border/50"
+                          />
+                        )}
+                        <span className="max-w-[16rem] truncate">{v.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Manual price input — only when the matched SKU + TAMIT base/promo
+          all came back 0. Pre-filled with TAMIT's value when present. */}
       {priceMissing ? (
         <label className="block rounded-xl border border-amber-300 bg-amber-50 p-3">
           <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 mb-1.5">
@@ -342,9 +523,11 @@ export function UrlPasteAddToCart({
           ? "กำลังใส่ตะกร้า…"
           : !title.trim()
             ? "ไม่พบชื่อสินค้า"
-            : effectivePriceCny <= 0
-              ? "กรอกราคา CNY ด้านบน"
-              : "หยิบใส่รถเข็น"}
+            : axesIncomplete
+              ? "เลือกตัวเลือกสินค้าให้ครบก่อน"
+              : effectivePriceCny <= 0
+                ? "กรอกราคา CNY ด้านบน"
+                : "หยิบใส่รถเข็น"}
       </button>
     </div>
   );

@@ -769,53 +769,19 @@ function UrlPasteMode({
                       </div>
                     </div>
                   </div>
-                        {/* SKU axis selectors — render TAMIT's `sku_axes` if
-                            available; otherwise show skeleton strips like
-                            the legacy pre-AJAX state. The full sku-picker
-                            with qty grid + price recompute lives at
-                            /service-order/add (the proper place to commit);
-                            here we just preview the option labels. */}
-                        {detail?.sku_axes && detail.sku_axes.length > 0 ? (
-                          <div style={{ marginTop: "8px" }}>
-                            {detail.sku_axes.map((axis, ai) => (
-                              <div key={ai} style={{ marginBottom: "8px" }}>
-                                <h5 style={{ marginBottom: "4px", fontSize: "13px", color: "#666" }}>
-                                  {axis.name}:
-                                </h5>
-                                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                                  {axis.values.slice(0, 12).map((v, vi) => (
-                                    <span
-                                      key={vi}
-                                      style={{
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        gap: "4px",
-                                        padding: "4px 10px",
-                                        borderRadius: "999px",
-                                        border: "1px solid #e5e5e5",
-                                        fontSize: "12px",
-                                        background: "#fafafa",
-                                      }}
-                                    >
-                                      {v.image && (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img src={v.image} alt="" style={{ width: 18, height: 18, borderRadius: 4, objectFit: "cover" }} />
-                                      )}
-                                      {v.label}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
+                        {/* 2026-06-02 ภูม UX flag #4: SKU axis selectors moved
+                            into the UrlPasteAddToCart client island below so
+                            customers can CLICK options (admin pattern).  Server
+                            no longer renders read-only chips — the island shows
+                            the picker + recomputes price per selected SKU. */}
+                        {!detail?.sku_axes || detail.sku_axes.length === 0 ? (
                           <>
                             <div className="pro-preload-effect"></div>
                             <div className="pro-preload-effect"></div>
                             <div className="pro-preload-effect"></div>
                             <div className="pro-preload-effect"></div>
                           </>
-                        )}
+                        ) : null}
                   <hr className="my-3 border-t border-border" />
                   {/* 2026-06-02 — replaced legacy hardcoded qty=0 / static
                       ราคารวม / dead-submit-button with the client island.
@@ -834,6 +800,24 @@ function UrlPasteMode({
                     minQty={1}
                     maxQty={999}
                     detailAvailable={detailAvailable}
+                    skuAxes={detail?.sku_axes?.map((ax) => ({
+                      name: ax.name,
+                      values: ax.values.map((v) => ({
+                        label: v.label,
+                        image: v.image,
+                        data:  v.data,
+                        is_image: v.is_image,
+                      })),
+                    }))}
+                    skuMap={detail?.sku_map?.map((row) => ({
+                      sku_id:    row.sku_id,
+                      prop_path: row.prop_path,
+                      price_cny: row.price_cny,
+                      stock:     row.stock,
+                      image:     row.image,
+                    }))}
+                    basePriceCny={detail?.base_price_cny}
+                    promoPriceCny={detail?.promo_price_cny}
                   />
                 </div>
               </div>
