@@ -77,7 +77,7 @@
 - ⏳ **PDPA registration** — defer-able to T+30d before K-sec-4 pen test starts T+8wk
 - 🟡 **Pacred legal info** — tax-ID confirmed; remaining 6 fields ใน [pacred-info.md](../pacred-info.md) ลูกพี่ confirm กับ พี่ป๊อป
 
-**ภูม pickup:** Wire `BANK.*` ลง [`components/pdf/forwarder-receipt.tsx`](../../components/pdf/forwarder-receipt.tsx) + [`shop-order-receipt.tsx`](../../components/pdf/shop-order-receipt.tsx) ในรอบ refactor เดียวกับ CONTACT.* migration (see pacred-info.md "Migration tracker"). T+30d ภูม wires Xendit + K-Biz + K-Shop per D-7 §5.3.
+**ภูม pickup:** Wire `BANK.*` ลง `components/pdf/forwarder-receipt.tsx` (removed · receipt = forwarder-invoice/tax-invoice flow ADR-0027 · brand done via site.ts) + [`shop-order-receipt.tsx`](../../components/pdf/shop-order-receipt.tsx) ในรอบ refactor เดียวกับ CONTACT.* migration (see pacred-info.md "Migration tracker"). T+30d ภูม wires Xendit + K-Biz + K-Shop per D-7 §5.3.
 
 ### E-5 · `interpreter` role for V-H1 — ✅ UNBLOCKED 2026-05-17 (ack-on-behalf-of-ก๊อต)
 

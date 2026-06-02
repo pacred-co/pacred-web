@@ -199,7 +199,7 @@ Last updated: 2026-05-25 (post-org-shift roster — full per-department director
 
 **Printed on:** receipt PDFs · tax-invoice PDFs · `/wallet/deposit` page (alternative to PromptPay QR).
 
-**Migration tracker:** receipts/invoices currently render w/o bank — ภูม wire `BANK.*` into [`components/pdf/forwarder-receipt.tsx`](../components/pdf/forwarder-receipt.tsx) + [`components/pdf/shop-order-receipt.tsx`](../components/pdf/shop-order-receipt.tsx) in same refactor batch as `CONTACT.*` row in §"Migration tracker" below.
+**Migration tracker:** receipts/invoices currently render w/o bank — ภูม wire `BANK.*` into `components/pdf/forwarder-receipt.tsx` (removed — receipt now renders via the admin forwarder-invoice / tax-invoice flow, ADR-0027; brand already wired via `site.ts`) + [`components/pdf/shop-order-receipt.tsx`](../components/pdf/shop-order-receipt.tsx) in same refactor batch as `CONTACT.*` row in §"Migration tracker" below.
 
 ---
 
