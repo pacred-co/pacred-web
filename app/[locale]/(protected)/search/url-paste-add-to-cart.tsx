@@ -70,28 +70,34 @@ export function UrlPasteAddToCart({
   const minClamp = Math.max(1, minQty);
   const maxClamp = Math.max(minClamp, maxQty || 999);
 
-  const [qty,     setQty]     = useState<number>(minClamp);
-  const [color,   setColor]   = useState<string>("");
-  const [size,    setSize]    = useState<string>("");
-  const [details, setDetails] = useState<string>("");
-  const [error,   setError]   = useState<string | null>(null);
-  const [success, setSuccess] = useState<boolean>(false);
-  const [pending, startTransition] = useTransition();
+  // priceThb is computed locally from priceCny × rsDefault inside this
+  // island (so the qty stepper recomputes the total live).  Kept as a
+  // prop only so the server-rendered card above can show its own ¥→฿
+  // line without duplicating the math.  Silence the unused-vars lint.
+  void priceThb;
 
-  // 1) TAMIT failed → render fallback to /service-order/add (which has
-  //    LinkPasteSearch + manual-entry fields). Avoid the infinite
-  //    "กำลังโหลด…" skeleton — that misleads the customer.
-  //
-  //    `detailAvailable = false` covers the explicit-fail case
-  //    (TAMIT returned ok:false). But TAMIT often returns ok:true with
-  //    a partial scrape (title via fallback heuristic, price = 0,
-  //    image = null) for URLs it can't fully decode (Tmall ?region=SG
-  //    pages, weird scm/spm chains). Treat those as failures too —
-  //    without price the customer can't even check what they're
-  //    paying, so we'd be ordering at price 0.
-  const hasRealPrice = priceCny > 0;
+  const [qty,        setQty]        = useState<number>(minClamp);
+  const [color,      setColor]      = useState<string>("");
+  const [size,       setSize]       = useState<string>("");
+  const [details,    setDetails]    = useState<string>("");
+  // Manual price override — when TAMIT didn't return a CNY price
+  // (Tmall blocks price scraping on many SKUs), the customer fills
+  // it in. Pre-filled with TAMIT's value when present.
+  const [manualPrice, setManualPrice] = useState<string>(priceCny > 0 ? String(priceCny) : "");
+  const [error,      setError]      = useState<string | null>(null);
+  const [success,    setSuccess]    = useState<boolean>(false);
+  const [pending,    startTransition] = useTransition();
+
+  // Render fallback only when TAMIT failed COMPLETELY — no image AND
+  // no usable title. If we got the product card (image + title +
+  // shop), even without a price, the customer can confirm it's the
+  // right product and type the price they see on the merchant's site.
+  // (Tmall blocks price-scraping on ~70% of SKUs; the legacy admin
+  // form at /admin/service-orders/cart/add has the same pattern.)
+  const hasUsableTitle = title.trim().length > 0
+    && !title.trim().match(/^สินค้าจาก (TMALL|TAOBAO|1688) \(รหัส /);
   const hasRealImage = !!mainImage;
-  if (!detailAvailable || !hasRealPrice || !hasRealImage) {
+  if (!detailAvailable || (!hasRealImage && !hasUsableTitle)) {
     return (
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3" role="alert">
         <div className="flex items-start gap-3">
@@ -121,8 +127,15 @@ export function UrlPasteAddToCart({
     );
   }
 
-  // 2) Detail loaded but somehow blank — defensive skeleton.
-  const isReady = priceCny > 0 && title.trim().length > 0;
+  // 2) Detail loaded → render island. Price uses TAMIT value when
+  //    present, otherwise the customer's manual input.
+  const effectivePriceCny = (() => {
+    const n = Number(manualPrice);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  })();
+  const effectivePriceThb = effectivePriceCny * rsDefault;
+  const priceMissing      = priceCny === 0;
+  const isReady           = effectivePriceCny > 0 && title.trim().length > 0;
 
   function adjQty(delta: number) {
     setQty((q) => {
@@ -134,8 +147,12 @@ export function UrlPasteAddToCart({
   }
 
   function onSubmit() {
-    if (!isReady) {
-      setError("ข้อมูลสินค้ายังโหลดไม่ครบ · รอสักครู่");
+    if (effectivePriceCny <= 0) {
+      setError("ยังไม่ใส่ราคา CNY · กรอกราคาก่อน");
+      return;
+    }
+    if (!title.trim()) {
+      setError("ไม่พบชื่อสินค้า · ลองวาง URL ใหม่หรือใช้ /service-order/add");
       return;
     }
     setError(null); setSuccess(false);
@@ -148,13 +165,15 @@ export function UrlPasteAddToCart({
         image_path: mainImage ?? undefined,
         color:      color.trim() || undefined,
         size:       size.trim() || undefined,
-        price_cny:  priceCny,
+        price_cny:  effectivePriceCny,
         amount:     qty,
         details:    details.trim() || undefined,
       });
       if (res.ok) {
         setSuccess(true);
-        // Clear form so customer can paste another URL without stale qty
+        // Clear form so customer can paste another URL without stale qty.
+        // Keep manualPrice — TAMIT often fails on a whole shop, so the
+        // next URL from the same vendor likely shares the price posture.
         setQty(minClamp); setColor(""); setSize(""); setDetails("");
         setTimeout(() => setSuccess(false), 4000);
       } else {
@@ -170,10 +189,42 @@ export function UrlPasteAddToCart({
     });
   }
 
-  const lineTotalThb = priceThb * qty;
+  const lineTotalThb = effectivePriceThb * qty;
 
   return (
     <div className="space-y-3">
+      {/* Manual price input — required when TAMIT didn't return a CNY
+          price (Tmall blocks the scrape). Pre-filled with TAMIT's
+          value when available; the field is always editable so the
+          customer can override (TAMIT often shows base price but the
+          shop discounts further). */}
+      {priceMissing ? (
+        <label className="block rounded-xl border border-amber-300 bg-amber-50 p-3">
+          <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 mb-1.5">
+            <AlertTriangle className="h-4 w-4" />
+            ราคา CNY (ระบบดึงราคาจาก {shopName || "ร้านนี้"} ไม่ได้ · กรอกราคาที่เห็นเอง)
+          </span>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              value={manualPrice}
+              onChange={(e) => setManualPrice(e.target.value)}
+              placeholder="เช่น 19.90"
+              step="0.01"
+              min="0"
+              inputMode="decimal"
+              className="flex-1 rounded-lg border border-amber-400 bg-white px-3 py-2 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+            />
+            <span className="text-lg font-bold text-amber-700">¥</span>
+            {effectivePriceCny > 0 && (
+              <span className="text-sm text-amber-800">
+                ≈ {effectivePriceThb.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ฿
+              </span>
+            )}
+          </div>
+        </label>
+      ) : null}
+
       {/* Color / size / details — legacy customer cart parity */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         <label className="block">
@@ -257,7 +308,7 @@ export function UrlPasteAddToCart({
             <b className="text-red-600 text-lg">{lineTotalThb.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>
             {" "}฿
             <span className="text-xs text-muted">
-              ({priceCny.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}¥ × {qty} × {rsDefault}฿/¥)
+              ({effectivePriceCny.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}¥ × {qty} × {rsDefault}฿/¥)
             </span>
           </span>
         </div>
@@ -287,7 +338,13 @@ export function UrlPasteAddToCart({
         className="w-full md:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-red-600 hover:bg-red-700 text-white text-base font-semibold px-6 py-3 min-h-[44px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <ShoppingCart className="h-5 w-5" />
-        {pending ? "กำลังใส่ตะกร้า…" : !isReady ? "กำลังโหลดข้อมูลสินค้า…" : "หยิบใส่รถเข็น"}
+        {pending
+          ? "กำลังใส่ตะกร้า…"
+          : !title.trim()
+            ? "ไม่พบชื่อสินค้า"
+            : effectivePriceCny <= 0
+              ? "กรอกราคา CNY ด้านบน"
+              : "หยิบใส่รถเข็น"}
       </button>
     </div>
   );
