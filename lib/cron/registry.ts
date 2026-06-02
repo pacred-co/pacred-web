@@ -103,6 +103,19 @@ export const CRON_REGISTRY: readonly CronEntry[] = [
     description:   "ดึง row ใหม่จาก Google Sheet ของคลัง CTT → tb_forwarder + แจ้งทีม ops (DRY-RUN จนกว่า ก๊อต wire credentials)",
     scheduleLabel: "ทุก 1 ชม.",
   },
+  // 2026-06-02 — PCS↔Pacred sync. Pulls recent tb_forwarder edits from the
+  // PHP endpoint on the PCS server (pacred-sync.php) and merges them into
+  // our tb_forwarder per the conflict policy in
+  // lib/integrations/pcs-sync/merge.ts. Dedicated dashboard at
+  // /admin/system/pcs-sync (has its own run history; this registry entry
+  // makes it appear on the cron-health overview too).
+  {
+    path:          "/api/cron/pcs-sync",
+    schedule:      "*/10 * * * *",
+    label:         "Sync tb_forwarder จาก PCS",
+    description:   "ดึง tb_forwarder ที่ staff PCS แก้ไข (status/ตู้/driver/...) มาเข้า Pacred ทุก 10 นาที",
+    scheduleLabel: "ทุก 10 นาที",
+  },
 ] as const;
 
 /** Look up a registry entry by path; returns null if unknown (means
