@@ -420,7 +420,6 @@ const blockSettingsCargo: MenuItem = {
       children: [
         { labelKey: "settingsCargo.crons",        href: "/admin/system/crons",         icon: "Clock" },
         { labelKey: "settingsCargo.systemNotifs", href: "/admin/system/notifications", icon: "BellRing" },
-        { labelKey: "settingsCargo.pcsSync",      href: "/admin/system/pcs-sync",      icon: "Database" },
         { labelKey: "settingsCargo.csvImports",   href: "/admin/csv-imports",          icon: "Upload" },
       ],
     },

@@ -2822,7 +2822,6 @@
       "system": "ระบบ",
       "crons": "Cron jobs",
       "systemNotifs": "การแจ้งเตือนระบบ",
-      "pcsSync": "PCS ↔ Pacred Sync",
       "csvImports": "นำเข้าข้อมูล (CSV)",
       "tools": "เครื่องมือ",
       "orgEmail": "อีเมลในองค์กร",
