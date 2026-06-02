@@ -3,6 +3,29 @@
 
 ---
 
+# 🏠 2026-06-02 PM-8 — SESSION CLOSE + MACHINE MOVE (→ บ้าน) · 2 PROD ENV INCIDENTS + Wave-A + ก๊อต/ปอน MERGED · read FIRST
+
+**main = `dave-pacred` = (this session-close commit)+ · pushed · typecheck+lint+build EXIT 0 · prod LIVE (Vercel auto-deploys `main`).** Resume at home: `git fetch origin && git pull origin main` → read this section. Owner closed the company-computer session.
+
+**🚀 Shipped + pushed this session (เดฟ + ก๊อต + ปอน — one verified batch):**
+- **เดฟ Wave-A trust sweep** (`0a38c71d`) — killed the `/service-import/pending` **dead-read** (read rebuilt 0-row `forwarders` → all 8,898 migrated customers saw an EMPTY "รอชำระเงิน" screen via 3 nav entries) → redirect to `/service-import?q=5` (faithful tb_forwarder pending tab) + repoint mobile FAB + removed orphan `listForwarders`/`ForwarderSummary`/`forwarder-list.tsx` (§0e). Deleted dead `/api/settings-rate` endpoint. Fixed search-demand `sourceNote` (named the empty `tb_history_key`; data layer already reads `tb_search_history`). **A 4-agent audit confirmed the other big-audit Wave-A P1s (credit-line P1-5, config-split P1-11, VIP-rate, yuan-bulk orphan) were ALREADY CLOSED in PM-3/PM-4 → not re-implemented (avoided the stale-doc re-work trap).**
+- **🔴 PROD INCIDENT #1 — "กดค้นหา/วาง link แล้ว api เก่าตาย, สั่งซื้อไม่ได้"** (`6200f463`) — China URL-paste product search dead on prod. Root cause: vendor retired `https://tamit-cloud.com/api-product` → **HTTP 404** (verified live); correct = `/api-product-2026`. The code default (`lib/china-search/index.ts:48`) is already -2026, **but Vercel prod `PACRED_TAMIT_DETAIL_URL` + `.env.example` still carried the dead URL → the env OVERRODE the good default.** Fixed `.env.example`. (AkuCargo keyword path also 404'd from external test — could be IP-allowlist; verify with ไอแต้ม.)
+- **🔴 PROD INCIDENT #2 — registration OTP "Sent but not received" + rate-limit** (`.env.example THAIBULKSMS_FORCE`) — customer KIT CHAREON MUSICAL (พีท · 0909709898) couldn't register: ThaiBulkSMS dashboard shows "Sent" ×3 but customer never received → hit the 3/hour/phone cap ("สมัครเกินจำนวน"). **Key findings:** (a) **`OTP_BYPASS` is HARD-IGNORED on Vercel production** (`gateway.ts:52` forces it off when `VERCEL_ENV==="production"`) → setting it false/true does nothing; the real emergency lever is **`EMERGENCY_OTP_BYPASS=true`**. (b) SMS "Sent"≠"Delivered": "Pacred" sender ID is approved in ThaiBulkSMS's **Corporate pool**, but `.env.example` still said `THAIBULKSMS_FORCE=premium` (stale, same class as TAMIT) → wrong pool = accepted-but-undelivered → fixed to `corporate` (code default already corporate). Owner admin-created พีท via `/admin/customers/new` (no-OTP path · juristic needs the 13-digit Tax ID). ThaiBulk deferred ("ปล่อยไปก่อน").
+- **ก๊อต (got-jirayus · merged from `origin/main` `bb09a8b0`+`ea02bc4f`)** — "เริ่มขยับ" = **comprehensive code-derived docs** (956 files · `docs/components/*` · `docs/database/*` per-table specs · `docs/test-cases/*` per-page manual test cases) + `fix: change path images` (china-shopping services page). No migrations.
+- **ปอน (PCSCARGO · merged from `origin/InwPond007` ×3)** — `2f84df06` **public `/track/[code]` + `/track`** (CargoThai P2 — the no-login tracking GTM moat) + **LINE CRM thread panel** (`/admin/line-inbox` · `actions/admin/line-crm.ts`) + **address-flash** UX + **camera image-search** panel + `fix(i18n) BookingHero` + `fix(test)` Windows bracket-path quoting. No migrations.
+
+**🟠 ภูม (Poom-pacred · 22 commits · NOT merged — needs RESYNC):** ภูม shipped a lot — §0e trust-sweeps (VIP/commission_*/service-orders tombstones), **search-E1** (SKU picker + per-SKU price + TAMIT-2026 endpoint + manual-price fallback + add-to-cart wire — the richer fix for INCIDENT #1's "ราคาไม่ขึ้น/รูปไม่ขึ้น" Tmall-per-SKU case), admin money-path pivots (forwarder/yuan/barcode → `tb_*`, commission→`tb_user_sales`), PCS-style forwarder `[fNo]` view, a 164-cast build-unblock. **NOT blind-merged** — his branch is **62 behind dave-pacred + overlaps เดฟ's trust-sweep + dave's `f4d72228` (search add-to-cart) + touches money paths**; a blind merge would revert prod files (learnings/parallel-agent-sprints "diff-stat LIES"). **➡️ Action next session: ภูม `git pull origin main` to rebase his 22 onto the new main → then it merges clean; OR เดฟ cherry-picks the non-overlapping ones with money-path diff review.** His work is SAFE on Poom-pacred — nothing lost. His search-E1 overlaps INCIDENT #1 — reconcile his richer version vs the env fix when integrating.
+
+**🔴 OWNER TODO — Vercel env (prod · เดฟ has no Vercel token):**
+1. `PACRED_TAMIT_DETAIL_URL` = `https://tamit-cloud.com/api-product-2026` (or DELETE) → unblocks China URL-paste search
+2. `THAIBULKSMS_FORCE` = `corporate` (or DELETE) → unblocks OTP SMS delivery (Corporate-pool sender)
+3. (optional) `EMERGENCY_OTP_BYPASS=true` ONLY if many signups stuck — fail-open, turn OFF after SMS fixed
+→ Redeploy after (or it auto-redeploys on this push). Also check ThaiBulkSMS delivery-report (Sent vs Delivered) + "Pacred" sender approval per carrier.
+
+> **Pattern (compounding · captured in memory `prod_env_staleness`):** when a vendor/API "ตาย" in prod but works locally, FIRST check whether a **Vercel env var is stale vs the code default + `.env.example`** — a SET-but-wrong env var OVERRIDES a correct code default. Hit twice this session (TAMIT detail URL + THAIBULKSMS_FORCE).
+
+---
+
 # 🌙 2026-06-02 PM-7 — OVERNIGHT AUTONOMOUS RUN (owner asleep · staff-CRUD backlog) · read FIRST
 
 **main = `dave-pacred` = `6b183aef`+ · all pushed · build EXIT 0 each wave · prod LIVE · migrations 0136 applied.** Owner moved to the company computer, said "หยิบงาน code รันยาวยันเช้า · เดี๋ยวตื่นมาสรุป" → ran the §PM-6 #3.3 staff-CRUD backlog autonomously (codeable items that need NO owner login/token/decision). Pattern: flat Agent + worktree + disjoint + build-gate + push-per-wave (clean state always).
