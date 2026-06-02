@@ -1,0 +1,45 @@
+# `/admin/forwarders/tran-th/[id]`
+
+**รายละเอียด batch ขนส่งในไทย**
+
+> **Auth:** 🛡 Admin — roles: `super`, `accounting`, `warehouse`, `freight_sales`
+> **Group:** `(admin)` · **Source:** `app/[locale]/(admin)/admin/forwarders/tran-th/[id]/page.tsx`
+
+## Request data (params)
+
+- **route param** `id`
+
+## Database tables
+
+- [`admins`](../../../../database/native/admins.md)
+- [`tb_forwarder`](../../../../database/legacy/tb_forwarder.md)
+- [`tb_forwarder_tran_th_h`](../../../../database/legacy/tb_forwarder_tran_th_h.md)
+- [`tb_forwarder_tran_th_sub`](../../../../database/legacy/tb_forwarder_tran_th_sub.md)
+
+## Components
+
+_No `@/components/*` imports (inline JSX or co-located only)._
+
+## Server Actions / internal APIs
+
+- action: `actions/admin/forwarder-tran-th`
+
+## 3rd-party / services
+
+- Supabase (Postgres)
+
+## Environment variables
+
+_None referenced (directly or via imported actions/lib)._
+
+## Lib modules
+
+- `lib/auth/require-admin`
+
+## Exports / functions
+
+- `AdminTranThDetailPage`
+
+---
+
+<sub>Auto-derived from code (page + co-located + 1-level action/lib transitive) on 2026-06-02. DB/env include those reached through imported server actions. See [pages index](../../../README.md).</sub>
