@@ -160,63 +160,22 @@ const upsertVipRateSchema = z.object({
 });
 export type UpsertVipRateInput = z.infer<typeof upsertVipRateSchema>;
 
+// ⚠️ TOMBSTONED 2026-06-02 (§0e Wave-A trust-sweep).
+// Wrote to the REBUILT `rate_vip` table (0 rows on prod). The forwarder
+// pricing engine reads the LIVE `tb_rate_vip_kg` / `tb_rate_vip_cbm`
+// (192 rows). Editing here changed nothing — green toast, no effect.
+// The faithful editor is `/admin/rates/custom-user` (writes tb_rate_vip_*).
+// /admin/rates/vip is now a redirect; zero callers grep-confirmed.
+// Kept as a tombstoned export so any future stale caller fails loudly
+// instead of silently no-op'ing — schedule full delete in follow-up.
+const VIP_RATE_TOMBSTONE_ERROR =
+  "tombstoned: ใช้ /admin/rates/custom-user แทน (เขียนตาราง rate_vip เก่าที่ตายแล้ว · §0e)";
+
 export async function adminUpsertVipRate(
   input: UpsertVipRateInput,
 ): Promise<AdminActionResult<{ id: string; created: boolean }>> {
-  const parsed = upsertVipRateSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
-  const d = parsed.data;
-
-  return withAdmin<{ id: string; created: boolean }>(["super", "accounting"], async ({ adminId }) => {
-    const admin = createAdminClient();
-    const { data: existing, error: existingErr } = await admin
-      .from("rate_vip")
-      .select("id, rate")
-      .eq("customer_group",   d.customer_group)
-      .eq("source_warehouse", d.source_warehouse)
-      .eq("transport_type",   d.transport_type)
-      .eq("product_type",     d.product_type)
-      .eq("basis",            d.basis)
-      .maybeSingle<{ id: string; rate: number }>();
-    if (existingErr) {
-      console.error(`[rate_vip list] failed`, { code: existingErr.code, message: existingErr.message });
-    }
-
-    const { data: written, error } = await admin
-      .from("rate_vip")
-      .upsert(
-        {
-          ...(existing?.id ? { id: existing.id } : {}),
-          customer_group:   d.customer_group,
-          source_warehouse: d.source_warehouse,
-          transport_type:   d.transport_type,
-          product_type:     d.product_type,
-          basis:            d.basis,
-          rate:             d.rate,
-          admin_id_update:  adminId,
-        },
-        { onConflict: "customer_group,source_warehouse,transport_type,product_type,basis" },
-      )
-      .select("id")
-      .single<{ id: string }>();
-    if (error) return { ok: false, error: error.message };
-
-    await logAdminAction(adminId, existing ? "rate_vip.update" : "rate_vip.insert", "rate_vip", written.id, {
-      key: {
-        customer_group:   d.customer_group,
-        source_warehouse: d.source_warehouse,
-        transport_type:   d.transport_type,
-        product_type:     d.product_type,
-        basis:            d.basis,
-      },
-      before: existing ? { rate: existing.rate } : null,
-      after:  { rate: d.rate },
-    });
-
-    revalidatePath("/admin/rates");
-    revalidatePath("/admin/rates/vip");
-    return { ok: true, data: { id: written.id, created: !existing } };
-  });
+  void input;
+  return { ok: false, error: VIP_RATE_TOMBSTONE_ERROR };
 }
 
 const deleteVipRateSchema = z.object({ id: z.string().uuid() });
@@ -225,32 +184,8 @@ export type DeleteVipRateInput = z.infer<typeof deleteVipRateSchema>;
 export async function adminDeleteVipRate(
   input: DeleteVipRateInput,
 ): Promise<AdminActionResult<{ id: string }>> {
-  const parsed = deleteVipRateSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
-  const d = parsed.data;
-
-  return withAdmin<{ id: string }>(["super", "accounting"], async ({ adminId }) => {
-    const admin = createAdminClient();
-    const { data: before, error: beforeErr } = await admin
-      .from("rate_vip")
-      .select("customer_group, source_warehouse, transport_type, product_type, basis, rate")
-      .eq("id", d.id)
-      .maybeSingle();
-    if (beforeErr) {
-      console.error(`[rate_vip mutation lookup] failed`, { code: beforeErr.code, message: beforeErr.message });
-      return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
-    }
-    if (!before) return { ok: false, error: "not_found" };
-
-    const { error } = await admin.from("rate_vip").delete().eq("id", d.id);
-    if (error) return { ok: false, error: error.message };
-
-    await logAdminAction(adminId, "rate_vip.delete", "rate_vip", d.id, { before });
-
-    revalidatePath("/admin/rates");
-    revalidatePath("/admin/rates/vip");
-    return { ok: true, data: { id: d.id } };
-  });
+  void input;
+  return { ok: false, error: VIP_RATE_TOMBSTONE_ERROR };
 }
 
 // ────────────────────────────────────────────────────────────
