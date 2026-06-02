@@ -235,13 +235,13 @@ export function RegisterClient({
   return (
     <>
       <NavBar />
-      <main className="flex items-stretch justify-center bg-background md:min-h-[calc(100dvh-56px)]">
-        {/* LEFT — desktop-only promo banner (50% split per owner reference 2026-06-02).
-            Mobile keeps the form full-width + thumb-reachable. */}
+      <main className="flex items-stretch justify-center bg-background md:items-center md:gap-6 md:px-6 md:py-3 md:min-h-[calc(100dvh-56px)]">
+        {/* LEFT — desktop-only promo banner, sized to the ad image (portrait, NOT a
+            50% split) with rounded corners. Hidden < md so mobile is unchanged. */}
         <RegisterAdsBanner />
 
         {/* RIGHT — register form column. Everything below (the form card + fields) is UNCHANGED. */}
-        <div className="flex w-full items-start justify-center px-4 pt-0 pb-0 md:w-1/2 md:py-3">
+        <div className="flex w-full items-start justify-center px-4 pt-0 pb-0 md:w-[540px] md:shrink-0 md:px-0">
         <div className="w-full max-w-[540px] min-h-[calc(100dvh-56px)] rounded-none border-0 bg-white p-3 shadow-[0_20px_50px_rgba(0,0,0,0.04)] dark:border-border dark:bg-surface sm:p-7 md:min-h-0 md:h-auto md:rounded-[24px] md:border md:border-white/80">
 
           {/* Logo — wordmark (140×140 source w/ ~25% whitespace top+bottom); render at
