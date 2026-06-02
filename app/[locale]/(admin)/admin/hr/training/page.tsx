@@ -69,7 +69,7 @@ export default async function AdminHRTrainingPage() {
   }));
 
   type AdminRow = { profile_id: string; profile: Profile | Profile[] | null };
-  const allEmployees = ((adminsRes.data ?? []) as AdminRow[]).map((a) => {
+  const allEmployees = ((adminsRes.data ?? []) as unknown as AdminRow[]).map((a) => {
     const p = Array.isArray(a.profile) ? a.profile[0] ?? null : a.profile;
     const full = `${p?.first_name ?? ""} ${p?.last_name ?? ""}`.trim() || "—";
     return { id: a.profile_id, label: `${p?.member_code ?? "—"} · ${full}` };

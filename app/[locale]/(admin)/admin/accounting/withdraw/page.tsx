@@ -275,7 +275,7 @@ export default async function AdminAccountingWithdrawPage({
     .lte("date", `${endDate}T23:59:59`)
     .order("date", { ascending: true });
 
-  const walletRows = (walletRes.data ?? []) as WalletRaw[];
+  const walletRows = (walletRes.data ?? []) as unknown as WalletRaw[];
 
   // ── Pass 2: tb_users for the customer-name display ──────────────
   // Legacy `LEFT JOIN tb_users AS u ON u.userID=wh.userID`.

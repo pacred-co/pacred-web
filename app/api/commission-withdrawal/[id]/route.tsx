@@ -140,7 +140,7 @@ export async function GET(
     return NextResponse.json({ error: itemsErr.message }, { status: 500 });
   }
 
-  const items = ((itemsRaw ?? []) as ItemDbRow[]).map((it, i) => {
+  const items = ((itemsRaw ?? []) as unknown as ItemDbRow[]).map((it, i) => {
     const acc = Array.isArray(it.accrual) ? it.accrual[0] ?? null : it.accrual;
     return {
       position:            i + 1,

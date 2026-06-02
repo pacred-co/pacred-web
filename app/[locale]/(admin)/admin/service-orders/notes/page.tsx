@@ -80,7 +80,7 @@ export default async function ServiceOrderNotesPage({
   if (error) {
     console.error(`[service_orders list] failed`, { code: error.code, message: error.message });
   }
-  const rows = ((data ?? []) as RawRow[]).map((r) => ({
+  const rows = ((data ?? []) as unknown as RawRow[]).map((r) => ({
     ...r,
     profile: Array.isArray(r.profile) ? r.profile[0] ?? null : r.profile,
   }));

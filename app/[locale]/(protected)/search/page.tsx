@@ -234,7 +234,7 @@ export default async function SearchPage({
     if (rowsErr) {
       console.error(`[tb_product list] failed`, { code: rowsErr.code, message: rowsErr.message });
     }
-    products = (rows ?? []) as ProductRow[];
+    products = (rows ?? []) as unknown as ProductRow[];
   } else {
     // Sprint-3 P2.2 — taobao / 1688 keyword search via AkuCargo
     // (P-52 canonical keyword backend; legacy TAMIT keyword endpoint

@@ -176,7 +176,7 @@ export default async function ServiceImportReceiptsPage({
     console.error(`[tb_receipt list] failed`, { code: receiptRowsErr.code, message: receiptRowsErr.message });
   }
 
-  const receipts = (receiptRows ?? []) as ReceiptRow[];
+  const receipts = (receiptRows ?? []) as unknown as ReceiptRow[];
 
   // ── $arrItem — tb_receipt_item: rID → comma-joined fID list ───
   // receipt-f-hs.php L54-64. Narrowed to this customer's receipt

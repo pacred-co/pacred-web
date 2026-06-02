@@ -102,8 +102,8 @@ export default async function AdminBoardInboxPage({
     console.error(`[work_items list] failed`, { code: deptRawErr.code, message: deptRawErr.message });
   }
 
-  const mine = (mineRaw ?? []) as WorkRow[];
-  const dept = (deptRaw ?? []) as WorkRow[];
+  const mine = (mineRaw ?? []) as unknown as WorkRow[];
+  const dept = (deptRaw ?? []) as unknown as WorkRow[];
 
   // ── IC-1 §5.3 — "Waiting on me" tab data ──────────────────────────
   // Jobs blocked on my DEPT (blocked_on_role ∈ my roles, waiting_reason
@@ -135,8 +135,8 @@ export default async function AdminBoardInboxPage({
     console.error(`[work_items list] failed`, { code: blockedMeRawErr.code, message: blockedMeRawErr.message });
   }
 
-  const blockedDept = (blockedDeptRaw ?? []) as WorkRow[];
-  const blockedMe   = (blockedMeRaw   ?? []) as WorkRow[];
+  const blockedDept = (blockedDeptRaw ?? []) as unknown as WorkRow[];
+  const blockedMe   = (blockedMeRaw   ?? []) as unknown as WorkRow[];
 
   // ── IC-1 §5.3 — @mentions tab data ────────────────────────────────
   type MentionRaw = {
@@ -184,7 +184,7 @@ export default async function AdminBoardInboxPage({
     workItemHref:   string;
     createdAt:   string;
   };
-  const mentions: MentionRow[] = ((mentionsRaw ?? []) as MentionRaw[]).map((m) => {
+  const mentions: MentionRow[] = ((mentionsRaw ?? []) as unknown as MentionRaw[]).map((m) => {
     const msg = Array.isArray(m.message) ? m.message[0] ?? null : m.message;
     const wi  = Array.isArray(m.work_item) ? m.work_item[0] ?? null : m.work_item;
     let authorName: string | null = null;

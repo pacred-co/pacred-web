@@ -419,7 +419,7 @@ export async function requestCommissionWithdraw(
     .eq("is_active", true);
   if (leaderErr) return { ok: false, error: leaderErr.message };
 
-  const leaders = (leadersRaw ?? []) as LeaderRow[];
+  const leaders = (leadersRaw ?? []) as unknown as LeaderRow[];
   if (leaders.length === 0) {
     return { ok: false, error: "not_a_team_leader — คุณไม่ใช่หัวหน้าทีม จึงไม่มีค่าคอม" };
   }

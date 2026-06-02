@@ -129,7 +129,7 @@ export async function getForwarderProfitAnalytics(
       return { ok: false, error: error.message };
     }
 
-    const rows = (data ?? []) as FwRaw[];
+    const rows = (data ?? []) as unknown as FwRaw[];
 
     const byCarrier = new Map<string, Acc>();
     const byWarehouse = new Map<string, Acc>();

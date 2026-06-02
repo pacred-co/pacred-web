@@ -307,7 +307,7 @@ export default async function CartPage() {
     console.error(`[cart rows list] failed`, { code: cartRowsErr.code, message: cartRowsErr.message });
     throw new Error(`cart rows list failed: ${cartRowsErr.message}`);
   }
-  const cartRows = (cartRowsData ?? []) as CartRow[];
+  const cartRows = (cartRowsData ?? []) as unknown as CartRow[];
 
   // Build the provider → shop → rows grouping. cart.php iterates
   // DISTINCT cProvider in result order, then DISTINCT cNameShop per

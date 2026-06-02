@@ -92,7 +92,7 @@ export async function getWhtCertQueue(opts: {
     cert_received_at: string | null;
     created_at:      string;
   };
-  const rows = (raw ?? []) as Raw[];
+  const rows = (raw ?? []) as unknown as Raw[];
 
   // Hydrate invoice serial — batched IN query
   const invoiceIds = Array.from(new Set(rows.map((r) => r.invoice_id).filter((v): v is number => v != null)));
@@ -106,7 +106,9 @@ export async function getWhtCertQueue(opts: {
     if (invErr) {
       console.error("[wht-cert invoice hydrate] failed", { code: invErr.code, message: invErr.message });
     }
-    serialByInvoice = new Map(((invRaw ?? []) as InvRow[]).map((i) => [i.id, i.serial_no]));
+    // Cast via `unknown` — Supabase types haven't been regenerated after
+    // migration 0129 added tb_forwarder_tax_invoice (2026-06-02 build fix).
+    serialByInvoice = new Map(((invRaw ?? []) as unknown as InvRow[]).map((i) => [i.id, i.serial_no]));
   }
 
   const entries: WhtCertEntry[] = rows.map((r) => ({

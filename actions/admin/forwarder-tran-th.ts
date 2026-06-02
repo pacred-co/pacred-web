@@ -103,7 +103,7 @@ export async function getTranThList(opts: {
     console.error("[tb_forwarder_tran_th_h list] failed", { code: headErr.code, message: headErr.message });
   }
   type HRow = { id: number; date: string | null; adminidcreate: string };
-  const headers = (headRaw ?? []) as HRow[];
+  const headers = (headRaw ?? []) as unknown as HRow[];
 
   // ── Item counts per header — batched lookup ──
   const ids = headers.map((h) => h.id);
@@ -118,7 +118,7 @@ export async function getTranThList(opts: {
     if (subErr) {
       console.error("[tb_forwarder_tran_th_sub count] failed", { code: subErr.code, message: subErr.message });
     }
-    for (const r of ((subRaw ?? []) as SubCountRow[])) {
+    for (const r of ((subRaw ?? []) as unknown as SubCountRow[])) {
       itemsPerHeader.set(r.ftthhid, (itemsPerHeader.get(r.ftthhid) ?? 0) + 1);
       totalItems += 1;
     }
@@ -177,7 +177,7 @@ export async function getTranThDetail(id: number): Promise<TranThDetail | null> 
     console.error("[tb_forwarder_tran_th_sub detail] failed", { code: subErr.code, message: subErr.message });
   }
   type SubRow = { id: number; fid: number };
-  const subs = (subRaw ?? []) as SubRow[];
+  const subs = (subRaw ?? []) as unknown as SubRow[];
   const fIds = Array.from(new Set(subs.map((s) => s.fid)));
 
   // ── Hydrate tb_forwarder for shipment metadata ──
@@ -209,7 +209,7 @@ export async function getTranThDetail(id: number): Promise<TranThDetail | null> 
     if (fwdErr) {
       console.error("[tb_forwarder tran-th batch] failed", { code: fwdErr.code, message: fwdErr.message });
     }
-    fwdById = new Map(((fwdRaw ?? []) as FwdRow[]).map((f) => [f.id, f]));
+    fwdById = new Map(((fwdRaw ?? []) as unknown as FwdRow[]).map((f) => [f.id, f]));
   }
 
   const items: TranThItemRow[] = subs.map((s) => {

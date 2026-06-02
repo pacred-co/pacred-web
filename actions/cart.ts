@@ -703,7 +703,7 @@ export async function listCart(): Promise<ActionResult<CartItem[]>> {
     .order("id", { ascending: false });
 
   if (error) return { ok: false, error: error.message };
-  return { ok: true, data: ((rows ?? []) as LegacyCartRow[]).map(legacyCartRowToCartItem) };
+  return { ok: true, data: ((rows ?? []) as unknown as LegacyCartRow[]).map(legacyCartRowToCartItem) };
 }
 
 // ────────────────────────────────────────────────────────────

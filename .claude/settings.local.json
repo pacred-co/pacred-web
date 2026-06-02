@@ -321,7 +321,13 @@
       "Bash(head -20 jobFlowchart.php)",
       "Bash(grep -n \"INSERT INTO\\\\|UPDATE \\\\`tb\" popup.php)",
       "Bash(grep -n \"title>\\\\|INSERT INTO \\\\`tb_receipt\\\\|tb_receipt_item\\\\|rID\" create-f-receipt.php)",
-      "Bash(grep -n \"tb_notify\\\\|SELECT.*notify\\\\|FROM \\\\`tb_notify\" include/all-script.php)"
+      "Bash(grep -n \"tb_notify\\\\|SELECT.*notify\\\\|FROM \\\\`tb_notify\" include/all-script.php)",
+      "Bash(sort -t'|' -k2 -n -r)",
+      "Bash(git stash *)",
+      "Bash(NODE_OPTIONS=--max-old-space-size=8192 pnpm exec next build)",
+      "Bash(grep -v \":0$\")",
+      "Bash(grep -v \"//\")",
+      "Bash(xargs -I {} grep -L \"as unknown\" {})"
     ]
   }
 }

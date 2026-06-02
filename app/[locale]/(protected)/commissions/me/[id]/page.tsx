@@ -126,7 +126,7 @@ export default async function MyWithdrawalDetailPage({
   if (itemsRawErr) {
     console.error(`[commission_withdrawal_items list] failed`, { code: itemsRawErr.code, message: itemsRawErr.message });
   }
-  const items = ((itemsRaw ?? []) as ItemRow[]).map((it) => {
+  const items = ((itemsRaw ?? []) as unknown as ItemRow[]).map((it) => {
     const acc = Array.isArray(it.accrual) ? it.accrual[0] ?? null : it.accrual;
     return { ...it, accrual: acc };
   });

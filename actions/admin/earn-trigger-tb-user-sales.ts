@@ -184,7 +184,7 @@ export async function fireUserSalesEarnTriggerOnDelivery(
     result.errors.push(`tb_forwarder lookup failed: ${fwdErr.message}`);
     return result;
   }
-  const forwarders = (fwdRaw ?? []) as ForwarderRow[];
+  const forwarders = (fwdRaw ?? []) as unknown as ForwarderRow[];
   if (forwarders.length === 0) {
     // No rows found — caller passed ids that don't exist. Treat as skip.
     result.skipped = ids.length;
@@ -205,7 +205,7 @@ export async function fireUserSalesEarnTriggerOnDelivery(
       result.errors.push(`tb_users lookup failed: ${usersErr.message}`);
       return result;
     }
-    for (const u of (usersRaw ?? []) as UserRow[]) {
+    for (const u of (usersRaw ?? []) as unknown as UserRow[]) {
       coidByUserid.set(u.userid, u.coid);
     }
   }
@@ -226,7 +226,7 @@ export async function fireUserSalesEarnTriggerOnDelivery(
       result.errors.push(`tb_user_sales lookup failed: ${existingErr.message}`);
       return result;
     }
-    for (const r of (existingRaw ?? []) as ExistingSalesRow[]) {
+    for (const r of (existingRaw ?? []) as unknown as ExistingSalesRow[]) {
       alreadyEarned.add(r.idf);
     }
   }

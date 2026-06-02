@@ -94,7 +94,7 @@ export default async function AdminRefundsListPage({
   if (rowsRawErr) {
     console.error(`[refund_requests list] failed`, { code: rowsRawErr.code, message: rowsRawErr.message });
   }
-  const rows = ((rowsRaw ?? []) as RefundRow[]).map((r) => ({ ...r, profile: normP(r.profile) }));
+  const rows = ((rowsRaw ?? []) as unknown as RefundRow[]).map((r) => ({ ...r, profile: normP(r.profile) }));
 
   // Status counts for filter chips.
   const counts: Record<RefundStatus, number> = { pending: 0, approved: 0, rejected: 0, paid: 0 };

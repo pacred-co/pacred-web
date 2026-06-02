@@ -231,5 +231,5 @@ export async function listAllBusinessConfig(): Promise<BusinessConfigRow[]> {
   if (error) {
     console.error(`[business_config list] failed`, { code: error.code, message: error.message });
   }
-  return (data ?? []) as BusinessConfigRow[];
+  return (data ?? []) as unknown as BusinessConfigRow[];
 }

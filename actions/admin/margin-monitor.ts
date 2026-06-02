@@ -47,7 +47,11 @@ export type MarginRow = {
 
 export type MarginBucket = "negative" | "0-5k" | "5-10k" | "10-15k" | "15k+";
 
-export const MARGIN_BUCKETS: MarginBucket[] = ["negative", "0-5k", "5-10k", "10-15k", "15k+"];
+// Module-local only — Next 16 "use server" files reject non-async value
+// exports at runtime (page-data collection). Demote `export const` →
+// bare const (only used by getMarginReport() in this same file).
+// 2026-06-02 ภูม session-start fix.
+const MARGIN_BUCKETS: MarginBucket[] = ["negative", "0-5k", "5-10k", "10-15k", "15k+"];
 
 export type MarginBucketStats = {
   bucket:    MarginBucket;
@@ -184,7 +188,7 @@ export async function getMarginReport(range: MarginRange): Promise<MarginReport>
     if (srErr) {
       console.error("[margin-monitor tb_sales_report] failed", { code: srErr.code, message: srErr.message });
     }
-    for (const r of ((srRaw ?? []) as SrRow[])) {
+    for (const r of ((srRaw ?? []) as unknown as SrRow[])) {
       if (!srByFid.has(r.fid)) srByFid.set(r.fid, r.sradminidsale);
     }
   }

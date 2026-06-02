@@ -110,7 +110,7 @@ export async function fetchUsersByQuery(
 
       if (error) return { ok: false, error: error.message };
 
-      return { ok: true, data: { users: (data ?? []) as ManualCustomerOption[] } };
+      return { ok: true, data: { users: (data ?? []) as unknown as ManualCustomerOption[] } };
     },
   );
 }

@@ -156,7 +156,7 @@ export async function GET(
   // (migration 0051). The invoice's commercial_value_thb already reflects
   // USD × frozen rate; we derive a per-THB line amount by scaling each USD
   // line by the same ratio so the THB line table sums to subtotal_thb.
-  const linesUsd = (linesRaw ?? []) as LineRow[];
+  const linesUsd = (linesRaw ?? []) as unknown as LineRow[];
   const totalUsd = roundThb(linesUsd.reduce((s, l) => s + Number(l.amount_usd), 0));
   const subtotalThb = Number(invoice.commercial_value_thb ?? 0);
   const usdToThb = totalUsd > 0 ? subtotalThb / totalUsd : 0;
@@ -169,7 +169,7 @@ export async function GET(
     amount_thb:  roundThb(Number(l.amount_usd) * usdToThb),
   }));
 
-  const payments = ((paymentsRaw ?? []) as PaymentDbRow[]).map((p) => ({
+  const payments = ((paymentsRaw ?? []) as unknown as PaymentDbRow[]).map((p) => ({
     method:     FREIGHT_PAYMENT_METHOD_LABEL[p.method as FreightPaymentMethod] ?? p.method,
     amount_thb: Number(p.amount_thb),
     paid_at:    p.paid_at,

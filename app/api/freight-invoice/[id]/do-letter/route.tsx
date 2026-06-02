@@ -119,7 +119,7 @@ export async function GET(
   if (partiesErr) {
     console.error(`[freight_parties list] failed`, { code: partiesErr.code, message: partiesErr.message });
   }
-  const partyList = (parties ?? []) as PartyRow[];
+  const partyList = (parties ?? []) as unknown as PartyRow[];
   const liveConsignee = partyList.find((p) => p.role === "consignee");
 
   const { data: linesRaw, error: linesRawErr } = await admin
@@ -129,7 +129,7 @@ export async function GET(
   if (linesRawErr) {
     console.error(`[freight_invoice_lines list] failed`, { code: linesRawErr.code, message: linesRawErr.message });
   }
-  const lines = (linesRaw ?? []) as LineRow[];
+  const lines = (linesRaw ?? []) as unknown as LineRow[];
 
   const totalCartons   = lines.reduce((s, l) => s + (Number(l.cartons) || 0), 0);
   const totalWeightKg  = lines.reduce((s, l) => s + (Number(l.gross_weight_kg) || 0), 0);

@@ -359,7 +359,7 @@ async function appendTrackingIdempotent(
   }
   type ExRow = { scanned_at: string; event: string };
   const existingKeys = new Set<string>(
-    ((existingRaw ?? []) as ExRow[]).map((r) => `${r.scanned_at}|${r.event}`),
+    ((existingRaw ?? []) as unknown as ExRow[]).map((r) => `${r.scanned_at}|${r.event}`),
   );
 
   let appended = 0;

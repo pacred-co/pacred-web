@@ -169,7 +169,7 @@ export async function listWalletTransactions(
     return { ok: false, error: error.message };
   }
 
-  const rows = (data ?? []) as LegacyWalletHsRow[];
+  const rows = (data ?? []) as unknown as LegacyWalletHsRow[];
   const mapped: WalletTransaction[] = rows.map((r) => {
     const typeKey = r.type ?? "";
     const meta = HS_TYPE_TO_KIND[typeKey] ?? { kind: "adjustment", credit: true };

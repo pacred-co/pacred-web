@@ -170,7 +170,7 @@ export async function listServiceOrders(opts?: {
   if (error) return { ok: false, error: error.message };
   return {
     ok: true,
-    data: ((data ?? []) as LegacyHeaderRow[]).map(headerRowToSummary),
+    data: ((data ?? []) as unknown as LegacyHeaderRow[]).map(headerRowToSummary),
   };
 }
 
@@ -313,7 +313,7 @@ export async function getServiceOrder(hNo: string): Promise<ActionResult<Service
     ship_postal_code: h.haddresszipcode && h.haddresszipcode.trim() ? h.haddresszipcode : null,
     ship_note: h.haddressnote && h.haddressnote.trim() ? h.haddressnote : null,
     note_user: h.hnote && h.hnote.trim() ? h.hnote : null,
-    items: ((items ?? []) as LegacyOrderItemRow[]).map(orderItemRow),
+    items: ((items ?? []) as unknown as LegacyOrderItemRow[]).map(orderItemRow),
   };
 
   return { ok: true, data: detail };
@@ -532,7 +532,7 @@ export async function getServiceOrderForReceipt(
     console.error(`[tb_order list] failed`, { code: itemsErr.code, message: itemsErr.message });
   }
 
-  const visibleItems = ((items ?? []) as LegacyOrderItemRow[]).filter(
+  const visibleItems = ((items ?? []) as unknown as LegacyOrderItemRow[]).filter(
     (it) => it.crewallet !== "1",
   );
 

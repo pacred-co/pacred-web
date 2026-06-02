@@ -624,7 +624,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       if (error) {
         console.warn(`[sales_payouts list] failed (soft-fail · returning empty rows)`, error);
       }
-      return ((data ?? []) as RawPayoutRow[]).map((r) => {
+      return ((data ?? []) as unknown as RawPayoutRow[]).map((r) => {
         const p = pickProfile(r.profile);
         return {
           id: String(r.id),

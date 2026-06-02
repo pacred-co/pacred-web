@@ -242,7 +242,7 @@ export async function getWalletAvailableBalance(
     return null; // fail closed
   }
 
-  return sumAvailableBalance(settledBalance, (pendingRows ?? []) as WalletHsRow[]);
+  return sumAvailableBalance(settledBalance, (pendingRows ?? []) as unknown as WalletHsRow[]);
 }
 
 /**

@@ -299,7 +299,7 @@ export default async function ServiceOrderAddPage({
   if (rowsDataErr) {
     console.error(`[tb_header_order list] failed`, { code: rowsDataErr.code, message: rowsDataErr.message });
   }
-  const rows: HeaderOrderRow[] = (rowsData ?? []) as HeaderOrderRow[];
+  const rows: HeaderOrderRow[] = (rowsData ?? []) as unknown as HeaderOrderRow[];
 
   // ── shops.php L1095-1097 — chProhNo(): looks up tb_promotion for each
   // order's promo badge. The legacy runs one query per row; here all

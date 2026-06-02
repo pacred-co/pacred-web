@@ -123,7 +123,7 @@ export async function issueTaxInvoice(
       .eq("tax_invoice_id", header.id)
       .order("position", { ascending: true });
     if (linesErr) return { ok: false, error: linesErr.message };
-    const lines = (linesRaw ?? []) as LineRow[];
+    const lines = (linesRaw ?? []) as unknown as LineRow[];
     if (lines.length === 0) return { ok: false, error: "no_lines" };
 
     // ── 2. Reserve serial ──

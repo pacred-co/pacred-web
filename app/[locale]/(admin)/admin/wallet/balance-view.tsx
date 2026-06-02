@@ -74,7 +74,7 @@ export async function WalletBalanceView({ q }: BalanceViewProps) {
   if (q && q.trim()) wq = wq.eq("userid", q.trim().toUpperCase());
 
   const { data: walletRowsRaw, error } = await wq;
-  const walletRows = (walletRowsRaw ?? []) as WalletRow[];
+  const walletRows = (walletRowsRaw ?? []) as unknown as WalletRow[];
 
   // ── Batch-join tb_users + tb_cash_back for the rows on screen.
   const userIds = walletRows.map((r) => r.userid);
@@ -85,7 +85,7 @@ export async function WalletBalanceView({ q }: BalanceViewProps) {
           .from("tb_users")
           .select("userID,userName,userLastName,coID,userStatus")
           .in("userID", userIds)
-          .then(({ data }) => new Map(((data ?? []) as UserRow[]).map((u) => [u.userID, u]))),
+          .then(({ data }) => new Map(((data ?? []) as unknown as UserRow[]).map((u) => [u.userID, u]))),
     userIds.length === 0
       ? Promise.resolve(new Map<string, number>())
       : admin
@@ -94,7 +94,7 @@ export async function WalletBalanceView({ q }: BalanceViewProps) {
           .in("userid", userIds)
           .then(({ data }) => {
             const m = new Map<string, number>();
-            for (const r of (data ?? []) as CashBackRow[]) {
+            for (const r of (data ?? []) as unknown as CashBackRow[]) {
               m.set(r.userid, Number(r.cbtotal ?? 0));
             }
             return m;

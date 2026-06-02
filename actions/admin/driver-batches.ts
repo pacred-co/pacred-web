@@ -111,7 +111,7 @@ export async function createDriverBatch(
       is_active: boolean;
       profile: { member_code: string | null; first_name: string | null; last_name: string | null } | { member_code: string | null; first_name: string | null; last_name: string | null }[] | null;
     };
-    const driverList = (driverCheck ?? []) as DriverRow[];
+    const driverList = (driverCheck ?? []) as unknown as DriverRow[];
     const driverLower = driverMemberCode.toLowerCase();
     const driverFound = driverList.some((d) => {
       const prof = Array.isArray(d.profile) ? d.profile[0] : d.profile;

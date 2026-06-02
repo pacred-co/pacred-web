@@ -85,9 +85,9 @@ export default async function AdminHRLeavesPage({
   }
 
   const adminMap = new Map<string, AdminRow>();
-  for (const a of (adminsRes.data ?? []) as AdminRow[]) adminMap.set(a.adminID, a);
+  for (const a of (adminsRes.data ?? []) as unknown as AdminRow[]) adminMap.set(a.adminID, a);
 
-  const rows = (leavesRes.data ?? []) as LeaveRow[];
+  const rows = (leavesRes.data ?? []) as unknown as LeaveRow[];
 
   const visible = rows.filter((r) => {
     if (filter === "all") return true;
@@ -105,7 +105,7 @@ export default async function AdminHRLeavesPage({
 
   // Employee dropdown options — legacy add.php filter (active staff with a
   // section, adminType 1-4): adminStatusA<>'0' AND section<>'0' AND adminType IN 1..4.
-  const employees = ((adminsRes.data ?? []) as AdminRow[])
+  const employees = ((adminsRes.data ?? []) as unknown as AdminRow[])
     .filter((a) =>
       a.adminStatusA !== "0" &&
       (a.section ?? "0") !== "0" &&

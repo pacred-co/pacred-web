@@ -235,7 +235,7 @@ export async function getForwarderSlaReport(
       return { ok: false, error: error.message };
     }
 
-    const rows = (data ?? []) as ForwarderRow[];
+    const rows = (data ?? []) as unknown as ForwarderRow[];
 
     // ── 1) Per-stage dwell accumulation ──────────────────────────────────
     const stageSamples = new Map<string, number[]>();
@@ -344,7 +344,7 @@ export async function getForwarderSlaReport(
         logger.error("reports", "forwarder-sla tb_users lookup failed", uErr);
       }
       type URow = { userID: string; userName: string | null; userLastName: string | null };
-      for (const u of (uRows ?? []) as URow[]) {
+      for (const u of (uRows ?? []) as unknown as URow[]) {
         const name = [u.userName, u.userLastName].filter(Boolean).join(" ");
         userMap.set(u.userID, name);
       }

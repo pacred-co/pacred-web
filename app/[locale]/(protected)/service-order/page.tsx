@@ -192,7 +192,7 @@ export default async function ServiceOrderPage({
     listQuery = listQuery.eq("hstatus", q);
   }
   const { data: rowsData } = await listQuery;
-  const rows: HeaderOrderRow[] = (rowsData ?? []) as HeaderOrderRow[];
+  const rows: HeaderOrderRow[] = (rowsData ?? []) as unknown as HeaderOrderRow[];
 
   // ── shops.php L1095-1097 — promo badge lookup (one query for all rows).
   const orderHnos = rows.map((r) => r.hno);

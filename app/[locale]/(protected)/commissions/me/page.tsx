@@ -84,7 +84,7 @@ export default async function MyCommissionsPage() {
   if (accrualsRawErr) {
     console.error(`[commission_accruals list] failed`, { code: accrualsRawErr.code, message: accrualsRawErr.message });
   }
-  const accruals = (accrualsRaw ?? []) as AccrualRow[];
+  const accruals = (accrualsRaw ?? []) as unknown as AccrualRow[];
 
   const unpaidTotal = accruals.reduce((s, a) => s + Number(a.accrued_amount_thb), 0);
   const canRequest = unpaidTotal >= MIN_WITHDRAWAL_THB;
@@ -110,7 +110,7 @@ export default async function MyCommissionsPage() {
   if (withdrawalsRawErr) {
     console.error(`[commission_withdrawals list] failed`, { code: withdrawalsRawErr.code, message: withdrawalsRawErr.message });
   }
-  const withdrawals = (withdrawalsRaw ?? []) as WithdrawalRow[];
+  const withdrawals = (withdrawalsRaw ?? []) as unknown as WithdrawalRow[];
 
   // Role kind for new request (use first eligible accrual or fallback to role).
   const defaultRoleKind: RoleKind =

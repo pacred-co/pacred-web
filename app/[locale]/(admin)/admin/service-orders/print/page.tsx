@@ -442,7 +442,7 @@ export default async function AdminServiceOrderPrintPage({
       throw new Error(`tb_order read failed for hNo=${hNo}`);
     }
 
-    const allRows = (orderRowsAll ?? []) as OrderRow[];
+    const allRows = (orderRowsAll ?? []) as unknown as OrderRow[];
 
     // DISTINCT(cProvider) GROUP BY cProvider — preserve first-seen
     // order, exactly as MySQL returns the grouped set.

@@ -507,7 +507,7 @@ export default async function AdminReportsPage({
       account_number: string | null; status: string; requested_at: string; paid_at: string | null;
       team_leader: TlShape | TlShape[] | null;
     };
-    payoutRows = ((data ?? []) as RawRow[]).map((r) => {
+    payoutRows = ((data ?? []) as unknown as RawRow[]).map((r) => {
       const tl = Array.isArray(r.team_leader) ? r.team_leader[0] ?? null : r.team_leader;
       return {
         id: r.id, amount_total: r.amount_total, bank_name: r.bank_name,

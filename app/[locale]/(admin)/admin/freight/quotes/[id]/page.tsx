@@ -109,7 +109,7 @@ export default async function AdminFreightQuoteDetailPage({
   if (itemsRawErr) {
     console.error(`[freight_quote_items list] failed`, { code: itemsRawErr.code, message: itemsRawErr.message });
   }
-  const items = (itemsRaw ?? []) as ItemRow[];
+  const items = (itemsRaw ?? []) as unknown as ItemRow[];
 
   // Audit trail rows for this quote.
   const { data: auditRaw, error: auditRawErr } = await admin

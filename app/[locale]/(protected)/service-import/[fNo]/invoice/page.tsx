@@ -233,7 +233,7 @@ export default async function ServiceImportInvoicePage({
         });
         throw new Error(`Failed to load tb_receipt_item siblings (${allLinksErr.code}): ${allLinksErr.message}`);
       }
-      const fids = ((allLinks ?? []) as ReceiptItemRow[]).map((l) => l.fid);
+      const fids = ((allLinks ?? []) as unknown as ReceiptItemRow[]).map((l) => l.fid);
       if (fids.length > 0) {
         const { data: fRows, error: fRowsErr } = await admin
           .from("tb_forwarder")

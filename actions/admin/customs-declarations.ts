@@ -73,7 +73,7 @@ async function recomputeHeaderTotals(
     console.error("[customs-declarations recomputeTotals] declarationId=", declarationId, { code: rowsErr.code, message: rowsErr.message });
     // Don't throw — best-effort totals — but the caller may persist stale numbers
   }
-  const list = ((rows ?? []) as LineRow[]).map((r) => ({
+  const list = ((rows ?? []) as unknown as LineRow[]).map((r) => ({
     declared_value_thb: Number(r.declared_value_thb ?? 0),
     duty_thb:           Number(r.duty_thb ?? 0),
     vat_thb:            Number(r.vat_thb ?? 0),
@@ -194,7 +194,7 @@ export async function adminCreateDeclaration(
         // Soft-fail — seeding lines is best-effort; declaration still useful empty.
         console.error("[customs-declarations create freight_invoice_lines lookup] invoiceId=", inv.id, { code: fiLinesErr.code, message: fiLinesErr.message });
       }
-      const list = (fiLines ?? []) as FiLineRow[];
+      const list = (fiLines ?? []) as unknown as FiLineRow[];
 
       if (list.length > 0) {
         const totalUsd = list.reduce((s, l) => s + Number(l.amount_usd ?? 0), 0);

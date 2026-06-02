@@ -128,7 +128,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const rows = (data ?? []) as AuditRow[];
+  const rows = (data ?? []) as unknown as AuditRow[];
 
   // Build CSV — header + per-row.
   const lines: string[] = [];

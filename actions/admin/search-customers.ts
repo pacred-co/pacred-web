@@ -112,7 +112,7 @@ export async function adminSearchCustomers(
     return { ok: false, error: error.message };
   }
 
-  const rows: CustomerPickerRow[] = ((data ?? []) as LegacyUserRow[]).map((u) => ({
+  const rows: CustomerPickerRow[] = ((data ?? []) as unknown as LegacyUserRow[]).map((u) => ({
     ID:           u.userID,
     member_code:  u.userID,
     account_type: u.userCompany === "1" ? "juristic" : "personal",
