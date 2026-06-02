@@ -59,6 +59,31 @@ const STATUS_DATE_COL: Record<string, string | null> = {
   delivered:        "date_delivered",
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Rebuilt → legacy field mappings used by the Tier-A pivot below.
+// adminUpdateForwarder accepts rebuilt-style status/warehouse strings (the
+// UI in /admin/forwarders/[fNo]/update-form.tsx still ships them) but writes
+// `tb_forwarder` columns — the legacy table where the 47k+ real rows live.
+// ─────────────────────────────────────────────────────────────────────────────
+const REBUILT_TO_TB_STATUS: Record<typeof STATUSES[number], "1"|"2"|"3"|"4"|"5"|"6"|"7"|"99"> = {
+  pending_payment:  "5",   // รอชำระเงิน (legacy '5')
+  shipped_china:    "3",   // ออกจากจีน → in_transit to TH (legacy '3')
+  in_transit:       "3",
+  arrived_thailand: "4",   // ถึงไทยแล้ว
+  out_for_delivery: "6",   // เตรียมส่ง / driver assignable
+  delivered:        "7",   // ส่งสำเร็จ (terminal)
+  cancelled:        "99",  // สถานะพิเศษ / soft-cancel
+};
+// Per migration 0081 L1779: fwarehousename character varying(1)
+//   1=แสง, 2=CTT, 3=MK, 4=MX, 5=JMF, 6=GOGO, 7=CargoCenter, 8=MOMO
+const PARTNER_WAREHOUSE_TO_TB: Record<"sang"|"ctt"|"mk"|"mx"|"jmf", string> = {
+  sang: "1",
+  ctt:  "2",
+  mk:   "3",
+  mx:   "4",
+  jmf:  "5",
+};
+
 export async function adminUpdateForwarder(input: UpdateForwarderInput): Promise<AdminActionResult> {
   const parsed = updateForwarderSchema.safeParse(input);
   if (!parsed.success) {
@@ -69,89 +94,159 @@ export async function adminUpdateForwarder(input: UpdateForwarderInput): Promise
   return withAdmin(["ops"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    // Fetch existing for diff + customer notification + V-A2 rollback note merging
+    // ─────────────────────────────────────────────────────────────────────────
+    // 🚨 Tier-A "silent dead-write" fix (2026-06-02 · master-fidelity #1 pattern):
+    //   Prior implementation read + wrote `.from("forwarders")` — the REBUILT
+    //   UUID table, EMPTY on prod. Every admin "บันทึก" press in
+    //   /admin/forwarders/[fNo]/update-form.tsx showed green toast while the
+    //   real `tb_forwarder` row sat untouched (47k+ live rows). Staff
+    //   reported "edit ไม่ติด".
+    //
+    // Fix: pivot to `tb_forwarder` (lookup by fidorco, the legacy f_no equivalent
+    //   used by /admin/forwarders/[fNo]/page.tsx renderLegacyForwarderView).
+    //   For status changes we DELEGATE to the canonical bulk action so the
+    //   matching faithful side-effects fire (date stamps · tb_log_forwarder_status
+    //   append · status-change notification with userid→profile_id resolution ·
+    //   per-role canAnyRoleFlipFstatus matrix). For pure metadata changes
+    //   (tracking_chn / tracking_th / cabinet_number / partner_warehouse /
+    //   note_admin) we write tb_forwarder directly with the legacy column names.
+    //
+    // The UI passes rebuilt-style status strings ("pending_payment", …) and
+    // rebuilt warehouse codes ("sang"/"ctt"/…) — we map them to legacy
+    // numeric chars via REBUILT_TO_TB_STATUS + PARTNER_WAREHOUSE_TO_TB above.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Fetch existing tb_forwarder row by fidorco (legacy f_no analog).
+    // Returns full state for diff (status change detection, rollback note
+    // merging, notification payload).
     const { data: existing, error: existingErr } = await admin
-      .from("forwarders")
-      .select("id, profile_id, status, total_price, note_admin")
-      .eq("f_no", d.f_no)
-      .maybeSingle<{ id: string; profile_id: string; status: string; total_price: number; note_admin: string | null }>();
+      .from("tb_forwarder")
+      .select("id, fidorco, userid, fstatus, fnote")
+      .eq("fidorco", d.f_no)
+      .maybeSingle<{ id: number; fidorco: string | null; userid: string; fstatus: string; fnote: string | null }>();
     if (existingErr) {
-      console.error("[forwarders mutation lookup] f_no=", d.f_no, { code: existingErr.code, message: existingErr.message });
+      console.error("[forwarders mutation lookup tb_forwarder] f_no=", d.f_no, { code: existingErr.code, message: existingErr.message });
       return { ok: false, error: `db_error:${existingErr.code}` };
     }
     if (!existing) return { ok: false, error: "not_found" };
 
-    const update: Record<string, unknown> = { admin_id_update: adminId };
+    // Tier-A safety: adminidupdate is varchar(10) — match Wave 23 P0 5254f8d.
+    const adminIdSafe = String(adminId).slice(0, 10);
+    const nowIso = new Date().toISOString();
+
+    let isRollback   = false;
+    let rolledNote: string | undefined;
+
+    // ── A. Status change branch (delegate to faithful bulk action) ─────────
     let statusChanged = false;
-    let isRollback    = false;
-
-    if (d.status && d.status !== existing.status) {
-      // V-A2: rollback path requires a reason
-      isRollback = isStatusRollback(existing.status, d.status);
-      if (isRollback) {
-        const reason = (d.rollback_reason ?? "").trim();
-        if (reason.length < 3) {
-          return {
-            ok: false,
-            error: `rollback ${existing.status} → ${d.status} ต้องระบุเหตุผล (≥3 ตัว) — ใส่ใน rollback_reason`,
-          };
+    if (d.status) {
+      const tbStatus = REBUILT_TO_TB_STATUS[d.status];
+      if (tbStatus !== existing.fstatus) {
+        statusChanged = true;
+        // Rebuilt-side rollback detection mirrored to legacy semantics. We
+        // compute it against the ORIGINAL rebuilt-string the UI sent so the
+        // user-facing reason wording stays consistent with what the operator
+        // typed. (Mapping back to the rebuilt label for existing.fstatus is
+        // not needed — we already know `d.status` is the target and we only
+        // care whether it's a backward move.)
+        // Inferred rebuilt-equivalent of the legacy fstatus for the reverse-
+        // mapping check (best-effort — uses TB_TO_REBUILT lookup below).
+        const reverseStatus = (() => {
+          for (const [k, v] of Object.entries(REBUILT_TO_TB_STATUS)) {
+            if (v === existing.fstatus) return k as typeof STATUSES[number];
+          }
+          return undefined;
+        })();
+        if (reverseStatus) {
+          isRollback = isStatusRollback(reverseStatus, d.status);
+          if (isRollback) {
+            const reason = (d.rollback_reason ?? "").trim();
+            if (reason.length < 3) {
+              return {
+                ok: false,
+                error: `rollback ${reverseStatus} → ${d.status} ต้องระบุเหตุผล (≥3 ตัว) — ใส่ใน rollback_reason`,
+              };
+            }
+            rolledNote = `[ROLLBACK ${reverseStatus}→${d.status}] ${reason}`
+              + (existing.fnote && existing.fnote !== d.note_admin
+                  ? `\n${existing.fnote}` : (d.note_admin ? `\n${d.note_admin}` : ""));
+          }
         }
-        // Stamp the reason into note_admin so it surfaces in admin UI thread.
-        // Prepend (not replace) so prior notes survive.
-        update.note_admin = `[ROLLBACK ${existing.status}→${d.status}] ${reason}`
-          + (existing.note_admin && existing.note_admin !== d.note_admin
-              ? `\n${existing.note_admin}` : (d.note_admin ? `\n${d.note_admin}` : ""));
-      }
 
-      update.status = d.status;
-      statusChanged = true;
-      const dateCol = STATUS_DATE_COL[d.status];
-      if (dateCol) update[dateCol] = new Date().toISOString();
-    }
-    if (d.tracking_chn      != null) update.tracking_chn      = d.tracking_chn || null;
-    if (d.tracking_th       != null) update.tracking_th       = d.tracking_th || null;
-    if (d.cabinet_number    != null) update.cabinet_number    = d.cabinet_number || null;
-    if (d.partner_warehouse != null) update.partner_warehouse = d.partner_warehouse;
-    if (d.note_admin        != null && !isRollback) update.note_admin = d.note_admin || null;
-
-    const { error } = await admin
-      .from("forwarders")
-      .update(update)
-      .eq("id", existing.id);
-
-    if (error) return { ok: false, error: error.message };
-
-    // V-A2: audit log marks rollback distinctly from forward-update so reports
-    // can flag rollback frequency per admin (governance signal).
-    await logAdminAction(adminId, isRollback ? "forwarder.rollback" : "forwarder.update", "forwarder", existing.id, {
-      f_no:      d.f_no,
-      before:    { status: existing.status },
-      after:     update,
-      ...(isRollback && d.rollback_reason ? { rollback_reason: d.rollback_reason.trim() } : {}),
-    });
-
-    // Notify customer when status changes. V-A2: rollback gets a distinct
-    // payload so the customer sees the reason + warning severity, not just
-    // a plain "status changed" line.
-    if (statusChanged && d.status) {
-      if (isRollback && d.rollback_reason) {
-        void sendNotification(existing.profile_id, {
-          category: "forwarder",
-          severity: "warning",
-          title:    `ฝากนำเข้า ${d.f_no} ถูกย้อนสถานะ`,
-          body:     `กลับเป็น ${d.status} · เหตุผล: ${d.rollback_reason.trim()}`,
-          link_href: `/service-import/${d.f_no}`,
-          reference_type: "forwarder",
-          reference_id:   existing.id,
+        // Delegate to the faithful bulk action. It enforces the per-role
+        // canAnyRoleFlipFstatus matrix, stamps fdatestatusN, appends
+        // tb_log_forwarder_status, and fires the customer notification.
+        const bulkRes = await adminBulkUpdateForwarderTbStatus({
+          fids:    [existing.id],
+          fstatus: tbStatus,
+          // Pass through any cabinet number that came with this update so
+          // the faithful action handles the fdatecontainerclose back-fill
+          // (Wave 24 #192 logic) in the SAME write — no double UPDATE.
+          ...(d.cabinet_number != null ? { cabinet_number: d.cabinet_number } : {}),
+          ...(d.tracking_th    != null ? { tracking_th:    d.tracking_th    } : {}),
+          // fnote: rollback note prepend, else the user's note_admin
+          ...(rolledNote != null
+              ? { fnote: rolledNote }
+              : (d.note_admin != null ? { fnote: d.note_admin } : {})),
         });
-      } else {
-        void sendNotification(existing.profile_id, notify.forwarderStatusChanged({
-          fNo:         d.f_no,
-          status:      d.status,
-          forwarderId: existing.id,
-        }));
+        if (!bulkRes.ok) return { ok: false, error: bulkRes.error };
       }
     }
+
+    // ── B. Metadata-only branch (no status change) ─────────────────────────
+    // Status delegate above already handled cabinet/tracking/note when it
+    // ran — we only fire this when status didn't change OR the delegate
+    // didn't run. For tracking_chn (which the bulk schema doesn't accept)
+    // and partner_warehouse we always need this branch.
+    const metaUpdate: Record<string, unknown> = {};
+    if (d.tracking_chn != null) metaUpdate.ftrackingchn = d.tracking_chn || "";
+    if (d.partner_warehouse != null) {
+      metaUpdate.fwarehousename = PARTNER_WAREHOUSE_TO_TB[d.partner_warehouse];
+    }
+    // If status DIDN'T change, the delegate above never ran — write the
+    // metadata fields that overlap (cabinet/tracking_th/note) here too.
+    if (!statusChanged) {
+      if (d.cabinet_number != null) metaUpdate.fcabinetnumber = d.cabinet_number || "";
+      if (d.tracking_th    != null) metaUpdate.ftrackingth    = d.tracking_th    || "-";
+      if (rolledNote != null) {
+        metaUpdate.fnote = rolledNote;
+      } else if (d.note_admin != null && !isRollback) {
+        metaUpdate.fnote = d.note_admin || null;
+      }
+    }
+
+    if (Object.keys(metaUpdate).length > 0) {
+      metaUpdate.adminidupdate    = adminIdSafe;
+      metaUpdate.fdateadminstatus = nowIso;
+
+      const { error: metaErr } = await admin
+        .from("tb_forwarder")
+        .update(metaUpdate)
+        .eq("id", existing.id);
+      if (metaErr) {
+        console.error(`[forwarders metadata UPDATE tb_forwarder] id=${existing.id}`, {
+          code: metaErr.code, message: metaErr.message,
+        });
+        return { ok: false, error: metaErr.message };
+      }
+    }
+
+    // ── C. Audit log (every mutation, regardless of status change) ─────────
+    await logAdminAction(
+      adminId,
+      isRollback ? "forwarder.rollback" : "forwarder.update",
+      "tb_forwarder",
+      String(existing.id),
+      {
+        f_no:    d.f_no,
+        before:  { fstatus: existing.fstatus },
+        after:   {
+          ...(d.status ? { fstatus: REBUILT_TO_TB_STATUS[d.status] } : {}),
+          ...metaUpdate,
+        },
+        ...(isRollback && d.rollback_reason ? { rollback_reason: d.rollback_reason.trim() } : {}),
+      },
+    );
 
     revalidatePath("/admin/forwarders");
     revalidatePath(`/admin/forwarders/${d.f_no}`);
@@ -159,7 +254,23 @@ export async function adminUpdateForwarder(input: UpdateForwarderInput): Promise
   });
 }
 
-// ── Bulk status update ────────────────────────────────────────────────────────
+// ── Bulk status update (TOMBSTONED 2026-06-02 · Tier-A "silent dead-write" fix) ──
+//
+// 🚨 Why this is dead:
+//   The original adminBulkUpdateForwarderStatus wrote `.from("forwarders")` —
+//   the REBUILT UUID table, EMPTY on prod. Every "bulk status update" was a
+//   silent no-op (0 rows matched → 0 rows updated → no error → green toast).
+//   Zero callers in app/ — this exported function existed only as dead code
+//   from the pre-D1 era.
+//
+// Replacement: `adminBulkUpdateForwarderTbStatus` (defined below at L380+).
+//   Writes `tb_forwarder.fstatus` faithfully · stamps fdatestatusN ·
+//   appends tb_log_forwarder_status · enforces canAnyRoleFlipFstatus per-row
+//   · fires customer notifications with userid→profile_id resolution.
+//
+// The export is kept as a thin reject-all stub so any future caller that
+// reimports it gets a clear error rather than a silent no-op. To call
+// the faithful action, use `adminBulkUpdateForwarderTbStatus({ fids, fstatus })`.
 
 const bulkSchema = z.object({
   f_nos:  z.array(z.string()).min(1).max(100),
@@ -167,56 +278,18 @@ const bulkSchema = z.object({
 });
 
 export async function adminBulkUpdateForwarderStatus(
-  input: z.infer<typeof bulkSchema>,
+  _input: z.infer<typeof bulkSchema>,
 ): Promise<AdminActionResult & { updated?: number }> {
-  const parsed = bulkSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
-  const { f_nos, status } = parsed.data;
-
-  return withAdmin(["ops"], async ({ adminId }) => {
-    const admin = createAdminClient();
-
-    const { data: existing, error: existingErr } = await admin
-      .from("forwarders")
-      .select("id, f_no, profile_id, status")
-      .in("f_no", f_nos);
-    if (existingErr) {
-      console.error("[forwarders bulk status lookup] f_nos=", f_nos, { code: existingErr.code, message: existingErr.message });
-      return { ok: false, error: `db_error:${existingErr.code}` };
-    }
-    if (!existing || existing.length === 0) return { ok: false, error: "not_found" };
-
-    const dateCol = STATUS_DATE_COL[status];
-    const update: Record<string, unknown> = {
-      status,
-      admin_id_update: adminId,
-      ...(dateCol ? { [dateCol]: new Date().toISOString() } : {}),
-    };
-
-    const { error } = await admin
-      .from("forwarders")
-      .update(update)
-      .in("f_no", f_nos);
-
-    if (error) return { ok: false, error: error.message };
-
-    await logAdminAction(adminId, "forwarder.bulk_update", "forwarder", "bulk", {
-      f_nos, before_statuses: existing.map((r) => ({ f_no: r.f_no, status: r.status })), after: { status },
-    });
-
-    // Notify each customer
-    for (const row of existing) {
-      if (row.status === status) continue;
-      void sendNotification(row.profile_id, notify.forwarderStatusChanged({
-        fNo:         row.f_no,
-        status,
-        forwarderId: row.id,
-      }));
-    }
-
-    revalidatePath("/admin/forwarders");
-    return { ok: true, updated: existing.length };
-  });
+  // Reject loudly — silent dead-write is the bug we're closing.
+  // Callers should use adminBulkUpdateForwarderTbStatus({ fids, fstatus }) instead.
+  console.warn(
+    "[forwarders] adminBulkUpdateForwarderStatus called — this is the tombstoned rebuilt-table writer. "
+    + "Use adminBulkUpdateForwarderTbStatus({ fids, fstatus }) — writes tb_forwarder (the 47k+ live rows).",
+  );
+  return {
+    ok: false,
+    error: "tombstoned: use adminBulkUpdateForwarderTbStatus({ fids, fstatus }) — writes tb_forwarder",
+  };
 }
 
 // ────────────────────────────────────────────────────────────
