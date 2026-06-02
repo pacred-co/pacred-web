@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Eye, EyeOff, User, Lock, Mail, Hash, Building2, Loader2, Phone, MessageSquare, ChevronDown, Check, CheckCircle2, UserRound, BadgeCheck } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { NavBar } from "@/components/sections/navbar";
+import { RegisterAdsBanner } from "./register-ads-banner";
 import {
   registerPersonal,
   registerJuristicStep1,
@@ -234,7 +235,13 @@ export function RegisterClient({
   return (
     <>
       <NavBar />
-      <main className="flex items-start justify-center bg-background px-4 pt-0 pb-0 md:py-3">
+      <main className="flex items-stretch justify-center bg-background md:min-h-[calc(100dvh-56px)]">
+        {/* LEFT — desktop-only promo banner (50% split per owner reference 2026-06-02).
+            Mobile keeps the form full-width + thumb-reachable. */}
+        <RegisterAdsBanner />
+
+        {/* RIGHT — register form column. Everything below (the form card + fields) is UNCHANGED. */}
+        <div className="flex w-full items-start justify-center px-4 pt-0 pb-0 md:w-1/2 md:py-3">
         <div className="w-full max-w-[540px] min-h-[calc(100dvh-56px)] rounded-none border-0 bg-white p-3 shadow-[0_20px_50px_rgba(0,0,0,0.04)] dark:border-border dark:bg-surface sm:p-7 md:min-h-0 md:h-auto md:rounded-[24px] md:border md:border-white/80">
 
           {/* Logo — wordmark (140×140 source w/ ~25% whitespace top+bottom); render at
@@ -298,6 +305,7 @@ export function RegisterClient({
           {tab === "personal"
             ? <PersonalForm recom={initialRecom} />
             : <JuristicForm resume={juristicResume} recom={initialRecom} />}
+        </div>
         </div>
       </main>
     </>
