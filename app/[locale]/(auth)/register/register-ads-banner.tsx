@@ -40,17 +40,34 @@ export function RegisterAdsBanner() {
       className="relative hidden w-1/2 overflow-hidden bg-primary-700 md:block"
     >
       {ADS.map((ad, i) => (
-        <Image
+        <div
           key={ad.src}
-          src={ad.src}
-          alt={ad.alt}
-          fill
-          sizes="50vw"
-          priority={i === 0}
-          className={`object-cover transition-opacity duration-700 ease-in-out ${
+          className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
             i === active ? "opacity-100" : "opacity-0"
           }`}
-        />
+        >
+          {/* Blurred fill — the 9:16 portrait ad is taller than the half-column,
+              so a zoomed, blurred copy fills the space behind (no empty side bars)
+              while the sharp ad below is never cropped. */}
+          <Image
+            src={ad.src}
+            alt=""
+            aria-hidden
+            fill
+            sizes="50vw"
+            priority={i === 0}
+            className="scale-110 object-cover blur-2xl"
+          />
+          {/* The full ad — object-contain so the top is never cut by the navbar. */}
+          <Image
+            src={ad.src}
+            alt={ad.alt}
+            fill
+            sizes="50vw"
+            priority={i === 0}
+            className="object-contain"
+          />
+        </div>
       ))}
 
       {/* slide dots */}
