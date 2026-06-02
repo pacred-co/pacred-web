@@ -46,7 +46,7 @@
 **ผลที่คาดหวัง:**
 - หน้าโหลดสำเร็จ (HTTP 200) ไม่มี error/หน้าขาว
 - แสดง component หลัก: `print-button`, `site`
-- ข้อมูลที่ดึงจาก DB แสดงครบ (ไม่ใช่ ฿0/ว่างทั้งที่ควรมีข้อมูล)
+- ตรวจข้อมูลที่ดึงจาก DB แสดงครบ (ไม่ใช่ ฿0/ว่างทั้งที่ควรมีข้อมูล) — table: `business_config`, `tb_address`, `tb_address_main`, `tb_corporate`, `tb_forwarder`, `tb_receipt`, `tb_receipt_item`, `tb_users`, `tb_wallet_hs`
 
 **ผลทดสอบ:**  `[ ] ✅ ผ่าน`   `[ ] ❌ ไม่ผ่าน`   `[ ] 🔧 ต้องแก้/ไม่ถูกต้อง`   `[ ] ⏭ ข้าม`
 

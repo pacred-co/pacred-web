@@ -31,50 +31,50 @@
 
 | Route | คืออะไร | #TC | สถานะ |
 |---|---|--:|---|
-| [`/`](index.md) | หน้าแรกเว็บไซต์ Pacred — hero + บริการ + จุดขาย + CTA เข้าระบบ | 3 | ⬜ ยังไม่เทส |
-| [`/about`](about.md) | เกี่ยวกับบริษัท Pacred — ประวัติ วิสัยทัศน์ ทีมงาน | 3 | ⬜ ยังไม่เทส |
-| [`/book`](book.md) | เริ่มขั้นตอนจองบริการ | 3 | ⬜ ยังไม่เทส |
-| [`/book-start`](book-start.md) | จุดเริ่มจอง (auth-gated) | 4 | ⬜ ยังไม่เทส |
-| [`/book/[service]`](book/[service].md) | เลือกบริการที่จะจอง | 4 | ⬜ ยังไม่เทส |
+| [`/`](index.md) | หน้าแรกเว็บไซต์ Pacred — hero + บริการ + จุดขาย + CTA เข้าระบบ | 3 | ✅ ผ่านทั้งหมด |
+| [`/about`](about.md) | เกี่ยวกับบริษัท Pacred — ประวัติ วิสัยทัศน์ ทีมงาน | 3 | ✅ ผ่านทั้งหมด |
+| [`/book`](book.md) | เริ่มขั้นตอนจองบริการ | 3 | ✅ ผ่านทั้งหมด |
+| [`/book-start`](book-start.md) | จุดเริ่มจอง (auth-gated) | 4 | ❌ มีปัญหาต้องแก้ |
+| [`/book/[service]`](book/[service].md) | เลือกบริการที่จะจอง | 4 | ⚠️ ผ่านบางส่วน |
 | [`/book/[service]/[route]`](book/[service]/[route].md) | เลือกเส้นทางขนส่งของบริการนั้น | 4 | ⬜ ยังไม่เทส |
 | [`/book/[service]/[route]/confirmation`](book/[service]/[route]/confirmation.md) | ยืนยันการจองสำเร็จ | 4 | ⬜ ยังไม่เทส |
 | [`/book/[service]/[route]/review`](book/[service]/[route]/review.md) | ทบทวนรายการก่อนยืนยันการจอง | 6 | ⬜ ยังไม่เทส |
 | [`/booking`](booking.md) | Landing: จองบริการขนส่ง (freight booking) | 3 | ⬜ ยังไม่เทส |
-| [`/contact`](contact.md) | หน้าติดต่อ + ฟอร์มส่งข้อความ (lead funnel → contact_messages) | 3 | ⬜ ยังไม่เทส |
-| [`/customs-clearance-shipping-suvarnabhumi`](customs-clearance-shipping-suvarnabhumi.md) | Landing SEO: เคลียร์ของสนามบินสุวรรณภูมิ | 3 | ⬜ ยังไม่เทส |
+| [`/contact`](contact.md) | หน้าติดต่อ + ฟอร์มส่งข้อความ (lead funnel → contact_messages) | 3 | ✅ ผ่านทั้งหมด |
+| [`/customs-clearance-shipping-suvarnabhumi`](customs-clearance-shipping-suvarnabhumi.md) | Landing SEO: เคลียร์ของสนามบินสุวรรณภูมิ | 3 | ✅ ผ่านทั้งหมด |
 | [`/customs-clearance-shipping-suvarnabhumi/[port]`](customs-clearance-shipping-suvarnabhumi/[port].md) | Landing SEO ตามด่าน/ท่า | 4 | ⬜ ยังไม่เทส |
-| [`/delivery-areas`](delivery-areas.md) | พื้นที่ให้บริการจัดส่ง | 3 | ⬜ ยังไม่เทส |
-| [`/faq`](faq.md) | คำถามที่พบบ่อย | 3 | ⬜ ยังไม่เทส |
-| [`/freight-quote`](freight-quote.md) | ขอใบเสนอราคา freight (ฟอร์มลูกค้า) | 3 | ⬜ ยังไม่เทส |
-| [`/holidays`](holidays.md) | วันหยุดบริษัท | 3 | ⬜ ยังไม่เทส |
-| [`/how-to-use`](how-to-use.md) | วิธีใช้งานระบบ Pacred (คู่มือลูกค้า) | 3 | ⬜ ยังไม่เทส |
+| [`/delivery-areas`](delivery-areas.md) | พื้นที่ให้บริการจัดส่ง | 3 | ✅ ผ่านทั้งหมด |
+| [`/faq`](faq.md) | คำถามที่พบบ่อย | 3 | ✅ ผ่านทั้งหมด |
+| [`/freight-quote`](freight-quote.md) | ขอใบเสนอราคา freight (ฟอร์มลูกค้า) | 3 | ✅ ผ่านทั้งหมด |
+| [`/holidays`](holidays.md) | วันหยุดบริษัท | 3 | ✅ ผ่านทั้งหมด |
+| [`/how-to-use`](how-to-use.md) | วิธีใช้งานระบบ Pacred (คู่มือลูกค้า) | 3 | ✅ ผ่านทั้งหมด |
 | [`/join-us`](join-us.md) | หน้าสมัครงาน / ร่วมงานกับ Pacred | 3 | ⬜ ยังไม่เทส |
-| [`/knowledge`](knowledge.md) | คลังความรู้ (knowledge base) — รายการบทความ | 3 | ⬜ ยังไม่เทส |
+| [`/knowledge`](knowledge.md) | คลังความรู้ (knowledge base) — รายการบทความ | 3 | ✅ ผ่านทั้งหมด |
 | [`/knowledge/[slug]`](knowledge/[slug].md) | บทความความรู้รายชิ้น | 4 | ⬜ ยังไม่เทส |
-| [`/line`](line.md) | หน้า redirect/เชื่อม LINE OA | 3 | ⬜ ยังไม่เทส |
-| [`/news`](news.md) | รายการข่าว/บทความ | 3 | ⬜ ยังไม่เทส |
+| [`/line`](line.md) | หน้า redirect/เชื่อม LINE OA | 3 | ✅ ผ่านทั้งหมด |
+| [`/news`](news.md) | รายการข่าว/บทความ | 3 | ✅ ผ่านทั้งหมด |
 | [`/news/[slug]`](news/[slug].md) | หน้าข่าว/บทความรายชิ้น | 4 | ⬜ ยังไม่เทส |
-| [`/payment/1688`](payment/1688.md) | ชำระ/ฝากโอนผ่าน 1688 | 3 | ⬜ ยังไม่เทส |
-| [`/payment/alipay`](payment/alipay.md) | ชำระ/ฝากโอนผ่าน Alipay | 3 | ⬜ ยังไม่เทส |
-| [`/payment/taobao`](payment/taobao.md) | ชำระ/ฝากโอนผ่าน Taobao | 3 | ⬜ ยังไม่เทส |
-| [`/privacy`](privacy.md) | นโยบายความเป็นส่วนตัว | 3 | ⬜ ยังไม่เทส |
-| [`/reviews`](reviews.md) | รีวิวจากลูกค้า | 3 | ⬜ ยังไม่เทส |
+| [`/payment/1688`](payment/1688.md) | ชำระ/ฝากโอนผ่าน 1688 | 3 | ❌ มีปัญหาต้องแก้ (เอาหน้านี้ออก) |
+| [`/payment/alipay`](payment/alipay.md) | ชำระ/ฝากโอนผ่าน Alipay | 3 | ❌ มีปัญหาต้องแก้ (เอาหน้านี้ออก) |
+| [`/payment/taobao`](payment/taobao.md) | ชำระ/ฝากโอนผ่าน Taobao | 3 | ❌ มีปัญหาต้องแก้ (เอาหน้านี้ออก) |
+| [`/privacy`](privacy.md) | นโยบายความเป็นส่วนตัว | 3 | ✅ ผ่านทั้งหมด |
+| [`/reviews`](reviews.md) | รีวิวจากลูกค้า | 3 | ✅ ผ่านทั้งหมด |
 | [`/reviews/[id]`](reviews/[id].md) | รีวิวรายชิ้น | 4 | ⬜ ยังไม่เทส |
-| [`/services`](services.md) | ภาพรวมบริการทั้งหมด (service grid) | 3 | ⬜ ยังไม่เทส |
-| [`/services/china-shopping`](services/china-shopping.md) | Landing: ฝากสั่งซื้อสินค้าจีน | 3 | ⬜ ยังไม่เทส |
-| [`/services/customs-clearance`](services/customs-clearance.md) | Landing: เคลียร์ศุลกากร | 3 | ⬜ ยังไม่เทส |
-| [`/services/export-worldwide`](services/export-worldwide.md) | Landing: ส่งออกสินค้าทั่วโลก | 3 | ⬜ ยังไม่เทส |
-| [`/services/import-china`](services/import-china.md) | Landing: นำเข้าจากจีน | 3 | ⬜ ยังไม่เทส |
-| [`/services/import-china-fcl`](services/import-china-fcl.md) | Landing: นำเข้าจากจีนแบบ FCL (เต็มตู้) | 3 | ⬜ ยังไม่เทส |
-| [`/services/import-china-lcl`](services/import-china-lcl.md) | Landing: นำเข้าจากจีนแบบ LCL (ไม่เต็มตู้) | 3 | ⬜ ยังไม่เทส |
-| [`/services/yuan-transfer`](services/yuan-transfer.md) | Landing: ฝากโอนเงินหยวน | 3 | ⬜ ยังไม่เทส |
+| [`/services`](services.md) | ภาพรวมบริการทั้งหมด (service grid) | 3 | ✅ ผ่านทั้งหมด |
+| [`/services/china-shopping`](services/china-shopping.md) | Landing: ฝากสั่งซื้อสินค้าจีน | 3 | ✅ ผ่านทั้งหมด |
+| [`/services/customs-clearance`](services/customs-clearance.md) | Landing: เคลียร์ศุลกากร | 3 | ❌ มีปัญหาต้องแก้ (หน้าไม่มี) |
+| [`/services/export-worldwide`](services/export-worldwide.md) | Landing: ส่งออกสินค้าทั่วโลก | 3 | ✅ ผ่านทั้งหมด |
+| [`/services/import-china`](services/import-china.md) | Landing: นำเข้าจากจีน | 3 | ❌ มีปัญหาต้องแก้ (แก้ UI)|
+| [`/services/import-china-fcl`](services/import-china-fcl.md) | Landing: นำเข้าจากจีนแบบ FCL (เต็มตู้) | 3 | ❌ มีปัญหาต้องแก้ (แก้ UI)|
+| [`/services/import-china-lcl`](services/import-china-lcl.md) | Landing: นำเข้าจากจีนแบบ LCL (ไม่เต็มตู้) | 3 | ✅ ผ่านทั้งหมด |
+| [`/services/yuan-transfer`](services/yuan-transfer.md) | Landing: ฝากโอนเงินหยวน | 3 | ✅ ผ่านทั้งหมด |
 | [`/start-order`](start-order.md) | จุดเริ่มสั่งซื้อ (buy-bridge) | 4 | ⬜ ยังไม่เทส |
-| [`/status`](status.md) | หน้าตรวจสถานะระบบ | 3 | ⬜ ยังไม่เทส |
-| [`/terms`](terms.md) | ข้อกำหนดการใช้บริการ | 3 | ⬜ ยังไม่เทส |
-| [`/warehouses/china`](warehouses/china.md) | ข้อมูลโกดังจีน (ที่อยู่รับของ) | 3 | ⬜ ยังไม่เทส |
-| [`/warehouses/guangzhou`](warehouses/guangzhou.md) | ข้อมูลโกดังกวางโจว | 3 | ⬜ ยังไม่เทส |
-| [`/warehouses/thailand`](warehouses/thailand.md) | ข้อมูลโกดังไทย | 3 | ⬜ ยังไม่เทส |
-| [`/warehouses/yiwu`](warehouses/yiwu.md) | ข้อมูลโกดังอี้อู | 3 | ⬜ ยังไม่เทส |
+| [`/status`](status.md) | หน้าตรวจสถานะระบบ | 3 | ❌ มีปัญหาต้องแก้ (เอาหน้านี้ออก) |
+| [`/terms`](terms.md) | ข้อกำหนดการใช้บริการ | 3 | ✅ ผ่านทั้งหมด |
+| [`/warehouses/china`](warehouses/china.md) | ข้อมูลโกดังจีน (ที่อยู่รับของ) | 3 | ✅ ผ่านทั้งหมด |
+| [`/warehouses/guangzhou`](warehouses/guangzhou.md) | ข้อมูลโกดังกวางโจว | 3 | ✅ ผ่านทั้งหมด |
+| [`/warehouses/thailand`](warehouses/thailand.md) | ข้อมูลโกดังไทย | 3 | ✅ ผ่านทั้งหมด |
+| [`/warehouses/yiwu`](warehouses/yiwu.md) | ข้อมูลโกดังอี้อู | 3 | ✅ ผ่านทั้งหมด |
 
 ### 👤 Auth — 3 pages
 

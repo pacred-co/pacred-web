@@ -55,7 +55,7 @@
 
 **ผลที่คาดหวัง:**
 - หน้าโหลดสำเร็จ (HTTP 200) ไม่มี error/หน้าขาว
-- ข้อมูลที่ดึงจาก DB แสดงครบ (ไม่ใช่ ฿0/ว่างทั้งที่ควรมีข้อมูล)
+- ตรวจข้อมูลที่ดึงจาก DB แสดงครบ (ไม่ใช่ ฿0/ว่างทั้งที่ควรมีข้อมูล) — table: `accounting_periods`, `admins`, `freight_invoice_payments`, `freight_invoices`, `period_close_event`, `tax_invoices`, `wallet_transactions`
 
 **ผลทดสอบ:**  `[ ] ✅ ผ่าน`   `[ ] ❌ ไม่ผ่าน`   `[ ] 🔧 ต้องแก้/ไม่ถูกต้อง`   `[ ] ⏭ ข้าม`
 

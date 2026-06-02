@@ -56,7 +56,7 @@
 **ผลที่คาดหวัง:**
 - หน้าโหลดสำเร็จ (HTTP 200) ไม่มี error/หน้าขาว
 - แสดง component หลัก: `tooltip`
-- ข้อมูลที่ดึงจาก DB แสดงครบ (ไม่ใช่ ฿0/ว่างทั้งที่ควรมีข้อมูล)
+- ตรวจข้อมูลที่ดึงจาก DB แสดงครบ (ไม่ใช่ ฿0/ว่างทั้งที่ควรมีข้อมูล) — table: `admins`, `forwarders`, `freight_invoices`, `service_orders`, `tax_invoice_lines`, `tax_invoices`, `withholding_tax_entries`
 
 **ผลทดสอบ:**  `[ ] ✅ ผ่าน`   `[ ] ❌ ไม่ผ่าน`   `[ ] 🔧 ต้องแก้/ไม่ถูกต้อง`   `[ ] ⏭ ข้าม`
 

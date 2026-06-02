@@ -57,7 +57,7 @@
 **ผลที่คาดหวัง:**
 - หน้าโหลดสำเร็จ (HTTP 200) ไม่มี error/หน้าขาว
 - แสดง component หลัก: `top-menu-report`, `forwarder-cost-edit-button`
-- ข้อมูลที่ดึงจาก DB แสดงครบ (ไม่ใช่ ฿0/ว่างทั้งที่ควรมีข้อมูล)
+- ตรวจข้อมูลที่ดึงจาก DB แสดงครบ (ไม่ใช่ ฿0/ว่างทั้งที่ควรมีข้อมูล) — table: `admins`, `tb_admin`, `tb_check_forwarder`, `tb_cnt`, `tb_cnt_item`, `tb_cnt_pay_idorco`, `tb_cnt_pay_trackingchn`, `tb_cost_container`, `tb_forwarder`, `tb_forwarder_import2`, `tb_promotion`, `tb_settings`, `tb_users`
 
 **ผลทดสอบ:**  `[ ] ✅ ผ่าน`   `[ ] ❌ ไม่ผ่าน`   `[ ] 🔧 ต้องแก้/ไม่ถูกต้อง`   `[ ] ⏭ ข้าม`
 

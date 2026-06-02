@@ -56,7 +56,7 @@
 **ผลที่คาดหวัง:**
 - หน้าโหลดสำเร็จ (HTTP 200) ไม่มี error/หน้าขาว
 - แสดง component หลัก: `page-top-menubar`
-- ข้อมูลที่ดึงจาก DB แสดงครบ (ไม่ใช่ ฿0/ว่างทั้งที่ควรมีข้อมูล)
+- ตรวจข้อมูลที่ดึงจาก DB แสดงครบ (ไม่ใช่ ฿0/ว่างทั้งที่ควรมีข้อมูล) — table: `admins`, `tb_admin`, `tb_cash_back`, `tb_cash_back_hs`, `tb_credit`, `tb_forwarder`, `tb_header_order`, `tb_users`, `tb_wallet`, `tb_wallet_hs`, `tb_wallet_paydeposit`
 
 **ผลทดสอบ:**  `[ ] ✅ ผ่าน`   `[ ] ❌ ไม่ผ่าน`   `[ ] 🔧 ต้องแก้/ไม่ถูกต้อง`   `[ ] ⏭ ข้าม`
 

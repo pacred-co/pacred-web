@@ -56,7 +56,7 @@
 **ผลที่คาดหวัง:**
 - หน้าโหลดสำเร็จ (HTTP 200) ไม่มี error/หน้าขาว
 - แสดง component หลัก: `bill-to-override-panel`, `button`
-- ข้อมูลที่ดึงจาก DB แสดงครบ (ไม่ใช่ ฿0/ว่างทั้งที่ควรมีข้อมูล)
+- ตรวจข้อมูลที่ดึงจาก DB แสดงครบ (ไม่ใช่ ฿0/ว่างทั้งที่ควรมีข้อมูล) — table: `admins`, `forwarder_cost_adjustments`, `forwarder_driver`, `forwarder_items`, `forwarders`, `profiles`, `tb_address`, `tb_admin`, `tb_corporate`, `tb_credit`, `tb_forwarder`, `tb_forwarder_driver`, `tb_forwarder_driver_item`, `tb_header_order`, `tb_log_forwarder_status`, `tb_users`, `tb_wallet`, `tb_wallet_hs`, `tb_wallet_paydeposit`, `wallet_transactions`
 
 **ผลทดสอบ:**  `[ ] ✅ ผ่าน`   `[ ] ❌ ไม่ผ่าน`   `[ ] 🔧 ต้องแก้/ไม่ถูกต้อง`   `[ ] ⏭ ข้าม`
 
