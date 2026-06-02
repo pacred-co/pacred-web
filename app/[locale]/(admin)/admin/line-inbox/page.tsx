@@ -3,13 +3,17 @@ import {
   getLineCustomerThread,
   getLineInboxStats,
 } from "@/actions/admin/line-inbox";
+import { getLineCsAgents, getMemberSnapshotForChat } from "@/actions/admin/line-crm";
 import type {
   LineCustomer,
   LineMessage,
+  CsAgent,
+  MemberChatSnapshot,
 } from "@/lib/admin/line-inbox-types";
 import { relativeTimeTh } from "@/lib/utils/relative-time";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
+import { ThreadCrmPanel } from "./thread-crm-panel";
 import {
   MessageCircle,
   Users,
@@ -42,7 +46,7 @@ const STATUS_LABEL: Record<string, string> = {
 export default async function AdminLineInboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ c?: string }>;
+  searchParams: Promise<{ c?: string; crmError?: string }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
@@ -50,13 +54,19 @@ export default async function AdminLineInboxPage({
 
   // Stat cards + customer list always load. The thread only loads when a
   // customer is selected. Run them together so the panel doesn't waterfall.
-  const [stats, customers, thread] = await Promise.all([
+  const [stats, customers, thread, agents] = await Promise.all([
     getLineInboxStats(),
     getLineInboxCustomers(),
     selectedId ? getLineCustomerThread(selectedId) : Promise.resolve(null),
+    getLineCsAgents(),
   ]);
 
   const selectedCustomer = thread?.customer ?? null;
+  // The in-chat member snapshot loads only when the contact is linked to a PR
+  // account (after the thread, since it depends on customer.customer_code).
+  const snapshot: MemberChatSnapshot | null = selectedCustomer?.customer_code
+    ? await getMemberSnapshotForChat(selectedCustomer.customer_code)
+    : null;
 
   return (
     <main className="p-4 sm:p-6 lg:p-8 space-y-5">
@@ -118,6 +128,9 @@ export default async function AdminLineInboxPage({
             <ThreadPanel
               customer={selectedCustomer}
               messages={thread?.messages ?? []}
+              agents={agents}
+              snapshot={snapshot}
+              crmError={sp.crmError ?? null}
             />
           ) : (
             <EmptyThreadPlaceholder />
@@ -244,9 +257,15 @@ function CustomerList({
 function ThreadPanel({
   customer,
   messages,
+  agents,
+  snapshot,
+  crmError,
 }: {
   customer: LineCustomer | null;
   messages: LineMessage[];
+  agents: CsAgent[];
+  snapshot: MemberChatSnapshot | null;
+  crmError: string | null;
 }) {
   if (!customer) {
     return (
@@ -323,6 +342,16 @@ function ThreadPanel({
           messages.map((m) => <MessageBubble key={m.id} message={m} />)
         )}
       </div>
+
+      {/* CRM footer — agent assign · member link/snapshot · (gated) reply box */}
+      <ThreadCrmPanel
+        customerLineId={customer.id}
+        assignedAgentId={customer.assigned_agent_id}
+        customerCode={customer.customer_code}
+        agents={agents}
+        snapshot={snapshot}
+        crmError={crmError}
+      />
     </div>
   );
 }

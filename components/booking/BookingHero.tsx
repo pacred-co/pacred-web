@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useMessages, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { HERO_IMGS, HERO_CONTENT_KEYS } from "@/lib/booking-data";
 import type { TabMode, SeaMode } from "@/types/booking";
@@ -26,6 +26,14 @@ const BG_OVERRIDES_DESKTOP: Record<string, string> = {
 
 export function BookingHero({ activeTab, seaMode }: BookingHeroProps) {
   const t = useTranslations("bookingCalc.hero");
+  // Raw messages for the sub-line emptiness guard below. A plain t(subKey) on a
+  // message containing rich tags (<hl>/<em>, e.g. customsSub) throws
+  // FORMATTING_ERROR ("variable hl was not provided") — so read the raw string
+  // (no ICU/tag parsing) to decide whether the <p> renders. The actual render
+  // uses t.rich(...) with the hl/em handlers.
+  const rawMessages = useMessages() as {
+    bookingCalc?: { hero?: Record<string, string> };
+  };
 
   const isDefault = activeTab === null;
 
@@ -45,6 +53,7 @@ export function BookingHero({ activeTab, seaMode }: BookingHeroProps) {
   const bgMobile = BG_OVERRIDES_MOBILE[imgKey] ?? fallbackBg;
   const bgDesktop = BG_OVERRIDES_DESKTOP[imgKey] ?? fallbackBg;
   const keys = HERO_CONTENT_KEYS[contentKey] ?? HERO_CONTENT_KEYS.default;
+  const rawSub = rawMessages.bookingCalc?.hero?.[keys.subKey] ?? "";
 
   // Default (home):
   //   mobile  → text left-aligned (left 50%) so it sits over the containers, not the person
@@ -91,7 +100,7 @@ export function BookingHero({ activeTab, seaMode }: BookingHeroProps) {
             mbr: () => <br aria-hidden className={isDefault ? "hidden" : undefined} />,
           })}
         </h1>
-        {t(keys.subKey).trim() !== "" && (
+        {rawSub.trim() !== "" && (
           <p className={`${isDefault ? "hidden" : ""} mt-1 md:mt-6 text-[14px] sm:text-[18px] md:text-[22px] font-extrabold text-white [-webkit-text-stroke:0.5px_#7f1d1d] sm:[-webkit-text-stroke:1px_#7f1d1d] md:[-webkit-text-stroke:4px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_2px_6px_rgba(0,0,0,0.8),0_4px_12px_rgba(0,0,0,0.55)] leading-tight md:leading-snug px-1`}>
             {t.rich(keys.subKey, {
               em: (chunks: ReactNode) => (

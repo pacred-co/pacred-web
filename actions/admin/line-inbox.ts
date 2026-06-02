@@ -50,7 +50,9 @@ export async function getLineInboxCustomers(): Promise<LineCustomer[]> {
       "id, line_user_id, display_name, picture_url, first_seen_at, first_follow_at, " +
         "first_message_at, last_message_at, last_inbound_message_at, last_outbound_message_at, " +
         "last_message_text, total_messages, total_inbound_messages, total_outbound_messages, " +
-        "status, raw_profile, created_at, updated_at",
+        "status, raw_profile, created_at, updated_at, " +
+        "customer_code, phone, email, company_name, lead_source_name, " +
+        "lead_quality, service_interest, assigned_agent_id",
     )
     .order("last_message_at", { ascending: false, nullsFirst: false })
     .limit(200);
@@ -84,7 +86,9 @@ export async function getLineCustomerThread(
       "id, line_user_id, display_name, picture_url, first_seen_at, first_follow_at, " +
         "first_message_at, last_message_at, last_inbound_message_at, last_outbound_message_at, " +
         "last_message_text, total_messages, total_inbound_messages, total_outbound_messages, " +
-        "status, raw_profile, created_at, updated_at",
+        "status, raw_profile, created_at, updated_at, " +
+        "customer_code, phone, email, company_name, lead_source_name, " +
+        "lead_quality, service_interest, assigned_agent_id",
     )
     .eq("id", customerLineId)
     .maybeSingle();
