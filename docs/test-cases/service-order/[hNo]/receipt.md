@@ -47,7 +47,7 @@
 **ผลที่คาดหวัง:**
 - หน้าโหลดสำเร็จ (HTTP 200) ไม่มี error/หน้าขาว
 - แสดง component หลัก: `print-button`, `tax-invoice-request-panel`, `site`, `customer-wht-upload-panel`
-- ข้อมูลที่ดึงจาก DB แสดงครบ (ไม่ใช่ ฿0/ว่างทั้งที่ควรมีข้อมูล)
+- ตรวจข้อมูลที่ดึงจาก DB แสดงครบ (ไม่ใช่ ฿0/ว่างทั้งที่ควรมีข้อมูล) — table: `profiles`, `tb_cash_back`, `tb_corporate`, `tb_forwarder`, `tb_forwarder_tax_invoice`, `tb_forwarder_tax_invoice_item`, `tb_header_order`, `tb_order`, `tb_users`, `tb_wallet`, `tb_wallet_hs`, `withholding_tax_entries`
 
 **ผลทดสอบ:**  `[ ] ✅ ผ่าน`   `[ ] ❌ ไม่ผ่าน`   `[ ] 🔧 ต้องแก้/ไม่ถูกต้อง`   `[ ] ⏭ ข้าม`
 
