@@ -202,6 +202,7 @@ export default async function SearchPage({
         rsDefault={rsDefault}
         detail={detail}
         provider={provider}
+        detailAvailable={detailResult.available}
       />
     );
   }
@@ -591,12 +592,14 @@ function UrlPasteMode({
   rsDefault,
   detail,
   provider,
+  detailAvailable,
 }: {
   srcWeb: string | null;
   urlcut: string;
   rsDefault: number;
   detail: ChinaProductDetail | null;
   provider: string;
+  detailAvailable: boolean;
 }) {
   // Map the URL-param provider to the cart-schema Provider enum.
   // Per cartItemSchema (lib/validators/cart.ts L7): only "1688" | "taobao"
@@ -830,6 +833,7 @@ function UrlPasteMode({
                     rsDefault={rsDefault}
                     minQty={1}
                     maxQty={999}
+                    detailAvailable={detailAvailable}
                   />
                 </div>
               </div>

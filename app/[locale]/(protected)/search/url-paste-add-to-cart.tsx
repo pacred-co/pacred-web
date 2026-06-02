@@ -30,7 +30,7 @@
  */
 
 import { useState, useTransition } from "react";
-import { ShoppingCart, Plus, Minus, CheckCircle2 } from "lucide-react";
+import { ShoppingCart, Plus, Minus, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { addCartItem } from "@/actions/cart";
 
@@ -49,6 +49,7 @@ export function UrlPasteAddToCart({
   rsDefault,
   minQty,
   maxQty,
+  detailAvailable,
 }: {
   url:        string;
   provider:   Provider;
@@ -60,6 +61,11 @@ export function UrlPasteAddToCart({
   rsDefault:  number;
   minQty:     number;
   maxQty:     number;
+  /** True when TAMIT returned a product detail · false when TAMIT
+   *  failed (URL not supported, vendor down, scraper blocked).
+   *  When false the island shows an error fallback + link to the
+   *  proper manual-entry workflow at /service-order/add. */
+  detailAvailable: boolean;
 }) {
   const minClamp = Math.max(1, minQty);
   const maxClamp = Math.max(minClamp, maxQty || 999);
@@ -72,7 +78,50 @@ export function UrlPasteAddToCart({
   const [success, setSuccess] = useState<boolean>(false);
   const [pending, startTransition] = useTransition();
 
-  // Skeleton state: detail hasn't loaded → submit disabled.
+  // 1) TAMIT failed → render fallback to /service-order/add (which has
+  //    LinkPasteSearch + manual-entry fields). Avoid the infinite
+  //    "กำลังโหลด…" skeleton — that misleads the customer.
+  //
+  //    `detailAvailable = false` covers the explicit-fail case
+  //    (TAMIT returned ok:false). But TAMIT often returns ok:true with
+  //    a partial scrape (title via fallback heuristic, price = 0,
+  //    image = null) for URLs it can't fully decode (Tmall ?region=SG
+  //    pages, weird scm/spm chains). Treat those as failures too —
+  //    without price the customer can't even check what they're
+  //    paying, so we'd be ordering at price 0.
+  const hasRealPrice = priceCny > 0;
+  const hasRealImage = !!mainImage;
+  if (!detailAvailable || !hasRealPrice || !hasRealImage) {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3" role="alert">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="h-6 w-6 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-semibold text-amber-900 text-base">
+              ดึงรายละเอียดสินค้าจากลิงก์นี้ไม่สำเร็จ
+            </p>
+            <p className="text-sm text-amber-800">
+              ระบบยังเปิดดูร้าน {shopName || "นี้"} ไม่ได้ · กรอกข้อมูลสินค้าเองได้ที่หน้า &ldquo;เพิ่มสินค้าในรถเข็น&rdquo;
+            </p>
+          </div>
+        </div>
+        <Link
+          href="/service-order/add"
+          className="inline-flex items-center justify-center gap-2 rounded-full bg-amber-600 hover:bg-amber-700 text-white text-base font-semibold px-5 py-3 min-h-[44px] w-full md:w-auto transition-colors"
+        >
+          <ShoppingCart className="h-5 w-5" />
+          เปิดหน้าเพิ่มสินค้า (กรอกเอง)
+        </Link>
+        {url && (
+          <p className="text-xs text-amber-800 break-all">
+            ลิงก์เดิมที่คุณวาง: <code className="bg-amber-100 px-1 rounded">{url}</code>
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // 2) Detail loaded but somehow blank — defensive skeleton.
   const isReady = priceCny > 0 && title.trim().length > 0;
 
   function adjQty(delta: number) {
