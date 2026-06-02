@@ -7,6 +7,7 @@ import { convertProductUrlDetail, type ChinaProductDetail } from "@/lib/china-se
 import { SearchRecents } from "./search-recents";
 import { SearchHistoryLogger } from "./search-history-logger";
 import { SearchImagePanel } from "./search-image-panel";
+import { UrlPasteAddToCart } from "./url-paste-add-to-cart";
 
 /**
  * China product search / search-results screen — a FAITHFUL 1:1
@@ -200,6 +201,7 @@ export default async function SearchPage({
         urlcut={dataRe.urlcut}
         rsDefault={rsDefault}
         detail={detail}
+        provider={provider}
       />
     );
   }
@@ -588,12 +590,24 @@ function UrlPasteMode({
   urlcut,
   rsDefault,
   detail,
+  provider,
 }: {
   srcWeb: string | null;
   urlcut: string;
   rsDefault: number;
   detail: ChinaProductDetail | null;
+  provider: string;
 }) {
+  // Map the URL-param provider to the cart-schema Provider enum.
+  // Per cartItemSchema (lib/validators/cart.ts L7): only "1688" | "taobao"
+  // | "tmall" | "shop" | "nice" are accepted. search.php uses "pcs" for
+  // the Pacred-local catalog → maps to "shop".
+  const cartProvider: "1688"|"taobao"|"tmall"|"shop"|"nice" =
+    provider === "1688"   ? "1688"   :
+    provider === "taobao" ? "taobao" :
+    provider === "tmall"  ? "tmall"  :
+    provider === "nice"   ? "nice"   :
+    "shop";
   // Computed values from TAMIT detail (null when unavailable → render
   // skeleton state, matching legacy pre-AJAX shimmer behaviour).
   const title = detail?.title ?? "";
@@ -620,21 +634,12 @@ function UrlPasteMode({
         {/* search.php L57-142 — product card (MODE A) */}
         <div className="data-pro-chinna bg-white dark:bg-surface border border-border rounded-2xl shadow-sm overflow-hidden">
           <div className="p-3 md:p-4">
-            <form
-              className=""
-              method="POST"
-              autoComplete="off"
-              action=""
-            >
-              <input type="hidden" name="cURL" value="" />
-              <input type="hidden" name="cProvider" value="" />
-              <input
-                type="hidden"
-                name="cTitle"
-                id="cTitle"
-                value=""
-              />
-              <input type="hidden" name="cNameShop" value="" />
+            {/* 2026-06-02 §0e — was `<form action="">` POSTing nowhere with
+                4 hidden inputs (cURL/cProvider/cTitle/cNameShop) all blank.
+                The submit button at the bottom now calls UrlPasteAddToCart
+                (client island → addCartItem → tb_cart faithfully). All
+                product fields flow as props, no form post needed. */}
+            <div>
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                 <div className="hidden md:block md:col-span-12">
                   <h2 className="text-lg font-bold text-foreground flex flex-wrap items-center gap-2 pb-0">
@@ -809,53 +814,26 @@ function UrlPasteMode({
                           </>
                         )}
                   <hr className="my-3 border-t border-border" />
-                  <div
-                    className="border-total-product pay-c rounded-xl border border-border bg-surface-alt/50 dark:bg-surface-alt/30 p-3"
-                    style={{ zIndex: 99 }}
-                  >
-                    <div className="grid grid-cols-12 items-center gap-y-2">
-                      <div className="col-span-3 md:col-span-8 text-right">
-                        <h4 className="text-base font-semibold text-foreground">ราคารวม</h4>
-                      </div>
-                      <div className="col-span-9 md:col-span-4 text-left md:text-right notranslate text-sm">
-                        <span id="CHNTotal">{fmt2(priceCny)}</span>¥
-                        <span className="">
-                          &nbsp;x {rsDefault}฿/¥ ={" "}
-                          <b id="THBtotal" className="text-red-600">
-                            {fmt2(priceThb)}
-                          </b>{" "}
-                          ฿
-                        </span>
-                      </div>
-                      <div className="col-span-3 md:col-span-8 text-right">
-                        <h4 className="text-base font-semibold text-foreground">จำนวน </h4>
-                      </div>
-                      <div className="col-span-5 md:col-span-4 text-left md:text-right text-sm">
-                        <span id="cAmount">0</span>
-                        <b className="text-xs">
-                          <span className="text-red-600">
-                            {" "}
-                            (ขั้นต่ำ{" "}
-                            <span className="text-sm" id="minnum"></span>{" "}
-                            ชิ้น)
-                          </span>
-                        </b>
-                      </div>
-                      <div className="col-span-4 md:col-span-12 self-end text-left md:text-right md:pt-1">
-                        <button
-                          type="submit"
-                          id="btnCart"
-                          className="btn-main inline-flex items-center gap-1.5 rounded-full bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-2 transition-colors animate__animated animate__infinite animate__headShake"
-                          name="addCartURL"
-                        >
-                          <i className="ft-shopping-cart"></i> หยิบใส่รถเข็น
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                  {/* 2026-06-02 — replaced legacy hardcoded qty=0 / static
+                      ราคารวม / dead-submit-button with the client island.
+                      Island manages qty (default minQty), color/size/details,
+                      total recompute + submit to addCartItem. Skeleton state
+                      when TAMIT detail null (priceCny=0 OR blank title). */}
+                  <UrlPasteAddToCart
+                    url={urlcut}
+                    provider={cartProvider}
+                    title={title}
+                    shopName={shopName}
+                    mainImage={mainImage ?? null}
+                    priceCny={priceCny}
+                    priceThb={priceThb}
+                    rsDefault={rsDefault}
+                    minQty={1}
+                    maxQty={999}
+                  />
                 </div>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       </div>
