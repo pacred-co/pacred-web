@@ -556,10 +556,18 @@ export default async function ForwarderInvoicePrintPage({
   const fids = receiptItems.map((it) => it.fid);
   let forwarders: RawForwarder[] = [];
   if (fids.length > 0) {
+    // 2026-06-03 ภูม flag — `fid` was in the select but doesn't exist on
+    // tb_forwarder (only `id`; verified via information_schema). PostgREST
+    // returned `code 42703 · column tb_forwarder.fid does not exist`, the
+    // page swallowed the error (logged but not surfaced), the forwarders
+    // array stayed empty, computedItems filtered everything out, and
+    // staff saw "ไม่พบรายการ" even though tb_receipt_item DID have rows.
+    // Removed `fid` from the select; the downstream `f.fid ?? String(f.id)`
+    // fallback already used `String(f.id)` so the display is unchanged.
     const { data: fwdRows, error: fwdErr } = await admin
       .from("tb_forwarder")
       .select(
-        "id, userid, ftrackingchn, fcabinetnumber, fid, famount, fweight, fvolume, fdate, " +
+        "id, userid, ftrackingchn, fcabinetnumber, famount, fweight, fvolume, fdate, " +
           "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
           "pricecrate, ftransportpricechnthb, priceother, fdiscount",
       )

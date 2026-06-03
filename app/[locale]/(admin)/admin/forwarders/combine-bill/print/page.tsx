@@ -45,7 +45,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
-import { CONTACT, ADDRESSES, SITE_NAME } from "@/components/seo/site";
+import { CONTACT, ADDRESSES, SITE_NAME, SITE_LEGAL_NAME, SITE_LEGAL_NAME_TH, TAX_ID } from "@/components/seo/site";
 
 export const dynamic = "force-dynamic";
 
@@ -362,10 +362,19 @@ export default async function CombineBillPrintPage({
       </div>
 
       <main className="print-area mx-auto max-w-[800px] p-8 space-y-5">
-        {/* Header row — left: company info · right: bill no */}
+        {/* Header row — 2026-06-03 ภูม flag: align legal company info with
+            the receipt format (full Thai+EN legal name + Tax ID + address +
+            phone). ใบส่งสินค้า keeps operational structure (consignee +
+            carrier + line items) but the issuer header gets the same
+            accountancy-grade identity block as ใบเสร็จ so warehouse staff
+            can hand a delivery slip to a juristic recipient who needs it
+            for their own bookkeeping. */}
         <div className="flex items-start justify-between border-b-2 border-black pb-4 gap-4">
-          <div>
+          <div className="flex-1">
             <h1 className="text-3xl font-black text-primary-700">{SITE_NAME}</h1>
+            <p className="text-sm font-semibold mt-0.5">{SITE_LEGAL_NAME_TH}</p>
+            <p className="text-xs text-gray-700">{SITE_LEGAL_NAME}</p>
+            <p className="text-xs mt-1">เลขประจำตัวผู้เสียภาษี / Tax ID: <span className="font-mono">{TAX_ID}</span></p>
             <p className="text-xs">{ADDRESSES.office.full}</p>
             <p className="text-xs">
               โทร {CONTACT.phoneCompanyDisplay} · {CONTACT.email}
@@ -373,7 +382,8 @@ export default async function CombineBillPrintPage({
           </div>
           <div className="text-right">
             <h2 className="text-xl font-bold">ใบส่งสินค้า</h2>
-            <p className="font-mono text-base text-gray-700">
+            <p className="text-xs text-gray-500">Delivery Note</p>
+            <p className="font-mono text-base text-gray-700 mt-1">
               เลขที่ #{ids.join(", #")}
             </p>
             <p className="text-xs text-gray-600">วันที่: {headerDateLabel}</p>
