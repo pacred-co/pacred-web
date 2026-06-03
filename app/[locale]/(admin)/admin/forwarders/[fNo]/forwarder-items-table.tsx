@@ -35,7 +35,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import Image from "next/image";
-import { ExternalLink, ShoppingBag, Box, PackagePlus, AlertCircle } from "lucide-react";
+import { ExternalLink, ShoppingBag, Box, PackagePlus, AlertCircle, Pencil } from "lucide-react";
+import { ShopItemRowEditor } from "./shop-item-row-editor";
 
 type ShopOrderItem = {
   id: number;
@@ -267,7 +268,11 @@ export async function ForwarderItemsTable(p: Props) {
     <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
       <header className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border bg-surface-alt/40">
         <h2 className="font-bold text-sm flex items-center gap-1.5">
-          <ShoppingBag className="h-4 w-4" /> รายการสินค้า ({shopItems.length})
+          {p.mode === "edit" ? <Pencil className="h-4 w-4" /> : <ShoppingBag className="h-4 w-4" />}
+          รายการสินค้า ({shopItems.length})
+          {p.mode === "edit" && (
+            <span className="ml-1 rounded bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[10px] font-medium">แก้ไขในตาราง</span>
+          )}
         </h2>
         <div className="flex items-center gap-2 text-xs">
           <span className="text-muted">จาก ออเดอร์ฝากสั่งซื้อ</span>
@@ -305,6 +310,7 @@ export async function ForwarderItemsTable(p: Props) {
                   providerInfo={providerInfo}
                   rows={rows}
                   startIdx={shopItems.findIndex((it) => it.id === rows[0].id) + 1}
+                  mode={p.mode}
                 />
               );
             })}
@@ -323,14 +329,14 @@ export async function ForwarderItemsTable(p: Props) {
       </div>
 
       {p.mode === "edit" && (
-        <div className="px-4 py-2 border-t border-border bg-amber-50/40 text-xs text-amber-800 flex items-center gap-2">
-          <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+        <div className="px-4 py-2 border-t border-border bg-sky-50/40 text-xs text-sky-800 flex items-center gap-2">
+          <Pencil className="h-3.5 w-3.5 flex-shrink-0" />
           <span>
-            แก้ไขรายการ/ราคา/ร้าน ของ ออเดอร์ฝากสั่งซื้อ ต้องทำที่{" "}
-            <Link href={`/admin/service-orders/${p.reforder}/edit`} className="underline font-mono hover:text-amber-900">
+            <b>แก้ไขในตารางได้เลย</b> · กรอกจำนวน / ราคา / ค่าขนส่ง / หมายเหตุ แล้วกด <b>บันทึก</b> · ต้องการแก้ ชื่อ/ร้าน/variant กด &quot;แก้ชื่อ/ร้าน/variant&quot; · หรือเปิด{" "}
+            <Link href={`/admin/service-orders/${p.reforder}/edit`} className="underline font-mono hover:text-sky-900">
               /admin/service-orders/{p.reforder}/edit
             </Link>
-            {" "}— แก้ที่นี่ ตู้/Tracking/น้ำหนัก/CBM ของ forwarder เท่านั้น
+            {" "}สำหรับเพิ่มรายการใหม่
           </span>
         </div>
       )}
@@ -348,11 +354,13 @@ async function ShopGroup({
   providerInfo,
   rows,
   startIdx,
+  mode,
 }: {
   shopName: string;
   providerInfo: { name: string; cls: string };
   rows: ShopOrderItem[];
   startIdx: number;
+  mode: "view" | "edit";
 }) {
   return (
     <>
@@ -368,13 +376,37 @@ async function ShopGroup({
           </div>
         </td>
       </tr>
-      {/* Item rows */}
+      {/* Item rows — switch to client editor when mode="edit" */}
       {await Promise.all(rows.map(async (it, idx) => {
         const imgHref = it.cimages && it.cimages.trim() !== ""
           ? (it.cimages.startsWith("http") || it.cimages.startsWith("//")
               ? (it.cimages.startsWith("//") ? `https:${it.cimages}` : it.cimages)
               : await resolveLegacyUrl(it.cimages, "cover"))
           : null;
+
+        if (mode === "edit") {
+          return (
+            <ShopItemRowEditor
+              key={it.id}
+              id={it.id}
+              rowIndex={startIdx + idx}
+              ctitle={it.ctitle ?? ""}
+              curl={it.curl ?? ""}
+              cnameshop={it.cnameshop ?? ""}
+              cimages={imgHref}
+              cprice={Number(it.cprice ?? 0)}
+              cshippingchn={Number(it.cshippingchn ?? 0)}
+              cpriceupdate={Number(it.cpriceupdate ?? 0)}
+              camount={Number(it.camount ?? 0)}
+              ccolor={it.ccolor ?? ""}
+              csize={it.csize ?? ""}
+              cnote={it.cnote ?? ""}
+              ctrackingnumber={it.ctrackingnumber ?? ""}
+            />
+          );
+        }
+
+        // mode === "view" — read-only row
         const lineSubtotal = Number(it.cprice) * Number(it.camount)
                            + Number(it.cshippingchn)
                            + Number(it.cpriceupdate);
