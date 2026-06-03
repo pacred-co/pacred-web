@@ -1000,6 +1000,11 @@ const menuWarehouse: MenuSection[] = [
           // Phase 2 — driver-runs sales-only side not yet live.
           { labelKey: "forwarder.assignDriver", href: "/admin/drivers",                     icon: "Truck", badge: "driverItems", phase: 2 },
           { labelKey: "forwarder.combineBill", href: "/admin/forwarders/combine-bill",      icon: "Printer" },
+          // 2026-06-03 (R-2 · เดฟ session) — ใบวางบิล (billing-run) for credit-line
+          // customers. Faithful port of legacy hs-forwarder-invoice.php + R-2
+          // enhancement (tb_forwarder_invoice persists what the legacy printed
+          // and discarded). See docs/audit/billing-run-port-2026-06-03.md.
+          { labelKey: "forwarder.billingRun",  href: "/admin/billing-run",                 icon: "Receipt" },
           // 2026-06-02 (poom-wave §6 · ภูม) — TH-transport batch reader (296
           // legacy batches · 643 forwarders) · MVP read-only · brief §6.
           { labelKey: "forwarder.tranTh",      href: "/admin/forwarders/tran-th",          icon: "Truck" },
