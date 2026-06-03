@@ -150,22 +150,12 @@ create policy tb_forwarder_invoice_item_service_role
 -- 4. Comments — for prod inspection clarity
 -- ─────────────────────────────────────────────────────────────────────────
 
-comment on table tb_forwarder_invoice is
-  'ใบวางบิล (Billing-run / monthly statement). Pacred R-2 port of legacy ' ||
-  'hs-forwarder-invoice.php (which was print-only — no persistence). ' ||
-  'doc_no = FRI{yyMM}-{NNNNN}. See docs/audit/billing-run-port-2026-06-03.md.';
+comment on table tb_forwarder_invoice is 'ใบวางบิล (Billing-run / monthly statement). Pacred R-2 port of legacy hs-forwarder-invoice.php (print-only · no persistence). doc_no = FRI{yyMM}-{NNNNN}. See docs/audit/billing-run-port-2026-06-03.md.';
 
-comment on table tb_forwarder_invoice_item is
-  'Line-items for tb_forwarder_invoice (one row per billed tb_forwarder.id).';
+comment on table tb_forwarder_invoice_item is 'Line-items for tb_forwarder_invoice (one row per billed tb_forwarder.id).';
 
-comment on column tb_forwarder_invoice.userid is
-  'tb_users.userID (logical FK · tb_users uses business-key not uuid).';
+comment on column tb_forwarder_invoice.userid is 'tb_users.userID (logical FK · tb_users uses business-key not uuid).';
 
-comment on column tb_forwarder_invoice.total_thb is
-  'Final amount due = subtotal_thb + delivery_chn_thb + delivery_th_thb + other_thb - discount_thb. ' ||
-  'Computed on insert + on update by the Server Action — not via a DB trigger ' ||
-  '(to keep validation/clamping in TypeScript where the legacy-port test suite lives).';
+comment on column tb_forwarder_invoice.total_thb is 'Final amount due = subtotal + delivery_chn + delivery_th + other - discount. Computed in TypeScript (Server Action), not DB trigger.';
 
-comment on column tb_forwarder_invoice.status is
-  '''issued'' (default) | ''paid'' (paid_at set · terminal) | ''cancelled'' (cancelled_at set · terminal). ' ||
-  '''overdue'' is computed (date_due < today AND status=''issued'') not stored.';
+comment on column tb_forwarder_invoice.status is 'issued (default) | paid (paid_at set · terminal) | cancelled (cancelled_at set · terminal). overdue is computed (date_due < today AND status=issued), NOT stored.';
