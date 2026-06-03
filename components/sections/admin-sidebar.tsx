@@ -462,7 +462,7 @@ export function AdminSidebar({
               <ul className="space-y-0.5">
                 {sec.items.map((item, ii) => (
                   <MenuRow
-                    key={item.href ?? `${item.labelKey}-${ii}`}
+                    key={`${ii}-${item.href ?? item.labelKey ?? ""}`}
                     item={item}
                     depth={0}
                     counts={counts}
