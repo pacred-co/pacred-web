@@ -1,5 +1,5 @@
 // Audits every markdown file in the repo for broken local links.
-// Skips node_modules, .next, .git, .claude, and vendored legacy assets.
+// Skips node_modules, .next, .git, .claude, .agents, and vendored legacy assets.
 //
 // Usage: node scripts/md-link-audit.mjs
 //
@@ -8,7 +8,10 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const SKIP_DIRS = new Set(["node_modules", ".next", ".git", ".claude"]);
+// `.agents` = vendored agent-tooling skill templates (grill-with-docs /
+// write-a-skill) — same category as `.claude`; their links are intentional
+// example paths (./src/ordering/CONTEXT.md, REFERENCE.md), not our docs.
+const SKIP_DIRS = new Set(["node_modules", ".next", ".git", ".claude", ".agents"]);
 // Vendored third-party plugins staged for the 1:1 legacy transcription
 // (datatables / cropper / owl-carousel). Their bundled READMEs link to
 // upstream repo files we never vendor — not our docs, not our audit.
