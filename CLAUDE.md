@@ -3,6 +3,29 @@
 
 ---
 
+# 🌅 2026-06-04 — AUTONOMOUS RUN (Mac · เดฟ): env reorg + Global Trade Group capture + Pacred branding swap + 4 build lanes A·B·C·E · read FIRST
+
+**main = `dave-pacred` = (this 2026-06-04 push) · `pnpm verify` EXIT 0 (lint·typecheck·~280 tests·audits) · Vercel auto-deploys main.** Resume: `git fetch origin && git pull origin main` → read this. On a new machine do `.env.local` first (see 2026-06-03 below + memory [`reachability_audit_2026_06_04`] + [`global_trade_group_2026_06_04`]).
+
+**🚀 Shipped + pushed (owner unlocked A-B-C-E-F · D deferred · ran 4 parallel isolated-worktree agents → merged serial → verify → push):**
+- **🔵 ENV reorg** — `.env.local` rewritten clean (51 Vercel keys reconciled + owner's new tokens Vercel/Sentry/hCaptcha/Cloudflare) + Desktop mirror + `.env.example`. ⚠️ **OTP**: ก๊อต fixed ThaiBulk (signups OK now); note `OTP_BYPASS` is hard-ignored on prod — real lever is `EMERGENCY_OTP_BYPASS` (unset).
+- **🏛 Global Trade Group** captured → [`docs/research/global-trade-group-2026-06-04.md`](docs/research/global-trade-group-2026-06-04.md): 6-entity holding · 3 tax-doc billing modes · launch stages · pricing · branding mandate.
+- **🔎 Reachability/404 audit + fixes** → [`docs/research/reachability-deadflow-audit-2026-06-04.md`](docs/research/reachability-deadflow-audit-2026-06-04.md) (4 agents · 374 routes): dead `/service-order` ยกเลิก button → client island · `doGTranslate` console error killed (every protected page) · `/admin/learning` 404 → `/admin/board/inbox` · dashboard banner → `/cart` · **6 orphan admin routes wired** · **2 dead-code files tombstoned** (`rates.ts`/`wallet.ts`) · sidebar dup-key fix. Customer surface healthy (0 404, no dead-write traps); admin money faithful.
+- **🅰 Branding** — Pacred stamp on all 6 legacy print pages (overwrote 2 old PCS stamp assets · `public/images/pacred-stamp.png` 284K from `/Users/dev/Desktop/stamppacred.png`) · footer chat LINE @PCSCARGO → Pacred LINE · search logo · self-pickup "โกดัง PCS / เพชรเกษม 77 / 02-444-7046" → Pacred สมุทรสาคร / 02-421-3325 (5 forms) · admin company options PCS→Pacred. ⏳ follow-up: add stamp IMAGE to modern @react-pdf templates (needs absolute-URL + render-test).
+- **🅱 Tax-doc 3 modes** — per-order ใบกำกับ/ใบขน/ไม่รับเอกสาร + per-mode VAT base (`lib/tax/tax-doc-mode.ts` +44 tests). `'customs'` was a dead enum. **Default `tax_invoice` verified-unchanged.** ⚠️ **ใบขน VAT-base = accounting-policy interpretation (no legacy citation) → needs accounting sign-off before staff issue ใบขน** (1-line override flagged in code).
+- **🅲 Pricing** — min-sell guardrail (`business_config pricing.min_sell_floor` + migration 0139 + 14 tests, hard-warn) · CBM/kg · รถ/เรือ/แอร์ quote-compare (`/admin/accounting/quote-compare/modes`).
+- **🅴 CRM** — `/admin/crm` verified functional + reachable (fixed unlinked-LINE dead-end).
+- **monitor** — Sentry already code-wired (gated on `NEXT_PUBLIC_SENTRY_DSN`); set locally. Prod-activate = 1 Vercel var (perf tradeoff).
+- ✅ **admin login VERIFIED** — `admin_pee@pacred.co.th` / `123456` works (super). ⚠️ `admin_dev`/`pop`/`poom` do NOT exist as `admin_xxx@pacred.co.th` (only 12 of 15 roster have profiles).
+
+**🔴 PENDING (owner / next session):**
+1. **Migrations NOT applied prod:** `0137_pcs_sync` (ภูม) · `0139_min_sell_floor` (loader has defaults → optional) · `0140_yuan_tax_doc_pref` (metadata-only ADD COLUMN). **NEXT FREE = 0141.**
+2. **Owner Vercel env:** TAMIT `-2026` · `THAIBULKSMS_FORCE=corporate` · Sentry activate (`NEXT_PUBLIC_SENTRY_DSN`) · FB 8 tokens · the 3 missing admin accounts. (เดฟ has Vercel token now — can set on request.)
+3. **InwPond007** — 1 unmerged commit (`fef7958f` styled-dialogs · 70 files · 67 behind) → **ปอน `git pull origin main` to rebase** (hand-merge unsafe before a prod push). Then switch the new `cancel-order-button.tsx` (native confirm) to ปอน's global `confirm()`.
+4. **ใบขน VAT-base accounting sign-off** (Lane B) · **D Freight FCL/LCL** deferred · customer-minor (profile image-upload unwired · @react-pdf stamp image).
+
+---
+
 # 💻 2026-06-03 — SESSION CLOSE + MACHINE MOVE (Windows คอมบริษัท → Mac บ้าน) · FULL TEAM MERGE + ฝากสั่งซื้อ detail REWRITE · read FIRST
 
 **main = `dave-pacred` = `26a01caf` · pushed · `pnpm verify` EXIT 0 (lint·typecheck·test:unit·audit:all all green) · Vercel auto-deploys `main`.** Resume on Mac: `git fetch origin && git pull origin main` → read this section.
