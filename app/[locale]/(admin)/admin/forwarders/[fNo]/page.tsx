@@ -459,6 +459,27 @@ async function tryRenderTbForwarder(
             </Link>
           </section>
 
+          {/* Address — 2026-06-03 ภูม flag: moved from page-bottom to right
+              after Customer (logical pairing: who ships to which address).
+              Was inside the LEFT col below the items table, ~700px scroll-down. */}
+          <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 text-sm">
+            <h3 className="text-sm font-semibold text-muted mb-2">ที่อยู่จัดส่ง</h3>
+            <p className="font-medium">
+              {r.faddressname ?? ""} {r.faddresslastname ?? ""}
+            </p>
+            <p>
+              {r.faddressno ?? ""} {r.faddresssubdistrict ? `ต.${r.faddresssubdistrict}` : ""} {r.faddressdistrict ? `อ.${r.faddressdistrict}` : ""} {r.faddressprovince ? `จ.${r.faddressprovince}` : ""} {r.faddresszipcode ?? ""}
+            </p>
+            {(r.faddresstel || r.faddresstel2) && (
+              <p className="text-xs text-muted mt-1">
+                📞 {r.faddresstel ?? "—"}{r.faddresstel2 ? ` · ${r.faddresstel2}` : ""}
+              </p>
+            )}
+            {r.faddressnote && (
+              <p className="text-xs text-muted mt-1">📝 {r.faddressnote}</p>
+            )}
+          </section>
+
           {/* Routing */}
           <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 text-sm">
             <h3 className="text-sm font-semibold text-muted mb-3">การจัดส่ง</h3>
@@ -552,25 +573,6 @@ async function tryRenderTbForwarder(
             famount={r.famount}
             mode="view"
           />
-
-          {/* Address */}
-          <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 text-sm">
-            <h3 className="text-sm font-semibold text-muted mb-2">ที่อยู่จัดส่ง</h3>
-            <p className="font-medium">
-              {r.faddressname ?? ""} {r.faddresslastname ?? ""}
-            </p>
-            <p>
-              {r.faddressno ?? ""} {r.faddresssubdistrict ? `ต.${r.faddresssubdistrict}` : ""} {r.faddressdistrict ? `อ.${r.faddressdistrict}` : ""} {r.faddressprovince ? `จ.${r.faddressprovince}` : ""} {r.faddresszipcode ?? ""}
-            </p>
-            {(r.faddresstel || r.faddresstel2) && (
-              <p className="text-xs text-muted mt-1">
-                📞 {r.faddresstel ?? "—"}{r.faddresstel2 ? ` · ${r.faddresstel2}` : ""}
-              </p>
-            )}
-            {r.faddressnote && (
-              <p className="text-xs text-muted mt-1">📝 {r.faddressnote}</p>
-            )}
-          </section>
 
           {/* Note */}
           {r.fnote && r.fnote.trim() !== "" && (
