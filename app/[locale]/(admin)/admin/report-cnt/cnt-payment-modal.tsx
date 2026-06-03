@@ -3,7 +3,7 @@
 /**
  * <CntPaymentModal> — Wave 17 P0-fix (2026-05-25 ค่ำ)
  *
- * In-page modal for the "ทำรายการเบิกเงินค่าตู้" workflow. Replaces the
+ * In-page modal for the "ทำรายการจ่ายเงินตู้" workflow. Replaces the
  * old `/admin/report-cnt/pay` separate page so admin can tick containers
  * on the list itself and open the form right there (matches legacy AJAX
  * modal in `pcs-admin/include/pages/report-cnt/getListCNTPay.php`).
@@ -13,7 +13,7 @@
  * 2 perspectives. We use "เบิก" because:
  *   - It correctly conveys "filing a request that needs approval"
  *     (cntStatus=1 → manager approves → cntStatus=2)
- *   - Legacy cnt-hs.php (the ledger) uses "รายการเบิกเงินค่าตู้"
+ *   - Legacy cnt-hs.php (the ledger) uses "รายการจ่ายเงินตู้"
  *   - The old Pacred wording "บันทึกรายการจ่ายเงินตู้" implied
  *     "fait accompli" which is wrong — we're SUBMITTING, not RECORDING.
  */
@@ -91,7 +91,7 @@ export function CntPaymentModal({ open, onClose, selected }: Props) {
         return;
       }
       setSuccessFlash(
-        `ส่งคำขอเบิกเงินค่าตู้แล้ว ${selected.length} ตู้ · รอผู้จัดการอนุมัติ`,
+        `ส่งคำขอจ่ายเงินตู้แล้ว ${selected.length} ตู้ · รอผู้จัดการอนุมัติ`,
       );
       // Brief delay so user reads the toast before redirect
       setTimeout(() => {
@@ -125,7 +125,7 @@ export function CntPaymentModal({ open, onClose, selected }: Props) {
         <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <div>
             <h2 id="cnt-payment-modal-title" className="text-lg font-semibold text-foreground">
-              💸 ทำรายการเบิกเงินค่าตู้
+              💸 ทำรายการจ่ายเงินตู้
             </h2>
             <p className="text-xs text-muted mt-0.5">
               {selected.length} ตู้ที่เลือก · ยอดต้นทุนรวม{" "}
@@ -257,7 +257,7 @@ export function CntPaymentModal({ open, onClose, selected }: Props) {
               >
                 {pending
                   ? "กำลังส่งคำขอ..."
-                  : `ทำรายการเบิกเงินค่าตู้ (${selected.length} ตู้)`}
+                  : `ทำรายการจ่ายเงินตู้ (${selected.length} ตู้)`}
               </button>
             </div>
           </div>

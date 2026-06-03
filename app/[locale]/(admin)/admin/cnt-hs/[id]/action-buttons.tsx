@@ -16,7 +16,7 @@ export function CntActionButtons({ cntId }: { cntId: number }) {
   const [pending, start] = useTransition();
 
   function handleApprove() {
-    if (!confirm(`อนุมัติการเบิกเงินค่าตู้ #${cntId}?\n(จะเปลี่ยนสถานะเป็น "จ่ายแล้ว" — ไม่สามารถ undo ผ่านหน้านี้)`)) return;
+    if (!confirm(`อนุมัติการจ่ายเงินตู้ #${cntId}?\n(จะเปลี่ยนสถานะเป็น "จ่ายแล้ว" — ไม่สามารถ undo ผ่านหน้านี้)`)) return;
     start(async () => {
       const res = await adminApproveCntHs(cntId);
       if (!res.ok) {
@@ -28,7 +28,7 @@ export function CntActionButtons({ cntId }: { cntId: number }) {
   }
 
   function handleReject() {
-    if (!confirm(`ปฏิเสธการเบิกเงินค่าตู้ #${cntId}?\n(จะเปลี่ยนสถานะเป็น "ปฏิเสธ" — ไม่สามารถ undo ผ่านหน้านี้)`)) return;
+    if (!confirm(`ปฏิเสธการจ่ายเงินตู้ #${cntId}?\n(จะเปลี่ยนสถานะเป็น "ปฏิเสธ" — ไม่สามารถ undo ผ่านหน้านี้)`)) return;
     start(async () => {
       const res = await adminRejectCntHs(cntId);
       if (!res.ok) {

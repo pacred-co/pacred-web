@@ -1,5 +1,5 @@
 /**
- * /admin/cnt-hs/[id] — รายละเอียดการเบิกเงินค่าตู้ (Wave 10 · Wave 12-A 2026-05-23)
+ * /admin/cnt-hs/[id] — รายละเอียดการจ่ายเงินตู้ (Wave 10 · Wave 12-A 2026-05-23)
  *
  * Legacy: pcs-admin/cnt-hs.php?page=detail&id=<ID> (L486+ · ~350 LOC).
  *
@@ -237,7 +237,7 @@ export default async function CntHsDetailPage({
       <div className="flex items-baseline justify-between flex-wrap gap-2">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-600">
-            ADMIN · เบิกเงินค่าตู้
+            ADMIN · จ่ายเงินตู้
           </p>
           <div className="flex items-center gap-3 mt-1 flex-wrap">
             <h1 className="text-2xl font-bold font-mono">#{cnt.ID}</h1>

@@ -305,7 +305,7 @@ export default async function BillingRunListPage({
 
   return (
     <main className="space-y-5">
-      <title>ใบวางบิล (Billing-Run) | PR Admin</title>
+      <title>ใบวางบิล | PR Admin</title>
 
       {/* PEAK-style accounting top menubar (ระบบบัญชี chrome) */}
       <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/billing-run" />
@@ -314,7 +314,7 @@ export default async function BillingRunListPage({
         <header className="flex flex-wrap items-center justify-between gap-3 pt-4">
           <div>
             <p className="text-xs text-muted">รายรับ → ใบวางบิล</p>
-            <h1 className="text-xl font-bold tracking-tight">ใบวางบิล (Billing-Run)</h1>
+            <h1 className="text-xl font-bold tracking-tight">ใบวางบิล</h1>
             <p className="text-xs text-muted mt-0.5">
               ออกใบเรียกเก็บค่าฝากนำเข้าให้ลูกค้าเครดิตเทอม · ดูประวัติ · ปรับสถานะรับชำระ
             </p>
@@ -355,24 +355,16 @@ export default async function BillingRunListPage({
                 📦 ตู้พร้อมวางบิล <span className="text-xs font-normal text-muted">(เข้าโกดังไทยแล้ว · 30 วันล่าสุด)</span>
               </h2>
               <p className="text-xs text-muted mt-0.5">
-                ตู้ที่ถึงไทยแล้ว · ใช้ดูภาพรวมก่อนกด <strong>+ สร้างใบวางบิลใหม่</strong>
-                {" "}— เลือกลูกค้า/forwarders ในตู้นั้นๆ ที่หน้า /add
+                ดูภาพรวมตู้ที่ถึงไทยแล้ว · กด <strong>+ สร้างใบวางบิลใหม่</strong> ด้านบนเพื่อเลือก
+                <strong> ลูกค้า + forwarders</strong> ที่ต้องการ (ติ๊กข้ามตู้ได้ · เลือกเฉพาะรายการที่พร้อม)
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Link
-                href="/admin/report-cnt?page=succeed"
-                className="text-xs text-sky-700 hover:underline inline-flex items-center gap-1"
-              >
-                → ดูตู้ทั้งหมด
-              </Link>
-              <Link
-                href="/admin/billing-run/add"
-                className="rounded bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 text-xs font-medium"
-              >
-                + สร้างใบวางบิลใหม่
-              </Link>
-            </div>
+            <Link
+              href="/admin/report-cnt?page=succeed"
+              className="text-xs text-sky-700 hover:underline inline-flex items-center gap-1 whitespace-nowrap"
+            >
+              → ดูตู้ทั้งหมด
+            </Link>
           </header>
 
           {eligibleCabinets.length === 0 ? (

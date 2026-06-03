@@ -9,7 +9,7 @@
  *   - Row tint per fstatus (canonical FSTATUS_CFG · solid Tailwind weights)
  *   - Status chip (canonical fstatusBadge · matches legacy labels + palette)
  *   - Orange summary band (avg วันที่รอเข้าโกดัง + sum trackCount/CBM/KG/cost/price/profit)
- *   - Floating action button "💸 ทำรายการเบิกเงินค่าตู้"
+ *   - Floating action button "💸 ทำรายการจ่ายเงินตู้"
  *   - Inline `<CntPaymentModal>` (instead of navigating to /pay)
  *
  * 2026-05-28 ROW-COLOR-RESTORE (Agent P1): the previous build used a local
@@ -425,7 +425,7 @@ export function CntListTable({
             className="rounded-full bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-4 py-2 text-xs font-semibold shadow-lg inline-flex items-center gap-2"
             title="บันทึกค่าใช้จ่ายตู้ที่บริษัทจ่ายเอง (ภาษี · ค่ามัดจำ · ค่าขนส่ง partner) — ลงใน tb_cnt"
           >
-            💸 ทำรายการเบิกเงินค่าตู้
+            💸 ทำรายการจ่ายเงินตู้
             {selected.size > 0 && (
               <span className="inline-flex items-center justify-center bg-white text-primary-600 text-[10px] font-bold rounded-full h-5 min-w-[20px] px-1.5">
                 {selected.size}
@@ -436,7 +436,7 @@ export function CntListTable({
             href="/admin/cnt-hs"
             className="rounded-full bg-white hover:bg-surface-alt border border-border text-foreground px-4 py-2 text-xs font-medium shadow-lg"
           >
-            📜 ประวัติเบิกค่าตู้
+            📜 ประวัติจ่ายเงินตู้
           </Link>
 
           {/* Customer-billing entries (Pacred · only on เข้าโกดังไทยแล้ว tab) */}
