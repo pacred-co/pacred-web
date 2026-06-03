@@ -51,6 +51,7 @@ import type { createAdminClient } from "@/lib/supabase/admin";
 import type { ForwarderPriceFields } from "@/lib/forwarder/outstanding";
 import { mintReceiptDocNo } from "@/lib/admin/mint-receipt-doc-no";
 import { issueForwarderTaxInvoice } from "@/lib/admin/forwarder-tax-invoice";
+import { modeFromPref, type TaxDocMode } from "@/lib/tax/tax-doc-mode";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
 import { sendNotification } from "@/lib/notifications";
 import { sendSms } from "@/lib/sms/gateway";
@@ -139,6 +140,21 @@ function composeReceiptBody(opts: {
     `ยอดที่ชำระ: ฿${amount}\n` +
     `สามารถดาวน์โหลดใบเสร็จได้จากระบบ`
   );
+}
+
+// ────────────────────────────────────────────────────────────
+// Pick the batch's tax-document mode from the covered forwarder rows.
+// All rows in one payment batch share a customer + payment event, so a mixed
+// batch is not expected; if rows DO disagree, prefer the first non-'none' mode
+// (a customer who asked for any VAT doc should get one). Returns 'none' only
+// when EVERY row is receipt/NULL.
+// ────────────────────────────────────────────────────────────
+function pickForwarderTaxDocMode(prefs: Array<string | null>): TaxDocMode {
+  for (const p of prefs) {
+    const m = modeFromPref(p);
+    if (m !== "none") return m;
+  }
+  return "none";
 }
 
 // ────────────────────────────────────────────────────────────
@@ -398,25 +414,29 @@ export async function autoIssueReceiptOnPaymentLand(
     return { ok: false, error: `receipt_items_insert: ${itemErr.message}` };
   }
 
-  // 8b. TAX-INVOICE BRIDGE (P2). If ANY covered forwarder row opted into a
-  //     ใบกำกับภาษี (tb_forwarder.tax_doc_pref='tax_invoice' · migration 0127),
-  //     issue one via the per-line tax engine (computeForwarderTax) into the
-  //     tb_*-native store (migration 0129). The default 'receipt' (or NULL)
-  //     keeps the current receipt-only behaviour. BEST-EFFORT — a tax-invoice
-  //     failure never undoes the receipt (the money already moved; the receipt
-  //     is the document of record · the tax invoice is a follow-on).
-  const wantsTaxInvoice = rows.some((r) => (r.tax_doc_pref ?? "").trim() === "tax_invoice");
-  if (wantsTaxInvoice) {
+  // 8b. TAX-DOCUMENT BRIDGE (P2 · 3-mode 2026-06-04). If ANY covered forwarder
+  //     row opted into a VAT document — ใบกำกับ (tax_doc_pref='tax_invoice') or
+  //     ใบขน (tax_doc_pref='customs') · migration 0127 — issue one via the
+  //     mode-aware tax engine (computeTaxForMode) into the tb_*-native store
+  //     (migration 0129). The default 'receipt'/NULL (ไม่รับเอกสาร) keeps the
+  //     receipt-only behaviour. We use the FIRST VAT-mode row's mode for the
+  //     batch (mixed modes on one payment batch are not expected — all rows
+  //     share a customer + a payment event). BEST-EFFORT — a tax-doc failure
+  //     never undoes the receipt (the money already moved; the receipt is the
+  //     document of record · the tax document is a follow-on).
+  const docMode = pickForwarderTaxDocMode(rows.map((r) => r.tax_doc_pref));
+  if (docMode !== "none") {
     const taxRes = await issueForwarderTaxInvoice(admin, {
       userid,
       fids: rows.map((r) => r.id),
       receiptId: receiptRow.id,
       rid: receiptRow.rid,
       issuedBy: "system-auto",
+      mode: docMode,
     });
     if (!taxRes.ok && !taxRes.alreadyIssued) {
-      logger.warn("auto-receipt", "tax-invoice bridge failed (non-fatal · receipt stands)", {
-        rid: receiptRow.rid, userid, fids: rows.map((r) => r.id), error: taxRes.error,
+      logger.warn("auto-receipt", "tax-doc bridge failed (non-fatal · receipt stands)", {
+        rid: receiptRow.rid, userid, mode: docMode, fids: rows.map((r) => r.id), error: taxRes.error,
       });
     }
   }

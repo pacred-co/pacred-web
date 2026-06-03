@@ -246,8 +246,10 @@ type ReceiptDoc = {
   // The owner's per-class WHT model + VAT, replacing the legacy flat 1%.
   // `isJuristic` here = the receipt is for a นิติบุคคล (corporate-name) row.
   isJuristic: boolean;
-  // true when ANY covered forwarder opted into a ใบกำกับภาษี (tax_doc_pref).
+  // true when ANY covered forwarder opted into a VAT document (ใบกำกับ/ใบขน).
   wantsTaxInvoice: boolean;
+  // the resolved doc mode for the header label (Lane B).
+  docMode: "tax_invoice" | "customs" | "none";
   // The aggregate breakdown across all item rows (post-discount, per class).
   tax: TaxBreakdown;
   // The configured rates used (for the printed % labels).
@@ -617,7 +619,18 @@ export default async function ServiceImportReceiptPrintPage({
     //    isJuristic = corporate-name receipt (reCorporate===1) — the same
     //    signal the legacy used to decide WHT applies.
     const isJuristicDoc = reCorporate === 1;
-    const wantsTaxInvoice = rows.some((r) => (r.taxDocPref ?? "").trim() === "tax_invoice");
+    // 3-mode (Lane B) — pick the first non-'none' mode across covered rows.
+    // For a forwarder bill goods=0, so ใบกำกับ vs ใบขน produce the SAME VAT
+    // base; the mode still drives the document HEADER label (ใบกำกับภาษี vs
+    // ใบขนสินค้า). withVat true for both VAT modes; false for ไม่รับเอกสาร.
+    const docMode = ((): "tax_invoice" | "customs" | "none" => {
+      for (const r of rows) {
+        const m = (r.taxDocPref ?? "").trim();
+        if (m === "tax_invoice" || m === "customs") return m;
+      }
+      return "none";
+    })();
+    const wantsTaxInvoice = docMode !== "none";
     const tax = computeForwarderTax(
       {
         ftotalprice:           rows.reduce((s, r) => s + r.ftotalprice, 0),
@@ -655,6 +668,7 @@ export default async function ServiceImportReceiptPrintPage({
       dis1per,
       isJuristic: isJuristicDoc,
       wantsTaxInvoice,
+      docMode,
       tax,
       whtRates: {
         transportPct: taxRates.transportPct,
@@ -768,18 +782,26 @@ function ReceiptPage({
               <div className="text-center">
                 <br />
               </div>
-              {/* P2: when the order opted into a ใบกำกับภาษี (tax_doc_pref=
-                  tax_invoice) the document is a combined ใบกำกับภาษี/ใบเสร็จ
-                  (RD Code 86 · VAT shown below); otherwise the legacy
+              {/* P2 · 3-mode (Lane B): the header label reflects the doc mode —
+                  ใบกำกับ (tax_invoice) = combined ใบกำกับภาษี/ใบเสร็จ; ใบขน
+                  (customs) = ใบขนสินค้า/ใบเสร็จ; ไม่รับเอกสาร = legacy
                   "ใบเสร็จรับเงิน (ไม่ใช่ใบกำกับภาษี)". */}
               <div
                 className="text-center h-title"
                 style={{ fontFamily: "frutiger" }}
               >
-                {doc.wantsTaxInvoice ? "ใบกำกับภาษี / ใบเสร็จรับเงิน" : "ใบเสร็จรับเงิน"}
+                {doc.docMode === "tax_invoice"
+                  ? "ใบกำกับภาษี / ใบเสร็จรับเงิน"
+                  : doc.docMode === "customs"
+                    ? "ใบขนสินค้า / ใบเสร็จรับเงิน"
+                    : "ใบเสร็จรับเงิน"}
               </div>
               <div className="text-center h-title3">
-                {doc.wantsTaxInvoice ? "TAX INVOICE / RECEIPT" : "(ไม่ใช่ใบกำกับภาษี)"}
+                {doc.docMode === "tax_invoice"
+                  ? "TAX INVOICE / RECEIPT"
+                  : doc.docMode === "customs"
+                    ? "CUSTOMS DECLARATION / RECEIPT"
+                    : "(ไม่ใช่ใบกำกับภาษี)"}
               </div>
               <div className="h-title2 ">เลขที่ {doc.rID}</div>
             </th>

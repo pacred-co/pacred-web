@@ -2,26 +2,34 @@
 
 /**
  * Cart tax-document preference (เดฟ 2026-05-30 · P1 of the tax-billing-flow
- * rebuild — design: docs/research/tax-billing-flow-design-2026-05-30.md).
+ * rebuild · 3-mode extension 2026-06-04 — Lane B / Global Trade Group §3).
  *
  * Owner directive at /cart: "เลือกไว้เลยว่าเอา VAT ออกใบกำกับภาษีอะไร
- * ประมาณนั้น." → at order time, the customer picks the kind of tax document
- * they want for THIS order:
+ * ประมาณนั้น." → at order time, the customer picks ONE of the 3 document
+ * modes for THIS order (lib/tax/tax-doc-mode.ts is the SOT):
  *
- *   - receipt     → ใบเสร็จรับเงิน ปกติ (ไม่มี VAT)             [default for personal]
- *   - tax_invoice → ใบกำกับภาษี + VAT 7% (RD Code 86)          [default for juristic]
+ *   - tax_invoice → ใบกำกับภาษี · VAT 7% on the GOODS VALUE (we import under
+ *                    our name). [default for juristic]
+ *   - customs     → ใบขนสินค้า · VAT 7% on the SERVICE FEE only (customs-
+ *                    brokerage; customer owns the goods).
+ *   - receipt     → ไม่รับเอกสาร · ใบเสร็จรับเงิน, no VAT in the bill (margin
+ *                    is Pacred's taxable profit). [default for personal]
  *
  * The choice + a snapshot of the 13-digit tax id + company address are
- * persisted on tb_header_order so the billing/payment-land flow knows what
- * to issue (P2 will route this to the existing tax_invoices machinery).
- *
- * NOTE: "customs" (ใบขนสินค้า) is not offered here — customs is for the
- * import-cargo flow (`tb_forwarder`), not for shop-orders (`tb_header_order`).
- * It will surface on the service-import booking page in a later P3 phase.
+ * persisted on tb_header_order.tax_doc_pref so the billing/payment-land flow
+ * knows what to issue. The 'customs' + 'tax_invoice' modes both require the
+ * billing snapshot; 'receipt' needs nothing.
  */
 
 import { useState, type ReactNode } from "react";
-import { FileText, Receipt } from "lucide-react";
+import { FileText, Receipt, FileCheck2 } from "lucide-react";
+import {
+  TAX_DOC_MODES,
+  TAX_DOC_MODE_META,
+  prefFromMode,
+  modeRequiresBillingSnapshot,
+  type TaxDocMode,
+} from "@/lib/tax/tax-doc-mode";
 
 export type TaxDocDefaults = {
   isJuristic: boolean;
@@ -30,27 +38,20 @@ export type TaxDocDefaults = {
   companyAddress: string;
 };
 
-const OPTIONS = [
-  {
-    value: "receipt" as const,
-    title: "ใบเสร็จรับเงิน",
-    hint: "ไม่มี VAT · ลูกค้าบุคคลทั่วไป",
-    icon: <Receipt className="w-4 h-4" />,
-  },
-  {
-    value: "tax_invoice" as const,
-    title: "ใบกำกับภาษี (มี VAT 7%)",
-    hint: "นิติบุคคล · ใช้เครดิตภาษีได้",
-    icon: <FileText className="w-4 h-4" />,
-  },
-];
+const MODE_ICON: Record<TaxDocMode, ReactNode> = {
+  tax_invoice: <FileText className="w-4 h-4" />,
+  customs: <FileCheck2 className="w-4 h-4" />,
+  none: <Receipt className="w-4 h-4" />,
+};
 
 export function CartTaxDocPref({ defaults }: { defaults: TaxDocDefaults }) {
-  const [pref, setPref] = useState<"receipt" | "tax_invoice">(
-    defaults.isJuristic && defaults.taxId ? "tax_invoice" : "receipt",
+  const [mode, setMode] = useState<TaxDocMode>(
+    defaults.isJuristic && defaults.taxId ? "tax_invoice" : "none",
   );
 
-  const needsBilling = pref === "tax_invoice";
+  // The persisted column value ('tax_invoice' | 'customs' | 'receipt').
+  const pref = prefFromMode(mode);
+  const needsBilling = modeRequiresBillingSnapshot(mode);
 
   return (
     <div className="rounded-2xl bg-white border border-border shadow-[0_4px_14px_rgba(0,0,0,0.04)] overflow-hidden">
@@ -59,30 +60,35 @@ export function CartTaxDocPref({ defaults }: { defaults: TaxDocDefaults }) {
         <p className="mt-0.5 text-[11px] text-muted">เลือกล่วงหน้า — ระบบจะออกเอกสารตามที่เลือกตอนชำระเงิน</p>
       </div>
       <div className="p-3 md:p-4 space-y-3">
-        <div className="grid grid-cols-2 gap-2">
-          {OPTIONS.map((opt) => {
-            const id = `taxDocPref-${opt.value}`;
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {TAX_DOC_MODES.map((m) => {
+            const meta = TAX_DOC_MODE_META[m];
+            const id = `taxDocMode-${m}`;
             return (
               <OptionTile
-                key={opt.value}
+                key={m}
                 id={id}
-                value={opt.value}
-                checked={pref === opt.value}
-                onChange={() => setPref(opt.value)}
-                title={opt.title}
-                hint={opt.hint}
-                icon={opt.icon}
+                value={m}
+                checked={mode === m}
+                onChange={() => setMode(m)}
+                title={meta.title}
+                hint={meta.hint}
+                icon={MODE_ICON[m]}
               />
             );
           })}
         </div>
 
-        {/* Hidden form input — read by CartInteractivity.handleSubmitOrder via fd.get() */}
+        {/* Hidden form input — read by CartInteractivity.handleSubmitOrder via
+            fd.get('taxDocPref'). Carries the COLUMN value (tax_invoice|customs|
+            receipt), not the UI mode. */}
         <input type="hidden" name="taxDocPref" value={pref} />
 
         {needsBilling && (
           <div className="space-y-2 rounded-lg border border-primary-200 bg-rose-50/40 p-3">
-            <p className="text-[11.5px] font-medium text-foreground">ข้อมูลสำหรับใบกำกับภาษี</p>
+            <p className="text-[11.5px] font-medium text-foreground">
+              ข้อมูลสำหรับ{TAX_DOC_MODE_META[mode].title}
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <label className="sm:col-span-1 block">
                 <span className="block text-[10.5px] text-muted mb-0.5">เลขผู้เสียภาษี (13 หลัก)</span>
@@ -109,7 +115,9 @@ export function CartTaxDocPref({ defaults }: { defaults: TaxDocDefaults }) {
                 />
               </label>
               <label className="sm:col-span-3 block">
-                <span className="block text-[10.5px] text-muted mb-0.5">ที่อยู่ตามใบกำกับภาษี</span>
+                <span className="block text-[10.5px] text-muted mb-0.5">
+                  ที่อยู่ตาม{TAX_DOC_MODE_META[mode].title}
+                </span>
                 <textarea
                   name="taxDocAddress"
                   defaultValue={defaults.companyAddress}
@@ -122,7 +130,8 @@ export function CartTaxDocPref({ defaults }: { defaults: TaxDocDefaults }) {
               </label>
             </div>
             <p className="text-[10.5px] text-muted">
-              ระบบจะ <strong>คิด VAT 7%</strong> เพิ่มจากค่าบริการ + ออกใบกำกับภาษีตอนคุณชำระเงิน
+              ระบบจะ <strong>คิด VAT 7%</strong> จาก<strong>{TAX_DOC_MODE_META[mode].vatBase}</strong>{" "}
+              + ออก{TAX_DOC_MODE_META[mode].title}ตอนคุณชำระเงิน
               {defaults.isJuristic && " · "}
               {defaults.isJuristic && (
                 <>นิติบุคคล <strong>หักภาษี ณ ที่จ่าย</strong> 1% (ค่าขนส่ง) / 3% (ค่าบริการ) — แสดงในบิล</>

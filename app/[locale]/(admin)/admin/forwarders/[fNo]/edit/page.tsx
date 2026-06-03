@@ -135,6 +135,7 @@ type RawForwarderRow = {
   fpallet:           number | null;
   adminidcreator:    string | null;
   reforder:          string | null;
+  tax_doc_pref:      string | null;
 };
 
 type RawItemRow = {
@@ -180,7 +181,7 @@ export default async function AdminForwarderEditPage({
       "faddressdistrict, faddressprovince, faddresszipcode, " +
       "faddresstel, faddresstel2, faddressnote, " +
       "crate, pricecrate, fcredit, paydeposit, paymethod, fbilltoname, fpallet, " +
-      "adminidcreator, reforder",
+      "adminidcreator, reforder, tax_doc_pref",
     )
     .limit(1);
   q = isId ? q.eq("id", asNumber) : q.eq("fidorco", fNo);
@@ -775,6 +776,7 @@ export default async function AdminForwarderEditPage({
           currentPriceUpdate={priceUpdate}
           currentPriceOther={otherCost}
           currentDiscount={discount}
+          currentTaxDocPref={(r.tax_doc_pref as string | null) ?? null}
         />
       </CollapsibleSection>
 
