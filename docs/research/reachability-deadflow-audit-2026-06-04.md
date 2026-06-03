@@ -93,3 +93,18 @@ Customer-side comms (also avoid): `placeServiceOrder`/`submitCartOrder`, `paySer
 
 ## Env notes (Mac worktree, this session)
 - Worktree had no `.env.local` (the "DB click hangs" trap) → copied the reconciled prod set from main checkout + applied `TAMIT → /api-product-2026` + removed a broken `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=the base64 string` placeholder + added `NOTIFY_BYPASS=true`. Dev server: worktree on **:58553** (main checkout's old server holds :3000). Legacy source confirmed at `/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/public_html/`.
+
+---
+
+## 🟢 Update — 2026-06-04 PM (continued autonomous run)
+
+**Admin "orphan routes" (§"Remaining queue") — ALL 9 RE-VERIFIED as FALSE POSITIVES.** Per-route inbound-link grep across the whole `(admin)` tree + nav config:
+`reports/forwarder` 10 · `admin/search` 4 · `admin/wht` 4 · `admin/inventory` 2 · `payment-reconciliation` 2 · `migration/pcs-customers` 1 · `notifications/dispatch` 1 · `settings/contacts` 1 inbound link(s) → all reachable. `system/cron-health` = 0 inbound BUT it's a deliberate `redirect("/admin/system/crons")` **alias** (the dashboard lives at the sidebar-linked `/crons`). **Zero true admin orphans** — the audit agent over-flagged every one (the §0b/§0c "verify from source, don't trust the agent" discipline again). No admin nav-wiring needed.
+
+**Customer no-death — FIXED: profile avatar upload was a dead click.** `profile.php` #edit-img-profile / #uploadimageModal (dropify+croppie) were transcribed 1:1 but UNWIRED (plugins not staged → button opened a modal whose upload never fired). Wired a clean Pacred control: `actions/profile-avatar.ts::updateMyAvatar` (→ public `avatars` bucket → `profiles.avatar_url`, NON-COMMS) + `profile/profile-avatar-upload.tsx` (self-contained React island, no jQuery) replacing the dead trigger. Render-verified: button present, dead `data-target` gone. ⚠️ actual file-upload POST not click-tested (file-picker automation impractical) — mirrors the proven promo-banners upload.
+
+**Brand sweep** (visible PCS + stale "กทม" self-pickup) — done separately, see [`brand-pcs-leak-sweep-2026-06-04.md`](brand-pcs-leak-sweep-2026-06-04.md).
+
+**Customer pricing estimator** (transport/crate live quote) — added, see [`order-pricing-flow-recheck-2026-06-04.md`](order-pricing-flow-recheck-2026-06-04.md).
+
+Pushed to `main` + `dave-pacred` in 3 save-points this run (estimator · brand sweep · avatar+audit).

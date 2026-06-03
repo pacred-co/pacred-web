@@ -75,14 +75,16 @@ export function ImportEstimateClient() {
     return Number.isFinite(x) && x > 0 ? x : 0;
   }, [weight]);
 
-  // Live recalc — debounced — whenever any pricing input changes.
+  // Live recalc — debounced — whenever any pricing input changes. ALL
+  // setState lives inside the (deferred) timeout callback — never synchronous
+  // in the effect body (react-hooks: avoids the cascading-render error).
   useEffect(() => {
-    if (weightKg <= 0 && cbm <= 0) {
-      setModes(null);
-      setError(null);
-      return;
-    }
     const t = setTimeout(() => {
+      if (weightKg <= 0 && cbm <= 0) {
+        setModes(null);
+        setError(null);
+        return;
+      }
       startTransition(async () => {
         const res = await getCustomerImportEstimate({
           warehouse,

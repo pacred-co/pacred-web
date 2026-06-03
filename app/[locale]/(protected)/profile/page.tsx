@@ -3,6 +3,7 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { EditProfileForm } from "./edit-profile-form";
+import { ProfileAvatarUpload } from "./profile-avatar-upload";
 
 /**
  * Customer profile screen — a FAITHFUL 1:1 TRANSCRIPTION of the legacy
@@ -354,24 +355,14 @@ export default async function ProfilePage() {
                               alt=""
                             />
                           </a>
-                          {/* L200-204 — the edit-image button. Opens the
-                              #edit-img-profile modal via data-toggle
-                              (vendor JS wires it). The crop-and-upload
-                              behind it is NOT wired — see the page-doc.
-                              data-toggle/data-target kept EXACTLY. */}
-                          <div className="edit-img-profile">
-                            <button
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-neutral-900 text-white shadow-md hover:bg-black"
-                              type="button"
-                              data-toggle="modal"
-                              data-target="#edit-img-profile"
-                            >
-                              <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="css-i6dzq1 svg-15">
-                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                                <circle cx="12" cy="13" r="4"></circle>
-                              </svg>
-                            </button>
-                          </div>
+                          {/* 2026-06-04 — WIRED Pacred avatar upload. Replaces
+                              the legacy edit-image button, whose #edit-img-profile
+                              / #uploadimageModal (dropify + croppie) were
+                              transcribed but never wired → a dead click. This
+                              island uploads to the `avatars` bucket → profiles
+                              .avatar_url (no jQuery, no comms). The inert legacy
+                              modal markup below is superseded (kept harmless). */}
+                          <ProfileAvatarUpload />
                           {/* L205-229 — #edit-img-profile modal (dropify
                               file picker). Markup transcribed 1:1; the
                               dropify plugin + the upload POST are NOT
