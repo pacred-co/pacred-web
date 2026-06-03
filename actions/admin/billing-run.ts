@@ -62,7 +62,7 @@ export type EligibleForwarderRow = {
   fbox: number | null;
   fweight: number | null;
   fcbm: number | null;
-  fpaytotal: number;
+  ftotalprice: number;
   fstatus: string | null;
   already_billed: boolean;
 };
@@ -183,7 +183,7 @@ function isOverdue(dateDue: string, status: string): boolean {
 //   WHERE f.fStatus=5  GROUP BY f.userID  ORDER BY f.userID
 //
 // We do it in two steps because PostgREST embeds don't aggregate cleanly:
-//   (a) SELECT DISTINCT userid + count() + sum(fpaytotal) FROM tb_forwarder WHERE fstatus='5'
+//   (a) SELECT DISTINCT userid + count() + sum(ftotalprice) FROM tb_forwarder WHERE fstatus='5'
 //   (b) JOIN tb_users + tb_corporate by userid
 
 export async function listEligibleCustomers(): Promise<
@@ -195,10 +195,10 @@ export async function listEligibleCustomers(): Promise<
       const admin = createAdminClient();
 
       // (a) aggregate per userid from tb_forwarder
-      type AggRow = { userid: string; fpaytotal: number | string | null };
+      type AggRow = { userid: string; ftotalprice: number | string | null };
       const { data: aggRaw, error: aggErr } = await admin
         .from("tb_forwarder")
-        .select("userid, fpaytotal")
+        .select("userid, ftotalprice")
         .eq("fstatus", "5")
         .limit(50_000); // generous cap — should not approach
       if (aggErr) {
@@ -213,7 +213,7 @@ export async function listEligibleCustomers(): Promise<
         if (!r.userid) continue;
         const cur = aggByUser.get(r.userid) ?? { count: 0, total: 0 };
         cur.count += 1;
-        cur.total += Number(r.fpaytotal ?? 0);
+        cur.total += Number(r.ftotalprice ?? 0);
         aggByUser.set(r.userid, cur);
       }
 
@@ -291,7 +291,7 @@ export async function listEligibleCustomers(): Promise<
 // ────────────────────────────────────────────────────────────────────────
 //
 // Mirrors legacy hs-forwarder-invoice/forwarder-invoice/listForwarderItem.php:
-//   SELECT id, fTrackingCHN, fDate, fbox, fweight, fcbm, fpaytotal, fStatus
+//   SELECT id, fTrackingCHN, fDate, fbox, fweight, fcbm, ftotalprice, fStatus
 //   FROM tb_forwarder WHERE userID=? AND fStatus=5
 //
 // Plus a Pacred guard: exclude forwarders ALREADY on a non-cancelled invoice
@@ -316,12 +316,12 @@ export async function listEligibleForwarders(
         fbox: number | string | null;
         fweight: number | string | null;
         fcbm: number | string | null;
-        fpaytotal: number | string | null;
+        ftotalprice: number | string | null;
         fstatus: string | null;
       };
       const { data: fwdRaw, error: fwdErr } = await admin
         .from("tb_forwarder")
-        .select("id, ftrackingchn, fdate, fbox, fweight, fcbm, fpaytotal, fstatus")
+        .select("id, ftrackingchn, fdate, fbox, fweight, fcbm, ftotalprice, fstatus")
         .eq("userid", userid)
         .eq("fstatus", "5")
         .order("id", { ascending: false })
@@ -375,7 +375,7 @@ export async function listEligibleForwarders(
         fbox:          f.fbox != null ? Number(f.fbox) : null,
         fweight:       f.fweight != null ? Number(f.fweight) : null,
         fcbm:          f.fcbm != null ? Number(f.fcbm) : null,
-        fpaytotal:     Number(f.fpaytotal ?? 0),
+        ftotalprice:     Number(f.ftotalprice ?? 0),
         fstatus:       f.fstatus,
         already_billed: alreadyBilledIds.has(f.id),
       }));
@@ -676,11 +676,11 @@ export async function createBillingRunInvoice(
         id: number;
         userid: string | null;
         fstatus: string | null;
-        fpaytotal: number | string | null;
+        ftotalprice: number | string | null;
       };
       const { data: fwdRaw, error: fwdErr } = await admin
         .from("tb_forwarder")
-        .select("id, userid, fstatus, fpaytotal")
+        .select("id, userid, fstatus, ftotalprice")
         .in("id", v.forwarderIds);
       if (fwdErr) {
         console.error("[createBillingRunInvoice tb_forwarder check] failed", {
@@ -791,10 +791,10 @@ export async function createBillingRunInvoice(
       }
 
       // (d) Compute subtotal + final total
-      const fpaytotalByID = new Map<number, number>();
-      for (const f of fwd) fpaytotalByID.set(f.id, Number(f.fpaytotal ?? 0));
+      const ftotalpriceByID = new Map<number, number>();
+      for (const f of fwd) ftotalpriceByID.set(f.id, Number(f.ftotalprice ?? 0));
       const subtotal = v.forwarderIds.reduce(
-        (sum, id) => sum + (fpaytotalByID.get(id) ?? 0),
+        (sum, id) => sum + (ftotalpriceByID.get(id) ?? 0),
         0,
       );
       const total = Math.max(
@@ -858,7 +858,7 @@ export async function createBillingRunInvoice(
       const itemsToInsert = v.forwarderIds.map((fid) => ({
         invoice_id:   invoiceId!,
         forwarder_id: fid,
-        amount_thb:   fpaytotalByID.get(fid) ?? 0,
+        amount_thb:   ftotalpriceByID.get(fid) ?? 0,
       }));
       const { error: itemErr } = await admin
         .from("tb_forwarder_invoice_item")

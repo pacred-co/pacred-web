@@ -134,7 +134,12 @@ export default async function CombineBillPage({
   let billsQ = admin
     .from("tb_bill")
     .select("billid, date, printstatus, adminid")
-    .order("billid", { ascending: false });
+    .order("billid", { ascending: false })
+    // 2026-06-03 — explicit cap raised above PostgREST's silent 1000-default.
+    // Same trap that bit the items query (silent truncation = empty cells).
+    // 2k is plenty for the 90d default window; revisit if the filter is
+    // ever widened to ทั้งหมด (currently 10,643 total bills).
+    .limit(2000);
 
   if (filterStart && filterEnd) {
     billsQ = billsQ
@@ -182,10 +187,28 @@ export default async function CombineBillPage({
   let rawItems: BillItemRow[] = [];
   if (bills.length > 0) {
     const visibleBillIds = bills.map((b) => b.billid);
+    // ── 2026-06-03 (ภูม flag · Pacred R-2 close-out) — silent 1000-cap fix ──
+    //
+    // The Wave 23 P0 fix #3 (Task #153) above collapsed the embed-join to a
+    // .in() pattern but did NOT set an explicit .limit() — so PostgREST's
+    // default 1000-row cap silently truncated the items result. With 953
+    // visible bills × ~3-5 items each the items table has ~3-5k rows in
+    // scope, but only the first 1000 (ordered unspecified by PostgREST →
+    // happens to be the OLDEST billids) came back. The newest bills (highest
+    // billid) got nothing in the Map → every `รายการฝากนำเข้า` cell rendered
+    // empty `—`. Live-verified 2026-06-03: items returned 1000 with first
+    // billid=9691 (= an OLD bill, NOT among the visible top-rows 10632-10643).
+    //
+    // Fix: explicit .limit(50000) + ascending sort by billid so the result
+    // set is deterministic. 50k is far above the ~26k total tb_bill_item
+    // row count today + leaves headroom; if it ever caps the page warns
+    // in the console.
     const itemsRes = await admin
       .from("tb_bill_item")
       .select("id, billid, fid")
-      .in("billid", visibleBillIds);
+      .in("billid", visibleBillIds)
+      .order("billid", { ascending: true })
+      .limit(50000);
     if (itemsRes.error) {
       // §0c — log + surface; do NOT swallow. Items being null here is
       // a real bug (already-visible bills must have item rows by
@@ -201,6 +224,11 @@ export default async function CombineBillPage({
       );
     }
     rawItems = (itemsRes.data ?? []) as unknown as BillItemRow[];
+    if (rawItems.length >= 50000) {
+      console.warn("[combine-bill] tb_bill_item hit the 50k cap — paginate", {
+        visibleBillCount: visibleBillIds.length,
+      });
+    }
   }
 
   // Build the (billID -> fID[]) Map — replaces legacy `search()` helper.
@@ -396,6 +424,7 @@ export default async function CombineBillPage({
                             <CombineBillRowActions
                               billId={row.billid}
                               printHref={printHref}
+                              hasItems={fids.length > 0}
                             />
                           )}
                         </div>

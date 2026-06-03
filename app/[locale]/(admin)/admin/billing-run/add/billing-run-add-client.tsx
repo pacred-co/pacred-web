@@ -127,12 +127,14 @@ export function BillingRunAddClient({ customers }: Props) {
     setLoadingFwd(uid !== "");
   }
 
-  // Subtotal = Σ fpaytotal of selected forwarders
+  // Subtotal = Σ ftotalprice of selected forwarders (the customer-paying
+  // total · tb_forwarder.ftotalprice. Earlier draft used fpaytotal which
+  // doesn't exist · fixed 2026-06-03 ภูม flag.)
   const subtotal = useMemo(() => {
     if (!eligible) return 0;
     let sum = 0;
     for (const f of eligible) {
-      if (selectedIds.has(f.id)) sum += f.fpaytotal;
+      if (selectedIds.has(f.id)) sum += f.ftotalprice;
     }
     return sum;
   }, [eligible, selectedIds]);
@@ -315,7 +317,7 @@ export function BillingRunAddClient({ customers }: Props) {
                     <td className="px-3 py-2 text-right">{f.fbox ?? "—"}</td>
                     <td className="px-3 py-2 text-right">{f.fweight ?? "—"}</td>
                     <td className="px-3 py-2 text-right">{f.fcbm ?? "—"}</td>
-                    <td className="px-3 py-2 text-right font-medium">{thbFmt(f.fpaytotal)}</td>
+                    <td className="px-3 py-2 text-right font-medium">{thbFmt(f.ftotalprice)}</td>
                     <td className="px-3 py-2 text-center text-xs text-muted">{f.fdate ?? "—"}</td>
                   </tr>
                 ))}

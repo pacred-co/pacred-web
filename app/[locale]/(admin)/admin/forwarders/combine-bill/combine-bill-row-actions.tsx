@@ -34,9 +34,14 @@ import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 type Props = {
   billId: number;
   printHref: string;
+  /** When false (bill has 0 items) print is disabled — clicking would 404
+   *  the print page since it requires ?id[]=… ≥ 1 to render. ภูม flag
+   *  2026-06-03: catch this at the row-action layer so staff sees a clear
+   *  "0 รายการ" hint instead of the print-page error message. */
+  hasItems?: boolean;
 };
 
-export function CombineBillRowActions({ billId, printHref }: Props) {
+export function CombineBillRowActions({ billId, printHref, hasItems = true }: Props) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const { confirm, alert, dialogs } = useConfirmDialogs();
@@ -70,14 +75,23 @@ export function CombineBillRowActions({ billId, printHref }: Props) {
       >
         {pending ? "กำลังลบ…" : "ลบรายการ"}
       </button>
-      <a
-        href={printHref}
-        target="_blank"
-        rel="noreferrer"
-        className="rounded-md border border-primary-300 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100"
-      >
-        พิมพ์บิลรวม
-      </a>
+      {hasItems ? (
+        <a
+          href={printHref}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-md border border-primary-300 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100"
+        >
+          พิมพ์บิลรวม
+        </a>
+      ) : (
+        <span
+          title="บิลนี้ยังไม่มีรายการฝากนำเข้า — เพิ่มรายการก่อนถึงจะพิมพ์ได้"
+          className="rounded-md border border-stone-200 bg-stone-50 px-2.5 py-1 text-xs font-medium text-stone-400 cursor-not-allowed"
+        >
+          พิมพ์บิลรวม
+        </span>
+      )}
       {dialogs}
     </>
   );
