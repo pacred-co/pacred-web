@@ -59,9 +59,9 @@ export type EligibleForwarderRow = {
   id: number;
   ftrackingchn: string;
   fdate: string | null;
-  fbox: number | null;
+  famount: number | null;
   fweight: number | null;
-  fcbm: number | null;
+  fvolume: number | null;
   ftotalprice: number;
   fstatus: string | null;
   already_billed: boolean;
@@ -123,9 +123,9 @@ export type BillingRunInvoiceDetail = {
     /** Hydrated forwarder data — joined post-fetch (no embed FK). */
     forwarder: {
       ftrackingchn: string;
-      fbox: number | null;
+      famount: number | null;
       fweight: number | null;
-      fcbm: number | null;
+      fvolume: number | null;
       fdate: string | null;
       fstatus: string | null;
     } | null;
@@ -309,7 +309,7 @@ export async function listEligibleCustomers(): Promise<
 // ────────────────────────────────────────────────────────────────────────
 //
 // Mirrors legacy hs-forwarder-invoice/forwarder-invoice/listForwarderItem.php:
-//   SELECT id, fTrackingCHN, fDate, fbox, fweight, fcbm, ftotalprice, fStatus
+//   SELECT id, fTrackingCHN, fDate, famount, fweight, fvolume, ftotalprice, fStatus
 //   FROM tb_forwarder WHERE userID=? AND fStatus=5
 //
 // Plus a Pacred guard: exclude forwarders ALREADY on a non-cancelled invoice
@@ -331,15 +331,15 @@ export async function listEligibleForwarders(
         id: number;
         ftrackingchn: string | null;
         fdate: string | null;
-        fbox: number | string | null;
+        famount: number | string | null;
         fweight: number | string | null;
-        fcbm: number | string | null;
+        fvolume: number | string | null;
         ftotalprice: number | string | null;
         fstatus: string | null;
       };
       const { data: fwdRaw, error: fwdErr } = await admin
         .from("tb_forwarder")
-        .select("id, ftrackingchn, fdate, fbox, fweight, fcbm, ftotalprice, fstatus")
+        .select("id, ftrackingchn, fdate, famount, fweight, fvolume, ftotalprice, fstatus")
         .eq("userid", userid)
         .eq("fstatus", "5")
         .order("id", { ascending: false })
@@ -390,9 +390,9 @@ export async function listEligibleForwarders(
         id:            f.id,
         ftrackingchn:  f.ftrackingchn ?? "",
         fdate:         f.fdate,
-        fbox:          f.fbox != null ? Number(f.fbox) : null,
+        famount:          f.famount != null ? Number(f.famount) : null,
         fweight:       f.fweight != null ? Number(f.fweight) : null,
-        fcbm:          f.fcbm != null ? Number(f.fcbm) : null,
+        fvolume:          f.fvolume != null ? Number(f.fvolume) : null,
         ftotalprice:     Number(f.ftotalprice ?? 0),
         fstatus:       f.fstatus,
         already_billed: alreadyBilledIds.has(f.id),
@@ -587,9 +587,9 @@ export async function getInvoiceDetail(
       type FwdHydRow = {
         id: number;
         ftrackingchn: string | null;
-        fbox: number | string | null;
+        famount: number | string | null;
         fweight: number | string | null;
-        fcbm: number | string | null;
+        fvolume: number | string | null;
         fdate: string | null;
         fstatus: string | null;
       };
@@ -597,7 +597,7 @@ export async function getInvoiceDetail(
       if (fids.length > 0) {
         const { data: fwdRaw, error: fwdErr } = await admin
           .from("tb_forwarder")
-          .select("id, ftrackingchn, fbox, fweight, fcbm, fdate, fstatus")
+          .select("id, ftrackingchn, famount, fweight, fvolume, fdate, fstatus")
           .in("id", fids);
         if (fwdErr) {
           console.error("[getInvoiceDetail tb_forwarder hydrate] failed", {
@@ -653,9 +653,9 @@ export async function getInvoiceDetail(
               forwarder:    f
                 ? {
                     ftrackingchn: f.ftrackingchn ?? "",
-                    fbox:         f.fbox != null ? Number(f.fbox) : null,
+                    famount:         f.famount != null ? Number(f.famount) : null,
                     fweight:      f.fweight != null ? Number(f.fweight) : null,
-                    fcbm:         f.fcbm != null ? Number(f.fcbm) : null,
+                    fvolume:         f.fvolume != null ? Number(f.fvolume) : null,
                     fdate:        f.fdate,
                     fstatus:      f.fstatus,
                   }

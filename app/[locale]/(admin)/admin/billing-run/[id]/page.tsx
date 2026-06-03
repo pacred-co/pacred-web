@@ -158,9 +158,9 @@ export default async function BillingRunDetailPage({
                     </Link>
                   </td>
                   <td className="px-3 py-2 font-mono text-xs">{it.forwarder?.ftrackingchn ?? "—"}</td>
-                  <td className="px-3 py-2 text-right">{it.forwarder?.fbox ?? "—"}</td>
+                  <td className="px-3 py-2 text-right">{it.forwarder?.famount ?? "—"}</td>
                   <td className="px-3 py-2 text-right">{it.forwarder?.fweight ?? "—"}</td>
-                  <td className="px-3 py-2 text-right">{it.forwarder?.fcbm ?? "—"}</td>
+                  <td className="px-3 py-2 text-right">{it.forwarder?.fvolume ?? "—"}</td>
                   <td className="px-3 py-2 text-center text-xs text-muted">{it.forwarder?.fdate ?? "—"}</td>
                   <td className="px-3 py-2 text-right font-medium">{thbFmt(it.amount_thb)}</td>
                 </tr>

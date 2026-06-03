@@ -106,16 +106,16 @@ export default async function CustomerBillingRunDetailPage({
   type FwdRow = {
     id: number;
     ftrackingchn: string | null;
-    fbox: number | string | null;
+    famount: number | string | null;
     fweight: number | string | null;
-    fcbm: number | string | null;
+    fvolume: number | string | null;
     fdate: string | null;
   };
   const fwdByID = new Map<number, FwdRow>();
   if (fids.length > 0) {
     const { data: fwdRaw, error: fwdErr } = await admin
       .from("tb_forwarder")
-      .select("id, ftrackingchn, fbox, fweight, fcbm, fdate")
+      .select("id, ftrackingchn, famount, fweight, fvolume, fdate")
       .in("id", fids);
     if (fwdErr) {
       console.error("[/billing-run/[id] customer forwarder hydrate] failed", {
@@ -223,9 +223,9 @@ export default async function CustomerBillingRunDetailPage({
                   <tr key={it.id} className="border-t border-border">
                     <td className="px-3 py-2.5 font-mono text-xs">#{it.forwarder_id}</td>
                     <td className="px-3 py-2.5 font-mono text-xs">{f?.ftrackingchn ?? "—"}</td>
-                    <td className="px-3 py-2.5 text-right">{f?.fbox ?? "—"}</td>
+                    <td className="px-3 py-2.5 text-right">{f?.famount ?? "—"}</td>
                     <td className="px-3 py-2.5 text-right">{f?.fweight ?? "—"}</td>
-                    <td className="px-3 py-2.5 text-right">{f?.fcbm ?? "—"}</td>
+                    <td className="px-3 py-2.5 text-right">{f?.fvolume ?? "—"}</td>
                     <td className="px-3 py-2.5 text-right font-medium">{thbFmt(Number(it.amount_thb))}</td>
                   </tr>
                 );

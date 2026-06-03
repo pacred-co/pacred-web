@@ -134,9 +134,9 @@ export default async function BillingRunPrintPage({
                 <td className="center">{idx + 1}</td>
                 <td>#{it.forwarder_id}</td>
                 <td style={{ fontFamily: "monospace", fontSize: "10px" }}>{it.forwarder?.ftrackingchn ?? "—"}</td>
-                <td className="right">{it.forwarder?.fbox ?? "—"}</td>
+                <td className="right">{it.forwarder?.famount ?? "—"}</td>
                 <td className="right">{it.forwarder?.fweight ?? "—"}</td>
-                <td className="right">{it.forwarder?.fcbm ?? "—"}</td>
+                <td className="right">{it.forwarder?.fvolume ?? "—"}</td>
                 <td className="right">{thbFmt(it.amount_thb)}</td>
               </tr>
             ))}

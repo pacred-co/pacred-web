@@ -55,6 +55,10 @@ export function BillingRunAddClient({ customers }: Props) {
   const [eligible, setEligible] = useState<EligibleForwarderRow[] | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [loadingFwd, setLoadingFwd] = useState(false);
+  // 2026-06-03 ภูม flag — round-1 swallowed listEligibleForwarders errors
+  // and just showed "ลูกค้านี้ไม่มีรายการ". Surface the real action error here
+  // so the next schema/column issue doesn't masquerade as an empty state.
+  const [fwdErr, setFwdErr] = useState<string | null>(null);
 
   const [dateIssued, setDateIssued] = useState(isoToday());
   const [dateDue, setDateDue] = useState(isoDaysFromToday(7));
@@ -111,10 +115,12 @@ export function BillingRunAddClient({ customers }: Props) {
       setLoadingFwd(false);
       if (res.ok) {
         setEligible(res.data!.rows);
+        setFwdErr(null);
         // Default selection: tick all unbilled rows
         setSelectedIds(new Set(res.data!.rows.filter((r) => !r.already_billed).map((r) => r.id)));
       } else {
         setEligible([]);
+        setFwdErr(res.error);
       }
     });
     return () => { cancelled = true; };
@@ -124,6 +130,7 @@ export function BillingRunAddClient({ customers }: Props) {
     setSelectedUserid(uid);
     setEligible(null);
     setSelectedIds(new Set());
+    setFwdErr(null);
     setLoadingFwd(uid !== "");
   }
 
@@ -274,7 +281,14 @@ export function BillingRunAddClient({ customers }: Props) {
           <p className="text-sm text-muted text-center py-6">กำลังโหลด...</p>
         )}
 
-        {selectedUserid && !loadingFwd && (eligible?.length ?? 0) === 0 && (
+        {selectedUserid && !loadingFwd && fwdErr && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <p className="font-medium">❌ ไม่สามารถโหลดรายการได้</p>
+            <p className="mt-1 text-xs">{fwdErr}</p>
+          </div>
+        )}
+
+        {selectedUserid && !loadingFwd && !fwdErr && (eligible?.length ?? 0) === 0 && (
           <p className="text-sm text-muted text-center py-6">ลูกค้านี้ไม่มีรายการที่สามารถออกใบวางบิลได้</p>
         )}
 
@@ -292,7 +306,7 @@ export function BillingRunAddClient({ customers }: Props) {
                   </th>
                   <th className="px-3 py-2 text-left">เลขที่ออเดอร์</th>
                   <th className="px-3 py-2 text-left">รหัสพัสดุ</th>
-                  <th className="px-3 py-2 text-right">กล่อง</th>
+                  <th className="px-3 py-2 text-right">จำนวน</th>
                   <th className="px-3 py-2 text-right">น้ำหนัก (kg)</th>
                   <th className="px-3 py-2 text-right">ปริมาตร (CBM)</th>
                   <th className="px-3 py-2 text-right">ค่าขนส่ง (฿)</th>
@@ -314,9 +328,9 @@ export function BillingRunAddClient({ customers }: Props) {
                     </td>
                     <td className="px-3 py-2 font-mono text-xs">#{f.id}</td>
                     <td className="px-3 py-2 font-mono text-xs">{f.ftrackingchn}</td>
-                    <td className="px-3 py-2 text-right">{f.fbox ?? "—"}</td>
+                    <td className="px-3 py-2 text-right">{f.famount ?? "—"}</td>
                     <td className="px-3 py-2 text-right">{f.fweight ?? "—"}</td>
-                    <td className="px-3 py-2 text-right">{f.fcbm ?? "—"}</td>
+                    <td className="px-3 py-2 text-right">{f.fvolume ?? "—"}</td>
                     <td className="px-3 py-2 text-right font-medium">{thbFmt(f.ftotalprice)}</td>
                     <td className="px-3 py-2 text-center text-xs text-muted">{f.fdate ?? "—"}</td>
                   </tr>
