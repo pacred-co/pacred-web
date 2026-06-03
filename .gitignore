@@ -52,3 +52,4 @@ next-env.d.ts
 scripts/backfill/.progress/
 
 .claude/scheduled_tasks.lock
+.pcs-sync-token-*.txt
