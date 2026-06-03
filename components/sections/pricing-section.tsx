@@ -240,7 +240,14 @@ const FREIGHT_CARDS: FreightCard[] = [
 const LCL_CARDS = FREIGHT_CARDS.filter((c) => c.group === "lcl");
 const FCL_CARDS = FREIGHT_CARDS.filter((c) => c.group === "fcl");
 
-export function PricingSection() {
+export function PricingSection({
+  lclExpanded = false,
+}: {
+  /** LCL-landing variant: hide the country picker + Cargo/Freight toggle +
+   *  port/term toggles, and show BOTH the Cargo-LCL and Freight-LCL sections
+   *  stacked (no FCL). Default false = the full home-page pricing. */
+  lclExpanded?: boolean;
+} = {}) {
   const t = useTranslations("pricing");
   const MODES: Record<Mode, { id: Mode; title: string; badge: string; icon: typeof Ship }> = {
     cargo:   { id: "cargo",   title: t("modeCargoTitle"),   badge: t("modeCargoBadge"),   icon: Warehouse },
@@ -277,7 +284,8 @@ export function PricingSection() {
           </h2>
         </div>
 
-        {/* ─── Country picker ─── */}
+        {/* ─── Country picker (hidden in the lclExpanded variant) ─── */}
+        {!lclExpanded && (
         <div className="mx-auto mt-6 w-full max-w-[1120px]">
           <div className="text-[12px] font-bold text-muted uppercase tracking-[0.12em] mb-2">
             {t("originCountry")}
@@ -318,8 +326,10 @@ export function PricingSection() {
             })}
           </div>
         </div>
+        )}
 
-        {/* ─── Mode toggle (Cargo / Freight) ─── */}
+        {/* ─── Mode toggle (Cargo / Freight) — hidden in the lclExpanded variant ─── */}
+        {!lclExpanded && (
         <div className="mx-auto mt-6 w-full max-w-[1120px]">
           <div className="inline-flex p-1.5 rounded-2xl bg-gradient-to-br from-surface to-surface-alt dark:from-surface dark:to-background border border-border w-full md:w-auto shadow-[inset_0_2px_6px_rgba(0,0,0,0.04)]">
             {(Object.keys(MODES) as Mode[]).map((m) => {
@@ -352,9 +362,10 @@ export function PricingSection() {
             })}
           </div>
         </div>
+        )}
 
-        {/* ─── Port picker (Freight only) ─── */}
-        {mode === "freight" && (
+        {/* ─── Port picker (Freight only) — hidden in the lclExpanded variant ─── */}
+        {mode === "freight" && !lclExpanded && (
           <div className="mx-auto mt-4 w-full max-w-[1120px]">
             <div className="text-[12px] font-bold text-muted uppercase tracking-[0.12em] mb-2 flex items-center gap-1.5">
               <Anchor className="w-3.5 h-3.5" strokeWidth={2.5} />
@@ -388,8 +399,8 @@ export function PricingSection() {
           </div>
         )}
 
-        {/* ─── Term toggle — hidden when only one term available (cargo = DDP only) ─── */}
-        {visibleTerms.length > 1 && (
+        {/* ─── Term toggle — hidden when one term only, or in the lclExpanded variant ─── */}
+        {visibleTerms.length > 1 && !lclExpanded && (
         <div className="mx-auto mt-6 w-full max-w-[1120px]">
           <div className="text-[12px] font-bold text-muted uppercase tracking-[0.12em] mb-2">
             {t("termLabel")}
@@ -444,7 +455,28 @@ export function PricingSection() {
 
         {/* ─── Price cards — horizontal swipe on mobile ─── */}
         <div className="mx-auto mt-6 w-full max-w-[1120px]">
-          {mode === "cargo" ? (
+          {lclExpanded ? (
+            <div className="flex flex-col gap-7 md:gap-10">
+              {/* ═════ Cargo LCL (ชื่อชิปปิ้ง · โกดังถึงโกดัง) ═════ */}
+              <CargoGroupRow
+                eyebrow={t("cargoLclSectionEyebrow")}
+                title={t("cargoLclSectionTitle")}
+                sub={t("cargoLclSectionSub")}
+                cards={CARGO_CARDS}
+                cols={3}
+                t={t}
+              />
+              {/* ═════ Freight LCL (ชื่อลูกค้า · Port-to-Port) ═════ */}
+              <FreightGroupRow
+                eyebrow={t("lclSectionEyebrow")}
+                title={t("lclSectionTitle")}
+                sub={t("lclSectionSub")}
+                cards={LCL_CARDS}
+                term="DDP"
+                t={t}
+              />
+            </div>
+          ) : mode === "cargo" ? (
             <div className="flex flex-col gap-7 md:gap-10">
               {/* ═════ Cargo LCL Section ═════ */}
               <CargoGroupRow
