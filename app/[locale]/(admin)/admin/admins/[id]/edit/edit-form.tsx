@@ -30,6 +30,7 @@ import {
   SEX_VALUES,
   type AdminRoleEnum,
 } from "@/lib/validators/admin-form";
+import { AdminAvatarUploadField } from "@/components/admin/admin-avatar-upload-field";
 
 const ROLE_LABELS: Record<AdminRoleEnum, string> = {
   super:                     "Super Admin",
@@ -302,17 +303,10 @@ export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted mb-1">
-                Avatar URL{" "}
-                <span className="text-[10px] text-muted">(file upload — Wave 23)</span>
-              </label>
-              <input
-                type="url"
+              <AdminAvatarUploadField
                 value={avatarUrl}
-                onChange={(e) => setAvatarUrl(e.target.value)}
-                maxLength={512}
+                onChange={setAvatarUrl}
                 disabled={pending}
-                className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
               />
             </div>
             <div>

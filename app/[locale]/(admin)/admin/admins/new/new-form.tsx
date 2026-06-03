@@ -32,6 +32,7 @@ import {
   suggestAdminPassword,
   type AdminRoleEnum,
 } from "@/lib/validators/admin-form";
+import { AdminAvatarUploadField } from "@/components/admin/admin-avatar-upload-field";
 
 // ─── role label map ────────────────────────────────────────────────────
 // Human-readable Thai labels keyed by the AdminRoleEnum values. Same
@@ -491,18 +492,10 @@ export function AdminCreateNewForm({
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted mb-1">
-              Avatar URL{" "}
-              <span className="text-[10px] text-muted">(วาง URL · file upload — Wave 23)</span>
-            </label>
-            <input
-              type="url"
+            <AdminAvatarUploadField
               value={avatarUrl}
-              onChange={(e) => setAvatarUrl(e.target.value)}
-              maxLength={512}
-              placeholder="https://… (ไม่บังคับ)"
+              onChange={setAvatarUrl}
               disabled={pending}
-              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
             />
           </div>
         </div>
