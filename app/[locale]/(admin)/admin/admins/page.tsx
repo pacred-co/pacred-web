@@ -209,7 +209,20 @@ type AdminRow = {
   } | null;
 };
 
-type SP = { s?: string; c?: string; type?: string; position?: string };
+type SP = { s?: string; c?: string; type?: string; position?: string; sort?: string; dir?: string };
+
+// Lane C 2026-06-02 — server-side sort whitelist (ภูม flag #3).
+// Only columns on the `admins` table can be ordered by Supabase here
+// because Query 1 reads admins first; profile/extras-driven sorts are
+// applied as a post-JS sort below.
+const ADMINS_SORT_KEYS = new Set([
+  "granted_at",
+  "role",
+  "is_active",
+  "name",      // post-JS: profile.first_name + last_name
+  "company",   // post-JS: extras.company
+  "type",      // post-JS: extras.employee_type
+]);
 
 export default async function AdminTablePage({
   searchParams,
@@ -237,7 +250,21 @@ export default async function AdminTablePage({
     case "all": /* no action */ break;
     default:    /* not set — render all (matches legacy "no `s` → unfiltered") */ break;
   }
-  adminQ = adminQ.order("granted_at", { ascending: false, nullsFirst: false });
+  // Lane C 2026-06-02 — resolve sort/dir from URL. Only granted_at/role/is_active
+  // can be ordered server-side (admins-table columns); the rest are sorted in JS.
+  const sortKeyRaw = sp.sort && ADMINS_SORT_KEYS.has(sp.sort) ? sp.sort : "granted_at";
+  const sortDir: "asc" | "desc" = sp.dir === "asc" ? "asc" : "desc";
+  const dbSortable: Record<string, string> = {
+    granted_at: "granted_at",
+    role:       "role",
+    is_active:  "is_active",
+  };
+  if (dbSortable[sortKeyRaw]) {
+    adminQ = adminQ.order(dbSortable[sortKeyRaw], { ascending: sortDir === "asc", nullsFirst: false });
+  } else {
+    // post-JS sort columns still need a stable secondary order from DB
+    adminQ = adminQ.order("granted_at", { ascending: false, nullsFirst: false });
+  }
 
   // ── Status overview counts (admins table only — fast) ──────────
   const buildCountQ = (statusVal: "active" | "inactive" | "all") => {
@@ -342,6 +369,41 @@ export default async function AdminTablePage({
 
   // Drop rows with no profile (FK should prevent · defensive).
   const rows: AdminRow[] = rawRows.filter((r) => r.profile !== null);
+
+  // Lane C 2026-06-02 — post-JS sort for columns derived from profiles / extras.
+  if (sortKeyRaw === "name" || sortKeyRaw === "company" || sortKeyRaw === "type") {
+    const dir = sortDir === "asc" ? 1 : -1;
+    rows.sort((a, b) => {
+      let av = "", bv = "";
+      if (sortKeyRaw === "name") {
+        av = `${a.profile?.first_name ?? ""} ${a.profile?.last_name ?? ""}`.toLowerCase().trim();
+        bv = `${b.profile?.first_name ?? ""} ${b.profile?.last_name ?? ""}`.toLowerCase().trim();
+      } else if (sortKeyRaw === "company") {
+        av = (a.extras?.company ?? "").toLowerCase();
+        bv = (b.extras?.company ?? "").toLowerCase();
+      } else if (sortKeyRaw === "type") {
+        av = (a.extras?.employee_type ?? "").toLowerCase();
+        bv = (b.extras?.employee_type ?? "").toLowerCase();
+      }
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    });
+  }
+
+  // Lane C 2026-06-02 — pre-compute sort hrefs (preserve all current filters).
+  const sortHrefs: Record<string, string> = {};
+  for (const k of ADMINS_SORT_KEYS) {
+    const nextDir = sortKeyRaw === k && sortDir === "desc" ? "asc" : "desc";
+    const params = new URLSearchParams();
+    if (sp.s)        params.set("s", sp.s);
+    if (sp.c)        params.set("c", sp.c);
+    if (sp.type)     params.set("type", sp.type);
+    if (sp.position) params.set("position", sp.position);
+    params.set("sort", k);
+    params.set("dir", nextDir);
+    sortHrefs[k] = `/admin/admins?${params.toString()}`;
+  }
 
   const sAll = sAllRes.count ?? 0;
   const s1   = s1Res.count   ?? 0;
@@ -461,19 +523,19 @@ export default async function AdminTablePage({
             <table className="w-full text-xs">
               <thead className="bg-surface-alt/60">
                 <tr className="text-left">
-                  <Th>วันที่เพิ่ม</Th>
+                  <SortTh label="วันที่เพิ่ม"    field="granted_at" activeKey={sortKeyRaw} activeDir={sortDir} hrefs={sortHrefs} />
                   <Th>รหัส</Th>
-                  <Th>ชื่อ - นามสกุล</Th>
+                  <SortTh label="ชื่อ - นามสกุล" field="name"       activeKey={sortKeyRaw} activeDir={sortDir} hrefs={sortHrefs} />
                   <Th>ชื่อเล่น</Th>
-                  <Th>Role</Th>
-                  <Th>บริษัท</Th>
-                  <Th>ประเภท</Th>
+                  <SortTh label="Role"           field="role"       activeKey={sortKeyRaw} activeDir={sortDir} hrefs={sortHrefs} />
+                  <SortTh label="บริษัท"         field="company"    activeKey={sortKeyRaw} activeDir={sortDir} hrefs={sortHrefs} />
+                  <SortTh label="ประเภท"         field="type"       activeKey={sortKeyRaw} activeDir={sortDir} hrefs={sortHrefs} />
                   <Th>แผนก / ตำแหน่ง</Th>
                   <Th>อีเมลส่วนตัว</Th>
                   <Th>เบอร์ส่วนตัว</Th>
                   <Th>อีเมลบริษัท</Th>
                   <Th>โทรบริษัท</Th>
-                  <Th>สถานะ</Th>
+                  <SortTh label="สถานะ"          field="is_active"  activeKey={sortKeyRaw} activeDir={sortDir} hrefs={sortHrefs} />
                   <Th>ตัวเลือก</Th>
                 </tr>
               </thead>
@@ -666,6 +728,36 @@ function Th({ children }: { children?: React.ReactNode }) {
   return (
     <th className="px-3 py-2 text-[10px] uppercase tracking-wider text-muted font-semibold whitespace-nowrap">
       {children}
+    </th>
+  );
+}
+/** Lane C 2026-06-02 — sortable column header (Link-based, server-side). */
+function SortTh({
+  label,
+  field,
+  activeKey,
+  activeDir,
+  hrefs,
+}: {
+  label: string;
+  field: string;
+  activeKey: string;
+  activeDir: "asc" | "desc";
+  hrefs: Record<string, string>;
+}) {
+  const active = activeKey === field;
+  const arrow = active ? (activeDir === "asc" ? "↑" : "↓") : "⇵";
+  return (
+    <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap">
+      <Link
+        href={hrefs[field]}
+        className={`inline-flex items-center gap-1 transition-colors hover:text-foreground ${
+          active ? "text-primary-700" : "text-muted"
+        }`}
+      >
+        <span>{label}</span>
+        <span className="text-[9px]" aria-hidden>{arrow}</span>
+      </Link>
     </th>
   );
 }

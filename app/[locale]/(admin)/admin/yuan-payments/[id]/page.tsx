@@ -1,14 +1,35 @@
 /**
  * /admin/yuan-payments/[id] — read-only yuan payment detail (Wave 7 fix · 2026-05-21 night).
  *
- * The /admin dashboard's "payment" tab "ดู/แก้ไข" link pointed at
- * `/admin/yuan-payments/${row.id}` but no route existed → 404. This page
- * resolves the row id against `tb_payment` + `tb_users` and renders the
- * basics + the slip image (if any).
+ * ── 2026-06-02 ภูม flag #2 — PCS-style redesign ──────────────────────
  *
- * Wave 8 backlog: approve/reject buttons + auto-credit wallet on approve
- * (mirrors the legacy `tb_payment.paystatus '1' → '2' → '3'` flow). For
- * now read-only; ops uses the legacy PHP admin if urgent.
+ * Old layout was barebones (ADMIN · ฝากโอนหยวน · #1460 · flat KV list +
+ * slip + action panel). PCS legacy shows two wallet summary cards on top
+ * + one BIG detail card with breadcrumb + clickable customer info + status
+ * badge + body sections + price breakdown right column. This rewrite ports
+ * that polish over while keeping the wired YuanPaymentActions island intact.
+ *
+ * Layout (top → bottom):
+ *   1. TOP CARDS (grid md:2) — left: this customer's wallet + cash-back
+ *      with "+ เติมเงินเข้ากระเป๋า" CTA → /admin/wallet/add?q=PR####;
+ *      right: system-wide wallet + cash-back totals + same CTA.
+ *      Modeled on /admin/wallet/[id]/page.tsx BalanceCard component.
+ *   2. BREADCRUMB — หน้าแรก / ฝากโอนหยวน / #<id>
+ *   3. MAIN DETAIL CARD (grid md:2/3+1/3):
+ *      LEFT 2/3 — header (id + paytype badge) · status banner ·
+ *        clickable customer (name → /admin/customers/<userid>, tel → tel:) ·
+ *        "ข้อมูลค่าชำระเงิน" group (yuan · rate · thb) · paydetail · timestamps
+ *      RIGHT 1/3 — price breakdown (paythb · paythbcost · payrate · payratecost
+ *        · payprofitthb)
+ *   4. SLIP IMAGES (existing — customer + admin sections)
+ *   5. ACTION PANEL (existing YuanPaymentActions client island, unchanged)
+ *
+ * ── What is preserved (don't break) ──────────────────────────────────
+ *   - YuanPaymentActions client island (same props, same wiring)
+ *   - paystatusToPacred + paidViaWallet logic for P0-11
+ *   - Slip resolver (customer + admin slips)
+ *   - Refund-probe via tb_wallet_hs
+ *   - force-dynamic + requireAdmin role gate
  *
  * Verified prod schema 2026-05-21 via REST: tb_payment(id, paydate,
  *   paydeposit, paystatus, paytype, paydetail, payyuan, payrate, payratecost,
@@ -18,6 +39,7 @@
  */
 
 import { notFound } from "next/navigation";
+import { Plus } from "lucide-react";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
@@ -38,6 +60,7 @@ const STATUS_CLS: Record<string, string> = {
   "3": "bg-red-100 text-red-700 border-red-200",
 };
 // paytype legacy values: 1=alipay 2=wechat 3=union 4=usdt ... (per legacy `payment.php`)
+// ภูม flag #2 confirms: keep the "Wechat" channel badge ("อันนี้ดีเเล้วเก็บไว้").
 const PAYTYPE_LABEL: Record<string, string> = {
   "1": "Alipay",
   "2": "Wechat",
@@ -53,6 +76,7 @@ type PaymentRow = {
   paydetail: string | null;
   payyuan: number | null;
   payrate: number | null;
+  payratecost: number | null;
   paythb: number | null;
   paythbcost: number | null;
   payprofitthb: number | null;
@@ -85,10 +109,11 @@ export default async function AdminYuanPaymentDetail({
   const admin = createAdminClient();
   // P0-11: pulled `paydeposit` so YuanPaymentActions knows whether the
   // refund modal should warn about a wallet reversal (Phase C QoL #4).
+  // ภูม #2: also pulled `payratecost` for the right-column price breakdown.
   const { data: rowRaw, error: rowRawErr } = await admin
     .from("tb_payment")
     .select(
-      "id,paydate,paystatus,paytype,paydetail,payyuan,payrate,paythb,paythbcost,payprofitthb,paydateadmin,userid,adminid,imagesslip,imagesslipadmin,paydeposit",
+      "id,paydate,paystatus,paytype,paydetail,payyuan,payrate,payratecost,paythb,paythbcost,payprofitthb,paydateadmin,userid,adminid,imagesslip,imagesslipadmin,paydeposit",
     )
     .eq("id", id)
     .maybeSingle();
@@ -99,30 +124,38 @@ export default async function AdminYuanPaymentDetail({
   if (!rowRaw) notFound();
   const row = rowRaw as unknown as PaymentRow;
 
-  const { data: userRaw, error: userRawErr } = await admin
-    .from("tb_users")
-    .select("userID,userName,userLastName,userTel,userEmail")
-    .eq("userID", row.userid)
-    .maybeSingle();
-  if (userRawErr) {
-    console.error(`[tb_users list] failed`, { code: userRawErr.code, message: userRawErr.message });
-  }
-  const user = userRaw as unknown as UserRow | null;
-
-  const customerName = `${user?.userName ?? ""} ${user?.userLastName ?? ""}`.trim() || "—";
-  const status = row.paystatus ?? "1";
-  const paytype = row.paytype ?? "";
-
-  // Wave 13: resolve legacy slip filenames → Supabase signed URLs in
-  // parallel. Bare filenames (`PCS9122_…jpg`) live under `slips/legacy/`
-  // after backfill 06; the resolver also passes through full URLs and
-  // Wave-12 admin uploads at `admin/cnt-slip/…` unchanged.
-  //
-  // P0-11: ALSO probe for an existing wallet refund row so YuanPaymentActions
-  // can render the right "refunded" vs "failed" branch on paystatus='3'.
-  // Pattern verified against actions/admin/yuan-payments.ts:104 — refund
-  // is INSERT tb_wallet_hs(type='5', reforder=id, userid).
-  const [slipUrl, slipAdminUrl, refundRow] = await Promise.all([
+  // Parallel reads: user · slip URLs · refund probe · wallet summary
+  // (per-user + system-wide). The 4 wallet/cb fetches mirror
+  // /admin/wallet/[id]/page.tsx — same `limit(50_000)` pattern (8,898
+  // customers comfortably under cap). To be replaced by
+  // `get_wallet_system_totals()` RPC in Phase C.
+  const [
+    { data: userRaw, error: userRawErr },
+    { data: walletRaw, error: walletErr },
+    { data: cbRaw, error: cbErr },
+    { data: allWallets, error: allWalletsErr },
+    { data: allCb, error: allCbErr },
+    slipUrl,
+    slipAdminUrl,
+    refundRow,
+  ] = await Promise.all([
+    admin
+      .from("tb_users")
+      .select("userID,userName,userLastName,userTel,userEmail")
+      .eq("userID", row.userid)
+      .maybeSingle(),
+    admin
+      .from("tb_wallet")
+      .select("wallettotal")
+      .eq("userid", row.userid)
+      .maybeSingle(),
+    admin
+      .from("tb_cash_back")
+      .select("cbtotal")
+      .eq("userid", row.userid)
+      .maybeSingle(),
+    admin.from("tb_wallet").select("wallettotal").limit(50_000),
+    admin.from("tb_cash_back").select("cbtotal").limit(50_000),
     resolveLegacyUrl(row.imagesslip, "slip"),
     resolveLegacyUrl(row.imagesslipadmin, "slip"),
     admin
@@ -134,6 +167,32 @@ export default async function AdminYuanPaymentDetail({
       .limit(1)
       .maybeSingle<{ id: number }>(),
   ]);
+  if (userRawErr) {
+    console.error(`[tb_users list] failed`, { code: userRawErr.code, message: userRawErr.message });
+  }
+  if (walletErr) console.error(`[tb_wallet list] failed`, { code: walletErr.code, message: walletErr.message });
+  if (cbErr) console.error(`[tb_cash_back list] failed`, { code: cbErr.code, message: cbErr.message });
+  if (allWalletsErr)
+    console.error(`[tb_wallet list-all] failed`, { code: allWalletsErr.code, message: allWalletsErr.message });
+  if (allCbErr)
+    console.error(`[tb_cash_back list-all] failed`, { code: allCbErr.code, message: allCbErr.message });
+
+  const user = userRaw as unknown as UserRow | null;
+  const walletTotalUser = Number((walletRaw as { wallettotal: number | null } | null)?.wallettotal ?? 0);
+  const cbTotalUser = Number((cbRaw as { cbtotal: number | null } | null)?.cbtotal ?? 0);
+  const walletTotalAll = (allWallets ?? []).reduce(
+    (s, r) => s + Number((r as { wallettotal: number | null }).wallettotal ?? 0),
+    0,
+  );
+  const cbTotalAll = (allCb ?? []).reduce(
+    (s, r) => s + Number((r as { cbtotal: number | null }).cbtotal ?? 0),
+    0,
+  );
+
+  const customerName = `${user?.userName ?? ""} ${user?.userLastName ?? ""}`.trim() || "—";
+  const status = row.paystatus ?? "1";
+  const paytype = row.paytype ?? "";
+
   // P0-11: compute the pacred-string status from the legacy char + wallet
   // refund probe. This is the same mapping the rebuilt action uses internally
   // (lib/legacy-paystatus-map.ts), so YuanPaymentActions can decide which
@@ -142,111 +201,211 @@ export default async function AdminYuanPaymentDetail({
   const paidViaWallet = row.paydeposit === "1";
 
   return (
-    <main className="p-6 lg:p-8 max-w-3xl mx-auto space-y-5">
-      <div className="flex items-baseline justify-between flex-wrap gap-2">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">
-            ADMIN · ฝากโอนหยวน
-          </p>
-          <div className="flex items-center gap-3 mt-1 flex-wrap">
-            <h1 className="text-2xl font-bold font-mono">#{row.id}</h1>
+    <main className="p-4 lg:p-6 max-w-6xl mx-auto space-y-4">
+      {/* ── 1. TOP CARDS: per-user + system-wide ── */}
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <BalanceCard
+          title="ยอดเงินของสมาชิก"
+          subtitle={`กระเป๋าสตางค์ ${row.userid} (บาท)`}
+          amount={walletTotalUser}
+          cashback={cbTotalUser}
+          topupHref={`/admin/wallet/add?q=${encodeURIComponent(row.userid)}`}
+        />
+        <BalanceCard
+          title="ยอดรวมทั้งหมดในระบบ"
+          subtitle="กระเป๋าสตางค์ (บาท)"
+          amount={walletTotalAll}
+          cashback={cbTotalAll}
+          topupHref="/admin/wallet/add"
+        />
+      </section>
+
+      {/* ── 2. BREADCRUMB ── */}
+      <nav aria-label="breadcrumb" className="text-xs text-muted flex gap-1.5 items-center flex-wrap">
+        <Link href="/admin" className="hover:text-primary-600">หน้าแรก</Link>
+        <span>/</span>
+        <Link href="/admin/yuan-payments" className="hover:text-primary-600">ฝากโอนหยวน</Link>
+        <span>/</span>
+        <span className="font-mono text-foreground">#{row.id}</span>
+      </nav>
+
+      {/* ── 3. MAIN DETAIL CARD ── */}
+      <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+        {/* Header strip */}
+        <div className="border-b border-border bg-primary-50/40 dark:bg-primary-50/5 p-4 flex items-start justify-between flex-wrap gap-3">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold tracking-widest text-primary-600">
+              รายการฝากชำระเงินค้า
+            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-bold font-mono">#{row.id}</h1>
+              {paytype ? (
+                <span className="rounded-full border border-border bg-surface-alt px-2.5 py-0.5 text-[11px]">
+                  {PAYTYPE_LABEL[paytype] ?? `type ${paytype}`}
+                </span>
+              ) : null}
+              {paidViaWallet ? (
+                <span className="rounded-full border border-amber-200 bg-amber-50 text-amber-700 px-2.5 py-0.5 text-[11px]">
+                  ชำระจากกระเป๋า
+                </span>
+              ) : null}
+            </div>
+            <p className="text-[11px] text-muted">
+              เวลาทำรายการ: {row.paydate ? new Date(row.paydate).toLocaleString("th-TH") : "—"}
+            </p>
+          </div>
+          <div className="text-right space-y-1">
             <span
-              className={`rounded-full border px-3 py-1 text-xs font-medium ${
+              className={`inline-block rounded-full border px-3 py-1 text-xs font-medium ${
                 STATUS_CLS[status] ?? "bg-gray-100 text-gray-600 border-gray-200"
               }`}
             >
               {STATUS_LABEL[status] ?? `status ${status}`}
             </span>
-            {paytype ? (
-              <span className="rounded-full border border-border bg-surface-alt px-3 py-1 text-xs">
-                {PAYTYPE_LABEL[paytype] ?? `type ${paytype}`}
-              </span>
+            {row.adminid && status !== "1" ? (
+              <p className="text-[11px] text-muted">
+                ดำเนินรายการแล้ว โดย: <span className="font-mono">{row.adminid}</span>
+              </p>
+            ) : null}
+            {row.paydateadmin ? (
+              <p className="text-[11px] text-muted">
+                {new Date(row.paydateadmin).toLocaleString("th-TH")}
+              </p>
             ) : null}
           </div>
-          <p className="text-xs text-muted mt-1">
-            P0-11 · ปุ่ม approve/reject ด้านล่างเขียน tb_payment (เปลี่ยนสถานะ + stamp adminid)
-          </p>
         </div>
-        <Link href="/admin/yuan-payments" className="text-xs text-primary-600 hover:underline">
-          ← รายการ
-        </Link>
-      </div>
 
-      <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3 text-sm">
-        <KV label="ลูกค้า" value={`${customerName} (${row.userid})`} />
-        <KV label="โทร · อีเมล" value={`${user?.userTel ?? "-"} · ${user?.userEmail ?? "-"}`} />
-        <KV
-          label="ยอดหยวน (¥)"
-          value={`¥${Number(row.payyuan ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-          mono
-        />
-        <KV label="เรท" value={String(row.payrate ?? 0)} mono />
-        <KV
-          label="ยอดโอน (THB)"
-          value={`฿${Number(row.paythb ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-          mono
-        />
-        <KV
-          label="ทุน (THB)"
-          value={`฿${Number(row.paythbcost ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-          mono
-        />
-        <KV
-          label="กำไร (THB)"
-          value={`฿${Number(row.payprofitthb ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-          mono
-        />
-        {row.paydetail ? <KV label="รายละเอียดผู้รับ" value={row.paydetail} /> : null}
-        <KV
-          label="วันที่สร้าง"
-          value={row.paydate ? new Date(row.paydate).toLocaleString("th-TH") : "-"}
-        />
-        <KV
-          label="วันที่อนุมัติ"
-          value={row.paydateadmin ? new Date(row.paydateadmin).toLocaleString("th-TH") : "-"}
-        />
-        {row.adminid ? <KV label="ผู้อนุมัติ" value={row.adminid} mono /> : null}
-      </div>
+        {/* Body: 2-col (md:2/3 + 1/3) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-0">
+          {/* LEFT 2/3 — customer + payment info */}
+          <div className="md:col-span-2 p-5 space-y-4 border-b md:border-b-0 md:border-r border-border">
+            {/* Customer block */}
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-muted">จาก</p>
+              <Link
+                href={`/admin/customers/${encodeURIComponent(row.userid)}`}
+                className="block text-base font-bold text-primary-600 hover:underline"
+              >
+                [{row.userid}] {customerName}
+              </Link>
+              {user?.userTel ? (
+                <p className="text-sm">
+                  <span className="text-muted">โทร:</span>{" "}
+                  <a href={`tel:${user.userTel}`} className="text-primary-600 hover:underline font-mono">
+                    {user.userTel}
+                  </a>
+                </p>
+              ) : null}
+              {user?.userEmail ? (
+                <p className="text-sm">
+                  <span className="text-muted">อีเมล:</span>{" "}
+                  <a href={`mailto:${user.userEmail}`} className="text-primary-600 hover:underline">
+                    {user.userEmail}
+                  </a>
+                </p>
+              ) : null}
+            </div>
 
-      {slipUrl && (
-        <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
-          <p className="text-xs font-semibold text-muted mb-2">สลิป (ลูกค้าอัปโหลด)</p>
-          <a
-            href={slipUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block rounded-md border border-border overflow-hidden hover:border-primary-500"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={slipUrl} alt="สลิป" className="max-w-full max-h-[600px]" />
-          </a>
-          <p className="text-xs text-muted mt-2 break-all">{row.imagesslip}</p>
+            {/* Payment data block */}
+            <div className="space-y-1.5 rounded-xl border border-border bg-surface-alt/30 p-4">
+              <p className="text-xs font-semibold text-muted mb-2">ข้อมูลค่าชำระเงิน</p>
+              <KV
+                label="จำนวนเงินหยวน"
+                value={`¥${Number(row.payyuan ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                mono
+              />
+              <KV
+                label="เรทฝากชำระ"
+                value={`${Number(row.payrate ?? 0).toLocaleString(undefined, { minimumFractionDigits: 4 })} บาท/หยวน`}
+                mono
+              />
+              <KV
+                label="จำนวนเงินบาท"
+                value={`฿${Number(row.paythb ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                mono
+                emphasis
+              />
+            </div>
+
+            {/* Paydetail */}
+            {row.paydetail ? (
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-muted">รายละเอียดผู้รับ</p>
+                <p className="text-sm whitespace-pre-wrap break-words rounded-md border border-border bg-white dark:bg-surface p-3">
+                  {row.paydetail}
+                </p>
+              </div>
+            ) : null}
+          </div>
+
+          {/* RIGHT 1/3 — price breakdown */}
+          <div className="p-5 space-y-3 bg-surface-alt/20">
+            <p className="text-xs font-semibold text-muted mb-1">สรุปรายการเงิน</p>
+            <PriceRow
+              label="จ่ายจริง"
+              value={`฿${Number(row.paythb ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            />
+            <PriceRow
+              label="รับทุนลูกค้า"
+              value={`฿${Number(row.paythbcost ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            />
+            <PriceRow
+              label="เรทกูลฯ"
+              value={Number(row.payratecost ?? 0).toLocaleString(undefined, { minimumFractionDigits: 4 })}
+            />
+            <PriceRow
+              label="เรทลูกค้า"
+              value={Number(row.payrate ?? 0).toLocaleString(undefined, { minimumFractionDigits: 4 })}
+            />
+            <div className="pt-2 border-t border-border">
+              <PriceRow
+                label="กำไรสุทธิ"
+                value={`฿${Number(row.payprofitthb ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                emphasis
+              />
+            </div>
+          </div>
         </div>
+      </section>
+
+      {/* ── 4. SLIP IMAGES ── */}
+      {(slipUrl || slipAdminUrl) && (
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {slipUrl && (
+            <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4">
+              <p className="text-xs font-semibold text-muted mb-2">สลิป (ลูกค้าอัปโหลด)</p>
+              <a
+                href={slipUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block rounded-md border border-border overflow-hidden hover:border-primary-500"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={slipUrl} alt="สลิป" className="max-w-full max-h-[480px]" />
+              </a>
+              <p className="text-[10px] text-muted mt-2 break-all font-mono">{row.imagesslip}</p>
+            </div>
+          )}
+          {slipAdminUrl && (
+            <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4">
+              <p className="text-xs font-semibold text-muted mb-2">สลิป (แอดมินอัปโหลด)</p>
+              <a
+                href={slipAdminUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block rounded-md border border-border overflow-hidden hover:border-primary-500"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={slipAdminUrl} alt="สลิปแอดมิน" className="max-w-full max-h-[480px]" />
+              </a>
+              <p className="text-[10px] text-muted mt-2 break-all font-mono">{row.imagesslipadmin}</p>
+            </div>
+          )}
+        </section>
       )}
 
-      {slipAdminUrl && (
-        <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
-          <p className="text-xs font-semibold text-muted mb-2">สลิป (แอดมินอัปโหลด)</p>
-          <a
-            href={slipAdminUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block rounded-md border border-border overflow-hidden hover:border-primary-500"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={slipAdminUrl} alt="สลิปแอดมิน" className="max-w-full max-h-[600px]" />
-          </a>
-          <p className="text-xs text-muted mt-2 break-all">{row.imagesslipadmin}</p>
-        </div>
-      )}
-
-      {/* P0-11 — actions row. YuanPaymentActions is the same client island
-          the table-list bulk-bar uses (renders different buttons per
-          rebuilt-string status: pending → เริ่มโอน/ปฏิเสธ; processing →
-          โอนสำเร็จ/ล้มเหลว; non-terminal → คืนเงิน w/ slip modal). The
-          underlying adminUpdateYuanPayment action writes tb_payment per
-          the legacy paystatus flow (verified actions/admin/yuan-payments.ts:73). */}
-      <div className="rounded-2xl border border-primary-200 bg-primary-50/40 dark:bg-primary-50/5 p-5">
+      {/* ── 5. ACTION PANEL — preserved YuanPaymentActions client island ── */}
+      <section className="rounded-2xl border border-primary-200 bg-primary-50/40 dark:bg-primary-50/5 p-5">
         <p className="text-xs font-semibold text-primary-700 mb-2">การดำเนินการ</p>
         <YuanPaymentActions
           id={String(row.id)}
@@ -258,14 +417,18 @@ export default async function AdminYuanPaymentDetail({
           phone={user?.userTel ?? null}
           paid_via_wallet={paidViaWallet}
         />
-      </div>
+        <p className="text-[10px] text-muted mt-2">
+          P0-11 · ปุ่มเขียน tb_payment (เปลี่ยนสถานะ + stamp adminid)
+        </p>
+      </section>
 
-      <div className="flex gap-2 flex-wrap pt-2">
+      {/* Bottom nav */}
+      <div className="flex gap-2 flex-wrap pt-1">
         <Link
           href="/admin/yuan-payments"
           className="rounded-md border border-border bg-white px-3 py-2 text-xs hover:bg-surface-alt"
         >
-          ← รายการ
+          ← รายการทั้งหมด
         </Link>
         <Link
           href={`/admin/customers/${encodeURIComponent(row.userid)}`}
@@ -278,11 +441,97 @@ export default async function AdminYuanPaymentDetail({
   );
 }
 
-function KV({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+// ── Sub-components (kept local — they only render data, no state) ─────
+
+function BalanceCard({
+  title,
+  subtitle,
+  amount,
+  cashback,
+  topupHref,
+}: {
+  title: string;
+  subtitle: string;
+  amount: number;
+  cashback: number;
+  topupHref: string;
+}) {
   return (
-    <div className="flex justify-between border-b border-border/40 py-1.5 gap-3">
-      <span className="text-muted shrink-0">{label}</span>
-      <span className={mono ? "font-mono text-right" : "text-right"}>{value}</span>
+    <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+      <div className="p-4 flex items-start justify-between gap-3">
+        <div className="space-y-0.5">
+          <p className="text-xs font-semibold text-red-700">{title}</p>
+          <p className="text-[11px] text-muted">{subtitle}</p>
+          <p className="mt-1 text-3xl font-bold text-foreground font-mono">
+            ฿{amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+          </p>
+          <p className="text-[11px] text-purple-700">
+            Cash Back: {cashback.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
+          </p>
+        </div>
+      </div>
+      <div className="h-1 bg-gradient-to-r from-amber-400 to-amber-200" />
+      <div className="px-4 py-2 text-center">
+        <Link
+          href={topupHref}
+          className="inline-flex items-center gap-1 rounded-full bg-primary-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-600"
+        >
+          <Plus className="h-3 w-3" /> เติมเงินเข้ากระเป๋า
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function KV({
+  label,
+  value,
+  mono,
+  emphasis,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  emphasis?: boolean;
+}) {
+  return (
+    <div className="flex justify-between gap-3 py-1">
+      <span className="text-sm text-muted shrink-0">{label}</span>
+      <span
+        className={[
+          "text-right",
+          mono ? "font-mono" : "",
+          emphasis ? "font-bold text-foreground" : "text-foreground",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function PriceRow({
+  label,
+  value,
+  emphasis,
+}: {
+  label: string;
+  value: string;
+  emphasis?: boolean;
+}) {
+  return (
+    <div className="flex justify-between items-baseline gap-2 text-sm">
+      <span className="text-muted">{label}</span>
+      <span
+        className={[
+          "font-mono text-right",
+          emphasis ? "text-base font-bold text-green-700" : "text-foreground",
+        ].join(" ")}
+      >
+        {value}
+      </span>
     </div>
   );
 }

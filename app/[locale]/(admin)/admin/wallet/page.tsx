@@ -73,7 +73,7 @@ const WALLET_MENUBAR: MenubarItem[] = [
   },
 ];
 
-type SP = { view?: string; kind?: string; status?: string; q?: string };
+type SP = { view?: string; kind?: string; status?: string; q?: string; sort?: string; dir?: string };
 
 export default async function AdminWalletPage({
   searchParams,
@@ -238,9 +238,9 @@ export default async function AdminWalletPage({
 
         {/* ── View body ── */}
         {view === "balance" ? (
-          <WalletBalanceView q={sp.q} />
+          <WalletBalanceView q={sp.q} sort={sp.sort} dir={sp.dir} />
         ) : (
-          <WalletTransactionsView kind={sp.kind} status={sp.status} q={sp.q} />
+          <WalletTransactionsView kind={sp.kind} status={sp.status} q={sp.q} sort={sp.sort} dir={sp.dir} />
         )}
       </main>
     </>
