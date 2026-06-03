@@ -10,7 +10,7 @@ import { CustomsVideoClips } from "@/components/sections/customs-video-clips";
 import { KnowledgeNewsBlock } from "@/components/sections/knowledge-news-block";
 import { Footer } from "@/components/sections/footer";
 import { LclHero } from "@/components/sections/lcl-hero";
-import { LclPricingCards } from "@/components/sections/lcl-pricing-cards";
+import { PricingSection } from "@/components/sections/pricing-section";
 import { LclSteps } from "@/components/sections/lcl-steps";
 import { AddLineBanner } from "@/components/sections/add-line-banner";
 import { LclWhyPacred } from "@/components/sections/lcl-why-pacred";
@@ -159,8 +159,9 @@ export default async function ImportChinaLclPage({
         {/* 3 — Hero intro (h1 + red LINE scope-banner + bullet card) */}
         <LclHero />
 
-        {/* 4 — Pricing cards (3 CBM tiers) */}
-        <LclPricingCards />
+        {/* 4 — Pricing — same as home page (Cargo / Freight toggle + real rates),
+            country picker hidden (this page is China-only) */}
+        <PricingSection hideCountryPicker />
 
         {/* 5 — 5 STEPS */}
         <LclSteps />

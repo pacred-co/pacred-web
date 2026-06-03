@@ -240,7 +240,13 @@ const FREIGHT_CARDS: FreightCard[] = [
 const LCL_CARDS = FREIGHT_CARDS.filter((c) => c.group === "lcl");
 const FCL_CARDS = FREIGHT_CARDS.filter((c) => c.group === "fcl");
 
-export function PricingSection() {
+export function PricingSection({
+  hideCountryPicker = false,
+}: {
+  /** Hide the origin-country chip row — for single-country pages (e.g. the
+   *  China LCL/FCL landings) where the selector is redundant. */
+  hideCountryPicker?: boolean;
+} = {}) {
   const t = useTranslations("pricing");
   const MODES: Record<Mode, { id: Mode; title: string; badge: string; icon: typeof Ship }> = {
     cargo:   { id: "cargo",   title: t("modeCargoTitle"),   badge: t("modeCargoBadge"),   icon: Warehouse },
@@ -277,7 +283,8 @@ export function PricingSection() {
           </h2>
         </div>
 
-        {/* ─── Country picker ─── */}
+        {/* ─── Country picker (hidden via hideCountryPicker on single-country pages) ─── */}
+        {!hideCountryPicker && (
         <div className="mx-auto mt-6 w-full max-w-[1120px]">
           <div className="text-[12px] font-bold text-muted uppercase tracking-[0.12em] mb-2">
             {t("originCountry")}
@@ -318,6 +325,7 @@ export function PricingSection() {
             })}
           </div>
         </div>
+        )}
 
         {/* ─── Mode toggle (Cargo / Freight) ─── */}
         <div className="mx-auto mt-6 w-full max-w-[1120px]">
