@@ -33,7 +33,7 @@ type CoidOption = { coid: string; coname: string };
 // Hardcoded list — same values/labels as legacy. "PCSF" is gated by the
 // freeShipping flag from tb_settings (passed as prop).
 const SHIP_BY_OPTIONS: { value: string; label: string }[] = [
-  { value: "PCS",  label: "🏬 รับเองโกดัง PCS กทม"        },
+  { value: "PCS",  label: "🏬 รับเองโกดัง Pacred (สมุทรสาคร)"        },
   { value: "2",    label: "Flash Express"                  },
   { value: "3",    label: "J.K. เอ็กซ์เพรส"                 },
   { value: "21",   label: "นิ่มซี่เส็งขนส่ง 1988"             },
@@ -620,10 +620,10 @@ export function AdminForwarderNewForm({
         {/* Address picker — hidden when fShipBy='PCS' (use hardcoded pickup). */}
         {shipBy === "PCS" ? (
           <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-            <p className="font-medium">📍 ที่อยู่: รับเองที่โกดัง PCS กทม.</p>
+            <p className="font-medium">📍 ที่อยู่: รับเองที่โกดัง Pacred (สมุทรสาคร)</p>
             <p className="mt-1 text-xs leading-relaxed">
-              บ้านเลขที่ 12 ซอย เพชรเกษม 77 แยก 3-6 · หนองค้างพลู · หนองแขม · กรุงเทพมหานคร · 10160<br />
-              โทร 02-444-7046
+              48/3 หมู่ 12 ตำบลอ้อมน้อย อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74130 (S&T WAREHOUSE219)<br />
+              โทร 02-421-3325
             </p>
           </div>
         ) : shipBy ? (

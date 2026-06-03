@@ -88,7 +88,7 @@ type RowFormState = {
 
 // Reuse the same ship-by option list as the manual-form (Wave 17 P1).
 const SHIP_BY_OPTIONS: { value: string; label: string }[] = [
-  { value: "PCS",  label: "รับเองโกดัง PCS กทม"  },
+  { value: "PCS",  label: "รับเองโกดัง Pacred (สมุทรสาคร)"  },
   { value: "2",    label: "Flash Express"           },
   { value: "3",    label: "J.K. เอ็กซ์เพรส"          },
   { value: "21",   label: "นิ่มซี่เส็งขนส่ง"            },

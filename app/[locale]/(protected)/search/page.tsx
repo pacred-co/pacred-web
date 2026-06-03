@@ -427,7 +427,7 @@ export default async function SearchPage({
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       className="h-7 w-auto"
-                      src="/legacy/pcs/shops/pcs-logo.png"
+                      src="/images/pacred-logo-red.png"
                       alt=""
                     />
                   </a>

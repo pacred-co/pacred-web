@@ -155,7 +155,7 @@ export function TbForwarderEditPanel(p: Props) {
     if (!code) { setMsg({ kind: "err", text: "เลือกผู้ขนส่ง หรือกรอกชื่อผู้ขนส่งภายนอก" }); return; }
     if (code === p.currentShipBy) { setMsg({ kind: "err", text: "ไม่มีการเปลี่ยนแปลง" }); return; }
     const extra = code === "PCS"
-      ? "\n\nผู้ขนส่ง PCS = รับเองที่โกดัง — ที่อยู่จัดส่งจะถูกแทนที่ด้วยที่อยู่โกดัง PCS กทม"
+      ? "\n\nผู้ขนส่ง PCS = รับเองที่โกดัง — ที่อยู่จัดส่งจะถูกแทนที่ด้วยที่อยู่โกดัง Pacred (สมุทรสาคร)"
       : (code === "PCSF" || code === "PCSE")
         ? "\n\nค่าขนส่งจะถูกคำนวณใหม่ตามเงื่อนไข PCS (เฉพาะรายการที่ยังไม่ชำระเงิน)"
         : "";
@@ -302,7 +302,7 @@ export function TbForwarderEditPanel(p: Props) {
           🏷️ บันทึกผู้ขนส่ง
         </button>
         <p className="text-[10px] text-muted">
-          ปัจจุบัน: <b>{p.currentShipBy || "—"}</b> · PCS/PCSF/PCSE คิดค่าขนส่งใหม่อัตโนมัติ (เฉพาะที่ยังไม่ชำระ) · PCS แทนที่ที่อยู่ด้วยโกดัง PCS กทม
+          ปัจจุบัน: <b>{p.currentShipBy || "—"}</b> · PCS/PCSF/PCSE คิดค่าขนส่งใหม่อัตโนมัติ (เฉพาะที่ยังไม่ชำระ) · PCS แทนที่ที่อยู่ด้วยโกดัง Pacred (สมุทรสาคร)
         </p>
       </div>
 
