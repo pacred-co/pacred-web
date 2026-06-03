@@ -283,7 +283,11 @@ function ReceiptPage({
           </div>
         </div>
 
-        {/* ── Issuer block ── */}
+        {/* ── Issuer block ──
+            2026-06-03 ภูม flag: "วันที่" value (18/05/2026) was overflowing
+            the right border because the right-value column was 1/12 = ~17mm
+            — too tight for a 10-char date in text-sm. Widened to 2/12 (~35mm)
+            and rebalanced left value column 6→5 (still fits the address). */}
         <section className="border border-gray-400 rounded mt-2 p-2 text-sm">
           <div className="grid grid-cols-12 gap-2">
             <div className="col-span-3 text-gray-700">
@@ -293,7 +297,7 @@ function ReceiptPage({
               <div className="invisible">.</div>
               <div>โทรศัพท์ / tel :</div>
             </div>
-            <div className="col-span-6">
+            <div className="col-span-5">
               <div className="font-medium">{SITE_LEGAL_NAME_TH}</div>
               <div className="font-mono">{TAX_ID}</div>
               <div>{issuerAddress}</div>
@@ -303,7 +307,7 @@ function ReceiptPage({
               <div>วันที่ / date :</div>
               <div>หน้า / page :</div>
             </div>
-            <div className="col-span-1 text-left">
+            <div className="col-span-2 text-left whitespace-nowrap">
               <div>{issueDate}</div>
               <div>{pageNumber}/{pageCount}</div>
             </div>
