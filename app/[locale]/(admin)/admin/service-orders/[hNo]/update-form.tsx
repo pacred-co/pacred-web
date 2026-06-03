@@ -4,9 +4,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { adminUpdateServiceOrder } from "@/actions/admin/service-orders";
-// adminMarkServiceOrderPaid REMOVED 2026-06-02 §0e — tombstoned dead-twin.
-// The faithful tb_wallet_hs version lives in MarkPaidTbForm (mark-paid-tb-form.tsx),
-// mounted separately in legacy-view.tsx L289-293.
+// adminMarkServiceOrderPaid REMOVED 2026-06-02 §0e — dead-twin Potemkin trap.
+// The live mark-paid path is <MarkPaidTbForm> (mark-paid-tb-form.tsx),
+// mounted in legacy-view.tsx L289-293 → adminMarkServiceOrderPaidTb writes
+// the real tb_wallet/tb_wallet_hs/tb_header_order trio.
 
 const inputCls = "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
 
@@ -18,7 +19,10 @@ const STATUS_FLOW = [
   { value: "completed",            label: "สำเร็จ" },
 ] as const;
 
-export function AdminServiceOrderUpdateForm({ hNo, status, note_admin }: { hNo: string; status: string; note_admin: string | null }) {
+// `totalThb` is accepted (both mounts still pass it) but no longer read here —
+// the mark-paid amount + debit now lives entirely in the adjacent
+// <MarkPaidTbForm> after the dead adminMarkServiceOrderPaid path was removed.
+export function AdminServiceOrderUpdateForm({ hNo, status, note_admin }: { hNo: string; status: string; note_admin: string | null; totalThb?: number }) {
   const router = useRouter();
   const [st, setSt]   = useState(status);
   const [note, setNote] = useState(note_admin ?? "");
@@ -106,10 +110,12 @@ export function AdminServiceOrderUpdateForm({ hNo, status, note_admin }: { hNo: 
       {msg && <div className="rounded-lg border border-green-200 bg-green-50 p-2 text-xs text-green-700">{msg}</div>}
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{error}</div>}
 
-      {/* MARK-PAID panel REMOVED 2026-06-02 §0e — was dead-write twin.
-          Faithful version: MarkPaidTbForm in mark-paid-tb-form.tsx,
-          mounted separately in legacy-view.tsx L289-293 (writes
-          tb_wallet_hs + flips tb_header_order.hstatus). */}
+      {/* Mark-paid lives in the adjacent <MarkPaidTbForm> (mark-paid-tb-form.tsx
+          → adminMarkServiceOrderPaidTb, writes the live tb_wallet/tb_wallet_hs/
+          tb_header_order trio). The old block here called adminMarkServiceOrderPaid
+          which read the 0-row rebuilt `service_orders` → `not_found` for every
+          real order (Potemkin dead-read · §0e). Removed so each order shows
+          ONE working "บันทึกชำระ" button. */}
 
       {/* Quick workflow */}
       <div className="space-y-2">

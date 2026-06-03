@@ -236,6 +236,8 @@ Every time you learn something tricky — a Next 16 gotcha, a Vercel surprise, a
 
 **Pattern rule:** a page under a dynamic segment (`[slug]`/`[port]`/`[id]`) that renders `<NavBar>` (or anything reading cookies/auth) MUST have `export const dynamic = "force-dynamic"` — else `DYNAMIC_SERVER_USAGE` 500. See [`docs/learnings/nextjs-16-quirks.md`](docs/learnings/nextjs-16-quirks.md).
 
+**Prod DATA-mutation scripts — dry-run + backup FIRST, then `--apply`.** Any script that writes prod (provisioning, mass-UPDATE, deletes) MUST default to dry-run and be run dry first — the printed plan is the gate, not a guess. On 2026-06-02 a dry-run caught a reset/clear script that would have DELETED the 12 freshly-provisioned admins (its keep-set was hardcoded to the 3 pre-existing). Write a restorable backup before destructive ops (the adminIDSale→center reset dumped a JSON + a restore snippet). And **a `"use server"` file may only export async functions** — `export const X = {...}`/array compiles under tsc but crashes the page at runtime (blank screen), caught only by `pnpm build` or a browser render (margin-monitor, 2026-06-02) → browser-render-verify after merging admin/page code, not just tsc.
+
 ## 12. Docs: every `.md` ≤ 2000 lines · no duplication
 
 - **Hard cap: every `.md` file ≤ 2000 lines.** If a file would exceed it, split into a new file and cross-link both ways — never let one file grow past the cap. Agents read docs into a context window; oversized files truncate mid-content.

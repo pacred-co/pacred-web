@@ -51,16 +51,16 @@ export default async function AdminSettingsPage() {
         <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
         <h1 className="mt-1 text-2xl font-bold">ตั้งค่าระบบ</h1>
         <p className="mt-1 text-sm text-muted">
-          ตัวเลขในตารางนี้ถูกใช้ทุกครั้งที่คำนวณราคา — เปลี่ยนจะมีผลกับออเดอร์ใหม่ทันที (ออเดอร์เก่าใช้ค่าเรทตอนเปิด)
+          ศูนย์รวมตัวตั้งค่า — แต่ละค่าแก้ที่ตัวแก้ตัวจริงด้านล่าง (มีผลกับออเดอร์ใหม่ทันที · ออเดอร์เก่าใช้ค่าตอนเปิด)
         </p>
         <p className="mt-2 text-xs">
           <Link href="/admin/settings/notifications" className="text-primary-600 underline">
             → ตั้งค่าการแจ้งเตือนของฉัน (รวม Sales Daily Digest)
           </Link>
         </p>
-        <p className="mt-2 text-xs">
-          <Link href="/admin/settings/forwarder-costs" className="text-primary-600 underline">
-            → เรทต้นทุนฝากนำเข้า ค่าเริ่มต้น (เติมอัตโนมัติลง forwarder ใหม่)
+        <p className="mt-1 text-xs">
+          <Link href="/admin/settings/promos" className="text-primary-600 underline">
+            → จัดการแบนเนอร์โปรโมชัน (เพิ่ม/แก้/อัปโหลดรูป หลายอัน)
           </Link>
         </p>
       </div>

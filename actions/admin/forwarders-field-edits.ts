@@ -63,6 +63,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { uploadToBucket } from "@/lib/storage/upload";
+import { ADDRESSES } from "@/components/seo/site";
 
 // Local resolveLegacyAdminId (same pattern as forwarders-edit.ts / pay-user.ts
 // — known consolidation TODO; kept local to avoid premature extraction).
@@ -347,19 +348,21 @@ export async function adminUpdateForwarderCover(
 // fShipBy is a free string (external carrier name or a PCS-family code). When the
 // row is still pre-payment (fStatus<=5), legacy re-prices fTransportPrice by the
 // three PCS-family carriers; then writes fShipBy; and for 'PCS' (รับเองที่โกดัง)
-// copies the fixed PCS-warehouse pickup address into fAddress* (depot strings are
-// VERBATIM from forwarder.php L1612-1626 · also mirrored in
-// actions/forwarder-legacy.ts updateLegacyForwarderShipBy for the customer side).
+// copies the fixed self-pickup warehouse address into fAddress* (= Pacred's TH
+// receiving warehouse — สมุทรสาคร, ADDRESSES.warehouseTh — the same depot the shop
+// path + customer-side forwarder-legacy.ts updateLegacyForwarderShipBy use).
+// Legacy PHP (forwarder.php L1612-1626) hard-coded the old Bangkok PCS depot.
+// faddresstel is varchar(10) → digits-only Pacred line "0224213325".
 const FPCS_DEPOT_ADDRESS = {
-  faddressname:        "รับที่โกดัง PCS กทม",
+  faddressname:        "รับที่โกดัง Pacred",
   faddresslastname:    "",
-  faddressno:          "12 ซอย เพชรเกษม 77 แยก 3-6",
-  faddresssubdistrict: "หนองค้างพลู",
-  faddressdistrict:    "หนองแขม",
-  faddressprovince:    "กรุงเทพมหานคร",
-  faddresszipcode:     "10160",
+  faddressno:          ADDRESSES.warehouseTh.line,
+  faddresssubdistrict: ADDRESSES.warehouseTh.subDistrict,
+  faddressdistrict:    ADDRESSES.warehouseTh.district,
+  faddressprovince:    ADDRESSES.warehouseTh.province,
+  faddresszipcode:     ADDRESSES.warehouseTh.postcode,
   faddressnote:        "",
-  faddresstel:         "02-444-7046",
+  faddresstel:         "0224213325",
   faddresstel2:        "",
 } as const;
 

@@ -3,6 +3,22 @@
  * constants (OTP TTL, wallet min/max, cashback %, bank list, feature
  * flags, …).
  *
+ * ── Config homes (ADR-0024 — the canonical rule · do NOT add a 4th) ──
+ *   • tb_settings      → everything the LIVE pricing engine reads:
+ *                        yuan rates (rpdefault/rsdefault/hratecostdefault),
+ *                        free-shipping (freeshipping 1/2), the 144-col
+ *                        partner-cost matrix. Editors: /admin/settings/
+ *                        legacy-rates + /admin/settings/forwarder-costs.
+ *   • business_config  → THIS file: Pacred-native + non-pricing config —
+ *                        tax (WHT/VAT), OTP, wallet limits, cashback %,
+ *                        banks, feature flags. Editor: /admin/settings/
+ *                        business-config. Uncontested + canonical.
+ *   • rebuilt `settings` → NOT a canonical home for any contested field
+ *                        (ADR-0024 D-2). Its only live reader is the
+ *                        low-data rebuilt forwarder lane (service-import/
+ *                        add). /admin/settings is now a read-through hub.
+ *   The pricing rate cards live on tb_rate_* (ADR-0017), out of scope here.
+ *
  * Read path:    getBusinessConfig(key, defaultValue)  — 60s in-memory
  *               cache. Falls back to defaultValue on miss/error so the
  *               system never breaks on an unseeded row.

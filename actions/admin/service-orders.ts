@@ -6,9 +6,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
-// getWalletAvailableBalance removed 2026-06-02 — adminMarkServiceOrderPaid
-// tombstoned (§0e dead-write trap), see file body. Faithful version uses
-// its own balance check at actions/admin/service-orders-tb.ts.
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
 import {
@@ -299,52 +296,17 @@ export async function adminUpdateServiceOrder(input: AdminUpdateServiceOrderInpu
 }
 
 // ────────────────────────────────────────────────────────────
-// T-P1: MARK service-order PAID — TOMBSTONED per §0e (2026-06-02)
+// (removed) adminMarkServiceOrderPaid — Potemkin dead-write trap (§0e)
 // ────────────────────────────────────────────────────────────
-//
-// HISTORICAL: this function debited `wallet_transactions` (REBUILT empty
-// table) + flipped `service_orders.status` (REBUILT empty table) — i.e.
-// a dead-write trap: admin clicks "บันทึกชำระ", green toast appears,
-// but the real ledger (`tb_wallet` / `tb_wallet_hs`) and the live order
-// header (`tb_header_order`) are NEVER touched. Customer wallet stays
-// untouched, real order status stays unchanged.
-//
-// REPLACEMENT: `adminMarkServiceOrderPaidTb` in
-// `actions/admin/service-orders-tb.ts` — writes faithfully to
-// `tb_wallet_hs` (the legacy ledger consumed by every reader) + flips
-// `tb_header_order.hstatus`. The UI surface is `MarkPaidTbForm`
-// (`mark-paid-tb-form.tsx`), mounted in `legacy-view.tsx` L289-293
-// alongside the status-only `AdminServiceOrderUpdateForm`.
-//
-// This stub remains so any stale caller fails loudly instead of
-// silently no-op'ing. New code must call adminMarkServiceOrderPaidTb.
-
-// Type-only kept so any imports of the type name still compile (the live
-// schema moved to actions/admin/service-orders-tb.ts where the faithful
-// adminMarkServiceOrderPaidTb lives).
-export type AdminMarkServiceOrderPaidInput = {
-  h_no:           string;
-  allow_overdraw?: boolean;
-};
-
-type MarkPaidData = { tx_id: string; already_paid: boolean };
-/**
- * @deprecated TOMBSTONED 2026-06-02 — use `adminMarkServiceOrderPaidTb`
- * from `@/actions/admin/service-orders-tb` instead. This wrote to
- * REBUILT empty tables (`service_orders` + `wallet_transactions`); the
- * faithful replacement writes to `tb_header_order` + `tb_wallet_hs`.
- */
-export async function adminMarkServiceOrderPaid(
-  input: AdminMarkServiceOrderPaidInput,
-): Promise<AdminActionResult<MarkPaidData>> {
-  // input swallowed so callers fail at the type level OR runtime, not
-  // halfway. The faithful replacement reads input the same way.
-  void input;
-  return {
-    ok: false,
-    error: "TOMBSTONED — use adminMarkServiceOrderPaidTb from @/actions/admin/service-orders-tb (this wrote to dead REBUILT tables · §0e dead-write trap)",
-  };
-}
+// This T-P1 action read+wrote the rebuilt `service_orders` + `wallet_transactions`
+// tables, both 0-row on prod after the D1 pivot → silently failed for EVERY real
+// order. Its only caller was the duplicate mark-paid block in [hNo]/update-form.tsx
+// (also removed). The LIVE mark-paid path is `adminMarkServiceOrderPaidTb`
+// (actions/admin/service-orders-tb.ts), surfaced by <MarkPaidTbForm> on legacy-view
+// — it debits the real tb_wallet/tb_wallet_hs + flips tb_header_order.hstatus.
+// Deleted to eliminate the dead-write trap. `getWalletAvailableBalance` import
+// was dropped; `sendNotification` stays (adminUpdateServiceOrder uses it).
+// Both Pacred branches independently converged on this fix 2026-06-02/03.
 
 // ────────────────────────────────────────────────────────────
 // V-C2: set bill_to_name_override on a service_order

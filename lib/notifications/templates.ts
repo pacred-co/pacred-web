@@ -318,9 +318,12 @@ export const notify = {
       severity:  "success",
       title:     `ออกใบกำกับภาษี ${opts.serialNo} แล้ว`,
       body:      `${opts.orderRef} · ยอด ${thb(opts.totalThb)} — ดาวน์โหลดได้จากหน้าใบเสร็จ`,
+      // Forwarder (non-ON ref) → live ใบแจ้งหนี้ at …/invoice (tb_forwarder⋈tb_receipt).
+      // The old …/receipt orphan read the rebuilt 0-row `forwarders` → 404. Shop
+      // (ON ref) → …/receipt stays (reads live tb_header_order, works).
       link_href: opts.orderRef.startsWith("ON")
         ? `/service-order/${opts.orderRef}/receipt`
-        : `/service-import/${opts.orderRef}/receipt`,
+        : `/service-import/${opts.orderRef}/invoice`,
     };
   },
 
@@ -330,9 +333,10 @@ export const notify = {
       severity:  "warning",
       title:     `ใบกำกับภาษี ${opts.serialNo} ถูกยกเลิก`,
       body:      `${opts.orderRef} · เหตุผล: ${opts.reason} — ติดต่อทีมงานหากต้องการใบใหม่`,
+      // Forwarder (non-ON ref) → …/invoice (live); shop (ON ref) → …/receipt.
       link_href: opts.orderRef.startsWith("ON")
         ? `/service-order/${opts.orderRef}/receipt`
-        : `/service-import/${opts.orderRef}/receipt`,
+        : `/service-import/${opts.orderRef}/invoice`,
     };
   },
 
@@ -349,9 +353,10 @@ export const notify = {
       severity:  "info",
       title:     `ออกใบลดหนี้ ${opts.serialNo} (อ้างอิงใบกำกับภาษี ${opts.forSerialNo})`,
       body:      `${opts.orderRef} · ลดยอด ${thb(opts.totalThb)} · ${opts.reason} — ดาวน์โหลดได้จากหน้าใบเสร็จ`,
+      // Forwarder (non-ON ref) → …/invoice (live); shop (ON ref) → …/receipt.
       link_href: opts.orderRef.startsWith("ON")
         ? `/service-order/${opts.orderRef}/receipt`
-        : `/service-import/${opts.orderRef}/receipt`,
+        : `/service-import/${opts.orderRef}/invoice`,
     };
   },
 

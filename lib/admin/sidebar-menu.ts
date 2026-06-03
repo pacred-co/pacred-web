@@ -401,6 +401,7 @@ const blockSettingsCargo: MenuItem = {
     { labelKey: "settingsCargo.general",   href: "/admin/settings",                  icon: "Settings" },
     { labelKey: "settingsCargo.homeNotice", href: "/admin/settings/notifications",   icon: "MessageCircle" },
     { labelKey: "settingsCargo.popup",     href: "/admin/settings/business-config",  icon: "MessageCircle" },
+    { labelKey: "settingsCargo.promos",    href: "/admin/settings/promos",           icon: "Megaphone" },
     {
       labelKey: "settingsCargo.rates",
       icon: "SlidersHorizontal",
@@ -431,6 +432,7 @@ const blockSettingsCargo: MenuItem = {
         { labelKey: "settingsCargo.orgEmail",    href: "/admin/organization-email",    icon: "MessageCircle" },
         { labelKey: "settingsCargo.orgChannels", href: "/admin/organization-channels", icon: "Smartphone" },
         { labelKey: "settingsCargo.adminUsers",  href: "/admin/admins",                icon: "UserCog" },
+        { labelKey: "settingsCargo.partners",    href: "/admin/partners",              icon: "Handshake" },
       ],
     },
   ],
@@ -616,6 +618,17 @@ const blockExtIncidents: MenuItem = {
 const blockExtKpi: MenuItem = {
   labelKey: "extension.kpi", href: "/admin/kpi", icon: "BarChart3", phase: 2,
 };
+// 2026-06-01 (เดฟ · Wave C BI) — the exec cockpit (แดชบอร์ดผู้บริหาร · MTD
+// revenue/profit · orders funnel · wallet total · AR · cold-leads · top
+// carriers/warehouses — all reading LIVE tb_*). A leadership at-a-glance
+// dashboard, so it lives in the Extension drawer next to the KPI dashboard
+// (same exec-analytics family). phase: 2 → super sees it in the sidebar; the
+// finance roles (accounting/manager) also reach it + the AR-aging report via
+// the reports-hub "BI / ผู้บริหาร" menubar group. The page gates RBAC to
+// super/accounting itself.
+const blockExtCockpit: MenuItem = {
+  labelKey: "extension.cockpit", href: "/admin/reports/cockpit", icon: "Gauge", phase: 2,
+};
 const blockExtContactMessages: MenuItem = {
   labelKey: "extension.contactMessages", href: "/admin/contact-messages",
   icon: "MessageSquare", badge: "contactMessages", phase: 2,
@@ -642,6 +655,15 @@ const blockExtLeads: MenuItem = {
 // the comms/CRM extensions until the broader launch.
 const blockExtLineInbox: MenuItem = {
   labelKey: "extension.lineInbox", href: "/admin/line-inbox", icon: "MessageCircle", phase: 2,
+};
+// 2026-06-01 (เดฟ · CEO opening-day · CRM core) — the omni-inbox + customer-360 +
+// sales-rep routing hub ("ลูกค้าคนนี้ เซลไหนดูแล"). The CEO's scale-blocker #1.
+// Reads ปอน's LINE data (Podeng_*) + tb_users/tb_wallet/tb_forwarder/lead_call_log;
+// the ONE write is tb_users.adminIDSale (rep routing). Lives in the Extension
+// "customer comms / CRM" family next to leads + lineInbox. phase 1 so all admin
+// staff can reach it — actions/admin/crm.ts gates RBAC (super/manager/sales/ops).
+const blockExtCrm: MenuItem = {
+  labelKey: "extension.crm", href: "/admin/crm", icon: "MessageSquare",
 };
 const blockExtWorkboard: MenuItem = {
   labelKey: "extension.workboard", href: "/admin/board", icon: "KanbanSquare", phase: 2,
@@ -752,9 +774,11 @@ const menuSuper: MenuSection[] = [
   // withdrawalsAll. All phase: 2 — non-super doesn't see them.
   extensionSection([
     blockExtKpi,
+    blockExtCockpit,
     blockExtWorkboard,
     blockExtInbox,
     blockExtLeads,
+    blockExtCrm,
     blockExtContactMessages,
     blockExtLineInbox,
     blockExtBroadcasts,
@@ -819,9 +843,11 @@ const menuManager: MenuSection[] = [
   learningSection,
   extensionSection([
     blockExtKpi,
+    blockExtCockpit,
     blockExtWorkboard,
     blockExtInbox,
     blockExtLeads,
+    blockExtCrm,
     blockExtContactMessages,
     blockExtLineInbox,
     blockExtBroadcasts,
@@ -867,7 +893,7 @@ const menuOps: MenuSection[] = [
     ],
   },
   learningSection,
-  extensionSection([blockExtLeads, blockExtJuristic, blockExtThaiTransport, blockExtIncidents]),
+  extensionSection([blockExtLeads, blockExtCrm, blockExtJuristic, blockExtThaiTransport, blockExtIncidents]),
 ];
 
 /**
@@ -884,7 +910,9 @@ const menuAccounting: MenuSection[] = [
   },
   { header: "Settings", items: [blockSettingsCargo] },
   learningSection,
-  extensionSection([blockExtJuristic, blockExtIncidents]),
+  // 2026-06-01 (เดฟ · Wave C BI) — accounting gets the exec cockpit (finance
+  // headline: MTD revenue/profit · AR · wallet liability). phase:2 in-sidebar.
+  extensionSection([blockExtCockpit, blockExtJuristic, blockExtIncidents]),
 ];
 
 /**
@@ -944,7 +972,7 @@ const menuSalesAdmin: MenuSection[] = [
   },
   learningSection,
   // 2026-06-01 (CEO §6) — sales reps live in the acquisition call-queue.
-  extensionSection([blockExtLeads, blockExtJuristic, blockExtIncidents]),
+  extensionSection([blockExtLeads, blockExtCrm, blockExtJuristic, blockExtIncidents]),
 ];
 
 /**

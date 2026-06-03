@@ -3,8 +3,8 @@
 import { useState, useTransition, useRef, useEffect, Fragment } from "react";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
-import { Eye, EyeOff, User, Lock, Mail, Hash, Building2, Loader2, Phone, MessageSquare, ChevronDown, Check } from "lucide-react";
-import { Link, useRouter } from "@/i18n/navigation";
+import { Eye, EyeOff, User, Lock, Mail, Hash, Building2, Loader2, Phone, MessageSquare, ChevronDown, Check, CheckCircle2, UserRound, BadgeCheck } from "lucide-react";
+import { Link } from "@/i18n/navigation";
 import { NavBar } from "@/components/sections/navbar";
 import {
   registerPersonal,
@@ -12,6 +12,7 @@ import {
   saveJuristicStep2,
   uploadJuristicDoc,
   completeJuristicRegistration,
+  type RegisterSuccess,
 } from "@/actions/auth";
 import { requestOtp } from "@/actions/otp";
 import { OtpInput } from "@/components/auth/otp-input";
@@ -305,7 +306,6 @@ export function RegisterClient({
 
 /* ─────────────────────────── PERSONAL FORM ─────────────────────────── */
 function PersonalForm({ recom }: { recom: string | null }) {
-  const router = useRouter();
   const nextUrl = safeNext(useSearchParams().get("next"));
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName]   = useState("");
@@ -322,6 +322,10 @@ function PersonalForm({ recom }: { recom: string | null }) {
   const [error, setError]         = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const captchaRef = useRef<HCaptchaHandle>(null);
+  // 2026-06-02 — success-popup payload (member code + assigned sales rep).
+  // Set on a successful signup → renders RegisterSuccessModal instead of an
+  // immediate redirect; the modal's "เข้าสู่ระบบ" button does the redirect.
+  const [success, setSuccess] = useState<RegisterSuccess | null>(null);
 
   // OTP phase state (B1 — Sunday-night blocker per deep-sweep audit)
   const [phase, setPhase] = useState<"form" | "otp">("form");
@@ -357,17 +361,16 @@ function PersonalForm({ recom }: { recom: string | null }) {
     });
     if (res.ok) {
       trackSignUp("personal");
-      // 2026-05-28 — hard navigation, same reason as the juristic flow
-      // (/dashboard fires 5 tb_* counts before rendering; soft-nav would
-      // leave the OTP screen visible during that load).
-      // Return to a pending `?next=` (booking-calculator CTA) if present.
-      // The protected layout still re-routes to /complete-profile when the
-      // new profile needs it — so an order quote only survives for a
-      // ready-to-order account, which is the intended behaviour. Default
-      // landing is `/dashboard` (customer portal launchpad), not `/`
-      // (public marketing) — per d1-fidelity-customer.md §2 + 2026-05-26
-      // brief fix A2: non-admin signups expect to see the signed-in shell.
-      window.location.replace(nextUrl ?? "/dashboard");
+      // 2026-06-02 — show the success popup (member code + assigned sales rep)
+      // instead of redirecting immediately. The modal's "เข้าสู่ระบบ" button
+      // performs the hard navigation (see onEnter below). When the payload is
+      // missing (member_code couldn't be read), fall back to the prior direct
+      // redirect so the user is never stuck on the OTP screen.
+      if (res.data) {
+        setSuccess(res.data);
+      } else {
+        window.location.replace(nextUrl ?? "/dashboard");
+      }
     } else {
       setError(mapErr(res.error));
       captchaRef.current?.reset();
@@ -419,6 +422,17 @@ function PersonalForm({ recom }: { recom: string | null }) {
       setOtpCode("");
       setResendIn(60);
     });
+  }
+
+  // 2026-06-02 — signup committed → show ONLY the success popup (member code +
+  // assigned sales rep). The CTA performs the hard redirect to /dashboard.
+  if (success) {
+    return (
+      <RegisterSuccessModal
+        data={success}
+        onEnter={() => window.location.replace(nextUrl ?? "/dashboard")}
+      />
+    );
   }
 
   if (phase === "otp") {
@@ -522,7 +536,6 @@ function JuristicForm({
   resume: RegisterResumeState | null;
   recom: string | null;
 }) {
-  const router = useRouter();
   const nextUrl = safeNext(useSearchParams().get("next"));
   // When resuming a juristic signup mid-flow (P0 fix 2026-05-25), skip Step 1
   // (auth + profile already exist) and jump to Step 2 or Step 3 per the
@@ -575,6 +588,9 @@ function JuristicForm({
    * status label confirms the upload is making progress.
    */
   const [submitStage, setSubmitStage] = useState<null | "uploading" | "finalizing">(null);
+  // 2026-06-02 — success-popup payload, shown after step-3 completes (member
+  // code + assigned sales rep) instead of an immediate redirect.
+  const [success, setSuccess] = useState<RegisterSuccess | null>(null);
   const [pending, startTransition]  = useTransition();
   const taxTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const captchaRef = useRef<HCaptchaHandle>(null);
@@ -782,23 +798,19 @@ function JuristicForm({
         const done = await completeJuristicRegistration();
         if (done.ok) {
           trackSignUp("juristic");
-          // 2026-05-28 — HARD navigation instead of router.replace +
-          // router.refresh. The soft Next-router path kept the
-          // "กำลังบันทึก..." button visible until /dashboard's RSC payload
-          // arrived, and /dashboard fires 5 separate Supabase counts on
-          // `tb_*` tables before it renders (header.php parity), so on a
-          // fresh signup that's an additional 5-15 s of *the wrong UI*
-          // — the user already submitted, but the page still shows the
-          // submission spinner instead of a loading state for the new
-          // page. window.location.replace commits the URL change in the
-          // browser immediately and lets the browser's own loading bar
-          // take over.
-          //
-          // Return to a pending `?next=` (booking-calculator CTA) if
-          // present. Default to `/dashboard` (customer portal launchpad),
-          // NOT `/` — per d1-fidelity-customer.md §2 + 2026-05-26 brief
-          // fix A2.
-          window.location.replace(nextUrl ?? "/dashboard");
+          // 2026-06-02 — show the success popup (member code + assigned sales
+          // rep) instead of redirecting immediately. The modal's "เข้าสู่ระบบ"
+          // button does the hard navigation (see the `success` render below).
+          // When the payload is missing, fall back to the prior direct
+          // redirect (window.location.replace — same reason as 2026-05-28:
+          // /dashboard fires 5 tb_* counts, so a hard nav avoids leaving the
+          // submission spinner up; default /dashboard per d1-fidelity §2).
+          if (done.data) {
+            setSubmitStage(null);
+            setSuccess(done.data);
+          } else {
+            window.location.replace(nextUrl ?? "/dashboard");
+          }
           return;
         }
         setError(ERR[done.error] ?? done.error);
@@ -816,6 +828,17 @@ function JuristicForm({
         setSubmitStage(null);
       }
     });
+  }
+
+  // 2026-06-02 — juristic signup committed (step 3 done) → show ONLY the
+  // success popup (member code + assigned sales rep). The CTA redirects.
+  if (success) {
+    return (
+      <RegisterSuccessModal
+        data={success}
+        onEnter={() => window.location.replace(nextUrl ?? "/dashboard")}
+      />
+    );
   }
 
   return (
@@ -1398,6 +1421,89 @@ function OtpStep({
         >
           {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           ยืนยันรหัส
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────── REGISTER SUCCESS MODAL ─────────────────────
+ * 2026-06-02 — shown after a signup commits (personal submit + juristic
+ * step-3 complete) instead of bouncing straight to /dashboard. Surfaces the
+ * minted member code + the assigned sales rep (round-robin · tb_admin pool)
+ * so "ทีมงานจะติดต่อกลับ" is concrete. Mobile-first per AGENTS.md §6: full-
+ * screen overlay, ≥16px text, the CTA is a 52px tap target.
+ */
+function RegisterSuccessModal({
+  data,
+  onEnter,
+}: {
+  data: RegisterSuccess;
+  onEnter: () => void;
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="register-success-title"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-4 py-6 backdrop-blur-sm"
+    >
+      <div className="w-full max-w-sm rounded-3xl bg-white dark:bg-gray-900 p-6 shadow-2xl">
+        <div className="flex flex-col items-center text-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+            <CheckCircle2 className="h-9 w-9 text-green-600 dark:text-green-400" />
+          </div>
+          <h2
+            id="register-success-title"
+            className="text-[20px] font-bold text-gray-900 dark:text-white"
+          >
+            สมัครสำเร็จ 🎉
+          </h2>
+          <p className="mt-1.5 text-[15px] text-gray-500 dark:text-gray-400">
+            ยินดีต้อนรับสู่ Pacred
+          </p>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {/* Member code */}
+          <div className="flex items-center gap-3 rounded-2xl bg-gray-50 dark:bg-gray-800 px-4 py-3">
+            <BadgeCheck className="h-5 w-5 shrink-0 text-primary-600" />
+            <div className="min-w-0">
+              <p className="text-[13px] text-gray-500 dark:text-gray-400">รหัสสมาชิกของคุณ</p>
+              <p className="text-[18px] font-bold tracking-wide text-gray-900 dark:text-white">
+                {data.memberCode}
+              </p>
+            </div>
+          </div>
+
+          {/* Assigned sales rep */}
+          <div className="flex items-center gap-3 rounded-2xl bg-gray-50 dark:bg-gray-800 px-4 py-3">
+            <UserRound className="h-5 w-5 shrink-0 text-primary-600" />
+            <div className="min-w-0">
+              <p className="text-[13px] text-gray-500 dark:text-gray-400">เซลที่ดูแล</p>
+              <p className="text-[16px] font-semibold text-gray-900 dark:text-white">
+                Sales {data.repName}
+              </p>
+              <a
+                href={`tel:${data.repPhone.replace(/[^\d+]/g, "")}`}
+                className="text-[15px] font-medium text-primary-600 hover:underline"
+              >
+                โทร {data.repPhone}
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <p className="mt-4 text-center text-[14px] leading-[1.6] text-gray-500 dark:text-gray-400">
+          ทีมงานจะติดต่อกลับโดยเร็วที่สุด
+        </p>
+
+        <button
+          type="button"
+          onClick={onEnter}
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-primary-600 px-4 py-[15px] text-[16px] font-semibold text-white shadow-[0_8px_20px_rgba(179,0,0,0.25)] transition hover:-translate-y-0.5 hover:bg-primary-700 hover:shadow-[0_12px_25px_rgba(179,0,0,0.35)]"
+        >
+          เข้าสู่ระบบ
         </button>
       </div>
     </div>

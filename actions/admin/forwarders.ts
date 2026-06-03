@@ -720,7 +720,8 @@ export async function adminSetForwarderBillToOverride(
       });
 
       revalidatePath(`/admin/forwarders/${d.f_no}`);
-      revalidatePath(`/service-import/${d.f_no}/receipt`);
+      // …/receipt redirects → …/invoice (live tb_forwarder⋈tb_receipt view).
+      revalidatePath(`/service-import/${d.f_no}/invoice`);
       return { ok: true, data: { f_no: d.f_no, bill_to_name_override: next } };
     },
   );

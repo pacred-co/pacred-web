@@ -123,6 +123,14 @@ export async function adminUpdateContactExtras(input: z.infer<typeof contactSche
 // ────────────────────────────────────────────────────────────
 // Assign sales rep to a customer (sets profiles.sales_admin_id)
 // Available to super OR sales_admin
+//
+// ⚠️ 2026-06-02 — DEAD-WRITE TOMBSTONE (0 callers). Writes ONLY the rebuilt
+// `profiles.sales_admin_id`, which no live surface reads. DO NOT wire this to
+// any UI — it would be a silent dead-write (§0e). The reachable reassign paths
+// are: adminTransferSalesRep (this file · per-customer + bulk-via-loop),
+// adminBulkTransferSalesRepTb (this file · /admin/customers/transfer-rep bulk),
+// adminUpdateUserSaleRep (customer-profile.ts · inline editor), and
+// setCustomerSalesRep (crm.ts) — all write the LIVE tb_users.adminIDSale.
 // ────────────────────────────────────────────────────────────
 const assignRepSchema = z.object({
   customer_id:    z.string().uuid(),
@@ -160,6 +168,21 @@ export async function adminAssignSalesRep(input: z.infer<typeof assignRepSchema>
 //       - the new rep ("ลูกค้า X ถูกย้ายเข้าทีมของท่าน")
 //       - the customer    ("ทีมเซลล์ของท่านถูกย้ายไปดูแลโดย Y")
 //     (the second + third skip silently if either id is null)
+//
+// 🔴 2026-06-02 — DEATH FIX (sales-rep reassignment). The input ids are Pacred
+// profile UUIDs (the combobox returns admins.profile_id; the page passes
+// profiles.id), but the LIVE column-of-truth the whole system reads is the
+// LEGACY `tb_users.adminIDSale` (a varchar holding `tb_admin.adminID`). The
+// CRM, reports, the customer-facing rep banner (lib/admin/sales-rep-contact.ts),
+// pcs-chrome + every faithful surface read THAT — so writing only
+// profiles.sales_admin_id (the rebuilt, near-empty column) was a silent
+// dead-write (green toast → invisible to everyone). We now ALSO write the live
+// column, resolved through the bridge:
+//   • customer profile UUID → profiles.member_code === tb_users.userID (PR####)
+//   • rep profile UUID      → admin_contact_extras.legacy_admin_id === tb_admin.adminID
+// profiles.sales_admin_id is kept in sync (dual-write) so the per-customer page
+// that still reads `profiles` + the notification fan-out stay coherent, but the
+// LEGACY column is now canonical.
 // ────────────────────────────────────────────────────────────
 const transferRepSchema = z.object({
   customer_id:        z.string().uuid(),
@@ -176,7 +199,9 @@ export async function adminTransferSalesRep(input: TransferSalesRepInput): Promi
   return withAdmin(["sales_admin"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    // Load current state so we can notify the previous rep and audit the delta
+    // Load current state so we can notify the previous rep and audit the delta.
+    // member_code is the bridge to tb_users.userID (PR####) — we write the
+    // LIVE legacy column keyed on it.
     const { data: before, error: beforeErr } = await admin
       .from("profiles")
       .select("id, member_code, first_name, last_name, company_name, account_type, sales_admin_id")
@@ -197,16 +222,63 @@ export async function adminTransferSalesRep(input: TransferSalesRepInput): Promi
       return { ok: false, error: "same_rep_no_change" };
     }
 
+    // Resolve the NEW rep's legacy adminID (the value tb_users.adminIDSale
+    // stores). Unassign (null) → clear the legacy column to '' (legacy "no
+    // rep" sentinel). Assign → require the rep profile to carry a
+    // legacy_admin_id, else the move would be invisible to every legacy
+    // surface (better to refuse than silently dead-write).
+    let newLegacyAdminId = "";
+    if (d.new_sales_admin_id) {
+      const { data: repExtra, error: repExtraErr } = await admin
+        .from("admin_contact_extras")
+        .select("legacy_admin_id")
+        .eq("profile_id", d.new_sales_admin_id)
+        .maybeSingle<{ legacy_admin_id: string | null }>();
+      if (repExtraErr) {
+        console.error(`[transfer-rep legacy id lookup] failed`, { code: repExtraErr.code, message: repExtraErr.message });
+        return { ok: false, error: `db_error:${repExtraErr.code ?? "unknown"}` };
+      }
+      newLegacyAdminId = (repExtra?.legacy_admin_id ?? "").trim();
+      if (!newLegacyAdminId) {
+        return {
+          ok: false,
+          error: "เซลล์ปลายทางยังไม่ได้ผูกรหัสเดิม (legacy_admin_id) — ผูกผ่าน /admin/admins ก่อน จึงจะมอบหมายลูกค้าเดิมได้",
+        };
+      }
+    }
+
+    // ── LIVE column write (canonical) — tb_users.adminIDSale keyed on the
+    //    customer's member_code (= userID). Skip only if the customer was
+    //    never migrated to tb_users (no member_code) — then profiles is the
+    //    only home we have.
+    if (before.member_code) {
+      const { error: tbErr } = await admin
+        .from("tb_users")
+        .update({ adminIDSale: newLegacyAdminId })
+        .eq("userID", before.member_code);
+      if (tbErr) {
+        console.error(`[transfer-rep tb_users.adminIDSale write] failed`, { userid: before.member_code, code: tbErr.code, message: tbErr.message });
+        return { ok: false, error: `db_error:${tbErr.code ?? "unknown"}` };
+      }
+    }
+
+    // ── Keep the rebuilt column in sync (dual-write) so the per-customer page
+    //    + notification fan-out stay coherent. Non-fatal: the legacy column is
+    //    canonical, so a sync failure logs but doesn't fail the transfer.
     const { error: updErr } = await admin
       .from("profiles")
       .update({ sales_admin_id: d.new_sales_admin_id })
       .eq("id", d.customer_id);
-    if (updErr) return { ok: false, error: updErr.message };
+    if (updErr) {
+      console.error(`[transfer-rep profiles sync] failed (non-fatal)`, { code: updErr.code, message: updErr.message });
+    }
 
     await logAdminAction(adminId, "customer.transfer_rep", "profile", d.customer_id, {
+      userid:                 before.member_code ?? null,
       previous_sales_admin_id,
-      new_sales_admin_id: d.new_sales_admin_id,
-      reason:             d.reason,
+      new_sales_admin_id:     d.new_sales_admin_id,
+      new_legacy_admin_id:    newLegacyAdminId || null,
+      reason:                 d.reason,
     });
 
     const customerDisplay = before.account_type === "juristic"
@@ -382,6 +454,13 @@ export async function searchAdminsByQuery(
 // or for portfolio rebalancing between reps. Complements the per-customer
 // adminTransferSalesRep() above; bulk path skips the reason field +
 // per-customer notification fan-out to keep the single UPDATE tight.
+//
+// ⚠️ 2026-06-02 — DEAD-WRITE TOMBSTONE (0 callers). Writes ONLY the rebuilt
+// `profiles.sales_admin_id` (no live reader). The LIVE bulk path used by
+// /admin/customers/transfer-rep is adminBulkTransferSalesRepTb (below), which
+// writes tb_users.adminIDSale; the reasoned bulk path
+// (/admin/customers/transfer-bulk) goes through adminTransferSalesRep (live).
+// DO NOT wire this to a UI — it would be a silent dead-write (§0e).
 // ────────────────────────────────────────────────────────────
 const bulkTransferRepSchema = z.object({
   customer_ids:       z.array(z.string().uuid()).min(1, "เลือกอย่างน้อย 1 ลูกค้า").max(500),

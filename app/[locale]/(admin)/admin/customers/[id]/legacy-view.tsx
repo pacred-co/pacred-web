@@ -30,6 +30,7 @@ import { getAdminRoles } from "@/lib/auth/require-admin";
 import { getCustomerRateMatrix } from "@/actions/admin/customer-rate";
 import { getCustomerStatCounts, listSalesAdmins } from "@/actions/admin/customer-profile";
 import { CustomerRateEditor } from "./rate-editor";
+import { HardDeletePanel } from "./hard-delete-panel";
 import {
   StatCards,
   IdentityEditor,
@@ -174,6 +175,10 @@ export async function renderLegacyCustomerView(id: string) {
     forwarderRes,
     shopRes,
     yuanRes,
+    fwdCountRes,
+    ordCountRes,
+    payCountRes,
+    walletHsCountRes,
   ] = await Promise.all([
     admin.from("tb_wallet").select("wallettotal").eq("userid", u.userID).maybeSingle(),
     admin
@@ -211,6 +216,14 @@ export async function renderLegacyCustomerView(id: string) {
       .eq("userid", u.userID)
       .order("paydate", { ascending: false })
       .limit(10),
+    // Exact activity counts for the super-only hard-delete safety gate
+    // (HardDeletePanel) — head:true counts are cheap. The recents above cap at
+    // 10; these report the true totals so the gate shows accurate "ลบไม่ได้"
+    // reasons. The action (adminHardDeleteCustomer) re-checks server-side.
+    admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("userid", u.userID),
+    admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("userid", u.userID),
+    admin.from("tb_payment").select("id", { count: "exact", head: true }).eq("userid", u.userID),
+    admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("userid", u.userID),
   ]);
 
   // §0c — surface real errors on the load-bearing reads (wallet · corp ·
@@ -276,6 +289,16 @@ export async function renderLegacyCustomerView(id: string) {
   const isSeniorAdmin =
     adminRoles.includes("super") ||
     ["manager", "accounting", "qa"].some((r) => adminRoles.includes(r as never));
+
+  // Hard-delete is super-only (staff-CRUD gap · §PM-6 #3.3). Exact activity
+  // counts feed the danger-zone panel's safety gate (count reads are best-
+  // effort — a transient miss degrades to 0, but the action re-checks
+  // server-side so a wrong 0 here can never bypass the real gate).
+  const isSuperAdmin = adminRoles.includes("super");
+  const fwdCount = fwdCountRes.count ?? 0;
+  const ordCount = ordCountRes.count ?? 0;
+  const payCount = payCountRes.count ?? 0;
+  const walletHsCount = walletHsCountRes.count ?? 0;
 
   return (
     <main className="p-6 lg:p-8 max-w-5xl mx-auto space-y-5">
@@ -343,8 +366,9 @@ export async function renderLegacyCustomerView(id: string) {
           label="ล่าสุดล็อกอิน"
           value={u.userLastLogin ? new Date(u.userLastLogin).toLocaleString("th-TH") : "-"}
         />
-        {/* editSale — write tb_users.adminIDSale (legacy-correct side; the
-            rebuilt transfer-rep page writes profiles.sales_admin_id). */}
+        {/* editSale — write tb_users.adminIDSale (canonical reassign). The
+            per-customer + bulk transfer-rep pages were repointed 2026-06-02 to
+            also write this live column (was profiles.sales_admin_id death). */}
         <SaleRepEditor userid={u.userID} currentRep={u.adminIDSale} admins={salesAdmins} />
       </div>
 
@@ -389,6 +413,20 @@ export async function renderLegacyCustomerView(id: string) {
       {/* Shipping addresses (tb_address) — full CRUD + set-main, main flag
           from tb_address_main. เดฟ 2026-05-30. */}
       <AddressManager userid={u.userID} addresses={addresses} mainAddressId={mainAddrId} />
+
+      {/* Danger zone — super-only HARD delete (staff-CRUD gap · §PM-6 #3.3).
+          Only for truly-empty (test/orphan) accounts; the panel shows the
+          activity gate up front + requires typing the PR-code to confirm. */}
+      {isSuperAdmin ? (
+        <HardDeletePanel
+          userid={u.userID}
+          forwarderCount={fwdCount}
+          orderCount={ordCount}
+          paymentCount={payCount}
+          walletBalance={walletBalance}
+          walletHistoryCount={walletHsCount}
+        />
+      ) : null}
 
       {/* Status mutate (อนุมัติ / ระงับ) still lives on the dedicated queues. */}
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">

@@ -174,8 +174,13 @@ export async function insertLegacyTbUserRow(
   // check-otp-register.php L60-95). Before this, leads were rep-less until an
   // admin approved them — breaking "ทีมเซลล์จะโทรหา" (the rep can't call a
   // lead they don't yet own). The new customer is userActive='0' so it's not
-  // counted in the round-robin's own load tally. Best-effort: a null pick
-  // (no active rep) leaves adminIDSale='' and approveCustomer assigns later.
+  // counted in the round-robin's own load tally.
+  //
+  // 2026-06-02 (legacy model): pickLeastLoadedSalesRep now reads the legacy
+  // tb_admin sales pool (adminStatusA='1' AND adminStatusSale='1') and NEVER
+  // returns null — when the pool is empty it returns the central rep
+  // (admin_center) so the lead is always owned. The register action re-reads
+  // this via getSalesRepContactForUserid(memberCode) for the success popup.
   const assignedSalesRep = await pickLeastLoadedSalesRep(admin);
 
   const payload: Record<string, unknown> = {
@@ -207,7 +212,7 @@ export async function insertLegacyTbUserRow(
     userNote:             "",
     userLineIDOA:         "",
     companyCustomer:      "0",
-    adminIDSale:          assignedSalesRep ?? "",  // P1-15: rep owned at signup
+    adminIDSale:          assignedSalesRep,  // P1-15: rep owned at signup (never empty)
   };
 
   const { error: insertErr } = await admin.from("tb_users").insert(payload);

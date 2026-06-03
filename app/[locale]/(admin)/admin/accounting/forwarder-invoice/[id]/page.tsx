@@ -14,13 +14,13 @@
  * (AGENTS.md §0a — workflow logic faithful · UI is our design). Element-by-
  * element parity with the PHP HTML table:
  *
- *   ✅ PCS Cargo logo (top-left band)
- *   ✅ บริษัท พีซีเอส คาร์โก้ จำกัด + PCS Cargo CO., LTD.
+ *   ✅ Pacred logo (top-left band)
+ *   ✅ บริษัท แพคเรด (ประเทศไทย) จำกัด + Pacred (Thailand) Co., Ltd.
  *   ✅ ใบเสร็จรับเงิน (#8BC34A green)
  *   ✅ (ไม่ใช่ใบกำกับภาษี) red — mandatory disclaimer per Thai tax rules
  *   ✅ เลขที่ {rid}
  *   ✅ ต้นฉบับ / สำเนา stamp top-right per page
- *   ✅ Issuer block (PCS Cargo · TaxID 0105560160694 · address · tel)
+ *   ✅ Issuer block (Pacred · TaxID + address · tel — from components/seo/site.ts)
  *   ✅ Customer block (name + corporateNumber + corporateAddress)
  *   ✅ 7-col items table (ลำดับ · เลขที่ออเดอร์ · Tracking · กล่อง · น้ำหนัก · ปริมาตร · จำนวนเงิน)
  *   ✅ Footer summary 6-line (Total · Delivery CHN · Delivery TH · Other · Discount · WHT 1% conditional)
@@ -30,11 +30,12 @@
  *   ✅ 4 signature boxes (ผู้ออก · ผู้อนุมัติ · ตราประทับ + sin-wandee.jpg · ผู้รับ)
  *   ✅ On print: flip tb_receipt.statusprint='1' + stamp adminidprint + rdateprint
  *
- * NOTE on branding — receipt uses PCS Cargo Co., Ltd. (legacy issuer of
- * record), NOT Pacred (Thailand) Co., Ltd. Receipts are historic legacy
- * accounting documents; the brand-split (CLAUDE.md "don't preempt brand
- * cleanup" + AGENTS.md §3) waits for ก๊อต to formally switch the company
- * of record for tax invoices. This file matches the legacy issuer.
+ * BRANDING (2026-06-01 · owner GO/NO-GO = GO): the receipt issuer is now
+ * Pacred (Thailand) Co., Ltd. — name / TaxID / address / phone / bank all
+ * pulled from components/seo/site.ts (the single source of truth, AGENTS.md
+ * §7). The legacy PCS Cargo issuer identity + the 2025-03-20 PCS address
+ * cutover were retired. Doc-number format (FRC/FRG), WHT 1% logic, and the
+ * 2-page ต้นฉบับ/สำเนา layout are unchanged — only the issuer identity swapped.
  */
 
 import { Link } from "@/i18n/navigation";
@@ -43,6 +44,14 @@ import Image from "next/image";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readThaiBaht } from "@/lib/utils/thai-number";
+import {
+  SITE_LEGAL_NAME_TH,
+  SITE_LEGAL_NAME,
+  TAX_ID,
+  CONTACT,
+  ADDRESSES,
+  BANK,
+} from "@/components/seo/site";
 import { Printer } from "lucide-react";
 import PrintButton from "./print-button";
 import BackfillItemsButton from "./backfill-items-button";
@@ -183,7 +192,7 @@ function composeMainAddress(row: RawAddressJoin | null | undefined): string {
 function ReceiptPage({
   label,             // "ต้นฉบับ" | "สำเนา"
   rid,
-  issuerAddress,     // address line for PCS Cargo issuer band
+  issuerAddress,     // address line for the Pacred issuer band
   issueDate,
   rDateCreate,
   customerName,
@@ -242,8 +251,8 @@ function ReceiptPage({
             <tr>
               <th colSpan={2} className="text-center align-middle p-1" style={{ width: "20%" }}>
                 <Image
-                  src="/legacy/pcs/logo.png"
-                  alt="PCS Cargo"
+                  src="/images/pacred-logo-red.png"
+                  alt={SITE_LEGAL_NAME}
                   width={76}
                   height={76}
                   unoptimized
@@ -251,8 +260,8 @@ function ReceiptPage({
                 />
               </th>
               <th colSpan={2} className="text-center align-middle p-1">
-                <div className="text-xl font-bold leading-tight">บริษัท พีซีเอส คาร์โก้ จำกัด</div>
-                <div className="text-base font-semibold leading-tight">PCS Cargo CO., LTD.</div>
+                <div className="text-xl font-bold leading-tight">{SITE_LEGAL_NAME_TH}</div>
+                <div className="text-base font-semibold leading-tight">{SITE_LEGAL_NAME}</div>
               </th>
               <th colSpan={3} className="text-center align-middle p-1" style={{ background: "#f2f2f2", lineHeight: "1.35em" }}>
                 <div>{label}</div>
@@ -285,10 +294,10 @@ function ReceiptPage({
                 <div>โทรศัพท์ / tel : </div>
               </td>
               <td colSpan={3} className="text-left align-top p-1">
-                <div>บริษัท พีซีเอส คาร์โก้ จำกัด</div>
-                <div>0105560160694</div>
+                <div>{SITE_LEGAL_NAME_TH}</div>
+                <div>{TAX_ID}</div>
                 <div>{issuerAddress}</div>
-                <div>02-444-7046</div>
+                <div>{CONTACT.phoneCompanyDisplay}</div>
               </td>
               <td colSpan={1} className="text-right align-top p-1" style={{ width: "12%" }}>
                 <div>วันที่ / date : </div>
@@ -397,8 +406,8 @@ function ReceiptPage({
                       <input type="checkbox" /> เช็คธนาคาร/สาขา_____________ วันที่________ เลขที่เช็ค____________
                     </div>
                     <div>
-                      <input type="checkbox" defaultChecked /> โอนเข้าธนาคาร <b>กสิกรไทย</b> เลขที่{" "}
-                      <b>064-174-3836</b> วันที่ {issueDate}
+                      <input type="checkbox" defaultChecked /> โอนเข้าธนาคาร <b>{BANK.name}</b> เลขที่{" "}
+                      <b>{BANK.accountNumber}</b> วันที่ {issueDate}
                     </div>
                     <div className="text-center">
                       จำนวนเงิน {fmt2(grandTotal)} บาท ผู้รับเงิน ________________________
@@ -443,6 +452,9 @@ function ReceiptPage({
                 <tr>
                   <th className="text-center align-top p-2 border border-gray-400" style={{ width: "25%" }}>
                     <div>ผู้ออกเอกสาร</div>
+                    {/* TODO(owner): Pacred authorised-signatory signature image
+                        — `sin-wandee.jpg` is the legacy PCS Cargo signature
+                        asset. Provide the Pacred signature scan to swap. */}
                     <Image
                       src="/legacy/pcs/assets/images/theme/sin-wandee.jpg"
                       alt="ลายมือชื่อ"
@@ -456,6 +468,8 @@ function ReceiptPage({
                   </th>
                   <th className="text-center align-top p-2 border border-gray-400" style={{ width: "25%" }}>
                     <div>ผู้อนุมัติเอกสาร</div>
+                    {/* TODO(owner): Pacred approver signature image (legacy
+                        PCS `sin-wandee.jpg` placeholder). */}
                     <Image
                       src="/legacy/pcs/assets/images/theme/sin-wandee.jpg"
                       alt="ลายมือชื่อ"
@@ -469,6 +483,9 @@ function ReceiptPage({
                   </th>
                   <th className="text-center align-top p-2 border border-gray-400" style={{ width: "25%" }}>
                     <div>ตราประทับ (ผู้ขาย)</div>
+                    {/* TODO(owner): Pacred company seal (ตราปั๊ม) image —
+                        `stamp.png` is the legacy PCS Cargo seal. Provide the
+                        Pacred company stamp scan to swap the file/path. */}
                     <Image
                       src="/legacy/pcs/assets/images/theme/stamp.png"
                       alt="ตราประทับ"
@@ -739,13 +756,11 @@ export default async function ForwarderInvoicePrintPage({
         fDiscount:        totals.fDiscount,
       };
 
-  // ── 8. Issuer address (legacy printReceipt.php:293-297 conditional) ──
-  // After 2025-03-20 the new address; before, the old one.
-  const today = new Date();
-  const issuerAddress =
-    today >= new Date("2025-03-20")
-      ? "เลขที่ 12 ซอย เพชรเกษม 77 แยก 3-6 แขวงหนองค้างพลู เขตหนองแขม กรุงเทพมหานคร 10160"
-      : "เลขที่ 8 ซอย เพชรเกษม 77 แยก 3-4 แขวงหนองค้างพลู เขตหนองแขม กรุงเทพมหานคร 10160";
+  // ── 8. Issuer address (2026-06-01 brand swap · owner GO) ──
+  // Legacy printReceipt.php:293-297 had a 2025-03-20 cutover between two PCS
+  // Cargo addresses; under Pacred there is one office address (the SOT in
+  // components/seo/site.ts ADDRESSES.office). The cutover is retired.
+  const issuerAddress = ADDRESSES.office.full;
 
   // ── 9. Pagination — 13 rows per page (legacy `$rowsPerPage = 13`) ──
   const ROWS_PER_PAGE = 13;

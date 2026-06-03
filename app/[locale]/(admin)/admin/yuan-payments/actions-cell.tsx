@@ -26,7 +26,7 @@ export function YuanPaymentActions(props: Props) {
   const [err, setErr] = useState<string | null>(null);
   const [refundOpen, setRefundOpen] = useState(false);
 
-  function set(newStatus: "processing" | "completed" | "failed") {
+  function set(newStatus: "completed" | "failed") {
     setErr(null);
     startTransition(async () => {
       const res = await adminUpdateYuanPayment({ id, status: newStatus });
@@ -41,16 +41,14 @@ export function YuanPaymentActions(props: Props) {
     <div className="space-y-1">
       {err && <div className="text-[10px] text-red-700">{err}</div>}
       <div className="flex flex-wrap gap-1">
+        {/* Legacy payment.php is a 2-step pending → completed (no in-flight
+            "processing" state). Approve flips paystatus 1→2 directly via
+            adminUpdateYuanPayment (same no-wallet-move behavior as the list
+            bulk-bar — wallet was already debited at submit). Reject → failed. */}
         {status === "pending" && (
           <>
-            <Button size="sm" variant="outline" type="button" onClick={() => set("processing")} disabled={pending}>เริ่มโอน</Button>
+            <Button size="sm" type="button" onClick={() => set("completed")} disabled={pending}>อนุมัติ (สำเร็จ)</Button>
             <Button size="sm" variant="outline" type="button" onClick={() => set("failed")} disabled={pending}>ปฏิเสธ</Button>
-          </>
-        )}
-        {status === "processing" && (
-          <>
-            <Button size="sm" type="button" onClick={() => set("completed")} disabled={pending}>โอนสำเร็จ</Button>
-            <Button size="sm" variant="outline" type="button" onClick={() => set("failed")} disabled={pending}>ล้มเหลว</Button>
           </>
         )}
         {/* Phase C QoL #4 — refund now requires a slip. Opens a modal

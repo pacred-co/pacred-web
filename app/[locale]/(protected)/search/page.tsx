@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { akucargoSearch } from "@/lib/china-search/akucargo";
@@ -92,6 +93,9 @@ type SearchParams = {
   provider?: string;
   page?: string;
   order?: string;
+  /** ?img=1 — arrived via the search-bar camera button; auto-scroll +
+   *  highlight the reverse-image panel so the customer taps its picker. */
+  img?: string;
 };
 
 type ProductRow = {
@@ -355,8 +359,9 @@ export default async function SearchPage({
               {/* P1-30 — reverse-image / camera "find-similar" search.
                   Wires the existing /api/china-search/image backend
                   (faithful to legacy searchIMG.php). Renders the hits in
-                  the same card grid the keyword search uses. */}
-              <SearchImagePanel rsDefault={rsDefault} />
+                  the same card grid the keyword search uses. M-5: ?img=1
+                  (search-bar camera button) auto-scrolls + highlights it. */}
+              <SearchImagePanel rsDefault={rsDefault} highlight={sp.img === "1"} />
             </div>
 
             <div className="mt-3">
@@ -787,7 +792,10 @@ function UrlPasteMode({
                       ราคารวม / dead-submit-button with the client island.
                       Island manages qty (default minQty), color/size/details,
                       total recompute + submit to addCartItem. Skeleton state
-                      when TAMIT detail null (priceCny=0 OR blank title). */}
+                      when TAMIT detail null (priceCny=0 OR blank title) →
+                      island internally falls back to a /cart manual-link
+                      message instead of a dead CTA (replaces dave's outer
+                      ternary — same UX, props inside the island). */}
                   <UrlPasteAddToCart
                     url={urlcut}
                     provider={cartProvider}

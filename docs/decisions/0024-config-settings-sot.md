@@ -1,6 +1,6 @@
 # ADR-0024 — Config SOT: legacy `tb_settings` (rate/cost) + `business_config` (tax/OTP/flags); retire the rebuilt `settings`
 
-**Status:** PROPOSED 2026-06-01 (เดฟ — plan for owner review; **nothing executed**). Awaiting เดฟ/owner approval before any code change.
+**Status:** ✅ ACCEPTED + IMPLEMENTED 2026-06-01 (owner approved; shipped main `1fb8ee6f`). `/admin/settings` neutralized → read-through hub (6 dead-write fields stopped; canonical editors = `/admin/settings/legacy-rates` + `/forwarder-costs` + `/business-config`). Follow-up (chip filed): `/admin/rates/page.tsx` still reads the rebuilt `settings` (dead-read display).
 **Source:** 2026-06-01 big audit — [`docs/research/big-audit-2026-06-01/05-rates-settings-promo.md`](../research/big-audit-2026-06-01/05-rates-settings-promo.md) §1b/§2/§3 G3 + [`_MASTER-PLAN.md`](../research/big-audit-2026-06-01/_MASTER-PLAN.md) §3 P1 #11 ("Config split-brain").
 **Domain:** the three coexisting config homes (`tb_settings`, `business_config`, rebuilt `settings`). Resolves the overlap on **yuan-rate** and **free-shipping** that currently lets the rebuilt forwarder lane price off a different rate than the live customer money path.
 

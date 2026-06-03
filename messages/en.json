@@ -2813,6 +2813,7 @@
       "general": "General",
       "homeNotice": "Home-page notice",
       "popup": "Customer popup",
+      "promos": "Promo banners",
       "rates": "Shipping rates",
       "rateGeneral": "General rates",
       "rateVip": "VIP customer rates",
@@ -2827,7 +2828,8 @@
       "tools": "Tools",
       "orgEmail": "Organization email",
       "orgChannels": "Organization channels",
-      "adminUsers": "Admin users"
+      "adminUsers": "Admin users",
+      "partners": "Partners"
     },
     "userCargo": {
       "title": "Customer management",
@@ -2883,6 +2885,8 @@
       "history": "Admin action log",
       "incidents": "System incidents",
       "kpi": "KPI Dashboard",
+      "crm": "CRM (Customer relations)",
+      "cockpit": "Exec cockpit",
       "contactMessages": "Customer contact messages",
       "leads": "Call leads (Leads)",
       "lineInbox": "LINE Inbox",

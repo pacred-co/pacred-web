@@ -75,7 +75,9 @@ const MENU: MenuItem[] = [
     children: [
       { href: "/service-order", labelKey: "serviceOrderAll" },
       { href: "/service-order/pending", labelKey: "serviceOrderPending", badgeKey: "serviceOrderPending" },
-      { href: "/service-order/cart", labelKey: "serviceOrderCart" },
+      // D1 cart unification — the faithful cart is /cart (was /service-order/cart,
+      // which now redirect()s here). Keeps this nav off the redirect hop.
+      { href: "/cart", labelKey: "serviceOrderCart" },
       { href: "/service-order/add", labelKey: "serviceOrderAdd" },
     ],
   },

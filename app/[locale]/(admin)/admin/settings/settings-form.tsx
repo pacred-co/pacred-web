@@ -1,11 +1,22 @@
-"use client";
+import { Link } from "@/i18n/navigation";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { adminUpdateSettings } from "@/actions/admin/settings";
-
-const inputCls = "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
+// ════════════════════════════════════════════════════════════
+// ADR-0024 — config / settings SOT.  Read-through hub (was editable form).
+// ════════════════════════════════════════════════════════════
+//
+// This used to be an editable form that wrote the rebuilt `settings` table
+// via adminUpdateSettings. The 2026-06-01 big audit confirmed every field
+// here is a DEAD-WRITE for the live customer money path (see
+// docs/decisions/0024-config-settings-sot.md · §0e per-consumer verify):
+//   • free_shipping_*           → live path reads tb_settings.freeshipping
+//   • service_fee/juristic/QC/crate → read only by the rebuilt forwarder lane
+//                                  (service-import/add) + display-only preview;
+//                                  live forwarder pricing uses tb_rate_* + the
+//                                  tb_settings cost matrix.
+//
+// Per D-2/D-4 #1 it's now a READ-ONLY view of the current rebuilt-table values
+// (so staff can see what the rebuilt forwarder lane uses) with prominent links
+// to the canonical editors. No write surface = no dead-write trap.
 
 type Props = {
   service_fee: number;
@@ -17,125 +28,90 @@ type Props = {
   free_shipping_threshold: number | null;
 };
 
-export function SettingsForm(initial: Props) {
-  const router = useRouter();
-  const [serviceFee,    setServiceFee]    = useState(String(initial.service_fee));
-  const [jurThresh,     setJurThresh]     = useState(String(initial.juristic_discount_threshold));
-  const [jurPctPct,     setJurPctPct]     = useState((initial.juristic_discount_pct * 100).toFixed(2));   // shown as percent
-  const [qcFee,         setQcFee]         = useState(String(initial.qc_fee_per_item));
-  const [crateFee,      setCrateFee]      = useState(String(initial.crate_fee_base));
-  const [freeShipEn,    setFreeShipEn]    = useState(initial.free_shipping_enabled);
-  const [freeShipMin,   setFreeShipMin]   = useState(initial.free_shipping_threshold != null ? String(initial.free_shipping_threshold) : "");
-  const [error, setError] = useState<string | null>(null);
-  const [msg,   setMsg]   = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+const thb = (n: number) =>
+  `฿${Number(n ?? 0).toLocaleString("th-TH", { maximumFractionDigits: 2 })}`;
 
-  function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null); setMsg(null);
-
-    const parsedJurPct = Number(jurPctPct);
-    if (!Number.isFinite(parsedJurPct) || parsedJurPct < 0 || parsedJurPct > 100) {
-      setError("ส่วนลดนิติบุคคล % ต้องอยู่ระหว่าง 0-100");
-      return;
-    }
-
-    submitWith(false);
-  }
-
-  // V-A4: shared submit path that supports the "confirm unusual rate"
-  // bypass. First call sends without the flag; if server rejects with
-  // suspicious-change error, UI prompts user → submitWith(true) retries.
-  function submitWith(confirmUnusualRate: boolean) {
-    startTransition(async () => {
-      const res = await adminUpdateSettings({
-        service_fee:                 Number(serviceFee) || 0,
-        juristic_discount_threshold: Number(jurThresh) || 0,
-        juristic_discount_pct:       (Number(jurPctPct) || 0) / 100,
-        qc_fee_per_item:             Number(qcFee) || 0,
-        crate_fee_base:              Number(crateFee) || 0,
-        free_shipping_enabled:       freeShipEn,
-        free_shipping_threshold:     freeShipMin ? Number(freeShipMin) : null,
-        ...(confirmUnusualRate ? { confirm_unusual_rate: true } : {}),
-      });
-      if (res.ok) {
-        setMsg(confirmUnusualRate ? "บันทึกแล้ว (bypass สั่งพิสูจน์การเปลี่ยนค่า)" : "บันทึกแล้ว");
-        router.refresh();
-        setTimeout(() => setMsg(null), 4000);
-      } else {
-        // V-A4: detect the suspicious-change rejection → ask user to confirm
-        if (res.error.includes("ตรวจพบการเปลี่ยนค่าผิดปกติ") && !confirmUnusualRate) {
-          if (window.confirm(
-            `${res.error}\n\nยืนยันว่าตั้งใจเปลี่ยนค่าตามนี้จริง?`,
-          )) {
-            submitWith(true);
-          }
-          return;
-        }
-        setError(res.error);
-      }
-    });
-  }
-
+export function SettingsForm(s: Props) {
   return (
-    <form onSubmit={onSubmit} className="rounded-2xl border border-border bg-white dark:bg-surface p-6 shadow-sm space-y-4 max-w-2xl">
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
-      {msg   && <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{msg}</div>}
-
-      <Group title="ค่าธรรมเนียม">
-        <Field label="ค่าบริการ Pacred ต่อออเดอร์ (บาท)" hint="default 50 บาท">
-          <input type="number" min="0" step="0.01" value={serviceFee} onChange={(e) => setServiceFee(e.target.value)} className={inputCls} required />
-        </Field>
-        <Field label="ค่า QC ต่อชิ้น (บาท)">
-          <input type="number" min="0" step="0.01" value={qcFee} onChange={(e) => setQcFee(e.target.value)} className={inputCls} required />
-        </Field>
-        <Field label="ค่าตีลังไม้ตั้งต้น (บาท)">
-          <input type="number" min="0" step="0.01" value={crateFee} onChange={(e) => setCrateFee(e.target.value)} className={inputCls} required />
-        </Field>
-      </Group>
-
-      <Group title="ส่วนลดนิติบุคคล">
-        <Field label="ยอดขั้นต่ำที่ได้ส่วนลด (บาท)">
-          <input type="number" min="0" step="0.01" value={jurThresh} onChange={(e) => setJurThresh(e.target.value)} className={inputCls} required />
-        </Field>
-        <Field label="% ส่วนลด" hint="เช่น 1 = 1% (เก็บใน DB เป็น 0.01)">
-          <input type="number" min="0" max="100" step="0.01" value={jurPctPct} onChange={(e) => setJurPctPct(e.target.value)} className={inputCls} required />
-        </Field>
-      </Group>
-
-      <Group title="ส่งฟรี">
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={freeShipEn} onChange={(e) => setFreeShipEn(e.target.checked)} />
-          <span>เปิดใช้งานโปรส่งฟรี (BKK + 5 จังหวัดปริมณฑล)</span>
-        </label>
-        <Field label="ยอดขั้นต่ำของส่งฟรี (บาท, ถ้าไม่มีเว้นว่าง)">
-          <input type="number" min="0" step="0.01" value={freeShipMin} onChange={(e) => setFreeShipMin(e.target.value)} className={inputCls} placeholder="ไม่จำกัด" />
-        </Field>
-      </Group>
-
-      <div className="flex justify-end pt-2 border-t border-border">
-        <Button type="submit" disabled={pending}>
-          {pending ? "กำลังบันทึก..." : "บันทึก"}
-        </Button>
+    <div className="space-y-5">
+      {/* Canonical editors — the real write surfaces */}
+      <div className="rounded-2xl border border-border bg-white dark:bg-surface p-6 shadow-sm space-y-3 max-w-2xl">
+        <h2 className="text-sm font-bold text-foreground">แก้ไขค่าจริงที่ระบบใช้ (ตัวแก้ที่ถูกต้อง)</h2>
+        <p className="text-xs text-muted">
+          หน้านี้รวมลิงก์ไปยังตัวตั้งค่าตัวจริง — แก้ที่นี่แล้วมีผลกับ flow จริงทันที
+          (หน้านี้เคยมีฟอร์มแก้ค่า แต่เขียนลงตารางที่ระบบไม่ได้อ่าน — ปิดไปตาม ADR-0024)
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+          <HubLink
+            href="/admin/settings/legacy-rates"
+            title="เรทหยวนรายวัน"
+            desc="ฝากโอน / ฝากสั่ง / ต้นทุน (tb_settings)"
+          />
+          <HubLink
+            href="/admin/settings/forwarder-costs"
+            title="เรทต้นทุน + ส่งฟรี"
+            desc="144 ช่องต้นทุน + โปรส่งฟรี (tb_settings)"
+          />
+          <HubLink
+            href="/admin/settings/business-config"
+            title="Business Config"
+            desc="ภาษี WHT/VAT · OTP · กระเป๋า · flags"
+          />
+        </div>
       </div>
-    </form>
-  );
-}
 
-function Group({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-2">
-      <h3 className="text-sm font-bold text-foreground">{title}</h3>
-      {children}
+      {/* Read-only: current values of the rebuilt `settings` row.
+          These drive ONLY the rebuilt service-import/add forwarder lane
+          (low-data) — shown for reference, not editable here. */}
+      <div className="rounded-2xl border border-border bg-surface/60 p-6 max-w-2xl space-y-3">
+        <div>
+          <h3 className="text-sm font-bold text-foreground">
+            ค่าธรรมเนียม forwarder (อ้างอิงเท่านั้น · อ่านอย่างเดียว)
+          </h3>
+          <p className="text-[11px] text-muted mt-0.5">
+            ค่าเหล่านี้ใช้เฉพาะ lane ฝากนำเข้าแบบ rebuilt (service-import/add) ซึ่งข้อมูลน้อยมาก
+            — pricing จริงของลูกค้าใช้ตารางเรท (tb_rate_*) + cost matrix (tb_settings) ไม่ได้อ่านค่าเหล่านี้
+          </p>
+        </div>
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+          <ReadRow label="ค่าบริการต่อออเดอร์" value={thb(s.service_fee)} />
+          <ReadRow label="ค่า QC ต่อชิ้น" value={thb(s.qc_fee_per_item)} />
+          <ReadRow label="ค่าตีลังไม้ตั้งต้น" value={thb(s.crate_fee_base)} />
+          <ReadRow
+            label="ส่วนลดนิติบุคคล"
+            value={`${(Number(s.juristic_discount_pct) * 100).toFixed(2)}% เมื่อ ≥ ${thb(s.juristic_discount_threshold)}`}
+          />
+          <ReadRow
+            label="โปรส่งฟรี"
+            value={
+              s.free_shipping_enabled
+                ? `เปิด${s.free_shipping_threshold != null ? ` (ขั้นต่ำ ${thb(s.free_shipping_threshold)})` : ""}`
+                : "ปิด"
+            }
+          />
+        </dl>
+      </div>
     </div>
   );
 }
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+
+function HubLink({ href, title, desc }: { href: string; title: string; desc: string }) {
   return (
-    <label className="block space-y-1">
-      <span className="text-xs font-medium">{label}</span>
-      {children}
-      {hint && <span className="block text-[10px] text-muted">{hint}</span>}
-    </label>
+    <Link
+      href={href}
+      className="block rounded-xl border border-primary-200 bg-primary-50/60 dark:bg-primary-950/20 px-4 py-3 hover:border-primary-400 hover:bg-primary-100/60 transition-colors"
+    >
+      <p className="text-sm font-bold text-primary-700">{title} →</p>
+      <p className="text-[11px] text-muted mt-0.5">{desc}</p>
+    </Link>
+  );
+}
+
+function ReadRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-border/50 py-1">
+      <dt className="text-muted">{label}</dt>
+      <dd className="font-medium text-foreground text-right">{value}</dd>
+    </div>
   );
 }

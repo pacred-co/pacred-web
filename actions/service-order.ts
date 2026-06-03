@@ -10,6 +10,8 @@ import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { computeShopOrderDebitTotal } from "@/lib/service-order/debit-total";
+import { spendCashbackAtCheckout, refundCashbackOnReject } from "@/actions/admin/wallet-hs";
+import { cashbackRefId } from "@/lib/cashback/note-tag";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { type LegacyOrderCode } from "@/lib/legacy-status-map";
 
@@ -905,6 +907,11 @@ export async function cancelServiceOrder(hNo: string): Promise<ActionResult> {
 // which calls THIS action. ≤3 clicks from the sidebar.
 export async function payServiceOrderFromWallet(
   hNo: string,
+  // ADR-0025 — optional apply-cashback (the shop pay-now path). When > 0 the
+  // cashback is spent FIRST (debit-on-submit · this path settles immediately
+  // with no admin step), then the wallet covers the remainder. Existing
+  // call-sites pass no opts → cashback unused → behaviour unchanged.
+  opts?: { cashBackApplied?: number },
 ): Promise<ActionResult<{ tx_id: string; already_paid: boolean }>> {
   // G-4 — impersonation is read-only; refuse customer-facing mutations.
   const impErr = await assertNotImpersonating();
@@ -972,6 +979,27 @@ export async function payServiceOrderFromWallet(
     return { ok: false, error: "total_thb_invalid" };
   }
 
+  // ── 2b. ADR-0025 — clamp the requested apply-cashback (pre-check) ──
+  // The actual debit happens after the idempotency probe (below) so a
+  // re-pay can't spend cashback twice. Here we only cap the request to
+  // `min(cbtotal, priceToPay)` so the wallet pre-check tests the correct
+  // (reduced) amount. Funding precedence (ADR-0025 D-3): wallet first, then
+  // cashback — but on the pay-now wallet path the customer chooses to spend
+  // cashback to preserve wallet, so cashback reduces the wallet debit.
+  let cashBackRequested = Math.max(0, Number(opts?.cashBackApplied) || 0);
+  if (cashBackRequested > 0) {
+    const { data: cbRow, error: cbErr } = await admin
+      .from("tb_cash_back")
+      .select("cbtotal")
+      .eq("userid", memberCode)
+      .maybeSingle<{ cbtotal: number | string | null }>();
+    if (cbErr) {
+      console.error(`[tb_cash_back read] failed`, { code: cbErr.code, message: cbErr.message, userid: memberCode });
+    }
+    cashBackRequested = Math.round(Math.max(0, Math.min(cashBackRequested, Number(cbRow?.cbtotal ?? 0), priceToPay)) * 100) / 100;
+  }
+  const walletNeededPrecheck = Math.round((priceToPay - cashBackRequested) * 100) / 100;
+
   // ── 3. Read tb_wallet + pre-check balance (legacy L51-55) ───────
   const { data: walletBefore, error: walletReadErr } = await admin
     .from("tb_wallet")
@@ -985,10 +1013,10 @@ export async function payServiceOrderFromWallet(
     return { ok: false, error: `db_error:${walletReadErr.code ?? "unknown"}` };
   }
   const currentBalance = Number(walletBefore?.wallettotal ?? 0);
-  if (!(currentBalance >= priceToPay)) {
+  if (!(currentBalance >= walletNeededPrecheck)) {
     return {
       ok: false,
-      error: `wallet_insufficient — มี ฿${currentBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ต้อง ฿${priceToPay.toLocaleString("th-TH", { minimumFractionDigits: 2 })} เติมเงินก่อนชำระ`,
+      error: `wallet_insufficient — มี ฿${currentBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ต้อง ฿${walletNeededPrecheck.toLocaleString("th-TH", { minimumFractionDigits: 2 })} เติมเงินก่อนชำระ`,
     };
   }
 
@@ -1031,17 +1059,33 @@ export async function payServiceOrderFromWallet(
     return { ok: true, data: { tx_id: String(existingHs.id), already_paid: true } };
   }
 
+  // ── 4b. ADR-0025 — spend the applied cashback NOW (debit-on-submit).
+  // Idempotent on `cbhrefid=shop:<hNo>` (a retry cannot double-spend).
+  // `applied` is the real amount debited (clamped to the live balance);
+  // the wallet then covers `priceToPay − applied`.
+  let cashBackApplied = 0;
+  if (cashBackRequested > 0) {
+    const cbRefId = cashbackRefId("shop", header.hno);
+    const cbRes = await spendCashbackAtCheckout(admin, {
+      userid: memberCode, requested: cashBackRequested, cbhrefid: cbRefId, nowIso,
+    });
+    cashBackApplied = cbRes.applied;
+  }
+  const walletDebit = Math.round((priceToPay - cashBackApplied) * 100) / 100;
+
   // ── 5. INSERT tb_wallet_hs (type='2', status='2') ───────────────
   // Mirror of adminMarkServiceOrderPaidTb's row (the admin twin), minus
   // the admin identity — customer-initiated, so adminID empty +
   // adminIDcrate = the customer's own member_code (matches payment-tb.ts
   // customer-self pattern). amount POSITIVE; debit direction encoded by
   // type='2' per the schema comment + legacy pay-users.php L65.
+  // ADR-0025: amount = the WALLET portion (priceToPay − cashbackApplied);
+  // the cashback portion is recorded in tb_cash_back_hs (above).
   const { data: hsRow, error: hsInsErr } = await admin
     .from("tb_wallet_hs")
     .insert({
       date:            nowIso,
-      amount:          priceToPay,
+      amount:          walletDebit,
       status:          "2",                       // approved (customer DEBIT-on-submit is final)
       type:            "2",                       // รายการชำระเงินฝากสั่ง (0081 L6220)
       typenew:         "3",                       // ชำระฝากสั่ง (0081 L6227)
@@ -1051,7 +1095,7 @@ export async function payServiceOrderFromWallet(
       depositnamebank: "WALLET",
       nameuserbank:    "",
       nouserbank:      "",
-      note:            `รายการชำระเงิน ฝากสั่งสินค้า #${header.hno} (ตัดจาก wallet โดยลูกค้า)`,
+      note:            `รายการชำระเงิน ฝากสั่งสินค้า #${header.hno} (ตัดจาก wallet โดยลูกค้า)${cashBackApplied > 0 ? ` + แคชแบ็ก ฿${cashBackApplied}` : ""}`,
       adminid:         "",                        // no admin involved
       adminidupdate:   "",
       session:         "customer-self",
@@ -1064,6 +1108,10 @@ export async function payServiceOrderFromWallet(
     .select("id")
     .single<{ id: number }>();
   if (hsInsErr || !hsRow) {
+    // Roll back the cashback spend — the wallet leg never started.
+    if (cashBackApplied > 0) {
+      await refundCashbackOnReject(admin, { userid: memberCode, cbhrefid: cashbackRefId("shop", header.hno), nowIso: new Date().toISOString() });
+    }
     console.error(`[tb_wallet_hs pay-from-wallet insert] failed`, {
       code: hsInsErr?.code, message: hsInsErr?.message, hno: header.hno, userid: memberCode,
     });
@@ -1075,16 +1123,20 @@ export async function payServiceOrderFromWallet(
 
   // ── 6. UPDATE tb_wallet (read-modify-write; INSERT-if-no-row) ───
   // The pre-check guaranteed walletBefore exists for any positive
-  // priceToPay (missing row → balance 0 → refuse), so the INSERT branch
+  // walletDebit (missing row → balance 0 → refuse), so the INSERT branch
   // is purely defensive against a delete-race (impossible in practice).
-  const newBalance = Math.round((currentBalance - priceToPay) * 100) / 100;
+  // ADR-0025: debit the WALLET portion only (cashback already moved).
+  const newBalance = Math.round((currentBalance - walletDebit) * 100) / 100;
   if (!walletBefore) {
     const { error: walletInsErr } = await admin
       .from("tb_wallet")
-      .insert({ userid: memberCode, wallettotal: -priceToPay });
+      .insert({ userid: memberCode, wallettotal: -walletDebit });
     if (walletInsErr) {
-      // Roll back the hs row — the debit never landed.
+      // Roll back the hs row + the cashback spend — the debit never landed.
       await admin.from("tb_wallet_hs").delete().eq("id", hsRow.id);
+      if (cashBackApplied > 0) {
+        await refundCashbackOnReject(admin, { userid: memberCode, cbhrefid: cashbackRefId("shop", header.hno), nowIso: new Date().toISOString() });
+      }
       console.error(`[tb_wallet pay-from-wallet insert] failed`, {
         code: walletInsErr.code, message: walletInsErr.message, hno: header.hno, userid: memberCode,
       });
@@ -1096,8 +1148,11 @@ export async function payServiceOrderFromWallet(
       .update({ wallettotal: newBalance })
       .eq("userid", memberCode);
     if (walletUpdErr) {
-      // Roll back the hs row — keep books balanced (payment-tb.ts pattern).
+      // Roll back the hs row + the cashback spend (payment-tb.ts pattern).
       await admin.from("tb_wallet_hs").delete().eq("id", hsRow.id);
+      if (cashBackApplied > 0) {
+        await refundCashbackOnReject(admin, { userid: memberCode, cbhrefid: cashbackRefId("shop", header.hno), nowIso: new Date().toISOString() });
+      }
       console.error(`[tb_wallet pay-from-wallet update] failed`, {
         code: walletUpdErr.code, message: walletUpdErr.message, hno: header.hno,
         userid: memberCode, before: currentBalance, target: newBalance,

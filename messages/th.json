@@ -2813,6 +2813,7 @@
       "general": "ทั่วไป",
       "homeNotice": "ประกาศหน้าแรก",
       "popup": "Popup ประกาศลูกค้า",
+      "promos": "แบนเนอร์โปรโมชัน",
       "rates": "อัตราค่าขนส่งสินค้า",
       "rateGeneral": "เรททั่วไป",
       "rateVip": "เรทลูกค้า VIP",
@@ -2827,7 +2828,8 @@
       "tools": "เครื่องมือ",
       "orgEmail": "อีเมลในองค์กร",
       "orgChannels": "ช่องทางองค์กร",
-      "adminUsers": "พนักงาน admin"
+      "adminUsers": "พนักงาน admin",
+      "partners": "พาร์ทเนอร์"
     },
     "userCargo": {
       "title": "ระบบจัดการลูกค้า",
@@ -2883,6 +2885,8 @@
       "history": "บันทึกการทำรายการแอดมิน",
       "incidents": "แจ้งเตือนระบบ (Incident)",
       "kpi": "แดชบอร์ด KPI",
+      "crm": "CRM (ลูกค้าสัมพันธ์)",
+      "cockpit": "แดชบอร์ดผู้บริหาร",
       "contactMessages": "ข้อความติดต่อจากลูกค้า",
       "leads": "โทรตามลูกค้า (Leads)",
       "lineInbox": "กล่องข้อความ LINE",

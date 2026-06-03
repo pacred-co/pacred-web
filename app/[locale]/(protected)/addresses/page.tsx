@@ -7,6 +7,7 @@ import { EditAddressModal } from "./edit-address-modal";
 import { DeleteAddressButton } from "./delete-address-button";
 import { SetMainAddressButton } from "./set-main-address-button";
 import { AddressBook, type Warehouse } from "./address-book";
+import { AddressFlash } from "./address-flash";
 
 /**
  * Customer Thai delivery-address screen — ported from the legacy PCS Cargo
@@ -63,13 +64,15 @@ import { AddressBook, type Warehouse } from "./address-book";
  *     plugin not present in the app. The legacy jQuery.Thailand
  *     subdistrict→zipcode autocomplete (#demo1) + Google Maps pin-drop
  *     (#map) were dropped — the 4 location fields are now plain inputs.
- *   - editAddress / deleteAddress / setMainAddress are legacy AJAX calls
- *     (page.address.js → include/pages/address/*.php). The three row
- *     buttons are rendered; their legacy `onclick` payloads are preserved
- *     as `data-legacy-onclick` so the integrator can re-wire them when the
- *     endpoints are ported.
- *   - The success/error SweetAlert popups (address.php L686-724) are the
- *     jQuery SweetAlert2 plugin — not reproduced.
+ *   - jQuery DataTables search/sort/paginate (#myTable) — not reproduced.
+ *
+ * WIRED (M-1 · 2026-06-01/02): editAddress / deleteAddress / setMainAddress
+ * were legacy AJAX calls (page.address.js → include/pages/address/*.php). The
+ * three row buttons are now real server-action submits — <EditAddressModal>
+ * (editAddressAction), <DeleteAddressButton> (deleteAddressAction · soft-delete
+ * + confirm), <SetMainAddressButton> (setMainAddressAction). The legacy
+ * SweetAlert success/error popups are reproduced as <AddressFlash> (reads the
+ * ?saved=1 / ?error= redirect flag). No `data-legacy-onclick` markers remain.
  */
 
 // address.php list-row query (L455) builds two CONCAT strings in SQL.
@@ -94,7 +97,13 @@ type AddressRow = {
   longitude: number | null;
 };
 
-export default async function AddressesPage() {
+export default async function AddressesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ saved?: string; error?: string }>;
+}) {
+  // Feedback flags set by add/edit/delete/set-main actions (?saved=1 / ?error=…).
+  const { saved, error } = await searchParams;
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
   const { profile } = data;
@@ -199,6 +208,10 @@ export default async function AddressesPage() {
           ที่อยู่จัดส่งสินค้าในไทย | Pacred */}
 
       <div className="pcs-content-pad w-full px-3 md:px-6 pt-3 pb-24 md:py-6">
+        {/* Success/error feedback for the add/edit/delete/set-main actions
+            (the faithful stand-in for the legacy SweetAlert popups). */}
+        <AddressFlash saved={saved === "1"} error={error} />
+
         {/* Tab switcher: "ที่อยู่จัดส่งในไทย" (the list below, passed as
             children) ↔ "ที่อยู่โกดังจีน" (the China warehouse table). The
             "เพิ่มที่อยู่" popup trigger shows on the Thai tab. ปอน 2026-05-30:
@@ -305,12 +318,11 @@ export default async function AddressesPage() {
                     </thead>
                     <tbody>
                       {/* address.php L454-480 — one <tr> per tb_address row.
-                          The legacy builds `fullAddress` (with <br>) + the
-                          onclick payload `fullAddress2` in SQL CONCAT;
-                          reproduced identically. The three row buttons carry
-                          legacy `onclick` payloads as `data-legacy-onclick`
-                          (page.address.js) so the integrator can re-wire them
-                          when the endpoints are ported. */}
+                          The legacy builds `fullAddress` (with <br>) in SQL
+                          CONCAT; reproduced identically. The three row buttons
+                          are real server-action submits (M-1 · wired): ลบ →
+                          <DeleteAddressButton>, แก้ไข → <EditAddressModal>,
+                          ตั้งเป็นที่อยู่หลัก → <SetMainAddressButton>. */}
                       {addresses.map((row, idx) => {
                         const no = idx + 1;
                         const fullAddress =

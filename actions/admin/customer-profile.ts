@@ -236,9 +236,10 @@ export async function adminUpdateUserNote(
 // Legacy updateAdminIDSale: UPDATE tb_users SET adminIDSale=$adminIDSale.
 // We additionally VALIDATE the chosen adminID exists + is sales-active in
 // tb_admin (prevents typo'd / dead rep ids). Writing the legacy varchar
-// keeps the profile badge + PHP staff in sync (the rebuilt transfer-rep
-// path writes profiles.sales_admin_id instead — the split-brain the audit
-// flagged; this is the legacy-correct side).
+// keeps the profile badge + PHP staff in sync. This is the canonical
+// reassign path; the former split-brain (the rebuilt transfer-rep page wrote
+// profiles.sales_admin_id) was fixed 2026-06-02 — adminTransferSalesRep +
+// crm.setCustomerSalesRep now also write tb_users.adminIDSale.
 const saleRepSchema = z.object({
   userid: useridSchema,
   adminID: z.string().trim().min(1, "เลือกเซลล์").max(20),

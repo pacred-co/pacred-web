@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
+import { ADDRESSES } from "@/components/seo/site";
 
 /**
  * Legacy `tb_forwarder` writers — D1 / ADR-0017 faithful 1:1 ports of
@@ -133,14 +134,18 @@ export async function createLegacyForwarder(
   let addressNo = "", addressSubDistrict = "", addressDistrict = "";
   let addressProvince = "", addressZIPCode = "", addressNote = "";
   if (fShipBy === "PCS") {
-    // L56-66 — รับเองหน้าโกดัง PCS กทม (HARD-CODED in legacy)
-    addressName = "รับที่โกดัง PCS กทม";
-    addressTel = "02-444-7046";
-    addressNo = "12 ซอย เพชรเกษม 77 แยก 3-6";
-    addressSubDistrict = "หนองค้างพลู";
-    addressDistrict = "หนองแขม";
-    addressProvince = "กรุงเทพมหานคร";
-    addressZIPCode = "10160";
+    // L56-66 — รับเองที่โกดัง Pacred (Samut Sakhon). Legacy PHP hard-coded the
+    // old Bangkok PCS depot; under D1 self-pickup uses Pacred's TH receiving
+    // warehouse (= ADDRESSES.warehouseTh, the same depot the shop path writes
+    // in actions/cart.ts). faddresstel is varchar(10) → digits-only Pacred
+    // company line "02-421-3325" → "0224213325" (10 chars · no dashes).
+    addressName = "รับที่โกดัง Pacred";
+    addressTel = "0224213325";
+    addressNo = ADDRESSES.warehouseTh.line;
+    addressSubDistrict = ADDRESSES.warehouseTh.subDistrict;
+    addressDistrict = ADDRESSES.warehouseTh.district;
+    addressProvince = ADDRESSES.warehouseTh.province;
+    addressZIPCode = ADDRESSES.warehouseTh.postcode;
   } else {
     // L69-87 — copy from tb_address (userID-scoped + addressStatus='1')
     const { data: addr, error: addrErr } = await admin
@@ -334,21 +339,23 @@ export async function updateLegacyForwarderShipBy(
     .eq("userid", userID);
   if (updErr) return { ok: false, error: updErr.message };
 
-  // forwarder.php L1599-1614 — PCS warehouse override (in-store pickup
-  // rewrites the address fields to the PCS depot address).
+  // forwarder.php L1599-1614 — self-pickup warehouse override (in-store pickup
+  // rewrites the address fields to Pacred's TH receiving warehouse — สมุทรสาคร,
+  // ADDRESSES.warehouseTh, same depot the shop path uses). Legacy wrote the old
+  // Bangkok PCS depot. faddresstel varchar(10) → digits-only "0224213325".
   if (fShipBy === "PCS") {
     const { error: addrErr } = await admin
       .from("tb_forwarder")
       .update({
-        faddressname:        "รับที่โกดัง PCS กทม",
+        faddressname:        "รับที่โกดัง Pacred",
         faddresslastname:    "",
-        faddressno:          "12 ซอย เพชรเกษม 77 แยก 3-6",
-        faddresssubdistrict: "หนองค้างพลู",
-        faddressdistrict:    "หนองแขม",
-        faddressprovince:    "กรุงเทพมหานคร",
-        faddresszipcode:     "10160",
+        faddressno:          ADDRESSES.warehouseTh.line,
+        faddresssubdistrict: ADDRESSES.warehouseTh.subDistrict,
+        faddressdistrict:    ADDRESSES.warehouseTh.district,
+        faddressprovince:    ADDRESSES.warehouseTh.province,
+        faddresszipcode:     ADDRESSES.warehouseTh.postcode,
         faddressnote:        "",
-        faddresstel:         "02-444-7046",
+        faddresstel:         "0224213325",
         faddresstel2:        "",
       })
       .eq("id", ID)

@@ -245,6 +245,17 @@ export default async function AdminTaxInvoicesPage({
         </div>
       </div>
 
+      {/* ADR-0027 — World-A SOT banner. This page reads `tax_invoices` (the
+          rebuilt, near-empty store). Real customer ใบกำกับภาษี issued via the
+          live tb_forwarder lane (World-B) are at /admin/accounting/etax. */}
+      <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 print:hidden">
+        ℹ️ หน้านี้แสดงเฉพาะใบกำกับภาษีระบบเดิม/freight (ตาราง <code>tax_invoices</code>) —
+        ใบกำกับภาษีของลูกค้าจริง (ฝากนำเข้า) ดูที่{" "}
+        <Link href="/admin/accounting/etax" className="font-semibold underline">
+          /admin/accounting/etax
+        </Link>
+      </div>
+
       {/* Tab nav */}
       <div className="border-b border-border print:hidden">
         <nav className="-mb-px flex flex-wrap gap-1">

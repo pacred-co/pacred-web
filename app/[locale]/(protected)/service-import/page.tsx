@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getActivePromoBanners } from "@/lib/promo/banners";
 import { ForwarderInteractivity } from "./forwarder-interactivity";
 import { type ForwarderRow } from "./forwarder-row-view";
 import { AddForwarderModal } from "./add/add-forwarder-modal";
@@ -403,6 +404,22 @@ export default async function ServiceImportPage({
   const showPayBar =
     (countForwarder5 ?? 0) > 0 || q === "" || q === "5" || q === "c";
 
+  // ── Multi-promo banner (เดฟ 2026-06-01 · multi-promo manager) ──
+  // The owner can now manage MULTIPLE promo banners + upload an image at
+  // /admin/settings/promos. The list lives as a JSON array in business_config
+  // key `promo.banners` (location='import' shows here). getActivePromoBanners
+  // returns only enabled + in-date promos, sorted; if the array is empty it
+  // FALLS BACK to the legacy single promo (the 6 `import.promo.*` keys ·
+  // migration 0135) so the live banner never disappears (backward-compat).
+  // Every field is plain-serializable so it crosses the RSC boundary cleanly.
+  const importPromos = await getActivePromoBanners("import");
+  const maoPromos = importPromos.map((p) => ({
+    headline: p.headline,
+    text: p.text,
+    amount: Number(p.amount_thb) || 0,
+    imageUrl: p.image_url,
+  }));
+
   // Tailwind rebuild (เดฟ 2026-05-27 — ปอน: "rebuild css เป็น tailwind ให้
   // หน่อย ห้ามแก้ relation อะไร ต้องให้ฟังก์ชั่นทุกอย่างทำงานเหมือนเดิม").
   // The wrapper + tab strip + status-filter chips + add-button + corporate-
@@ -565,6 +582,7 @@ export default async function ServiceImportPage({
                   (countPricePCSFDatabase ?? 0) > 1
                 }
                 columnCount={q === "c" ? 10 : 8}
+                maoPromos={maoPromos}
               />
             </div>
           </section>

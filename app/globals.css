@@ -73,6 +73,17 @@ body {
   body.no-bottom-tabs {
     padding-bottom: env(safe-area-inset-bottom);
   }
+
+  /* BUG #1/#2 (2026-06-01) — on pages with the /service-import sticky pay-bar
+     (which sets `body.has-import-paybar` while mounted), lift the floating
+     LINE bubble ABOVE the pay-bar so the two no longer pile up / overlap at
+     the bottom-right. The pay-bar sits at bottom-[92px] and is ~56px tall
+     (top ≈ 148px), so the bubble parks just above it. Mobile only — at md+
+     the pay-bar is flush at the bottom and the bubble is at the side, no
+     conflict. */
+  body.has-import-paybar .pacred-line-bubble {
+    bottom: 160px;
+  }
 }
 
 @keyframes marquee {

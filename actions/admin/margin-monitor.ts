@@ -47,10 +47,11 @@ export type MarginRow = {
 
 export type MarginBucket = "negative" | "0-5k" | "5-10k" | "10-15k" | "15k+";
 
-// Module-local only — Next 16 "use server" files reject non-async value
-// exports at runtime (page-data collection). Demote `export const` →
-// bare const (only used by getMarginReport() in this same file).
-// 2026-06-02 ภูม session-start fix.
+// NOT exported — Next 16 "use server" files may only export async functions
+// ("invalid-use-server-value" — rejected at page-data collection · crashed
+// the page at runtime even though tsc passed). MARGIN_BUCKETS is used only
+// by getMarginReport() in this same file, so keep it module-private.
+// (merge-resolved 2026-06-03 · same intent both branches)
 const MARGIN_BUCKETS: MarginBucket[] = ["negative", "0-5k", "5-10k", "10-15k", "15k+"];
 
 export type MarginBucketStats = {

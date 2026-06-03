@@ -260,7 +260,8 @@ export async function issueTaxInvoice(
     revalidatePath("/admin/tax-invoices");
     revalidatePath(`/admin/tax-invoices/${header.id}`);
     if (header.order_h_no)     revalidatePath(`/service-order/${header.order_h_no}/receipt`);
-    if (header.forwarder_f_no) revalidatePath(`/service-import/${header.forwarder_f_no}/receipt`);
+    // forwarder …/receipt redirects → …/invoice (live tb_forwarder⋈tb_receipt view).
+    if (header.forwarder_f_no) revalidatePath(`/service-import/${header.forwarder_f_no}/invoice`);
 
     return {
       ok: true,
@@ -370,7 +371,8 @@ export async function cancelTaxInvoice(
     revalidatePath("/admin/tax-invoices");
     revalidatePath(`/admin/tax-invoices/${header.id}`);
     if (header.order_h_no)     revalidatePath(`/service-order/${header.order_h_no}/receipt`);
-    if (header.forwarder_f_no) revalidatePath(`/service-import/${header.forwarder_f_no}/receipt`);
+    // forwarder …/receipt redirects → …/invoice (live tb_forwarder⋈tb_receipt view).
+    if (header.forwarder_f_no) revalidatePath(`/service-import/${header.forwarder_f_no}/invoice`);
 
     return { ok: true, data: { cancelled_at: cancelledAt } };
   });
@@ -664,7 +666,8 @@ export async function issueCreditNote(
     revalidatePath(`/admin/tax-invoices/${original.id}`);
     revalidatePath(`/admin/tax-invoices/${newRow.id}`);
     if (original.order_h_no)     revalidatePath(`/service-order/${original.order_h_no}/receipt`);
-    if (original.forwarder_f_no) revalidatePath(`/service-import/${original.forwarder_f_no}/receipt`);
+    // forwarder …/receipt redirects → …/invoice (live tb_forwarder⋈tb_receipt view).
+    if (original.forwarder_f_no) revalidatePath(`/service-import/${original.forwarder_f_no}/invoice`);
 
     return {
       ok: true,

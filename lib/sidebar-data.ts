@@ -1,6 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import type { SidebarBadges, SalesRepInfo } from "@/components/sections/protected-sidebar";
 
+// ⚠️ 2026-06-02 — ORPHAN (no live callers). `getSidebarData` is NOT invoked by
+// the mounted (protected) layout — it uses the legacy PCS chrome
+// (PcsSidebarToggle + lib/legacy/pcs-chrome.ts), and the customer-facing rep
+// banner that IS mounted reads the LIVE tb_users.adminIDSale chain
+// (lib/admin/sales-rep-contact.ts, on /service-import/[fNo]/invoice). This
+// helper still reads the rebuilt `profiles.sales_admin_id` below — kept in sync
+// by adminTransferSalesRep's dual-write, so it would NOT show a stale rep if it
+// were ever re-mounted. But to be the single source of truth a future re-mount
+// should resolve the rep via tb_users.adminIDSale → tb_admin like the banner.
 /** Fetch sidebar pending-count badges + assigned sales rep info in parallel.
  *  Failures degrade silently to zero/null so the sidebar always renders. */
 export async function getSidebarData(profileId: string): Promise<{

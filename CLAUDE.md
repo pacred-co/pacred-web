@@ -3,6 +3,111 @@
 
 ---
 
+# 🏠 2026-06-02 PM-8 — SESSION CLOSE + MACHINE MOVE (→ บ้าน) · 2 PROD ENV INCIDENTS + Wave-A + ก๊อต/ปอน MERGED · read FIRST
+
+**main = `dave-pacred` = (this session-close commit)+ · pushed · typecheck+lint+build EXIT 0 · prod LIVE (Vercel auto-deploys `main`).** Resume at home: `git fetch origin && git pull origin main` → read this section. Owner closed the company-computer session.
+
+**🚀 Shipped + pushed this session (เดฟ + ก๊อต + ปอน — one verified batch):**
+- **เดฟ Wave-A trust sweep** (`0a38c71d`) — killed the `/service-import/pending` **dead-read** (read rebuilt 0-row `forwarders` → all 8,898 migrated customers saw an EMPTY "รอชำระเงิน" screen via 3 nav entries) → redirect to `/service-import?q=5` (faithful tb_forwarder pending tab) + repoint mobile FAB + removed orphan `listForwarders`/`ForwarderSummary`/`forwarder-list.tsx` (§0e). Deleted dead `/api/settings-rate` endpoint. Fixed search-demand `sourceNote` (named the empty `tb_history_key`; data layer already reads `tb_search_history`). **A 4-agent audit confirmed the other big-audit Wave-A P1s (credit-line P1-5, config-split P1-11, VIP-rate, yuan-bulk orphan) were ALREADY CLOSED in PM-3/PM-4 → not re-implemented (avoided the stale-doc re-work trap).**
+- **🔴 PROD INCIDENT #1 — "กดค้นหา/วาง link แล้ว api เก่าตาย, สั่งซื้อไม่ได้"** (`6200f463`) — China URL-paste product search dead on prod. Root cause: vendor retired `https://tamit-cloud.com/api-product` → **HTTP 404** (verified live); correct = `/api-product-2026`. The code default (`lib/china-search/index.ts:48`) is already -2026, **but Vercel prod `PACRED_TAMIT_DETAIL_URL` + `.env.example` still carried the dead URL → the env OVERRODE the good default.** Fixed `.env.example`. (AkuCargo keyword path also 404'd from external test — could be IP-allowlist; verify with ไอแต้ม.)
+- **🔴 PROD INCIDENT #2 — registration OTP "Sent but not received" + rate-limit** (`.env.example THAIBULKSMS_FORCE`) — customer KIT CHAREON MUSICAL (พีท · 0909709898) couldn't register: ThaiBulkSMS dashboard shows "Sent" ×3 but customer never received → hit the 3/hour/phone cap ("สมัครเกินจำนวน"). **Key findings:** (a) **`OTP_BYPASS` is HARD-IGNORED on Vercel production** (`gateway.ts:52` forces it off when `VERCEL_ENV==="production"`) → setting it false/true does nothing; the real emergency lever is **`EMERGENCY_OTP_BYPASS=true`**. (b) SMS "Sent"≠"Delivered": "Pacred" sender ID is approved in ThaiBulkSMS's **Corporate pool**, but `.env.example` still said `THAIBULKSMS_FORCE=premium` (stale, same class as TAMIT) → wrong pool = accepted-but-undelivered → fixed to `corporate` (code default already corporate). Owner admin-created พีท via `/admin/customers/new` (no-OTP path · juristic needs the 13-digit Tax ID). ThaiBulk deferred ("ปล่อยไปก่อน").
+- **ก๊อต (got-jirayus · merged from `origin/main` `bb09a8b0`+`ea02bc4f`)** — "เริ่มขยับ" = **comprehensive code-derived docs** (956 files · `docs/components/*` · `docs/database/*` per-table specs · `docs/test-cases/*` per-page manual test cases) + `fix: change path images` (china-shopping services page). No migrations.
+- **ปอน (PCSCARGO · merged from `origin/InwPond007` ×3)** — `2f84df06` **public `/track/[code]` + `/track`** (CargoThai P2 — the no-login tracking GTM moat) + **LINE CRM thread panel** (`/admin/line-inbox` · `actions/admin/line-crm.ts`) + **address-flash** UX + **camera image-search** panel + `fix(i18n) BookingHero` + `fix(test)` Windows bracket-path quoting. No migrations.
+
+**🟠 ภูม (Poom-pacred · 22 commits · NOT merged — needs RESYNC):** ภูม shipped a lot — §0e trust-sweeps (VIP/commission_*/service-orders tombstones), **search-E1** (SKU picker + per-SKU price + TAMIT-2026 endpoint + manual-price fallback + add-to-cart wire — the richer fix for INCIDENT #1's "ราคาไม่ขึ้น/รูปไม่ขึ้น" Tmall-per-SKU case), admin money-path pivots (forwarder/yuan/barcode → `tb_*`, commission→`tb_user_sales`), PCS-style forwarder `[fNo]` view, a 164-cast build-unblock. **NOT blind-merged** — his branch is **62 behind dave-pacred + overlaps เดฟ's trust-sweep + dave's `f4d72228` (search add-to-cart) + touches money paths**; a blind merge would revert prod files (learnings/parallel-agent-sprints "diff-stat LIES"). **➡️ Action next session: ภูม `git pull origin main` to rebase his 22 onto the new main → then it merges clean; OR เดฟ cherry-picks the non-overlapping ones with money-path diff review.** His work is SAFE on Poom-pacred — nothing lost. His search-E1 overlaps INCIDENT #1 — reconcile his richer version vs the env fix when integrating.
+
+**🔴 OWNER TODO — Vercel env (prod · เดฟ has no Vercel token):**
+1. `PACRED_TAMIT_DETAIL_URL` = `https://tamit-cloud.com/api-product-2026` (or DELETE) → unblocks China URL-paste search
+2. `THAIBULKSMS_FORCE` = `corporate` (or DELETE) → unblocks OTP SMS delivery (Corporate-pool sender)
+3. (optional) `EMERGENCY_OTP_BYPASS=true` ONLY if many signups stuck — fail-open, turn OFF after SMS fixed
+→ Redeploy after (or it auto-redeploys on this push). Also check ThaiBulkSMS delivery-report (Sent vs Delivered) + "Pacred" sender approval per carrier.
+
+> **Pattern (compounding · captured in memory `prod_env_staleness`):** when a vendor/API "ตาย" in prod but works locally, FIRST check whether a **Vercel env var is stale vs the code default + `.env.example`** — a SET-but-wrong env var OVERRIDES a correct code default. Hit twice this session (TAMIT detail URL + THAIBULKSMS_FORCE).
+
+---
+
+# 🌙 2026-06-02 PM-7 — OVERNIGHT AUTONOMOUS RUN (owner asleep · staff-CRUD backlog) · read FIRST
+
+**main = `dave-pacred` = `6b183aef`+ · all pushed · build EXIT 0 each wave · prod LIVE · migrations 0136 applied.** Owner moved to the company computer, said "หยิบงาน code รันยาวยันเช้า · เดี๋ยวตื่นมาสรุป" → ran the §PM-6 #3.3 staff-CRUD backlog autonomously (codeable items that need NO owner login/token/decision). Pattern: flat Agent + worktree + disjoint + build-gate + push-per-wave (clean state always).
+
+**🚀 Shipped overnight (each its own wave · merged + built + pushed + migration applied):**
+- **CRUD: partner** (`daa0d73f`) — NEW `partners` table (**migration 0136 APPLIED prod** · isolated · RLS super-only) + admin directory CRUD at **`/admin/partners`** (list/add/edit/toggle/hard-delete · super) + sidebar (Handshake). MVP = external logistics/business partner directory (GOGO/JMF/TTP/MOMO/CargoThai/warehouse/customs/messenger/api_provider · 8 partner_type CHECK). 🟠 **3 OPEN-Q for owner:** (1) partner-portal *login role*? (built admin-internal only) (2) the 8 partner_type buckets right? (`last_mile` overlaps `carriers`) (3) link partner `code` ↔ MOMO/JMF integration configs? — answer → wire later (no schema change).
+- **admin-create-customer + guarded hard-delete** (`6b183aef`) — `/admin/customers/new` (admin creates a customer w/o self-register/OTP: phone-collision guard → `auth.admin.createUser` → profiles → tb_users seed incl. round-robin sales + wallet + cashback · juristic→tb_corporate · reveal pw once) + a **hard-delete** danger-zone on `/admin/customers/[id]` (super-only · type-the-PR-code confirm · **REFUSES if the account has any orders / wallet balance / wallet history** → only truly-empty test/orphan rows · full audit snapshot). Closes the staff-CRUD gap (was soft-toggle only).
+
+**🔴 STILL PENDING (need owner — kept for when พี่ wakes · all in `docs/research/RESUME-machine-move-2026-06-02.md`):**
+1. **admin-login-verify** — `admin_pee` / `123456` (Claude can't type pw — owner logs in → confirm `/admin/admins` shows 15).
+2. **5 phone-collisions** — owner sign-off per row → free the phones (detail table in RESUME §3.2).
+3. **prod money spot-check** — approve 2-3 real test slips → confirm fstatus 5→6 + AR decrement + tax-invoice issuance (mutates real money/RD).
+4. **partner CRUD 3 open-Q** (above) · **FB 8 env tokens** → scaffold `/api/webhooks/facebook`.
+5. **QA full-loop admin-side** (member-side verified · `docs/research/qa-6systems-2026-06-01.md`).
+
+> 🟢 Codeable backlog still open for a fresh run (no owner needed): freight_quote admin-review page (close the public freight funnel) · sales quote-comparison tool (CEO pricing) · more BI. ⚠️ This conversation hit context limit after 2 clean waves — a fresh session continues the loop with full headroom.
+
+---
+
+# 🏢 2026-06-02 PM-6 — SESSION CLOSE + MACHINE MOVE (→ คอมบริษัท) · read FIRST → then `docs/research/RESUME-machine-move-2026-06-02.md`
+
+**main = `dave-pacred` = `origin/main` = `37078633`+ · all pushed · typecheck EXIT 0 · prod (Vercel auto-deploys `pacred.co.th`) LIVE.** Closing the home session to continue on the company computer. Resume: `git fetch origin && git pull origin main` → read [`docs/research/RESUME-machine-move-2026-06-02.md`](docs/research/RESUME-machine-move-2026-06-02.md) FIRST (carries the machine-local paths · the **5 phone-collision + login-verify pending** · the FB-token checklist · working-style — none of which travel with git).
+
+**🚀 Shipped this session (all pushed + deployed):**
+- **🔴 ADMIN OVERHAUL (the headline · owner directive)** — cleared the legacy-admin mess + provisioned a clean **15-admin roster** (`admin_pop/dev/pond/got/poom/win/nat/vam/web/jane/aom/may/pee/ploy/gring`) on prod: each = auth + profiles + `admins`(super) + `admin_contact_extras`(legacy_admin_id bridge) + `tb_admin` (the unification — login SOT = `admins`, sales-attribution SOT = `tb_admin`, linked via `legacy_admin_id`). **Login flexible** (เบอร์ + email `admin_xxx@pacred.co.th` + PR-code · pw `123456`). Created **`admin_center`** ("เซลส่วนกลาง" · routing bucket, no login) · **reset all 8,900 customers' `adminIDSale`→admin_center** (backup `scripts/backup-adminIDSale-*.json` · reversible) · **deleted 10 old messy `tb_admin`** (admin_admin_*, admin_ploypr01, admin_Warehouse). Code: **round-robin sales auto-assign** (legacy `tb_admin.adminStatusSale='1'` model · pool = พี `admin_pee` + เมย์ `admin_may`) + **register success popup** (PR-code + เซล + เบอร์) + **killed the sales-rep-change "death"** (all reassign paths now write live `tb_users.adminIDSale`; CRM accepts legacy rep). Scripts: `scripts/provision-admins-2026-06-02.mjs` + `reset-clear-admins-2026-06-02.mjs` (dry-run default · `--apply`). Roster + flow spec: [`docs/setup/staff-admin-provisioning-2026-06-02.md`](docs/setup/staff-admin-provisioning-2026-06-02.md).
+- **AR-aging dedup** — canonical = ภูม's `/admin/accounting/ar-aging` (reconciled after his CSV enhancement); `/admin/reports/ar-aging` redirects there.
+- **A+D receipt+tax-invoice** — removed dead forwarder-receipt orphan stack (orphan→redirect, deleted PDF route + `getForwarderByNo`, repointed 3 notifications→/invoice); rewired customer tax-invoice → ภูม's World-B `tb_forwarder_tax_invoice` (forwarder; shop/yuan deferred-banner); **ADR-0027** (`docs/decisions/0027-tax-invoice-sot.md`).
+- **forwarder self-pickup address** → Pacred warehouse (สมุทรสาคร · 7 write-path files · legacy rows untouched).
+- **/search add-to-cart** wired (dead RSC button → client island calling `addCartItem`).
+- **margin-monitor "use server" fix** (caught via browser QA — a const-array value export blanked the page; tsc can't catch it → **always browser-verify after merge**).
+- **ภูม sitting-I v4+v5 merged** — margin-monitor (CEO profit-cap ≤15k/ตู้) + quote-compare + margin-flag cron + e-Tax bulk XML + 2 withdraw payouts + ar-aging CSV + forwarders/[fNo] collapsible panels + MOMO PR99 scripts. **No work lost** (cherry-picked; ภูม pulls main when he resumes).
+- **FB/IG integration guide** (owner directive · waiting on tokens) → [`docs/setup/facebook-integration-guide-2026-06-02.md`](docs/setup/facebook-integration-guide-2026-06-02.md). Found: Meta Pixel fires the **App ID** not a real Dataset (Events Manager empty → ads don't track) + no FB webhook (CRM FB/IG inbox = stub). Owner provides 8 env (`FACEBOOK_*` + real `NEXT_PUBLIC_FB_PIXEL_ID`) → scaffold `/api/webhooks/facebook` (mirror LINE).
+
+**🔴 PENDING (next session · company computer):**
+1. **VERIFY admin login** — `admin_pee` / `123456` (เบอร์ or email) → confirm login works + `/admin/admins` shows the clean 15. **NOT yet click-tested** (provision created the auth rows; login path unverified).
+2. **5 phone-collisions** — ภูม/กอต/แนท/พลอย/กริ้ง are **email-only login** (their phone is held by an empty 0-order customer/test/orphan: PR10901/PR130/PR147/PR114 + 1 orphan). Owner sign-off → free the phones → phone login. (Detail in RESUME-2026-06-02 §collisions.)
+3. **CRUD: partner** (no table/role/page yet — build) + admin-create-customer + admin-hard-delete (gaps; per the staff-CRUD audit).
+4. **QA full-loop** (CEO ask) — member-side 3 systems verified; admin-side + the 🔴 tax-invoice issuance + slip-approve mark-paid still need the owner's prod spot-check.
+5. **Owner to provide:** FB 8 env tokens · approve real test slips on prod (mark-paid + tax-invoice mutate money/RD).
+
+---
+
+# 🧳 2026-06-01 PM-5 — SESSION CLOSE + MACHINE MOVE · read FIRST → then `docs/research/RESUME-machine-move-2026-06-01.md`
+
+**main = `dave-pacred` = `55e247be` · pushed · build EXIT 0 · prod LIVE.** Closing the home-machine session to continue on the work computer. Owner types only `sync main / pull dave-pacred มาทำงานต่อ` → **read [`docs/research/RESUME-machine-move-2026-06-01.md`](docs/research/RESUME-machine-move-2026-06-01.md) FIRST** (it carries everything that does NOT travel with git: machine-local paths, the owner-token inventory, the login protocol, env pointers, and the working-style/memory facts).
+
+**Shipped in this close (all pushed):**
+- **Promo manager** — owner can now เพิ่ม/แก้/เปิด-ปิดโปร + **อัปโหลดรูป** at **`/admin/settings/promos`** (Megaphone · multi-promo JSON in `business_config.promo.banners` · image→`avatars` public bucket · `/service-import` banner reads active promos, falls back to the legacy single promo). **Migration 0135 APPLIED prod via PostgREST** (IPv6 direct-DB was down → seed via `POST /rest/v1/business_config`; DDL still needs direct-DB/SQL-editor — see ledger + RESUME §2).
+- **Member `/service-import` UX (from owner screenshot):** floating widgets decluttered (LINE bubble z-48 below pay-bar) · **pay-bar "ชำระเงิน" FIXED** (root cause = z-index: pay-bar z-44 sat *below* the LINE bubble z-51 → transparent overlap stole the tap → raised pay-bar to z-55; browser-verified click → pay modal opens with the 5 รอชำระ orders) · promo banner configurable.
+- **Brand sweep** — admin receipt issuer → Pacred (TaxID `0105564077716` · KBANK `225-2-91144-0` · via site.ts). ⚠️ owner-TODO: **ตราปั๊ม+ลายเซ็น Pacred image assets** (still legacy PCS scans) · self-pickup **warehouse address** (ก๊อต confirm · no China warehouse addr in code) — owner bringing images.
+- **ภูม sitting-I INTEGRATED** (Poom-pacred 14 commits · merged CLEAN · zero money-path overlap): commission Potemkin repoint (`/admin/commissions`+`/forwarder-sales` → live `tb_user_sales*` · **4,104 invisible earns now surface** · ADR-0026) · PEAK documents+CSV hubs · `/admin/accounting/ar-aging` · `/admin/forwarders/tran-th` (TH-transport batch) · menubar/orphan-wiring. **Build-fix:** his 5 `x as T[]` casts (written on a 34-behind base) failed typecheck against the newer base → `as unknown as T[]`. 🟠 **follow-up (non-blocker): DUPLICATE AR-aging** — dave `/admin/reports/ar-aging` vs ภูม `/admin/accounting/ar-aging` (both work · pick one canonical, redirect the other).
+- **QA:** full-loop tester plan + proven env (Chrome + PR321 + admin auth, screenshots) in [`docs/research/qa-6systems-2026-06-01.md`](docs/research/qa-6systems-2026-06-01.md) — flow #1 (member ฝากนำเข้า/status/pay-bar) + the pay-button fix browser-verified; the rest TODO on the work computer (login protocol agreed).
+- **Owner spot-check on prod (recommended):** approve 2-3 real test slips → confirm fstatus 5→6 advance + AR cockpit decrements (the PM-4 mark-paid fix · not click-tested by me = mutates real money).
+
+---
+
+# 🟢 2026-06-01 PM-4 — CEO "6 core systems done?" DEEP-AUDIT + FIX SPRINT · read FIRST
+
+**main = `dave-pacred` = `685dd44b`+ · pushed · build EXIT 0 · no new migrations.** CEO asked if the 6 revenue systems (ฝากสั่งซื้อ·ฝากนำเข้า·โอนหยวน·ออกบิล·แจ้งเก็บเงิน·ออกใบเสร็จ) are TRULY done. Ran **4 read-only audit agents** (legacy PHP source + code + §0e) → **5 fix agents** (flat-Agent worktree pattern). **Verdict: all 6 money loops CLOSED + correct (no leak/double-spend) — but route-200 testing missed real gaps.** Shipped:
+- 🔴 **#1 CEO-visible bug — paid forwarders stuck at fstatus=5 "รอชำระเงิน" → AR ฿917k overstated.** "mark-paid" was split (slip-approve minted receipt but no status flip; pay-on-behalf flipped but no receipt). **Fixed ALL approve paths** to advance fstatus 5→6 + mint receipt: `adminBulkApproveWalletHs` (tb-bulk · LIVE bulk) · `adminApproveWalletDeposit` (wallet-hs · LIVE single-row — was ERRORING on type='4', now full direct-slip branch) · `adminPayForwardersOnBehalf` (pay-user · +receipt). credit→clear fcredit (legacy L467/469) · idempotent eq-guard · best-effort. `adminApproveWalletHs` (wallet-trans) = DEAD (0 callers · tombstone).
+- 🔴 **forwarder `/invoice` dead-write pay-button REMOVED** + customer rebuilt-twin orphan cleanup (-1424 LOC).
+- 🔴 **shop dup dead "mark paid" button REMOVED** (read empty service_orders) + notes page repointed→tb_header_order + split-brain cart unified→/cart.
+- 🟠 **yuan detail-approve** fixed (pending→อนุมัติสำเร็จ direct · drop phantom processing) + badge `.eq(paystatus,'1')`.
+- money diffs (forwarder fstatus + wallet-hs type='4') reviewed line-by-line before merge. **Owner go/no-go: receipt still shows PCS Cargo brand** (not Pacred). Deferred: shop per-line pricing engine (big build). Detail: memory `big_audit_master_plan_2026_06_01.md` §PM-4.
+
+---
+
+# 🟢 2026-06-01 PM-3 — CRM + 3 MONEY ADRs + BI + pricing-guard SHIPPED · read FIRST
+
+**main = `dave-pacred` = `1fb8ee6f`+ · all pushed · build EXIT 0 · typecheck/i18n 0 · NO new migrations** (all repoint/neutralize existing `tb_*`). Owner approved a batch + said run-long-parallel-ask-once-at-end. Ran **5 worktree agents** (proven pattern) + 2 self-built pieces:
+- **CRM core** `/admin/crm` — omni-inbox (LINE real via ปอน's `Podeng_*`; **FB stubbed — no FB table in DB**) + customer-360 + **sales-rep routing** (`tb_users.adminIDSale` · new `actions/admin/crm.ts`) + funnel→`/admin/leads`. LINE↔customer mostly "ยังไม่ผูก" til manual-link; rep dropdown gated on 13-admin recreate.
+- **ADR-0023 credit** ✅ — `getMyCredit`→`tb_users.userCreditValue`−`tb_credit.creditvalue`; paydown idempotent. 🛑 **prod-verify caught 2 agent bugs** (ห้ามเดา paid off): hs `type='3'` was a withdrawal-tab COLLISION (641 rows)→`'8'`; + missing NOT NULL `typenew`/`typeservice` (runtime INSERT fail).
+- **ADR-0024 config** ✅ — `/admin/settings` neutralized→read-through hub (6 dead-write fields). **+ `/admin/rates` dead-read FIXED** → live `tb_settings` (ฝากโอน 4.93/ฝากสั่ง 4.97/ต้นทุน 4.84 · freeshipping flag · dropped rebuilt-only fee cards). browser-verified.
+- **ADR-0025 cashback** ✅ **COMPLETE all paths** — debit `tb_cash_back`+hs idempotent; shop/yuan/deposit + **forwarder-slip approve/bulk** (wallet-trans.ts/tb-bulk.ts → spendCashbackAtCheckout · reject→refund · `357e9e2b`) all settle.
+- **BI** `/admin/reports/{cockpit,ar-aging}` — exec cockpit (AR ฿917k · funnel) + AR-aging (buckets · top-50 debtors w/ phones). browser-verified real data.
+- **pricing-guard** ✅ — `lib/pricing/margin-advisory.ts` + `<MarginAdvisoryNote>` (`blocks:false` ALWAYS · 6 tests). **Owner chose cockpit portfolio signal** → wired into `/admin/reports/cockpit` (MTD orders > ฿15k/ตู้: amber nudge if >0 else green · verified). Reusable block still plugs into freight per-container pricing (Theme 8) later.
+- build-gate catch: cashback sync helpers broke `pnpm build` ("use server" only-async-exports, typecheck missed it) → moved to `lib/cashback/note-tag.ts`. Also: **prod deploys from branch `main`** (not dave-pacred) → `git push origin dave-pacred:main`.
+
+**🔓 STILL OPEN (not เดฟ-solo):** **13-admin recreate (ADR-0022) gates CRM rep-routing + credit/commission visibility** (owner/ภูม) · FB omni-inbox waits ปอน's FB webhook. No เดฟ-solo chips left from this batch. Detail: memory `big_audit_master_plan_2026_06_01.md` §PM-3.
+
+---
+
 # 🧭 2026-06-01 PM — BIG AUDIT + MASTER PLAN + WAVE HANDOFF · read FIRST (supersedes-but-keeps the MARATHON section below)
 
 **main = `dave-pacred` = `49368172`+ (0/0 · prod · Vercel auto-deploys) · all pushed.** Cross-machine resume: `git pull origin main` → read this section → **[`docs/research/big-audit-2026-06-01/_MASTER-PLAN.md`](docs/research/big-audit-2026-06-01/_MASTER-PLAN.md)** (THE canonical long-term plan) + per-lane briefs in [`docs/briefs/`](docs/briefs/).

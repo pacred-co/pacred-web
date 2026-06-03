@@ -61,6 +61,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { uploadToBucket } from "@/lib/storage/upload";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { cashbackRefId, parseCashbackNoteTag } from "@/lib/cashback/note-tag";
+import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
+import { logger } from "@/lib/logger";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — same helper as actions/admin/warehouse-history.ts
@@ -87,6 +90,269 @@ async function resolveLegacyAdminId(): Promise<string> {
   }
   if (data?.adminID) return data.adminID;
   return email.slice(0, 30);
+}
+
+// ════════════════════════════════════════════════════════════════
+// ADR-0025 — CASHBACK SPEND (the spend side of tb_cash_back).
+// ════════════════════════════════════════════════════════════════
+//
+// Faithful port of the legacy cashback-at-checkout debit (wallet.php
+// L580-594 + the `cashBackKey` math in getListPayForwarder.php).
+//
+// MODEL (ADR-0025 D-1): cashback is a slip-reducing balance. When a
+// customer applies `cashBackApplied` to a bill, the spend is recorded
+// as a `tb_cash_back_hs (cbhstatus='2'=ชำระเงิน)` row and `tb_cash_back
+// .cbtotal` is decremented. `cbhrefid` = the order/forwarder the cashback
+// was spent on AND the idempotency anchor.
+//
+// SOT: `tb_cash_back.cbtotal` = the authority (the current balance);
+// `tb_cash_back_hs` = the movement trail (`cbhstatus` strictly
+// '1'=earn / '2'=spend per the 0081 schema comment). This ADR builds
+// ONLY the spend side — the earn side (signup seed + refund credit)
+// already writes these tables and is NOT touched (ADR-0025 D-6).
+//
+// CASING ⚠️ — tb_cash_back/tb_cash_back_hs are all-lowercase columns:
+// `userid`, `cbtotal`, `cbhid` (auto-seq), `cbhdate`, `cbhstatus`,
+// `cbhamount`, `cbhrefid` (text, NOT NULL). Quoted exactly (matches the
+// existing read in lib/legacy/pcs-chrome.ts + wallet-credit/page.tsx).
+//
+// MONEY-SAFETY (ADR-0025 D-4):
+//   - Idempotent: the spend is gated by the `(userid, cbhrefid,
+//     cbhstatus='2')` uniqueness — before INSERT-ing the spend row, we
+//     SELECT for an existing one; if present → already settled, skip the
+//     debit (a re-submit / re-approve / retry cannot double-debit).
+//   - Clamp at write: re-read `cbtotal` and clamp the applied amount to
+//     the CURRENT balance (a customer can never spend more cashback than
+//     they hold, even if the requested amount was stale / racing).
+//   - Rollback: if the `tb_cash_back_hs` INSERT succeeds but the
+//     `tb_cash_back` decrement fails, delete the spend row (no real tx in
+//     PostgREST — the helper owns the rollback).
+
+type AdminClient = ReturnType<typeof createAdminClient>;
+
+// cashbackRefId + CashbackRefKind moved to lib/cashback/note-tag.ts (a
+// "use server" module may only export async fns) — imported above.
+
+export type CashbackSpendResult = {
+  applied: number;          // amount actually debited (clamped · ≥ 0)
+  alreadySpent: boolean;    // true → idempotent no-op (prior spend on this refid)
+  cbhId: number | null;     // tb_cash_back_hs.cbhid of the spend row (null if no-op / nothing applied)
+  cbTotalBefore: number;
+  cbTotalAfter: number;
+};
+
+/**
+ * Spend cashback at checkout — the central, idempotent debit (ADR-0025 D-1/D-4).
+ *
+ * - `requested` ≤ 0 → no-op (applied=0).
+ * - Idempotent on `(userid, cbhrefid)`: if a `cbhstatus='2'` row already
+ *   exists for this refid, returns alreadySpent=true with the prior amount
+ *   (NO second debit).
+ * - Clamps `requested` to the current `tb_cash_back.cbtotal` (never negative).
+ * - On the rare INSERT-ok-but-UPDATE-fail, deletes the just-written spend
+ *   row so the trail matches the (unchanged) balance.
+ *
+ * Returns `applied` so the caller knows how much of the bill the cashback
+ * actually covered (and slips/charges the remainder).
+ */
+export async function spendCashbackAtCheckout(
+  admin: AdminClient,
+  args: { userid: string; requested: number; cbhrefid: string; nowIso?: string },
+): Promise<CashbackSpendResult> {
+  const { userid, cbhrefid } = args;
+  const nowIso = args.nowIso ?? new Date().toISOString();
+
+  // Read current balance (the SOT). Missing row → balance 0.
+  const { data: cbRow, error: cbReadErr } = await admin
+    .from("tb_cash_back")
+    .select("userid, cbtotal")
+    .eq("userid", userid)
+    .maybeSingle<{ userid: string; cbtotal: number | string | null }>();
+  if (cbReadErr) {
+    console.error(`[tb_cash_back read] failed`, { code: cbReadErr.code, message: cbReadErr.message, userid });
+  }
+  const cbTotalBefore = Number(cbRow?.cbtotal ?? 0);
+
+  // Clamp the requested amount to [0, cbTotalBefore]; round to 2dp (money).
+  const requested = Math.max(0, Number(args.requested) || 0);
+  const applied = Math.round(Math.min(requested, cbTotalBefore) * 100) / 100;
+
+  if (applied <= 0) {
+    return { applied: 0, alreadySpent: false, cbhId: null, cbTotalBefore, cbTotalAfter: cbTotalBefore };
+  }
+
+  // ── Idempotency: prior spend on this refid? (no double-debit) ──
+  const { data: prior, error: priorErr } = await admin
+    .from("tb_cash_back_hs")
+    .select("cbhid, cbhamount")
+    .eq("userid", userid)
+    .eq("cbhrefid", cbhrefid)
+    .eq("cbhstatus", "2")
+    .limit(1)
+    .maybeSingle<{ cbhid: number; cbhamount: number | string | null }>();
+  if (priorErr) {
+    console.error(`[tb_cash_back_hs idempotency probe] failed`, {
+      code: priorErr.code, message: priorErr.message, userid, cbhrefid,
+    });
+    // Cannot prove "not yet spent" → refuse to debit (safer than risking a
+    // double-spend). applied=0 means the caller treats cashback as unused.
+    return { applied: 0, alreadySpent: false, cbhId: null, cbTotalBefore, cbTotalAfter: cbTotalBefore };
+  }
+  if (prior) {
+    return {
+      applied: Number(prior.cbhamount ?? 0),
+      alreadySpent: true,
+      cbhId: prior.cbhid,
+      cbTotalBefore,
+      cbTotalAfter: cbTotalBefore,
+    };
+  }
+
+  // ── INSERT the spend row (cbhstatus='2') ──
+  const { data: hsRow, error: hsInsErr } = await admin
+    .from("tb_cash_back_hs")
+    .insert({
+      cbhdate:   nowIso,
+      cbhstatus: "2",          // ชำระเงิน (spend)
+      cbhamount: applied,
+      userid,
+      cbhrefid,
+    })
+    .select("cbhid")
+    .single<{ cbhid: number }>();
+  if (hsInsErr || !hsRow) {
+    console.error(`[tb_cash_back_hs spend insert] failed`, {
+      code: hsInsErr?.code, message: hsInsErr?.message, userid, cbhrefid, applied,
+    });
+    return { applied: 0, alreadySpent: false, cbhId: null, cbTotalBefore, cbTotalAfter: cbTotalBefore };
+  }
+
+  // ── Decrement tb_cash_back.cbtotal (clamp ≥ 0) ──
+  const cbTotalAfter = Math.round(Math.max(0, cbTotalBefore - applied) * 100) / 100;
+  let updOk = false;
+  if (!cbRow) {
+    // No tb_cash_back row — INSERT at the post-spend balance (0). Unusual
+    // (a customer with no row has 0 cashback → applied would be 0 above), but
+    // defensive against a delete-race.
+    const { error: cbInsErr } = await admin
+      .from("tb_cash_back")
+      .insert({ userid, cbtotal: cbTotalAfter });
+    updOk = !cbInsErr;
+    if (cbInsErr) console.error(`[tb_cash_back insert post-spend] failed`, { code: cbInsErr.code, message: cbInsErr.message, userid });
+  } else {
+    const { error: cbUpdErr } = await admin
+      .from("tb_cash_back")
+      .update({ cbtotal: cbTotalAfter })
+      .eq("userid", userid);
+    updOk = !cbUpdErr;
+    if (cbUpdErr) console.error(`[tb_cash_back decrement] failed`, { code: cbUpdErr.code, message: cbUpdErr.message, userid });
+  }
+
+  if (!updOk) {
+    // Rollback the spend row — the balance never moved.
+    await admin.from("tb_cash_back_hs").delete().eq("cbhid", hsRow.cbhid);
+    return { applied: 0, alreadySpent: false, cbhId: null, cbTotalBefore, cbTotalAfter: cbTotalBefore };
+  }
+
+  return { applied, alreadySpent: false, cbhId: hsRow.cbhid, cbTotalBefore, cbTotalAfter };
+}
+
+export type CashbackRefundResult = {
+  refunded: number;
+  alreadyRefunded: boolean;
+  cbTotalAfter: number;
+};
+
+/**
+ * Refund a previously-spent cashback (ADR-0025 D-1 reject path).
+ *
+ * Mirrors the wallet refund on reject. Idempotent + guarded:
+ *   - Finds the `cbhstatus='2'` spend row for `(userid, cbhrefid)`.
+ *   - If none → nothing was spent → no-op (refunded=0).
+ *   - Otherwise credits `tb_cash_back.cbtotal += cbhamount` and writes a
+ *     COMPENSATING earn row `cbhstatus='1'` tagged with a `:refund` suffix
+ *     (ADR-0025 D-5 #2 recommendation — preserves the full "applied then
+ *     refunded" trail rather than deleting the spend row).
+ *   - The compensating-row existence is the idempotency guard (a second
+ *     reject finds it and no-ops → no double-refund).
+ */
+export async function refundCashbackOnReject(
+  admin: AdminClient,
+  args: { userid: string; cbhrefid: string; nowIso?: string },
+): Promise<CashbackRefundResult> {
+  const { userid, cbhrefid } = args;
+  const nowIso = args.nowIso ?? new Date().toISOString();
+  const refundRefId = `${cbhrefid}:refund`;
+
+  // Was anything spent on this refid?
+  const { data: spend, error: spendErr } = await admin
+    .from("tb_cash_back_hs")
+    .select("cbhid, cbhamount")
+    .eq("userid", userid)
+    .eq("cbhrefid", cbhrefid)
+    .eq("cbhstatus", "2")
+    .limit(1)
+    .maybeSingle<{ cbhid: number; cbhamount: number | string | null }>();
+  if (spendErr) {
+    console.error(`[tb_cash_back_hs refund probe] failed`, { code: spendErr.code, message: spendErr.message, userid, cbhrefid });
+    return { refunded: 0, alreadyRefunded: false, cbTotalAfter: NaN };
+  }
+  const amount = Number(spend?.cbhamount ?? 0);
+  if (!spend || amount <= 0) {
+    return { refunded: 0, alreadyRefunded: false, cbTotalAfter: NaN };
+  }
+
+  // Idempotency: a compensating earn row already written?
+  const { data: priorRefund, error: priorRefundErr } = await admin
+    .from("tb_cash_back_hs")
+    .select("cbhid")
+    .eq("userid", userid)
+    .eq("cbhrefid", refundRefId)
+    .eq("cbhstatus", "1")
+    .limit(1)
+    .maybeSingle<{ cbhid: number }>();
+  if (priorRefundErr) {
+    console.error(`[tb_cash_back_hs refund-idempotency probe] failed`, { code: priorRefundErr.code, message: priorRefundErr.message, userid, cbhrefid });
+    return { refunded: 0, alreadyRefunded: false, cbTotalAfter: NaN };
+  }
+  if (priorRefund) {
+    return { refunded: 0, alreadyRefunded: true, cbTotalAfter: NaN };
+  }
+
+  // Write the compensating earn row FIRST (the idempotency anchor). If a
+  // concurrent reject already wrote it we'd hit it on the probe above; the
+  // tiny race window is acceptable (worst case the loud refund-fail log).
+  const { error: compInsErr } = await admin
+    .from("tb_cash_back_hs")
+    .insert({
+      cbhdate:   nowIso,
+      cbhstatus: "1",          // บวกเพิ่ม (earn) — compensating "refunded" row
+      cbhamount: amount,
+      userid,
+      cbhrefid:  refundRefId,
+    });
+  if (compInsErr) {
+    console.error(`[tb_cash_back_hs refund-comp insert] failed`, { code: compInsErr.code, message: compInsErr.message, userid, cbhrefid });
+    return { refunded: 0, alreadyRefunded: false, cbTotalAfter: NaN };
+  }
+
+  // Credit cbtotal += amount.
+  const { data: cbRow, error: cbReadErr } = await admin
+    .from("tb_cash_back")
+    .select("userid, cbtotal")
+    .eq("userid", userid)
+    .maybeSingle<{ userid: string; cbtotal: number | string | null }>();
+  if (cbReadErr) console.error(`[tb_cash_back read for refund] failed`, { code: cbReadErr.code, message: cbReadErr.message, userid });
+  const cbTotalAfter = Math.round((Number(cbRow?.cbtotal ?? 0) + amount) * 100) / 100;
+  if (!cbRow) {
+    const { error: insErr } = await admin.from("tb_cash_back").insert({ userid, cbtotal: cbTotalAfter });
+    if (insErr) console.error(`[tb_cash_back refund insert] FAILED post-comp`, { code: insErr.code, message: insErr.message, userid, cbhrefid, amount });
+  } else {
+    const { error: updErr } = await admin.from("tb_cash_back").update({ cbtotal: cbTotalAfter }).eq("userid", userid);
+    if (updErr) console.error(`[tb_cash_back refund update] FAILED post-comp`, { code: updErr.code, message: updErr.message, userid, cbhrefid, amount });
+  }
+
+  return { refunded: amount, alreadyRefunded: false, cbTotalAfter };
 }
 
 // ────────────────────────────────────────────────────────────
@@ -360,12 +626,17 @@ const approveDepositSchema = z.object({
 export type AdminApproveWalletDepositInput = z.infer<typeof approveDepositSchema>;
 
 type CascadedRow = {
-  table: "tb_header_order" | "tb_forwarder" | "tb_wallet_hs" | "tb_credit";
+  table: "tb_header_order" | "tb_forwarder" | "tb_wallet_hs" | "tb_credit" | "tb_cash_back";
   id: string;
   fromStatus: string | null;
   toStatus: string | null;
   note?: string;
 };
+
+// ADR-0025 D-2a — the applied cashback rides the pending row's `note` as a
+// `[CB:<amount>]` tag (free-text, no migration); the approve/reject cascade
+// parses it back out via parseCashbackNoteTag (imported from
+// lib/cashback/note-tag.ts — pure helpers can't live in a "use server" file).
 
 type ApproveResult = {
   ok: true;
@@ -411,10 +682,14 @@ export async function adminApproveWalletDeposit(
 
       // ──────────────────────────────────────────────
       // 1. Read the topup row + idempotency check.
+      //    `note` carries the ADR-0025 D-2a `[CB:<amt>]` applied-cashback tag.
+      //    P0 mark-paid symmetry: `typeservice` / `reforder` / `wusercredit`
+      //    let the DIRECT forwarder-slip branch below (type='4') settle the
+      //    forwarder fStatus 5→6 — mirrors the bulk path in tb-bulk.ts.
       // ──────────────────────────────────────────────
       const { data: rowRaw, error: rowErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, amount, type, status")
+        .select("id, userid, amount, type, status, note, typeservice, reforder, dateslip, wusercredit")
         .eq("id", id)
         .maybeSingle<{
           id: number;
@@ -422,6 +697,11 @@ export async function adminApproveWalletDeposit(
           amount: number;
           type: string | null;
           status: string | null;
+          note: string | null;
+          typeservice: string | null;
+          reforder: string | null;
+          dateslip: string | null;
+          wusercredit: string | null;
         }>();
       if (rowErr) {
         console.error(`[tb_wallet_hs list] failed`, { code: rowErr.code, message: rowErr.message });
@@ -450,10 +730,200 @@ export async function adminApproveWalletDeposit(
       if (rowRaw.status !== "1") {
         return { ok: false, error: `รายการนี้สถานะไม่ใช่ 'รอตรวจสอบ' (status=${rowRaw.status ?? "null"})` };
       }
-      // Per task: only handle deposit (type='1') — withdraw approve is a
-      // separate function (rule 3 paragraph 3) and out of scope here.
+
+      // ──────────────────────────────────────────────
+      // 1b. DIRECT forwarder-payment slip (type='4', typeservice='2',
+      //     reforder=<tb_forwarder.id>, NO tb_wallet_paydeposit links).
+      //
+      //     P0 mark-paid symmetry. `submitForwarderPayment` (actions/forwarder.ts
+      //     L714-725) inserts the slip as status='1' type='4' typeservice='2'
+      //     reforder=<fid> and DELIBERATELY does NOT flip tb_forwarder.fstatus
+      //     (legacy keeps fStatus=5 until staff confirm the slip). The detail
+      //     page (wallet/[id]/page.tsx:607) routes every non-type-3 row here as
+      //     kind="deposit" → so a type='4' slip lands in THIS function. Before
+      //     this branch it hit the `type!=='1'` guard and errored out → the
+      //     single-row approve never settled the wallet debit NOR advanced the
+      //     forwarder, leaving paid orders stuck at "รอชำระเงิน" + the AR cockpit
+      //     never decrementing (the #1 CEO bug). The BULK path (tb-bulk.ts
+      //     adminBulkApproveWalletHs L150-287) already settles these per-row;
+      //     this branch is the single-row mirror of that exact contract:
+      //       1. flip the slip status 1→2
+      //       2. debit tb_wallet.wallettotal −= amount (type='4' is a debit)
+      //       3. settle carried cashback ([CB:] tag · idempotent · best-effort)
+      //       4. advance tb_forwarder fStatus 5→6 (or fcredit-clear for credit
+      //          rows) — idempotent via the eq-guard; best-effort + logged so a
+      //          flip failure never rolls back the wallet leg (money has moved)
+      //       5. fire the auto-receipt hook (best-effort)
+      //     Direct slips have no paydeposit links, so we short-circuit (the
+      //     link-cascade below is for the type='1' topup-and-pay shape only).
+      // ──────────────────────────────────────────────
+      if (rowRaw.type === "4" && rowRaw.typeservice === "2" && rowRaw.reforder) {
+        const amount = Number(rowRaw.amount ?? 0);
+        const userid = rowRaw.userid;
+        const cascadedRows: CascadedRow[] = [];
+
+        // (i) Flip the slip row 1→2.
+        const { error: updHsErr } = await admin
+          .from("tb_wallet_hs")
+          .update({ status: "2", adminid: legacyAdminId, adminidupdate: legacyAdminId })
+          .eq("id", id)
+          .eq("status", "1");
+        if (updHsErr) {
+          console.error(`[tb_wallet_hs mutation] failed`, { code: updHsErr.code, message: updHsErr.message });
+          return { ok: false, error: updHsErr.message };
+        }
+        cascadedRows.push({ table: "tb_wallet_hs", id: String(id), fromStatus: "1", toStatus: "2", note: "direct forwarder-pay (type=4)" });
+
+        // (ii) Debit tb_wallet.wallettotal −= amount (type='4' is a spend;
+        //      matches tb-bulk.ts delta rule). Read-then-update, upsert if missing.
+        let walletBefore = 0;
+        let walletAfter = 0;
+        const { data: wRow, error: wRowErr } = await admin
+          .from("tb_wallet")
+          .select("userid, wallettotal")
+          .eq("userid", userid)
+          .maybeSingle<{ userid: string; wallettotal: number }>();
+        if (wRowErr) {
+          console.error(`[tb_wallet list] failed`, { code: wRowErr.code, message: wRowErr.message });
+        }
+        if (!wRow) {
+          walletBefore = 0;
+          walletAfter = -amount;
+          const { error: walletInsErr } = await admin
+            .from("tb_wallet")
+            .insert({ userid, wallettotal: walletAfter });
+          if (walletInsErr) {
+            return { ok: false, error: `อนุมัติ tb_wallet_hs สำเร็จ (id=${id}) แต่ tb_wallet insert ล้มเหลว: ${walletInsErr.message}` };
+          }
+        } else {
+          walletBefore = Number(wRow.wallettotal);
+          walletAfter = walletBefore - amount;
+          const { error: walletUpdErr } = await admin
+            .from("tb_wallet")
+            .update({ wallettotal: walletAfter })
+            .eq("userid", userid);
+          if (walletUpdErr) {
+            return { ok: false, error: `อนุมัติ tb_wallet_hs สำเร็จ (id=${id}) แต่ tb_wallet update ล้มเหลว: ${walletUpdErr.message}` };
+          }
+        }
+
+        // (iii) Settle carried cashback ([CB:] tag). Idempotent on cbhrefid;
+        //       best-effort — never fails the row (the money already moved).
+        const cbReq = parseCashbackNoteTag(rowRaw.note);
+        if (cbReq > 0) {
+          try {
+            const cbRes = await spendCashbackAtCheckout(admin, {
+              userid,
+              requested: cbReq,
+              cbhrefid: cashbackRefId("forwarder", `walleths:${id}`),
+              nowIso,
+            });
+            cascadedRows.push({
+              table: "tb_cash_back",
+              id: userid,
+              fromStatus: `cbtotal=${cbRes.cbTotalBefore}`,
+              toStatus: `cbtotal=${cbRes.cbTotalAfter}`,
+              note: cbRes.alreadySpent ? `cashback already spent (idempotent · ฿${cbRes.applied})` : `cashback spent ฿${cbRes.applied} on approve`,
+            });
+          } catch (e) {
+            logger.warn("wallet-hs", "cashback settle failed (non-fatal · money already moved)", {
+              wallet_hs_id: id, userid, error: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
+
+        // (iv) P0 mark-paid symmetry — advance the forwarder. MIRROR of
+        //      tb-bulk.ts L252-275 + wallet-trans.ts L316-339:
+        //        standard   → fstatus='6' + fdateadminstatus + fdatestatus6 (guard fstatus='5')
+        //        credit row → fcredit='' + fdateadminstatus (NO fstatus flip · guard fcredit='1')
+        //      Idempotent via the eq-guard → if some other path already advanced
+        //      this forwarder, the WHERE matches nothing = harmless no-op (NO
+        //      double-effect). Best-effort + logged; NEVER throw (money moved).
+        const fid = Number(rowRaw.reforder);
+        if (Number.isFinite(fid) && fid > 0) {
+          const isCredit = (rowRaw.wusercredit ?? "").trim() === "1";
+          let flipErrMsg: string | null = null;
+          if (isCredit) {
+            const { error: flipErr } = await admin
+              .from("tb_forwarder")
+              .update({ fcredit: "", fdateadminstatus: nowIso })
+              .eq("id", fid)
+              .eq("userid", userid)
+              .eq("fcredit", "1");
+            flipErrMsg = flipErr?.message ?? null;
+          } else {
+            const { error: flipErr } = await admin
+              .from("tb_forwarder")
+              .update({ fstatus: "6", fdateadminstatus: nowIso, fdatestatus6: nowIso })
+              .eq("id", fid)
+              .eq("userid", userid)
+              .eq("fstatus", "5");
+            flipErrMsg = flipErr?.message ?? null;
+          }
+          if (flipErrMsg) {
+            logger.warn("wallet-hs", "forwarder settle flip failed (non-fatal · money already moved)", {
+              wallet_hs_id: id, userid, fid, isCredit, error: flipErrMsg,
+            });
+          }
+          cascadedRows.push({
+            table: "tb_forwarder",
+            id: String(fid),
+            fromStatus: isCredit ? "fcredit=1" : "fstatus=5",
+            toStatus: isCredit ? "fcredit=" : "fstatus=6",
+            note: flipErrMsg ? `settle flip failed: ${flipErrMsg}` : (isCredit ? "approve · credit branch" : "approve · fStatus 5→6"),
+          });
+
+          // (v) Auto-receipt hook (best-effort — receipt failure does NOT
+          //     roll back the settle; matches tb-bulk.ts / wallet-trans.ts).
+          const dateSlip = rowRaw.dateslip ? new Date(rowRaw.dateslip) : new Date();
+          const rcpt = await autoIssueReceiptOnPaymentLand(admin, {
+            userid,
+            fids: [fid],
+            dateSlip,
+            source: "wallet_hs.approve_deposit.direct",
+          });
+          if (!rcpt.ok && !rcpt.alreadyIssued) {
+            logger.warn("wallet-hs", "auto-receipt failed (non-fatal)", { wallet_hs_id: id, userid, fid, error: rcpt.error });
+          }
+          if (rcpt.ok) {
+            revalidatePath(`/admin/accounting/forwarder-invoice/${rcpt.data.receiptId}`);
+            revalidatePath("/admin/accounting/forwarder-invoice");
+            revalidatePath(`/service-import/${fid}/invoice`);
+          }
+        }
+
+        await logAdminAction(adminId, "tb_wallet_hs.approve_deposit", "tb_wallet_hs", String(id), {
+          userid,
+          amount,
+          before: { wallettotal: walletBefore },
+          after:  { wallettotal: walletAfter },
+          directForwarderSlip: true,
+          forwarderId: fid,
+          cascade: cascadedRows,
+        });
+
+        revalidatePath(`/admin/wallet/${id}`);
+        revalidatePath("/admin/wallet");
+        revalidatePath("/admin");
+        revalidatePath(`/admin/forwarders/${fid}`);
+
+        return {
+          ok: true,
+          data: {
+            ok: true,
+            walletHsId: id,
+            customer: { userid, walletTotalBefore: walletBefore, walletTotalAfter: walletAfter },
+            cascadedRows,
+            hadPaydepositLinks: false,
+          },
+        };
+      }
+
+      // The remaining cascade logic (link-driven topup-and-pay) only handles
+      // the deposit (type='1') shape — withdraw approve (type='3') is a separate
+      // function (adminApproveWithdraw). Reject anything else explicitly.
       if (rowRaw.type !== "1") {
-        return { ok: false, error: `ฟังก์ชันนี้รองรับเฉพาะรายการเติมเงิน (type='1') · พบ type='${rowRaw.type ?? "null"}'` };
+        return { ok: false, error: `ฟังก์ชันนี้รองรับรายการเติมเงิน (type='1') หรือสลิปจ่ายค่าฝากนำเข้า (type='4') · พบ type='${rowRaw.type ?? "null"}'` };
       }
 
       const amount = Number(rowRaw.amount ?? 0);
@@ -859,6 +1329,36 @@ export async function adminApproveWalletDeposit(
         });
       }
 
+      // ──────────────────────────────────────────
+      // (iv) ADR-0025 — settle the applied cashback on approve.
+      //
+      //   If the customer carried an applied-cashback amount (the
+      //   `[CB:<amt>]` note tag, ADR-0025 D-2a), debit it now on the SAME
+      //   approve transition as the wallet/credit legs. Idempotent on
+      //   `cbhrefid` (re-approve cannot double-debit), clamped to the live
+      //   balance. cbhrefid anchored on the topup row id so reject (below)
+      //   refunds the same key. (Mirror of the tb_credit decrement above.)
+      // ──────────────────────────────────────────
+      const cashbackRequested = parseCashbackNoteTag(rowRaw.note);
+      if (cashbackRequested > 0) {
+        const cbRefId = cashbackRefId("forwarder", `walleths:${id}`);
+        const cbRes = await spendCashbackAtCheckout(admin, {
+          userid,
+          requested: cashbackRequested,
+          cbhrefid: cbRefId,
+          nowIso,
+        });
+        cascadedRows.push({
+          table: "tb_cash_back",
+          id: userid,
+          fromStatus: `cbtotal=${cbRes.cbTotalBefore}`,
+          toStatus: `cbtotal=${cbRes.cbTotalAfter}`,
+          note: cbRes.alreadySpent
+            ? `cashback already spent (idempotent · ฿${cbRes.applied})`
+            : `cashback spent ฿${cbRes.applied} on approve (cbhrefid=${cbRefId})`,
+        });
+      }
+
       // No wallet credit on linked-slip approve (legacy L621-633 explicit
       // comment: "ไม่เติมเพิ่ม"). The topup amount was already counted via
       // the type='7' sibling debits.
@@ -951,10 +1451,11 @@ export async function adminRejectWalletDeposit(
 
       // ──────────────────────────────────────────
       // 1. Read topup row + idempotency.
+      //    `note` carries the ADR-0025 D-2a `[CB:<amt>]` applied-cashback tag.
       // ──────────────────────────────────────────
       const { data: rowRaw, error: rowErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, amount, type, status")
+        .select("id, userid, amount, type, status, note")
         .eq("id", id)
         .maybeSingle<{
           id: number;
@@ -962,6 +1463,7 @@ export async function adminRejectWalletDeposit(
           amount: number;
           type: string | null;
           status: string | null;
+          note: string | null;
         }>();
       if (rowErr) {
         console.error(`[tb_wallet_hs list] failed`, { code: rowErr.code, message: rowErr.message });
@@ -1305,6 +1807,28 @@ export async function adminRejectWalletDeposit(
                 message: walletUpdErr.message,
               });
             }
+          }
+        }
+
+        // ADR-0025 — refund the applied cashback on reject (mirror of the
+        // wallet refund above). Idempotent: only refunds if a cashback spend
+        // was actually settled on the matching `cbhrefid` (and not already
+        // refunded). The spend lands at approve, but a slip may be rejected
+        // without a prior approve — `refundCashbackOnReject` no-ops cleanly
+        // when nothing was spent.
+        if (parseCashbackNoteTag(rowRaw.note) > 0) {
+          const cbRefId = cashbackRefId("forwarder", `walleths:${id}`);
+          const cbRefund = await refundCashbackOnReject(admin, { userid, cbhrefid: cbRefId, nowIso: new Date().toISOString() });
+          if (cbRefund.refunded > 0 || cbRefund.alreadyRefunded) {
+            cascadedRows.push({
+              table: "tb_cash_back",
+              id: userid,
+              fromStatus: null,
+              toStatus: cbRefund.alreadyRefunded ? "already-refunded" : `cbtotal=${cbRefund.cbTotalAfter}`,
+              note: cbRefund.alreadyRefunded
+                ? "cashback refund idempotent no-op"
+                : `cashback refunded ฿${cbRefund.refunded} on reject (cbhrefid=${cbRefId})`,
+            });
           }
         }
 

@@ -33,7 +33,7 @@ import {
   SlidersHorizontal, Network, ListOrdered, Barcode, ScanLine, Camera,
   Printer, Calculator, BadgeCheck, ShieldAlert, UserCheck, Wand2, RefreshCw,
   Banknote, KanbanSquare, Smartphone, Save,
-  Ban, AlertCircle, Database,
+  Ban, AlertCircle, Database, Gauge, PhoneCall, Megaphone, Handshake,
   ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
@@ -110,6 +110,14 @@ const ICONS: Record<string, LucideIcon> = {
   AlertCircle,     // 8 alert queues that don't otherwise have an icon
   // 2026-06-02 — /admin/system/pcs-sync dashboard
   Database,        // PCS↔Pacred Sync settings page
+  // 2026-06-01 (เดฟ) — Wave C BI cockpit + the leads call-queue. Both icon
+  // names were referenced from sidebar-menu.ts but absent here → blank spacer.
+  Gauge,           // blockExtCockpit — /admin/reports/cockpit
+  PhoneCall,       // blockExtLeads — /admin/leads (pre-existing miss, fixed here)
+  // 2026-06-01 (เดฟ) — promo-banner manager (/admin/settings/promos).
+  Megaphone,       // settingsCargo.promos
+  // 2026-06-02 (เดฟ) — partner directory (/admin/partners · staff-CRUD gap §PM-6).
+  Handshake,       // settingsCargo.partners
 };
 
 function Icon({ name, active }: { name?: string; active: boolean }) {

@@ -2,12 +2,12 @@ import { notFound, redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { requireAuth } from "@/lib/auth/require-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import { PrintButton } from "@/components/print-button";
+import { TaxInvoiceRequestPanel } from "@/components/tax-invoice-request-panel";
+import { getMyTaxInvoiceForOrder } from "@/actions/tax-invoices";
 import { CONTACT, ADDRESSES, TAX_ID } from "@/components/seo/site";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { getSalesRepContactForUserid } from "@/lib/admin/sales-rep-contact";
-import { PayFromWalletButton } from "../pay-from-wallet-button";
 
 /**
  * Customer-side ใบแจ้งหนี้ (invoice) view —
@@ -323,33 +323,11 @@ export default async function ServiceImportInvoicePage({
     ? await getSalesRepContactForUserid(customerOwnerUserid)
     : null;
 
-  // ── 5. Wallet balance — only relevant if receipt exists + pending ──
-  const receiptPending = receipt && receipt.rstatus !== "1" && receipt.rstatus !== "2";
-  let walletBalance: number | null = null;
-  if (receiptPending) {
-    const supabase = await createClient();
-    const { data: { user }, error: authErr } = await supabase.auth.getUser();
-    if (authErr) {
-      console.error(`[invoice/[fNo] auth.getUser] failed`, {
-        message: authErr.message,
-      });
-    }
-    if (user) {
-      const { data: wallet, error: walletErr } = await admin
-        .from("tb_wallet")
-        .select("wallettotal")
-        .eq("userid", memberCode)
-        .maybeSingle<{ wallettotal: number }>();
-      if (walletErr) {
-        console.error(`[invoice/[fNo] tb_wallet lookup] failed`, {
-          code: walletErr.code, message: walletErr.message,
-        });
-      }
-      walletBalance = Number(wallet?.wallettotal ?? 0);
-    }
-  }
-
-  // ── 6. Totals — items rollup, fallback to current forwarder calc ──
+  // ── 5. Totals — items rollup, fallback to current forwarder calc ──
+  // (Pay-from-wallet was removed — §0e: it debited the rebuilt 0-row
+  //  `wallet_transactions`/`forwarders` twins, never the live
+  //  `tb_wallet`/`tb_forwarder`. The real pay path is the slip upload
+  //  via `submitForwarderPayment`; this page stays a read-only ใบแจ้งหนี้.)
   const itemsTotal = receiptItems.length > 0
     ? receiptItems.reduce((sum, r) => sum + r._amountThb, 0)
     : 0;
@@ -357,6 +335,20 @@ export default async function ServiceImportInvoicePage({
   const rAmount       = Number(receipt?.ramount ?? itemsTotal);
   // grandTotal = ยอดที่ลูกค้าต้องชำระ (after withholding tax cut).
   const grandTotal    = receipt ? rAmount : calcForwarderOutstanding(forwarder);
+
+  // ── 6. ใบกำกับภาษี (RD Code 86) request panel — World-B (ADR-0027) ──
+  // Moved here from the old …/receipt orphan. The customer-request action
+  // (requestTaxInvoice) + this lookup both go through World-B
+  // (tb_forwarder_tax_invoice via issueForwarderTaxInvoice). Shown once the
+  // order is PAID (legacy fstatus '6'=เตรียมส่ง · '7'=ส่งแล้ว — past รอชำระเงิน).
+  const isPaid = fStatus === "6" || fStatus === "7";
+  const taxInv = isPaid ? await getMyTaxInvoiceForOrder("forwarder", String(idNum)) : null;
+  const existingTaxInvoice = taxInv?.ok ? taxInv.data : null;
+  // Eligible = has a 13-digit tax id (juristic). The World-B engine snapshots
+  // the buyer from tb_corporate/tb_users itself, so the form values are
+  // informational — the panel hint tells the customer to keep their company
+  // profile up to date.
+  const taxEligible = custTaxId.replace(/\D/g, "").length === 13;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -448,13 +440,6 @@ export default async function ServiceImportInvoicePage({
             {/* Action bar — hidden on print */}
             <div className="no-print flex flex-wrap items-center justify-end gap-2">
               <PrintButton label="📄 พิมพ์ / บันทึก PDF" />
-              {receiptPending && walletBalance !== null && grandTotal > 0 && (
-                <PayFromWalletButton
-                  fNo={String(idNum)}
-                  totalThb={grandTotal}
-                  walletBalance={walletBalance}
-                />
-              )}
             </div>
 
             <article className="invoice-card rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -594,22 +579,6 @@ export default async function ServiceImportInvoicePage({
                   </div>
                 </div>
 
-                {/* Pending hint */}
-                {receiptPending && walletBalance !== null && (
-                  <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50 p-4 no-print">
-                    <p className="text-sm font-semibold text-primary-900">
-                      💳 จ่ายจากกระเป๋า Pacred Wallet ของท่าน
-                    </p>
-                    <p className="text-xs text-primary-800 mt-1">
-                      ยอดในกระเป๋า: ฿{numberFormat2(walletBalance)}{" "}
-                      {walletBalance < grandTotal && (
-                        <>· ขาดอีก ฿{numberFormat2(grandTotal - walletBalance)}{" "}
-                          <Link href="/wallet/deposit" className="underline font-medium">เติมเงิน →</Link>
-                        </>
-                      )}
-                    </p>
-                  </div>
-                )}
               </div>
 
               {/* Footer */}
@@ -619,6 +588,22 @@ export default async function ServiceImportInvoicePage({
               </div>
             </article>
           </>
+        )}
+
+        {/* ใบกำกับภาษี request panel — World-B (ADR-0027). Paid orders only;
+            hidden on print (the panel self-marks no-print). */}
+        {isPaid && (
+          <TaxInvoiceRequestPanel
+            orderType="forwarder"
+            orderId={String(idNum)}
+            defaults={{
+              name:    custName,
+              address: custAddr,
+              taxId:   custTaxId,
+            }}
+            existing={existingTaxInvoice}
+            eligible={taxEligible}
+          />
         )}
       </main>
     </div>

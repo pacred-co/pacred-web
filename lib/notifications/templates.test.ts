@@ -297,7 +297,7 @@ console.log("\ntax-invoice templates — order ref routing");
 }
 {
   const p = notify.taxInvoiceIssued({ serialNo: "INV-002", totalThb: 100, orderRef: "FW999" });
-  eq("non-ON ref → service-import receipt link", p.link_href, "/service-import/FW999/receipt");
+  eq("non-ON ref → service-import invoice link", p.link_href, "/service-import/FW999/invoice");
 }
 {
   const p = notify.taxInvoiceCancelled({ serialNo: "INV-003", reason: "ขอใหม่", orderRef: "ON555" });
@@ -307,7 +307,7 @@ console.log("\ntax-invoice templates — order ref routing");
 }
 {
   const p = notify.taxInvoiceCancelled({ serialNo: "INV-004", reason: "ผิด", orderRef: "FW111" });
-  eq("cancelled non-ON ref → service-import receipt link", p.link_href, "/service-import/FW111/receipt");
+  eq("cancelled non-ON ref → service-import invoice link", p.link_href, "/service-import/FW111/invoice");
 }
 
 // ════════════════════════════════════════════════════════════════════

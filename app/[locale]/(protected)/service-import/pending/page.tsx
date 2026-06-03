@@ -1,32 +1,18 @@
-import { getTranslations } from "next-intl/server";
-import { Link } from "@/i18n/navigation";
-import { listForwarders } from "@/actions/forwarder";
-import { ForwarderList } from "../forwarder-list";
+import { redirect } from "next/navigation";
 
-export default async function ServiceImportPendingPage() {
-  const t = await getTranslations("forwarder");
-  const res = await listForwarders({ status: ["pending_payment"], limit: 100 });
-  const items = res.ok ? (res.data ?? []) : [];
-
-  return (
-    <>
-      <main className="mx-auto w-full max-w-[1200px] px-4 py-12 space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-600">{t("kicker")}</p>
-            <h1 className="mt-1 text-2xl font-bold text-foreground">{t("pendingTitle")}</h1>
-            <p className="mt-1 text-sm text-muted">{t("pendingSubtitle")}</p>
-          </div>
-          <Link
-            href="/service-import"
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-surface-alt"
-          >
-            {t("viewAll")}
-          </Link>
-        </div>
-
-        <ForwarderList items={items} />
-      </main>
-    </>
-  );
+/**
+ * `/service-import/pending` was a divergent DEAD TWIN: it read the rebuilt,
+ * 0-row `forwarders` table via `listForwarders` → always empty for the 8,898
+ * migrated customers (Wave A trust sweep · big-audit §0e dead-read trap).
+ *
+ * The canonical "รอชำระเงิน" (pending-payment) view is the faithful
+ * `tb_forwarder` transcription at `/service-import` filtered to fStatus=5
+ * (`?q=5` — see service-import/page.tsx L261). Redirect so every inbound nav
+ * (sidebar / mobile FAB / mobile-launchpad / bookmark) lands on REAL data.
+ *
+ * The orphan reader (`listForwarders` + `ForwarderSummary` + the
+ * `<ForwarderList>` component) was removed in the same sweep.
+ */
+export default function ServiceImportPendingPage() {
+  redirect("/service-import?q=5");
 }

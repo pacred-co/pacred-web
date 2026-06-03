@@ -51,6 +51,8 @@ import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
 import { logger } from "@/lib/logger";
+import { spendCashbackAtCheckout, refundCashbackOnReject } from "./wallet-hs";
+import { cashbackRefId, parseCashbackNoteTag } from "@/lib/cashback/note-tag";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — duplicated from wallet-hs.ts L54 (third caller —
@@ -174,10 +176,12 @@ export async function adminApproveWalletHs(
 
       // 1. Read the pending row. Includes typeservice + reforder + dateslip
       //    so we can detect a forwarder-payment (typeservice='2') and trigger
-      //    the auto-receipt hook after wallet update succeeds.
+      //    the auto-receipt hook after wallet update succeeds. `wusercredit`
+      //    is read too so the fStatus 5→6 flip below can pick the credit vs
+      //    non-credit branch (submitForwarderPayment stamps it per row).
       const { data: row, error: rowErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, amount, type, status, typeservice, reforder, dateslip")
+        .select("id, userid, amount, type, status, typeservice, reforder, dateslip, note, wusercredit")
         .eq("id", id)
         .maybeSingle<{
           id: number;
@@ -188,6 +192,8 @@ export async function adminApproveWalletHs(
           typeservice: string | null;
           reforder: string | null;
           dateslip: string | null;
+          note: string | null;
+          wusercredit: string | null;
         }>();
       if (rowErr) {
         console.error(`[tb_wallet_hs list] failed`, { code: rowErr.code, message: rowErr.message });
@@ -251,6 +257,30 @@ export async function adminApproveWalletHs(
         }
       }
 
+      // ADR-0025 — settle any carried cashback ([CB:<amt>] tag stamped by
+      // submitForwarderPayment). Mirror of the deposit-cascade settle in
+      // wallet-hs.ts: idempotent on cbhrefid, clamped to live balance. The slip
+      // `amount` was already reduced by the applied cashback at submit, so this
+      // only debits tb_cash_back + logs tb_cash_back_hs (no wallet double-count).
+      const cashbackRequested = parseCashbackNoteTag(row.note);
+      if (cashbackRequested > 0) {
+        try {
+          const cbRes = await spendCashbackAtCheckout(admin, {
+            userid: row.userid,
+            requested: cashbackRequested,
+            cbhrefid: cashbackRefId("forwarder", `walleths:${id}`),
+            nowIso: new Date().toISOString(),
+          });
+          logger.info("wallet-trans", "cashback settled on slip approve", {
+            wallet_hs_id: id, userid: row.userid, applied: cbRes.applied, alreadySpent: cbRes.alreadySpent,
+          });
+        } catch (e) {
+          logger.warn("wallet-trans", "cashback settle failed (non-fatal · money already moved)", {
+            wallet_hs_id: id, userid: row.userid, error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+
       await logAdminAction(adminId, "tb_wallet_hs.approve", "tb_wallet_hs", String(id), {
         userid: row.userid,
         amount: amt,
@@ -266,6 +296,48 @@ export async function adminApproveWalletHs(
       if (row.typeservice === "2" && row.reforder) {
         const fid = Number(row.reforder);
         if (Number.isFinite(fid) && fid > 0) {
+          // P0 mark-paid symmetry — settle tb_forwarder for the paid row.
+          // submitForwarderPayment (actions/forwarder.ts) does NOT flip fstatus
+          // at submit (legacy keeps fStatus=5 until staff confirm the slip), so
+          // the slip-approve is where the order must settle — otherwise paid
+          // forwarders are stuck at "รอชำระเงิน" forever + the AR cockpit never
+          // decrements. Mirror the pure-wallet flip in pay-user.ts L574-576
+          // (legacy pay-users.php L467/L469):
+          //   standard    → fstatus='6' + fdateadminstatus + fdatestatus6
+          //                  (guard fstatus='5' → idempotent 5→6 advance)
+          //   credit row  → fcredit='' + fdateadminstatus  (NO fstatus/fdatestatus6
+          //                  flip — credit rows settle without the 6 stamp; guard
+          //                  fcredit='1' → idempotent, a credit row reaches the
+          //                  payable set via fCredit='1' and may NOT be at fstatus=5).
+          // wusercredit is stamped per row by submitForwarderPayment. Best-effort
+          // + logged like the auto-receipt — a flip failure must NOT roll back the
+          // wallet leg (the money already moved).
+          const nowIso = new Date().toISOString();
+          const isCredit = (row.wusercredit ?? "").trim() === "1";
+          let flipErrMsg: string | null = null;
+          if (isCredit) {
+            const { error: flipErr } = await admin
+              .from("tb_forwarder")
+              .update({ fcredit: "", fdateadminstatus: nowIso })
+              .eq("id", fid)
+              .eq("userid", row.userid)
+              .eq("fcredit", "1");
+            flipErrMsg = flipErr?.message ?? null;
+          } else {
+            const { error: flipErr } = await admin
+              .from("tb_forwarder")
+              .update({ fstatus: "6", fdateadminstatus: nowIso, fdatestatus6: nowIso })
+              .eq("id", fid)
+              .eq("userid", row.userid)
+              .eq("fstatus", "5");
+            flipErrMsg = flipErr?.message ?? null;
+          }
+          if (flipErrMsg) {
+            logger.warn("wallet-trans", "forwarder settle flip failed (non-fatal · money already moved)", {
+              wallet_hs_id: id, userid: row.userid, fid, isCredit, error: flipErrMsg,
+            });
+          }
+
           const dateSlip = row.dateslip ? new Date(row.dateslip) : new Date();
           const r = await autoIssueReceiptOnPaymentLand(admin, {
             userid: row.userid,
@@ -325,9 +397,9 @@ export async function adminRejectWalletHs(
 
       const { data: row, error: rowErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, status")
+        .select("id, userid, status, note")
         .eq("id", id)
-        .maybeSingle<{ id: number; userid: string; status: string | null }>();
+        .maybeSingle<{ id: number; userid: string; status: string | null; note: string | null }>();
       if (rowErr) {
         console.error(`[tb_wallet_hs list] failed`, { code: rowErr.code, message: rowErr.message });
         return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
@@ -352,6 +424,24 @@ export async function adminRejectWalletHs(
       if (updErr) {
         console.error(`[tb_wallet_hs mutation] failed`, { code: updErr.code, message: updErr.message });
         return { ok: false, error: updErr.message };
+      }
+
+      // ADR-0025 — refund any carried cashback if the slip is rejected. Reads
+      // the ORIGINAL row.note (the [CB:] tag), not the rejection-reason `note`.
+      // refundCashbackOnReject is idempotent + no-ops cleanly if no prior spend
+      // landed (reject-before-approve), so it is safe on every reject.
+      if (parseCashbackNoteTag(row.note) > 0) {
+        try {
+          await refundCashbackOnReject(admin, {
+            userid: row.userid,
+            cbhrefid: cashbackRefId("forwarder", `walleths:${id}`),
+            nowIso: new Date().toISOString(),
+          });
+        } catch (e) {
+          logger.warn("wallet-trans", "cashback refund failed (non-fatal)", {
+            wallet_hs_id: id, userid: row.userid, error: e instanceof Error ? e.message : String(e),
+          });
+        }
       }
 
       await logAdminAction(adminId, "tb_wallet_hs.reject", "tb_wallet_hs", String(id), {

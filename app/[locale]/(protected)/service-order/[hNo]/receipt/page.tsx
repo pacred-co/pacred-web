@@ -333,6 +333,8 @@ export default async function ShopOrderReceiptPage({
             }}
             existing={existingInvoice}
             eligible={isEligible}
+            /* ADR-0027 — shop ใบกำกับภาษี deferred (no World-B cross-type store yet). */
+            deferred
           />
         )}
 

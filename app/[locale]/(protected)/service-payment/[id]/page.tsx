@@ -166,6 +166,8 @@ export default async function YuanPaymentDetailPage({
             }}
             existing={existingInvoice}
             eligible={isEligible}
+            /* ADR-0027 — yuan ใบกำกับภาษี deferred (no World-B cross-type store yet). */
+            deferred
           />
         ) : (
           <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">

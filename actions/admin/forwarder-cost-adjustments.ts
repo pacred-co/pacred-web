@@ -183,14 +183,15 @@ export async function adminAddForwarderCostAdjustment(
         severity:       "warning",
         title:          `มีค่าใช้จ่ายเพิ่ม — ${fwd.f_no}`,
         body:           `${KIND_LABEL_TH[d.kind]} ฿${d.amount_thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })} — ติดต่อทีมงานเพื่อชำระ`,
-        link_href:      `/service-import/${fwd.f_no}/receipt`,
+        // …/receipt is now a redirect → …/invoice (live tb_forwarder⋈tb_receipt view).
+        link_href:      `/service-import/${fwd.f_no}/invoice`,
         reference_type: "forwarder",
         reference_id:   fwd.id,
       });
     }
 
     revalidatePath(`/admin/forwarders/${fwd.f_no}`);
-    revalidatePath(`/service-import/${fwd.f_no}/receipt`);
+    revalidatePath(`/service-import/${fwd.f_no}/invoice`);
     revalidatePath(`/service-import/${fwd.f_no}`);
 
     return { ok: true, data: { id: created.id, reconfirm_required: gate.triggered } };
@@ -321,13 +322,14 @@ export async function adminMarkCostAdjustmentPaid(
       severity: "success",
       title:    `ชำระค่าใช้จ่ายเพิ่ม — ${fNo}`,
       body:     `${KIND_LABEL_TH[adj.kind as keyof typeof KIND_LABEL_TH] ?? adj.kind} ฿${total.toLocaleString()} ชำระแล้ว`,
-      link_href: `/service-import/${fNo}/receipt`,
+      // …/receipt is now a redirect → …/invoice (live tb_forwarder⋈tb_receipt view).
+      link_href: `/service-import/${fNo}/invoice`,
       reference_type: "forwarder",
       reference_id:   adj.forwarder_id,
     });
 
     revalidatePath(`/admin/forwarders/${fNo}`);
-    revalidatePath(`/service-import/${fNo}/receipt`);
+    revalidatePath(`/service-import/${fNo}/invoice`);
     revalidatePath("/admin/wallet");
 
     return { ok: true, data: { wallet_tx_id: tx.id } };
@@ -392,7 +394,8 @@ export async function adminCancelCostAdjustment(
     }
     if (fwd) {
       revalidatePath(`/admin/forwarders/${fwd.f_no}`);
-      revalidatePath(`/service-import/${fwd.f_no}/receipt`);
+      // …/receipt redirects → …/invoice (live tb_forwarder⋈tb_receipt view).
+      revalidatePath(`/service-import/${fwd.f_no}/invoice`);
     }
     return { ok: true };
   });

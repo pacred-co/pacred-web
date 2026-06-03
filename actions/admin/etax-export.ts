@@ -126,7 +126,6 @@ export async function getEtaxBundle(range: EtaxRange): Promise<EtaxBundle> {
   // migration 0129 added tb_forwarder_tax_invoice, so the inferred row type
   // is `{ error: true } & String` (unknown-table marker). Direct `as Raw[]`
   // fails TypeScript. `as unknown as Raw[]` is the canonical workaround.
-  // 2026-06-02 ภูม session-start fix.
   const rows: EtaxInvoiceRow[] = ((rawRows ?? []) as unknown as Raw[]).map((r) => ({
     id:                  r.id,
     serial_no:           r.serial_no,
