@@ -19,6 +19,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { adminUpdateGeneralRateCells } from "@/actions/admin/rate-edits";
+import { confirm } from "@/components/ui/confirm";
 
 type WH = "1" | "2";
 type TT = "1" | "2" | "3";
@@ -71,7 +72,7 @@ export function GeneralRateMatrix({ coid, initial }: { coid: string; initial: Ge
     setDraft((prev) => ({ ...prev, [`${k}.${f}`]: v }));
   }
 
-  function onSave() {
+  async function onSave() {
     setMsg(null);
     const cells: Array<{
       sourcewarehouse: WH; rgtransporttype: TT; rgproductstype: PT;
@@ -88,7 +89,7 @@ export function GeneralRateMatrix({ coid, initial }: { coid: string; initial: Ge
         cbm1: toNum(draft[`${k}.cbm1`] ?? ""), cbm2: toNum(draft[`${k}.cbm2`] ?? ""), cbm3: toNum(draft[`${k}.cbm3`] ?? ""),
       });
     }
-    if (!window.confirm("บันทึกเรท General ทั้งตาราง ? (เขียนเฉพาะช่องที่เปลี่ยน · มีผลกับการคำนวณราคาลูกค้าทั่วไปทันที)")) return;
+    if (!(await confirm("บันทึกเรท General ทั้งตาราง ? (เขียนเฉพาะช่องที่เปลี่ยน · มีผลกับการคำนวณราคาลูกค้าทั่วไปทันที)"))) return;
     startTransition(async () => {
       const res = await adminUpdateGeneralRateCells({ coid, cells });
       if (!res.ok) { setMsg({ kind: "err", text: res.error ?? "บันทึกไม่สำเร็จ" }); return; }

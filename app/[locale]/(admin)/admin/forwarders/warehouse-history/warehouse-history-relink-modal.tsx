@@ -37,6 +37,7 @@ import {
   adminSearchForwarderForScan,
   type ForwarderSearchRow,
 } from "@/actions/admin/warehouse-history";
+import { alert } from "@/components/ui/confirm";
 
 type Props = {
   open: boolean;
@@ -120,10 +121,10 @@ export function WarehouseHistoryRelinkModal({
     start(async () => {
       const res = await adminRelinkScan({ scanId, fid });
       if (!res.ok) {
-        window.alert(`ผิดพลาด: ${res.error ?? "กรุณาลองใหม่ภายหลัง"}`);
+        await alert(`ผิดพลาด: ${res.error ?? "กรุณาลองใหม่ภายหลัง"}`);
         return;
       }
-      window.alert("สำเร็จ\nเชื่อมรายการแล้ว");
+      await alert("สำเร็จ\nเชื่อมรายการแล้ว");
       onClose();
       router.refresh();
     });

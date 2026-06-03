@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { alert, prompt } from "@/components/ui/confirm";
 import { adminUpdateDisbursement, adminDeleteDisbursement, type DisbursementKind } from "@/actions/admin/disbursements";
 
 /**
@@ -89,15 +90,15 @@ export function DisbursementRowControls({
     });
   }
 
-  function doDelete() {
-    const reason = window.prompt("เหตุผลที่ลบรายการนี้ (super only):");
+  async function doDelete() {
+    const reason = await prompt("เหตุผลที่ลบรายการนี้ (super only):");
     if (!reason || reason.trim().length < 3) return;
     startTransition(async () => {
       const res = await adminDeleteDisbursement({ id, reason: reason.trim() });
       if (res.ok) {
         router.refresh();
       } else {
-        alert(`ลบไม่สำเร็จ: ${res.error}`);
+        await alert(`ลบไม่สำเร็จ: ${res.error}`);
       }
     });
   }

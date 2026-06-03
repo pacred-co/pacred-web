@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
+import { confirm } from "@/components/ui/confirm";
 import { driverUpdateOwnAssignmentStatus } from "@/actions/admin/forwarder-drivers";
 
 // CT-7 — driver-self accept (1→2) / complete (2→4) + jump-to-scan for status 2.
@@ -20,9 +21,9 @@ export function DriverActionButtons({
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
 
-  function act(action: "accept" | "complete") {
+  async function act(action: "accept" | "complete") {
     setErr(null);
-    if (action === "complete" && !confirm("ยืนยันส่งงานนี้สำเร็จ ?")) return;
+    if (action === "complete" && !(await confirm("ยืนยันส่งงานนี้สำเร็จ ?"))) return;
     startTransition(async () => {
       const res = await driverUpdateOwnAssignmentStatus({ id: assignmentId, action });
       if (res.ok) {

@@ -25,6 +25,7 @@ import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { adminPayForwardersOnBehalf } from "@/actions/admin/pay-user";
 import { adminMarkForwarderCredit } from "@/actions/admin/forwarders-field-edits";
+import { confirm } from "@/components/ui/confirm";
 
 type Props = {
   fId: number;            // tb_forwarder.id
@@ -48,15 +49,15 @@ export function TbForwarderPaymentPanel(p: Props) {
   // fStatus='c' branch). Faithful: gated on the customer's tb_users.userCreditValue
   // limit; adds the order to tb_credit.creditvalue. Only offered when not already
   // on credit.
-  function onCredit() {
+  async function onCredit() {
     setError(null);
     setSuccess(null);
     if (!creditDate) { setError("กรุณาเลือกวันครบกำหนดชำระ (เครดิต)"); return; }
-    if (!window.confirm(
+    if (!(await confirm(
       `ให้เครดิตรายการ #${p.fId} แก่ ${p.customerName} [${p.userId}] ?\n\n` +
       `ระบบจะบันทึกเป็นหนี้ค้างในวงเงินเครดิตลูกค้า (tb_credit) + เลื่อนสถานะเป็น 'เตรียมส่ง' โดยยังไม่ตัดเงิน\n` +
       `ครบกำหนดชำระ: ${creditDate}`,
-    )) return;
+    ))) return;
     startTransition(async () => {
       const res = await adminMarkForwarderCredit({ fId: p.fId, creditDueDate: creditDate });
       if (!res.ok) { setError(res.error ?? "ให้เครดิตไม่สำเร็จ"); return; }
@@ -65,7 +66,7 @@ export function TbForwarderPaymentPanel(p: Props) {
     });
   }
 
-  function onPay() {
+  async function onPay() {
     setError(null);
     setSuccess(null);
 
@@ -75,7 +76,7 @@ export function TbForwarderPaymentPanel(p: Props) {
       `ยอดประมาณ: ฿${p.amountEstimate.toLocaleString("th-TH", { minimumFractionDigits: 2 })}\n` +
       `ยอดกระเป๋า: ฿${p.walletBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}\n\n` +
       `ระบบจะตัดเงินจากกระเป๋าลูกค้า (tb_wallet) + บันทึก tb_wallet_hs + เลื่อนสถานะ 5→6`;
-    if (!window.confirm(msg)) return;
+    if (!(await confirm(msg))) return;
 
     startTransition(async () => {
       const res = await adminPayForwardersOnBehalf({

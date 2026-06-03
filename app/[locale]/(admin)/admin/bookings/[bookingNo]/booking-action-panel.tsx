@@ -20,6 +20,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { confirm } from "@/components/ui/confirm";
 import {
   adminMarkBookingContacted,
   adminMarkBookingQuoted,
@@ -121,8 +122,8 @@ export function BookingActionPanel({
     });
   }
 
-  function fireMarkWon() {
-    if (!confirm("ยืนยันปิดดีลเป็น 'won'?\n(ปิดสถานะถาวร — แก้ไขย้อนหลังไม่ได้)")) return;
+  async function fireMarkWon() {
+    if (!(await confirm("ยืนยันปิดดีลเป็น 'won'?\n(ปิดสถานะถาวร — แก้ไขย้อนหลังไม่ได้)"))) return;
     setError(null);
     startTransition(async () => {
       const res = await adminMarkBookingWon({ bookingId });
@@ -130,7 +131,7 @@ export function BookingActionPanel({
     });
   }
 
-  function fireClose(kind: "lost" | "cancel") {
+  async function fireClose(kind: "lost" | "cancel") {
     setError(null);
     const reason = reasonInput.trim();
     if (reason.length < 3) {
@@ -138,7 +139,7 @@ export function BookingActionPanel({
       return;
     }
     const label = kind === "lost" ? "ลูกค้าไม่เอา · lost" : "ยกเลิก · cancelled";
-    if (!confirm(`ยืนยัน ${label}?\n\nเหตุผล: ${reason}\n\n(ปิดสถานะถาวร — แก้ไขย้อนหลังไม่ได้)`)) return;
+    if (!(await confirm(`ยืนยัน ${label}?\n\nเหตุผล: ${reason}\n\n(ปิดสถานะถาวร — แก้ไขย้อนหลังไม่ได้)`))) return;
     startTransition(async () => {
       const res = kind === "lost"
         ? await adminMarkBookingLost({ bookingId, reason })

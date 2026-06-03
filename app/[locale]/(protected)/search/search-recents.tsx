@@ -25,6 +25,7 @@ import {
   getMyRecentSearches,
   type RecentSearch,
 } from "@/actions/search";
+import { confirm } from "@/components/ui/confirm";
 
 type Props = {
   /** Max chips to show. Defaults to 8 — fits one row on a phone. */
@@ -56,8 +57,8 @@ export function SearchRecents({ limit = 8 }: Props) {
     router.push(`/search?url=${encodeURIComponent(q)}`);
   }
 
-  function clear() {
-    if (!window.confirm("ล้างประวัติการค้นหาทั้งหมด?")) return;
+  async function clear() {
+    if (!(await confirm("ล้างประวัติการค้นหาทั้งหมด?"))) return;
     startTransition(async () => {
       const res = await clearMySearchHistory();
       if (res.ok) setItems([]);

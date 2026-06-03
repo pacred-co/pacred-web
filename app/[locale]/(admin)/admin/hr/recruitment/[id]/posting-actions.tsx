@@ -6,6 +6,7 @@ import {
   ArrowRight, CalendarCheck2, X, UserPlus, Trash2, Loader2,
   CheckCheck, XCircle, Phone, Mail,
 } from "lucide-react";
+import { confirm, alert, prompt } from "@/components/ui/confirm";
 import { Button } from "@/components/ui/button";
 import {
   adminCreateApplicant, adminAdvanceApplicant, adminScheduleInterview,
@@ -36,12 +37,12 @@ export function DeletePostingButton({ postingId }: { postingId: number }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  function remove() {
-    if (!confirm("ลบประกาศรับสมัครงานนี้?")) return;
+  async function remove() {
+    if (!(await confirm("ลบประกาศรับสมัครงานนี้?"))) return;
     startTransition(async () => {
       const res = await adminDeletePosting({ id: postingId });
       if (res.ok) router.push("/admin/hr/recruitment" as Parameters<typeof router.push>[0]);
-      else alert(res.error);
+      else await alert(res.error);
     });
   }
 
@@ -186,22 +187,22 @@ export function ApplicantActions({ applicantId, stage, phone, email, interviewSc
         rejected_reason: opts?.reason ?? null,
       });
       if (res.ok) router.refresh();
-      else alert(res.error);
+      else await alert(res.error);
     });
   }
 
-  function reject() {
-    const reason = prompt("เหตุผลที่ไม่รับ (option):") ?? "";
+  async function reject() {
+    const reason = (await prompt("เหตุผลที่ไม่รับ (option):")) ?? "";
     move("rejected", { reason });
   }
 
-  function hire() {
-    if (!confirm("ยืนยันรับเข้าทำงาน?\n(จะต้องลิงก์โปรไฟล์ที่หน้า /admin/admins เพื่อเปิดสิทธิ์ admin ภายหลัง)")) return;
+  async function hire() {
+    if (!(await confirm("ยืนยันรับเข้าทำงาน?\n(จะต้องลิงก์โปรไฟล์ที่หน้า /admin/admins เพื่อเปิดสิทธิ์ admin ภายหลัง)"))) return;
     move("hired");
   }
 
-  function schedule() {
-    if (!slot) { alert("เลือกวันเวลาก่อน"); return; }
+  async function schedule() {
+    if (!slot) { await alert("เลือกวันเวลาก่อน"); return; }
     startTransition(async () => {
       const res = await adminScheduleInterview({
         applicant_id: applicantId,
@@ -211,12 +212,12 @@ export function ApplicantActions({ applicantId, stage, phone, email, interviewSc
       if (res.ok) {
         setScheduleOpen(false);
         router.refresh();
-      } else alert(res.error);
+      } else await alert(res.error);
     });
   }
 
-  function clearSchedule() {
-    if (!confirm("ยกเลิกนัดสัมภาษณ์?")) return;
+  async function clearSchedule() {
+    if (!(await confirm("ยกเลิกนัดสัมภาษณ์?"))) return;
     startTransition(async () => {
       const res = await adminScheduleInterview({
         applicant_id: applicantId,
@@ -226,16 +227,16 @@ export function ApplicantActions({ applicantId, stage, phone, email, interviewSc
       if (res.ok) {
         setScheduleOpen(false);
         router.refresh();
-      } else alert(res.error);
+      } else await alert(res.error);
     });
   }
 
-  function remove() {
-    if (!confirm("ลบผู้สมัครคนนี้ออกจากระบบ?\n(ถ้าแค่ไม่รับ — กดปุ่ม Reject แทน)")) return;
+  async function remove() {
+    if (!(await confirm("ลบผู้สมัครคนนี้ออกจากระบบ?\n(ถ้าแค่ไม่รับ — กดปุ่ม Reject แทน)"))) return;
     startTransition(async () => {
       const res = await adminDeleteApplicant({ applicant_id: applicantId });
       if (res.ok) router.refresh();
-      else alert(res.error);
+      else await alert(res.error);
     });
   }
 

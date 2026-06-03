@@ -37,6 +37,7 @@ import {
   modeFromPref,
   type TaxDocMode,
 } from "@/lib/tax/tax-doc-mode";
+import { confirm } from "@/components/ui/confirm";
 
 export type SavedAddressOption = {
   addressId: number;
@@ -128,27 +129,27 @@ export function TbForwarderEditPanel(p: Props) {
     });
   }
 
-  function onSaveAddress() {
+  async function onSaveAddress() {
     const aid = Number(addressId);
     if (!Number.isInteger(aid) || aid <= 0) { setMsg({ kind: "err", text: "กรุณาเลือกที่อยู่" }); return; }
-    if (!window.confirm("เปลี่ยนที่อยู่จัดส่งของรายการนี้เป็นที่อยู่ที่เลือก ?")) return;
+    if (!(await confirm("เปลี่ยนที่อยู่จัดส่งของรายการนี้เป็นที่อยู่ที่เลือก ?"))) return;
     run(() => adminPickForwarderAddress({ fId: p.fId, addressId: aid }), "เปลี่ยนที่อยู่จัดส่งสำเร็จ");
   }
 
-  function onSaveTransport() {
+  async function onSaveTransport() {
     if (transport === p.currentTransportType) { setMsg({ kind: "err", text: "ไม่มีการเปลี่ยนแปลง" }); return; }
-    if (!window.confirm("เปลี่ยนประเภทขนส่ง ? (ราคาจะไม่อัพเดทอัตโนมัติ — กด 'แก้ไขขนาด/น้ำหนัก' เพื่อคำนวณเรทใหม่)")) return;
+    if (!(await confirm("เปลี่ยนประเภทขนส่ง ? (ราคาจะไม่อัพเดทอัตโนมัติ — กด 'แก้ไขขนาด/น้ำหนัก' เพื่อคำนวณเรทใหม่)"))) return;
     run(() => adminUpdateForwarderTransportType({ fId: p.fId, transportType: transport }), "เปลี่ยนประเภทขนส่งสำเร็จ");
   }
 
-  function onReassign() {
+  async function onReassign() {
     const code = newOwner.trim().toUpperCase();
     if (!code) { setMsg({ kind: "err", text: "กรอกรหัสลูกค้าปลายทาง" }); return; }
-    if (!window.confirm(
+    if (!(await confirm(
       `⚠ ย้ายรายการฝากนำเข้านี้ไปเป็นของลูกค้า "${code}" ?\n\n` +
       `การเงิน/ที่อยู่/รายการสินค้าจะติดไปด้วย · ที่อยู่จัดส่งจะยังเป็นของเดิม (ควรเลือกที่อยู่ใหม่หลังย้าย)\n` +
       `ทำเฉพาะกรณีสร้างผิดบัญชีเท่านั้น`,
-    )) return;
+    ))) return;
     run(() => adminReassignForwarderOwner({ fId: p.fId, newUserId: code }), `ย้ายเจ้าของไปยัง ${code} สำเร็จ`);
   }
 
@@ -161,7 +162,7 @@ export function TbForwarderEditPanel(p: Props) {
     run(() => adminUpdateForwarderCover(fd), "อัปโหลดรูปปกสำเร็จ");
   }
 
-  function onSaveShipBy() {
+  async function onSaveShipBy() {
     const code = effectiveShipBy;
     if (!code) { setMsg({ kind: "err", text: "เลือกผู้ขนส่ง หรือกรอกชื่อผู้ขนส่งภายนอก" }); return; }
     if (code === p.currentShipBy) { setMsg({ kind: "err", text: "ไม่มีการเปลี่ยนแปลง" }); return; }
@@ -170,17 +171,17 @@ export function TbForwarderEditPanel(p: Props) {
       : (code === "PCSF" || code === "PCSE")
         ? "\n\nค่าขนส่งจะถูกคำนวณใหม่ตามเงื่อนไข PCS (เฉพาะรายการที่ยังไม่ชำระเงิน)"
         : "";
-    if (!window.confirm(`เปลี่ยนผู้ขนส่ง (Ship-by) เป็น "${code}" ?${extra}`)) return;
+    if (!(await confirm(`เปลี่ยนผู้ขนส่ง (Ship-by) เป็น "${code}" ?${extra}`))) return;
     run(() => adminUpdateForwarderShipBy({ fId: p.fId, fShipBy: code }), `เปลี่ยนผู้ขนส่งเป็น ${code} สำเร็จ`);
   }
 
-  function onSaveAmountCount() {
+  async function onSaveAmountCount() {
     if (amountCount === p.currentAmountCount) { setMsg({ kind: "err", text: "ไม่มีการเปลี่ยนแปลง" }); return; }
-    if (!window.confirm("เปลี่ยนฐานการคิดราคา ? (ราคาจะไม่อัพเดทอัตโนมัติ — กด 'แก้ไขขนาด/น้ำหนัก' เพื่อคำนวณเรทใหม่)")) return;
+    if (!(await confirm("เปลี่ยนฐานการคิดราคา ? (ราคาจะไม่อัพเดทอัตโนมัติ — กด 'แก้ไขขนาด/น้ำหนัก' เพื่อคำนวณเรทใหม่)"))) return;
     run(() => adminUpdateForwarderAmountCount({ fId: p.fId, famountcount: amountCount }), "เปลี่ยนฐานราคาสำเร็จ");
   }
 
-  function onSaveCostAdjust() {
+  async function onSaveCostAdjust() {
     const pu = Number(priceUpdate);
     const po = Number(priceOther);
     const dc = Number(discount);
@@ -190,13 +191,13 @@ export function TbForwarderEditPanel(p: Props) {
     if (pu === p.currentPriceUpdate && po === p.currentPriceOther && dc === p.currentDiscount) {
       setMsg({ kind: "err", text: "ไม่มีการเปลี่ยนแปลง" }); return;
     }
-    if (!window.confirm(
+    if (!(await confirm(
       `บันทึกค่าใช้จ่ายปรับเพิ่ม/ลด ?\n\n` +
       `ค่าสินค้า/ปรับเพิ่ม : ฿${pu.toLocaleString()}\n` +
       `ค่าอื่นๆ : ฿${po.toLocaleString()}\n` +
       `ส่วนลด : -฿${dc.toLocaleString()}\n\n` +
       `(มีผลต่อยอดรวมที่ลูกค้าต้องชำระ)`,
-    )) return;
+    ))) return;
     run(
       () => adminUpdateForwarderCostAdjust({ fId: p.fId, fpriceupdate: pu, priceother: po, fdiscount: dc }),
       "บันทึกค่าใช้จ่ายสำเร็จ",

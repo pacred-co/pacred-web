@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "@/i18n/navigation";
 import { Plus, Loader2, Save, X, Trash2 } from "lucide-react";
+import { confirm, alert } from "@/components/ui/confirm";
 import { Button } from "@/components/ui/button";
 import { adminAddHoliday, adminDeleteHoliday } from "@/actions/admin/attendance";
 
@@ -103,12 +104,12 @@ export function DeleteHolidayButton({ id, name }: { id: number; name: string }) 
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  function remove() {
-    if (!confirm(`ลบวันหยุด "${name}"?`)) return;
+  async function remove() {
+    if (!(await confirm(`ลบวันหยุด "${name}"?`))) return;
     startTransition(async () => {
       const res = await adminDeleteHoliday({ id });
       if (res.ok) router.refresh();
-      else alert(res.error);
+      else await alert(res.error);
     });
   }
 

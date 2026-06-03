@@ -19,6 +19,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { confirm } from "@/components/ui/confirm";
 import { adminMarkServiceOrderPaidTb } from "@/actions/admin/service-orders-tb";
 
 export function MarkPaidTbForm({
@@ -99,9 +100,9 @@ export function MarkPaidTbForm({
         </button>
         <button
           type="button"
-          onClick={() => {
+          onClick={async () => {
             if (
-              confirm(
+              await confirm(
                 "รับเงินสด/โอนตรงโดยไม่เช็คยอด wallet ใช่ไหม? (ใช้เมื่อลูกค้าโอนนอกระบบ · ยังหัก wallet เช่นเดิม)",
               )
             ) {

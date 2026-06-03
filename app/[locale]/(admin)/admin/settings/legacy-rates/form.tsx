@@ -12,6 +12,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { adminSetTbSettingsRates } from "@/actions/admin/tb-settings";
+import { confirm } from "@/components/ui/confirm";
 
 type Props = {
   initial: {
@@ -80,7 +81,7 @@ export function LegacyRatesForm({ initial }: Props) {
           // Range-guard rejection → ask user to confirm bypass (super only).
           if (res.error.includes("เรทผิดปกติ") && !forceOverride) {
             if (
-              window.confirm(
+              await confirm(
                 `${res.error}\n\nยืนยันใช้ค่านี้จริง? (ต้องเป็น super admin จึง bypass ได้)`,
               )
             ) {

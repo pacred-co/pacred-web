@@ -18,6 +18,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { confirm } from "@/components/ui/confirm";
 import { Button } from "@/components/ui/button";
 import {
   adminMarkShopOrderOrdered,
@@ -147,13 +148,13 @@ export function AdminSpawnToCompletedButton({ hNo }: { hNo: string }) {
     setMsg(null);
     setError(null);
     if (
-      !confirm(
+      !(await confirm(
         `ส่งเข้าโกดังจีน + สร้างใบฝากนำเข้าจาก ${hNo}?\nจะ:\n` +
           `- สร้าง tb_forwarder ทุก tracking ใน tb_order\n` +
           `- ถ่ายโอน tb_promotion (ถ้ามีโปรค้างไว้บนออเดอร์)\n` +
           `- ปิดออเดอร์ → "สำเร็จ" (hstatus=5)\n` +
           `- แจ้งลูกค้า in-app + LINE OA + email`,
-      )
+      ))
     ) {
       return;
     }

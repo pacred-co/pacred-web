@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "@/i18n/navigation";
 import { Plus, X, Save, Loader2, Trash2 } from "lucide-react";
+import { confirm, alert } from "@/components/ui/confirm";
 import { Button } from "@/components/ui/button";
 import { adminCreateAuditEntry, adminDeleteAuditEntry } from "@/actions/admin/employee-audit";
 
@@ -136,12 +137,12 @@ export function AuditDeleteButton({ id }: { id: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  function remove() {
-    if (!confirm("ลบบันทึกนี้ออกจากระบบ?")) return;
+  async function remove() {
+    if (!(await confirm("ลบบันทึกนี้ออกจากระบบ?"))) return;
     startTransition(async () => {
       const res = await adminDeleteAuditEntry({ id });
       if (res.ok) router.refresh();
-      else alert(res.error);
+      else await alert(res.error);
     });
   }
 

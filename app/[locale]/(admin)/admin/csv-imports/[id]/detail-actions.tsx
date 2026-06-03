@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { confirm } from "@/components/ui/confirm";
 import { Button } from "@/components/ui/button";
 import {
   parsePreviewCsvImport,
@@ -34,8 +35,8 @@ export function CsvImportDetailActions({
     });
   }
 
-  function onConfirm() {
-    if (!confirm("ยืนยันนำเข้าทั้งไฟล์? การกระทำนี้จะ insert ลง DB จริง")) return;
+  async function onConfirm() {
+    if (!(await confirm("ยืนยันนำเข้าทั้งไฟล์? การกระทำนี้จะ insert ลง DB จริง"))) return;
     setErr(null);
     setInfo(null);
     startTransition(async () => {
@@ -48,8 +49,8 @@ export function CsvImportDetailActions({
     });
   }
 
-  function onDelete() {
-    if (!confirm("ลบไฟล์นี้ + รายการนี้ใช่ไหม?")) return;
+  async function onDelete() {
+    if (!(await confirm("ลบไฟล์นี้ + รายการนี้ใช่ไหม?"))) return;
     setErr(null);
     startTransition(async () => {
       const res = await deleteCsvImport({ id });

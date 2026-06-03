@@ -6,6 +6,7 @@ import {
   Plus, X, Loader2, Save, Trash2, Users2, Pencil,
   CheckCircle2, PlayCircle, MinusCircle, GraduationCap,
 } from "lucide-react";
+import { confirm, alert, prompt } from "@/components/ui/confirm";
 import { Button } from "@/components/ui/button";
 import {
   adminUpsertCourse, adminDeleteCourse,
@@ -173,23 +174,23 @@ export function CourseRowActions({ courseId }: { courseId: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  function bulkEnroll() {
-    if (!confirm("Enroll พนักงาน admin ที่ active ทุกคนเข้าหลักสูตรนี้?")) return;
+  async function bulkEnroll() {
+    if (!(await confirm("Enroll พนักงาน admin ที่ active ทุกคนเข้าหลักสูตรนี้?"))) return;
     startTransition(async () => {
       const res = await adminBulkEnrollActiveAdmins({ course_id: courseId });
       if (res.ok && res.data) {
-        alert(`✓ Enroll สำเร็จ ${res.data.inserted} คน`);
+        await alert(`✓ Enroll สำเร็จ ${res.data.inserted} คน`);
         router.refresh();
-      } else if (!res.ok) alert(res.error);
+      } else if (!res.ok) await alert(res.error);
     });
   }
 
-  function remove() {
-    if (!confirm("ลบหลักสูตรนี้ออกจากระบบ? (จะลบ enrollment ทั้งหมดด้วย)")) return;
+  async function remove() {
+    if (!(await confirm("ลบหลักสูตรนี้ออกจากระบบ? (จะลบ enrollment ทั้งหมดด้วย)"))) return;
     startTransition(async () => {
       const res = await adminDeleteCourse({ id: courseId });
       if (res.ok) router.refresh();
-      else alert(res.error);
+      else await alert(res.error);
     });
   }
 
@@ -227,19 +228,19 @@ export function EnrollmentRowActions({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  function set(to: Status, withScore = false) {
+  async function set(to: Status, withScore = false) {
     let score: number | null = null;
     if (withScore) {
-      const raw = prompt("คะแนน (0-100):", "80");
+      const raw = await prompt("คะแนน (0-100):", "80");
       if (raw === null) return;
       const n = Number(raw);
-      if (Number.isNaN(n) || n < 0 || n > 100) { alert("คะแนนไม่ถูกต้อง"); return; }
+      if (Number.isNaN(n) || n < 0 || n > 100) { await alert("คะแนนไม่ถูกต้อง"); return; }
       score = n;
     }
     startTransition(async () => {
       const res = await adminSetEnrollmentStatus({ enrollment_id: enrollmentId, status: to, score });
       if (res.ok) router.refresh();
-      else alert(res.error);
+      else await alert(res.error);
     });
   }
 
@@ -314,7 +315,7 @@ export function AddEnrollmentInline({ courseId, employees }: { courseId: string;
     startTransition(async () => {
       const res = await adminEnroll({ course_id: courseId, profile_id: profileId });
       if (res.ok) { setProfileId(""); setOpen(false); router.refresh(); }
-      else alert(res.error);
+      else await alert(res.error);
     });
   }
 

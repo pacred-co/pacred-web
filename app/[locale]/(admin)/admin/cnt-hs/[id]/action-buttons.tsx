@@ -9,30 +9,31 @@
 
 import { useTransition } from "react";
 import { useRouter } from "@/i18n/navigation";
+import { confirm, alert } from "@/components/ui/confirm";
 import { adminApproveCntHs, adminRejectCntHs } from "@/actions/admin/cnt-hs";
 
 export function CntActionButtons({ cntId }: { cntId: number }) {
   const router = useRouter();
   const [pending, start] = useTransition();
 
-  function handleApprove() {
-    if (!confirm(`อนุมัติการจ่ายเงินตู้ #${cntId}?\n(จะเปลี่ยนสถานะเป็น "จ่ายแล้ว" — ไม่สามารถ undo ผ่านหน้านี้)`)) return;
+  async function handleApprove() {
+    if (!(await confirm(`อนุมัติการเบิกเงินค่าตู้ #${cntId}?\n(จะเปลี่ยนสถานะเป็น "จ่ายแล้ว" — ไม่สามารถ undo ผ่านหน้านี้)`))) return;
     start(async () => {
       const res = await adminApproveCntHs(cntId);
       if (!res.ok) {
-        alert(`Approve failed: ${res.error}`);
+        await alert(`Approve failed: ${res.error}`);
         return;
       }
       router.refresh();
     });
   }
 
-  function handleReject() {
-    if (!confirm(`ปฏิเสธการจ่ายเงินตู้ #${cntId}?\n(จะเปลี่ยนสถานะเป็น "ปฏิเสธ" — ไม่สามารถ undo ผ่านหน้านี้)`)) return;
+  async function handleReject() {
+    if (!(await confirm(`ปฏิเสธการเบิกเงินค่าตู้ #${cntId}?\n(จะเปลี่ยนสถานะเป็น "ปฏิเสธ" — ไม่สามารถ undo ผ่านหน้านี้)`))) return;
     start(async () => {
       const res = await adminRejectCntHs(cntId);
       if (!res.ok) {
-        alert(`Reject failed: ${res.error}`);
+        await alert(`Reject failed: ${res.error}`);
         return;
       }
       router.refresh();

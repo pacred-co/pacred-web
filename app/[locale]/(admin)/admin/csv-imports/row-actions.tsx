@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
+import { confirm } from "@/components/ui/confirm";
 import { Button } from "@/components/ui/button";
 import { deleteCsvImport } from "@/actions/admin/csv-imports";
 
@@ -11,8 +12,8 @@ export function CsvImportRowActions({ id, status }: { id: string; status: string
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
 
-  function onDelete() {
-    if (!confirm("ลบไฟล์นี้ + รายการนี้ใช่ไหม?")) return;
+  async function onDelete() {
+    if (!(await confirm("ลบไฟล์นี้ + รายการนี้ใช่ไหม?"))) return;
     setErr(null);
     startTransition(async () => {
       const res = await deleteCsvImport({ id });

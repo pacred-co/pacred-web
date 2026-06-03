@@ -27,6 +27,7 @@ import { useRouter } from "next/navigation";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { adminReportCntAddCheck, adminReportCntBillToCustomer } from "@/actions/admin/report-cnt-detail";
 import { Link } from "@/i18n/navigation";
+import { confirm } from "@/components/ui/confirm";
 import { ForwarderCostEditButton } from "@/components/admin/forwarder-cost-edit-button";
 import {
   fstatusBadge,
@@ -650,8 +651,8 @@ function BillToCustomerButton({ fID }: { fID: number }) {
   const [done, setDone] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  function bill() {
-    if (!window.confirm(`แจ้งหนี้ลูกค้า (ย้ายไปสถานะรอชำระเงิน) สำหรับรายการ #${fID}?`)) return;
+  async function bill() {
+    if (!(await confirm(`แจ้งหนี้ลูกค้า (ย้ายไปสถานะรอชำระเงิน) สำหรับรายการ #${fID}?`))) return;
     setMsg(null);
     start(async () => {
       const res = await adminReportCntBillToCustomer({ fID });

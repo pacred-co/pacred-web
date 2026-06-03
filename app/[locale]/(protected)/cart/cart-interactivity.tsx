@@ -21,6 +21,7 @@ import {
   validatePromoCode,
   submitCartOrder,
 } from "@/actions/cart";
+import { confirm, alert } from "@/components/ui/confirm";
 
 /**
  * Client-side interactivity for /cart — Tailwind-rebuilt (ปอน 2026-05-26).
@@ -310,15 +311,15 @@ export function CartInteractivity({
   // ── deleteItem.php wire — remove a row from tb_cart. ──
   const router = useRouter();
   const [busyDeleteId, setBusyDeleteId] = useState<number | null>(null);
-  function handleDelete(id: number) {
+  async function handleDelete(id: number) {
     if (busyDeleteId !== null) return;
-    if (!window.confirm("ลบรายการนี้ออกจากตะกร้า?")) return;
+    if (!(await confirm("ลบรายการนี้ออกจากตะกร้า?"))) return;
     setBusyDeleteId(id);
     startTransition(async () => {
       const res = await deleteCartItem({ id });
       setBusyDeleteId(null);
       if (!res.ok) {
-        window.alert("ลบไม่สำเร็จ: " + res.error);
+        await alert("ลบไม่สำเร็จ: " + res.error);
         return;
       }
       const ns = new Set(selectedIds);
@@ -341,11 +342,11 @@ export function CartInteractivity({
 
   // ── addOrder wire — "สั่งซื้อสินค้า" submit. ──
   const [submitting, setSubmitting] = useState(false);
-  function handleSubmitOrder(e: React.MouseEvent<HTMLButtonElement>) {
+  async function handleSubmitOrder(e: React.MouseEvent<HTMLButtonElement>) {
     if (selectedIds.size === 0 || submitting) return;
     const form = e.currentTarget.form;
     if (!form) {
-      window.alert("ไม่พบฟอร์ม กรุณารีเฟรชหน้าใหม่");
+      await alert("ไม่พบฟอร์ม กรุณารีเฟรชหน้าใหม่");
       return;
     }
     const fd = new FormData(form);
@@ -373,32 +374,32 @@ export function CartInteractivity({
       const docName = taxDocPref === "customs" ? "ใบขนสินค้า" : "ใบกำกับภาษี";
       const t = String(taxDocTaxId ?? "").trim();
       if (!/^\d{13}$/.test(t)) {
-        window.alert("กรุณากรอกเลขผู้เสียภาษี 13 หลักให้ครบ");
+        await alert("กรุณากรอกเลขผู้เสียภาษี 13 หลักให้ครบ");
         return;
       }
       if (!String(taxDocBillingName ?? "").trim()) {
-        window.alert(`กรุณากรอกชื่อบริษัทสำหรับ${docName}`);
+        await alert(`กรุณากรอกชื่อบริษัทสำหรับ${docName}`);
         return;
       }
       if (!String(taxDocAddress ?? "").trim()) {
-        window.alert(`กรุณากรอกที่อยู่สำหรับ${docName}`);
+        await alert(`กรุณากรอกที่อยู่สำหรับ${docName}`);
         return;
       }
     }
 
     if (!addressID) {
-      window.alert("กรุณาเลือกที่อยู่จัดส่ง");
+      await alert("กรุณาเลือกที่อยู่จัดส่ง");
       return;
     }
     if (!hTransportType) {
-      window.alert("กรุณาเลือกรูปแบบการขนส่งจีน-ไทย");
+      await alert("กรุณาเลือกรูปแบบการขนส่งจีน-ไทย");
       return;
     }
     if (!crate) {
-      window.alert("กรุณาเลือกการตีลังไม้");
+      await alert("กรุณาเลือกการตีลังไม้");
       return;
     }
-    if (!window.confirm(`ยืนยันส่งออเดอร์ ${selectedIds.size} รายการ?`)) return;
+    if (!(await confirm(`ยืนยันส่งออเดอร์ ${selectedIds.size} รายการ?`))) return;
     setSubmitting(true);
     startTransition(async () => {
       const res = await submitCartOrder({
@@ -418,11 +419,11 @@ export function CartInteractivity({
       });
       setSubmitting(false);
       if (!res.ok) {
-        window.alert("ส่งออเดอร์ไม่สำเร็จ: " + res.error);
+        await alert("ส่งออเดอร์ไม่สำเร็จ: " + res.error);
         return;
       }
       if (res.data?.hNo) {
-        window.alert(
+        await alert(
           `ส่งออเดอร์เรียบร้อย เลขที่ ${res.data.hNo}\nกดตกลงเพื่อไปหน้ารายละเอียด`,
         );
         router.push(`/service-order/${res.data.hNo}`);

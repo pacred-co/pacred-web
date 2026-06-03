@@ -5,6 +5,7 @@ import { useRouter } from "@/i18n/navigation";
 import {
   Plus, X, Save, Loader2, Trash2, Pencil, Eye, EyeOff,
 } from "lucide-react";
+import { confirm, alert } from "@/components/ui/confirm";
 import { Button } from "@/components/ui/button";
 import {
   adminUpsertPolicy, adminTogglePublishPolicy, adminDeletePolicy,
@@ -171,16 +172,16 @@ export function PolicyRowActions({
     startTransition(async () => {
       const res = await adminTogglePublishPolicy({ id, is_published: !isPublished });
       if (res.ok) router.refresh();
-      else alert(res.error);
+      else await alert(res.error);
     });
   }
 
-  function remove() {
-    if (!confirm("ลบนโยบายนี้ออกจากระบบ? (จะลบ acknowledgments ทั้งหมดด้วย)")) return;
+  async function remove() {
+    if (!(await confirm("ลบนโยบายนี้ออกจากระบบ? (จะลบ acknowledgments ทั้งหมดด้วย)"))) return;
     startTransition(async () => {
       const res = await adminDeletePolicy({ id });
       if (res.ok) router.refresh();
-      else alert(res.error);
+      else await alert(res.error);
     });
   }
 

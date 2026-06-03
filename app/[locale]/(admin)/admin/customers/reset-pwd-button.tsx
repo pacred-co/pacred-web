@@ -19,6 +19,7 @@
 
 import { useState, useTransition, useEffect } from "react";
 import { Loader2, KeyRound, Copy, Check, X } from "lucide-react";
+import { confirm } from "@/components/ui/confirm";
 import { adminResetCustomerPassword } from "@/actions/admin/customers-reset-pwd";
 
 type Props = {
@@ -43,9 +44,9 @@ export function ResetPwdButton({ userid }: Props) {
     return () => clearTimeout(t);
   }, [revealed]);
 
-  function handleClick() {
+  async function handleClick() {
     setErr(null);
-    if (!window.confirm(`รีเซ็ตรหัสผ่านของลูกค้า ${userid}?\nจะสุ่มรหัสใหม่ 6 ตัว — คุณจะเห็นเพียงครั้งเดียว`)) {
+    if (!(await confirm(`รีเซ็ตรหัสผ่านของลูกค้า ${userid}?\nจะสุ่มรหัสใหม่ 6 ตัว — คุณจะเห็นเพียงครั้งเดียว`))) {
       return;
     }
     start(async () => {

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Share2, Check, Link2 } from "lucide-react";
+import { prompt } from "@/components/ui/confirm";
 
 export function ShareButton({
   title,
@@ -37,7 +38,7 @@ export function ShareButton({
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
       // last-resort: prompt
-      window.prompt("คัดลอกลิงก์นี้", url);
+      await prompt("คัดลอกลิงก์นี้", url);
     }
   };
 

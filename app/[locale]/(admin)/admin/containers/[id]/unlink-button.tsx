@@ -3,17 +3,18 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { adminUnlinkForwarder } from "@/actions/admin/containers";
+import { confirm, alert } from "@/components/ui/confirm";
 
 export function UnlinkButton({ id, fNo }: { id: string; fNo: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  function unlink() {
-    if (!confirm(`ปลดผูก ${fNo} ออกจากตู้นี้?`)) return;
+  async function unlink() {
+    if (!(await confirm(`ปลดผูก ${fNo} ออกจากตู้นี้?`))) return;
     startTransition(async () => {
       const res = await adminUnlinkForwarder({ forwarder_id: id });
       if (res.ok) router.refresh();
-      else alert(res.error);
+      else await alert(res.error);
     });
   }
 

@@ -36,6 +36,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "@/i18n/navigation";
 import { cancelOwnForwarder } from "@/actions/forwarder";
+import { confirm } from "@/components/ui/confirm";
 
 // ────────────────────────────────────────────────────────────────────
 //  Status badge — legacy `statusForwarderAll2($fStatus,$fStatusDriver)`
@@ -307,9 +308,9 @@ function CancelForwarderButton({ id }: { id: number }) {
   const [pending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  function handleCancel() {
+  async function handleCancel() {
     // Legacy used a plain confirm() gate before the AJAX delete; match it.
-    if (!window.confirm(`ยืนยันยกเลิกรายการนำเข้า #${id} ?\nรายการที่ยกเลิกแล้วจะถูกลบถาวร`)) {
+    if (!(await confirm(`ยืนยันยกเลิกรายการนำเข้า #${id} ?\nรายการที่ยกเลิกแล้วจะถูกลบถาวร`))) {
       return;
     }
     setErrorMsg(null);

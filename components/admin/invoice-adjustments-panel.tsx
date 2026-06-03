@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { prompt } from "@/components/ui/confirm";
 import {
   addInvoiceAdjustment,
   reverseInvoiceAdjustment,
@@ -88,9 +89,9 @@ export function InvoiceAdjustmentsPanel({ targetType, targetId, existing }: Prop
     });
   }
 
-  function onReverse(id: string, amount: number) {
+  async function onReverse(id: string, amount: number) {
     setErr(null); setMsg(null);
-    const reason = window.prompt(
+    const reason = await prompt(
       `เหตุผลที่ยกเลิกรายการปรับ ${amount > 0 ? "+" : "−"}฿${Math.abs(amount).toLocaleString()} (≥3 ตัว):`,
     );
     if (!reason || reason.trim().length < 3) return;

@@ -11,6 +11,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
+import { confirm } from "@/components/ui/confirm";
 import { deleteDriverBatch } from "@/actions/admin/driver-batches";
 
 export function BatchActions({ batchId }: { batchId: number }) {
@@ -18,8 +19,8 @@ export function BatchActions({ batchId }: { batchId: number }) {
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
 
-  function handleDelete() {
-    const ok = window.confirm(`ลบรอบ #${batchId} นี้? — ใช้ได้เฉพาะรอบที่ยังไม่มีรายการส่งสำเร็จ`);
+  async function handleDelete() {
+    const ok = await confirm(`ลบรอบ #${batchId} นี้? — ใช้ได้เฉพาะรอบที่ยังไม่มีรายการส่งสำเร็จ`);
     if (!ok) return;
     setErr(null);
     startTransition(async () => {

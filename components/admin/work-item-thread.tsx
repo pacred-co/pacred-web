@@ -51,6 +51,7 @@ import {
   X,
 } from "lucide-react";
 
+import { confirm } from "@/components/ui/confirm";
 import { relativeTimeTh } from "@/lib/utils/relative-time";
 import {
   WAITING_REASONS,
@@ -397,9 +398,9 @@ export function WorkItemThread({ workItemId, className }: WorkItemThreadProps) {
     });
   }
 
-  function fireDelete(messageId: string) {
+  async function fireDelete(messageId: string) {
     // i18n-key: chat.confirm.delete
-    if (!confirm("ลบข้อความนี้?")) return;
+    if (!(await confirm("ลบข้อความนี้?"))) return;
     setActionError(null);
     startTransition(async () => {
       const res = await softDeleteMessage(messageId);

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { confirm } from "@/components/ui/confirm";
 import { payServiceOrderFromWallet } from "@/actions/service-order";
 
 /**
@@ -46,8 +47,8 @@ export function PayFromWalletButton({ hNo, totalThb, walletBalance }: Props) {
     );
   }
 
-  function onPay() {
-    if (!confirm(t("payFromWalletConfirm", { total: totalFmt }))) return;
+  async function onPay() {
+    if (!(await confirm(t("payFromWalletConfirm", { total: totalFmt })))) return;
     setMsg(null);
     setError(null);
     startTransition(async () => {

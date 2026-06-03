@@ -27,6 +27,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter, Link } from "@/i18n/navigation";
 import { adminDeleteScan } from "@/actions/admin/warehouse-history";
 import { WarehouseHistoryRelinkModal } from "./warehouse-history-relink-modal";
+import { confirm, alert } from "@/components/ui/confirm";
 
 // ────────────────────────────────────────────────────────────
 // Cross-island event channel — per-row buttons → singleton modal host.
@@ -109,15 +110,15 @@ export function WarehouseHistoryDeleteButton({
   const [pending, start] = useTransition();
   const router = useRouter();
 
-  function handleDelete() {
-    const ok = window.confirm(
+  async function handleDelete() {
+    const ok = await confirm(
       `คุณแน่ใจเหรอ?\nต้องลบรายการเลขที่ #${scanId} นี้ออกจากรายการสินค้าเข้าโกดัง`,
     );
     if (!ok) return;
     start(async () => {
       const res = await adminDeleteScan({ scanId });
       if (!res.ok) {
-        window.alert(`ผิดพลาด: ${res.error ?? "กรุณาลองใหม่ภายหลัง"}`);
+        await alert(`ผิดพลาด: ${res.error ?? "กรุณาลองใหม่ภายหลัง"}`);
         return;
       }
       router.refresh();
