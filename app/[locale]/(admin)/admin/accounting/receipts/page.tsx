@@ -178,7 +178,7 @@ export default async function ReceiptsListPage({
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="mx-auto max-w-7xl px-4 py-6 space-y-5">
+      <div className=" px-4 py-6 space-y-5">
         {/* ── Breadcrumb ── */}
         <nav className="text-xs text-slate-500">
           <Link href="/admin" className="hover:text-indigo-700">หน้าแรก</Link>

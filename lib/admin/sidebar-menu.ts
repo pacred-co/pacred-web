@@ -999,7 +999,12 @@ const menuWarehouse: MenuSection[] = [
           { labelKey: "forwarder.listPrepare", href: "/admin/forwarders?q=6",               icon: "Truck", badge: "forwarderDelivery" },
           // Phase 2 — driver-runs sales-only side not yet live.
           { labelKey: "forwarder.assignDriver", href: "/admin/drivers",                     icon: "Truck", badge: "driverItems", phase: 2 },
-          { labelKey: "forwarder.combineBill", href: "/admin/forwarders/combine-bill",      icon: "Printer" },
+          // 2026-06-03 (ภูม flag · R-2 close-out): รวมบิลสินค้า + ใบวางบิล ย้ายไป
+          // "ระบบบัญชี → รายรับ" topmenubar (CARGO_MENUBAR · accounting-menubar.ts).
+          // ตาม PEAK pattern · ภูม flag screenshot 2026-06-03. The leaves are
+          // surfaced via /admin/accounting topmenu + quick-access cards now.
+          // The /admin/forwarders/combine-bill route itself stays live (just
+          // not in this sidebar block) — accessed via accounting hub instead.
           // 2026-06-02 (poom-wave §6 · ภูม) — TH-transport batch reader (296
           // legacy batches · 643 forwarders) · MVP read-only · brief §6.
           { labelKey: "forwarder.tranTh",      href: "/admin/forwarders/tran-th",          icon: "Truck" },

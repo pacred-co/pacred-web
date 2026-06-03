@@ -25,7 +25,9 @@ export type NotifyReferenceType =
   // BK-1 (0079) — links a notification back to the bookings row.
   | "booking"
   // IC-1 (0086) — links a work_chat notification to the work_items row.
-  | "work_item";
+  | "work_item"
+  // R-2 billing-run (0138) — link a notification back to a tb_forwarder_invoice row.
+  | "forwarder_invoice";
 
 export type NotifyPayload = {
   category:  NotifyCategory;

@@ -9,7 +9,7 @@
  *   - Row tint per fstatus (canonical FSTATUS_CFG · solid Tailwind weights)
  *   - Status chip (canonical fstatusBadge · matches legacy labels + palette)
  *   - Orange summary band (avg วันที่รอเข้าโกดัง + sum trackCount/CBM/KG/cost/price/profit)
- *   - Floating action button "💸 ทำรายการเบิกเงินค่าตู้"
+ *   - Floating action button "💸 ทำรายการจ่ายเงินตู้"
  *   - Inline `<CntPaymentModal>` (instead of navigating to /pay)
  *
  * 2026-05-28 ROW-COLOR-RESTORE (Agent P1): the previous build used a local
@@ -406,16 +406,26 @@ export function CntListTable({
         </table>
       </div>
 
-      {/* Floating action bar — only for money tier (both tabs) */}
+      {/* Floating action bar — only for money tier (both tabs)
+          2026-06-03 ภูม flag (พี่ป๊อป ask): PCS legacy expected accounting to
+          วางบิลลูกค้า directly from this page (เข้าโกดังไทยแล้ว = ตู้พร้อม
+          เก็บเงินลูกค้าได้). Added 3 customer-billing entry buttons that
+          PCS legacy didn't have inline — Pacred has the destination flows
+          ready but they weren't linked from here:
+            📄 ทำใบวางบิล → /admin/billing-run/add (R-2 formal invoice)
+            📞 แจ้งชำระเงินลูกค้า → /admin/forwarder-check?page=succeed (bulk SMS/LINE)
+            🧾 รวมบิลพิมพ์ → /admin/forwarders/combine-bill/add
+          These show only on the "เข้าโกดังไทยแล้ว" tab (isWaiting=false). */}
       {canSelect && (
-        <div className="pcs-safe-area-bottom fixed bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 z-50">
+        <div className="pcs-safe-area-bottom fixed bottom-4 left-1/2 -translate-x-1/2 flex flex-wrap items-center justify-center gap-2 z-50 max-w-[calc(100vw-32px)]">
           <button
             type="button"
             onClick={() => setModalOpen(true)}
             disabled={selected.size === 0}
             className="rounded-full bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-4 py-2 text-xs font-semibold shadow-lg inline-flex items-center gap-2"
+            title="บันทึกค่าใช้จ่ายตู้ที่บริษัทจ่ายเอง (ภาษี · ค่ามัดจำ · ค่าขนส่ง partner) — ลงใน tb_cnt"
           >
-            💸 ทำรายการเบิกเงินค่าตู้
+            💸 ทำรายการจ่ายเงินตู้
             {selected.size > 0 && (
               <span className="inline-flex items-center justify-center bg-white text-primary-600 text-[10px] font-bold rounded-full h-5 min-w-[20px] px-1.5">
                 {selected.size}
@@ -426,8 +436,36 @@ export function CntListTable({
             href="/admin/cnt-hs"
             className="rounded-full bg-white hover:bg-surface-alt border border-border text-foreground px-4 py-2 text-xs font-medium shadow-lg"
           >
-            📜 ประวัติรายการเบิกเงินค่าตู้
+            📜 ประวัติจ่ายเงินตู้
           </Link>
+
+          {/* Customer-billing entries (Pacred · only on เข้าโกดังไทยแล้ว tab) */}
+          {!isWaiting && (
+            <>
+              <span className="mx-1 hidden sm:inline-block w-px h-6 bg-border" aria-hidden />
+              <Link
+                href="/admin/billing-run/add"
+                className="rounded-full bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 text-xs font-semibold shadow-lg inline-flex items-center gap-1.5"
+                title="สร้างใบวางบิล (R-2 · formal invoice) — เก็บเงินลูกค้าเป็นรายตู้/รายลูกค้า"
+              >
+                📄 ทำใบวางบิล
+              </Link>
+              <Link
+                href="/admin/forwarder-check?page=succeed"
+                className="rounded-full bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 text-xs font-semibold shadow-lg inline-flex items-center gap-1.5"
+                title="แจ้งลูกค้าให้ชำระเงิน (bulk SMS+LINE · callPriceUser)"
+              >
+                📞 แจ้งชำระเงินลูกค้า
+              </Link>
+              <Link
+                href="/admin/forwarders/combine-bill/add"
+                className="rounded-full bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 text-xs font-semibold shadow-lg inline-flex items-center gap-1.5"
+                title="รวมหลาย forwarder ของลูกค้าคนเดียวเป็นบิลเดียวพิมพ์"
+              >
+                🧾 รวมบิลพิมพ์
+              </Link>
+            </>
+          )}
         </div>
       )}
 

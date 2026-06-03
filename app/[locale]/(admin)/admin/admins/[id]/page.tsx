@@ -352,7 +352,7 @@ export default async function AdminProfilePage({
   const probationRemaining = isProbation ? diffDateNow(x?.contract_end_date) : "";
 
   return (
-    <main className="p-4 lg:p-8 max-w-5xl mx-auto space-y-5">
+    <main className="p-4 lg:p-8 space-y-5">
       {/* Breadcrumb + back link */}
       <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
         <nav className="flex items-center gap-1.5 text-muted">

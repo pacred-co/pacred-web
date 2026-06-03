@@ -107,7 +107,7 @@ export default async function AdminYuanPaymentNewPage({
   const defaultRate = Number(settingsRaw?.rpdefault ?? 5);
 
   return (
-    <main className="p-6 lg:p-8 max-w-5xl mx-auto space-y-5">
+    <main className="p-6 lg:p-8 space-y-5">
       <title>เพิ่มรายการฝากโอนหยวน | PR Admin</title>
 
       {/* Breadcrumb */}

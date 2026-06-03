@@ -7,7 +7,7 @@ import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { CntHsTable, type CntHsRow } from "./cnt-hs-table";
 
 /**
- * Admin > "รายการเบิกเงินค่าตู้" — container-payment (ตู้-ค่าจ่าย) ledger.
+ * Admin > "รายการจ่ายเงินตู้" — container-payment (ตู้-ค่าจ่าย) ledger.
  *
  * Wave 24 ROW-COLOR-RESTORE (2026-05-28 ดึก · Agent P3): restored row tint
  * per cntStatus + sortable column headers + orange summary band that the
@@ -221,7 +221,7 @@ export default async function CntHsPage({
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
-            <h1 className="mt-1 text-2xl font-bold">รายการเบิกเงินค่าตู้</h1>
+            <h1 className="mt-1 text-2xl font-bold">รายการจ่ายเงินตู้</h1>
             <p className="mt-1 text-sm text-muted">
               จัดการการชำระเงินค่าตู้คอนเทนเนอร์ (tb_cnt) · {countAll.toLocaleString()} รายการทั้งหมด
               {sp.q && (
@@ -241,7 +241,7 @@ export default async function CntHsPage({
           <nav aria-label="breadcrumb" className="text-xs text-muted flex gap-1.5 items-center">
             <Link href="/admin" className="hover:text-primary-600">หน้าแรก</Link>
             <span>/</span>
-            <span className="text-foreground">รายการเบิกเงินค่าตู้</span>
+            <span className="text-foreground">รายการจ่ายเงินตู้</span>
           </nav>
         </div>
 
@@ -295,7 +295,7 @@ export default async function CntHsPage({
         {/* Table card */}
         <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
           {tableRows.length === 0 ? (
-            <p className="p-12 text-center text-sm text-muted">ไม่พบรายการเบิกเงินค่าตู้</p>
+            <p className="p-12 text-center text-sm text-muted">ไม่พบรายการจ่ายเงินตู้</p>
           ) : (
             <>
               <CntHsTable rows={tableRows} />

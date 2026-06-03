@@ -36,23 +36,25 @@ export default async function CombineBillAddPage() {
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      {/* Breadcrumb */}
+      {/* Breadcrumb — 2026-06-03 ภูม flag · moved to ระบบบัญชี → รายรับ */}
       <nav aria-label="breadcrumb" className="text-xs text-muted flex gap-1.5 items-center flex-wrap">
         <Link href="/admin" className="hover:text-primary-600">หน้าแรก</Link>
         <span>/</span>
-        <Link href="/admin/forwarders" className="hover:text-primary-600">ฝากนำเข้า</Link>
+        <Link href="/admin/accounting" className="hover:text-primary-600">ระบบบัญชี</Link>
+        <span>/</span>
+        <span className="text-muted">รายรับ</span>
         <span>/</span>
         <Link href="/admin/forwarders/combine-bill" className="hover:text-primary-600">
-          ประวัติรายการรวมบิล
+          รวมบิลสินค้า
         </Link>
         <span>/</span>
-        <span className="text-foreground">เพิ่มรายการ</span>
+        <span className="text-foreground">สร้างใหม่</span>
       </nav>
 
       {/* Header */}
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ฝากนำเข้า</p>
-        <h1 className="mt-1 text-2xl font-bold">เพิ่มรายการรวมบิล</h1>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ระบบบัญชี · รายรับ</p>
+        <h1 className="mt-1 text-2xl font-bold">สร้างรวมบิลสินค้า (ใบส่งสินค้า)</h1>
         <p className="mt-1 text-sm text-muted">
           กรอกเลขที่ออเดอร์นำเข้าของลูกค้าคนเดียวกัน (คอมมาคั่น) เพื่อรวมเป็นบิลค่าส่งเดียว
         </p>

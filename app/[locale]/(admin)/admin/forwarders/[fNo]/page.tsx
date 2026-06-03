@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
+import { ForwarderItemsTable } from "./forwarder-items-table";
 import {
   User as UserIcon,
   Package,
@@ -95,7 +96,7 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
   }
 
   return (
-    <main className="p-4 lg:p-6 max-w-6xl mx-auto space-y-4">
+    <main className="p-4 lg:p-6 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ฝากนำเข้า (rebuilt fallback)</p>
@@ -278,29 +279,9 @@ async function tryRenderTbForwarder(
     userPicture: string | null; adminIDSale: string | null;
   } | null;
 
-  // Items table — full breakdown of the forwarder's product items.
-  const { data: itemRows, error: itemRowsErr } = await admin
-    .from("tb_forwarder_item")
-    .select(
-      "id, productname, producttracking, productqty, productwidth, productlength, " +
-      "productheight, productweightperitem, productweightall, productcbmperitem, " +
-      "productcbmall, chinawoodencratefee, chinawoodencratefeetype",
-    )
-    .eq("fid", r.id)
-    .order("id", { ascending: true })
-    .limit(200);
-  if (itemRowsErr) {
-    console.error(`[tb_forwarder_item list] failed`, { code: itemRowsErr.code, message: itemRowsErr.message });
-  }
-  type ItemShape = {
-    id: number; productname: string; producttracking: string;
-    productqty: number; productwidth: number | string; productlength: number | string;
-    productheight: number | string; productweightperitem: number | string;
-    productweightall: number | string; productcbmperitem: number | string;
-    productcbmall: number | string; chinawoodencratefee: number | string;
-    chinawoodencratefeetype: string;
-  };
-  const items = (itemRows ?? []) as unknown as ItemShape[];
+  // Items table loading is now owned by <ForwarderItemsTable> further down —
+  // it handles tb_order (shop-spawn) + tb_forwarder_item (admin) + empty-state.
+  // 2026-06-03: removed the local item query that fed the old plain-text table.
 
   // Resolve cover image — shop-spawned rows may have alicdn URL, legacy path, or empty.
   const coverHref = r.fcover && r.fcover.trim() !== ""
@@ -348,7 +329,7 @@ async function tryRenderTbForwarder(
   const slugForLink = r.fidorco ?? String(r.id);
 
   return (
-    <main className="p-4 lg:p-6 max-w-6xl mx-auto space-y-4">
+    <main className="p-4 lg:p-6 space-y-4">
       {/* ── 1. HEADER ── id + status badge + source tag + "✏️ แก้ไข" CTA */}
       <div className="space-y-3">
         <nav className="text-xs text-muted flex gap-1.5 items-center flex-wrap">
@@ -478,6 +459,27 @@ async function tryRenderTbForwarder(
             </Link>
           </section>
 
+          {/* Address — 2026-06-03 ภูม flag: moved from page-bottom to right
+              after Customer (logical pairing: who ships to which address).
+              Was inside the LEFT col below the items table, ~700px scroll-down. */}
+          <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 text-sm">
+            <h3 className="text-sm font-semibold text-muted mb-2">ที่อยู่จัดส่ง</h3>
+            <p className="font-medium">
+              {r.faddressname ?? ""} {r.faddresslastname ?? ""}
+            </p>
+            <p>
+              {r.faddressno ?? ""} {r.faddresssubdistrict ? `ต.${r.faddresssubdistrict}` : ""} {r.faddressdistrict ? `อ.${r.faddressdistrict}` : ""} {r.faddressprovince ? `จ.${r.faddressprovince}` : ""} {r.faddresszipcode ?? ""}
+            </p>
+            {(r.faddresstel || r.faddresstel2) && (
+              <p className="text-xs text-muted mt-1">
+                📞 {r.faddresstel ?? "—"}{r.faddresstel2 ? ` · ${r.faddresstel2}` : ""}
+              </p>
+            )}
+            {r.faddressnote && (
+              <p className="text-xs text-muted mt-1">📝 {r.faddressnote}</p>
+            )}
+          </section>
+
           {/* Routing */}
           <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 text-sm">
             <h3 className="text-sm font-semibold text-muted mb-3">การจัดส่ง</h3>
@@ -552,59 +554,25 @@ async function tryRenderTbForwarder(
             </div>
           </section>
 
-          {/* Items table */}
-          {items.length > 0 && (
-            <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4">
-              <h3 className="text-sm font-semibold text-muted mb-3">
-                รายการสินค้า ({items.length})
-              </h3>
-              <div className="overflow-x-auto scrollbar-x-visible">
-                <table className="w-full text-xs min-w-[640px]">
-                  <thead className="text-muted">
-                    <tr className="border-b border-border">
-                      <th className="text-left py-2 px-2">ชื่อสินค้า</th>
-                      <th className="text-left py-2 px-2">Tracking</th>
-                      <th className="text-right py-2 px-2">จำนวน</th>
-                      <th className="text-right py-2 px-2">น้ำหนักรวม</th>
-                      <th className="text-right py-2 px-2">CBM รวม</th>
-                      <th className="text-right py-2 px-2">ตีลังไม้</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((it) => (
-                      <tr key={it.id} className="border-b border-border/50">
-                        <td className="py-2 px-2">{it.productname}</td>
-                        <td className="py-2 px-2 font-mono text-[11px]">{it.producttracking || "—"}</td>
-                        <td className="py-2 px-2 text-right font-mono">{it.productqty}</td>
-                        <td className="py-2 px-2 text-right font-mono">{Number(it.productweightall).toFixed(2)} กก.</td>
-                        <td className="py-2 px-2 text-right font-mono">{Number(it.productcbmall).toFixed(3)}</td>
-                        <td className="py-2 px-2 text-right font-mono">{Number(it.chinawoodencratefee) > 0 ? `฿${Number(it.chinawoodencratefee).toFixed(2)}` : "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          )}
-
-          {/* Address */}
-          <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 text-sm">
-            <h3 className="text-sm font-semibold text-muted mb-2">ที่อยู่จัดส่ง</h3>
-            <p className="font-medium">
-              {r.faddressname ?? ""} {r.faddresslastname ?? ""}
-            </p>
-            <p>
-              {r.faddressno ?? ""} {r.faddresssubdistrict ? `ต.${r.faddresssubdistrict}` : ""} {r.faddressdistrict ? `อ.${r.faddressdistrict}` : ""} {r.faddressprovince ? `จ.${r.faddressprovince}` : ""} {r.faddresszipcode ?? ""}
-            </p>
-            {(r.faddresstel || r.faddresstel2) && (
-              <p className="text-xs text-muted mt-1">
-                📞 {r.faddresstel ?? "—"}{r.faddresstel2 ? ` · ${r.faddresstel2}` : ""}
-              </p>
-            )}
-            {r.faddressnote && (
-              <p className="text-xs text-muted mt-1">📝 {r.faddressnote}</p>
-            )}
-          </section>
+          {/* Items table — PCS-style (2026-06-03 ภูม flag · forwarder-items-table.tsx) ──
+              When the forwarder is shop-spawned (reforder set), joins to tb_order
+              to render product cards grouped by Chinese vendor with thumbnails +
+              per-item ¥ price + qty + variant (color/size) + tracking +
+              tfoot totals row.
+              When fdetail is set or only box dimensions exist, renders an
+              empty-state with cover + dimensions panel. */}
+          <ForwarderItemsTable
+            forwarderId={r.id}
+            forwarderNo={r.fidorco ?? String(r.id)}
+            reforder={r.reforder}
+            fdetail={r.fdetail}
+            fcover={r.fcover}
+            fwidth={r.fwidth}
+            flength={r.flength}
+            fheight={r.fheight}
+            famount={r.famount}
+            mode="view"
+          />
 
           {/* Note */}
           {r.fnote && r.fnote.trim() !== "" && (

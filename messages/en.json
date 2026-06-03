@@ -2724,6 +2724,7 @@
       "assignDriver": "Assign driver jobs",
       "driverWork": "Driver work-list (mobile)",
       "combineBill": "Combine bills",
+      "billingRun": "Billing-run (credit-term)",
       "tranTh": "TH-transport batches"
     },
     "forwarderImport": {

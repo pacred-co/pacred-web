@@ -791,7 +791,10 @@ function UrlPasteMode({
                       ราคารวม / dead-submit-button with the client island.
                       Island manages qty (default minQty), color/size/details,
                       total recompute + submit to addCartItem. Skeleton state
-                      when TAMIT detail null (priceCny=0 OR blank title). */}
+                      when TAMIT detail null (priceCny=0 OR blank title) →
+                      island internally falls back to a /cart manual-link
+                      message instead of a dead CTA (replaces dave's outer
+                      ternary — same UX, props inside the island). */}
                   <UrlPasteAddToCart
                     url={urlcut}
                     provider={cartProvider}
