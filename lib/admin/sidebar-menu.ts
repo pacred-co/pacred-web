@@ -421,7 +421,15 @@ const blockSettingsCargo: MenuItem = {
       children: [
         { labelKey: "settingsCargo.crons",        href: "/admin/system/crons",         icon: "Clock" },
         { labelKey: "settingsCargo.systemNotifs", href: "/admin/system/notifications", icon: "BellRing" },
+        // 2026-06-04 (reachability audit §0d) — notification DISPATCH monitor
+        // (failed/pending pushes + one-click retry · companion to systemNotifs
+        // above). Was orphan (no inbound link · URL-only). Page gates super/ops.
+        { labelKey: "settingsCargo.notifyDispatch", href: "/admin/notifications/dispatch", icon: "Send" },
         { labelKey: "settingsCargo.pcsSync",      href: "/admin/system/pcs-sync",      icon: "Database" },
+        // 2026-06-04 (reachability audit §0d) — PCS→Pacred customer migration
+        // (one-shot launch-week backfill tool · super-only). Was orphan
+        // (no inbound link · URL-only).
+        { labelKey: "settingsCargo.pcsCustomerMigration", href: "/admin/migration/pcs-customers", icon: "DatabaseZap" },
         { labelKey: "settingsCargo.csvImports",   href: "/admin/csv-imports",          icon: "Upload" },
       ],
     },
@@ -429,8 +437,18 @@ const blockSettingsCargo: MenuItem = {
       labelKey: "settingsCargo.tools",
       icon: "Wrench",
       children: [
+        // 2026-06-04 (reachability audit §0d) — global admin search (U4-1 ·
+        // member_code/f_no/h_no/job_no/invoice_no across all entities). Was
+        // orphan (no inbound link · URL-only). Page gates super/ops/accounting/
+        // sales_admin — placed under super's Settings→tools toolbox.
+        { labelKey: "settingsCargo.globalSearch", href: "/admin/search",                icon: "Search" },
         { labelKey: "settingsCargo.orgEmail",    href: "/admin/organization-email",    icon: "MessageCircle" },
         { labelKey: "settingsCargo.orgChannels", href: "/admin/organization-channels", icon: "Smartphone" },
+        // 2026-06-04 (reachability audit §0d) — org_contacts CRUD (V-G5 · feeds
+        // the public /contact page). Was orphan (no inbound link · URL-only ·
+        // only referenced in code comments). Same org-config family as orgEmail
+        // / orgChannels above. Page gates super/accounting/sales_admin.
+        { labelKey: "settingsCargo.orgContacts", href: "/admin/settings/contacts",     icon: "Contact" },
         { labelKey: "settingsCargo.adminUsers",  href: "/admin/admins",                icon: "UserCog" },
         { labelKey: "settingsCargo.partners",    href: "/admin/partners",              icon: "Handshake" },
       ],

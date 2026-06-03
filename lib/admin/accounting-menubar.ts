@@ -267,6 +267,12 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       // 2026-06-02 sitting-I §3.4 Phase-C: 50-ทวิ cert tracking · juristic
       // customers withhold + send cert · admin marks received / waived.
       { label: "ติดตาม 50-ทวิ (WHT certs)",      href: "/admin/accounting/wht-certs" },
+      // 2026-06-04 (reachability audit §0d): the older WHT chase queue (ADR-0015 ·
+      // withholding_tax_entries table · per-shipment/tax-invoice WHT roll-up).
+      // Was orphan (no inbound link · URL-only). Distinct from "WHT certs" above
+      // (which reads the sitting-I tb_forwarder_tax_invoice queue) — kept adjacent
+      // so accounting sees both 50-ทวิ surfaces. Page gates super/accounting.
+      { label: "คุมยอดภาษีหัก ณ ที่จ่าย (WHT chase)", href: "/admin/wht" },
       // 2026-06-02 sitting-I · CEO directive 2026-06-01: profit-cap ≤ 15k/ตู้
       // retrospective monitor (forward quote-comparison tool = next surface).
       { label: "Margin Monitor (CEO ≤ ฿15k cap)", href: "/admin/accounting/margin-monitor" },
@@ -278,6 +284,12 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       // ภูม decision in page-inventory-2026-05-21-night.md §🔴 DEAD.
       { label: "งวดบัญชี",  href: "/admin/accounting/periods" },
       { label: "กระทบยอด", href: "/admin/accounting/reconcile" },
+      // 2026-06-04 (reachability audit §0d): slip↔order payment reconciliation
+      // (V-A3 · the OTHER side of กระทบยอด — matches completed deposit wallet_tx
+      // to pending forwarders / routes to refund queue · its own docstring names
+      // /admin/accounting/reconcile as companion). Was orphan (no inbound link ·
+      // URL-only). Page gates accounting.
+      { label: "จับคู่สลิป↔ออเดอร์ (Reconciliation)", href: "/admin/payment-reconciliation" },
       // TODO — legacy L496-597: ผังบัญชี / บัญชีรายวัน / บัญชีแยกประเภท / งบทดลอง / งบฐานะ / งบกำไรขาดทุน / งบกระแสเงินสด / DBD e-Filing / สินทรัพย์.
       // Wave 23 P0 (2026-05-27): stub instead of no-op "#".
       { label: "🚧 อยู่ระหว่างพัฒนา (Wave 24+)", href: "/admin/accounting/cargo/income/ledger/coming-soon" },
