@@ -223,15 +223,20 @@ export async function listEligibleCustomers(): Promise<
       }
 
       // (b) tb_users join — camelCase per migration 0113
+      // 2026-06-03 (ภูม flag) — corporateNumber NOT on tb_users (verified via
+      // information_schema). The juristic flag = userCompany ('1' = juristic,
+      // '0' or '' = personal). The tax-ID + corp-name live on tb_corporate
+      // (separate table, joined by userid). Earlier draft assumed
+      // tb_users.corporateNumber existed → "column does not exist" 500.
       type UserRow = {
         userID: string;
         userName: string | null;
         userLastName: string | null;
-        corporateNumber: string | null;
+        userCompany: string | null;
       };
       const { data: userRows, error: userErr } = await admin
         .from("tb_users")
-        .select("userID, userName, userLastName, corporateNumber")
+        .select("userID, userName, userLastName, userCompany")
         .in("userID", userids);
       if (userErr) {
         console.error("[listEligibleCustomers tb_users] failed", {
@@ -244,11 +249,17 @@ export async function listEligibleCustomers(): Promise<
         userByID.set(u.userID, u);
       }
 
-      // (c) tb_corporate join (for juristic display name)
-      type CorpRow = { userid: string; corporatename: string | null };
+      // (c) tb_corporate join — provides corporatename + corporatenumber (tax-ID)
+      // for juristic customers. Lowercased columns (NOT renamed in migration
+      // 0113 batch 1 — only tb_users/tb_admin/tb_co got camelCase).
+      type CorpRow = {
+        userid: string;
+        corporatename: string | null;
+        corporatenumber: string | null;
+      };
       const { data: corpRows, error: corpErr } = await admin
         .from("tb_corporate")
-        .select("userid, corporatename")
+        .select("userid, corporatename, corporatenumber")
         .in("userid", userids);
       if (corpErr) {
         console.error("[listEligibleCustomers tb_corporate] failed", {
@@ -256,25 +267,32 @@ export async function listEligibleCustomers(): Promise<
         });
         // non-fatal — fall through with empty corp map
       }
-      const corpByUser = new Map<string, string>();
+      const corpByUser = new Map<string, { name: string; number: string }>();
       for (const c of ((corpRows ?? []) as CorpRow[])) {
-        if (c.corporatename) corpByUser.set(c.userid, c.corporatename);
+        corpByUser.set(c.userid, {
+          name:   (c.corporatename ?? "").trim(),
+          number: (c.corporatenumber ?? "").trim(),
+        });
       }
 
       const rows: EligibleCustomerRow[] = userids
         .map((uid) => {
           const u = userByID.get(uid);
-          const corpName = corpByUser.get(uid);
-          const isJuristic = !!u?.corporateNumber?.trim();
+          const corp = corpByUser.get(uid);
+          // Juristic flag = tb_users.userCompany === '1' (per legacy
+          // hs-forwarder-invoice/add.php pattern). Fallback to existence of
+          // tb_corporate.corporatenumber for safety (some legacy rows lost
+          // userCompany during migration).
+          const isJuristic = u?.userCompany === "1" || !!corp?.number;
           const display = isJuristic
-            ? `${uid} (${corpName ?? u?.userName ?? ""} ${u?.corporateNumber ?? ""})`.trim()
+            ? `${uid} (${corp?.name || u?.userName || ""} ${corp?.number ?? ""})`.trim()
             : `${uid} (${u?.userName ?? ""} ${u?.userLastName ?? ""})`.trim();
           const agg = aggByUser.get(uid)!;
           return {
             userid:             uid,
             display_name:       display,
             is_juristic:        isJuristic,
-            tax_id:             u?.corporateNumber?.trim() ?? "",
+            tax_id:             corp?.number ?? "",
             eligible_count:     agg.count,
             eligible_total_thb: Math.round(agg.total * 100) / 100,
           };
@@ -739,18 +757,22 @@ export async function createBillingRunInvoice(
         };
       }
 
-      // (c) Buyer info from tb_users + tb_corporate
+      // (c) Buyer info from tb_users + tb_corporate (+ tb_address for personal)
+      // 2026-06-03 (ภูม flag) — tb_users does NOT have corporateNumber OR
+      // userAddress columns. Verified columns: userID/userName/userLastName/
+      // userCompany/userAddressID/userTel/userEmail. Address text lives in
+      // tb_address (joined via userAddressID), corp info in tb_corporate.
       type UserBuyer = {
         userID: string;
         userName: string | null;
         userLastName: string | null;
-        userAddress: string | null;
+        userAddressID: string | null;
         userTel: string | null;
-        corporateNumber: string | null;
+        userCompany: string | null;
       };
       const { data: userRow, error: userErr } = await admin
         .from("tb_users")
-        .select("userID, userName, userLastName, userAddress, userTel, corporateNumber")
+        .select("userID, userName, userLastName, userAddressID, userTel, userCompany")
         .eq("userID", v.userid)
         .maybeSingle<UserBuyer>();
       if (userErr) {
@@ -763,31 +785,60 @@ export async function createBillingRunInvoice(
         return { ok: false, error: `ไม่พบลูกค้า ${v.userid}` };
       }
 
-      const isJuristic = !!userRow.corporateNumber?.trim();
+      // Pull tb_corporate first so we know if the customer is juristic by
+      // EITHER signal (userCompany='1' OR corp row exists with tax-ID).
+      // tb_corporate is the source of truth for tax-ID + corp name + address.
+      type CorpBuyer = {
+        userid: string;
+        corporatename: string | null;
+        corporatenumber: string | null;
+        corporateaddress: string | null;
+      };
+      const { data: corp, error: corpErr } = await admin
+        .from("tb_corporate")
+        .select("userid, corporatename, corporatenumber, corporateaddress")
+        .eq("userid", v.userid)
+        .maybeSingle<CorpBuyer>();
+      if (corpErr) {
+        console.error("[createBillingRunInvoice tb_corporate] failed", {
+          code: corpErr.code, message: corpErr.message,
+        });
+      }
+      const corpNumber = (corp?.corporatenumber ?? "").trim();
+      const isJuristic = userRow.userCompany === "1" || corpNumber !== "";
+
       let buyerName = `${userRow.userName ?? ""} ${userRow.userLastName ?? ""}`.trim();
-      let buyerAddress = userRow.userAddress ?? "";
-      let buyerBranch  = "";
+      let buyerAddress = "";
+      const buyerBranch  = ""; // tb_corporate has no `corporatebranch` column
 
       if (isJuristic) {
-        type CorpBuyer = {
-          userid: string;
-          corporatename: string | null;
-          corporateaddress: string | null;
-          corporatebranch: string | null;
-        };
-        const { data: corp, error: corpErr } = await admin
-          .from("tb_corporate")
-          .select("userid, corporatename, corporateaddress, corporatebranch")
-          .eq("userid", v.userid)
-          .maybeSingle<CorpBuyer>();
-        if (corpErr) {
-          console.error("[createBillingRunInvoice tb_corporate] failed", {
-            code: corpErr.code, message: corpErr.message,
-          });
-        }
         if (corp?.corporatename) buyerName = corp.corporatename;
         if (corp?.corporateaddress) buyerAddress = corp.corporateaddress;
-        if (corp?.corporatebranch) buyerBranch = corp.corporatebranch;
+      } else if (userRow.userAddressID) {
+        // Personal customer — resolve address via tb_address.
+        type AddrRow = {
+          addressno: string | null;
+          addresssubdistrict: string | null;
+          addressdistrict: string | null;
+          addressprovince: string | null;
+          addresszipcode: string | null;
+        };
+        const { data: addr, error: addrErr } = await admin
+          .from("tb_address")
+          .select("addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode")
+          .eq("addressid", userRow.userAddressID)
+          .maybeSingle<AddrRow>();
+        if (addrErr) {
+          console.error("[createBillingRunInvoice tb_address] failed", {
+            code: addrErr.code, message: addrErr.message,
+          });
+        }
+        if (addr) {
+          buyerAddress = [
+            addr.addressno, addr.addresssubdistrict, addr.addressdistrict,
+            addr.addressprovince, addr.addresszipcode,
+          ].filter(Boolean).join(" ").trim();
+        }
       }
 
       // (d) Compute subtotal + final total
@@ -817,7 +868,7 @@ export async function createBillingRunInvoice(
             doc_no:            minted,
             userid:            v.userid,
             buyer_name:        buyerName,
-            buyer_tax_id:      userRow.corporateNumber?.trim() ?? "",
+            buyer_tax_id:      corpNumber,
             buyer_address:     buyerAddress,
             buyer_branch:      buyerBranch,
             is_juristic:       isJuristic,

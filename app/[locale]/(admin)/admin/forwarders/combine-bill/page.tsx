@@ -254,22 +254,27 @@ export default async function CombineBillPage({
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      {/* Breadcrumb */}
+      {/* Breadcrumb — 2026-06-03 (ภูม flag): ย้ายจาก ฝากนำเข้า → ระบบบัญชี →
+          รายรับ → รวมบิลสินค้า ตาม PEAK pattern (acc-system-cargo.php). The
+          /admin/forwarders/combine-bill URL stays for bookmark stability;
+          only the breadcrumb + section label reflect the move. */}
       <nav aria-label="breadcrumb" className="text-xs text-muted flex gap-1.5 items-center flex-wrap">
         <Link href="/admin" className="hover:text-primary-600">หน้าแรก</Link>
         <span>/</span>
-        <Link href="/admin/forwarders" className="hover:text-primary-600">ฝากนำเข้า</Link>
+        <Link href="/admin/accounting" className="hover:text-primary-600">ระบบบัญชี</Link>
         <span>/</span>
-        <span className="text-foreground">ประวัติรายการรวมบิล</span>
+        <span className="text-muted">รายรับ</span>
+        <span>/</span>
+        <span className="text-foreground">รวมบิลสินค้า (ใบส่งสินค้า)</span>
       </nav>
 
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ฝากนำเข้า</p>
-          <h1 className="mt-1 text-2xl font-bold">ประวัติรายการรวมบิล</h1>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ระบบบัญชี · รายรับ</p>
+          <h1 className="mt-1 text-2xl font-bold">รวมบิลสินค้า (ใบส่งสินค้า)</h1>
           <p className="mt-1 text-sm text-muted">
-            รวมหลายรายการฝากนำเข้าของลูกค้าเดียวกันเป็นบิลค่าส่งเดียว · {bills.length.toLocaleString("th-TH")} รายการ
+            รวมหลายรายการฝากนำเข้าของลูกค้าเดียวกันเป็นใบส่งสินค้าใบเดียว · {bills.length.toLocaleString("th-TH")} รายการ
           </p>
         </div>
         {canMutate && (
