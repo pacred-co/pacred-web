@@ -177,6 +177,7 @@ export default async function AdminCrmPage({
               <div className={selectedId ? "block" : "hidden lg:block"}>
                 {selectedId ? (
                   <ThreadPanel
+                    conversationId={selectedId}
                     name={selectedConv?.displayName ?? null}
                     pictureUrl={selectedConv?.pictureUrl ?? null}
                     status={selectedConv?.status ?? null}
@@ -192,6 +193,7 @@ export default async function AdminCrmPage({
               <div className={selectedId ? "block" : "hidden lg:block"}>
                 {selectedId ? (
                   <Customer360Panel
+                    conversationId={selectedId}
                     c360={c360}
                     reps={reps}
                     repGateNote={repGateNote}
@@ -343,12 +345,14 @@ function ConversationList({
 
 // ── Thread panel ────────────────────────────────────────────────────────
 function ThreadPanel({
+  conversationId,
   name,
   pictureUrl,
   status,
   messages,
   repFilter,
 }: {
+  conversationId: string;
   name: string | null;
   pictureUrl: string | null;
   status: string | null;
@@ -373,9 +377,16 @@ function ThreadPanel({
           <p className="font-semibold text-sm truncate">{name || "ผู้ใช้ LINE"}</p>
           {status && <p className="text-[11px] text-muted">{STATUS_LABEL[status] ?? status}</p>}
         </div>
-        <span className="inline-flex items-center gap-1 text-[10px] text-muted">
-          <MessageCircle className="w-3.5 h-3.5" /> LINE
-        </span>
+        {/* Manage in the full LINE inbox (assign agent · link member · reply box).
+            The omni-inbox thread here is read-only; the richer CRM panel lives at
+            /admin/line-inbox (same Podeng_customers_line.id key). */}
+        <Link
+          href={`/admin/line-inbox?c=${encodeURIComponent(conversationId)}`}
+          className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-primary-600 hover:bg-surface-alt shrink-0"
+          title="เปิดในกล่องข้อความ LINE เพื่อจัดการเต็มรูปแบบ (มอบหมายผู้ดูแล · ผูกบัญชี · ตอบกลับ)"
+        >
+          <MessageCircle className="w-3.5 h-3.5" /> จัดการเต็ม
+        </Link>
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-surface-alt/20">
         {messages.length === 0 ? (
@@ -443,11 +454,13 @@ function Bubble({ message }: { message: LineMessage }) {
 
 // ── Customer 360 panel ──────────────────────────────────────────────────────
 function Customer360Panel({
+  conversationId,
   c360,
   reps,
   repGateNote,
   canRoute,
 }: {
+  conversationId: string;
   c360: import("@/lib/admin/crm-types").Customer360 | null;
   reps: import("@/lib/admin/crm-types").CrmRep[];
   repGateNote: string | null;
@@ -463,8 +476,17 @@ function Customer360Panel({
         </div>
         <p className="text-[10px] text-muted/70">
           ระบบจับคู่จาก LINE ID อัตโนมัติ — ลูกค้าส่วนใหญ่กรอก “ไอดีไลน์” ตอนสมัคร ซึ่งมักไม่ตรงกับ
-          LINE platform id จึงต้องผูกมือในภายหลัง (ฟีเจอร์ผูกมือ — ปอน lane / รอบถัดไป)
+          LINE platform id จึงต้องผูกมือในภายหลัง
         </p>
+        {/* Reachable manual-link path: the working linkLineContactToMember UI
+            lives in the full LINE inbox (same Podeng_customers_line.id key) —
+            link to it instead of dead-ending (§0d reachability). */}
+        <Link
+          href={`/admin/line-inbox?c=${encodeURIComponent(conversationId)}`}
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-xs font-medium text-white hover:bg-primary-700"
+        >
+          <Link2 className="w-3.5 h-3.5" /> ผูกกับลูกค้าในระบบ (ในกล่องข้อความ LINE)
+        </Link>
       </div>
     );
   }
@@ -547,6 +569,13 @@ function Customer360Panel({
           className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs hover:bg-surface-alt"
         >
           <PhoneCall className="w-3.5 h-3.5" /> คิวโทร
+        </Link>
+        <Link
+          href={`/admin/line-inbox?c=${encodeURIComponent(conversationId)}`}
+          className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs hover:bg-surface-alt"
+          title="มอบหมายผู้ดูแล · ตอบกลับ · จัดการในกล่องข้อความ LINE"
+        >
+          <MessageCircle className="w-3.5 h-3.5" /> จัดการแชต LINE
         </Link>
       </div>
     </div>
