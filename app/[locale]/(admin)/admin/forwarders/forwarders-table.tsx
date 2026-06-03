@@ -8,6 +8,7 @@ import {
   markForwarderPrinted,
   adminRestoreForwarderFromSpecial,
 } from "@/actions/admin/forwarders";
+import { confirm } from "@/components/ui/confirm";
 
 /**
  * Forwarders table — Wave 11 fidelity port to legacy `forwarder.php`
@@ -343,14 +344,14 @@ export function ForwardersTable({
     setSuccess(null);
   };
 
-  const onBulkSubmit = () => {
+  const onBulkSubmit = async () => {
     setError(null);
     setSuccess(null);
     if (selected.size === 0) return;
     const statusLabelTxt = BULK_STATUS_OPTIONS.find((o) => o.v === bulkStatus)?.l ?? bulkStatus;
     const cab = bulkCabinet.trim();
     const cabinetTxt = cab ? `\nเลขตู้ (GZE/GZS): "${cab}"` : "";
-    if (!window.confirm(`อัพเดต ${selected.size} รายการ เป็นสถานะ "${statusLabelTxt}"${cabinetTxt} ?`)) return;
+    if (!(await confirm(`อัพเดต ${selected.size} รายการ เป็นสถานะ "${statusLabelTxt}"${cabinetTxt} ?`))) return;
 
     const fids = Array.from(selected);
     startTransition(async () => {
@@ -413,7 +414,7 @@ export function ForwardersTable({
    * fstatus="99" (พิเศษ) via the existing bulk action. In the special lane
    * (?status=p) → restore them to their pre-special status from the status log.
    */
-  const onSpecialToggle = () => {
+  const onSpecialToggle = async () => {
     setError(null);
     setSuccess(null);
     if (selected.size === 0) return;
@@ -421,9 +422,9 @@ export function ForwardersTable({
 
     if (inSpecialLane) {
       if (
-        !window.confirm(
+        !(await confirm(
           `ย้าย ${fids.length} รายการ กลับสู่สถานะปกติ (คืนค่าจากประวัติสถานะ) ?`,
-        )
+        ))
       )
         return;
       startTransition(async () => {
@@ -440,7 +441,7 @@ export function ForwardersTable({
     }
 
     if (
-      !window.confirm(`เพิ่ม ${fids.length} รายการ ไปยังสถานะพิเศษ (พิเศษ / 99) ?`)
+      !(await confirm(`เพิ่ม ${fids.length} รายการ ไปยังสถานะพิเศษ (พิเศษ / 99) ?`))
     )
       return;
     startTransition(async () => {

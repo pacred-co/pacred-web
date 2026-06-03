@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { confirm } from "@/components/ui/confirm";
 import {
   adminGrantRole, adminToggleRole, adminUpdateContactExtras,
 } from "@/actions/admin/admins";
@@ -67,8 +68,8 @@ export function GrantForm() {
 export function RowActions({ profileId, role, isActive }: { profileId: string; role: Role; isActive: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  function toggle() {
-    if (!confirm(isActive ? `ปิดสิทธิ์ ${role}?` : `เปิดสิทธิ์ ${role}?`)) return;
+  async function toggle() {
+    if (!(await confirm(isActive ? `ปิดสิทธิ์ ${role}?` : `เปิดสิทธิ์ ${role}?`))) return;
     startTransition(async () => {
       const res = await adminToggleRole({ profile_id: profileId, role, is_active: !isActive });
       if (res.ok) router.refresh();

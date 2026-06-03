@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { confirm, alert } from "@/components/ui/confirm";
 import { adminArchiveContainerCost } from "@/actions/admin/container-costs";
 
 /**
@@ -20,14 +21,14 @@ export function ContainerCostRowControls({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  function doArchive() {
-    if (!confirm("ปิดใช้ rate card นี้? (effective_to = วันนี้)")) return;
+  async function doArchive() {
+    if (!(await confirm("ปิดใช้ rate card นี้? (effective_to = วันนี้)"))) return;
     startTransition(async () => {
       const res = await adminArchiveContainerCost({ id });
       if (res.ok) {
         router.refresh();
       } else {
-        alert(`ปิดไม่สำเร็จ: ${res.error}`);
+        await alert(`ปิดไม่สำเร็จ: ${res.error}`);
       }
     });
   }

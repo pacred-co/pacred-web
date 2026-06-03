@@ -25,6 +25,7 @@ import {
   Package, Ship, Wallet, ArrowDownCircle, CreditCard, ArrowUpCircle, Gift, ShoppingCart,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { confirm } from "@/components/ui/confirm";
 import {
   adminUpdateUserNote,
   adminUpdateUserSaleRep,
@@ -692,9 +693,9 @@ export function AddressManager({
     });
   }
 
-  function remove(addressid: number) {
+  async function remove(addressid: number) {
     setError(null);
-    if (!window.confirm("ยืนยันลบที่อยู่นี้?")) return;
+    if (!(await confirm("ยืนยันลบที่อยู่นี้?"))) return;
     start(async () => {
       const res = await adminDeleteAddress({ userid, addressid });
       if (!res.ok) {

@@ -21,6 +21,7 @@ import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { adminSetTbSettingsForwarderCosts } from "@/actions/admin/tb-settings";
+import { confirm } from "@/components/ui/confirm";
 import {
   CARRIERS,
   PRODUCT_TYPES,
@@ -160,7 +161,7 @@ export function ForwarderCostsForm({
         } else {
           if (res.error.includes("เรทผิดปกติ") && !forceOverride) {
             if (
-              window.confirm(
+              await confirm(
                 `${res.error}\n\nยืนยันใช้ค่านี้จริง? (ต้องเป็น super admin จึง bypass ได้)`,
               )
             ) {

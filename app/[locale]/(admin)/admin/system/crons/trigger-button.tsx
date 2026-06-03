@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "@/i18n/navigation";
+import { confirm } from "@/components/ui/confirm";
 import { adminTriggerCron } from "@/actions/admin/system";
 
 /**
@@ -18,8 +19,8 @@ export function CronTriggerButton({ cronPath }: { cronPath: string }) {
       <button
         type="button"
         disabled={pending}
-        onClick={() => {
-          if (!confirm(`รัน cron ${cronPath} ตอนนี้?`)) return;
+        onClick={async () => {
+          if (!(await confirm(`รัน cron ${cronPath} ตอนนี้?`))) return;
           startTransition(async () => {
             const res = await adminTriggerCron(cronPath);
             if (res.ok) {

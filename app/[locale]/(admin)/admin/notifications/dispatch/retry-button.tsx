@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { confirm } from "@/components/ui/confirm";
 import { retryNotificationDispatch } from "@/actions/admin/notifications";
 
 /**
@@ -20,8 +21,8 @@ export function RetryDispatchButton({ notificationId }: { notificationId: string
     | null
   >(null);
 
-  const handleClick = () => {
-    if (!confirm("ส่งใหม่? cron จะลองส่งซ้ำในรอบถัดไป (~2 นาที).")) return;
+  const handleClick = async () => {
+    if (!(await confirm("ส่งใหม่? cron จะลองส่งซ้ำในรอบถัดไป (~2 นาที)."))) return;
     startTransition(async () => {
       const res = await retryNotificationDispatch(notificationId);
       if (res.ok) setFeedback({ kind: "ok" });

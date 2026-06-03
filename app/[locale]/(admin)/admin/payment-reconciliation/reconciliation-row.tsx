@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
+import { confirm, prompt } from "@/components/ui/confirm";
 import {
   manualMatch,
   markUnmatched,
@@ -32,11 +33,11 @@ export function ReconciliationRow({ item }: { item: PendingReconciliationItem })
   const p  = item.profile;
   const hasCandidates = item.candidates.length > 0;
 
-  function doManualMatch() {
+  async function doManualMatch() {
     if (!picked) return;
     const cand = item.candidates.find((c) => c.forwarder_id === picked);
     if (cand && !cand.is_exact) {
-      if (!confirm(`ยอดไม่ตรง ฿${THB(cand.amount_diff)} — ยังจะจับคู่กับ ${cand.f_no}?`)) return;
+      if (!(await confirm(`ยอดไม่ตรง ฿${THB(cand.amount_diff)} — ยังจะจับคู่กับ ${cand.f_no}?`))) return;
     }
     setErr(null); setMsg(null);
     startTransition(async () => {
@@ -53,8 +54,8 @@ export function ReconciliationRow({ item }: { item: PendingReconciliationItem })
     });
   }
 
-  function doMarkUnmatched() {
-    const reason = prompt("ระบุเหตุผลที่ไม่จับคู่ (3+ ตัวอักษร):");
+  async function doMarkUnmatched() {
+    const reason = await prompt("ระบุเหตุผลที่ไม่จับคู่ (3+ ตัวอักษร):");
     if (!reason || reason.trim().length < 3) {
       setErr("ต้องระบุเหตุผลอย่างน้อย 3 ตัวอักษร");
       return;

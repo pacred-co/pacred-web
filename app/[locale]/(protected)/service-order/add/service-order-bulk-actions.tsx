@@ -11,6 +11,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { cancelServiceOrder, payServiceOrderFromWallet } from "@/actions/service-order";
+import { confirm } from "@/components/ui/confirm";
 
 /**
  * Client-side shim that wires the legacy `member/shops.php` jQuery +
@@ -118,9 +119,9 @@ export function RowCancelButton({ hNo }: { hNo: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
-  function onClick() {
+  async function onClick() {
     if (pending) return;
-    if (!confirm(`ต้องการยกเลิกออเดอร์ ${hNo} นี้?`)) return;
+    if (!(await confirm(`ต้องการยกเลิกออเดอร์ ${hNo} นี้?`))) return;
     setErr(null);
     startTransition(async () => {
       const res = await cancelServiceOrder(hNo);
@@ -174,13 +175,13 @@ export function BulkCancelButton({ cancellableHNos }: { cancellableHNos: string[
     [cancellableHNos, selected],
   );
 
-  function onClick() {
+  async function onClick() {
     if (pending) return;
     if (targets.length === 0) {
       setBanner({ kind: "err", text: "กรุณาเลือกออเดอร์ที่ต้องการยกเลิก" });
       return;
     }
-    if (!confirm(`ต้องการยกเลิกออเดอร์ที่เลือกทั้ง ${targets.length} รายการ?`)) return;
+    if (!(await confirm(`ต้องการยกเลิกออเดอร์ที่เลือกทั้ง ${targets.length} รายการ?`))) return;
     setBanner(null);
     startTransition(async () => {
       const results = await Promise.all(targets.map((h) => cancelServiceOrder(h)));
@@ -272,7 +273,7 @@ export function BulkPayBar({
     });
   }
 
-  function onPay() {
+  async function onPay() {
     if (pending) return;
     if (countPay === 0) {
       setBanner({ kind: "err", text: "กรุณาเลือกออเดอร์ที่ต้องการชำระเงิน" });
@@ -289,7 +290,7 @@ export function BulkPayBar({
       });
       return;
     }
-    if (!confirm(`ยืนยันชำระเงิน ${countPay} รายการ รวม ฿${priceAll.toLocaleString("th-TH", { minimumFractionDigits: 2 })} จาก wallet?`)) {
+    if (!(await confirm(`ยืนยันชำระเงิน ${countPay} รายการ รวม ฿${priceAll.toLocaleString("th-TH", { minimumFractionDigits: 2 })} จาก wallet?`))) {
       return;
     }
     setBanner(null);

@@ -30,6 +30,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { confirm } from "@/components/ui/confirm";
 import { disconnectLineAccount } from "@/actions/line-settings";
 
 export function LineSettingsActions({
@@ -57,9 +58,9 @@ export function LineSettingsActions({
     window.location.href = liffUrl;
   }
 
-  function onDisconnect() {
+  async function onDisconnect() {
     setFlash(null);
-    if (!window.confirm(t("disconnectConfirm"))) return;
+    if (!(await confirm(t("disconnectConfirm")))) return;
     startTransition(async () => {
       const res = await disconnectLineAccount();
       if (res.ok) {

@@ -15,6 +15,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "@/i18n/navigation";
+import { confirm, prompt } from "@/components/ui/confirm";
 import {
   acknowledgeIncident,
   markIncidentInProgress,
@@ -56,8 +57,8 @@ export function IncidentTriagePanel({ id, status, hasWorkItem }: Props) {
     });
   }
 
-  function handleResolve() {
-    const note = window.prompt("บันทึกสิ่งที่แก้ไข (จำเป็น):");
+  async function handleResolve() {
+    const note = await prompt("บันทึกสิ่งที่แก้ไข (จำเป็น):");
     if (note == null) return;                // cancelled
     if (note.trim().length === 0) {
       setMsg("✗ ต้องระบุสิ่งที่แก้ไข");
@@ -66,9 +67,9 @@ export function IncidentTriagePanel({ id, status, hasWorkItem }: Props) {
     run("ปิดงาน — แก้ไขแล้ว", () => resolveIncident({ id, note: note.trim() }));
   }
 
-  function handleIgnore() {
-    if (!window.confirm("ปิด incident นี้แบบ 'ไม่ใช่บั๊ก'?")) return;
-    const note = window.prompt("เหตุผล (ไม่บังคับ):") ?? "";
+  async function handleIgnore() {
+    if (!(await confirm("ปิด incident นี้แบบ 'ไม่ใช่บั๊ก'?"))) return;
+    const note = (await prompt("เหตุผล (ไม่บังคับ):")) ?? "";
     run("ปิดงาน — ไม่ใช่บั๊ก", () => ignoreIncident({ id, note }));
   }
 

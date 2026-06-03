@@ -32,6 +32,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { bulkAssignDriver } from "@/actions/admin/forwarders-bulk";
 import { DriverCombobox } from "./driver-combobox";
+import { confirm } from "@/components/ui/confirm";
 
 type EndTimeHours = 17 | 24 | 30;
 
@@ -99,7 +100,7 @@ export function TbForwarderDriverAssignPanel(p: Props) {
   const hasOpenBatch = p.current?.batchOpen === true && (p.current.fdistatus === "" || p.current.fdistatus === "1");
   const canAssign = isReadyStatus && !isDepositBlocked && !hasOpenBatch;
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setSuccess(null);
@@ -110,9 +111,9 @@ export function TbForwarderDriverAssignPanel(p: Props) {
     }
 
     const driverLabel = driverDisplay ?? driverCode;
-    if (!window.confirm(
+    if (!(await confirm(
       `มอบหมายงานขนส่ง #${p.fNo} ให้คนขับ:\n\n${driverLabel}\n\nรับงานภายใน ${endTime} ชม. — ยืนยัน?`,
-    )) return;
+    ))) return;
 
     startTransition(async () => {
       // Reuse the bulk action with a single-element batch (fids:[fId]).

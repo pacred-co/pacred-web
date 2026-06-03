@@ -23,6 +23,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "@/i18n/navigation";
 import { adminCreateCombineBill } from "@/actions/admin/combine-bill";
+import { alert } from "@/components/ui/confirm";
 
 export function CombineBillAddForm() {
   const router = useRouter();
@@ -48,7 +49,7 @@ export function CombineBillAddForm() {
       // Faithful: legacy redirects back to the list view + flashes a
       // success SweetAlert (forwarder-bill.php L516-526). Mirror that
       // here with a redirect + a small notification.
-      window.alert("สำเร็จ\nเพิ่มรายการรวมบิลแล้ว");
+      await alert("สำเร็จ\nเพิ่มรายการรวมบิลแล้ว");
       router.push("/admin/forwarders/combine-bill");
     });
   }

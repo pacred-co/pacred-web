@@ -12,6 +12,7 @@
  */
 
 import { useState } from "react";
+import { confirm } from "@/components/ui/confirm";
 // IMPORTANT: import from "./types" directly — the barrel index.ts re-exports
 // client.ts which is `"server-only"`. Client Components can pull types +
 // pure data maps, but not the HTTP client.
@@ -132,8 +133,8 @@ export function MomoSyncClient({ initialDbRows }: { initialDbRows: {
       body: JSON.stringify({ start, end, sackNo: sackNo.trim() || undefined }),
     }, "preview");
   }
-  function onSyncReal() {
-    if (!confirm("ยืนยัน sync เข้า momo_* tables? (action นี้จะ upsert เข้า DB)")) return;
+  async function onSyncReal() {
+    if (!(await confirm("ยืนยัน sync เข้า momo_* tables? (action นี้จะ upsert เข้า DB)"))) return;
     callApi("/api/admin/momo/sync", {
       method: "POST",
       body: JSON.stringify({ start, end, sackNo: sackNo.trim() || undefined }),

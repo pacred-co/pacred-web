@@ -37,6 +37,7 @@
  */
 
 import { useRef, useState, useTransition } from "react";
+import { prompt } from "@/components/ui/confirm";
 import {
   markDriverItemLoaded,
   markDriverItemDelivered,
@@ -140,11 +141,9 @@ export function DriverItemActionButtons({ itemId, status }: Props) {
   }
 
   // ── "ส่งไม่ได้" stays as a quick inline prompt (no photo per legacy).
-  function runFail() {
+  async function runFail() {
     setErr(null);
-    const reason = typeof window !== "undefined"
-      ? window.prompt("เหตุผลที่ส่งไม่ได้?")
-      : null;
+    const reason = await prompt("เหตุผลที่ส่งไม่ได้?");
     if (!reason || !reason.trim()) return;
     start(async () => {
       const res = await markDriverItemFailed({ itemId, reason: reason.trim() });

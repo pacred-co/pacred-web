@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import type { ServiceOrderSummary } from "@/actions/service-order";
 import { cancelServiceOrder } from "@/actions/service-order";
+import { confirm } from "@/components/ui/confirm";
 import { legacyOrderStatusThai } from "@/lib/legacy-status-map";
 import { Eye, Package, Printer, FileText, XCircle, Wallet } from "lucide-react";
 
@@ -80,10 +81,10 @@ export function ServiceOrderList({
     });
   }
 
-  function onBulkCancel() {
+  async function onBulkCancel() {
     const targets = selectedCancellable.map((o) => o.h_no).filter(Boolean) as string[];
     if (targets.length === 0) return;
-    if (!confirm(tp("bulkCancelConfirm", { count: targets.length }))) return;
+    if (!(await confirm(tp("bulkCancelConfirm", { count: targets.length })))) return;
     startTransition(async () => {
       await Promise.all(targets.map((hNo) => cancelServiceOrder(hNo)));
       setSelected(new Set());
@@ -234,9 +235,9 @@ export function ServiceOrderList({
                           {CANCELLABLE.includes(o.status) && (
                             <button
                               type="button"
-                              onClick={() => {
+                              onClick={async () => {
                                 if (!o.h_no) return;
-                                if (!confirm(tp("cancelOneConfirm", { hNo: o.h_no }))) return;
+                                if (!(await confirm(tp("cancelOneConfirm", { hNo: o.h_no })))) return;
                                 startTransition(async () => {
                                   await cancelServiceOrder(o.h_no as string);
                                   router.refresh();

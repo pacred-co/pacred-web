@@ -24,6 +24,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { adminBulkUpdateForwarderTbStatus, adminSaveForwarderNote } from "@/actions/admin/forwarders";
+import { confirm } from "@/components/ui/confirm";
 
 type Status = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "99";
 
@@ -69,7 +70,7 @@ export function TbForwarderActionPanel(p: Props) {
     );
   }
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setSuccess(null);
@@ -96,7 +97,7 @@ export function TbForwarderActionPanel(p: Props) {
     if (nt !== p.currentNote.trim())
       lines.push(`หมายเหตุ: "${p.currentNote.slice(0, 30) || '—'}..." → "${nt.slice(0, 30) || '—'}..."`);
 
-    if (!window.confirm(`บันทึก #${p.fNo} ?\n\n${lines.join('\n')}`)) return;
+    if (!(await confirm(`บันทึก #${p.fNo} ?\n\n${lines.join('\n')}`))) return;
 
     startTransition(async () => {
       const result = await adminBulkUpdateForwarderTbStatus({
@@ -251,12 +252,12 @@ function NotePushForm({ fId, fNo, currentNote }: { fId: number; fNo: string; cur
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setSuccess(null);
     const target = adminOnly ? "แอดมินเท่านั้น" : "ลูกค้าและแอดมิน";
-    if (!window.confirm(`บันทึกหมายเหตุ + แจ้งเตือน (${target}) สำหรับ #${fNo}?`)) return;
+    if (!(await confirm(`บันทึกหมายเหตุ + แจ้งเตือน (${target}) สำหรับ #${fNo}?`))) return;
     startTransition(async () => {
       const result = await adminSaveForwarderNote({
         fID:       fId,

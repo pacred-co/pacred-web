@@ -23,6 +23,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { confirm } from "@/components/ui/confirm";
 import {
   adminReportCntCustomRate,
   adminReportCntResetRate,
@@ -95,9 +96,9 @@ export function CostRateModal({
     });
   }
 
-  function reset() {
+  async function reset() {
     setErr(null);
-    if (!confirm("คืนค่าเป็นแบบหลักและอัปเดตต้นทุนในตู้ทั้งหมด?")) return;
+    if (!(await confirm("คืนค่าเป็นแบบหลักและอัปเดตต้นทุนในตู้ทั้งหมด?"))) return;
     start(async () => {
       const res = await adminReportCntResetRate(fCabinetNumber);
       if (!res.ok) {

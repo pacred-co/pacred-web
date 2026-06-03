@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { confirm } from "@/components/ui/confirm";
 import {
   bulkUpdateStatus,
   bulkAssignDriver,
@@ -161,12 +162,12 @@ export function BulkActionsToolbar({ selectedFNos, onClearSelection }: Props) {
     });
   }
 
-  function runCancel() {
+  async function runCancel() {
     if (cancelReason.trim().length < 3) {
       setTopErr("เหตุผลต้องยาว ≥ 3 ตัวอักษร");
       return;
     }
-    if (!confirm(`ยืนยันการยกเลิก ${selectedFNos.length} รายการ?`)) return;
+    if (!(await confirm(`ยืนยันการยกเลิก ${selectedFNos.length} รายการ?`))) return;
     setTopErr(null);
     setOutcome(null);
     startTransition(async () => {

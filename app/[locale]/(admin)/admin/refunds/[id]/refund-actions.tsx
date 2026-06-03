@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { confirm } from "@/components/ui/confirm";
 import {
   adminApproveRefund,
   adminRejectRefund,
@@ -21,8 +22,8 @@ export function RefundActions({ id, status }: Props) {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
 
-  function onApprove() {
-    if (!confirm("ยืนยันอนุมัติคำขอคืนเงินนี้? (ยังไม่ตัดเงิน)")) return;
+  async function onApprove() {
+    if (!(await confirm("ยืนยันอนุมัติคำขอคืนเงินนี้? (ยังไม่ตัดเงิน)"))) return;
     setError(null);
     startTransition(async () => {
       const res = await adminApproveRefund({ id });
@@ -31,8 +32,8 @@ export function RefundActions({ id, status }: Props) {
     });
   }
 
-  function onMarkPaid() {
-    if (!confirm("ยืนยันจ่ายเงินคืน? จะเครดิตเข้ากระเป๋าหลักของลูกค้าทันที — ขั้นตอนนี้กลับไม่ได้")) return;
+  async function onMarkPaid() {
+    if (!(await confirm("ยืนยันจ่ายเงินคืน? จะเครดิตเข้ากระเป๋าหลักของลูกค้าทันที — ขั้นตอนนี้กลับไม่ได้"))) return;
     setError(null);
     startTransition(async () => {
       const res = await adminMarkRefundPaid({ id });

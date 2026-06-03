@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
+import { confirm } from "@/components/ui/confirm";
 import { updateProfileBasic, upsertCorporate, updateNotifyChannels, unlinkLine } from "@/actions/profile";
 import type { Profile } from "@/lib/auth/get-user";
 
@@ -78,7 +79,7 @@ export function ProfileForm({ profile, corporate }: Props) {
   }
 
   async function onUnlinkLine() {
-    if (!confirm(t("lineUnlinkConfirm"))) return;
+    if (!(await confirm(t("lineUnlinkConfirm")))) return;
     startTransition(async () => {
       const res = await unlinkLine();
       flash(res.ok ? "ok" : "err", res.ok ? t("lineUnlinked") : res.error);

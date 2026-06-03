@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { addHsLine, deleteHsLine } from "@/actions/admin/hs-codes";
+import { confirm } from "@/components/ui/confirm";
 
 type HsCode = {
   code:             string;
@@ -72,8 +73,8 @@ export function HsLinesEditor({
     });
   }
 
-  function onDelete(id: string) {
-    if (!confirm("ลบรายการนี้?")) return;
+  async function onDelete(id: string) {
+    if (!(await confirm("ลบรายการนี้?"))) return;
     setErr(null);
     startTransition(async () => {
       const res = await deleteHsLine({ id });

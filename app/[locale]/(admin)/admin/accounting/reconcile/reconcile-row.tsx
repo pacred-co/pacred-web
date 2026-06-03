@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
+import { confirm } from "@/components/ui/confirm";
 import { adminAutoClearForwarderPayment } from "@/actions/admin/reconciliation";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -46,10 +47,10 @@ export function ReconcileRow({ item, canAutoClear }: { item: Item; canAutoClear:
   const f  = item.forwarder;
   const tx = item.wallet_tx;
 
-  function autoClear() {
+  async function autoClear() {
     if (!f) return;
     if (Math.abs(item.amount_diff) > 0.01) {
-      if (!confirm(`ยอดไม่ตรง ฿${Math.abs(item.amount_diff).toFixed(2)} — ยังจะ auto-clear?\n(แนะนำให้ตรวจมือก่อน)`)) return;
+      if (!(await confirm(`ยอดไม่ตรง ฿${Math.abs(item.amount_diff).toFixed(2)} — ยังจะ auto-clear?\n(แนะนำให้ตรวจมือก่อน)`))) return;
     }
     setErr(null); setMsg(null);
     startTransition(async () => {

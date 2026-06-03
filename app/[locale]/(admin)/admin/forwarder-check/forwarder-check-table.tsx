@@ -37,6 +37,7 @@ import {
   adminCallPriceUser,
   adminRemoveFromCheckQueue,
 } from "@/actions/admin/forwarder-check";
+import { confirm } from "@/components/ui/confirm";
 
 // ────────────────────────────────────────────────────────────
 // Row type — exported so page.tsx can reuse
@@ -219,11 +220,11 @@ export function ForwarderCheckTable({
     });
   }
 
-  function runRemoveFromQueue() {
+  async function runRemoveFromQueue() {
     setResultBanner(null);
     const fids = Array.from(selected);
     if (fids.length === 0) return;
-    if (!window.confirm(`ลบ ${fids.length} รายการออกจากคิว? (ไม่แจ้งชำระเงิน · forwarder ยังคงอยู่ที่สถานะ 4)`)) return;
+    if (!(await confirm(`ลบ ${fids.length} รายการออกจากคิว? (ไม่แจ้งชำระเงิน · forwarder ยังคงอยู่ที่สถานะ 4)`))) return;
     startTransition(async () => {
       const res = await adminRemoveFromCheckQueue({ fids });
       if (res.ok && res.data) {

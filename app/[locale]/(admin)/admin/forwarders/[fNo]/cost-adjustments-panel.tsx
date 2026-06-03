@@ -7,6 +7,7 @@ import {
   adminMarkCostAdjustmentPaid,
   adminCancelCostAdjustment,
 } from "@/actions/admin/forwarder-cost-adjustments";
+import { confirm, prompt } from "@/components/ui/confirm";
 
 const inputCls =
   "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
@@ -92,9 +93,9 @@ export function CostAdjustmentsPanel({ forwarderId, fNo, existing }: Props) {
     });
   }
 
-  function onMarkPaid(id: string, amount: number, allowOverdraw: boolean) {
+  async function onMarkPaid(id: string, amount: number, allowOverdraw: boolean) {
     setErr(null); setMsg(null);
-    if (allowOverdraw && !confirm(`รับเงินสด/นอกระบบ ฿${amount.toLocaleString()} ใช่ไหม?`)) return;
+    if (allowOverdraw && !(await confirm(`รับเงินสด/นอกระบบ ฿${amount.toLocaleString()} ใช่ไหม?`))) return;
     startTransition(async () => {
       const res = await adminMarkCostAdjustmentPaid({ id, allow_overdraw: allowOverdraw });
       if (res.ok) {
@@ -106,9 +107,9 @@ export function CostAdjustmentsPanel({ forwarderId, fNo, existing }: Props) {
     });
   }
 
-  function onCancel(id: string) {
+  async function onCancel(id: string) {
     setErr(null); setMsg(null);
-    const reason = window.prompt("เหตุผลที่ยกเลิก (≥3 ตัว):");
+    const reason = await prompt("เหตุผลที่ยกเลิก (≥3 ตัว):");
     if (!reason || reason.trim().length < 3) return;
     startTransition(async () => {
       const res = await adminCancelCostAdjustment({ id, reason: reason.trim() });

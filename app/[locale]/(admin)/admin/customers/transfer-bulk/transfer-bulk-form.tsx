@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { confirm } from "@/components/ui/confirm";
 import { bulkTransferCustomersToSalesRep } from "@/actions/admin/customer-transfer-bulk";
 import type { RepOption } from "./page";
 
@@ -91,7 +92,7 @@ export function TransferBulkForm({ customers, reps }: { customers: Customer[]; r
     });
   }
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     if (selected.size === 0) {
@@ -115,11 +116,11 @@ export function TransferBulkForm({ customers, reps }: { customers: Customer[]; r
     const newRep     = newRepId ? reps.find((r) => r.profile_id === newRepId) : null;
     const targetName = newRep ? newRep.display_name : "(ยกเลิกการผูกเซลล์)";
 
-    if (!confirm(
+    if (!(await confirm(
       `ยืนยันย้ายลูกค้า ${selected.size} ราย ไปยัง "${targetName}"?\n` +
       `ระบบจะส่งแจ้งเตือนให้พนักงานขายต้นทาง/ปลายทาง/ลูกค้าทุกราย + บันทึก audit log ทุก row.\n` +
       `การย้อนกลับต้องทำด้วยมือ.`,
-    )) return;
+    ))) return;
 
     startTransition(async () => {
       const res = await bulkTransferCustomersToSalesRep({

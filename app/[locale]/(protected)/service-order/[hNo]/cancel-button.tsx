@@ -4,6 +4,7 @@ import { useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { confirm } from "@/components/ui/confirm";
 import { cancelServiceOrder } from "@/actions/service-order";
 
 export function CancelButton({ hNo }: { hNo: string }) {
@@ -12,8 +13,8 @@ export function CancelButton({ hNo }: { hNo: string }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  function onCancel() {
-    if (!confirm(t("cancelConfirm", { hNo }))) return;
+  async function onCancel() {
+    if (!(await confirm(t("cancelConfirm", { hNo })))) return;
     startTransition(async () => {
       const res = await cancelServiceOrder(hNo);
       if (res.ok) {

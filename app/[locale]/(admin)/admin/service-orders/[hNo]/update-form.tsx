@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { adminUpdateServiceOrder } from "@/actions/admin/service-orders";
+import { prompt } from "@/components/ui/confirm";
 
 const inputCls = "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
 
@@ -38,11 +39,11 @@ export function AdminServiceOrderUpdateForm({ hNo, status, note_admin }: { hNo: 
     return fi >= 0 && ti >= 0 && ti < fi;
   }
 
-  function quickSet(value: string) {
+  async function quickSet(value: string) {
     setMsg(null); setError(null);
     let rollbackReason: string | undefined = undefined;
     if (isRollbackAttempt(st, value)) {
-      const r = window.prompt(
+      const r = await prompt(
         `กำลังย้อนสถานะจาก "${st}" → "${value}".\nระบุเหตุผล (≥3 ตัว) — ลูกค้าจะเห็นเหตุผลในการแจ้งเตือน:`,
       );
       if (r == null) return;
@@ -66,14 +67,14 @@ export function AdminServiceOrderUpdateForm({ hNo, status, note_admin }: { hNo: 
     });
   }
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null); setError(null);
 
     // V-A2: rollback against the saved-state status (prop)
     let rollbackReason: string | undefined = undefined;
     if (isRollbackAttempt(status, st)) {
-      const r = window.prompt(
+      const r = await prompt(
         `กำลังย้อนสถานะจาก "${status}" → "${st}".\nระบุเหตุผล (≥3 ตัว) — ลูกค้าจะเห็นเหตุผลในการแจ้งเตือน:`,
       );
       if (r == null) return;

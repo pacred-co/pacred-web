@@ -20,6 +20,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Truck, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
 import { Link } from "@/i18n/navigation";
+import { confirm, alert } from "@/components/ui/confirm";
 import {
   commitMomoRowToForwarder,
   commitMomoRowsBatch,
@@ -267,16 +268,16 @@ export function ReviewGridClient({
         ? `ทุก row ที่กรอกครบ มี userID ที่ไม่มีอยู่ใน tb_users (${userMissingRows.length} row) — ` +
           "แก้ userID เป็นเลขที่ถูกต้องก่อน หรือคลิก 'สร้างใหม่' รายตัว"
         : "ยังไม่มี row ใดที่กรอก userID + บริษัทขนส่งครบ — กรอกอย่างน้อย 1 row ก่อน";
-      alert(baseMsg);
+      await alert(baseMsg);
       return;
     }
     const skipNote = userMissingRows.length > 0
       ? `\n(จะข้าม ${userMissingRows.length} row ที่ userID ไม่มีในระบบ)`
       : "";
-    if (!confirm(
+    if (!(await confirm(
       `ยืนยัน commit ${validRows.length} row พร้อมกัน?${skipNote}\n` +
       `(action นี้จะ INSERT ${validRows.length} row ลง tb_forwarder · ส่งเมล/LINE ถ้าเปิด)`,
-    )) {
+    ))) {
       return;
     }
     // Pre-mark the user-missing rows so they don't sit silent during bulk.
@@ -299,7 +300,7 @@ export function ReviewGridClient({
       res = await commitMomoRowsBatch({ rows: validRows });
     } catch (err) {
       console.error("[commitMomoRowsBatch] threw", err);
-      alert(`bulk commit threw: ${err instanceof Error ? err.message : "unknown"}`);
+      await alert(`bulk commit threw: ${err instanceof Error ? err.message : "unknown"}`);
       setBulkRunning(false);
       return;
     }
@@ -309,11 +310,11 @@ export function ReviewGridClient({
     // Treat `ok: false` first so `res.error` is accessible; then the
     // `ok: true` arm has access to `res.data` (still optional but safe).
     if (!res.ok) {
-      alert(`bulk commit failed: ${res.error}`);
+      await alert(`bulk commit failed: ${res.error}`);
       return;
     }
     if (!res.data) {
-      alert("bulk commit returned no data");
+      await alert("bulk commit returned no data");
       return;
     }
     // Apply per-row results onto rowResults map.

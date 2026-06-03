@@ -33,6 +33,7 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { adminRemoveCartItem, adminEditCartQty } from "@/actions/admin/cart";
+import { confirm, alert } from "@/components/ui/confirm";
 
 type Props = {
   cartId: number;
@@ -52,11 +53,12 @@ export default function CartRowActions({ cartId, initialQty }: Props) {
       return;
     }
     if (qty === initialQty) return;  // no-op
+    const input = e.currentTarget;
     startTransition(async () => {
       const res = await adminEditCartQty({ cartId, qty });
       if (!res.ok) {
-        window.alert(`อัพเดทจำนวนไม่สำเร็จ: ${res.error}`);
-        e.currentTarget.value = String(initialQty);
+        await alert(`อัพเดทจำนวนไม่สำเร็จ: ${res.error}`);
+        input.value = String(initialQty);
         return;
       }
       router.refresh();
@@ -84,12 +86,12 @@ export function CartRowRemove({ cartId }: RemoveProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  function handleRemove() {
-    if (!window.confirm("ต้องการลบรายการนี้ออกจากรถเข็นหรือไม่?")) return;
+  async function handleRemove() {
+    if (!(await confirm("ต้องการลบรายการนี้ออกจากรถเข็นหรือไม่?"))) return;
     startTransition(async () => {
       const res = await adminRemoveCartItem({ cartId });
       if (!res.ok) {
-        window.alert(`ลบรายการไม่สำเร็จ: ${res.error}`);
+        await alert(`ลบรายการไม่สำเร็จ: ${res.error}`);
         return;
       }
       router.refresh();

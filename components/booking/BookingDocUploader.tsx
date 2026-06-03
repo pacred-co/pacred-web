@@ -23,6 +23,7 @@ import {
   removeBookingDocument,
   uploadBookingDocument,
 } from "@/actions/bookings";
+import { confirm } from "@/components/ui/confirm";
 import type { BookingDocKind, BookingDocument } from "@/types/booking";
 
 interface DocSlot {
@@ -98,8 +99,8 @@ export function BookingDocUploader({ bookingId }: BookingDocUploaderProps) {
     });
   }
 
-  function onRemove(doc: BookingDocument) {
-    if (!confirm(`ลบไฟล์ "${storageBasename(doc.storagePath)}"?`)) return;
+  async function onRemove(doc: BookingDocument) {
+    if (!(await confirm(`ลบไฟล์ "${storageBasename(doc.storagePath)}"?`))) return;
     setErrorMsg(null);
     setPendingSlot(doc.kind);
     startTransition(async () => {

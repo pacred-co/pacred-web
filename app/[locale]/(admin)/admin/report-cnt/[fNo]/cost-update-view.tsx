@@ -32,6 +32,7 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Upload, Save, AlertTriangle, CheckCircle2, FileSpreadsheet, Info } from "lucide-react";
+import { confirm } from "@/components/ui/confirm";
 import { adminBulkUpdateForwarderCostSheet } from "@/actions/admin/report-cnt-cost-update";
 import type { DetailRow } from "./container-detail-client";
 
@@ -165,8 +166,8 @@ export function CostUpdateView({ fCabinetNumber, warehouseLabel, rows }: CostUpd
     });
   }
 
-  function resetAll() {
-    if (changedCount > 0 && !confirm(`ยกเลิกการแก้ไขทั้งหมด ${changedCount} รายการ?`)) return;
+  async function resetAll() {
+    if (changedCount > 0 && !(await confirm(`ยกเลิกการแก้ไขทั้งหมด ${changedCount} รายการ?`))) return;
     setEdits(new Map());
     setCsvSummary(null);
     setMsg(null);
@@ -237,7 +238,7 @@ export function CostUpdateView({ fCabinetNumber, warehouseLabel, rows }: CostUpd
     reader.readAsText(file, "utf-8");
   }
 
-  function save() {
+  async function save() {
     const updates = decorated
       .filter((r) => r.changed)
       .map((r) => ({ fid: r.id, newCostSheet: r.newCost }));
@@ -245,7 +246,7 @@ export function CostUpdateView({ fCabinetNumber, warehouseLabel, rows }: CostUpd
       setMsg({ kind: "info", text: "ไม่มีรายการที่ถูกแก้ไข" });
       return;
     }
-    if (!confirm(`บันทึก ${updates.length} รายการ — ต้นทุน Sheet ใหม่ขึ้นไปยังฐานข้อมูล?`)) return;
+    if (!(await confirm(`บันทึก ${updates.length} รายการ — ต้นทุน Sheet ใหม่ขึ้นไปยังฐานข้อมูล?`))) return;
     setMsg(null);
     start(async () => {
       const res = await adminBulkUpdateForwarderCostSheet({ updates });

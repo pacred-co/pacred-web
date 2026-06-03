@@ -7,14 +7,30 @@
 // flips tb_address.addressstatus '1'→'0'). Dropped into both the mobile-card
 // and desktop-table render paths.
 
+import { useRef } from "react";
+import { confirm } from "@/components/ui/confirm";
 import { deleteAddressAction } from "./add-address-action";
 
 export function DeleteAddressButton({ addressId }: { addressId: number }) {
+  // The styled confirm() is async, so we can't synchronously preventDefault
+  // based on its result. Instead we always block the first submit, ask, then
+  // programmatically resubmit on "yes" — the `confirmed` ref lets that second
+  // submit pass straight through (so the form `action` fires) without looping.
+  const confirmed = useRef(false);
   return (
     <form
       action={deleteAddressAction}
-      onSubmit={(e) => {
-        if (!window.confirm("ลบที่อยู่นี้ออกจากสมุดที่อยู่?")) e.preventDefault();
+      onSubmit={async (e) => {
+        if (confirmed.current) {
+          confirmed.current = false;
+          return; // let the resubmit through → deleteAddressAction runs
+        }
+        e.preventDefault();
+        const form = e.currentTarget;
+        if (await confirm("ลบที่อยู่นี้ออกจากสมุดที่อยู่?")) {
+          confirmed.current = true;
+          form.requestSubmit();
+        }
       }}
       className="inline-block"
     >

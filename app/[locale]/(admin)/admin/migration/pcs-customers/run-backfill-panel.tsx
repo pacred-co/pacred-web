@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { confirm } from "@/components/ui/confirm";
 import { adminBackfillPcsAuthUsers, type PcsBackfillResult } from "@/actions/admin/pcs-migration";
 
 export function RunBackfillPanel() {
@@ -11,11 +12,11 @@ export function RunBackfillPanel() {
   const [result, setResult] = useState<PcsBackfillResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function runBatch(opts: { dry_run: boolean }) {
+  async function runBatch(opts: { dry_run: boolean }) {
     setError(null);
     setResult(null);
     if (!opts.dry_run) {
-      if (!confirm(`Run backfill: up to ${limit} rows.\nThis creates auth.users + profiles for each.\nIdempotent — re-runnable. Continue?`)) return;
+      if (!(await confirm(`Run backfill: up to ${limit} rows.\nThis creates auth.users + profiles for each.\nIdempotent — re-runnable. Continue?`))) return;
     }
     startTransition(async () => {
       const res = await adminBackfillPcsAuthUsers({ limit, dry_run: opts.dry_run });

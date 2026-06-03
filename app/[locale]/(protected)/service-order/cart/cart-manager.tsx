@@ -11,6 +11,7 @@ import {
   type CartItem,
 } from "@/actions/cart";
 import { placeServiceOrder } from "@/actions/service-order";
+import { confirm } from "@/components/ui/confirm";
 import type { Provider } from "@/lib/validators/cart";
 import { trackPlaceOrder } from "@/lib/analytics";
 import { MapPin, Truck, Ship, Plane, Package2, Box, Trash2 } from "lucide-react";
@@ -101,8 +102,8 @@ export function CartManager({ cart: initialCart, yuanRate, serviceFee, defaultAd
     });
   }
 
-  function onRemove(id: string) {
-    if (!confirm(t("removeConfirm"))) return;
+  async function onRemove(id: string) {
+    if (!(await confirm(t("removeConfirm")))) return;
     startTransition(async () => {
       await removeCartItem(id);
       setSelected((prev) => {

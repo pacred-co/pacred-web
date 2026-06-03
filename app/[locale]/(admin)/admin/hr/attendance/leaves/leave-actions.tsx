@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "@/i18n/navigation";
 import { CheckCircle2, XCircle, Plus, Loader2, X, Save, ArrowRight } from "lucide-react";
+import { confirm, alert } from "@/components/ui/confirm";
 import { Button } from "@/components/ui/button";
 import { adminCreateLeave, adminDecideLeave } from "@/actions/admin/attendance";
 import { LEAVE_TYPE_LABEL, LEAVE_DURATION_LABEL } from "../../_legacy-labels";
@@ -17,12 +18,12 @@ export function LeaveDecideActions({ id, currentStatus }: { id: number; currentS
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  function decide(to: "2" | "3" | "4", confirmMsg?: string) {
-    if (confirmMsg && !confirm(confirmMsg)) return;
+  async function decide(to: "2" | "3" | "4", confirmMsg?: string) {
+    if (confirmMsg && !(await confirm(confirmMsg))) return;
     startTransition(async () => {
       const res = await adminDecideLeave({ id, to_status: to });
       if (res.ok) router.refresh();
-      else alert(res.error);
+      else await alert(res.error);
     });
   }
 

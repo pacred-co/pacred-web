@@ -4,6 +4,7 @@ import { getMessages, getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { LocaleHtmlLang } from "@/components/locale-html-lang";
+import { ConfirmDialogHost } from "@/components/ui/confirm";
 import { JsonLd } from "@/components/seo/json-ld";
 import {
   localBusinessSchema,
@@ -132,6 +133,9 @@ export default async function LocaleLayout({
           `app/[locale]/(public)/layout.tsx` so it only renders on
           public marketing routes. (Sprint-25, 2026-05-25.) */}
       {children}
+      {/* Global centered confirm/alert/prompt host — replaces native browser
+          popups everywhere (see components/ui/confirm.tsx). Mounted once. */}
+      <ConfirmDialogHost />
     </NextIntlClientProvider>
   );
 }

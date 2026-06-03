@@ -17,6 +17,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { confirm } from "@/components/ui/confirm";
 import {
   adminUpdateProfileFields,
   adminToggleActive,
@@ -172,18 +173,18 @@ export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
   }
 
   // ─── role change ─────────────────────────────────────────────────
-  function onRoleChange() {
+  async function onRoleChange() {
     if (role === primaryRole) {
       showErr("role ใหม่ตรงกับ role ปัจจุบัน — ไม่มีการเปลี่ยน");
       return;
     }
-    if (!confirm(
+    if (!(await confirm(
       `เปลี่ยน role จาก "${ROLE_LABELS[primaryRole]}" → "${ROLE_LABELS[role]}" ?\n\n` +
       `ระบบจะ:\n` +
       `  1. ให้ ${role} ใหม่ (is_active=true)\n` +
       `  2. ปิด ${primaryRole} เดิม (is_active=false · history ไม่ลบ)\n\n` +
       `การเปลี่ยน role จะถูก audit-log.`,
-    )) return;
+    ))) return;
 
     startTransition(async () => {
       const result = await adminChangeRole({
@@ -201,14 +202,14 @@ export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
   }
 
   // ─── toggle is_active on a specific role row ─────────────────────
-  function onToggleRoleActive(targetRole: string, currentActive: boolean) {
-    if (!confirm(
+  async function onToggleRoleActive(targetRole: string, currentActive: boolean) {
+    if (!(await confirm(
       currentActive
         ? `ปิดสิทธิ์ "${ROLE_LABELS[targetRole as AdminRoleEnum] ?? targetRole}" ?\n\n` +
           `พนักงานจะไม่สามารถใช้งานเมนูของ role นี้ได้ทันที.\n` +
           `แถวยังคงอยู่ในตาราง · เปิดกลับได้ทุกเมื่อ.`
         : `เปิดสิทธิ์ "${ROLE_LABELS[targetRole as AdminRoleEnum] ?? targetRole}" กลับ ?`,
-    )) return;
+    ))) return;
 
     startTransition(async () => {
       const result = await adminToggleActive({

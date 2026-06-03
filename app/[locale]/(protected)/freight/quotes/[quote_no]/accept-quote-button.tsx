@@ -15,6 +15,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, CheckCircle } from "lucide-react";
 import { customerAcceptQuote } from "@/actions/freight";
+import { confirm } from "@/components/ui/confirm";
 
 interface Props {
   quoteId: string;
@@ -35,9 +36,9 @@ export function AcceptQuoteButton({ quoteId, quoteNo, total }: Props) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  function fire() {
+  async function fire() {
     setError(null);
-    const ok = confirm(
+    const ok = await confirm(
       `ยืนยันตอบรับใบเสนอราคา ${quoteNo}?\n\n` +
       `ราคา ฿${total.toLocaleString("th-TH")}\n\n` +
       `เมื่อตอบรับแล้ว ทีม Pacred จะเริ่มขั้นตอนต่อไป (เปิดงานขนส่ง) ทันที`

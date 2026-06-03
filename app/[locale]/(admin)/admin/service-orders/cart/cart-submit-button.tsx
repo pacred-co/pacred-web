@@ -29,6 +29,7 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { adminSubmitCartAsOrder } from "@/actions/admin/cart";
+import { confirm, alert } from "@/components/ui/confirm";
 
 type Props = {
   /** The legacy `userid` who owns the source tb_cart rows. */
@@ -39,12 +40,12 @@ export default function CartSubmitButton({ cartOwnerUserid }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  function handleSubmit(e: React.MouseEvent<HTMLButtonElement>) {
+  async function handleSubmit(e: React.MouseEvent<HTMLButtonElement>) {
     e.preventDefault();
     const button = e.currentTarget;
     const form   = button.closest("form");
     if (!form) {
-      window.alert("ไม่พบฟอร์มรถเข็น");
+      await alert("ไม่พบฟอร์มรถเข็น");
       return;
     }
 
@@ -56,7 +57,7 @@ export default function CartSubmitButton({ cartOwnerUserid }: Props) {
     const userIDField    = String(fd.get("userID") ?? "").trim();
 
     if (!hShipBy) {
-      window.alert("กรุณาเลือกบริษัทขนส่ง");
+      await alert("กรุณาเลือกบริษัทขนส่ง");
       return;
     }
 
@@ -67,11 +68,11 @@ export default function CartSubmitButton({ cartOwnerUserid }: Props) {
     const customerUserid = userIDField || cartOwnerUserid;
 
     if (hShipBy !== "PCS" && !customerUserid) {
-      window.alert("กรุณาเลือกรหัสสมาชิก (สำหรับจัดส่งไปที่อยู่ลูกค้า)");
+      await alert("กรุณาเลือกรหัสสมาชิก (สำหรับจัดส่งไปที่อยู่ลูกค้า)");
       return;
     }
 
-    if (!window.confirm("ยืนยันการสั่งซื้อสินค้าในรถเข็นทั้งหมด?")) return;
+    if (!(await confirm("ยืนยันการสั่งซื้อสินค้าในรถเข็นทั้งหมด?"))) return;
 
     startTransition(async () => {
       const res = await adminSubmitCartAsOrder({
@@ -95,11 +96,11 @@ export default function CartSubmitButton({ cartOwnerUserid }: Props) {
       });
 
       if (!res.ok) {
-        window.alert(`ยืนยันการสั่งซื้อไม่สำเร็จ: ${res.error}`);
+        await alert(`ยืนยันการสั่งซื้อไม่สำเร็จ: ${res.error}`);
         return;
       }
 
-      window.alert(
+      await alert(
         `สร้างออเดอร์ ${res.data?.hno} สำเร็จ\n` +
         `โอนรายการ: ${res.data?.itemsTransferred} รายการ`,
       );

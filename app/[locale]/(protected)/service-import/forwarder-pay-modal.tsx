@@ -7,6 +7,7 @@ import {
   submitForwarderPayment,
   uploadForwarderSlip,
 } from "@/actions/forwarder";
+import { confirm } from "@/components/ui/confirm";
 import type { ForwarderRow } from "./forwarder-row-view";
 
 /**
@@ -174,13 +175,13 @@ export function ForwarderPayModal({
     }
   }
 
-  function onConfirm() {
+  async function onConfirm() {
     if (rows.length === 0) return;
     if (!slipPath) {
       setError("กรุณาแนบหลักฐานการโอน (สลิปรายการ)");
       return;
     }
-    const ok = window.confirm(
+    const ok = await confirm(
       "กรุณาตรวจสอบยอดเงินและสลิปก่อนยืนยันการชำระเงิน",
     );
     if (!ok) return;
