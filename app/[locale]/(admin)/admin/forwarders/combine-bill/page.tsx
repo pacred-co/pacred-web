@@ -37,6 +37,8 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildCombineBillPrintHref, buildCombineBillDetailHref } from "@/lib/admin/combine-bill-urls";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import { CombineBillRowActions } from "./combine-bill-row-actions";
 // ^ Wired client island (delete + print buttons). Kept on the page so super
 //   role retains the existing functional delete; visual chrome of the
@@ -92,6 +94,7 @@ type SP = {
   historyTable?: string;
   historyTableAll?: string;
   date?: string;
+  page?: string;
 };
 
 export default async function CombineBillPage({
@@ -107,6 +110,11 @@ export default async function CombineBillPage({
 
   const sp = await searchParams;
   const admin = createAdminClient();
+
+  // PERF (2026-06-03): paginate — one 50-row window via .range() + exact
+  // count instead of pulling every bill on each render.
+  const page = parsePage(sp.page);
+  const { from: rowFrom, to: rowTo } = pageRange(page);
 
   // ── Filter resolution (forwarder-bill.php L115-132) ──────────
   let filterStart: string | null = null;
@@ -133,13 +141,9 @@ export default async function CombineBillPage({
   // ── tb_bill filtered query (forwarder-bill.php L116-132) ─────
   let billsQ = admin
     .from("tb_bill")
-    .select("billid, date, printstatus, adminid")
+    .select("billid, date, printstatus, adminid", { count: "exact" })
     .order("billid", { ascending: false })
-    // 2026-06-03 — explicit cap raised above PostgREST's silent 1000-default.
-    // Same trap that bit the items query (silent truncation = empty cells).
-    // 2k is plenty for the 90d default window; revisit if the filter is
-    // ever widened to ทั้งหมด (currently 10,643 total bills).
-    .limit(2000);
+    .range(rowFrom, rowTo);
 
   if (filterStart && filterEnd) {
     billsQ = billsQ
@@ -148,6 +152,7 @@ export default async function CombineBillPage({
   }
 
   const billsRes = await billsQ;
+  const totalBills = billsRes.count ?? 0;
 
   // §0c — destructure error + log on the load-bearing read.
   if (billsRes.error) {
@@ -274,7 +279,7 @@ export default async function CombineBillPage({
           <p className="text-xs font-semibold tracking-widest text-primary-600">ระบบบัญชี · รายรับ</p>
           <h1 className="mt-1 text-2xl font-bold">รวมบิลสินค้า (ใบส่งสินค้า)</h1>
           <p className="mt-1 text-sm text-muted">
-            รวมหลายรายการฝากนำเข้าของลูกค้าเดียวกันเป็นใบส่งสินค้าใบเดียว · {bills.length.toLocaleString("th-TH")} รายการ
+            รวมหลายรายการฝากนำเข้าของลูกค้าเดียวกันเป็นใบส่งสินค้าใบเดียว · {totalBills.toLocaleString("th-TH")} รายการ
           </p>
         </div>
         {canMutate && (
@@ -442,6 +447,18 @@ export default async function CombineBillPage({
           </div>
         )}
       </div>
+
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={totalBills}
+        basePath="/admin/forwarders/combine-bill"
+        params={{
+          historyTable: sp.historyTable,
+          historyTableAll: sp.historyTableAll,
+          date: sp.date,
+        }}
+      />
     </main>
   );
 }

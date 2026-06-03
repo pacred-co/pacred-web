@@ -35,6 +35,8 @@ import { AdminDateFilter } from "@/components/admin/date-filter";
 import { CsvButton } from "@/components/admin/csv-button";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { legacyForwarderStatusThai } from "@/lib/legacy-status-map";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -106,7 +108,7 @@ function daysAgo(iso: string | null): number {
 export default async function CreditPendingReport({
   searchParams,
 }: {
-  searchParams: Promise<{ date_from?: string; date_to?: string; sla?: string }>;
+  searchParams: Promise<{ date_from?: string; date_to?: string; sla?: string; page?: string }>;
 }) {
   await requireAdmin(["super", "ops", "accounting"]);
   const sp = await searchParams;
@@ -181,11 +183,20 @@ export default async function CreditPendingReport({
     };
   });
 
+  // Totals computed over the FULL set (correct) before paginating the display.
   const total = rows.reduce((s, r) => s + r.outstanding_thb, 0);
   const stuck14 = rows.filter((r) => {
     const ref = r.date_shipped_china ?? r.created_at;
     return daysAgo(ref) >= 14;
   }).length;
+
+  // PERF (2026-06-03): paginate the DISPLAYED table (50/page) — the grand
+  // total above stays full-set-correct because outstanding_thb is a per-row
+  // JS computation, so we keep the full fetch for the sum and only slice the
+  // rows we render. ?page=N drives the window (shared <Pagination>).
+  const page = parsePage(sp.page);
+  const offset = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
   const csvRows = rows.map((r) => ({
     order_no:        r.order_no,
@@ -279,7 +290,7 @@ export default async function CreditPendingReport({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
+                {pageRows.map((r) => {
                   const ref = r.date_shipped_china ?? r.created_at;
                   const age = daysAgo(ref);
                   const ageBadge = age >= 30 ? "bg-red-50 text-red-700 border-red-200"
@@ -319,10 +330,17 @@ export default async function CreditPendingReport({
             </table>
           </div>
         )}
+        <Pagination
+          page={page}
+          pageSize={DEFAULT_PAGE_SIZE}
+          total={rows.length}
+          basePath="/admin/reports/credit-pending"
+          params={{ date_from: sp.date_from, date_to: sp.date_to, sla: sp.sla }}
+        />
       </div>
 
       <p className="text-[11px] text-muted">
-        แสดงไม่เกิน 2,000 แถวต่อหน้า · ใช้ตัวกรองช่วงวันเพื่อจำกัดผลลัพธ์
+        ยอดค้างรวม + จำนวนคำนวณจากชุดข้อมูลทั้งหมด · ตารางแบ่งหน้าละ {DEFAULT_PAGE_SIZE} แถว
       </p>
     </main>
   );

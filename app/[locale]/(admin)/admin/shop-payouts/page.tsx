@@ -2,6 +2,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { ShopPayoutActions } from "./actions-cell";
 
@@ -35,12 +37,14 @@ const STATUS_LABEL: Record<string, string> = {
 export default async function AdminShopPayoutsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; page?: string }>;
 }) {
   await requireAdmin(["accounting", "ops"]);
 
   const sp = await searchParams;
   const admin = createAdminClient();
+  const page = parsePage(sp.page);
+  const { from: rowFrom, to: rowTo } = pageRange(page);
 
   // Pull pending + recent rows. Joined to profiles for the customer
   // identity column. We include `transfer_out` as a future-proofing
@@ -52,13 +56,13 @@ export default async function AdminShopPayoutsPage({
       bank_name, account_name, account_number, slip_url,
       rejected_reason, reviewed_at, created_at,
       profile:profiles!profile_id ( member_code, first_name, last_name, phone )
-    `)
+    `, { count: "exact" })
     .in("kind", ["withdraw", "transfer_out"])
     .order("created_at", { ascending: false })
-    .limit(200);
+    .range(rowFrom, rowTo);
 
   if (sp.status) q = q.eq("status", sp.status);
-  const { data, error } = await q;
+  const { data, error, count: totalPayouts } = await q;
   if (error) {
     console.error(`[tb_shop_transactions list] failed`, { code: error.code, message: error.message });
   }
@@ -163,6 +167,13 @@ export default async function AdminShopPayoutsPage({
           </div>
         )}
       </div>
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={totalPayouts ?? 0}
+        basePath="/admin/shop-payouts"
+        params={{ status: sp.status }}
+      />
     </main>
     </>
   );

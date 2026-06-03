@@ -38,6 +38,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -76,9 +78,14 @@ function daysSince(iso: string | null): number {
   return Math.floor((nowMs() - new Date(iso).getTime()) / 86_400_000);
 }
 
-export default async function AdminQaOrderCancellationsPage() {
+export default async function AdminQaOrderCancellationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   await requireAdmin(["ops", "accounting"]);
 
+  const sp = await searchParams;
   const admin = createAdminClient();
 
   // Cutoff: 1d ago, for the "silent cancellation needing follow-up" condition.
@@ -115,10 +122,15 @@ export default async function AdminQaOrderCancellationsPage() {
     const isStale = r.hdateupdate != null && r.hdateupdate < oneDayCutoff;
     return hasPayment || hasNote || isStale;
   });
-  const rows = needsFollowup.slice(0, 200);
-
   // Header breach count — total cancellations needing follow-up (full window).
   const breachCount = needsFollowup.length;
+
+  // PERF (2026-06-03): paginate the DISPLAYED table (50/page). The breach
+  // chip stays computed over the full `needsFollowup` set; we slice the page
+  // window for render + the customer merge below.
+  const page = parsePage(sp.page);
+  const offset = (page - 1) * DEFAULT_PAGE_SIZE;
+  const rows = needsFollowup.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
   // Pass 2: customer merge (legacy pattern).
   const userIds = Array.from(new Set(rows.map((r) => r.userid).filter(Boolean))) as string[];
@@ -296,10 +308,17 @@ export default async function AdminQaOrderCancellationsPage() {
             </table>
           </div>
         )}
+        <Pagination
+          page={page}
+          pageSize={DEFAULT_PAGE_SIZE}
+          total={breachCount}
+          basePath="/admin/qa/order-cancellations"
+          params={{}}
+        />
       </div>
 
       <p className="text-[11px] text-muted">
-        แสดงไม่เกิน 200 แถว · เรียง <code>hdateupdate</code> DESC (ยกเลิกล่าสุดก่อน) ·
+        เรียง <code>hdateupdate</code> DESC (ยกเลิกล่าสุดก่อน) ·
         คลิกเลขที่ออเดอร์เพื่อตรวจสอบ / ออกใบคืนเงิน / ปิดเคส
       </p>
     </main>

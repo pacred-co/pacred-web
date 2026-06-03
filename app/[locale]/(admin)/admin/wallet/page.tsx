@@ -32,6 +32,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
+import { parsePage } from "@/lib/admin/paginate";
 import { WalletBalanceView } from "./balance-view";
 import { WalletTransactionsView } from "./transactions-view";
 
@@ -73,7 +74,7 @@ const WALLET_MENUBAR: MenubarItem[] = [
   },
 ];
 
-type SP = { view?: string; kind?: string; status?: string; q?: string; sort?: string; dir?: string };
+type SP = { view?: string; kind?: string; status?: string; q?: string; sort?: string; dir?: string; page?: string };
 
 export default async function AdminWalletPage({
   searchParams,
@@ -103,6 +104,10 @@ export default async function AdminWalletPage({
   // pending-approval queue from the balance view (operators still need
   // to know "1,470 slips waiting" at a glance even when looking at
   // balances). All 4 queries use count:exact + head:true so no rows ship.
+  // Left LIVE (not cached) on purpose: this "รอตรวจ" badge sits on the screen
+  // staff actively approve from, so it must drop the instant a slip is
+  // approved — caching it would lag ≤60 s and read as a bug. The 50k-row
+  // SUM (the real waste) is the part that's cached, via getWalletSystemTotals.
   const admin = createAdminClient();
   const [
     { count: pendingTopupCount },
@@ -238,9 +243,9 @@ export default async function AdminWalletPage({
 
         {/* ── View body ── */}
         {view === "balance" ? (
-          <WalletBalanceView q={sp.q} sort={sp.sort} dir={sp.dir} />
+          <WalletBalanceView q={sp.q} sort={sp.sort} dir={sp.dir} page={parsePage(sp.page)} />
         ) : (
-          <WalletTransactionsView kind={sp.kind} status={sp.status} q={sp.q} sort={sp.sort} dir={sp.dir} />
+          <WalletTransactionsView kind={sp.kind} status={sp.status} q={sp.q} sort={sp.sort} dir={sp.dir} page={parsePage(sp.page)} />
         )}
       </main>
     </>

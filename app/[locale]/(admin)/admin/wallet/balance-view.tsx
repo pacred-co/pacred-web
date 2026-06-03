@@ -20,6 +20,9 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getWalletSystemTotals } from "@/lib/admin/wallet-totals";
+import { pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import { Link } from "@/i18n/navigation";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -42,6 +45,8 @@ export type BalanceViewProps = {
   /** Lane C 2026-06-02 — sortable column header (ภูม flag #3). */
   sort?: string;
   dir?: string;
+  /** 1-based page (server-side .range pagination · 2026-06-03). */
+  page?: number;
 };
 
 // Lane C 2026-06-02 — server-side sort field whitelist.
@@ -50,29 +55,17 @@ const BALANCE_SORT_FIELDS: Record<string, string> = {
   userid:      "userid",
 };
 
-export async function WalletBalanceView({ q, sort, dir }: BalanceViewProps) {
+export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewProps) {
   const admin = createAdminClient();
+  const { from: rowFrom, to: rowTo } = pageRange(page);
 
   // ── System-wide totals (faithful to legacy L107-127 + L165 admin/page.tsx pattern).
-  // PostgREST has no aggregate-fn endpoint; we pull the rows + sum in app.
-  // .limit(50_000) matches the admin/page.tsx walletAll precedent (8,898
-  // customers → comfortably under cap).
-  // Wave 21 P2 Phase A: Two SUMs (wallet + cash_back) — both fetch full tables
-  // to reduce in JS. Survey docs/research/wave-21-p2-query-survey.md §2 + §6 —
-  // to be replaced by a `get_wallet_system_totals()` RPC in Phase C. Leaving
-  // the fetches for now: PostgREST has no SUM endpoint + staff want fresh data.
-  const [{ data: allWalletsForSum }, { data: allCbForSum }] = await Promise.all([
-    admin.from("tb_wallet").select("wallettotal").limit(50_000),
-    admin.from("tb_cash_back").select("cbtotal").limit(50_000),
-  ]);
-  const sumWallet = (allWalletsForSum ?? []).reduce(
-    (s, r) => s + Number((r as { wallettotal: number | null }).wallettotal ?? 0),
-    0,
-  );
-  const sumCb = (allCbForSum ?? []).reduce(
-    (s, r) => s + Number((r as { cbtotal: number | null }).cbtotal ?? 0),
-    0,
-  );
+  // PERF (2026-06-03): pulled into the shared `getWalletSystemTotals()` helper,
+  // cached 60 s (lib/admin/wallet-totals.ts). Previously this pulled ~9k+9k
+  // rows + summed in JS on EVERY wallet-page render; now it's cached + shared
+  // with the /admin dashboard. PostgREST still has no SUM endpoint — the cache
+  // is what makes the full-table pull cheap (≤ once a minute, not per nav).
+  const { sumWallet, sumCb, walletCount, cbCount } = await getWalletSystemTotals();
 
   // ── Top-200 wallets by balance DESC (matches legacy ORDER BY walletTotal DESC).
   // Lane C 2026-06-02 — respect ?sort=&dir= from URL with whitelist; default
@@ -80,11 +73,12 @@ export async function WalletBalanceView({ q, sort, dir }: BalanceViewProps) {
   const sortKey = sort && BALANCE_SORT_FIELDS[sort] ? sort : "wallettotal";
   const sortDir: "asc" | "desc" = dir === "asc" ? "asc" : "desc";
   const sortColumn = BALANCE_SORT_FIELDS[sortKey];
+  // PERF (2026-06-03): paginate 50/page via .range + exact count.
   let wq = admin
     .from("tb_wallet")
-    .select("userid,wallettotal")
+    .select("userid,wallettotal", { count: "exact" })
     .order(sortColumn, { ascending: sortDir === "asc" })
-    .limit(200);
+    .range(rowFrom, rowTo);
   if (q && q.trim()) wq = wq.eq("userid", q.trim().toUpperCase());
 
   // Pre-compute sort hrefs (Server Components can't ship functions).
@@ -99,7 +93,7 @@ export async function WalletBalanceView({ q, sort, dir }: BalanceViewProps) {
     sortHrefs[k] = `/admin/wallet?${params.toString()}`;
   }
 
-  const { data: walletRowsRaw, error } = await wq;
+  const { data: walletRowsRaw, error, count: totalWallets } = await wq;
   const walletRows = (walletRowsRaw ?? []) as unknown as WalletRow[];
 
   // ── Batch-join tb_users + tb_cash_back for the rows on screen.
@@ -137,7 +131,7 @@ export async function WalletBalanceView({ q, sort, dir }: BalanceViewProps) {
             ฿{sumWallet.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
           </p>
           <p className="text-[11px] text-muted mt-0.5">
-            รวมจาก tb_wallet ทุกบัญชี ({(allWalletsForSum ?? []).length.toLocaleString()} ราย)
+            รวมจาก tb_wallet ทุกบัญชี ({walletCount.toLocaleString()} ราย)
           </p>
         </div>
         <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
@@ -146,7 +140,7 @@ export async function WalletBalanceView({ q, sort, dir }: BalanceViewProps) {
             ฿{sumCb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
           </p>
           <p className="text-[11px] text-muted mt-0.5">
-            รวมจาก tb_cash_back ({(allCbForSum ?? []).length.toLocaleString()} ราย)
+            รวมจาก tb_cash_back ({cbCount.toLocaleString()} ราย)
           </p>
         </div>
       </section>
@@ -252,8 +246,15 @@ export async function WalletBalanceView({ q, sort, dir }: BalanceViewProps) {
         )}
       </div>
 
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={totalWallets ?? 0}
+        basePath="/admin/wallet"
+        params={{ view: "balance", q, sort, dir }}
+      />
       <p className="text-[11px] text-muted">
-        แสดงไม่เกิน 200 อันดับแรก (ยอด wallet สูงสุดก่อน) — ใช้ค้นหารหัสสมาชิกเพื่อดูเฉพาะรายใดรายหนึ่ง
+        เรียงยอด wallet สูงสุดก่อน — ใช้ค้นหารหัสสมาชิกเพื่อดูเฉพาะรายใดรายหนึ่ง
       </p>
     </>
   );

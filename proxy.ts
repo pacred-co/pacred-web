@@ -61,25 +61,32 @@ export default async function middleware(request: NextRequest) {
     },
   );
 
-  // Triggers token refresh if needed.
+  // PERF (2026-06-03 · systemic nav-speed fix) — getSession() not getUser().
   //
-  // 🚨 Wave 24 bounce-loop fix (2026-05-27 ดึก · ภูม "เด้งๆ มาหน้าหลัก" repro):
-  // Previously we silently destructured `error` away — a Supabase
-  // ConnectTimeoutError (10 s · prod region throttle) made `user` null even for
-  // signed-in admins. proxy.ts then redirected /admin → /login. The /login
-  // page's (auth) layout calls requireGuest() which does a FRESH auth check —
-  // this one usually succeeds (cookies are warm now) → sees signed-in user
-  // → redirect("/"). Net: admin click on /admin bounces to homepage. Worse
-  // still: every retry from the now-homepage hits the same race.
+  // getUser() makes a NETWORK round-trip to the GoTrue auth server to
+  // re-validate the JWT on EVERY request (~150-400 ms in-region · the code
+  // base's own measured floor). Running it in the middleware that matches
+  // every page made that round-trip the per-navigation tax on every admin +
+  // protected + public route — the #1 reason "เปลี่ยนหน้าช้าทุกหน้า".
   //
-  // Capture `error` explicitly. A confirmed-null user (no error) IS unauth →
-  // safe to redirect. A failed RPC (network/timeout) is AMBIGUOUS — let the
-  // layout's requireAdmin() decide with its own retry (cache-shared with the
-  // page) rather than slamming the user to /login from the edge.
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  // getSession() reads the session from the cookies LOCALLY (no network) on
+  // the common path, and only hits the network to refresh when the access
+  // token is actually expired (~hourly). The edge check below is a SOFT gate
+  // ("is there a session?"). The AUTHORITATIVE, network-verified identity
+  // check stays in the layout's requireAuth()/requireAdmin() (getUser), which
+  // every protected + admin route already runs — so this does NOT weaken the
+  // security boundary, it just stops paying the auth RTT a second time per nav.
+  //
+  // 🚨 Wave 24 bounce-loop fix preserved: a ConnectTimeout previously nulled
+  // `user` for signed-in admins → wrongful /admin→/login→/ bounce. getSession()
+  // is local on the common path so it can't hit that 10 s timeout at all; and
+  // we still only redirect on a CONFIRMED-null session (no error). On a refresh
+  // failure (error set) we pass through and let the layout's guard decide.
+  const { data: { session }, error: authErr } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
   if (authErr) {
-    // Log so we can see when transient timeouts fire. Don't redirect.
-    console.warn("[proxy.ts] auth.getUser() failed — passing through to layout", {
+    // Log so we can see when transient refresh failures fire. Don't redirect.
+    console.warn("[proxy.ts] auth.getSession() failed — passing through to layout", {
       message: authErr.message,
       pathname: request.nextUrl.pathname,
     });

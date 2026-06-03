@@ -26,6 +26,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import { TbYuanBulkBar, TbYuanRowCheckbox } from "./tb-bulk-bar";
 
 export const dynamic = "force-dynamic";
@@ -77,7 +79,7 @@ type URow = {
   userTel: string | null;
 };
 
-type SP = { status?: string; q?: string; from?: string; to?: string; all?: string; sort?: string; dir?: string };
+type SP = { status?: string; q?: string; from?: string; to?: string; all?: string; sort?: string; dir?: string; page?: string };
 
 // Lane C 2026-06-02 — server-side sort field whitelist (ภูม flag #3).
 // Maps the URL `?sort=` value to the actual tb_payment column. Any value
@@ -138,13 +140,19 @@ export default async function AdminYuanPaymentsPage({
   const sortDir: "asc" | "desc" = sp.dir === "asc" ? "asc" : "desc";
   const sortColumn = YUAN_SORT_FIELDS[sortKey];
 
+  // PERF (2026-06-03): paginate — one 50-row window via .range() + exact count
+  // instead of pulling 200 rows every render.
+  const page = parsePage(sp.page);
+  const { from: rowFrom, to: rowTo } = pageRange(page);
+
   let q = admin
     .from("tb_payment")
     .select(
       "id,paydate,paystatus,paytype,paydetail,payyuan,payrate,paythb,payprofitthb,paydateadmin,userid,adminid,imagesslip",
+      { count: "exact" },
     )
     .order(sortColumn, { ascending: sortDir === "asc" })
-    .limit(200);
+    .range(rowFrom, rowTo);
 
   if (sp.status && /^[123]$/.test(sp.status)) q = q.eq("paystatus", sp.status);
   if (sp.q) {
@@ -158,7 +166,7 @@ export default async function AdminYuanPaymentsPage({
   if (window.from) q = q.gte("paydate", window.from);
   if (window.to)   q = q.lte("paydate", window.to + "T23:59:59");
 
-  const { data: rowsRaw, error } = await q;
+  const { data: rowsRaw, error, count: totalPayments } = await q;
   const rows = (rowsRaw ?? []) as unknown as PaymentRow[];
 
   // 2nd query — merge customer names from tb_users
@@ -442,9 +450,16 @@ export default async function AdminYuanPaymentsPage({
         )}
       </div>
 
-      <p className="text-[11px] text-muted">
-        แสดงไม่เกิน 200 แถวต่อหน้า (ใช้ค้นหา / ตัวกรองด้านบนเพื่อกรองเพิ่ม)
-      </p>
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={totalPayments ?? 0}
+        basePath="/admin/yuan-payments"
+        params={{
+          status: sp.status, q: sp.q, from: sp.from, to: sp.to,
+          all: sp.all, sort: sp.sort, dir: sp.dir,
+        }}
+      />
     </main>
   );
 }

@@ -24,6 +24,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -59,22 +61,31 @@ function daysSince(iso: string | null): number {
   return Math.floor((nowMs() - new Date(iso).getTime()) / 86_400_000);
 }
 
-export default async function AdminQaPayFwdOver2dPage() {
+export default async function AdminQaPayFwdOver2dPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   await requireAdmin(["ops", "accounting"]);
 
+  const sp = await searchParams;
   const admin = createAdminClient();
+
+  const page = parsePage(sp.page);
+  const { from, to } = pageRange(page);
 
   const cutoff = new Date(nowMs() - 2 * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: rowsRaw, error } = await admin
+  const { data: rowsRaw, error, count: breachCount } = await admin
     .from("tb_forwarder")
     .select(
       "id,fdate,fidorco,fcabinetnumber,ftrackingchn,ftrackingth,fstatus,fweight,fvolume,ftotalprice,fnote,userid",
+      { count: "exact" },
     )
     .eq("fstatus", "5")
     .lt("fdate", cutoff)
     .order("fdate", { ascending: true })
-    .limit(200);
+    .range(from, to);
 
   const rows = (rowsRaw ?? []) as unknown as FRow[];
 
@@ -90,12 +101,6 @@ export default async function AdminQaPayFwdOver2dPage() {
     }
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
   }
-
-  const { count: breachCount } = await admin
-    .from("tb_forwarder")
-    .select("id", { count: "exact", head: true })
-    .eq("fstatus", "5")
-    .lt("fdate", cutoff);
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
@@ -225,8 +230,15 @@ export default async function AdminQaPayFwdOver2dPage() {
         )}
       </div>
 
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={breachCount ?? 0}
+        basePath="/admin/qa/pay-fwd-over-2d"
+      />
+
       <p className="text-[11px] text-muted">
-        แสดงไม่เกิน 200 แถว · เรียง <code>fdate</code> ASC (เก่าสุดขึ้นก่อน) · กดเข้าหน้ารายละเอียดเพื่อตามลูกค้า / ออกใบแจ้งหนี้ใหม่
+        เรียง <code>fdate</code> ASC (เก่าสุดขึ้นก่อน) · กดเข้าหน้ารายละเอียดเพื่อตามลูกค้า / ออกใบแจ้งหนี้ใหม่
       </p>
     </main>
   );

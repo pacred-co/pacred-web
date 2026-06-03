@@ -3,6 +3,8 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveSalesAgent } from "../team-map";
 import { fStatusBadge, nameStatusUserPay, numberFormat } from "../helpers";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 /**
  * Sales-rep "รายงานยอดขายทีม" (team sales report) screen — a FAITHFUL
@@ -266,6 +268,13 @@ export default async function SalesReportPage({
       .filter((r): r is ReportRow => r !== null);
   }
 
+  // PERF (2026-06-03): paginate the DISPLAYED rows (50/page). The row set is
+  // a JS-derived flat list with no aggregate total echoed, so a client-slice
+  // is correct + cheap.
+  const page = parsePage(sp["page"]);
+  const offset = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
+
   return (
     <div className="pcs-legacy">
       {/* Legacy PCS theme CSS — kept for layout-scope globals; the
@@ -347,7 +356,7 @@ export default async function SalesReportPage({
               <>
                 {/* ── Mobile: stacked cards (md:hidden) ── */}
                 <div className="space-y-3 md:hidden">
-                  {rows.map((row) => (
+                  {pageRows.map((row) => (
                     <div
                       key={row.usID}
                       className="rounded-xl border border-border bg-white dark:bg-surface p-3 shadow-sm"
@@ -406,7 +415,7 @@ export default async function SalesReportPage({
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.map((row) => (
+                      {pageRows.map((row) => (
                         <tr
                           key={row.usID}
                           className="border-t border-border hover:bg-surface-alt/30"
@@ -440,6 +449,18 @@ export default async function SalesReportPage({
                     </tbody>
                   </table>
                 </div>
+
+                <Pagination
+                  page={page}
+                  pageSize={DEFAULT_PAGE_SIZE}
+                  total={rows.length}
+                  basePath="/sales/report"
+                  params={{
+                    usStatus: usStatusRaw,
+                    date: dateRaw,
+                    report_forwarderTable: didSearch ? "1" : undefined,
+                  }}
+                />
               </>
             )}
           </div>

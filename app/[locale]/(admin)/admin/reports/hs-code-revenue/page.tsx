@@ -2,6 +2,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton } from "@/components/admin/csv-button";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 /**
  * V-G6 #3 — HS-code revenue analysis.
@@ -46,7 +48,7 @@ function daysAgoIso(days: number): string {
 export default async function HsCodeRevenueReport({
   searchParams,
 }: {
-  searchParams: Promise<{ days?: string }>;
+  searchParams: Promise<{ days?: string; page?: string }>;
 }) {
   await requireAdmin(["super", "ops", "accounting"]);
   const sp = await searchParams;
@@ -132,6 +134,13 @@ export default async function HsCodeRevenueReport({
 
   const dayOptions = [30, 90, 180, 365];
 
+  // PERF (2026-06-03): paginate the DISPLAYED aggregate table — summary cards
+  // + CSV above are over the full `aggregates` array, so they stay correct.
+  // (Replaces the prior hardcoded `aggregates.slice(0, 200)` display cap.)
+  const page = parsePage(sp.page);
+  const offset = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageRows = aggregates.slice(offset, offset + DEFAULT_PAGE_SIZE);
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -198,7 +207,7 @@ export default async function HsCodeRevenueReport({
               </tr>
             </thead>
             <tbody>
-              {aggregates.slice(0, 200).map((a) => (
+              {pageRows.map((a) => (
                 <tr key={a.hs_code} className="border-t border-border">
                   <td className="px-3 py-2">
                     <Link
@@ -220,9 +229,13 @@ export default async function HsCodeRevenueReport({
             </tbody>
           </table>
         )}
-        {aggregates.length > 200 && (
-          <p className="p-3 text-center text-[10px] text-muted">แสดง 200 HS codes แรก — ดาวน์โหลด CSV เพื่อดูทั้งหมด</p>
-        )}
+        <Pagination
+          page={page}
+          pageSize={DEFAULT_PAGE_SIZE}
+          total={aggregates.length}
+          basePath="/admin/reports/hs-code-revenue"
+          params={{ days }}
+        />
       </div>
 
       <p className="text-[10px] text-muted">

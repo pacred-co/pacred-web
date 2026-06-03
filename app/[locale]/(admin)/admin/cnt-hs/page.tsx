@@ -4,6 +4,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
+import { parsePage } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import { CntHsTable, type CntHsRow } from "./cnt-hs-table";
 
 /**
@@ -62,7 +64,7 @@ type CntRow = {
   nameAccount: string;
 };
 
-type SP = { q?: string; search?: string; offset?: string };
+type SP = { q?: string; search?: string; page?: string };
 
 const PAGE_SIZE = 200;
 
@@ -107,9 +109,9 @@ export default async function CntHsPage({
     else arrItem.set(r.cntID, [r.fCabinetNumber]);
   }
 
-  // ── pagination + search resolve ─────────────────────────────────
-  const offsetRaw = Number(sp.offset ?? 0);
-  const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? Math.floor(offsetRaw) : 0;
+  // ── pagination + search resolve (2026-06-04 · ?page=N + shared Pagination)
+  const page = parsePage(sp.page);
+  const offset = (page - 1) * PAGE_SIZE;
   const searchTerm = (sp.search ?? "").trim();
   const qIsStatus = sp.q === "1" || sp.q === "2";
   const qAsSearch = !qIsStatus ? (sp.q ?? "").trim() : "";
@@ -187,19 +189,6 @@ export default async function CntHsPage({
   const activeTab: "all" | "1" | "2" =
     sp.q === "1" ? "1" : sp.q === "2" ? "2" : "all";
 
-  // Pagination boundary
-  const hasPrev = offset > 0;
-  const hasNext = offset + rows.length < resultTotal;
-  const prevOffset = Math.max(0, offset - PAGE_SIZE);
-  const nextOffset = offset + PAGE_SIZE;
-  const buildPageHref = (newOffset: number): string => {
-    const params = new URLSearchParams();
-    if (sp.q) params.set("q", sp.q);
-    if (searchTerm) params.set("search", searchTerm);
-    if (newOffset > 0) params.set("offset", String(newOffset));
-    const qs = params.toString();
-    return qs ? `/admin/cnt-hs?${qs}` : "/admin/cnt-hs";
-  };
 
   // Tab pill class helper.
   const tabCls = (active: boolean) =>
@@ -299,42 +288,13 @@ export default async function CntHsPage({
           ) : (
             <>
               <CntHsTable rows={tableRows} />
-
-              {/* Pagination */}
-              {(hasPrev || hasNext) && (
-                <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs text-muted">
-                  <span>
-                    หน้า {Math.floor(offset / PAGE_SIZE) + 1} จาก{" "}
-                    {Math.max(1, Math.ceil(resultTotal / PAGE_SIZE))}
-                  </span>
-                  <div className="flex gap-2">
-                    {hasPrev ? (
-                      <Link
-                        href={buildPageHref(prevOffset)}
-                        className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
-                      >
-                        ก่อนหน้า
-                      </Link>
-                    ) : (
-                      <span className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium opacity-40 pointer-events-none">
-                        ก่อนหน้า
-                      </span>
-                    )}
-                    {hasNext ? (
-                      <Link
-                        href={buildPageHref(nextOffset)}
-                        className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
-                      >
-                        ถัดไป
-                      </Link>
-                    ) : (
-                      <span className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium opacity-40 pointer-events-none">
-                        ถัดไป
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
+              <Pagination
+                page={page}
+                pageSize={PAGE_SIZE}
+                total={resultTotal}
+                basePath="/admin/cnt-hs"
+                params={{ q: sp.q, search: searchTerm }}
+              />
             </>
           )}
         </div>

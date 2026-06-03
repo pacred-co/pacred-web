@@ -27,6 +27,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -64,23 +66,32 @@ function daysSince(iso: string | null): number {
   return Math.floor((nowMs() - new Date(iso).getTime()) / 86_400_000);
 }
 
-export default async function AdminQaPayShopOver1dPage() {
+export default async function AdminQaPayShopOver1dPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   await requireAdmin(["ops", "accounting"]);
 
+  const sp = await searchParams;
   const admin = createAdminClient();
+
+  const page = parsePage(sp.page);
+  const { from, to } = pageRange(page);
 
   // SLA cutoff: 24h ago, ISO string. tb_header_order.hdate is a timestamp.
   const cutoff = new Date(nowMs() - 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: rowsRaw, error } = await admin
+  const { data: rowsRaw, error, count: breachCount } = await admin
     .from("tb_header_order")
     .select(
       "id,hno,hdate,hdatepayment,htitle,hcover,hcount,hstatus,htotalpricechn,htotalpriceuser,hrate,userid",
+      { count: "exact" },
     )
     .eq("hstatus", "2")
     .lt("hdate", cutoff)
     .order("hdate", { ascending: true })
-    .limit(200);
+    .range(from, to);
 
   const rows = (rowsRaw ?? []) as unknown as HRow[];
 
@@ -96,13 +107,6 @@ export default async function AdminQaPayShopOver1dPage() {
     }
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
   }
-
-  // Header breach count — covers the full SLA window (not just the 200 we fetch).
-  const { count: breachCount } = await admin
-    .from("tb_header_order")
-    .select("id", { count: "exact", head: true })
-    .eq("hstatus", "2")
-    .lt("hdate", cutoff);
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
@@ -233,8 +237,15 @@ export default async function AdminQaPayShopOver1dPage() {
         )}
       </div>
 
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={breachCount ?? 0}
+        basePath="/admin/qa/pay-shop-over-1d"
+      />
+
       <p className="text-[11px] text-muted">
-        แสดงไม่เกิน 200 แถว · เรียง <code>hdate</code> ASC (เก่าสุด/เลทสุดขึ้นก่อน) · กดเข้าหน้ารายละเอียดเพื่อตามลูกค้า / ยกเลิกออเดอร์
+        เรียง <code>hdate</code> ASC (เก่าสุด/เลทสุดขึ้นก่อน) · กดเข้าหน้ารายละเอียดเพื่อตามลูกค้า / ยกเลิกออเดอร์
       </p>
     </main>
   );

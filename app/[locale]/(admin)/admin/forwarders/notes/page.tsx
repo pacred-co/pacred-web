@@ -30,6 +30,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { LEGACY_FORWARDER_STATUS, legacyForwarderStatusThai, toLegacyForwarderCode } from "@/lib/legacy-status-map";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +59,7 @@ type UserLite = {
 export default async function ForwarderNotesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; page?: string }>;
 }) {
   // legacy menu-forwarder.php — note view sits inside the forwarder module
   // → ops (warehouse + cs) + sales_admin (follow-up). super implicit.
@@ -93,6 +95,14 @@ export default async function ForwarderNotesPage({
   const rows = ((rowsRaw ?? []) as RawForwarder[])
     // Drop any row where BOTH note columns are empty (.or with neq.'' false negatives).
     .filter((r) => (r.fnote && r.fnote.trim()) || (r.fnoteuser && r.fnoteuser.trim()));
+
+  // PERF (2026-06-03): client-slice pagination. The fetched-then-filtered
+  // `rows` is the authoritative set (a DB count:exact would over-count the
+  // .or false-negatives dropped above), so we keep the full list for the
+  // count + tb_users lookup and only render one 50-row window.
+  const page = parsePage(sp.page);
+  const offset = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
   // Pass 2 — batch tb_users lookup for the customer panel column.
   const useridList = Array.from(new Set(rows.map((r) => r.userid).filter(Boolean)));
@@ -168,7 +178,7 @@ export default async function ForwarderNotesPage({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
+                {pageRows.map((r) => {
                   const updated = r.fdateadminstatus ?? r.fdate;
                   const u = userMap[r.userid];
                   const customerName = u ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() : "";
@@ -225,6 +235,14 @@ export default async function ForwarderNotesPage({
           </div>
         )}
       </div>
+
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={rows.length}
+        basePath="/admin/forwarders/notes"
+        params={{ status: sp.status }}
+      />
     </main>
   );
 }

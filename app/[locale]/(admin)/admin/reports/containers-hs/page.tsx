@@ -1,5 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 // Aggregate report — sums qty/weight/value/duty per HS code across
 // all containers (or a date-filtered subset). Mirror of legacy
@@ -41,7 +43,7 @@ function normSingle<T>(x: T | T[] | null | undefined): T | null {
 export default async function ContainerHsReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date_from?: string; date_to?: string }>;
+  searchParams: Promise<{ date_from?: string; date_to?: string; page?: string }>;
 }) {
   const sp        = await searchParams;
   const dateFrom  = sp.date_from ?? "";
@@ -112,6 +114,13 @@ export default async function ContainerHsReportPage({
   const grandLines     = aggregates.reduce((s, a) => s + a.lines, 0);
   const grandContainers = new Set<string>();
   aggregates.forEach((a) => a.containers.forEach((c) => grandContainers.add(c)));
+
+  // PERF (2026-06-03): paginate the DISPLAYED aggregate table — grand totals
+  // above are computed over the full `aggregates` array, so they stay correct;
+  // we only slice the rendered rows.
+  const page = parsePage(sp.page);
+  const offset = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageRows = aggregates.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
@@ -189,7 +198,7 @@ export default async function ContainerHsReportPage({
                 </tr>
               </thead>
               <tbody>
-                {aggregates.map((a) => {
+                {pageRows.map((a) => {
                   const pct = grandValue > 0 ? (a.value_thb / grandValue) * 100 : 0;
                   return (
                     <tr key={a.hs_code} className="border-t border-border align-top">
@@ -221,6 +230,13 @@ export default async function ContainerHsReportPage({
             </table>
           </div>
         )}
+        <Pagination
+          page={page}
+          pageSize={DEFAULT_PAGE_SIZE}
+          total={aggregates.length}
+          basePath="/admin/reports/containers-hs"
+          params={{ date_from: dateFrom, date_to: dateTo }}
+        />
       </div>
     </main>
   );

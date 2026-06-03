@@ -3,10 +3,11 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { legacyMemberUrl } from "@/lib/legacy-image";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import {
   ShoppingBag,
   Plus,
-  Search,
   Calendar,
   Receipt,
   FileText,
@@ -120,7 +121,7 @@ const TABS: readonly Tab[] = [
 export default async function ServiceOrderPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; hNo?: string }>;
+  searchParams: Promise<{ q?: string; hNo?: string; page?: string }>;
 }) {
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
@@ -180,18 +181,27 @@ export default async function ServiceOrderPage({
   const countAll = counts[""];
   const countShops2 = counts["2"];
 
+  // ── Pagination — server-side window via ?page=N (PERF 2026-06-03).
+  // Was unbounded — a long-time customer with hundreds of orders rendered
+  // every card on one page. The status counter chips above stay full-count
+  // (separate HEAD queries), so paging the list doesn't distort them.
+  const page = parsePage(sp.page);
+  const { from: rowFrom, to: rowTo } = pageRange(page);
+
   // ── shops.php L902-917 — main list query.
   let listQuery = admin
     .from("tb_header_order")
     .select(
       "hno, hstatus, hdate, hdatepayment, hcover, htitle, hcount, htotalpricechn, hrate, hshippingchn, hshippingservice, hnoteuser, hnote",
+      { count: "exact" },
     )
     .eq("userid", userID)
     .order("hdate", { ascending: false });
   if (["1", "2", "3", "4", "5", "6"].includes(q)) {
     listQuery = listQuery.eq("hstatus", q);
   }
-  const { data: rowsData } = await listQuery;
+  listQuery = listQuery.range(rowFrom, rowTo);
+  const { data: rowsData, count: totalList } = await listQuery;
   const rows: HeaderOrderRow[] = (rowsData ?? []) as unknown as HeaderOrderRow[];
 
   // ── shops.php L1095-1097 — promo badge lookup (one query for all rows).
@@ -313,6 +323,14 @@ export default async function ServiceOrderPage({
                     />
                   ))}
                 </div>
+
+                <Pagination
+                  page={page}
+                  pageSize={DEFAULT_PAGE_SIZE}
+                  total={totalList ?? 0}
+                  basePath="/service-order"
+                  params={{ q: sp.q }}
+                />
               </>
             )}
 

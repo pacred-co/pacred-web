@@ -5,6 +5,8 @@ import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 /**
  * /admin/forwarder-sales — sales-rep attribution report.
@@ -62,11 +64,13 @@ export default async function AdminForwarderSalesPage({
     rep?:        string;
     date_from?:  string;
     date_to?:    string;
+    page?:       string;
   }>;
 }) {
   await requireAdmin(["accounting", "sales_admin"]);
   const sp = await searchParams;
   const repId = (sp.rep ?? "").trim();
+  const page = parsePage(sp.page);
 
   // Default to current month (legacy convention).
   const now = new Date();
@@ -217,6 +221,12 @@ export default async function AdminForwarderSalesPage({
       };
     })
     .sort((a, b) => b.net - a.net);
+
+  // PERF (2026-06-03): paginate the DISPLAYED detail table (50/page). The
+  // leaderboard rollup + gross/net totals + CSV stay full-set-correct because
+  // they reduce over the full `rows`; only the rendered detail tbody is sliced.
+  const offset = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
   // ── 7. CSV ──
   const csvRows: CsvRow[] = rows.map((r) => ({
@@ -371,7 +381,7 @@ export default async function AdminForwarderSalesPage({
                     </td>
                   </tr>
                 ) : (
-                  rows.map((r) => (
+                  pageRows.map((r) => (
                     <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
                       <td className="px-3 py-2.5 whitespace-nowrap text-xs">
                         {r.srdate ? new Date(r.srdate).toLocaleDateString("th-TH") : "—"}
@@ -404,6 +414,15 @@ export default async function AdminForwarderSalesPage({
                 )}
               </tbody>
             </table>
+          </div>
+          <div className="px-5 pb-4">
+            <Pagination
+              page={page}
+              pageSize={DEFAULT_PAGE_SIZE}
+              total={rows.length}
+              basePath="/admin/forwarder-sales"
+              params={{ rep: repId || undefined, date_from: dateFrom, date_to: dateTo }}
+            />
           </div>
         </section>
       </main>

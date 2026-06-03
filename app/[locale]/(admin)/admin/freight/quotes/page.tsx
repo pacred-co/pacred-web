@@ -2,6 +2,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { QUOTE_STATUSES, QUOTE_STATUS_LABEL, TRANSPORT_MODE_LABEL, type QuoteStatus, type TransportMode } from "@/lib/validators/freight-quote";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 /**
  * V-E6 — /admin/freight/quotes list page.
@@ -42,7 +44,7 @@ function thb(n: number): string {
 export default async function AdminFreightQuotesListPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; q?: string }>;
+  searchParams: Promise<{ status?: string; q?: string; page?: string }>;
 }) {
   await requireAdmin(["super", "ops", "sales_admin", "accounting"]);
   const sp = await searchParams;
@@ -53,18 +55,25 @@ export default async function AdminFreightQuotesListPage({
 
   const admin = createAdminClient();
 
+  // Pagination — server-side window via ?page=N (PERF 2026-06-03).
+  const page = parsePage(sp.page);
+  const { from: rowFrom, to: rowTo } = pageRange(page);
+
   let query = admin
     .from("freight_quotes")
-    .select("id, quote_no, status, buyer_name_snapshot, buyer_tax_id_snapshot, transport_mode, total, valid_until, created_at")
+    .select(
+      "id, quote_no, status, buyer_name_snapshot, buyer_tax_id_snapshot, transport_mode, total, valid_until, created_at",
+      { count: "exact" },
+    )
     .order("created_at", { ascending: false })
-    .limit(200);
+    .range(rowFrom, rowTo);
   if (status) query = query.eq("status", status);
   if (q) {
     query = query.or(
       `quote_no.ilike.%${q}%,buyer_name_snapshot.ilike.%${q}%,buyer_tax_id_snapshot.ilike.%${q}%`,
     );
   }
-  const { data: rows, error: rowsErr } = await query;
+  const { data: rows, error: rowsErr, count: totalQuotes } = await query;
   if (rowsErr) {
     console.error(`[freight_quotes list] failed`, { code: rowsErr.code, message: rowsErr.message });
   }
@@ -198,6 +207,14 @@ export default async function AdminFreightQuotesListPage({
           </table>
         )}
       </div>
+
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={totalQuotes ?? 0}
+        basePath="/admin/freight/quotes"
+        params={{ status: sp.status, q: sp.q }}
+      />
     </main>
   );
 }
