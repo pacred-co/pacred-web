@@ -96,7 +96,7 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
   }
 
   return (
-    <main className="p-4 lg:p-6 max-w-6xl mx-auto space-y-4">
+    <main className="p-4 lg:p-6 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ฝากนำเข้า (rebuilt fallback)</p>
@@ -329,7 +329,7 @@ async function tryRenderTbForwarder(
   const slugForLink = r.fidorco ?? String(r.id);
 
   return (
-    <main className="p-4 lg:p-6 max-w-6xl mx-auto space-y-4">
+    <main className="p-4 lg:p-6 space-y-4">
       {/* ── 1. HEADER ── id + status badge + source tag + "✏️ แก้ไข" CTA */}
       <div className="space-y-3">
         <nav className="text-xs text-muted flex gap-1.5 items-center flex-wrap">

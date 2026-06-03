@@ -389,7 +389,7 @@ export default async function AdminWalletDetail({
   // RENDER
   // ────────────────────────────────────────────────────────────
   return (
-    <main className="p-4 lg:p-6 max-w-6xl mx-auto space-y-4">
+    <main className="p-4 lg:p-6 space-y-4">
       {/* ── 1. TOP CARDS: per-user + system-wide ── */}
       <section className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <BalanceCard

@@ -232,7 +232,7 @@ export default async function CntHsDetailPage({
   const linkedCount = forwarders.length;
 
   return (
-    <main className="p-6 lg:p-8 max-w-5xl mx-auto space-y-5">
+    <main className="p-6 lg:p-8 space-y-5">
       {/* Header */}
       <div className="flex items-baseline justify-between flex-wrap gap-2">
         <div>

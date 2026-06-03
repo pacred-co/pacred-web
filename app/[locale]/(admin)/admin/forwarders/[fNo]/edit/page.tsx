@@ -360,7 +360,7 @@ export default async function AdminForwarderEditPage({
   const fullAddress = addressParts.join(" ");
 
   return (
-    <main className="p-4 lg:p-6 max-w-6xl mx-auto space-y-4">
+    <main className="p-4 lg:p-6 space-y-4">
       {/* ── 1. Breadcrumb ── */}
       <nav className="text-xs text-muted flex gap-1.5 items-center flex-wrap">
         <Link href="/admin" className="hover:text-primary-600">หน้าแรก</Link>

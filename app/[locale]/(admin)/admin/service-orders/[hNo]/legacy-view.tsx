@@ -185,7 +185,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
     .join(" ");
 
   return (
-    <main className="p-6 lg:p-8 max-w-4xl mx-auto space-y-5">
+    <main className="p-6 lg:p-8 space-y-5">
       <div className="flex items-baseline justify-between flex-wrap gap-2">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ฝากสั่งซื้อ</p>

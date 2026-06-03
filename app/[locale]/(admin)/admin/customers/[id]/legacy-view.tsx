@@ -301,7 +301,7 @@ export async function renderLegacyCustomerView(id: string) {
   const walletHsCount = walletHsCountRes.count ?? 0;
 
   return (
-    <main className="p-6 lg:p-8 max-w-5xl mx-auto space-y-5">
+    <main className="p-6 lg:p-8 space-y-5">
       <div className="flex items-baseline justify-between flex-wrap gap-2">
         <div className="flex items-start gap-4">
           {/* Wave 13: legacy avatar — resolved signed URL or initial-letter
