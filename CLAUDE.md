@@ -3,6 +3,29 @@
 
 ---
 
+# 🌙 2026-06-04 NIGHT — OVERNIGHT CONTINUATION (Mac · เดฟ · owner asleep → closes AM): profile-pic + UX-confirm + estimator + brand-r2 + badges + perf · read FIRST
+
+**main = `dave-pacred` = `41d5e341`+ · 7 night save-points pushed · `pnpm verify && pnpm build` → CHAIN=0 (REAL exit codes) · both branches 0/0 · Vercel build RESTORED.** Continuation of the 🌅 run below (same day). Standing quality rules now in **AGENTS.md §0f** + memory [`ui_quality_concept_2026_06_04`]. Full night detail in [`reachability_audit_2026_06_04`] memory.
+
+**🔴 PROCESS BUG FOUND + FIXED — never gate via `| tail`.** The 🌅 run's first 2 night save-points (estimator `fc2107aa`, brand `dd35140f`) were gated through `pnpm build 2>&1 | tail` — which returns **tail's** exit code, masking 2 real `next build` failures (estimator `setState` sync-in-`useEffect`; `revalidateTag` 1-arg `TS2554`). So **Vercel couldn't deploy those** (site kept last-good — no data lost). Both fixed + the build restored in `7f63d60a`. **RULE (AGENTS.md §0f): gate with `pnpm build > /tmp/x 2>&1; echo $?` and read the REAL exit code before claiming green/pushing.**
+
+**🚀 Shipped this night (7 save-points · each gated real-exit + pushed):**
+- **Customer import price ESTIMATOR** `/service-import/estimate` — live ทางรถ/เรือ/แอร์(soon) + ตีลัง recalc (owner's "ราคานิ่งจัด" fix). Reuses the verified `resolveForwarderRate`; CUSTOMER-SAFE (strips margin/floor/tier). **Flow-recheck:** legacy pricing = admin-set-after-warehouse (`calPrice.php`, NOT customer-live) → estimator is a NEW enhancement; address-select (`cart-address-shipby`) + shipment-reassign (`adminReassignForwarderOwner`) already EXIST. Doc: [`docs/research/order-pricing-flow-recheck-2026-06-04.md`](docs/research/order-pricing-flow-recheck-2026-06-04.md).
+- **🅰 Brand sweep round-2** — 19 visible "PCS"/stale-"กทม" labels → "Pacred (สมุทรสาคร)". All 6 customer PDF docs + public pages confirmed already-clean; `366/49`=a customer's own addr (kept). `หนองแขม` free-ship allowlist FLAGGED (pricing rule may need to follow the warehouse). Doc: [`docs/research/brand-pcs-leak-sweep-2026-06-04.md`](docs/research/brand-pcs-leak-sweep-2026-06-04.md).
+- **🖼 PROFILE PICTURE WIRED** (owner "เรื่องเด็ด" · customer **AND** staff) — was a dead modal (customer) + URL-only "Wave 23" field (staff). Customer: `actions/profile-avatar.ts` + `profile/profile-avatar-upload.tsx`. Staff: `actions/admin/avatar-upload.ts` (super) + `components/admin/admin-avatar-upload-field.tsx` → wired into `admins/[id]/edit` + `admins/new`. Both → `avatars` bucket → `profiles.avatar_url`. Render-verified; mechanism = the proven prod promo-image uploader. ⚠️ **literal file-pick test = a 30-sec owner manual confirm** (couldn't automate: Chrome not auth'd to the preview).
+- **✅ Confirm-before-mutate** (กันคนลั่น) — native `confirm()` on 9 staff money/state/comms buttons (forwarder + service-order mark-paid, withdraw approve, yuan approve/reject, shop-payout transfer/reject, period soft-close, freight quote approve/**send-to-customer**/accept). Customer side was already guarded.
+- **🔢 Badge accuracy** (อย่ามั่ว) — customer sidebar counts verified read canonical `tb_*` (correct `fstatus=5`/`hstatus=2`/`paystatus=1` filters). **FIXED** admin sidebar `salesPayout` badge: was reading the empty rebuilt `sales_payouts` (0 rows) → repointed to `tb_user_sales_admin_pay` status='2' (= pending, **empirically verified** vs the `[id]` page `isPending===2`; currently 0 = correct). Dashboard `sales_payouts` (customer "เบิกค่าสินค้า") left as intentional Phase-C native-empty. Interpreter `commissions` badge flagged (missing table · ภูม).
+- **⚡ Perf survey** ([`docs/research/performance-survey-2026-06-04.md`](docs/research/performance-survey-2026-06-04.md)) — the obvious DB indexes **already exist** (migration 0109's 23 partial indexes cover userid/fstatus/hstatus/paystatus on the hot tables; agent over-flagged). Remaining = `.ilike("%term%")` searches needing Phase-C `pg_trgm` GIN + regression-risk CODE-CHANGES — **none auto-applied** (the "ห้ามทำงานบัค" guardrail). **Headline: set `NEXT_PUBLIC_SENTRY_DSN` in Vercel** → the already-wired Sentry then MEASURES the real prod P95 (the honest fix vs guess-optimizing the busiest tables). + banner-img `sizes` perf fix.
+
+**🔴 PENDING (owner / AM — unchanged from 🌅 + these):**
+1. **Apply migrations prod:** `0137`·`0139`·`0140` (next free **0141**) — I can't write prod DDL autonomously.
+2. **1 Vercel env to unblock perf:** `NEXT_PUBLIC_SENTRY_DSN` (then Sentry reports real slow transactions). + the 🌅 list (TAMIT-2026 · THAIBULKSMS · FB tokens · 3 missing admins).
+3. **30-sec manual:** confirm the profile-pic upload works (customer `/profile` + staff `/admin/admins/[id]/edit`) — same code as your working promo-image uploader.
+4. **ภูม:** define the interpreter-`commissions` badge source. **ปอน:** InwPond007 rebase (`fef7958f`). **Accounting:** ใบขน VAT sign-off + `หนองแขม` free-ship-zone-vs-warehouse decision.
+5. **Freight (Phase D):** realdata SOT = `/Users/dev/Desktop/olddata dev/data งานเก่า` (real LINE/WeChat chats + Excel + real prices) per [`ui_quality_concept_2026_06_04`].
+
+---
+
 # 🌅 2026-06-04 — AUTONOMOUS RUN (Mac · เดฟ): env reorg + Global Trade Group capture + Pacred branding swap + 4 build lanes A·B·C·E · read FIRST
 
 **main = `dave-pacred` = (this 2026-06-04 push) · `pnpm verify` EXIT 0 (lint·typecheck·~280 tests·audits) · Vercel auto-deploys main.** Resume: `git fetch origin && git pull origin main` → read this. On a new machine do `.env.local` first (see 2026-06-03 below + memory [`reachability_audit_2026_06_04`] + [`global_trade_group_2026_06_04`]).
