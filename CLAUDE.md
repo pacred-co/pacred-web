@@ -3,6 +3,25 @@
 
 ---
 
+# 💻 2026-06-03 — SESSION CLOSE + MACHINE MOVE (Windows คอมบริษัท → Mac บ้าน) · FULL TEAM MERGE + ฝากสั่งซื้อ detail REWRITE · read FIRST
+
+**main = `dave-pacred` = `26a01caf` · pushed · `pnpm verify` EXIT 0 (lint·typecheck·test:unit·audit:all all green) · Vercel auto-deploys `main`.** Resume on Mac: `git fetch origin && git pull origin main` → read this section.
+
+> ⚠️ **Mac needs `.env.local` first** (the Windows one doesn't travel). Per memory [`local-dev-env-and-legacy-path`]: local `.env.local` must hold the REAL **prod** Supabase keys (`yzljakczhwrpbxflnmco`) — a PLACEHOLDER `.env.local` (fake keys) is the root cause of *"กดอะไรก็ค้าง error เพียบ"* (public pages 200 but every DB click hangs). Owner provides the prod env paste. `OTP_BYPASS=true` STAYS (ThaiBulk corporate SMS too slow). `PACRED_TAMIT_DETAIL_URL` must be `…/api-product-2026` (bare `/api-product` = dead 404). Legacy PCS source (faithful-port SOT) on Windows was at `C:\Users\Admin\Desktop\newrealdatapcs\pcscargo\member\{,/pcs-admin}` — on Mac it's at `/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/public_html/` per the `legacy-php-sweep` skill (AGENTS.md §0b's `D:\REALSHITDATAPCS` is wrong on both).
+
+**🚀 Shipped + pushed this session (เดฟ integrator + ก๊อต/ภูม/ปอน — multiple verified batches):**
+- **🔴 FULL-TEAM MERGE (2 rounds)** — round 1 (`cbc7ee06`): ปอน register split-screen + ภูม's 27 (search-E1 SKU picker · forwarder `[fNo]` read-only redesign+`/edit` · §0e tb_* pivots · yuan-bulk · momo-cron). round 2 / session-close (`9d6a791a`): ปอน +9 (register polish + **LCL-pricing** rebuild) + ภูม +21 (**ใบวางบิล R-2** billing-run admin+customer+print · **migration 0138_forwarder_invoice APPLIED prod by ภูม** · forwarders/edit PCS-style single-page · receipt/ใบส่งสินค้า redesign · `max-w` sweep 21 pages). **Read EVERY money-path conflict by hand** (the "diff-stat lies" trap) — notably KEPT เดฟ's §0e `notes/page.tsx` live-`tb_header_order` fix over ภูม's dead-read `service_orders` version; took ภูม's richer search-E1; renumbered ภูม's `0135_pcs_sync`→**`0137`** (collided with promo `0135`).
+- **🔴 ฝากสั่งซื้อ admin detail REWRITE (`884c1a42` · owner directive "รื้อทั้งหน้าให้เหมือน legacy เป๊ะ")** — `/admin/service-orders/[hNo]` was read-only KV + 8 stacked forms, MISSING the editable per-item price table → CS/ล่าม ใช้ไม่ได้. **Decoded legacy `shops.php`/`update.php`/`update1-5.php` price+loop from source** (formula proven vs the HTML owner pasted: 2,120¥×5.01=10,621.20฿). Rewrote into ONE faithful page: 5-step bar · customer + inline-edits (hRate/transport/crate/shipBy/payMethod/address) · price breakdown + กำไร · **editable items table (จำนวน/¥ราคา/ค่าขนส่งจีน + live calc) + new action `adminSaveShopOrderItemsAndQuote`** (= legacy `update2`: per-item save → recompute hTotalPriceCHN/hShippingCHN/hTotalPriceUser → guard via `tb_wallet_hs.reforder` → hStatus=2 + hDatePayment+5d + 4-CH notify). Reused all ภูม's step-3/4/5 + inline actions. Built via worktree agent + **เดฟ reviewed the money action line-by-line**.
+- **CI:** `.agents/` tooling added to md-link-audit `SKIP_DIRS` (pre-existing broken links, like `.claude`) · declared `PCS_SYNC_URL/TOKEN` + `SUPABASE_DB_PASSWORD` in `.env.example` (used-but-undeclared → audit:env).
+
+**🔴 PENDING (next session / Mac):**
+1. **ฝากสั่งซื้อ rewrite NOT browser-verified** — compiles (307 admin-gate) + money action reviewed, but the **save flow was NOT click-tested** (§0c). On Mac: login admin → open a status-1 ออเดอร์ → verify editable price table + live calc + "บันทึก+รอชำระเงิน" writes tb_order/tb_header_order correctly + 1→2 + notify. ⚠️ test on a TEST order (writes real prod data).
+2. **Owner Vercel env (เดฟ no token):** `PACRED_TAMIT_DETAIL_URL`→`/api-product-2026` · `THAIBULKSMS_FORCE`→`corporate` (PM-8 TODOs, still open) · **pcs-sync activation:** apply migration **`0137`** + set `PCS_SYNC_URL`/`PCS_SYNC_TOKEN` + deploy `pcscargo.com/api/pacred-sync.php` (cron fails gracefully until then).
+3. **Migrations:** `0137_pcs_sync` ⏳ NOT applied · `0138_forwarder_invoice` ✅ applied prod by ภูม. NEXT FREE = **0139**.
+4. **ภูม + ปอน:** their branches moved during the merge (they kept working) — on resume they `git pull origin main` (their work IS in main; I did NOT force-distribute).
+
+---
+
 # 🏠 2026-06-02 PM-8 — SESSION CLOSE + MACHINE MOVE (→ บ้าน) · 2 PROD ENV INCIDENTS + Wave-A + ก๊อต/ปอน MERGED · read FIRST
 
 **main = `dave-pacred` = (this session-close commit)+ · pushed · typecheck+lint+build EXIT 0 · prod LIVE (Vercel auto-deploys `main`).** Resume at home: `git fetch origin && git pull origin main` → read this section. Owner closed the company-computer session.
