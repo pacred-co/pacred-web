@@ -235,15 +235,15 @@ export function RegisterClient({
   return (
     <>
       <NavBar />
-      <main className="flex items-stretch justify-center bg-background md:min-h-[calc(100dvh-56px)]">
+      <main className="flex items-stretch justify-center bg-background md:h-[calc(100dvh-56px)] md:overflow-hidden">
         {/* LEFT — desktop-only promo banner, full-bleed flush to the left edge +
             full height. Hidden < md so mobile is unchanged. */}
         <RegisterAdsBanner />
 
         {/* RIGHT — white form panel whose rounded-left edge curves over the banner
             (md:-ml-12 + md:rounded-l-[3rem]). The form FIELDS below are UNCHANGED. */}
-        <div className="relative z-10 flex w-full items-start justify-center px-4 pt-0 pb-0 md:-ml-12 md:flex-1 md:items-center md:rounded-l-[3rem] md:bg-white md:px-0 md:py-8 md:shadow-[-24px_0_60px_-15px_rgba(0,0,0,0.15)] md:dark:bg-surface">
-        <div className="w-full max-w-[540px] min-h-[calc(100dvh-56px)] rounded-none border-0 bg-white p-3 shadow-[0_20px_50px_rgba(0,0,0,0.04)] dark:border-border dark:bg-surface sm:p-7 md:min-h-0 md:h-auto md:rounded-none md:border-0 md:bg-transparent md:shadow-none md:dark:bg-transparent">
+        <div className="relative z-10 flex w-full items-start justify-center px-4 pt-0 pb-0 md:-ml-12 md:flex-1 md:items-start md:overflow-y-auto md:rounded-l-[3rem] md:bg-white md:px-0 md:py-4 md:shadow-[-24px_0_60px_-15px_rgba(0,0,0,0.15)] md:dark:bg-surface">
+        <div className="w-full max-w-[540px] min-h-[calc(100dvh-56px)] rounded-none border-0 bg-white p-3 shadow-[0_20px_50px_rgba(0,0,0,0.04)] dark:border-border dark:bg-surface sm:p-7 md:my-auto md:min-h-0 md:h-auto md:rounded-none md:border-0 md:bg-transparent md:shadow-none md:dark:bg-transparent">
 
           {/* Logo — wordmark (140×140 source w/ ~25% whitespace top+bottom); render at
               110px square + tight negative margins so title hugs the wordmark baseline.
