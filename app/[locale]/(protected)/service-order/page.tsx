@@ -10,10 +10,10 @@ import {
   Calendar,
   Receipt,
   FileText,
-  XCircle,
   CheckCircle2,
   Eye,
 } from "lucide-react";
+import { CancelOrderButton } from "./cancel-order-button";
 
 /**
  * รายการฝากสั่งซื้อสินค้า — Tailwind-rebuilt version (ปอน 2026-05-26).
@@ -443,13 +443,7 @@ function OrderCard({
             </Link>
           )}
           {Number(row.hstatus) <= 2 && (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[11.5px] font-bold px-2.5 py-1 hover:bg-rose-100 transition-colors"
-            >
-              <XCircle className="w-3 h-3" strokeWidth={2.2} />
-              ยกเลิก
-            </button>
+            <CancelOrderButton hNo={row.hno} />
           )}
           {row.hstatus === "5" && (
             <Link

@@ -279,6 +279,13 @@ export default async function ProtectedLayout({
         dangerouslySetInnerHTML={{
           __html: `
             var basePath = '/legacy/pcs/';
+            // doGTranslate stub (เดฟ 2026-06-04): legacy app.min.js:304 (pcsLangMenu)
+            // calls Google-Translate's doGTranslate, which Pacred never loads (we use
+            // next-intl + our own TH/EN toggle). Define a no-op BEFORE app.min.js runs
+            // to kill the "doGTranslate is not defined" ReferenceError that fired on
+            // every protected page. pcsLangMenu's useful part (loading lang/X.js string
+            // tables) still runs.
+            window.doGTranslate = window.doGTranslate || function () {};
             (function () {
               var sources = ${JSON.stringify(JS_BUNDLE)};
               sources.forEach(function (src) {

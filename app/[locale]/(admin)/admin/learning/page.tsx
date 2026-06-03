@@ -62,7 +62,7 @@ export default async function AdminLearningPage({ searchParams }: { searchParams
           <div className="mt-5 border-t border-dashed border-border pt-5 text-sm text-muted space-y-2">
             <p>หน้านี้เป็น <strong className="font-semibold text-default">placeholder</strong> สำหรับเนื้อหา &quot;{cfg.label}&quot;</p>
             <p>เจ้าหน้าที่ HR/แอดมินจะเพิ่มเอกสาร · วิดีโอ · หรือลิงก์ที่เกี่ยวข้องในเฟสถัดไป (Phase H — editor + upload + sign-acknowledge flow)</p>
-            <p className="text-xs">หากต้องการเสนอเนื้อหา ติดต่อทีม HR หรือเปิด ticket ที่ <Link href="/admin/inbox" className="text-primary-600 hover:underline">/admin/inbox</Link></p>
+            <p className="text-xs">หากต้องการเสนอเนื้อหา ติดต่อทีม HR หรือเปิด ticket ที่ <Link href="/admin/board/inbox" className="text-primary-600 hover:underline">/admin/board/inbox</Link></p>
           </div>
         </div>
       </main>
