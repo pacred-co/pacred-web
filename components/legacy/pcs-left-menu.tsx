@@ -173,6 +173,7 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
             </span>
           </SubLink>
           <SubLink href="/service-import/add">เพิ่มรายการนำเข้า</SubLink>
+          <SubLink href="/service-import/estimate">ประเมินราคานำเข้า</SubLink>
           <SubLink href="/service-import?q=7">ประวัติการนำเข้า</SubLink>
         </PcsLeftMenuAccordion>
 
