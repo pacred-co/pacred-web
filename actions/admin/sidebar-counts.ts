@@ -138,9 +138,21 @@ async function computeSidebarCounts(): Promise<BadgeCounts> {
       admin.from("tb_payment").select("id", { count: "exact", head: true })
         .eq("paystatus", "1"),
       // ── เบิกเงิน (payouts) ──────────────────────────────────────
-      admin.from("sales_payouts").select("id", { count: "exact", head: true })
-        .eq("status", "pending"),
+      // 2026-06-04 (§0e · อย่ามั่ว): repointed from the empty rebuilt
+      // `sales_payouts` (0 rows on prod) to the canonical
+      // `tb_user_sales_admin_pay` status='2' = pending payout — matches the
+      // /admin/sales-payouts page (page-doc: "status='2' when an agent requests
+      // a payout · LIST WHERE status=2"). The old twin pinned this badge at 0
+      // while real payout requests waited, so staff never saw the queue.
+      admin.from("tb_user_sales_admin_pay").select("id", { count: "exact", head: true })
+        .eq("status", "2"),
       // โบนัสล่ามจีน — interpreter commission payouts pending.
+      // ⚠️ 2026-06-04 FLAG: the `commissions` table is missing/empty on prod, so
+      // this badge is 0 — currently CORRECT (no interpreter-bonus payout feature
+      // built; /admin/commissions reads tb_user_sales + tb_user_sales_admin_pay).
+      // Do NOT repoint here to tb_user_sales_admin_pay — it would double-count the
+      // payout badge above. Owner/ภูม (accounting) define the interpreter-pending
+      // source if/when that queue becomes real.
       admin.from("commissions").select("id", { count: "exact", head: true })
         .eq("status", "pending"),
       // ── ลูกค้า ──────────────────────────────────────────────────
