@@ -77,7 +77,7 @@ export function ShopPayoutActions({
         <Button
           size="sm"
           type="button"
-          onClick={() => set("completed")}
+          onClick={() => { if (confirm("ยืนยันบันทึกว่าโอนเงินแล้ว? (ทำเครื่องหมายจ่ายเสร็จ — มีผลกับ wallet)")) set("completed"); }}
           disabled={pending}
         >
           โอนแล้ว
@@ -86,7 +86,7 @@ export function ShopPayoutActions({
           size="sm"
           variant="outline"
           type="button"
-          onClick={() => set("cancelled")}
+          onClick={() => { if (confirm("ยืนยันปฏิเสธรายการจ่ายเงินนี้?")) set("cancelled"); }}
           disabled={pending}
         >
           ปฏิเสธ

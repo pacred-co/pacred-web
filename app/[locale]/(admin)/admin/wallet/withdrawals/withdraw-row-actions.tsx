@@ -59,7 +59,9 @@ export function WithdrawRowActions({ id }: { id: number }) {
         <div className="flex flex-wrap gap-1.5">
           <button
             type="button"
-            onClick={approve}
+            onClick={() => {
+              if (confirm("ยืนยันจ่ายเงินถอน — อนุมัติจ่ายเงินออกให้ลูกค้ารายการนี้?")) approve();
+            }}
             disabled={pending}
             className="inline-flex items-center gap-1 rounded-md bg-green-600 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-green-700 disabled:opacity-50"
           >

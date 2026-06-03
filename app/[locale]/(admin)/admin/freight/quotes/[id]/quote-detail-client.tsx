@@ -297,7 +297,7 @@ function StatusActions({ data, hasItems }: { data: QuoteDetailData; hasItems: bo
             <button
               type="button"
               disabled={pending}
-              onClick={() => call(() => adminApproveQuote({ id: data.id }))}
+              onClick={() => { if (confirm("ยืนยันอนุมัติใบเสนอราคานี้?")) call(() => adminApproveQuote({ id: data.id })); }}
               className="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50"
             >
               ✓ อนุมัติ
@@ -321,7 +321,7 @@ function StatusActions({ data, hasItems }: { data: QuoteDetailData; hasItems: bo
           <button
             type="button"
             disabled={pending}
-            onClick={() => call(() => adminSendQuote({ id: data.id }))}
+            onClick={() => { if (confirm("ยืนยันส่งใบเสนอราคานี้ให้ลูกค้า? (ลูกค้าจะได้รับการแจ้งเตือน)")) call(() => adminSendQuote({ id: data.id })); }}
             className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-bold text-white hover:bg-purple-700 disabled:opacity-50"
           >
             📨 ส่งให้ลูกค้า
@@ -333,7 +333,7 @@ function StatusActions({ data, hasItems }: { data: QuoteDetailData; hasItems: bo
             <button
               type="button"
               disabled={pending}
-              onClick={() => call(() => adminMarkQuoteAccepted({ id: data.id }))}
+              onClick={() => { if (confirm("ยืนยันว่าลูกค้าตอบรับใบเสนอราคานี้แล้ว?")) call(() => adminMarkQuoteAccepted({ id: data.id })); }}
               className="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50"
             >
               ✓ ลูกค้าตอบรับ
