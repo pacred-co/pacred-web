@@ -107,4 +107,12 @@ Customer-side comms (also avoid): `placeServiceOrder`/`submitCartOrder`, `paySer
 
 **Customer pricing estimator** (transport/crate live quote) — added, see [`order-pricing-flow-recheck-2026-06-04.md`](order-pricing-flow-recheck-2026-06-04.md).
 
-Pushed to `main` + `dave-pacred` in 3 save-points this run (estimator · brand sweep · avatar+audit).
+**Confirm-before-mutate sweep (กันคนลั่น — owner directive).** Audit found 9 staff money/state/comms buttons firing on a single click; customer side + most admin destructive actions were already guarded (Wave 23). Added native `confirm()` (matching each file's existing pattern) to: forwarder & service-order mark-paid (money), withdraw approve (payout), yuan approve/reject, shop-payout transfer/reject, accounting period soft-close, freight quote approve/**send-to-customer**/accept. The send-quote guard doubly matters (กันลั่นแจ้งเตือนลูกค้า).
+
+**Staff profile-picture upload (the other half of "ใช้ไม่ได้จริง").** `/admin/admins/[id]/edit` + `/admins/new` had a URL-only field ("file upload — Wave 23" deferred). Wired `actions/admin/avatar-upload.ts` (super-gated) + `components/admin/admin-avatar-upload-field.tsx` (reusable: preview + file button + keeps URL paste). Render-confirmed (button present, page 200). Mechanism = the proven prod promo-image uploader (same `uploadToBucket`→`avatars`→getPublicUrl). ⚠️ literal file-pick→display click-test not automated (Chrome not auth'd to the preview + file-path restriction) → a 30-sec owner manual confirm is the only unverified step.
+
+**Badge-number accuracy (อย่ามั่ว — owner directive).** Verified the customer sidebar counts (`lib/legacy/pcs-chrome.ts`): all read canonical `tb_*` (tb_forwarder/tb_header_order/tb_cart/tb_payment/tb_wallet/…) with correct filters (`fstatus=5`/`hstatus=2`/`paystatus=1` = the real "รอชำระ"), `countPaymentDue` correctly sums the three. No wrong-source/0-row-twin counts on the customer side. (Admin sidebar counts = a larger follow-up audit.)
+
+**Concept captured** (owner "จดในคอนเซป"): memory `ui_quality_concept_2026_06_04` + AGENTS.md §0f (confirm-before-mutate · accurate badges · linked+reachable all roles · perf-no-regression · gate-never-through-`tail`).
+
+Pushed to `main` + `dave-pacred` in **5 save-points** this run (estimator · brand sweep · build-restore+customer-avatar · confirm-dialogs · staff-avatar). Build restored (the first 2 save-points had been masked by `| tail` and couldn't deploy). Next: performance survey (read-only, risk-labeled — only SAFE-ADDITIVE fixes auto-applied).
