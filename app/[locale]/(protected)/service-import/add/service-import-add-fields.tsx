@@ -206,7 +206,7 @@ export function ServiceImportAddFields({
               {a.full}
             </option>
           ))}
-          <option value="PCS">รับเองหน้าโกดัง Pacred กทม</option>
+          <option value="PCS">รับเองหน้าโกดัง Pacred (สมุทรสาคร)</option>
         </select>
 
         {/* P1-18 — carrier (#hShipBy) picker. Repopulates when the address
@@ -218,7 +218,7 @@ export function ServiceImportAddFields({
         {!hasAddress && (
           <p className="mt-2 text-[13px] text-muted">
             คุณยังไม่มีที่อยู่จัดส่ง — เลือก &ldquo;รับเองหน้าโกดัง Pacred
-            กทม&rdquo; หรือ{" "}
+            (สมุทรสาคร)&rdquo; หรือ{" "}
             <Link
               href="/addresses/add"
               target="_blank"

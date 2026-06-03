@@ -83,7 +83,7 @@ import { Pagination } from "@/components/admin/pagination";
  *
  * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
  * `PR<n>` + Pacred — incl. the address-pickup option
- * ("รับเองหน้าโกดัง Pacred กทม"). The `value="PCS"` data value on the
+ * ("รับเองหน้าโกดัง Pacred (สมุทรสาคร)"). The `value="PCS"` data value on the
  * pickup option stays (it's the DB-stored fShipBy value the legacy
  * tb_*.fshipby rows persist).
  */
@@ -448,7 +448,7 @@ export default async function ForwarderTablePage({
 
   // ── the add-forwarder modal address <select> (L1149-1167) ──
   // The main address (tb_address ⋈ tb_address_main) first, then every
-  // other active address; "รับเองหน้าโกดัง PCS กทม" appended last.
+  // other active address; "รับเองหน้าโกดัง Pacred (สมุทรสาคร)" appended last.
   // (tb_address.addressid / tb_address_main.addressid are bigint.)
   const addressOptions: AddressOption[] = [];
   let mainAddressID: number | null = null;
@@ -1201,7 +1201,7 @@ export default async function ForwarderTablePage({
                           {a.fullAddress}
                         </option>
                       ))}
-                      <option value="PCS">รับเองหน้าโกดัง Pacred กทม</option>
+                      <option value="PCS">รับเองหน้าโกดัง Pacred (สมุทรสาคร)</option>
                     </select>
                   </div>
                   <div id="selectShipBy"></div>

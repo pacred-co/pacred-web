@@ -589,7 +589,7 @@ export function AdminForwarderNewForm({
           <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
             *บริษัทอยู่ในช่วงโปรโมชั่นจัดส่งฟรี ในพื้นที่ กทม. และปริมณฑล —
             หากที่อยู่ปลายทางอยู่ในพื้นที่ ให้เลือก{" "}
-            <strong>&ldquo;PCS เหมาๆ (50 บ.) — กทม + ปริมณฑล&rdquo;</strong>
+            <strong>&ldquo;Pacred เหมาๆ (50 บ.) — กทม + ปริมณฑล&rdquo;</strong>
           </div>
         )}
 
@@ -609,7 +609,7 @@ export function AdminForwarderNewForm({
           >
             <option value="">— กรุณาเลือกบริษัทขนส่ง —</option>
             {freeShipping && (
-              <option value="PCSF">📦 PCS เหมาๆ (50 บ.) — กทม + ปริมณฑล</option>
+              <option value="PCSF">📦 Pacred เหมาๆ (50 บ.) — กทม + ปริมณฑล</option>
             )}
             {SHIP_BY_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>

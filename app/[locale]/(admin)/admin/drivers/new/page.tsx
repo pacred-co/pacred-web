@@ -54,9 +54,9 @@ type DriverOption = {
 // nameShipBy equivalent (compact subset from legacy function.php — extend
 // later if more carriers appear in data). Keep cases stable for prod fidelity.
 const SHIP_BY_LABEL: Record<string, string> = {
-  PCSF: "PCS รถ",
-  PCSE: "PCS Express",
-  PCS:  "PCS",
+  PCSF: "Pacred เหมาเหมา",
+  PCSE: "Pacred Express",
+  PCS:  "รับเองโกดัง Pacred",
   "1":  "KERRY",
   "2":  "ไปรษณีย์",
   "3":  "Flash",

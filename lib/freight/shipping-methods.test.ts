@@ -87,16 +87,16 @@ eq("code '47' Thai = 'ภูเก็ตแหลมทองขนส่ง'", 
 
 // Special tokens — these are NOT numeric ids
 const pcsPickup = getShippingMethodByCode("PCS");
-eq("code 'PCS' Thai = 'รับเองโกดัง PCS กทม'", pcsPickup?.nameTh, "รับเองโกดัง PCS กทม");
+eq("code 'PCS' Thai = 'รับเองโกดัง Pacred (สมุทรสาคร)'", pcsPickup?.nameTh, "รับเองโกดัง Pacred (สมุทรสาคร)");
 
 const auto = getShippingMethodByCode("F");
 eq("code 'F' Thai = 'บริษัทจัดหาให้อัตโนมัติ'", auto?.nameTh, "บริษัทจัดหาให้อัตโนมัติ");
 
 const pcsf = getShippingMethodByCode("PCSF");
-eq("code 'PCSF' Thai = 'PCS เหมาเหมา'", pcsf?.nameTh, "PCS เหมาเหมา");
+eq("code 'PCSF' Thai = 'Pacred เหมาเหมา'", pcsf?.nameTh, "Pacred เหมาเหมา");
 
 const pcse = getShippingMethodByCode("PCSE");
-eq("code 'PCSE' Thai = 'PCS Express'", pcse?.nameTh, "PCS Express");
+eq("code 'PCSE' Thai = 'Pacred Express'", pcse?.nameTh, "Pacred Express");
 
 // ── (c) lookup not found ─────────────────────────────────────────
 console.log("\n(c) lookup not found");
@@ -109,7 +109,7 @@ eq("garbage code → null", getShippingMethodByCode("XYZ"), null);
 console.log("\n(d) nameShipBy() — legacy switch parity");
 eq("nameShipBy('2') = 'Flash Express'", nameShipBy("2"), "Flash Express");
 eq("nameShipBy('1') = 'DHL Express'", nameShipBy("1"), "DHL Express");
-eq("nameShipBy('PCS') = 'รับเองโกดัง PCS กทม'", nameShipBy("PCS"), "รับเองโกดัง PCS กทม");
+eq("nameShipBy('PCS') = 'รับเองโกดัง Pacred (สมุทรสาคร)'", nameShipBy("PCS"), "รับเองโกดัง Pacred (สมุทรสาคร)");
 // Legacy returns the Thai string 'ไม่พบข้อมูล' for unknown codes (function.php:145).
 eq("nameShipBy('999') = 'ไม่พบข้อมูล' (legacy default)", nameShipBy("999"), "ไม่พบข้อมูล");
 eq("nameShipBy('') = 'ไม่พบข้อมูล'", nameShipBy(""), "ไม่พบข้อมูล");

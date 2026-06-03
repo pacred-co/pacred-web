@@ -86,7 +86,7 @@ export const TRANSPORT_TYPE_LABEL: Record<string, string> = {
  * code for the rest — the breakdown stays correct, just shows the code.
  */
 export const SHIP_BY_LABEL: Record<string, string> = {
-  PCS: "รับเองโกดัง PCS กทม",
+  PCS: "รับเองโกดัง Pacred (สมุทรสาคร)",
   "1": "DHL Express",
   "2": "Flash Express",
   "3": "J.K. เอ็กซ์เพรส",
