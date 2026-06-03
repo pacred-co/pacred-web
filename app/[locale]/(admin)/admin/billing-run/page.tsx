@@ -29,8 +29,126 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { getInvoiceList } from "@/actions/admin/billing-run";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { CntListTable, type CntListRow } from "../report-cnt/cnt-list-table";
 
 export const dynamic = "force-dynamic";
+
+// Warehouse + transport label maps (mirrors /admin/report-cnt/page.tsx).
+// Kept inline so this page is self-contained.
+const WAREHOUSE_LABEL: Record<string, string> = {
+  "1": "แสง", "2": "CTT", "3": "MK", "4": "MX",
+  "5": "JMF", "6": "GOGO", "7": "Cargo Center", "8": "MOMO",
+};
+const TRANSPORT_LABEL: Record<string, string> = {
+  "1": "🚛 ทางรถ", "2": "🚢 ทางเรือ", "3": "✈️ ทางอากาศ",
+};
+
+/**
+ * Load cabinets that arrived in Thailand (fstatus > 3) in the last 30 days +
+ * group by fCabinetNumber. Mirrors the query in /admin/report-cnt/page.tsx
+ * (succeed page mode) but capped + scoped for the billing-run side-list.
+ *
+ * 2026-06-03 ภูม flag: "เอาหน้านี้มาแปะที่หน้าใบวางบิล" — copy the cabinet
+ * list from /admin/report-cnt?page=succeed onto this page so accounting can
+ * see cabinets that arrived + jump to creating invoices in one place.
+ */
+async function loadEligibleCabinets(): Promise<CntListRow[]> {
+  const admin = createAdminClient();
+
+  // Date range: last 30 days (vs report-cnt's 90 days — narrower for billing
+  // focus · accounting cares about recent arrivals, not historic).
+  const today = new Date();
+  const thirtyAgo = new Date();
+  thirtyAgo.setDate(thirtyAgo.getDate() - 30);
+  const startDate = thirtyAgo.toISOString().slice(0, 10);
+  const endDate = today.toISOString().slice(0, 10);
+
+  const { data: rows, error } = await admin
+    .from("tb_forwarder")
+    .select(
+      "fwarehousename,fdatestatus4,fstatus,fcabinetnumber,fdatecontainerclose,ftransporttype,fvolume,fweight,fcosttotalprice,ftotalprice",
+    )
+    .not("fcabinetnumber", "is", null)
+    .neq("fcabinetnumber", "")
+    .neq("fcabinetnumber", "0")
+    .gt("fstatus", "3")
+    .gte("fdatecontainerclose", startDate + " 00:00:00")
+    .lte("fdatecontainerclose", endDate + " 23:59:59")
+    .limit(50_000);
+  if (error) {
+    console.error(`[billing-run loadEligibleCabinets]`, { code: error.code, message: error.message });
+    return [];
+  }
+  if (!rows) return [];
+
+  // Group by cabinet (PostgREST cannot do SUM/GROUP BY without an RPC, so
+  // aggregate at app layer · same as /admin/report-cnt).
+  type Row = {
+    fwarehousename: string;
+    fdatestatus4: string | null;
+    fstatus: string;
+    fcabinetnumber: string;
+    fdatecontainerclose: string | null;
+    ftransporttype: string;
+    fvolume: number;
+    fweight: number;
+    fcosttotalprice: number;
+    ftotalprice: number;
+  };
+  const byContainer = new Map<string, CntListRow>();
+  for (const r of (rows as Row[])) {
+    const k = r.fcabinetnumber;
+    const existing = byContainer.get(k);
+    if (existing) {
+      existing.trackCount += 1;
+      existing.volumeSum += Number(r.fvolume ?? 0);
+      existing.weightSum += Number(r.fweight ?? 0);
+      existing.costSum   += Number(r.fcosttotalprice ?? 0);
+      existing.priceSum  += Number(r.ftotalprice ?? 0);
+      if (r.fdatestatus4 && (!existing.fdatestatus4 || r.fdatestatus4 > existing.fdatestatus4)) {
+        existing.fdatestatus4 = r.fdatestatus4;
+      }
+    } else {
+      byContainer.set(k, {
+        fcabinetnumber: k,
+        fwarehousename: r.fwarehousename,
+        fdatecontainerclose: r.fdatecontainerclose,
+        fdatestatus4: r.fdatestatus4,
+        ftransporttype: r.ftransporttype,
+        fstatus: r.fstatus,
+        trackCount: 1,
+        volumeSum: Number(r.fvolume ?? 0),
+        weightSum: Number(r.fweight ?? 0),
+        costSum:   Number(r.fcosttotalprice ?? 0),
+        priceSum:  Number(r.ftotalprice ?? 0),
+        isPaid:    false, // not relevant for billing — we don't filter on cnt-payment here
+      });
+    }
+  }
+
+  // Hydrate isPaid from tb_cnt_item (whether internal cnt-payment was made).
+  const visibleCabs = Array.from(byContainer.keys());
+  if (visibleCabs.length > 0) {
+    const { data: paidRows, error: paidErr } = await admin
+      .from("tb_cnt_item")
+      .select("fCabinetNumber")
+      .in("fCabinetNumber", visibleCabs);
+    if (paidErr) {
+      console.error(`[billing-run loadEligibleCabinets paid]`, { code: paidErr.code, message: paidErr.message });
+    }
+    const paidSet = new Set((paidRows ?? []).map((r) => (r as { fCabinetNumber: string }).fCabinetNumber));
+    for (const [k, v] of byContainer) {
+      v.isPaid = paidSet.has(k);
+    }
+  }
+
+  return Array.from(byContainer.values()).sort((a, b) => {
+    if (!a.fdatecontainerclose) return 1;
+    if (!b.fdatecontainerclose) return -1;
+    return b.fdatecontainerclose.localeCompare(a.fdatecontainerclose);
+  });
+}
 
 type SearchParams = {
   tab?: string;
@@ -107,8 +225,17 @@ export default async function BillingRunListPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  await requireAdmin(["super", "accounting", "ops"]);
+  const { roles } = await requireAdmin(["super", "accounting", "ops"]);
   const sp = await searchParams;
+
+  // 2026-06-03 ภูม flag: pre-load cabinet list (last 30d · เข้าโกดังไทยแล้ว)
+  // so accounting can browse arrived containers + jump to billing in one
+  // place. Mirrors /admin/report-cnt?page=succeed.
+  const eligibleCabinets = await loadEligibleCabinets();
+  const showMoney =
+    roles.includes("super") ||
+    roles.includes("ops") ||
+    roles.includes("accounting");
 
   const requestedTab = (sp.tab ?? "recent") as TabKey;
   const tab = TABS.find((t) => t.key === requestedTab)?.key ?? "recent";
@@ -216,6 +343,55 @@ export default async function BillingRunListPage({
             );
           })}
         </nav>
+
+        {/* 📦 ตู้พร้อมวางบิล — embed of /admin/report-cnt?page=succeed
+            (2026-06-03 ภูม flag: "เอาหน้านี้มาแปะที่หน้าใบวางบิล").
+            Accounting can browse arrived containers + click to create
+            a billing-run invoice without bouncing to report-cnt first. */}
+        <section className="rounded-2xl border border-sky-200 bg-sky-50/30 dark:bg-sky-950/10 overflow-hidden">
+          <header className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-sky-200 bg-sky-100/40">
+            <div>
+              <h2 className="font-bold text-sm flex items-center gap-1.5">
+                📦 ตู้พร้อมวางบิล <span className="text-xs font-normal text-muted">(เข้าโกดังไทยแล้ว · 30 วันล่าสุด)</span>
+              </h2>
+              <p className="text-xs text-muted mt-0.5">
+                ตู้ที่ถึงไทยแล้ว · ใช้ดูภาพรวมก่อนกด <strong>+ สร้างใบวางบิลใหม่</strong>
+                {" "}— เลือกลูกค้า/forwarders ในตู้นั้นๆ ที่หน้า /add
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/admin/report-cnt?page=succeed"
+                className="text-xs text-sky-700 hover:underline inline-flex items-center gap-1"
+              >
+                → ดูตู้ทั้งหมด
+              </Link>
+              <Link
+                href="/admin/billing-run/add"
+                className="rounded bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 text-xs font-medium"
+              >
+                + สร้างใบวางบิลใหม่
+              </Link>
+            </div>
+          </header>
+
+          {eligibleCabinets.length === 0 ? (
+            <div className="p-6 text-center text-sm text-muted">
+              ไม่มีตู้ที่ถึงโกดังไทยใน 30 วันล่าสุด
+              {" "}<Link href="/admin/report-cnt?page=succeed" className="text-sky-600 hover:underline">→ ดูประวัติทั้งหมด</Link>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-surface">
+              <CntListTable
+                rows={eligibleCabinets}
+                showMoney={showMoney}
+                isWaiting={false}
+                warehouseLabel={WAREHOUSE_LABEL}
+                transportLabel={TRANSPORT_LABEL}
+              />
+            </div>
+          )}
+        </section>
 
         {/* Outstanding amount banner (only when there's unpaid in current view) */}
         {totalUnpaid > 0 && (
