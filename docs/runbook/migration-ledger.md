@@ -5,9 +5,11 @@
 
 ---
 
-## 🔢 NEXT FREE NUMBER = **0138**
+## 🔢 NEXT FREE NUMBER = **0140**
 
-ใครจะเขียน migration ใหม่ → ใช้ `0138_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
+ใครจะเขียน migration ใหม่ → ใช้ `0140_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
+
+> 2026-06-04 Lane C: **0138** = `forwarder_invoice` (ใบวางบิล R-2 · 2 tables · ✅ **applied prod by ภูม** per CLAUDE.md session-close 2026-06-03) · **0139** = `min_sell_floor` (seed 1 `business_config` key `pricing.min_sell_floor` for the sales min-sell guardrail — กว่างโจว 2,900 / อี้อู 4,900 / เรือ +300 · global-trade-group §5). ⏳ **0139 NOT applied prod yet** — idempotent `on conflict do nothing` seed · zero schema change · the loader falls back to identical defaults so applying is OPTIONAL.
 
 > 2026-06-02 PM-6: **0136** = `partners` (external logistics/business partner directory · staff-CRUD gap §PM-6 #3 — 1 NEW isolated table, NO FK to legacy, RLS service_role/admin-only · mirrors carriers/freight_quote). ⏳ **NOT applied prod yet** — เดฟ applies (direct-DB back up · pure DDL · idempotent `create … if not exists`).
 
@@ -46,6 +48,8 @@
 | 0135 | `import_promo_banner_config` | เดฟ | ✅ **applied prod 2026-06-01 via PostgREST** (IPv6 direct-DB was down on the home machine → applied the 6 INSERTs through `POST /rest/v1/business_config` + `Prefer: resolution=ignore-duplicates` · the REST/IPv4 path works for seed/DML when direct-DB times out; DDL still needs direct-DB / SQL-editor) · seed 6 `business_config` keys `import.promo.{enabled,headline,text,amount_thb,end_date,image_url}` (category "Promo") → configurable ฝากนำเข้า "โปรเหมาๆ" banner editable at `/admin/settings/business-config` · defaults = previous hardcoded banner · idempotent `on conflict do nothing` (zero schema change) | dave-pacred (service-import promo) |
 | 0136 | `partners` | เดฟ | ✅ **applied prod 2026-06-02** (direct-DB · pure DDL · idempotent) · 1 NEW isolated table `partners` (external logistics/business partner directory — GOGO/JMF/TTP/MOMO/CargoThai/warehouse/customs/messenger/api_provider) · `id/code(unique)/name/name_en/partner_type(CHECK 8 vals)/contact_*/note/is_active/sort/timestamps` · NO FK to legacy (like carriers/freight_quote) · RLS `is_admin(['super'])` only · staff-CRUD gap §PM-6 #3 MVP · admin CRUD at `/admin/partners` (super) · `set_updated_at()` trigger · idempotent `create … if not exists` | dave-pacred (partner directory MVP) |
 | 0137 | `pcs_sync_state` + `pcs_sync_logs` | ภูม (renumbered from his `0135` by เดฟ at integration — collided with main's `0135_import_promo_banner_config`) | ⏳ **NOT applied prod** · 2 NEW isolated tables for the PCS↔Pacred sync — `pcs_sync_state` (singleton id=1 cursor) + `pcs_sync_logs` (append-only audit) · service_role-only · RLS deny-all · idempotent `create … if not exists`. **Activation (ภูม/ก๊อต/owner):** (1) apply 0137 to prod (2) set `PCS_SYNC_URL`/`PCS_SYNC_TOKEN` Vercel env (3) deploy `pcscargo.com/api/pacred-sync.php`. Cron `/api/cron/pcs-sync` (every 10 min) is already in vercel.json — until activation it fails gracefully (`state_read_failed`, HTTP 200, no customer impact). | Poom-pacred (PCS↔Pacred sync) |
+| 0138 | `forwarder_invoice` | ภูม | ✅ **applied prod by ภูม** (CLAUDE.md session-close 2026-06-03 · R-2 ใบวางบิล/billing-run · 2 tables) | main |
+| 0139 | `min_sell_floor` | เดฟ (Lane C) | ⏳ **NOT applied prod** · seed 1 `business_config` key `pricing.min_sell_floor` (JSON: base ต่อโกดัง 1=กวางโจว 2=อี้อู + surcharge ต่อขนส่ง 1=รถ 2=เรือ 3=อากาศ + enabled + block) for the sales min-sell guardrail (global-trade-group §5 · กว่างโจว 2,900 / อี้อู 4,900 / เรือ +300) · editable at `/admin/settings/business-config` · idempotent `on conflict do nothing` (zero schema change) · loader `lib/pricing/min-sell-config.ts` falls back to identical defaults so applying is OPTIONAL | dave-pacred (Lane C pricing) |
 
 ---
 

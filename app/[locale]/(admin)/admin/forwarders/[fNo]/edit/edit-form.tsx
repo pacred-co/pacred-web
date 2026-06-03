@@ -14,6 +14,7 @@
 
 import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { Link } from "@/i18n/navigation";
 import { adminUpdateForwarderDimensions } from "@/actions/admin/forwarders-edit";
 
 export type EditItemRow = {
@@ -93,6 +94,9 @@ export function AdminForwarderEditForm({
 
   const [error,   setError]   = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  // Lane C — min-sell guardrail warning (shown when the resolved transport
+  // price lands below the per-route sales floor · business_config).
+  const [minSellWarn, setMinSellWarn] = useState<string | null>(null);
 
   // Numeric parse + CBM preview — same formula legacy uses:
   // (W × L × H) / 1,000,000 (cm³ → m³).
@@ -138,6 +142,7 @@ export function AdminForwarderEditForm({
     e.preventDefault();
     setError(null);
     setSuccess(null);
+    setMinSellWarn(null);
 
     if (parsed.weight < 0 || parsed.width < 0 || parsed.length < 0 || parsed.height < 0) {
       setError("ค่าทุกช่องต้อง ≥ 0");
@@ -176,11 +181,21 @@ export function AdminForwarderEditForm({
         setSuccess(
           `✓ บันทึกขนาด/น้ำหนักสำเร็จ — CBM = ${d?.cbm?.toFixed(5)} m³${priceTxt} — กำลังพากลับหน้ารายละเอียด...`,
         );
+        // Lane C — surface the min-sell hard-warning when the resolved price
+        // is below the sales floor. Keep it on-screen longer (no auto-redirect
+        // while warning) so the pricer sees it before the bounce-back.
+        if (d?.minSell && d.minSell.level === "below" && d.minSell.message) {
+          setMinSellWarn(d.minSell.message);
+        }
       }
-      setTimeout(() => {
-        router.push(`/admin/forwarders/${fNo}`);
-        router.refresh();
-      }, 900);
+      // If we tripped a min-sell warning, hold on the form (let the pricer read
+      // it) instead of bouncing back; otherwise return to the detail page.
+      if (!(res.data?.minSell && res.data.minSell.level === "below")) {
+        setTimeout(() => {
+          router.push(`/admin/forwarders/${fNo}`);
+          router.refresh();
+        }, 900);
+      }
     });
   }
 
@@ -195,6 +210,22 @@ export function AdminForwarderEditForm({
       {success && (
         <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
           {success}
+        </div>
+      )}
+      {minSellWarn && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 space-y-2">
+          <p className="font-medium">{minSellWarn}</p>
+          <p className="text-xs text-amber-700">
+            บันทึกแล้ว — แต่ราคาต่ำกว่าราคาขายขั้นต่ำที่ตั้งไว้ (นโยบายฝ่ายขาย) · ปรับราคาขั้นต่ำได้ที่{" "}
+            <Link href="/admin/settings/business-config" className="underline font-medium">ตั้งค่าระบบ (pricing.min_sell_floor)</Link>
+          </p>
+          <button
+            type="button"
+            onClick={() => { router.push(`/admin/forwarders/${fNo}`); router.refresh(); }}
+            className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium hover:bg-amber-100"
+          >
+            รับทราบ · กลับหน้ารายละเอียด →
+          </button>
         </div>
       )}
 

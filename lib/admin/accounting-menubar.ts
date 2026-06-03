@@ -274,6 +274,10 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       // to Margin Monitor — sales reps compare 9 carriers' projected margin
       // BEFORE pitching, route via best carrier per CEO cap policy.
       { label: "Sales Quote Comparison",  href: "/admin/accounting/quote-compare" },
+      // Lane C 2026-06-04 (global-trade-group §5): the รถ/เรือ/แอร์ side-by-side
+      // compare (+ add-on services + per-route min-sell floor + CEO cap). Pair
+      // of quote-compare (which is per-carrier within one mode).
+      { label: "เทียบ รถ/เรือ/แอร์ (+ ค่าบริการ)", href: "/admin/accounting/quote-compare/modes" },
       // Wave 7.3 (2026-05-22): wired 2 orphan accounting pages here per
       // ภูม decision in page-inventory-2026-05-21-night.md §🔴 DEAD.
       { label: "งวดบัญชี",  href: "/admin/accounting/periods" },

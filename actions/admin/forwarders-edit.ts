@@ -42,6 +42,13 @@ import {
   type ResolveRateCandidates,
   type ResolvedRate,
 } from "@/lib/forwarder/resolve-rate";
+import { getMinSellFloors } from "@/lib/pricing/min-sell-config";
+import {
+  getMinSellAdvisory,
+  type MinSellAdvisory,
+  type MinSellTransport,
+  type MinSellWarehouse,
+} from "@/lib/pricing/min-sell";
 
 // ────────────────────────────────────────────────────────────
 // Resolve current admin's legacy id (tb_forwarder.adminid* is varchar(10)).
@@ -287,6 +294,15 @@ export type AdminUpdateForwarderDimensionsData = {
   rateSource: "manual" | "svip" | "vip" | "general";
   /** Recomputed grand total (transport + adders − discount). */
   grandTotal: number;
+  /**
+   * Lane C min-sell guardrail (global-trade-group §5). Evaluates the resolved
+   * China→Thailand transport price against the per-route floor (business_config
+   * `pricing.min_sell_floor`). The save STILL succeeds (faithful — the row is
+   * priced by the legacy engine); this is surfaced so the edit UI can hard-WARN
+   * (`level==="below"`) the pricer that they're under the sales floor. `block`
+   * is true only if the owner flips the policy to a true gate.
+   */
+  minSell: MinSellAdvisory;
 };
 
 export async function adminUpdateForwarderDimensions(
@@ -461,6 +477,21 @@ export async function adminUpdateForwarderDimensions(
         num(before.fdiscount);
       const newGrandTotal = Math.round(grandTotal * 100) / 100;
 
+      // ─── Lane C — min-sell guardrail advisory (global-trade-group §5) ──
+      // Evaluate the resolved China→Thailand transport price (legacy fTotalPrice
+      // = the shipping subtotal a customer is charged) against the per-route
+      // sales floor. We do NOT block the save (faithful — the legacy engine just
+      // priced the row); we return the advisory so the edit form can hard-WARN
+      // the pricer. The floor is per (warehouse, transport) — both read from the
+      // row (before.*), the same source the rate engine used above.
+      const minSellFloors = await getMinSellFloors();
+      const minSell = getMinSellAdvisory({
+        floors: minSellFloors,
+        warehouse: (String(before.fwarehousechina ?? "1").trim() as MinSellWarehouse) || "1",
+        transport: (String(before.ftransporttype ?? "1").trim() as MinSellTransport) || "1",
+        quotedThb: newFTotalPrice,
+      });
+
       // ─── UPDATE tb_forwarder ────────────────────────────────────
       const update: Record<string, unknown> = {
         fweight:           d.weightKg,
@@ -579,6 +610,15 @@ export async function adminUpdateForwarderDimensions(
             custom_rate:     customRateSwitch,
             cbm_product:     cbmProduct,
             grand_total:     newGrandTotal,
+            // Lane C — record when the resolved price landed below the sales
+            // floor (so a below-floor save is auditable even if the rep
+            // overrode the UI warning).
+            min_sell: {
+              level:        minSell.level,
+              floor_thb:    minSell.floorThb,
+              quoted_thb:   minSell.quotedThb,
+              shortfall_thb: minSell.shortfallThb,
+            },
           },
           items_updated:   d.items.length,
           crate_count:     d.items.filter((it) => it.crateType === "2").length,
@@ -618,6 +658,7 @@ export async function adminUpdateForwarderDimensions(
           basis:       resolved.basis,
           rateSource:  resolved.source,
           grandTotal:  newGrandTotal,
+          minSell,
         },
       };
     },
