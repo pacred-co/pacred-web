@@ -5,11 +5,12 @@
 
 ---
 
-## 🔢 NEXT FREE NUMBER = **0140**
+## 🔢 NEXT FREE NUMBER = **0141**
 
-ใครจะเขียน migration ใหม่ → ใช้ `0140_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
+ใครจะเขียน migration ใหม่ → ใช้ `0141_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
 
 > 2026-06-04 Lane C: **0138** = `forwarder_invoice` (ใบวางบิล R-2 · 2 tables · ✅ **applied prod by ภูม** per CLAUDE.md session-close 2026-06-03) · **0139** = `min_sell_floor` (seed 1 `business_config` key `pricing.min_sell_floor` for the sales min-sell guardrail — กว่างโจว 2,900 / อี้อู 4,900 / เรือ +300 · global-trade-group §5). ⏳ **0139 NOT applied prod yet** — idempotent `on conflict do nothing` seed · zero schema change · the loader falls back to identical defaults so applying is OPTIONAL.
+> 2026-06-04 Lane B: **0140** = `yuan_tax_doc_pref` (RENAMED from 0139 at integration — collided with Lane C's 0139 · tax_doc_pref + 2 snapshot cols on tb_payment · completes the 3-mode selection data model across all order types · issuance deferred per ADR-0027). ⏳ **NOT applied prod yet** — เดฟ applies (metadata-only ADD COLUMN nullable · idempotent).
 
 > 2026-06-02 PM-6: **0136** = `partners` (external logistics/business partner directory · staff-CRUD gap §PM-6 #3 — 1 NEW isolated table, NO FK to legacy, RLS service_role/admin-only · mirrors carriers/freight_quote). ⏳ **NOT applied prod yet** — เดฟ applies (direct-DB back up · pure DDL · idempotent `create … if not exists`).
 
@@ -50,6 +51,7 @@
 | 0137 | `pcs_sync_state` + `pcs_sync_logs` | ภูม (renumbered from his `0135` by เดฟ at integration — collided with main's `0135_import_promo_banner_config`) | ⏳ **NOT applied prod** · 2 NEW isolated tables for the PCS↔Pacred sync — `pcs_sync_state` (singleton id=1 cursor) + `pcs_sync_logs` (append-only audit) · service_role-only · RLS deny-all · idempotent `create … if not exists`. **Activation (ภูม/ก๊อต/owner):** (1) apply 0137 to prod (2) set `PCS_SYNC_URL`/`PCS_SYNC_TOKEN` Vercel env (3) deploy `pcscargo.com/api/pacred-sync.php`. Cron `/api/cron/pcs-sync` (every 10 min) is already in vercel.json — until activation it fails gracefully (`state_read_failed`, HTTP 200, no customer impact). | Poom-pacred (PCS↔Pacred sync) |
 | 0138 | `forwarder_invoice` | ภูม | ✅ **applied prod by ภูม** (CLAUDE.md session-close 2026-06-03 · R-2 ใบวางบิล/billing-run · 2 tables) | main |
 | 0139 | `min_sell_floor` | เดฟ (Lane C) | ⏳ **NOT applied prod** · seed 1 `business_config` key `pricing.min_sell_floor` (JSON: base ต่อโกดัง 1=กวางโจว 2=อี้อู + surcharge ต่อขนส่ง 1=รถ 2=เรือ 3=อากาศ + enabled + block) for the sales min-sell guardrail (global-trade-group §5 · กว่างโจว 2,900 / อี้อู 4,900 / เรือ +300) · editable at `/admin/settings/business-config` · idempotent `on conflict do nothing` (zero schema change) · loader `lib/pricing/min-sell-config.ts` falls back to identical defaults so applying is OPTIONAL | dave-pacred (Lane C pricing) |
+| 0140 | `yuan_tax_doc_pref` | เดฟ (Lane B) | ⏳ **NOT applied prod** · RENAMED from 0139 at integration (collided with Lane C's 0139) · adds `tax_doc_pref` + `tax_doc_tax_id` + `tax_doc_address` to `tb_payment` (ฝากโอน) — mirrors 0127's columns on tb_header_order/tb_forwarder so yuan orders can carry a tax-doc mode (ใบกำกับ/ใบขน/ไม่รับเอกสาร). CHECK `in ('receipt','tax_invoice','customs')` · 1 partial index · idempotent `add column if not exists`. **Issuance still deferred per ADR-0027** (no cross-type World-B store for yuan) — completes the SELECTION data model only. เดฟ applies (metadata-only ADD COLUMN nullable). | dave-pacred (Lane B tax-doc) |
 
 ---
 
