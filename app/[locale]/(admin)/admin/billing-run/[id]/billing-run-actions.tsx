@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import {
   markBillingRunPaid,
   cancelBillingRunInvoice,
+  sendBillingRunNotification,
 } from "@/actions/admin/billing-run";
 
 type Props = {
@@ -92,6 +93,26 @@ export function BillingRunActions({ invoiceId, docNo, status, totalThb, customer
     });
   }
 
+  function onSendNotification() {
+    setMsg(null);
+    startTransition(async () => {
+      const res = await sendBillingRunNotification({
+        invoiceId,
+        channel: "both",
+      });
+      if (res.ok) {
+        setMsg({
+          kind: "ok",
+          text: res.data?.sent
+            ? `✓ ส่งเตือนลูกค้าแล้ว (${res.data.channel})`
+            : `📝 ${res.data?.channel} (ลูกค้าไม่มี LINE/email)`,
+        });
+      } else {
+        setMsg({ kind: "err", text: res.error });
+      }
+    });
+  }
+
   function onCancel() {
     if (cancelReason.trim().length < 3) {
       setMsg({ kind: "err", text: "เหตุผลยกเลิกต้องอย่างน้อย 3 ตัวอักษร" });
@@ -163,6 +184,22 @@ export function BillingRunActions({ invoiceId, docNo, status, totalThb, customer
           {pending ? "กำลังบันทึก..." : `บันทึกการรับชำระ ฿${thbFmt(totalThb)}`}
         </button>
       </form>
+
+      {/* Send notification to customer (LINE/email) */}
+      <div className="rounded-xl border border-blue-200 bg-blue-50/30 p-4 space-y-2">
+        <h4 className="font-medium text-sm text-blue-800">📨 แจ้งเตือนลูกค้า</h4>
+        <p className="text-xs text-muted">
+          ส่งแจ้งเตือนผ่าน LINE OA (ถ้าลูกค้าผูกแล้ว) หรือ Email · เนื้อหาจะปรับเป็น &quot;เลยกำหนด&quot; โดยอัตโนมัติถ้าครบกำหนดแล้ว
+        </p>
+        <button
+          type="button"
+          onClick={onSendNotification}
+          disabled={pending}
+          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {pending ? "กำลังส่ง..." : "📨 ส่งแจ้งเตือน"}
+        </button>
+      </div>
 
       {/* Cancel */}
       {!showCancelDialog ? (

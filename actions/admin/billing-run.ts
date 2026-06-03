@@ -30,13 +30,16 @@ import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { mintForwarderInvoiceDocNo } from "@/lib/admin/mint-receipt-doc-no";
+import { sendNotification } from "@/lib/notifications";
 import {
   createBillingRunInvoiceSchema,
   markBillingRunPaidSchema,
   cancelBillingRunInvoiceSchema,
+  sendBillingRunNotificationSchema,
   type CreateBillingRunInvoiceInput,
   type MarkBillingRunPaidInput,
   type CancelBillingRunInvoiceInput,
+  type SendBillingRunNotificationInput,
 } from "@/lib/validators/admin-billing-run";
 
 // ────────────────────────────────────────────────────────────────────────
@@ -1022,6 +1025,142 @@ export async function cancelBillingRunInvoice(
       revalidatePath("/[locale]/(admin)/admin/billing-run/[id]", "page");
 
       return { ok: true, data: { invoiceId: v.invoiceId } };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 8. SEND NOTIFICATION — staff-triggered LINE/email push to customer
+// ────────────────────────────────────────────────────────────────────────
+//
+// Resolves the invoice's userid → profiles.id (via tb_users.profile_id
+// OR profiles.member_code = userid · whichever finds first) → calls the
+// unified `sendNotification` channel (handles LINE+email preference logic
+// + delivery logging in lib/notifications/index.ts).
+//
+// Logs the trigger to admin_audit_log so we can see who sent which
+// reminder when — useful when a customer claims "didn't get the bill".
+
+export async function sendBillingRunNotification(
+  input: SendBillingRunNotificationInput,
+): Promise<AdminActionResult<{ invoiceId: number; sent: boolean; channel: string }>> {
+  const parsed = sendBillingRunNotificationSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const v = parsed.data;
+
+  return withAdmin<{ invoiceId: number; sent: boolean; channel: string }>(
+    ["super", "accounting", "ops"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+
+      // (a) Load invoice header
+      type InvRow = {
+        id: number;
+        doc_no: string;
+        userid: string;
+        buyer_name: string;
+        date_due: string;
+        total_thb: number | string;
+        status: string;
+      };
+      const { data: inv, error: invErr } = await admin
+        .from("tb_forwarder_invoice")
+        .select("id, doc_no, userid, buyer_name, date_due, total_thb, status")
+        .eq("id", v.invoiceId)
+        .maybeSingle<InvRow>();
+      if (invErr) {
+        console.error("[sendBillingRunNotification invoice] failed", {
+          code: invErr.code, message: invErr.message,
+        });
+        return { ok: false, error: invErr.message };
+      }
+      if (!inv) return { ok: false, error: "not_found" };
+      if (inv.status !== "issued") {
+        return { ok: false, error: `ใบวางบิล ${inv.doc_no} อยู่ในสถานะ ${inv.status} — ส่งเตือนได้เฉพาะ issued` };
+      }
+
+      // (b) Resolve userid → profile.id
+      // Pattern A: tb_users has a profile_id uuid column linking to profiles
+      // Pattern B: profiles.member_code = userid (fallback)
+      let profileId: string | null = null;
+
+      const { data: userRow, error: userErr } = await admin
+        .from("tb_users")
+        .select("profile_id")
+        .eq("userID", inv.userid)
+        .maybeSingle<{ profile_id: string | null }>();
+      if (userErr) {
+        console.error("[sendBillingRunNotification tb_users] failed", {
+          code: userErr.code, message: userErr.message,
+        });
+      }
+      if (userRow?.profile_id) {
+        profileId = userRow.profile_id;
+      } else {
+        // Fallback: profiles.member_code = userid
+        const { data: profileRow, error: profileErr } = await admin
+          .from("profiles")
+          .select("id")
+          .eq("member_code", inv.userid)
+          .maybeSingle<{ id: string }>();
+        if (profileErr) {
+          console.error("[sendBillingRunNotification profiles fallback] failed", {
+            code: profileErr.code, message: profileErr.message,
+          });
+        }
+        if (profileRow?.id) profileId = profileRow.id;
+      }
+
+      if (!profileId) {
+        return {
+          ok: false,
+          error: `ไม่พบ profile สำหรับลูกค้า ${inv.userid} — แจ้งทาง LINE/email ไม่ได้ (อาจต้อง provision profile uuid ก่อน · ดู Wave 16 follow-up A)`,
+        };
+      }
+
+      // (c) Build payload + send via unified channel
+      const totalThb = Number(inv.total_thb);
+      const today = new Date().toISOString().slice(0, 10);
+      const isOverdueAtSend = inv.date_due < today;
+
+      const result = await sendNotification(profileId, {
+        category:       "payment",
+        severity:       isOverdueAtSend ? "warning" : "info",
+        title:          isOverdueAtSend
+          ? `⚠️ ใบวางบิล ${inv.doc_no} เลยกำหนดชำระแล้ว`
+          : `📄 ใบวางบิล ${inv.doc_no} รอชำระ`,
+        body:           isOverdueAtSend
+          ? `เลยกำหนดชำระตั้งแต่ ${inv.date_due} · ยอดค้าง ฿${totalThb.toLocaleString("th-TH", { minimumFractionDigits: 2 })} · กรุณาชำระโดยเร็วเพื่อหลีกเลี่ยงการระงับบริการ`
+          : `ครบกำหนดชำระ ${inv.date_due} · ยอด ฿${totalThb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
+        link_href:      `/billing-run/${inv.id}`,
+        reference_type: "forwarder_invoice",
+        reference_id:   String(inv.id),
+      });
+
+      const sentVia = result.deliveredLine
+        ? "LINE"
+        : result.deliveredEmail
+          ? "email"
+          : "บันทึกแล้ว (ยังไม่มี LINE/email channel)";
+
+      await logAdminAction(adminId, "billing_run.send_notification", "forwarder_invoice", String(v.invoiceId), {
+        doc_no:           inv.doc_no,
+        channel_request:  v.channel,
+        delivered_line:   result.deliveredLine,
+        delivered_email:  result.deliveredEmail,
+        notification_id:  result.id,
+      });
+
+      return {
+        ok: true,
+        data: {
+          invoiceId: v.invoiceId,
+          sent:      result.deliveredLine || result.deliveredEmail,
+          channel:   sentVia,
+        },
+      };
     },
   );
 }
