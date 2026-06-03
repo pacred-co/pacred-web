@@ -52,9 +52,9 @@ cat <<EOF
    vercel env add PCS_SYNC_URL production
    vercel env add PCS_SYNC_TOKEN production
 
-🗄  STEP 3 — Apply migration 0135 in Supabase:
+🗄  STEP 3 — Apply migration 0137 in Supabase:
    - Open: https://supabase.com/dashboard/project/yzljakczhwrpbxflnmco/sql/new
-   - Paste contents of: supabase/migrations/0135_pcs_sync_state.sql
+   - Paste contents of: supabase/migrations/0137_pcs_sync_state.sql
    - Click Run → "Success. No rows returned"
 
 🧪 STEP 4 — Test:

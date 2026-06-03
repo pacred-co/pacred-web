@@ -21,7 +21,7 @@ Match by `tb_forwarder.id` only — Pacred never creates new rows from PCS
 
 | Path | Purpose |
 |---|---|
-| `supabase/migrations/0135_pcs_sync_state.sql` | `pcs_sync_state` + `pcs_sync_logs` tables |
+| `supabase/migrations/0137_pcs_sync_state.sql` | `pcs_sync_state` + `pcs_sync_logs` tables |
 | `lib/integrations/pcs-sync/client.ts` | Fetcher → calls PHP endpoint |
 | `lib/integrations/pcs-sync/merge.ts` | Per-row conflict policy |
 | `lib/integrations/pcs-sync/sync.ts` | Orchestrator (shared by cron + manual) |
@@ -33,10 +33,10 @@ Match by `tb_forwarder.id` only — Pacred never creates new rows from PCS
 
 ## Setup (3 steps)
 
-### 1. Apply migration 0135
+### 1. Apply migration 0137
 
 Open Supabase Dashboard → SQL Editor → paste contents of
-`supabase/migrations/0135_pcs_sync_state.sql` → Run.
+`supabase/migrations/0137_pcs_sync_state.sql` → Run.
 
 The migration is idempotent (safe to re-run). It creates 2 tables, seeds
 the singleton state row (with `last_sync_at = now() - 24h`), and locks

@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { akucargoSearch } from "@/lib/china-search/akucargo";

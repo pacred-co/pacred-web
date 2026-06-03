@@ -108,8 +108,6 @@ const ICONS: Record<string, LucideIcon> = {
   // Wave 26 (2026-05-28 ดึก) — 11 QA queue leaves under blockQAQueues.
   Ban,             // order-cancellations
   AlertCircle,     // 8 alert queues that don't otherwise have an icon
-  // 2026-06-02 — /admin/system/pcs-sync dashboard
-  Database,        // PCS↔Pacred Sync settings page
   // 2026-06-01 (เดฟ) — Wave C BI cockpit + the leads call-queue. Both icon
   // names were referenced from sidebar-menu.ts but absent here → blank spacer.
   Gauge,           // blockExtCockpit — /admin/reports/cockpit
@@ -118,6 +116,8 @@ const ICONS: Record<string, LucideIcon> = {
   Megaphone,       // settingsCargo.promos
   // 2026-06-02 (เดฟ) — partner directory (/admin/partners · staff-CRUD gap §PM-6).
   Handshake,       // settingsCargo.partners
+  // 2026-06-02 (ภูม) — /admin/system/pcs-sync dashboard
+  Database,        // PCS↔Pacred Sync settings page
 };
 
 function Icon({ name, active }: { name?: string; active: boolean }) {

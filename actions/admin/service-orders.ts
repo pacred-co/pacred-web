@@ -296,17 +296,17 @@ export async function adminUpdateServiceOrder(input: AdminUpdateServiceOrderInpu
 }
 
 // ────────────────────────────────────────────────────────────
-// (removed) adminMarkServiceOrderPaid — Potemkin dead-write trap (§0e)
+// (removed) adminMarkServiceOrderPaid — Potemkin dead-read
 // ────────────────────────────────────────────────────────────
-// This T-P1 action read+wrote the rebuilt `service_orders` + `wallet_transactions`
-// tables, both 0-row on prod after the D1 pivot → silently failed for EVERY real
-// order. Its only caller was the duplicate mark-paid block in [hNo]/update-form.tsx
-// (also removed). The LIVE mark-paid path is `adminMarkServiceOrderPaidTb`
-// (actions/admin/service-orders-tb.ts), surfaced by <MarkPaidTbForm> on legacy-view
-// — it debits the real tb_wallet/tb_wallet_hs + flips tb_header_order.hstatus.
-// Deleted to eliminate the dead-write trap. `getWalletAvailableBalance` import
+// This T-P1 action read+wrote the rebuilt `service_orders` table, which is
+// 0-row on prod after the D1 pivot → it returned `not_found` for EVERY real
+// order. Its only caller was the duplicate mark-paid block in
+// `[hNo]/update-form.tsx` (removed in the same change). The LIVE mark-paid
+// path is `adminMarkServiceOrderPaidTb` (actions/admin/service-orders-tb.ts),
+// surfaced by <MarkPaidTbForm> on the legacy-view — it debits the real
+// tb_wallet/tb_wallet_hs + flips tb_header_order.hstatus. Deleted to remove
+// the dead-write trap (§0e). The `getWalletAvailableBalance` import this used
 // was dropped; `sendNotification` stays (adminUpdateServiceOrder uses it).
-// Both Pacred branches independently converged on this fix 2026-06-02/03.
 
 // ────────────────────────────────────────────────────────────
 // V-C2: set bill_to_name_override on a service_order

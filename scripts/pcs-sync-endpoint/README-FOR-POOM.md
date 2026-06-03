@@ -87,10 +87,10 @@ Save ไฟล์
 
 ---
 
-## STEP 5 · Apply migration 0135 (3 นาที)
+## STEP 5 · Apply migration 0137 (3 นาที)
 
 1. เปิด https://supabase.com/dashboard/project/yzljakczhwrpbxflnmco/sql/new
-2. Copy เนื้อหาทั้งหมดจาก `supabase/migrations/0135_pcs_sync_state.sql`
+2. Copy เนื้อหาทั้งหมดจาก `supabase/migrations/0137_pcs_sync_state.sql`
 3. Paste ลง SQL editor → คลิก **Run** → ต้องขึ้น "Success. No rows returned"
 
 ---
