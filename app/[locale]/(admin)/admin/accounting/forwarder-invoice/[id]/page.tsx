@@ -54,6 +54,7 @@ import {
 } from "@/components/seo/site";
 import { Printer } from "lucide-react";
 import PrintButton from "./print-button";
+import BackfillItemsButton from "./backfill-items-button";
 
 export const dynamic = "force-dynamic";
 
@@ -883,7 +884,12 @@ export default async function ForwarderInvoicePrintPage({
             {/* 2026-05-31 sitting-H-fix #4 (ภูม): data-gap banner.
                 Shows ONLY on screen (not print). Surfaces the missing
                 tb_receipt_item case so staff don't print a "blank" receipt
-                without knowing the breakdown is reconstructed from header. */}
+                without knowing the breakdown is reconstructed from header.
+
+                2026-06-02 sitting Wave A (ภูม flag #1): added the
+                <BackfillItemsButton> recovery hook — staff can trigger
+                the wallet_hs + fdatestatus5 trail rebuild from this banner
+                instead of opening a SQL editor. */}
             {itemsMissing && (
               <div className="mb-3 rounded border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-900">
                 <b>⚠️ รายการพัสดุไม่พบใน tb_receipt_item</b> — ระบบจึงดึงยอดรวมจาก
@@ -898,6 +904,14 @@ export default async function ForwarderInvoicePrintPage({
                   ดูเพิ่ม <code>docs/runbook/wave-29-tb-receipt-pollution-audit.md</code>
                   หรือ query <code>tb_receipt_item WHERE rid=&lsquo;{receipt.rid}&rsquo;</code> ก่อน reprint.
                 </span>
+                <div className="mt-2 flex items-start gap-2">
+                  <BackfillItemsButton receiptId={receipt.id} />
+                  <span className="text-rose-700 text-[11px] mt-1.5 inline-block">
+                    ลองดึงรายการจาก <code>tb_wallet_hs</code> (±7 วัน) +{" "}
+                    <code>tb_forwarder.fdatestatus5</code> (±14 วัน) ที่ยอดรวมเท่ากัน ·
+                    ถ้าหลายชุดเข้ากันได้ ระบบจะให้เลือกเอง
+                  </span>
+                </div>
               </div>
             )}
           </div>

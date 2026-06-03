@@ -78,7 +78,7 @@ export default async function TransferBulkPage({
     throw new Error(`failed to load sales reps: ${repsErr.message}`);
   }
 
-  const reps: RepOption[] = ((repsRaw ?? []) as RepRow[]).map(repToOption);
+  const reps: RepOption[] = ((repsRaw ?? []) as unknown as RepRow[]).map(repToOption);
   const repsById = new Map(reps.map((r) => [r.profile_id, r]));
 
   // Filter customers. For non-super callers we always scope to their
@@ -112,7 +112,7 @@ export default async function TransferBulkPage({
     sales_admin_id:  string | null;
     created_at:      string;
   };
-  const customers = ((customersRaw ?? []) as CustomerRow[]).map((c) => ({
+  const customers = ((customersRaw ?? []) as unknown as CustomerRow[]).map((c) => ({
     id:              c.id,
     member_code:     c.member_code,
     name: c.account_type === "juristic" && c.company_name

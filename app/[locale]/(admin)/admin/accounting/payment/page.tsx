@@ -317,7 +317,7 @@ export default async function AdminAccountingPaymentPage({
       .select("id, paydate, paystatus, payyuan, payrate, payratecost, userid")
       .eq("paystatus", "2")
       .in("id", paymentIds);
-    for (const r of (payRes.data ?? []) as PaymentRaw[]) {
+    for (const r of (payRes.data ?? []) as unknown as PaymentRaw[]) {
       payRowsById.set(r.id, r);
     }
   }

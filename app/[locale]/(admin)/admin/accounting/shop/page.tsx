@@ -315,7 +315,7 @@ export default async function AdminAccountingShopPage({
     .select("amount, reforder")
     .eq("type", "5")
     .eq("status", "2");
-  const refundWalletRows = (refundWalletRes.data ?? []) as WalletRefundRaw[];
+  const refundWalletRows = (refundWalletRes.data ?? []) as unknown as WalletRefundRaw[];
 
   // type=5 refunds carry the tb_order.id (numeric) in refOrder — look
   // those ids up to recover the parent hno.
@@ -372,7 +372,7 @@ export default async function AdminAccountingShopPage({
     .gte("date", `${startDate}T00:00:00`)
     .lte("date", `${endDate}T23:59:59`)
     .order("date", { ascending: true });
-  const walletRows = (walletRes.data ?? []) as WalletShopRaw[];
+  const walletRows = (walletRes.data ?? []) as unknown as WalletShopRaw[];
 
   // The legacy WHERE filters wh.refOrder<>'' indirectly via the JOIN
   // (`ho.hNo<>''` means matched ho has a non-empty hNo — when status
@@ -403,7 +403,7 @@ export default async function AdminAccountingShopPage({
         "hno, hdate, hstatus, htotalpricechn, hshippingchn, hrate, hratecost, hcostall, userid",
       )
       .in("hno", candidateHnos);
-    for (const h of (headerRes.data ?? []) as HeaderRaw[]) {
+    for (const h of (headerRes.data ?? []) as unknown as HeaderRaw[]) {
       // Legacy GROUP BY ho.hNo means each hno appears at most once.
       // tb_header_order.hno is NOT a primary key but the migration
       // guarantees one row per hno via the legacy unique index.

@@ -133,7 +133,7 @@ export async function getForwarderAgingReport(): Promise<AgingReport> {
   if (rowsErr) {
     console.error("[ar-aging tb_forwarder] failed", { code: rowsErr.code, message: rowsErr.message });
   }
-  const rows = (rowsRaw ?? []) as ForwardRow[];
+  const rows = (rowsRaw ?? []) as unknown as ForwardRow[];
 
   // ── 2. Per-row aging (compute once, reuse for all rollups) ──
   type Enriched = {
@@ -206,7 +206,7 @@ export async function getForwarderAgingReport(): Promise<AgingReport> {
     if (usersErr) {
       console.error("[ar-aging tb_users] failed", { code: usersErr.code, message: usersErr.message });
     }
-    userByID = new Map(((usersRaw ?? []) as UserRow[]).map((u) => [u.userID, u]));
+    userByID = new Map(((usersRaw ?? []) as unknown as UserRow[]).map((u) => [u.userID, u]));
   }
 
   const topCustomers: CustomerAgingRow[] = Array.from(customerAgg.entries())
@@ -248,7 +248,7 @@ export async function getForwarderAgingReport(): Promise<AgingReport> {
     if (srErr) {
       console.error("[ar-aging tb_sales_report] failed", { code: srErr.code, message: srErr.message });
     }
-    for (const r of ((srRaw ?? []) as SrRow[])) {
+    for (const r of ((srRaw ?? []) as unknown as SrRow[])) {
       // First-write-wins (a forwarder shouldn't appear in tb_sales_report
       // twice; if it does, take the earliest attribution).
       if (!srByFid.has(r.fid)) srByFid.set(r.fid, r.sradminidsale);
@@ -277,7 +277,7 @@ export async function getForwarderAgingReport(): Promise<AgingReport> {
     if (adminsErr) {
       console.error("[ar-aging tb_admin] failed", { code: adminsErr.code, message: adminsErr.message });
     }
-    adminByID = new Map(((adminsRaw ?? []) as AdminRow[]).map((a) => [a.adminID, a]));
+    adminByID = new Map(((adminsRaw ?? []) as unknown as AdminRow[]).map((a) => [a.adminID, a]));
   }
 
   const topReps: RepAgingRow[] = Array.from(repAgg.entries())

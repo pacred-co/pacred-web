@@ -62,7 +62,7 @@ export default async function ContainerHsReportPage({
     console.error(`[container_hs_lines list] failed`, { code: error.code, message: error.message });
   }
 
-  const rowsRaw = ((data ?? []) as LineRow[]).map((l) => ({
+  const rowsRaw = ((data ?? []) as unknown as LineRow[]).map((l) => ({
     ...l,
     container: normSingle(l.container),
     hs:        normSingle(l.hs),

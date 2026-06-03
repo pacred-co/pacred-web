@@ -106,7 +106,9 @@ export async function getWhtCertQueue(opts: {
     if (invErr) {
       console.error("[wht-cert invoice hydrate] failed", { code: invErr.code, message: invErr.message });
     }
-    serialByInvoice = new Map(((invRaw ?? []) as InvRow[]).map((i) => [i.id, i.serial_no]));
+    // Cast via `unknown` — Supabase types haven't been regenerated after
+    // migration 0129 added tb_forwarder_tax_invoice (2026-06-02 build fix).
+    serialByInvoice = new Map(((invRaw ?? []) as unknown as InvRow[]).map((i) => [i.id, i.serial_no]));
   }
 
   const entries: WhtCertEntry[] = rows.map((r) => ({

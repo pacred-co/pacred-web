@@ -14,6 +14,11 @@ import {
   paystatusToPacred,
   pacredToPaystatus,
 } from "@/lib/legacy-paystatus-map";
+// Tier-A "silent dead-write" fix: delegate the bulk-approve path to the
+// canonical TB action (tb-bulk.ts). Same-module-style delegation keeps the
+// function shape backward-compatible for any stray caller still on the
+// rebuilt-string API contract.
+import { adminBulkApproveYuanPaymentsTb } from "./tb-bulk";
 
 // Local aliases — the function body below reads `STATUSES` (for the Zod
 // enum) and `STATUS_LABEL` (for Thai error messages). Keep the names so
@@ -276,16 +281,32 @@ export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput)
 // T-P3: BULK approve pending yuan_payments (cargo revenue path)
 // ────────────────────────────────────────────────────────────
 //
-// Same pattern as adminBulkApproveDeposits (wallet.ts) — but for
-// yuan_payments. Skips already-progressed rows silently.
+// 🚨 Tier-A "silent dead-write" fix (2026-06-02 · master-fidelity #1 pattern):
+//   Prior implementation read + wrote `.from("yuan_payments")` — the REBUILT
+//   UUID table, EMPTY on prod. Every bulk-approve press silently no-op'd
+//   because the rebuilt table has 0 rows; the real ~1,460 yuan transfers
+//   live in `tb_payment`.
 //
-// "Approve" here = transition pending → processing (admin starts
-// transferring to the customer's Alipay account). Final 'completed'
-// requires per-row context (cost rate, profit, proof URL) so it stays
-// single-row.
+// Fix: delegate to `adminBulkApproveYuanPaymentsTb` (actions/admin/tb-bulk.ts
+//   L356) — the canonical faithful action that writes `tb_payment.paystatus`,
+//   stamps `paydateadmin`, resolves the legacy admin slug for `adminid`
+//   (varchar(10) — same Wave 23 P0 5254f8d constraint).
+//
+// Schema bridge: the old input shape took `ids: string[]` (UUIDs from the
+//   rebuilt table). The faithful TB action takes `ids: number[]` (bigint
+//   tb_payment.id). We accept either-shape strings and coerce numerically;
+//   non-numeric entries (legacy UUID format) get rejected per-row in the
+//   result envelope rather than aborting the whole batch (preserves the
+//   pre-tombstone caller contract for the orphaned bulk-approve-bar).
+//   The active UI (`/admin/yuan-payments` → tb-bulk-bar.tsx) calls
+//   `adminBulkApproveYuanPaymentsTb` directly with numeric ids; this
+//   wrapper is here for any stray caller still on the rebuilt-shape API.
 
 const yuanBulkSchema = z.object({
-  ids:  z.array(z.string().uuid()).min(1, "ต้องเลือกอย่างน้อย 1 รายการ").max(50, "เลือกได้สูงสุด 50 รายการต่อรอบ"),
+  // Relaxed from .uuid() — accept any non-empty string, coerce to bigint
+  // below. Rebuilt-UUID-shape strings will fail numeric coercion and be
+  // surfaced as per-row errors rather than aborting the whole batch.
+  ids:  z.array(z.string().min(1)).min(1, "ต้องเลือกอย่างน้อย 1 รายการ").max(50, "เลือกได้สูงสุด 50 รายการต่อรอบ"),
   note: z.string().trim().max(500).optional(),
 });
 export type AdminBulkApproveYuanPaymentsInput = z.infer<typeof yuanBulkSchema>;
@@ -301,68 +322,44 @@ export async function adminBulkApproveYuanPayments(
   }
   const { ids } = parsed.data;
 
-  return withAdmin<YuanBulkResult>(["accounting"], async ({ adminId }) => {
-    const admin = createAdminClient();
-
-    const { data: rows, error: selErr } = await admin
-      .from("yuan_payments")
-      .select("id, profile_id, status, yuan_amount, thb_amount, paid_via_wallet")
-      .in("id", ids);
-    if (selErr) return { ok: false, error: selErr.message };
-
-    const result: YuanBulkResult = { approved: 0, skipped: 0, errors: [] };
-    type Row = { id: string; profile_id: string; status: string; yuan_amount: number; thb_amount: number; paid_via_wallet: boolean };
-
-    for (const row of (rows ?? []) as Row[]) {
-      if (row.status !== "pending") {
-        result.skipped++;
-        continue;
-      }
-
-      const { error: updErr } = await admin
-        .from("yuan_payments")
-        .update({
-          status:          "processing",
-          executed_at:     new Date().toISOString(),
-          admin_id_update: adminId,
-        })
-        .eq("id", row.id);
-
-      if (updErr) {
-        result.errors.push({ id: row.id, reason: updErr.message });
-        continue;
-      }
-
-      result.approved++;
-
-      await logAdminAction(adminId, "yuan_payment.bulk_approve", "yuan_payment", row.id, {
-        yuan_amount: row.yuan_amount,
-        thb_amount:  row.thb_amount,
-        before:      { status: "pending" },
-        after:       { status: "processing" },
+  // Parse stringified bigints; non-numeric entries (rebuilt UUIDs) fail
+  // per-row with a clear error so the UI can highlight them.
+  const result: YuanBulkResult = { approved: 0, skipped: 0, errors: [] };
+  const numericIds: number[] = [];
+  for (const raw of ids) {
+    const n = Number(raw);
+    if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) {
+      result.errors.push({
+        id: raw,
+        reason: "legacy_uuid_id: ใช้ tb-bulk-bar (tb_payment.id เป็น bigint ไม่ใช่ UUID)",
       });
-
-      void sendNotification(row.profile_id, {
-        category: "yuan_payment",
-        severity: "info",
-        title:    `ฝากโอนหยวน — ${STATUS_LABEL.processing}`,
-        body:     `¥${Number(row.yuan_amount).toFixed(2)} = ฿${Number(row.thb_amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })} — กำลังโอนไป Alipay`,
-        link_href: `/service-payment`,
-        reference_type: "yuan_payment",
-        reference_id:   row.id,
-      });
+      continue;
     }
+    numericIds.push(n);
+  }
 
-    const seenIds = new Set((rows ?? []).map((r) => r.id));
-    for (const id of ids) {
-      if (!seenIds.has(id)) {
-        result.errors.push({ id, reason: "not_found" });
-      }
-    }
-
-    revalidatePath("/admin/yuan-payments");
+  if (numericIds.length === 0) {
     return { ok: true, data: result };
-  });
+  }
+
+  // Delegate to the faithful TB action — same module so no extra round-trip.
+  const tbRes = await adminBulkApproveYuanPaymentsTb({ ids: numericIds });
+  if (!tbRes.ok) {
+    return { ok: false, error: tbRes.error };
+  }
+
+  // The TB action returns { processed, failed, errors[] }; reshape to the
+  // pre-tombstone { approved, skipped, errors[] } contract.
+  result.approved = tbRes.data?.processed ?? 0;
+  // The TB action's "didn't match paystatus='1'" rows are silently dropped
+  // (no error row · matches legacy "WHERE paystatus='1'" idempotency).
+  // Approximate skipped = numericIds.length - approved (excluding rows
+  // that were genuinely missing).
+  result.skipped = Math.max(0, numericIds.length - result.approved);
+  for (const errMsg of tbRes.data?.errors ?? []) {
+    result.errors.push({ id: "tb-bulk", reason: errMsg });
+  }
+  return { ok: true, data: result };
 }
 
 // ────────────────────────────────────────────────────────────
@@ -733,6 +730,25 @@ export async function adminGetYuanPaymentSlipSignedUrl(
 // ────────────────────────────────────────────────────────────
 // V-A1: set yuan_payments.slip_transferred_at (admin edit)
 // ────────────────────────────────────────────────────────────
+//
+// 🚨 Tier-A "silent dead-write" fix (2026-06-02 · master-fidelity #1 pattern):
+//   Prior implementation read + wrote `.from("yuan_payments")` (REBUILT,
+//   EMPTY on prod). The only inbound caller — `SlipTransferredAtCell` in
+//   `components/admin/slip-transferred-at-cell.tsx` L4 — has been TOMBSTONED
+//   itself ("ORPHAN component · zero inbound callers · runtime calls fail
+//   loudly"). The wallet-side equivalent already pivoted to `tb_wallet_hs.dateslip`
+//   via `actions/admin/wallet-trans.ts::adminUpdateWalletHsDateSlip`.
+//
+//   `tb_payment` has NO direct analog to "slip_transferred_at" (the bank-side
+//   timestamp on the customer's slip — distinct from `paydate` which is the
+//   row-create timestamp and `paydateadmin` which is the approve-flip
+//   timestamp). Adding the column requires a migration (e.g. `paydateslip
+//   timestamp without time zone`), which is forbidden by the 2026-06-02 Tier-A
+//   scope.
+//
+// Tombstoned: returns a clear error rather than silently writing into an
+//   empty rebuilt table. Replace with the real tb_payment.paydateslip writer
+//   once the migration lands (author = ภูม / accounting lane).
 
 const setYuanSlipTransferredAtSchema = z.object({
   id:                  z.string().uuid(),
@@ -745,39 +761,16 @@ export async function adminSetYuanSlipTransferredAt(
 ): Promise<AdminActionResult<{ id: string; slip_transferred_at: string | null }>> {
   const parsed = setYuanSlipTransferredAtSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
-  const d = parsed.data;
-  let next: string | null = null;
-  if (d.slip_transferred_at.length > 0) {
-    const dt = new Date(d.slip_transferred_at);
-    if (Number.isNaN(dt.getTime())) return { ok: false, error: "slip_transferred_at รูปแบบไม่ถูกต้อง" };
-    next = dt.toISOString();
-  }
+  void parsed.data;
 
-  return withAdmin<{ id: string; slip_transferred_at: string | null }>(
-    ["super", "accounting"],
-    async ({ adminId }) => {
-      const admin = createAdminClient();
-      const { data: before, error: readErr } = await admin
-        .from("yuan_payments")
-        .select("id, slip_transferred_at")
-        .eq("id", d.id)
-        .maybeSingle<{ id: string; slip_transferred_at: string | null }>();
-      if (readErr) return { ok: false, error: readErr.message };
-      if (!before) return { ok: false, error: "not_found" };
-
-      const { error: updErr } = await admin
-        .from("yuan_payments")
-        .update({ slip_transferred_at: next })
-        .eq("id", d.id);
-      if (updErr) return { ok: false, error: updErr.message };
-
-      await logAdminAction(adminId, "yuan_payment.set_slip_transferred_at", "yuan_payment", d.id, {
-        before: before.slip_transferred_at,
-        after:  next,
-      });
-
-      revalidatePath("/admin/yuan-payments");
-      return { ok: true, data: { id: d.id, slip_transferred_at: next } };
-    },
+  console.warn(
+    "[yuan-payments] adminSetYuanSlipTransferredAt called — tombstoned. "
+    + "The only caller (SlipTransferredAtCell) is also an orphan. "
+    + "Add migration `ALTER TABLE tb_payment ADD COLUMN paydateslip timestamp without time zone` "
+    + "+ restore the live body when this field is needed on the live yuan-payments UI.",
   );
+  return {
+    ok: false,
+    error: "feature_pending_migration: slip_transferred_at รอเพิ่มคอลัมน์ paydateslip บน tb_payment — ตอนนี้ยังใช้ไม่ได้",
+  };
 }

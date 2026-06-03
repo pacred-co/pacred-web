@@ -33,7 +33,7 @@ import {
   SlidersHorizontal, Network, ListOrdered, Barcode, ScanLine, Camera,
   Printer, Calculator, BadgeCheck, ShieldAlert, UserCheck, Wand2, RefreshCw,
   Banknote, KanbanSquare, Smartphone, Save,
-  Ban, AlertCircle, Gauge, PhoneCall, Megaphone, Handshake,
+  Ban, AlertCircle, Gauge, PhoneCall, Megaphone, Handshake, Database,
   ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
@@ -116,6 +116,8 @@ const ICONS: Record<string, LucideIcon> = {
   Megaphone,       // settingsCargo.promos
   // 2026-06-02 (เดฟ) — partner directory (/admin/partners · staff-CRUD gap §PM-6).
   Handshake,       // settingsCargo.partners
+  // 2026-06-02 (ภูม) — /admin/system/pcs-sync dashboard
+  Database,        // PCS↔Pacred Sync settings page
 };
 
 function Icon({ name, active }: { name?: string; active: boolean }) {

@@ -53,7 +53,7 @@ export default async function AdminCsvImportsPage() {
     size_bytes: number | null; created_at: string; imported_at: string | null;
     uploader: Uploader;
   };
-  const rows = ((data ?? []) as RawRow[]).map((r) => ({
+  const rows = ((data ?? []) as unknown as RawRow[]).map((r) => ({
     ...r,
     uploader: normSingle(r.uploader),
   }));

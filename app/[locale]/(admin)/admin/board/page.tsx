@@ -123,7 +123,7 @@ export default async function AdminBoardPage({
   if (error) {
     console.error(`[work_items list] failed`, { code: error.code, message: error.message });
   }
-  let rows = (data ?? []) as WorkRow[];
+  let rows = (data ?? []) as unknown as WorkRow[];
   if (overdueOnly) {
     rows = rows.filter((r) => isWorkItemOverdue(r.due_at, r.status as WorkStatus));
   }

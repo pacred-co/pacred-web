@@ -142,7 +142,7 @@ export async function getShopWalletSummary(): Promise<ActionResult<ShopWalletSum
 
   // `amount` for outbound kinds is stored as a negative number — sum
   // the absolute values for the "pending lock" total.
-  const pending = ((pendingRows ?? []) as PendingRow[]).reduce(
+  const pending = ((pendingRows ?? []) as unknown as PendingRow[]).reduce(
     (s, r) => s + Math.abs(Number(r.amount)),
     0,
   );
@@ -190,7 +190,7 @@ export async function listShopWalletTransactions(
     .limit(limit);
   if (error) return { ok: false, error: error.message };
 
-  const rows: ShopWalletTransaction[] = ((data ?? []) as Raw[]).map((r) => ({
+  const rows: ShopWalletTransaction[] = ((data ?? []) as unknown as Raw[]).map((r) => ({
     id:         r.id,
     kind:       r.kind,
     status:     r.status,

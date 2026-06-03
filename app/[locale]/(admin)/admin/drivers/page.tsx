@@ -97,7 +97,7 @@ export default async function AdminDriversPage({
     console.error("/admin/drivers: list query failed", rowsErr, { status, range });
     throw new Error(`ไม่สามารถอ่านรายการรอบจัดส่ง: ${rowsErr.message}`);
   }
-  const rows = (rowsData ?? []) as BatchRow[];
+  const rows = (rowsData ?? []) as unknown as BatchRow[];
 
   // Status tally (filter chips show counts of the active range).
   // Next 16 react-hooks/purity rule rejects raw `Date.now()` inline in render
@@ -130,7 +130,7 @@ export default async function AdminDriversPage({
     if (itemAggErr) {
       console.error("/admin/drivers: item agg failed", itemAggErr);
     }
-    items = (itemAggData ?? []) as AggItemRow[];
+    items = (itemAggData ?? []) as unknown as AggItemRow[];
   }
   // For box-count we need to look up tb_forwarder.famount — but since items
   // can be 5000+ that's a separate concurrent query bounded to the visible
@@ -146,7 +146,7 @@ export default async function AdminDriversPage({
     if (error) {
       console.error("/admin/drivers: forwarder amount lookup failed", error);
     }
-    fwdAmtData = (data ?? []) as FwdAmtRow[];
+    fwdAmtData = (data ?? []) as unknown as FwdAmtRow[];
   }
   const famountById = new Map(fwdAmtData.map((r) => [r.id, r.famount ?? 0]));
   const itemAgg = new Map<number, { itemCount: number; boxSum: number; doneCount: number }>();

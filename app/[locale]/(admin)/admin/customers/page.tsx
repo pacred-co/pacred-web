@@ -275,7 +275,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
     if (addressesErr) {
       console.error(`[tb_address list] failed`, { code: addressesErr.code, message: addressesErr.message });
     }
-    for (const a of (addresses ?? []) as AddressRow[]) {
+    for (const a of (addresses ?? []) as unknown as AddressRow[]) {
       if (!addressByUser.has(a.userid)) addressByUser.set(a.userid, a);
     }
   }

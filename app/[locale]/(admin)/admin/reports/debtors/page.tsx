@@ -67,7 +67,7 @@ export default async function DebtorsReport() {
     });
     throw new Error(`Failed to load tb_wallet (${walletErr.code ?? "unknown"}): ${walletErr.message}`);
   }
-  const wallets = (walletRaw ?? []) as WalletRow[];
+  const wallets = (walletRaw ?? []) as unknown as WalletRow[];
 
   // 2-pass: customer names + cashback balances (parallel).
   const useridList = wallets.map((w) => w.userid).filter(Boolean);
@@ -81,12 +81,12 @@ export default async function DebtorsReport() {
     if (usersRes.error) {
       console.error(`[tb_users debtors join] failed`, { code: usersRes.error.code, message: usersRes.error.message });
     } else {
-      userMap = Object.fromEntries(((usersRes.data ?? []) as UserRow[]).map((u) => [u.userID, u]));
+      userMap = Object.fromEntries(((usersRes.data ?? []) as unknown as UserRow[]).map((u) => [u.userID, u]));
     }
     if (cbRes.error) {
       console.error(`[tb_cash_back debtors join] failed`, { code: cbRes.error.code, message: cbRes.error.message });
     } else {
-      cbMap = Object.fromEntries(((cbRes.data ?? []) as CashBackRow[]).map((c) => [c.userid, Number(c.cbtotal ?? 0)]));
+      cbMap = Object.fromEntries(((cbRes.data ?? []) as unknown as CashBackRow[]).map((c) => [c.userid, Number(c.cbtotal ?? 0)]));
     }
   }
 

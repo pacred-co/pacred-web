@@ -183,7 +183,7 @@ export default async function CreateDriverBatchPage() {
     profile: { member_code: string | null; first_name: string | null; last_name: string | null } |
              { member_code: string | null; first_name: string | null; last_name: string | null }[] | null;
   };
-  const drivers: DriverOption[] = ((driversData ?? []) as DrvRow[])
+  const drivers: DriverOption[] = ((driversData ?? []) as unknown as DrvRow[])
     .map((d) => {
       const prof = Array.isArray(d.profile) ? d.profile[0] : d.profile;
       if (!prof?.member_code) return null;

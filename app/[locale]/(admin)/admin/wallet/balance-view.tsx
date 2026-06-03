@@ -39,9 +39,18 @@ type UserRow = {
 
 export type BalanceViewProps = {
   q: string | undefined;
+  /** Lane C 2026-06-02 — sortable column header (ภูม flag #3). */
+  sort?: string;
+  dir?: string;
 };
 
-export async function WalletBalanceView({ q }: BalanceViewProps) {
+// Lane C 2026-06-02 — server-side sort field whitelist.
+const BALANCE_SORT_FIELDS: Record<string, string> = {
+  wallettotal: "wallettotal",
+  userid:      "userid",
+};
+
+export async function WalletBalanceView({ q, sort, dir }: BalanceViewProps) {
   const admin = createAdminClient();
 
   // ── System-wide totals (faithful to legacy L107-127 + L165 admin/page.tsx pattern).
@@ -66,15 +75,32 @@ export async function WalletBalanceView({ q }: BalanceViewProps) {
   );
 
   // ── Top-200 wallets by balance DESC (matches legacy ORDER BY walletTotal DESC).
+  // Lane C 2026-06-02 — respect ?sort=&dir= from URL with whitelist; default
+  // wallettotal desc (legacy parity).
+  const sortKey = sort && BALANCE_SORT_FIELDS[sort] ? sort : "wallettotal";
+  const sortDir: "asc" | "desc" = dir === "asc" ? "asc" : "desc";
+  const sortColumn = BALANCE_SORT_FIELDS[sortKey];
   let wq = admin
     .from("tb_wallet")
     .select("userid,wallettotal")
-    .order("wallettotal", { ascending: false })
+    .order(sortColumn, { ascending: sortDir === "asc" })
     .limit(200);
   if (q && q.trim()) wq = wq.eq("userid", q.trim().toUpperCase());
 
+  // Pre-compute sort hrefs (Server Components can't ship functions).
+  const sortHrefs: Record<string, string> = {};
+  for (const k of Object.keys(BALANCE_SORT_FIELDS)) {
+    const nextDir = sortKey === k && sortDir === "desc" ? "asc" : "desc";
+    const params = new URLSearchParams();
+    params.set("view", "balance");
+    if (q) params.set("q", q);
+    params.set("sort", k);
+    params.set("dir", nextDir);
+    sortHrefs[k] = `/admin/wallet?${params.toString()}`;
+  }
+
   const { data: walletRowsRaw, error } = await wq;
-  const walletRows = (walletRowsRaw ?? []) as WalletRow[];
+  const walletRows = (walletRowsRaw ?? []) as unknown as WalletRow[];
 
   // ── Batch-join tb_users + tb_cash_back for the rows on screen.
   const userIds = walletRows.map((r) => r.userid);
@@ -85,7 +111,7 @@ export async function WalletBalanceView({ q }: BalanceViewProps) {
           .from("tb_users")
           .select("userID,userName,userLastName,coID,userStatus")
           .in("userID", userIds)
-          .then(({ data }) => new Map(((data ?? []) as UserRow[]).map((u) => [u.userID, u]))),
+          .then(({ data }) => new Map(((data ?? []) as unknown as UserRow[]).map((u) => [u.userID, u]))),
     userIds.length === 0
       ? Promise.resolve(new Map<string, number>())
       : admin
@@ -94,7 +120,7 @@ export async function WalletBalanceView({ q }: BalanceViewProps) {
           .in("userid", userIds)
           .then(({ data }) => {
             const m = new Map<string, number>();
-            for (const r of (data ?? []) as CashBackRow[]) {
+            for (const r of (data ?? []) as unknown as CashBackRow[]) {
               m.set(r.userid, Number(r.cbtotal ?? 0));
             }
             return m;
@@ -168,9 +194,9 @@ export async function WalletBalanceView({ q }: BalanceViewProps) {
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-3 py-3 w-12">ลำดับ</th>
-                  <th className="px-3 py-3">รหัสสมาชิก</th>
+                  <BalanceSortTh label="รหัสสมาชิก"     field="userid"      activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} />
                   <th className="px-3 py-3">ชื่อ-นามสกุล</th>
-                  <th className="px-3 py-3 text-right">ยอดเงินคงเหลือ</th>
+                  <BalanceSortTh label="ยอดเงินคงเหลือ" field="wallettotal" activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} align="right" />
                   <th className="px-3 py-3 text-right">Cash Back</th>
                   <th className="px-3 py-3">สถานะ</th>
                 </tr>
@@ -230,5 +256,38 @@ export async function WalletBalanceView({ q }: BalanceViewProps) {
         แสดงไม่เกิน 200 อันดับแรก (ยอด wallet สูงสุดก่อน) — ใช้ค้นหารหัสสมาชิกเพื่อดูเฉพาะรายใดรายหนึ่ง
       </p>
     </>
+  );
+}
+
+function BalanceSortTh({
+  label,
+  field,
+  activeKey,
+  activeDir,
+  hrefs,
+  align,
+}: {
+  label: string;
+  field: string;
+  activeKey: string;
+  activeDir: "asc" | "desc";
+  hrefs: Record<string, string>;
+  align?: "right";
+}) {
+  const active = activeKey === field;
+  const arrow = active ? (activeDir === "asc" ? "↑" : "↓") : "⇵";
+  const cls = align === "right" ? "text-right" : "";
+  return (
+    <th className={`px-3 py-3 ${cls}`}>
+      <Link
+        href={hrefs[field]}
+        className={`inline-flex items-center gap-1 hover:text-foreground transition-colors ${
+          active ? "text-primary-700 font-semibold" : ""
+        } ${align === "right" ? "flex-row-reverse" : ""}`}
+      >
+        <span>{label}</span>
+        <span className="text-[9px]" aria-hidden>{arrow}</span>
+      </Link>
+    </th>
   );
 }

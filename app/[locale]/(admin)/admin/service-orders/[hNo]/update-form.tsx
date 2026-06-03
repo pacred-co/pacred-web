@@ -15,9 +15,9 @@ const STATUS_FLOW = [
   { value: "completed",            label: "สำเร็จ" },
 ] as const;
 
-// `totalThb` is accepted (both mounts still pass it) but no longer read here —
-// the mark-paid amount + debit now lives entirely in the adjacent
-// <MarkPaidTbForm> after the dead adminMarkServiceOrderPaid path was removed.
+// `totalThb` is still accepted as an optional prop (legacy-view's adjacent
+// <MarkPaidTbForm> owns the mark-paid amount + debit now) but no longer read
+// here — kept optional so any caller passing it still compiles.
 export function AdminServiceOrderUpdateForm({ hNo, status, note_admin }: { hNo: string; status: string; note_admin: string | null; totalThb?: number }) {
   const router = useRouter();
   const [st, setSt]   = useState(status);

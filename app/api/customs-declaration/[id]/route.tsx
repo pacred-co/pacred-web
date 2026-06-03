@@ -157,7 +157,7 @@ export async function GET(
   if (partiesRawErr) {
     console.error(`[freight_parties list] failed`, { code: partiesRawErr.code, message: partiesRawErr.message });
   }
-  const partyList = (partiesRaw ?? []) as PartyRow[];
+  const partyList = (partiesRaw ?? []) as unknown as PartyRow[];
   const shipper   = partyList.find((p) => p.role === "shipper");
   const consignee = partyList.find((p) => p.role === "consignee");
 
@@ -173,7 +173,7 @@ export async function GET(
   if (linesRawErr) {
     console.error(`[customs_declaration_lines list] failed`, { code: linesRawErr.code, message: linesRawErr.message });
   }
-  const lines = (linesRaw ?? []) as LineRow[];
+  const lines = (linesRaw ?? []) as unknown as LineRow[];
 
   registerPdfFonts();
 

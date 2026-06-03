@@ -155,7 +155,7 @@ async function primaryLookup(
     logger.error("barcode-import", "primaryLookup failed", error, { keysearch });
     return null;
   }
-  const rows = (data ?? []) as ForwarderRow[];
+  const rows = (data ?? []) as unknown as ForwarderRow[];
   if (rows.length === 1) return rows[0];
   if (rows.length === 0) return null;
 
@@ -170,7 +170,7 @@ async function primaryLookup(
   if (refRowsErr) {
     console.error(`[tb_forwarder list] failed`, { code: refRowsErr.code, message: refRowsErr.message });
   }
-  const refList = (refRows ?? []) as ForwarderRow[];
+  const refList = (refRows ?? []) as unknown as ForwarderRow[];
   if (refList.length === 1) return refList[0];
 
   // Then adminIDCreator<>'' (legacy L58)
@@ -184,7 +184,7 @@ async function primaryLookup(
   if (adminRowsErr) {
     console.error(`[tb_forwarder list] failed`, { code: adminRowsErr.code, message: adminRowsErr.message });
   }
-  const adminList = (adminRows ?? []) as ForwarderRow[];
+  const adminList = (adminRows ?? []) as unknown as ForwarderRow[];
   if (adminList.length === 1) return adminList[0];
 
   // Still ambiguous → legacy treats as not-found (statusData=2).
@@ -220,7 +220,7 @@ async function fallbackLookup(
       });
       return null;
     }
-    const rows = (data ?? []) as ForwarderRow[];
+    const rows = (data ?? []) as unknown as ForwarderRow[];
     if (rows.length === 1) return rows[0];
     return null;
   }
@@ -246,7 +246,7 @@ async function fallbackLookup(
     });
     return null;
   }
-  const rows = (data ?? []) as ForwarderRow[];
+  const rows = (data ?? []) as unknown as ForwarderRow[];
   if (rows.length === 1) return rows[0];
   return null;
 }

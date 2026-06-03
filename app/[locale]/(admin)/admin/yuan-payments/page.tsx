@@ -77,7 +77,20 @@ type URow = {
   userTel: string | null;
 };
 
-type SP = { status?: string; q?: string; from?: string; to?: string; all?: string };
+type SP = { status?: string; q?: string; from?: string; to?: string; all?: string; sort?: string; dir?: string };
+
+// Lane C 2026-06-02 — server-side sort field whitelist (ภูม flag #3).
+// Maps the URL `?sort=` value to the actual tb_payment column. Any value
+// not in this map falls back to `paydate` (the legacy default).
+const YUAN_SORT_FIELDS: Record<string, string> = {
+  paydate:        "paydate",
+  userid:         "userid",
+  paytype:        "paytype",
+  payyuan:        "payyuan",
+  paythb:         "paythb",
+  payprofitthb:   "payprofitthb",
+  paystatus:      "paystatus",
+};
 
 // Wave 15 P0-2 — Default date window helpers.
 //
@@ -120,12 +133,17 @@ export default async function AdminYuanPaymentsPage({
   // Wave 15 P0-2 — apply default 60-day window (legacy parity).
   const window = resolveDateWindow(sp);
 
+  // Lane C 2026-06-02 — resolve sort + dir from URL with whitelist.
+  const sortKey = sp.sort && YUAN_SORT_FIELDS[sp.sort] ? sp.sort : "paydate";
+  const sortDir: "asc" | "desc" = sp.dir === "asc" ? "asc" : "desc";
+  const sortColumn = YUAN_SORT_FIELDS[sortKey];
+
   let q = admin
     .from("tb_payment")
     .select(
       "id,paydate,paystatus,paytype,paydetail,payyuan,payrate,paythb,payprofitthb,paydateadmin,userid,adminid,imagesslip",
     )
-    .order("paydate", { ascending: false })
+    .order(sortColumn, { ascending: sortDir === "asc" })
     .limit(200);
 
   if (sp.status && /^[123]$/.test(sp.status)) q = q.eq("paystatus", sp.status);
@@ -155,6 +173,23 @@ export default async function AdminYuanPaymentsPage({
       console.error(`[tb_users list] failed`, { code: usersRawErr.code, message: usersRawErr.message });
     }
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
+  }
+
+  // Lane C 2026-06-02 — pre-compute sort hrefs for each header. Click on
+  // the active sort column flips the direction; click on any other column
+  // sets it as the new active sort with the default 'desc' direction.
+  const sortHrefs: Record<string, string> = {};
+  for (const k of Object.keys(YUAN_SORT_FIELDS)) {
+    const nextDir = sortKey === k && sortDir === "desc" ? "asc" : "desc";
+    const params = new URLSearchParams();
+    if (sp.status) params.set("status", sp.status);
+    if (sp.q)      params.set("q", sp.q);
+    if (sp.from)   params.set("from", sp.from);
+    if (sp.to)     params.set("to", sp.to);
+    if (sp.all)    params.set("all", sp.all);
+    params.set("sort", k);
+    params.set("dir", nextDir);
+    sortHrefs[k] = `/admin/yuan-payments?${params.toString()}`;
   }
 
   // Pending count for the page header chip — scoped to the SAME date window
@@ -297,13 +332,13 @@ export default async function AdminYuanPaymentsPage({
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-2 py-3 w-8"></th>
-                  <th className="px-3 py-3">วันที่สร้าง</th>
-                  <th className="px-3 py-3">ลูกค้า</th>
-                  <th className="px-3 py-3">ช่องทาง</th>
-                  <th className="px-3 py-3 text-right">หยวน</th>
-                  <th className="px-3 py-3 text-right">บาท</th>
-                  <th className="px-3 py-3 text-right">กำไร</th>
-                  <th className="px-3 py-3">สถานะ</th>
+                  <YuanSortTh label="วันที่สร้าง" field="paydate"      activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} />
+                  <YuanSortTh label="ลูกค้า"      field="userid"       activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} />
+                  <YuanSortTh label="ช่องทาง"     field="paytype"      activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} />
+                  <YuanSortTh label="หยวน"        field="payyuan"      activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} align="right" />
+                  <YuanSortTh label="บาท"         field="paythb"       activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} align="right" />
+                  <YuanSortTh label="กำไร"        field="payprofitthb" activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} align="right" />
+                  <YuanSortTh label="สถานะ"       field="paystatus"    activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} />
                   <th className="px-3 py-3">สลิป</th>
                   <th className="px-3 py-3">จัดการ</th>
                 </tr>
@@ -411,5 +446,44 @@ export default async function AdminYuanPaymentsPage({
         แสดงไม่เกิน 200 แถวต่อหน้า (ใช้ค้นหา / ตัวกรองด้านบนเพื่อกรองเพิ่ม)
       </p>
     </main>
+  );
+}
+
+/**
+ * Lane C 2026-06-02 — server-side sortable column header (Link-based).
+ * Pattern mirrors service-orders-table.tsx `SortableTh` — pre-computed
+ * hrefs Record passed in (Server Components can't ship functions over
+ * the RSC wire).
+ */
+function YuanSortTh({
+  label,
+  field,
+  activeKey,
+  activeDir,
+  hrefs,
+  align,
+}: {
+  label: string;
+  field: string;
+  activeKey: string;
+  activeDir: "asc" | "desc";
+  hrefs: Record<string, string>;
+  align?: "right";
+}) {
+  const active = activeKey === field;
+  const arrow = active ? (activeDir === "asc" ? "↑" : "↓") : "⇵";
+  const cls = align === "right" ? "text-right" : "";
+  return (
+    <th className={`px-3 py-3 ${cls}`}>
+      <Link
+        href={hrefs[field]}
+        className={`inline-flex items-center gap-1 hover:text-foreground transition-colors ${
+          active ? "text-primary-700 font-semibold" : ""
+        } ${align === "right" ? "flex-row-reverse" : ""}`}
+      >
+        <span>{label}</span>
+        <span className="text-[9px]" aria-hidden>{arrow}</span>
+      </Link>
+    </th>
   );
 }

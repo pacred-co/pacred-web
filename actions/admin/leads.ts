@@ -149,7 +149,7 @@ export async function getLeadQueue(
           console.error(`[tb_users big-pcs load] failed`, { code: usErr.code, message: usErr.message });
           return { ok: false, error: `query_failed: ${usErr.message}` };
         }
-        for (const u of (us ?? []) as TbUserRow[]) usersById.set(u.userID, u);
+        for (const u of (us ?? []) as unknown as TbUserRow[]) usersById.set(u.userID, u);
       }
 
       // 4) Optional free-text narrow (over the ranked set, in memory).
@@ -196,7 +196,7 @@ export async function getLeadQueue(
         console.error(`[tb_users lead queue] failed`, { code: error.code, message: error.message });
         return { ok: false, error: `query_failed: ${error.message}` };
       }
-      users = (data ?? []) as TbUserRow[];
+      users = (data ?? []) as unknown as TbUserRow[];
 
       // Order counts for the visible page only (bounded .in()).
       const ids = users.map((u) => u.userID);

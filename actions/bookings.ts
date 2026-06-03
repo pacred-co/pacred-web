@@ -137,7 +137,7 @@ async function loadActiveRates(): Promise<RateRow[]> {
     logger.warn("bookings", "loadActiveRates failed", { error: error.message });
     return [];
   }
-  return (data ?? []) as RateRow[];
+  return (data ?? []) as unknown as RateRow[];
 }
 
 /** Pick the most-specific rate (service-slug match wins over the catch-all). */

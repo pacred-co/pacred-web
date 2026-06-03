@@ -3,14 +3,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
-import { AdminForwarderUpdateForm } from "./update-form";
-import { TbForwarderActionPanel } from "./tb-action-panel";
-import { TbForwarderPaymentPanel } from "./tb-payment-panel";
-import { TbForwarderEditPanel, type SavedAddressOption } from "./tb-edit-panel";
-import { TbForwarderDriverAssignPanel, type DriverAssignmentState } from "./tb-driver-assign-panel";
-import { DriverAssignForm } from "./driver-assign-form";
-import { CostAdjustmentsPanel, type CostAdjustmentRow } from "./cost-adjustments-panel";
-import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
 import {
   User as UserIcon,
   Package,
@@ -21,27 +13,52 @@ import {
   Circle,
   Clock,
   StickyNote,
+  Pencil,
+  ArrowLeft,
+  ExternalLink,
 } from "lucide-react";
 
 // W-1: requireAdmin reads auth cookies; a page under a dynamic [fNo]
 // segment that reads cookies MUST be force-dynamic (AGENTS.md §11).
-//
-// Wave 3 cleanup (2026-05-20 ค่ำ): the "Cargo shipments (spine)" section
-// was removed when cargo_shipments/cargo_containers were retired under
-// D1 Option A. The forwarder's container number is on the `cabinet_number`
-// column directly (rendered in the AdminForwarderUpdateForm) and `tracking_th`
-// gives the in-Thailand parcel ID; full container-level view lives at
-// `/admin/report-cnt` (faithful port of report-cnt.php).
 export const dynamic = "force-dynamic";
 
+/**
+ * /admin/forwarders/[fNo] — READ-ONLY single-page view (2026-06-02 ภูม UX P0).
+ *
+ * Before this rewrite the detail page mixed read + write — 5 stacked
+ * CollapsibleCards in the right column held all action panels, conflating
+ * "ดูข้อมูล" with "อัปเดต". ภูม flag (paraphrase):
+ *   1. "พอกดปุ่มอัพเดต ตรง Action ที่มีให้อัพเดตสถานะ มันไม่ควรเรียงแบบนี้
+ *      มันใช้งานยากมาก" — vertical stack of collapsibles is hard to use
+ *   2. "กดปุ่มดูข้อมูล แต่กลับเข้ามาหน้าเดียวกันกับปุ่มอัพเดต ดูข้อมูล
+ *      ควรแสดงข้อมูลทั้งหมด แล้วทำปุ่มแก้ไขในหน้าเพื่อเด้งไปหน้าอัพเดต
+ *      มันจะดูมาตรฐานกว่า" — view + edit should be different pages
+ *   3. "ของ PCS ดูง่ายกว่าเยอะ เราควรจัดการเรียงให้เหมือนเขาแต่ทำหน้าตา
+ *      ออกมาให้เข้ากับระบบเรา" — match PCS layout structure, Pacred style
+ *
+ * Fix:
+ *   · This page is now READ-ONLY · all data visible in one full page
+ *     (legacy PCS forwarder.php detail mode layout · ลูกค้า / ที่อยู่ /
+ *     tracking / cabinet / dimensions / items / pricing breakdown · all
+ *     in 2-column flat layout, no collapsibles)
+ *   · Single "✏️ แก้ไข / อัปเดต" button top-right → routes to /edit
+ *   · The 5 action panels (Status · Driver · Payment · Edit · Bill-to)
+ *     moved to /edit/page.tsx as flat sections
+ *
+ * Legacy reference: D:\REALSHITDATAPCS\pcsc\public_html\member\pcs-admin\
+ *   forwarder.php (read mode · no ?page= param) + forwarder-back-up/detail.php
+ */
 export default async function AdminForwarderDetail({ params }: { params: Promise<{ fNo: string }> }) {
-  // W-1 (gap-admin H-1): same gate as the list page — import-order
-  // detail + cost adjustments is ops + accounting only.
   await requireAdmin(["ops", "accounting"]);
 
   const { fNo } = await params;
   const admin = createAdminClient();
 
+  // 2026-06-02 — Primary path = tb_forwarder (legacy, ~47K rows on prod).
+  const tbResult = await tryRenderTbForwarder(fNo, admin);
+  if (tbResult) return tbResult;
+
+  // Fallback — rebuilt `forwarders` table (UUID, empty on prod, back-compat).
   const { data, error } = await admin
     .from("forwarders")
     .select(`
@@ -59,18 +76,11 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
     .eq("f_no", fNo)
     .maybeSingle();
   if (error) {
-    console.error(`[forwarders list] failed`, { code: error.code, message: error.message });
+    console.error(`[forwarders fallback] failed`, { code: error.code, message: error.message });
   }
 
   if (!data) {
-    // Wave 3 P0 #1 fallback (2026-05-21): the list page reads tb_forwarder
-    // (legacy · 47K rows on prod) while this detail page reads the rebuilt
-    // forwarders (EMPTY on prod). Row clicks that came from the list will
-    // miss here. Look up the row in tb_forwarder by id or fidorco and render
-    // a minimal read-only legacy view + link to /admin/report-cnt for the
-    // container info. Full editable detail = Wave 5 (rewrite of update form
-    // + cost adjustments + driver assign + bill-to over tb_forwarder).
-    return await renderLegacyForwarderView(fNo, admin);
+    notFound();
   }
   type ProfileShape = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null; email: string | null };
   const f = data as unknown as Omit<typeof data, "profile"> & { profile: ProfileShape | ProfileShape[] | null };
@@ -81,186 +91,75 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
     .select("id, product_name, product_tracking, product_qty")
     .eq("forwarder_id", f.id);
   if (itemsErr) {
-    console.error(`[forwarder_items list] failed`, { code: itemsErr.code, message: itemsErr.message });
+    console.error(`[forwarder_items fallback] failed`, { code: itemsErr.code, message: itemsErr.message });
   }
-
-  // U2-4: load cost adjustments for this forwarder
-  const { data: costAdjRaw, error: costAdjRawErr } = await admin
-    .from("forwarder_cost_adjustments")
-    .select("id, kind, amount_thb, note, status, created_at, paid_at, cancellation_reason")
-    .eq("forwarder_id", f.id)
-    .order("created_at", { ascending: false })
-    .returns<CostAdjustmentRow[]>();
-  if (costAdjRawErr) {
-    console.error(`[forwarder_cost_adjustments list] failed`, { code: costAdjRawErr.code, message: costAdjRawErr.message });
-  }
-  const costAdjustments = costAdjRaw ?? [];
-
-  // T-P1: load all driver assignments (history + active) for this forwarder
-  const { data: assignmentsRaw, error: assignmentsRawErr } = await admin
-    .from("forwarder_driver")
-    .select(`
-      id, status, fd_date, accepted_at, completed_at,
-      driver:profiles!profile_id ( member_code, first_name, last_name, phone )
-    `)
-    .eq("forwarder_id", f.id)
-    .order("fd_date", { ascending: false });
-  if (assignmentsRawErr) {
-    console.error(`[forwarder_driver list] failed`, { code: assignmentsRawErr.code, message: assignmentsRawErr.message });
-  }
-  type DriverShape = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null };
-  const assignments = ((assignmentsRaw ?? []) as Array<{
-    id: string; status: number; fd_date: string;
-    accepted_at: string | null; completed_at: string | null;
-    driver: DriverShape | DriverShape[] | null;
-  }>).map((a) => ({
-    ...a,
-    driver: Array.isArray(a.driver) ? (a.driver[0] ?? null) : a.driver,
-  }));
 
   return (
-    <main className="p-6 lg:p-8 space-y-6">
+    <main className="p-4 lg:p-6 max-w-6xl mx-auto space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ฝากนำเข้า</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ฝากนำเข้า (rebuilt fallback)</p>
           <h1 className="mt-1 text-2xl font-bold font-mono">{f.f_no}</h1>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Wave 12-C ภาค 2 — แก้ไขขนาด/น้ำหนัก */}
           <Link
             href={`/admin/forwarders/${f.f_no}/edit`}
-            className="rounded-lg border border-primary-500 bg-primary-50 px-3 py-1.5 text-sm text-primary-700 font-medium hover:bg-primary-100"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-primary-500 bg-primary-50 px-3 py-1.5 text-sm text-primary-700 font-medium hover:bg-primary-100"
           >
-            ✏️ แก้ไขขนาด/น้ำหนัก
-            <span className="ml-1.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
-              Wave 12-C ภาค 2 · ใหม่
-            </span>
+            <Pencil className="h-3.5 w-3.5" /> แก้ไข / อัปเดต
           </Link>
-          <Link href="/admin/forwarders" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
-            ← กลับรายการ
+          <Link href="/admin/forwarders" className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
+            <ArrowLeft className="h-3.5 w-3.5" /> กลับรายการ
           </Link>
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-[1fr_360px] gap-6">
-        <div className="space-y-4">
-          {/* Customer */}
-          <Section title="ลูกค้า">
-            <Row label="รหัสสมาชิก" value={profile?.member_code ?? "—"} mono />
-            <Row label="ชื่อ" value={`${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`} />
-            <Row label="เบอร์" value={profile?.phone ?? "—"} />
-            <Row label="อีเมล" value={profile?.email ?? "—"} />
-            <Link href={`/admin/customers/${f.profile_id}`} className="text-xs text-primary-500 hover:underline">→ ดูโปรไฟล์ลูกค้า</Link>
+      <div className="grid lg:grid-cols-2 gap-4">
+        <Section title="ลูกค้า">
+          <Row label="รหัสสมาชิก" value={profile?.member_code ?? "—"} mono />
+          <Row label="ชื่อ" value={`${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`} />
+          <Row label="เบอร์" value={profile?.phone ?? "—"} />
+          <Row label="อีเมล" value={profile?.email ?? "—"} />
+          <Link href={`/admin/customers/${f.profile_id}`} className="text-xs text-primary-500 hover:underline">→ ดูโปรไฟล์ลูกค้า</Link>
+        </Section>
+
+        <Section title="ที่อยู่จัดส่ง">
+          <p className="text-sm">{f.ship_first_name} {f.ship_last_name}</p>
+          <p className="text-xs text-muted">📞 {f.ship_phone}{f.ship_phone2 ? ` / ${f.ship_phone2}` : ""}</p>
+          <p className="text-sm">{f.ship_address_line} ต.{f.ship_sub_district} อ.{f.ship_district} จ.{f.ship_province} {f.ship_postal_code}</p>
+          {f.ship_note && <p className="text-xs text-muted">📝 {f.ship_note}</p>}
+        </Section>
+
+        <Section title="ขนาด / น้ำหนัก">
+          <Row label="กล่อง" value={`${f.box_count}`} />
+          <Row label="น้ำหนัก" value={`${Number(f.weight_kg).toFixed(2)} kg`} mono />
+          <Row label="ขนาดกล่อง" value={`${Number(f.width_cm)}×${Number(f.length_cm)}×${Number(f.height_cm)} cm`} mono />
+          <Row label="ปริมาตร" value={`${Number(f.volume_cbm).toFixed(3)} cbm`} mono />
+        </Section>
+
+        <Section title="ราคา">
+          <Row label="ค่าขนส่ง" value={`฿${Number(f.transport_price).toFixed(2)}`} mono />
+          <Row label="ค่าบริการ" value={`฿${Number(f.service_fee).toFixed(2)}`} mono />
+          {f.crate && <Row label="ค่าตีลังไม้" value={`฿${Number(f.crate_price).toFixed(2)}`} mono />}
+          {f.qc && <Row label="ค่า QC" value={`฿${Number(f.qc_price).toFixed(2)}`} mono />}
+          <div className="flex justify-between pt-2 border-t border-border text-base font-bold">
+            <span>รวม</span>
+            <span className="font-mono">฿{Number(f.total_price).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+          </div>
+        </Section>
+
+        {items && items.length > 0 && (
+          <Section title={`รายการสินค้า (${items.length})`}>
+            <ul className="text-sm space-y-1">
+              {items.map((it) => (
+                <li key={it.id} className="flex justify-between border-b border-border pb-1">
+                  <span>{it.product_name}{it.product_tracking ? ` · ${it.product_tracking}` : ""}</span>
+                  <span className="font-mono text-xs">× {it.product_qty}</span>
+                </li>
+              ))}
+            </ul>
           </Section>
-
-          {/* Address */}
-          <Section title="ที่อยู่จัดส่ง">
-            <p className="text-sm">{f.ship_first_name} {f.ship_last_name}</p>
-            <p className="text-xs text-muted">📞 {f.ship_phone}{f.ship_phone2 ? ` / ${f.ship_phone2}` : ""}</p>
-            <p className="text-sm">{f.ship_address_line} ต.{f.ship_sub_district} อ.{f.ship_district} จ.{f.ship_province} {f.ship_postal_code}</p>
-            {f.ship_note && <p className="text-xs text-muted">📝 {f.ship_note}</p>}
-          </Section>
-
-          {/* Dimensions */}
-          <Section title="ขนาด / น้ำหนัก">
-            <Row label="กล่อง" value={`${f.box_count}`} />
-            <Row label="น้ำหนัก" value={`${Number(f.weight_kg).toFixed(2)} kg`} mono />
-            <Row label="ขนาดกล่อง" value={`${Number(f.width_cm)}×${Number(f.length_cm)}×${Number(f.height_cm)} cm`} mono />
-            <Row label="ปริมาตร" value={`${Number(f.volume_cbm).toFixed(3)} cbm`} mono />
-          </Section>
-
-          {/* Items */}
-          {items && items.length > 0 && (
-            <Section title={`รายการสินค้า (${items.length})`}>
-              <ul className="text-sm space-y-1">
-                {items.map((it) => (
-                  <li key={it.id} className="flex justify-between border-b border-border pb-1">
-                    <span>{it.product_name}{it.product_tracking ? ` · ${it.product_tracking}` : ""}</span>
-                    <span className="font-mono text-xs">× {it.product_qty}</span>
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          )}
-
-          {/* Pricing */}
-          <Section title="ราคา">
-            <Row label="ค่าขนส่ง" value={`฿${Number(f.transport_price).toFixed(2)}`} mono />
-            <Row label="ค่าบริการ" value={`฿${Number(f.service_fee).toFixed(2)}`} mono />
-            {f.crate && <Row label="ค่าตีลังไม้" value={`฿${Number(f.crate_price).toFixed(2)}`} mono />}
-            {f.qc && <Row label="ค่า QC" value={`฿${Number(f.qc_price).toFixed(2)}`} mono />}
-            {f.domestic_china_thb > 0 && <Row label="ค่าขนส่งในจีน" value={`฿${Number(f.domestic_china_thb).toFixed(2)}`} mono />}
-            {f.thailand_delivery_thb > 0 && <Row label="ค่าขนส่งในไทย" value={`฿${Number(f.thailand_delivery_thb).toFixed(2)}`} mono />}
-            {f.other_price > 0 && <Row label="อื่นๆ" value={`฿${Number(f.other_price).toFixed(2)}`} mono />}
-            <div className="flex justify-between pt-2 border-t border-border text-base font-bold">
-              <span>รวม</span>
-              <span className="font-mono">฿{Number(f.total_price).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
-            </div>
-          </Section>
-
-          {/* Container info — Wave 3: the spine join was removed; the
-              container number lives directly on `forwarders.cabinet_number`
-              and is shown in the AdminForwarderUpdateForm. For the full
-              container view + รายงานตู้, jump to /admin/report-cnt. */}
-          {f.cabinet_number && (
-            <Section title="📦 ตู้คอนเทนเนอร์">
-              <Row label="หมายเลขตู้" value={f.cabinet_number} mono />
-              <Link href="/admin/report-cnt" className="text-xs text-primary-500 hover:underline">→ ดูในรายงานตู้</Link>
-            </Section>
-          )}
-
-          {(f as { acknowledged_at: string | null }).acknowledged_at && (
-            <Section title="✅ ลูกค้ายืนยันรับสินค้าแล้ว (U4-3a)">
-              <p className="text-xs text-muted">
-                {new Date((f as { acknowledged_at: string }).acknowledged_at).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}
-              </p>
-              {(f as { acknowledged_note: string | null }).acknowledged_note && (
-                <p className="mt-1 text-sm whitespace-pre-wrap">
-                  <span className="text-muted text-xs">โน้ตจากลูกค้า:</span> {(f as { acknowledged_note: string }).acknowledged_note}
-                </p>
-              )}
-            </Section>
-          )}
-
-          {f.note_user && (
-            <Section title="หมายเหตุจากลูกค้า">
-              <p className="text-sm whitespace-pre-wrap">{f.note_user}</p>
-            </Section>
-          )}
-          {f.detail && (
-            <Section title="รายละเอียดสินค้า">
-              <p className="text-sm whitespace-pre-wrap">{f.detail}</p>
-            </Section>
-          )}
-        </div>
-
-        <aside className="space-y-4">
-          <AdminForwarderUpdateForm
-            fNo={f.f_no}
-            status={f.status}
-            totalPrice={Number(f.total_price)}
-            tracking_chn={f.tracking_chn}
-            tracking_th={f.tracking_th}
-            cabinet_number={f.cabinet_number}
-            partner_warehouse={f.partner_warehouse}
-            note_admin={f.note_admin}
-          />
-          <DriverAssignForm
-            forwarderId={f.id}
-            assignments={assignments}
-          />
-          <CostAdjustmentsPanel
-            forwarderId={f.id}
-            fNo={f.f_no}
-            existing={costAdjustments}
-          />
-          <BillToOverridePanel
-            kind="forwarder"
-            fNo={f.f_no}
-            defaultName={[f.ship_first_name, f.ship_last_name].filter(Boolean).join(" ") || ""}
-            current={f.bill_to_name_override ?? null}
-          />
-        </aside>
+        )}
       </div>
     </main>
   );
@@ -283,45 +182,43 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
   );
 }
 
-// Wave 3 P0 #1 fallback + Wave 20 P1 enrichment — legacy tb_forwarder
-// detail view, enhanced to match the PCS layout that ภูม flagged on
-// 2026-05-25 ค่ำ. Adds:
-//   · 7-step status timeline (icons + completed-when based on fdatestatus*)
-//   · Sale rep + admin creator badges (joined from tb_users.adminidsale)
-//   · Product detail block — cover image + Chinese name when shop-spawned
-//     (reforder != ""), freetext fdetail otherwise
-//   · ค่าใช้จ่ายแบบแยก (transport + service + crate + qc + other) instead
-//     of just one ftotalprice number
-//   · paydeposit / pay-method / credit-line state line
-//   · Note block (read-only for now; write form = Wave 20 P1.1)
-async function renderLegacyForwarderView(
+/**
+ * Primary tb_forwarder read-only renderer.
+ *
+ * Returns null on miss so the caller can try the rebuilt-forwarders fallback
+ * before 404'ing.
+ *
+ * Layout (matches PCS legacy forwarder.php detail mode + Pacred design):
+ *   1. Header — id + status badge + source tag + sale rep + "✏️ แก้ไข" button
+ *   2. Status timeline — 7 icons horizontal with datestamps
+ *   3. 2-col grid:
+ *      LEFT (2/3): customer · routing · product detail · address · note
+ *      RIGHT (1/3): cost breakdown · admin meta · quick-jump links
+ *
+ * NO action panels here — those moved to /edit.
+ */
+async function tryRenderTbForwarder(
   fNo: string,
   admin: ReturnType<typeof createAdminClient>,
 ) {
-  // Decide column to look up: numeric → id, else fidorco.
   const asNumber = Number(fNo);
   const isId = Number.isFinite(asNumber) && Number.isInteger(asNumber) && asNumber > 0;
 
   let tbq = admin
     .from("tb_forwarder")
     .select(
-      // Core identity + lifecycle
       "id, fidorco, userid, fstatus, fdate, " +
       "fdatestatus2, fdatestatus3, fdatestatus4, fdatestatus5, fdatestatus6, fdatestatus7, " +
       "fdatetothai, fdatecontainerclose, " +
-      // Routing / mode
       "ftransporttype, fwarehousechina, fwarehousename, fcabinetnumber, " +
       "ftrackingchn, ftrackingth, fshipby, fshippingservice, " +
-      // Dimensions + cost
       "fweight, fvolume, fwidth, flength, fheight, famount, famountcount, " +
       "ftotalprice, fcosttotalprice, ftransportprice, fpriceupdate, fdiscount, " +
       "pricecrate, fqcprice, ftransportpricechnthb, priceother, fproductstype, " +
       "frefprice, frefrate, customrate, customratekg, customratecbm, " +
-      // Address
       "faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
       "faddressdistrict, faddressprovince, faddresszipcode, " +
       "faddresstel, faddresstel2, faddressnote, " +
-      // Notes + meta + source
       "fnote, fdetail, fcover, fcredit, reforder, " +
       "adminid, adminidcreator, adminidupdate, paymethod, paydeposit, crate, fpallet, fbilltoname",
     )
@@ -333,7 +230,7 @@ async function renderLegacyForwarderView(
       code: tbRowErr.code, message: tbRowErr.message,
     });
   }
-  if (!tbRow) notFound();
+  if (!tbRow) return null;
   const r = tbRow as unknown as {
     id: number; fidorco: string | null; userid: string; fstatus: string;
     fdate: string | null;
@@ -367,8 +264,6 @@ async function renderLegacyForwarderView(
     fbilltoname: string | null;
   };
 
-  // Customer name lookup — now also pulls adminIDSale (the customer's
-  // assigned sales rep, shown as a "Sale" badge in legacy) + userPicture.
   const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
     .select("userID, userName, userLastName, userTel, userEmail, userPicture, adminIDSale")
@@ -383,86 +278,31 @@ async function renderLegacyForwarderView(
     userPicture: string | null; adminIDSale: string | null;
   } | null;
 
-  // Theme A (2026-05-31): wallet balance for the payment panel (display only —
-  // adminPayForwardersOnBehalf re-reads + is authoritative). tb_wallet is
-  // lowercase-columns (wallettotal) keyed by the legacy userid.
-  const { data: walletRow, error: walletErr } = await admin
-    .from("tb_wallet")
-    .select("wallettotal")
-    .eq("userid", r.userid)
-    .maybeSingle<{ wallettotal: number | string | null }>();
-  if (walletErr) {
-    console.error(`[tb_wallet detail] failed`, { code: walletErr.code, message: walletErr.message, userid: r.userid });
-  }
-  const walletBalance = Number(walletRow?.wallettotal ?? 0);
-  // Payable = legacy gate `.or("fstatus.eq.5,fcredit.eq.1")` (รอชำระเงิน OR credit).
-  const isPayable = r.fstatus === "5" || (r.fcredit ?? "").trim() === "1";
-
-  // Theme A cont (2026-05-31): the customer's saved address book for the
-  // re-pick editor (faithful update_fAddress). tb_address is lowercase-columns,
-  // keyed by userid, addressstatus='1' = active (legacy L1724).
-  const { data: addrRows, error: addrErr } = await admin
-    .from("tb_address")
-    .select("addressid, addressname, addresslastname, addressno, addressprovince")
-    .eq("userid", r.userid)
-    .eq("addressstatus", "1")
-    .order("addressid", { ascending: false })
-    .limit(50);
-  if (addrErr) {
-    console.error(`[tb_address list] failed`, { code: addrErr.code, message: addrErr.message, userid: r.userid });
-  }
-  const savedAddresses: SavedAddressOption[] = ((addrRows ?? []) as Array<{
-    addressid: number; addressname: string | null; addresslastname: string | null;
-    addressno: string | null; addressprovince: string | null;
-  }>).map((a) => ({
-    addressId: a.addressid,
-    label: [
-      `${a.addressname ?? ""} ${a.addresslastname ?? ""}`.trim(),
-      (a.addressno ?? "").slice(0, 30),
-      a.addressprovince ?? "",
-    ].filter(Boolean).join(" · ") || `ที่อยู่ #${a.addressid}`,
-  }));
-  // re-sweep adm-09 (2026-06-01): latest driver-assignment for this forwarder.
-  // tb_forwarder_driver_item (lowercase cols) keyed by `fid` = tb_forwarder.id.
-  // NB: legacy schema declares NO FK between item.fdid → driver.id (0081), so a
-  // PostgREST embed (`!fdid`) would 500 with PGRST200 — do TWO reads instead:
-  // (1) most-recent item by id desc, then (2) its parent batch by id.
-  let driverAssignment: DriverAssignmentState | null = null;
-  const { data: assignItemRow, error: assignItemErr } = await admin
-    .from("tb_forwarder_driver_item")
-    .select("id, fdid, fdistatus")
+  // Items table — full breakdown of the forwarder's product items.
+  const { data: itemRows, error: itemRowsErr } = await admin
+    .from("tb_forwarder_item")
+    .select(
+      "id, productname, producttracking, productqty, productwidth, productlength, " +
+      "productheight, productweightperitem, productweightall, productcbmperitem, " +
+      "productcbmall, chinawoodencratefee, chinawoodencratefeetype",
+    )
     .eq("fid", r.id)
-    .order("id", { ascending: false })
-    .limit(1)
-    .maybeSingle<{ id: number; fdid: number; fdistatus: string | null }>();
-  if (assignItemErr) {
-    console.error(`[tb_forwarder_driver_item detail] failed`, { code: assignItemErr.code, message: assignItemErr.message, fid: r.id });
+    .order("id", { ascending: true })
+    .limit(200);
+  if (itemRowsErr) {
+    console.error(`[tb_forwarder_item list] failed`, { code: itemRowsErr.code, message: itemRowsErr.message });
   }
-  if (assignItemRow) {
-    const { data: parentRow, error: parentErr } = await admin
-      .from("tb_forwarder_driver")
-      .select("id, fdadminid, fddate, fdstatus")
-      .eq("id", assignItemRow.fdid)
-      .maybeSingle<{ id: number; fdadminid: string | null; fddate: string | null; fdstatus: string | null }>();
-    if (parentErr) {
-      console.error(`[tb_forwarder_driver detail] failed`, { code: parentErr.code, message: parentErr.message, fdid: assignItemRow.fdid });
-    }
-    driverAssignment = {
-      fdistatus:  (assignItemRow.fdistatus ?? "").trim(),
-      batchId:    assignItemRow.fdid,
-      driverCode: parentRow?.fdadminid ?? null,
-      assignedAt: parentRow?.fddate ?? null,
-      batchOpen:  (parentRow?.fdstatus ?? "").trim() === "1",
-    };
-  }
+  type ItemShape = {
+    id: number; productname: string; producttracking: string;
+    productqty: number; productwidth: number | string; productlength: number | string;
+    productheight: number | string; productweightperitem: number | string;
+    productweightall: number | string; productcbmperitem: number | string;
+    productcbmall: number | string; chinawoodencratefee: number | string;
+    chinawoodencratefeetype: string;
+  };
+  const items = (itemRows ?? []) as unknown as ItemShape[];
 
-  const isPcsPickup = (r.fshipby ?? "").trim() === "PCS";
-  const transportTypeForEdit = (["1", "2", "3"].includes(r.ftransporttype) ? r.ftransporttype : "1") as "1" | "2" | "3";
-  // famountcount: '1' = ราคาต่อกล่อง · anything else = รวม (legacy default).
-  const amountCountForEdit = ((r.famountcount ?? "").trim() === "1" ? "1" : "2") as "1" | "2";
-
-  // Resolve cover image — shop-spawned rows may have a live alicdn URL
-  // (https://...), legacy local filename (PCS prefix), or empty.
+  // Resolve cover image — shop-spawned rows may have alicdn URL, legacy path, or empty.
   const coverHref = r.fcover && r.fcover.trim() !== ""
     ? (r.fcover.startsWith("http") ? r.fcover : await resolveLegacyUrl(r.fcover, "cover"))
     : null;
@@ -477,9 +317,6 @@ async function renderLegacyForwarderView(
     "1":"แสง","2":"CTT","3":"MK","4":"MX","5":"JMF","6":"GOGO","7":"Cargo Center","8":"MOMO",
   };
 
-  // Wave 20 P1: build the 7-step timeline. Each step has an icon + a
-  // datestamp pulled from fdatestatusN. The current fstatus marks the
-  // ACTIVE step; earlier steps with a date show as completed.
   const currentStatusInt = parseInt(r.fstatus, 10);
   const TIMELINE: Array<{ key: number; label: string; date: string | null; Icon: typeof Package }> = [
     { key: 1, label: "เข้าโกดังจีน",  date: r.fdate ?? null,         Icon: Package },
@@ -502,17 +339,18 @@ async function renderLegacyForwarderView(
   const discount = Number(r.fdiscount ?? 0);
   const refRate = Number(r.frefrate ?? 0);
 
-  // Source: shop-spawned (refOrder != "") vs admin-created vs system.
   const sourceTag: { label: string; cls: string } = r.reforder && r.reforder !== ""
     ? { label: `ฝากสั่งซื้อ : ${r.reforder}`, cls: "bg-sky-50 text-sky-700 border-sky-200" }
     : r.adminidcreator && r.adminidcreator !== ""
       ? { label: `ฝากนำเข้า : ${r.adminidcreator}`, cls: "bg-amber-50 text-amber-700 border-amber-200" }
       : { label: "ฝากนำเข้าจาก : users", cls: "bg-gray-50 text-gray-600 border-gray-200" };
 
+  const slugForLink = r.fidorco ?? String(r.id);
+
   return (
     <main className="p-4 lg:p-6 max-w-6xl mx-auto space-y-4">
-      {/* ── 1. HEADER — id + status badge + source tag + meta ── */}
-      <div className="space-y-2">
+      {/* ── 1. HEADER ── id + status badge + source tag + "✏️ แก้ไข" CTA */}
+      <div className="space-y-3">
         <nav className="text-xs text-muted flex gap-1.5 items-center flex-wrap">
           <Link href="/admin" className="hover:text-primary-600">หน้าแรก</Link>
           <span>/</span>
@@ -520,29 +358,45 @@ async function renderLegacyForwarderView(
           <span>/</span>
           <span className="font-mono text-foreground">#{r.fidorco ?? r.id}</span>
         </nav>
-        <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-2xl font-bold font-mono">{r.fidorco ?? `#${r.id}`}</h1>
-          <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-            currentStatusInt >= 7 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-            currentStatusInt === 99 ? "bg-violet-50 text-violet-700 border-violet-200" :
-            currentStatusInt >= 4 ? "bg-blue-50 text-blue-700 border-blue-200" :
-            "bg-yellow-50 text-yellow-700 border-yellow-200"
-          }`}>
-            {STATUS_LABEL[r.fstatus] ?? `สถานะ ${r.fstatus}`}
-          </span>
-          <span className={`rounded-full border px-2.5 py-0.5 text-xs ${sourceTag.cls}`}>
-            {sourceTag.label}
-          </span>
-          {u?.adminIDSale && u.adminIDSale !== "" && (
-            <span className="rounded-full border border-purple-200 bg-purple-50 text-purple-700 px-2.5 py-0.5 text-xs">
-              Sale : {u.adminIDSale}
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-2xl font-bold font-mono">{r.fidorco ?? `#${r.id}`}</h1>
+            <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+              currentStatusInt >= 7 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+              currentStatusInt === 99 ? "bg-violet-50 text-violet-700 border-violet-200" :
+              currentStatusInt >= 4 ? "bg-blue-50 text-blue-700 border-blue-200" :
+              "bg-yellow-50 text-yellow-700 border-yellow-200"
+            }`}>
+              {STATUS_LABEL[r.fstatus] ?? `สถานะ ${r.fstatus}`}
             </span>
-          )}
-          {r.fcredit === "1" && (
-            <span className="rounded-full border border-red-200 bg-red-50 text-red-700 px-2.5 py-0.5 text-xs">
-              💳 เครดิตสินค้า
+            <span className={`rounded-full border px-2.5 py-0.5 text-xs ${sourceTag.cls}`}>
+              {sourceTag.label}
             </span>
-          )}
+            {u?.adminIDSale && u.adminIDSale !== "" && (
+              <span className="rounded-full border border-purple-200 bg-purple-50 text-purple-700 px-2.5 py-0.5 text-xs">
+                Sale : {u.adminIDSale}
+              </span>
+            )}
+            {r.fcredit === "1" && (
+              <span className="rounded-full border border-red-200 bg-red-50 text-red-700 px-2.5 py-0.5 text-xs">
+                💳 เครดิตสินค้า
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Link
+              href={`/admin/forwarders/${slugForLink}/edit`}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-4 py-2 text-sm text-white font-semibold shadow-sm hover:bg-primary-600"
+            >
+              <Pencil className="h-4 w-4" /> แก้ไข / อัปเดต
+            </Link>
+            <Link
+              href="/admin/forwarders"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-sm hover:bg-surface-alt"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> กลับรายการ
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -591,11 +445,11 @@ async function renderLegacyForwarderView(
         </div>
       </section>
 
-      {/* ── 3. 2-COL: LEFT customer+meta+address · RIGHT cost breakdown ── */}
+      {/* ── 3. 2-COL BODY ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* LEFT (2/3 width on desktop) */}
+        {/* LEFT (2/3) — customer / routing / product / address / note */}
         <div className="lg:col-span-2 space-y-4">
-          {/* Customer card */}
+          {/* Customer */}
           <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4">
             <h3 className="text-sm font-semibold text-muted mb-3">ลูกค้า</h3>
             <Link
@@ -624,7 +478,7 @@ async function renderLegacyForwarderView(
             </Link>
           </section>
 
-          {/* Routing card */}
+          {/* Routing */}
           <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 text-sm">
             <h3 className="text-sm font-semibold text-muted mb-3">การจัดส่ง</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
@@ -635,7 +489,7 @@ async function renderLegacyForwarderView(
               <LegacyKV
                 label="หมายเลขตู้"
                 value={r.fcabinetnumber ?? "—"}
-                href={r.fcabinetnumber ? `/admin/report-cnt?id=${encodeURIComponent(r.fcabinetnumber)}` : undefined}
+                href={r.fcabinetnumber ? `/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}` : undefined}
                 mono
               />
               <LegacyKV label="วันปิดตู้" value={r.fdatecontainerclose ? new Date(r.fdatecontainerclose).toLocaleDateString("th-TH") : "—"} />
@@ -646,16 +500,16 @@ async function renderLegacyForwarderView(
             </div>
           </section>
 
-          {/* Product detail card */}
+          {/* Product detail */}
           <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4">
             <h3 className="text-sm font-semibold text-muted mb-3 flex items-center justify-between">
               <span>รายละเอียดสินค้า</span>
               {r.reforder && r.reforder !== "" && (
                 <Link
                   href={`/admin/service-orders/${r.reforder}`}
-                  className="text-xs font-normal text-sky-600 hover:underline"
+                  className="text-xs font-normal text-sky-600 hover:underline inline-flex items-center gap-1"
                 >
-                  ดูออเดอร์ต้นทาง {r.reforder} →
+                  ดูออเดอร์ต้นทาง {r.reforder} <ExternalLink className="h-3 w-3" />
                 </Link>
               )}
             </h3>
@@ -698,7 +552,42 @@ async function renderLegacyForwarderView(
             </div>
           </section>
 
-          {/* Address card */}
+          {/* Items table */}
+          {items.length > 0 && (
+            <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4">
+              <h3 className="text-sm font-semibold text-muted mb-3">
+                รายการสินค้า ({items.length})
+              </h3>
+              <div className="overflow-x-auto scrollbar-x-visible">
+                <table className="w-full text-xs min-w-[640px]">
+                  <thead className="text-muted">
+                    <tr className="border-b border-border">
+                      <th className="text-left py-2 px-2">ชื่อสินค้า</th>
+                      <th className="text-left py-2 px-2">Tracking</th>
+                      <th className="text-right py-2 px-2">จำนวน</th>
+                      <th className="text-right py-2 px-2">น้ำหนักรวม</th>
+                      <th className="text-right py-2 px-2">CBM รวม</th>
+                      <th className="text-right py-2 px-2">ตีลังไม้</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((it) => (
+                      <tr key={it.id} className="border-b border-border/50">
+                        <td className="py-2 px-2">{it.productname}</td>
+                        <td className="py-2 px-2 font-mono text-[11px]">{it.producttracking || "—"}</td>
+                        <td className="py-2 px-2 text-right font-mono">{it.productqty}</td>
+                        <td className="py-2 px-2 text-right font-mono">{Number(it.productweightall).toFixed(2)} กก.</td>
+                        <td className="py-2 px-2 text-right font-mono">{Number(it.productcbmall).toFixed(3)}</td>
+                        <td className="py-2 px-2 text-right font-mono">{Number(it.chinawoodencratefee) > 0 ? `฿${Number(it.chinawoodencratefee).toFixed(2)}` : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {/* Address */}
           <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 text-sm">
             <h3 className="text-sm font-semibold text-muted mb-2">ที่อยู่จัดส่ง</h3>
             <p className="font-medium">
@@ -717,7 +606,7 @@ async function renderLegacyForwarderView(
             )}
           </section>
 
-          {/* Note card */}
+          {/* Note */}
           {r.fnote && r.fnote.trim() !== "" && (
             <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm">
               <h3 className="text-xs font-semibold text-amber-700 mb-2 flex items-center gap-1.5">
@@ -728,7 +617,7 @@ async function renderLegacyForwarderView(
           )}
         </div>
 
-        {/* RIGHT (1/3 width on desktop) — cost breakdown + admin meta */}
+        {/* RIGHT (1/3) — cost breakdown · admin meta · quick links */}
         <div className="space-y-4">
           {/* Cost breakdown */}
           <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 text-sm">
@@ -766,140 +655,27 @@ async function renderLegacyForwarderView(
               {r.paydeposit && r.paydeposit !== "" && (
                 <Field label="เงินค่ามัดจำ" value={r.paydeposit} />
               )}
+              {r.fbilltoname && r.fbilltoname.trim() !== "" && (
+                <Field label="ผู้รับใบกำกับ" value={r.fbilltoname} />
+              )}
             </dl>
           </section>
 
-          {/* ── ACTIONS section (2026-06-02 ภูม UX flag · v4 refactor) ──
-              Wave 23 → re-sweep adm-09 → Theme bill-to: 4 action panels
-              accreted on top of each other as separate ship-of-Theseus
-              additions. ภูม flagged the stack ดู "กากกว่า PCS" — too tall,
-              no hierarchy, all expanded at once.
-
-              Fix: wrap each interactive panel in a collapsible <details>
-              card. Smart defaults so the right one is open when you arrive:
-                · Payment    → open if payable     (most urgent action)
-                · Status     → open default        (most-used action)
-                · Driver     → open if ready (fstatus=6)
-                · Edit       → closed              (rare edits)
-                · Bill-to    → closed              (rare edits)
-
-              Native <details> = no JS, server-component-friendly,
-              keyboard-accessible. */}
-          <div className="space-y-2 pt-2">
-            <h2 className="text-xs font-bold text-muted uppercase tracking-widest px-1">⚡ Actions</h2>
-          </div>
-
-          {/* Payment — auto-open when payable (urgent action) */}
-          {isPayable && (
-            <CollapsibleCard
-              title="ชำระเงิน (หักกระเป๋า)"
-              icon="💰"
-              tone="primary"
-              hint={`฿${Number(r.ftotalprice ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}
-              defaultOpen
-            >
-              <TbForwarderPaymentPanel
-                fId={r.id}
-                userId={r.userid}
-                customerName={`คุณ${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim()}
-                amountEstimate={Number(r.ftotalprice ?? 0)}
-                walletBalance={walletBalance}
-                isCredit={(r.fcredit ?? "").trim() === "1"}
-              />
-            </CollapsibleCard>
-          )}
-
-          {/* Status + cabinet + tracking + note — open by default (most-used) */}
-          <CollapsibleCard
-            title="อัปเดตสถานะ + ตู้ + Tracking + หมายเหตุ"
-            icon="📝"
-            hint={`สถานะปัจจุบัน: ${r.fstatus ?? "—"}`}
-            defaultOpen
-          >
-            <TbForwarderActionPanel
-              fId={r.id}
-              fNo={String(r.id)}
-              currentStatus={(r.fstatus as "1" | "2" | "3" | "4" | "5" | "6" | "7" | "99") || "1"}
-              currentCabinet={r.fcabinetnumber ?? ""}
-              currentTrackingTh={r.ftrackingth ?? ""}
-              currentNote={r.fnote ?? ""}
-            />
-          </CollapsibleCard>
-
-          {/* Driver assign — auto-open when fstatus='6' (ready-to-dispatch) */}
-          <CollapsibleCard
-            title="มอบหมายคนขับ"
-            icon="🚚"
-            hint={r.fstatus === "6" ? "พร้อมจัดส่ง" : "(สถานะต้อง 'เตรียมส่ง')"}
-            defaultOpen={r.fstatus === "6"}
-          >
-            <TbForwarderDriverAssignPanel
-              fId={r.id}
-              fNo={String(r.id)}
-              fstatus={r.fstatus}
-              paydeposit={r.paydeposit ?? ""}
-              current={driverAssignment}
-            />
-          </CollapsibleCard>
-
-          {/* Edit address + transport + ship-by + pricing — closed default (rare) */}
-          <CollapsibleCard
-            title="แก้ไขที่อยู่ / การขนส่ง / ราคา"
-            icon="✏️"
-            hint="เปิดเมื่อต้องแก้"
-          >
-            <TbForwarderEditPanel
-              fId={r.id}
-              isPcs={isPcsPickup}
-              addresses={savedAddresses}
-              currentTransportType={transportTypeForEdit}
-              currentShipBy={(r.fshipby ?? "").trim()}
-              currentAmountCount={amountCountForEdit}
-              currentPriceUpdate={priceUpdate}
-              currentPriceOther={otherCost}
-              currentDiscount={discount}
-            />
-          </CollapsibleCard>
-
-          {/* Bill-to override — closed default (rare) */}
-          <CollapsibleCard
-            title="ชื่อผู้รับใบกำกับ (Bill-to)"
-            icon="🧾"
-            hint={r.fbilltoname ? `กำหนดเอง: ${r.fbilltoname}` : "ใช้ชื่อผู้รับ default"}
-          >
-            <BillToOverridePanel
-              kind="forwarder"
-              fNo={String(r.id)}
-              defaultName={`${r.faddressname ?? ""} ${r.faddresslastname ?? ""}`.trim()}
-              current={r.fbilltoname}
-            />
-          </CollapsibleCard>
-
-          {/* Secondary action buttons */}
-          <div className="space-y-2 pt-3">
-            <Link
-              href={`/admin/forwarders/${encodeURIComponent(fNo)}/edit`}
-              className="block w-full rounded-lg border border-primary-500 bg-primary-50 px-3 py-2 text-sm text-primary-700 font-medium hover:bg-primary-100 text-center"
-            >
-              ✏️ แก้ไขขนาด / น้ำหนัก
-            </Link>
+          {/* Quick-jump links */}
+          <div className="space-y-2">
             {r.fcabinetnumber && (
               <Link
-                // URL-segment route per Wave 16 P0-1 (per-container detail
-                // lives at /admin/report-cnt/[fCabinetNumber]); the earlier
-                // `?id=` query-string link incorrectly fell through to the
-                // list page. Wave 23 walkthrough fix.
                 href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`}
-                className="block w-full rounded-lg bg-primary-500 px-3 py-2 text-sm text-white font-medium hover:bg-primary-600 text-center"
+                className="block w-full rounded-lg border border-border bg-white px-3 py-2 text-sm hover:bg-surface-alt text-center"
               >
-                📦 ดูตู้คอนเทนเนอร์ →
+                📦 ดูตู้คอนเทนเนอร์
               </Link>
             )}
             <Link
-              href="/admin/forwarders"
+              href={`/admin/customers/${r.userid}`}
               className="block w-full rounded-lg border border-border bg-white px-3 py-2 text-sm hover:bg-surface-alt text-center"
             >
-              ← กลับรายการ
+              👤 ดูโปรไฟล์ลูกค้า
             </Link>
           </div>
 
@@ -912,7 +688,6 @@ async function renderLegacyForwarderView(
   );
 }
 
-// Small reusable field display — left-label + right-value flex row.
 function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex justify-between gap-3">
@@ -922,9 +697,6 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
   );
 }
 
-// Display helper for the legacy fallback view above.
-// (The existing `Row` component uses `value` prop · this one accepts an
-// optional `href` so cabinet number can link to /admin/report-cnt.)
 function LegacyKV({ label, value, mono, href }: { label: string; value: string; mono?: boolean; href?: string }) {
   return (
     <div className="flex justify-between border-b border-border/40 py-1.5">
@@ -935,55 +707,5 @@ function LegacyKV({ label, value, mono, href }: { label: string; value: string; 
         <span className={mono ? "font-mono" : ""}>{value}</span>
       )}
     </div>
-  );
-}
-
-/**
- * Collapsible action card — wraps an interactive panel in a server-component
- * <details>/<summary> with no JS dep. Visual hierarchy:
- *   · summary header  → icon + title + hint + chevron
- *   · body            → the panel itself, separated by a faint border
- *
- * 2026-06-02 ภูม UX P0 — fixes the "right column too tall, all panels
- * stacked + expanded" complaint by giving each interactive panel its own
- * collapsible card with smart defaultOpen logic per action context.
- */
-function CollapsibleCard({
-  title,
-  icon,
-  hint,
-  defaultOpen,
-  tone = "neutral",
-  children,
-}: {
-  title: string;
-  icon?: string;
-  hint?: string;
-  defaultOpen?: boolean;
-  tone?: "neutral" | "primary" | "warn";
-  children: React.ReactNode;
-}) {
-  const toneCls =
-    tone === "primary" ? "border-primary-200 bg-primary-50/30 dark:bg-primary-950/20" :
-    tone === "warn"    ? "border-amber-200 bg-amber-50/30 dark:bg-amber-950/20" :
-    "border-border bg-white dark:bg-surface";
-  // Native <details>: pass `open` only when defaultOpen (React rejects open={false}).
-  const openProps = defaultOpen ? { open: true } : {};
-  return (
-    <details className={`rounded-2xl border ${toneCls} group shadow-sm overflow-hidden`} {...openProps}>
-      <summary className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer select-none hover:bg-surface-alt/40 transition-colors list-none [&::-webkit-details-marker]:hidden">
-        <div className="flex items-center gap-2 min-w-0">
-          {icon && <span className="text-base flex-shrink-0" aria-hidden>{icon}</span>}
-          <span className="text-sm font-semibold truncate">{title}</span>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {hint && <span className="text-[10px] text-muted truncate max-w-[140px]">{hint}</span>}
-          <span className="text-muted text-[10px] group-open:rotate-180 transition-transform" aria-hidden>▼</span>
-        </div>
-      </summary>
-      <div className="px-4 pb-4 pt-3 border-t border-border/50 bg-white/60 dark:bg-surface/60">
-        {children}
-      </div>
-    </details>
   );
 }

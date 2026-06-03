@@ -80,7 +80,7 @@ export default async function AdminCronHealthPage() {
   }
 
   const byPath = new Map<string, InvocationRow[]>();
-  for (const r of (rows7d ?? []) as InvocationRow[]) {
+  for (const r of (rows7d ?? []) as unknown as InvocationRow[]) {
     const arr = byPath.get(r.cron_path) ?? [];
     arr.push(r);
     byPath.set(r.cron_path, arr);
@@ -102,7 +102,7 @@ export default async function AdminCronHealthPage() {
       if (olderRowsErr) {
         console.error(`[cron_invocations list] failed`, { code: olderRowsErr.code, message: olderRowsErr.message });
       }
-      last = ((olderRows ?? []) as InvocationRow[])[0] ?? null;
+      last = ((olderRows ?? []) as unknown as InvocationRow[])[0] ?? null;
     }
     const success7d = recent.filter((r) => r.status === "success").length;
     stats.set(entry.path, { last, total7d: recent.length, success7d });

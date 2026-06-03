@@ -145,7 +145,7 @@ export default async function AddressesPage({
       .maybeSingle<{ addressid: number | null }>(),
   ]);
 
-  const addresses = (addressRes.data ?? []) as AddressRow[];
+  const addresses = (addressRes.data ?? []) as unknown as AddressRow[];
 
   // $_SESSION['userName'] / userLastName / userTel — the add-form prefill.
   const userName = userRowRes.data?.userName ?? "";

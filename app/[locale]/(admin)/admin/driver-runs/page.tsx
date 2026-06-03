@@ -87,7 +87,7 @@ export default async function DriverRunsPage() {
   if (activeRawErr) {
     console.error(`[forwarder_driver list] failed`, { code: activeRawErr.code, message: activeRawErr.message });
   }
-  const activeRows = ((activeRaw ?? []) as AssignmentRow[]).map((r) => ({ ...r, forwarder: normForwarder(r.forwarder) }));
+  const activeRows = ((activeRaw ?? []) as unknown as AssignmentRow[]).map((r) => ({ ...r, forwarder: normForwarder(r.forwarder) }));
 
   // Completed today (status 4 + completed_at today, BKK)
   const todayBkk = new Date();
@@ -109,7 +109,7 @@ export default async function DriverRunsPage() {
   if (doneRawErr) {
     console.error(`[forwarder_driver list] failed`, { code: doneRawErr.code, message: doneRawErr.message });
   }
-  const doneRows = ((doneRaw ?? []) as AssignmentRow[]).map((r) => ({ ...r, forwarder: normForwarder(r.forwarder) }));
+  const doneRows = ((doneRaw ?? []) as unknown as AssignmentRow[]).map((r) => ({ ...r, forwarder: normForwarder(r.forwarder) }));
 
   // Wave 3 cleanup: spine retired (cargo_shipments → tb_forwarder).
   // The container number for each forwarder is already on

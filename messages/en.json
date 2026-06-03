@@ -2823,6 +2823,7 @@
       "system": "System",
       "crons": "Cron jobs",
       "systemNotifs": "System notifications",
+      "pcsSync": "PCS ↔ Pacred Sync",
       "csvImports": "CSV bulk import",
       "tools": "Tools",
       "orgEmail": "Organization email",

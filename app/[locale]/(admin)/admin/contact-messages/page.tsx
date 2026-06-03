@@ -49,7 +49,7 @@ export default async function AdminContactMessagesPage({
   type RawRow = Omit<NonNullable<typeof data>[number], "profile"> & {
     profile: ProfileShape | ProfileShape[] | null;
   };
-  const rows = ((data ?? []) as RawRow[]).map((r) => ({
+  const rows = ((data ?? []) as unknown as RawRow[]).map((r) => ({
     ...r,
     profile: Array.isArray(r.profile) ? r.profile[0] ?? null : r.profile,
   }));

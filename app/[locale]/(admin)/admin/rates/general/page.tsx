@@ -48,11 +48,11 @@ export default async function AdminRatesGeneralPage() {
   const key = (wh: string, tt: string, pt: string) => `${wh}|${tt}|${pt}`;
   const matrix: GeneralMatrix = {};
   const ensure = (k: string) => (matrix[k] ??= { kg1: null, kg2: null, kg3: null, cbm1: null, cbm2: null, cbm3: null });
-  for (const r of (kgData ?? []) as KgRow[]) {
+  for (const r of (kgData ?? []) as unknown as KgRow[]) {
     const c = ensure(key(r.sourcewarehouse, r.rgtransporttype, r.rgproductstype));
     c.kg1 = n(r.rgkg1); c.kg2 = n(r.rgkg2); c.kg3 = n(r.rgkg3);
   }
-  for (const r of (cbmData ?? []) as CbmRow[]) {
+  for (const r of (cbmData ?? []) as unknown as CbmRow[]) {
     const c = ensure(key(r.sourcewarehouse, r.rgtransporttype, r.rgproductstype));
     c.cbm1 = n(r.rgcbm1); c.cbm2 = n(r.rgcbm2); c.cbm3 = n(r.rgcbm3);
   }

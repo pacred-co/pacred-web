@@ -122,7 +122,7 @@ export default async function AdminAccountingPeriodDetailPage({
   if (eventsRawErr) {
     console.error(`[period_close_event list] failed`, { code: eventsRawErr.code, message: eventsRawErr.message });
   }
-  const events = (eventsRaw ?? []) as EventRow[];
+  const events = (eventsRaw ?? []) as unknown as EventRow[];
 
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-4xl">

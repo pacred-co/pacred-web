@@ -72,7 +72,7 @@ export default async function AdminShopPayoutsPage({
   type RawRow = Omit<NonNullable<typeof data>[number], "profile"> & {
     profile: Profile | Profile[] | null;
   };
-  const rows = ((data ?? []) as RawRow[]).map((r) => {
+  const rows = ((data ?? []) as unknown as RawRow[]).map((r) => {
     const profile = Array.isArray(r.profile) ? r.profile[0] ?? null : r.profile;
     return { ...r, profile };
   });

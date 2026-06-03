@@ -128,7 +128,7 @@ async function loadReceipts(
     if (usersErr) {
       console.error("[peak-export tb_users] failed", { code: usersErr.code, message: usersErr.message });
     }
-    userByID = new Map(((usersRaw ?? []) as UserRow[]).map((u) => [u.userID, u]));
+    userByID = new Map(((usersRaw ?? []) as unknown as UserRow[]).map((u) => [u.userID, u]));
   }
 
   return rows.map((r) => {
@@ -190,7 +190,7 @@ async function loadBills(
     if (itemsErr) {
       console.error("[peak-export tb_bill_item] failed", { code: itemsErr.code, message: itemsErr.message });
     }
-    for (const r of ((itemsRaw ?? []) as ItemCountRow[])) {
+    for (const r of ((itemsRaw ?? []) as unknown as ItemCountRow[])) {
       itemCount.set(r.billid, (itemCount.get(r.billid) ?? 0) + 1);
     }
   }

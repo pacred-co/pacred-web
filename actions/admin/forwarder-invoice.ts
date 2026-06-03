@@ -587,3 +587,636 @@ export async function adminMarkReceiptPrinted(
     },
   );
 }
+
+// ────────────────────────────────────────────────────────────
+// adminBackfillReceiptItems — recovery for receipts with missing tb_receipt_item
+// ────────────────────────────────────────────────────────────
+
+/**
+ * ภูม flag #1 (2026-06-02) — receipt FRG2605-00218-1 rendered with banner
+ * "รายการพัสดุไม่พบใน tb_receipt_item" + Total = 0.00 because tb_receipt_item
+ * had no rows for that rid. The receipt header (`totalbeforewithholding` +
+ * `ramount`) was correct but the per-line items were missing.
+ *
+ * Possible root causes (all real, all need a recovery path):
+ *   1. Legacy migration where `tb_receipt_item` rows weren't ported (the
+ *      legacy `pcsc_main` HAD them, but the data-load did not include the
+ *      child table) — the most likely cause for old-yyMM rids like 2503
+ *      or PCS-era rids
+ *   2. Wave 28 PR-format pollution + cleanup that touched parent rid but
+ *      not child rid → orphan items deleted, parent stays
+ *   3. Wave 29 manual-create flow batch-INSERT bug — verified clean now
+ *      (auto + manual both delete the parent receipt header on item-insert
+ *      failure, so this should not produce a parent-without-children state)
+ *   4. Manual SQL clean-up by an admin that removed items without removing
+ *      the receipt
+ *
+ * ── Recovery strategy ────────────────────────────────────────────
+ *
+ * Reconstruct the missing items from the source-of-truth payment trail.
+ * The link between a receipt and its forwarder rows lives in
+ * `tb_wallet_hs` — every approved payment-for-a-forwarder row records:
+ *   - `userid`        = the customer
+ *   - `typeservice`   = '2'  (forwarder payment)
+ *   - `status`        = '2'  (approved)
+ *   - `reforder`      = the tb_forwarder.id as a string
+ *   - `dateslip`      = when the customer paid (= receipt.issuedate ± hours)
+ *
+ * Algorithm:
+ *   1. Read tb_receipt by id → pin userid, issuedate, rid, totals
+ *   2. If tb_receipt_item already has rows for this rid → return early
+ *      (no backfill needed)
+ *   3. Strategy A — wallet_hs trail (highest confidence):
+ *      - Find tb_wallet_hs rows for this userid · typeservice='2' ·
+ *        status='2' · dateslip BETWEEN issuedate − 7d AND issuedate + 7d
+ *      - Extract numeric reforder values → candidate fids
+ *      - Filter out any fid already on a DIFFERENT receipt (we never
+ *        double-link)
+ *      - Try exact-match: find the subset whose perRowRaw sum equals
+ *        tb_receipt.totalbeforewithholding (±1 baht). If exactly one
+ *        subset matches → insert items, done.
+ *   4. Strategy B — fdatestatus5 fallback:
+ *      - Find tb_forwarder rows for this userid where fdatestatus5
+ *        (the "moved to fstatus=5 (รอชำระเงิน)" timestamp) is within
+ *        a 14-day window around issuedate
+ *      - Same filtering + matching as A
+ *   5. If neither strategy converges → return `ambiguous` with the
+ *      candidate fids so the admin can manually call adminLinkReceiptItems
+ *      with their explicit pick. (We don't auto-guess on ambiguity —
+ *      mis-linking is worse than missing-items because it falsely attests
+ *      to a payment trail.)
+ *
+ * ── Safety guarantees ────────────────────────────────────────────
+ *   - Idempotent — re-running on a receipt that already has items is a no-op
+ *   - Never overwrites — only INSERTs into an empty join
+ *   - Never double-links — a fid on receipt A will not be backfilled to receipt B
+ *   - Audit-logged via admin_audit_log with full payload (chosen fids,
+ *     strategy, candidates, totals)
+ *
+ * Roles: super | accounting (money tier · matches the rest of this file).
+ */
+
+const backfillReceiptItemsSchema = z.object({
+  receiptId: z.number().int().positive(),
+});
+export type AdminBackfillReceiptItemsInput = z.infer<typeof backfillReceiptItemsSchema>;
+
+export type AdminBackfillReceiptItemsCandidate = {
+  fid:            number;
+  perRowRaw:      number;
+  ftrackingchn:   string | null;
+  fcabinetnumber: string | null;
+  fdatestatus5:   string | null;
+  fstatus:        string;
+};
+
+export type AdminBackfillReceiptItemsData = {
+  receiptId:      number;
+  rid:            string;
+  /** Reason for outcome — discriminator for the UI message. */
+  status:         "already_has_items" | "filled" | "ambiguous" | "no_candidates";
+  /** When `status='filled'` — the fids that were linked + the strategy used. */
+  linkedFids?:    number[];
+  strategy?:      "wallet_hs" | "fdatestatus5";
+  itemsInserted?: number;
+  /** When `status='ambiguous'` — candidate fids the admin can pick from. */
+  candidates?:    AdminBackfillReceiptItemsCandidate[];
+  expectedTotal?: number;
+};
+
+export type AdminBackfillReceiptItemsResult = AdminActionResult<AdminBackfillReceiptItemsData>;
+
+type WalletHsRow = {
+  id:           number;
+  reforder:     string | null;
+  dateslip:     string | null;
+  status:       string | null;
+  typeservice:  string | null;
+};
+
+type FwBackfillRow = ForwarderRowForReceipt & {
+  fcabinetnumber: string | null;
+  fdatestatus5:   string | null;
+};
+
+/**
+ * Find every subset of `rows` whose perRowRaw sum equals `target` (±tolerance).
+ * Brute-force across `rows` with pruning. Returns at most `maxSolutions` matches
+ * — when more than 1 exists we treat as ambiguous and don't auto-pick.
+ *
+ * Complexity is 2^N; we cap N at 18 (262K subsets — sub-second on prod hardware).
+ * Beyond 18 candidates we fall back to "ambiguous" without enumerating.
+ */
+function findExactSubsets(
+  rows: Array<{ fid: number; raw: number }>,
+  target: number,
+  tolerance: number,
+  maxSolutions: number,
+): number[][] {
+  if (rows.length > 18) return []; // too many — defer to admin pick
+  const solutions: number[][] = [];
+  const n = rows.length;
+  // Skip 0-size subset (matches target=0 vacuously; never useful)
+  for (let mask = 1; mask < (1 << n); mask++) {
+    let sum = 0;
+    const picked: number[] = [];
+    for (let i = 0; i < n; i++) {
+      if (mask & (1 << i)) {
+        sum += rows[i]!.raw;
+        picked.push(rows[i]!.fid);
+      }
+    }
+    if (Math.abs(sum - target) <= tolerance) {
+      solutions.push(picked);
+      if (solutions.length >= maxSolutions) return solutions;
+    }
+  }
+  return solutions;
+}
+
+export async function adminBackfillReceiptItems(
+  input: AdminBackfillReceiptItemsInput,
+): Promise<AdminBackfillReceiptItemsResult> {
+  const parsed = backfillReceiptItemsSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { receiptId } = parsed.data;
+
+  return withAdmin<AdminBackfillReceiptItemsData>(
+    ["super", "accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+
+      // 1. Read receipt header — needed for userid, issuedate, totals.
+      type ReceiptHdr = {
+        id:                     number;
+        rid:                    string;
+        userid:                 string;
+        issuedate:              string | null;
+        rdate:                  string | null;
+        rdatecreate:            string | null;
+        totalbeforewithholding: number | string | null;
+        ramount:                number | string | null;
+        corporatetype:          string | null;
+      };
+      const { data: receiptData, error: rdErr } = await admin
+        .from("tb_receipt")
+        .select(
+          "id, rid, userid, issuedate, rdate, rdatecreate, " +
+            "totalbeforewithholding, ramount, corporatetype",
+        )
+        .eq("id", receiptId)
+        .maybeSingle<ReceiptHdr>();
+      if (rdErr) {
+        console.error(`[backfill: tb_receipt read] failed`, {
+          code: rdErr.code, message: rdErr.message, receiptId,
+        });
+        return { ok: false, error: `db_error:${rdErr.code ?? "unknown"}` };
+      }
+      if (!receiptData) {
+        return { ok: false, error: "not_found: receipt does not exist" };
+      }
+      const receipt = receiptData;
+
+      // 2. Already has items? — idempotent early return.
+      const { data: existingItems, error: itErr } = await admin
+        .from("tb_receipt_item")
+        .select("id, fid")
+        .eq("rid", receipt.rid);
+      if (itErr) {
+        console.error(`[backfill: tb_receipt_item check] failed`, {
+          code: itErr.code, message: itErr.message, rid: receipt.rid,
+        });
+        return { ok: false, error: `db_error:${itErr.code ?? "unknown"}` };
+      }
+      if ((existingItems ?? []).length > 0) {
+        return {
+          ok:   true,
+          data: {
+            receiptId,
+            rid:     receipt.rid,
+            status:  "already_has_items",
+            itemsInserted: 0,
+          },
+        };
+      }
+
+      // The "expected total" — what the receipt header attests to.
+      const expectedTotal = Math.round(toNumber(receipt.totalbeforewithholding) * 100) / 100;
+      // Window anchor — prefer issuedate, then rdate, then rdatecreate.
+      const anchorIso = receipt.issuedate ?? receipt.rdate ?? receipt.rdatecreate;
+      if (!anchorIso) {
+        return { ok: false, error: "receipt_missing_dates" };
+      }
+      const anchor = new Date(anchorIso);
+      if (Number.isNaN(anchor.getTime())) {
+        return { ok: false, error: "receipt_dates_unparseable" };
+      }
+
+      // ── Build the "already-linked elsewhere" exclusion set ──
+      // Pull all tb_receipt_item rows that mention any fid we might consider.
+      // We'll union all candidate fids first, then exclude.
+      //
+      // Helper: query tb_forwarder by ids → expand to BackfillRow.
+      async function loadForwarderRows(fids: number[]): Promise<FwBackfillRow[]> {
+        if (fids.length === 0) return [];
+        const { data, error } = await admin
+          .from("tb_forwarder")
+          .select(
+            "id, userid, fstatus, ftrackingchn, fcabinetnumber, fdatestatus5, " +
+              "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
+              "pricecrate, ftransportpricechnthb, priceother, fdiscount",
+          )
+          .in("id", fids)
+          .eq("userid", receipt.userid);
+        if (error) {
+          console.error(`[backfill: tb_forwarder load] failed`, {
+            code: error.code, message: error.message, count: fids.length,
+          });
+          return [];
+        }
+        return ((data ?? []) as unknown as FwBackfillRow[]);
+      }
+
+      // Helper: filter out fids already attached to a DIFFERENT receipt rid.
+      async function dropAlreadyLinked(fids: number[]): Promise<number[]> {
+        if (fids.length === 0) return [];
+        const { data, error } = await admin
+          .from("tb_receipt_item")
+          .select("fid, rid")
+          .in("fid", fids);
+        if (error) {
+          console.error(`[backfill: tb_receipt_item exclusion check] failed`, {
+            code: error.code, message: error.message,
+          });
+          return fids; // fail open — don't silently drop everything on a transient error
+        }
+        const linked = new Set<number>(
+          ((data ?? []) as Array<{ fid: number; rid: string }>)
+            .filter((r) => r.rid !== receipt.rid)
+            .map((r) => r.fid),
+        );
+        return fids.filter((f) => !linked.has(f));
+      }
+
+      // ────────────────────────────────────────────────────────────
+      // STRATEGY A — wallet_hs trail (highest confidence)
+      // ────────────────────────────────────────────────────────────
+      //
+      // ±7-day window around issuedate · approved · typeservice='2'.
+      const winAStart = new Date(anchor.getTime() - 7 * 86400_000).toISOString();
+      const winAEnd   = new Date(anchor.getTime() + 7 * 86400_000).toISOString();
+      const { data: whsRows, error: whsErr } = await admin
+        .from("tb_wallet_hs")
+        .select("id, reforder, dateslip, status, typeservice")
+        .eq("userid",      receipt.userid)
+        .eq("typeservice", "2")
+        .eq("status",      "2")
+        .gte("dateslip",   winAStart)
+        .lte("dateslip",   winAEnd);
+      if (whsErr) {
+        console.error(`[backfill: tb_wallet_hs window read] failed`, {
+          code: whsErr.code, message: whsErr.message, userid: receipt.userid,
+        });
+      }
+      const whsFidsRaw: number[] = ((whsRows ?? []) as unknown as WalletHsRow[])
+        .map((w) => Number(w.reforder))
+        .filter((n) => Number.isFinite(n) && n > 0);
+      const whsFids = Array.from(new Set(whsFidsRaw));
+      const whsFidsAvail = await dropAlreadyLinked(whsFids);
+      const whsRowsLoaded = await loadForwarderRows(whsFidsAvail);
+
+      // 3a. Try exact-subset match on wallet_hs candidates.
+      if (whsRowsLoaded.length > 0) {
+        const indexed = whsRowsLoaded.map((r) => ({ fid: r.id, raw: perRowRaw(r) }));
+        const subsets = findExactSubsets(indexed, expectedTotal, 1.0, 2);
+        if (subsets.length === 1) {
+          const chosen = subsets[0]!;
+          const itemRows = chosen.map((fid) => ({ rid: receipt.rid, fid }));
+          const { error: insErr } = await admin
+            .from("tb_receipt_item")
+            .insert(itemRows);
+          if (insErr) {
+            console.error(`[backfill: tb_receipt_item insert wallet_hs] failed`, {
+              code: insErr.code, message: insErr.message, rid: receipt.rid,
+            });
+            return { ok: false, error: `insert_failed: ${insErr.message}` };
+          }
+          await logAdminAction(
+            adminId,
+            "forwarder_invoice.backfill_items",
+            "tb_receipt",
+            String(receiptId),
+            {
+              rid:           receipt.rid,
+              strategy:      "wallet_hs",
+              expectedTotal,
+              linkedFids:    chosen,
+              candidateCount: whsRowsLoaded.length,
+            },
+          );
+          revalidatePath(`/admin/accounting/forwarder-invoice/${receiptId}`);
+          revalidatePath("/admin/accounting/forwarder-invoice");
+          return {
+            ok:   true,
+            data: {
+              receiptId,
+              rid:           receipt.rid,
+              status:        "filled",
+              strategy:      "wallet_hs",
+              linkedFids:    chosen,
+              itemsInserted: chosen.length,
+            },
+          };
+        }
+      }
+
+      // ────────────────────────────────────────────────────────────
+      // STRATEGY B — fdatestatus5 fallback
+      // ────────────────────────────────────────────────────────────
+      //
+      // Wider 14-day window — useful when wallet_hs lost trace (e.g.
+      // approve flow flipped fstatus but legacy didn't always write
+      // wallet_hs reforder).
+      const winBStart = new Date(anchor.getTime() - 14 * 86400_000).toISOString();
+      const winBEnd   = new Date(anchor.getTime() + 14 * 86400_000).toISOString();
+      const { data: fwWindow, error: fwWinErr } = await admin
+        .from("tb_forwarder")
+        .select(
+          "id, userid, fstatus, ftrackingchn, fcabinetnumber, fdatestatus5, " +
+            "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
+            "pricecrate, ftransportpricechnthb, priceother, fdiscount",
+        )
+        .eq("userid",      receipt.userid)
+        .gte("fdatestatus5", winBStart)
+        .lte("fdatestatus5", winBEnd);
+      if (fwWinErr) {
+        console.error(`[backfill: tb_forwarder fdatestatus5 window] failed`, {
+          code: fwWinErr.code, message: fwWinErr.message, userid: receipt.userid,
+        });
+      }
+      const fwWinFids = ((fwWindow ?? []) as unknown as FwBackfillRow[]).map((r) => r.id);
+      const fwWinAvail = await dropAlreadyLinked(fwWinFids);
+      const fwWinRows = ((fwWindow ?? []) as unknown as FwBackfillRow[])
+        .filter((r) => fwWinAvail.includes(r.id));
+
+      if (fwWinRows.length > 0) {
+        const indexed = fwWinRows.map((r) => ({ fid: r.id, raw: perRowRaw(r) }));
+        const subsets = findExactSubsets(indexed, expectedTotal, 1.0, 2);
+        if (subsets.length === 1) {
+          const chosen = subsets[0]!;
+          const itemRows = chosen.map((fid) => ({ rid: receipt.rid, fid }));
+          const { error: insErr } = await admin
+            .from("tb_receipt_item")
+            .insert(itemRows);
+          if (insErr) {
+            console.error(`[backfill: tb_receipt_item insert fdatestatus5] failed`, {
+              code: insErr.code, message: insErr.message, rid: receipt.rid,
+            });
+            return { ok: false, error: `insert_failed: ${insErr.message}` };
+          }
+          await logAdminAction(
+            adminId,
+            "forwarder_invoice.backfill_items",
+            "tb_receipt",
+            String(receiptId),
+            {
+              rid:           receipt.rid,
+              strategy:      "fdatestatus5",
+              expectedTotal,
+              linkedFids:    chosen,
+              candidateCount: fwWinRows.length,
+            },
+          );
+          revalidatePath(`/admin/accounting/forwarder-invoice/${receiptId}`);
+          revalidatePath("/admin/accounting/forwarder-invoice");
+          return {
+            ok:   true,
+            data: {
+              receiptId,
+              rid:           receipt.rid,
+              status:        "filled",
+              strategy:      "fdatestatus5",
+              linkedFids:    chosen,
+              itemsInserted: chosen.length,
+            },
+          };
+        }
+      }
+
+      // ────────────────────────────────────────────────────────────
+      // NO EXACT MATCH → return candidates for admin pick
+      // ────────────────────────────────────────────────────────────
+      //
+      // Combine both candidate pools (dedup) so the UI can show
+      // everything plausible. If both pools are empty → no_candidates.
+      const allCandidatesById = new Map<number, FwBackfillRow>();
+      for (const r of whsRowsLoaded)  allCandidatesById.set(r.id, r);
+      for (const r of fwWinRows)      allCandidatesById.set(r.id, r);
+      const candidates = Array.from(allCandidatesById.values())
+        .sort((a, b) => {
+          const da = a.fdatestatus5 ? new Date(a.fdatestatus5).getTime() : 0;
+          const db = b.fdatestatus5 ? new Date(b.fdatestatus5).getTime() : 0;
+          return db - da;
+        })
+        .map((r) => ({
+          fid:            r.id,
+          perRowRaw:      Math.round(perRowRaw(r) * 100) / 100,
+          ftrackingchn:   r.ftrackingchn,
+          fcabinetnumber: r.fcabinetnumber,
+          fdatestatus5:   r.fdatestatus5,
+          fstatus:        r.fstatus,
+        }));
+
+      if (candidates.length === 0) {
+        await logAdminAction(
+          adminId,
+          "forwarder_invoice.backfill_items_no_candidates",
+          "tb_receipt",
+          String(receiptId),
+          { rid: receipt.rid, expectedTotal },
+        );
+        return {
+          ok:   true,
+          data: {
+            receiptId,
+            rid:           receipt.rid,
+            status:        "no_candidates",
+            expectedTotal,
+            candidates:    [],
+          },
+        };
+      }
+
+      await logAdminAction(
+        adminId,
+        "forwarder_invoice.backfill_items_ambiguous",
+        "tb_receipt",
+        String(receiptId),
+        {
+          rid:            receipt.rid,
+          expectedTotal,
+          candidateCount: candidates.length,
+        },
+      );
+
+      return {
+        ok:   true,
+        data: {
+          receiptId,
+          rid:           receipt.rid,
+          status:        "ambiguous",
+          expectedTotal,
+          candidates,
+        },
+      };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// adminLinkReceiptItems — manual fid pick for the ambiguous case
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Companion to `adminBackfillReceiptItems`. When the backfill returns
+ * `status:'ambiguous'` with N candidates, the admin reviews them and
+ * picks a specific subset to link. This action takes that explicit
+ * list and inserts the tb_receipt_item rows.
+ *
+ * Guards (matching adminIssueForwarderInvoice):
+ *   - Receipt must exist
+ *   - All fids must belong to the receipt's userid
+ *   - No fid may already be on a different receipt
+ *   - tb_receipt_item must currently be EMPTY for this rid (we never
+ *     append after the fact — that would re-open the door to silent
+ *     double-counting)
+ */
+const linkItemsSchema = z.object({
+  receiptId: z.number().int().positive(),
+  fids:      z.array(z.number().int().positive()).min(1).max(50),
+});
+export type AdminLinkReceiptItemsInput = z.infer<typeof linkItemsSchema>;
+
+export async function adminLinkReceiptItems(
+  input: AdminLinkReceiptItemsInput,
+): Promise<AdminActionResult<{ receiptId: number; rid: string; itemsInserted: number }>> {
+  const parsed = linkItemsSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { receiptId, fids: rawFids } = parsed.data;
+  const fids = Array.from(new Set(rawFids));
+
+  return withAdmin<{ receiptId: number; rid: string; itemsInserted: number }>(
+    ["super", "accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+
+      // 1. Receipt must exist; capture rid + userid.
+      const { data: receiptData, error: rdErr } = await admin
+        .from("tb_receipt")
+        .select("id, rid, userid")
+        .eq("id", receiptId)
+        .maybeSingle<{ id: number; rid: string; userid: string }>();
+      if (rdErr) {
+        console.error(`[link items: tb_receipt read] failed`, {
+          code: rdErr.code, message: rdErr.message, receiptId,
+        });
+        return { ok: false, error: `db_error:${rdErr.code ?? "unknown"}` };
+      }
+      if (!receiptData) {
+        return { ok: false, error: "not_found: receipt does not exist" };
+      }
+      const receipt = receiptData;
+
+      // 2. tb_receipt_item must be currently empty for this rid.
+      const { data: existing, error: existErr } = await admin
+        .from("tb_receipt_item")
+        .select("id")
+        .eq("rid", receipt.rid)
+        .limit(1);
+      if (existErr) {
+        console.error(`[link items: tb_receipt_item existence check] failed`, {
+          code: existErr.code, message: existErr.message,
+        });
+        return { ok: false, error: `db_error:${existErr.code ?? "unknown"}` };
+      }
+      if ((existing ?? []).length > 0) {
+        return { ok: false, error: "receipt_already_has_items" };
+      }
+
+      // 3. All fids must belong to this userid.
+      const { data: fwRows, error: fwErr } = await admin
+        .from("tb_forwarder")
+        .select("id, userid")
+        .in("id", fids);
+      if (fwErr) {
+        console.error(`[link items: tb_forwarder verify] failed`, {
+          code: fwErr.code, message: fwErr.message,
+        });
+        return { ok: false, error: `db_error:${fwErr.code ?? "unknown"}` };
+      }
+      const rows = ((fwRows ?? []) as unknown as Array<{ id: number; userid: string }>);
+      if (rows.length !== fids.length) {
+        return { ok: false, error: "some_fids_not_found" };
+      }
+      const wrongOwner = rows.filter((r) => r.userid !== receipt.userid);
+      if (wrongOwner.length > 0) {
+        return {
+          ok: false,
+          error: `fids_wrong_owner: ${wrongOwner.map((r) => `#${r.id}(${r.userid})`).join(", ")}`,
+        };
+      }
+
+      // 4. No fid may already be on a different receipt.
+      const { data: dupRows, error: dupErr } = await admin
+        .from("tb_receipt_item")
+        .select("fid, rid")
+        .in("fid", fids);
+      if (dupErr) {
+        console.error(`[link items: tb_receipt_item dup check] failed`, {
+          code: dupErr.code, message: dupErr.message,
+        });
+        return { ok: false, error: `db_error:${dupErr.code ?? "unknown"}` };
+      }
+      const conflicts = ((dupRows ?? []) as Array<{ fid: number; rid: string }>)
+        .filter((r) => r.rid !== receipt.rid);
+      if (conflicts.length > 0) {
+        return {
+          ok: false,
+          error: `fids_on_other_receipt: ${conflicts.slice(0, 3).map((c) => `#${c.fid}→${c.rid}`).join(", ")}`,
+        };
+      }
+
+      // 5. INSERT — same shape as adminIssueForwarderInvoice's batch insert.
+      const itemRows = fids.map((fid) => ({ rid: receipt.rid, fid }));
+      const { error: insErr } = await admin
+        .from("tb_receipt_item")
+        .insert(itemRows);
+      if (insErr) {
+        console.error(`[link items: tb_receipt_item insert] failed`, {
+          code: insErr.code, message: insErr.message, rid: receipt.rid,
+        });
+        return { ok: false, error: `insert_failed: ${insErr.message}` };
+      }
+
+      await logAdminAction(
+        adminId,
+        "forwarder_invoice.link_items_manual",
+        "tb_receipt",
+        String(receiptId),
+        { rid: receipt.rid, fids, source: "admin_pick" },
+      );
+
+      revalidatePath(`/admin/accounting/forwarder-invoice/${receiptId}`);
+      revalidatePath("/admin/accounting/forwarder-invoice");
+
+      return {
+        ok:   true,
+        data: { receiptId, rid: receipt.rid, itemsInserted: fids.length },
+      };
+    },
+  );
+}

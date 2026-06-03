@@ -113,7 +113,7 @@ export default async function AdminWithdrawalsQueuePage({
     console.error(`[tb_wallet_hs withdraw list] failed`, { code: error.code, message: error.message });
     throw new Error(`โหลดรายการถอนเงินไม่สำเร็จ (${error.code ?? "unknown"}): ${error.message}`);
   }
-  const rows = (rowsRaw ?? []) as WhsRow[];
+  const rows = (rowsRaw ?? []) as unknown as WhsRow[];
 
   // Merge customer names.
   const userIds = Array.from(new Set(rows.map((r) => r.userid).filter(Boolean))) as string[];
@@ -126,7 +126,7 @@ export default async function AdminWithdrawalsQueuePage({
     if (usersErr) {
       console.error(`[tb_users list] failed`, { code: usersErr.code, message: usersErr.message });
     }
-    userMap = new Map(((usersRaw ?? []) as URow[]).map((u) => [u.userID, u]));
+    userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
   }
 
   const statusTabs: { key: string; label: string }[] = [

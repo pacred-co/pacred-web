@@ -317,7 +317,6 @@ export async function renderLegacyServiceOrderView(hno: string) {
         hNo={r.hno}
         status={LEGACY_TO_REBUILT_KEY[r.hstatus ?? "1"] ?? "pending"}
         note_admin={r.hnote ?? null}
-        totalThb={Number(r.htotalpriceuser ?? 0)}
       />
 
       {/* Sitting G — 3 Phase-2 header-edit handlers from P0-13 batch

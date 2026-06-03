@@ -52,7 +52,7 @@ export default async function AdminBroadcastsListPage() {
     console.error(`[tb_notify list] failed`, { code: rawErr.code, message: rawErr.message });
     throw new Error(`Failed to load tb_notify (${rawErr.code ?? "unknown"}): ${rawErr.message}`);
   }
-  const rows = (raw ?? []) as NotifyRow[];
+  const rows = (raw ?? []) as unknown as NotifyRow[];
 
   const now = nowMs();
   const activeCount = rows.filter((r) => {

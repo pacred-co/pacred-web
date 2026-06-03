@@ -318,7 +318,7 @@ export default async function AdminAccountingForwarderPage({
     .gte("date", `${startDate}T00:00:00`)
     .lte("date", `${endDate}T23:59:59`)
     .order("date", { ascending: true });
-  const walletRows = (walletRes.data ?? []) as WalletForwarderRaw[];
+  const walletRows = (walletRes.data ?? []) as unknown as WalletForwarderRaw[];
 
   // Build the parent-forwarder id list (numeric — refOrder stores the
   // bigint ID as a string).
@@ -356,7 +356,7 @@ export default async function AdminAccountingForwarderPage({
         "id, fdate, ftrackingchn, fcabinetnumber, fcosttotalprice, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany, userid",
       )
       .in("id", forwarderIds);
-    for (const f of (fRes.data ?? []) as ForwarderRaw[]) {
+    for (const f of (fRes.data ?? []) as unknown as ForwarderRaw[]) {
       forwarderById.set(f.id, f);
     }
   }

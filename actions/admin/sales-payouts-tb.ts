@@ -295,7 +295,7 @@ export async function getSalesPayoutDetailTb(
         console.error(`[sales-payouts-tb detail tb_forwarder] failed`, { code: fwdErr.code, message: fwdErr.message });
         return { ok: false, error: `detail_forwarder_failed: ${fwdErr.message}` };
       }
-      fwdById = new Map(((fwdRaw ?? []) as FwdRow[]).map((f) => [f.id, f]));
+      fwdById = new Map(((fwdRaw ?? []) as unknown as FwdRow[]).map((f) => [f.id, f]));
     }
 
     forwarders = usRows.map((u) => {

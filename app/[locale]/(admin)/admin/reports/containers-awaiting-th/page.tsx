@@ -120,7 +120,7 @@ export default async function ContainersAwaitingThReport({
   if (error) {
     console.error(`[tb_forwarder list] failed`, { code: error.code, message: error.message });
   }
-  const grouped = groupByContainer((data ?? []) as ForwarderRow[]);
+  const grouped = groupByContainer((data ?? []) as unknown as ForwarderRow[]);
 
   const overdue = grouped.filter((g) => {
     const d = daysAgo(g.fdatecontainerclose);

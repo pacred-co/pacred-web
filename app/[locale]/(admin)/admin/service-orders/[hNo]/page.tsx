@@ -211,7 +211,7 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
         </div>
 
         <aside className="space-y-4">
-          <AdminServiceOrderUpdateForm hNo={o.h_no!} status={o.status} note_admin={o.note_admin} totalThb={Number(o.total_thb)} />
+          <AdminServiceOrderUpdateForm hNo={o.h_no!} status={o.status} note_admin={o.note_admin} />
           <BillToOverridePanel
             kind="service_order"
             hNo={o.h_no!}

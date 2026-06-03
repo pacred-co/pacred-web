@@ -140,7 +140,7 @@ export async function getSearchDemandReport(
     }
 
     type Raw = { created_at: string | null; query: string | null; result_count: number | null };
-    const raw = (data ?? []) as Raw[];
+    const raw = (data ?? []) as unknown as Raw[];
 
     // GROUP BY keyword in JS (PostgREST can't COUNT/GROUP without an RPC).
     // Rows arrive newest-first, so the first sighting of a keyword carries
@@ -234,7 +234,7 @@ export async function getSmsUsageReport(
       id: number; date: string | null; msisdn: string | null;
       message: string | null; status: string | null;
     };
-    const raw = (data ?? []) as Raw[];
+    const raw = (data ?? []) as unknown as Raw[];
 
     const rows: SmsUsageRow[] = raw.map((r) => ({
       id:      String(r.id),

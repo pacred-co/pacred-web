@@ -68,7 +68,7 @@ export default async function AdminFreightQuotesListPage({
   if (rowsErr) {
     console.error(`[freight_quotes list] failed`, { code: rowsErr.code, message: rowsErr.message });
   }
-  const quotes = (rows ?? []) as QuoteRow[];
+  const quotes = (rows ?? []) as unknown as QuoteRow[];
 
   // Counts per status for badges.
   const counts: Record<QuoteStatus, number> = {} as Record<QuoteStatus, number>;

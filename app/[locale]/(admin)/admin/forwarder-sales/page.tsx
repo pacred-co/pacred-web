@@ -105,7 +105,7 @@ export default async function AdminForwarderSalesPage({
     if (adminsErr) {
       console.error("[tb_admin reps] failed", { code: adminsErr.code, message: adminsErr.message });
     }
-    adminByID = new Map(((adminsRaw ?? []) as AdminRow[]).map((a) => [a.adminID, a]));
+    adminByID = new Map(((adminsRaw ?? []) as unknown as AdminRow[]).map((a) => [a.adminID, a]));
   }
   const repOptions: RepOption[] = repIdsInWindow
     .map((id) => {
@@ -132,7 +132,7 @@ export default async function AdminForwarderSalesPage({
     console.error("[tb_sales_report list] failed", { code: reportErr.code, message: reportErr.message });
   }
   type SrRow = { id: number; srdate: string | null; fid: number; sradminidsale: string };
-  const srRows = (reportRaw ?? []) as SrRow[];
+  const srRows = (reportRaw ?? []) as unknown as SrRow[];
 
   // ── 3. Batch-hydrate tb_forwarder for fid set ──
   type FwdRow = {
@@ -153,7 +153,7 @@ export default async function AdminForwarderSalesPage({
     if (fwdErr) {
       console.error("[tb_forwarder list] failed", { code: fwdErr.code, message: fwdErr.message });
     }
-    fwdById = new Map(((fwdRaw ?? []) as FwdRow[]).map((f) => [f.id, f]));
+    fwdById = new Map(((fwdRaw ?? []) as unknown as FwdRow[]).map((f) => [f.id, f]));
   }
 
   // ── 4. Optional: customer name via tb_users (camelCase: userID) ──
@@ -168,7 +168,7 @@ export default async function AdminForwarderSalesPage({
     if (usersErr) {
       console.error("[tb_users names] failed", { code: usersErr.code, message: usersErr.message });
     }
-    userByID = new Map(((usersRaw ?? []) as UserRow[]).map((u) => [u.userID, u]));
+    userByID = new Map(((usersRaw ?? []) as unknown as UserRow[]).map((u) => [u.userID, u]));
   }
 
   // ── 5. Assemble rows ──

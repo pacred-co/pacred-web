@@ -103,7 +103,7 @@ export default async function AdminBookingsListPage({
   if (rowsRawErr) {
     console.error(`[bookings list] failed`, { code: rowsRawErr.code, message: rowsRawErr.message });
   }
-  const rows = (rowsRaw ?? []) as BookingRow[];
+  const rows = (rowsRaw ?? []) as unknown as BookingRow[];
 
   // Counts for filter chips (across all rows so chips show queue depth).
   const counts: Record<BookingStatus, number> = {

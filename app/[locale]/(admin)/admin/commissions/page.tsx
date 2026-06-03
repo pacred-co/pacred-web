@@ -87,7 +87,7 @@ export default async function AdminCommissionsPage({
     console.error("[tb_user_sales unpaid] failed", { code: unpaidErr.code, message: unpaidErr.message });
   }
   type UnpaidRow = { id: number; useridmain: string; idf: number; date: string | null };
-  const unpaid = (unpaidRaw ?? []) as UnpaidRow[];
+  const unpaid = (unpaidRaw ?? []) as unknown as UnpaidRow[];
 
   // Collect all forwarder ids → batch-query tb_forwarder for ftotalprice + fdiscount
   const fIds = Array.from(new Set(unpaid.map((r) => r.idf)));

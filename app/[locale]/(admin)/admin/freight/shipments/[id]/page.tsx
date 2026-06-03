@@ -167,7 +167,7 @@ export default async function AdminFreightShipmentDetailPage({
     duty_thb:             number | null;
     vat_thb:              number | null;
   };
-  const invoicesAll = (invoicesRaw ?? []) as InvoiceRaw[];
+  const invoicesAll = (invoicesRaw ?? []) as unknown as InvoiceRaw[];
   const invoices: InvoiceData[] = invoicesAll.map((i) => ({
     id:                  i.id,
     status:              i.status,
@@ -213,7 +213,7 @@ export default async function AdminFreightShipmentDetailPage({
       });
       throw new Error(`Failed to load freight_invoice_payments (${paymentsErr.code}): ${paymentsErr.message}`);
     }
-    const payments = ((paymentsRaw ?? []) as PaymentLedgerRow[]).map((p) => ({
+    const payments = ((paymentsRaw ?? []) as unknown as PaymentLedgerRow[]).map((p) => ({
       ...p,
       amount_thb: Number(p.amount_thb),
     }));
@@ -317,7 +317,7 @@ export default async function AdminFreightShipmentDetailPage({
     });
     throw new Error(`Failed to load customs_declarations (${cdRowsErr.code}): ${cdRowsErr.message}`);
   }
-  const cdRows = (cdRowsRaw ?? []) as CdRow[];
+  const cdRows = (cdRowsRaw ?? []) as unknown as CdRow[];
   const activeCd = cdRows.find((c) => c.status !== "cancelled") ?? null;
 
   // IC-1 — find the work_item that indexes this shipment so the thread

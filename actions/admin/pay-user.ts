@@ -930,7 +930,7 @@ export async function adminPayOrdersWithTopUp(
       hshippingchn: number | string | null; hshippingservice: number | string | null;
       hrate: number | string | null; hdatepayment: string | null;
     };
-    const payable = (rows ?? []) as HeaderRow[];
+    const payable = (rows ?? []) as unknown as HeaderRow[];
     if (payable.length === 0) return { ok: false, error: "ไม่พบออเดอร์ที่พร้อมชำระของลูกค้ารายนี้" };
 
     const priced = payable
