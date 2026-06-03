@@ -60,7 +60,11 @@ const FORWARDER_MENUBAR: MenubarItem[] = [
   {
     label: "งาน",
     children: [
-      { label: "รวมบิลสินค้า",            href: "/admin/forwarders/combine-bill" },
+      // 2026-06-03 (ภูม flag · R-2 close-out): รวมบิลสินค้า + ใบวางบิล ย้ายไป
+      // หมวด "ระบบบัญชี → รายรับ" ตาม PEAK pattern (acc-system-cargo.php).
+      // เหตุผล: ใบวางบิล/รวมบิลสินค้า = เอกสารบัญชี (income surface) ไม่ใช่
+      // operational งาน-โกดัง. PEAK เก็บใบวางบิลใต้ "รายรับ" — Pacred ทำตาม.
+      // Kept the หมายเหตุ / มอบงาน / ต้นทุน leaves here (ops-flavor).
       { label: "ประวัติเข้าโกดังไทย",     href: "/admin/forwarders/warehouse-history" },
       // Wave 20 P1 (ภูม flag 2026-05-26): the dedicated หมายเหตุนำเข้า
       // page exists at /admin/forwarders/notes but was unreachable from

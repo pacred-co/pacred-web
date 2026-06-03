@@ -181,7 +181,36 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       },
       { label: "ใบลดหนี้",                              children: notesStatuses("credit-note") },
       { label: "ใบเพิ่มหนี้",                            children: notesStatuses("debit-note") },
-      { label: "ใบวางบิล",                              children: notesStatuses("billing-note") },
+      // 2026-06-03 (R-2 · เดฟ): ใบวางบิล wired to the live billing-run port
+      // (migration 0138 · tb_forwarder_invoice). Was stubbed via
+      // notesStatuses("billing-note") → 404. Mirrors PEAK status tabs
+      // ล่าสุด / ทั้งหมด / รอรับชำระ / เกินเวลา / รับชำระแล้ว / ยกเลิก.
+      // ภูม flag 2026-06-03: ใบวางบิลเป็นของ "ระบบบัญชี" (PEAK pattern)
+      // → ย้ายมาที่นี่ ทิ้งสตับ /accounting/cargo/income/billing-note/* เก่า.
+      {
+        label: "ใบวางบิล",
+        href: "/admin/billing-run",
+        children: [
+          { label: "สร้างใบวางบิลใหม่",  href: "/admin/billing-run/add" },
+          { label: "ล่าสุด (30 วัน)",     href: "/admin/billing-run?tab=recent" },
+          { label: "ทั้งหมด",             href: "/admin/billing-run?tab=all" },
+          { label: "รอรับชำระ",          href: "/admin/billing-run?tab=issued" },
+          { label: "เกินเวลารับชำระ",    href: "/admin/billing-run?tab=overdue" },
+          { label: "รับชำระแล้ว",        href: "/admin/billing-run?tab=paid" },
+          { label: "ยกเลิก",              href: "/admin/billing-run?tab=cancelled" },
+        ],
+      },
+      // 2026-06-03 (R-2 · เดฟ): รวมบิลสินค้า also belongs in รายรับ (legacy
+      // ใบส่งสินค้า / shipping-bill family · adjacent to ใบวางบิล workflow).
+      // ภูม flag: ย้ายมาจาก /admin/forwarders "งาน" dropdown.
+      {
+        label: "รวมบิลสินค้า (ใบส่งสินค้า)",
+        href: "/admin/forwarders/combine-bill",
+        children: [
+          { label: "สร้างใบรวมบิล",   href: "/admin/forwarders/combine-bill/add" },
+          { label: "ดูทั้งหมด",        href: "/admin/forwarders/combine-bill" },
+        ],
+      },
     ],
   },
   {
@@ -304,6 +333,22 @@ export const ACCOUNTING_HUB_CARDS = [
     title: "ใบลด/ใบจ่าย (Disbursements)",
     desc: "ใบเบิกจ่าย + เบิกเงิน",
     href: "/admin/accounting/disbursements",
+    badge: "live",
+  },
+  // 2026-06-03 (R-2 · เดฟ) — ใบวางบิล / billing-run (NEW · migration 0138).
+  // ใบเรียกเก็บค่าฝากนำเข้าให้ลูกค้าเครดิตเทอม. PEAK pattern: lives in
+  // ระบบบัญชี (not ฝากนำเข้า) — ภูม flag 2026-06-03.
+  {
+    title: "ใบวางบิล (Billing-Run)",
+    desc: "ใบเรียกเก็บลูกค้าเครดิตเทอม · ฝากนำเข้า fStatus=5 · PEAK tabs",
+    href: "/admin/billing-run",
+    badge: "live",
+  },
+  // 2026-06-03 (R-2 · เดฟ) — รวมบิลสินค้า (ใบส่งสินค้า) ย้ายมาจาก /admin/forwarders.
+  {
+    title: "รวมบิลสินค้า (ใบส่งสินค้า)",
+    desc: "รวมหลายรายการของลูกค้าเดียวกัน → ใบส่งสินค้าใบเดียว · พิมพ์ตามคนขับ",
+    href: "/admin/forwarders/combine-bill",
     badge: "live",
   },
   // 2026-06-01 (re-sweep A2 #23): admin-PUSH shop-affiliate disbursement.
