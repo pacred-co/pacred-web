@@ -39,6 +39,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 import { CsvButton } from "@/components/admin/csv-button";
 import { legacyForwarderStatusThai } from "@/lib/legacy-status-map";
+import { parsePage } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -107,7 +109,7 @@ const STATUS_LABEL: Record<string, string> = {
 export default async function RefundsReport({
   searchParams,
 }: {
-  searchParams: Promise<{ date_from?: string; date_to?: string; offset?: string }>;
+  searchParams: Promise<{ date_from?: string; date_to?: string; page?: string }>;
 }) {
   await requireAdmin(["super", "accounting"]);
   const sp = await searchParams;
@@ -117,9 +119,9 @@ export default async function RefundsReport({
   const dateFrom = sp.date_from ?? nDaysAgoIsoDate(30);
   const dateTo   = sp.date_to;
 
-  // Wave 24 #189 — parse + clamp ?offset= (default 0, never negative).
-  const offsetRaw = Number(sp.offset ?? 0);
-  const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? Math.floor(offsetRaw) : 0;
+  // Pagination (2026-06-03 · unified with shared <Pagination> · ?page=N).
+  const page = parsePage(sp.page);
+  const offset = (page - 1) * PAGE_SIZE;
 
   // ── 1) Main refund rows (tb_wallet_hs type='5' = refund / admin manual adjust). ──
   //    Wave 24 #189: dropped the silent `.limit(1000)` cap → `.range()` +
@@ -232,22 +234,8 @@ export default async function RefundsReport({
   // Wave 24 #189 — pagination boundary + Prev/Next href builder. Mirrors
   // /admin/reports/payment commit 22dd746 (which mirrors /reports/forwarder
   // 399ed01 · which mirrors cnt-hs/page.tsx).
-  const hasPrev = offset > 0;
-  const hasNext = offset + rows.length < totalRows;
-  const prevOffset = Math.max(0, offset - PAGE_SIZE);
-  const nextOffset = offset + PAGE_SIZE;
-  const pageNumber = Math.floor(offset / PAGE_SIZE) + 1;
-  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
   const rangeFrom = totalRows === 0 ? 0 : offset + 1;
   const rangeTo = Math.min(offset + rows.length, totalRows);
-  const buildPageHref = (newOffset: number): string => {
-    const params = new URLSearchParams();
-    if (sp.date_from) params.set("date_from", sp.date_from);
-    if (sp.date_to)   params.set("date_to", sp.date_to);
-    if (newOffset > 0) params.set("offset", String(newOffset));
-    const qs = params.toString();
-    return qs ? `/admin/reports/refunds?${qs}` : "/admin/reports/refunds";
-  };
 
   // ── 5) CSV data. ──
   const csvRows = rows.map((r) => ({
@@ -385,51 +373,13 @@ export default async function RefundsReport({
             </table>
           </div>
 
-          {/* Wave 24 #189 — Prev/Next footer (only when there's >1 page). */}
-          {(hasPrev || hasNext) && (
-            <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs text-muted flex-wrap">
-              <span>
-                หน้า <span className="font-semibold text-foreground">{pageNumber.toLocaleString("th-TH")}</span> จาก{" "}
-                <span className="font-semibold text-foreground">{totalPages.toLocaleString("th-TH")}</span>
-                {" · "}
-                แสดง <span className="font-semibold text-foreground">{rangeFrom.toLocaleString("th-TH")}</span>
-                –<span className="font-semibold text-foreground">{rangeTo.toLocaleString("th-TH")}</span> จากทั้งหมด{" "}
-                <span className="font-semibold text-foreground">{totalRows.toLocaleString("th-TH")}</span>
-              </span>
-              <div className="flex gap-2">
-                {hasPrev ? (
-                  <Link
-                    href={buildPageHref(prevOffset)}
-                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
-                  >
-                    ← ก่อนหน้า
-                  </Link>
-                ) : (
-                  <span
-                    aria-disabled="true"
-                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium opacity-40 pointer-events-none"
-                  >
-                    ← ก่อนหน้า
-                  </span>
-                )}
-                {hasNext ? (
-                  <Link
-                    href={buildPageHref(nextOffset)}
-                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
-                  >
-                    ถัดไป →
-                  </Link>
-                ) : (
-                  <span
-                    aria-disabled="true"
-                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium opacity-40 pointer-events-none"
-                  >
-                    ถัดไป →
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={totalRows}
+            basePath="/admin/reports/refunds"
+            params={{ date_from: sp.date_from, date_to: sp.date_to }}
+          />
           </>
         )}
       </div>

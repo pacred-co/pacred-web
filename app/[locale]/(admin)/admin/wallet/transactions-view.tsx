@@ -18,6 +18,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { TbWalletBulkBar, TbWalletRowCheckbox } from "./tb-bulk-bar";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
+import { pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 const STATUS_LABEL: Record<string, string> = {
   "1": "รอตรวจสอบ",
@@ -93,6 +95,8 @@ export type TransactionsViewProps = {
   /** Lane C 2026-06-02 — sortable column headers (ภูม flag #3). */
   sort?: string;
   dir?: string;
+  /** 1-based page (server-side .range pagination · 2026-06-03). */
+  page?: number;
 };
 
 // Lane C 2026-06-02 — server-side sort whitelist for the tx list.
@@ -113,8 +117,9 @@ function buildTxHref(params: { kind?: string | null; status?: string | null }): 
   return `/admin/wallet?${qs.toString()}`;
 }
 
-export async function WalletTransactionsView({ kind, status, q, sort, dir }: TransactionsViewProps) {
+export async function WalletTransactionsView({ kind, status, q, sort, dir, page = 1 }: TransactionsViewProps) {
   const admin = createAdminClient();
+  const { from: rowFrom, to: rowTo } = pageRange(page);
   // Lane C 2026-06-02 — resolve sort + dir from URL with whitelist.
   const sortKey = sort && TX_SORT_FIELDS[sort] ? sort : "date";
   const sortDir: "asc" | "desc" = dir === "asc" ? "asc" : "desc";
@@ -134,13 +139,15 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir }: Tra
 
   const statusFilter = status === "pending" ? "1" : status ?? "";
 
+  // PERF (2026-06-03): paginate 50/page via .range + exact count.
   let qb = admin
     .from("tb_wallet_hs")
     .select(
       "id,date,dateslip,amount,status,type,imagesslip,depositnamebank,note,userid,adminid,adminidcrate",
+      { count: "exact" },
     )
     .order(sortColumn, { ascending: sortDir === "asc" })
-    .limit(200);
+    .range(rowFrom, rowTo);
 
   if (effectiveTypeFilter && effectiveTypeFilter.length > 0) {
     qb = qb.in("type", effectiveTypeFilter);
@@ -154,7 +161,7 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir }: Tra
     else qb = qb.eq("userid", term.toUpperCase());
   }
 
-  const { data: rowsRaw, error } = await qb;
+  const { data: rowsRaw, error, count: totalTx } = await qb;
   const rows = (rowsRaw ?? []) as unknown as WhsRow[];
 
   // Resolve every imagesslip → signed Supabase URL in parallel (Wave 13.1).
@@ -399,9 +406,13 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir }: Tra
         )}
       </div>
 
-      <p className="text-[11px] text-muted">
-        แสดงไม่เกิน 200 แถวต่อหน้า (ใช้ตัวกรอง / ค้นหาด้านบนเพื่อกรองเพิ่ม)
-      </p>
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={totalTx ?? 0}
+        basePath="/admin/wallet"
+        params={{ view: "tx", kind, status, q, sort, dir }}
+      />
     </>
   );
 }

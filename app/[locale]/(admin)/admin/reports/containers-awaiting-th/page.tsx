@@ -3,6 +3,8 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 import { CsvButton } from "@/components/admin/csv-button";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 /**
  * Wave 3 cleanup (2026-05-20 ค่ำ) — V-B1 #3 containers รอเข้าโกดังไทย
@@ -98,7 +100,7 @@ function groupByContainer(rows: ForwarderRow[]): Grouped[] {
 export default async function ContainersAwaitingThReport({
   searchParams,
 }: {
-  searchParams: Promise<{ date_from?: string; date_to?: string; sla?: string }>;
+  searchParams: Promise<{ date_from?: string; date_to?: string; sla?: string; page?: string }>;
 }) {
   await requireAdmin(["super", "ops", "warehouse", "accounting"]);
   const sp = await searchParams;
@@ -128,6 +130,13 @@ export default async function ContainersAwaitingThReport({
   }).length;
   const totalShipments = grouped.reduce((s, g) => s + g.shipmentCount, 0);
   const totalCbm       = grouped.reduce((s, g) => s + g.totalVolume, 0);
+
+  // PERF (2026-06-03): paginate only the DISPLAYED container rows (50/page).
+  // The stat cards + CSV above iterate the full `grouped` set, so they stay
+  // full-set-correct; only the rendered <tbody> is windowed.
+  const page = parsePage(sp.page);
+  const offset = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageRows = grouped.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
   const csvRows = grouped.map((g) => ({
     fcabinetnumber:      g.fcabinetnumber,
@@ -216,7 +225,7 @@ export default async function ContainersAwaitingThReport({
                 </tr>
               </thead>
               <tbody>
-                {grouped.map((g) => {
+                {pageRows.map((g) => {
                   const d = daysAgo(g.fdatecontainerclose);
                   const dBadge = d == null ? "bg-surface-alt text-muted border-border"
                     : d > 21 ? "bg-red-50 text-red-700 border-red-200"
@@ -254,6 +263,13 @@ export default async function ContainersAwaitingThReport({
             </table>
           </div>
         )}
+        <Pagination
+          page={page}
+          pageSize={DEFAULT_PAGE_SIZE}
+          total={grouped.length}
+          basePath="/admin/reports/containers-awaiting-th"
+          params={{ date_from: sp.date_from, date_to: sp.date_to, sla: sp.sla }}
+        />
       </div>
     </main>
   );

@@ -18,6 +18,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { Clock } from "lucide-react";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import { TbCustomerBulkBar, TbCustomerRowCheckbox, TbCustomerRejectButton } from "./tb-bulk-bar";
 
 export const dynamic = "force-dynamic";
@@ -33,10 +35,18 @@ type Row = {
   userActive: string | null;
 };
 
-export default async function AdminCustomersPendingPage() {
+export default async function AdminCustomersPendingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   // W-1 (gap-admin H-1/H-7): role-pin (was bare requireAdmin() — only
   // proved "some admin"). Pending-customer queue lists customer PII.
   await requireAdmin(["ops", "sales_admin", "accounting"]);
+
+  const sp = await searchParams;
+  const page = parsePage(sp.page);
+  const { from, to } = pageRange(page);
 
   const admin = createAdminClient();
   const { data: customers, count, error: customersErr } = await admin
@@ -50,7 +60,7 @@ export default async function AdminCustomersPendingPage() {
     // BOTH so the queue catches every pending row in one filter.
     .in("userActive", ["", "0"])
     .order("userRegistered", { ascending: false })
-    .limit(500);
+    .range(from, to);
   if (customersErr) {
     console.error(`[tb_users list] failed`, { code: customersErr.code, message: customersErr.message });
   }
@@ -173,6 +183,13 @@ export default async function AdminCustomersPendingPage() {
           </table>
         </div>
       </div>
+
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={total}
+        basePath="/admin/customers/pending"
+      />
     </main>
   );
 }

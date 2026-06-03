@@ -4,6 +4,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { computeCommission } from "@/lib/sales-commission/calc";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 /**
  * /admin/commissions — sales-rep commission queue + top earners.
@@ -66,7 +68,7 @@ function thb(n: number): string {
 export default async function AdminCommissionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; page?: string }>;
 }) {
   await requireAdmin(["super", "accounting"]);
   const sp = await searchParams;
@@ -178,6 +180,14 @@ export default async function AdminCommissionsPage({
   // Totals over the filtered queue (for the summary band).
   const sumAmount = payouts.reduce((s, p) => s + p.amount, 0);
   const grandUnpaidNet = topEarners.reduce((s, t) => s + t.net, 0);
+
+  // PERF (2026-06-03): client-slice the withdrawal-queue table (50/page) —
+  // sumAmount + status counts above stay full-set-correct (computed over the
+  // full payouts window / their own queries). Top-earners is a fixed top-20
+  // summary, untouched.
+  const page = parsePage(sp.page);
+  const offset = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pagePayouts = payouts.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
   return (
     <>
@@ -314,7 +324,7 @@ export default async function AdminCommissionsPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {payouts.map((p) => (
+                  {pagePayouts.map((p) => (
                     <tr key={p.id} className="border-t border-border hover:bg-surface-alt/30">
                       <td className="px-3 py-2">
                         <Link
@@ -345,6 +355,13 @@ export default async function AdminCommissionsPage({
               </table>
             </div>
           )}
+          <Pagination
+            page={page}
+            pageSize={DEFAULT_PAGE_SIZE}
+            total={payouts.length}
+            basePath="/admin/commissions"
+            params={{ status: sp.status }}
+          />
         </div>
 
         <p className="text-[10px] text-muted">

@@ -28,13 +28,15 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import { Link } from "@/i18n/navigation";
 import { redirect } from "@/i18n/navigation";
 import { getLocale } from "next-intl/server";
 
 export const dynamic = "force-dynamic";
 
-type SP = { action?: string; q?: string };
+type SP = { action?: string; q?: string; page?: string };
 
 /**
  * Legacy URL → Pacred QA queue redirect map (Wave 26 · 2026-05-28 ดึก).
@@ -125,6 +127,8 @@ const NOTE_SHOP_TABS: { q: string | null; label: string }[] = [
 export default async function AdminForwarderActionPage({ searchParams }: { searchParams: Promise<SP> }) {
   await requireAdmin(["super", "ops", "accounting", "warehouse"]);
   const sp = await searchParams;
+  const page = parsePage(sp.page);
+  const { from: rowFrom, to: rowTo } = pageRange(page);
   const action = sp.action ?? "";
 
   // Wave 26: redirect legacy QA queue URLs to the dedicated /admin/qa/* pages.
@@ -159,17 +163,17 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
     const fStatusQ = sp.q;
     let shopQ = admin
       .from("tb_header_order")
-      .select("id,hdate,hno,userid,hcover,htitle,hcount,htotalpricechn,hstatus,hnote,hrate,hdateupdate")
+      .select("id,hdate,hno,userid,hcover,htitle,hcount,htotalpricechn,hstatus,hnote,hrate,hdateupdate", { count: "exact" })
       .neq("hnote", "")
       .not("hnote", "is", null)
-      .limit(200)
+      .range(rowFrom, rowTo)
       .order("hdate", { ascending: false });
 
     if (fStatusQ && /^[1-6]$/.test(fStatusQ)) {
       shopQ = shopQ.eq("hstatus", fStatusQ);
     }
 
-    const { data: shopRows, error: shopError } = await shopQ;
+    const { data: shopRows, error: shopError, count: totalShopNotes } = await shopQ;
 
     return (
       <>
@@ -263,9 +267,13 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
             )}
           </div>
 
-          <p className="text-[11px] text-muted">
-            (Wave 2 — แสดงไม่เกิน 200 แถว · tb_header_order audit · edit / printShop / status-count badges → Wave 3)
-          </p>
+          <Pagination
+            page={page}
+            pageSize={DEFAULT_PAGE_SIZE}
+            total={totalShopNotes ?? 0}
+            basePath="/admin/forwarder-action"
+            params={{ action: "NoteShop", q: sp.q }}
+          />
         </main>
       </>
     );
@@ -274,8 +282,8 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
   // --- All other actions: read tb_forwarder ---
   let q = admin
     .from("tb_forwarder")
-    .select("id,fdate,fcabinetnumber,ftrackingchn,fstatus,fnote,fcover,fwarehousename,ftotalprice,fshipby,faddresszipcode")
-    .limit(200)
+    .select("id,fdate,fcabinetnumber,ftrackingchn,fstatus,fnote,fcover,fwarehousename,ftotalprice,fshipby,faddresszipcode", { count: "exact" })
+    .range(rowFrom, rowTo)
     .order("fdate", { ascending: false });
 
   const cutoff = "2022-01-15 00:00:00";
@@ -308,7 +316,7 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
   const fStatusQ = sp.q;
   if (fStatusQ) q = q.eq("fstatus", fStatusQ);
 
-  const { data: rows, error } = await q;
+  const { data: rows, error, count: totalForwarderRows } = await q;
 
   // Wave 13: batch-resolve every forwarder-cover filename in parallel
   // so the row template can render the thumbnail next to the F-id.
@@ -416,9 +424,13 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
           )}
         </div>
 
-        <p className="text-[11px] text-muted">
-          (แสดงไม่เกิน 200 แถว · edit buttons + bulk-apply (notPortage รวมค่าขนส่ง) → Wave 3)
-        </p>
+        <Pagination
+          page={page}
+          pageSize={DEFAULT_PAGE_SIZE}
+          total={totalForwarderRows ?? 0}
+          basePath="/admin/forwarder-action"
+          params={{ action: sp.action, q: sp.q }}
+        />
       </main>
     </>
   );

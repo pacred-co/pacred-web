@@ -4,6 +4,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { getTranslations } from "next-intl/server";
 import { getServiceConfig } from "@/lib/booking/service-config";
 import { BOOKING_STATUSES, type BookingStatus } from "@/lib/validators/booking";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 /**
  * BK-1 — /admin/bookings list page.
@@ -69,11 +71,13 @@ export default async function AdminBookingsListPage({
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; page?: string }>;
 }) {
   await requireAdmin(["super", "ops", "sales_admin", "accounting"]);
   const { locale } = await params;
   const sp = await searchParams;
+  const page = parsePage(sp.page);
+  const { from, to } = pageRange(page);
   const t = await getTranslations({ locale, namespace: "booking.admin" });
   const tStatus = await getTranslations({ locale, namespace: "booking.status" });
 
@@ -94,12 +98,12 @@ export default async function AdminBookingsListPage({
       id, booking_no, status, service_slug, route_slug, transport_mode,
       estimate_total, contact_name, contact_phone, source_channel,
       submitted_at, created_at
-    `)
+    `, { count: "exact" })
     .order("created_at", { ascending: false })
-    .limit(200);
+    .range(from, to);
   if (status) query = query.eq("status", status);
 
-  const { data: rowsRaw, error: rowsRawErr } = await query;
+  const { data: rowsRaw, error: rowsRawErr, count } = await query;
   if (rowsRawErr) {
     console.error(`[bookings list] failed`, { code: rowsRawErr.code, message: rowsRawErr.message });
   }
@@ -235,6 +239,14 @@ export default async function AdminBookingsListPage({
           </div>
         )}
       </div>
+
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={count ?? 0}
+        basePath="/admin/bookings"
+        params={{ status: sp.status }}
+      />
     </main>
   );
 }

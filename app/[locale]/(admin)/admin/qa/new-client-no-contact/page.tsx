@@ -17,6 +17,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { nowMs, cutoffIsoDaysAgo } from "@/lib/datetime-helpers";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -33,10 +35,18 @@ type URow = {
   userCompany: string | null;
 };
 
-export default async function NewClientNoContactPage() {
+export default async function NewClientNoContactPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   await requireAdmin(["ops", "accounting", "super"]);
 
+  const sp = await searchParams;
   const admin = createAdminClient();
+
+  const page = parsePage(sp.page);
+  const { from, to } = pageRange(page);
 
   // Filters:
   //   useractive='1' (active accounts; excludes pending/disabled)
@@ -55,31 +65,22 @@ export default async function NewClientNoContactPage() {
   // silently rendered "no results" → SLA queue invisible to sales. The
   // .or() syntax needs quoted identifiers ("userLastLogin") because the
   // raw filter string is fed straight to PostgREST as the column name.
-  const { data: rowsRaw, error } = await admin
+  // count:"exact" on the windowed query — accurate even when > 200 breaches
+  // (Wave 10 bug-fix 2026-05-23 · same pattern across QA queues).
+  const { data: rowsRaw, error, count: breachCount } = await admin
     .from("tb_users")
     .select(
       "userID,userName,userLastName,userTel,userEmail,userRegistered," +
         "userLastLogin,userActive,adminIDSale,userCompany",
+      { count: "exact" },
     )
     .eq("userActive", "1")
     .gt("userRegistered", registerCutoff)
     .or(`userLastLogin.is.null,userLastLogin.lt.${loginCutoff}`)
     .order("userRegistered", { ascending: true })
-    .limit(500);
+    .range(from, to);
 
-  // Exact total count — push the same .or() filter into PostgREST so the
-  // count is accurate even when > 200 breaches. Wave 10 bug-fix 2026-05-23
-  // (ภูม flagged in driver/work · same pattern across QA queues).
-  const { count: breachCount } = await admin
-    .from("tb_users")
-    .select("userID", { count: "exact", head: true })
-    .eq("userActive", "1")
-    .gt("userRegistered", registerCutoff)
-    .or(`userLastLogin.is.null,userLastLogin.lt.${loginCutoff}`);
-
-  // Same .or() pushed into the data query (above) makes the in-memory
-  // filter redundant; keep the slice(0, 200) cap for the display window.
-  const rows = ((rowsRaw ?? []) as unknown as URow[]).slice(0, 200);
+  const rows = (rowsRaw ?? []) as unknown as URow[];
 
   const now = nowMs();
 
@@ -196,6 +197,14 @@ export default async function NewClientNoContactPage() {
           </div>
         )}
       </div>
+
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={breachCount ?? 0}
+        basePath="/admin/qa/new-client-no-contact"
+        params={{}}
+      />
 
       <p className="text-[11px] text-muted">
         Wave 10 Group B · SLA-breach audit · drill-in → /admin/customers เพื่อกำหนดเซลส์ + ติดต่อ

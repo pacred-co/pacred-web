@@ -2,6 +2,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { nowMs } from "@/lib/datetime-helpers";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 /**
  * /admin/broadcasts — Pop-up ประกาศ list (faithful — legacy `pcs-admin/popup.php`
@@ -39,9 +41,14 @@ function fmt(dt: string | null): string {
   return d.toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" });
 }
 
-export default async function AdminBroadcastsListPage() {
+export default async function AdminBroadcastsListPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   await requireAdmin(["super", "sales_admin"]);
 
+  const sp = await searchParams;
   const admin = createAdminClient();
   const { data: raw, error: rawErr } = await admin
     .from("tb_notify")
@@ -60,6 +67,12 @@ export default async function AdminBroadcastsListPage() {
     const end   = r.dateexp   ? new Date(r.dateexp).getTime()   :  Infinity;
     return start <= now && now <= end;
   }).length;
+
+  // PERF (2026-06-03): client-slice the displayed table (50/page) — activeCount
+  // above stays full-set-correct (JS-derived over all rows).
+  const page = parsePage(sp.page);
+  const offset = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
@@ -97,7 +110,7 @@ export default async function AdminBroadcastsListPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
+                {pageRows.map((r) => {
                   const start = r.datestart ? new Date(r.datestart).getTime() : -Infinity;
                   const end   = r.dateexp   ? new Date(r.dateexp).getTime()   :  Infinity;
                   const active = start <= now && now <= end;
@@ -146,6 +159,12 @@ export default async function AdminBroadcastsListPage() {
             </table>
           </div>
         )}
+        <Pagination
+          page={page}
+          pageSize={DEFAULT_PAGE_SIZE}
+          total={rows.length}
+          basePath="/admin/broadcasts"
+        />
       </div>
 
       <p className="text-[10px] text-muted">

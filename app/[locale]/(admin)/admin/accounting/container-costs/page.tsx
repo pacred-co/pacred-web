@@ -1,5 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import { ContainerCostForm } from "./container-cost-form";
 import { ContainerCostRowControls } from "./container-cost-row-controls";
 
@@ -17,6 +19,7 @@ type SP = {
   carrier?: string;
   mode?:    string;
   active?:  string;   // "all" | "active" | "archived"
+  page?:    string;
 };
 
 function thb(n: number | string | null) {
@@ -38,6 +41,8 @@ export default async function AdminContainerCostsPage({
   const sp = await searchParams;
   const admin = createAdminClient();
   const today = new Date().toISOString().slice(0, 10);
+  const page = parsePage(sp.page);
+  const { from, to } = pageRange(page);
 
   let q = admin
     .from("container_costs")
@@ -45,10 +50,10 @@ export default async function AdminContainerCostsPage({
       id, carrier_name, transport_mode, origin, destination, container_type,
       rate_per_cbm_thb, rate_per_kg_thb, minimum_charge_thb, fuel_surcharge_pct,
       effective_from, effective_to, source, note, created_at
-    `)
+    `, { count: "exact" })
     .order("carrier_name", { ascending: true })
     .order("effective_from", { ascending: false })
-    .limit(500);
+    .range(from, to);
 
   if (sp.carrier)               q = q.ilike("carrier_name", `%${sp.carrier}%`);
   if (sp.mode && sp.mode !== "all") q = q.eq("transport_mode", sp.mode);
@@ -59,7 +64,7 @@ export default async function AdminContainerCostsPage({
     q = q.not("effective_to", "is", null).lt("effective_to", today);
   }
 
-  const { data: rowsRaw, error: rowsRawErr } = await q;
+  const { data: rowsRaw, error: rowsRawErr, count } = await q;
   if (rowsRawErr) {
     console.error(`[container_costs list] failed`, { code: rowsRawErr.code, message: rowsRawErr.message });
   }
@@ -195,6 +200,15 @@ export default async function AdminContainerCostsPage({
               </table>
             </div>
           )}
+          <div className="px-5 pb-4">
+            <Pagination
+              page={page}
+              pageSize={DEFAULT_PAGE_SIZE}
+              total={count ?? 0}
+              basePath="/admin/accounting/container-costs"
+              params={{ carrier: sp.carrier, mode: sp.mode, active: sp.active }}
+            />
+          </div>
         </div>
 
         {/* Add new form */}

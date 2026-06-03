@@ -100,6 +100,13 @@ export type BadgeKey =
 /** Counts resolved server-side; absent key → 0. */
 export type BadgeCounts = Partial<Record<BadgeKey, number>>;
 
+/** Cache tag for the admin sidebar badge counts (see
+ *  `actions/admin/sidebar-counts.ts`). Lives here, not in the
+ *  `"use server"` action file — that file may only export async functions.
+ *  Call `revalidateTag(ADMIN_SIDEBAR_COUNTS_TAG)` from any Server Action
+ *  that changes a queue depth to refresh the badges before the 60 s TTL. */
+export const ADMIN_SIDEBAR_COUNTS_TAG = "admin-sidebar-counts";
+
 // ──────────────────────────────────────────────────────────────
 // Phase-gated visibility (2026-05-20 night owner brief).
 //   Phase 1 = LIVE for customers (visible to ALL admin staff).

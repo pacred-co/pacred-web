@@ -18,6 +18,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { nowMs, cutoffIsoDaysAgo } from "@/lib/datetime-helpers";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -55,34 +57,37 @@ const TRANSPORT_LABEL: Record<string, string> = {
   "3": "แอร์",
 };
 
-export default async function ChnWhOver2dPage() {
+export default async function ChnWhOver2dPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   await requireAdmin(["ops", "accounting", "super"]);
 
+  const sp = await searchParams;
   const admin = createAdminClient();
+
+  const page = parsePage(sp.page);
+  const { from, to } = pageRange(page);
 
   // SLA cutoff — 2 days ago (rows created earlier than this AND still in
   // fstatus='1' have breached the "expected to enter China warehouse
   // within 2 days" SLA).
   const cutoff = cutoffIsoDaysAgo(2);
 
-  // Exact total count (head:true is cheap · accurate even when > 200 breaches)
-  // Wave 10 bug-fix 2026-05-23 — was using rows.length (capped at 200).
-  const { count: breachCount } = await admin
-    .from("tb_forwarder")
-    .select("id", { count: "exact", head: true })
-    .eq("fstatus", "1")
-    .lt("fdate", cutoff);
-
-  const { data: rowsRaw, error } = await admin
+  // Exact total count via count:"exact" on the windowed query — accurate
+  // even when > 200 breaches (was rows.length, capped at 200, Wave 10 fix).
+  const { data: rowsRaw, error, count: breachCount } = await admin
     .from("tb_forwarder")
     .select(
       "id,fdate,fstatus,fcabinetnumber,ftrackingchn,ftrackingth,fidorco," +
         "fwarehousechina,ftransporttype,fweight,fvolume,fnote,userid",
+      { count: "exact" },
     )
     .eq("fstatus", "1")
     .lt("fdate", cutoff)
     .order("fdate", { ascending: true })
-    .limit(200);
+    .range(from, to);
 
   const rows = (rowsRaw ?? []) as unknown as FwdRow[];
 
@@ -211,6 +216,14 @@ export default async function ChnWhOver2dPage() {
           </div>
         )}
       </div>
+
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={breachCount ?? 0}
+        basePath="/admin/qa/chn-wh-over-2d"
+        params={{}}
+      />
 
       <p className="text-[11px] text-muted">
         Wave 10 Group B · SLA-breach audit · drill-in → /admin/forwarders

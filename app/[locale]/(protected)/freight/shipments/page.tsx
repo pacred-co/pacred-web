@@ -12,6 +12,8 @@ import {
   FREIGHT_INVOICE_PAYMENT_STATUS_LABEL,
   type FreightInvoicePaymentStatus,
 } from "@/lib/validators/freight-payment";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 /**
  * V-E1.2 — /freight/shipments customer list.
@@ -61,7 +63,7 @@ type InvoiceForShipment = {
 export default async function CustomerFreightShipmentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; page?: string }>;
 }) {
   const sp = await searchParams;
   const sb = await createClient();
@@ -71,18 +73,25 @@ export default async function CustomerFreightShipmentsPage({
     : null;
   const q = sp.q?.trim() ?? "";
 
+  // PERF (2026-06-03): paginate — one 50-row window via .range() + exact count.
+  const page = parsePage(sp.page);
+  const { from, to } = pageRange(page);
+
   let query = sb
     .from("freight_shipments")
-    .select("id, job_no, status, transport_mode, bl_no, container_code, port_loading, port_discharge, created_at")
+    .select(
+      "id, job_no, status, transport_mode, bl_no, container_code, port_loading, port_discharge, created_at",
+      { count: "exact" },
+    )
     .order("created_at", { ascending: false })
-    .limit(200);
+    .range(from, to);
   if (status) query = query.eq("status", status);
   if (q) {
     // Escape % and _ in the search term so RLS+filter doesn't trip.
     const safe = q.replace(/[%_]/g, (m) => `\\${m}`);
     query = query.or(`job_no.ilike.%${safe}%,container_code.ilike.%${safe}%,bl_no.ilike.%${safe}%`);
   }
-  const { data: rowsRaw } = await query.returns<ShipmentRow[]>();
+  const { data: rowsRaw, count: shipmentTotal } = await query.returns<ShipmentRow[]>();
   const shipments = rowsRaw ?? [];
 
   // Per-status counts (for filter chips). Cheap second pass on the same RLS view.
@@ -266,6 +275,14 @@ export default async function CustomerFreightShipmentsPage({
             </table>
           )}
         </div>
+
+        <Pagination
+          page={page}
+          pageSize={DEFAULT_PAGE_SIZE}
+          total={shipmentTotal ?? 0}
+          basePath="/freight/shipments"
+          params={{ q: sp.q, status: sp.status }}
+        />
       </main>
     </>
   );

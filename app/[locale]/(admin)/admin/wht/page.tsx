@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 /**
  * /admin/wht — Withholding-tax certificate chase queue.
@@ -72,14 +74,17 @@ function ageDays(iso: string): number {
 export default async function AdminWhtChasePage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; page?: string }>;
 }) {
   await requireAdmin(["super", "accounting"]);
 
-  const { status: statusParam } = await searchParams;
+  const { status: statusParam, page: pageParam } = await searchParams;
   const status = (["pending", "received", "waived", "all"].includes(statusParam ?? "")
     ? statusParam
     : "pending") as "pending" | "received" | "waived" | "all";
+
+  const page = parsePage(pageParam);
+  const { from, to } = pageRange(page);
 
   const admin = createAdminClient();
   const baseQuery = admin
@@ -94,7 +99,7 @@ export default async function AdminWhtChasePage({
     // Oldest first when chasing pending; newest first otherwise so recent
     // additions surface for staff doing same-day work.
     .order("created_at", { ascending: status === "pending" })
-    .limit(100);
+    .range(from, to);
 
   const { data: rawRows, count: total } = status === "all"
     ? await baseQuery
@@ -270,11 +275,13 @@ export default async function AdminWhtChasePage({
         )}
       </section>
 
-      {total != null && total > 100 && (
-        <p className="text-xs text-muted">
-          แสดง 100 รายการแรก จากทั้งหมด {total.toLocaleString("th-TH")} รายการ
-        </p>
-      )}
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={total ?? 0}
+        basePath="/admin/wht"
+        params={{ status: statusParam }}
+      />
 
       <aside className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 space-y-1">
         <div className="font-semibold">⚠️ Reminder — ทำไมต้องตามใบ 50 ทวิ</div>

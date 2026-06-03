@@ -16,6 +16,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { nowMs, cutoffIsoDaysAgo } from "@/lib/datetime-helpers";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -54,10 +56,18 @@ const TRANSPORT_LABEL: Record<string, string> = {
   "3": "แอร์",
 };
 
-export default async function PrepareOverduePage() {
+export default async function PrepareOverduePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   await requireAdmin(["ops", "accounting", "super"]);
 
+  const sp = await searchParams;
   const admin = createAdminClient();
+
+  const page = parsePage(sp.page);
+  const { from, to } = pageRange(page);
 
   // 3-day prep SLA: rows arrived (fstatus='4') more than 3 days ago and
   // still haven't moved to '6' (เตรียมส่ง) or '7' (ส่งแล้ว) — since this
@@ -65,23 +75,19 @@ export default async function PrepareOverduePage() {
   // result set.
   const cutoff = cutoffIsoDaysAgo(3);
 
-  // Exact total — Wave 10 bug-fix 2026-05-23 (was using rows.length).
-  const { count: breachCount } = await admin
-    .from("tb_forwarder")
-    .select("id", { count: "exact", head: true })
-    .eq("fstatus", "4")
-    .lt("fdatestatus4", cutoff);
-
-  const { data: rowsRaw, error } = await admin
+  // Exact total via count:"exact" on the same query — Wave 10 bug-fix
+  // 2026-05-23 (was using rows.length).
+  const { data: rowsRaw, error, count: breachCount } = await admin
     .from("tb_forwarder")
     .select(
       "id,fdate,fdatestatus4,fstatus,fcabinetnumber,ftrackingchn,ftrackingth," +
         "fwarehousechina,ftransporttype,fweight,fvolume,ftotalprice,fnote,userid",
+      { count: "exact" },
     )
     .eq("fstatus", "4")
     .lt("fdatestatus4", cutoff)
     .order("fdatestatus4", { ascending: true })
-    .limit(200);
+    .range(from, to);
 
   const rows = (rowsRaw ?? []) as unknown as FwdRow[];
 
@@ -116,8 +122,7 @@ export default async function PrepareOverduePage() {
         </div>
         <p className="mt-1 text-xs text-muted">
           tb_forwarder · fstatus=&apos;4&apos; (ถึงไทยแล้ว) AND fdatestatus4 &lt; NOW() − 3 วัน
-          (ยังไม่ย้ายไป &apos;6&apos; เตรียมส่ง หรือ &apos;7&apos; ส่งแล้ว) · เรียงเก่าสุดก่อน ·
-          จำกัด 200 แถว
+          (ยังไม่ย้ายไป &apos;6&apos; เตรียมส่ง หรือ &apos;7&apos; ส่งแล้ว) · เรียงเก่าสุดก่อน
         </p>
       </div>
 
@@ -212,6 +217,13 @@ export default async function PrepareOverduePage() {
           </div>
         )}
       </div>
+
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={breachCount ?? 0}
+        basePath="/admin/qa/prepare-overdue"
+      />
 
       <p className="text-[11px] text-muted">
         Wave 10 Group B · SLA-breach audit · drill-in → /admin/forwarders เพื่อเปลี่ยน fstatus

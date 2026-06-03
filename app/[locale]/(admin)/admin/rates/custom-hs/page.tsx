@@ -30,6 +30,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import { HsRateEditForm, type HsCellInitial } from "./edit-form";
 
 export const dynamic = "force-dynamic";
@@ -68,7 +70,7 @@ type URow = {
   coID: string | null;
 };
 
-type SP = { userid?: string; q?: string };
+type SP = { userid?: string; q?: string; page?: string };
 
 function cellKey(r: { sourcewarehouse: string; rtransporttype: string; rproductstype: string }) {
   return `${r.sourcewarehouse}|${r.rtransporttype}|${r.rproductstype}`;
@@ -130,12 +132,14 @@ export default async function CustomHsRatesPage({
 
   const admin = createAdminClient();
 
-  // History list (search by userid if ?q=)
+  // History list (search by userid if ?q=) — paginated 50/page (2026-06-04).
+  const page = parsePage(sp.page);
+  const { from, to } = pageRange(page);
   let historyQ = admin
     .from("tb_customrate_hs")
     .select("id,userid,date,adminid")
     .order("date", { ascending: false })
-    .limit(200);
+    .range(from, to);
   if (sp.q) historyQ = historyQ.eq("userid", sp.q.trim().toUpperCase());
   const { data: histRaw, error: histRawErr } = await historyQ;
   if (histRawErr) {
@@ -277,6 +281,13 @@ export default async function CustomHsRatesPage({
               </table>
             </div>
           )}
+          <Pagination
+            page={page}
+            pageSize={DEFAULT_PAGE_SIZE}
+            total={totalHistoryCount ?? 0}
+            basePath="/admin/rates/custom-hs"
+            params={{ q: sp.q, userid: sp.userid }}
+          />
         </div>
       </section>
 

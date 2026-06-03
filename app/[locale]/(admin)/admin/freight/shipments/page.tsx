@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import {
   FREIGHT_SHIPMENT_STATUSES, FREIGHT_SHIPMENT_STATUS_LABEL,
   FREIGHT_TRANSPORT_MODE_LABEL,
@@ -53,7 +55,7 @@ function thb(n: number | null): string {
 export default async function AdminFreightShipmentsListPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; q?: string }>;
+  searchParams: Promise<{ status?: string; q?: string; page?: string }>;
 }) {
   await requireAdmin(["super", "ops", "sales_admin", "accounting"]);
   const sp = await searchParams;
@@ -61,6 +63,8 @@ export default async function AdminFreightShipmentsListPage({
     ? (sp.status as FreightShipmentStatus)
     : null;
   const q = sp.q?.trim() ?? "";
+  const page = parsePage(sp.page);
+  const { from, to } = pageRange(page);
 
   const admin = createAdminClient();
   let query = admin
@@ -69,16 +73,16 @@ export default async function AdminFreightShipmentsListPage({
       id, job_no, status, transport_mode, container_code, carrier_container_no,
       bl_no, commercial_value_thb, created_at, source_quote_id,
       profile:profiles!profile_id ( member_code, first_name, last_name, company_name )
-    `)
+    `, { count: "exact" })
     .order("created_at", { ascending: false })
-    .limit(200);
+    .range(from, to);
   if (status) query = query.eq("status", status);
   if (q) {
     query = query.or(
       `job_no.ilike.%${q}%,container_code.ilike.%${q}%,carrier_container_no.ilike.%${q}%,bl_no.ilike.%${q}%`,
     );
   }
-  const { data: raw, error: rawErr } = await query;
+  const { data: raw, error: rawErr, count: total } = await query;
   if (rawErr) {
     console.error(`[freight_shipments list] failed`, { code: rawErr.code, message: rawErr.message });
   }
@@ -225,6 +229,14 @@ export default async function AdminFreightShipmentsListPage({
           </table>
         )}
       </div>
+
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={total ?? 0}
+        basePath="/admin/freight/shipments"
+        params={{ status: status ?? undefined, q: q || undefined }}
+      />
     </main>
   );
 }

@@ -16,6 +16,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { nowMs } from "@/lib/datetime-helpers";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -47,9 +49,14 @@ const TRANSPORT_LABEL: Record<string, string> = {
   "3": "แอร์",
 };
 
-export default async function OwnerlessGoodsPage() {
+export default async function OwnerlessGoodsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   await requireAdmin(["ops", "accounting", "super"]);
 
+  const sp = await searchParams;
   const admin = createAdminClient();
 
   // PostgREST `.or()` can't express "userid IS NULL OR userid = ''" in
@@ -105,6 +112,13 @@ export default async function OwnerlessGoodsPage() {
     })
     .slice(0, 200);
 
+  // PERF (2026-06-03): client-slice the displayed table (50/page). The
+  // header breach chip stays full-set-correct (it uses the two exact counts
+  // above); only the rendered window is paginated over the fetched `rows`.
+  const page = parsePage(sp.page);
+  const offset = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
+
   const now = nowMs();
 
   return (
@@ -159,7 +173,7 @@ export default async function OwnerlessGoodsPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
+                {pageRows.map((r) => {
                   const arrivedAt = r.fdatestatus4;
                   const daysSinceArrival = arrivedAt
                     ? Math.floor((now - new Date(arrivedAt).getTime()) / (24 * 60 * 60 * 1000))
@@ -210,6 +224,12 @@ export default async function OwnerlessGoodsPage() {
             </table>
           </div>
         )}
+        <Pagination
+          page={page}
+          pageSize={DEFAULT_PAGE_SIZE}
+          total={rows.length}
+          basePath="/admin/qa/ownerless-goods"
+        />
       </div>
 
       <p className="text-[11px] text-muted">

@@ -27,6 +27,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -61,25 +63,34 @@ function daysSince(iso: string | null): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
 }
 
-export default async function AdminQaChnShopOver2dPage() {
+export default async function AdminQaChnShopOver2dPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   await requireAdmin(["ops", "accounting"]);
 
+  const sp = await searchParams;
   const admin = createAdminClient();
+
+  const page = parsePage(sp.page);
+  const { from, to } = pageRange(page);
 
   const cutoff = new Date(nowMs() - 2 * 24 * 60 * 60 * 1000).toISOString();
 
   // Combined filter: (hdate3 is null AND hdate<cutoff) OR (hdate3<cutoff).
   // PostgREST or() takes a comma-separated condition list using its own
   // operator syntax. and() nests the null-and-old-hdate branch.
-  const { data: rowsRaw, error } = await admin
+  const { data: rowsRaw, error, count: breachCount } = await admin
     .from("tb_header_order")
     .select(
       "id,hno,hdate,hdate3,htitle,hcount,hstatus,htotalpricechn,hnote,htransporttype,userid",
+      { count: "exact" },
     )
     .eq("hstatus", "3")
     .or(`and(hdate3.is.null,hdate.lt.${cutoff}),hdate3.lt.${cutoff}`)
     .order("hdate3", { ascending: true, nullsFirst: true })
-    .limit(200);
+    .range(from, to);
 
   const rows = (rowsRaw ?? []) as unknown as HRow[];
 
@@ -95,12 +106,6 @@ export default async function AdminQaChnShopOver2dPage() {
     }
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
   }
-
-  const { count: breachCount } = await admin
-    .from("tb_header_order")
-    .select("id", { count: "exact", head: true })
-    .eq("hstatus", "3")
-    .or(`and(hdate3.is.null,hdate.lt.${cutoff}),hdate3.lt.${cutoff}`);
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
@@ -239,8 +244,16 @@ export default async function AdminQaChnShopOver2dPage() {
         )}
       </div>
 
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={breachCount ?? 0}
+        basePath="/admin/qa/chn-shop-over-2d"
+        params={{}}
+      />
+
       <p className="text-[11px] text-muted">
-        แสดงไม่เกิน 200 แถว · เรียง <code>hdate3</code> ASC (นานสุดขึ้นก่อน) · ติดต่อร้านจีน / ขอเลขแทร็ก / เลื่อนเป็นสถานะ 4
+        เรียง <code>hdate3</code> ASC (นานสุดขึ้นก่อน) · ติดต่อร้านจีน / ขอเลขแทร็ก / เลื่อนเป็นสถานะ 4
       </p>
     </main>
   );

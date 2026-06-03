@@ -19,21 +19,41 @@
  * a missing badge must not break admin chrome.
  */
 
+import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import type { BadgeCounts } from "@/lib/admin/sidebar-menu";
+import { type BadgeCounts, ADMIN_SIDEBAR_COUNTS_TAG } from "@/lib/admin/sidebar-menu";
 import { logger } from "@/lib/logger";
 
 /**
  * Computes the live-count badge set for the admin sidebar.
  * Call from the (admin) layout (Server Component) — the result is passed
  * to `<AdminSidebar counts={...}>`.
+ *
+ * **Perf (2026-06-03):** the 22-query count fan-out is wrapped in
+ * `unstable_cache` (60-second TTL, global key — the badges are total
+ * counts, not RLS-scoped to the admin, so one cache entry serves every
+ * admin). Without this, every (admin) layout re-render re-ran all 22
+ * `head:true` count queries before the sidebar could paint. `requireAdmin`
+ * stays OUTSIDE the cache (it reads cookies — dynamic, uncacheable).
  */
 export async function getSidebarCounts(): Promise<BadgeCounts> {
   // Gate: any active admin (the layout already called requireAdmin, but
-  // this keeps the action self-guarding if called elsewhere).
+  // this keeps the action self-guarding if called elsewhere). Must run
+  // outside the cache — it reads per-request auth cookies.
   await requireAdmin();
+  return getSidebarCountsCached();
+}
 
+/** The cached count fan-out — see `getSidebarCounts` for why the gate is
+ *  split out. Keyed globally (counts are not per-admin). */
+const getSidebarCountsCached = unstable_cache(
+  computeSidebarCounts,
+  ["admin-sidebar-counts"],
+  { revalidate: 60, tags: [ADMIN_SIDEBAR_COUNTS_TAG] },
+);
+
+async function computeSidebarCounts(): Promise<BadgeCounts> {
   const admin = createAdminClient();
   const n = (v: { count: number | null } | { count?: number | null }) =>
     ("count" in v ? v.count : null) ?? 0;

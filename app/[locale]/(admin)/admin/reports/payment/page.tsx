@@ -34,6 +34,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton } from "@/components/admin/csv-button";
+import { parsePage } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -114,7 +116,7 @@ type SP = {
   payStatus?: string;
   date_from?: string;
   date_to?: string;
-  offset?: string;
+  page?: string;
 };
 
 // ── Page ─────────────────────────────────────────────────────────────────
@@ -135,9 +137,9 @@ export default async function AdminReportPaymentPage({
   const dateTo    = sp.date_to   ?? lastDayOfThisMonth();
   const payStatus = sp.payStatus ?? "all";
 
-  // Wave 24 #185 — parse + clamp ?offset= (default 0, never negative).
-  const offsetRaw = Number(sp.offset ?? 0);
-  const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? Math.floor(offsetRaw) : 0;
+  // Pagination (2026-06-03 · unified with shared <Pagination> · ?page=N).
+  const page = parsePage(sp.page);
+  const offset = (page - 1) * PAGE_SIZE;
 
   // 1) Fetch tb_payment within window + status filter, paginated 200/page.
   //    Wave 24 #185: dropped the silent `.limit(1000)` cap → `.range()` +
@@ -215,26 +217,9 @@ export default async function AdminReportPaymentPage({
   const total = rows.reduce((s, r) => s + Number(r.paythb ?? 0), 0);
   const successCount = rows.filter((r) => r.paystatus === "2").length;
 
-  // Wave 24 #185 — pagination boundary + Prev/Next href builder. Mirrors
-  // /admin/reports/forwarder commit 399ed01 (which mirrors cnt-hs/page.tsx).
-  const hasPrev = offset > 0;
-  const hasNext = offset + rows.length < totalRows;
-  const prevOffset = Math.max(0, offset - PAGE_SIZE);
-  const nextOffset = offset + PAGE_SIZE;
-  const pageNumber = Math.floor(offset / PAGE_SIZE) + 1;
-  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+  // Row-range labels for the "หน้านี้" card (footer pager = shared <Pagination>).
   const rangeFrom = totalRows === 0 ? 0 : offset + 1;
   const rangeTo = Math.min(offset + rows.length, totalRows);
-  const buildPageHref = (newOffset: number): string => {
-    const params = new URLSearchParams();
-    if (sp.report_paymentTable) params.set("report_paymentTable", sp.report_paymentTable);
-    if (sp.payStatus)           params.set("payStatus", sp.payStatus);
-    if (sp.date_from)           params.set("date_from", sp.date_from);
-    if (sp.date_to)             params.set("date_to", sp.date_to);
-    if (newOffset > 0)          params.set("offset", String(newOffset));
-    const qs = params.toString();
-    return qs ? `/admin/reports/payment?${qs}` : "/admin/reports/payment";
-  };
 
   // 4) CSV (page-scoped — see file header doc for why).
   const csvRows = rows.map((r) => ({
@@ -418,51 +403,18 @@ export default async function AdminReportPaymentPage({
               </table>
             </div>
 
-            {/* Wave 24 #185 — Prev/Next footer (only when there's >1 page). */}
-            {(hasPrev || hasNext) && (
-              <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs text-muted flex-wrap">
-                <span>
-                  หน้า <span className="font-semibold text-foreground">{pageNumber.toLocaleString("th-TH")}</span> จาก{" "}
-                  <span className="font-semibold text-foreground">{totalPages.toLocaleString("th-TH")}</span>
-                  {" · "}
-                  แสดง <span className="font-semibold text-foreground">{rangeFrom.toLocaleString("th-TH")}</span>
-                  –<span className="font-semibold text-foreground">{rangeTo.toLocaleString("th-TH")}</span> จากทั้งหมด{" "}
-                  <span className="font-semibold text-foreground">{totalRows.toLocaleString("th-TH")}</span>
-                </span>
-                <div className="flex gap-2">
-                  {hasPrev ? (
-                    <Link
-                      href={buildPageHref(prevOffset)}
-                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
-                    >
-                      ← ก่อนหน้า
-                    </Link>
-                  ) : (
-                    <span
-                      aria-disabled="true"
-                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium opacity-40 pointer-events-none"
-                    >
-                      ← ก่อนหน้า
-                    </span>
-                  )}
-                  {hasNext ? (
-                    <Link
-                      href={buildPageHref(nextOffset)}
-                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
-                    >
-                      ถัดไป →
-                    </Link>
-                  ) : (
-                    <span
-                      aria-disabled="true"
-                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium opacity-40 pointer-events-none"
-                    >
-                      ถัดไป →
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
+            <Pagination
+              page={page}
+              pageSize={PAGE_SIZE}
+              total={totalRows}
+              basePath="/admin/reports/payment"
+              params={{
+                report_paymentTable: sp.report_paymentTable,
+                payStatus: sp.payStatus,
+                date_from: sp.date_from,
+                date_to: sp.date_to,
+              }}
+            />
           </>
         )}
       </div>

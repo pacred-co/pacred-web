@@ -19,6 +19,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import { JuristicActions } from "./juristic-actions";
 
 // requireAdmin reads auth cookies → force-dynamic (AGENTS.md §11).
@@ -58,7 +60,7 @@ type URow = {
 export default async function AdminJuristicCheckPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; page?: string }>;
 }) {
   // Legacy review roles (CEO/Manager/QA/Accounting/ITDT) → Pacred equivalents.
   await requireAdmin(["super", "manager", "accounting", "qa", "ops", "sales_admin"]);
@@ -69,14 +71,20 @@ export default async function AdminJuristicCheckPage({
   // Default to the pending queue (legacy `corporateStatus=1`); chips switch it.
   const statusFilter = sp.status ? STATUS_PARAM[sp.status] : "1";
 
+  const page = parsePage(sp.page);
+  const { from, to } = pageRange(page);
+
   let q = admin
     .from("tb_corporate")
-    .select("id, userid, corporatenumber, corporatename, corporateaddress, corporatestatus, corporatefile, corporatefile20, cpdatecreate")
+    .select(
+      "id, userid, corporatenumber, corporatename, corporateaddress, corporatestatus, corporatefile, corporatefile20, cpdatecreate",
+      { count: "exact" },
+    )
     .order("cpdatecreate", { ascending: false })
-    .limit(200);
+    .range(from, to);
   if (statusFilter) q = q.eq("corporatestatus", statusFilter);
 
-  const { data, error } = await q;
+  const { data, error, count: total } = await q;
   if (error) {
     console.error(`[juristic-check tb_corporate list] failed`, { code: error.code, message: error.message });
     throw new Error(`juristic-check: failed to load tb_corporate — ${error.code ?? "unknown"}: ${error.message}`);
@@ -199,6 +207,14 @@ export default async function AdminJuristicCheckPage({
           </div>
         )}
       </div>
+
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={total ?? 0}
+        basePath="/admin/juristic-check"
+        params={{ status: sp.status }}
+      />
     </main>
   );
 }

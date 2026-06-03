@@ -5,6 +5,8 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { Wallet as WalletIcon, Plus, History, Banknote, CreditCard, ArrowDownToLine, ChevronRight, Home } from "lucide-react";
 import { CreditLinePanel } from "../credit-panel";
 import { CancelPendingButton } from "./cancel-pending-button";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 // ADR-0018 §D-3 #1: distinguish a rebuilt `wallet_transactions` row (UUID id)
 // from a legacy `tb_wallet_hs` row (numeric id). Only UUID rows support the
@@ -64,7 +66,7 @@ const TAB_DEFS: { key: TabKey; label: string; icon: React.ReactNode; kinds: stri
   { key: "withdraw", label: "รายการถอนเงิน",     icon: <ArrowDownToLine className="w-4 h-4" />,   kinds: ["withdraw"] },
 ];
 
-export default async function WalletHistoryPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+export default async function WalletHistoryPage({ searchParams }: { searchParams: Promise<{ q?: string; page?: string }> }) {
   const sp = await searchParams;
   const [walletRes, txRes, userData, creditRes] = await Promise.all([
     getWallet(),
@@ -90,6 +92,12 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
     acc[tab.key] = tab.kinds === null ? allTx.length : allTx.filter((t) => tab.kinds!.includes(t.kind)).length;
     return acc;
   }, {} as Record<TabKey, number>);
+
+  // PERF (2026-06-03): paginate the displayed rows (50/page). Tab counts above
+  // stay full-set-correct (computed over allTx); only the rendered rows slice.
+  const page = parsePage(sp.page);
+  const offset = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageTxs = txs.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
   return (
     <>
@@ -234,7 +242,7 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {txs.map((tx) => {
+                  {pageTxs.map((tx) => {
                     const created = new Date(tx.created_at);
                     const isPositive = tx.amount >= 0;
                     return (
@@ -279,6 +287,13 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
                   })}
                 </tbody>
               </table>
+              <Pagination
+                page={page}
+                pageSize={DEFAULT_PAGE_SIZE}
+                total={txs.length}
+                basePath="/wallet/history"
+                params={{ q: sp.q }}
+              />
             </div>
           )}
         </div>

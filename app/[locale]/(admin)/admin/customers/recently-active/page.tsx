@@ -18,6 +18,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -48,11 +50,12 @@ function daysSince(iso: string | null): number | null {
 export default async function RecentlyActiveCustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string }>;
+  searchParams: Promise<{ type?: string; page?: string }>;
 }) {
   await requireAdmin(["ops", "sales_admin", "accounting"]);
 
   const sp = await searchParams;
+  const page = parsePage(sp.page);
   const type: ActType =
     sp.type === "personal" || sp.type === "juristic" ? sp.type : "all";
 
@@ -84,6 +87,12 @@ export default async function RecentlyActiveCustomersPage({
     const d = daysSince(r.userLastLogin);
     return d !== null && d > 90;
   }).length;
+
+  // PERF (2026-06-03): paginate the DISPLAYED table (50/page). The summary
+  // cards above stay full-set-correct (per-row JS aggregates over the full
+  // fetched `rows`); only the rendered rows are sliced.
+  const offset = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
@@ -153,7 +162,7 @@ export default async function RecentlyActiveCustomersPage({
                 </td>
               </tr>
             ) : (
-              rows.map((r) => {
+              pageRows.map((r) => {
                 const isJuristic = r.userCompany === "1";
                 const name = `${r.userName ?? ""} ${r.userLastName ?? ""}`.trim() || "—";
                 const days = daysSince(r.userLastLogin);
@@ -204,6 +213,14 @@ export default async function RecentlyActiveCustomersPage({
           </tbody>
         </table>
       </section>
+
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={rows.length}
+        basePath="/admin/customers/recently-active"
+        params={{ type: sp.type }}
+      />
     </main>
   );
 }
