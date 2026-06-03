@@ -362,31 +362,47 @@ export default async function CombineBillPrintPage({
       </div>
 
       <main className="print-area mx-auto max-w-[800px] p-8 space-y-5">
-        {/* Header row — 2026-06-03 ภูม flag: align legal company info with
-            the receipt format (full Thai+EN legal name + Tax ID + address +
-            phone). ใบส่งสินค้า keeps operational structure (consignee +
-            carrier + line items) but the issuer header gets the same
-            accountancy-grade identity block as ใบเสร็จ so warehouse staff
-            can hand a delivery slip to a juristic recipient who needs it
-            for their own bookkeeping. */}
-        <div className="flex items-start justify-between border-b-2 border-black pb-4 gap-4">
-          <div className="flex-1">
-            <h1 className="text-3xl font-black text-primary-700">{SITE_NAME}</h1>
-            <p className="text-sm font-semibold mt-0.5">{SITE_LEGAL_NAME_TH}</p>
-            <p className="text-xs text-gray-700">{SITE_LEGAL_NAME}</p>
-            <p className="text-xs mt-1">เลขประจำตัวผู้เสียภาษี / Tax ID: <span className="font-mono">{TAX_ID}</span></p>
-            <p className="text-xs">{ADDRESSES.office.full}</p>
-            <p className="text-xs">
+        {/* Header — 2026-06-03 ภูม flag round-2: standardised layout (ภูม
+            screenshot showed the company-info column getting squeezed to a
+            narrow 17%-width column on smaller viewports — flex with
+            text-right children was collapsing wrong). Rewritten as
+            grid-cols-12 with explicit fractions: 7/12 for issuer block,
+            5/12 for doc title + bill no — predictable on any width.
+            Issuer block flows as INLINE text (legal name pair on one line,
+            then TaxID line, then address line, then phone/email line) so
+            address wrapping is graceful instead of cramming into a
+            narrow column. */}
+        <div className="grid grid-cols-12 items-start border-b-2 border-black pb-4 gap-6">
+          {/* Issuer block (7/12) — Pacred legal identity */}
+          <div className="col-span-7">
+            <h1 className="text-3xl font-black text-primary-700 leading-tight">{SITE_NAME}</h1>
+            <p className="text-sm font-semibold mt-1">{SITE_LEGAL_NAME_TH} · <span className="font-normal text-gray-700">{SITE_LEGAL_NAME}</span></p>
+            <p className="text-xs mt-1">
+              เลขประจำตัวผู้เสียภาษี / Tax ID: <span className="font-mono">{TAX_ID}</span>
+            </p>
+            <p className="text-xs text-gray-700 mt-0.5">{ADDRESSES.office.full}</p>
+            <p className="text-xs text-gray-700 mt-0.5">
               โทร {CONTACT.phoneCompanyDisplay} · {CONTACT.email}
             </p>
           </div>
-          <div className="text-right">
-            <h2 className="text-xl font-bold">ใบส่งสินค้า</h2>
-            <p className="text-xs text-gray-500">Delivery Note</p>
-            <p className="font-mono text-base text-gray-700 mt-1">
-              เลขที่ #{ids.join(", #")}
-            </p>
-            <p className="text-xs text-gray-600">วันที่: {headerDateLabel}</p>
+          {/* Doc title + bill-no (5/12) — right-aligned */}
+          <div className="col-span-5 text-right">
+            <h2 className="text-2xl font-bold">ใบส่งสินค้า</h2>
+            <p className="text-xs text-gray-500 -mt-0.5">Delivery Note</p>
+            {/* Bill-no list: when ≤4 ids show inline; when >4 collapse with count
+                + first 2 + "และอีก N รายการ" so the header doesn't stretch wider
+                than the right column on big batches (ภูม screenshot showed an
+                8-id batch wrapping awkwardly at the seam). */}
+            {ids.length <= 4 ? (
+              <p className="font-mono text-sm text-gray-700 mt-2">
+                เลขที่ #{ids.join(", #")}
+              </p>
+            ) : (
+              <p className="font-mono text-sm text-gray-700 mt-2 leading-snug">
+                เลขที่ #{ids.slice(0, 2).join(", #")} <span className="text-gray-500">และอีก {ids.length - 2} รายการ</span>
+              </p>
+            )}
+            <p className="text-xs text-gray-600 mt-1">วันที่: {headerDateLabel}</p>
           </div>
         </div>
 
@@ -418,25 +434,34 @@ export default async function CombineBillPrintPage({
           </div>
         </section>
 
-        {/* Items table (legacy printBill.php L189-198 header + L274-282 body) */}
+        {/* Items table — 2026-06-03 ภูม flag: split "ลำดับ ITEM" into two
+            columns (just running No. + Pacred internal order# #{f.id}) and
+            rename "รายการ DESCRIPTION" → "รหัสพัสดุ Tracking" since the
+            content IS the 中国 tracking number, not a free-text description.
+            Matches the receipt-print table column shape so warehouse staff
+            see the same layout across both docs. */}
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="bg-gray-100 text-center">
-              <th className="border border-gray-400 px-2 py-1 w-16">ลำดับ<br />ITEM</th>
-              <th className="border border-gray-400 px-2 py-1">รายการ<br />DESCRIPTION</th>
-              <th className="border border-gray-400 px-2 py-1 w-24">ที่ตั้ง<br />LOCATION</th>
-              <th className="border border-gray-400 px-2 py-1 w-20">น้ำหนัก<br />kg</th>
-              <th className="border border-gray-400 px-2 py-1 w-20">ปริมาตร<br />cbm</th>
-              <th className="border border-gray-400 px-2 py-1 w-16">จำนวน<br />BOX</th>
+              <th className="border border-gray-400 px-2 py-1 w-12">ลำดับ<br /><span className="text-[10px] font-normal text-gray-500">No.</span></th>
+              <th className="border border-gray-400 px-2 py-1 w-28">เลขที่ออเดอร์<br /><span className="text-[10px] font-normal text-gray-500">Order No.</span></th>
+              <th className="border border-gray-400 px-2 py-1">รหัสพัสดุ<br /><span className="text-[10px] font-normal text-gray-500">Tracking</span></th>
+              <th className="border border-gray-400 px-2 py-1 w-24">ที่ตั้ง<br /><span className="text-[10px] font-normal text-gray-500">Location</span></th>
+              <th className="border border-gray-400 px-2 py-1 w-20">น้ำหนัก<br /><span className="text-[10px] font-normal text-gray-500">Wt./kg</span></th>
+              <th className="border border-gray-400 px-2 py-1 w-20">ปริมาตร<br /><span className="text-[10px] font-normal text-gray-500">Vol./cbm</span></th>
+              <th className="border border-gray-400 px-2 py-1 w-16">จำนวน<br /><span className="text-[10px] font-normal text-gray-500">Box</span></th>
             </tr>
           </thead>
           <tbody>
             {orderedForwarders.map((f, idx) => (
               <tr key={f.id}>
-                <td className="border border-gray-400 px-2 py-1 text-center font-mono text-xs">
-                  {idx + 1}:#{f.id}
+                <td className="border border-gray-400 px-2 py-1 text-center">
+                  {idx + 1}
                 </td>
-                <td className="border border-gray-400 px-2 py-1 break-all">
+                <td className="border border-gray-400 px-2 py-1 text-center font-mono text-xs">
+                  #{f.id}
+                </td>
+                <td className="border border-gray-400 px-2 py-1 break-all font-mono text-xs">
                   {f.ftrackingchn || "—"}
                 </td>
                 <td className="border border-gray-400 px-2 py-1 text-center text-xs">
@@ -456,7 +481,8 @@ export default async function CombineBillPrintPage({
           </tbody>
           <tfoot>
             <tr className="bg-gray-100 font-bold">
-              <td colSpan={3} className="border border-gray-400 px-2 py-1 text-right">
+              {/* colSpan=4 now (ลำดับ + เลขที่ออเดอร์ + รหัสพัสดุ + ที่ตั้ง) */}
+              <td colSpan={4} className="border border-gray-400 px-2 py-1 text-right">
                 รวม
               </td>
               <td className="border border-gray-400 px-2 py-1 text-right font-mono">
