@@ -159,9 +159,9 @@ export default async function ImportChinaLclPage({
         {/* 3 — Hero intro (h1 + red LINE scope-banner + bullet card) */}
         <LclHero />
 
-        {/* 4 — Pricing — same as home page (Cargo / Freight toggle + real rates),
-            country picker hidden (this page is China-only) */}
-        <PricingSection hideCountryPicker />
+        {/* 4 — Pricing — home-page rates, LCL-only: Cargo-LCL + Freight-LCL
+            stacked (no toggle, no FCL, no country picker) */}
+        <PricingSection lclExpanded />
 
         {/* 5 — 5 STEPS */}
         <LclSteps />
