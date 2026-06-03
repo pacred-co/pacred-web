@@ -73,6 +73,7 @@ import { TbForwarderPaymentPanel } from "../tb-payment-panel";
 import { TbForwarderEditPanel, type SavedAddressOption } from "../tb-edit-panel";
 import { TbForwarderDriverAssignPanel, type DriverAssignmentState } from "../tb-driver-assign-panel";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
+import { ForwarderItemsTable } from "../forwarder-items-table";
 
 export const dynamic = "force-dynamic";
 
@@ -690,6 +691,23 @@ export default async function AdminForwarderEditPage({
           )}
         </div>
       </section>
+
+      {/* ── 4.5 ITEMS TABLE ── PCS-style line-item display (2026-06-03 ภูม flag)
+          For shop-spawned forwarders (reforder set) renders the tb_order rows
+          grouped by Chinese vendor with thumbnails + ¥ pricing. Otherwise
+          shows an empty-state with cover + box dimensions. */}
+      <ForwarderItemsTable
+        forwarderId={r.id}
+        forwarderNo={r.fidorco ?? String(r.id)}
+        reforder={r.reforder}
+        fdetail={r.fdetail}
+        fcover={r.fcover}
+        fwidth={r.fwidth === null ? null : Number(r.fwidth)}
+        flength={r.flength === null ? null : Number(r.flength)}
+        fheight={r.fheight === null ? null : Number(r.fheight)}
+        famount={r.famount}
+        mode="edit"
+      />
 
       {/* ── 5. PRIMARY ACTION — always-open, eye-catching ── */}
       <section className="rounded-2xl border-2 border-primary-300 bg-primary-50/30 dark:bg-primary-950/20 shadow-md overflow-hidden">
