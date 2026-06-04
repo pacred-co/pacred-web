@@ -204,15 +204,18 @@ export function TbForwarderEditPanel(p: Props) {
     );
   }
 
-  function onSaveTaxDocMode() {
+  async function onSaveTaxDocMode() {
     if (taxDocMode === currentMode) { setMsg({ kind: "err", text: "ไม่มีการเปลี่ยนแปลง (โหมดเอกสารเดิม)" }); return; }
     const meta = TAX_DOC_MODE_META[taxDocMode];
-    if (!window.confirm(
+    // 2026-06-05 ภูม §0f sweep — replace native window.confirm with the
+    // global styled `confirm()` (centered Pacred dialog · matches the
+    // rest of the admin's confirm-before-mutate pattern).
+    if (!(await confirm(
       `เปลี่ยนโหมดเอกสารภาษีเป็น "${meta.title}" ?\n\n` +
       `${meta.hint}\n` +
       `ฐาน VAT: ${meta.vatBase}\n\n` +
       `(มีผลตอนชำระเงิน — ระบบจะออกเอกสารตามโหมดนี้ · ไม่กระทบเอกสารที่ออกไปแล้ว)`,
-    )) return;
+    ))) return;
     run(() => adminUpdateForwarderTaxDocMode({ fId: p.fId, mode: taxDocMode }), `ตั้งโหมดเอกสารเป็น ${meta.short} สำเร็จ`);
   }
 
