@@ -75,5 +75,15 @@ assertEq("CIF LCL customs commission = 5% of 8,511", cifLcl4.commission.customs,
 assertEq("CIF LCL no freight commission", cifLcl4.commission.freight, 0);
 assertEq("net = gross − 3% WHT", cifLcl4.commission.net, round2(cifLcl4.commission.gross * 0.97));
 
+// ── (h) chinaCostPending — honesty flag (cost side not modelled yet) ──
+section("(h) chinaCostPending flag");
+// CIF/FOB = Thai-only scope → those costs ARE modelled → not pending.
+assertEq("CIF LCL chinaCostPending = false", cifLcl4.chinaCostPending, false);
+assertTrue("EXW LCL chinaCostPending = true (origin+freight cost 0)", exwLcl.chinaCostPending);
+// air freight carries a representative cost > 0, and CFR has no origin lines →
+// for an air CFR the flag stays false.
+assertEq("CFR AIR chinaCostPending = false (air freight cost modelled)",
+  composeFreightQuote({ mode: "air", incoterm: "CFR", kgm: 100 }).chinaCostPending, false);
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} freight rate-engine: ${pass} pass / ${fail} fail`);
 if (fail > 0) process.exit(1);

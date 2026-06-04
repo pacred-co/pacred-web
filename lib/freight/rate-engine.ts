@@ -62,6 +62,15 @@ export type FreightQuoteResult = {
   total: number; // subtotalSell + vat
   marginCapThb: number;
   marginExceedsCap: boolean;
+  /**
+   * true when the quote bills a China-side freight/origin line whose COST isn't
+   * modelled yet (the carrier rate is a monthly, FX-dependent per-port/carrier
+   * matrix → lives in a future admin rate table, NOT hardcoded). When true,
+   * `profit` is a GROSS figure (sell − Thai-local cost only) and must be shown
+   * as "ก่อนหักต้นทุนเฟรทจีน", never as net. false for CIF/FOB (Thai-only scope:
+   * those costs ARE modelled → profit is reliable).
+   */
+  chinaCostPending: boolean;
   commission: {
     freight: number;
     customs: number;
@@ -128,6 +137,14 @@ export function composeFreightQuote(spec: FreightQuoteSpec): FreightQuoteResult 
   const marginCapThb = FREIGHT_MARGIN_CAP_PER_CONTAINER * containers;
   const marginExceedsCap = profit > marginCapThb;
 
+  // The China-side carrier/origin cost is a monthly, FX-dependent matrix (not
+  // modelled here yet) — if we bill any freight/origin line at cost 0, `profit`
+  // is gross, not net. (Air freight carries a representative cost > 0, so an
+  // air-only freight scope won't trip this.)
+  const chinaCostPending = lines.some(
+    (l) => (l.scope === "freight" || l.scope === "origin") && l.unitCost === 0,
+  );
+
   // ── Commission split (1% freight · 5% customs · 5% doc · −3% WHT) ──
   const sumScope = (s: ScopeCategory) =>
     lines.filter((l) => l.scope === s).reduce((a, l) => a + l.sell, 0);
@@ -151,6 +168,7 @@ export function composeFreightQuote(spec: FreightQuoteSpec): FreightQuoteResult 
     total,
     marginCapThb,
     marginExceedsCap,
+    chinaCostPending,
     commission: { freight: commFreight, customs: commCustoms, doc: commDoc, gross, wht, net },
   };
 }

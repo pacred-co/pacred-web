@@ -125,9 +125,11 @@ function RateCardAutoFill({
       if (res.ok) {
         const d = res.data;
         if (d) {
+          const profitLabel = d.freightCostPending ? "กำไรขั้นต้น" : "กำไร";
           setDone(
-            `เติม ${d.count} รายการ · ยอดขาย ฿${d.subtotalSell.toLocaleString("th-TH")} · กำไร ฿${d.profit.toLocaleString("th-TH")}` +
-            (d.marginExceedsCap ? ` ⚠️ กำไรเกินเพดาน ฿${d.marginCapThb.toLocaleString("th-TH")}/ตู้` : ""),
+            `เติม ${d.count} รายการ · ยอดขาย ฿${d.subtotalSell.toLocaleString("th-TH")} · ${profitLabel} ฿${d.profit.toLocaleString("th-TH")}` +
+            (d.marginExceedsCap ? ` ⚠️ ${profitLabel}เกินเพดาน ฿${d.marginCapThb.toLocaleString("th-TH")}/ตู้` : "") +
+            (d.freightCostPending ? " · หมายเหตุ: ยังไม่รวมต้นทุนค่าเฟรท/ต้นทางจีน (อยู่ระหว่างทำตาราง cost)" : ""),
           );
         }
         router.refresh();

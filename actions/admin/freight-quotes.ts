@@ -267,6 +267,8 @@ type ComposeResult = {
   profit: number;
   marginCapThb: number;
   marginExceedsCap: boolean;
+  /** true → `profit` is GROSS (China freight/origin cost not modelled yet). */
+  freightCostPending: boolean;
 };
 
 export async function adminComposeQuoteFromRateCard(
@@ -375,17 +377,19 @@ export async function adminComposeQuoteFromRateCard(
       subtotal_sell:      quote.subtotalSell,
       profit:             quote.profit,
       margin_exceeds_cap: quote.marginExceedsCap,
+      china_cost_pending: quote.chinaCostPending,
     });
 
     revalidateOne(d.freight_quote_id);
     return {
       ok: true,
       data: {
-        count:            rows.length,
-        subtotalSell:     quote.subtotalSell,
-        profit:           quote.profit,
-        marginCapThb:     quote.marginCapThb,
-        marginExceedsCap: quote.marginExceedsCap,
+        count:              rows.length,
+        subtotalSell:       quote.subtotalSell,
+        profit:             quote.profit,
+        marginCapThb:       quote.marginCapThb,
+        marginExceedsCap:   quote.marginExceedsCap,
+        freightCostPending: quote.chinaCostPending,
       },
     };
   });

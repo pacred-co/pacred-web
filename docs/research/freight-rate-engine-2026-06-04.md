@@ -39,16 +39,40 @@ The engine is now reachable + usable, not just a library:
   `เติม N รายการ · ยอดขาย · กำไร` and a ⚠️ flag if profit > 15k/ตู้. Sales review
   + edit + submit-for-approval afterwards (the existing flow is unchanged).
 
-## ⚠️ v1 limitations (next increments)
-1. **Freight COST side** — the model has accurate Thai-local costs but the
-   China-freight *cost* (carrier rate) isn't transcribed yet (sell only) → freight
-   profit is currently overstated. Add the per-POL/POD/carrier cost cards
-   (`AXELRA Cost & Profit & Com.xlsx` FRE-IM-SEA-FCL/LCL/AIR sheets · per-month
-   exchange) for true margin. Then an admin-editable `tb_freight_rate_*` table
-   (the cargo `tb_rate_g_*` pattern).
-2. **Transport = "เช็คตามระยะทางจริง"** — the per-distance Thai truck rate is a
-   representative default; a distance/zone table would refine it.
-3. SEA-FCL/AIR rate cards are partial (representative) — extend from the xlsx.
+## ✅ increment 3 — honesty flag for the un-modelled China cost (SHIPPED)
+We examined the COST workbook (`AXELRA Cost & Profit & Com.xlsx`) to add the
+China-freight cost. **Finding: it can't be honestly hardcoded** — the cost side
+is a **monthly, FX-dependent, per-port × per-carrier USD matrix** (`FRE IM SEA
+FCL/LCL/AIR` sheets: explicit `35 /USD` exchange column · "เรทเดือน เมษายน /
+มิถุนายน 2568" cards · per-carrier RCL/CUL/TSL/WHL rows · rate-expiry dates) plus
+a **markup-tier policy** (`เงื่อนไข จ๊อบการทำงาน!A23 "อัตราการ+กำไร" → เฟรท
+30%/25%/20%/15%/10%`). Snapshotting volatile USD carrier rates into a TS constant
+would go stale immediately and **violate the owner's "อย่ามั่ว"** bar.
+
+So instead of fabricating a cost: `composeFreightQuote()` now returns
+**`chinaCostPending`** — true when the quote bills a freight/origin line whose
+cost isn't modelled (EXW/CFR/etc.), false for CIF/FOB (Thai-only scope → those
+costs ARE modelled → profit reliable). The auto-fill UI then labels the figure
+**"กำไรขั้นต้น"** + "ยังไม่รวมต้นทุนค่าเฟรท/ต้นทางจีน" so no one mistakes a gross EXW
+margin for net. (CIF/FOB still show a true "กำไร".)
+
+## 🔴 HANDOFF — the cost side needs an admin rate table + accounting input
+The true China-freight margin is **not** a hardcode job; it's a build that
+touches accounting policy. Needs an owner/ภูม decision before เดฟ wires it:
+- **monthly FX** — the sheet uses `35 ฿/USD`; who sets/refreshes it + cadence?
+- **per-port/carrier cost cards** — `FRE IM SEA FCL/LCL/AIR` (USD, per POL/carrier,
+  with expiry) → an admin-editable `tb_freight_rate_*` table (the cargo
+  `tb_rate_g_*` pattern) so staff maintain it, not a code deploy.
+- **markup tiers** — 30/25/20/15/10% (`เงื่อนไข` sheet): which tier applies to
+  whom (volume? customer class?) → config, not a guess.
+- **`COST` + `Profit AXELRAPRICING` sheets** = per-job actuals ledgers (realized
+  cost/sell/กำไร/com per real shipment) — these belong in the freight P&L /
+  commission reporting (ภูม lane), not the quote engine.
+
+## ⚠️ v1 limitations (smaller next increments)
+1. **Transport = "เช็คตามระยะทางจริง"** — the per-distance Thai truck rate is a
+   representative default; a distance/zone table (the `Transport` sheet) refines it.
+2. SEA-FCL/AIR sell cards are partial (representative) — extend from the xlsx.
 
 Compliance: the off-book "ปิดตรวจ จ่ายเจ้าหน้าที่" line is **not** modelled (priced 0
 in the sheets too) — compliant core only (freight cluster doc §5).
