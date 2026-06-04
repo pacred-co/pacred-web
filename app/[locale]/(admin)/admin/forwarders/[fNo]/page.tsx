@@ -24,30 +24,27 @@ import {
 export const dynamic = "force-dynamic";
 
 /**
- * /admin/forwarders/[fNo] — READ-ONLY single-page view (2026-06-02 ภูม UX P0).
+ * /admin/forwarders/[fNo] — READ-ONLY single-page view.
  *
- * Before this rewrite the detail page mixed read + write — 5 stacked
- * CollapsibleCards in the right column held all action panels, conflating
- * "ดูข้อมูล" with "อัปเดต". ภูม flag (paraphrase):
- *   1. "พอกดปุ่มอัพเดต ตรง Action ที่มีให้อัพเดตสถานะ มันไม่ควรเรียงแบบนี้
- *      มันใช้งานยากมาก" — vertical stack of collapsibles is hard to use
- *   2. "กดปุ่มดูข้อมูล แต่กลับเข้ามาหน้าเดียวกันกับปุ่มอัพเดต ดูข้อมูล
- *      ควรแสดงข้อมูลทั้งหมด แล้วทำปุ่มแก้ไขในหน้าเพื่อเด้งไปหน้าอัพเดต
- *      มันจะดูมาตรฐานกว่า" — view + edit should be different pages
- *   3. "ของ PCS ดูง่ายกว่าเยอะ เราควรจัดการเรียงให้เหมือนเขาแต่ทำหน้าตา
- *      ออกมาให้เข้ากับระบบเรา" — match PCS layout structure, Pacred style
+ * 2026-06-04 ภูม UX F1 final: detail = READ-ONLY ALWAYS. The detail page
+ * SHOULD NOT carry any inline [แก้ไข] buttons — those belong on /edit
+ * alongside the status pipeline + payment. PCS legacy `update.php` is a
+ * single edit page with ALL inline edits inside; faithful = the same.
  *
- * Fix:
- *   · This page is now READ-ONLY · all data visible in one full page
- *     (legacy PCS forwarder.php detail mode layout · ลูกค้า / ที่อยู่ /
- *     tracking / cabinet / dimensions / items / pricing breakdown · all
- *     in 2-column flat layout, no collapsibles)
- *   · Single "✏️ แก้ไข / อัปเดต" button top-right → routes to /edit
- *   · The 5 action panels (Status · Driver · Payment · Edit · Bill-to)
- *     moved to /edit/page.tsx as flat sections
+ * Layout (matches PCS legacy forwarder.php detail mode + Pacred design):
+ *   · Header — id + status badge + source tag + sale rep + "✏️ แก้ไข/อัปเดต" CTA
+ *   · 7-icon status timeline horizontal with datestamps
+ *   · 2-col grid:
+ *     LEFT (2/3): ลูกค้า · ที่อยู่ · การจัดส่ง · รายละเอียดสินค้า · items table · หมายเหตุ
+ *     RIGHT (1/3): ค่าใช้จ่าย breakdown · admin meta · quick-jump links
+ *   · NO action panels here — those live on /edit/page.tsx
  *
  * Legacy reference: D:\REALSHITDATAPCS\pcsc\public_html\member\pcs-admin\
  *   forwarder.php (read mode · no ?page= param) + forwarder-back-up/detail.php
+ *
+ * History: 2026-06-04 morning placed ForwarderInlineEdits + TbForwarderDriver-
+ * AssignPanel on this page — moved to /edit/page.tsx the same day per ภูม
+ * directive after he reviewed.
  */
 export default async function AdminForwarderDetail({ params }: { params: Promise<{ fNo: string }> }) {
   await requireAdmin(["ops", "accounting"]);
@@ -282,6 +279,9 @@ async function tryRenderTbForwarder(
   // Items table loading is now owned by <ForwarderItemsTable> further down —
   // it handles tb_order (shop-spawn) + tb_forwarder_item (admin) + empty-state.
   // 2026-06-03: removed the local item query that fed the old plain-text table.
+  //
+  // 2026-06-04 F1: removed the driver-assignment + inline-edits data loads —
+  // those panels moved to /edit/page.tsx (this page is READ-ONLY).
 
   // Resolve cover image — shop-spawned rows may have alicdn URL, legacy path, or empty.
   const coverHref = r.fcover && r.fcover.trim() !== ""
@@ -293,7 +293,8 @@ async function tryRenderTbForwarder(
     "1":"รอเข้าโกดังจีน","2":"ถึงโกดังจีนแล้ว","3":"กำลังส่งมาไทย","4":"ถึงไทยแล้ว",
     "5":"รอชำระเงิน","6":"เตรียมส่ง","7":"ส่งแล้ว","99":"พิเศษ",
   };
-  const MODE_LABEL: Record<string, string> = { "1": "🚛 ทางรถ", "2": "🚢 ทางเรือ", "3": "✈️ ทางอากาศ" };
+  // MODE_LABEL removed 2026-06-04 — transport mode is rendered with the status
+  // timeline icon (Truck/Plane) above; the editable form lives on /edit.
   const WAREHOUSE_LABEL: Record<string, string> = {
     "1":"แสง","2":"CTT","3":"MK","4":"MX","5":"JMF","6":"GOGO","7":"Cargo Center","8":"MOMO",
   };
@@ -480,14 +481,13 @@ async function tryRenderTbForwarder(
             )}
           </section>
 
-          {/* Routing */}
+          {/* Routing — read-only timeline + tracking + cabinet */}
           <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 text-sm">
             <h3 className="text-sm font-semibold text-muted mb-3">การจัดส่ง</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
               <LegacyKV label="วันที่สร้าง" value={r.fdate ? new Date(r.fdate).toLocaleString("th-TH") : "—"} />
               <LegacyKV label="วันที่ถึงไทย" value={r.fdatetothai ? new Date(r.fdatetothai).toLocaleDateString("th-TH") : "—"} />
               <LegacyKV label="โกดังจีน" value={WAREHOUSE_LABEL[r.fwarehousename] ?? r.fwarehousename} />
-              <LegacyKV label="ขนส่ง" value={MODE_LABEL[r.ftransporttype] ?? r.ftransporttype} />
               <LegacyKV
                 label="หมายเลขตู้"
                 value={r.fcabinetnumber ?? "—"}
@@ -497,7 +497,6 @@ async function tryRenderTbForwarder(
               <LegacyKV label="วันปิดตู้" value={r.fdatecontainerclose ? new Date(r.fdatecontainerclose).toLocaleDateString("th-TH") : "—"} />
               <LegacyKV label="Tracking CN" value={r.ftrackingchn ?? "—"} mono />
               <LegacyKV label="Tracking TH" value={r.ftrackingth ?? "—"} mono />
-              <LegacyKV label="ผู้ขนส่ง (Ship-by)" value={r.fshipby ?? "—"} />
               <LegacyKV label="จำนวน / น้ำหนัก / CBM" value={`${r.famount ?? 0} กล่อง · ${Number(r.fweight ?? 0).toFixed(2)} กก. · ${Number(r.fvolume ?? 0).toFixed(3)} ม³`} mono />
             </div>
           </section>
@@ -619,14 +618,19 @@ async function tryRenderTbForwarder(
             <dl className="space-y-1.5">
               <Field label="แอดมินสร้าง" value={r.adminidcreator || "—"} />
               <Field label="แอดมินอัปเดต" value={r.adminidupdate || "—"} />
-              <Field label="วิธีชำระเงิน" value={r.paymethod === "1" ? "หักเงินในกระเป๋า" : r.paymethod || "—"} />
               {r.paydeposit && r.paydeposit !== "" && (
                 <Field label="เงินค่ามัดจำ" value={r.paydeposit} />
               )}
-              {r.fbilltoname && r.fbilltoname.trim() !== "" && (
-                <Field label="ผู้รับใบกำกับ" value={r.fbilltoname} />
-              )}
             </dl>
+            <p className="text-[10px] text-muted mt-3 pt-2 border-t border-border/40">
+              แก้ไขข้อมูลทั้งหมด (สถานะ · บริษัทขนส่ง · ที่อยู่ · วิธีเก็บเงิน · ชื่อบนใบกำกับ · ฯลฯ) ได้ที่
+              <Link
+                href={`/admin/forwarders/${slugForLink}/edit`}
+                className="text-primary-600 hover:underline ml-1"
+              >
+                หน้าแก้ไข/อัปเดต →
+              </Link>
+            </p>
           </section>
 
           {/* Quick-jump links */}

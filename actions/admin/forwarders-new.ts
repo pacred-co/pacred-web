@@ -228,6 +228,21 @@ const PCS_PICKUP_ADDRESS = {
 
 const TRANSPORT_TYPES = ["1", "2"] as const;  // legacy modal: only รถ + เรือ (no AIR)
 
+// 2026-06-04 ภูม flag — `fwarehousename` (โกดังประเทศจีน) was previously
+// hardcoded to "1" at create-time → every test order rendered as "แสง"
+// regardless of where it actually arrived. Legacy PHP `forwarder.php` (L115)
+// did NOT supply fWarehouseName on INSERT — MySQL silently filled the column
+// default; admin set the real warehouse later via /edit when goods arrived.
+//
+// New behaviour:
+//   - Schema accepts "" | "1".."8" (empty = unknown · admin can pick later).
+//   - Codes per `actions/admin/reports-profit-types.ts:WAREHOUSE_NAME_LABEL`:
+//        1=แสง · 2=CTT · 3=MK · 4=MX · 5=JMF · 6=GOGO · 7=Cargo Center · 8=MOMO
+//   - The client form provides a dropdown + auto-detect from tracking prefix
+//     (MO→8, CC→7) — but the source of truth on save is whatever the admin
+//     submits (auto-detect only pre-fills when the dropdown is still empty).
+const WAREHOUSE_CODES = ["", "1", "2", "3", "4", "5", "6", "7", "8"] as const;
+
 const createForwarderSchema = z.object({
   coid:            z.string().trim().min(1, "เลือกประเภทสมาชิก").max(10),
   customerUserid:  z.string().trim().regex(/^PR\d+$/i, "userid ต้องเป็น PR####").max(20),
@@ -237,6 +252,7 @@ const createForwarderSchema = z.object({
   shipBy:          z.string().trim().min(1, "เลือกบริษัทขนส่ง").max(10),
   addressId:       z.number().int().positive().nullable().optional(),
   transportType:   z.enum(TRANSPORT_TYPES),
+  warehouseName:   z.enum(WAREHOUSE_CODES).optional().default(""),
 });
 export type AdminCreateForwarderInput = z.infer<typeof createForwarderSchema>;
 
@@ -373,7 +389,12 @@ export async function adminCreateForwarder(
           fstatus:               "1",      // รอเข้าโกดังจีน — initial state
           paydeposit:            "0",
           fwarehousechina:       "1",      // กวางโจว default (admin can edit)
-          fwarehousename:        "1",
+          // fwarehousename: "" = ยังไม่ระบุโกดังจีน · admin sets it in /edit
+          // after goods arrive (or via the form dropdown / tracking auto-detect
+          // on create). Avoids the 2026-06-04 bug where everything defaulted
+          // to "1" (แสง) on the list page. Column is varchar(1) NOT NULL —
+          // empty string passes the constraint.
+          fwarehousename:        d.warehouseName ?? "",
           fcabinetnumber:        "",
           ftrackingth:           "-",
           ffreeshipping:         "0",
@@ -494,6 +515,7 @@ export async function adminCreateForwarder(
           ship_by:          d.shipBy,
           transport_type:   d.transportType,
           amount:           d.amount,
+          warehouse_name:   d.warehouseName || "(empty)",
           address_source:   d.shipBy === "PCS" ? "pcs_pickup" : `addressid:${d.addressId}`,
           cover_uploaded:   coverFilename ? true : false,
         },

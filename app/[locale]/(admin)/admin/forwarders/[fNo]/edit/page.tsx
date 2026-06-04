@@ -1,59 +1,55 @@
 /**
- * /admin/forwarders/[fNo]/edit — UNIFIED EDIT HUB (2026-06-03 ภูม UX P0 v2).
+ * /admin/forwarders/[fNo]/edit — THE edit page (2026-06-04 ภูม UX F1 final).
  *
- * ── Why this exists (ภูม flag 2026-06-03):
- *   "ของเรามันดูเยอะไปหมดเลย" — the previous v1 of this page had 6 stacked
- *   ActionSection cards (Status · Payment · Driver · Edit · Bill-to · Dimensions)
- *   each ~150-200px tall = a 1200px+ scroll wall before staff could find
- *   what they were looking for. ภูม pointed at legacy PCS forwarder/update.php
- *   (รูปที่ 3 in the chat thread) as the right shape: ONE coherent page with
- *   the order data UPFRONT in a 2-col display + status pipeline + ONE primary
- *   action visible at first scroll + the rarely-used edit panels tucked into
- *   <details> disclosures so the page reads "info-first, action-second" like
- *   the legacy.
+ * Detail = READ-ONLY. /edit = ALL the inline [แก้ไข] buttons + status
+ * pipeline + payment. This matches legacy PCS `update.php` which is a
+ * single edit page with all inline edits in it (faithful to the source).
  *
- * ── Layout (matches legacy PCS forwarder/update.php — see
- *    D:\REALSHITDATAPCS\pcsc\public_html\member\pcs-admin\include\pages\forwarder\update.php):
- *   1. Breadcrumb + page-title strip
- *   2. PCS-style header card:
- *      LEFT (col-md-6): order# + tracking# + barcode
- *      RIGHT (col-md-6): status badge · last-update timestamp · print/receipt links
- *   3. 8-step pipeline timeline (status-based active/visited like legacy)
- *   4. 2-col READ-ONLY info display (matches legacy update.php L514-839):
- *      LEFT (col-md-6): refOrder badge · Sale · created-at · จาก (avatar+name) ·
- *        userid · email · phone · location · การตีลังไม้ · การเก็บเงิน · บริษัทขนส่ง ·
- *        ที่อยู่จัดส่ง · เลขพัสดุไทย
- *      RIGHT (col-md-6): เลขพัสดุจีน · รูปแบบขนส่ง · โกดังจีน · เลขที่ตู้ ·
- *        วันที่ปิดตู้ · จำนวน · การรวมกล่อง · ประเภทสินค้า · รายละเอียดสินค้า + cover
- *   5. PRIMARY ACTION (always-open): อัปเดตสถานะ + ตู้ + Tracking + หมายเหตุ
- *      (TbForwarderActionPanel — the most-used CS action)
- *   6. SECONDARY ACTIONS (each behind a <details> · collapsed by default):
- *      §A · 💰 ชำระเงิน (TbForwarderPaymentPanel — only when isPayable)
- *      §B · 🚛 มอบหมายคนขับ (TbForwarderDriverAssignPanel)
- *      §C · ✏️ แก้ไขที่อยู่/การขนส่ง/ราคา (TbForwarderEditPanel)
- *      §D · 📄 ชื่อผู้รับใบกำกับ (BillToOverridePanel)
- *      §E · 📦 ขนาด/น้ำหนัก + รายการสินค้า (AdminForwarderEditForm)
- *   7. Bottom nav (back-to-detail + back-to-list)
- *
- * All 6 action panels are kept verbatim — their server-actions are
- * battle-tested. Only the page composition changed.
+ * ── Layout (mirrors PCS update.php order):
+ *   1. Breadcrumb + PCS-style header (#fNo · status · source · last-update + action links)
+ *   2. 8-step pipeline timeline
+ *   3. 2-col data display WITH per-field inline [แก้ไข] buttons
+ *      (Edit*Field components from forwarder-inline-edits.tsx are interleaved
+ *      next to their sibling read-only data fields — 10 inline editors total:
+ *      userid · pallet · transport · crate · ship-by · pay-method · tracking-chn ·
+ *      date-close · amount-count · bill-to · per PCS L514-839 verbatim handlers)
+ *   4. Driver-assign collapsible (auto-open at fstatus=6 เตรียมส่ง)
+ *   5. Items table (line-item view from forwarder-items-table)
+ *   6. PRIMARY ACTION (always-open): TbForwarderActionPanel
+ *      — อัปเดตสถานะ + ตู้ + Tracking (LEFT) · บันทึกหมายเหตุ + แจ้งเตือน (RIGHT)
+ *        2-col grid (ภูม UX F1 Issue 2 — don't stack-wrap; side-by-side)
+ *   7. PAYMENT (when isPayable): TbForwarderPaymentPanel
+ *      — หักกระเป๋า / mark paid / etc.
+ *   8. Bottom nav (back-to-detail + back-to-list)
  *
  * Legacy source columns mapped (per legacy update.php / detail.php):
  *   - refOrer source tag (L358-360 update.php) ← adminidcreator/reforder
  *   - sale badge (L517) ← tb_users.adminIDSale
- *   - fpallet "location" (L554-568)
- *   - paymethod "การเก็บเงินค่าขนส่งในไทย" (L588-604)
- *   - fshipby "บริษัทขนส่ง" (L606-623)
- *   - fullAddress (L631-665)
+ *   - fUserID (L526-544 update_fUserID) inline edit, TYPE-CONFIRM
+ *   - fpallet (L554-568 update_fPallet) inline edit
+ *   - paymethod (L588-604 update_fPayMethod) inline edit
+ *   - fcrate (L570-586 update_fCrate) inline edit
+ *   - fshipby (L606-623 update_fShipBy) inline edit
+ *   - fullAddress (L631-665) read-only + address re-pick panel
  *   - ftrackingth "เลขพัสดุไทย" (L666)
- *   - ftrackingchn + barcode (L725-740)
- *   - ftransporttype "รูปแบบขนส่ง" (L743-759)
- *   - fwarehousechina "โกดังจีน" (L761)
+ *   - fTrackingCHN (L725-740 update_fTrackingCHN) inline edit · gated fstatus<7
+ *   - fTransportType (L743-759 update_fTransportType) inline edit
+ *   - fwarehousechina (L761) read-only
  *   - fcabinetnumber linked to /report-cnt (L763-777)
- *   - fdatecontainerclose "วันที่ปิดตู้" (L779-808)
- *   - famount + famountcount "จำนวน · การรวมกล่อง" (L809-828)
+ *   - fDateContainerClose + fDateToThai (L779-808 update_fDateToThai) inline edit · +5/+12 days
+ *   - famount + fAmountCount (L809-828 update_fAmountCount) inline edit
  *   - fproductstype "ประเภทสินค้า" (L829)
  *   - fdetail + fcover "รายละเอียด + รูป" (L830-839)
+ *
+ * 2026-06-04 history:
+ *   - morning: put ForwarderInlineEdits + driver-assign on detail page → bad
+ *   - afternoon: moved to /edit as standalone "ตั้งค่ารายการ" section → bad
+ *   - evening (THIS): per ภูม UX F1 Issues 1+2+3 — interleaved per-field
+ *     [แก้ไข] inline into the 2-col data blocks (no standalone duplicate
+ *     section), split status-vs-note forms into 2-col grid, added "ยังไม่
+ *     ใส่ราคา" hint when ftotalprice=0. ภูม verbatim flag:
+ *     "กรอบเหลือง...มันควรไปอยู่ในชุดกรอบน้ำเงินเลย" +
+ *     "อัปเดตสถานะ...แบ่งหน้าคนละครึ่งกับบันทึกหมายเหตุไปเลย".
  */
 
 import { notFound } from "next/navigation";
@@ -67,13 +63,25 @@ import {
 import Image from "next/image";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 
-import { AdminForwarderEditForm, type EditItemRow } from "./edit-form";
 import { TbForwarderActionPanel } from "../tb-action-panel";
 import { TbForwarderPaymentPanel } from "../tb-payment-panel";
-import { TbForwarderEditPanel, type SavedAddressOption } from "../tb-edit-panel";
-import { TbForwarderDriverAssignPanel, type DriverAssignmentState } from "../tb-driver-assign-panel";
-import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
 import { ForwarderItemsTable } from "../forwarder-items-table";
+import {
+  // 2026-06-04 ภูม UX F1 Issue 1 — individual field components, interleaved
+  // inline next to their sibling data fields in the 2-col data blocks below
+  // (no more standalone "ตั้งค่ารายการ (แก้ไขรายฟิลด์)" panel).
+  EditUserIdField,
+  EditPalletField,
+  EditCrateField,
+  EditPayMethodField,
+  EditShipByField,
+  EditBillToField,
+  EditTrackingChnField,
+  EditTransportTypeField,
+  EditDateCloseField,
+  EditAmountCountField,
+} from "../forwarder-inline-edits";
+import { TbForwarderDriverAssignPanel, type DriverAssignmentState } from "../tb-driver-assign-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -136,22 +144,6 @@ type RawForwarderRow = {
   adminidcreator:    string | null;
   reforder:          string | null;
   tax_doc_pref:      string | null;
-};
-
-type RawItemRow = {
-  id:                       number;
-  productname:              string;
-  producttracking:          string;
-  productqty:               number;
-  productwidth:             number | string;
-  productlength:            number | string;
-  productheight:            number | string;
-  productweightperitem:     number | string;
-  productweightall:         number | string;
-  productcbmperitem:        number | string;
-  productcbmall:            number | string;
-  chinawoodencratefee:      number | string;
-  chinawoodencratefeetype:  string;
 };
 
 export default async function AdminForwarderEditPage({
@@ -223,30 +215,9 @@ export default async function AdminForwarderEditPage({
   const walletBalance = Number(walletRow?.wallettotal ?? 0);
   const isPayable = r.fstatus === "5" || (r.fcredit ?? "").trim() === "1";
 
-  // Customer's saved address book for re-pick (faithful update_fAddress).
-  const { data: addrRows, error: addrErr } = await admin
-    .from("tb_address")
-    .select("addressid, addressname, addresslastname, addressno, addressprovince")
-    .eq("userid", r.userid)
-    .eq("addressstatus", "1")
-    .order("addressid", { ascending: false })
-    .limit(50);
-  if (addrErr) {
-    console.error(`[tb_address edit] failed`, { code: addrErr.code, message: addrErr.message, userid: r.userid });
-  }
-  const savedAddresses: SavedAddressOption[] = ((addrRows ?? []) as Array<{
-    addressid: number; addressname: string | null; addresslastname: string | null;
-    addressno: string | null; addressprovince: string | null;
-  }>).map((a) => ({
-    addressId: a.addressid,
-    label: [
-      `${a.addressname ?? ""} ${a.addresslastname ?? ""}`.trim(),
-      (a.addressno ?? "").slice(0, 30),
-      a.addressprovince ?? "",
-    ].filter(Boolean).join(" · ") || `ที่อยู่ #${a.addressid}`,
-  }));
-
-  // Latest driver-assignment for this forwarder (two reads · no FK).
+  // ─── Latest driver-assignment for this forwarder (two reads · no FK) ─
+  // Drives the driver-assign collapsible (auto-open at fstatus='6' เตรียมส่ง).
+  // 2026-06-04 F1: moved here from detail page (detail = READ-ONLY).
   let driverAssignment: DriverAssignmentState | null = null;
   const { data: assignItemRow, error: assignItemErr } = await admin
     .from("tb_forwarder_driver_item")
@@ -276,53 +247,25 @@ export default async function AdminForwarderEditPage({
     };
   }
 
-  // ─── Load tb_forwarder_item rows for the per-item crate dimensions form ──
-  const { data: itemRowsRaw, error: itemRowsRawErr } = await admin
-    .from("tb_forwarder_item")
-    .select(
-      "id, productname, producttracking, productqty, productwidth, productlength, " +
-      "productheight, productweightperitem, productweightall, productcbmperitem, " +
-      "productcbmall, chinawoodencratefee, chinawoodencratefeetype",
-    )
-    .eq("fid", r.id)
-    .order("id", { ascending: true })
-    .limit(200);
-  if (itemRowsRawErr) {
-    console.error(`[tb_forwarder_item edit] failed`, { code: itemRowsRawErr.code, message: itemRowsRawErr.message });
-  }
-
-  const items: EditItemRow[] = ((itemRowsRaw ?? []) as unknown as RawItemRow[]).map((it) => ({
-    itemId:           it.id,
-    name:             it.productname,
-    tracking:         it.producttracking,
-    qty:              Number(it.productqty),
-    weightPerItem:    Number(it.productweightperitem),
-    weightAll:        Number(it.productweightall),
-    cbmPerItem:       Number(it.productcbmperitem),
-    cbmAll:           Number(it.productcbmall),
-    crateFee:         Number(it.chinawoodencratefee),
-    crateType:        (it.chinawoodencratefeetype === "2" ? "2" : "1") as "1" | "2",
-  }));
-
   // ─── Resolve cover image + customer avatar via legacy URL resolver ───
   const coverHref = r.fcover && r.fcover.trim() !== ""
     ? (r.fcover.startsWith("http") ? r.fcover : await resolveLegacyUrl(r.fcover, "cover"))
     : null;
   const customerAvatar = await resolveLegacyUrl(u?.userPicture ?? null, "profile-thumb");
 
-  // ─── Status / mode / warehouse labels ─────────────────────────────
+  // ─── Status / warehouse / product labels ─────────────────────────────
+  // 2026-06-04 ภูม UX F1 Issue 1: CRATE_LABEL / MODE_LABEL / PAYMETHOD_LABEL
+  // removed — their display rows now live inside <Edit*Field/> components
+  // (forwarder-inline-edits.tsx) interleaved into the 2-col data blocks.
   const STATUS_LABEL: Record<string, string> = {
     "1": "รอเข้าโกดังจีน", "2": "ถึงโกดังจีนแล้ว", "3": "กำลังส่งมาไทย",
     "4": "ถึงไทยแล้ว", "5": "รอชำระเงิน", "6": "เตรียมส่ง", "7": "ส่งแล้ว",
     "99": "พิเศษ",
   };
-  const MODE_LABEL: Record<string, string> = { "1": "🚛 ทางรถ", "2": "🚢 ทางเรือ", "3": "✈️ ทางอากาศ" };
   const WAREHOUSE_LABEL: Record<string, string> = {
     "1": "แสง", "2": "CTT", "3": "MK", "4": "MX",
     "5": "JMF", "6": "GOGO", "7": "Cargo Center", "8": "MOMO",
   };
-  const CRATE_LABEL: Record<string, string> = { "1": "ตีลังไม้", "2": "ไม่ตีลังไม้" };
-  const PAYMETHOD_LABEL: Record<string, string> = { "1": "ต้นทาง", "2": "ปลายทาง" };
   const PRODUCT_TYPE_LABEL: Record<string, string> = {
     "1": "ทั่วไป", "2": "พิเศษ 1", "3": "พิเศษ 2", "4": "พิเศษ 3",
   };
@@ -337,13 +280,6 @@ export default async function AdminForwarderEditPage({
   const customerName = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || r.userid;
   const slugForLink = r.fidorco ?? String(r.id);
 
-  const isPcsPickup = (r.fshipby ?? "").trim() === "PCS";
-  const transportTypeForEdit = (["1", "2", "3"].includes(r.ftransporttype) ? r.ftransporttype : "1") as "1" | "2" | "3";
-  const amountCountForEdit = ((r.famountcount ?? "").trim() === "1" ? "1" : "2") as "1" | "2";
-
-  const priceUpdate = Number(r.fpriceupdate ?? 0);
-  const otherCost = Number(r.priceother ?? 0);
-  const discount = Number(r.fdiscount ?? 0);
   const currentStatusInt = parseInt(r.fstatus, 10);
 
   // Compose the full delivery address (matches legacy fullAddress L633).
@@ -533,9 +469,8 @@ export default async function AdminForwarderEditPage({
             </InfoLine>
           )}
 
-          <InfoLine label="รหัสสมาชิก">
-            <span className="font-mono font-bold">{r.userid}</span>
-          </InfoLine>
+          {/* รหัสสมาชิก — inline TYPE-CONFIRM edit (ภูม UX F1 Issue 1) */}
+          <EditUserIdField fId={r.id} userid={r.userid} />
 
           {u?.userEmail && (
             <InfoLine label="อีเมล">
@@ -551,30 +486,17 @@ export default async function AdminForwarderEditPage({
 
           <div className="border-t border-border pt-2 mt-2"></div>
 
-          {(r.fpallet !== null && r.fpallet !== 0) && (
-            <InfoLine label="Location (pallet)">
-              <span className="font-mono">{r.fpallet}</span>
-            </InfoLine>
-          )}
+          {/* Location (pallet) — inline edit */}
+          <EditPalletField fId={r.id} fpallet={r.fpallet} />
 
-          <InfoLine label="การตีลังไม้">
-            {CRATE_LABEL[r.crate ?? ""] ?? "—"}
-            {Number(r.pricecrate ?? 0) > 0 && (
-              <span className="text-muted text-xs ml-1.5">(฿{Number(r.pricecrate).toLocaleString("th-TH", { minimumFractionDigits: 2 })})</span>
-            )}
-          </InfoLine>
+          {/* การตีลังไม้ — inline edit */}
+          <EditCrateField fId={r.id} crate={r.crate} pricecrate={r.pricecrate} />
 
-          {r.paymethod && (
-            <InfoLine label="การเก็บเงินค่าขนส่งในไทย">
-              <span className={r.paymethod === "2" ? "rounded bg-red-50 text-red-700 px-1.5 py-0.5 text-xs font-medium" : "text-foreground"}>
-                {PAYMETHOD_LABEL[r.paymethod] ?? r.paymethod}
-              </span>
-            </InfoLine>
-          )}
+          {/* การเก็บเงินค่าขนส่งในไทย — inline edit */}
+          <EditPayMethodField fId={r.id} paymethod={r.paymethod} />
 
-          <InfoLine label="บริษัทขนส่ง">
-            {r.fshipby ? <span className="font-mono">{r.fshipby}</span> : "—"}
-          </InfoLine>
+          {/* บริษัทขนส่ง — inline edit (PCS/PCSF/PCSE preset + external) */}
+          <EditShipByField fId={r.id} fshipby={r.fshipby} />
 
           <div>
             <p className="text-xs text-muted mb-0.5">ที่อยู่จัดส่งสินค้า:</p>
@@ -584,13 +506,12 @@ export default async function AdminForwarderEditPage({
             )}
           </div>
 
-          {r.fbilltoname && r.fbilltoname.trim() !== "" && (
-            <InfoLine label="ผู้รับใบกำกับ (Bill-to)">
-              <span className="rounded bg-violet-50 text-violet-700 px-1.5 py-0.5 text-xs">
-                {r.fbilltoname}
-              </span>
-            </InfoLine>
-          )}
+          {/* ผู้รับใบกำกับ (Bill-to) — inline edit (Pacred extension) */}
+          <EditBillToField
+            fId={r.id}
+            fbilltoname={r.fbilltoname}
+            defaultBillTo={`${r.faddressname ?? ""} ${r.faddresslastname ?? ""}`.trim()}
+          />
 
           <InfoLine label="เลขพัสดุไทย">
             {r.ftrackingth && r.ftrackingth !== "-" ? (
@@ -607,16 +528,11 @@ export default async function AdminForwarderEditPage({
             <h2 className="font-bold text-sm">ตู้ · Tracking · สินค้า</h2>
           </div>
 
-          <div>
-            <p className="text-xs text-muted mb-0.5">เลขพัสดุจีน:</p>
-            <p className="text-base font-bold font-mono text-primary-600 break-all">
-              {r.ftrackingchn ?? "—"}
-            </p>
-          </div>
+          {/* เลขพัสดุจีน — inline edit (locked when fstatus=7) */}
+          <EditTrackingChnField fId={r.id} ftrackingchn={r.ftrackingchn} fstatus={r.fstatus} />
 
-          <InfoLine label="รูปแบบขนส่ง จีน-ไทย">
-            {MODE_LABEL[r.ftransporttype] ?? r.ftransporttype}
-          </InfoLine>
+          {/* รูปแบบขนส่ง จีน-ไทย — inline edit (รถ/เรือ/อากาศ) */}
+          <EditTransportTypeField fId={r.id} ftransporttype={r.ftransporttype} />
 
           <InfoLine label="โกดังประเทศจีน">
             {WAREHOUSE_LABEL[r.fwarehousename] ?? r.fwarehousename ?? "—"}
@@ -635,20 +551,13 @@ export default async function AdminForwarderEditPage({
             )}
           </InfoLine>
 
-          {r.fdatecontainerclose && (
-            <InfoLine label="วันที่ปิดตู้">
-              {new Date(r.fdatecontainerclose).toLocaleDateString("th-TH")}
-            </InfoLine>
-          )}
+          {/* วันที่ปิดตู้ — inline edit (auto +5/+12 ETA) */}
+          <EditDateCloseField fId={r.id} fdatecontainerclose={r.fdatecontainerclose} />
 
           <div className="border-t border-border pt-2 mt-2"></div>
 
-          <InfoLine label="จำนวน">
-            <span className="font-mono font-bold">{r.famount ?? 0}</span> กล่อง
-            {r.famountcount === "1" && (
-              <span className="ml-1.5 rounded bg-red-50 text-red-700 px-1.5 py-0.5 text-xs">รวมกล่อง</span>
-            )}
-          </InfoLine>
+          {/* จำนวน · การรวมกล่อง — inline edit */}
+          <EditAmountCountField fId={r.id} famountcount={r.famountcount} famount={r.famount} />
 
           {(Number(r.fweight ?? 0) > 0 || Number(r.fvolume ?? 0) > 0) && (
             <InfoLine label="น้ำหนัก · CBM">
@@ -662,10 +571,25 @@ export default async function AdminForwarderEditPage({
             {PRODUCT_TYPE_LABEL[r.fproductstype ?? ""] ?? "—"}
           </InfoLine>
 
+          {/* ยอดรวม — 2026-06-04 ภูม UX F1 Issue 3:
+              ftotalprice=0 is the legitimate state for orders before admin
+              enters dimensions/weight. PCS legacy update.php L1038 displays
+              ฿0.00 too — the real total is calculated and shown in the cost-
+              adjust matrix at status 4+ (ของถึงไทย). Add a helpful hint so
+              staff don't mistake the red price for a bug. */}
           <InfoLine label="ยอดรวม">
-            <span className="font-bold text-base text-primary-700">
-              ฿{Number(r.ftotalprice ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-            </span>
+            {Number(r.ftotalprice ?? 0) > 0 ? (
+              <span className="font-bold text-base text-primary-700">
+                ฿{Number(r.ftotalprice).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+              </span>
+            ) : (
+              <span className="inline-flex flex-col gap-0.5">
+                <span className="font-bold text-base text-primary-700">฿0.00</span>
+                <span className="text-[10px] text-muted leading-tight">
+                  ยังไม่ใส่ราคา · จะใส่ตอนของถึงโกดังไทย (status 4)
+                </span>
+              </span>
+            )}
           </InfoLine>
 
           {r.fdetail && (
@@ -692,6 +616,46 @@ export default async function AdminForwarderEditPage({
           )}
         </div>
       </section>
+
+      {/* ── 4.2 INLINE EDITS — removed as a standalone section per ภูม UX F1
+          Issue 1 (2026-06-04). The 10 click-to-flip fields are now
+          interleaved INLINE within the 2-col "ลูกค้า · ที่อยู่ · การขนส่ง" +
+          "ตู้ · Tracking · สินค้า" data blocks above (each <Edit*Field/> sits
+          next to its sibling data field). Same workflow + same server
+          actions; layout-only refactor. ภูม verbatim: "ก็ใส่แก้ไขด้านบน
+          ไปเลยสิ". */}
+
+      {/* ── 4.3 DRIVER ASSIGN ── auto-open ONLY when ready to dispatch (fstatus='6'
+          เตรียมส่ง). Hidden in the collapsible at other statuses so it doesn't
+          clutter the page — the gate is per legacy forwarder-driver.php (fstatus=6
+          + paydeposit<>1). 2026-06-04 F1: moved from detail page. */}
+      <details
+        className="group rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden"
+        open={r.fstatus === "6"}
+      >
+        <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none hover:bg-surface-alt/40 list-none">
+          <ChevronDown className="h-4 w-4 text-muted transition-transform group-open:rotate-180 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-bold flex items-center gap-1.5">
+              <Truck className="h-3.5 w-3.5" /> มอบหมายคนขับ
+            </h3>
+            <p className="text-xs text-muted mt-0.5 truncate">
+              {r.fstatus === "6"
+                ? "✅ พร้อมจัดส่ง — เลือกคนขับและเริ่ม"
+                : "เปิดใช้งานเมื่อสถานะเป็น 'เตรียมส่ง' (fstatus=6)"}
+            </p>
+          </div>
+        </summary>
+        <div className="px-4 pt-1 pb-4 border-t border-border/40">
+          <TbForwarderDriverAssignPanel
+            fId={r.id}
+            fNo={String(r.id)}
+            fstatus={r.fstatus}
+            paydeposit={r.paydeposit ?? ""}
+            current={driverAssignment}
+          />
+        </div>
+      </details>
 
       {/* ── 4.5 ITEMS TABLE ── PCS-style line-item display (2026-06-03 ภูม flag)
           For shop-spawned forwarders (reforder set) renders the tb_order rows
@@ -729,90 +693,29 @@ export default async function AdminForwarderEditPage({
         </div>
       </section>
 
-      {/* ── 6. SECONDARY ACTIONS — collapsible <details> ── */}
+      {/* ── 6. PAYMENT (when isPayable — fstatus=5 รอชำระ or fcredit=1) ── */}
       {isPayable && (
-        <CollapsibleSection
-          summary={`💰 ชำระเงิน (หักกระเป๋า) · ฿${Number(r.ftotalprice ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}
-          subtitle={`ยอดในกระเป๋า ฿${walletBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}
-          tone="primary"
-          openByDefault
-        >
-          <TbForwarderPaymentPanel
-            fId={r.id}
-            userId={r.userid}
-            customerName={`คุณ${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim()}
-            amountEstimate={Number(r.ftotalprice ?? 0)}
-            walletBalance={walletBalance}
-            isCredit={(r.fcredit ?? "").trim() === "1"}
-          />
-        </CollapsibleSection>
+        <section className="rounded-2xl border-2 border-amber-300 bg-amber-50/40 dark:bg-amber-950/20 shadow-md overflow-hidden">
+          <header className="bg-amber-500 text-white px-4 py-2.5 flex items-center gap-2">
+            <h2 className="text-sm font-bold">
+              💰 ชำระเงิน · ฿{Number(r.ftotalprice ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+            </h2>
+            <span className="ml-auto text-[10px] bg-white/20 rounded px-1.5 py-0.5">
+              ยอดในกระเป๋า ฿{walletBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+            </span>
+          </header>
+          <div className="p-4">
+            <TbForwarderPaymentPanel
+              fId={r.id}
+              userId={r.userid}
+              customerName={`คุณ${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim()}
+              amountEstimate={Number(r.ftotalprice ?? 0)}
+              walletBalance={walletBalance}
+              isCredit={(r.fcredit ?? "").trim() === "1"}
+            />
+          </div>
+        </section>
       )}
-
-      <CollapsibleSection
-        summary="🚛 มอบหมายคนขับ"
-        subtitle={r.fstatus === "6" ? "✅ พร้อมจัดส่ง" : "เปิดใช้งานเมื่อสถานะเป็น 'เตรียมส่ง'"}
-        openByDefault={r.fstatus === "6"}
-      >
-        <TbForwarderDriverAssignPanel
-          fId={r.id}
-          fNo={String(r.id)}
-          fstatus={r.fstatus}
-          paydeposit={r.paydeposit ?? ""}
-          current={driverAssignment}
-        />
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        summary="✏️ แก้ไขที่อยู่ · การขนส่ง · ราคา"
-        subtitle="เปลี่ยนที่อยู่จัดส่ง · สลับโหมดขนส่ง · ปรับยอดเงินด้วยตนเอง"
-      >
-        <TbForwarderEditPanel
-          fId={r.id}
-          isPcs={isPcsPickup}
-          addresses={savedAddresses}
-          currentTransportType={transportTypeForEdit}
-          currentShipBy={(r.fshipby ?? "").trim()}
-          currentAmountCount={amountCountForEdit}
-          currentPriceUpdate={priceUpdate}
-          currentPriceOther={otherCost}
-          currentDiscount={discount}
-          currentTaxDocPref={(r.tax_doc_pref as string | null) ?? null}
-        />
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        summary="📄 ชื่อผู้รับใบกำกับ (Bill-to)"
-        subtitle={r.fbilltoname && r.fbilltoname.trim() !== "" ? `กำหนดเอง: ${r.fbilltoname}` : "ใช้ชื่อผู้รับ default"}
-      >
-        <BillToOverridePanel
-          kind="forwarder"
-          fNo={String(r.id)}
-          defaultName={`${r.faddressname ?? ""} ${r.faddresslastname ?? ""}`.trim()}
-          current={r.fbilltoname}
-        />
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        summary="📦 ขนาด · น้ำหนัก · CBM · รายการสินค้า"
-        subtitle="ใส่ข้อมูลหลังสินค้าเข้าโกดังจีน · แก้ไขรายการ + ค่าตีลังไม้ต่อรายการ"
-      >
-        <AdminForwarderEditForm
-          fNo={r.fidorco ?? String(r.id)}
-          idNumeric={r.id}
-          weightInit={Number(r.fweight ?? 0)}
-          widthInit={Number(r.fwidth ?? 0)}
-          lengthInit={Number(r.flength ?? 0)}
-          heightInit={Number(r.fheight ?? 0)}
-          volumeInit={Number(r.fvolume ?? 0)}
-          productTypeInit={(r.fproductstype === "1" || r.fproductstype === "2" ||
-                            r.fproductstype === "3" || r.fproductstype === "4")
-                             ? (r.fproductstype as "1" | "2" | "3" | "4")
-                             : "1"}
-          refPriceInit={(r.frefprice === "2" ? "2" : "1") as "1" | "2"}
-          noteInit={r.fnote ?? ""}
-          itemsInit={items}
-        />
-      </CollapsibleSection>
 
       {/* ── 7. Footer nav ── */}
       <div className="flex gap-2 flex-wrap pt-2 pb-4">
@@ -832,7 +735,7 @@ export default async function AdminForwarderEditPage({
 
       {/* Hidden a11y note for ภูม browser-verify */}
       <p className="sr-only">
-        v2 layout (PCS-style): header + pipeline + 2-col info + 1 primary action + 5 collapsibles.
+        /edit layout (ภูม UX F1 2026-06-04): header + pipeline + 2-col info + inline edits + driver assign + items table + status panel + payment.
         Status: {STATUS_LABEL[r.fstatus]}. Last update: {r.fdateadminstatus ?? "—"}.
       </p>
     </main>
@@ -849,47 +752,5 @@ function InfoLine({ label, children }: { label: string; children: React.ReactNod
       <span className="text-muted text-xs flex-shrink-0">{label}:</span>
       <span className="flex-1 break-words">{children}</span>
     </div>
-  );
-}
-
-/**
- * CollapsibleSection — uses native <details> for zero-JS collapsing.
- *
- * Mirrors the PCS pattern of "show all data, action visible but compact"
- * without forcing the user to scroll through 6 full forms before finding
- * what they need.
- */
-function CollapsibleSection({
-  summary,
-  subtitle,
-  tone = "neutral",
-  openByDefault = false,
-  children,
-}: {
-  summary: string;
-  subtitle?: string;
-  tone?: "neutral" | "primary";
-  openByDefault?: boolean;
-  children: React.ReactNode;
-}) {
-  const wrapperCls = tone === "primary"
-    ? "border-amber-300 bg-amber-50/40 dark:bg-amber-950/20"
-    : "border-border bg-white dark:bg-surface";
-  return (
-    <details
-      className={`group rounded-2xl border shadow-sm overflow-hidden ${wrapperCls}`}
-      open={openByDefault}
-    >
-      <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none hover:bg-surface-alt/40 list-none">
-        <ChevronDown className="h-4 w-4 text-muted transition-transform group-open:rotate-180 flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <h2 className="text-sm font-bold">{summary}</h2>
-          {subtitle && <p className="text-xs text-muted mt-0.5 truncate">{subtitle}</p>}
-        </div>
-      </summary>
-      <div className="px-4 pt-1 pb-4 border-t border-border/40">
-        {children}
-      </div>
-    </details>
   );
 }

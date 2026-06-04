@@ -2,26 +2,30 @@
  * /admin/service-orders/[hNo] — the SINGLE coherent shop-order (ฝากสั่งซื้อ)
  * detail page, faithful to legacy `pcs-admin/include/pages/shops/update.php`.
  *
+ * 2026-06-04 ภูม UX flag #2 — PURE READ-ONLY detail (PCS pattern):
+ *   - The detail page is INFO-FIRST · READ-ONLY ALWAYS · no inline [แก้ไข]
+ *     buttons anywhere · just data display + the prominent "✏️ แก้ไข/อัปเดต"
+ *     CTA in the header that bounces to /edit.
+ *   - ALL field edits (transport · crate · shipBy · payMethod · rate) live on
+ *     /edit alongside the items editor + status-aware workflow actions
+ *     (mark-paid, mark-ordered, spawn, refund).
+ *
  * 2026-06-03 rewrite (owner directive "(B) รื้อทั้งหน้าให้เป็นหน้าเดียวเหมือน
- * legacy เป๊ะ"): replaces the prior read-only KV + 8-stacked-forms shell with
- * one status-aware page that mirrors the legacy `update.php` layout —
+ * legacy เป๊ะ"): the original "single coherent page" structure remains —
  *   header (order#, IPC/Sale badges, status badge, 5-step process bar,
- *           print buttons for status 3/4/5)
+ *           print buttons for status 3/4/5, "แก้ไข/อัปเดต" CTA)
  *   2 columns:
- *     LEFT  — customer block + inline-edit fields (transport · crate · shipBy
- *             · payMethod) + shipping address
- *     RIGHT — price breakdown (rate INLINE-editable · CHN · net THB · cost ·
+ *     LEFT  — customer block + read-only field summary (transport · crate ·
+ *             shipBy · payMethod) + shipping address
+ *     RIGHT — price breakdown (rate read-only · CHN · net THB · cost ·
  *             profit) — the exact formulas from update.php L277-292
- *   status 1/2 → editable per-item price table (ShopItemsEditor · the legacy
- *                update1.php core + the update2 save) — THE missing piece
- *   status 3   → mark-ordered (cShippingNumber) + per-item refund
- *   status 4   → spawn-to-forwarder (per-tracking) + auto-spawn-to-completed
- *   status 5   → completed (read-only) + reprint
- *   footer     → note form + cancel + hard-delete (super)
+ *   read-only items table (ItemSummary) for ALL statuses
+ *   footer     → note form + bill-to + danger zone (super-only)
  *
  * Per AGENTS.md §0a — faithful WORKFLOW (fields/columns/formula/loop), Pacred
  * Tailwind UI (NOT Bootstrap markup). §0d reachability — every action has a
- * visible button on this page. §0c — every Supabase read destructures error.
+ * visible button on this page (CTA → /edit). §0c — every Supabase read
+ * destructures error.
  *
  * Reads the LIVE legacy `tb_header_order` + `tb_order` + `tb_users` +
  * `tb_settings` (the rebuilt `service_orders` is empty on prod).
@@ -30,16 +34,22 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
+import { Pencil } from "lucide-react";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
-import SpawnForwarderForm from "./spawn-form";
-import { buildSpawnRows } from "./spawn-utils";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
-import { ShopItemsEditor, type EditorItem } from "./items-editor";
-import { OrderInlineEdits, OrderRateInlineEdit } from "./inline-edits";
+import type { EditorItem } from "./items-editor";
 import { OrderNoteForm, OrderDangerZone } from "./order-actions";
-import { AdminMarkShopOrderOrderedForm, AdminSpawnToCompletedButton } from "./mark-ordered-form";
-import { AdminRefundItemPanel } from "./refund-item-form";
-import { MarkPaidTbForm } from "./mark-paid-tb-form";
+
+// ── inline-edits labels mirrored here for read-only display (the editor in
+// inline-edits.tsx owns the canonical maps; we duplicate the 3 small ones
+// rather than import a "use client" module for label lookup).
+const TRANSPORT_LABEL: Record<string, string> = {
+  "1": "🚚 ขนส่งทางรถ",
+  "2": "🚢 ขนส่งทางเรือ",
+  "3": "✈️ ขนส่งทางเครื่องบิน",
+};
+const CRATE_LABEL: Record<string, string> = { "1": "ตีลังไม้", "2": "ไม่ตีลังไม้" };
+const PAY_LABEL: Record<string, string> = { "1": "ต้นทาง", "2": "ปลายทาง" };
 
 // round_up(x,2) — CEIL to 2dp (matches legacy round_up + lib roundUp).
 function roundUp2(v: number): number {
@@ -145,16 +155,6 @@ export async function renderLegacyServiceOrderView(hno: string) {
   }
   const items = (itemsRaw ?? []) as unknown as ORow[];
 
-  const { data: settingsRow, error: settingsErr } = await admin
-    .from("tb_settings")
-    .select("hratecostdefault")
-    .eq("id", 1)
-    .maybeSingle<{ hratecostdefault: number | null }>();
-  if (settingsErr) {
-    console.error(`[tb_settings lookup] failed`, { code: settingsErr.code, message: settingsErr.message });
-  }
-  const hRateCostDefault = Number(settingsRow?.hratecostdefault ?? 0);
-
   // Resolve every item cover image (cimages → displayable URL) in parallel.
   const coverUrls = await Promise.all(
     items.map((it) => resolveLegacyUrl(it.cimages, "cover").catch(() => null)),
@@ -176,21 +176,6 @@ export async function renderLegacyServiceOrderView(hno: string) {
     cpriceupdate: Number(it.cpriceupdate ?? 0),
     crewallet:    it.crewallet,
   }));
-
-  // Spawn rows (status 4) + refundable items (status 3/4/5).
-  const spawnRows = buildSpawnRows(
-    items.map((it) => ({
-      cnameshop:       it.cnameshop ?? "",
-      cshippingnumber: it.cshippingnumber ?? "",
-      ctrackingnumber: it.ctrackingnumber,
-    })),
-  );
-  const refundableItems = items
-    .filter((it) => Number(it.camount ?? 0) > 0 && it.crewallet !== "1")
-    .map((it) => ({
-      id: it.id, title: it.ctitle ?? "", cprice: Number(it.cprice ?? 0),
-      camount: Number(it.camount ?? 0), cnameshop: it.cnameshop ?? "",
-    }));
 
   // Bill-to default — for juristic customers the receipt/PDF uses the company
   // name (legacy F-1). tb_corporate is keyed by userid (member code).
@@ -220,11 +205,11 @@ export async function renderLegacyServiceOrderView(hno: string) {
   const netThb   = roundUp2((chn + shipChn) * rate + svc);
   const profit   = (chn + shipChn) * rate - rateCost * costAll;
 
-  const isEditable = status === "1" || status === "2" || status === "6";
   const showPrint = status === "3" || status === "4" || status === "5";
   // legacy printShop: status 5 → print=1 ใบเสร็จ + print=2 ใบแจ้งหนี้; else print=2 only.
   const printHref = (mode: 1 | 2) =>
     `/admin/service-orders/print?print=${mode}&${encodeURIComponent("id[]")}=${encodeURIComponent(r.hno)}`;
+  const editHref = `/admin/service-orders/${encodeURIComponent(r.hno)}/edit`;
 
   return (
     <main className="p-4 sm:p-6 lg:p-8 space-y-5 max-w-6xl mx-auto">
@@ -249,9 +234,18 @@ export async function renderLegacyServiceOrderView(hno: string) {
           )}
         </div>
         <div className="flex flex-col items-end gap-2">
-          <Link href="/admin/service-orders" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
-            ← กลับรายการ
-          </Link>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Link href="/admin/service-orders" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
+              ← กลับรายการ
+            </Link>
+            <Link
+              href={editHref}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-primary-500 bg-primary-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-600"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              แก้ไข / อัปเดต
+            </Link>
+          </div>
           {showPrint && (
             <div className="flex gap-2">
               <a href={printHref(2)} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100">
@@ -322,13 +316,22 @@ export async function renderLegacyServiceOrderView(hno: string) {
             )}
           </div>
 
-          <div className="border-t border-border pt-3">
-            <OrderInlineEdits
-              hNo={r.hno}
-              htransporttype={r.htransporttype}
-              crate={r.crate}
-              hshipby={r.hshipby}
-              paymethod={r.paymethod}
+          <div className="border-t border-border pt-3 space-y-2 text-sm">
+            <KV
+              label="รูปแบบขนส่ง จีน-ไทย"
+              value={TRANSPORT_LABEL[r.htransporttype ?? ""] ?? `mode ${r.htransporttype ?? "-"}`}
+            />
+            <KV
+              label="การตีลังไม้"
+              value={CRATE_LABEL[r.crate ?? ""] ?? "—"}
+            />
+            <KV
+              label="บริษัทขนส่ง"
+              value={r.hshipby || "—"}
+            />
+            <KV
+              label="การเก็บเงินค่าขนส่งในไทย"
+              value={PAY_LABEL[r.paymethod ?? ""] ?? "—"}
             />
           </div>
 
@@ -346,7 +349,12 @@ export async function renderLegacyServiceOrderView(hno: string) {
         <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 sm:p-5 shadow-sm space-y-2 text-sm">
           <div className="flex items-baseline justify-between gap-3">
             <span className="text-muted" title="เรทฝากสั่งในวันสร้างออเดอร์">อัตราแลกเปลี่ยน</span>
-            <OrderRateInlineEdit hNo={r.hno} hRate={rate} />
+            <span className="text-right">
+              <span className="font-mono tabular-nums">
+                {rate.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+              </span>
+              <span className="text-muted"> บาท/หยวน</span>
+            </span>
           </div>
           <KV label="ราคาสินค้า" value={`¥${cny(chn)}`} mono />
           <KV label="ค่าขนส่งในจีน" value={`¥${cny(shipChn)}`} mono />
@@ -376,50 +384,29 @@ export async function renderLegacyServiceOrderView(hno: string) {
         </div>
       </div>
 
-      {/* ── status-aware item workspace ── */}
-      {isEditable && (
-        <ShopItemsEditor
-          hNo={r.hno}
-          hRate={rate}
-          hShippingService={svc}
-          hRateCostDefault={hRateCostDefault}
-          hRateCostInit={rateCost}
-          hCostAllInit={costAll}
-          items={editorItems}
-          superAdmin={superAdmin}
-        />
-      )}
+      {/* ── Items — READ-ONLY on detail (to edit prices/qty, advance status,
+          spawn, refund, or settle from wallet → click "แก้ไข/อัปเดต") ── */}
+      <ItemSummary items={editorItems} completed={status === "5"} />
 
-      {/* mark-paid from wallet (2→3) — self-gates to status 1/2 (Pacred
-          affordance: after pricing, settle the customer's wallet here without
-          waiting for the customer self-pay flow). */}
-      <MarkPaidTbForm hno={r.hno} status={status} totalThb={netThb} />
-
-      {status === "3" && (
-        <>
-          {/* Read-only item summary for the ordered step */}
-          <ItemSummary items={editorItems} />
-          <AdminMarkShopOrderOrderedForm hNo={r.hno} />
-        </>
-      )}
-
-      {status === "4" && (
-        <>
-          <ItemSummary items={editorItems} />
-          <SpawnForwarderForm
-            hNo={r.hno}
-            rows={spawnRows}
-            defaultShipBy={r.hshipby ?? undefined}
-            defaultTransportType={r.htransporttype ?? undefined}
-          />
-          <AdminSpawnToCompletedButton hNo={r.hno} />
-        </>
-      )}
-
-      {status === "5" && <ItemSummary items={editorItems} completed />}
-
-      {/* per-item refund — status 3/4/5 only (panel self-hides otherwise) */}
-      <AdminRefundItemPanel hNo={r.hno} hstatus={status} refundableItems={refundableItems} />
+      {/* ── Edit-page CTA — repeated near the items as a discoverability nudge.
+          Staff used to "ราคา แก้ตรงไหน" — now the next click is right here. ── */}
+      <div className="rounded-2xl border border-dashed border-primary-200 bg-primary-50/40 px-4 py-3 sm:px-5 sm:py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm text-primary-700">
+            <p className="font-semibold">ต้องการแก้ราคา / จำนวน / สั่งสินค้า / ปั่นเข้าฝากนำเข้า / คืนเงิน?</p>
+            <p className="text-xs text-primary-600/80">
+              ทุกการเปลี่ยนแปลงตารางสินค้า + ฟังก์ชั่นอัปเดตสถานะ ทำในหน้าแก้ไข
+            </p>
+          </div>
+          <Link
+            href={editHref}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-primary-500 bg-primary-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-600"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            ไปหน้าแก้ไข / อัปเดต
+          </Link>
+        </div>
+      </div>
 
       {/* ── footer: note + bill-to + danger zone ── */}
       <div className="grid gap-5 lg:grid-cols-2">
