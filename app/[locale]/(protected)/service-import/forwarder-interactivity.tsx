@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+  type ReactNode,
+} from "react";
+import { Package, ChevronDown } from "lucide-react";
 import { calculateForwarderTotal } from "@/actions/forwarder";
 import {
   ForwarderRowView,
@@ -8,6 +15,109 @@ import {
   type ForwarderRow,
 } from "./forwarder-row-view";
 import { ForwarderPayModal } from "./forwarder-pay-modal";
+
+// ── Container grouping (ตู้ครอบ) — cluster rows under their cabinet number;
+//    each group is collapsible and OPEN by default ("default โชว์ไว้เลย"). ──
+const NO_CABINET = "__no_cabinet__";
+
+function groupByContainer<T extends { fcabinetnumber: string | null }>(
+  rows: T[],
+): [string, T[]][] {
+  const map = new Map<string, T[]>();
+  for (const row of rows) {
+    const cab = (row.fcabinetnumber ?? "").trim() || NO_CABINET;
+    const arr = map.get(cab);
+    if (arr) arr.push(row);
+    else map.set(cab, [row]);
+  }
+  return Array.from(map.entries());
+}
+
+type ContainerSummary = { boxes: number; weight: number; volume: number; total: number };
+
+// Roll-up of every item in a container — shown in the group header so the
+// customer sees the totals without expanding ("รวมสรุป รายละเอียดทั้งหมด").
+function summarizeContainer(rows: ForwarderRow[]): ContainerSummary {
+  let boxes = 0,
+    weight = 0,
+    volume = 0,
+    total = 0;
+  for (const r of rows) {
+    boxes += Number(r.famount) || 0;
+    weight += Number(r.fweight) || 0;
+    volume += Number(r.fvolume) || 0;
+    total += calPriceForwarderSumCompany(
+      r.fusercompany,
+      r.fpriceupdate,
+      r.ftotalprice,
+      r.ftransportprice,
+      r.fshippingservice,
+      r.fdiscount,
+      r.pricecrate,
+      r.ftransportpricechnthb,
+      r.priceother,
+    );
+  }
+  return { boxes, weight, volume, total };
+}
+
+function ContainerGroup({
+  cabinet,
+  count,
+  summary,
+  children,
+}: {
+  cabinet: string | null;
+  count: number;
+  summary: ContainerSummary;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(true); // default expanded
+  const fmt = (n: number, d = 2) =>
+    n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-surface-alt/30">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left transition-colors hover:bg-surface-alt/60"
+      >
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="flex items-center gap-2">
+            <Package className="h-4 w-4 shrink-0 text-red-600" />
+            <span className="truncate text-sm font-bold text-foreground">
+              {cabinet ? (
+                <>
+                  ตู้ <span className="font-mono">{cabinet}</span>
+                </>
+              ) : (
+                "ยังไม่เข้าตู้"
+              )}
+            </span>
+            <span className="inline-flex shrink-0 items-center justify-center rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-muted dark:bg-background">
+              {count}
+            </span>
+          </span>
+          {/* รวมสรุป รายละเอียดทั้งหมดของตู้ */}
+          <span className="text-[11px] font-normal text-muted">
+            {summary.boxes} กล่อง · {fmt(summary.weight, 1)} kg · {fmt(summary.volume)} CBM
+            {summary.total > 0 && (
+              <>
+                {" · รวม "}
+                <span className="font-bold text-red-600">฿{fmt(summary.total)}</span>
+              </>
+            )}
+          </span>
+        </span>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-muted transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && <div className="space-y-2.5 p-2.5 pt-0">{children}</div>}
+    </div>
+  );
+}
 
 /**
  * Client-side interactivity for `/service-import` — Tailwind card-list
@@ -223,11 +333,6 @@ export function ForwarderInteractivity({
               <div className="text-[12px] leading-snug whitespace-pre-line">
                 {promo.text}
               </div>
-              {promo.amount > 0 && (
-                <div className="mt-1.5 text-[11px] font-semibold opacity-90">
-                  ส่วนลดสูงสุด {numberFormat2(promo.amount)} บาท
-                </div>
-              )}
             </div>
           </div>
         ))}
@@ -249,16 +354,26 @@ export function ForwarderInteractivity({
             </h3>
           </div>
         ) : (
-          enrichedRows.map((row) => (
-            <ForwarderRowView
-              key={row.id}
-              row={row}
-              q={q}
-              arrFidDriver={arrFidDriver}
-              selectable={row.eligibleForPay}
-              checked={selectedIds.has(row.id)}
-              onToggleCheck={toggleRow}
-            />
+          groupByContainer(enrichedRows).map(([cab, rows]) => (
+            <ContainerGroup
+              key={cab}
+              cabinet={cab === NO_CABINET ? null : cab}
+              count={rows.length}
+              summary={summarizeContainer(rows)}
+            >
+              {rows.map((row) => (
+                <ForwarderRowView
+                  key={row.id}
+                  row={row}
+                  q={q}
+                  arrFidDriver={arrFidDriver}
+                  selectable={row.eligibleForPay}
+                  checked={selectedIds.has(row.id)}
+                  onToggleCheck={toggleRow}
+                  grouped
+                />
+              ))}
+            </ContainerGroup>
           ))
         )}
         <div id="example-console-rows" />

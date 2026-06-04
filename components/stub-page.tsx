@@ -8,9 +8,10 @@ import { Footer } from "@/components/sections/footer";
 import { ImportExportBanner } from "@/components/sections/import-export-banner";
 import { ClearanceBanner } from "@/components/sections/clearance-banner";
 import { PurchaseBanner } from "@/components/sections/purchase-banner";
+import { RotatingServiceBanner } from "@/components/sections/rotating-service-banner";
 
 export type Breadcrumb = { label: string; href?: string };
-export type StubBanner = "import-export" | "clearance" | "purchase";
+export type StubBanner = "import-export" | "clearance" | "purchase" | "rotate";
 
 export function StubPage({
   eyebrow,
@@ -89,7 +90,9 @@ export function StubPage({
         </section>
 
         {/* Banner CTA — แทน CTA card เล็ก */}
-        {banner === "clearance" ? (
+        {banner === "rotate" ? (
+          <RotatingServiceBanner />
+        ) : banner === "clearance" ? (
           <ClearanceBanner />
         ) : banner === "purchase" ? (
           <PurchaseBanner />

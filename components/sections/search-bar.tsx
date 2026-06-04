@@ -90,7 +90,7 @@ export function SearchBar({ embedded = false, hideOnMobile = false, defaultColla
 
   const rootClass = embedded
     ? "w-full bg-white dark:bg-surface overflow-hidden"
-    : `${hideOnMobile ? "hidden md:block" : "block"} sticky top-[56px] z-40 w-full bg-white dark:bg-surface border-b border-gray-100 dark:border-border shadow-[0_4px_15px_rgba(0,0,0,0.04)] overflow-hidden transition-[max-height,padding,opacity] duration-300 ease-in-out ${collapsed ? "max-h-0 opacity-0 !py-0 !border-0 !shadow-none" : "max-h-[200px] opacity-100"}`;
+    : `${hideOnMobile ? "hidden md:block" : "block"} sticky top-[56px] z-40 w-full bg-white dark:bg-surface border-b border-gray-100 dark:border-border shadow-[0_4px_15px_rgba(0,0,0,0.04)] overflow-hidden transition-[max-height,padding,opacity] duration-300 ease-in-out ${collapsed ? "max-h-0 opacity-0 !py-0 !border-0 !shadow-none xl:max-h-[200px] xl:opacity-100 xl:!border-b xl:!shadow-[0_4px_15px_rgba(0,0,0,0.04)]" : "max-h-[200px] opacity-100"}`;
 
   return (
     <div className={rootClass}>

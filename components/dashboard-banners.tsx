@@ -27,7 +27,7 @@ export async function DashboardBanners() {
   // migration 0016 hasn't run yet) — so the dashboard always has the
   // visual row, matching the PCS legacy layout.
   const DEFAULT_BANNERS: Banner[] = [
-    { id: "default-search-china", slug: "search-china", title: "ค้นหาสินค้าจากเว็บ 1688 / Taobao / Tmall", subtitle: "วางลิ้งสินค้าหรือพิมพ์คำค้น แปลภาษาไทยทันที", image_path: null, link_href: "/service-order/add", cta_label: "เริ่มค้นหา" },
+    { id: "default-search-china", slug: "search-china", title: "ค้นหาสินค้าจากเว็บ 1688 / Taobao / Tmall", subtitle: "วางลิ้งสินค้าหรือพิมพ์คำค้น แปลภาษาไทยทันที", image_path: null, link_href: "/cart/add", cta_label: "เริ่มค้นหา" },
     { id: "default-billing",      slug: "billing",      title: "ออกบิลใบเสร็จ / ใบแจ้งหนี้",                 subtitle: "ฝากสั่งซื้อด้วยตัวคุณเอง — Pacred ออกบิลให้อัตโนมัติ", image_path: null, link_href: "/cart", cta_label: "ดูตัวอย่าง" },
     { id: "default-line-oa",      slug: "line-oa",      title: "ไม่พลาดทุกการแจ้งเตือน",                     subtitle: "เพิ่ม Pacred LINE OA เป็นเพื่อน รับข่าวสาร + โปรโมชั่น",  image_path: null, link_href: "/line",               cta_label: "เพิ่มเพื่อน LINE" },
   ];

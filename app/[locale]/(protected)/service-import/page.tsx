@@ -491,10 +491,6 @@ export default async function ServiceImportPage({
                 </Link>
               </div>
 
-              {/* Add-forwarder CTA — Tailwind modal (no Bootstrap JS). Opens
-                  the shared add form over the list; address options resolved
-                  server-side above and handed down as props. */}
-              <AddForwarderModal mainAddr={mainAddress} others={otherAddresses} />
             </div>
 
             {/* ── Status filter chips + content ── */}
@@ -503,6 +499,10 @@ export default async function ServiceImportPage({
                 สถานะรายการ
               </h4>
               <div className="flex flex-wrap gap-2">
+                {/* Add-forwarder CTA — compact pill sitting in the status row
+                    (slightly bigger than the filter chips). Opens the shared
+                    add form over the list (address options handed down as props). */}
+                <AddForwarderModal mainAddr={mainAddress} others={otherAddresses} compact />
                 {statusChips.map((chip) => {
                   const isActive =
                     chip.href === "/service-import"

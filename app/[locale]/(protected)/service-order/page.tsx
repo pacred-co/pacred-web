@@ -13,8 +13,47 @@ import {
   FileText,
   CheckCircle2,
   Eye,
+  type LucideIcon,
 } from "lucide-react";
-import { CancelOrderButton } from "./cancel-order-button";
+
+// One order-card action — ALWAYS rendered. When `enabled` is false it shows
+// greyed out + non-clickable (a <span>, not a link) so every card displays the
+// full action set, with inapplicable ones disabled.
+function OrderActionLink({
+  enabled,
+  href,
+  target,
+  Icon,
+  label,
+  enabledCls,
+}: {
+  enabled: boolean;
+  href: string;
+  target?: string;
+  Icon: LucideIcon;
+  label: string;
+  enabledCls: string;
+}) {
+  const base =
+    "inline-flex items-center gap-1 rounded-full text-[11.5px] font-bold px-2.5 py-1 transition-colors";
+  if (!enabled) {
+    return (
+      <span
+        aria-disabled="true"
+        className={`${base} bg-neutral-100 text-neutral-400 border border-neutral-200 cursor-not-allowed`}
+      >
+        <Icon className="w-3 h-3" strokeWidth={2.2} />
+        {label}
+      </span>
+    );
+  }
+  return (
+    <Link href={href} target={target} className={`${base} ${enabledCls}`}>
+      <Icon className="w-3 h-3" strokeWidth={2.2} />
+      {label}
+    </Link>
+  );
+}
 
 /**
  * รายการฝากสั่งซื้อสินค้า — Tailwind-rebuilt version (ปอน 2026-05-26).
@@ -224,6 +263,26 @@ export default async function ServiceOrderPage({
     );
   }
 
+  // Representative product URL per order (first tb_order.curl) — shown on
+  // desktop next to the title (pattern "ชื่อ | url สินค้า"). One query for all
+  // rows; non-fatal on error (the link is decorative, never 500 the list).
+  const urlMap = new Map<string, string>();
+  if (orderHnos.length > 0) {
+    const { data: urlRows, error: urlErr } = await admin
+      .from("tb_order")
+      .select("hno, curl")
+      .in("hno", orderHnos);
+    if (urlErr) {
+      console.error(`[service-order/page] tb_order curl lookup failed`, {
+        code: urlErr.code, message: urlErr.message, orderCount: orderHnos.length,
+      });
+    }
+    for (const u of (urlRows ?? []) as { hno: string; curl: string }[]) {
+      const c = (u.curl ?? "").trim();
+      if (c !== "" && c !== "-" && c !== "PCS" && !urlMap.has(u.hno)) urlMap.set(u.hno, c);
+    }
+  }
+
   return (
     <>
       <title>รายการฝากสั่งซื้อสินค้า | Pacred</title>
@@ -319,6 +378,7 @@ export default async function ServiceOrderPage({
                       key={row.hno}
                       row={row}
                       promoId={promoMap.get(row.hno)}
+                      productUrl={urlMap.get(row.hno)}
                       isAnchor={!!hNoAnchor && hNoAnchor === row.hno}
                     />
                   ))}
@@ -352,10 +412,13 @@ export default async function ServiceOrderPage({
 function OrderCard({
   row,
   promoId,
+  productUrl,
   isAnchor,
 }: {
   row: HeaderOrderRow;
   promoId: number | undefined;
+  /** Representative product URL — shown next to the title on desktop. */
+  productUrl: string | undefined;
   isAnchor: boolean;
 }) {
   const pricePayNum =
@@ -414,12 +477,37 @@ function OrderCard({
             <ProBadge promoId={promoId} />
             <StatusBadge hStatus={row.hstatus} />
           </div>
+          {/* Mobile: product name only (2-line clamp). */}
           <Link
             href={`/service-order/${row.hno}`}
-            className="block mt-1 text-[12.5px] md:text-[13.5px] text-foreground hover:text-primary-600 line-clamp-2"
+            className="md:hidden block mt-1 text-[12.5px] text-foreground hover:text-primary-600 line-clamp-2"
           >
             {itemTitle || "—"}
           </Link>
+          {/* Desktop: ชื่อ | url สินค้า — STRICTLY one line. The whole block
+              truncates: whatever overflows the column width is hidden with an
+              ellipsis (…). */}
+          <div className="hidden md:block mt-1 truncate text-[13.5px]">
+            <Link
+              href={`/service-order/${row.hno}`}
+              className="text-foreground hover:text-primary-600 hover:underline"
+            >
+              {itemTitle || "—"}
+            </Link>
+            {productUrl && (
+              <>
+                <span className="text-border"> | </span>
+                <a
+                  href={productUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sky-600 hover:underline"
+                >
+                  {productUrl}
+                </a>
+              </>
+            )}
+          </div>
           <div className="mt-1.5 flex items-center gap-3 flex-wrap text-[11px] text-muted">
             <span className="inline-flex items-center gap-1">
               <Calendar className="w-3 h-3" strokeWidth={2} />
@@ -444,13 +532,8 @@ function OrderCard({
 
         {/* Action buttons — right column on desktop, full row beneath on mobile */}
         <div className="col-span-2 md:col-span-1 flex flex-wrap md:flex-col items-end justify-end gap-1.5">
-          <Link
-            href={`/service-order/${row.hno}`}
-            className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11.5px] font-bold px-2.5 py-1 hover:bg-emerald-100 transition-colors"
-          >
-            <Eye className="w-3 h-3" strokeWidth={2.2} />
-            ดูรายละเอียด
-          </Link>
+          {/* ชำระเงิน — เด่น, โชว์เฉพาะออเดอร์รอชำระเงิน (status 2) → จ่ายจาก
+              wallet ที่หน้ารายละเอียด (?pay=true). */}
           {row.hstatus === "2" && (
             <Link
               href={`/service-order/${row.hno}?pay=true`}
@@ -460,29 +543,32 @@ function OrderCard({
               ชำระเงิน
             </Link>
           )}
-          {Number(row.hstatus) <= 2 && (
-            <CancelOrderButton hNo={row.hno} />
-          )}
-          {row.hstatus === "5" && (
-            <Link
-              href={`/service-order/print?print=1&id=${row.hno}`}
-              target="_blank"
-              className="inline-flex items-center gap-1 rounded-full bg-primary-50 text-primary-700 border border-primary-200 text-[11.5px] font-bold px-2.5 py-1 hover:bg-primary-100 transition-colors"
-            >
-              <Receipt className="w-3 h-3" strokeWidth={2.2} />
-              พิมพ์ใบเสร็จ
-            </Link>
-          )}
-          {Number(row.hstatus) > 1 && Number(row.hstatus) < 6 && (
-            <Link
-              href={`/service-order/print?print=2&id=${row.hno}`}
-              target="_blank"
-              className="inline-flex items-center gap-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[11.5px] font-bold px-2.5 py-1 hover:bg-rose-100 transition-colors"
-            >
-              <FileText className="w-3 h-3" strokeWidth={2.2} />
-              พิมพ์ใบแจ้งหนี้
-            </Link>
-          )}
+          {/* แค่ 3 อัน — รายละเอียด + ใบเสร็จ + ใบแจ้งหนี้. ทั้ง 3 โชว์เสมอ;
+              ใบเสร็จ/ใบแจ้งหนี้ จะเทา + กดไม่ได้ จนกว่าออเดอร์จะถึงสถานะที่ออก
+              เอกสารนั้นได้ (ชำระเงิน/ยกเลิก ทำผ่านลิงก์เตือน + หน้ารายละเอียด). */}
+          <OrderActionLink
+            enabled
+            href={`/service-order/${row.hno}`}
+            Icon={Eye}
+            label="ดูรายละเอียด"
+            enabledCls="bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+          />
+          <OrderActionLink
+            enabled={row.hstatus === "5"}
+            href={`/service-order/print?print=1&id=${row.hno}`}
+            target="_blank"
+            Icon={Receipt}
+            label="พิมพ์ใบเสร็จ"
+            enabledCls="bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100"
+          />
+          <OrderActionLink
+            enabled={Number(row.hstatus) > 1 && Number(row.hstatus) < 6}
+            href={`/service-order/print?print=2&id=${row.hno}`}
+            target="_blank"
+            Icon={FileText}
+            label="พิมพ์ใบแจ้งหนี้"
+            enabledCls="bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100"
+          />
         </div>
       </div>
     </article>
@@ -502,7 +588,7 @@ function EmptyState({ title, showCta }: { title: string; showCta: boolean }) {
       <h3 className="text-[15px] md:text-[17px] font-bold text-foreground">{title}</h3>
       {showCta && (
         <Link
-          href="/service-order/add"
+          href="/cart/add"
           className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[13px] font-bold px-4 py-2 shadow-lg shadow-primary-600/30 hover:shadow-primary-600/40 hover:-translate-y-0.5 transition-all"
         >
           <Plus className="w-4 h-4" strokeWidth={2.5} />

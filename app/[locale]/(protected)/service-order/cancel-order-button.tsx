@@ -13,10 +13,31 @@ import { useRouter } from "next/navigation";
 import { XCircle } from "lucide-react";
 import { cancelServiceOrder } from "@/actions/service-order";
 
-export function CancelOrderButton({ hNo }: { hNo: string }) {
+export function CancelOrderButton({
+  hNo,
+  disabled = false,
+}: {
+  hNo: string;
+  /** When the order status doesn't allow cancel — render greyed + non-clickable. */
+  disabled?: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  // Disabled (status doesn't allow cancel) — show the action greyed out so the
+  // full action set is visible on every card, but it can't be clicked.
+  if (disabled) {
+    return (
+      <span
+        aria-disabled="true"
+        className="inline-flex items-center gap-1 rounded-full bg-neutral-100 text-neutral-400 border border-neutral-200 text-[11.5px] font-bold px-2.5 py-1 cursor-not-allowed"
+      >
+        <XCircle className="w-3 h-3" strokeWidth={2.2} />
+        ยกเลิก
+      </span>
+    );
+  }
 
   function onCancel() {
     if (!confirm(`ยืนยันยกเลิกออเดอร์ ${hNo}?`)) return;

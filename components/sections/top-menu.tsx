@@ -50,10 +50,9 @@ function buildMenu(t: Translator): Item[] {
       groups: [
         {
           title: t("china"),
+          // ไม่แยก — 1688 / Taobao / Alipay shown as a single combined item.
           items: [
-            { label: "1688",   href: "/payment/1688" },
-            { label: "Taobao", href: "/payment/taobao" },
-            { label: "Alipay", href: "/payment/alipay" },
+            { label: "1688 / Taobao / Alipay", href: "/payment/1688" },
           ],
         },
       ],

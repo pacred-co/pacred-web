@@ -5,6 +5,7 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { legacyMemberUrl } from "@/lib/legacy-image";
 import { PaymentDueList, type PaymentDueItem } from "./payment-due-list";
+import type { ForwarderRow } from "../service-import/forwarder-row-view";
 
 /**
  * รายการที่ต้องชำระ — a cross-service "items awaiting payment" aggregator
@@ -105,7 +106,12 @@ export default async function PaymentDuePage() {
       .eq("hstatus", "2"),
     admin
       .from("tb_forwarder")
-      .select("id, fcover, fdate, fdetail, ftotalprice")
+      // Full ForwarderRow column set (same as the /service-import list,
+      // page.tsx L253) so the in-place <ForwarderPayModal> can compute the
+      // bill + QR without navigating away.
+      .select(
+        "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftrackingth, ftransporttype, fshipby, fdetail, fcover, famount, fweight, fvolume, ftotalprice, ftransportprice, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, fcredit, fcreditdate, fdatestatus5, fdatetothai, fcabinetnumber, fdatecontainerclose, fnote, fnoteuser, reforder, adminidcreator",
+      )
       .eq("userid", userID)
       .eq("fstatus", "5"),
     admin
@@ -156,6 +162,45 @@ export default async function PaymentDuePage() {
   for (const r of (importRes.data ?? []) as Record<string, unknown>[]) {
     const id = Number(r.id);
     const detail = String(r.fdetail ?? "").trim();
+    // Build the full ForwarderRow (same field mapping as the /service-import
+    // list, page.tsx L302-336) so the card can open <ForwarderPayModal>
+    // in-place — QR + slip + submit for THIS item without leaving the page.
+    // promoid is display-only (promo strip) → null here.
+    const forwarderRow: ForwarderRow = {
+      id,
+      fdate: (r.fdate as string) ?? null,
+      fstatus: (r.fstatus as string) ?? null,
+      ftrackingchn: (r.ftrackingchn as string) ?? null,
+      ftrackingchn2: (r.ftrackingchn2 as string) ?? null,
+      ftrackingth: (r.ftrackingth as string) ?? null,
+      ftransporttype: (r.ftransporttype as string) ?? null,
+      fshipby: (r.fshipby as string) ?? null,
+      fdetail: (r.fdetail as string) ?? null,
+      fcover: (r.fcover as string) ?? null,
+      famount: Number(r.famount ?? 0),
+      fweight: Number(r.fweight ?? 0),
+      fvolume: Number(r.fvolume ?? 0),
+      ftotalprice: Number(r.ftotalprice ?? 0),
+      ftransportprice: Number(r.ftransportprice ?? 0),
+      fpriceupdate: Number(r.fpriceupdate ?? 0),
+      fdiscount: Number(r.fdiscount ?? 0),
+      fshippingservice: Number(r.fshippingservice ?? 0),
+      pricecrate: Number(r.pricecrate ?? 0),
+      ftransportpricechnthb: Number(r.ftransportpricechnthb ?? 0),
+      priceother: Number(r.priceother ?? 0),
+      fusercompany: (r.fusercompany as string) ?? null,
+      fcredit: (r.fcredit as string) ?? null,
+      fcreditdate: (r.fcreditdate as string) ?? null,
+      fdatestatus5: (r.fdatestatus5 as string) ?? null,
+      fdatetothai: (r.fdatetothai as string) ?? null,
+      fcabinetnumber: (r.fcabinetnumber as string) ?? null,
+      fdatecontainerclose: (r.fdatecontainerclose as string) ?? null,
+      fnote: (r.fnote as string) ?? null,
+      fnoteuser: (r.fnoteuser as string) ?? null,
+      reforder: (r.reforder as string) ?? null,
+      adminidcreator: (r.adminidcreator as string) ?? null,
+      promoid: null,
+    };
     withTs.push({
       ts: parseTs(r.fdate as string | null),
       item: {
@@ -172,6 +217,8 @@ export default async function PaymentDuePage() {
         statusLabel: "รอชำระเงิน",
         ctaLabel: "ชำระเงิน",
         ctaHref: `/service-import?q=5`,
+        forwarderRow,
+        isJuristic: (r.fusercompany as string) === "1",
       },
     });
   }

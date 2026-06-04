@@ -274,7 +274,7 @@ function ReviewCard({ review, index = 0, t, typeConfig }: { review: Review; inde
       data-review-card
       aria-label={title}
       style={{ contain: "layout paint" }}
-      className="group relative shrink-0 w-[220px] sm:w-[240px] md:w-[260px] aspect-[3/4] rounded-[22px] overflow-hidden bg-gradient-to-br from-gray-200 via-gray-400 to-gray-700 dark:from-surface-alt dark:via-surface dark:to-background shadow-[0_8px_22px_rgba(15,23,42,0.10)] hover:shadow-[0_22px_44px_rgba(15,23,42,0.22)] hover:-translate-y-1.5 transition-[transform,box-shadow,ring-color] duration-300 cursor-pointer ring-1 ring-black/5 hover:ring-primary-400/30 snap-start"
+      className="group relative shrink-0 w-[calc(50vw-16px)] sm:w-[240px] md:w-[260px] aspect-[3/4] rounded-[22px] overflow-hidden bg-gradient-to-br from-gray-200 via-gray-400 to-gray-700 dark:from-surface-alt dark:via-surface dark:to-background shadow-[0_8px_22px_rgba(15,23,42,0.10)] hover:shadow-[0_22px_44px_rgba(15,23,42,0.22)] hover:-translate-y-1.5 transition-[transform,box-shadow,ring-color] duration-300 cursor-pointer ring-1 ring-black/5 hover:ring-primary-400/30 snap-start"
     >
       {/* Background — placeholder pattern or image */}
       {review.image ? (
@@ -283,7 +283,7 @@ function ReviewCard({ review, index = 0, t, typeConfig }: { review: Review; inde
           alt={title}
           fill
           quality={92}
-          sizes="(max-width: 767px) 75vw, 320px"
+          sizes="(max-width: 767px) 50vw, 320px"
           className="object-cover"
         />
       ) : (

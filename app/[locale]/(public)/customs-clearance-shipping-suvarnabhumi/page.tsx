@@ -51,7 +51,7 @@ export async function generateMetadata({
   const absoluteTitle =
     locale === "en"
       ? "Shipping, Customs Clearance & Import Duties | Pacred Shipping"
-      : "Shipping, Customs Clearance & Import Duties บริการชิปปิ้ง เคลียร์ภาษี และ พิธีการศุลกากร | Pacred Shipping";
+      : "บริการ Shipping เคลียร์สินค้า(ติดด่าน) สุวรรณภูมิ คลองเตย แหลมฉบัง Pacred Shipping";
   return {
     ...base,
     title: { absolute: absoluteTitle },
@@ -240,7 +240,7 @@ export default async function CustomsClearancePage({
   const t = await getTranslations({ locale, namespace: NS });
   const homeLabel = typedLocale === "th" ? "หน้าหลัก" : "Home";
   const svcLabel  = typedLocale === "th" ? "บริการ" : "Services";
-  const here      = typedLocale === "th" ? "เคลียร์ศุลกากร" : "Customs clearance";
+  const here      = "customs-clearance-shipping-suvarnabhumi";
 
   return (
     <>
@@ -293,7 +293,7 @@ export default async function CustomsClearancePage({
               <ChevronRight className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={2.2} />
             </li>
             <li aria-current="page" className="font-bold text-foreground">
-              เคลียร์ศุลกากร
+              customs-clearance-shipping-suvarnabhumi
             </li>
           </ol>
         </nav>
@@ -301,13 +301,12 @@ export default async function CustomsClearancePage({
         {/* ═══════ 1. Hero intro ═══════ */}
         <section className="relative pt-1 md:pt-2 pb-1 md:pb-2">
           <div className="relative mx-auto w-full max-w-[1140px] px-4 md:px-5">
+            {/* One flowing line — no forced breaks; สุวรรณภูมิ-คลองเตยแหลมฉบัง
+                rendered a bit smaller so it sits inline cleanly. */}
             <h1 className="text-[20px] md:text-[40px] leading-[1.25] md:leading-[1.2] font-black tracking-[-0.025em] text-[#111827] dark:text-white">
-              <span className="md:block">บริการ <span className="text-primary-600">Customs Clearance</span> เคลียร์ภาษี (<span className="text-primary-600 text-[28px] md:text-[56px]">สินค้าติดด่าน</span>)</span>{" "}
-              <span className="md:block md:mt-1">
-                <span className="block md:inline">สุวรรณภูมิ คลองเตย แหลมฉบัง</span>
-                <br className="hidden md:block" />
-                <span className="text-primary-600">Pacred Shipping</span>
-              </span>
+              บริการ <span className="text-primary-600">Shipping</span> เคลียร์สินค้า(<span className="text-primary-600 text-[28px] md:text-[56px]">ติดด่าน</span>){" "}
+              <span className="text-[0.7em] font-bold">สุวรรณภูมิ คลองเตย แหลมฉบัง</span>{" "}
+              <span className="text-primary-600">Pacred Shipping</span>
             </h1>
 
             {/* ─── Service scope banner — tappable LINE link, headline only (per เดฟ 2026-05-18) ─── */}
@@ -378,14 +377,13 @@ export default async function CustomsClearancePage({
             <div className="mt-4 md:mt-5 rounded-2xl md:rounded-3xl border border-primary-200 dark:border-primary-800/60 bg-gradient-to-br from-primary-50/60 via-white to-primary-50/30 dark:from-primary-900/15 dark:via-surface dark:to-primary-900/10 p-4 md:p-6 shadow-[0_8px_22px_rgba(179,0,0,0.06)]">
               <ul className="flex flex-col gap-y-3 md:gap-y-3.5 text-[14px] md:text-[16px] leading-[1.55] text-foreground/95">
                 {[
-                  { icon: "/images/hero-section/icon-draf/transfast.png",       text: "รับเคลียร์ทั้งขาเข้า–ขาออก ไม่ว่าจะมาทางอากาศ ทางเรือ หรือทางรถ" },
-                  { icon: "/images/hero-section/icon-draf/checklistred.png",    text: "จับคู่ทะเบียนผู้นำเข้า–ส่งออก (YY) ที่กรมศุลฯ ให้ จบไวภายในครึ่งชั่วโมง" },
-                  { icon: "/images/hero-section/icon-draf/pcs-forwarder.png",   text: "เอกสารครบมือทุกใบ — AWB, B/L, D/O, Invoice + Packing, ใบขนสินค้า, ใบเสร็จภาษี และใบอนุญาตนำเข้า" },
-                  { icon: "/images/hero-section/icon-draf/customclearance.png", text: "เคยติดด่านมาก่อน? เราแก้ให้ตั้งแต่ภาษีเกิน พิกัดผิด เอกสารขาด ไปจนใบอนุญาตยังไม่ครบ" },
-                  { icon: "/images/hero-section/icon-draf/customclearance.png", text: "วิ่งใบอนุญาตให้ทุกหน่วย — อย., มอก., สมอ., กสทช., กรมเกษตร, กรมประมง และอื่นๆ" },
-                  { icon: "/images/hero-section/icon-draf/pcs-sales.png",       text: "ทีมเดินงานหน้าด่านจริงมามากกว่า 15 ปี รู้จักเจ้าหน้าที่ทุกตัวคน" },
-                  { icon: "/images/hero-section/icon-draf/checklistred.png",    text: "มีใบอนุญาตตัวแทนออกของ (Shipping License) ของจริง ไม่ใช่นายหน้าหากิน" },
-                  { icon: "/images/hero-section/icon-draf/people.png",          text: "ทุกอย่างถูกกฎหมาย ใบขนพร้อม ภาษีอากรครบ ไม่ต้องกลัวกรมศุล ตำรวจ หรือสรรพากรย้อนหลัง" },
+                  { icon: "/images/hero-section/icon-draf/billingicon.png",     text: "ลงทะเบียนกรมศุล จับคู่ YY ตัวแทนนำเข้า ออกของ – ส่งออก ภายใน 1 ชั่วโมง" },
+                  { icon: "/images/hero-section/icon-draf/pcs-forwarder.png",   text: "ดูแลเอกสารครบ: ใบขน, ใบเสร็จภาษี, เอกสารใบอนุญาตนำเข้าต่างๆ" },
+                  { icon: "/images/hero-section/icon-draf/customclearance.png", text: "แก้ปัญหาสินค้าติดด่าน ภาษีไม่ลงตัว, เอกสารไม่ครบ, HS CODE พิกัดไม่ตรง, สินค้าไม่มีใบอนุญาต ติด DHL FEDEX TNT UPS" },
+                  { icon: "/images/hero-section/icon-draf/transfast.png",       text: "รองรับขนส่งทุกรูปแบบไม่ว่าจะเป็น รถ เรือ แอร์" },
+                  { icon: "/images/hero-section/icon-draf/pcs-sales.png",       text: "ให้คำปรึกษาฟรีโดยผู้เชี่ยวชาญด้านศุลกากรกว่า 14 ปี" },
+                  { icon: "/images/hero-section/icon-draf/people.png",          text: "ได้รับใบอนุญาตตัวแทนออกของ (Shipping License) และ สมาคมชิปปิ้ง อย่างถูกต้อง" },
+                  { icon: "/images/hero-section/icon-draf/checklistred.png",    text: "การันตีราคาถูก โปร่งใส ไม่มีบวกแอบ" },
                 ].map((item) => (
                   <li key={item.text} className="flex items-start gap-3">
                     <Image src={item.icon} alt="" width={32} height={32} aria-hidden className="w-6 h-6 md:w-8 md:h-8 shrink-0 mt-0.5 object-contain" />

@@ -372,6 +372,7 @@ export function ForwarderRowView({
   selectable = false,
   checked = false,
   onToggleCheck,
+  grouped = false,
 }: {
   row: ForwarderRow;
   q: string;
@@ -379,6 +380,9 @@ export function ForwarderRowView({
   selectable?: boolean;
   checked?: boolean;
   onToggleCheck?: (id: number, next: boolean) => void;
+  /** When rendered inside a container group, hide the redundant per-card
+   *  "เลขที่ตู้" line (the cabinet is already in the group header). */
+  grouped?: boolean;
 }) {
   // L672 — fTrackingCHN2 overrides fTrackingCHN when present.
   const trackingChn =
@@ -455,8 +459,9 @@ export function ForwarderRowView({
         </div>
       </header>
 
-      {/* Body — thumbnail + details */}
-      <div className="flex gap-3 p-3">
+      {/* Body — thumbnail + compact details (track + รายละเอียด on one row,
+          a small muted meta row below — clean, not sparse). */}
+      <div className="flex gap-2.5 p-2.5 md:gap-3 md:p-3">
         {/* Thumbnail (image-popup-vertical-fit class kept so legacy
             magnific-popup vendor JS binds to it on hydration). */}
         <a
@@ -465,7 +470,7 @@ export function ForwarderRowView({
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            className="w-20 h-20 object-cover rounded-lg border border-border bg-surface-alt"
+            className="h-16 w-16 md:h-20 md:w-20 object-cover rounded-lg border border-border bg-surface-alt"
             src={convertIMGCHN(row.fcover, "_80x80.jpg")}
             width={80}
             height={80}
@@ -473,60 +478,51 @@ export function ForwarderRowView({
           />
         </a>
 
-        {/* Details */}
-        <div className="min-w-0 flex-1 space-y-1 text-xs md:text-sm">
-          {/* Tracking CHN */}
-          {trackingChn && (
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-muted shrink-0">🇨🇳 Track:</span>
+        {/* Details — condensed */}
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 text-xs md:text-sm">
+          {/* Track + รายละเอียด — one row, truncated */}
+          <div className="flex min-w-0 items-baseline gap-1.5">
+            {trackingChn && (
               <a
                 href={`/service-import/${row.id}`}
-                className="font-mono text-red-600 hover:underline truncate"
+                className="shrink-0 font-mono text-red-600 hover:underline"
               >
-                {trackingChn}
+                🇨🇳 {trackingChn}
               </a>
-            </div>
-          )}
-          {/* Tracking TH */}
-          {row.ftrackingth && row.ftrackingth !== "-" && (
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-muted shrink-0">🇹🇭 พัสดุ:</span>
-              <span className="font-mono text-foreground truncate">
-                {row.ftrackingth}
-              </span>
-            </div>
-          )}
-          {/* Container */}
-          {row.fcabinetnumber && (
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-muted shrink-0">เลขที่ตู้:</span>
-              <span className="font-mono text-foreground">{row.fcabinetnumber}</span>
-              {containerCloseValid && (
-                <span className="text-[11px] text-muted">
-                  · {dmy(row.fdatecontainerclose)}
-                </span>
-              )}
-            </div>
-          )}
-          {/* Detail */}
-          {row.fdetail && (
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-muted shrink-0">รายละเอียด:</span>
+            )}
+            {row.fdetail && (
               <a
                 href={`/service-import/${row.id}`}
-                className="text-foreground hover:underline line-clamp-2"
+                className="truncate text-foreground/90 hover:underline"
               >
+                {trackingChn ? "· " : ""}
                 {row.fdetail}
               </a>
-            </div>
-          )}
-          {/* จะถึงไทยประมาณ */}
-          {fDateToThaiValid && (
-            <div className="text-[11px] text-muted">
-              จะถึงไทยประมาณ:{" "}
-              <span className="text-sky-600 font-medium">
-                {toThaiShow} ถึง {toThaiShow2}
-              </span>
+            )}
+          </div>
+          {/* Secondary meta — TH track · ตู้ · ETA — one small muted row */}
+          {((row.ftrackingth && row.ftrackingth !== "-") ||
+            (!grouped && row.fcabinetnumber) ||
+            fDateToThaiValid) && (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted">
+              {row.ftrackingth && row.ftrackingth !== "-" && (
+                <span className="font-mono">🇹🇭 {row.ftrackingth}</span>
+              )}
+              {!grouped && row.fcabinetnumber && (
+                <span>
+                  ตู้{" "}
+                  <span className="font-mono text-foreground">{row.fcabinetnumber}</span>
+                  {containerCloseValid && <> · {dmy(row.fdatecontainerclose)}</>}
+                </span>
+              )}
+              {fDateToThaiValid && (
+                <span>
+                  ถึงไทย ~{" "}
+                  <span className="font-medium text-sky-600">
+                    {toThaiShow}–{toThaiShow2}
+                  </span>
+                </span>
+              )}
             </div>
           )}
         </div>
