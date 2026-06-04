@@ -32,10 +32,13 @@ import {
   createQuoteItemSchema,    type CreateQuoteItemInput,
   updateQuoteItemSchema,    type UpdateQuoteItemInput,
   deleteQuoteItemSchema,    type DeleteQuoteItemInput,
+  composeFromRateCardSchema, type ComposeFromRateCardInput,
   quoteIdOnlySchema,        type QuoteIdOnlyInput,
   rejectQuoteSchema,        type RejectQuoteInput,
   computeQuoteTotals,
+  type QuoteUnit,
 } from "@/lib/validators/freight-quote";
+import { composeFreightQuote } from "@/lib/freight/rate-engine";
 
 const ROLES_CREATE  = ["super", "ops", "sales_admin", "accounting"] as const;
 const ROLES_APPROVE = ["super"] as const;
@@ -242,6 +245,149 @@ export async function adminAddQuoteItem(
 
     revalidateOne(d.freight_quote_id);
     return { ok: true, data: { id: inserted.id } };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// 3b) Auto-fill from the AXELRA rate card (Phase D rate engine)
+// ────────────────────────────────────────────────────────────
+// Replaces hand-typing each line: composeFreightQuote() prices the in-scope
+// Thai-customs + China-freight lines from lib/freight/rate-model (the real
+// AXELRA IMPORT cards), then bulk-inserts them into the draft quote and aligns
+// the header (mode/incoterm/vat). Internal only — adds draft line items, NO
+// customer comms. The owner reviews + can edit/submit afterwards.
+
+const RATE_UNIT_MAP: Record<string, QuoteUnit> = {
+  SET: "JOB", CBM: "CBM", KGM: "KGM", CONT: "TEU",
+};
+
+type ComposeResult = {
+  count: number;
+  subtotalSell: number;
+  profit: number;
+  marginCapThb: number;
+  marginExceedsCap: boolean;
+};
+
+export async function adminComposeQuoteFromRateCard(
+  input: ComposeFromRateCardInput,
+): Promise<AdminActionResult<ComposeResult>> {
+  const parsed = composeFromRateCardSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  return withAdmin([...ROLES_CREATE], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    const { data: parent, error: parentErr } = await admin
+      .from("freight_quotes")
+      .select("status, quote_no")
+      .eq("id", d.freight_quote_id)
+      .maybeSingle<{ status: string; quote_no: string }>();
+    if (parentErr) {
+      console.error(`[freight_quotes mutation lookup] failed`, { code: parentErr.code, message: parentErr.message });
+      return { ok: false, error: `db_error:${parentErr.code ?? "unknown"}` };
+    }
+    if (!parent) return { ok: false, error: "not_found" };
+    if (parent.status !== "draft") return { ok: false, error: "not_draft" };
+
+    // Price from the real rate cards (pure, no IO).
+    const quote = composeFreightQuote({
+      mode:          d.mode,
+      incoterm:      d.incoterm,
+      deliveryTruck: d.deliveryTruck,
+      tier:          d.tier,
+      cbm:           d.cbm,
+      kgm:           d.kgm,
+      containers:    d.containers,
+    });
+    if (quote.lines.length === 0) {
+      return { ok: false, error: "rate_card_produced_no_lines" };
+    }
+
+    // Optionally clear existing draft items first (replace vs append).
+    if (d.replaceExisting) {
+      const { error: delErr } = await admin
+        .from("freight_quote_items")
+        .delete()
+        .eq("freight_quote_id", d.freight_quote_id);
+      if (delErr) return { ok: false, error: `clear_failed: ${delErr.message}` };
+    }
+
+    // Starting position = max existing + 1 (0 after a replace).
+    let basePos = 0;
+    if (!d.replaceExisting) {
+      const { data: maxRow, error: maxRowErr } = await admin
+        .from("freight_quote_items")
+        .select("position")
+        .eq("freight_quote_id", d.freight_quote_id)
+        .order("position", { ascending: false })
+        .limit(1)
+        .maybeSingle<{ position: number }>();
+      if (maxRowErr) {
+        console.error(`[freight_quote_items list] failed`, { code: maxRowErr.code, message: maxRowErr.message });
+      }
+      basePos = maxRow?.position ?? 0;
+    }
+
+    const rows = quote.lines.map((l, i) => ({
+      freight_quote_id: d.freight_quote_id,
+      position:         basePos + i + 1,
+      description:      l.labelTh,
+      quantity:         l.qty,
+      unit:             RATE_UNIT_MAP[l.unit] ?? "JOB",
+      unit_price_thb:   Math.round(l.unitSell * 100) / 100,
+      line_total_thb:   Math.round(l.sell * 100) / 100,
+      note:             null as string | null,
+    }));
+
+    const { error: insErr } = await admin
+      .from("freight_quote_items")
+      .insert(rows);
+    if (insErr) return { ok: false, error: `insert_failed: ${insErr.message}` };
+
+    // Align the header to the spec (draft-only — guarded above).
+    await admin
+      .from("freight_quotes")
+      .update({
+        transport_mode: d.mode,
+        incoterm:       d.incoterm,
+        vat_pct:        quote.vatPct,
+      })
+      .eq("id", d.freight_quote_id)
+      .eq("status", "draft");
+
+    await recomputeQuoteTotals(d.freight_quote_id);
+
+    await logAdminAction(adminId, "freight_quote.compose_from_rate_card", "freight_quote", d.freight_quote_id, {
+      quote_no:           parent.quote_no,
+      mode:               d.mode,
+      incoterm:           d.incoterm,
+      tier:               d.tier,
+      delivery_truck:     d.deliveryTruck,
+      cbm:                d.cbm ?? null,
+      kgm:                d.kgm ?? null,
+      containers:         d.containers ?? null,
+      replaced:           d.replaceExisting,
+      lines_added:        rows.length,
+      subtotal_sell:      quote.subtotalSell,
+      profit:             quote.profit,
+      margin_exceeds_cap: quote.marginExceedsCap,
+    });
+
+    revalidateOne(d.freight_quote_id);
+    return {
+      ok: true,
+      data: {
+        count:            rows.length,
+        subtotalSell:     quote.subtotalSell,
+        profit:           quote.profit,
+        marginCapThb:     quote.marginCapThb,
+        marginExceedsCap: quote.marginExceedsCap,
+      },
+    };
   });
 }
 

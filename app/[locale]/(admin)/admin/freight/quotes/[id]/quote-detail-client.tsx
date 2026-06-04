@@ -8,11 +8,15 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   adminAddQuoteItem, adminUpdateQuoteItem, adminDeleteQuoteItem,
+  adminComposeQuoteFromRateCard,
   adminSubmitQuoteForApproval, adminApproveQuote, adminRejectQuote,
   adminSendQuote, adminMarkQuoteAccepted, adminMarkQuoteExpired,
   adminConvertQuoteToShipment,
 } from "@/actions/admin/freight-quotes";
-import { QUOTE_UNITS, type QuoteStatus, type TransportMode, type QuoteUnit } from "@/lib/validators/freight-quote";
+import {
+  QUOTE_UNITS, TRANSPORT_MODES, TRANSPORT_MODE_LABEL, INCOTERMS,
+  type QuoteStatus, type TransportMode, type QuoteUnit, type Incoterm,
+} from "@/lib/validators/freight-quote";
 import { confirm } from "@/components/ui/confirm";
 
 export type LineItem = {
@@ -52,9 +56,171 @@ export function QuoteDetailClient({ data, items }: Props) {
   const isDraft = data.status === "draft";
   return (
     <div className="space-y-4">
+      {isDraft && (
+        <RateCardAutoFill
+          quoteId={data.id}
+          defaultMode={data.transport_mode}
+          itemCount={items.length}
+        />
+      )}
       <ItemsTable quoteId={data.id} items={items} editable={isDraft} />
       <StatusActions data={data} hasItems={items.length > 0} />
     </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// Rate-card auto-fill (Phase D rate engine)
+// ────────────────────────────────────────────────────────────
+// Prices the in-scope line items from the real AXELRA cards (server action
+// composeFreightQuote) so sales don't hand-type each charge. Confirm-before-
+// mutate per the product-quality bar (กันคนลั่น). Internal only — no comms.
+
+const TIER_OPTIONS: { value: "retail" | "regular" | "wholesale"; label: string }[] = [
+  { value: "retail",    label: "ปลีก" },
+  { value: "regular",   label: "ลูกค้าประจำ" },
+  { value: "wholesale", label: "ส่ง" },
+];
+
+function RateCardAutoFill({
+  quoteId, defaultMode, itemCount,
+}: {
+  quoteId:     string;
+  defaultMode: TransportMode;
+  itemCount:   number;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<TransportMode>(defaultMode);
+  const [incoterm, setIncoterm] = useState<Incoterm>("CIF");
+  const [truck, setTruck] = useState<"4W" | "6W">("4W");
+  const [tier, setTier] = useState<"retail" | "regular" | "wholesale">("regular");
+  const [cbm, setCbm] = useState<number>(0);
+  const [kgm, setKgm] = useState<number>(0);
+  const [containers, setContainers] = useState<number>(1);
+  const [replaceExisting, setReplaceExisting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+
+  function fire() {
+    setErr(null);
+    setDone(null);
+    startTransition(async () => {
+      const ok = await confirm(
+        replaceExisting && itemCount > 0
+          ? `จะ "ล้าง" รายการเดิม ${itemCount} รายการ แล้วเติมราคาใหม่จาก rate card (${incoterm} · ${TRANSPORT_MODE_LABEL[mode]}) — ยืนยัน?`
+          : `เติม line items จาก rate card (${incoterm} · ${TRANSPORT_MODE_LABEL[mode]}) เข้าใบเสนอราคานี้?`,
+        { title: "เติมราคาจาก rate card", confirmLabel: "เติมราคา", cancelLabel: "ยกเลิก" },
+      );
+      if (!ok) return;
+      const res = await adminComposeQuoteFromRateCard({
+        freight_quote_id: quoteId,
+        mode, incoterm, deliveryTruck: truck, tier,
+        cbm:        mode === "sea_lcl" ? cbm : undefined,
+        kgm:        mode === "air" ? kgm : undefined,
+        containers: mode === "sea_fcl" ? containers : undefined,
+        replaceExisting,
+      });
+      if (res.ok) {
+        const d = res.data;
+        if (d) {
+          setDone(
+            `เติม ${d.count} รายการ · ยอดขาย ฿${d.subtotalSell.toLocaleString("th-TH")} · กำไร ฿${d.profit.toLocaleString("th-TH")}` +
+            (d.marginExceedsCap ? ` ⚠️ กำไรเกินเพดาน ฿${d.marginCapThb.toLocaleString("th-TH")}/ตู้` : ""),
+          );
+        }
+        router.refresh();
+      } else {
+        setErr(res.error);
+      }
+    });
+  }
+
+  if (!open) {
+    return (
+      <section className="rounded-2xl border border-dashed border-primary-300 bg-primary-50/40 dark:bg-primary-950/10 px-5 py-3">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="text-sm font-bold text-primary-700 hover:underline"
+        >
+          🧮 เติมราคาอัตโนมัติจาก rate card (AXELRA)
+        </button>
+        {done && <p className="mt-2 text-xs text-emerald-700">{done}</p>}
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-2xl border border-primary-300 bg-primary-50/40 dark:bg-primary-950/10 p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="font-bold text-sm text-primary-800 dark:text-primary-300">🧮 เติมราคาจาก rate card (AXELRA IMPORT)</h2>
+        <button type="button" onClick={() => setOpen(false)} className="text-xs text-muted hover:underline">ปิด</button>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+        <label className="text-xs space-y-1">
+          <span className="text-muted">รูปแบบขนส่ง</span>
+          <select value={mode} onChange={(e) => setMode(e.target.value as TransportMode)} className="w-full rounded border border-border bg-white dark:bg-surface px-2 py-1.5 text-sm">
+            {TRANSPORT_MODES.map((m) => <option key={m} value={m}>{TRANSPORT_MODE_LABEL[m]}</option>)}
+          </select>
+        </label>
+        <label className="text-xs space-y-1">
+          <span className="text-muted">Incoterm</span>
+          <select value={incoterm} onChange={(e) => setIncoterm(e.target.value as Incoterm)} className="w-full rounded border border-border bg-white dark:bg-surface px-2 py-1.5 text-sm">
+            {INCOTERMS.map((i) => <option key={i} value={i}>{i}</option>)}
+          </select>
+        </label>
+        <label className="text-xs space-y-1">
+          <span className="text-muted">รถส่งในไทย</span>
+          <select value={truck} onChange={(e) => setTruck(e.target.value as "4W" | "6W")} className="w-full rounded border border-border bg-white dark:bg-surface px-2 py-1.5 text-sm">
+            <option value="4W">4 ล้อ</option>
+            <option value="6W">6 ล้อ</option>
+          </select>
+        </label>
+        <label className="text-xs space-y-1">
+          <span className="text-muted">เรทขาย</span>
+          <select value={tier} onChange={(e) => setTier(e.target.value as typeof tier)} className="w-full rounded border border-border bg-white dark:bg-surface px-2 py-1.5 text-sm">
+            {TIER_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+        </label>
+        {mode === "sea_lcl" && (
+          <label className="text-xs space-y-1">
+            <span className="text-muted">ปริมาตร (CBM)</span>
+            <input type="number" min={0} step={0.001} value={cbm} onChange={(e) => setCbm(Number(e.target.value) || 0)} className="w-full rounded border border-border bg-white dark:bg-surface px-2 py-1.5 text-sm font-mono" />
+          </label>
+        )}
+        {mode === "air" && (
+          <label className="text-xs space-y-1">
+            <span className="text-muted">น้ำหนักคิดราคา (KG)</span>
+            <input type="number" min={0} step={0.01} value={kgm} onChange={(e) => setKgm(Number(e.target.value) || 0)} className="w-full rounded border border-border bg-white dark:bg-surface px-2 py-1.5 text-sm font-mono" />
+          </label>
+        )}
+        {mode === "sea_fcl" && (
+          <label className="text-xs space-y-1">
+            <span className="text-muted">จำนวนตู้</span>
+            <input type="number" min={1} step={1} value={containers} onChange={(e) => setContainers(Math.max(1, Math.floor(Number(e.target.value) || 1)))} className="w-full rounded border border-border bg-white dark:bg-surface px-2 py-1.5 text-sm font-mono" />
+          </label>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label className="flex items-center gap-2 text-xs text-muted">
+          <input type="checkbox" checked={replaceExisting} onChange={(e) => setReplaceExisting(e.target.checked)} className="rounded border-border" />
+          ล้างรายการเดิมก่อน ({itemCount} รายการ)
+        </label>
+        <button
+          type="button"
+          onClick={fire}
+          disabled={pending}
+          className="rounded-lg bg-primary-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-primary-700 disabled:opacity-50"
+        >
+          {pending ? "กำลังเติม…" : "🧮 เติมราคา"}
+        </button>
+      </div>
+      <p className="text-[10px] text-muted">ราคาอ้างอิงจาก rate card จริง (AXELRA IMPORT) · ตรวจ/แก้ไขได้ก่อนส่งอนุมัติ · ไม่มีการแจ้งลูกค้า</p>
+      {done && <p className="text-xs text-emerald-700">{done}</p>}
+      {err && <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{err}</p>}
+    </section>
   );
 }
 

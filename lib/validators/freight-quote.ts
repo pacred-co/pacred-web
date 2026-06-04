@@ -122,6 +122,26 @@ export const deleteQuoteItemSchema = z.object({
 export type DeleteQuoteItemInput = z.infer<typeof deleteQuoteItemSchema>;
 
 // ────────────────────────────────────────────────────────────
+// Compose from rate card (auto-fill) — Phase D rate engine
+// ────────────────────────────────────────────────────────────
+// Drives lib/freight/rate-engine.composeFreightQuote(): incoterm + mode + the
+// volumetric drivers → in-scope line items priced from the real AXELRA cards.
+
+export const composeFromRateCardSchema = z.object({
+  freight_quote_id: z.string().uuid(),
+  mode:             z.enum(TRANSPORT_MODES),
+  incoterm:         z.enum(INCOTERMS),
+  deliveryTruck:    z.enum(["4W", "6W"]).default("4W"),
+  tier:             z.enum(["retail", "regular", "wholesale"]).default("regular"),
+  cbm:              z.coerce.number().refine(notInt32, INT32_MSG).min(0).max(999_999).optional(),
+  kgm:              z.coerce.number().refine(notInt32, INT32_MSG).min(0).max(999_999).optional(),
+  containers:       z.coerce.number().int().min(1).max(999).optional(),
+  /** false = append to existing items (default); true = replace all draft items first. */
+  replaceExisting:  z.boolean().optional().default(false),
+});
+export type ComposeFromRateCardInput = z.infer<typeof composeFromRateCardSchema>;
+
+// ────────────────────────────────────────────────────────────
 // Status flips
 // ────────────────────────────────────────────────────────────
 

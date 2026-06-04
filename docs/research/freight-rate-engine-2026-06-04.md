@@ -25,19 +25,30 @@ The §5.2 gap = a **rate engine** that auto-prices from the real rate cards.
   totals**: reproduces `IM CIF AIR` รวมราคา **10,211** (4W) / **13,301** (6W) and
   `IM CIF SEA LCL` **13,511** / **14,801** exactly — proof the model is faithful.
 
+## ✅ increment 2 — wired into the quote-builder UI (SHIPPED)
+The engine is now reachable + usable, not just a library:
+- **`actions/admin/freight-quotes.ts` → `adminComposeQuoteFromRateCard`** — same
+  role gate (`super/ops/sales_admin/accounting`) + draft-only guard + audit log
+  as the manual add. Calls `composeFreightQuote()`, bulk-inserts the in-scope
+  lines into `freight_quote_items`, aligns the header (mode/incoterm/vat),
+  recomputes totals. Append OR replace-existing. **Internal only — adds draft
+  line items, zero customer comms.**
+- **`/admin/freight/quotes/[id]` → `RateCardAutoFill`** panel (draft only): pick
+  mode / incoterm / 4W-6W / sell-tier / CBM·KG·ตู้ → **🧮 เติมราคา** → styled
+  confirm-before-mutate (กันคนลั่น) → fills the line-item table + shows
+  `เติม N รายการ · ยอดขาย · กำไร` and a ⚠️ flag if profit > 15k/ตู้. Sales review
+  + edit + submit-for-approval afterwards (the existing flow is unchanged).
+
 ## ⚠️ v1 limitations (next increments)
-1. **Wire into the quote-builder UI** — an "เติมราคาจาก rate card อัตโนมัติ" button on
-   `/admin/freight/quotes/[id]` that calls the engine + bulk-inserts the line
-   items (via `adminAddQuoteItem`) instead of manual typing. (← the immediate next step)
-2. **Freight COST side** — the model has accurate Thai-local costs but the
+1. **Freight COST side** — the model has accurate Thai-local costs but the
    China-freight *cost* (carrier rate) isn't transcribed yet (sell only) → freight
    profit is currently overstated. Add the per-POL/POD/carrier cost cards
    (`AXELRA Cost & Profit & Com.xlsx` FRE-IM-SEA-FCL/LCL/AIR sheets · per-month
    exchange) for true margin. Then an admin-editable `tb_freight_rate_*` table
    (the cargo `tb_rate_g_*` pattern).
-3. **Transport = "เช็คตามระยะทางจริง"** — the per-distance Thai truck rate is a
+2. **Transport = "เช็คตามระยะทางจริง"** — the per-distance Thai truck rate is a
    representative default; a distance/zone table would refine it.
-4. SEA-FCL/AIR rate cards are partial (representative) — extend from the xlsx.
+3. SEA-FCL/AIR rate cards are partial (representative) — extend from the xlsx.
 
 Compliance: the off-book "ปิดตรวจ จ่ายเจ้าหน้าที่" line is **not** modelled (priced 0
 in the sheets too) — compliant core only (freight cluster doc §5).
