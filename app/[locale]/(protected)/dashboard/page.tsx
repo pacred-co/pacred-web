@@ -252,7 +252,7 @@ export default async function DashboardPage() {
             <div className="text-left">
               <div className="text-3xl font-bold text-violet-500">{countPayment}</div>
               <div className="mt-1 text-sm font-medium text-foreground/80">
-                ฝากชำระเงิน
+                ฝากชำระสินค้า
               </div>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-50 dark:bg-violet-950/30">
