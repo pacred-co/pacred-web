@@ -1,49 +1,47 @@
 /**
- * /admin/forwarders/[fNo]/edit — STATUS + PAYMENT focused (2026-06-04 ภูม UX P1).
+ * /admin/forwarders/[fNo]/edit — THE edit page (2026-06-04 ภูม UX F1 final).
  *
- * ── Why this is small now (ภูม flag 2026-06-04):
- *   "ในPCSภูมิไปดูไม่เห็นมีเลย มันดูเยอะไปหมดเลย" — the 4 collapsible
- *   sections (มอบหมายคนขับ · แก้ไขที่อยู่/การขนส่ง/ราคา · ชื่อผู้รับใบกำกับ ·
- *   ขนาด/น้ำหนัก) don't appear in the legacy PCS layout that ภูม referenced
- *   for shop-orders (รูปที่ 1, /admin/service-orders/[hNo]) — those simple
- *   field-edits are now inline-edit buttons on the detail page (see
- *   forwarder-inline-edits.tsx). The collapsibles only added vertical
- *   scroll noise to what should be a focused "update status + take payment"
- *   page.
+ * Detail = READ-ONLY. /edit = ALL the inline [แก้ไข] buttons + status
+ * pipeline + payment. This matches legacy PCS `update.php` which is a
+ * single edit page with all inline edits in it (faithful to the source).
  *
- * ── Layout (kept minimal · the headline staff workflow):
+ * ── Layout (mirrors PCS update.php order):
  *   1. Breadcrumb + PCS-style header (#fNo · status · source · last-update + action links)
  *   2. 8-step pipeline timeline
  *   3. 2-col read-only info display (mirrors legacy update.php · matches detail page)
- *   4. Items table
- *   5. PRIMARY ACTION (always-open): TbForwarderActionPanel
+ *   4. Inline-edit grid (ForwarderInlineEdits) — the 10 [แก้ไข] click-to-flip fields
+ *      (userid · pallet · transport · crate · ship-by · pay-method · tracking-chn ·
+ *      date-close · amount-count · bill-to · per PCS L514-839 verbatim handlers)
+ *   5. Driver-assign collapsible (auto-open at fstatus=6 เตรียมส่ง)
+ *   6. Items table (line-item view from forwarder-items-table)
+ *   7. PRIMARY ACTION (always-open): TbForwarderActionPanel
  *      — อัปเดตสถานะ + ตู้ + Tracking + หมายเหตุ (the most-used CS action)
- *   6. PAYMENT (when isPayable): TbForwarderPaymentPanel
+ *   8. PAYMENT (when isPayable): TbForwarderPaymentPanel
  *      — หักกระเป๋า / mark paid / etc.
- *   7. Bottom nav (back-to-detail + back-to-list)
- *
- * ── Removed in this pass (collapsibles cleaned per ภูม flag):
- *   - TbForwarderDriverAssignPanel  → moved to detail page (collapsible · auto-open at fstatus=6)
- *   - TbForwarderEditPanel          → 4 quick flips now inline on detail; address re-pick + cost-adjust kept in tb-edit-panel.tsx (orphan · can re-mount when needed)
- *   - BillToOverridePanel           → inline on detail (forwarder-inline-edits.tsx)
- *   - AdminForwarderEditForm        → not currently rendered here (orphan · edit-form.tsx kept for future dimensions UX)
+ *   9. Bottom nav (back-to-detail + back-to-list)
  *
  * Legacy source columns mapped (per legacy update.php / detail.php):
  *   - refOrer source tag (L358-360 update.php) ← adminidcreator/reforder
  *   - sale badge (L517) ← tb_users.adminIDSale
- *   - fpallet "location" (L554-568)
- *   - paymethod "การเก็บเงินค่าขนส่งในไทย" (L588-604)
- *   - fshipby "บริษัทขนส่ง" (L606-623)
- *   - fullAddress (L631-665)
+ *   - fUserID (L526-544 update_fUserID) inline edit, TYPE-CONFIRM
+ *   - fpallet (L554-568 update_fPallet) inline edit
+ *   - paymethod (L588-604 update_fPayMethod) inline edit
+ *   - fcrate (L570-586 update_fCrate) inline edit
+ *   - fshipby (L606-623 update_fShipBy) inline edit
+ *   - fullAddress (L631-665) read-only + address re-pick panel
  *   - ftrackingth "เลขพัสดุไทย" (L666)
- *   - ftrackingchn + barcode (L725-740)
- *   - ftransporttype "รูปแบบขนส่ง" (L743-759)
- *   - fwarehousechina "โกดังจีน" (L761)
+ *   - fTrackingCHN (L725-740 update_fTrackingCHN) inline edit · gated fstatus<7
+ *   - fTransportType (L743-759 update_fTransportType) inline edit
+ *   - fwarehousechina (L761) read-only
  *   - fcabinetnumber linked to /report-cnt (L763-777)
- *   - fdatecontainerclose "วันที่ปิดตู้" (L779-808)
- *   - famount + famountcount "จำนวน · การรวมกล่อง" (L809-828)
+ *   - fDateContainerClose + fDateToThai (L779-808 update_fDateToThai) inline edit · +5/+12 days
+ *   - famount + fAmountCount (L809-828 update_fAmountCount) inline edit
  *   - fproductstype "ประเภทสินค้า" (L829)
  *   - fdetail + fcover "รายละเอียด + รูป" (L830-839)
+ *
+ * 2026-06-04 history: an earlier wave put ForwarderInlineEdits + Tb-driver-
+ * assign on the detail page — moved here per ภูม directive (detail is
+ * READ-ONLY always · all edits in one place).
  */
 
 import { notFound } from "next/navigation";
@@ -52,7 +50,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import {
   ArrowLeft, Package, Warehouse, Truck, Plane, CheckCircle2, Clock,
-  Pencil, ExternalLink, Eye,
+  Pencil, ExternalLink, Eye, ChevronDown,
 } from "lucide-react";
 import Image from "next/image";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
@@ -60,6 +58,8 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { TbForwarderActionPanel } from "../tb-action-panel";
 import { TbForwarderPaymentPanel } from "../tb-payment-panel";
 import { ForwarderItemsTable } from "../forwarder-items-table";
+import { ForwarderInlineEdits } from "../forwarder-inline-edits";
+import { TbForwarderDriverAssignPanel, type DriverAssignmentState } from "../tb-driver-assign-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -193,10 +193,37 @@ export default async function AdminForwarderEditPage({
   const walletBalance = Number(walletRow?.wallettotal ?? 0);
   const isPayable = r.fstatus === "5" || (r.fcredit ?? "").trim() === "1";
 
-  // 2026-06-04 ภูม UX P1 cleanup: removed the address-book read, the driver-
-  // assignment read, and the tb_forwarder_item read — none of those panels
-  // mount here anymore (collapsibles dropped per ภูม flag). The 4 quick-flip
-  // fields are now inline on the detail page (forwarder-inline-edits.tsx).
+  // ─── Latest driver-assignment for this forwarder (two reads · no FK) ─
+  // Drives the driver-assign collapsible (auto-open at fstatus='6' เตรียมส่ง).
+  // 2026-06-04 F1: moved here from detail page (detail = READ-ONLY).
+  let driverAssignment: DriverAssignmentState | null = null;
+  const { data: assignItemRow, error: assignItemErr } = await admin
+    .from("tb_forwarder_driver_item")
+    .select("id, fdid, fdistatus")
+    .eq("fid", r.id)
+    .order("id", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ id: number; fdid: number; fdistatus: string | null }>();
+  if (assignItemErr) {
+    console.error(`[tb_forwarder_driver_item edit] failed`, { code: assignItemErr.code, message: assignItemErr.message, fid: r.id });
+  }
+  if (assignItemRow) {
+    const { data: parentRow, error: parentErr } = await admin
+      .from("tb_forwarder_driver")
+      .select("id, fdadminid, fddate, fdstatus")
+      .eq("id", assignItemRow.fdid)
+      .maybeSingle<{ id: number; fdadminid: string | null; fddate: string | null; fdstatus: string | null }>();
+    if (parentErr) {
+      console.error(`[tb_forwarder_driver edit] failed`, { code: parentErr.code, message: parentErr.message, fdid: assignItemRow.fdid });
+    }
+    driverAssignment = {
+      fdistatus:  (assignItemRow.fdistatus ?? "").trim(),
+      batchId:    assignItemRow.fdid,
+      driverCode: parentRow?.fdadminid ?? null,
+      assignedAt: parentRow?.fddate ?? null,
+      batchOpen:  (parentRow?.fdstatus ?? "").trim() === "1",
+    };
+  }
 
   // ─── Resolve cover image + customer avatar via legacy URL resolver ───
   const coverHref = r.fcover && r.fcover.trim() !== ""
@@ -580,6 +607,67 @@ export default async function AdminForwarderEditPage({
         </div>
       </section>
 
+      {/* ── 4.2 INLINE EDITS ── the 10 click-to-flip fields (PCS update.php L514-839
+          verbatim — userid · pallet · transport · crate · ship-by · pay-method ·
+          tracking-chn · date-close · amount-count · bill-to). Per-field [แก้ไข]
+          buttons; pencil opens an inline editor; "บันทึก" writes to tb_forwarder.
+          Faithful workflow, Pacred design. 2026-06-04 ภูม UX F1 — moved here
+          from detail page after ภูม flagged detail = READ-ONLY. */}
+      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 lg:p-5 shadow-sm">
+        <header className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
+          <Pencil className="h-4 w-4 text-primary-500 flex-shrink-0" />
+          <h2 className="text-sm font-bold">ตั้งค่ารายการ (แก้ไขรายฟิลด์)</h2>
+          <span className="ml-auto text-[10px] text-muted">ลูกค้า · พาเลท · ขนส่ง · ตีลังไม้ · ฯลฯ</span>
+        </header>
+        <ForwarderInlineEdits
+          fId={r.id}
+          userid={r.userid}
+          fpallet={r.fpallet}
+          ftransporttype={r.ftransporttype}
+          crate={r.crate}
+          fshipby={r.fshipby}
+          paymethod={r.paymethod}
+          ftrackingchn={r.ftrackingchn}
+          fstatus={r.fstatus}
+          fdatecontainerclose={r.fdatecontainerclose}
+          famountcount={r.famountcount}
+          fbilltoname={r.fbilltoname}
+          defaultBillTo={`${r.faddressname ?? ""} ${r.faddresslastname ?? ""}`.trim()}
+        />
+      </section>
+
+      {/* ── 4.3 DRIVER ASSIGN ── auto-open ONLY when ready to dispatch (fstatus='6'
+          เตรียมส่ง). Hidden in the collapsible at other statuses so it doesn't
+          clutter the page — the gate is per legacy forwarder-driver.php (fstatus=6
+          + paydeposit<>1). 2026-06-04 F1: moved from detail page. */}
+      <details
+        className="group rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden"
+        open={r.fstatus === "6"}
+      >
+        <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none hover:bg-surface-alt/40 list-none">
+          <ChevronDown className="h-4 w-4 text-muted transition-transform group-open:rotate-180 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-bold flex items-center gap-1.5">
+              <Truck className="h-3.5 w-3.5" /> มอบหมายคนขับ
+            </h3>
+            <p className="text-xs text-muted mt-0.5 truncate">
+              {r.fstatus === "6"
+                ? "✅ พร้อมจัดส่ง — เลือกคนขับและเริ่ม"
+                : "เปิดใช้งานเมื่อสถานะเป็น 'เตรียมส่ง' (fstatus=6)"}
+            </p>
+          </div>
+        </summary>
+        <div className="px-4 pt-1 pb-4 border-t border-border/40">
+          <TbForwarderDriverAssignPanel
+            fId={r.id}
+            fNo={String(r.id)}
+            fstatus={r.fstatus}
+            paydeposit={r.paydeposit ?? ""}
+            current={driverAssignment}
+          />
+        </div>
+      </details>
+
       {/* ── 4.5 ITEMS TABLE ── PCS-style line-item display (2026-06-03 ภูม flag)
           For shop-spawned forwarders (reforder set) renders the tb_order rows
           grouped by Chinese vendor with thumbnails + ¥ pricing. Otherwise
@@ -640,15 +728,7 @@ export default async function AdminForwarderEditPage({
         </section>
       )}
 
-      {/* ── 7. Footer nav + hint to detail page for quick-field edits ── */}
-      <div className="rounded-lg border border-border bg-surface-alt/40 p-3 text-xs text-muted">
-        <p>
-          แก้ไข <b>รูปแบบขนส่ง</b> · <b>การตีลังไม้</b> · <b>บริษัทขนส่ง</b> · <b>การเก็บเงิน</b> · <b>ชื่อบนใบกำกับ</b> ได้ที่
-          <Link href={`/admin/forwarders/${slugForLink}`} className="text-primary-600 hover:underline ml-1">
-            หน้ารายละเอียด →
-          </Link>
-        </p>
-      </div>
+      {/* ── 7. Footer nav ── */}
       <div className="flex gap-2 flex-wrap pt-2 pb-4">
         <Link
           href={`/admin/forwarders/${slugForLink}`}
@@ -666,7 +746,7 @@ export default async function AdminForwarderEditPage({
 
       {/* Hidden a11y note for ภูม browser-verify */}
       <p className="sr-only">
-        Minimal /edit layout (ภูม UX P1 2026-06-04): header + pipeline + 2-col info + items table + status panel + payment.
+        /edit layout (ภูม UX F1 2026-06-04): header + pipeline + 2-col info + inline edits + driver assign + items table + status panel + payment.
         Status: {STATUS_LABEL[r.fstatus]}. Last update: {r.fdateadminstatus ?? "—"}.
       </p>
     </main>

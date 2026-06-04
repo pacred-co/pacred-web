@@ -898,3 +898,185 @@ export async function adminUpdateForwarderTaxDocMode(
     return { ok: true };
   });
 }
+
+// ── update_fPallet — location/pallet number (forwarder.php L2417-2427) ────────
+// Legacy writes the raw text to tb_forwarder.fpallet (+ adminIDUpdate). fpallet
+// is INTEGER in the DB (the legacy "warehouse pallet number", e.g. 12) — Pacred
+// also accepts 0 / NULL to clear. UI on the inline editor renders a number input.
+const palletSchema = z.object({
+  fId:     z.number().int().positive(),
+  fpallet: z.number().int().min(0).max(99_999),
+});
+export type AdminUpdateForwarderPalletInput = z.infer<typeof palletSchema>;
+
+export async function adminUpdateForwarderPallet(
+  rawInput: AdminUpdateForwarderPalletInput,
+): Promise<AdminActionResult> {
+  const parsed = palletSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+
+    const { data: fwd, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, fpallet")
+      .eq("id", d.fId)
+      .maybeSingle<{ id: number; fpallet: number | null }>();
+    if (fwdErr) {
+      console.error(`[adminUpdateForwarderPallet read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
+      return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
+    }
+    if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+    if (Number(fwd.fpallet ?? 0) === d.fpallet) {
+      return { ok: false, error: "ไม่มีการเปลี่ยนแปลง (พาเลทเดิม)" };
+    }
+
+    const { error: updErr } = await admin
+      .from("tb_forwarder")
+      .update({ fpallet: d.fpallet, adminidupdate: legacyAdminId })
+      .eq("id", d.fId);
+    if (updErr) {
+      console.error(`[adminUpdateForwarderPallet update] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
+      return { ok: false, error: `บันทึกพาเลทไม่สำเร็จ: ${updErr.message}` };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder.update_pallet", "tb_forwarder", String(d.fId), {
+      before: fwd.fpallet, after: d.fpallet,
+    });
+
+    revalidatePath(`/admin/forwarders/${d.fId}`);
+    revalidatePath("/admin/forwarders");
+    return { ok: true };
+  });
+}
+
+// ── update_fTrackingCHN — China tracking number (forwarder.php L1562-1577) ────
+// Legacy column-only UPDATE tb_forwarder.fTrackingCHN. Legacy gate (L730 in the
+// form view): only editable while fStatus<7 — once the package is delivered
+// the tracking number is locked. We mirror that gate (return error if fstatus=7).
+const trackingChnSchema = z.object({
+  fId:          z.number().int().positive(),
+  ftrackingchn: z.string().trim().min(1).max(60),
+});
+export type AdminUpdateForwarderTrackingChnInput = z.infer<typeof trackingChnSchema>;
+
+export async function adminUpdateForwarderTrackingChn(
+  rawInput: AdminUpdateForwarderTrackingChnInput,
+): Promise<AdminActionResult> {
+  const parsed = trackingChnSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+
+    const { data: fwd, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, fstatus, ftrackingchn")
+      .eq("id", d.fId)
+      .maybeSingle<{ id: number; fstatus: string | null; ftrackingchn: string | null }>();
+    if (fwdErr) {
+      console.error(`[adminUpdateForwarderTrackingChn read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
+      return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
+    }
+    if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+    // Legacy gate (update.php L730) — only editable while fstatus<7.
+    const fStatusInt = parseInt(fwd.fstatus ?? "0", 10);
+    if (fStatusInt >= 7) {
+      return { ok: false, error: "รายการนี้ถูกส่งแล้ว — แก้ไขเลขแทรคกิ้งจีนไม่ได้" };
+    }
+    if ((fwd.ftrackingchn ?? "").trim() === d.ftrackingchn) {
+      return { ok: false, error: "ไม่มีการเปลี่ยนแปลง (เลขแทรคกิ้งเดิม)" };
+    }
+
+    const { error: updErr } = await admin
+      .from("tb_forwarder")
+      .update({ ftrackingchn: d.ftrackingchn, adminidupdate: legacyAdminId })
+      .eq("id", d.fId);
+    if (updErr) {
+      console.error(`[adminUpdateForwarderTrackingChn update] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
+      return { ok: false, error: `บันทึกเลขแทรคกิ้งไม่สำเร็จ: ${updErr.message}` };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder.update_tracking_chn", "tb_forwarder", String(d.fId), {
+      before: fwd.ftrackingchn, after: d.ftrackingchn,
+    });
+
+    revalidatePath(`/admin/forwarders/${d.fId}`);
+    revalidatePath("/admin/forwarders");
+    return { ok: true };
+  });
+}
+
+// ── update_fDateToThai — container-close + ETA-to-Thailand (forwarder.php L1541-1560)
+// Legacy: takes ONE input (the container-close date in dd/mm/yyyy), then writes
+// BOTH columns:
+//   - fdatecontainerclose = the close date (as-entered)
+//   - fdatetothai          = close date + 5 days (truck) or +12 days (sea)
+// Legacy did the math on the PHP side; we mirror it in the action. Input here =
+// the close date as an ISO 'YYYY-MM-DD' string (HTML <input type="date"> emits
+// this). We read the current ftransporttype to pick the offset.
+const dateToThaiSchema = z.object({
+  fId:                 z.number().int().positive(),
+  fdatecontainerclose: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "วันที่ปิดตู้ต้องอยู่ในรูป YYYY-MM-DD"),
+});
+export type AdminUpdateForwarderDateToThaiInput = z.infer<typeof dateToThaiSchema>;
+
+export async function adminUpdateForwarderDateToThai(
+  rawInput: AdminUpdateForwarderDateToThaiInput,
+): Promise<AdminActionResult> {
+  const parsed = dateToThaiSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+
+    const { data: fwd, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, ftransporttype, fdatecontainerclose, fdatetothai")
+      .eq("id", d.fId)
+      .maybeSingle<{ id: number; ftransporttype: string | null; fdatecontainerclose: string | null; fdatetothai: string | null }>();
+    if (fwdErr) {
+      console.error(`[adminUpdateForwarderDateToThai read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
+      return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
+    }
+    if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+
+    // Legacy L1547-1553 — derive fdatetothai from close + transport-type offset.
+    // truck (1) = +5 days; sea (2) and air (3) = +12 days (legacy treated non-1 as sea).
+    const closeDate = new Date(d.fdatecontainerclose + "T00:00:00Z");
+    if (Number.isNaN(closeDate.getTime())) return { ok: false, error: "วันที่ปิดตู้ไม่ถูกต้อง" };
+    const offsetDays = (fwd.ftransporttype ?? "1") === "1" ? 5 : 12;
+    const toThaiDate = new Date(closeDate.getTime() + offsetDays * 24 * 60 * 60 * 1000);
+    const fdatetothai = toThaiDate.toISOString().slice(0, 10); // YYYY-MM-DD
+
+    const { error: updErr } = await admin
+      .from("tb_forwarder")
+      .update({
+        fdatecontainerclose: d.fdatecontainerclose,
+        fdatetothai,
+        adminidupdate: legacyAdminId,
+      })
+      .eq("id", d.fId);
+    if (updErr) {
+      console.error(`[adminUpdateForwarderDateToThai update] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
+      return { ok: false, error: `บันทึกวันที่ปิดตู้ไม่สำเร็จ: ${updErr.message}` };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder.update_date_to_thai", "tb_forwarder", String(d.fId), {
+      before: { fdatecontainerclose: fwd.fdatecontainerclose, fdatetothai: fwd.fdatetothai },
+      after:  { fdatecontainerclose: d.fdatecontainerclose, fdatetothai },
+      offsetDays,
+    });
+
+    revalidatePath(`/admin/forwarders/${d.fId}`);
+    revalidatePath("/admin/forwarders");
+    return { ok: true };
+  });
+}

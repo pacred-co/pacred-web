@@ -4,8 +4,6 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { ForwarderItemsTable } from "./forwarder-items-table";
-import { ForwarderInlineEdits } from "./forwarder-inline-edits";
-import { TbForwarderDriverAssignPanel, type DriverAssignmentState } from "./tb-driver-assign-panel";
 import {
   User as UserIcon,
   Package,
@@ -19,7 +17,6 @@ import {
   Pencil,
   ArrowLeft,
   ExternalLink,
-  ChevronDown,
 } from "lucide-react";
 
 // W-1: requireAdmin reads auth cookies; a page under a dynamic [fNo]
@@ -27,30 +24,27 @@ import {
 export const dynamic = "force-dynamic";
 
 /**
- * /admin/forwarders/[fNo] — READ-ONLY single-page view (2026-06-02 ภูม UX P0).
+ * /admin/forwarders/[fNo] — READ-ONLY single-page view.
  *
- * Before this rewrite the detail page mixed read + write — 5 stacked
- * CollapsibleCards in the right column held all action panels, conflating
- * "ดูข้อมูล" with "อัปเดต". ภูม flag (paraphrase):
- *   1. "พอกดปุ่มอัพเดต ตรง Action ที่มีให้อัพเดตสถานะ มันไม่ควรเรียงแบบนี้
- *      มันใช้งานยากมาก" — vertical stack of collapsibles is hard to use
- *   2. "กดปุ่มดูข้อมูล แต่กลับเข้ามาหน้าเดียวกันกับปุ่มอัพเดต ดูข้อมูล
- *      ควรแสดงข้อมูลทั้งหมด แล้วทำปุ่มแก้ไขในหน้าเพื่อเด้งไปหน้าอัพเดต
- *      มันจะดูมาตรฐานกว่า" — view + edit should be different pages
- *   3. "ของ PCS ดูง่ายกว่าเยอะ เราควรจัดการเรียงให้เหมือนเขาแต่ทำหน้าตา
- *      ออกมาให้เข้ากับระบบเรา" — match PCS layout structure, Pacred style
+ * 2026-06-04 ภูม UX F1 final: detail = READ-ONLY ALWAYS. The detail page
+ * SHOULD NOT carry any inline [แก้ไข] buttons — those belong on /edit
+ * alongside the status pipeline + payment. PCS legacy `update.php` is a
+ * single edit page with ALL inline edits inside; faithful = the same.
  *
- * Fix:
- *   · This page is now READ-ONLY · all data visible in one full page
- *     (legacy PCS forwarder.php detail mode layout · ลูกค้า / ที่อยู่ /
- *     tracking / cabinet / dimensions / items / pricing breakdown · all
- *     in 2-column flat layout, no collapsibles)
- *   · Single "✏️ แก้ไข / อัปเดต" button top-right → routes to /edit
- *   · The 5 action panels (Status · Driver · Payment · Edit · Bill-to)
- *     moved to /edit/page.tsx as flat sections
+ * Layout (matches PCS legacy forwarder.php detail mode + Pacred design):
+ *   · Header — id + status badge + source tag + sale rep + "✏️ แก้ไข/อัปเดต" CTA
+ *   · 7-icon status timeline horizontal with datestamps
+ *   · 2-col grid:
+ *     LEFT (2/3): ลูกค้า · ที่อยู่ · การจัดส่ง · รายละเอียดสินค้า · items table · หมายเหตุ
+ *     RIGHT (1/3): ค่าใช้จ่าย breakdown · admin meta · quick-jump links
+ *   · NO action panels here — those live on /edit/page.tsx
  *
  * Legacy reference: D:\REALSHITDATAPCS\pcsc\public_html\member\pcs-admin\
  *   forwarder.php (read mode · no ?page= param) + forwarder-back-up/detail.php
+ *
+ * History: 2026-06-04 morning placed ForwarderInlineEdits + TbForwarderDriver-
+ * AssignPanel on this page — moved to /edit/page.tsx the same day per ภูม
+ * directive after he reviewed.
  */
 export default async function AdminForwarderDetail({ params }: { params: Promise<{ fNo: string }> }) {
   await requireAdmin(["ops", "accounting"]);
@@ -285,38 +279,9 @@ async function tryRenderTbForwarder(
   // Items table loading is now owned by <ForwarderItemsTable> further down —
   // it handles tb_order (shop-spawn) + tb_forwarder_item (admin) + empty-state.
   // 2026-06-03: removed the local item query that fed the old plain-text table.
-
-  // Latest driver-assignment for this forwarder (two reads · no FK · moved
-  // from /edit/page.tsx 2026-06-04 — the driver-assign collapsible now lives
-  // on the detail page near the inline-edits as a quick-action panel).
-  let driverAssignment: DriverAssignmentState | null = null;
-  const { data: assignItemRow, error: assignItemErr } = await admin
-    .from("tb_forwarder_driver_item")
-    .select("id, fdid, fdistatus")
-    .eq("fid", r.id)
-    .order("id", { ascending: false })
-    .limit(1)
-    .maybeSingle<{ id: number; fdid: number; fdistatus: string | null }>();
-  if (assignItemErr) {
-    console.error(`[tb_forwarder_driver_item detail] failed`, { code: assignItemErr.code, message: assignItemErr.message, fid: r.id });
-  }
-  if (assignItemRow) {
-    const { data: parentRow, error: parentErr } = await admin
-      .from("tb_forwarder_driver")
-      .select("id, fdadminid, fddate, fdstatus")
-      .eq("id", assignItemRow.fdid)
-      .maybeSingle<{ id: number; fdadminid: string | null; fddate: string | null; fdstatus: string | null }>();
-    if (parentErr) {
-      console.error(`[tb_forwarder_driver detail] failed`, { code: parentErr.code, message: parentErr.message, fdid: assignItemRow.fdid });
-    }
-    driverAssignment = {
-      fdistatus:  (assignItemRow.fdistatus ?? "").trim(),
-      batchId:    assignItemRow.fdid,
-      driverCode: parentRow?.fdadminid ?? null,
-      assignedAt: parentRow?.fddate ?? null,
-      batchOpen:  (parentRow?.fdstatus ?? "").trim() === "1",
-    };
-  }
+  //
+  // 2026-06-04 F1: removed the driver-assignment + inline-edits data loads —
+  // those panels moved to /edit/page.tsx (this page is READ-ONLY).
 
   // Resolve cover image — shop-spawned rows may have alicdn URL, legacy path, or empty.
   const coverHref = r.fcover && r.fcover.trim() !== ""
@@ -328,8 +293,8 @@ async function tryRenderTbForwarder(
     "1":"รอเข้าโกดังจีน","2":"ถึงโกดังจีนแล้ว","3":"กำลังส่งมาไทย","4":"ถึงไทยแล้ว",
     "5":"รอชำระเงิน","6":"เตรียมส่ง","7":"ส่งแล้ว","99":"พิเศษ",
   };
-  // MODE_LABEL removed 2026-06-04 — transport mode now appears in the inline
-  // editor below (forwarder-inline-edits.tsx) where it's clickable/editable.
+  // MODE_LABEL removed 2026-06-04 — transport mode is rendered with the status
+  // timeline icon (Truck/Plane) above; the editable form lives on /edit.
   const WAREHOUSE_LABEL: Record<string, string> = {
     "1":"แสง","2":"CTT","3":"MK","4":"MX","5":"JMF","6":"GOGO","7":"Cargo Center","8":"MOMO",
   };
@@ -536,63 +501,6 @@ async function tryRenderTbForwarder(
             </div>
           </section>
 
-          {/* Inline-edit row — the 5 quick-flip fields legacy PCS lets staff
-              edit directly on the detail page (mirrors /admin/service-orders/
-              [hNo] pattern · ภูม flag 2026-06-04). */}
-          <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4">
-            <h3 className="text-sm font-semibold text-muted mb-3 flex items-center gap-1.5">
-              <Pencil className="h-3.5 w-3.5" /> ตั้งค่ารายการ (แก้ไขได้)
-            </h3>
-            <ForwarderInlineEdits
-              fId={r.id}
-              ftransporttype={r.ftransporttype}
-              crate={r.crate}
-              fshipby={r.fshipby}
-              paymethod={r.paymethod}
-              fbilltoname={r.fbilltoname}
-              defaultBillTo={`${r.faddressname ?? ""} ${r.faddresslastname ?? ""}`.trim()}
-            />
-            <p className="text-[10px] text-muted mt-3 pt-2 border-t border-border/40">
-              สำหรับการเปลี่ยน <b>ที่อยู่จัดส่ง</b> · <b>แก้ไขขนาด/น้ำหนัก/รายการสินค้า</b> · อัปเดตสถานะ · ชำระเงิน ·
-              <Link href={`/admin/forwarders/${r.fidorco ?? String(r.id)}/edit`} className="text-primary-600 hover:underline ml-1">
-                ไปหน้าแก้ไข/อัปเดต →
-              </Link>
-            </p>
-          </section>
-
-          {/* Driver-assign collapsible — open by default ONLY when ready to dispatch
-              (fstatus='6' เตรียมส่ง). Moved from /edit/page.tsx 2026-06-04 per ภูม
-              UX flag: the rest of /edit's collapsibles were noise, but driver-assign
-              is the workflow gate at fstatus=6 — it belongs visible (collapsed) on
-              the detail page so staff don't have to bounce to /edit just for this. */}
-          <details
-            className="group rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden"
-            open={r.fstatus === "6"}
-          >
-            <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none hover:bg-surface-alt/40 list-none">
-              <ChevronDown className="h-4 w-4 text-muted transition-transform group-open:rotate-180 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-bold flex items-center gap-1.5">
-                  <Truck className="h-3.5 w-3.5" /> มอบหมายคนขับ
-                </h3>
-                <p className="text-xs text-muted mt-0.5 truncate">
-                  {r.fstatus === "6"
-                    ? "✅ พร้อมจัดส่ง — เลือกคนขับและเริ่ม"
-                    : "เปิดใช้งานเมื่อสถานะเป็น 'เตรียมส่ง' (fstatus=6)"}
-                </p>
-              </div>
-            </summary>
-            <div className="px-4 pt-1 pb-4 border-t border-border/40">
-              <TbForwarderDriverAssignPanel
-                fId={r.id}
-                fNo={String(r.id)}
-                fstatus={r.fstatus}
-                paydeposit={r.paydeposit ?? ""}
-                current={driverAssignment}
-              />
-            </div>
-          </details>
-
           {/* Product detail */}
           <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4">
             <h3 className="text-sm font-semibold text-muted mb-3 flex items-center justify-between">
@@ -715,7 +623,13 @@ async function tryRenderTbForwarder(
               )}
             </dl>
             <p className="text-[10px] text-muted mt-3 pt-2 border-t border-border/40">
-              วิธีเก็บเงิน · ชื่อบนใบกำกับ แก้ไขได้ใน &quot;ตั้งค่ารายการ&quot; ด้านซ้าย
+              แก้ไขข้อมูลทั้งหมด (สถานะ · บริษัทขนส่ง · ที่อยู่ · วิธีเก็บเงิน · ชื่อบนใบกำกับ · ฯลฯ) ได้ที่
+              <Link
+                href={`/admin/forwarders/${slugForLink}/edit`}
+                className="text-primary-600 hover:underline ml-1"
+              >
+                หน้าแก้ไข/อัปเดต →
+              </Link>
             </p>
           </section>
 
