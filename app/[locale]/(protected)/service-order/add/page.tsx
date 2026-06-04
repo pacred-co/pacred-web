@@ -400,7 +400,7 @@ export default async function ServiceOrderAddPage({
                             (the add-to-cart screen, cart.php?page=add).
                             Routed to the equivalent Pacred cart route. */}
                         <Link
-                          href="/cart"
+                          href="/cart/add"
                           className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-bold transition-colors"
                         >
                           <i className="ft-plus"></i>
@@ -907,7 +907,7 @@ export default async function ServiceOrderAddPage({
                               ) : (
                                 // shops.php L1034-1047 — no orders at all
                                 <div className="text-center py-8">
-                                  <Link href="/cart" className="inline-block">
+                                  <Link href="/cart/add" className="inline-block">
                                     <h4 className="text-base md:text-lg font-bold text-foreground mb-3">คุณยังไม่มีรายการฝากสั่งซื้อ</h4>
                                     <div className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-bold transition-colors">
                                       <i className="ft-plus"></i>

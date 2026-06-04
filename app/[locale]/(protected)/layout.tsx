@@ -209,7 +209,11 @@ export default async function ProtectedLayout({
             NavBar already knows auth state (reads Supabase from the client)
             and SearchBar is the same component the public home renders. */}
       <NavBar />
-      <SearchBar />
+      {/* Member chrome: search bar starts COLLAPSED on mobile (< xl, where the
+          NavBar chevron toggle lives) and is force-shown on desktop (xl+, no
+          chevron there). Tap the navbar chevron to expand. Per owner 2026-06-04
+          ("หน้าเมนูในมือถือ ให้ search bar พับเป็น default แต่กดเปิดได้"). */}
+      <SearchBar defaultCollapsed />
 
       {/* 4. Legacy left sidebar — kept per ปอน 2026-05-23 (the "แถบซ้าย"). */}
       <PcsLeftMenu data={chrome} />
@@ -238,7 +242,7 @@ export default async function ProtectedLayout({
           mobile bottom nav since the legacy `.nav-footer-pcs` is hidden in
           legacy-overrides.css §0). Auto-hides itself on /admin /login /register
           /forgot-password via its own isHidden check, so adding it here is safe. */}
-      <FloatingTabs payDueCount={chrome.countPaymentDue} />
+      <FloatingTabs payDueCount={chrome.countPaymentDue} avatarUrl={profile?.avatar_url ?? null} />
 
       {/* 7. Legacy JS bundle — rendered last so the full chrome DOM exists
             when it runs. jQuery → Popper → Bootstrap-4 (vendors.min.js) → the

@@ -3,6 +3,7 @@ import { StubPage } from "@/components/stub-page";
 import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbSchema } from "@/components/seo/schemas";
 import { buildPageMetadata } from "@/components/seo/page-meta";
+import { DeliveryZones } from "./delivery-zones";
 
 const PATH = "/delivery-areas";
 
@@ -39,11 +40,14 @@ export default async function Page({
         highlight={typedLocale === "th" ? "Pacred เหมาๆ" : "coverage"}
         description={
           typedLocale === "th"
-            ? "ส่งทั่วกรุงเทพฯ ปริมณฑล เริ่มต้น 100 บาท พร้อมขยายทั่วประเทศ — เรทเหมาเรทดี ตามเส้นทาง"
-            : "Bangkok metro from 100 baht, expanding nationwide — flat-rate pricing optimised by route."
+            ? "ส่งเหมา 100 บาท ไม่จำกัดน้ำหนัก ทั่วกรุงเทพฯ–ปริมณฑล ถึงมือลูกค้า"
+            : "Flat 100 baht, any weight — across Bangkok and the surrounding provinces."
         }
         breadcrumb={[{ label: typedLocale === "th" ? "พื้นที่จัดส่ง" : "Delivery areas" }]}
-      />
+        banner="rotate"
+      >
+        <DeliveryZones locale={typedLocale} />
+      </StubPage>
     </>
   );
 }

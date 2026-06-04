@@ -25,6 +25,8 @@ import {
   CheckCircle2,
   Inbox,
 } from "lucide-react";
+import { ForwarderPayModal } from "../service-import/forwarder-pay-modal";
+import type { ForwarderRow } from "../service-import/forwarder-row-view";
 
 export type PaymentDueService = "order" | "import" | "payment";
 
@@ -40,6 +42,10 @@ export type PaymentDueItem = {
   statusLabel: string; // per-item status (รอชำระเงิน / รอดำเนินการ)
   ctaLabel: string; // ชำระเงิน / ดูรายละเอียด
   ctaHref: string;
+  /** Import items only — the full forwarder row lets the card open the
+   *  in-place pay modal (QR + slip) instead of navigating to /service-import. */
+  forwarderRow?: ForwarderRow;
+  isJuristic?: boolean;
 };
 
 type TabKey = "all" | "order" | "import" | "export" | "payment" | "customs";
@@ -97,6 +103,8 @@ function numberLimit(n: number): string {
 
 export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
   const [tab, setTab] = useState<TabKey>("all");
+  // The import item whose in-place pay modal (QR + slip) is open, if any.
+  const [payItem, setPayItem] = useState<PaymentDueItem | null>(null);
 
   const counts: Record<TabKey, number> = {
     all: items.length,
@@ -113,6 +121,7 @@ export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
   const activeLabel = TABS.find((t) => t.key === tab)?.label ?? "";
 
   return (
+    <>
     <section className="rounded-2xl bg-white dark:bg-surface border border-border shadow-sm overflow-hidden">
       {/* ── Status/service tab strip ── */}
       <div className="border-b border-border px-3 py-3 md:px-5 md:py-4">
@@ -186,16 +195,33 @@ export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
         ) : (
           <div className="space-y-2.5">
             {filtered.map((it) => (
-              <PaymentDueCard key={it.key} item={it} />
+              <PaymentDueCard key={it.key} item={it} onPay={setPayItem} />
             ))}
           </div>
         )}
       </div>
     </section>
+
+    {/* In-place forwarder payment (QR + slip + submit) — reuses the verified
+        /service-import pay modal so import items pay right here, no navigation.
+        Renders hidden until an import card is tapped. */}
+    <ForwarderPayModal
+      rows={payItem?.forwarderRow ? [payItem.forwarderRow] : []}
+      isJuristic={!!payItem?.isJuristic}
+      open={!!payItem?.forwarderRow}
+      onClose={() => setPayItem(null)}
+    />
+    </>
   );
 }
 
-function PaymentDueCard({ item }: { item: PaymentDueItem }) {
+function PaymentDueCard({
+  item,
+  onPay,
+}: {
+  item: PaymentDueItem;
+  onPay?: (item: PaymentDueItem) => void;
+}) {
   const meta = SERVICE_META[item.service];
   const Icon = meta.Icon;
   const [imgFailed, setImgFailed] = useState(false);
@@ -271,15 +297,27 @@ function PaymentDueCard({ item }: { item: PaymentDueItem }) {
           </div>
         </div>
 
-        {/* CTA — right column on desktop, full-width row beneath on mobile */}
+        {/* CTA — import items pay in-place via the QR modal; others navigate
+            to their own pay/detail flow. */}
         <div className="col-span-2 md:col-span-1 flex md:flex-col items-stretch md:items-end justify-end gap-1.5">
-          <Link
-            href={item.ctaHref}
-            className="inline-flex items-center justify-center gap-1 rounded-full bg-sky-600 text-white text-[12px] font-bold px-3.5 py-2 md:py-1.5 shadow-md shadow-sky-600/25 hover:bg-sky-700 transition-colors w-full md:w-auto"
-          >
-            {item.ctaLabel}
-            <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.4} />
-          </Link>
+          {item.service === "import" && item.forwarderRow && onPay ? (
+            <button
+              type="button"
+              onClick={() => onPay(item)}
+              className="inline-flex items-center justify-center gap-1 rounded-full bg-sky-600 text-white text-[12px] font-bold px-3.5 py-2 md:py-1.5 shadow-md shadow-sky-600/25 hover:bg-sky-700 transition-colors w-auto"
+            >
+              {item.ctaLabel}
+              <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.4} />
+            </button>
+          ) : (
+            <Link
+              href={item.ctaHref}
+              className="inline-flex items-center justify-center gap-1 rounded-full bg-sky-600 text-white text-[12px] font-bold px-3.5 py-2 md:py-1.5 shadow-md shadow-sky-600/25 hover:bg-sky-700 transition-colors w-auto"
+            >
+              {item.ctaLabel}
+              <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.4} />
+            </Link>
+          )}
         </div>
       </div>
     </article>

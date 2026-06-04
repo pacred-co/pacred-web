@@ -59,7 +59,7 @@ type LaunchpadItem = {
 // icon (already in the iconfloating set), grayscale + "COMING SOON" badge
 // applied in the render branch.
 const PRIMARY_SERVICES: readonly LaunchpadItem[] = [
-  { icon: "/images/hero-section/icon/cart.png", label: "ฝากสั่งซื้อ", href: "/service-order"   },
+  { icon: "/images/hero-section/icon/cart.png", label: "ฝากสั่งซื้อ", href: "/cart/add"   },
   { icon: `${ICON_BASE}/pcs-payment.png`,      label: "ฝากโอนชำระ", href: "/service-payment" },
   { icon: `${ICON_BASE}/pcs-forwarder.png`,    label: "นำเข้า",     href: "/service-import"  },
   { icon: `${ICON_BASE}/export.png`,           label: "ส่งออก",     href: "#", comingSoon: true },

@@ -696,6 +696,9 @@ export default async function ServiceImportDetailPage({
   const fAmount = row.famount;
   const fWeight = Number(row.fweight ?? 0);
   const fVolume = Number(row.fvolume ?? 0);
+  const fWidth = Number(row.fwidth ?? 0);
+  const fLength = Number(row.flength ?? 0);
+  const fHeight = Number(row.fheight ?? 0);
   const fTotalPrice = Number(row.ftotalprice ?? 0);
   const fTransportPrice = Number(row.ftransportprice ?? 0);
   const fPriceUpdate = Number(row.fpriceupdate ?? 0);
@@ -827,7 +830,9 @@ export default async function ServiceImportDetailPage({
       {/* Page content — Tailwind rebuild. Wrapped in `.pcs-content-pad` so
           the (protected) layout's desktop padding (sidebar + FloatingTabs
           clearance) kicks in automatically. */}
-      <div className="pcs-content-pad w-full px-3 md:px-6 py-3 md:py-6">
+      {/* pb-32 on mobile so the last content clears the floating LINE bubble
+          + the fixed bottom nav (otherwise it sits hidden behind them). */}
+      <div className="pcs-content-pad w-full px-3 md:px-6 pt-3 pb-32 md:py-6">
         {/* L1707-1719 — breadcrumb header */}
         <nav className="mb-3 flex flex-wrap items-center gap-1.5 text-xs md:text-sm text-muted">
           <Link href="/dashboard" className="hover:text-red-600 transition-colors">
@@ -1226,6 +1231,8 @@ export default async function ServiceImportDetailPage({
                               <dd className="text-right font-medium tabular-nums">{fAmount}</dd>
                               <dt className="text-muted">น้ำหนัก</dt>
                               <dd className="text-right font-medium tabular-nums">{fWeight} kg.</dd>
+                              <dt className="text-muted">กว้าง × ยาว × สูง</dt>
+                              <dd className="text-right font-medium tabular-nums">{fWidth} × {fLength} × {fHeight} ซม.</dd>
                               <dt className="text-muted">ปริมาตรรวม</dt>
                               <dd className="text-right font-medium tabular-nums">{fVolume}</dd>
                               <dt className="text-muted">คิดราคาตาม</dt>
@@ -1384,6 +1391,8 @@ export default async function ServiceImportDetailPage({
                               <dd className="text-right font-medium tabular-nums">{fAmount}</dd>
                               <dt className="text-muted">น้ำหนัก</dt>
                               <dd className="text-right font-medium tabular-nums">{fWeight} kg.</dd>
+                              <dt className="text-muted">กว้าง × ยาว × สูง</dt>
+                              <dd className="text-right font-medium tabular-nums">{fWidth} × {fLength} × {fHeight} ซม.</dd>
                               <dt className="text-muted">ปริมาตรรวม</dt>
                               <dd className="text-right font-medium tabular-nums">
                                 {row.famountcount === "1"

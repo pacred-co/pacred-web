@@ -103,7 +103,7 @@ export function ServiceOrderList({
         </p>
         <p className="mt-1 text-xs text-muted">{tp("emptyHint")}</p>
         <Link
-          href="/service-order/add"
+          href="/cart/add"
           className="mt-4 inline-block rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-bold hover:bg-primary-600 shadow-sm"
         >
           + {t("addItem")}

@@ -39,7 +39,15 @@ function TabCountBadge({ n }: { n: number }) {
   );
 }
 
-export function FloatingTabs({ payDueCount = 0 }: { payDueCount?: number }) {
+export function FloatingTabs({
+  payDueCount = 0,
+  avatarUrl = null,
+}: {
+  payDueCount?: number;
+  /** Logged-in member's avatar — shown round (Facebook-style) on the เมนู tab
+   *  instead of the hamburger icon. Null on public pages → falls back to Menu. */
+  avatarUrl?: string | null;
+}) {
   const t = useTranslations("floatingTabs");
   const [active, setActive] = useState<number | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -287,7 +295,16 @@ export function FloatingTabs({ payDueCount = 0 }: { payDueCount?: number }) {
                 tap is a no-op page-refresh, which is acceptable. */}
             <Link href="/m/dashboard" onClick={() => setActive(5)}
               className="group flex flex-col items-center justify-center gap-1 pt-2 pb-4 transition-colors active:bg-primary-50/60">
-              <Menu className={`w-8 h-8 transition-all duration-300 ${active === 5 ? "text-primary-600 scale-110" : "text-muted opacity-75"}`} strokeWidth={2.2} />
+              {avatarUrl ? (
+                <span
+                  className={`relative w-8 h-8 shrink-0 overflow-hidden rounded-full border-2 transition-all duration-300 ${active === 5 ? "border-primary-600 scale-110" : "border-transparent opacity-90"}`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                </span>
+              ) : (
+                <Menu className={`w-8 h-8 transition-all duration-300 ${active === 5 ? "text-primary-600 scale-110" : "text-muted opacity-75"}`} strokeWidth={2.2} />
+              )}
               <span className={`text-[11px] leading-tight font-medium ${active === 5 ? "text-primary-600 font-bold" : "text-muted"}`}>{t("menu")}</span>
             </Link>
 

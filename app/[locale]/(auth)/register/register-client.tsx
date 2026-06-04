@@ -1466,7 +1466,7 @@ function RegisterSuccessModal({
             id="register-success-title"
             className="text-[20px] font-bold text-gray-900 dark:text-white"
           >
-            สมัครสำเร็จ 🎉
+            สมัครสมาชิกสำเร็จ 🎉
           </h2>
           <p className="mt-1.5 text-[15px] text-gray-500 dark:text-gray-400">
             ยินดีต้อนรับสู่ Pacred
@@ -1503,8 +1503,15 @@ function RegisterSuccessModal({
           </div>
         </div>
 
-        <p className="mt-4 text-center text-[14px] leading-[1.6] text-gray-500 dark:text-gray-400">
-          ทีมงานจะติดต่อกลับโดยเร็วที่สุด
+        <p className="mt-4 text-center text-[13.5px] leading-[1.65] text-gray-500 dark:text-gray-400">
+          หลังสมัครสมาชิกสำเร็จ ทีมเซลล์จะโทรเข้าไปแนะนำเรื่องการบริการ
+          {" "}ผ่านเบอร์โทร{" "}
+          <a
+            href={`tel:${data.repPhone.replace(/[^\d+]/g, "")}`}
+            className="font-bold text-primary-600 hover:underline"
+          >
+            {data.repPhone}
+          </a>
         </p>
 
         <button
@@ -1512,7 +1519,7 @@ function RegisterSuccessModal({
           onClick={onEnter}
           className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-primary-600 px-4 py-[15px] text-[16px] font-semibold text-white shadow-[0_8px_20px_rgba(179,0,0,0.25)] transition hover:-translate-y-0.5 hover:bg-primary-700 hover:shadow-[0_12px_25px_rgba(179,0,0,0.35)]"
         >
-          เข้าสู่ระบบ
+          ล็อกอินเข้าสู่ระบบ
         </button>
       </div>
     </div>

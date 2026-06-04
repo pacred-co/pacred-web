@@ -30,9 +30,13 @@ import {
 export function AddForwarderModal({
   mainAddr,
   others,
+  compact = false,
 }: {
   mainAddr: AddrOption | null;
   others: AddrOption[];
+  /** Compact pill style — to sit inside the status-filter row (slightly
+   *  bigger than the status chips). */
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -56,11 +60,19 @@ export function AddForwarderModal({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 self-stretch justify-center rounded-full bg-emerald-600 pl-1.5 pr-4 py-1.5 text-sm font-bold text-white shadow-md shadow-emerald-600/25 transition-all hover:bg-emerald-700 active:scale-[0.98] md:self-auto md:justify-start"
+        className={
+          compact
+            ? "inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3.5 py-1.5 text-xs md:text-sm font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-[0.98] transition-all"
+            : "inline-flex items-center gap-2 self-stretch justify-center rounded-full bg-emerald-600 pl-1.5 pr-4 py-1.5 text-sm font-bold text-white shadow-md shadow-emerald-600/25 transition-all hover:bg-emerald-700 active:scale-[0.98] md:self-auto md:justify-start"
+        }
       >
-        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-emerald-600 shadow-sm">
-          <Plus className="h-4 w-4" strokeWidth={3} />
-        </span>
+        {compact ? (
+          <Plus className="h-3.5 w-3.5" strokeWidth={3} />
+        ) : (
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-emerald-600 shadow-sm">
+            <Plus className="h-4 w-4" strokeWidth={3} />
+          </span>
+        )}
         <span>เพิ่มรายการนำเข้า</span>
       </button>
 

@@ -6,10 +6,8 @@ import {
   ChevronRight,
   CheckCircle2,
   ArrowRight,
-  MessageCircle,
   Phone,
   Sparkles,
-  Search,
   ShieldCheck,
 } from "lucide-react";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
@@ -24,7 +22,7 @@ import {
   breadcrumbSchema,
   serviceSchema,
 } from "@/components/seo/schemas";
-import { CONTACT, LINE_OA } from "@/components/seo/site";
+import { LINE_OA } from "@/components/seo/site";
 import {
   CUSTOMS_PORTS,
   TEMPLATES,
@@ -36,6 +34,17 @@ const PARENT_PATH = "/customs-clearance-shipping-suvarnabhumi";
 // Dynamic render — the shared <NavBar> reads auth cookies (a dynamic API);
 // static prerender would throw DYNAMIC_SERVER_USAGE in production.
 export const dynamic = "force-dynamic";
+
+// Public price masking — show only the first 2 digits of each number, the rest
+// as "x" (1,500 → 1,5xx · 500-5,000 → 50x-5,0xx). Non-numeric values like
+// "รอเช็ค" pass through. The one fee shown in FULL is "ค่าพิธีการศุลกากร".
+function maskPrice(label: string, value: string): string {
+  if (label.includes("ค่าพิธีการศุลกากร")) return value;
+  return value.replace(/\d[\d,]*/g, (numStr) => {
+    let n = 0;
+    return numStr.replace(/\d/g, (d) => (++n <= 2 ? d : "x"));
+  });
+}
 
 export function generateStaticParams() {
   return CUSTOMS_PORTS.map((port) => ({ port: port.slug }));
@@ -235,7 +244,7 @@ export default async function CustomsPortDetailPage({
                                 {item.label}
                               </span>
                               <span className="text-foreground font-bold whitespace-nowrap">
-                                {item.value}
+                                {maskPrice(item.label, item.value)}
                               </span>
                             </li>
                           ))}
@@ -244,7 +253,7 @@ export default async function CustomsPortDetailPage({
                     ))}
 
                     {/* Summary card */}
-                    <div className="rounded-2xl border border-primary-200 bg-primary-50 dark:bg-primary-900/20 dark:border-primary-800 p-5 md:p-6 flex items-center justify-between gap-4 flex-wrap">
+                    <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 md:p-6 flex items-center justify-between gap-4 flex-wrap">
                       <div>
                         <div className="text-[11px] md:text-[12px] font-bold text-primary-700/80 dark:text-primary-300/80 tracking-[0.10em] uppercase leading-none">
                           📌 {port.summaryLabel}
@@ -409,54 +418,6 @@ export default async function CustomsPortDetailPage({
                       ขอใบเสนอราคา ฟรี · ตอบไว 5 นาที
                       <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.6} />
                     </a>
-                    <a
-                      href={LINE_OA.shortUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      data-cta="book-aside"
-                      className="inline-flex w-full items-center justify-center gap-2 h-11 rounded-xl border-2 border-primary-600 bg-white text-primary-600 font-black text-[13px] md:text-[13.5px] hover:bg-primary-50 transition-colors dark:bg-surface dark:border-primary-500 dark:text-primary-300"
-                    >
-                      จองออนไลน์ · ดูราคาประมาณการครบทุกหัว
-                      <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.6} />
-                    </a>
-                    <div className="grid grid-cols-2 gap-2">
-                      <a
-                        href={LINE_OA.shortUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        data-cta="line-aside"
-                        className="inline-flex items-center justify-center gap-1.5 h-10 rounded-lg bg-[#06C755] text-white font-bold text-[12px] md:text-[12.5px] hover:bg-[#05B04C] transition-colors shadow-[0_4px_12px_rgba(6,199,85,0.30)]"
-                      >
-                        <MessageCircle className="w-3.5 h-3.5" strokeWidth={2.6} />
-                        ทักไลน์
-                      </a>
-                      <a
-                        href={`tel:${CONTACT.phone}`}
-                        data-cta="phone-aside"
-                        className="inline-flex items-center justify-center gap-1.5 h-10 rounded-lg border border-primary-200 bg-white text-primary-700 font-bold text-[12px] md:text-[12.5px] hover:bg-primary-50 hover:border-primary-300 transition-colors dark:bg-surface dark:border-primary-800 dark:text-primary-200"
-                      >
-                        <Phone className="w-3.5 h-3.5" strokeWidth={2.6} />
-                        โทร
-                      </a>
-                    </div>
-                  </div>
-
-                  {/* SEO sub-keywords */}
-                  <div className="mt-4 pt-3 border-t border-border">
-                    <div className="text-[10px] md:text-[10.5px] font-bold text-muted tracking-[0.10em] uppercase mb-1.5">
-                      <Search className="inline w-3 h-3 mr-1" strokeWidth={2.6} />
-                      คำที่ใช้ค้นหา
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {port.subKeywords.map((kw) => (
-                        <span
-                          key={kw}
-                          className="inline-flex items-center px-1.5 h-5 rounded bg-primary-50/70 dark:bg-primary-900/20 border border-primary-100 dark:border-primary-900/40 text-[10px] md:text-[10.5px] font-bold text-primary-700 dark:text-primary-300"
-                        >
-                          {kw}
-                        </span>
-                      ))}
-                    </div>
                   </div>
                 </div>
               </aside>
