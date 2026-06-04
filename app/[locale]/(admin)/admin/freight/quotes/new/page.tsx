@@ -1,6 +1,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { NewQuoteForm } from "./new-quote-form";
+import { RateCardGuide } from "@/components/admin/freight/rate-card-guide";
 
 /**
  * V-E6 — /admin/freight/quotes/new
@@ -26,6 +27,7 @@ export default async function NewFreightQuotePage() {
         </p>
       </div>
       <NewQuoteForm />
+      <RateCardGuide />
     </main>
   );
 }

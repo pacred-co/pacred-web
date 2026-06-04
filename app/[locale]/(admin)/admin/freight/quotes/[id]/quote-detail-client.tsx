@@ -18,6 +18,7 @@ import {
   type QuoteStatus, type TransportMode, type QuoteUnit, type Incoterm,
 } from "@/lib/validators/freight-quote";
 import { confirm } from "@/components/ui/confirm";
+import { RateCardGuide } from "@/components/admin/freight/rate-card-guide";
 
 export type LineItem = {
   id:             string;
@@ -63,6 +64,7 @@ export function QuoteDetailClient({ data, items }: Props) {
           itemCount={items.length}
         />
       )}
+      <RateCardGuide />
       <ItemsTable quoteId={data.id} items={items} editable={isDraft} />
       <StatusActions data={data} hasItems={items.length > 0} />
     </div>

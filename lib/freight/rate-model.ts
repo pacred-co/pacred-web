@@ -148,3 +148,43 @@ export const FREIGHT_COMMISSION = {
   salesDocPct: 5,
   whtPct: 3,
 } as const;
+
+// ────────────────────────────────────────────────────────────
+// Reference labels + policy constants (for the human pricing guide)
+// ────────────────────────────────────────────────────────────
+
+/** Human label per scope leg (the guide groups lines by this). */
+export const SCOPE_LABEL: Record<ScopeCategory, string> = {
+  freight:        "ค่าเฟรทจีน→ไทย",
+  origin:         "ค่าต้นทาง / เอกสารจีน",
+  thai_customs:   "พิธีการ + ค่าท่าไทย",
+  thai_transport: "ขนส่งในไทย",
+  import_tax:     "ภาษีนำเข้าไทย (DDP)",
+};
+
+/** Concise Thai hint per incoterm — what WE bill (matches INCOTERM_SCOPE). */
+export const INCOTERM_LABEL: Record<Incoterm, string> = {
+  EXW: "หน้าโรงงานจีน — ต้นทาง+เฟรท+พิธีการ+ส่งไทย",
+  FCA: "ส่งมอบผู้ขนส่งต้นทาง — ต้นทาง+เฟรท+พิธีการ+ส่งไทย",
+  CPT: "จ่ายค่าขนส่งถึงปลายทาง — เฟรท+ส่งไทย",
+  CIP: "CPT + ประกัน — เฟรท+ส่งไทย",
+  DAP: "ส่งถึงที่ — เฟรท+พิธีการ+ส่งไทย",
+  DPU: "ส่งถึง+ลงสินค้า — เฟรท+พิธีการ+ส่งไทย",
+  DDP: "ส่งถึงที่ รวมภาษี — ครบทุกขา",
+  FAS: "ข้างเรือต้นทาง — พิธีการ+ส่งไทย",
+  FOB: "พ้นกราบเรือ — พิธีการ+ส่งไทย (ลูกค้าจองเฟรท)",
+  CFR: "ค่าเฟรทถึงปลายทาง — เฟรท+ส่งไทย (ลูกค้าเคลียร์เอง)",
+  CIF: "CFR + ประกัน — พิธีการ+ส่งไทย (เฟรทจ่ายแล้ว)",
+};
+
+/** Freight markup tiers (เงื่อนไข จ๊อบการทำงาน A23: "เฟรท 30-25-20-15-10%").
+ *  Which tier applies = a sales/volume judgment → the human picks at confirm. */
+export const FREIGHT_MARKUP_TIERS_PCT = [30, 25, 20, 15, 10] as const;
+
+/** FX reference (the cost sheets quote USD at this rate, refreshed monthly).
+ *  The guide shows it so the pricer confirms the current month's rate before
+ *  computing true cost — it is NOT a hardcoded authoritative number. */
+export const FREIGHT_FX_REFERENCE = {
+  thbPerUsd: 35,
+  note: "เรทอ้างอิงรายเดือน (จากชีต cost AXELRA) — ยืนยันเรทเดือนปัจจุบันก่อนคิดต้นทุนจริง",
+} as const;
