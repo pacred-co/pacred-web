@@ -83,6 +83,14 @@ export default async function AdminMomoReviewPage() {
       raw && typeof raw === "object" && typeof raw.quantity === "number"
         ? raw.quantity
         : null;
+    // 2026-06-04 (ภูม flag) — MOMO แนบรูปป้ายแปะกระสอบมาใน raw.images
+    // (e.g. https://api.momocargo.com/images/momo-center/tracking/*.png).
+    // ใช้สำหรับ admin click quick-zoom ตรวจสอบว่า MOMO กรอก user_code ถูก
+    // มั้ย ก่อน commit (เคสจริง: MOMO กรอก "023" แต่ป้ายเขียน "PR025").
+    const imageUrls: string[] =
+      raw && typeof raw === "object" && Array.isArray(raw.images)
+        ? raw.images.filter((u): u is string => typeof u === "string" && u.length > 0)
+        : [];
 
     // Guess userID from MOMO's `user_group + user_code` — e.g. user_group="PR"
     // + user_code="032" → "PR032". Admin should still verify before commit.
@@ -103,6 +111,7 @@ export default async function AdminMomoReviewPage() {
       qty:               qtyRaw,
       lastSyncedAt:      row.last_synced_at ?? null,
       momoUpdatedAt:     row.momo_updated_at ?? null,
+      imageUrls,
     };
   });
 
