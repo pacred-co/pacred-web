@@ -16,9 +16,9 @@
  * page); the commit action returns AdminActionResult so errors surface to UI.
  */
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Truck, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
+import { Truck, RefreshCw, CheckCircle2, AlertCircle, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import {
   commitMomoRowToForwarder,
@@ -157,8 +157,14 @@ export function ReviewGridClient({
   const [bulkSummary, setBulkSummary] = useState<{
     total: number; succeeded: number; failed: number;
   } | null>(null);
-  // 2026-06-04 (ภูม flag) — lightbox state สำหรับ quick-zoom ป้าย MOMO
-  const [zoomImage, setZoomImage] = useState<{ url: string; tracking: string } | null>(null);
+  // 2026-06-04 (ภูม flag) — lightbox state สำหรับ quick-zoom ป้าย MOMO.
+  // Carries the FULL `urls: string[]` (some MOMO rows have multiple labels)
+  // + current `index` for prev/next navigation inside the modal.
+  const [zoomImage, setZoomImage] = useState<{
+    urls: string[];
+    tracking: string;
+    index: number;
+  } | null>(null);
 
   // Set the form value for one row.
   const setRowField = <K extends keyof RowFormState>(
@@ -528,9 +534,15 @@ export function ReviewGridClient({
                         {r.imageUrls.length > 0 ? (
                           <button
                             type="button"
-                            onClick={() => setZoomImage({ url: r.imageUrls[0], tracking: r.momoTrackingNo ?? "—" })}
+                            onClick={() => setZoomImage({
+                              urls:     r.imageUrls,
+                              tracking: r.momoTrackingNo ?? "—",
+                              index:    0,
+                            })}
                             className="group relative inline-block"
-                            title="คลิกเพื่อ quick-zoom"
+                            title={r.imageUrls.length > 1
+                              ? `คลิกเพื่อ quick-zoom (${r.imageUrls.length} รูป · เลื่อนใน modal ได้)`
+                              : "คลิกเพื่อ quick-zoom"}
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
@@ -733,58 +745,186 @@ export function ReviewGridClient({
       )}
 
       {/* 2026-06-04 (ภูม flag) — Quick-zoom lightbox สำหรับรูปป้าย MOMO.
-          ภูมคลิกรูปเล็กในตาราง → modal full-screen แสดงรูปขนาดเต็ม +
-          tracking + ปุ่มเปิดในแท็บใหม่ (ถ้าจะซูมต่อบน MOMO). Esc/คลิกพื้นที่
-          ดำ = ปิด. */}
+          v2 (ภูม fix): บาง row มีหลายรูป (ภูมเตือน) → modal ตอนนี้
+          navigate ระหว่างรูปได้ · keyboard ← / → · thumbnail strip
+          ล่างสุด + counter "N/M". */}
       {zoomImage && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 cursor-zoom-out"
-          onClick={() => setZoomImage(null)}
-          onKeyDown={(e) => e.key === "Escape" && setZoomImage(null)}
-          role="button"
-          tabIndex={0}
-        >
-          <div
-            className="relative max-w-5xl max-h-[92vh] flex flex-col gap-2"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between gap-3 text-white">
-              <div>
-                <div className="text-xs text-white/60">รูปป้ายที่ MOMO แนบ</div>
-                <div className="font-mono text-sm font-bold">{zoomImage.tracking}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <a
-                  href={zoomImage.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="rounded-lg bg-white/10 hover:bg-white/20 px-3 py-1.5 text-xs"
-                >
-                  เปิดในแท็บใหม่ ↗
-                </a>
-                <button
-                  type="button"
-                  onClick={() => setZoomImage(null)}
-                  className="rounded-lg bg-white/10 hover:bg-white/20 px-3 py-1.5 text-xs"
-                  aria-label="ปิด"
-                >
-                  ✕ ปิด (Esc)
-                </button>
-              </div>
+        <ZoomLightbox
+          urls={zoomImage.urls}
+          index={zoomImage.index}
+          tracking={zoomImage.tracking}
+          onIndexChange={(i) => setZoomImage((z) => z ? { ...z, index: i } : null)}
+          onClose={() => setZoomImage(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// ZoomLightbox — 2026-06-04 (ภูม flag v2)
+// ─────────────────────────────────────────────────────────────
+// Full-screen overlay for the MOMO label image(s). Supports navigation
+// when the row has multiple images (ภูม catch · บาง row มี 2 รูป).
+// Features:
+//   - Keyboard arrows ← / → · Esc to close
+//   - Prev / Next buttons on left/right edges (hide when only 1 image)
+//   - Counter "N / M" + thumbnail strip below the main image
+//   - "เปิดในแท็บใหม่" link to the CURRENT image (not just the first)
+
+function ZoomLightbox({
+  urls,
+  index,
+  tracking,
+  onIndexChange,
+  onClose,
+}: {
+  urls: string[];
+  index: number;
+  tracking: string;
+  onIndexChange: (i: number) => void;
+  onClose: () => void;
+}) {
+  const total = urls.length;
+  const safeIndex = Math.max(0, Math.min(index, total - 1));
+  const currentUrl = urls[safeIndex];
+  const hasMany = total > 1;
+
+  const goPrev = () => {
+    if (!hasMany) return;
+    onIndexChange((safeIndex - 1 + total) % total);
+  };
+  const goNext = () => {
+    if (!hasMany) return;
+    onIndexChange((safeIndex + 1) % total);
+  };
+
+  // Keyboard navigation — bind to document so it works regardless of focus.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      } else if (e.key === "ArrowLeft" && hasMany) {
+        e.preventDefault();
+        goPrev();
+      } else if (e.key === "ArrowRight" && hasMany) {
+        e.preventDefault();
+        goNext();
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [safeIndex, total]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 cursor-zoom-out"
+      onClick={onClose}
+      role="button"
+      tabIndex={-1}
+    >
+      <div
+        className="relative max-w-5xl w-full max-h-[92vh] flex flex-col gap-2"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3 text-white">
+          <div>
+            <div className="text-xs text-white/60">รูปป้ายที่ MOMO แนบ</div>
+            <div className="font-mono text-sm font-bold">
+              {tracking}
+              {hasMany && (
+                <span className="ml-2 text-xs font-normal text-white/70">
+                  · รูป {safeIndex + 1} / {total}
+                </span>
+              )}
             </div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={zoomImage.url}
-              alt={`MOMO label · ${zoomImage.tracking}`}
-              className="max-w-full max-h-[80vh] rounded-lg object-contain"
-            />
-            <p className="text-[10px] text-white/60 text-center">
-              ⚠️ ตรวจสอบเลข user_code บนป้ายให้ตรงกับ Pacred userID ก่อน commit ·
-              ถ้าไม่ตรง → แจ้งเซลให้ MOMO update
-            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <a
+              href={currentUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-lg bg-white/10 hover:bg-white/20 px-3 py-1.5 text-xs"
+            >
+              เปิดในแท็บใหม่ ↗
+            </a>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg bg-white/10 hover:bg-white/20 px-3 py-1.5 text-xs inline-flex items-center gap-1"
+              aria-label="ปิด"
+            >
+              <X className="h-3 w-3" /> ปิด (Esc)
+            </button>
           </div>
         </div>
-      )}
+
+        {/* Main image + side nav arrows */}
+        <div className="relative flex items-center justify-center">
+          {hasMany && (
+            <button
+              type="button"
+              onClick={goPrev}
+              className="absolute left-2 z-10 rounded-full bg-white/10 hover:bg-white/30 p-2 text-white"
+              aria-label="รูปก่อนหน้า (←)"
+            >
+              <ChevronLeft className="h-6 w-6" />
+            </button>
+          )}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={currentUrl}
+            alt={`MOMO label · ${tracking} · ${safeIndex + 1}/${total}`}
+            className="max-w-full max-h-[75vh] rounded-lg object-contain"
+          />
+          {hasMany && (
+            <button
+              type="button"
+              onClick={goNext}
+              className="absolute right-2 z-10 rounded-full bg-white/10 hover:bg-white/30 p-2 text-white"
+              aria-label="รูปถัดไป (→)"
+            >
+              <ChevronRight className="h-6 w-6" />
+            </button>
+          )}
+        </div>
+
+        {/* Thumbnail strip — only when multi */}
+        {hasMany && (
+          <div className="flex gap-2 justify-center pt-1 overflow-x-auto">
+            {urls.map((u, i) => (
+              <button
+                key={u + i}
+                type="button"
+                onClick={() => onIndexChange(i)}
+                className={`shrink-0 rounded border-2 transition-all ${
+                  i === safeIndex
+                    ? "border-primary-400 ring-2 ring-primary-300"
+                    : "border-white/20 hover:border-white/50 opacity-70 hover:opacity-100"
+                }`}
+                aria-label={`เปิดรูปที่ ${i + 1}`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={u}
+                  alt={`thumb ${i + 1}`}
+                  className="h-14 w-14 object-cover rounded-sm"
+                  loading="lazy"
+                />
+              </button>
+            ))}
+          </div>
+        )}
+
+        <p className="text-[10px] text-white/60 text-center">
+          ⚠️ ตรวจสอบเลข user_code บนป้ายให้ตรงกับ Pacred userID ก่อน commit ·
+          ถ้าไม่ตรง → แจ้งเซลให้ MOMO update
+          {hasMany && <span className="block">⌨ ใช้ ← / → เปลี่ยนรูปได้</span>}
+        </p>
+      </div>
     </div>
   );
 }
