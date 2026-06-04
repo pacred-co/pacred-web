@@ -16,6 +16,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { adminApproveWithdraw, adminRejectWithdraw } from "@/actions/admin/wallet-hs";
+import { confirm } from "@/components/ui/confirm";
 
 export function WithdrawRowActions({ id }: { id: number }) {
   const router = useRouter();
@@ -59,8 +60,8 @@ export function WithdrawRowActions({ id }: { id: number }) {
         <div className="flex flex-wrap gap-1.5">
           <button
             type="button"
-            onClick={() => {
-              if (confirm("ยืนยันจ่ายเงินถอน — อนุมัติจ่ายเงินออกให้ลูกค้ารายการนี้?")) approve();
+            onClick={async () => {
+              if (await confirm("ยืนยันจ่ายเงินถอน — อนุมัติจ่ายเงินออกให้ลูกค้ารายการนี้?")) approve();
             }}
             disabled={pending}
             className="inline-flex items-center gap-1 rounded-md bg-green-600 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-green-700 disabled:opacity-50"

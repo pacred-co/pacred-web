@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { adminUpdateShopPayout } from "@/actions/admin/shop-payouts";
+import { confirm } from "@/components/ui/confirm";
 
 /**
  * Per-row action buttons for /admin/shop-payouts — Sprint-3 P2.3.
@@ -77,7 +78,7 @@ export function ShopPayoutActions({
         <Button
           size="sm"
           type="button"
-          onClick={() => { if (confirm("ยืนยันบันทึกว่าโอนเงินแล้ว? (ทำเครื่องหมายจ่ายเสร็จ — มีผลกับ wallet)")) set("completed"); }}
+          onClick={async () => { if (await confirm("ยืนยันบันทึกว่าโอนเงินแล้ว? (ทำเครื่องหมายจ่ายเสร็จ — มีผลกับ wallet)")) set("completed"); }}
           disabled={pending}
         >
           โอนแล้ว
@@ -86,7 +87,7 @@ export function ShopPayoutActions({
           size="sm"
           variant="outline"
           type="button"
-          onClick={() => { if (confirm("ยืนยันปฏิเสธรายการจ่ายเงินนี้?")) set("cancelled"); }}
+          onClick={async () => { if (await confirm("ยืนยันปฏิเสธรายการจ่ายเงินนี้?")) set("cancelled"); }}
           disabled={pending}
         >
           ปฏิเสธ

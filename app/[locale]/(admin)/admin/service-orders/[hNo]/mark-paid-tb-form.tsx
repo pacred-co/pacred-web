@@ -84,9 +84,9 @@ export function MarkPaidTbForm({
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={() => {
+          onClick={async () => {
             if (
-              confirm(
+              await confirm(
                 `ยืนยันหักเงิน ฿${totalThb.toLocaleString()} จาก wallet ลูกค้า และเปลี่ยนสถานะเป็น “สั่งสินค้าแล้ว”?\nรายการนี้มีผลกับยอดเงินจริงของลูกค้า`,
               )
             ) {

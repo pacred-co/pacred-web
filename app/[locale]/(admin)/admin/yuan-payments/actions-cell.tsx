@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { adminUpdateYuanPayment } from "@/actions/admin/yuan-payments";
 import { YuanRefundModal } from "./refund-modal";
+import { confirm } from "@/components/ui/confirm";
 
 type Props = {
   id:     string;
@@ -47,8 +48,8 @@ export function YuanPaymentActions(props: Props) {
             bulk-bar — wallet was already debited at submit). Reject → failed. */}
         {status === "pending" && (
           <>
-            <Button size="sm" type="button" onClick={() => { if (confirm("ยืนยันอนุมัติรายการฝากโอนนี้ (สำเร็จ)?")) set("completed"); }} disabled={pending}>อนุมัติ (สำเร็จ)</Button>
-            <Button size="sm" variant="outline" type="button" onClick={() => { if (confirm("ยืนยันปฏิเสธรายการฝากโอนนี้?")) set("failed"); }} disabled={pending}>ปฏิเสธ</Button>
+            <Button size="sm" type="button" onClick={async () => { if (await confirm("ยืนยันอนุมัติรายการฝากโอนนี้ (สำเร็จ)?")) set("completed"); }} disabled={pending}>อนุมัติ (สำเร็จ)</Button>
+            <Button size="sm" variant="outline" type="button" onClick={async () => { if (await confirm("ยืนยันปฏิเสธรายการฝากโอนนี้?")) set("failed"); }} disabled={pending}>ปฏิเสธ</Button>
           </>
         )}
         {/* Phase C QoL #4 — refund now requires a slip. Opens a modal
