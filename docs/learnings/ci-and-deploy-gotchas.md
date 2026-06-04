@@ -4,6 +4,35 @@ Topics: GitHub Actions, Vercel build/deploy, pnpm action-setup, Next 16 build ou
 
 ---
 
+## [2026-06-05] The shared dev server runs from the MAIN checkout, NOT your worktree — your edits won't show until you push + pull it (+ setsid≠macOS, stale-.next, transient auth burst)
+
+**Context.** Owner asked me to review member-side edits (sidebar + dashboard cards) live on their Chrome at `localhost:3000`. I edited files in my session worktree (`.claude/worktrees/gifted-snyder-0a9cca`), the gate was green, but **the browser kept showing the OLD UI** — even a card-4 label (`กระเป๋าสตางค์เครดิต`) that wasn't in my worktree's file at all. Burned several cycles before diagnosing.
+
+**Root cause + diagnosis.** The `:3000` dev server was started from `/Users/dev/pacred-web` (the **main checkout**), not my worktree. Confirm with:
+```bash
+pid=$(lsof -nP -iTCP:3000 -sTCP:LISTEN | awk 'NR==2{print $2}')
+lsof -a -p "$pid" -d cwd | awk 'NR==2{print $NF}'   # → /Users/dev/pacred-web (NOT the worktree)
+```
+Worse, the main checkout was **38 commits behind `dave-pacred`** (owner reviewing a stale app for the whole night) AND its running Turbopack had a **stale `.next` compile** of `/dashboard` that didn't even match its own on-disk file. This is §13 (worktree-base-stale) in a new guise: the *served* tree ≠ the *edited* tree.
+
+**The fix sequence (the reliable one).**
+1. `git commit` + push the worktree edits to `dave-pacred`/`main`.
+2. `git -C /Users/dev/pacred-web pull origin dave-pacred --no-edit` (FF — brings the served tree current incl. your push).
+3. A 38-commit pull + a stale `.next` → hot-reload is UNRELIABLE; do a clean restart: `kill <pid>; rm -rf /Users/dev/pacred-web/.next; <restart dev>`.
+4. First request recompiles fresh (~10-45s) → the new UI finally renders.
+
+**Three sub-traps hit along the way:**
+- **`setsid` does NOT exist on macOS.** I tried `setsid bash -c '<dev>' &` to detach the restarted server — it failed *silently* (no such binary) → server never started → "local บน chrome ล่ม". Use **`nohup <cmd> > log 2>&1 &`** (a foreground Bash command that backgrounds via `&`; survives the shell, and is NOT a harness-tracked background task so it won't get reaped like `run_in_background` did once). Run `next dev <dir>` with the dir ARG to avoid a `cd`-permission prompt.
+- **Stale `.next` serves content not on disk.** The served `/dashboard` showed a label absent from the file — Turbopack was serving an old compiled chunk. `rm -rf .next` + restart (server already killed — see the 2026-05-31 entry: never `rm` while it's live) is the only reliable fix after a big pull.
+- **Transient Supabase-auth `Failed to fetch` burst.** A long-running localhost→prod-Supabase session's refresh token goes stale → the browser client's background `autoRefreshToken` fires a burst of `TypeError: Failed to fetch` (network-level, NOT a 4xx) into the console (`_refreshAccessToken`/`_recoverAndRefresh`/`__loadSession`). It **self-clears after a fresh dev restart + reload** (verified: 87 errors → 0). Don't chase it as a perf/code bug — `lib/supabase/client.ts` is the standard browser client and `autoRefreshToken` is required for sessions.
+
+**Rules.**
+- Before reviewing UI on a shared dev server, confirm WHICH checkout it serves (`lsof … -d cwd`) and that it's on the current HEAD. If you edit a worktree, you must push + pull the served checkout for changes to appear.
+- macOS detach = `nohup … &`, never `setsid`.
+- After a multi-commit pull into a running dev server, kill + `rm -rf .next` + restart for a trustworthy render — don't trust hot-reload.
+
+---
+
 ## [2026-05-31] NEVER `rm -rf .next` while a dev server is running on it — Turbopack DB corruption → false 500s
 
 **Context.** After merging a teammate commit I cleared the Next build cache (`rm -rf .next`) to drop a stale type reference to a deleted route. But a **preview dev server was still running on port 3000** (started earlier, sharing the same `.next` dir). Minutes later, browsing `/admin/reports` returned **`Internal Server Error`** with `body.innerText === "Internal Server Error"`. I almost filed it as a real reports-hub bug — it was NOT.
