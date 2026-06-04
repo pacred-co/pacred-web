@@ -147,12 +147,17 @@ async function computeSidebarCounts(): Promise<BadgeCounts> {
       admin.from("tb_user_sales_admin_pay").select("id", { count: "exact", head: true })
         .eq("status", "2"),
       // โบนัสล่ามจีน — interpreter commission payouts pending.
-      // ⚠️ 2026-06-04 FLAG: the `commissions` table is missing/empty on prod, so
-      // this badge is 0 — currently CORRECT (no interpreter-bonus payout feature
-      // built; /admin/commissions reads tb_user_sales + tb_user_sales_admin_pay).
-      // Do NOT repoint here to tb_user_sales_admin_pay — it would double-count the
-      // payout badge above. Owner/ภูม (accounting) define the interpreter-pending
-      // source if/when that queue becomes real.
+      // ⚠️ 2026-06-04 FLAG (ภูม): the `commissions` table is missing/empty on
+      // prod → badge = 0. The interpreter-commission domain has OVERLAPPING
+      // systems, so the canonical source is a domain decision, not a guess:
+      //   • the badge's nav links to /admin/commissions (reads tb_user_sales +
+      //     tb_user_sales_admin_pay — NOT interpreter-specific), AND
+      //   • the interpreter-SPECIFIC data is `tb_withdraw_comm_interpreter_h`
+      //     (46 batches · status '1'สร้าง/'2'รอจ่าย/'3'จ่ายแล้ว) that
+      //     /admin/accounting/withdraw/comm-interpreter reads — but its PAY flow
+      //     is "CREATE+PAY DEFERRED" (read-only MVP).
+      // Likely fix once ภูม confirms: count tb_withdraw_comm_interpreter_h
+      // status='2' (รอจ่าย). Left as-is (0) to avoid a wrong number / double-count.
       admin.from("commissions").select("id", { count: "exact", head: true })
         .eq("status", "pending"),
       // ── ลูกค้า ──────────────────────────────────────────────────

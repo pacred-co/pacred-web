@@ -17,11 +17,13 @@
 - **🔢 Badge accuracy** (อย่ามั่ว) — customer sidebar counts verified read canonical `tb_*` (correct `fstatus=5`/`hstatus=2`/`paystatus=1` filters). **FIXED** admin sidebar `salesPayout` badge: was reading the empty rebuilt `sales_payouts` (0 rows) → repointed to `tb_user_sales_admin_pay` status='2' (= pending, **empirically verified** vs the `[id]` page `isPending===2`; currently 0 = correct). Dashboard `sales_payouts` (customer "เบิกค่าสินค้า") left as intentional Phase-C native-empty. Interpreter `commissions` badge flagged (missing table · ภูม).
 - **⚡ Perf survey** ([`docs/research/performance-survey-2026-06-04.md`](docs/research/performance-survey-2026-06-04.md)) — the obvious DB indexes **already exist** (migration 0109's 23 partial indexes cover userid/fstatus/hstatus/paystatus on the hot tables; agent over-flagged). Remaining = `.ilike("%term%")` searches needing Phase-C `pg_trgm` GIN + regression-risk CODE-CHANGES — **none auto-applied** (the "ห้ามทำงานบัค" guardrail). **Headline: set `NEXT_PUBLIC_SENTRY_DSN` in Vercel** → the already-wired Sentry then MEASURES the real prod P95 (the honest fix vs guess-optimizing the busiest tables). + banner-img `sizes` perf fix.
 
-**🔴 PENDING (owner / AM — unchanged from 🌅 + these):**
-1. **Apply migrations prod:** `0137`·`0139`·`0140` (next free **0141**) — I can't write prod DDL autonomously.
-2. **1 Vercel env to unblock perf:** `NEXT_PUBLIC_SENTRY_DSN` (then Sentry reports real slow transactions). + the 🌅 list (TAMIT-2026 · THAIBULKSMS · FB tokens · 3 missing admins).
-3. **30-sec manual:** confirm the profile-pic upload works (customer `/profile` + staff `/admin/admins/[id]/edit`) — same code as your working promo-image uploader.
-4. **ภูม:** define the interpreter-`commissions` badge source. **ปอน:** InwPond007 rebase (`fef7958f`). **Accounting:** ใบขน VAT sign-off + `หนองแขม` free-ship-zone-vs-warehouse decision.
+**🟢 OWNER-AUTHORIZED 1-4 — DONE this session ("ทำเลย 1 2 3 4"):**
+1. ✅ **Migrations `0137`·`0139`·`0140` APPLIED to prod** (direct-host · 150/72/160ms · each verified live via REST · `scripts/apply-migration-generic.mjs`). NEXT FREE = **0141**.
+2. ✅ **`NEXT_PUBLIC_SENTRY_DSN` set in Vercel prod** (env id `18cDBhSlvVqu334X` · target=production · `SENTRY_DSN` server-side already existed; the CLIENT one was the missing gate). Activates on the next deploy (= this push) → client Sentry perf monitoring live → measures the real prod P95.
+3. ✅ **Profile-pic upload PROVEN end-to-end** (`scripts/test-avatar-upload.mjs`: 287 KB → `avatars` bucket → public URL → HTTP 200 image served → cleaned up). Both customer + staff use this verified mechanism — "ใช้ได้จริง" confirmed.
+4. **Cross-person (advanced as far as safe):** ภูม — interpreter-`commissions` badge source enriched IN-CODE with the concrete lead (`tb_withdraw_comm_interpreter_h` status='2' = รอจ่าย · the comm-interpreter batch table); ภูม confirms before wiring (PAY flow is deferred). **ปอน — InwPond007 `fef7958f` (styled-dialogs · 73 files · 88 behind) deliberately NOT merged by me** — a stale-base merge would revert prod (งานหาย · the guardrail) → ปอน MUST `git pull origin main` to rebase, then their styled-dialog sweep lands clean on top of tonight's native `confirm()`s. Accounting — ใบขน VAT base + `หนองแขม` free-ship zone = policy decisions (documented in code/ADR).
+
+**🔴 STILL PENDING (owner / team):** 🌅 Vercel list (`PACRED_TAMIT_DETAIL_URL`-2026 · `THAIBULKSMS_FORCE` · FB tokens · 3 missing admins) · ปอน InwPond007 rebase · accounting ใบขน VAT + free-ship-zone sign-off · ภูม interpreter-badge confirm.
 5. **Freight (Phase D):** realdata SOT = `/Users/dev/Desktop/olddata dev/data งานเก่า` (real LINE/WeChat chats + Excel + real prices) per [`ui_quality_concept_2026_06_04`].
 
 ---
