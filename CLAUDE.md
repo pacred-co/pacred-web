@@ -3,6 +3,23 @@
 
 ---
 
+# 💻 2026-06-04 PM — เดฟ WINDOWS SESSION CLOSE → Mac move: env-fix + ฝากสั่งซื้อ admin 1:1 + full-team merge · read FIRST
+
+**main = `dave-pacred` = (this session-close commit) · all pushed · `next build` EXIT 0 + `pnpm verify` EXIT 0 (REAL exit codes — direct `node next build`, NOT via the flaky pnpm script-shell) · Vercel auto-deploys main.** Resume on Mac: `git fetch origin && git pull origin main` → read this. ⚠️ **Mac needs `.env.local` first** (prod keys don't travel — memory [`local-dev-env-and-legacy-path`] + the 2026-06-04-night section below). **Legacy source on THIS Windows box = `C:\Users\Admin\Desktop\newrealdatapcs\pcscargo\member{,\pcs-admin}`** (42 customer + 187 admin `.php` + `pcsc_main.sql` dumps · AGENTS.md §0a/§0b corrected this session; the big `REALSHITDATAPCS.rar` = 35GB full backup, not extracted); on Mac use the `/Users/dev/Desktop/...` path.
+
+**🚀 Shipped + pushed this session (each gated REAL-exit · branch-integrate-loop):**
+- **🔧 ENV reconciled** — local `.env.local` was stale DEV keys + placeholders (= the "กดค้าง/error เพียบ" bug) → rewritten to PROD (`yzljakczhwrpbxflnmco`) + owner's new tokens (TAMIT-2026 / LINE-login / LIFF / Vercel / Sentry / Cloudflare / MOMO / S3 / hCaptcha / CRON) · `OTP_BYPASS=true` (เดฟ directive · **ก๊อต handles OTP on prod, works** — `EMERGENCY_OTP_BYPASS` not needed; memory [`prod-env-debugging`]). DB pw confirmed `Jirayus40x.`. เดฟ now HAS a Vercel token (read prod env only; **no prod-env changes** made).
+- **🛒 ฝากสั่งซื้อ admin 1:1 (headline · owner "admin flow ยังไม่ 1:1")** — deep-audited legacy `shops.php`(135K)+`detail.php`(59K)+`update.php`(72K) (2 read-only agents) → closed gaps: **per-shop board** (เลขออเดอร์ร้าน + tracking ราย ร้าน · status-aware = legacy update3/update4 · 3 ร้าน=3 บล็อก) + **¥ cPriceUpdate ต่อชิ้น** (update3 L85) + **auto-cancel ค้างจ่าย** (`lib/service-order/auto-expire.ts` · detail.php L73 · recoverable) + **เปลี่ยนที่อยู่จาก address book** (`adminUpdateOrderAddress` · กัน hShipBy=PCS). Wires the 4 orphan line-edit actions (§0d) · all `tb_*` · confirm-before-mutate (§0f). ⚠️ **ภูม built the per-shop board too (more faithful) → adopted ภูม's `ShopFieldsBoard`, dropped my dup panel** (legacy-first reconcile — learning [`feature-reconciliation`](docs/learnings/feature-reconciliation.md)).
+- **🔀 Full-team merge (origin/Poom-pacred + origin/InwPond007 now 0-ahead):** ภูม Poom-pacred (forwarder new/edit UX · detail↔edit split · MOMO-review image zoom) + ปอน InwPond007 (**styled-dialog sweep** `components/ui/confirm.tsx` app-wide · customs rebrand · mobile UX — ปอน rebased → merged clean, 1 trivial conflict + 1 dup-import fixed).
+
+**🔴 PENDING (Mac / owner / team):**
+- **#7 cleanup** — `adminQuoteShopOrder` + `adminUpdateServiceOrder` verified ZERO-caller (safe to tombstone) · print-stamp `hPrintBill` = render-write anti-pattern → both **deferred** (cosmetic).
+- **Owner Vercel env (เดฟ has token, did NOT change prod):** confirm `PACRED_TAMIT_DETAIL_URL`=`…/api-product-2026` · `THAIBULKSMS_FORCE`=`corporate` · FB 8 tokens · 3 missing admins.
+- **🚢 Freight cost-side** (`tb_freight_rate_*` + monthly FX + markup-tier) · **ใบขน VAT** accounting sign-off · **ภูม interpreter-badge** confirm.
+- ⚠️ ฝากสั่งซื้อ `/edit` money-flow **NOT click-tested by me on prod** (build+verify+route-307 green · earlier 200 renders · preview-browser flaky after many restarts + `.next` contention from running prod builds beside dev). **Mac: login admin → open a status-3/4 order → verify per-shop save + auto-cancel + address re-pick on a TEST order.**
+
+---
+
 # 🌙 2026-06-04 NIGHT — OVERNIGHT CONTINUATION (Mac · เดฟ · owner asleep → closes AM): profile-pic + UX-confirm + estimator + brand-r2 + badges + perf + 🚢 FREIGHT engine · read FIRST
 
 **main = `dave-pacred` = `5f55efa5`+ · 10+ night save-points pushed · `pnpm verify && pnpm build` → CHAIN=0 (REAL exit codes) · both branches 0/0 · Vercel build RESTORED.** Continuation of the 🌅 run below (same day). Standing quality rules now in **AGENTS.md §0f** + memory [`ui_quality_concept_2026_06_04`]. Full night detail in [`reachability_audit_2026_06_04`] memory.
