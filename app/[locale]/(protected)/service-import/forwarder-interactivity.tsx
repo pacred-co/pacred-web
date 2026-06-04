@@ -81,27 +81,26 @@ function ContainerGroup({
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left transition-colors hover:bg-surface-alt/60"
+        className="flex w-full items-center justify-between gap-2 px-3 py-2.5 md:px-4 md:py-3.5 text-left transition-colors hover:bg-surface-alt/60"
       >
-        <span className="flex min-w-0 flex-col gap-0.5">
-          <span className="flex items-center gap-2">
-            <Package className="h-4 w-4 shrink-0 text-red-600" />
-            <span className="truncate text-sm font-bold text-foreground">
-              {cabinet ? (
-                <>
-                  ตู้ <span className="font-mono">{cabinet}</span>
-                </>
-              ) : (
-                "ยังไม่เข้าตู้"
-              )}
-            </span>
-            <span className="inline-flex shrink-0 items-center justify-center rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-muted dark:bg-background">
-              {count}
-            </span>
+        {/* Single clear row — icon · ตู้ · count · summary all inline
+            (owner 2026-06-04: "ทำเป็นแถวเดียว แต่ขอชัดๆ เอามาเรียงเลย"). */}
+        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
+          <Package className="h-4 w-4 md:h-5 md:w-5 shrink-0 text-red-600" />
+          <span className="text-sm md:text-base font-bold text-foreground">
+            {cabinet ? (
+              <>
+                ตู้ <span className="font-mono">{cabinet}</span>
+              </>
+            ) : (
+              "ยังไม่เข้าตู้"
+            )}
           </span>
-          {/* รวมสรุป รายละเอียดทั้งหมดของตู้ */}
-          <span className="text-[11px] font-normal text-muted">
-            {summary.boxes} กล่อง · {fmt(summary.weight, 1)} kg · {fmt(summary.volume)} CBM
+          <span className="inline-flex shrink-0 items-center justify-center rounded-full bg-white px-2 py-0.5 text-[11px] md:text-xs font-bold text-muted dark:bg-background">
+            {count}
+          </span>
+          <span className="text-[11px] md:text-[13px] font-normal text-muted">
+            · {summary.boxes} กล่อง · {fmt(summary.weight, 1)} kg · {fmt(summary.volume)} CBM
             {summary.total > 0 && (
               <>
                 {" · รวม "}
@@ -111,10 +110,10 @@ function ContainerGroup({
           </span>
         </span>
         <ChevronDown
-          className={`h-4 w-4 shrink-0 text-muted transition-transform ${open ? "rotate-180" : ""}`}
+          className={`h-4 w-4 md:h-5 md:w-5 shrink-0 text-muted transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
-      {open && <div className="space-y-2.5 p-2.5 pt-0">{children}</div>}
+      {open && <div className="space-y-2.5 p-2.5 pt-0 md:space-y-3 md:p-3 md:pt-0">{children}</div>}
     </div>
   );
 }
@@ -195,9 +194,9 @@ export function ForwarderInteractivity({
   q,
   isJuristic,
   showPayBar,
-  showMaoStrip,
   showPayStrip,
-  maoPromos,
+  // showMaoStrip + maoPromos kept in the prop type (page.tsx still passes them)
+  // but no longer destructured — the "โปรเหมาๆ" strip was removed.
   // columnCount kept in the prop type for binary compat with page.tsx;
   // the card list doesn't need it.
 }: ForwarderInteractivityProps) {
@@ -310,32 +309,10 @@ export function ForwarderInteractivity({
 
   return (
     <>
-      {/* ── (cond.) "โปรเหมาๆ" strips — forwarder.php L600. Tailwind
-              rebuild of the headShake legacy strip (animation kept by
-              `animate__animated animate__headShake` classes — vendor
-              CSS still loads it). Now renders MULTIPLE admin-managed promos
-              (multi-promo manager · /admin/settings/promos). ── */}
-      {showMaoStrip &&
-        maoPromos.map((promo, i) => (
-          <div key={i} className="my-3 mx-auto max-w-[640px]">
-            <div className="rounded-2xl bg-red-600 text-white text-center px-4 py-3 shadow-md shadow-red-600/20 animate__animated animate__infinite animate__headShake">
-              {promo.imageUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={promo.imageUrl}
-                  alt=""
-                  className="mx-auto mb-2 max-h-24 w-auto object-contain"
-                />
-              )}
-              {promo.headline && (
-                <div className="text-sm font-bold mb-1">{promo.headline}</div>
-              )}
-              <div className="text-[12px] leading-snug whitespace-pre-line">
-                {promo.text}
-              </div>
-            </div>
-          </div>
-        ))}
+      {/* "โปรเหมาๆ" promo strip removed per owner 2026-06-04 ("เอาออก
+          ในมือถือ ในคอมด้วย"). The admin multi-promo plumbing (showMaoStrip /
+          maoPromos via /admin/settings/promos) is still wired in page.tsx but
+          no longer rendered on this page. */}
 
       {/* ── Card list — `<form id="frm-example2">` kept so any legacy
               CSS rule targeting the form id still applies. The legacy

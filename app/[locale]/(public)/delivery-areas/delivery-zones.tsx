@@ -152,7 +152,7 @@ export function DeliveryZones({ locale = "th" }: { locale?: "th" | "en" }) {
             {en ? (
               <>Flat <span className="text-yellow-300">100 baht</span>, any weight</>
             ) : (
-              <>ส่งเหมา <span className="text-yellow-300">100 บาท</span> ไม่จำกัดน้ำหนัก</>
+              <>ส่งเหมาๆ <span className="text-yellow-300">100 บาท</span> ไม่จำกัดCBM</>
             )}
           </h2>
           <p className="mt-2 text-[13.5px] md:text-[15.5px] leading-[1.6] text-white/90">

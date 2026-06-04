@@ -239,36 +239,16 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
           className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-gradient-to-b from-emerald-500 to-emerald-700"
         />
 
-        {/* Left badge — mirrors the sales-rep avatar dimensions (56×56) so
-            the two cards line up. Emerald bg + wallet icon = visual identity
-            for the "money" card. */}
-        <div className="relative shrink-0">
-          <div className="relative w-14 h-14 overflow-hidden rounded-full border-2 border-emerald-500/40 bg-emerald-50 flex items-center justify-center">
-            <Image
-              src={`${ICON_BASE}/pcs-wallet.png`}
-              alt=""
-              width={32}
-              height={32}
-              className="object-contain"
-            />
-          </div>
-        </div>
-
-        {/* Middle — 3-line text block matching sales structure
-            (eyebrow / main figure / subtitle). */}
-        <div className="relative min-w-0 flex-1">
-          <p className="text-[10.5px] font-semibold uppercase tracking-wider text-emerald-700">
+        {/* Single row — no icon, label + balance inline (owner 2026-06-04:
+            "ไม่ต้องมีไอคอนกระเป๋าพักเงิน และทำให้ทุกอย่างเป็นแถวเดียวกัน"). */}
+        <div className="relative min-w-0 flex-1 flex items-baseline gap-1.5 pl-1.5">
+          <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wider text-emerald-700">
             กระเป๋าพักเงิน
-          </p>
-          <p className="flex items-baseline gap-1 leading-tight">
-            <span className="text-[20px] font-black tracking-tight text-emerald-600">
-              {walletText}
-            </span>
-            <span className="text-[11px] font-bold text-emerald-500/80">บาท</span>
-          </p>
-          <p className="mt-0.5 text-[11.5px] text-muted font-mono">
-            วงเงินคงเหลือ <span className="text-foreground">{walletText}</span> บาท
-          </p>
+          </span>
+          <span className="truncate text-[18px] font-black tracking-tight text-emerald-600">
+            {walletText}
+          </span>
+          <span className="shrink-0 text-[11px] font-bold text-emerald-500/80">บาท</span>
         </div>
 
         {/* Right button — same pill style as "ติดต่อเซลล์" so both cards have
