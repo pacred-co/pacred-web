@@ -533,18 +533,39 @@ export async function adminSaveShopOrderItemsAndQuote(
 // 2. adminMarkShopOrderOrdered — 3 → 4 (ordered handler)
 // ────────────────────────────────────────────────────────────
 
+// 2026-06-04 (ภูม flag #4) — schema now accepts EITHER:
+//   - `shops`: per-shop [{cnameshop, cshippingnumber}] (faithful to legacy
+//     update3.php · loops cNameShop[] from $_POST and writes WHERE
+//     hNo+cNameShop), OR
+//   - legacy single `cshippingnumber` scalar — kept for backward-compat
+//     with the OLD AdminMarkShopOrderOrderedForm callers (it's still
+//     callable but will write the same value to ALL shops — same as
+//     the pre-flag behaviour).
+//
+// At least ONE form must be provided. When BOTH are provided the
+// per-shop array wins (the new code path).
 const orderedSchema = z.object({
   hNo:             z.string().trim().min(1, "missing hNo").max(30),
-  // Optional: when the per-shop ShopChinaPanel has already written
-  // cshippingnumber per ร้าน, this is left blank → flip-only (do NOT
-  // overwrite per-shop values). When given, applies to ALL lines (legacy
-  // single-paste convenience).
-  cshippingnumber: z.string().trim().max(500).optional().default(""),
+  cshippingnumber: z.string().trim().max(500).optional(),
+  shops:           z.array(
+    z.object({
+      cnameshop:       z.string().trim().min(1).max(300),
+      cshippingnumber: z.string().trim().min(1, "เลขออเดอร์ร้านจีนห้ามว่าง").max(500),
+    }),
+  ).optional(),
   hnotechn:        z.string().trim().max(500).optional(),
-});
+}).refine(
+  (v) => (v.shops && v.shops.length > 0) || (v.cshippingnumber && v.cshippingnumber.length > 0),
+  { message: "ต้องระบุเลขออเดอร์ร้านจีน (อย่างน้อย 1 ร้าน)" },
+);
 export type AdminMarkShopOrderOrderedInput = z.infer<typeof orderedSchema>;
 
-type OrderedData = { hno: string; rows_updated: number; tracking_summary: string };
+type OrderedData = {
+  hno: string;
+  rows_updated: number;
+  tracking_summary: string;
+  shops_updated: number;
+};
 
 export async function adminMarkShopOrderOrdered(
   input: AdminMarkShopOrderOrderedInput,
@@ -578,17 +599,40 @@ export async function adminMarkShopOrderOrdered(
     const guard = orderedGuard(header.hstatus);
     if (!guard.ok) return { ok: false, error: guard.error };
 
-    // 2. Stamp `cshippingnumber` on every tb_order line for this hNo —
-    //    ONLY in legacy single-paste mode (a value passed here). When blank,
-    //    the per-shop ShopChinaPanel has already written cshippingnumber per
-    //    ร้าน (owner directive 2026-06-04) → pure flip; MUST NOT overwrite
-    //    the per-shop values.
-    const writeNumber = (d.cshippingnumber ?? "").trim();
+    // 2. Stamp `cshippingnumber` per-shop on tb_order (legacy update3.php
+    //    L1075-1080 · for($count) { UPDATE tb_order ... WHERE hNo + cNameShop }).
+    //    Two paths:
+    //      - NEW (preferred): per-shop array — admin filled the per-shop UI
+    //      - LEGACY/fallback: single scalar applied to ALL rows for hNo
     let rowsUpdated = 0;
-    if (writeNumber.length > 0) {
+    let shopsUpdated = 0;
+    let trackingSummary = "";
+
+    if (d.shops && d.shops.length > 0) {
+      // Per-shop update: loop the array · WHERE hno + cnameshop
+      for (const sh of d.shops) {
+        const { error: shErr, count } = await admin
+          .from("tb_order")
+          .update({ cshippingnumber: sh.cshippingnumber }, { count: "exact" })
+          .eq("hno", header.hno)
+          .eq("cnameshop", sh.cnameshop);
+        if (shErr) {
+          console.error(`[tb_order per-shop ordered update] failed`, {
+            code: shErr.code, message: shErr.message, shop: sh.cnameshop,
+          });
+          return { ok: false, error: `db_error:${shErr.code ?? "unknown"}` };
+        }
+        if ((count ?? 0) > 0) {
+          rowsUpdated += count ?? 0;
+          shopsUpdated += 1;
+        }
+      }
+      trackingSummary = d.shops.map((s) => `${s.cnameshop}: ${s.cshippingnumber}`).join(" · ");
+    } else if (d.cshippingnumber) {
+      // Legacy single-value fallback — same as pre-2026-06-04 behaviour.
       const { data: items, error: itemsErr } = await admin
         .from("tb_order")
-        .select("id")
+        .select("id, cnameshop")
         .eq("hno", header.hno)
         .limit(500);
       if (itemsErr) {
@@ -598,10 +642,11 @@ export async function adminMarkShopOrderOrdered(
         return { ok: false, error: `db_error:${itemsErr.code ?? "unknown"}` };
       }
       const itemIds = (items ?? []).map((r) => r.id);
+      const distinctShops = new Set((items ?? []).map((r) => r.cnameshop));
       if (itemIds.length > 0) {
         const { error: itemUpdErr, count } = await admin
           .from("tb_order")
-          .update({ cshippingnumber: writeNumber }, { count: "exact" })
+          .update({ cshippingnumber: d.cshippingnumber }, { count: "exact" })
           .in("id", itemIds);
         if (itemUpdErr) {
           console.error(`[tb_order ordered update] failed`, {
@@ -610,16 +655,18 @@ export async function adminMarkShopOrderOrdered(
           return { ok: false, error: itemUpdErr.message };
         }
         rowsUpdated = count ?? itemIds.length;
+        shopsUpdated = distinctShops.size;
       }
+      trackingSummary = d.cshippingnumber;
     }
 
     // 3. Header flip 3 → 4 + stamp hdate4.
     //    Legacy stamps the China-side note (hnotechn) into hnote when the
-    //    admin enters one. cShippingNumber is the per-shop value (set via the
-    //    ShopChinaPanel), so we append a short pointer in hnote for audits.
+    //    admin enters one. Per-line cShippingNumber is the per-shop value,
+    //    so we also append a short pointer in hnote so future audits see
+    //    "ordered with tracking XYZ" without joining to tb_order.
     const nowIso   = new Date().toISOString();
-    const summaryNumber = writeNumber.length > 0 ? writeNumber : "(เลขสั่งซื้อ ราย ร้าน)";
-    const trackingTag = `[ORDERED] cshippingnumber=${summaryNumber}`;
+    const trackingTag = `[ORDERED] cshippingnumber=${trackingSummary}`;
     const headerNote =
       d.hnotechn && d.hnotechn.length > 0
         ? `${trackingTag} · ${d.hnotechn}`
@@ -655,16 +702,18 @@ export async function adminMarkShopOrderOrdered(
       {
         hno:              header.hno,
         userid:           header.userid,
-        cshippingnumber:  summaryNumber,
+        cshippingnumber:  trackingSummary,
+        shops_updated:    shopsUpdated,
         rows_updated:     rowsUpdated,
         before_status:    header.hstatus,
         after_status:     "4",
         hnotechn:         d.hnotechn ?? null,
+        per_shop:         d.shops ?? null,
       },
     );
 
     // 5. Notify (3 channels per legacy — in-app + LINE OA + email).
-    void notifyShopOrderOrdered(admin, header.userid, header.hno, summaryNumber);
+    void notifyShopOrderOrdered(admin, header.userid, header.hno, trackingSummary);
 
     revalidatePath("/admin/service-orders");
     revalidatePath(`/admin/service-orders/${header.hno}`);
@@ -675,7 +724,116 @@ export async function adminMarkShopOrderOrdered(
       data: {
         hno:              header.hno,
         rows_updated:     rowsUpdated,
-        tracking_summary: summaryNumber,
+        shops_updated:    shopsUpdated,
+        tracking_summary: trackingSummary,
+      },
+    };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// 2b. adminUpdateShopTracking — status 4 per-shop ctrackingnumber input
+//     (faithful to legacy update4.php where each shop has its own
+//     cTrackingNumber that admin fills BEFORE spawning forwarders)
+// ────────────────────────────────────────────────────────────
+
+const trackingSchema = z.object({
+  hNo:   z.string().trim().min(1, "missing hNo").max(30),
+  shops: z.array(
+    z.object({
+      cnameshop:       z.string().trim().min(1).max(300),
+      ctrackingnumber: z.string().trim().max(200),  // empty allowed = clear
+    }),
+  ).min(1, "ต้องระบุอย่างน้อย 1 ร้าน"),
+});
+export type AdminUpdateShopTrackingInput = z.infer<typeof trackingSchema>;
+
+type ShopTrackingData = {
+  hno: string;
+  rows_updated: number;
+  shops_updated: number;
+};
+
+/**
+ * Per-shop `cTrackingNumber` update on tb_order (legacy update4.php
+ * L1366-1371). Used at hstatus=4 (รอร้านจีนจัดส่ง) — admin types the
+ * tracking the seller gave them, per shop. NOT a status flip — that
+ * happens later via `adminSpawnForwarderFromShopOrder` (4→5).
+ *
+ * Allowed at hstatus = '4'. Empty tracking clears the field (legacy
+ * accepts that too — used when retyping).
+ */
+export async function adminUpdateShopTracking(
+  input: AdminUpdateShopTrackingInput,
+): Promise<AdminActionResult<ShopTrackingData>> {
+  const parsed = trackingSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  return withAdmin<ShopTrackingData>(["super", "ops", "sales_admin"], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    const { data: header, error: headerErr } = await admin
+      .from("tb_header_order")
+      .select("id, hno, userid, hstatus")
+      .eq("hno", d.hNo)
+      .maybeSingle<{ id: number; hno: string; userid: string; hstatus: string | null }>();
+    if (headerErr) {
+      console.error(`[tb_header_order tracking lookup] failed`, {
+        code: headerErr.code, message: headerErr.message,
+      });
+      return { ok: false, error: `db_error:${headerErr.code ?? "unknown"}` };
+    }
+    if (!header) return { ok: false, error: "ไม่พบออเดอร์ฝากสั่งซื้อ (hNo ไม่ตรง)" };
+    if (header.hstatus !== "4") {
+      return { ok: false, error: `กรอกเลข Tracking ได้เฉพาะออเดอร์สถานะ "รอร้านจีนจัดส่ง" (4) เท่านั้น · สถานะปัจจุบัน = ${header.hstatus}` };
+    }
+
+    let rowsUpdated = 0;
+    let shopsUpdated = 0;
+    for (const sh of d.shops) {
+      const { error: shErr, count } = await admin
+        .from("tb_order")
+        .update({ ctrackingnumber: sh.ctrackingnumber }, { count: "exact" })
+        .eq("hno", header.hno)
+        .eq("cnameshop", sh.cnameshop);
+      if (shErr) {
+        console.error(`[tb_order per-shop tracking update] failed`, {
+          code: shErr.code, message: shErr.message, shop: sh.cnameshop,
+        });
+        return { ok: false, error: `db_error:${shErr.code ?? "unknown"}` };
+      }
+      if ((count ?? 0) > 0) {
+        rowsUpdated += count ?? 0;
+        shopsUpdated += 1;
+      }
+    }
+
+    await logAdminAction(
+      adminId,
+      "service_order.shop_tracking_updated",
+      "tb_header_order",
+      header.hno,
+      {
+        hno:            header.hno,
+        userid:         header.userid,
+        shops_updated:  shopsUpdated,
+        rows_updated:   rowsUpdated,
+        per_shop:       d.shops,
+      },
+    );
+
+    revalidatePath(`/admin/service-orders/${header.hno}`);
+    revalidatePath(`/admin/service-orders/${header.hno}/edit`);
+
+    return {
+      ok: true,
+      data: {
+        hno:           header.hno,
+        rows_updated:  rowsUpdated,
+        shops_updated: shopsUpdated,
       },
     };
   });

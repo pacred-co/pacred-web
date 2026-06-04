@@ -22,8 +22,10 @@
  *       status 3/4/5: read-only summary (locked — items already committed)
  *   5. STATUS-AWARE WORKFLOW ACTIONS
  *       status 1/2: 💰 บันทึกชำระจาก wallet (MarkPaidTbForm)
- *       status 3  : 📝 บันทึกเลขสั่งซื้อร้านจีน (AdminMarkShopOrderOrderedForm)
- *       status 4  : 🚛 สร้าง tb_forwarder จาก tracking (SpawnForwarderForm) +
+ *       status 3  : 📝 บันทึกเลขออเดอร์ร้านจีน per-shop (ShopFieldsBoard)
+ *                   → flip 3→4 + notify
+ *       status 4  : 🚛 บันทึกเลข Tracking per-shop (ShopFieldsBoard) +
+ *                   สร้าง tb_forwarder จาก tracking (SpawnForwarderForm) +
  *                   ✓ มาร์คทุก tracking ว่าได้ tb_forwarder แล้ว
  *       status 5  : ✓ สำเร็จ (banner)
  *   6. 🔄 คืนเงินรายชิ้น (AdminRefundItemPanel · status 3/4/5)
@@ -37,23 +39,24 @@
  * `tb_settings` (rebuilt `service_orders` is empty on prod).
  */
 
+import type React from "react";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
-import { ArrowLeft, Eye, CheckCircle2, Lock } from "lucide-react";
+import {
+  ArrowLeft, Eye, CheckCircle2, Lock,
+  ClipboardList, CircleDollarSign, ShoppingCart, Clock, PackageCheck,
+} from "lucide-react";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { buildSpawnRows } from "../spawn-utils";
 import SpawnForwarderForm from "../spawn-form";
 import { ShopItemsEditor, type EditorItem } from "../items-editor";
-import {
-  AdminMarkShopOrderOrderedForm,
-  AdminSpawnToCompletedButton,
-} from "../mark-ordered-form";
+import { ShopFieldsBoard } from "../shop-fields-board";
+import { AdminSpawnToCompletedButton } from "../mark-ordered-form";
 import { AdminRefundItemPanel } from "../refund-item-form";
 import { MarkPaidTbForm } from "../mark-paid-tb-form";
 import { OrderInlineEdits, OrderRateInlineEdit } from "../inline-edits";
-import { ShopChinaPanel, type ShopGroup } from "../shop-china-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -69,12 +72,20 @@ function cny(n: number): string {
 }
 
 // ── status taxonomy (legacy '1'..'6') — mirrors legacy-view.tsx ──
-const STATUS_STEPS: { code: string; label: string }[] = [
-  { code: "1", label: "รอดำเนินการ" },
-  { code: "2", label: "รอชำระเงิน" },
-  { code: "3", label: "สั่งสินค้า" },
-  { code: "4", label: "รอร้านจีนจัดส่ง" },
-  { code: "5", label: "สำเร็จ" },
+// 2026-06-04 (ภูม flag): step bar เปลี่ยนจาก "เลข 1-5 ในวงกลม" → "icon + label"
+// แบบเดียวกับ /admin/forwarders/[fNo]/edit (ที่ภูมบอก "ทำถูกต้องสวยเลย").
+// Icons map ตาม legacy shops.php status workflow + customer screenshot
+// (👩‍💼 รอดำเนินการ · 🤚💵 รอชำระเงิน · 🛒 สั่งสินค้า · ⏰ รอร้านจีนจัดส่ง · 📦✓ สำเร็จ).
+const STATUS_STEPS: {
+  code: string;
+  label: string;
+  Icon: React.ComponentType<{ className?: string }>;
+}[] = [
+  { code: "1", label: "รอดำเนินการ",     Icon: ClipboardList },
+  { code: "2", label: "รอชำระเงิน",       Icon: CircleDollarSign },
+  { code: "3", label: "สั่งสินค้า",         Icon: ShoppingCart },
+  { code: "4", label: "รอร้านจีนจัดส่ง", Icon: Clock },
+  { code: "5", label: "สำเร็จ",            Icon: PackageCheck },
 ];
 const STATUS_LABEL: Record<string, string> = {
   "1": "รอดำเนินการ", "2": "รอชำระเงิน", "3": "สั่งสินค้าแล้ว",
@@ -201,40 +212,31 @@ export default async function AdminServiceOrderEditPage({
       ctrackingnumber: it.ctrackingnumber,
     })),
   );
+
+  // 2026-06-04 (ภูม flag #4 · A-path) — per-shop group for ShopFieldsBoard.
+  // legacy update3/update4 → SELECT DISTINCT cnameshop, cshippingnumber,
+  // ctrackingnumber FROM tb_order WHERE hno=? GROUP BY cnameshop.
+  // We do the dedup client-side here against the already-loaded items list.
+  const shopFieldsMap = new Map<string, { cshippingnumber: string; ctrackingnumber: string }>();
+  for (const it of items) {
+    const shop = (it.cnameshop ?? "").trim();
+    if (!shop) continue;
+    if (!shopFieldsMap.has(shop)) {
+      shopFieldsMap.set(shop, {
+        cshippingnumber: it.cshippingnumber ?? "",
+        ctrackingnumber: it.ctrackingnumber ?? "",
+      });
+    }
+  }
+  const shopFields = Array.from(shopFieldsMap.entries()).map(([cnameshop, v]) => ({
+    cnameshop, cshippingnumber: v.cshippingnumber, ctrackingnumber: v.ctrackingnumber,
+  }));
   const refundableItems = items
     .filter((it) => Number(it.camount ?? 0) > 0 && it.crewallet !== "1")
     .map((it) => ({
       id: it.id, title: it.ctitle ?? "", cprice: Number(it.cprice ?? 0),
       camount: Number(it.camount ?? 0), cnameshop: it.cnameshop ?? "",
     }));
-
-  // Per-shop groups (by cNameShop) for the ShopChinaPanel — owner directive
-  // 2026-06-04: เลขสั่งซื้อ + tracking ราย ร้าน (one order can buy from many
-  // China shops). Legacy writes the same cshippingnumber/ctrackingnumber
-  // across a shop's lines, so the shop-level value = first non-empty seen.
-  const shopGroups: ShopGroup[] = (() => {
-    const map = new Map<string, ShopGroup>();
-    for (const it of items) {
-      const shop = it.cnameshop ?? "";
-      let g = map.get(shop);
-      if (!g) {
-        g = { cNameShop: shop, cShippingNumber: "", cTrackingNumber: "", items: [] };
-        map.set(shop, g);
-      }
-      if (!g.cShippingNumber && it.cshippingnumber) g.cShippingNumber = it.cshippingnumber;
-      if (!g.cTrackingNumber && it.ctrackingnumber) g.cTrackingNumber = it.ctrackingnumber;
-      g.items.push({
-        id: it.id,
-        ctitle: it.ctitle ?? "",
-        curl: it.curl,
-        camount: Number(it.camount ?? 0),
-        cprice: Number(it.cprice ?? 0),
-        cpriceupdate: Number(it.cpriceupdate ?? 0),
-        crewallet: it.crewallet,
-      });
-    }
-    return Array.from(map.values());
-  })();
 
   const status = r.hstatus ?? "1";
   const customerName = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || "—";
@@ -252,13 +254,9 @@ export default async function AdminServiceOrderEditPage({
   // Status workflow eligibility.
   const isEditable     = status === "1" || status === "2" || status === "6";
   const showMarkPaid   = status === "1" || status === "2";
-  const showMarkOrdered = status === "3";
   const showSpawn      = status === "4";
   const showCompleted  = status === "5";
   const showRefund     = status === "3" || status === "4" || status === "5";
-  // Per-shop China panel: data entry at 3/4, read-only review at 5.
-  const showShopPanel    = status === "3" || status === "4" || status === "5";
-  const shopPanelEditable = status === "3" || status === "4";
 
   const detailHref = `/admin/service-orders/${encodeURIComponent(r.hno)}`;
 
@@ -311,23 +309,39 @@ export default async function AdminServiceOrderEditPage({
         </div>
       </section>
 
-      {/* ── 3. 5-step process bar ── */}
-      <ol className="flex items-stretch gap-1 overflow-x-auto rounded-2xl border border-border bg-white dark:bg-surface p-2 sm:p-3">
-        {STATUS_STEPS.map((step) => {
-          const cur = step.code === status;
-          const visited = Number(status) > Number(step.code) && status !== "6";
-          return (
-            <li key={step.code} className="flex-1 min-w-[88px]">
-              <div className={`flex h-full flex-col items-center gap-1 rounded-xl px-2 py-2 text-center ${cur ? "bg-primary-500 text-white" : visited ? "bg-primary-50 text-primary-700" : "bg-surface-alt/40 text-muted"}`}>
-                <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${cur ? "bg-white text-primary-600" : visited ? "bg-primary-500 text-white" : "bg-border text-muted"}`}>
-                  {step.code}
+      {/* ── 3. 5-step process bar ──
+          2026-06-04 (ภูม flag #3): same icon + label style as
+          /admin/forwarders/[fNo]/edit · current = ring-2 + primary fill,
+          visited = emerald-50 + emerald icon, pending = surface-alt + muted */}
+      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-3 lg:p-4 shadow-sm">
+        <div className="grid grid-cols-5 gap-2">
+          {STATUS_STEPS.map((step) => {
+            const cur = step.code === status;
+            const visited = Number(status) > Number(step.code) && status !== "6";
+            return (
+              <div
+                key={step.code}
+                className={`flex flex-col items-center text-center p-2 rounded-lg border transition-colors ${
+                  cur
+                    ? "border-primary-500 bg-primary-50 dark:bg-primary-950/20 ring-2 ring-primary-300"
+                    : visited
+                      ? "border-emerald-300 bg-emerald-50/40"
+                      : "border-border bg-surface-alt/30 opacity-60"
+                }`}
+              >
+                <step.Icon className={`h-5 w-5 mb-1 ${
+                  cur ? "text-primary-600" : visited ? "text-emerald-600" : "text-gray-400"
+                }`} />
+                <span className={`text-[10px] leading-tight ${
+                  cur ? "font-bold text-primary-700" : visited ? "text-emerald-700" : "text-muted"
+                }`}>
+                  {step.label}
                 </span>
-                <span className="text-[10px] font-medium leading-tight">{step.label}</span>
               </div>
-            </li>
-          );
-        })}
-      </ol>
+            );
+          })}
+        </div>
+      </section>
 
       {status === "6" && (
         <div className="rounded-xl border border-gray-300 bg-gray-50 p-3 text-sm text-gray-600">
@@ -369,13 +383,6 @@ export default async function AdminServiceOrderEditPage({
         <ItemSummaryReadOnly items={editorItems} netThb={netThb} status={status} />
       )}
 
-      {/* ── 4b. PER-SHOP CHINA DATA — เลขสั่งซื้อ + tracking ราย ร้าน
-          (owner directive 2026-06-04 · status 3/4 editable, 5 read-only).
-          Wires the previously-orphan line-edit actions (§0d). ── */}
-      {showShopPanel && (
-        <ShopChinaPanel hNo={r.hno} shops={shopGroups} editable={shopPanelEditable} />
-      )}
-
       {/* ── 5. STATUS-AWARE WORKFLOW ACTIONS ── */}
 
       {/* status 1/2 → 💰 mark-paid from wallet (self-gates inside the form) */}
@@ -383,17 +390,12 @@ export default async function AdminServiceOrderEditPage({
         <MarkPaidTbForm hno={r.hno} status={status} totalThb={netThb} />
       )}
 
-      {/* status 3 → 📝 mark-ordered (write cshippingnumber + flip 3→4) */}
-      {showMarkOrdered && (
-        <section className="rounded-2xl border-2 border-primary-300 bg-primary-50/30 dark:bg-primary-950/20 shadow-md overflow-hidden">
-          <header className="bg-primary-500 text-white px-4 py-2.5 flex items-center gap-2">
-            <span className="text-sm font-bold">📝 บันทึกเลขสั่งซื้อร้านจีน (สถานะ 3 → 4)</span>
-            <span className="ml-auto text-[10px] bg-white/20 rounded px-1.5 py-0.5">ใช้บ่อย</span>
-          </header>
-          <div className="p-4">
-            <AdminMarkShopOrderOrderedForm hNo={r.hno} />
-          </div>
-        </section>
+      {/* 2026-06-04 (ภูม flag #4 · A-path) — per-shop status-aware board
+          replaces the old single-input AdminMarkShopOrderOrderedForm.
+          Active at status 3/4/5 · self-hides at status 1/2 (items-editor
+          handles those). Mirrors legacy update3.php + update4.php. */}
+      {(status === "3" || status === "4" || status === "5") && shopFields.length > 0 && (
+        <ShopFieldsBoard hNo={r.hno} status={status} shops={shopFields} />
       )}
 
       {/* status 4 → 🚛 spawn forwarder per tracking + auto-spawn-to-completed */}

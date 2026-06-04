@@ -31,10 +31,14 @@
  * `tb_settings` (the rebuilt `service_orders` is empty on prod).
  */
 
+import type React from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
-import { Pencil } from "lucide-react";
+import {
+  Pencil,
+  ClipboardList, CircleDollarSign, ShoppingCart, Clock, PackageCheck,
+} from "lucide-react";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
 import type { EditorItem } from "./items-editor";
@@ -66,12 +70,19 @@ function cny(n: number): string {
 }
 
 // ── status taxonomy (legacy '1'..'6') ──
-const STATUS_STEPS: { code: string; label: string }[] = [
-  { code: "1", label: "รอดำเนินการ" },
-  { code: "2", label: "รอชำระเงิน" },
-  { code: "3", label: "สั่งสินค้า" },
-  { code: "4", label: "รอร้านจีนจัดส่ง" },
-  { code: "5", label: "สำเร็จ" },
+// 2026-06-04 (ภูม flag #1) — same icon + label style as /edit step bar
+// (matches /admin/forwarders/[fNo]/edit · ภูมบอก "ทำถูกต้องสวยเลย" + ขอ
+// "แก้หน้าลายละเอียดด้วยหงะ" ให้ตรงกัน).
+const STATUS_STEPS: {
+  code: string;
+  label: string;
+  Icon: React.ComponentType<{ className?: string }>;
+}[] = [
+  { code: "1", label: "รอดำเนินการ",     Icon: ClipboardList },
+  { code: "2", label: "รอชำระเงิน",       Icon: CircleDollarSign },
+  { code: "3", label: "สั่งสินค้า",         Icon: ShoppingCart },
+  { code: "4", label: "รอร้านจีนจัดส่ง", Icon: Clock },
+  { code: "5", label: "สำเร็จ",            Icon: PackageCheck },
 ];
 const STATUS_LABEL: Record<string, string> = {
   "1": "รอดำเนินการ", "2": "รอชำระเงิน", "3": "สั่งสินค้าแล้ว",
@@ -261,23 +272,38 @@ export async function renderLegacyServiceOrderView(hno: string) {
         </div>
       </div>
 
-      {/* ── 5-step process bar ── */}
-      <ol className="flex items-stretch gap-1 overflow-x-auto rounded-2xl border border-border bg-white dark:bg-surface p-2 sm:p-3">
-        {STATUS_STEPS.map((step) => {
-          const cur = step.code === status;
-          const visited = Number(status) > Number(step.code) && status !== "6";
-          return (
-            <li key={step.code} className="flex-1 min-w-[88px]">
-              <div className={`flex h-full flex-col items-center gap-1 rounded-xl px-2 py-2 text-center ${cur ? "bg-primary-500 text-white" : visited ? "bg-primary-50 text-primary-700" : "bg-surface-alt/40 text-muted"}`}>
-                <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${cur ? "bg-white text-primary-600" : visited ? "bg-primary-500 text-white" : "bg-border text-muted"}`}>
-                  {step.code}
+      {/* ── 5-step process bar ──
+          2026-06-04 (ภูม flag #1) — match /edit + /admin/forwarders/[fNo]/edit
+          icon+label style (was number-in-circle pills). */}
+      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-3 lg:p-4 shadow-sm">
+        <div className="grid grid-cols-5 gap-2">
+          {STATUS_STEPS.map((step) => {
+            const cur = step.code === status;
+            const visited = Number(status) > Number(step.code) && status !== "6";
+            return (
+              <div
+                key={step.code}
+                className={`flex flex-col items-center text-center p-2 rounded-lg border transition-colors ${
+                  cur
+                    ? "border-primary-500 bg-primary-50 dark:bg-primary-950/20 ring-2 ring-primary-300"
+                    : visited
+                      ? "border-emerald-300 bg-emerald-50/40"
+                      : "border-border bg-surface-alt/30 opacity-60"
+                }`}
+              >
+                <step.Icon className={`h-5 w-5 mb-1 ${
+                  cur ? "text-primary-600" : visited ? "text-emerald-600" : "text-gray-400"
+                }`} />
+                <span className={`text-[10px] leading-tight ${
+                  cur ? "font-bold text-primary-700" : visited ? "text-emerald-700" : "text-muted"
+                }`}>
+                  {step.label}
                 </span>
-                <span className="text-[10px] font-medium leading-tight">{step.label}</span>
               </div>
-            </li>
-          );
-        })}
-      </ol>
+            );
+          })}
+        </div>
+      </section>
 
       {status === "6" && (
         <div className="rounded-xl border border-gray-300 bg-gray-50 p-3 text-sm text-gray-600">

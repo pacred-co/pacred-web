@@ -186,6 +186,17 @@ export function AdminForwarderNewForm({
   //   /admin/forwarders/[fNo]/edit ภายหลังถ้าจำเป็น.
   const [warehouseName, setWarehouseName]       = useState<WarehouseCode>("");
   const [warehouseAutoFilled, setWarehouseAutoFilled] = useState<boolean>(false);
+  // 2026-06-04 (ภูม flag #2) — extra signals from `/api/admin/forwarders/
+  // check-tracking` AJAX. Called on a 600ms debounce after the admin stops
+  // typing in the tracking field. Surfaces:
+  //   - `duplicateRow`: an existing tb_forwarder row with the same
+  //     ftrackingchn (legacy `scriptfTrackingCHN.php` red-warn behavior),
+  //   - `warehouseHint`: what the SERVER says the warehouse should be
+  //     (priority: momo_import_tracks lookup > MO prefix > CC prefix).
+  //   - `warehouseHintNote`: human-readable note for the chip.
+  const [duplicateRow, setDuplicateRow] = useState<{ id: number; userid: string | null } | null>(null);
+  const [warehouseHintNote, setWarehouseHintNote] = useState<string | null>(null);
+  const [trackingChecking, setTrackingChecking] = useState<boolean>(false);
   const [coverFile, setCoverFile]     = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const coverInputRef = useRef<HTMLInputElement | null>(null);
@@ -270,6 +281,69 @@ export function AdminForwarderNewForm({
       setWarehouseAutoFilled(false);
     }
   }
+
+  // ─── 2026-06-04 (ภูม flag #2) ─────────────────────────────────────
+  // Debounced AJAX check: every 600ms after the admin pauses typing in the
+  // tracking field, hit `/api/admin/forwarders/check-tracking`. The server
+  // returns:
+  //   - `duplicate`: row in tb_forwarder with the same ftrackingchn (show
+  //     a red badge "เลขซ้ำ #51234" so admin doesn't double-open the order),
+  //   - `warehouse + source`: best-known warehouse + where it came from
+  //     (momo-sync = authoritative, beats client-side prefix guess).
+  // This is the smart equivalent of legacy scriptfTrackingCHN.php + a new
+  // MOMO sync hint pacred enhancement (legacy didn't have).
+  useEffect(() => {
+    const tracking = trackingChn.trim();
+    let cancelled = false;
+
+    // Always schedule a 600ms tick — empty-tracking handling lives INSIDE
+    // the callback (React 19's `react-hooks/set-state-in-effect` rule
+    // forbids setState directly in the effect body).
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+      if (!tracking) {
+        setDuplicateRow(null);
+        setWarehouseHintNote(null);
+        setTrackingChecking(false);
+        return;
+      }
+      setTrackingChecking(true);
+      try {
+        const r = await fetch(
+          `/api/admin/forwarders/check-tracking?t=${encodeURIComponent(tracking)}`,
+          { cache: "no-store" },
+        );
+        if (cancelled || !r.ok) return;
+        const j = (await r.json()) as {
+          ok: boolean;
+          duplicate: { id: number; userid: string | null } | null;
+          warehouse: string | null;
+          source: "momo-sync" | "mo-prefix" | "cc-prefix" | null;
+          note?: string;
+        };
+        if (cancelled || !j.ok) return;
+        setDuplicateRow(j.duplicate);
+        // server's warehouse hint wins over client prefix guess when source
+        // = "momo-sync" (authoritative). When source = mo-prefix / cc-prefix,
+        // client guessed the same — no override needed.
+        if (j.source === "momo-sync" && j.warehouse) {
+          setWarehouseName(j.warehouse as WarehouseCode);
+          setWarehouseAutoFilled(true);
+        }
+        setWarehouseHintNote(j.note ?? null);
+      } catch {
+        // network error → ignore (the form still validates server-side)
+      } finally {
+        if (!cancelled) setTrackingChecking(false);
+      }
+    }, 600);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackingChn]);
 
   // ─── when coID changes → fetch users for that tier ─────────────
   async function onCoidChange(next: string) {
@@ -578,15 +652,37 @@ export function AdminForwarderNewForm({
           />
         </div>
 
-        {/* ─── โกดังประเทศจีน (2026-06-04 ภูม flag · auto-detect ONLY · no manual pick)
-            ภูม: "/admin/forwarders/new ไม่ได้บอกให้เพิ่ม dropdown โกดังประเทศจีน
-            เลยนะ ... จะมานั่งให้เลือกโกดังเอง ถ้าพนักงานมันกดกันผิดมั่วตายเลย"
-            → ลบ dropdown · ระบบจับ prefix tracking ให้เลย admin แก้ใน /edit ได้
-            ภายหลังถ้าตรวจจับผิด */}
-        {warehouseName && warehouseAutoFilled && (
-          <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs text-emerald-700">
+        {/* ─── feedback chips (2026-06-04 ภูม flag · 3 signals) ─────────
+            1. 🔴 DUPLICATE warning — มี tb_forwarder row นี้อยู่แล้ว
+               (legacy scriptfTrackingCHN.php "มีรายการซ้ำ" red text)
+            2. ⏳ checking spinner — กำลังตรวจ DB
+            3. 🟢 warehouse auto-detect — MOMO sync (authoritative) /
+               prefix guess (fallback) */}
+        {duplicateRow && (
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-red-300 bg-red-50 px-3 py-1.5 text-xs text-red-700">
+            ⚠️ <strong>เลขนี้มีรายการซ้ำในระบบแล้ว!</strong>
+            <a
+              href={`/admin/forwarders/${duplicateRow.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="ml-1 underline hover:text-red-900"
+            >
+              ดูออเดอร์ #{duplicateRow.id}
+              {duplicateRow.userid ? ` (${duplicateRow.userid})` : ""} ↗
+            </a>
+          </div>
+        )}
+        {trackingChecking && !duplicateRow && (
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-border bg-surface-alt px-3 py-1 text-xs text-muted">
+            ⏳ กำลังตรวจสอบกับ MOMO sync · DB...
+          </div>
+        )}
+        {warehouseName && warehouseAutoFilled && !trackingChecking && (
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700">
             🏬 ตรวจจับโกดังอัตโนมัติ: <strong>{WAREHOUSE_OPTIONS.find((o) => o.value === warehouseName)?.label.split(" - ")[1] ?? warehouseName}</strong>
-            <span className="text-emerald-600/70">(จาก prefix tracking · แก้ภายหลังใน /edit)</span>
+            <span className="text-emerald-600/70">
+              ({warehouseHintNote ?? "จาก prefix tracking"} · แก้ภายหลังใน /edit)
+            </span>
           </div>
         )}
 
