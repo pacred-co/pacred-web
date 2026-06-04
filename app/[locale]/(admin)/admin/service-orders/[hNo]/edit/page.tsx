@@ -52,6 +52,7 @@ import {
 } from "../mark-ordered-form";
 import { AdminRefundItemPanel } from "../refund-item-form";
 import { MarkPaidTbForm } from "../mark-paid-tb-form";
+import { OrderInlineEdits, OrderRateInlineEdit } from "../inline-edits";
 
 export const dynamic = "force-dynamic";
 
@@ -93,6 +94,7 @@ type HRow = {
   hshippingservice: number | null; hshippingchn: number | null; hrate: number | null;
   hratecost: number | null; hcostall: number | null;
   hshipby: string | null; userid: string;
+  crate: string | null; paymethod: string | null;
 };
 type URow = {
   userID: string; userName: string | null; userLastName: string | null;
@@ -119,7 +121,8 @@ export default async function AdminServiceOrderEditPage({
     .from("tb_header_order")
     .select(
       "id,hno,hstatus,htransporttype,htotalpricechn," +
-      "hshippingservice,hshippingchn,hrate,hratecost,hcostall,hshipby,userid",
+      "hshippingservice,hshippingchn,hrate,hratecost,hcostall,hshipby,userid," +
+      "crate,paymethod",
     )
     .eq("hno", hNo)
     .maybeSingle();
@@ -299,6 +302,24 @@ export default async function AdminServiceOrderEditPage({
           ออเดอร์นี้ถูกยกเลิก — ยังแก้ราคา/ตั้งราคาใหม่ได้ (จะเปลี่ยนสถานะกลับเป็น &ldquo;รอชำระเงิน&rdquo;)
         </div>
       )}
+
+      {/* ── 3b. INLINE FIELD EDITS — order-header attributes (legacy update.php
+          L156-265 left col + L268-276 rate). Each field shows current value
+          with a [แก้ไข] toggle → save via existing server actions. ── */}
+      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 sm:p-5 shadow-sm space-y-4">
+        <h3 className="font-bold text-sm">ข้อมูลออเดอร์ (แก้ไขรายฟิลด์)</h3>
+        <OrderInlineEdits
+          hNo={r.hno}
+          htransporttype={r.htransporttype}
+          crate={r.crate}
+          hshipby={r.hshipby}
+          paymethod={r.paymethod}
+        />
+        <div className="border-t border-border pt-3 flex items-baseline justify-between gap-3 text-sm">
+          <span className="text-xs font-medium text-muted" title="เรทฝากสั่งในวันสร้างออเดอร์">อัตราแลกเปลี่ยน</span>
+          <OrderRateInlineEdit hNo={r.hno} hRate={rate} />
+        </div>
+      </section>
 
       {/* ── 4. PRIMARY — รายการสินค้า (editable / read-only) ── */}
       {isEditable ? (
