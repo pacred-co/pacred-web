@@ -18,6 +18,7 @@
 import { useRef, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { adminMarkSalesPayoutPaidTb } from "@/actions/admin/sales-payouts-tb";
+import { confirm } from "@/components/ui/confirm";
 
 export function SalesPayoutPayForm({ id }: { id: number }) {
   const router = useRouter();
@@ -51,7 +52,7 @@ export function SalesPayoutPayForm({ id }: { id: number }) {
     }
   }
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
@@ -60,6 +61,8 @@ export function SalesPayoutPayForm({ id }: { id: number }) {
       setError("กรุณาแนบหลักฐานการโอน (สลิปรายการ)");
       return;
     }
+
+    if (!(await confirm("ยืนยันจ่ายเงินรายการนี้ + ทำเครื่องหมายว่าจ่ายแล้ว?\nรายการนี้ย้อนกลับไม่ได้"))) return;
 
     startTransition(async () => {
       const result = await adminMarkSalesPayoutPaidTb({ id }, slipFile);

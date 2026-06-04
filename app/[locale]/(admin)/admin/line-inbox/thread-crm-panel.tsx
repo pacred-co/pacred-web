@@ -11,7 +11,7 @@
  *      (AGENTS.md §0a — banner deferred features, never silently omit).
  */
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   assignLineAgent,
   linkLineContactToMember,
@@ -28,6 +28,45 @@ import {
   AlertCircle,
   ExternalLink,
 } from "lucide-react";
+import { confirm } from "@/components/ui/confirm";
+
+/** Unlink button — guarded by the styled (async) confirm via ปอน's
+ *  preventDefault → await confirm → requestSubmit (ref-guarded so the server
+ *  action fires exactly once). */
+function UnlinkLineButton({
+  customerLineId,
+  className,
+  children,
+}: {
+  customerLineId: string;
+  className: string;
+  children: React.ReactNode;
+}) {
+  const confirmed = useRef(false);
+  return (
+    <form
+      action={unlinkLineContact}
+      onSubmit={async (e) => {
+        if (confirmed.current) { confirmed.current = false; return; }
+        e.preventDefault();
+        const form = e.currentTarget;
+        if (
+          await confirm(
+            "ยกเลิกการเชื่อมบัญชีนี้?\n(ห้องแชทจะไม่เห็นกระเป๋าเงิน/พัสดุของลูกค้า จนกว่าจะเชื่อมใหม่)",
+          )
+        ) {
+          confirmed.current = true;
+          form.requestSubmit();
+        }
+      }}
+    >
+      <input type="hidden" name="customerLineId" value={customerLineId} />
+      <button type="submit" className={className}>
+        {children}
+      </button>
+    </form>
+  );
+}
 
 const CRM_ERROR_TEXT: Record<string, string> = {
   assign: "บันทึกไม่สำเร็จ กรุณาลองใหม่",
@@ -141,15 +180,12 @@ export function ThreadCrmPanel({
                 <p className="mt-0.5 text-sm font-bold text-amber-600">{snapshot.forwarderInTransit}</p>
               </div>
             </div>
-            <form action={unlinkLineContact}>
-              <input type="hidden" name="customerLineId" value={customerLineId} />
-              <button
-                type="submit"
-                className="inline-flex items-center gap-1 text-xs text-muted hover:text-red-600"
-              >
-                <Unlink className="h-3.5 w-3.5" /> ยกเลิกการเชื่อมบัญชี
-              </button>
-            </form>
+            <UnlinkLineButton
+              customerLineId={customerLineId}
+              className="inline-flex items-center gap-1 text-xs text-muted hover:text-red-600"
+            >
+              <Unlink className="h-3.5 w-3.5" /> ยกเลิกการเชื่อมบัญชี
+            </UnlinkLineButton>
           </div>
         ) : customerCode && !snapshot ? (
           <div className="space-y-2">
