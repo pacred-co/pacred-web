@@ -3,6 +3,44 @@
 
 ---
 
+# 🌆 2026-06-04 EVENING — ภูม session (Poom-pacred ที่ทำงาน → กลับบ้านต่อ) · read FIRST if you are on `Poom-pacred`
+
+**Branch:** `Poom-pacred` HEAD = `691060cb` · pushed · 0/0 vs origin
+**Resume:** `git fetch origin && git pull origin Poom-pacred --no-edit`
+**Full save-point:** [`docs/research/poom-save-point-2026-06-04-evening.md`](docs/research/poom-save-point-2026-06-04-evening.md) (อ่าน 5 นาที · มี workflow ของภูม + decision tree + browser-test list)
+
+**7 commits Session นี้ (ce403fb5 → 691060cb):**
+1. `ce403fb5` `/admin/forwarders/new` ลบ dropdown โกดัง · auto-detect ONLY (ภูม: "ถ้าพนักงานกดผิดมั่วตาย")
+2. `d37b0c7a` **Smart tracking lookup** + Step pills icons (เลข 1-5 → icon+label สวยเหมือน forwarders/edit)
+3. `63e22aa2` **Per-shop status-aware fields** (legacy update3/update4 port · NEW `<ShopFieldsBoard>`)
+4. `09ad130a` Step pills sync detail ↔ edit + PR023 lookup v1
+5. `f0580c0d` PR023 mapping resolution (ผ่าน legacy `tb_users.ID` + เบอร์โทร)
+6. `4751c411` MOMO review thumbnail + lightbox v1
+7. `691060cb` Multi-image lightbox v2 (ภูม catch: บาง row > 1 รูป)
+
+**🧠 Key insights ที่ภูมสอนผม (capture ใน [`docs/learnings/partner-apis-quirks.md`](docs/learnings/partner-apis-quirks.md) + [`docs/learnings/php-port-patterns.md`](docs/learnings/php-port-patterns.md)):**
+
+1. **MOMO `user_code` = legacy `tb_users.ID` (integer PK zero-padded)** — ไม่ใช่ string userID. MOMO ส่ง `"023"` = legacy ID=23 = userID `PCS1395` = Pacred ปัจจุบัน `PR1395` (ฮูเซ็น เบอร์ 0831915627). MOMO ส่ง `"99"` = ID=99 = `PR089` (ธนชัย).
+2. **MOMO `raw.images[]` = GROUND TRUTH** — เปิดดูรูปก่อนเชื่อ field อื่น. ภูมเปิดรูปที่ MOMO ส่ง user_code "023" → ป้ายของจริงเขียน **"PR025"** → พิสูจน์ว่า MOMO operator กรอกผิด (Pacred logic ถูก).
+3. **Per-shop array loop pattern** — legacy `update3.php` loops `$_POST['cNameShop'][]` array · port = Zod array arg + WHERE `hno+cnameshop` UPDATE per shop. **`name="...[]"` ใน legacy HTML = backend loops.**
+4. **Status-aware UI conditional** — legacy แยกหลายไฟล์ (`update3.php`, `update4.php`) · port = component เดียว + `isStatus3` / `isStatus4` flags.
+
+**🔴 รอ ภูม ตัดสินใจ:** PR023/PR99 mapping (3 ทาง · default = ทาง 3 "ไม่ทำ Pacred · เซลแจ้ง MOMO" เพราะมีหลักฐานป้ายของจริง). ดูใน save-point.
+
+**🧪 Browser-test list ที่ภูมจะทำที่บ้าน:**
+1. `/admin/forwarders/new` → พิมพ์ tracking ที่ซ้ำ → red duplicate warning?
+2. `/admin/service-orders/<hNo>/edit` (status 3 + 4) → per-shop card · กดบันทึก → flip + notify
+3. `/admin/api-forwarder-momo/review` row ที่มี "+1" → ลูกศรซ้าย/ขวาเปลี่ยนรูป
+4. service-orders detail + edit → step pills เหมือนกัน
+
+**⚠️ Anti-patterns (อย่าทำซ้ำ):**
+- ❌ ไม่ trust MOMO field · เปิดรูปดูก่อน
+- ❌ ไม่ใส่ dropdown ให้ admin เลือกอะไรที่ส่งผลข้อมูล (ภูม: "พนักงานกดผิดมั่วตาย")
+- ❌ ไม่ port single-value where legacy ใช้ per-shop array
+- ❌ ไม่ลืม sync UI 2 หน้าที่ใช้ component เดียวกัน (step pills detail + edit ผมเคยพลาด)
+
+---
+
 # 🌙 2026-06-04 NIGHT — OVERNIGHT CONTINUATION (Mac · เดฟ · owner asleep → closes AM): profile-pic + UX-confirm + estimator + brand-r2 + badges + perf · read FIRST
 
 **main = `dave-pacred` = `41d5e341`+ · 7 night save-points pushed · `pnpm verify && pnpm build` → CHAIN=0 (REAL exit codes) · both branches 0/0 · Vercel build RESTORED.** Continuation of the 🌅 run below (same day). Standing quality rules now in **AGENTS.md §0f** + memory [`ui_quality_concept_2026_06_04`]. Full night detail in [`reachability_audit_2026_06_04`] memory.

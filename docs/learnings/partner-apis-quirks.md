@@ -6,6 +6,70 @@ Topics: MOMO JMF (TH warehouse partner) · TAM (china-search interim) · ThaiBul
 
 ---
 
+## 2026-06-04 evening · MOMO `user_code` is the LEGACY integer ID (`tb_users.ID`), NOT the string userID
+
+**Symptom:** MOMO review-grid `/admin/api-forwarder-momo/review` shows rows
+flagged "ไม่มี PR023 ในระบบ" + "ไม่มี PR99 ในระบบ" — but lookup-by-userID
+returns nothing in `tb_users` for `PR023` / `PR99`, and the legacy SQL dump
+also has no `PCS023` / `PCS99`.
+
+**Root cause:** MOMO stores customers by `user_code` = **PCS legacy
+`tb_users.ID` (integer PK) zero-padded to 3 digits**, NOT by `userID`
+(the string display code like `PCS1395`, `PR1395`). Pacred's
+`commit-momo-row-core.ts` naively wraps it as `PR${user_code}` which only
+works when MOMO's customer happens to have a userID matching that pattern
+(true for most accounts whose display code is e.g. `PR040` from autogen,
+NOT true for migrated PCS customers whose display code is `PRxxxx`
+arbitrary).
+
+**Concrete cases found 2026-06-04:**
+| MOMO `user_code` | Legacy `tb_users.ID` | Legacy `userID` | Pacred `userID` (after migrate) | Customer | Phone |
+|---|---|---|---|---|---|
+| `023` | 23 | `PCS1395` | `PR1395` | ฮูเซ็น | 0831915627 |
+| `99`  | 99 | `PCS89`   | `PR089`  | ธนชัย ปานพรมมา | 0843369559 |
+
+**Verified ผ่าน 3 paths:**
+1. Legacy SQL dump (`/d/REALSHITDATAPCS/pcsc_main.sql`) at `tb_users` INSERT block (lines 1261140+) — `grep -oE "\(23, 'PCS[^']+'"` returns `(23, 'PCS1395'`
+2. Pacred `tb_users` filtered by `userID='PR1395'` shows `ID=23` (the integer PK is preserved across migration)
+3. Phone match on Pacred `tb_users.userTel='0831915627'` returns PR1395 (1 hit · 100% match)
+
+**What to do:**
+- **Default (recommended):** ไม่ต้องแตะ Pacred · เซลแจ้ง MOMO ฝั่งโน้นแก้ user_code ของลูกค้าให้ตรง Pacred userID — เพราะมีหลักฐานเพิ่มเติม (ดูเรื่องที่ 2 ด้านล่าง): MOMO operator กรอกผิดเอง ป้ายของจริงเขียน `PR025` ไม่ใช่ `023`
+- **Fallback A:** Atomic rename `PR1395 → PR023` + `PR089 → PR099` ผ่าน `scripts/rename-userid-to-pr99.mjs` (ภูมเคยทำ 3 รายตอน 2026-05-30: PR9370→PR005, PR1282→PR032, PR1321→PR116) — ต้อง dry-run ก่อน apply เพราะแตะลูกค้าจริง + 9 FK tables
+- **Fallback B:** Smart mapping ใน `lib/admin/commit-momo-row-core.ts` — ถ้า `PR${user_code}` ไม่เจอใน tb_users → ลอง `tb_users.id = Number(user_code)` → ใช้ userID ของแถวนั้น. หลีกเลี่ยง rename · เก็บ logic ใน code
+
+**Cross-link:** `scripts/lookup-pr023-by-phone.mjs` + `scripts/lookup-pr023-final.mjs` (the 2-step diagnostic) · save-point `docs/research/poom-save-point-2026-06-04-evening.md`
+
+---
+
+## 2026-06-04 evening · MOMO `raw.images[]` is GROUND TRUTH — เปิดดูจริงก่อนเชื่อ field อื่นใน raw
+
+**Symptom:** MOMO sync ส่ง `user_code="023"` มา · ระบบสรุปว่าลูกค้า PR023 (ไม่มีใน Pacred)
+
+**Discovery:** ภูมไม่ trust field · เปิด `raw.images[0]` URL ใน browser →
+รูปป้ายแปะกระสอบของจริงเขียนว่า **"PR025"** (ไม่ใช่ "023")
+
+→ พิสูจน์ว่า **MOMO operator กรอก user_code ผิดเอง** (Pacred logic ถูก ·
+ป้าย physical ถูก · แค่ data entry ที่ MOMO operator พลาด)
+
+**What to do (workflow pattern):**
+1. ทุก row ใน MOMO review ที่ flag "ไม่มี PR{xxx} ในระบบ" → เปิด `raw.images[0]` ดูป้ายจริงก่อน
+2. ถ้าป้ายเขียน PR{yyy} ที่ตรงกับ Pacred → MOMO กรอกผิด · แจ้งเซลให้ MOMO อัพเดท user_code ของลูกค้านั้นในระบบ MOMO
+3. ถ้าป้ายอ่านไม่ออก/ไม่มีรูป → fallback ไปดู `tb_users.ID` mapping (เรื่องด้านบน)
+
+**Pacred UI support (commit `4751c411` + `691060cb`):**
+- หน้า `/admin/api-forwarder-momo/review` มี column "รูปป้าย" แสดง thumbnail + quick-zoom lightbox
+- Multi-image support (~5% rows มี > 1 รูป) · keyboard ← → · thumbnail strip
+- → ภูมไม่ต้องเปิดแท็บใหม่ดู URL · คลิกในตารางได้เลย
+
+**Bigger pattern:** **เมื่อ partner API ส่งทั้ง structured data + attachment image
+มาด้วย → image คือ source of truth · field อื่นเป็น operator data entry ที่ผิดได้.** 
+ใช้กับทุก partner ที่มี photo evidence (MOMO sack labels · upload receipts · OCR-ish use cases)
+
+**Cross-link:** `app/[locale]/(admin)/admin/api-forwarder-momo/review/review-client.tsx` (`<ZoomLightbox>` component) · save-point 2026-06-04-evening
+
+---
+
 ## 2026-06-01 · LINE staff-group push — the chat.line.biz URL id is NOT a pushable groupId
 
 **Symptom.** `LINE_STAFF_GROUP_ID` was set to `C61f60d763a766e4f391812381281e3d9` (copied from the chat.line.biz
