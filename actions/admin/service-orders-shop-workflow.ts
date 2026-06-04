@@ -535,7 +535,11 @@ export async function adminSaveShopOrderItemsAndQuote(
 
 const orderedSchema = z.object({
   hNo:             z.string().trim().min(1, "missing hNo").max(30),
-  cshippingnumber: z.string().trim().min(1, "ต้องระบุเลข Tracking จีน").max(500),
+  // Optional: when the per-shop ShopChinaPanel has already written
+  // cshippingnumber per ร้าน, this is left blank → flip-only (do NOT
+  // overwrite per-shop values). When given, applies to ALL lines (legacy
+  // single-paste convenience).
+  cshippingnumber: z.string().trim().max(500).optional().default(""),
   hnotechn:        z.string().trim().max(500).optional(),
 });
 export type AdminMarkShopOrderOrderedInput = z.infer<typeof orderedSchema>;
@@ -574,45 +578,48 @@ export async function adminMarkShopOrderOrdered(
     const guard = orderedGuard(header.hstatus);
     if (!guard.ok) return { ok: false, error: guard.error };
 
-    // 2. Stamp `cshippingnumber` on every tb_order line for this hNo
-    //    (legacy update3 writes per-shop; we apply the same value across all
-    //    rows because the legacy form lets admin paste one tracking pattern
-    //    that covers the whole shop). Count matched rows for the audit.
-    const { data: items, error: itemsErr } = await admin
-      .from("tb_order")
-      .select("id, cshippingnumber")
-      .eq("hno", header.hno)
-      .limit(500);
-    if (itemsErr) {
-      console.error(`[tb_order ordered list] failed`, {
-        code: itemsErr.code, message: itemsErr.message,
-      });
-      return { ok: false, error: `db_error:${itemsErr.code ?? "unknown"}` };
-    }
-    const itemIds = (items ?? []).map((r) => r.id);
-
+    // 2. Stamp `cshippingnumber` on every tb_order line for this hNo —
+    //    ONLY in legacy single-paste mode (a value passed here). When blank,
+    //    the per-shop ShopChinaPanel has already written cshippingnumber per
+    //    ร้าน (owner directive 2026-06-04) → pure flip; MUST NOT overwrite
+    //    the per-shop values.
+    const writeNumber = (d.cshippingnumber ?? "").trim();
     let rowsUpdated = 0;
-    if (itemIds.length > 0) {
-      const { error: itemUpdErr, count } = await admin
+    if (writeNumber.length > 0) {
+      const { data: items, error: itemsErr } = await admin
         .from("tb_order")
-        .update({ cshippingnumber: d.cshippingnumber }, { count: "exact" })
-        .in("id", itemIds);
-      if (itemUpdErr) {
-        console.error(`[tb_order ordered update] failed`, {
-          code: itemUpdErr.code, message: itemUpdErr.message,
+        .select("id")
+        .eq("hno", header.hno)
+        .limit(500);
+      if (itemsErr) {
+        console.error(`[tb_order ordered list] failed`, {
+          code: itemsErr.code, message: itemsErr.message,
         });
-        return { ok: false, error: itemUpdErr.message };
+        return { ok: false, error: `db_error:${itemsErr.code ?? "unknown"}` };
       }
-      rowsUpdated = count ?? itemIds.length;
+      const itemIds = (items ?? []).map((r) => r.id);
+      if (itemIds.length > 0) {
+        const { error: itemUpdErr, count } = await admin
+          .from("tb_order")
+          .update({ cshippingnumber: writeNumber }, { count: "exact" })
+          .in("id", itemIds);
+        if (itemUpdErr) {
+          console.error(`[tb_order ordered update] failed`, {
+            code: itemUpdErr.code, message: itemUpdErr.message,
+          });
+          return { ok: false, error: itemUpdErr.message };
+        }
+        rowsUpdated = count ?? itemIds.length;
+      }
     }
 
     // 3. Header flip 3 → 4 + stamp hdate4.
     //    Legacy stamps the China-side note (hnotechn) into hnote when the
-    //    admin enters one. Per-line cShippingNumber is the per-shop value,
-    //    so we also append a short pointer in hnote so future audits see
-    //    "ordered with tracking XYZ" without joining to tb_order.
+    //    admin enters one. cShippingNumber is the per-shop value (set via the
+    //    ShopChinaPanel), so we append a short pointer in hnote for audits.
     const nowIso   = new Date().toISOString();
-    const trackingTag = `[ORDERED] cshippingnumber=${d.cshippingnumber}`;
+    const summaryNumber = writeNumber.length > 0 ? writeNumber : "(เลขสั่งซื้อ ราย ร้าน)";
+    const trackingTag = `[ORDERED] cshippingnumber=${summaryNumber}`;
     const headerNote =
       d.hnotechn && d.hnotechn.length > 0
         ? `${trackingTag} · ${d.hnotechn}`
@@ -648,7 +655,7 @@ export async function adminMarkShopOrderOrdered(
       {
         hno:              header.hno,
         userid:           header.userid,
-        cshippingnumber:  d.cshippingnumber,
+        cshippingnumber:  summaryNumber,
         rows_updated:     rowsUpdated,
         before_status:    header.hstatus,
         after_status:     "4",
@@ -657,7 +664,7 @@ export async function adminMarkShopOrderOrdered(
     );
 
     // 5. Notify (3 channels per legacy — in-app + LINE OA + email).
-    void notifyShopOrderOrdered(admin, header.userid, header.hno, d.cshippingnumber);
+    void notifyShopOrderOrdered(admin, header.userid, header.hno, summaryNumber);
 
     revalidatePath("/admin/service-orders");
     revalidatePath(`/admin/service-orders/${header.hno}`);
@@ -668,7 +675,7 @@ export async function adminMarkShopOrderOrdered(
       data: {
         hno:              header.hno,
         rows_updated:     rowsUpdated,
-        tracking_summary: d.cshippingnumber,
+        tracking_summary: summaryNumber,
       },
     };
   });

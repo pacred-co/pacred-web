@@ -42,21 +42,27 @@ export function AdminMarkShopOrderOrderedForm({ hNo }: { hNo: string }) {
     setError(null);
 
     const ship = cShippingNumber.trim();
-    if (ship.length < 1) {
-      setError("กรอกหมายเลขสั่งซื้อร้านจีน (cShippingNumber)");
-      return;
-    }
 
     startTransition(async () => {
+      if (
+        !(await confirm(
+          ship.length > 0
+            ? `ยืนยันสั่งซื้อ + เปลี่ยนสถานะเป็น "รอจีนจัดส่ง" (3→4)?\nจะเขียนเลขสั่งซื้อ "${ship}" ลงทุกรายการ + แจ้งลูกค้า`
+            : `ยืนยันสั่งซื้อครบทุกร้าน + เปลี่ยนสถานะเป็น "รอจีนจัดส่ง" (3→4)?\nใช้เลขสั่งซื้อ ราย ร้าน ที่กรอกไว้ด้านบน + แจ้งลูกค้า`,
+        ))
+      )
+        return;
       const res = await adminMarkShopOrderOrdered({
         hNo,
-        cshippingnumber: ship,
+        cshippingnumber: ship,   // "" → flip-only (per-shop numbers kept)
         hnotechn:        chnNote.trim().length > 0 ? chnNote : undefined,
       });
       if (res.ok) {
         const rows = res.data?.rows_updated ?? 0;
         setMsg(
-          `✅ บันทึกเลขสั่งซื้อจีนเรียบร้อย — อัพเดท ${rows} รายการ · เปลี่ยนสถานะเป็น "รอจีนจัดส่ง" · ลูกค้าได้รับแจ้งเตือนแล้ว`,
+          ship.length > 0
+            ? `✅ บันทึกเลขสั่งซื้อจีน — อัพเดท ${rows} รายการ · เปลี่ยนเป็น "รอจีนจัดส่ง" · แจ้งลูกค้าแล้ว`
+            : `✅ เปลี่ยนสถานะเป็น "รอจีนจัดส่ง" (ใช้เลขสั่งซื้อ ราย ร้าน) · แจ้งลูกค้าแล้ว`,
         );
         router.refresh();
         setTimeout(() => setMsg(null), 6000);
@@ -72,10 +78,11 @@ export function AdminMarkShopOrderOrderedForm({ hNo }: { hNo: string }) {
       className="rounded-2xl border border-blue-200 bg-blue-50/40 dark:bg-blue-950/20 p-4 shadow-sm space-y-3"
     >
       <div>
-        <h3 className="font-bold text-sm">บันทึกเลขสั่งซื้อร้านจีน (Tab 3 · 3→4)</h3>
+        <h3 className="font-bold text-sm">ยืนยันสั่งซื้อครบ → รอจีนจัดส่ง (3→4)</h3>
         <p className="text-xs text-muted mt-0.5">
-          กรอกเลข cShippingNumber จากร้านจีน — ระบบจะอัพเดททุกแถวใน tb_order +
-          เปลี่ยนสถานะออเดอร์เป็น &ldquo;รอจีนจัดส่ง&rdquo; + แจ้งลูกค้า 3 ช่องทาง
+          กรอกเลขสั่งซื้อ + tracking ราย ร้าน ที่แผง &ldquo;ข้อมูลร้านค้าจีน&rdquo; ด้านบนก่อน
+          แล้วกดปุ่มนี้เพื่อเปลี่ยนสถานะเป็น &ldquo;รอจีนจัดส่ง&rdquo; + แจ้งลูกค้า 3 ช่องทาง
+          (ช่องด้านล่างใช้กรณีอยากใส่เลขเดียวกันทุกร้านแบบเร็ว ๆ)
         </p>
       </div>
 
@@ -87,14 +94,13 @@ export function AdminMarkShopOrderOrderedForm({ hNo }: { hNo: string }) {
       )}
 
       <label className="block space-y-1">
-        <span className="text-xs font-medium">เลขสั่งซื้อร้านจีน (cShippingNumber) *</span>
+        <span className="text-xs font-medium">เลขสั่งซื้อร้านจีน (ใช้ค่าเดียวทุกร้าน · ไม่บังคับ)</span>
         <input
           type="text"
-          required
           value={cShippingNumber}
           onChange={(e) => setCShippingNumber(e.target.value)}
           className={inputCls}
-          placeholder="เช่น 1234567890123"
+          placeholder="เว้นว่างถ้ากรอกราย ร้านด้านบนแล้ว"
         />
       </label>
       <label className="block space-y-1">
@@ -109,7 +115,7 @@ export function AdminMarkShopOrderOrderedForm({ hNo }: { hNo: string }) {
       </label>
 
       <Button type="submit" fullWidth disabled={pending}>
-        {pending ? "กำลังบันทึก..." : "📦 บันทึกเลขสั่งซื้อจีน + แจ้งลูกค้า"}
+        {pending ? "กำลังบันทึก..." : "📦 ยืนยันสั่งซื้อครบ → รอจีนจัดส่ง + แจ้งลูกค้า"}
       </Button>
 
       <p className="text-[10px] text-muted leading-relaxed">

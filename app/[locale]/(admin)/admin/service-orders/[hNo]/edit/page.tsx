@@ -53,6 +53,7 @@ import {
 import { AdminRefundItemPanel } from "../refund-item-form";
 import { MarkPaidTbForm } from "../mark-paid-tb-form";
 import { OrderInlineEdits, OrderRateInlineEdit } from "../inline-edits";
+import { ShopChinaPanel, type ShopGroup } from "../shop-china-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -207,6 +208,34 @@ export default async function AdminServiceOrderEditPage({
       camount: Number(it.camount ?? 0), cnameshop: it.cnameshop ?? "",
     }));
 
+  // Per-shop groups (by cNameShop) for the ShopChinaPanel — owner directive
+  // 2026-06-04: เลขสั่งซื้อ + tracking ราย ร้าน (one order can buy from many
+  // China shops). Legacy writes the same cshippingnumber/ctrackingnumber
+  // across a shop's lines, so the shop-level value = first non-empty seen.
+  const shopGroups: ShopGroup[] = (() => {
+    const map = new Map<string, ShopGroup>();
+    for (const it of items) {
+      const shop = it.cnameshop ?? "";
+      let g = map.get(shop);
+      if (!g) {
+        g = { cNameShop: shop, cShippingNumber: "", cTrackingNumber: "", items: [] };
+        map.set(shop, g);
+      }
+      if (!g.cShippingNumber && it.cshippingnumber) g.cShippingNumber = it.cshippingnumber;
+      if (!g.cTrackingNumber && it.ctrackingnumber) g.cTrackingNumber = it.ctrackingnumber;
+      g.items.push({
+        id: it.id,
+        ctitle: it.ctitle ?? "",
+        curl: it.curl,
+        camount: Number(it.camount ?? 0),
+        cprice: Number(it.cprice ?? 0),
+        cpriceupdate: Number(it.cpriceupdate ?? 0),
+        crewallet: it.crewallet,
+      });
+    }
+    return Array.from(map.values());
+  })();
+
   const status = r.hstatus ?? "1";
   const customerName = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || "—";
 
@@ -227,6 +256,9 @@ export default async function AdminServiceOrderEditPage({
   const showSpawn      = status === "4";
   const showCompleted  = status === "5";
   const showRefund     = status === "3" || status === "4" || status === "5";
+  // Per-shop China panel: data entry at 3/4, read-only review at 5.
+  const showShopPanel    = status === "3" || status === "4" || status === "5";
+  const shopPanelEditable = status === "3" || status === "4";
 
   const detailHref = `/admin/service-orders/${encodeURIComponent(r.hno)}`;
 
@@ -335,6 +367,13 @@ export default async function AdminServiceOrderEditPage({
         />
       ) : (
         <ItemSummaryReadOnly items={editorItems} netThb={netThb} status={status} />
+      )}
+
+      {/* ── 4b. PER-SHOP CHINA DATA — เลขสั่งซื้อ + tracking ราย ร้าน
+          (owner directive 2026-06-04 · status 3/4 editable, 5 read-only).
+          Wires the previously-orphan line-edit actions (§0d). ── */}
+      {showShopPanel && (
+        <ShopChinaPanel hNo={r.hno} shops={shopGroups} editable={shopPanelEditable} />
       )}
 
       {/* ── 5. STATUS-AWARE WORKFLOW ACTIONS ── */}
