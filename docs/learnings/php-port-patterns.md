@@ -8,6 +8,117 @@ Topics: porting `D:\xampp\htdocs\pcscargo\` → Pacred Next.js. Schema mappings 
 
 ---
 
+## [2026-06-04 evening] Per-shop array loop pattern (legacy `update3.php` / `update4.php`)
+
+**Symptom (ภูม flag):** Pacred `AdminMarkShopOrderOrderedForm` รับ `cshippingnumber` เลขเดียวแล้ว update ทุก row ของ `tb_order` ด้วยค่าเดียวกัน. ผิด — legacy loop per `cNameShop` (แต่ละร้านมีเลข ตัวเอง).
+
+**Legacy pattern** (`pcs-admin/shops.php` L1071-1080):
+```php
+if(isset($_POST['update3'])){
+  for($count = 0; $count<count($_POST['cNameShop']); $count++){
+    $_POST['cShippingNumber'][$count]=replaceSpace($_POST['cShippingNumber'][$count]);
+    $sql = "UPDATE `tb_order` SET cShippingNumber='...'
+            WHERE hNo='$hNo' AND cNameShop='$_POST[cNameShop][$count]';";
+    $result = $conn->query($sql);
+  }
+}
+```
+
+**Form (update3.php L34-52) renders** N hidden inputs `cNameShop[]` + N text inputs `cShippingNumber[]` — one per `cnameshop` (unique). Same for `cTrackingNumber[]` in update4.php.
+
+**Port to Pacred:**
+```ts
+// 1. Schema: accept per-shop array OR legacy single (back-compat)
+const orderedSchema = z.object({
+  hNo: z.string(),
+  cshippingnumber: z.string().optional(),  // legacy single
+  shops: z.array(z.object({
+    cnameshop: z.string().min(1),
+    cshippingnumber: z.string().min(1),
+  })).optional(),
+}).refine((v) => (v.shops?.length ?? 0) > 0 || v.cshippingnumber, {
+  message: "อย่างน้อย 1 ค่า",
+});
+
+// 2. Body: loop per-shop · WHERE hno + cnameshop
+if (d.shops) {
+  for (const sh of d.shops) {
+    const { error, count } = await admin
+      .from("tb_order")
+      .update({ cshippingnumber: sh.cshippingnumber }, { count: "exact" })
+      .eq("hno", header.hno)
+      .eq("cnameshop", sh.cnameshop);
+    // accumulate rowsUpdated + shopsUpdated for audit
+  }
+}
+
+// 3. Audit log: include `per_shop` array in payload
+await logAdminAction(adminId, "service_order.ordered", ..., {
+  per_shop: d.shops ?? null, ...
+});
+```
+
+**UI side:**
+- Dedup `cnameshop` server-side (Map by `cnameshop` from already-loaded `tb_order` items list — no extra query)
+- Render ONE card per unique cnameshop
+- Each card: input(s) + initial values from current `cshippingnumber` / `ctrackingnumber`
+- Submit: collect all cards → POST `{shops: [...]}` array
+
+**Cross-link:** `actions/admin/service-orders-shop-workflow.ts` `adminMarkShopOrderOrdered` + `adminUpdateShopTracking` · `app/[locale]/(admin)/admin/service-orders/[hNo]/shop-fields-board.tsx`
+
+**Bigger pattern:** **ตรวจ legacy form HTML — ถ้าเห็น `name="...[]"` (with brackets) → backend loops · port ต้องเป็น array argument · WHERE clause ต้อง include foreign-grouping key (cnameshop · userID · etc.)**
+
+---
+
+## [2026-06-04 evening] Status-aware conditional UI fields (legacy multi-file update*.php pattern)
+
+**Symptom:** Pacred `/admin/service-orders/[hNo]/edit` แสดง input ตัวเดียวกับทุก status. ผิด — legacy แต่ละ status เปิดฟิลด์ที่แก้ได้ต่างกัน.
+
+**Legacy structure** (`shops/update.php` dispatcher):
+```php
+switch($_POST['type']){
+  case "3": require('include/pages/shops/update/update3.php'); break;  // form: cshippingnumber input per shop
+  case "4": require('include/pages/shops/update/update4.php'); break;  // form: cshippingnumber LOCKED + ctrackingnumber input per shop
+}
+```
+
+Each `update<N>.php` renders a **different form** for the same `hNo` based on its current `hStatus`. Plus each has its own `update<N>Script.php` (per-status JS).
+
+**Port to Pacred (single React component, conditional render):**
+```tsx
+export function ShopFieldsBoard({ status, shops, ... }) {
+  if (status === "1" || status === "2") return null;  // items-editor handles these
+  const isStatus3 = status === "3";
+  const isStatus4 = status === "4";
+  const isStatus5 = status === "5";
+
+  return shops.map((sh) => (
+    <div key={sh.cnameshop}>
+      <label>เลขออเดอร์ร้านจีน</label>
+      <input
+        value={draft[sh.cnameshop]?.cshippingnumber}
+        disabled={!isStatus3}              // editable at 3 · locked at 4/5
+      />
+      {(isStatus4 || isStatus5) && (
+        <>
+          <label>เลข Tracking จีน</label>
+          <input
+            value={draft[sh.cnameshop]?.ctrackingnumber}
+            disabled={!isStatus4}          // editable at 4 only
+          />
+        </>
+      )}
+    </div>
+  ));
+}
+```
+
+**Bigger pattern:** **เมื่อ legacy มี `update<N>.php` หลายไฟล์สำหรับ status ต่างๆ → port เป็น component เดียว + conditional flag (`isStatus3`, `isStatus4`) — ไม่ต้องสร้าง component แยก** (React conditional render ทำได้คล้ายๆกัน · maintain ง่ายกว่า)
+
+**Cross-link:** `shop-fields-board.tsx` + save-point 2026-06-04-evening §C
+
+---
+
 ## 2026-05-31 — Split-casing landmine: `tb_users` is camelCase on prod, `tb_address`/`tb_forwarder` are lowercase (เดฟ · agent C)
 
 **Symptom (caught by a DB-connected test, NOT tsc):** a freshly-ported action querying `tb_users` threw `column "usershipby" does not exist` at runtime — even though `0081_*.sql` (the migration file on disk) declares the column lowercase. tsc + lint + a route-200 smoke all passed; only a test that hit the **real prod DB** surfaced it.

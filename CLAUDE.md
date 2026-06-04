@@ -20,6 +20,27 @@
 
 ---
 
+# 🌆 2026-06-04 EVENING — ภูม session (Poom-pacred ที่ทำงาน → กลับบ้านต่อ) · merged into main 2026-06-04 PM (เดฟ)
+
+> ภูม's evening save-point (his work is now merged into main — see the 💻 PM section above). Kept for the learnings + browser-test list.
+
+**Branch:** `Poom-pacred` (HEAD `691060cb` at the time · now in main)
+**Full save-point:** [`docs/research/poom-save-point-2026-06-04-evening.md`](docs/research/poom-save-point-2026-06-04-evening.md) (workflow ของภูม + decision tree + browser-test list)
+
+**7 commits (ce403fb5 → 691060cb · all merged):** `/admin/forwarders/new` ลบ dropdown โกดัง · auto-detect ONLY · Smart tracking lookup + Step pills icons · **Per-shop status-aware `<ShopFieldsBoard>`** (legacy update3/update4) · step-pills sync detail↔edit · PR023 mapping · MOMO review thumbnail + multi-image lightbox.
+
+**🧠 Key insights (captured in [`docs/learnings/partner-apis-quirks.md`](docs/learnings/partner-apis-quirks.md) + [`docs/learnings/php-port-patterns.md`](docs/learnings/php-port-patterns.md)):**
+1. **MOMO `user_code` = legacy `tb_users.ID` (integer PK zero-padded)** — ไม่ใช่ string userID. MOMO `"023"` = ID 23 = `PR1395`; `"99"` = ID 99 = `PR089`.
+2. **MOMO `raw.images[]` = GROUND TRUTH** — เปิดดูรูปก่อนเชื่อ field อื่น (ภูม เปิดรูป user_code "023" → ป้ายจริง "PR025" → MOMO operator กรอกผิด).
+3. **Per-shop array loop** — legacy `update3.php` loops `$_POST['cNameShop'][]` → port = Zod array + WHERE `hno+cnameshop` per shop. `name="...[]"` = backend loops.
+4. **Status-aware UI** — legacy แยกไฟล์ (update3/update4) → port = component เดียว + `isStatus3`/`isStatus4` flags.
+
+**🔴 รอ ภูม:** PR023/PR99 mapping (default = ทาง 3 "ไม่ทำ Pacred · เซลแจ้ง MOMO" เพราะมีหลักฐานป้ายจริง).
+
+**⚠️ Anti-patterns:** ไม่ trust MOMO field (เปิดรูปก่อน) · ไม่ใส่ dropdown ให้ admin เลือกอะไรที่ส่งผลข้อมูล ("พนักงานกดผิดมั่วตาย") · ไม่ port single-value where legacy = per-shop array · ไม่ลืม sync UI 2 หน้าที่ใช้ component เดียวกัน.
+
+---
+
 # 🌙 2026-06-04 NIGHT — OVERNIGHT CONTINUATION (Mac · เดฟ · owner asleep → closes AM): profile-pic + UX-confirm + estimator + brand-r2 + badges + perf + 🚢 FREIGHT engine · read FIRST
 
 **main = `dave-pacred` = `5f55efa5`+ · 10+ night save-points pushed · `pnpm verify && pnpm build` → CHAIN=0 (REAL exit codes) · both branches 0/0 · Vercel build RESTORED.** Continuation of the 🌅 run below (same day). Standing quality rules now in **AGENTS.md §0f** + memory [`ui_quality_concept_2026_06_04`]. Full night detail in [`reachability_audit_2026_06_04`] memory.
