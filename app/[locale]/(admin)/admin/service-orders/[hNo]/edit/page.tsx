@@ -22,8 +22,10 @@
  *       status 3/4/5: read-only summary (locked — items already committed)
  *   5. STATUS-AWARE WORKFLOW ACTIONS
  *       status 1/2: 💰 บันทึกชำระจาก wallet (MarkPaidTbForm)
- *       status 3  : 📝 บันทึกเลขสั่งซื้อร้านจีน (AdminMarkShopOrderOrderedForm)
- *       status 4  : 🚛 สร้าง tb_forwarder จาก tracking (SpawnForwarderForm) +
+ *       status 3  : 📝 บันทึกเลขออเดอร์ร้านจีน per-shop (ShopFieldsBoard)
+ *                   → flip 3→4 + notify
+ *       status 4  : 🚛 บันทึกเลข Tracking per-shop (ShopFieldsBoard) +
+ *                   สร้าง tb_forwarder จาก tracking (SpawnForwarderForm) +
  *                   ✓ มาร์คทุก tracking ว่าได้ tb_forwarder แล้ว
  *       status 5  : ✓ สำเร็จ (banner)
  *   6. 🔄 คืนเงินรายชิ้น (AdminRefundItemPanel · status 3/4/5)
@@ -50,10 +52,8 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { buildSpawnRows } from "../spawn-utils";
 import SpawnForwarderForm from "../spawn-form";
 import { ShopItemsEditor, type EditorItem } from "../items-editor";
-import {
-  AdminMarkShopOrderOrderedForm,
-  AdminSpawnToCompletedButton,
-} from "../mark-ordered-form";
+import { ShopFieldsBoard } from "../shop-fields-board";
+import { AdminSpawnToCompletedButton } from "../mark-ordered-form";
 import { AdminRefundItemPanel } from "../refund-item-form";
 import { MarkPaidTbForm } from "../mark-paid-tb-form";
 import { OrderInlineEdits, OrderRateInlineEdit } from "../inline-edits";
@@ -212,6 +212,25 @@ export default async function AdminServiceOrderEditPage({
       ctrackingnumber: it.ctrackingnumber,
     })),
   );
+
+  // 2026-06-04 (ภูม flag #4 · A-path) — per-shop group for ShopFieldsBoard.
+  // legacy update3/update4 → SELECT DISTINCT cnameshop, cshippingnumber,
+  // ctrackingnumber FROM tb_order WHERE hno=? GROUP BY cnameshop.
+  // We do the dedup client-side here against the already-loaded items list.
+  const shopFieldsMap = new Map<string, { cshippingnumber: string; ctrackingnumber: string }>();
+  for (const it of items) {
+    const shop = (it.cnameshop ?? "").trim();
+    if (!shop) continue;
+    if (!shopFieldsMap.has(shop)) {
+      shopFieldsMap.set(shop, {
+        cshippingnumber: it.cshippingnumber ?? "",
+        ctrackingnumber: it.ctrackingnumber ?? "",
+      });
+    }
+  }
+  const shopFields = Array.from(shopFieldsMap.entries()).map(([cnameshop, v]) => ({
+    cnameshop, cshippingnumber: v.cshippingnumber, ctrackingnumber: v.ctrackingnumber,
+  }));
   const refundableItems = items
     .filter((it) => Number(it.camount ?? 0) > 0 && it.crewallet !== "1")
     .map((it) => ({
@@ -235,7 +254,6 @@ export default async function AdminServiceOrderEditPage({
   // Status workflow eligibility.
   const isEditable     = status === "1" || status === "2" || status === "6";
   const showMarkPaid   = status === "1" || status === "2";
-  const showMarkOrdered = status === "3";
   const showSpawn      = status === "4";
   const showCompleted  = status === "5";
   const showRefund     = status === "3" || status === "4" || status === "5";
@@ -372,17 +390,12 @@ export default async function AdminServiceOrderEditPage({
         <MarkPaidTbForm hno={r.hno} status={status} totalThb={netThb} />
       )}
 
-      {/* status 3 → 📝 mark-ordered (write cshippingnumber + flip 3→4) */}
-      {showMarkOrdered && (
-        <section className="rounded-2xl border-2 border-primary-300 bg-primary-50/30 dark:bg-primary-950/20 shadow-md overflow-hidden">
-          <header className="bg-primary-500 text-white px-4 py-2.5 flex items-center gap-2">
-            <span className="text-sm font-bold">📝 บันทึกเลขสั่งซื้อร้านจีน (สถานะ 3 → 4)</span>
-            <span className="ml-auto text-[10px] bg-white/20 rounded px-1.5 py-0.5">ใช้บ่อย</span>
-          </header>
-          <div className="p-4">
-            <AdminMarkShopOrderOrderedForm hNo={r.hno} />
-          </div>
-        </section>
+      {/* 2026-06-04 (ภูม flag #4 · A-path) — per-shop status-aware board
+          replaces the old single-input AdminMarkShopOrderOrderedForm.
+          Active at status 3/4/5 · self-hides at status 1/2 (items-editor
+          handles those). Mirrors legacy update3.php + update4.php. */}
+      {(status === "3" || status === "4" || status === "5") && shopFields.length > 0 && (
+        <ShopFieldsBoard hNo={r.hno} status={status} shops={shopFields} />
       )}
 
       {/* status 4 → 🚛 spawn forwarder per tracking + auto-spawn-to-completed */}
