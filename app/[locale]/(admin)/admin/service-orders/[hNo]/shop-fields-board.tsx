@@ -34,17 +34,27 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { Store, Save, ExternalLink, CheckCircle2, Truck } from "lucide-react";
+import { Store, Save, ExternalLink, CheckCircle2, Truck, Coins } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   adminMarkShopOrderOrdered,
   adminUpdateShopTracking,
 } from "@/actions/admin/service-orders-shop-workflow";
+import { adminUpdateCartItemPriceUpdate } from "@/actions/admin/service-orders-line-edits";
 
+export type ShopFieldsItem = {
+  id: number;
+  ctitle: string;
+  camount: number;
+  cprice: number;
+  cpriceupdate: number;
+  crewallet: string | null;
+};
 export type ShopFieldsRow = {
   cnameshop: string;
   cshippingnumber: string;
   ctrackingnumber: string;
+  items?: ShopFieldsItem[];   // per-line ¥ cPriceUpdate (legacy update3.php L85)
 };
 
 const inputCls =
@@ -246,6 +256,25 @@ export function ShopFieldsBoard({
                     </div>
                   </label>
                 )}
+
+                {/* per-line ¥ cPriceUpdate — เพิ่ม/ลด ราคาตอนของถึงจีน
+                    (legacy update3.php L85 cPriceUpdate[] + update4 inline).
+                    Editable at status 3/4, read-only at 5. */}
+                {sh.items && sh.items.length > 0 && (
+                  <div className="space-y-1 border-t border-border/60 pt-2">
+                    <span className="text-[11px] font-medium text-muted flex items-center gap-1">
+                      <Coins className="h-3 w-3" /> เพิ่ม/ลด ราคาต่อชิ้น (¥ · ตอนของถึงจีน)
+                    </span>
+                    {sh.items.map((it) => (
+                      <ItemPriceUpdateRow
+                        key={it.id}
+                        item={it}
+                        editable={isStatus3 || isStatus4}
+                        onSaved={() => router.refresh()}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -293,5 +322,69 @@ export function ShopFieldsBoard({
         )}
       </div>
     </section>
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// ItemPriceUpdateRow — per-line ¥ add/subtract (cPriceUpdate) under a shop.
+// Legacy update3.php L85 (cPriceUpdate[]) + update4 inline update_cPriceUpdate
+// (shops.php L1806). Saves via adminUpdateCartItemPriceUpdate → delta-adjusts
+// the header hPriceUpdate. confirm-before-mutate (§0f · native, matches board).
+// ────────────────────────────────────────────────────────────
+function ItemPriceUpdateRow({
+  item,
+  editable,
+  onSaved,
+}: {
+  item: ShopFieldsItem;
+  editable: boolean;
+  onSaved: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [val, setVal] = useState(String(item.cpriceupdate ?? 0));
+  const [rowErr, setRowErr] = useState<string | null>(null);
+  const refunded = item.crewallet === "1";
+
+  function save() {
+    setRowErr(null);
+    const n = Number(val);
+    if (!Number.isFinite(n) || n < 0) { setRowErr("ตัวเลขไม่ถูกต้อง"); return; }
+    if (Math.abs(n - Number(item.cpriceupdate ?? 0)) < 0.005) { setRowErr("ไม่เปลี่ยน"); return; }
+    if (!confirm(`บันทึก ¥ เพิ่ม/ลด ของ "${item.ctitle || `#${item.id}`}" = ${n.toFixed(2)} ?`)) return;
+    startTransition(async () => {
+      const res = await adminUpdateCartItemPriceUpdate({ tb_order_id: item.id, c_price_update: n });
+      if (res.ok) onSaved();
+      else setRowErr(res.error);
+    });
+  }
+
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="min-w-0 flex-1 truncate text-muted" title={item.ctitle}>
+        {item.ctitle || `#${item.id}`}
+        <span className="ml-1 text-muted/70">({item.camount}×¥{item.cprice})</span>
+      </span>
+      <input
+        type="number"
+        min={0}
+        step={0.01}
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        disabled={!editable || pending || refunded}
+        className="w-20 rounded border border-border px-2 py-1 text-right font-mono text-xs disabled:opacity-50"
+      />
+      {editable && !refunded && (
+        <button
+          type="button"
+          onClick={save}
+          disabled={pending}
+          className="shrink-0 rounded border border-primary-300 text-primary-700 px-2 py-1 text-[11px] hover:bg-primary-50 disabled:opacity-50"
+        >
+          บันทึก
+        </button>
+      )}
+      {refunded && <span className="text-[10px] text-red-500 shrink-0">คืนเงินแล้ว</span>}
+      {rowErr && <span className="text-[10px] text-red-600 shrink-0">{rowErr}</span>}
+    </div>
   );
 }

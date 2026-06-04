@@ -57,6 +57,8 @@ import { AdminSpawnToCompletedButton } from "../mark-ordered-form";
 import { AdminRefundItemPanel } from "../refund-item-form";
 import { MarkPaidTbForm } from "../mark-paid-tb-form";
 import { OrderInlineEdits, OrderRateInlineEdit } from "../inline-edits";
+import { autoExpireOverdueShopOrder } from "@/lib/service-order/auto-expire";
+import { OrderAddressPanel, type SavedAddress } from "../order-address-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -107,6 +109,7 @@ type HRow = {
   hratecost: number | null; hcostall: number | null;
   hshipby: string | null; userid: string;
   crate: string | null; paymethod: string | null;
+  hdatepayment: string | null;
 };
 type URow = {
   userID: string; userName: string | null; userLastName: string | null;
@@ -134,7 +137,7 @@ export default async function AdminServiceOrderEditPage({
     .select(
       "id,hno,hstatus,htransporttype,htotalpricechn," +
       "hshippingservice,hshippingchn,hrate,hratecost,hcostall,hshipby,userid," +
-      "crate,paymethod",
+      "crate,paymethod,hdatepayment",
     )
     .eq("hno", hNo)
     .maybeSingle();
@@ -147,6 +150,13 @@ export default async function AdminServiceOrderEditPage({
   if (!rowRaw) notFound();
   const r = rowRaw as unknown as HRow;
 
+  // Auto-expire overdue (legacy detail.php L73 / update.php L72): a status-2
+  // order past its hdatepayment deadline flips to 6 on open. Recoverable —
+  // staff can re-quote a 6 back to 2. No notify (legacy doesn't).
+  const autoExpired = await autoExpireOverdueShopOrder({
+    id: r.id, hstatus: r.hstatus, hdatepayment: r.hdatepayment,
+  });
+
   const { data: userRaw, error: userErr } = await admin
     .from("tb_users")
     .select("userID,userName,userLastName")
@@ -156,6 +166,19 @@ export default async function AdminServiceOrderEditPage({
     console.error(`[tb_users edit lookup] failed`, { code: userErr.code, message: userErr.message });
   }
   const u = userRaw as unknown as URow | null;
+
+  // Customer's saved address book (tb_address) — for the address re-pick
+  // panel (legacy update_hAddress). lowercase columns.
+  const { data: addrRaw, error: addrErr } = await admin
+    .from("tb_address")
+    .select("addressid,addressname,addresslastname,addressno,addresssubdistrict,addressdistrict,addressprovince,addresszipcode,addressnote,addresstel")
+    .eq("userid", r.userid)
+    .order("addressid", { ascending: true })
+    .limit(50);
+  if (addrErr) {
+    console.error(`[tb_address edit lookup] failed`, { code: addrErr.code, message: addrErr.message });
+  }
+  const savedAddresses = (addrRaw ?? []) as unknown as SavedAddress[];
 
   const { data: itemsRaw, error: itemsErr } = await admin
     .from("tb_order")
@@ -217,19 +240,29 @@ export default async function AdminServiceOrderEditPage({
   // legacy update3/update4 → SELECT DISTINCT cnameshop, cshippingnumber,
   // ctrackingnumber FROM tb_order WHERE hno=? GROUP BY cnameshop.
   // We do the dedup client-side here against the already-loaded items list.
-  const shopFieldsMap = new Map<string, { cshippingnumber: string; ctrackingnumber: string }>();
+  const shopFieldsMap = new Map<string, {
+    cshippingnumber: string; ctrackingnumber: string;
+    items: { id: number; ctitle: string; camount: number; cprice: number; cpriceupdate: number; crewallet: string | null }[];
+  }>();
   for (const it of items) {
     const shop = (it.cnameshop ?? "").trim();
     if (!shop) continue;
-    if (!shopFieldsMap.has(shop)) {
-      shopFieldsMap.set(shop, {
+    let g = shopFieldsMap.get(shop);
+    if (!g) {
+      g = {
         cshippingnumber: it.cshippingnumber ?? "",
         ctrackingnumber: it.ctrackingnumber ?? "",
-      });
+        items: [],
+      };
+      shopFieldsMap.set(shop, g);
     }
+    g.items.push({
+      id: it.id, ctitle: it.ctitle ?? "", camount: Number(it.camount ?? 0),
+      cprice: Number(it.cprice ?? 0), cpriceupdate: Number(it.cpriceupdate ?? 0), crewallet: it.crewallet,
+    });
   }
   const shopFields = Array.from(shopFieldsMap.entries()).map(([cnameshop, v]) => ({
-    cnameshop, cshippingnumber: v.cshippingnumber, ctrackingnumber: v.ctrackingnumber,
+    cnameshop, cshippingnumber: v.cshippingnumber, ctrackingnumber: v.ctrackingnumber, items: v.items,
   }));
   const refundableItems = items
     .filter((it) => Number(it.camount ?? 0) > 0 && it.crewallet !== "1")
@@ -238,7 +271,7 @@ export default async function AdminServiceOrderEditPage({
       camount: Number(it.camount ?? 0), cnameshop: it.cnameshop ?? "",
     }));
 
-  const status = r.hstatus ?? "1";
+  const status = autoExpired ? "6" : (r.hstatus ?? "1");
   const customerName = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || "—";
 
   // Price breakdown (legacy update.php L277-292) — for the read-only summary
@@ -366,6 +399,13 @@ export default async function AdminServiceOrderEditPage({
           <OrderRateInlineEdit hNo={r.hno} hRate={rate} />
         </div>
       </section>
+
+      {/* ── 3c. CHANGE DELIVERY ADDRESS (จากสมุดที่อยู่ลูกค้า · legacy
+          update_hAddress · wires orphan adminUpdateOrderAddress §0d).
+          Hidden once the order is closed (status 5/6). ── */}
+      {status !== "5" && status !== "6" && (
+        <OrderAddressPanel hNo={r.hno} hShipBy={r.hshipby} addresses={savedAddresses} />
+      )}
 
       {/* ── 4. PRIMARY — รายการสินค้า (editable / read-only) ── */}
       {isEditable ? (
