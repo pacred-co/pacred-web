@@ -147,6 +147,67 @@ async function loadHealth(): Promise<HealthSnapshot> {
   };
 }
 
+// ─────────────────────────────────────────────────────────────
+// 2026-06-05 ภูม flag — top-of-page "ยอดรวมคิวจาก MOMO" card.
+// "ภูมิต้องการแค่โชว์จำนวนคิวทั้งหมด ให้พี่ป๊อปดูได้ว่าตั้งแต่รับลูกค้า
+//  มาได้กี่คิวแล้ว แค่นั้นเอง"
+//
+// Strategy: SUM cbm/weight_kg/quantity across ALL momo_import_tracks rows
+// — the canonical "ตั้งแต่รับลูกค้ามา" lifetime aggregate.
+//
+// Why JS sum vs Postgres RPC: momo_import_tracks is delta-synced (MOMO
+// only pushes recent rows), so the working set stays in the low-thousands
+// even on a busy month. Range(0, 49999) is 1 round-trip + plenty of
+// headroom; promote to an RPC if/when row count crosses 50k.
+//
+// "ของยังไม่เข้า MOMO" (status = WAITING_SELLER_SHIP) excluded — those
+// are rows where MOMO knows the tracking but hasn't physically received
+// the parcel yet, so CBM is usually 0 anyway. Including them never hurts
+// the total; the filter is just for honesty in the row count.
+// ─────────────────────────────────────────────────────────────
+type CbmSummary = {
+  totalCbm:    number;
+  totalKgs:    number;
+  totalQty:    number;
+  totalRows:   number;
+  excludedWaiting: number;
+};
+
+async function loadCbmSummary(): Promise<CbmSummary> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("momo_import_tracks")
+    .select("cbm, weight_kg, quantity, shipment_status")
+    .range(0, 49_999);
+  if (error) {
+    console.error("[momo cbm summary] failed", { code: error.code, message: error.message });
+    return { totalCbm: 0, totalKgs: 0, totalQty: 0, totalRows: 0, excludedWaiting: 0 };
+  }
+  let totalCbm = 0;
+  let totalKgs = 0;
+  let totalQty = 0;
+  let totalRows = 0;
+  let excludedWaiting = 0;
+  for (const r of (data ?? []) as Array<{
+    cbm: number | string | null;
+    weight_kg: number | string | null;
+    quantity: number | string | null;
+    shipment_status: string | null;
+  }>) {
+    // "รอต้นทางส่งเข้าโกดัง" = MOMO ยังไม่ได้รับของจริง → exclude จากยอดรวม
+    // (นับแยกใน chip เพื่อความโปร่งใส)
+    if (r.shipment_status === "WAITING_SELLER_SHIP") {
+      excludedWaiting += 1;
+      continue;
+    }
+    totalCbm += Number(r.cbm ?? 0);
+    totalKgs += Number(r.weight_kg ?? 0);
+    totalQty += Number(r.quantity ?? 0);
+    totalRows += 1;
+  }
+  return { totalCbm, totalKgs, totalQty, totalRows, excludedWaiting };
+}
+
 function freshnessTone(min: number | null): {
   bg: string;
   border: string;
@@ -194,7 +255,7 @@ const CARRIER_MENUBAR: MenubarItem[] = [
 export default async function AdminApiForwarderMomoPage() {
   await requireAdmin(["super", "ops", "warehouse"]);
 
-  const health = await loadHealth();
+  const [health, cbm] = await Promise.all([loadHealth(), loadCbmSummary()]);
   const freshTone = freshnessTone(health.lastSuccessMinAgo);
 
   return (
@@ -221,6 +282,69 @@ export default async function AdminApiForwarderMomoPage() {
 
       {/* Top menubar (MOMO ↔ CargoCenter) */}
       <PageTopMenubar items={CARRIER_MENUBAR} activeHref="/admin/api-forwarder-momo" />
+
+      {/*
+        2026-06-05 ภูม flag — ยอดรวมคิวสะสม (สำหรับพี่ป๊อปดู).
+        Single big number — total CBM cumulative since MOMO sync started.
+        kg + qty + row count = supplementary stats.
+        Excludes WAITING_SELLER_SHIP (MOMO ยังไม่ได้รับของจริง) —
+        จำนวน excluded แสดง chip ด้านล่างเพื่อความโปร่งใส.
+      */}
+      <section
+        aria-labelledby="momo-cbm-h"
+        className="rounded-2xl border border-primary-200 bg-gradient-to-br from-primary-50 to-white p-5 shadow-sm"
+      >
+        <div className="flex items-baseline justify-between gap-3 flex-wrap mb-3">
+          <h2 id="momo-cbm-h" className="flex items-center gap-2 text-sm font-bold text-primary-700">
+            <BarChart3 className="h-4 w-4" />
+            ยอดรวมคิวจาก MOMO (สะสม)
+          </h2>
+          <p className="text-[10px] text-muted">
+            ตั้งแต่รับลูกค้ามา · นับจากที่ MOMO sync เข้าระบบ
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-3 items-end">
+          {/* Big CBM number (the headline) */}
+          <div className="sm:col-span-1">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-primary-600">
+              CBM รวม (ลบ.ม.)
+            </p>
+            <p className="mt-1 font-mono text-5xl font-bold text-primary-700 leading-none">
+              {cbm.totalCbm.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+          </div>
+
+          {/* Supplementary: kg + qty + rows */}
+          <div className="sm:col-span-2 grid grid-cols-3 gap-3">
+            <div className="rounded-xl border border-gray-200 bg-white p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">น้ำหนัก (kg)</p>
+              <p className="mt-1 font-mono text-xl font-bold text-gray-800">
+                {cbm.totalKgs.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            </div>
+            <div className="rounded-xl border border-gray-200 bg-white p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">จำนวนชิ้น</p>
+              <p className="mt-1 font-mono text-xl font-bold text-gray-800">
+                {cbm.totalQty.toLocaleString("th-TH")}
+              </p>
+            </div>
+            <div className="rounded-xl border border-gray-200 bg-white p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">รายการ tracking</p>
+              <p className="mt-1 font-mono text-xl font-bold text-gray-800">
+                {cbm.totalRows.toLocaleString("th-TH")}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {cbm.excludedWaiting > 0 && (
+          <p className="mt-3 text-[10px] text-muted">
+            * ไม่นับ {cbm.excludedWaiting.toLocaleString("th-TH")} รายการที่
+            สถานะ &quot;รอต้นทางส่งเข้าโกดัง&quot; (MOMO ยังไม่ได้รับของจริง)
+          </p>
+        )}
+      </section>
 
       {/* Wave 30.6 #230 — MOMO Health Snapshot. ภูม flag 2026-05-30:
           "เวลาดึงจากmomoจะเช็คยังไง ว่าไม่ได้ตกหล่นอะ". 3 cards: freshness,
