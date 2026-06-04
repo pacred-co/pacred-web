@@ -8,17 +8,19 @@
  * ── Layout (mirrors PCS update.php order):
  *   1. Breadcrumb + PCS-style header (#fNo · status · source · last-update + action links)
  *   2. 8-step pipeline timeline
- *   3. 2-col read-only info display (mirrors legacy update.php · matches detail page)
- *   4. Inline-edit grid (ForwarderInlineEdits) — the 10 [แก้ไข] click-to-flip fields
- *      (userid · pallet · transport · crate · ship-by · pay-method · tracking-chn ·
+ *   3. 2-col data display WITH per-field inline [แก้ไข] buttons
+ *      (Edit*Field components from forwarder-inline-edits.tsx are interleaved
+ *      next to their sibling read-only data fields — 10 inline editors total:
+ *      userid · pallet · transport · crate · ship-by · pay-method · tracking-chn ·
  *      date-close · amount-count · bill-to · per PCS L514-839 verbatim handlers)
- *   5. Driver-assign collapsible (auto-open at fstatus=6 เตรียมส่ง)
- *   6. Items table (line-item view from forwarder-items-table)
- *   7. PRIMARY ACTION (always-open): TbForwarderActionPanel
- *      — อัปเดตสถานะ + ตู้ + Tracking + หมายเหตุ (the most-used CS action)
- *   8. PAYMENT (when isPayable): TbForwarderPaymentPanel
+ *   4. Driver-assign collapsible (auto-open at fstatus=6 เตรียมส่ง)
+ *   5. Items table (line-item view from forwarder-items-table)
+ *   6. PRIMARY ACTION (always-open): TbForwarderActionPanel
+ *      — อัปเดตสถานะ + ตู้ + Tracking (LEFT) · บันทึกหมายเหตุ + แจ้งเตือน (RIGHT)
+ *        2-col grid (ภูม UX F1 Issue 2 — don't stack-wrap; side-by-side)
+ *   7. PAYMENT (when isPayable): TbForwarderPaymentPanel
  *      — หักกระเป๋า / mark paid / etc.
- *   9. Bottom nav (back-to-detail + back-to-list)
+ *   8. Bottom nav (back-to-detail + back-to-list)
  *
  * Legacy source columns mapped (per legacy update.php / detail.php):
  *   - refOrer source tag (L358-360 update.php) ← adminidcreator/reforder
@@ -39,9 +41,15 @@
  *   - fproductstype "ประเภทสินค้า" (L829)
  *   - fdetail + fcover "รายละเอียด + รูป" (L830-839)
  *
- * 2026-06-04 history: an earlier wave put ForwarderInlineEdits + Tb-driver-
- * assign on the detail page — moved here per ภูม directive (detail is
- * READ-ONLY always · all edits in one place).
+ * 2026-06-04 history:
+ *   - morning: put ForwarderInlineEdits + driver-assign on detail page → bad
+ *   - afternoon: moved to /edit as standalone "ตั้งค่ารายการ" section → bad
+ *   - evening (THIS): per ภูม UX F1 Issues 1+2+3 — interleaved per-field
+ *     [แก้ไข] inline into the 2-col data blocks (no standalone duplicate
+ *     section), split status-vs-note forms into 2-col grid, added "ยังไม่
+ *     ใส่ราคา" hint when ftotalprice=0. ภูม verbatim flag:
+ *     "กรอบเหลือง...มันควรไปอยู่ในชุดกรอบน้ำเงินเลย" +
+ *     "อัปเดตสถานะ...แบ่งหน้าคนละครึ่งกับบันทึกหมายเหตุไปเลย".
  */
 
 import { notFound } from "next/navigation";
@@ -58,7 +66,21 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { TbForwarderActionPanel } from "../tb-action-panel";
 import { TbForwarderPaymentPanel } from "../tb-payment-panel";
 import { ForwarderItemsTable } from "../forwarder-items-table";
-import { ForwarderInlineEdits } from "../forwarder-inline-edits";
+import {
+  // 2026-06-04 ภูม UX F1 Issue 1 — individual field components, interleaved
+  // inline next to their sibling data fields in the 2-col data blocks below
+  // (no more standalone "ตั้งค่ารายการ (แก้ไขรายฟิลด์)" panel).
+  EditUserIdField,
+  EditPalletField,
+  EditCrateField,
+  EditPayMethodField,
+  EditShipByField,
+  EditBillToField,
+  EditTrackingChnField,
+  EditTransportTypeField,
+  EditDateCloseField,
+  EditAmountCountField,
+} from "../forwarder-inline-edits";
 import { TbForwarderDriverAssignPanel, type DriverAssignmentState } from "../tb-driver-assign-panel";
 
 export const dynamic = "force-dynamic";
@@ -231,19 +253,19 @@ export default async function AdminForwarderEditPage({
     : null;
   const customerAvatar = await resolveLegacyUrl(u?.userPicture ?? null, "profile-thumb");
 
-  // ─── Status / mode / warehouse labels ─────────────────────────────
+  // ─── Status / warehouse / product labels ─────────────────────────────
+  // 2026-06-04 ภูม UX F1 Issue 1: CRATE_LABEL / MODE_LABEL / PAYMETHOD_LABEL
+  // removed — their display rows now live inside <Edit*Field/> components
+  // (forwarder-inline-edits.tsx) interleaved into the 2-col data blocks.
   const STATUS_LABEL: Record<string, string> = {
     "1": "รอเข้าโกดังจีน", "2": "ถึงโกดังจีนแล้ว", "3": "กำลังส่งมาไทย",
     "4": "ถึงไทยแล้ว", "5": "รอชำระเงิน", "6": "เตรียมส่ง", "7": "ส่งแล้ว",
     "99": "พิเศษ",
   };
-  const MODE_LABEL: Record<string, string> = { "1": "🚛 ทางรถ", "2": "🚢 ทางเรือ", "3": "✈️ ทางอากาศ" };
   const WAREHOUSE_LABEL: Record<string, string> = {
     "1": "แสง", "2": "CTT", "3": "MK", "4": "MX",
     "5": "JMF", "6": "GOGO", "7": "Cargo Center", "8": "MOMO",
   };
-  const CRATE_LABEL: Record<string, string> = { "1": "ตีลังไม้", "2": "ไม่ตีลังไม้" };
-  const PAYMETHOD_LABEL: Record<string, string> = { "1": "ต้นทาง", "2": "ปลายทาง" };
   const PRODUCT_TYPE_LABEL: Record<string, string> = {
     "1": "ทั่วไป", "2": "พิเศษ 1", "3": "พิเศษ 2", "4": "พิเศษ 3",
   };
@@ -447,9 +469,8 @@ export default async function AdminForwarderEditPage({
             </InfoLine>
           )}
 
-          <InfoLine label="รหัสสมาชิก">
-            <span className="font-mono font-bold">{r.userid}</span>
-          </InfoLine>
+          {/* รหัสสมาชิก — inline TYPE-CONFIRM edit (ภูม UX F1 Issue 1) */}
+          <EditUserIdField fId={r.id} userid={r.userid} />
 
           {u?.userEmail && (
             <InfoLine label="อีเมล">
@@ -465,30 +486,17 @@ export default async function AdminForwarderEditPage({
 
           <div className="border-t border-border pt-2 mt-2"></div>
 
-          {(r.fpallet !== null && r.fpallet !== 0) && (
-            <InfoLine label="Location (pallet)">
-              <span className="font-mono">{r.fpallet}</span>
-            </InfoLine>
-          )}
+          {/* Location (pallet) — inline edit */}
+          <EditPalletField fId={r.id} fpallet={r.fpallet} />
 
-          <InfoLine label="การตีลังไม้">
-            {CRATE_LABEL[r.crate ?? ""] ?? "—"}
-            {Number(r.pricecrate ?? 0) > 0 && (
-              <span className="text-muted text-xs ml-1.5">(฿{Number(r.pricecrate).toLocaleString("th-TH", { minimumFractionDigits: 2 })})</span>
-            )}
-          </InfoLine>
+          {/* การตีลังไม้ — inline edit */}
+          <EditCrateField fId={r.id} crate={r.crate} pricecrate={r.pricecrate} />
 
-          {r.paymethod && (
-            <InfoLine label="การเก็บเงินค่าขนส่งในไทย">
-              <span className={r.paymethod === "2" ? "rounded bg-red-50 text-red-700 px-1.5 py-0.5 text-xs font-medium" : "text-foreground"}>
-                {PAYMETHOD_LABEL[r.paymethod] ?? r.paymethod}
-              </span>
-            </InfoLine>
-          )}
+          {/* การเก็บเงินค่าขนส่งในไทย — inline edit */}
+          <EditPayMethodField fId={r.id} paymethod={r.paymethod} />
 
-          <InfoLine label="บริษัทขนส่ง">
-            {r.fshipby ? <span className="font-mono">{r.fshipby}</span> : "—"}
-          </InfoLine>
+          {/* บริษัทขนส่ง — inline edit (PCS/PCSF/PCSE preset + external) */}
+          <EditShipByField fId={r.id} fshipby={r.fshipby} />
 
           <div>
             <p className="text-xs text-muted mb-0.5">ที่อยู่จัดส่งสินค้า:</p>
@@ -498,13 +506,12 @@ export default async function AdminForwarderEditPage({
             )}
           </div>
 
-          {r.fbilltoname && r.fbilltoname.trim() !== "" && (
-            <InfoLine label="ผู้รับใบกำกับ (Bill-to)">
-              <span className="rounded bg-violet-50 text-violet-700 px-1.5 py-0.5 text-xs">
-                {r.fbilltoname}
-              </span>
-            </InfoLine>
-          )}
+          {/* ผู้รับใบกำกับ (Bill-to) — inline edit (Pacred extension) */}
+          <EditBillToField
+            fId={r.id}
+            fbilltoname={r.fbilltoname}
+            defaultBillTo={`${r.faddressname ?? ""} ${r.faddresslastname ?? ""}`.trim()}
+          />
 
           <InfoLine label="เลขพัสดุไทย">
             {r.ftrackingth && r.ftrackingth !== "-" ? (
@@ -521,16 +528,11 @@ export default async function AdminForwarderEditPage({
             <h2 className="font-bold text-sm">ตู้ · Tracking · สินค้า</h2>
           </div>
 
-          <div>
-            <p className="text-xs text-muted mb-0.5">เลขพัสดุจีน:</p>
-            <p className="text-base font-bold font-mono text-primary-600 break-all">
-              {r.ftrackingchn ?? "—"}
-            </p>
-          </div>
+          {/* เลขพัสดุจีน — inline edit (locked when fstatus=7) */}
+          <EditTrackingChnField fId={r.id} ftrackingchn={r.ftrackingchn} fstatus={r.fstatus} />
 
-          <InfoLine label="รูปแบบขนส่ง จีน-ไทย">
-            {MODE_LABEL[r.ftransporttype] ?? r.ftransporttype}
-          </InfoLine>
+          {/* รูปแบบขนส่ง จีน-ไทย — inline edit (รถ/เรือ/อากาศ) */}
+          <EditTransportTypeField fId={r.id} ftransporttype={r.ftransporttype} />
 
           <InfoLine label="โกดังประเทศจีน">
             {WAREHOUSE_LABEL[r.fwarehousename] ?? r.fwarehousename ?? "—"}
@@ -549,20 +551,13 @@ export default async function AdminForwarderEditPage({
             )}
           </InfoLine>
 
-          {r.fdatecontainerclose && (
-            <InfoLine label="วันที่ปิดตู้">
-              {new Date(r.fdatecontainerclose).toLocaleDateString("th-TH")}
-            </InfoLine>
-          )}
+          {/* วันที่ปิดตู้ — inline edit (auto +5/+12 ETA) */}
+          <EditDateCloseField fId={r.id} fdatecontainerclose={r.fdatecontainerclose} />
 
           <div className="border-t border-border pt-2 mt-2"></div>
 
-          <InfoLine label="จำนวน">
-            <span className="font-mono font-bold">{r.famount ?? 0}</span> กล่อง
-            {r.famountcount === "1" && (
-              <span className="ml-1.5 rounded bg-red-50 text-red-700 px-1.5 py-0.5 text-xs">รวมกล่อง</span>
-            )}
-          </InfoLine>
+          {/* จำนวน · การรวมกล่อง — inline edit */}
+          <EditAmountCountField fId={r.id} famountcount={r.famountcount} famount={r.famount} />
 
           {(Number(r.fweight ?? 0) > 0 || Number(r.fvolume ?? 0) > 0) && (
             <InfoLine label="น้ำหนัก · CBM">
@@ -576,10 +571,25 @@ export default async function AdminForwarderEditPage({
             {PRODUCT_TYPE_LABEL[r.fproductstype ?? ""] ?? "—"}
           </InfoLine>
 
+          {/* ยอดรวม — 2026-06-04 ภูม UX F1 Issue 3:
+              ftotalprice=0 is the legitimate state for orders before admin
+              enters dimensions/weight. PCS legacy update.php L1038 displays
+              ฿0.00 too — the real total is calculated and shown in the cost-
+              adjust matrix at status 4+ (ของถึงไทย). Add a helpful hint so
+              staff don't mistake the red price for a bug. */}
           <InfoLine label="ยอดรวม">
-            <span className="font-bold text-base text-primary-700">
-              ฿{Number(r.ftotalprice ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-            </span>
+            {Number(r.ftotalprice ?? 0) > 0 ? (
+              <span className="font-bold text-base text-primary-700">
+                ฿{Number(r.ftotalprice).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+              </span>
+            ) : (
+              <span className="inline-flex flex-col gap-0.5">
+                <span className="font-bold text-base text-primary-700">฿0.00</span>
+                <span className="text-[10px] text-muted leading-tight">
+                  ยังไม่ใส่ราคา · จะใส่ตอนของถึงโกดังไทย (status 4)
+                </span>
+              </span>
+            )}
           </InfoLine>
 
           {r.fdetail && (
@@ -607,34 +617,13 @@ export default async function AdminForwarderEditPage({
         </div>
       </section>
 
-      {/* ── 4.2 INLINE EDITS ── the 10 click-to-flip fields (PCS update.php L514-839
-          verbatim — userid · pallet · transport · crate · ship-by · pay-method ·
-          tracking-chn · date-close · amount-count · bill-to). Per-field [แก้ไข]
-          buttons; pencil opens an inline editor; "บันทึก" writes to tb_forwarder.
-          Faithful workflow, Pacred design. 2026-06-04 ภูม UX F1 — moved here
-          from detail page after ภูม flagged detail = READ-ONLY. */}
-      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 lg:p-5 shadow-sm">
-        <header className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
-          <Pencil className="h-4 w-4 text-primary-500 flex-shrink-0" />
-          <h2 className="text-sm font-bold">ตั้งค่ารายการ (แก้ไขรายฟิลด์)</h2>
-          <span className="ml-auto text-[10px] text-muted">ลูกค้า · พาเลท · ขนส่ง · ตีลังไม้ · ฯลฯ</span>
-        </header>
-        <ForwarderInlineEdits
-          fId={r.id}
-          userid={r.userid}
-          fpallet={r.fpallet}
-          ftransporttype={r.ftransporttype}
-          crate={r.crate}
-          fshipby={r.fshipby}
-          paymethod={r.paymethod}
-          ftrackingchn={r.ftrackingchn}
-          fstatus={r.fstatus}
-          fdatecontainerclose={r.fdatecontainerclose}
-          famountcount={r.famountcount}
-          fbilltoname={r.fbilltoname}
-          defaultBillTo={`${r.faddressname ?? ""} ${r.faddresslastname ?? ""}`.trim()}
-        />
-      </section>
+      {/* ── 4.2 INLINE EDITS — removed as a standalone section per ภูม UX F1
+          Issue 1 (2026-06-04). The 10 click-to-flip fields are now
+          interleaved INLINE within the 2-col "ลูกค้า · ที่อยู่ · การขนส่ง" +
+          "ตู้ · Tracking · สินค้า" data blocks above (each <Edit*Field/> sits
+          next to its sibling data field). Same workflow + same server
+          actions; layout-only refactor. ภูม verbatim: "ก็ใส่แก้ไขด้านบน
+          ไปเลยสิ". */}
 
       {/* ── 4.3 DRIVER ASSIGN ── auto-open ONLY when ready to dispatch (fstatus='6'
           เตรียมส่ง). Hidden in the collapsible at other statuses so it doesn't

@@ -121,8 +121,12 @@ export function TbForwarderActionPanel(p: Props) {
 
   const isRollback = parseInt(status, 10) < parseInt(p.currentStatus, 10) && p.currentStatus !== "99";
 
+  // 2026-06-04 ภูม UX F1 Issue 2: split status-form + note-form into a
+  // responsive 2-col grid (ฟอร์มอัปเดตสถานะซ้าย · ฟอร์มบันทึกหมายเหตุขวา).
+  // Previously both stacked vertically which made the page "ดูยืดไปหมดเลย"
+  // when used inside the always-open ACTION section on /edit.
   return (
-    <div className="space-y-3">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
     <form onSubmit={onSubmit} className="space-y-3 rounded-2xl border border-primary-200 bg-primary-50/30 p-4">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="rounded-full bg-primary-100 text-primary-700 px-2.5 py-0.5 text-[11px] font-semibold">

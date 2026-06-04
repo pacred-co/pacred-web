@@ -69,20 +69,55 @@ const btnSave =
 const btnCancel =
   "rounded-md border border-border px-3 py-1 text-xs hover:bg-surface-alt disabled:opacity-50";
 
-/** Shared "display + แก้ไข" → editor toggle row. */
+/**
+ * Shared "display + แก้ไข" → editor toggle row.
+ *
+ * 2026-06-04 ภูม UX F1 follow-up: pass `compact` to render in InfoLine
+ * shape (label : value [แก้ไข] on a single row) — used when the field lives
+ * INSIDE an existing data block (the 2-col "ลูกค้า · ที่อยู่ · การขนส่ง" +
+ * "ตู้ · Tracking · สินค้า" sections on /edit) instead of inside a
+ * standalone inline-edits panel.
+ *
+ * Default (non-compact) shape — label stacked above value — kept for
+ * back-compat with the standalone ForwarderInlineEdits panel.
+ */
 function EditableRow({
   label,
   display,
   children,
   editing,
   setEditing,
+  compact = false,
 }: {
   label: string;
   display: React.ReactNode;
   children: (close: () => void) => React.ReactNode;
   editing: boolean;
   setEditing: (v: boolean) => void;
+  compact?: boolean;
 }) {
+  if (compact) {
+    return (
+      <div className="space-y-1">
+        <div className="flex items-baseline gap-2 text-sm">
+          <span className="text-muted text-xs flex-shrink-0">{label}:</span>
+          {editing ? null : (
+            <>
+              <span className="flex-1 break-words">{display}</span>
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="inline-flex items-center gap-0.5 text-[11px] text-primary-600 hover:underline flex-shrink-0"
+              >
+                <Pencil className="h-3 w-3" /> แก้ไข
+              </button>
+            </>
+          )}
+        </div>
+        {editing && <div className="space-y-2">{children(() => setEditing(false))}</div>}
+      </div>
+    );
+  }
   return (
     <div className="space-y-1">
       <div className="flex items-baseline justify-between gap-2">
@@ -723,6 +758,454 @@ export function ForwarderInlineEdits(p: Props) {
               <button type="button" disabled={pending} className={btnCancel} onClick={close}>
                 ยกเลิก
               </button>
+            </div>
+          </>
+        )}
+      </EditableRow>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Individual exported field components (2026-06-04 ภูม UX F2 — Issue 1
+// follow-up).
+//
+// These small wrappers let the /edit page place each [แก้ไข] toggle INLINE
+// next to its sibling data field (in the "ลูกค้า · ที่อยู่ · การขนส่ง" and
+// "ตู้ · Tracking · สินค้า" 2-col blocks) instead of stuffing all 10 fields
+// into a single bottom panel. Each one owns its own draft state + uses the
+// shared `useEditor` hook + `EditableRow compact` for InfoLine-shape display.
+//
+// Workflow + server-action contract is IDENTICAL to the bundled
+// ForwarderInlineEdits; this is a layout-only refactor.
+// ─────────────────────────────────────────────────────────────────────────
+
+/** รหัสสมาชิก (Customer) — TYPE-CONFIRM owner reassign · PCS L1469. */
+export function EditUserIdField({ fId, userid }: { fId: number; userid: string }) {
+  const { pending, err, run } = useEditor();
+  const [editing, setEditing] = useState(false);
+  const [userIdVal, setUserIdVal] = useState<string>(userid);
+  const [userIdConfirm, setUserIdConfirm] = useState<string>("");
+  return (
+    <div>
+      {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
+      <EditableRow
+        compact
+        label="รหัสสมาชิก"
+        editing={editing}
+        setEditing={setEditing}
+        display={<span className="font-mono font-bold">{userid}</span>}
+      >
+        {(close) => {
+          const trimmedNew = userIdVal.trim().toUpperCase();
+          const canSave = trimmedNew !== "" && trimmedNew !== userid && userIdConfirm.trim() === "ยืนยัน";
+          return (
+            <>
+              <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-[11px] text-red-700 flex gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                <span>
+                  ⚠ การเปลี่ยน user จะส่งผลต่อ <b>สถานะรายการ · บริษัทขนส่ง · ที่อยู่จัดส่ง · เรทราคา ·
+                  การหัก ณ ที่จ่าย</b> — ตรวจสอบให้ครบก่อนบันทึก
+                </span>
+              </div>
+              <input type="text" value={userIdVal} onChange={(e) => setUserIdVal(e.target.value)} maxLength={10}
+                placeholder="รหัสลูกค้าใหม่ (เช่น PR12345)" className={inputCls} />
+              <input type="text" value={userIdConfirm} onChange={(e) => setUserIdConfirm(e.target.value)}
+                placeholder='พิมพ์ "ยืนยัน" เพื่อบันทึก' className={inputCls} />
+              <div className="flex gap-2">
+                <button type="button" disabled={pending || !canSave} className={btnSave}
+                  onClick={() => run(() => adminReassignForwarderOwner({ fId, newUserId: trimmedNew }), () => {
+                    setUserIdConfirm("");
+                    close();
+                  })}>บันทึก</button>
+                <button type="button" disabled={pending} className={btnCancel}
+                  onClick={() => { setUserIdVal(userid); setUserIdConfirm(""); close(); }}>ยกเลิก</button>
+              </div>
+            </>
+          );
+        }}
+      </EditableRow>
+    </div>
+  );
+}
+
+/** Location (pallet) · PCS L2417 — warehouse pallet number, integer 0+. */
+export function EditPalletField({ fId, fpallet }: { fId: number; fpallet: number | null }) {
+  const { pending, err, run } = useEditor();
+  const [editing, setEditing] = useState(false);
+  const [palletVal, setPalletVal] = useState<string>(fpallet !== null ? String(fpallet) : "");
+  return (
+    <div>
+      {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
+      <EditableRow
+        compact
+        label="Location (pallet)"
+        editing={editing}
+        setEditing={setEditing}
+        display={
+          fpallet !== null && fpallet > 0
+            ? <span className="font-mono">{fpallet}</span>
+            : <span className="text-muted">—</span>
+        }
+      >
+        {(close) => (
+          <>
+            <input type="number" min={0} max={99999} step={1} value={palletVal}
+              onChange={(e) => setPalletVal(e.target.value)} placeholder="เลขพาเลท (0 = ล้าง)" className={inputCls} />
+            <p className="text-[10px] text-muted">เลขพาเลทในโกดัง — ใช้สำหรับค้นหาที่จัดเก็บ · กรอก 0 เพื่อล้าง</p>
+            <div className="flex gap-2">
+              <button type="button" disabled={pending} className={btnSave} onClick={() => {
+                const n = Number(palletVal);
+                const safe = Number.isFinite(n) && Number.isInteger(n) && n >= 0 ? n : 0;
+                run(() => adminUpdateForwarderPallet({ fId, fpallet: safe }), close);
+              }}>บันทึก</button>
+              <button type="button" disabled={pending} className={btnCancel}
+                onClick={() => { setPalletVal(fpallet !== null ? String(fpallet) : ""); close(); }}>ยกเลิก</button>
+            </div>
+          </>
+        )}
+      </EditableRow>
+    </div>
+  );
+}
+
+/** การตีลังไม้ · PCS L2439 — header crate flag. */
+export function EditCrateField({ fId, crate, pricecrate }: { fId: number; crate: string | null; pricecrate?: number | string | null }) {
+  const { pending, err, run } = useEditor();
+  const [editing, setEditing] = useState(false);
+  const initialCrate = (crate === "2" ? "2" : "1") as "1" | "2";
+  const [crateVal, setCrateVal] = useState<"1" | "2">(initialCrate);
+  return (
+    <div>
+      {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
+      <EditableRow
+        compact
+        label="การตีลังไม้"
+        editing={editing}
+        setEditing={setEditing}
+        display={
+          <>
+            {CRATE_LABEL[crate ?? ""] ?? "—"}
+            {Number(pricecrate ?? 0) > 0 && (
+              <span className="text-muted text-xs ml-1.5">(฿{Number(pricecrate).toLocaleString("th-TH", { minimumFractionDigits: 2 })})</span>
+            )}
+          </>
+        }
+      >
+        {(close) => (
+          <>
+            <select className={selectCls} value={crateVal} onChange={(e) => setCrateVal(e.target.value as "1" | "2")}>
+              <option value="1">ตีลังไม้</option>
+              <option value="2">ไม่ตีลังไม้</option>
+            </select>
+            <p className="text-[10px] text-muted">
+              ค่าตีลังจริงคำนวณตอนแก้ไขขนาด/น้ำหนัก (ต่อ-รายการ) — รายการนี้เก็บแค่ flag header
+            </p>
+            <div className="flex gap-2">
+              <button type="button" disabled={pending} className={btnSave}
+                onClick={() => run(() => adminUpdateForwarderCrate({ fId, crate: crateVal }), close)}>บันทึก</button>
+              <button type="button" disabled={pending} className={btnCancel} onClick={close}>ยกเลิก</button>
+            </div>
+          </>
+        )}
+      </EditableRow>
+    </div>
+  );
+}
+
+/** การเก็บเงิน · PCS L2428 — paymethod "1" ต้นทาง / "2" ปลายทาง. */
+export function EditPayMethodField({ fId, paymethod }: { fId: number; paymethod: string | null }) {
+  const { pending, err, run } = useEditor();
+  const [editing, setEditing] = useState(false);
+  const initialPay = (paymethod === "2" ? "2" : "1") as "1" | "2";
+  const [payVal, setPayVal] = useState<"1" | "2">(initialPay);
+  return (
+    <div>
+      {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
+      <EditableRow
+        compact
+        label="การเก็บเงินค่าขนส่งในไทย"
+        editing={editing}
+        setEditing={setEditing}
+        display={
+          <span className={paymethod === "2" ? "rounded bg-red-50 text-red-700 px-1.5 py-0.5 text-xs font-medium" : "text-foreground"}>
+            {PAY_LABEL[paymethod ?? ""] ?? paymethod ?? "—"}
+          </span>
+        }
+      >
+        {(close) => (
+          <>
+            <select className={selectCls} value={payVal} onChange={(e) => setPayVal(e.target.value as "1" | "2")}>
+              <option value="1">ต้นทาง</option>
+              <option value="2">ปลายทาง</option>
+            </select>
+            <div className="flex gap-2">
+              <button type="button" disabled={pending} className={btnSave}
+                onClick={() => run(() => adminUpdateForwarderPayMethod({ fId, paymethod: payVal }), close)}>บันทึก</button>
+              <button type="button" disabled={pending} className={btnCancel} onClick={close}>ยกเลิก</button>
+            </div>
+          </>
+        )}
+      </EditableRow>
+    </div>
+  );
+}
+
+/** บริษัทขนส่ง · PCS L1579 — fshipby preset + free-text. */
+export function EditShipByField({ fId, fshipby }: { fId: number; fshipby: string | null }) {
+  const { pending, err, run } = useEditor();
+  const [editing, setEditing] = useState(false);
+  const isPresetShipBy = SHIPBY_PRESETS.includes((fshipby ?? "") as (typeof SHIPBY_PRESETS)[number]);
+  const initialShipByMode = isPresetShipBy
+    ? (fshipby as (typeof SHIPBY_PRESETS)[number])
+    : (fshipby && fshipby.trim() !== "" ? "_ext" : "PCS");
+  const [shipByMode, setShipByMode] = useState<string>(initialShipByMode);
+  const [shipByExt, setShipByExt] = useState<string>(isPresetShipBy ? "" : (fshipby ?? ""));
+  const effectiveShipBy = shipByMode === "_ext" ? shipByExt.trim() : shipByMode;
+  return (
+    <div>
+      {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
+      <EditableRow
+        compact
+        label="บริษัทขนส่ง"
+        editing={editing}
+        setEditing={setEditing}
+        display={fshipby ? <span className="font-mono">{fshipby}</span> : "—"}
+      >
+        {(close) => (
+          <>
+            <select className={selectCls} value={shipByMode} onChange={(e) => setShipByMode(e.target.value)}>
+              <option value="PCS">PCS · รับเองที่โกดัง (ค่าขนส่ง 0)</option>
+              <option value="PCSF">PCSF · ส่งฟรี (ค่าขนส่ง 0)</option>
+              <option value="PCSE">PCSE · ส่งด่วน (ปริมาตร×120 · ขั้นต่ำ 50)</option>
+              <option value="_ext">ผู้ขนส่งภายนอก (กรอกชื่อเอง)…</option>
+            </select>
+            {shipByMode === "_ext" && (
+              <input type="text" value={shipByExt} onChange={(e) => setShipByExt(e.target.value)} maxLength={50}
+                placeholder="ชื่อผู้ขนส่งภายนอก เช่น Flash Express" className={inputCls} />
+            )}
+            <p className="text-[10px] text-muted">
+              PCS = ที่อยู่จะถูกแทนด้วยโกดัง Pacred (สมุทรสาคร) · PCS/PCSF/PCSE คิดค่าขนส่งใหม่อัตโนมัติ
+            </p>
+            <div className="flex gap-2">
+              <button type="button" disabled={pending || !effectiveShipBy} className={btnSave}
+                onClick={() => run(() => adminUpdateForwarderShipBy({ fId, fShipBy: effectiveShipBy }), close)}>บันทึก</button>
+              <button type="button" disabled={pending} className={btnCancel} onClick={close}>ยกเลิก</button>
+            </div>
+          </>
+        )}
+      </EditableRow>
+    </div>
+  );
+}
+
+/** ผู้รับใบกำกับ (Bill-to override) · Pacred extension. */
+export function EditBillToField({ fId, fbilltoname, defaultBillTo }: { fId: number; fbilltoname: string | null; defaultBillTo: string }) {
+  const { pending, err, run } = useEditor();
+  const [editing, setEditing] = useState(false);
+  const [billToVal, setBillToVal] = useState<string>(fbilltoname ?? "");
+  return (
+    <div>
+      {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
+      <EditableRow
+        compact
+        label="ชื่อผู้รับใบกำกับ"
+        editing={editing}
+        setEditing={setEditing}
+        display={
+          fbilltoname && fbilltoname.trim() !== ""
+            ? <span className="rounded bg-violet-50 text-violet-700 px-1.5 py-0.5 text-xs">{fbilltoname}</span>
+            : <span className="text-muted">{defaultBillTo || "—"} (ค่าเริ่มต้น)</span>
+        }
+      >
+        {(close) => (
+          <>
+            <input type="text" value={billToVal} onChange={(e) => setBillToVal(e.target.value)} maxLength={200}
+              placeholder={defaultBillTo || "เว้นว่าง = ใช้ชื่อเริ่มต้น"} className={inputCls} />
+            <p className="text-[10px] text-muted">
+              ปล่อยว่าง = กลับใช้ชื่อเริ่มต้น ({defaultBillTo || "—"}) · สูงสุด 200 ตัวอักษร
+            </p>
+            <div className="flex gap-2">
+              <button type="button" disabled={pending} className={btnSave}
+                onClick={() => run(() => adminSetForwarderBillToOverride({ f_no: String(fId), override: billToVal.trim() }), close)}>บันทึก</button>
+              <button type="button" disabled={pending} className={btnCancel} onClick={close}>ยกเลิก</button>
+            </div>
+          </>
+        )}
+      </EditableRow>
+    </div>
+  );
+}
+
+/** เลขพัสดุจีน · PCS L1562 — ftrackingchn (locked fstatus=7). */
+export function EditTrackingChnField({ fId, ftrackingchn, fstatus }: { fId: number; ftrackingchn: string | null; fstatus: string | null }) {
+  const { pending, err, run } = useEditor();
+  const [editing, setEditing] = useState(false);
+  const [trackingChnVal, setTrackingChnVal] = useState<string>(ftrackingchn ?? "");
+  const trackingLocked = (fstatus ?? "") === "7";
+  return (
+    <div>
+      {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
+      <EditableRow
+        compact
+        label="เลขพัสดุจีน"
+        editing={editing}
+        setEditing={setEditing}
+        display={
+          ftrackingchn && ftrackingchn.trim() !== ""
+            ? <span className="font-mono font-bold text-primary-600 break-all">{ftrackingchn}</span>
+            : <span className="text-muted">—</span>
+        }
+      >
+        {(close) =>
+          trackingLocked ? (
+            <>
+              <p className="text-[11px] text-red-700">⚠ รายการนี้ถูกส่งแล้ว (fStatus=7) — เลขแทรคกิ้งจีนถูกล็อก แก้ไขไม่ได้</p>
+              <div className="flex gap-2">
+                <button type="button" className={btnCancel} onClick={close}>ปิด</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <input type="text" value={trackingChnVal} onChange={(e) => setTrackingChnVal(e.target.value)} maxLength={60}
+                placeholder="เลขแทรคกิ้งจาก vendor จีน" className={inputCls} />
+              <p className="text-[10px] text-muted">แก้ไขได้ก่อนรายการจะถูกส่ง (fStatus &lt; 7) เท่านั้น</p>
+              <div className="flex gap-2">
+                <button type="button" disabled={pending || trackingChnVal.trim() === ""} className={btnSave}
+                  onClick={() => run(() => adminUpdateForwarderTrackingChn({ fId, ftrackingchn: trackingChnVal.trim() }), close)}>บันทึก</button>
+                <button type="button" disabled={pending} className={btnCancel}
+                  onClick={() => { setTrackingChnVal(ftrackingchn ?? ""); close(); }}>ยกเลิก</button>
+              </div>
+            </>
+          )
+        }
+      </EditableRow>
+    </div>
+  );
+}
+
+/** รูปแบบขนส่ง จีน-ไทย · PCS L1458 — ftransporttype. */
+export function EditTransportTypeField({ fId, ftransporttype }: { fId: number; ftransporttype: string | null }) {
+  const { pending, err, run } = useEditor();
+  const [editing, setEditing] = useState(false);
+  const initialTransport = (["1", "2", "3"].includes(ftransporttype ?? "") ? ftransporttype : "1") as "1" | "2" | "3";
+  const [transportVal, setTransportVal] = useState<"1" | "2" | "3">(initialTransport);
+  return (
+    <div>
+      {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
+      <EditableRow
+        compact
+        label="รูปแบบขนส่ง จีน-ไทย"
+        editing={editing}
+        setEditing={setEditing}
+        display={TRANSPORT_LABEL[ftransporttype ?? "1"] ?? `mode ${ftransporttype ?? "-"}`}
+      >
+        {(close) => (
+          <>
+            <select className={selectCls} value={transportVal} onChange={(e) => setTransportVal(e.target.value as "1" | "2" | "3")}>
+              <option value="1">ทางรถ (5-7 วัน)</option>
+              <option value="2">ทางเรือ (12-16 วัน)</option>
+              <option value="3">ทางอากาศ</option>
+            </select>
+            <p className="text-[10px] text-muted">⚠ เปลี่ยนแล้วราคาไม่อัพเดทอัตโนมัติ — แก้ไขขนาด/น้ำหนักเพื่อคำนวณเรทใหม่</p>
+            <div className="flex gap-2">
+              <button type="button" disabled={pending} className={btnSave}
+                onClick={() => run(() => adminUpdateForwarderTransportType({ fId, transportType: transportVal }), close)}>บันทึก</button>
+              <button type="button" disabled={pending} className={btnCancel} onClick={close}>ยกเลิก</button>
+            </div>
+          </>
+        )}
+      </EditableRow>
+    </div>
+  );
+}
+
+/** วันที่ปิดตู้ · PCS L1541 — fdatecontainerclose + fdatetothai. */
+export function EditDateCloseField({ fId, fdatecontainerclose }: { fId: number; fdatecontainerclose: string | null }) {
+  const { pending, err, run } = useEditor();
+  const [editing, setEditing] = useState(false);
+  const [dateCloseVal, setDateCloseVal] = useState<string>(
+    fdatecontainerclose && /^\d{4}-\d{2}-\d{2}/.test(fdatecontainerclose)
+      ? fdatecontainerclose.slice(0, 10)
+      : "",
+  );
+  return (
+    <div>
+      {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
+      <EditableRow
+        compact
+        label="วันที่ปิดตู้"
+        editing={editing}
+        setEditing={setEditing}
+        display={
+          fdatecontainerclose && fdatecontainerclose.length >= 10
+            ? <span className="font-mono">{new Date(fdatecontainerclose).toLocaleDateString("th-TH")}</span>
+            : <span className="text-muted">—</span>
+        }
+      >
+        {(close) => (
+          <>
+            <input type="date" value={dateCloseVal} onChange={(e) => setDateCloseVal(e.target.value)} className={inputCls} />
+            <p className="text-[10px] text-muted">
+              วันที่จะอัปเดตทั้ง <b>วันปิดตู้</b> และ <b>วันถึงไทย (ETA)</b> โดยอัตโนมัติ
+              (รถ +5 วัน · เรือ/อากาศ +12 วัน)
+            </p>
+            <div className="flex gap-2">
+              <button type="button" disabled={pending || !/^\d{4}-\d{2}-\d{2}$/.test(dateCloseVal)} className={btnSave}
+                onClick={() => run(() => adminUpdateForwarderDateToThai({ fId, fdatecontainerclose: dateCloseVal }), close)}>บันทึก</button>
+              <button type="button" disabled={pending} className={btnCancel}
+                onClick={() => {
+                  setDateCloseVal(
+                    fdatecontainerclose && /^\d{4}-\d{2}-\d{2}/.test(fdatecontainerclose)
+                      ? fdatecontainerclose.slice(0, 10)
+                      : "",
+                  );
+                  close();
+                }}>ยกเลิก</button>
+            </div>
+          </>
+        )}
+      </EditableRow>
+    </div>
+  );
+}
+
+/** การรวมกล่อง · PCS L2450 — famountcount. */
+export function EditAmountCountField({ fId, famountcount, famount }: { fId: number; famountcount: string | null; famount?: number | null }) {
+  const { pending, err, run } = useEditor();
+  const [editing, setEditing] = useState(false);
+  const initialAmountCount = (famountcount === "1" ? "1" : "2") as "1" | "2";
+  const [amountCountVal, setAmountCountVal] = useState<"1" | "2">(initialAmountCount);
+  return (
+    <div>
+      {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
+      <EditableRow
+        compact
+        label="จำนวน · การรวมกล่อง"
+        editing={editing}
+        setEditing={setEditing}
+        display={
+          <>
+            <span className="font-mono font-bold">{famount ?? 0}</span> กล่อง
+            {famountcount === "1" ? (
+              <span className="ml-1.5 rounded bg-red-50 text-red-700 px-1.5 py-0.5 text-xs">รวมกล่อง</span>
+            ) : (
+              <span className="ml-1.5 text-xs text-muted">({AMOUNT_COUNT_LABEL[famountcount ?? "2"] ?? "ไม่รวมกล่อง"})</span>
+            )}
+          </>
+        }
+      >
+        {(close) => (
+          <>
+            <select className={selectCls} value={amountCountVal} onChange={(e) => setAmountCountVal(e.target.value as "1" | "2")}>
+              <option value="2">ไม่รวมกล่อง (คิดราคาแยกต่อกล่อง)</option>
+              <option value="1">รวมกล่อง (คิดราคารวมทั้งบิล)</option>
+            </select>
+            <p className="text-[10px] text-muted">⚠ ค่าฐานการคิดราคา — มีผลตอนกดแก้ไขขนาด/น้ำหนักครั้งถัดไป (ราคาเดิมไม่ recompute)</p>
+            <div className="flex gap-2">
+              <button type="button" disabled={pending} className={btnSave}
+                onClick={() => run(() => adminUpdateForwarderAmountCount({ fId, famountcount: amountCountVal }), close)}>บันทึก</button>
+              <button type="button" disabled={pending} className={btnCancel} onClick={close}>ยกเลิก</button>
             </div>
           </>
         )}
