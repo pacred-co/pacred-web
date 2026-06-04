@@ -569,6 +569,118 @@ export async function adminUpdateForwarderAmountCount(
   });
 }
 
+// ── update_crate — toggle ตีลังไม้ on the forwarder header ────────────────────
+// Header-level flag mirroring per-item chinawoodencratefeetype (see
+// forwarders-edit.ts §"Mirror crate flag onto tb_forwarder"). This per-field
+// edit is the QUICK-flip the inline-edit button on the detail page calls;
+// the heavier-handed re-price is the dimensions form. Column-only write —
+// the actual pricecrate cost recomputes when dimensions are re-saved.
+// Values: '1' = ตีลังไม้ · '2' = ไม่ตีลังไม้ (matches legacy + tb_edit-panel UI).
+const crateSchema = z.object({
+  fId:   z.number().int().positive(),
+  crate: z.enum(["1", "2"] as const),
+});
+export type AdminUpdateForwarderCrateInput = z.infer<typeof crateSchema>;
+
+export async function adminUpdateForwarderCrate(
+  rawInput: AdminUpdateForwarderCrateInput,
+): Promise<AdminActionResult> {
+  const parsed = crateSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+
+    const { data: fwd, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, crate")
+      .eq("id", d.fId)
+      .maybeSingle<{ id: number; crate: string | null }>();
+    if (fwdErr) {
+      console.error(`[adminUpdateForwarderCrate read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
+      return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
+    }
+    if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+    if ((fwd.crate ?? "").trim() === d.crate) {
+      return { ok: false, error: "ไม่มีการเปลี่ยนแปลง (ค่าตีลังเดิม)" };
+    }
+
+    const { error: updErr } = await admin
+      .from("tb_forwarder")
+      .update({ crate: d.crate, adminidupdate: legacyAdminId })
+      .eq("id", d.fId);
+    if (updErr) {
+      console.error(`[adminUpdateForwarderCrate update] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
+      return { ok: false, error: `บันทึกค่าตีลังไม่สำเร็จ: ${updErr.message}` };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder.update_crate", "tb_forwarder", String(d.fId), {
+      before: fwd.crate, after: d.crate,
+    });
+
+    revalidatePath(`/admin/forwarders/${d.fId}`);
+    revalidatePath("/admin/forwarders");
+    return { ok: true };
+  });
+}
+
+// ── update_paymethod — เก็บเงินค่าขนส่งในไทย (ต้นทาง/ปลายทาง) ────────────────
+// Faithful counterpart to adminUpdateOrderPayMethod (service-orders-header-edits.ts)
+// — the ฝากสั่งซื้อ side already had this; ฝากนำเข้า was missing the per-field
+// quick-edit. Pure flag flip ('1'=ต้นทาง · '2'=ปลายทาง). Affects downstream
+// COD handling at delivery; no re-price needed.
+const payMethodSchema = z.object({
+  fId:       z.number().int().positive(),
+  paymethod: z.enum(["1", "2"] as const),
+});
+export type AdminUpdateForwarderPayMethodInput = z.infer<typeof payMethodSchema>;
+
+export async function adminUpdateForwarderPayMethod(
+  rawInput: AdminUpdateForwarderPayMethodInput,
+): Promise<AdminActionResult> {
+  const parsed = payMethodSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+
+    const { data: fwd, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, paymethod")
+      .eq("id", d.fId)
+      .maybeSingle<{ id: number; paymethod: string | null }>();
+    if (fwdErr) {
+      console.error(`[adminUpdateForwarderPayMethod read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
+      return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
+    }
+    if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+    if ((fwd.paymethod ?? "").trim() === d.paymethod) {
+      return { ok: false, error: "ไม่มีการเปลี่ยนแปลง (วิธีเก็บเงินเดิม)" };
+    }
+
+    const { error: updErr } = await admin
+      .from("tb_forwarder")
+      .update({ paymethod: d.paymethod, adminidupdate: legacyAdminId })
+      .eq("id", d.fId);
+    if (updErr) {
+      console.error(`[adminUpdateForwarderPayMethod update] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
+      return { ok: false, error: `บันทึกวิธีเก็บเงินไม่สำเร็จ: ${updErr.message}` };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder.update_paymethod", "tb_forwarder", String(d.fId), {
+      before: fwd.paymethod, after: d.paymethod,
+    });
+
+    revalidatePath(`/admin/forwarders/${d.fId}`);
+    revalidatePath("/admin/forwarders");
+    return { ok: true };
+  });
+}
+
 // ── fCredit credit-out — grant credit instead of payment (forwarder.php L1395-1435)
 // ─────────────────────────────────────────────────────────────────────────────
 // MONEY/DEBT flow (owner-authorized 2026-05-31). Legacy "เครดิต" branch: instead

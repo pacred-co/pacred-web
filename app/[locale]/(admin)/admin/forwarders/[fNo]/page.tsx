@@ -4,6 +4,8 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { ForwarderItemsTable } from "./forwarder-items-table";
+import { ForwarderInlineEdits } from "./forwarder-inline-edits";
+import { TbForwarderDriverAssignPanel, type DriverAssignmentState } from "./tb-driver-assign-panel";
 import {
   User as UserIcon,
   Package,
@@ -17,6 +19,7 @@ import {
   Pencil,
   ArrowLeft,
   ExternalLink,
+  ChevronDown,
 } from "lucide-react";
 
 // W-1: requireAdmin reads auth cookies; a page under a dynamic [fNo]
@@ -283,6 +286,38 @@ async function tryRenderTbForwarder(
   // it handles tb_order (shop-spawn) + tb_forwarder_item (admin) + empty-state.
   // 2026-06-03: removed the local item query that fed the old plain-text table.
 
+  // Latest driver-assignment for this forwarder (two reads · no FK · moved
+  // from /edit/page.tsx 2026-06-04 — the driver-assign collapsible now lives
+  // on the detail page near the inline-edits as a quick-action panel).
+  let driverAssignment: DriverAssignmentState | null = null;
+  const { data: assignItemRow, error: assignItemErr } = await admin
+    .from("tb_forwarder_driver_item")
+    .select("id, fdid, fdistatus")
+    .eq("fid", r.id)
+    .order("id", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ id: number; fdid: number; fdistatus: string | null }>();
+  if (assignItemErr) {
+    console.error(`[tb_forwarder_driver_item detail] failed`, { code: assignItemErr.code, message: assignItemErr.message, fid: r.id });
+  }
+  if (assignItemRow) {
+    const { data: parentRow, error: parentErr } = await admin
+      .from("tb_forwarder_driver")
+      .select("id, fdadminid, fddate, fdstatus")
+      .eq("id", assignItemRow.fdid)
+      .maybeSingle<{ id: number; fdadminid: string | null; fddate: string | null; fdstatus: string | null }>();
+    if (parentErr) {
+      console.error(`[tb_forwarder_driver detail] failed`, { code: parentErr.code, message: parentErr.message, fdid: assignItemRow.fdid });
+    }
+    driverAssignment = {
+      fdistatus:  (assignItemRow.fdistatus ?? "").trim(),
+      batchId:    assignItemRow.fdid,
+      driverCode: parentRow?.fdadminid ?? null,
+      assignedAt: parentRow?.fddate ?? null,
+      batchOpen:  (parentRow?.fdstatus ?? "").trim() === "1",
+    };
+  }
+
   // Resolve cover image — shop-spawned rows may have alicdn URL, legacy path, or empty.
   const coverHref = r.fcover && r.fcover.trim() !== ""
     ? (r.fcover.startsWith("http") ? r.fcover : await resolveLegacyUrl(r.fcover, "cover"))
@@ -293,7 +328,8 @@ async function tryRenderTbForwarder(
     "1":"รอเข้าโกดังจีน","2":"ถึงโกดังจีนแล้ว","3":"กำลังส่งมาไทย","4":"ถึงไทยแล้ว",
     "5":"รอชำระเงิน","6":"เตรียมส่ง","7":"ส่งแล้ว","99":"พิเศษ",
   };
-  const MODE_LABEL: Record<string, string> = { "1": "🚛 ทางรถ", "2": "🚢 ทางเรือ", "3": "✈️ ทางอากาศ" };
+  // MODE_LABEL removed 2026-06-04 — transport mode now appears in the inline
+  // editor below (forwarder-inline-edits.tsx) where it's clickable/editable.
   const WAREHOUSE_LABEL: Record<string, string> = {
     "1":"แสง","2":"CTT","3":"MK","4":"MX","5":"JMF","6":"GOGO","7":"Cargo Center","8":"MOMO",
   };
@@ -480,14 +516,13 @@ async function tryRenderTbForwarder(
             )}
           </section>
 
-          {/* Routing */}
+          {/* Routing — read-only timeline + tracking + cabinet */}
           <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 text-sm">
             <h3 className="text-sm font-semibold text-muted mb-3">การจัดส่ง</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
               <LegacyKV label="วันที่สร้าง" value={r.fdate ? new Date(r.fdate).toLocaleString("th-TH") : "—"} />
               <LegacyKV label="วันที่ถึงไทย" value={r.fdatetothai ? new Date(r.fdatetothai).toLocaleDateString("th-TH") : "—"} />
               <LegacyKV label="โกดังจีน" value={WAREHOUSE_LABEL[r.fwarehousename] ?? r.fwarehousename} />
-              <LegacyKV label="ขนส่ง" value={MODE_LABEL[r.ftransporttype] ?? r.ftransporttype} />
               <LegacyKV
                 label="หมายเลขตู้"
                 value={r.fcabinetnumber ?? "—"}
@@ -497,10 +532,66 @@ async function tryRenderTbForwarder(
               <LegacyKV label="วันปิดตู้" value={r.fdatecontainerclose ? new Date(r.fdatecontainerclose).toLocaleDateString("th-TH") : "—"} />
               <LegacyKV label="Tracking CN" value={r.ftrackingchn ?? "—"} mono />
               <LegacyKV label="Tracking TH" value={r.ftrackingth ?? "—"} mono />
-              <LegacyKV label="ผู้ขนส่ง (Ship-by)" value={r.fshipby ?? "—"} />
               <LegacyKV label="จำนวน / น้ำหนัก / CBM" value={`${r.famount ?? 0} กล่อง · ${Number(r.fweight ?? 0).toFixed(2)} กก. · ${Number(r.fvolume ?? 0).toFixed(3)} ม³`} mono />
             </div>
           </section>
+
+          {/* Inline-edit row — the 5 quick-flip fields legacy PCS lets staff
+              edit directly on the detail page (mirrors /admin/service-orders/
+              [hNo] pattern · ภูม flag 2026-06-04). */}
+          <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4">
+            <h3 className="text-sm font-semibold text-muted mb-3 flex items-center gap-1.5">
+              <Pencil className="h-3.5 w-3.5" /> ตั้งค่ารายการ (แก้ไขได้)
+            </h3>
+            <ForwarderInlineEdits
+              fId={r.id}
+              ftransporttype={r.ftransporttype}
+              crate={r.crate}
+              fshipby={r.fshipby}
+              paymethod={r.paymethod}
+              fbilltoname={r.fbilltoname}
+              defaultBillTo={`${r.faddressname ?? ""} ${r.faddresslastname ?? ""}`.trim()}
+            />
+            <p className="text-[10px] text-muted mt-3 pt-2 border-t border-border/40">
+              สำหรับการเปลี่ยน <b>ที่อยู่จัดส่ง</b> · <b>แก้ไขขนาด/น้ำหนัก/รายการสินค้า</b> · อัปเดตสถานะ · ชำระเงิน ·
+              <Link href={`/admin/forwarders/${r.fidorco ?? String(r.id)}/edit`} className="text-primary-600 hover:underline ml-1">
+                ไปหน้าแก้ไข/อัปเดต →
+              </Link>
+            </p>
+          </section>
+
+          {/* Driver-assign collapsible — open by default ONLY when ready to dispatch
+              (fstatus='6' เตรียมส่ง). Moved from /edit/page.tsx 2026-06-04 per ภูม
+              UX flag: the rest of /edit's collapsibles were noise, but driver-assign
+              is the workflow gate at fstatus=6 — it belongs visible (collapsed) on
+              the detail page so staff don't have to bounce to /edit just for this. */}
+          <details
+            className="group rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden"
+            open={r.fstatus === "6"}
+          >
+            <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none hover:bg-surface-alt/40 list-none">
+              <ChevronDown className="h-4 w-4 text-muted transition-transform group-open:rotate-180 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-bold flex items-center gap-1.5">
+                  <Truck className="h-3.5 w-3.5" /> มอบหมายคนขับ
+                </h3>
+                <p className="text-xs text-muted mt-0.5 truncate">
+                  {r.fstatus === "6"
+                    ? "✅ พร้อมจัดส่ง — เลือกคนขับและเริ่ม"
+                    : "เปิดใช้งานเมื่อสถานะเป็น 'เตรียมส่ง' (fstatus=6)"}
+                </p>
+              </div>
+            </summary>
+            <div className="px-4 pt-1 pb-4 border-t border-border/40">
+              <TbForwarderDriverAssignPanel
+                fId={r.id}
+                fNo={String(r.id)}
+                fstatus={r.fstatus}
+                paydeposit={r.paydeposit ?? ""}
+                current={driverAssignment}
+              />
+            </div>
+          </details>
 
           {/* Product detail */}
           <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4">
@@ -619,14 +710,13 @@ async function tryRenderTbForwarder(
             <dl className="space-y-1.5">
               <Field label="แอดมินสร้าง" value={r.adminidcreator || "—"} />
               <Field label="แอดมินอัปเดต" value={r.adminidupdate || "—"} />
-              <Field label="วิธีชำระเงิน" value={r.paymethod === "1" ? "หักเงินในกระเป๋า" : r.paymethod || "—"} />
               {r.paydeposit && r.paydeposit !== "" && (
                 <Field label="เงินค่ามัดจำ" value={r.paydeposit} />
               )}
-              {r.fbilltoname && r.fbilltoname.trim() !== "" && (
-                <Field label="ผู้รับใบกำกับ" value={r.fbilltoname} />
-              )}
             </dl>
+            <p className="text-[10px] text-muted mt-3 pt-2 border-t border-border/40">
+              วิธีเก็บเงิน · ชื่อบนใบกำกับ แก้ไขได้ใน &quot;ตั้งค่ารายการ&quot; ด้านซ้าย
+            </p>
           </section>
 
           {/* Quick-jump links */}

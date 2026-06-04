@@ -1,42 +1,32 @@
 /**
- * /admin/forwarders/[fNo]/edit — UNIFIED EDIT HUB (2026-06-03 ภูม UX P0 v2).
+ * /admin/forwarders/[fNo]/edit — STATUS + PAYMENT focused (2026-06-04 ภูม UX P1).
  *
- * ── Why this exists (ภูม flag 2026-06-03):
- *   "ของเรามันดูเยอะไปหมดเลย" — the previous v1 of this page had 6 stacked
- *   ActionSection cards (Status · Payment · Driver · Edit · Bill-to · Dimensions)
- *   each ~150-200px tall = a 1200px+ scroll wall before staff could find
- *   what they were looking for. ภูม pointed at legacy PCS forwarder/update.php
- *   (รูปที่ 3 in the chat thread) as the right shape: ONE coherent page with
- *   the order data UPFRONT in a 2-col display + status pipeline + ONE primary
- *   action visible at first scroll + the rarely-used edit panels tucked into
- *   <details> disclosures so the page reads "info-first, action-second" like
- *   the legacy.
+ * ── Why this is small now (ภูม flag 2026-06-04):
+ *   "ในPCSภูมิไปดูไม่เห็นมีเลย มันดูเยอะไปหมดเลย" — the 4 collapsible
+ *   sections (มอบหมายคนขับ · แก้ไขที่อยู่/การขนส่ง/ราคา · ชื่อผู้รับใบกำกับ ·
+ *   ขนาด/น้ำหนัก) don't appear in the legacy PCS layout that ภูม referenced
+ *   for shop-orders (รูปที่ 1, /admin/service-orders/[hNo]) — those simple
+ *   field-edits are now inline-edit buttons on the detail page (see
+ *   forwarder-inline-edits.tsx). The collapsibles only added vertical
+ *   scroll noise to what should be a focused "update status + take payment"
+ *   page.
  *
- * ── Layout (matches legacy PCS forwarder/update.php — see
- *    D:\REALSHITDATAPCS\pcsc\public_html\member\pcs-admin\include\pages\forwarder\update.php):
- *   1. Breadcrumb + page-title strip
- *   2. PCS-style header card:
- *      LEFT (col-md-6): order# + tracking# + barcode
- *      RIGHT (col-md-6): status badge · last-update timestamp · print/receipt links
- *   3. 8-step pipeline timeline (status-based active/visited like legacy)
- *   4. 2-col READ-ONLY info display (matches legacy update.php L514-839):
- *      LEFT (col-md-6): refOrder badge · Sale · created-at · จาก (avatar+name) ·
- *        userid · email · phone · location · การตีลังไม้ · การเก็บเงิน · บริษัทขนส่ง ·
- *        ที่อยู่จัดส่ง · เลขพัสดุไทย
- *      RIGHT (col-md-6): เลขพัสดุจีน · รูปแบบขนส่ง · โกดังจีน · เลขที่ตู้ ·
- *        วันที่ปิดตู้ · จำนวน · การรวมกล่อง · ประเภทสินค้า · รายละเอียดสินค้า + cover
- *   5. PRIMARY ACTION (always-open): อัปเดตสถานะ + ตู้ + Tracking + หมายเหตุ
- *      (TbForwarderActionPanel — the most-used CS action)
- *   6. SECONDARY ACTIONS (each behind a <details> · collapsed by default):
- *      §A · 💰 ชำระเงิน (TbForwarderPaymentPanel — only when isPayable)
- *      §B · 🚛 มอบหมายคนขับ (TbForwarderDriverAssignPanel)
- *      §C · ✏️ แก้ไขที่อยู่/การขนส่ง/ราคา (TbForwarderEditPanel)
- *      §D · 📄 ชื่อผู้รับใบกำกับ (BillToOverridePanel)
- *      §E · 📦 ขนาด/น้ำหนัก + รายการสินค้า (AdminForwarderEditForm)
+ * ── Layout (kept minimal · the headline staff workflow):
+ *   1. Breadcrumb + PCS-style header (#fNo · status · source · last-update + action links)
+ *   2. 8-step pipeline timeline
+ *   3. 2-col read-only info display (mirrors legacy update.php · matches detail page)
+ *   4. Items table
+ *   5. PRIMARY ACTION (always-open): TbForwarderActionPanel
+ *      — อัปเดตสถานะ + ตู้ + Tracking + หมายเหตุ (the most-used CS action)
+ *   6. PAYMENT (when isPayable): TbForwarderPaymentPanel
+ *      — หักกระเป๋า / mark paid / etc.
  *   7. Bottom nav (back-to-detail + back-to-list)
  *
- * All 6 action panels are kept verbatim — their server-actions are
- * battle-tested. Only the page composition changed.
+ * ── Removed in this pass (collapsibles cleaned per ภูม flag):
+ *   - TbForwarderDriverAssignPanel  → moved to detail page (collapsible · auto-open at fstatus=6)
+ *   - TbForwarderEditPanel          → 4 quick flips now inline on detail; address re-pick + cost-adjust kept in tb-edit-panel.tsx (orphan · can re-mount when needed)
+ *   - BillToOverridePanel           → inline on detail (forwarder-inline-edits.tsx)
+ *   - AdminForwarderEditForm        → not currently rendered here (orphan · edit-form.tsx kept for future dimensions UX)
  *
  * Legacy source columns mapped (per legacy update.php / detail.php):
  *   - refOrer source tag (L358-360 update.php) ← adminidcreator/reforder
@@ -62,17 +52,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import {
   ArrowLeft, Package, Warehouse, Truck, Plane, CheckCircle2, Clock,
-  Pencil, ExternalLink, Eye, ChevronDown,
+  Pencil, ExternalLink, Eye,
 } from "lucide-react";
 import Image from "next/image";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 
-import { AdminForwarderEditForm, type EditItemRow } from "./edit-form";
 import { TbForwarderActionPanel } from "../tb-action-panel";
 import { TbForwarderPaymentPanel } from "../tb-payment-panel";
-import { TbForwarderEditPanel, type SavedAddressOption } from "../tb-edit-panel";
-import { TbForwarderDriverAssignPanel, type DriverAssignmentState } from "../tb-driver-assign-panel";
-import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
 import { ForwarderItemsTable } from "../forwarder-items-table";
 
 export const dynamic = "force-dynamic";
@@ -136,22 +122,6 @@ type RawForwarderRow = {
   adminidcreator:    string | null;
   reforder:          string | null;
   tax_doc_pref:      string | null;
-};
-
-type RawItemRow = {
-  id:                       number;
-  productname:              string;
-  producttracking:          string;
-  productqty:               number;
-  productwidth:             number | string;
-  productlength:            number | string;
-  productheight:            number | string;
-  productweightperitem:     number | string;
-  productweightall:         number | string;
-  productcbmperitem:        number | string;
-  productcbmall:            number | string;
-  chinawoodencratefee:      number | string;
-  chinawoodencratefeetype:  string;
 };
 
 export default async function AdminForwarderEditPage({
@@ -223,86 +193,10 @@ export default async function AdminForwarderEditPage({
   const walletBalance = Number(walletRow?.wallettotal ?? 0);
   const isPayable = r.fstatus === "5" || (r.fcredit ?? "").trim() === "1";
 
-  // Customer's saved address book for re-pick (faithful update_fAddress).
-  const { data: addrRows, error: addrErr } = await admin
-    .from("tb_address")
-    .select("addressid, addressname, addresslastname, addressno, addressprovince")
-    .eq("userid", r.userid)
-    .eq("addressstatus", "1")
-    .order("addressid", { ascending: false })
-    .limit(50);
-  if (addrErr) {
-    console.error(`[tb_address edit] failed`, { code: addrErr.code, message: addrErr.message, userid: r.userid });
-  }
-  const savedAddresses: SavedAddressOption[] = ((addrRows ?? []) as Array<{
-    addressid: number; addressname: string | null; addresslastname: string | null;
-    addressno: string | null; addressprovince: string | null;
-  }>).map((a) => ({
-    addressId: a.addressid,
-    label: [
-      `${a.addressname ?? ""} ${a.addresslastname ?? ""}`.trim(),
-      (a.addressno ?? "").slice(0, 30),
-      a.addressprovince ?? "",
-    ].filter(Boolean).join(" · ") || `ที่อยู่ #${a.addressid}`,
-  }));
-
-  // Latest driver-assignment for this forwarder (two reads · no FK).
-  let driverAssignment: DriverAssignmentState | null = null;
-  const { data: assignItemRow, error: assignItemErr } = await admin
-    .from("tb_forwarder_driver_item")
-    .select("id, fdid, fdistatus")
-    .eq("fid", r.id)
-    .order("id", { ascending: false })
-    .limit(1)
-    .maybeSingle<{ id: number; fdid: number; fdistatus: string | null }>();
-  if (assignItemErr) {
-    console.error(`[tb_forwarder_driver_item edit] failed`, { code: assignItemErr.code, message: assignItemErr.message, fid: r.id });
-  }
-  if (assignItemRow) {
-    const { data: parentRow, error: parentErr } = await admin
-      .from("tb_forwarder_driver")
-      .select("id, fdadminid, fddate, fdstatus")
-      .eq("id", assignItemRow.fdid)
-      .maybeSingle<{ id: number; fdadminid: string | null; fddate: string | null; fdstatus: string | null }>();
-    if (parentErr) {
-      console.error(`[tb_forwarder_driver edit] failed`, { code: parentErr.code, message: parentErr.message, fdid: assignItemRow.fdid });
-    }
-    driverAssignment = {
-      fdistatus:  (assignItemRow.fdistatus ?? "").trim(),
-      batchId:    assignItemRow.fdid,
-      driverCode: parentRow?.fdadminid ?? null,
-      assignedAt: parentRow?.fddate ?? null,
-      batchOpen:  (parentRow?.fdstatus ?? "").trim() === "1",
-    };
-  }
-
-  // ─── Load tb_forwarder_item rows for the per-item crate dimensions form ──
-  const { data: itemRowsRaw, error: itemRowsRawErr } = await admin
-    .from("tb_forwarder_item")
-    .select(
-      "id, productname, producttracking, productqty, productwidth, productlength, " +
-      "productheight, productweightperitem, productweightall, productcbmperitem, " +
-      "productcbmall, chinawoodencratefee, chinawoodencratefeetype",
-    )
-    .eq("fid", r.id)
-    .order("id", { ascending: true })
-    .limit(200);
-  if (itemRowsRawErr) {
-    console.error(`[tb_forwarder_item edit] failed`, { code: itemRowsRawErr.code, message: itemRowsRawErr.message });
-  }
-
-  const items: EditItemRow[] = ((itemRowsRaw ?? []) as unknown as RawItemRow[]).map((it) => ({
-    itemId:           it.id,
-    name:             it.productname,
-    tracking:         it.producttracking,
-    qty:              Number(it.productqty),
-    weightPerItem:    Number(it.productweightperitem),
-    weightAll:        Number(it.productweightall),
-    cbmPerItem:       Number(it.productcbmperitem),
-    cbmAll:           Number(it.productcbmall),
-    crateFee:         Number(it.chinawoodencratefee),
-    crateType:        (it.chinawoodencratefeetype === "2" ? "2" : "1") as "1" | "2",
-  }));
+  // 2026-06-04 ภูม UX P1 cleanup: removed the address-book read, the driver-
+  // assignment read, and the tb_forwarder_item read — none of those panels
+  // mount here anymore (collapsibles dropped per ภูม flag). The 4 quick-flip
+  // fields are now inline on the detail page (forwarder-inline-edits.tsx).
 
   // ─── Resolve cover image + customer avatar via legacy URL resolver ───
   const coverHref = r.fcover && r.fcover.trim() !== ""
@@ -337,13 +231,6 @@ export default async function AdminForwarderEditPage({
   const customerName = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || r.userid;
   const slugForLink = r.fidorco ?? String(r.id);
 
-  const isPcsPickup = (r.fshipby ?? "").trim() === "PCS";
-  const transportTypeForEdit = (["1", "2", "3"].includes(r.ftransporttype) ? r.ftransporttype : "1") as "1" | "2" | "3";
-  const amountCountForEdit = ((r.famountcount ?? "").trim() === "1" ? "1" : "2") as "1" | "2";
-
-  const priceUpdate = Number(r.fpriceupdate ?? 0);
-  const otherCost = Number(r.priceother ?? 0);
-  const discount = Number(r.fdiscount ?? 0);
   const currentStatusInt = parseInt(r.fstatus, 10);
 
   // Compose the full delivery address (matches legacy fullAddress L633).
@@ -729,92 +616,39 @@ export default async function AdminForwarderEditPage({
         </div>
       </section>
 
-      {/* ── 6. SECONDARY ACTIONS — collapsible <details> ── */}
+      {/* ── 6. PAYMENT (when isPayable — fstatus=5 รอชำระ or fcredit=1) ── */}
       {isPayable && (
-        <CollapsibleSection
-          summary={`💰 ชำระเงิน (หักกระเป๋า) · ฿${Number(r.ftotalprice ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}
-          subtitle={`ยอดในกระเป๋า ฿${walletBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}
-          tone="primary"
-          openByDefault
-        >
-          <TbForwarderPaymentPanel
-            fId={r.id}
-            userId={r.userid}
-            customerName={`คุณ${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim()}
-            amountEstimate={Number(r.ftotalprice ?? 0)}
-            walletBalance={walletBalance}
-            isCredit={(r.fcredit ?? "").trim() === "1"}
-          />
-        </CollapsibleSection>
+        <section className="rounded-2xl border-2 border-amber-300 bg-amber-50/40 dark:bg-amber-950/20 shadow-md overflow-hidden">
+          <header className="bg-amber-500 text-white px-4 py-2.5 flex items-center gap-2">
+            <h2 className="text-sm font-bold">
+              💰 ชำระเงิน · ฿{Number(r.ftotalprice ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+            </h2>
+            <span className="ml-auto text-[10px] bg-white/20 rounded px-1.5 py-0.5">
+              ยอดในกระเป๋า ฿{walletBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+            </span>
+          </header>
+          <div className="p-4">
+            <TbForwarderPaymentPanel
+              fId={r.id}
+              userId={r.userid}
+              customerName={`คุณ${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim()}
+              amountEstimate={Number(r.ftotalprice ?? 0)}
+              walletBalance={walletBalance}
+              isCredit={(r.fcredit ?? "").trim() === "1"}
+            />
+          </div>
+        </section>
       )}
 
-      <CollapsibleSection
-        summary="🚛 มอบหมายคนขับ"
-        subtitle={r.fstatus === "6" ? "✅ พร้อมจัดส่ง" : "เปิดใช้งานเมื่อสถานะเป็น 'เตรียมส่ง'"}
-        openByDefault={r.fstatus === "6"}
-      >
-        <TbForwarderDriverAssignPanel
-          fId={r.id}
-          fNo={String(r.id)}
-          fstatus={r.fstatus}
-          paydeposit={r.paydeposit ?? ""}
-          current={driverAssignment}
-        />
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        summary="✏️ แก้ไขที่อยู่ · การขนส่ง · ราคา"
-        subtitle="เปลี่ยนที่อยู่จัดส่ง · สลับโหมดขนส่ง · ปรับยอดเงินด้วยตนเอง"
-      >
-        <TbForwarderEditPanel
-          fId={r.id}
-          isPcs={isPcsPickup}
-          addresses={savedAddresses}
-          currentTransportType={transportTypeForEdit}
-          currentShipBy={(r.fshipby ?? "").trim()}
-          currentAmountCount={amountCountForEdit}
-          currentPriceUpdate={priceUpdate}
-          currentPriceOther={otherCost}
-          currentDiscount={discount}
-          currentTaxDocPref={(r.tax_doc_pref as string | null) ?? null}
-        />
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        summary="📄 ชื่อผู้รับใบกำกับ (Bill-to)"
-        subtitle={r.fbilltoname && r.fbilltoname.trim() !== "" ? `กำหนดเอง: ${r.fbilltoname}` : "ใช้ชื่อผู้รับ default"}
-      >
-        <BillToOverridePanel
-          kind="forwarder"
-          fNo={String(r.id)}
-          defaultName={`${r.faddressname ?? ""} ${r.faddresslastname ?? ""}`.trim()}
-          current={r.fbilltoname}
-        />
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        summary="📦 ขนาด · น้ำหนัก · CBM · รายการสินค้า"
-        subtitle="ใส่ข้อมูลหลังสินค้าเข้าโกดังจีน · แก้ไขรายการ + ค่าตีลังไม้ต่อรายการ"
-      >
-        <AdminForwarderEditForm
-          fNo={r.fidorco ?? String(r.id)}
-          idNumeric={r.id}
-          weightInit={Number(r.fweight ?? 0)}
-          widthInit={Number(r.fwidth ?? 0)}
-          lengthInit={Number(r.flength ?? 0)}
-          heightInit={Number(r.fheight ?? 0)}
-          volumeInit={Number(r.fvolume ?? 0)}
-          productTypeInit={(r.fproductstype === "1" || r.fproductstype === "2" ||
-                            r.fproductstype === "3" || r.fproductstype === "4")
-                             ? (r.fproductstype as "1" | "2" | "3" | "4")
-                             : "1"}
-          refPriceInit={(r.frefprice === "2" ? "2" : "1") as "1" | "2"}
-          noteInit={r.fnote ?? ""}
-          itemsInit={items}
-        />
-      </CollapsibleSection>
-
-      {/* ── 7. Footer nav ── */}
+      {/* ── 7. Footer nav + hint to detail page for quick-field edits ── */}
+      <div className="rounded-lg border border-border bg-surface-alt/40 p-3 text-xs text-muted">
+        <p>
+          แก้ไข <b>รูปแบบขนส่ง</b> · <b>การตีลังไม้</b> · <b>บริษัทขนส่ง</b> · <b>การเก็บเงิน</b> · <b>ชื่อบนใบกำกับ</b> ได้ที่
+          <Link href={`/admin/forwarders/${slugForLink}`} className="text-primary-600 hover:underline ml-1">
+            หน้ารายละเอียด →
+          </Link>
+        </p>
+      </div>
       <div className="flex gap-2 flex-wrap pt-2 pb-4">
         <Link
           href={`/admin/forwarders/${slugForLink}`}
@@ -832,7 +666,7 @@ export default async function AdminForwarderEditPage({
 
       {/* Hidden a11y note for ภูม browser-verify */}
       <p className="sr-only">
-        v2 layout (PCS-style): header + pipeline + 2-col info + 1 primary action + 5 collapsibles.
+        Minimal /edit layout (ภูม UX P1 2026-06-04): header + pipeline + 2-col info + items table + status panel + payment.
         Status: {STATUS_LABEL[r.fstatus]}. Last update: {r.fdateadminstatus ?? "—"}.
       </p>
     </main>
@@ -849,47 +683,5 @@ function InfoLine({ label, children }: { label: string; children: React.ReactNod
       <span className="text-muted text-xs flex-shrink-0">{label}:</span>
       <span className="flex-1 break-words">{children}</span>
     </div>
-  );
-}
-
-/**
- * CollapsibleSection — uses native <details> for zero-JS collapsing.
- *
- * Mirrors the PCS pattern of "show all data, action visible but compact"
- * without forcing the user to scroll through 6 full forms before finding
- * what they need.
- */
-function CollapsibleSection({
-  summary,
-  subtitle,
-  tone = "neutral",
-  openByDefault = false,
-  children,
-}: {
-  summary: string;
-  subtitle?: string;
-  tone?: "neutral" | "primary";
-  openByDefault?: boolean;
-  children: React.ReactNode;
-}) {
-  const wrapperCls = tone === "primary"
-    ? "border-amber-300 bg-amber-50/40 dark:bg-amber-950/20"
-    : "border-border bg-white dark:bg-surface";
-  return (
-    <details
-      className={`group rounded-2xl border shadow-sm overflow-hidden ${wrapperCls}`}
-      open={openByDefault}
-    >
-      <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none hover:bg-surface-alt/40 list-none">
-        <ChevronDown className="h-4 w-4 text-muted transition-transform group-open:rotate-180 flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <h2 className="text-sm font-bold">{summary}</h2>
-          {subtitle && <p className="text-xs text-muted mt-0.5 truncate">{subtitle}</p>}
-        </div>
-      </summary>
-      <div className="px-4 pt-1 pb-4 border-t border-border/40">
-        {children}
-      </div>
-    </details>
   );
 }
