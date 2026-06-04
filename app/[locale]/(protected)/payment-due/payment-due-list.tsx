@@ -103,8 +103,13 @@ function numberLimit(n: number): string {
 
 export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
   const [tab, setTab] = useState<TabKey>("all");
-  // The import item whose in-place pay modal (QR + slip) is open, if any.
-  const [payItem, setPayItem] = useState<PaymentDueItem | null>(null);
+  // Unified pay modal — driven by payRows so ONE instance serves both a single
+  // card's "ชำระเงิน" and the bulk select-all bar (ForwarderPayModal takes an array).
+  const [payRows, setPayRows] = useState<ForwarderRow[]>([]);
+  const [payJuristic, setPayJuristic] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
+  // Bulk-select state — keyed by item.key (only import items are bulk-payable).
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const counts: Record<TabKey, number> = {
     all: items.length,
@@ -119,6 +124,49 @@ export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
   const filtered =
     tab === "all" ? items : items.filter((it) => it.service === tab);
   const activeLabel = TABS.find((t) => t.key === tab)?.label ?? "";
+
+  // ── Bulk select + pay (mirrors the /service-import pay-bar). Only import
+  //    items (with a forwarder row) are bulk-payable through the QR modal;
+  //    order/payment items keep their own per-card CTA.
+  const eligible = filtered.filter(
+    (it) => it.service === "import" && !!it.forwarderRow,
+  );
+  const eligibleKeys = eligible.map((it) => it.key);
+  const selectedItems = eligible.filter((it) => selected.has(it.key));
+  const selectedCount = selectedItems.length;
+  const allChecked =
+    eligibleKeys.length > 0 && eligibleKeys.every((k) => selected.has(k));
+
+  function toggleOne(key: string, next: boolean) {
+    setSelected((prev) => {
+      const ns = new Set(prev);
+      if (next) ns.add(key);
+      else ns.delete(key);
+      return ns;
+    });
+  }
+  function toggleAll(next: boolean) {
+    setSelected((prev) => {
+      const ns = new Set(prev);
+      for (const k of eligibleKeys) {
+        if (next) ns.add(k);
+        else ns.delete(k);
+      }
+      return ns;
+    });
+  }
+  function openPay(rows: ForwarderRow[], juristic: boolean) {
+    if (rows.length === 0) return;
+    setPayRows(rows);
+    setPayJuristic(juristic);
+    setPayOpen(true);
+  }
+  function handleBulkPay() {
+    const rows = selectedItems
+      .map((it) => it.forwarderRow)
+      .filter((r): r is ForwarderRow => !!r);
+    openPay(rows, selectedItems.some((it) => !!it.isJuristic));
+  }
 
   return (
     <>
@@ -193,11 +241,58 @@ export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
             </div>
           )
         ) : (
-          <div className="space-y-2.5">
-            {filtered.map((it) => (
-              <PaymentDueCard key={it.key} item={it} onPay={setPayItem} />
-            ))}
-          </div>
+          <>
+            {/* Select-all + bulk-pay bar — shown when there are import items in
+                view (the bulk-payable service). Mirrors the import pay-bar. */}
+            {eligibleKeys.length > 0 && (
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface-alt/40 px-3 py-2.5">
+                <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={allChecked}
+                    onChange={(e) => toggleAll(e.target.checked)}
+                    className="w-4 h-4 rounded border-border accent-primary-600 cursor-pointer"
+                  />
+                  <span className="text-[12.5px] font-bold text-foreground">
+                    เลือกทั้งหมด
+                  </span>
+                  {selectedCount > 0 && (
+                    <span className="text-[11px] text-muted">
+                      · เลือก {selectedCount} รายการ
+                    </span>
+                  )}
+                </label>
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    disabled={selectedCount === 0}
+                    onClick={handleBulkPay}
+                    className="inline-flex items-center gap-1 rounded-full bg-primary-600 text-white text-[12.5px] font-bold px-4 py-2 shadow-md shadow-primary-600/25 hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    ชำระเงิน{selectedCount > 0 ? ` ${selectedCount} รายการ` : ""}
+                    <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.4} />
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className="space-y-2.5">
+              {filtered.map((it) => (
+                <PaymentDueCard
+                  key={it.key}
+                  item={it}
+                  selectable={it.service === "import" && !!it.forwarderRow}
+                  checked={selected.has(it.key)}
+                  onToggle={toggleOne}
+                  onPay={(item) =>
+                    openPay(
+                      item.forwarderRow ? [item.forwarderRow] : [],
+                      !!item.isJuristic,
+                    )
+                  }
+                />
+              ))}
+            </div>
+          </>
         )}
       </div>
     </section>
@@ -206,10 +301,10 @@ export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
         /service-import pay modal so import items pay right here, no navigation.
         Renders hidden until an import card is tapped. */}
     <ForwarderPayModal
-      rows={payItem?.forwarderRow ? [payItem.forwarderRow] : []}
-      isJuristic={!!payItem?.isJuristic}
-      open={!!payItem?.forwarderRow}
-      onClose={() => setPayItem(null)}
+      rows={payRows}
+      isJuristic={payJuristic}
+      open={payOpen}
+      onClose={() => setPayOpen(false)}
     />
     </>
   );
@@ -218,9 +313,15 @@ export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
 function PaymentDueCard({
   item,
   onPay,
+  selectable = false,
+  checked = false,
+  onToggle,
 }: {
   item: PaymentDueItem;
   onPay?: (item: PaymentDueItem) => void;
+  selectable?: boolean;
+  checked?: boolean;
+  onToggle?: (key: string, next: boolean) => void;
 }) {
   const meta = SERVICE_META[item.service];
   const Icon = meta.Icon;
@@ -231,8 +332,23 @@ function PaymentDueCard({
   const showImage = !!item.imageUrl && !imgFailed;
 
   return (
-    <article className="relative rounded-2xl bg-white dark:bg-surface border border-border shadow-[0_4px_14px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_22px_rgba(0,0,0,0.07)] transition-shadow overflow-hidden">
-      <div className="grid grid-cols-[52px_1fr] md:grid-cols-[60px_1fr_auto] gap-3 md:gap-4 p-3">
+    <article
+      className={`relative rounded-2xl bg-white dark:bg-surface border shadow-[0_4px_14px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_22px_rgba(0,0,0,0.07)] transition-shadow overflow-hidden ${
+        checked ? "border-primary-300 ring-1 ring-primary-200" : "border-border"
+      }`}
+    >
+      <div className="flex items-stretch">
+        {selectable && (
+          <label className="flex items-center pl-3 cursor-pointer shrink-0">
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={(e) => onToggle?.(item.key, e.target.checked)}
+              className="w-4 h-4 rounded border-border accent-primary-600 cursor-pointer"
+            />
+          </label>
+        )}
+      <div className="grid grid-cols-[52px_1fr] md:grid-cols-[60px_1fr_auto] gap-3 md:gap-4 p-3 flex-1 min-w-0">
         {/* Real item cover (order hcover / forwarder fcover) — falls back to
             the service icon when there's no image or it fails to load. */}
         {showImage ? (
@@ -319,6 +435,7 @@ function PaymentDueCard({
             </Link>
           )}
         </div>
+      </div>
       </div>
     </article>
   );

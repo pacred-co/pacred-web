@@ -284,6 +284,67 @@ export function ForwarderPayModal({
               </div>
             ) : (
               <>
+                {/* QR + amount pinned to the TOP so the customer can scan
+                    immediately (owner 2026-06-04: "เอา qrcode ขึ้นบนสุด ทุกหน้า").
+                    Shared modal — applies on /service-import + /payment-due. */}
+                {/* Pay block — ยอดที่ต้องชำระจริง */}
+                <div className="rounded-xl bg-gradient-to-br from-red-600 to-red-700 text-white px-4 py-3 shadow-md shadow-red-600/25">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-xs md:text-sm font-bold">
+                      ยอดเงินที่ต้องชำระจริง
+                    </span>
+                    <span className="text-2xl md:text-3xl font-black tabular-nums totalPriceAll">
+                      {numberFormat2(bill.payAmount)}{" "}
+                      <span className="text-sm font-normal opacity-90">บาท</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* QR + PromptPay */}
+                <div className="rounded-xl bg-white border border-border px-4 py-4 text-center">
+                  <div
+                    id="qrcode"
+                    className="mx-auto"
+                    style={{ width: 250, height: 250 }}
+                  >
+                    {qrDataUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={qrDataUrl}
+                        width={250}
+                        height={250}
+                        alt="PromptPay QR"
+                        className="rounded-lg"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-sm text-muted px-4 text-center">
+                        {qrError ?? "กำลังสร้าง QR..."}
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-2 text-base font-bold text-red-600">
+                    ยอดเงิน:{" "}
+                    <span id="amount-show" className="tabular-nums">
+                      {numberFormat2(bill.payAmount)} บาท
+                    </span>
+                  </div>
+                  {promptPayId && (
+                    <div className="mt-2 flex items-center justify-center gap-2 flex-wrap">
+                      <span className="text-sm text-muted">พร้อมเพย์</span>
+                      <span id="text-pp" className="font-mono text-lg font-bold text-foreground tabular-nums">
+                        {formatPromptPayId(promptPayId)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => copyText(promptPayId)}
+                        className="inline-flex items-center rounded-full bg-surface-alt hover:bg-border text-foreground text-xs font-bold px-2.5 py-1 transition-colors"
+                      >
+                        📋 คัดลอก
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 {/* Header — "มี N รายการ" */}
                 <div className="flex items-center justify-between">
                   <h5 className="text-sm md:text-base font-bold text-red-600">
@@ -391,64 +452,6 @@ export function ForwarderPayModal({
                       value={numberFormat2(bill.totalNiTi)}
                       danger
                     />
-                  )}
-                </div>
-
-                {/* Pay block — ยอดที่ต้องชำระจริง + QR */}
-                <div className="rounded-xl bg-gradient-to-br from-red-600 to-red-700 text-white px-4 py-3 shadow-md shadow-red-600/25">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-xs md:text-sm font-bold">
-                      ยอดเงินที่ต้องชำระจริง
-                    </span>
-                    <span className="text-2xl md:text-3xl font-black tabular-nums totalPriceAll">
-                      {numberFormat2(bill.payAmount)}{" "}
-                      <span className="text-sm font-normal opacity-90">บาท</span>
-                    </span>
-                  </div>
-                </div>
-
-                {/* QR + PromptPay */}
-                <div className="rounded-xl bg-white border border-border px-4 py-4 text-center">
-                  <div
-                    id="qrcode"
-                    className="mx-auto"
-                    style={{ width: 250, height: 250 }}
-                  >
-                    {qrDataUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={qrDataUrl}
-                        width={250}
-                        height={250}
-                        alt="PromptPay QR"
-                        className="rounded-lg"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-sm text-muted px-4 text-center">
-                        {qrError ?? "กำลังสร้าง QR..."}
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-2 text-base font-bold text-red-600">
-                    ยอดเงิน:{" "}
-                    <span id="amount-show" className="tabular-nums">
-                      {numberFormat2(bill.payAmount)} บาท
-                    </span>
-                  </div>
-                  {promptPayId && (
-                    <div className="mt-2 flex items-center justify-center gap-2 flex-wrap">
-                      <span className="text-sm text-muted">พร้อมเพย์</span>
-                      <span id="text-pp" className="font-mono text-lg font-bold text-foreground tabular-nums">
-                        {formatPromptPayId(promptPayId)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => copyText(promptPayId)}
-                        className="inline-flex items-center rounded-full bg-surface-alt hover:bg-border text-foreground text-xs font-bold px-2.5 py-1 transition-colors"
-                      >
-                        📋 คัดลอก
-                      </button>
-                    </div>
                   )}
                 </div>
 

@@ -431,7 +431,7 @@ export function ForwarderRowView({
   return (
     <article className="rounded-2xl bg-white dark:bg-surface border border-border shadow-sm overflow-hidden">
       {/* Header — checkbox · ID + promo · status · date */}
-      <header className="flex items-start justify-between gap-2 px-3 py-2 border-b border-border bg-surface-alt/40">
+      <header className="flex items-start justify-between gap-2 px-3 py-2 md:px-4 md:py-3 border-b border-border bg-surface-alt/40">
         <div className="flex items-center gap-2 min-w-0">
           {selectable && (
             <input
@@ -445,7 +445,7 @@ export function ForwarderRowView({
           )}
           <a
             href={`/service-import/${row.id}`}
-            className="font-mono text-sm md:text-base font-bold text-red-600 hover:underline"
+            className="font-mono text-sm md:text-lg font-bold text-red-600 hover:underline"
           >
             #{row.id}
           </a>
@@ -453,7 +453,7 @@ export function ForwarderRowView({
         </div>
         <div className="text-right shrink-0">
           <StatusForwarderAll2 fStatus={row.fstatus} fStatusDriver={fStatusDriver} />
-          <div className="mt-0.5 text-[10px] text-muted notranslate">
+          <div className="mt-0.5 text-[10px] md:text-xs text-muted notranslate">
             {dmy(row.fdate)} · {hms(row.fdate)}
           </div>
         </div>
@@ -461,7 +461,7 @@ export function ForwarderRowView({
 
       {/* Body — thumbnail + compact details (track + รายละเอียด on one row,
           a small muted meta row below — clean, not sparse). */}
-      <div className="flex gap-2.5 p-2.5 md:gap-3 md:p-3">
+      <div className="flex gap-2.5 p-2.5 md:gap-4 md:p-4">
         {/* Thumbnail (image-popup-vertical-fit class kept so legacy
             magnific-popup vendor JS binds to it on hydration). */}
         <a
@@ -470,7 +470,7 @@ export function ForwarderRowView({
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            className="h-16 w-16 md:h-20 md:w-20 object-cover rounded-lg border border-border bg-surface-alt"
+            className="h-16 w-16 md:h-28 md:w-28 object-cover rounded-lg border border-border bg-surface-alt"
             src={convertIMGCHN(row.fcover, "_80x80.jpg")}
             width={80}
             height={80}
@@ -479,7 +479,7 @@ export function ForwarderRowView({
         </a>
 
         {/* Details — condensed */}
-        <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 text-xs md:text-sm">
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 md:gap-1.5 text-xs md:text-base">
           {/* Track + รายละเอียด — one row, truncated */}
           <div className="flex min-w-0 items-baseline gap-1.5">
             {trackingChn && (
@@ -504,7 +504,7 @@ export function ForwarderRowView({
           {((row.ftrackingth && row.ftrackingth !== "-") ||
             (!grouped && row.fcabinetnumber) ||
             fDateToThaiValid) && (
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] md:text-[13px] text-muted">
               {row.ftrackingth && row.ftrackingth !== "-" && (
                 <span className="font-mono">🇹🇭 {row.ftrackingth}</span>
               )}
@@ -556,11 +556,11 @@ export function ForwarderRowView({
       )}
 
       {/* Footer — meta · price · action buttons */}
-      <footer className="border-t border-border bg-surface-alt/30 px-3 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <footer className="border-t border-border bg-surface-alt/30 px-3 py-2 md:px-4 md:py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         {/* Left — meta + price */}
         <div className="flex items-center gap-3 flex-wrap">
           {/* Transport + amount */}
-          <div className="text-[11px] text-muted">
+          <div className="text-[11px] md:text-[13px] text-muted">
             {nameTransportType(row.ftransporttype)}
             {row.famount > 0 && (
               <span className="ml-1">· {row.famount} กล่อง</span>
@@ -575,8 +575,8 @@ export function ForwarderRowView({
           {/* Net price — only when > 0 */}
           {totalPriceNet > 0 && (
             <div className="leading-none">
-              <span className="text-[10px] text-muted uppercase tracking-wide">รวม</span>{" "}
-              <span className="text-base md:text-lg font-bold text-red-600 notranslate">
+              <span className="text-[10px] md:text-xs text-muted uppercase tracking-wide">รวม</span>{" "}
+              <span className="text-base md:text-xl font-bold text-red-600 notranslate">
                 {numberFormat2(totalPriceNet)} บ.
               </span>
             </div>
@@ -593,7 +593,7 @@ export function ForwarderRowView({
           {/* View details */}
           <a
             href={`/service-import/${row.id}`}
-            className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-300 px-3 py-1.5 text-xs font-bold hover:bg-emerald-100 active:scale-[0.98] transition-all"
+            className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-300 px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm font-bold hover:bg-emerald-100 active:scale-[0.98] transition-all"
           >
             ดูรายละเอียด
           </a>
@@ -601,7 +601,7 @@ export function ForwarderRowView({
           {(row.fstatus === "5" || row.fcredit === "1") && (
             <a
               href={`/service-import/${row.id}?pay=true`}
-              className="inline-flex items-center gap-1 rounded-full bg-red-600 text-white px-3 py-1.5 text-xs font-bold hover:bg-red-700 active:scale-[0.98] transition-all shadow-sm"
+              className="inline-flex items-center gap-1 rounded-full bg-red-600 text-white px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm font-bold hover:bg-red-700 active:scale-[0.98] transition-all shadow-sm"
             >
               ✓ ชำระเงิน
             </a>
