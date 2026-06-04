@@ -212,7 +212,7 @@ export async function readActiveImpersonation(
     console.error(`[admins list] failed`, { code: rolesErr.code, message: rolesErr.message });
   }
 
-  const roleSet = new Set(((roles ?? []) as AdminRoleRow[]).map((r) => r.role));
+  const roleSet = new Set(((roles ?? []) as unknown as AdminRoleRow[]).map((r) => r.role));
   const stillEligible = roleSet.has("super") || roleSet.has("ops");
   if (!stillEligible) {
     await admin

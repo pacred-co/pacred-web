@@ -6,6 +6,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import { CustomersTable, PendingJuristicReviews, type CustomerTableRow, type JuristicBundle } from "./customers-table";
 
 // P0-21 (ADR-0021 corporate-SOT): the inline juristic review reads the LEGACY
@@ -162,7 +164,7 @@ const GROUP_CFG: Record<string, { label: string; col?: string }> = {
 // tb_corporate docs use fixed labels (หนังสือรับรองบริษัท / ภ.พ.20) resolved in
 // resolveLegacyCorpDocs above.
 
-export default async function AdminCustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; type?: string; group?: string; adminidsale?: string }> }) {
+export default async function AdminCustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; type?: string; group?: string; adminidsale?: string; page?: string }> }) {
   // W-1 (gap-admin H-1/H-7): page-level role gate. Lists every
   // customer's member_code/name/phone/email + wallet balances via
   // createAdminClient (RLS-bypass) — a PDPA/PII surface. ops + sales +
@@ -185,15 +187,21 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
 
   const admin = createAdminClient();
 
+  // PERF (2026-06-03): server-side pagination — fetch ONE page (50 rows) via
+  // .range() + an exact count for the pager, instead of pulling 200 rows + all
+  // their joins/doc-resolution every render. ?page=N drives the window.
+  const page = parsePage(sp.page);
+  const { from, to } = pageRange(page);
+
   // D1 Wave-2: read legacy tb_users (member-code identity = `userID`).
   let q = admin.from("tb_users")
     .select(`
       userID, userName, userLastName, userCompany,
       userTel, userEmail, userActive, userStatus, adminIDSale, userRegistered,
       coID, userLineID, userFacebook, userBirthday
-    `)
+    `, { count: "exact" })
     .order("userRegistered", { ascending: false })
-    .limit(200);
+    .range(from, to);
 
   // `type` filter — userCompany '1' = นิติบุคคล (juristic), else บุคคล.
   if (sp.type === "personal")  q = q.neq("userCompany", "1");
@@ -216,7 +224,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
     q = q.or(`userID.ilike.%${term}%,userTel.ilike.%${term}%,userName.ilike.%${term}%,userLastName.ilike.%${term}%`);
   }
 
-  const { data, error } = await q;
+  const { data, error, count: totalCustomers } = await q;
   if (error) {
     console.error(`[tb_users list] failed`, { code: error.code, message: error.message });
   }
@@ -275,7 +283,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
     if (addressesErr) {
       console.error(`[tb_address list] failed`, { code: addressesErr.code, message: addressesErr.message });
     }
-    for (const a of (addresses ?? []) as AddressRow[]) {
+    for (const a of (addresses ?? []) as unknown as AddressRow[]) {
       if (!addressByUser.has(a.userid)) addressByUser.set(a.userid, a);
     }
   }
@@ -320,8 +328,14 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
       corporatefile: string | null; corporatefile20: string | null;
     }[];
 
-    for (const c of corpList) {
-      const docs = await resolveLegacyCorpDocs(c.corporatefile, c.corporatefile20);
+    // PERF (2026-06-03): resolve every corp's signed doc URLs CONCURRENTLY.
+    // resolveLegacyCorpDocs does 2 storage round-trips per row; awaiting it in
+    // a sequential for-loop serialized N rows into N round-trips (a big part of
+    // the measured 2-4 s /admin/customers render). Promise.all fans them out.
+    const corpDocsList = await Promise.all(
+      corpList.map((c) => resolveLegacyCorpDocs(c.corporatefile, c.corporatefile20)),
+    );
+    corpList.forEach((c, i) => {
       juristicByMember.set(c.userid, {
         profileId: profileIdByMember.get(c.userid) ?? "",
         userid: c.userid, // member_code === legacy tb_users.userID (P0-18 actions key on this)
@@ -329,9 +343,9 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
         companyName: c.corporatename ?? "",
         companyAddress: c.corporateaddress ?? "",
         corpStatus: CORP_STATUS_TO_KEYWORD[c.corporatestatus ?? "1"] ?? "pending",
-        docs,
+        docs: corpDocsList[i],
       });
-    }
+    });
   }
 
   // ── Pending juristic review QUEUE (corporate-driven · owner 2026-05-30 · P0-21) ──
@@ -377,8 +391,13 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
       }
     }
 
-    for (const c of pcorpList) {
-      const docs = await resolveLegacyCorpDocs(c.corporatefile, c.corporatefile20);
+    // PERF (2026-06-03): same N+1 fix as the visible-corp loop above — the
+    // pending queue is up to 50 rows × 2 storage round-trips each. Awaiting
+    // them sequentially was the dominant slice of the 2-4 s render; fan out.
+    const pcorpDocsList = await Promise.all(
+      pcorpList.map((c) => resolveLegacyCorpDocs(c.corporatefile, c.corporatefile20)),
+    );
+    pcorpList.forEach((c, i) => {
       const customerName = nameByUser.get(c.userid) || undefined;
       pendingJuristic.push({
         profileId: "", // not needed — the juristic actions key on userid (P0-18)
@@ -388,11 +407,11 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
         companyName: c.corporatename ?? "",
         companyAddress: c.corporateaddress ?? "",
         corpStatus: "pending",
-        docs,
+        docs: pcorpDocsList[i],
         memberCode: c.userid || undefined,
         customerName,
       });
-    }
+    });
   }
 
   // Build the serializable rows for the client table.
@@ -467,7 +486,21 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
       {rows.length === 0 ? (
         <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-12 text-center text-sm text-muted">ไม่พบลูกค้า</div>
       ) : (
-        <CustomersTable rows={tableRows} />
+        <>
+          <CustomersTable rows={tableRows} />
+          <Pagination
+            page={page}
+            pageSize={DEFAULT_PAGE_SIZE}
+            total={totalCustomers ?? 0}
+            basePath="/admin/customers"
+            params={{
+              type: typeof sp.type === "string" ? sp.type : undefined,
+              group: group ?? undefined,
+              adminidsale: adminidsale ?? undefined,
+              q: typeof sp.q === "string" ? sp.q : undefined,
+            }}
+          />
+        </>
       )}
     </main>
     </>

@@ -266,7 +266,7 @@ export default async function AdminWalletDetail({
     (s, r) => s + Number((r as { cbtotal: number | null }).cbtotal ?? 0),
     0,
   );
-  const linkedRows = (linkedRaw ?? []) as LinkedWalletHsRow[];
+  const linkedRows = (linkedRaw ?? []) as unknown as LinkedWalletHsRow[];
   const linkedSpentTotal = linkedRows.reduce((s, r) => s + Number(r.amount ?? 0), 0);
   const linkedDebitAndCredit = linkedSpentTotal + Number(row.amount ?? 0);
 
@@ -362,7 +362,7 @@ export default async function AdminWalletDetail({
       if (simErr) {
         console.error(`[tb_wallet_hs similar] failed`, { code: simErr.code, message: simErr.message });
       } else {
-        const sims = (simRaw ?? []) as SimilarRow[];
+        const sims = (simRaw ?? []) as unknown as SimilarRow[];
         similar = await Promise.all(
           sims.map(async (s) => ({ ...s, slipUrl: await resolveLegacyUrl(s.imagesslip, "slip") })),
         );
@@ -389,7 +389,7 @@ export default async function AdminWalletDetail({
   // RENDER
   // ────────────────────────────────────────────────────────────
   return (
-    <main className="p-4 lg:p-6 max-w-6xl mx-auto space-y-4">
+    <main className="p-4 lg:p-6 space-y-4">
       {/* ── 1. TOP CARDS: per-user + system-wide ── */}
       <section className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <BalanceCard

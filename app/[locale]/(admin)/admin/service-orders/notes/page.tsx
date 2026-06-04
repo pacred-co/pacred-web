@@ -27,6 +27,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { LEGACY_ORDER_STATUS, legacyOrderStatusThai, type LegacyOrderCode } from "@/lib/legacy-status-map";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +58,7 @@ type RawUserRow = {
 export default async function ServiceOrderNotesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; page?: string }>;
 }) {
   // legacy menu-purchasing.php — note view sits inside the purchasing
   // module → CS/sales/super (ops alias keeps it open to the cargo team)
@@ -64,6 +66,8 @@ export default async function ServiceOrderNotesPage({
 
   const sp = await searchParams;
   const admin = createAdminClient();
+  const page = parsePage(sp.page);
+  const { from: rowFrom, to: rowTo } = pageRange(page);
 
   // legacy: WHERE hNote<>'' (+ optional hStatus). On tb_header_order we widen
   // to "either hnote OR hnoteuser has content" so both the staff note and the
@@ -73,6 +77,7 @@ export default async function ServiceOrderNotesPage({
     .from("tb_header_order")
     .select(
       "id,hno,hstatus,hnote,hnoteuser,hnotedate,hdateupdate,hdate,htotalpriceuser,userid",
+      { count: "exact" },
     )
     // Supabase `.or()` combines "neq empty" predicates — same proven pattern as
     // the sibling /admin/forwarders/notes page. `neq.` already excludes both
@@ -81,7 +86,7 @@ export default async function ServiceOrderNotesPage({
     .or("hnote.neq.,hnoteuser.neq.")
     .order("hdateupdate", { ascending: false, nullsFirst: false })
     .order("id", { ascending: false })
-    .limit(500);
+    .range(rowFrom, rowTo);
 
   // Optional status filter — accepts the legacy single-char code '1'..'6'.
   const statusFilter =
@@ -90,7 +95,7 @@ export default async function ServiceOrderNotesPage({
       : null;
   if (statusFilter) q = q.eq("hstatus", statusFilter);
 
-  const { data, error } = await q;
+  const { data, error, count: totalNotes } = await q;
   if (error) {
     console.error(`[service-orders/notes tb_header_order list] failed`, {
       code: error.code, message: error.message,
@@ -240,6 +245,13 @@ export default async function ServiceOrderNotesPage({
               </table>
             </div>
           )}
+          <Pagination
+            page={page}
+            pageSize={DEFAULT_PAGE_SIZE}
+            total={totalNotes ?? 0}
+            basePath="/admin/service-orders/notes"
+            params={{ status: sp.status }}
+          />
         </div>
       </main>
     </div>

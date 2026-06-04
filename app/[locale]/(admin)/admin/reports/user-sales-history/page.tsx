@@ -32,6 +32,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CsvButton } from "@/components/admin/csv-button";
 import { nowMs } from "@/lib/datetime-helpers";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -105,7 +107,7 @@ type CustomerAggregate = {
   days_since_last: number | null;
 };
 
-type SP = { cohort?: string; q?: string; limit?: string };
+type SP = { cohort?: string; q?: string; limit?: string; page?: string };
 
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 500;
@@ -266,6 +268,14 @@ export default async function UserSalesHistoryEntry({
   }
 
   const aggregates = Array.from(aggMap.values());
+
+  // PERF (2026-06-03): paginate the DISPLAYED table (50/page). The stat
+  // cards + CSV below stay computed over the FULL `aggregates` set (revenue
+  // total + active/churn counts are JS reductions, never per-page), so only
+  // the rendered tbody is sliced. ?page=N drives the window.
+  const page = parsePage(sp.page);
+  const offset = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageRows = aggregates.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
   // Stat summary
   const totalRevenue = aggregates.reduce((s, a) => s + a.total_revenue_thb, 0);
@@ -453,7 +463,7 @@ export default async function UserSalesHistoryEntry({
                 </tr>
               </thead>
               <tbody>
-                {aggregates.map((a) => {
+                {pageRows.map((a) => {
                   const churnRisk = a.days_since_last !== null && a.days_since_last > 60;
                   const noOrders = a.total_revenue_thb === 0;
                   return (
@@ -535,10 +545,17 @@ export default async function UserSalesHistoryEntry({
             </table>
           </div>
         )}
+        <Pagination
+          page={page}
+          pageSize={DEFAULT_PAGE_SIZE}
+          total={aggregates.length}
+          basePath="/admin/reports/user-sales-history"
+          params={{ cohort: sp.cohort, q: sp.q, limit: sp.limit }}
+        />
       </div>
 
       <p className="text-[11px] text-muted">
-        แสดงไม่เกิน {limit} ลูกค้า · ใช้ตัวกรอง cohort หรือคำค้นเพื่อจำกัดผลลัพธ์
+        แสดงไม่เกิน {limit} ลูกค้า · ตารางแบ่งหน้าละ {DEFAULT_PAGE_SIZE} แถว · สถิติ + CSV คำนวณจากชุดข้อมูลทั้งหมด · ใช้ตัวกรอง cohort หรือคำค้นเพื่อจำกัดผลลัพธ์
       </p>
     </main>
   );

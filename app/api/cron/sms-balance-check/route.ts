@@ -91,7 +91,7 @@ export async function GET(request: Request) {
       const dispatched: string[] = [];
       const skipped:    string[] = [];
       const seen = new Set<string>();
-      for (const row of (targetAdmins ?? []) as AdminRow[]) {
+      for (const row of (targetAdmins ?? []) as unknown as AdminRow[]) {
         const pid = row.profile_id;
         if (!pid || seen.has(pid)) continue;
         seen.add(pid);

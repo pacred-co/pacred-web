@@ -43,6 +43,8 @@ import { Suspense } from "react";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import {
   legacyOrderStatusThai,
   legacyForwarderStatusThai,
@@ -335,7 +337,7 @@ function monthStartIso(): string {
   return new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
 }
 
-type SP = { tab?: string; date_from?: string; date_to?: string };
+type SP = { tab?: string; date_from?: string; date_to?: string; page?: string };
 
 export default async function AdminReportsPage({
   searchParams,
@@ -519,7 +521,7 @@ export default async function AdminReportsPage({
       account_number: string | null; status: string; requested_at: string; paid_at: string | null;
       team_leader: TlShape | TlShape[] | null;
     };
-    payoutRows = ((data ?? []) as RawRow[]).map((r) => {
+    payoutRows = ((data ?? []) as unknown as RawRow[]).map((r) => {
       const tl = Array.isArray(r.team_leader) ? r.team_leader[0] ?? null : r.team_leader;
       return {
         id: r.id, amount_total: r.amount_total, bank_name: r.bank_name,
@@ -664,6 +666,19 @@ export default async function AdminReportsPage({
     paymentCsv;
 
   const csvFilename = `report_${tab}_${dateFrom ?? "all"}_${dateTo ?? "all"}.csv`;
+
+  // PERF (2026-06-04): paginate the active tab's DISPLAYED table (50/page).
+  // tabCount / tabTotal / statusBreakdown + the CSV are all computed above
+  // over the FULL fetched set, so they stay correct — we only slice the rows
+  // we render here. Only the active tab's array is populated, so slicing all
+  // five is safe.
+  const page = parsePage(sp.page);
+  const { from: rowFrom, to: rowTo } = pageRange(page);
+  forwarderRows = forwarderRows.slice(rowFrom, rowTo + 1);
+  shopRows = shopRows.slice(rowFrom, rowTo + 1);
+  yuanRows = yuanRows.slice(rowFrom, rowTo + 1);
+  payoutRows = payoutRows.slice(rowFrom, rowTo + 1);
+  walletRows = walletRows.slice(rowFrom, rowTo + 1);
 
   // V-B1 self-serve report counts — surfaced as quick-link cards below.
   // Wave 20 P0-4 (2026-05-26): legacy `tb_*` swap.
@@ -1029,6 +1044,14 @@ export default async function AdminReportsPage({
           })}
         </DataTable>
       )}
+
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={tabCount}
+        basePath="/admin/reports"
+        params={{ tab, date_from: sp.date_from, date_to: sp.date_to }}
+      />
     </main>
     </>
   );

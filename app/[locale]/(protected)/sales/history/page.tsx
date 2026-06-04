@@ -5,6 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { legacyMemberUrl } from "@/lib/legacy-image";
 import { resolveSalesAgent } from "../team-map";
 import { nameStatusUserPay, numberFormat } from "../helpers";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 /**
  * Sales-rep "ประวัติจ่ายเงินลูกค้าตัวแทน" (agent payout history) screen —
@@ -94,7 +96,12 @@ function splitDateTime(ts: string | null): { date: string; time: string } {
   return { date: datePart ?? "", time: (timePartRaw ?? "").slice(0, 8) };
 }
 
-export default async function SalesHistoryPage() {
+export default async function SalesHistoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const sp = await searchParams;
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
 
@@ -136,6 +143,12 @@ export default async function SalesHistoryPage() {
     };
   });
 
+  // PERF (2026-06-03): paginate the DISPLAYED rows (50/page). The fetch is
+  // a flat list with no aggregate total, so a client-slice is correct + cheap.
+  const page = parsePage(sp.page);
+  const offset = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
+
   return (
     <div className="pcs-legacy">
       {/* Legacy PCS theme CSS — kept for layout-scope globals; the
@@ -174,7 +187,7 @@ export default async function SalesHistoryPage() {
               <>
                 {/* ── Mobile: stacked cards (md:hidden) ── */}
                 <div className="space-y-3 md:hidden">
-                  {rows.map((row) => (
+                  {pageRows.map((row) => (
                     <div
                       key={row.ID}
                       className="rounded-xl border border-border bg-white dark:bg-surface p-3 shadow-sm"
@@ -231,7 +244,7 @@ export default async function SalesHistoryPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.map((row) => (
+                      {pageRows.map((row) => (
                         <tr
                           key={row.ID}
                           className="border-t border-border hover:bg-surface-alt/30"
@@ -272,6 +285,13 @@ export default async function SalesHistoryPage() {
                     </tbody>
                   </table>
                 </div>
+
+                <Pagination
+                  page={page}
+                  pageSize={DEFAULT_PAGE_SIZE}
+                  total={rows.length}
+                  basePath="/sales/history"
+                />
               </>
             )}
           </div>

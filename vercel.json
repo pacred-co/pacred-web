@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["sin1"],
   "crons": [
     {
       "path": "/api/cron/auto-cancel-orders",
@@ -38,12 +39,20 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/pcs-sync",
+      "schedule": "*/10 * * * *"
+    },
+    {
       "path": "/api/cron/sheets-sync-ctt",
       "schedule": "0 * * * *"
     },
     {
       "path": "/api/cron/margin-flag",
       "schedule": "10 17 * * *"
+    },
+    {
+      "path": "/api/cron/billing-run-overdue",
+      "schedule": "0 9 * * *"
     }
   ]
 }

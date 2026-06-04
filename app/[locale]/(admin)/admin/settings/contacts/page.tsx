@@ -59,7 +59,7 @@ export default async function AdminOrgContactsPage({
   if (rowsRawErr) {
     console.error(`[org_contacts list] failed`, { code: rowsRawErr.code, message: rowsRawErr.message });
   }
-  const rows = (rowsRaw ?? []) as OrgContactRow[];
+  const rows = (rowsRaw ?? []) as unknown as OrgContactRow[];
 
   // Counts per kind for tab badges.
   const counts: Record<OrgContactKind, number> = {} as Record<OrgContactKind, number>;

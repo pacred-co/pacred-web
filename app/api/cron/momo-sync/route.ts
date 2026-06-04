@@ -69,7 +69,13 @@ export async function GET(request: Request) {
       const admin = createAdminClient();
       const url = new URL(request.url);
       const override = parseDateOverride(url, request);
-      const start = override.start ?? dateIsoForCron(1); // yesterday (or override)
+      // 2026-06-03 — widened from 1 → 7 days (ภูม flag #51994 GZS260601-1).
+      // Symptom: containers that close > 1 day ago never enter `momo_container_closed`
+      // because the cron window missed them. Propagation reads from that table,
+      // so cabinet never propagates to tb_forwarder.fcabinetnumber. 7-day window
+      // catches containers that close anytime within the past week — Vercel cron
+      // runs every 10 min so the extra API calls are cheap, MOMO API is fast.
+      const start = override.start ?? dateIsoForCron(7);
       const end   = override.end   ?? dateIsoForCron(0); // today (or override)
 
       // ── 1. Pull MOMO → upsert momo_import_tracks + momo_container_closed ──

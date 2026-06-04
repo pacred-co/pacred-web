@@ -85,7 +85,7 @@ export default async function TransferSalesRepPage({
   const admins = (adminsRaw ?? []) as unknown as TbAdminLite[];
 
   return (
-    <main className="p-6 lg:p-8 max-w-5xl mx-auto space-y-5">
+    <main className="p-6 lg:p-8 space-y-5">
       {/* Wave 20 P1 rewrite (2026-05-26): removed Bootstrap-4 `.pcs-legacy`
           chrome + jQuery `<link>` to admin-base.css. Pure Tailwind v4 now;
           same form logic + same `tb_users` / `tb_admin` queries. */}

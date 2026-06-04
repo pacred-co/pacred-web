@@ -30,7 +30,7 @@ export default async function AdminTosVersionsPage() {
   if (versionsRawErr) {
     console.error(`[tos_versions list] failed`, { code: versionsRawErr.code, message: versionsRawErr.message });
   }
-  const versions = (versionsRaw ?? []) as TosVersionRow[];
+  const versions = (versionsRaw ?? []) as unknown as TosVersionRow[];
 
   // Per-version acceptance counts (single aggregate query).
   const counts: Record<string, number> = {};

@@ -22,8 +22,10 @@ import type { AdminActionResult } from "./common";
 //                              /admin/settings/forwarder-costs.
 //   • service_fee / juristic / QC / crate
 //                            → read ONLY by the rebuilt actions/forwarder.ts
-//                              lane (service-import/add, near-zero data) and
-//                              the display-only /api/settings-rate preview.
+//                              lane (service-import/add, near-zero data).
+//                              (The display-only /api/settings-rate preview
+//                              endpoint was DELETED 2026-06-02 — Wave A §0e:
+//                              unconsumed + served the stale rebuilt rate.)
 //                              The live forwarder pricing uses
 //                              resolve-rate.ts + tb_rate_* + the tb_settings
 //                              cost matrix — NOT these fields. (Scoped to the

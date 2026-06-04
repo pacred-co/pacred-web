@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import {
   REFUND_STATUSES,
   REFUND_STATUS_LABEL,
@@ -63,10 +65,12 @@ function normP(p: Profile | Profile[] | null): Profile | null {
 export default async function AdminRefundsListPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; q?: string }>;
+  searchParams: Promise<{ status?: string; q?: string; page?: string }>;
 }) {
   await requireAdmin(["super", "accounting", "ops", "sales_admin"]);
   const sp = await searchParams;
+  const page = parsePage(sp.page);
+  const { from, to } = pageRange(page);
   const status = (REFUND_STATUSES as readonly string[]).includes(sp.status ?? "")
     ? (sp.status as RefundStatus)
     : null;
@@ -80,21 +84,21 @@ export default async function AdminRefundsListPage({
       id, request_no, source, source_ref, amount_thb, status, created_at,
       approved_at, paid_at, rejected_at, reason, created_by_admin_id,
       profile:profiles!profile_id(member_code, first_name, last_name, phone)
-    `)
+    `, { count: "exact" })
     // Pending-first when no explicit status filter (queue view).
     // status='pending' sorts before others alphabetically AND we order by created_at within.
     .order("status", { ascending: true })
     .order("created_at", { ascending: false })
-    .limit(200);
+    .range(from, to);
   if (status) query = query.eq("status", status);
   if (q) {
     query = query.or(`request_no.ilike.%${q}%,source_ref.ilike.%${q}%,reason.ilike.%${q}%`);
   }
-  const { data: rowsRaw, error: rowsRawErr } = await query;
+  const { data: rowsRaw, error: rowsRawErr, count } = await query;
   if (rowsRawErr) {
     console.error(`[refund_requests list] failed`, { code: rowsRawErr.code, message: rowsRawErr.message });
   }
-  const rows = ((rowsRaw ?? []) as RefundRow[]).map((r) => ({ ...r, profile: normP(r.profile) }));
+  const rows = ((rowsRaw ?? []) as unknown as RefundRow[]).map((r) => ({ ...r, profile: normP(r.profile) }));
 
   // Status counts for filter chips.
   const counts: Record<RefundStatus, number> = { pending: 0, approved: 0, rejected: 0, paid: 0 };
@@ -235,6 +239,14 @@ export default async function AdminRefundsListPage({
           </table>
         )}
       </div>
+
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={count ?? 0}
+        basePath="/admin/refunds"
+        params={{ status: sp.status, q: sp.q }}
+      />
     </main>
   );
 }

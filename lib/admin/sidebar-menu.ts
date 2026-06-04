@@ -100,6 +100,13 @@ export type BadgeKey =
 /** Counts resolved server-side; absent key → 0. */
 export type BadgeCounts = Partial<Record<BadgeKey, number>>;
 
+/** Cache tag for the admin sidebar badge counts (see
+ *  `actions/admin/sidebar-counts.ts`). Lives here, not in the
+ *  `"use server"` action file — that file may only export async functions.
+ *  Call `revalidateTag(ADMIN_SIDEBAR_COUNTS_TAG)` from any Server Action
+ *  that changes a queue depth to refresh the badges before the 60 s TTL. */
+export const ADMIN_SIDEBAR_COUNTS_TAG = "admin-sidebar-counts";
+
 // ──────────────────────────────────────────────────────────────
 // Phase-gated visibility (2026-05-20 night owner brief).
 //   Phase 1 = LIVE for customers (visible to ALL admin staff).
@@ -421,6 +428,15 @@ const blockSettingsCargo: MenuItem = {
       children: [
         { labelKey: "settingsCargo.crons",        href: "/admin/system/crons",         icon: "Clock" },
         { labelKey: "settingsCargo.systemNotifs", href: "/admin/system/notifications", icon: "BellRing" },
+        // 2026-06-04 (reachability audit §0d) — notification DISPATCH monitor
+        // (failed/pending pushes + one-click retry · companion to systemNotifs
+        // above). Was orphan (no inbound link · URL-only). Page gates super/ops.
+        { labelKey: "settingsCargo.notifyDispatch", href: "/admin/notifications/dispatch", icon: "Send" },
+        { labelKey: "settingsCargo.pcsSync",      href: "/admin/system/pcs-sync",      icon: "Database" },
+        // 2026-06-04 (reachability audit §0d) — PCS→Pacred customer migration
+        // (one-shot launch-week backfill tool · super-only). Was orphan
+        // (no inbound link · URL-only).
+        { labelKey: "settingsCargo.pcsCustomerMigration", href: "/admin/migration/pcs-customers", icon: "DatabaseZap" },
         { labelKey: "settingsCargo.csvImports",   href: "/admin/csv-imports",          icon: "Upload" },
       ],
     },
@@ -428,8 +444,18 @@ const blockSettingsCargo: MenuItem = {
       labelKey: "settingsCargo.tools",
       icon: "Wrench",
       children: [
+        // 2026-06-04 (reachability audit §0d) — global admin search (U4-1 ·
+        // member_code/f_no/h_no/job_no/invoice_no across all entities). Was
+        // orphan (no inbound link · URL-only). Page gates super/ops/accounting/
+        // sales_admin — placed under super's Settings→tools toolbox.
+        { labelKey: "settingsCargo.globalSearch", href: "/admin/search",                icon: "Search" },
         { labelKey: "settingsCargo.orgEmail",    href: "/admin/organization-email",    icon: "MessageCircle" },
         { labelKey: "settingsCargo.orgChannels", href: "/admin/organization-channels", icon: "Smartphone" },
+        // 2026-06-04 (reachability audit §0d) — org_contacts CRUD (V-G5 · feeds
+        // the public /contact page). Was orphan (no inbound link · URL-only ·
+        // only referenced in code comments). Same org-config family as orgEmail
+        // / orgChannels above. Page gates super/accounting/sales_admin.
+        { labelKey: "settingsCargo.orgContacts", href: "/admin/settings/contacts",     icon: "Contact" },
         { labelKey: "settingsCargo.adminUsers",  href: "/admin/admins",                icon: "UserCog" },
         { labelKey: "settingsCargo.partners",    href: "/admin/partners",              icon: "Handshake" },
       ],
@@ -998,7 +1024,12 @@ const menuWarehouse: MenuSection[] = [
           { labelKey: "forwarder.listPrepare", href: "/admin/forwarders?q=6",               icon: "Truck", badge: "forwarderDelivery" },
           // Phase 2 — driver-runs sales-only side not yet live.
           { labelKey: "forwarder.assignDriver", href: "/admin/drivers",                     icon: "Truck", badge: "driverItems", phase: 2 },
-          { labelKey: "forwarder.combineBill", href: "/admin/forwarders/combine-bill",      icon: "Printer" },
+          // 2026-06-03 (ภูม flag · R-2 close-out): รวมบิลสินค้า + ใบวางบิล ย้ายไป
+          // "ระบบบัญชี → รายรับ" topmenubar (CARGO_MENUBAR · accounting-menubar.ts).
+          // ตาม PEAK pattern · ภูม flag screenshot 2026-06-03. The leaves are
+          // surfaced via /admin/accounting topmenu + quick-access cards now.
+          // The /admin/forwarders/combine-bill route itself stays live (just
+          // not in this sidebar block) — accessed via accounting hub instead.
           // 2026-06-02 (poom-wave §6 · ภูม) — TH-transport batch reader (296
           // legacy batches · 643 forwarders) · MVP read-only · brief §6.
           { labelKey: "forwarder.tranTh",      href: "/admin/forwarders/tran-th",          icon: "Truck" },

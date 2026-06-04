@@ -33,7 +33,7 @@ import {
   SlidersHorizontal, Network, ListOrdered, Barcode, ScanLine, Camera,
   Printer, Calculator, BadgeCheck, ShieldAlert, UserCheck, Wand2, RefreshCw,
   Banknote, KanbanSquare, Smartphone, Save,
-  Ban, AlertCircle, Gauge, PhoneCall, Megaphone, Handshake,
+  Ban, AlertCircle, Database, DatabaseZap, Send, Contact, Gauge, PhoneCall, Megaphone, Handshake,
   ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
@@ -116,6 +116,14 @@ const ICONS: Record<string, LucideIcon> = {
   Megaphone,       // settingsCargo.promos
   // 2026-06-02 (เดฟ) — partner directory (/admin/partners · staff-CRUD gap §PM-6).
   Handshake,       // settingsCargo.partners
+  // 2026-06-02 (ภูม) — /admin/system/pcs-sync dashboard
+  Database,        // PCS↔Pacred Sync settings page
+  // 2026-06-04 (reachability audit §0d) — 3 orphan admin tools wired into
+  // Settings (system + tools subgroups). Icon names were referenced from
+  // sidebar-menu.ts but absent here → would render a blank spacer.
+  DatabaseZap,     // settingsCargo.pcsCustomerMigration — /admin/migration/pcs-customers
+  Send,            // settingsCargo.notifyDispatch — /admin/notifications/dispatch
+  Contact,         // settingsCargo.orgContacts — /admin/settings/contacts
 };
 
 function Icon({ name, active }: { name?: string; active: boolean }) {
@@ -454,7 +462,7 @@ export function AdminSidebar({
               <ul className="space-y-0.5">
                 {sec.items.map((item, ii) => (
                   <MenuRow
-                    key={item.href ?? `${item.labelKey}-${ii}`}
+                    key={`${ii}-${item.href ?? item.labelKey ?? ""}`}
                     item={item}
                     depth={0}
                     counts={counts}

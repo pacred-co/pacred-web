@@ -215,9 +215,9 @@ export default async function MonthlyOrdersReport({
     id: number; paytype: string | null; payyuan: number | null;
     paythb: number | null; paystatus: string; paydate: string | null; userid: string;
   };
-  const fRaw = (fRes.data ?? []) as FRaw[];
-  const sRaw = (sRes.data ?? []) as SRaw[];
-  const yRaw = (yRes.data ?? []) as YRaw[];
+  const fRaw = (fRes.data ?? []) as unknown as FRaw[];
+  const sRaw = (sRes.data ?? []) as unknown as SRaw[];
+  const yRaw = (yRes.data ?? []) as unknown as YRaw[];
 
   // ── 2) Batch-load tb_users across all 3 panes (one round-trip). ──
   const allUserIds = [

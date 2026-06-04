@@ -1,5 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import { ContactMessageActions } from "./actions-cell";
 
 const STATUS_BADGE: Record<string, string> = {
@@ -25,9 +27,11 @@ type ProfileShape = {
 export default async function AdminContactMessagesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; page?: string }>;
 }) {
   const sp = await searchParams;
+  const page = parsePage(sp.page);
+  const { from, to } = pageRange(page);
   const admin = createAdminClient();
 
   let q = admin
@@ -36,20 +40,20 @@ export default async function AdminContactMessagesPage({
       id, profile_id, name, contact, subject, message, status,
       source_url, user_agent, ip, created_at, updated_at,
       profile:profiles!profile_id ( member_code, first_name, last_name )
-    `)
+    `, { count: "exact" })
     .order("created_at", { ascending: false })
-    .limit(200);
+    .range(from, to);
 
   if (sp.status) q = q.eq("status", sp.status);
 
-  const { data, error } = await q;
+  const { data, error, count } = await q;
   if (error) {
     console.error(`[contact_messages list] failed`, { code: error.code, message: error.message });
   }
   type RawRow = Omit<NonNullable<typeof data>[number], "profile"> & {
     profile: ProfileShape | ProfileShape[] | null;
   };
-  const rows = ((data ?? []) as RawRow[]).map((r) => ({
+  const rows = ((data ?? []) as unknown as RawRow[]).map((r) => ({
     ...r,
     profile: Array.isArray(r.profile) ? r.profile[0] ?? null : r.profile,
   }));
@@ -198,6 +202,14 @@ export default async function AdminContactMessagesPage({
           </div>
         )}
       </div>
+
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={count ?? 0}
+        basePath="/admin/contact-messages"
+        params={{ status: sp.status }}
+      />
     </main>
   );
 }

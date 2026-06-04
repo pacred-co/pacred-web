@@ -101,7 +101,7 @@ async function recomputeInvoicePayment(
   }
 
   const paid_thb = roundThb(
-    ((rows ?? []) as PaymentRow[])
+    ((rows ?? []) as unknown as PaymentRow[])
       .filter((r) => r.status === "recorded")
       .reduce((s, r) => s + Number(r.amount_thb), 0),
   );
@@ -572,7 +572,7 @@ export async function listFreightPayments(
       console.error(`[freight_invoice_payments list] failed`, { code: rowsErr.code, message: rowsErr.message });
     }
 
-    const payments = ((rows ?? []) as FreightPaymentListRow[]).map((r) => ({
+    const payments = ((rows ?? []) as unknown as FreightPaymentListRow[]).map((r) => ({
       ...r,
       amount_thb: Number(r.amount_thb),
     }));

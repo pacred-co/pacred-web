@@ -53,8 +53,8 @@ type CarrierOpt = { value: string; label: string };
 function optionHShipByCart(freeShippingEnabled: boolean): CarrierOpt[] {
   // KEPT VERBATIM — borrowed-API carrier names (PCS-scrub stays API-gated).
   const opts: CarrierOpt[] = [];
-  if (freeShippingEnabled) opts.push({ value: "PCSF", label: "PCS เหมาๆ (50บ.)" });
-  opts.push({ value: "PCS",  label: "รับเองโกดัง PCS กทม" });
+  if (freeShippingEnabled) opts.push({ value: "PCSF", label: "Pacred เหมาๆ (50บ.)" });
+  opts.push({ value: "PCS",  label: "รับเองโกดัง Pacred (สมุทรสาคร)" });
   opts.push({ value: "2",    label: "Flash Express" });
   opts.push({ value: "3",    label: "J.K. เอ็กซ์เพรส" });
   opts.push({ value: "21",   label: "นิ่มซี่เส็งขนส่ง 1988" });

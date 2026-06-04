@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { akucargoSearch } from "@/lib/china-search/akucargo";
@@ -205,6 +204,8 @@ export default async function SearchPage({
         urlcut={dataRe.urlcut}
         rsDefault={rsDefault}
         detail={detail}
+        provider={provider}
+        detailAvailable={detailResult.available}
       />
     );
   }
@@ -239,7 +240,7 @@ export default async function SearchPage({
     if (rowsErr) {
       console.error(`[tb_product list] failed`, { code: rowsErr.code, message: rowsErr.message });
     }
-    products = (rows ?? []) as ProductRow[];
+    products = (rows ?? []) as unknown as ProductRow[];
   } else {
     // Sprint-3 P2.2 — taobao / 1688 keyword search via AkuCargo
     // (P-52 canonical keyword backend; legacy TAMIT keyword endpoint
@@ -426,7 +427,7 @@ export default async function SearchPage({
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       className="h-7 w-auto"
-                      src="/legacy/pcs/shops/pcs-logo.png"
+                      src="/images/pacred-logo-red.png"
                       alt=""
                     />
                   </a>
@@ -594,12 +595,26 @@ function UrlPasteMode({
   urlcut,
   rsDefault,
   detail,
+  provider,
+  detailAvailable,
 }: {
   srcWeb: string | null;
   urlcut: string;
   rsDefault: number;
   detail: ChinaProductDetail | null;
+  provider: string;
+  detailAvailable: boolean;
 }) {
+  // Map the URL-param provider to the cart-schema Provider enum.
+  // Per cartItemSchema (lib/validators/cart.ts L7): only "1688" | "taobao"
+  // | "tmall" | "shop" | "nice" are accepted. search.php uses "pcs" for
+  // the Pacred-local catalog → maps to "shop".
+  const cartProvider: "1688"|"taobao"|"tmall"|"shop"|"nice" =
+    provider === "1688"   ? "1688"   :
+    provider === "taobao" ? "taobao" :
+    provider === "tmall"  ? "tmall"  :
+    provider === "nice"   ? "nice"   :
+    "shop";
   // Computed values from TAMIT detail (null when unavailable → render
   // skeleton state, matching legacy pre-AJAX shimmer behaviour).
   const title = detail?.title ?? "";
@@ -626,7 +641,12 @@ function UrlPasteMode({
         {/* search.php L57-142 — product card (MODE A) */}
         <div className="data-pro-chinna bg-white dark:bg-surface border border-border rounded-2xl shadow-sm overflow-hidden">
           <div className="p-3 md:p-4">
-            <div className="">
+            {/* 2026-06-02 §0e — was `<form action="">` POSTing nowhere with
+                4 hidden inputs (cURL/cProvider/cTitle/cNameShop) all blank.
+                The submit button at the bottom now calls UrlPasteAddToCart
+                (client island → addCartItem → tb_cart faithfully). All
+                product fields flow as props, no form post needed. */}
+            <div>
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                 <div className="hidden md:block md:col-span-12">
                   <h2 className="text-lg font-bold text-foreground flex flex-wrap items-center gap-2 pb-0">
@@ -753,87 +773,59 @@ function UrlPasteMode({
                       </div>
                     </div>
                   </div>
-                        {/* SKU axis selectors — render TAMIT's `sku_axes` if
-                            available; otherwise show skeleton strips like
-                            the legacy pre-AJAX state. The full sku-picker
-                            with qty grid + price recompute lives at
-                            /service-order/add (the proper place to commit);
-                            here we just preview the option labels. */}
-                        {detail?.sku_axes && detail.sku_axes.length > 0 ? (
-                          <div style={{ marginTop: "8px" }}>
-                            {detail.sku_axes.map((axis, ai) => (
-                              <div key={ai} style={{ marginBottom: "8px" }}>
-                                <h5 style={{ marginBottom: "4px", fontSize: "13px", color: "#666" }}>
-                                  {axis.name}:
-                                </h5>
-                                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                                  {axis.values.slice(0, 12).map((v, vi) => (
-                                    <span
-                                      key={vi}
-                                      style={{
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        gap: "4px",
-                                        padding: "4px 10px",
-                                        borderRadius: "999px",
-                                        border: "1px solid #e5e5e5",
-                                        fontSize: "12px",
-                                        background: "#fafafa",
-                                      }}
-                                    >
-                                      {v.image && (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img src={v.image} alt="" style={{ width: 18, height: 18, borderRadius: 4, objectFit: "cover" }} />
-                                      )}
-                                      {v.label}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
+                        {/* 2026-06-02 ภูม UX flag #4: SKU axis selectors moved
+                            into the UrlPasteAddToCart client island below so
+                            customers can CLICK options (admin pattern).  Server
+                            no longer renders read-only chips — the island shows
+                            the picker + recomputes price per selected SKU. */}
+                        {!detail?.sku_axes || detail.sku_axes.length === 0 ? (
                           <>
                             <div className="pro-preload-effect"></div>
                             <div className="pro-preload-effect"></div>
                             <div className="pro-preload-effect"></div>
                             <div className="pro-preload-effect"></div>
                           </>
-                        )}
+                        ) : null}
                   <hr className="my-3 border-t border-border" />
-                  {/* search.php L113-141 — the total + qty + "หยิบใส่รถเข็น"
-                      block. Legacy wired this to a jQuery $.ajax → cart.php
-                      (never ported). Here it is a real client island that
-                      reads the server-fetched `detail` + calls the wired
-                      `addCartItem` action. When `detail` is null (TAMIT
-                      down → skeleton above), we offer the manual cart
-                      fallback instead of a dead CTA. */}
-                  {detail ? (
-                    <UrlPasteAddToCart
-                      provider={detail.provider}
-                      title={detail.title}
-                      imageUrl={mainImage}
-                      shopName={detail.shop_name}
-                      priceCny={priceCny}
-                      sourceUrl={detail.url || urlcut}
-                      rsDefault={rsDefault}
-                    />
-                  ) : (
-                    <div
-                      className="border-total-product pay-c rounded-xl border border-border bg-surface-alt/50 dark:bg-surface-alt/30 p-3"
-                      style={{ zIndex: 99 }}
-                    >
-                      <p className="text-sm text-foreground">
-                        กำลังโหลดข้อมูลสินค้า... หากข้อมูลไม่ขึ้น{" "}
-                        <Link
-                          href="/cart"
-                          className="text-red-600 underline underline-offset-2 hover:text-red-700"
-                        >
-                          ไปที่ตะกร้าเพื่อกรอกเอง
-                        </Link>
-                      </p>
-                    </div>
-                  )}
+                  {/* 2026-06-02 — replaced legacy hardcoded qty=0 / static
+                      ราคารวม / dead-submit-button with the client island.
+                      Island manages qty (default minQty), color/size/details,
+                      total recompute + submit to addCartItem. Skeleton state
+                      when TAMIT detail null (priceCny=0 OR blank title) →
+                      island internally falls back to a /cart manual-link
+                      message instead of a dead CTA (replaces dave's outer
+                      ternary — same UX, props inside the island). */}
+                  <UrlPasteAddToCart
+                    url={urlcut}
+                    provider={cartProvider}
+                    title={title}
+                    shopName={shopName}
+                    mainImage={mainImage ?? null}
+                    priceCny={priceCny}
+                    priceThb={priceThb}
+                    rsDefault={rsDefault}
+                    minQty={1}
+                    maxQty={999}
+                    detailAvailable={detailAvailable}
+                    skuAxes={detail?.sku_axes?.map((ax) => ({
+                      name: ax.name,
+                      values: ax.values.map((v) => ({
+                        label: v.label,
+                        image: v.image,
+                        data:  v.data,
+                        is_image: v.is_image,
+                      })),
+                    }))}
+                    skuMap={detail?.sku_map?.map((row) => ({
+                      sku_id:    row.sku_id,
+                      prop_path: row.prop_path,
+                      price_cny: row.price_cny,
+                      stock:     row.stock,
+                      image:     row.image,
+                    }))}
+                    basePriceCny={detail?.base_price_cny}
+                    promoPriceCny={detail?.promo_price_cny}
+                  />
                 </div>
               </div>
             </div>

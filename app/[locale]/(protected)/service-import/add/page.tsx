@@ -101,7 +101,7 @@ export default async function ServiceImportAddPage() {
       message: allAddrsErr.message,
     });
   }
-  const addrs = ((allAddrs ?? []) as AddressRow[]).slice();
+  const addrs = ((allAddrs ?? []) as unknown as AddressRow[]).slice();
   let mainAddr: AddressRow | undefined;
   const others: AddressRow[] = [];
   for (const a of addrs) {

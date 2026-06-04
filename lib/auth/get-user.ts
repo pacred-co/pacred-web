@@ -7,6 +7,7 @@
 
 import "server-only";
 import { cache } from "react";
+import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readActiveImpersonation } from "@/lib/auth/impersonation";
@@ -99,8 +100,46 @@ export type Profile = {
  * (per-request scope — Next.js guarantees no cross-request leakage),
  * so layout + sub-layout + page now share a single auth check.
  */
-export const getCurrentUser = cache(async () => {
+export const getCurrentUser = cache(async (): Promise<User | null> => {
   const supabase = await createClient();
+
+  // PERF (2026-06-03 · final systemic auth fix): verify the session JWT
+  // LOCALLY via getClaims() instead of getUser() (a network round-trip to the
+  // GoTrue auth server on EVERY render — the last remaining per-nav auth tax).
+  //
+  // This project signs sessions with an ASYMMETRIC ES256 key (confirmed via
+  // the project's JWKS endpoint), so getClaims() validates the JWT's signature
+  // in-process using the cached public key. That is AUTHORITATIVE (a forged or
+  // tampered cookie fails signature verification — unlike getSession(), which
+  // only decodes) AND fast (no network on the warm path; JWKS is cached). For
+  // any legacy HS256 token getClaims() falls back to a server call internally,
+  // and we also fall back to getUser() below on any failure — so this can
+  // never be LESS secure or LESS correct than before, only faster.
+  try {
+    const { data, error } = await supabase.auth.getClaims();
+    const claims = data?.claims;
+    if (!error && claims?.sub) {
+      // Reconstruct a minimal Supabase User from the verified claims. Callers
+      // use .id / .email; the rest is populated best-effort from the token so
+      // the User shape stays intact for any incidental field access.
+      return {
+        id: claims.sub,
+        email: claims.email ?? undefined,
+        phone: claims.phone ?? undefined,
+        app_metadata: claims.app_metadata ?? {},
+        user_metadata: claims.user_metadata ?? {},
+        aud: Array.isArray(claims.aud) ? claims.aud[0] ?? "" : claims.aud ?? "",
+        role: typeof claims.role === "string" ? claims.role : undefined,
+        created_at: "",
+      } as User;
+    }
+  } catch {
+    // JWKS unreachable / unexpected token shape — fall through to the
+    // authoritative network check rather than failing the request.
+  }
+
+  // Fallback: authoritative network check (legacy HS256 tokens, or any
+  // getClaims() failure path above).
   const {
     data: { user },
     error,

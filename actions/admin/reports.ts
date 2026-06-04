@@ -169,7 +169,7 @@ export async function backfillSalesReport(): Promise<Result<{ inserted: number }
       return { ok: false, error: fErr.message };
     }
     type FRow = { id: number; userid: string | null; fdatestatus7: string | null };
-    const eligible = (fRows ?? []) as FRow[];
+    const eligible = (fRows ?? []) as unknown as FRow[];
     if (eligible.length === 0) return { ok: true, data: { inserted: 0 } };
 
     // 2) Already-snapshotted fids (so we only insert the missing ones).
@@ -250,7 +250,7 @@ export async function getSalesMonthlyReport(range: DateRange): Promise<Result<Sa
       return { ok: false, error: srErr.message };
     }
     type SrRow = { id: number; srdate: string | null; fid: number | null; sradminidsale: string | null };
-    const snapshots = (srData ?? []) as SrRow[];
+    const snapshots = (srData ?? []) as unknown as SrRow[];
     if (snapshots.length === 0) return { ok: true, data: [] };
 
     // Step 2 — JOIN tb_forwarder on fid=id (require fstatus='7', pull the
@@ -438,7 +438,7 @@ export async function getForwarderProfitReport(
       fprofittotal: number | null;
       fdate: string | null;
     };
-    const forwarders = (data ?? []) as FRow[];
+    const forwarders = (data ?? []) as unknown as FRow[];
 
     // Resolve customer (member_code + name) via tb_users.userID lookup.
     const userids = Array.from(new Set(
@@ -641,7 +641,7 @@ export async function getShopsProfitReport(range: DateRange): Promise<Result<Sho
       hcostall: number | null;
       hdate: string | null;
     };
-    const orders = (data ?? []) as HRow[];
+    const orders = (data ?? []) as unknown as HRow[];
 
     // Resolve customer member code + name via tb_users.userID lookup.
     const userids = Array.from(new Set(
@@ -821,7 +821,7 @@ export async function getYuanProfitReport(range: DateRange): Promise<Result<Yuan
       payprofitthb: number | null;
       paydate: string | null;
     };
-    const payments = (data ?? []) as PRow[];
+    const payments = (data ?? []) as unknown as PRow[];
 
     // Resolve customer member code + name via tb_users.userID lookup.
     const userids = Array.from(new Set(
@@ -974,7 +974,7 @@ export async function getOtpSuccessReport(range: DateRange): Promise<Result<OtpS
     }
 
     type OtpRow = { id: number; userid: string; date: string | null };
-    const otpRows = (otps ?? []) as OtpRow[];
+    const otpRows = (otps ?? []) as unknown as OtpRow[];
 
     // Step 2 — resolve each userid → (member_code, name, phone) via tb_users.
     const userids = Array.from(new Set(otpRows.map((o) => o.userid).filter(Boolean)));
@@ -1016,7 +1016,7 @@ export async function getOtpSuccessReport(range: DateRange): Promise<Result<OtpS
       if (hsErr) {
         logger.error("reports", "otp-success tb_users_otp_hs lookup failed", hsErr);
       }
-      hsRows = (hsData ?? []) as HsRow[];
+      hsRows = (hsData ?? []) as unknown as HsRow[];
     }
     // Bucket history by userid, sort each list newest-first for the nearest
     // lookup in the row map below.

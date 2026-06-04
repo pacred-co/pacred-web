@@ -1,6 +1,8 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 /**
  * Admin > "รายงานฝากนำเข้า" — a FAITHFUL 1:1 TRANSCRIPTION of the
@@ -266,6 +268,7 @@ type SP = {
   year?: string;
   month?: string;
   userType?: string;
+  page?: string;
 };
 
 // ============================================================================
@@ -318,7 +321,7 @@ export default async function AdminAccountingForwarderPage({
     .gte("date", `${startDate}T00:00:00`)
     .lte("date", `${endDate}T23:59:59`)
     .order("date", { ascending: true });
-  const walletRows = (walletRes.data ?? []) as WalletForwarderRaw[];
+  const walletRows = (walletRes.data ?? []) as unknown as WalletForwarderRaw[];
 
   // Build the parent-forwarder id list (numeric — refOrder stores the
   // bigint ID as a string).
@@ -356,7 +359,7 @@ export default async function AdminAccountingForwarderPage({
         "id, fdate, ftrackingchn, fcabinetnumber, fcosttotalprice, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany, userid",
       )
       .in("id", forwarderIds);
-    for (const f of (fRes.data ?? []) as ForwarderRaw[]) {
+    for (const f of (fRes.data ?? []) as unknown as ForwarderRaw[]) {
       forwarderById.set(f.id, f);
     }
   }
@@ -570,6 +573,13 @@ export default async function AdminAccountingForwarderPage({
     if (r.fusercompany === "1") Per1All += fTotalPrice * 0.01;
   }
   const profitAll = userPayAll - fCostTotalPriceAll;
+
+  // PERF (2026-06-03): client-slice the DISPLAYED ledger (50/page). All
+  // totals above are computed over the full `rows` set — we only window the
+  // rows rendered in the <tbody> below the pinned totals row.
+  const page     = parsePage(sp.page);
+  const offset   = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
   // Display-only banner copy (acc-forwarder.php L141-154 — always
   // emits "ผลลัพธ์การค้นหา ตั้งแต่วันที่ : <start> - <end>" + the
@@ -886,7 +896,7 @@ export default async function AdminAccountingForwarderPage({
                                     <td className="text-right"></td>
                                     <td className="text-right"></td>
                                   </tr>
-                                  {rows.map((row) => {
+                                  {pageRows.map((row) => {
                                     const fCostTotalPrice =
                                       row.fcosttotalprice +
                                       row.ftransportprice +
@@ -1075,6 +1085,16 @@ export default async function AdminAccountingForwarderPage({
                                 </tbody>
                               </table>
                             </form>
+                            <Pagination
+                              page={page}
+                              pageSize={DEFAULT_PAGE_SIZE}
+                              total={rows.length}
+                              basePath="/admin/accounting/forwarder"
+                              params={{
+                                date: sp.date, dateGroup: sp.dateGroup,
+                                year: sp.year, month: sp.month, userType: sp.userType,
+                              }}
+                            />
                           </div>
                         </div>
                       </div>

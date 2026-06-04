@@ -33,8 +33,8 @@
  */
 
 import type { createAdminClient } from "@/lib/supabase/admin";
-import type { ForwarderCharges } from "@/lib/tax/wht";
-import { computeForwarderTax } from "@/lib/tax/wht";
+import type { ForwarderCharges, TaxableParts } from "@/lib/tax/wht";
+import { computeTaxForMode, type TaxDocMode } from "@/lib/tax/tax-doc-mode";
 import { getTaxRates } from "@/lib/tax/rates";
 import { logger } from "@/lib/logger";
 
@@ -53,6 +53,16 @@ export interface IssueForwarderTaxInvoiceOpts {
   serialNo?: string | null;
   /** Who issued — adminID or 'system-auto'. */
   issuedBy?: string;
+  /**
+   * The document mode (Lane B — lib/tax/tax-doc-mode.ts). Controls the VAT-7%
+   * base: 'tax_invoice' (ใบกำกับ) = VAT on the full vatable base (goods +
+   * domestic transport + service; intl leg zero-rated); 'customs' (ใบขน) =
+   * VAT on the SERVICE FEE only (goods excluded). Defaults to 'tax_invoice'
+   * to preserve the pre-3-mode behaviour. (A forwarder bill has no goods line
+   * — goods=0 either way — so for pure forwarders the two modes coincide on
+   * VAT; the mode still drives which RD document is issued + reported.)
+   */
+  mode?: TaxDocMode;
 }
 
 export type IssueForwarderTaxInvoiceResult =
@@ -165,7 +175,25 @@ export async function issueForwarderTaxInvoice(
   };
 
   const rates = await getTaxRates();
-  const tax = computeForwarderTax(agg, { isJuristic, withVat: true, rates });
+  const mode: TaxDocMode = opts.mode ?? "tax_invoice";
+  // Map the forwarder buckets → generic taxable parts (same classification
+  // computeForwarderTax does internally), then run the MODE-aware engine so
+  // 'customs' (ใบขน) charges VAT on the service fee only. A forwarder bill has
+  // no goods line (goods=0), so for pure forwarders ใบกำกับ vs ใบขน differ only
+  // by the document type, not the VAT amount — but routing through
+  // computeTaxForMode keeps the behaviour correct if a goods bucket is ever
+  // added to forwarder bills.
+  const parts: TaxableParts = {
+    transportDomestic: num(agg.ftransportprice),
+    transportIntl:     num(agg.ftotalprice) + num(agg.ftransportpricechnthb),
+    service:           num(agg.fshippingservice) + num(agg.pricecrate) + num(agg.fpriceupdate) + num(agg.priceother),
+    rental:            0,
+    goods:             0,
+    discount:          num(agg.fdiscount),
+  };
+  // (For the default 'tax_invoice' mode this is identical to the previous
+  //  computeForwarderTax(agg, {withVat:true}) — same classification + base.)
+  const tax = computeTaxForMode(mode, parts, { isJuristic, rates });
 
   // 5. INSERT header.
   const insertHeader = {

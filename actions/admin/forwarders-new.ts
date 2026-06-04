@@ -113,7 +113,7 @@ export async function fetchUsersByCoid(
 
       if (error) return { ok: false, error: error.message };
 
-      return { ok: true, data: { users: (data ?? []) as CustomerOption[] } };
+      return { ok: true, data: { users: (data ?? []) as unknown as CustomerOption[] } };
     },
   );
 }
@@ -171,7 +171,7 @@ export async function fetchAddressesByUserid(
       const addresses = (rows ?? []).map((r) => ({
         ...(r as Omit<AddressOption, "isMain">),
         isMain: mainId !== null && r.addressid === mainId,
-      })) as AddressOption[];
+      })) as unknown as AddressOption[];
 
       // Sort: main first, then by id asc (legacy behaviour).
       addresses.sort((a, b) => {

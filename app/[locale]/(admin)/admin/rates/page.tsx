@@ -160,6 +160,34 @@ export default async function AdminRatesPage() {
         </div>
       </RateSection>
 
+      {/* Sales min-sell floor — Lane C guardrail (business_config) */}
+      <RateSection title="ราคาขายขั้นต่ำ + เครื่องมือเสนอราคา (Sales)">
+        <div className="grid sm:grid-cols-2 gap-3">
+          <Link
+            href="/admin/settings/business-config"
+            className="rounded-2xl border border-amber-200 bg-amber-50 p-4 hover:bg-amber-100 transition"
+          >
+            <p className="text-sm font-semibold text-amber-800">
+              ราคาขายขั้นต่ำที่เซลเสนอได้ — แก้ได้ →
+            </p>
+            <p className="text-[11px] text-amber-700 mt-1">
+              key <code className="rounded bg-white/60 px-1">pricing.min_sell_floor</code> · base ต่อโกดัง (กวางโจว/อี้อู) + เพิ่มต่อขนส่ง (เรือ) · เตือนเมื่อเสนอต่ำกว่า
+            </p>
+          </Link>
+          <Link
+            href="/admin/accounting/quote-compare/modes"
+            className="rounded-2xl border border-primary-200 bg-primary-50 p-4 hover:bg-primary-100 transition"
+          >
+            <p className="text-sm font-semibold text-primary-700">
+              เทียบราคา รถ/เรือ/แอร์ (+ ค่าบริการ) →
+            </p>
+            <p className="text-[11px] text-primary-600 mt-1">
+              เครื่องมือเสนอราคาให้ลูกค้า · เทียบ 3 ขนส่ง all-in + กรอบกำไร CEO
+            </p>
+          </Link>
+        </div>
+      </RateSection>
+
       {/* Footer note — the real editors */}
       <p className="text-xs text-muted">
         แก้ไขอัตราได้ที่{" "}

@@ -24,6 +24,8 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import { ArrowLeft } from "lucide-react";
 import { WithdrawRowActions } from "./withdraw-row-actions";
 
@@ -75,7 +77,7 @@ type URow = {
   userTel: string | null;
 };
 
-type SP = { status?: string };
+type SP = { status?: string; page?: string };
 
 export default async function AdminWithdrawalsQueuePage({
   searchParams,
@@ -102,18 +104,21 @@ export default async function AdminWithdrawalsQueuePage({
     console.error(`[tb_wallet_hs withdraw count] failed`, { code: countErr.code, message: countErr.message });
   }
 
-  const { data: rowsRaw, error } = await admin
+  // PERF (2026-06-03): paginate (50/page via .range + exact count).
+  const page = parsePage(sp.page);
+  const { from: rowFrom, to: rowTo } = pageRange(page);
+  const { data: rowsRaw, error, count: totalWithdrawals } = await admin
     .from("tb_wallet_hs")
-    .select("id,date,amount,status,depositnamebank,nameuserbank,nouserbank,note,userid,adminidupdate")
+    .select("id,date,amount,status,depositnamebank,nameuserbank,nouserbank,note,userid,adminidupdate", { count: "exact" })
     .eq("type", "3")
     .eq("status", statusFilter)
     .order("date", { ascending: false })
-    .limit(200);
+    .range(rowFrom, rowTo);
   if (error) {
     console.error(`[tb_wallet_hs withdraw list] failed`, { code: error.code, message: error.message });
     throw new Error(`โหลดรายการถอนเงินไม่สำเร็จ (${error.code ?? "unknown"}): ${error.message}`);
   }
-  const rows = (rowsRaw ?? []) as WhsRow[];
+  const rows = (rowsRaw ?? []) as unknown as WhsRow[];
 
   // Merge customer names.
   const userIds = Array.from(new Set(rows.map((r) => r.userid).filter(Boolean))) as string[];
@@ -126,7 +131,7 @@ export default async function AdminWithdrawalsQueuePage({
     if (usersErr) {
       console.error(`[tb_users list] failed`, { code: usersErr.code, message: usersErr.message });
     }
-    userMap = new Map(((usersRaw ?? []) as URow[]).map((u) => [u.userID, u]));
+    userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
   }
 
   const statusTabs: { key: string; label: string }[] = [
@@ -267,9 +272,14 @@ export default async function AdminWithdrawalsQueuePage({
           )}
         </div>
 
-        <p className="text-[11px] text-muted">
-          แสดงไม่เกิน 200 แถวต่อหน้า · ⇆ เลื่อนซ้าย-ขวาเพื่อดูทุกคอลัมน์
-        </p>
+        <Pagination
+          page={page}
+          pageSize={DEFAULT_PAGE_SIZE}
+          total={totalWithdrawals ?? 0}
+          basePath="/admin/wallet/withdrawals"
+          params={{ status: sp.status }}
+        />
+        <p className="text-[11px] text-muted">⇆ เลื่อนซ้าย-ขวาเพื่อดูทุกคอลัมน์</p>
       </main>
     </>
   );

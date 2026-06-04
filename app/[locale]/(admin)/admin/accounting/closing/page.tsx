@@ -2,6 +2,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import { ClosingMonthPicker } from "./closing-month-picker";
 
 // P0-21 (2026-05-30 sitting-E) — Pivot the month-end closing report off
@@ -76,7 +78,7 @@ function customerLabel(r: ReceiptRow, u: UserLite | null): string {
 export default async function ClosingReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; year?: string; month?: string }>;
+  searchParams: Promise<{ tab?: string; year?: string; month?: string; page?: string }>;
 }) {
   // W-1 page-level role gate. Month-end revenue + customer tax IDs via
   // createAdminClient (RLS-bypass) — accounting only (super implicit).
@@ -153,6 +155,13 @@ export default async function ClosingReportPage({
   };
   const totalBeforeWHT = sum(visibleRows, "totalbeforewithholding");
   const whtAmount      = totalBeforeWHT - totals[tab];
+
+  // PERF (2026-06-03): client-slice the DISPLAYED table (50/page). Totals,
+  // tab counts + CSV all stay computed over the full `visibleRows` set — we
+  // only window the rows we render in the <tbody>.
+  const page    = parsePage(sp.page);
+  const offset  = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageRows = visibleRows.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
   // CSV rows — finance teams want the tax-id + company name front and
   // center so they can match to their accounting software.
@@ -282,7 +291,7 @@ export default async function ClosingReportPage({
                 </td>
               </tr>
             ) : (
-              visibleRows.map((r) => {
+              pageRows.map((r) => {
                 const u   = userMap.get(r.userid) ?? null;
                 const wht = Number(r.totalbeforewithholding ?? 0) - Number(r.ramount ?? 0);
                 return (
@@ -329,6 +338,14 @@ export default async function ClosingReportPage({
           )}
         </table>
       </section>
+
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={visibleRows.length}
+        basePath="/admin/accounting/closing"
+        params={{ tab, year: String(year), month: String(month) }}
+      />
     </main>
   );
 }

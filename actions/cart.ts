@@ -13,6 +13,11 @@ import {
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { ADDRESSES, CONTACT } from "@/components/seo/site";
 import {
+  modeFromPref,
+  prefFromMode,
+  modeRequiresBillingSnapshot,
+} from "@/lib/tax/tax-doc-mode";
+import {
   PROMO_CATALOG,
   calcLegacyPromoDiscount,
   isActive,
@@ -234,11 +239,12 @@ export async function submitCartOrder(input: {
   pro?: string | null;                    // 'f' = PCSF promo (+50฿ shipping)
   pro2?: string | null;                   // '77' = 3.3 date-window promo
   hNote?: string | null;                  // free-text note
-  // P1 (เดฟ 2026-05-30) — tax-doc selector at /cart. Persisted on
-  // tb_header_order so the billing/payment-land flow can issue the right doc.
-  // Validated server-side: 'tax_invoice' requires the 13-digit tax id +
-  // billing name + address; 'receipt' (default) needs nothing.
-  taxDocPref?: string | null;             // 'receipt' | 'tax_invoice'
+  // P1 (เดฟ 2026-05-30 · 3-mode 2026-06-04) — tax-doc selector at /cart.
+  // Persisted on tb_header_order so the billing/payment-land flow can issue
+  // the right doc. Validated server-side: 'tax_invoice' (ใบกำกับ) + 'customs'
+  // (ใบขน) both require the 13-digit tax id + billing name + address;
+  // 'receipt' (ไม่รับเอกสาร, default) needs nothing. See lib/tax/tax-doc-mode.ts.
+  taxDocPref?: string | null;             // 'receipt' | 'tax_invoice' | 'customs'
   taxDocTaxId?: string | null;            // 13-digit
   taxDocBillingName?: string | null;      // company name
   taxDocAddress?: string | null;          // billing address snapshot
@@ -275,12 +281,17 @@ export async function submitCartOrder(input: {
   }
 
   // P1 — tax-doc selector validation (server side too, so a stale client
-  // can't sneak a tax_invoice through without the required snapshot fields).
-  const taxDocPref = input.taxDocPref === "tax_invoice" ? "tax_invoice" : "receipt";
+  // can't sneak a VAT-doc mode through without the required snapshot fields).
+  // Coerce the raw pref → canonical mode (NULL/unknown → 'none' fail-safe),
+  // then back to the column value for persistence (lib/tax/tax-doc-mode.ts).
+  const taxDocMode = modeFromPref(input.taxDocPref);
+  const taxDocPref = prefFromMode(taxDocMode);   // 'tax_invoice' | 'customs' | 'receipt'
   const taxDocTaxId = (input.taxDocTaxId ?? "").trim();
   const taxDocBillingName = (input.taxDocBillingName ?? "").trim();
   const taxDocAddress = (input.taxDocAddress ?? "").trim();
-  if (taxDocPref === "tax_invoice") {
+  // ใบกำกับ + ใบขน both need the immutable buyer snapshot (RD docs); ไม่รับฯ none.
+  const needsBilling = modeRequiresBillingSnapshot(taxDocMode);
+  if (needsBilling) {
     if (!/^\d{13}$/.test(taxDocTaxId)) return { ok: false, error: "tax_id_invalid" };
     if (taxDocBillingName === "") return { ok: false, error: "tax_billing_name_required" };
     if (taxDocAddress === "") return { ok: false, error: "tax_address_required" };
@@ -441,13 +452,14 @@ export async function submitCartOrder(input: {
       paymethod: input.payMethod ?? "",
       fshippingservice: fShippingService,
       hno: hNo,
-      // P1 — tax-doc snapshot. 'receipt' (default) snapshots nothing;
-      // 'tax_invoice' carries the 13-digit tax id + billing name+address so
-      // the eventual ใบกำกับภาษี reflects what the customer chose at order
-      // time (their profile can change later — the doc must not).
+      // P1 — tax-doc snapshot. 'receipt' (ไม่รับเอกสาร, default) snapshots
+      // nothing; 'tax_invoice' (ใบกำกับ) + 'customs' (ใบขน) carry the 13-digit
+      // tax id + billing name+address so the eventual RD document reflects what
+      // the customer chose at order time (their profile can change later — the
+      // doc must not). needsBilling === modeRequiresBillingSnapshot(mode).
       tax_doc_pref: taxDocPref,
-      tax_doc_tax_id: taxDocPref === "tax_invoice" ? taxDocTaxId : null,
-      tax_doc_address: taxDocPref === "tax_invoice"
+      tax_doc_tax_id: needsBilling ? taxDocTaxId : null,
+      tax_doc_address: needsBilling
         ? `${taxDocBillingName} · ${taxDocAddress}`
         : null,
       hdate: new Date().toISOString(),
@@ -703,7 +715,7 @@ export async function listCart(): Promise<ActionResult<CartItem[]>> {
     .order("id", { ascending: false });
 
   if (error) return { ok: false, error: error.message };
-  return { ok: true, data: ((rows ?? []) as LegacyCartRow[]).map(legacyCartRowToCartItem) };
+  return { ok: true, data: ((rows ?? []) as unknown as LegacyCartRow[]).map(legacyCartRowToCartItem) };
 }
 
 // ────────────────────────────────────────────────────────────

@@ -186,7 +186,7 @@ export default async function AdminBookingDetailPage({
   if (optionsRawErr) {
     console.error(`[booking_options list] failed`, { code: optionsRawErr.code, message: optionsRawErr.message });
   }
-  const options = (optionsRaw ?? []) as BookingOptionRow[];
+  const options = (optionsRaw ?? []) as unknown as BookingOptionRow[];
 
   // Frozen JSONB snapshot — preferred display source so the page always shows
   // the receipt the customer saw, even if booking_options got mutated later.

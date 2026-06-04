@@ -2724,6 +2724,7 @@
       "assignDriver": "Assign driver jobs",
       "driverWork": "Driver work-list (mobile)",
       "combineBill": "Combine bills",
+      "billingRun": "Billing-run (credit-term)",
       "tranTh": "TH-transport batches"
     },
     "forwarderImport": {
@@ -2823,10 +2824,15 @@
       "system": "System",
       "crons": "Cron jobs",
       "systemNotifs": "System notifications",
+      "notifyDispatch": "Notification dispatch",
+      "pcsSync": "PCS ↔ Pacred Sync",
+      "pcsCustomerMigration": "PCS customer migration",
       "csvImports": "CSV bulk import",
       "tools": "Tools",
+      "globalSearch": "Global search",
       "orgEmail": "Organization email",
       "orgChannels": "Organization channels",
+      "orgContacts": "Organization contacts",
       "adminUsers": "Admin users",
       "partners": "Partners"
     },

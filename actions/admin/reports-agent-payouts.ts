@@ -216,7 +216,7 @@ export async function getAgentPayoutReport(
         logger.error("reports", "agent-payouts tb_forwarder lookup failed", fwdErr);
         return { ok: false, error: fwdErr.message };
       }
-      for (const f of (fwdRaw ?? []) as FwdRow[]) fwdById.set(f.id, f);
+      for (const f of (fwdRaw ?? []) as unknown as FwdRow[]) fwdById.set(f.id, f);
     }
 
     // Bucket the open gross + row-count per team (only rows whose forwarder
@@ -259,7 +259,7 @@ export async function getAgentPayoutReport(
       date: string | null;
       status: string | null;
     };
-    const payRows = (payRaw ?? []) as PayRow[];
+    const payRows = (payRaw ?? []) as unknown as PayRow[];
 
     // Per-team pending/paid sums (status '2' / '3'), over ALL batches.
     const pendingPayoutByTeam = new Map<string, number>();

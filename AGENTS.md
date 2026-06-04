@@ -124,6 +124,20 @@ This sharpens §0c (verify-deep-flow) + §0d (reachability): a surface can be re
 
 ---
 
+## 0f. Product-quality concept — confirm-before-mutate · accurate badges · linked + reachable for all roles · no-regression perf (2026-06-04 · owner directive)
+
+Owner's standing quality bar ("เป๊ะคม") for every surface — customer, staff, AND partner. Full record: memory `ui_quality_concept_2026_06_04`. Treat as a checklist on every surface you touch:
+
+1. **Confirm before mutate (กันคนลั่น / user-error).** Any action that fills / edits / submits / deletes / approves MUST show a dialog (Confirm / Cancel / OK / explicit edit-mode) BEFORE it fires — never silent instant-mutate on a single click. Reusable: `components/ui/pacred-dialog.tsx` + `useConfirmDialogs`. A mutate-button with no confirm = a defect.
+2. **Badge / notification numbers EXACT — อย่ามั่ว.** Every count/badge must equal the live `tb_*` query it claims to represent (not a rebuilt-twin 0-row count, not stale). If you surface a number, verify its source.
+3. **Linked + reachable + useful for all 3 roles.** Data links correctly + completely across the system and is used to the max; every function is ≤3-click reachable (§0d) for staff · customer · **partner**.
+4. **Perf without regression.** The platform is slow ("ช้า·หน่วง·ทุกคนบ่น"). Hunt + fix lag (performance-hunter skill, measure-then-fix) — but **ห้ามทำงานบัค งานหาย** (NEVER introduce a bug or lose work; verify every perf change doesn't regress). This is the #1 guardrail.
+5. **Profile picture must actually work** — customer (wired 2026-06-04) AND staff/admin (TODO) — and be upload-tested, not just render-checked.
+
+Gate discipline (learned 2026-06-04): NEVER pipe a gate through `| tail` — the pipe's exit code masks the real one (a build can fail while the wrapper reports 0). Use `pnpm build > /tmp/x 2>&1; echo $?` and read the real exit code before claiming green or pushing.
+
+---
+
 ## 0. Current direction — D1: Pacred is a faithful PCS Cargo port
 
 On **2026-05-18 the owner rejected the rebuilt-from-scratch Pacred app** — its UI and workflow look nothing like the legacy **PCS Cargo** system that staff and ~8,898 customers use daily. The direction is now **D1: Pacred becomes the legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`.** This is the canonical lens for every task. Three phases:

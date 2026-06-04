@@ -64,6 +64,7 @@ import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { uploadToBucket } from "@/lib/storage/upload";
 import { ADDRESSES } from "@/components/seo/site";
+import { TAX_DOC_MODES, prefFromMode, type TaxDocMode } from "@/lib/tax/tax-doc-mode";
 
 // Local resolveLegacyAdminId (same pattern as forwarders-edit.ts / pay-user.ts
 // — known consolidation TODO; kept local to avoid premature extraction).
@@ -717,5 +718,71 @@ export async function adminMarkForwarderCredit(
     revalidatePath(`/admin/forwarders/${d.fId}`);
     revalidatePath("/admin/forwarders");
     return { ok: true, data: { priceCredited: pricePay, outstanding: newOutstanding } };
+  });
+}
+
+// ── tax-document mode (Lane B · 2026-06-04) ─────────────────────────────────
+// Set/change the order's tax-document mode (ใบกำกับ / ใบขน / ไม่รับเอกสาร) on a
+// tb_forwarder row. This is the ADMIN counterpart to the customer's /cart
+// selector — staff can correct/assign the mode for forwarder orders (which are
+// created via warehouse/MOMO intake, not a customer cart, so they have no mode
+// until set here). The mode drives the VAT-7% base + which RD document is
+// issued at payment-land (lib/admin/auto-issue-receipt.ts → issueForwarderTax-
+// Invoice). Column-only write to tb_forwarder.tax_doc_pref (migration 0127).
+//
+// NOTE — this sets the PREFERENCE only. It does NOT re-issue an already-issued
+// tax document (those are idempotent on fid). Setting the mode BEFORE payment-
+// land is what routes the auto-issue. After issuance, accounting must cancel +
+// re-issue via the etax surface to change a document's mode.
+const taxDocModeSchema = z.object({
+  fId:  z.number().int().positive(),
+  mode: z.enum(TAX_DOC_MODES as unknown as [TaxDocMode, ...TaxDocMode[]]),
+});
+export type AdminUpdateForwarderTaxDocModeInput = z.infer<typeof taxDocModeSchema>;
+
+export async function adminUpdateForwarderTaxDocMode(
+  rawInput: AdminUpdateForwarderTaxDocModeInput,
+): Promise<AdminActionResult> {
+  const parsed = taxDocModeSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+  const newPref = prefFromMode(d.mode); // 'tax_invoice' | 'customs' | 'receipt'
+
+  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+
+    const { data: fwd, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, tax_doc_pref")
+      .eq("id", d.fId)
+      .maybeSingle<{ id: number; tax_doc_pref: string | null }>();
+    if (fwdErr) {
+      console.error(`[adminUpdateForwarderTaxDocMode read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
+      return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
+    }
+    if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+    // Normalise the stored value the same way the engine does ('' / NULL = receipt).
+    const beforePref = (fwd.tax_doc_pref ?? "").trim() || "receipt";
+    if (beforePref === newPref) {
+      return { ok: false, error: "ไม่มีการเปลี่ยนแปลง (โหมดเอกสารเดิม)" };
+    }
+
+    const { error: updErr } = await admin
+      .from("tb_forwarder")
+      .update({ tax_doc_pref: newPref, adminidupdate: legacyAdminId })
+      .eq("id", d.fId);
+    if (updErr) {
+      console.error(`[adminUpdateForwarderTaxDocMode update] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
+      return { ok: false, error: `บันทึกโหมดเอกสารไม่สำเร็จ: ${updErr.message}` };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder.update_tax_doc_mode", "tb_forwarder", String(d.fId), {
+      before: beforePref, after: newPref, mode: d.mode,
+    });
+
+    revalidatePath(`/admin/forwarders/${d.fId}`);
+    revalidatePath("/admin/forwarders");
+    return { ok: true };
   });
 }

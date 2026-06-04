@@ -294,7 +294,7 @@ export async function getBatchDetail(
       if (fwdErr) {
         console.error("[tb_forwarder batch] failed", { code: fwdErr.code, message: fwdErr.message });
       }
-      fwdById = new Map(((fwdRaw ?? []) as FwdRow[]).map((f) => [f.id, f]));
+      fwdById = new Map(((fwdRaw ?? []) as unknown as FwdRow[]).map((f) => [f.id, f]));
     }
 
     const items: BatchSaleItem[] = itemRows.map((it) => {
@@ -358,7 +358,7 @@ export async function getBatchDetail(
     if (orderErr) {
       console.error("[tb_header_order batch] failed", { code: orderErr.code, message: orderErr.message });
     }
-    orderByHno = new Map(((orderRaw ?? []) as OrderRow[]).map((o) => [o.hno, o]));
+    orderByHno = new Map(((orderRaw ?? []) as unknown as OrderRow[]).map((o) => [o.hno, o]));
   }
 
   const items: BatchInterpreterItem[] = itemRows.map((it) => {

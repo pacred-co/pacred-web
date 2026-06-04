@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { sweepStaleImportingRows } from "@/lib/admin/csv-import-sweep";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import { CsvImportRowActions } from "./row-actions";
 
 const STATUS_BADGE: Record<string, string> = {
@@ -26,23 +28,30 @@ function normSingle<T>(x: T | T[] | null | undefined): T | null {
   return Array.isArray(x) ? (x[0] ?? null) : x;
 }
 
-export default async function AdminCsvImportsPage() {
+export default async function AdminCsvImportsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const sp = await searchParams;
+  const page = parsePage(sp.page);
+  const { from, to } = pageRange(page);
   const admin = createAdminClient();
 
   // P-19-followup-stale: opportunistic sweep so admins never see a
   // zombie 'importing' row left behind by a crashed import process.
   await sweepStaleImportingRows(admin);
 
-  const { data, error } = await admin
+  const { data, error, count } = await admin
     .from("csv_imports")
     .select(`
       id, filename, target_table, status,
       row_count, imported_count, error_message,
       size_bytes, created_at, imported_at,
       uploader:profiles!uploader_id ( member_code, first_name, last_name )
-    `)
+    `, { count: "exact" })
     .order("created_at", { ascending: false })
-    .limit(100);
+    .range(from, to);
   if (error) {
     console.error(`[csv_imports list] failed`, { code: error.code, message: error.message });
   }
@@ -53,7 +62,7 @@ export default async function AdminCsvImportsPage() {
     size_bytes: number | null; created_at: string; imported_at: string | null;
     uploader: Uploader;
   };
-  const rows = ((data ?? []) as RawRow[]).map((r) => ({
+  const rows = ((data ?? []) as unknown as RawRow[]).map((r) => ({
     ...r,
     uploader: normSingle(r.uploader),
   }));
@@ -149,6 +158,12 @@ export default async function AdminCsvImportsPage() {
             </table>
           </div>
         )}
+        <Pagination
+          page={page}
+          pageSize={DEFAULT_PAGE_SIZE}
+          total={count ?? 0}
+          basePath="/admin/csv-imports"
+        />
       </div>
     </main>
   );

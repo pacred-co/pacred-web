@@ -18,6 +18,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { TbWalletBulkBar, TbWalletRowCheckbox } from "./tb-bulk-bar";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
+import { pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 const STATUS_LABEL: Record<string, string> = {
   "1": "รอตรวจสอบ",
@@ -90,6 +92,20 @@ export type TransactionsViewProps = {
   kind: string | undefined;
   status: string | undefined;
   q: string | undefined;
+  /** Lane C 2026-06-02 — sortable column headers (ภูม flag #3). */
+  sort?: string;
+  dir?: string;
+  /** 1-based page (server-side .range pagination · 2026-06-03). */
+  page?: number;
+};
+
+// Lane C 2026-06-02 — server-side sort whitelist for the tx list.
+const TX_SORT_FIELDS: Record<string, string> = {
+  date:    "date",
+  userid:  "userid",
+  type:    "type",
+  amount:  "amount",
+  status:  "status",
 };
 
 // Helper — build URL preserving view=tx + the other tx-only searchparams.
@@ -101,8 +117,13 @@ function buildTxHref(params: { kind?: string | null; status?: string | null }): 
   return `/admin/wallet?${qs.toString()}`;
 }
 
-export async function WalletTransactionsView({ kind, status, q }: TransactionsViewProps) {
+export async function WalletTransactionsView({ kind, status, q, sort, dir, page = 1 }: TransactionsViewProps) {
   const admin = createAdminClient();
+  const { from: rowFrom, to: rowTo } = pageRange(page);
+  // Lane C 2026-06-02 — resolve sort + dir from URL with whitelist.
+  const sortKey = sort && TX_SORT_FIELDS[sort] ? sort : "date";
+  const sortDir: "asc" | "desc" = dir === "asc" ? "asc" : "desc";
+  const sortColumn = TX_SORT_FIELDS[sortKey];
 
   // Map ?kind=... to the matching `type` values.
   const kindTab = KIND_TABS.find((t) => t.key === (kind ?? null));
@@ -118,13 +139,15 @@ export async function WalletTransactionsView({ kind, status, q }: TransactionsVi
 
   const statusFilter = status === "pending" ? "1" : status ?? "";
 
+  // PERF (2026-06-03): paginate 50/page via .range + exact count.
   let qb = admin
     .from("tb_wallet_hs")
     .select(
       "id,date,dateslip,amount,status,type,imagesslip,depositnamebank,note,userid,adminid,adminidcrate",
+      { count: "exact" },
     )
-    .order("date", { ascending: false })
-    .limit(200);
+    .order(sortColumn, { ascending: sortDir === "asc" })
+    .range(rowFrom, rowTo);
 
   if (effectiveTypeFilter && effectiveTypeFilter.length > 0) {
     qb = qb.in("type", effectiveTypeFilter);
@@ -138,7 +161,7 @@ export async function WalletTransactionsView({ kind, status, q }: TransactionsVi
     else qb = qb.eq("userid", term.toUpperCase());
   }
 
-  const { data: rowsRaw, error } = await qb;
+  const { data: rowsRaw, error, count: totalTx } = await qb;
   const rows = (rowsRaw ?? []) as unknown as WhsRow[];
 
   // Resolve every imagesslip → signed Supabase URL in parallel (Wave 13.1).
@@ -159,6 +182,20 @@ export async function WalletTransactionsView({ kind, status, q }: TransactionsVi
       console.error(`[tb_users list] failed`, { code: usersRawErr.code, message: usersRawErr.message });
     }
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
+  }
+
+  // Lane C 2026-06-02 — pre-compute sort hrefs for each tx column header.
+  const sortHrefs: Record<string, string> = {};
+  for (const k of Object.keys(TX_SORT_FIELDS)) {
+    const nextDir = sortKey === k && sortDir === "desc" ? "asc" : "desc";
+    const params = new URLSearchParams();
+    params.set("view", "tx");
+    if (kind)   params.set("kind", kind);
+    if (status) params.set("status", status);
+    if (q)      params.set("q", q);
+    params.set("sort", k);
+    params.set("dir", nextDir);
+    sortHrefs[k] = `/admin/wallet?${params.toString()}`;
   }
 
   return (
@@ -250,12 +287,12 @@ export async function WalletTransactionsView({ kind, status, q }: TransactionsVi
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-2 py-3 w-8"></th>
-                  <th className="px-3 py-3">วันที่สร้าง</th>
-                  <th className="px-3 py-3">ลูกค้า</th>
-                  <th className="px-3 py-3">ประเภท</th>
-                  <th className="px-3 py-3 text-right">จำนวน (THB)</th>
+                  <TxSortTh label="วันที่สร้าง"   field="date"   activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} />
+                  <TxSortTh label="ลูกค้า"        field="userid" activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} />
+                  <TxSortTh label="ประเภท"        field="type"   activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} />
+                  <TxSortTh label="จำนวน (THB)"   field="amount" activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} align="right" />
                   <th className="px-3 py-3">ธนาคาร</th>
-                  <th className="px-3 py-3">สถานะ</th>
+                  <TxSortTh label="สถานะ"         field="status" activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} />
                   <th className="px-3 py-3">สลิป</th>
                   <th className="px-3 py-3">จัดการ</th>
                 </tr>
@@ -369,9 +406,46 @@ export async function WalletTransactionsView({ kind, status, q }: TransactionsVi
         )}
       </div>
 
-      <p className="text-[11px] text-muted">
-        แสดงไม่เกิน 200 แถวต่อหน้า (ใช้ตัวกรอง / ค้นหาด้านบนเพื่อกรองเพิ่ม)
-      </p>
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={totalTx ?? 0}
+        basePath="/admin/wallet"
+        params={{ view: "tx", kind, status, q, sort, dir }}
+      />
     </>
+  );
+}
+
+function TxSortTh({
+  label,
+  field,
+  activeKey,
+  activeDir,
+  hrefs,
+  align,
+}: {
+  label: string;
+  field: string;
+  activeKey: string;
+  activeDir: "asc" | "desc";
+  hrefs: Record<string, string>;
+  align?: "right";
+}) {
+  const active = activeKey === field;
+  const arrow = active ? (activeDir === "asc" ? "↑" : "↓") : "⇵";
+  const cls = align === "right" ? "text-right" : "";
+  return (
+    <th className={`px-3 py-3 ${cls}`}>
+      <Link
+        href={hrefs[field]}
+        className={`inline-flex items-center gap-1 hover:text-foreground transition-colors ${
+          active ? "text-primary-700 font-semibold" : ""
+        } ${align === "right" ? "flex-row-reverse" : ""}`}
+      >
+        <span>{label}</span>
+        <span className="text-[9px]" aria-hidden>{arrow}</span>
+      </Link>
+    </th>
   );
 }

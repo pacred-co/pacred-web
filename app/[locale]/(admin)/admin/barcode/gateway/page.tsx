@@ -227,7 +227,7 @@ export default async function BarcodeGatewayPage({
     );
   }
 
-  const rows = (data ?? []) as ForwarderRow[];
+  const rows = (data ?? []) as unknown as ForwarderRow[];
 
   if (rows.length === 0) {
     return <NotFoundPanel tracking={tracking} fallbackHref={fallbackHref} />;

@@ -29,8 +29,15 @@ import {
   adminUpdateForwarderShipBy,
   adminUpdateForwarderCostAdjust,
   adminUpdateForwarderAmountCount,
+  adminUpdateForwarderTaxDocMode,
 } from "@/actions/admin/forwarders-field-edits";
 import { confirm } from "@/components/ui/confirm";
+import {
+  TAX_DOC_MODES,
+  TAX_DOC_MODE_META,
+  modeFromPref,
+  type TaxDocMode,
+} from "@/lib/tax/tax-doc-mode";
 
 export type SavedAddressOption = {
   addressId: number;
@@ -75,6 +82,7 @@ type Props = {
   currentPriceUpdate: number;           // tb_forwarder.fpriceupdate
   currentPriceOther: number;            // tb_forwarder.priceother
   currentDiscount: number;              // tb_forwarder.fdiscount
+  currentTaxDocPref: string | null;     // tb_forwarder.tax_doc_pref (null='receipt')
 };
 
 export function TbForwarderEditPanel(p: Props) {
@@ -100,6 +108,9 @@ export function TbForwarderEditPanel(p: Props) {
   const [priceUpdate, setPriceUpdate] = useState<string>(String(p.currentPriceUpdate ?? 0));
   const [priceOther, setPriceOther] = useState<string>(String(p.currentPriceOther ?? 0));
   const [discount, setDiscount] = useState<string>(String(p.currentDiscount ?? 0));
+  // tax-document mode (ใบกำกับ / ใบขน / ไม่รับเอกสาร)
+  const currentMode = modeFromPref(p.currentTaxDocPref);
+  const [taxDocMode, setTaxDocMode] = useState<TaxDocMode>(currentMode);
   // owner reassign
   const [newOwner, setNewOwner] = useState<string>("");
   // cover upload
@@ -156,7 +167,7 @@ export function TbForwarderEditPanel(p: Props) {
     if (!code) { setMsg({ kind: "err", text: "เลือกผู้ขนส่ง หรือกรอกชื่อผู้ขนส่งภายนอก" }); return; }
     if (code === p.currentShipBy) { setMsg({ kind: "err", text: "ไม่มีการเปลี่ยนแปลง" }); return; }
     const extra = code === "PCS"
-      ? "\n\nผู้ขนส่ง PCS = รับเองที่โกดัง — ที่อยู่จัดส่งจะถูกแทนที่ด้วยที่อยู่โกดัง PCS กทม"
+      ? "\n\nผู้ขนส่ง PCS = รับเองที่โกดัง — ที่อยู่จัดส่งจะถูกแทนที่ด้วยที่อยู่โกดัง Pacred (สมุทรสาคร)"
       : (code === "PCSF" || code === "PCSE")
         ? "\n\nค่าขนส่งจะถูกคำนวณใหม่ตามเงื่อนไข PCS (เฉพาะรายการที่ยังไม่ชำระเงิน)"
         : "";
@@ -191,6 +202,18 @@ export function TbForwarderEditPanel(p: Props) {
       () => adminUpdateForwarderCostAdjust({ fId: p.fId, fpriceupdate: pu, priceother: po, fdiscount: dc }),
       "บันทึกค่าใช้จ่ายสำเร็จ",
     );
+  }
+
+  function onSaveTaxDocMode() {
+    if (taxDocMode === currentMode) { setMsg({ kind: "err", text: "ไม่มีการเปลี่ยนแปลง (โหมดเอกสารเดิม)" }); return; }
+    const meta = TAX_DOC_MODE_META[taxDocMode];
+    if (!window.confirm(
+      `เปลี่ยนโหมดเอกสารภาษีเป็น "${meta.title}" ?\n\n` +
+      `${meta.hint}\n` +
+      `ฐาน VAT: ${meta.vatBase}\n\n` +
+      `(มีผลตอนชำระเงิน — ระบบจะออกเอกสารตามโหมดนี้ · ไม่กระทบเอกสารที่ออกไปแล้ว)`,
+    )) return;
+    run(() => adminUpdateForwarderTaxDocMode({ fId: p.fId, mode: taxDocMode }), `ตั้งโหมดเอกสารเป็น ${meta.short} สำเร็จ`);
   }
 
   return (
@@ -303,7 +326,7 @@ export function TbForwarderEditPanel(p: Props) {
           🏷️ บันทึกผู้ขนส่ง
         </button>
         <p className="text-[10px] text-muted">
-          ปัจจุบัน: <b>{p.currentShipBy || "—"}</b> · PCS/PCSF/PCSE คิดค่าขนส่งใหม่อัตโนมัติ (เฉพาะที่ยังไม่ชำระ) · PCS แทนที่ที่อยู่ด้วยโกดัง PCS กทม
+          ปัจจุบัน: <b>{p.currentShipBy || "—"}</b> · PCS/PCSF/PCSE คิดค่าขนส่งใหม่อัตโนมัติ (เฉพาะที่ยังไม่ชำระ) · PCS แทนที่ที่อยู่ด้วยโกดัง Pacred (สมุทรสาคร)
         </p>
       </div>
 
@@ -384,6 +407,36 @@ export function TbForwarderEditPanel(p: Props) {
         </button>
         <p className="text-[10px] text-muted">
           มีผลต่อยอดรวมที่ลูกค้าต้องชำระทันที (ไม่แตะค่าขนส่ง/ค่าตีลังที่คำนวณจากขนาด)
+        </p>
+      </div>
+
+      {/* Tax-document mode (Lane B · ใบกำกับ / ใบขน / ไม่รับเอกสาร) */}
+      <div className="space-y-2 border-t border-border pt-3">
+        <label htmlFor="te_taxdocmode" className="block text-xs font-medium text-muted">
+          โหมดเอกสารภาษี (เลือกก่อนชำระเงิน)
+        </label>
+        <select
+          id="te_taxdocmode"
+          value={taxDocMode}
+          onChange={(e) => setTaxDocMode(e.target.value as TaxDocMode)}
+          disabled={pending}
+          className={INPUT_CLS}
+        >
+          {TAX_DOC_MODES.map((m) => (
+            <option key={m} value={m}>{TAX_DOC_MODE_META[m].title}</option>
+          ))}
+        </select>
+        <p className="text-[10px] text-muted">{TAX_DOC_MODE_META[taxDocMode].hint}</p>
+        <button
+          type="button"
+          onClick={onSaveTaxDocMode}
+          disabled={pending || taxDocMode === currentMode}
+          className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm hover:bg-surface-alt disabled:opacity-50"
+        >
+          🧾 บันทึกโหมดเอกสาร
+        </button>
+        <p className="text-[10px] text-muted">
+          ปัจจุบัน: <b>{TAX_DOC_MODE_META[currentMode].title}</b> · ฐาน VAT: {TAX_DOC_MODE_META[taxDocMode].vatBase} · มีผลตอนชำระเงิน (ออกเอกสารอัตโนมัติตามโหมดนี้)
         </p>
       </div>
 

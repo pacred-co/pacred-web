@@ -294,7 +294,7 @@ export async function getEligibleShopOrdersForDisbursement(
         });
         return { ok: false, error: error.message };
       }
-      headerRows.push(...((data ?? []) as HeaderOrderRaw[]));
+      headerRows.push(...((data ?? []) as unknown as HeaderOrderRaw[]));
     }
 
     if (headerRows.length === 0) {
@@ -401,7 +401,7 @@ export async function createShopDisbursementBatch(
       });
       return { ok: false, error: orderErr.message };
     }
-    const rows = (orderData ?? []) as HeaderOrderRaw[];
+    const rows = (orderData ?? []) as unknown as HeaderOrderRaw[];
     if (rows.length === 0) {
       return { ok: false, error: "ไม่พบรายการที่เลือก" };
     }
@@ -741,7 +741,7 @@ export async function getShopDisbursementBatch(
           });
           return { ok: false, error: error.message };
         }
-        collected.push(...((data ?? []) as HeaderOrderRaw[]));
+        collected.push(...((data ?? []) as unknown as HeaderOrderRaw[]));
       }
       headerRows = collected;
     }

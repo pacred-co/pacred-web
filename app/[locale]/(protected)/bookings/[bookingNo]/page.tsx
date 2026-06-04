@@ -275,7 +275,7 @@ export default async function BookingDetailPage({
         ) : (
           (options ?? []).length > 0 && (
             <ul className="mt-3 divide-y divide-border text-sm">
-              {((options ?? []) as BookingOptionRow[]).map((o) => (
+              {((options ?? []) as unknown as BookingOptionRow[]).map((o) => (
                 <li
                   key={`${o.option_key}-${o.option_label}`}
                   className="flex items-center justify-between gap-3 py-2"

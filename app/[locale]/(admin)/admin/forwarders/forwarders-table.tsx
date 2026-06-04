@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition, type ChangeEvent } from "react";
+import { useMemo, useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
+import { ArrowUpDown } from "lucide-react";
 import {
   adminBulkUpdateForwarderTbStatus,
   markForwarderPrinted,
@@ -294,6 +295,82 @@ function isMomoRoutingBatch(cab: string | null | undefined): boolean {
   return !!cab && MOMO_ROUTING_RX.test(cab.trim());
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Lane C 2026-06-02 — sortable column headers (per ภูม flag #3).
+// Module-level component per the cnt-hs-table.tsx pattern (Next 16
+// react-hooks/static-components rule: never define a child component
+// inside another component's render body — identity flips every render).
+// ─────────────────────────────────────────────────────────────────────
+type ForwardersSortKey =
+  | "id"
+  | "created_at"
+  | "userid"
+  | "outstanding"
+  | "tracking_chn"
+  | "date_status2"
+  | "date_status3"
+  | "date_status4"
+  | "status"
+  | "date_admin_status";
+type ForwardersSortDir = "asc" | "desc";
+
+function fwSortValue(r: Row, k: ForwardersSortKey): string | number {
+  switch (k) {
+    case "id":                  return r.id;
+    case "created_at":          return r.created_at ? Date.parse(r.created_at) : 0;
+    case "userid":              return (r.customer?.userid ?? "").toLowerCase();
+    case "outstanding":         return r.outstanding_thb;
+    case "tracking_chn":        return (r.tracking_chn ?? "").toLowerCase();
+    case "date_status2":        return r.date_status2 ? Date.parse(r.date_status2) : 0;
+    case "date_status3":        return r.date_status3 ? Date.parse(r.date_status3) : 0;
+    case "date_status4":        return r.date_status4 ? Date.parse(r.date_status4) : 0;
+    case "status":              return r.status;
+    case "date_admin_status":   return r.date_admin_status ? Date.parse(r.date_admin_status) : 0;
+  }
+}
+
+function FwSortableTh({
+  label,
+  sortKey,
+  activeKey,
+  activeDir,
+  onSort,
+  align = "left",
+  title,
+}: {
+  label: string;
+  sortKey: ForwardersSortKey;
+  activeKey: ForwardersSortKey | null;
+  activeDir: ForwardersSortDir;
+  onSort: (k: ForwardersSortKey) => void;
+  align?: "left" | "right" | "center";
+  title?: string;
+}) {
+  const active = activeKey === sortKey;
+  const alignCls = align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left";
+  return (
+    <th className={`px-2 py-3 ${alignCls}`} title={title}>
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className={`inline-flex items-center gap-1 hover:text-foreground transition-colors ${
+          active ? "text-primary-700 font-semibold" : ""
+        } ${align === "right" ? "flex-row-reverse" : ""}`}
+        aria-label={`เรียงตาม ${label}`}
+      >
+        <span>{label}</span>
+        <ArrowUpDown
+          className={`w-3 h-3 ${active ? "opacity-100" : "opacity-40"}`}
+          aria-hidden
+        />
+        {active && (
+          <span className="sr-only">{activeDir === "asc" ? "ascending" : "descending"}</span>
+        )}
+      </button>
+    </th>
+  );
+}
+
 export function ForwardersTable({
   rows,
   statusLabel,
@@ -314,6 +391,26 @@ export function ForwardersTable({
   const router = useRouter();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkStatus, setBulkStatus] = useState<BulkStatusValue>("2");
+  // Lane C 2026-06-02 — client-side sort state (server pre-orders by fdate desc;
+  // until user clicks a header, activeKey stays null = preserve server order).
+  const [sortKey, setSortKey] = useState<ForwardersSortKey | null>(null);
+  const [sortDir, setSortDir] = useState<ForwardersSortDir>("desc");
+  const handleSort = (k: ForwardersSortKey) => {
+    if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(k); setSortDir("desc"); }
+  };
+  const viewRows = useMemo(() => {
+    if (!sortKey) return rows;
+    const dir = sortDir === "asc" ? 1 : -1;
+    const out = [...rows].sort((a, b) => {
+      const av = fwSortValue(a, sortKey);
+      const bv = fwSortValue(b, sortKey);
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    });
+    return out;
+  }, [rows, sortKey, sortDir]);
   // Wave 23 (2026-05-27 ภูม flag): cabinet input in bulk-bar so admin can
   // assign a container (เลขตู้ "GZE-2026-001" etc) to a batch of orders in
   // one shot. Optional — left blank = don't touch fcabinetnumber on the
@@ -480,23 +577,23 @@ export function ForwardersTable({
                       aria-label="เลือกทั้งหมด"
                     />
                   </th>
-                  <th className="px-2 py-3">ID</th>
-                  <th className="px-2 py-3">วันที่สร้าง</th>
-                  <th className="px-2 py-3">รหัสลูกค้า</th>
+                  <FwSortableTh label="ID"            sortKey="id"                activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
+                  <FwSortableTh label="วันที่สร้าง"     sortKey="created_at"        activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
+                  <FwSortableTh label="รหัสลูกค้า"     sortKey="userid"            activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
                   <th className="px-2 py-3">รายละเอียด</th>
-                  <th className="px-2 py-3 text-right" title="คำนวณจาก calPriceForwarderMain (legacy formula)">ยอดค้างชำระ</th>
-                  <th className="px-2 py-3">เลขพัสดุ (จีน)</th>
+                  <FwSortableTh label="ยอดค้างชำระ"   sortKey="outstanding"       activeKey={sortKey} activeDir={sortDir} onSort={handleSort} align="right" title="คำนวณจาก calPriceForwarderMain (legacy formula)" />
+                  <FwSortableTh label="เลขพัสดุ (จีน)" sortKey="tracking_chn"      activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
                   <th className="px-2 py-3">เลขพัสดุ (ไทย)</th>
-                  <th className="px-2 py-3">เข้าโกดัง</th>
-                  <th className="px-2 py-3">ออกโกดัง</th>
-                  <th className="px-2 py-3">ถึงไทย</th>
-                  <th className="px-2 py-3">สถานะ</th>
-                  <th className="px-2 py-3">อัปเดต</th>
+                  <FwSortableTh label="เข้าโกดัง"      sortKey="date_status2"      activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
+                  <FwSortableTh label="ออกโกดัง"      sortKey="date_status3"      activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
+                  <FwSortableTh label="ถึงไทย"        sortKey="date_status4"      activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
+                  <FwSortableTh label="สถานะ"         sortKey="status"            activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
+                  <FwSortableTh label="อัปเดต"        sortKey="date_admin_status" activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
                   <th className="px-2 py-3">ตัวเลือก</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
+                {viewRows.map((r) => {
                   const statusKey = r.status;
                   const badgeCls = STATUS_BADGE[r.status] ?? "bg-gray-50 text-gray-600 border-gray-200";
                   const sLabel = r.fcredit === "1"

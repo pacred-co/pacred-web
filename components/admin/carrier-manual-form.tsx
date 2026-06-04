@@ -41,7 +41,7 @@ type CoidOption = { coID: string; coName: string };
  *  Kept inline so this form is self-contained; if we ever centralise it, both
  *  files import from one place. */
 const SHIP_BY_OPTIONS: { value: string; label: string }[] = [
-  { value: "PCS",  label: "🏬 รับเองโกดัง PCS กทม"        },
+  { value: "PCS",  label: "🏬 รับเองโกดัง Pacred (สมุทรสาคร)"        },
   { value: "2",    label: "Flash Express"                  },
   { value: "3",    label: "J.K. เอ็กซ์เพรส"                 },
   { value: "21",   label: "นิ่มซี่เส็งขนส่ง 1988"             },
@@ -637,7 +637,7 @@ export function CarrierManualForm({
           <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
             *บริษัทอยู่ในช่วงโปรโมชั่นจัดส่งฟรี ในพื้นที่ กทม. และปริมณฑล —
             หากที่อยู่ปลายทางอยู่ในพื้นที่ ให้เลือก{" "}
-            <strong>&ldquo;PCS เหมาๆ (50 บ.) — กทม + ปริมณฑล&rdquo;</strong>
+            <strong>&ldquo;Pacred เหมาๆ (50 บ.) — กทม + ปริมณฑล&rdquo;</strong>
           </div>
         )}
 
@@ -657,9 +657,9 @@ export function CarrierManualForm({
           >
             <option value="">— กรุณาเลือกบริษัทขนส่ง —</option>
             {freeShipping && (
-              <option value="PCSF">📦 PCS เหมาๆ (50 บ.) — กทม + ปริมณฑล</option>
+              <option value="PCSF">📦 Pacred เหมาๆ (50 บ.) — กทม + ปริมณฑล</option>
             )}
-            <option value="PCSE">📦 PCS ขนส่ง — คิดตาม CBM × 120 บ. (ขั้นต่ำ 50)</option>
+            <option value="PCSE">📦 Pacred ขนส่ง — คิดตาม CBM × 120 บ. (ขั้นต่ำ 50)</option>
             {SHIP_BY_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
@@ -684,10 +684,10 @@ export function CarrierManualForm({
         {/* Address picker */}
         {shipBy === "PCS" ? (
           <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-            <p className="font-medium">📍 ที่อยู่: รับเองที่โกดัง PCS กทม.</p>
+            <p className="font-medium">📍 ที่อยู่: รับเองที่โกดัง Pacred (สมุทรสาคร)</p>
             <p className="mt-1 text-xs leading-relaxed">
-              บ้านเลขที่ 12 ซอย เพชรเกษม 77 แยก 3-6 · หนองค้างพลู · หนองแขม · กรุงเทพมหานคร · 10160<br />
-              โทร 02-444-7046
+              48/3 หมู่ 12 ตำบลอ้อมน้อย อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74130 (S&T WAREHOUSE219)<br />
+              โทร 02-421-3325
             </p>
           </div>
         ) : shipBy ? (

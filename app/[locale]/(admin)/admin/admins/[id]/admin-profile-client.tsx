@@ -332,9 +332,9 @@ function EditProfileButton({
                   <label className="form-control-label"><span className="text-danger">*</span> บริษัท</label>
                   <select className="form-control form-control-lg" value={v.company_type} onChange={up("company_type")} required>
                     <option value="">กรุณาเลือก...</option>
-                    <option value="1">PCS Cargo & PCS Freight</option>
-                    <option value="2">PCS Freight</option>
-                    <option value="3">PCS Cargo</option>
+                    <option value="1">Pacred Cargo & Pacred Freight</option>
+                    <option value="2">Pacred Freight</option>
+                    <option value="3">Pacred Cargo</option>
                   </select>
                 </div>
                 <div className="col-md-6">

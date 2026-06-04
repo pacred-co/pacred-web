@@ -32,6 +32,7 @@
  *   tb_settings       — rgdefault (เรทสั่งซื้อ), rsdefault (sale), rpdefault (โอน)
  */
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getWalletSystemTotals } from "@/lib/admin/wallet-totals";
 import { requireAdmin, getAdminRoles } from "@/lib/auth/require-admin";
 import { Link, redirect } from "@/i18n/navigation";
 import { getLocale } from "next-intl/server";
@@ -101,12 +102,16 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   // Note: tb_payment has no explicit cancelled state (paystatus 1=รอ);
   // we treat paystatus='2' (อนุมัติ) as the "completed" set per legacy
   // comment on the column.
+  // PERF (2026-06-03): the system-wide wallet total was pulled out of this
+  // fan-out into the cached getWalletSystemTotals() helper (60 s TTL · shared
+  // with /admin/wallet). It used to pull ~9k rows + sum in JS on every
+  // dashboard load. Kick it off concurrently with the big query batch below.
+  const walletTotalsPromise = getWalletSystemTotals();
   const [
     settings,
     revShopMonth, revShopToday,
     revForwarderMonth, revForwarderToday,
     revYuanMonth, revYuanToday,
-    walletTotal,
     usageCountsRes,
     totalCustomersCount,
     cancelledOrdersCount,
@@ -133,13 +138,6 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     // ฝากโอน (yuan transfer) revenue — paythb is THB equivalent · paystatus='2'=อนุมัติ.
     admin.from("tb_payment").select("paythb").gte("paydate", monthStart).eq("paystatus", "2"),
     admin.from("tb_payment").select("paythb").gte("paydate", todayStart).eq("paystatus", "2"),
-    // Wallet total — running balance per customer (`wallettotal`); summed in app.
-    // Wave 21 P2 Phase A: This SUM fetches ALL ~8,898 rows just to reduce in JS.
-    // Survey docs/research/wave-21-p2-query-survey.md §2 + §7 — to be replaced
-    // by `get_dashboard_kpi()` RPC in Phase C (collapses 8 sum-reduces to 1 RTT).
-    // Leaving the fetch for now: PostgREST has no SUM endpoint + accepting a
-    // stale cache here would diverge from staff "always fresh" expectation.
-    admin.from("tb_wallet").select("wallettotal").limit(50_000),
     // Customer usage split — ORDER-BASED (migration 0125 · เดฟ 2026-05-30).
     // used = customer with ≥1 tb_forwarder/tb_header_order · unused = approved
     // customer (userActive≠'0', not deleted) with 0 orders. Replaces the old
@@ -193,7 +191,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   const forwarderToday = sumNum(revForwarderToday.data, "ftotalprice");
   const yuanMonth      = sumNum(revYuanMonth.data, "paythb");
   const yuanToday      = sumNum(revYuanToday.data, "paythb");
-  const walletAll      = sumNum(walletTotal.data, "wallettotal");
+  const walletAll      = (await walletTotalsPromise).sumWallet;
   const grandTotal     = shopMonth + forwarderMonth + yuanMonth;
 
   // Settings rates — default to 5.00 (parity with legacy default constants
@@ -624,7 +622,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       if (error) {
         console.warn(`[sales_payouts list] failed (soft-fail · returning empty rows)`, error);
       }
-      return ((data ?? []) as RawPayoutRow[]).map((r) => {
+      return ((data ?? []) as unknown as RawPayoutRow[]).map((r) => {
         const p = pickProfile(r.profile);
         return {
           id: String(r.id),

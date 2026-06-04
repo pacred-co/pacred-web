@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { legacyMemberUrl } from "@/lib/legacy-image";
 import { ServiceImportAddForm } from "../add/service-import-add-form";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 /**
  * Import-forwarder list — TABLE VIEW. A FAITHFUL 1:1 TRANSCRIPTION of
@@ -81,7 +83,7 @@ import { ServiceImportAddForm } from "../add/service-import-add-form";
  *
  * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
  * `PR<n>` + Pacred — incl. the address-pickup option
- * ("รับเองหน้าโกดัง Pacred กทม"). The `value="PCS"` data value on the
+ * ("รับเองหน้าโกดัง Pacred (สมุทรสาคร)"). The `value="PCS"` data value on the
  * pickup option stays (it's the DB-stored fShipBy value the legacy
  * tb_*.fshipby rows persist).
  */
@@ -248,7 +250,7 @@ type AddressOption = {
 export default async function ForwarderTablePage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; fTrackingCHN?: string; fCabinetNumber?: string; ID?: string }>;
+  searchParams: Promise<{ q?: string; fTrackingCHN?: string; fCabinetNumber?: string; ID?: string; page?: string }>;
 }) {
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
@@ -435,9 +437,18 @@ export default async function ForwarderTablePage({
     rowNet.set(row.id, net);
   }
 
+  // PERF (2026-06-03): paginate the DISPLAYED rows (50/page). The status-tab
+  // counts (arrStatus / countAll / statusDriverItem) are derived from a
+  // SEPARATE status-only query so they stay full-set-correct; the q=6/q=6.1
+  // client filtering + per-row net (rowNet) above also run over the full set.
+  // Only the rendered mobile cards + desktop table slice to this window.
+  const page = parsePage(sp.page);
+  const offset = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
+
   // ── the add-forwarder modal address <select> (L1149-1167) ──
   // The main address (tb_address ⋈ tb_address_main) first, then every
-  // other active address; "รับเองหน้าโกดัง PCS กทม" appended last.
+  // other active address; "รับเองหน้าโกดัง Pacred (สมุทรสาคร)" appended last.
   // (tb_address.addressid / tb_address_main.addressid are bigint.)
   const addressOptions: AddressOption[] = [];
   let mainAddressID: number | null = null;
@@ -699,7 +710,7 @@ export default async function ForwarderTablePage({
                   {rows.length === 0 ? (
                     <p className="py-10 text-center text-sm text-muted">ไม่พบรายการ</p>
                   ) : (
-                    rows.map((row) => {
+                    pageRows.map((row) => {
                       const fStatusDriver = arrFIDDriver.has(row.id) ? 1 : 0;
                       const cover = resolveCover(row.fcover);
                       const net = rowNet.get(row.id) ?? 0;
@@ -855,7 +866,7 @@ export default async function ForwarderTablePage({
                                         <td className="t19 text-right px-2 py-1.5 border-b border-border text-xs font-bold text-white tabular-nums font-mono"></td>
                                         <td className="t18 px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
                                       </tr>
-                                      {rows.map((row) => {
+                                      {pageRows.map((row) => {
                                         const fStatusDriver = arrFIDDriver.has(row.id) ? 1 : 0;
                                         const cover = resolveCover(row.fcover);
                                         const net = rowNet.get(row.id) ?? 0;
@@ -1008,6 +1019,14 @@ export default async function ForwarderTablePage({
               <div id="example-console-rows"></div>
             </form>
         </section>
+
+        <Pagination
+          page={page}
+          pageSize={DEFAULT_PAGE_SIZE}
+          total={rows.length}
+          basePath="/service-import/table"
+          params={{ q: sp.q, fTrackingCHN: sp.fTrackingCHN, fCabinetNumber: sp.fCabinetNumber }}
+        />
       </div>
 
       {/* ── Bottom pay-bar — Tailwind rebuild matching forwarder-interactivity.tsx.
@@ -1182,7 +1201,7 @@ export default async function ForwarderTablePage({
                           {a.fullAddress}
                         </option>
                       ))}
-                      <option value="PCS">รับเองหน้าโกดัง Pacred กทม</option>
+                      <option value="PCS">รับเองหน้าโกดัง Pacred (สมุทรสาคร)</option>
                     </select>
                   </div>
                   <div id="selectShipBy"></div>

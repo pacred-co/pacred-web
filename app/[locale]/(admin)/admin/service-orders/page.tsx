@@ -43,6 +43,8 @@ import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-me
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 import { toLegacyOrderCode } from "@/lib/legacy-status-map";
+import { parsePage, pageRange } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import { ServiceOrdersTable, type ServiceOrderRow } from "./service-orders-table";
 
 export const dynamic = "force-dynamic";
@@ -108,6 +110,7 @@ type SearchParams = {
   sort?: string;
   dir?: "asc" | "desc";
   n?: string;                   // page size: 25|50|100|200
+  page?: string;                // 1-based page number (server-side pagination)
 };
 
 // Raw row shape from tb_header_order — the columns we read.
@@ -223,6 +226,11 @@ export default async function AdminServiceOrdersPage({
     hdateupdate: "hdateupdate",
   };
 
+  // ── Pagination — server-side window via ?page=N (PERF 2026-06-03).
+  // pageSize comes from the legacy "แสดง N รายการ" dropdown (?n=).
+  const page = parsePage(sp.page);
+  const { from: rowFrom, to: rowTo } = pageRange(page, pageSize);
+
   // ── Main query against tb_header_order ─────────────────────────────
   let q = admin
     .from("tb_header_order")
@@ -232,9 +240,10 @@ export default async function AdminServiceOrdersPage({
         "hshippingservice,hrate,hnote,hnoteuser,hnoteuserread,hnotedate," +
         "hprintbill,hprintbill2,adminid,adminidcreate,adminidip," +
         "adminidupdate,userid",
+      { count: "exact" },
     )
     .order(SORT_COL[currentSort], { ascending: currentDir === "asc", nullsFirst: false })
-    .limit(pageSize);
+    .range(rowFrom, rowTo);
 
   if (statusFilter) {
     q = q.eq("hstatus", statusFilter);
@@ -253,7 +262,7 @@ export default async function AdminServiceOrdersPage({
     );
   }
 
-  const { data: headerRows, error: headerErr } = await q;
+  const { data: headerRows, error: headerErr, count: totalFiltered } = await q;
   if (headerErr) {
     console.error("[/admin/service-orders] tb_header_order list failed", {
       code: headerErr.code,
@@ -586,6 +595,24 @@ export default async function AdminServiceOrdersPage({
           currentSort={currentSort}
           currentDir={currentDir}
           sortHrefs={sortHrefs}
+        />
+
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={totalFiltered ?? 0}
+          basePath="/admin/service-orders"
+          params={{
+            n: sp.n,
+            sort: sp.sort,
+            dir: sp.dir,
+            status: sp.status,
+            q: statusFilter,
+            search: keyword,
+            date_from: sp.date_from,
+            date_to: sp.date_to,
+            historyTableAll: sp.historyTableAll,
+          }}
         />
       </main>
     </>

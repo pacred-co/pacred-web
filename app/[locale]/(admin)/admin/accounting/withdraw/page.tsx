@@ -1,6 +1,8 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 /**
  * Admin > "ถอนเงิน โอนโดยตรง" — a FAITHFUL 1:1 TRANSCRIPTION of
@@ -215,6 +217,7 @@ type SP = {
   dateGroup?: string;
   year?: string;
   month?: string;
+  page?: string;
 };
 
 // ============================================================================
@@ -275,7 +278,7 @@ export default async function AdminAccountingWithdrawPage({
     .lte("date", `${endDate}T23:59:59`)
     .order("date", { ascending: true });
 
-  const walletRows = (walletRes.data ?? []) as WalletRaw[];
+  const walletRows = (walletRes.data ?? []) as unknown as WalletRaw[];
 
   // ── Pass 2: tb_users for the customer-name display ──────────────
   // Legacy `LEFT JOIN tb_users AS u ON u.userID=wh.userID`.
@@ -322,6 +325,13 @@ export default async function AdminAccountingWithdrawPage({
   //   amountAll = SUM(wh.amount) — used twice (columns 5 + 6).
   let amountAll = 0;
   for (const r of rows) amountAll += r.amount;
+
+  // PERF (2026-06-03): client-slice the DISPLAYED ledger (50/page). The
+  // amountAll total above is computed over the full `rows` set — we only
+  // window the rows rendered in the <tbody> below the pinned totals row.
+  const page     = parsePage(sp.page);
+  const offset   = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
   // Display banner copy (acc-withdraw.php L133-135 — always shows
   // "ผลลัพธ์การค้นหา ตั้งแต่วันที่ : <start> - <end>", because the legacy
@@ -559,7 +569,7 @@ export default async function AdminAccountingWithdrawPage({
                                     <td></td>
                                     <td></td>
                                   </tr>
-                                  {rows.map((row) => (
+                                  {pageRows.map((row) => (
                                     <tr
                                       key={`${row.id}-${row.date ?? ""}`}
                                       className="font-12"
@@ -626,6 +636,16 @@ export default async function AdminAccountingWithdrawPage({
                                 </tbody>
                               </table>
                             </form>
+                            <Pagination
+                              page={page}
+                              pageSize={DEFAULT_PAGE_SIZE}
+                              total={rows.length}
+                              basePath="/admin/accounting/withdraw"
+                              params={{
+                                date: sp.date, dateGroup: sp.dateGroup,
+                                year: sp.year, month: sp.month,
+                              }}
+                            />
                           </div>
                         </div>
                       </div>

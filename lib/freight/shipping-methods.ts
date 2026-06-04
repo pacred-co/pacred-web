@@ -109,10 +109,10 @@ export const SHIPPING_METHODS: readonly ShippingMethod[] = [
   { code: "45",   name: "MPort Logistics",                nameTh: "บริษัท เอ็มพอร์ท โลจิสติกส์ จำกัด", type: "truck", etaDays: 5, description: "ภาคเหนือ" },
   { code: "46",   name: "C.N. Transport",                 nameTh: "ซี.เอ็น.ทรานสปอร์ต",             type: "truck", etaDays: 4, description: "ชลบุรี · ระยอง" },
   { code: "47",   name: "Phuket Laem Thong Transport",    nameTh: "ภูเก็ตแหลมทองขนส่ง",             type: "truck", etaDays: 5, description: "ภูเก็ต · พังงา" },
-  { code: "PCS",  name: "PCS Warehouse Pickup",           nameTh: "รับเองโกดัง PCS กทม",            type: "truck", etaDays: 1, description: "รับด้วยตนเองที่โกดัง PCS หนองแขม" },
-  { code: "F",    name: "Auto-assigned by PCS",           nameTh: "บริษัทจัดหาให้อัตโนมัติ",        type: "truck", etaDays: 4 },
-  { code: "PCSF", name: "PCS Mao Mao (bulk)",             nameTh: "PCS เหมาเหมา",                   type: "truck", etaDays: 3, description: "PCS เหมาส่งทั้งคันรถ" },
-  { code: "PCSE", name: "PCS Express",                    nameTh: "PCS Express",                    type: "truck", etaDays: 2, description: "บริการขนส่งของ PCS Express" },
+  { code: "PCS",  name: "Pacred Warehouse Pickup",        nameTh: "รับเองโกดัง Pacred (สมุทรสาคร)", type: "truck", etaDays: 1, description: "รับด้วยตนเองที่โกดัง Pacred สมุทรสาคร" },
+  { code: "F",    name: "Auto-assigned by Pacred",        nameTh: "บริษัทจัดหาให้อัตโนมัติ",        type: "truck", etaDays: 4 },
+  { code: "PCSF", name: "Pacred Mao Mao (bulk)",          nameTh: "Pacred เหมาเหมา",                type: "truck", etaDays: 3, description: "Pacred เหมาส่งทั้งคันรถ" },
+  { code: "PCSE", name: "Pacred Express",                 nameTh: "Pacred Express",                 type: "truck", etaDays: 2, description: "บริการขนส่งของ Pacred Express" },
 ];
 
 /** Fast index by code — built once at module load. */

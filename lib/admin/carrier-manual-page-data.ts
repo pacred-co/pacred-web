@@ -41,7 +41,7 @@ export async function loadCarrierManualPageData(
   if (coRawErr) {
     console.error(`[tb_co list] failed`, { code: coRawErr.code, message: coRawErr.message });
   }
-  const coidList = (coRaw ?? []) as CoidOption[];
+  const coidList = (coRaw ?? []) as unknown as CoidOption[];
 
   // ─── tb_settings.freeShipping ───────────────────────────────────
   const { data: settingsRow, error: settingsRowErr } = await admin

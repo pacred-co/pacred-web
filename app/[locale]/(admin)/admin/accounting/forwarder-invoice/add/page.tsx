@@ -186,7 +186,7 @@ export default async function AddForwarderInvoicePage({
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="mx-auto max-w-7xl px-4 py-6">
+      <div className=" px-4 py-6">
         {/* Breadcrumb — 2026-05-30 ภูม flagged #7: was "ใบแจ้งหนี้ ฝากนำเข้า"
             but this page issues ใบเสร็จ (Wave 29 pivot · tb_receipt-backed). */}
         <nav className="text-sm text-slate-500 mb-3">

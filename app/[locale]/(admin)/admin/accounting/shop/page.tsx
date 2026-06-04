@@ -1,6 +1,8 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 /**
  * Admin > "รายงานฝากสั่งซื้อสินค้า" — a FAITHFUL 1:1 TRANSCRIPTION
@@ -253,6 +255,7 @@ type SP = {
   dateGroup?: string;
   year?: string;
   month?: string;
+  page?: string;
 };
 
 // ============================================================================
@@ -315,7 +318,7 @@ export default async function AdminAccountingShopPage({
     .select("amount, reforder")
     .eq("type", "5")
     .eq("status", "2");
-  const refundWalletRows = (refundWalletRes.data ?? []) as WalletRefundRaw[];
+  const refundWalletRows = (refundWalletRes.data ?? []) as unknown as WalletRefundRaw[];
 
   // type=5 refunds carry the tb_order.id (numeric) in refOrder — look
   // those ids up to recover the parent hno.
@@ -372,7 +375,7 @@ export default async function AdminAccountingShopPage({
     .gte("date", `${startDate}T00:00:00`)
     .lte("date", `${endDate}T23:59:59`)
     .order("date", { ascending: true });
-  const walletRows = (walletRes.data ?? []) as WalletShopRaw[];
+  const walletRows = (walletRes.data ?? []) as unknown as WalletShopRaw[];
 
   // The legacy WHERE filters wh.refOrder<>'' indirectly via the JOIN
   // (`ho.hNo<>''` means matched ho has a non-empty hNo — when status
@@ -403,7 +406,7 @@ export default async function AdminAccountingShopPage({
         "hno, hdate, hstatus, htotalpricechn, hshippingchn, hrate, hratecost, hcostall, userid",
       )
       .in("hno", candidateHnos);
-    for (const h of (headerRes.data ?? []) as HeaderRaw[]) {
+    for (const h of (headerRes.data ?? []) as unknown as HeaderRaw[]) {
       // Legacy GROUP BY ho.hNo means each hno appears at most once.
       // tb_header_order.hno is NOT a primary key but the migration
       // guarantees one row per hno via the legacy unique index.
@@ -496,6 +499,13 @@ export default async function AdminAccountingShopPage({
     pricePCSAll += pricePCS;
     profitAll += profit;
   }
+
+  // PERF (2026-06-03): client-slice the DISPLAYED ledger (50/page). All
+  // totals above are computed over the full `rows` set — we only window the
+  // rows rendered in the <tbody> below the pinned totals row.
+  const page     = parsePage(sp.page);
+  const offset   = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
   // Display-only banner copy (acc-shop.php L146-148 — always shows
   // "ผลลัพธ์การค้นหา ตั้งแต่วันที่ : <start> - <end>", because the legacy
@@ -767,7 +777,7 @@ export default async function AdminAccountingShopPage({
                                     <td className="text-right"></td>
                                     <td></td>
                                   </tr>
-                                  {rows.map((row) => {
+                                  {pageRows.map((row) => {
                                     const priceUser =
                                       (row.htotalpricechn + row.hshippingchn) *
                                       row.hrate;
@@ -859,6 +869,16 @@ export default async function AdminAccountingShopPage({
                                 </tbody>
                               </table>
                             </form>
+                            <Pagination
+                              page={page}
+                              pageSize={DEFAULT_PAGE_SIZE}
+                              total={rows.length}
+                              basePath="/admin/accounting/shop"
+                              params={{
+                                date: sp.date, dateGroup: sp.dateGroup,
+                                year: sp.year, month: sp.month,
+                              }}
+                            />
                           </div>
                         </div>
                       </div>

@@ -433,7 +433,7 @@ export default async function ServiceOrderPrintPage({
       console.error(`[tb_order list] failed`, { code: orderRowsAllErr.code, message: orderRowsAllErr.message });
     }
 
-    const allRows = (orderRowsAll ?? []) as OrderRow[];
+    const allRows = (orderRowsAll ?? []) as unknown as OrderRow[];
 
     // DISTINCT(cProvider) GROUP BY cProvider — preserve first-seen
     // order, exactly as MySQL returns the grouped set.

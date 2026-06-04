@@ -185,3 +185,61 @@ export function deriveCorporateFromUser(
   // /admin/customers/[id] edit; we trust the column here.
   return cn ? 1 : 2;
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// FORWARDER-INVOICE DOC NO (FRI) — billing-run R-2 (2026-06-03)
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Mint the next `doc_no` for `tb_forwarder_invoice` (ใบวางบิล / billing-run).
+ *
+ * Format: `FRI{yyMM}-{NNNNN}` — e.g. `FRI2606-00001`. Counter is monthly
+ * (rolls over on the 1st of each month). Single sequence — unlike receipts,
+ * billing-run does NOT bifurcate juristic vs personal because the operational
+ * concept (monthly batch billing) is identical for both. The buyer_name +
+ * is_juristic columns on the row distinguish the customer class.
+ *
+ * Mirrors `mintReceiptDocNo` race-condition behavior — `tb_forwarder_invoice.doc_no`
+ * IS a unique constraint, so a duplicate would 23505 on insert. The Server
+ * Action wraps INSERT in a small retry loop (3 attempts with re-mint between)
+ * for that case.
+ *
+ * @throws Never — on lookup error returns `FRI{yyMM}-00001` so the INSERT
+ *         attempts; the downstream unique constraint will surface the real
+ *         issue. See AGENTS.md §0c.
+ */
+export async function mintForwarderInvoiceDocNo(
+  admin: SupabaseClient,
+  opts: { issueDate: Date },
+): Promise<string> {
+  const yyMm = yyMmTokenForDate(opts.issueDate);
+  const matchPattern = `FRI${yyMm}-%`; // ILIKE pattern, e.g. "FRI2606-%"
+
+  const { data, error } = await admin
+    .from("tb_forwarder_invoice")
+    .select("doc_no")
+    .ilike("doc_no", matchPattern)
+    .order("doc_no", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ doc_no: string | null }>();
+
+  if (error) {
+    console.error(`[mintForwarderInvoiceDocNo] tb_forwarder_invoice lookup failed`, {
+      code: error.code,
+      message: error.message,
+      yyMm,
+    });
+  }
+
+  if (!data?.doc_no) {
+    return `FRI${yyMm}-00001`;
+  }
+
+  // Same parse pattern as mintReceiptDocNo: last 5 chars + parseInt + +1.
+  const lastSuffix = data.doc_no.slice(-5);
+  const lastSeq = Number.parseInt(lastSuffix, 10);
+  const nextSeq = (Number.isFinite(lastSeq) ? lastSeq : 0) + 1;
+  const nextSuffix = String(nextSeq).padStart(5, "0");
+
+  return `FRI${yyMm}-${nextSuffix}`;
+}

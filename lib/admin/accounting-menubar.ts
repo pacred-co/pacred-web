@@ -181,7 +181,36 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       },
       { label: "ใบลดหนี้",                              children: notesStatuses("credit-note") },
       { label: "ใบเพิ่มหนี้",                            children: notesStatuses("debit-note") },
-      { label: "ใบวางบิล",                              children: notesStatuses("billing-note") },
+      // 2026-06-03 (R-2 · เดฟ): ใบวางบิล wired to the live billing-run port
+      // (migration 0138 · tb_forwarder_invoice). Was stubbed via
+      // notesStatuses("billing-note") → 404. Mirrors PEAK status tabs
+      // ล่าสุด / ทั้งหมด / รอรับชำระ / เกินเวลา / รับชำระแล้ว / ยกเลิก.
+      // ภูม flag 2026-06-03: ใบวางบิลเป็นของ "ระบบบัญชี" (PEAK pattern)
+      // → ย้ายมาที่นี่ ทิ้งสตับ /accounting/cargo/income/billing-note/* เก่า.
+      {
+        label: "ใบวางบิล",
+        href: "/admin/billing-run",
+        children: [
+          { label: "สร้างใบวางบิลใหม่",  href: "/admin/billing-run/add" },
+          { label: "ล่าสุด (30 วัน)",     href: "/admin/billing-run?tab=recent" },
+          { label: "ทั้งหมด",             href: "/admin/billing-run?tab=all" },
+          { label: "รอรับชำระ",          href: "/admin/billing-run?tab=issued" },
+          { label: "เกินเวลารับชำระ",    href: "/admin/billing-run?tab=overdue" },
+          { label: "รับชำระแล้ว",        href: "/admin/billing-run?tab=paid" },
+          { label: "ยกเลิก",              href: "/admin/billing-run?tab=cancelled" },
+        ],
+      },
+      // 2026-06-03 (R-2 · เดฟ): รวมบิลสินค้า also belongs in รายรับ (legacy
+      // ใบส่งสินค้า / shipping-bill family · adjacent to ใบวางบิล workflow).
+      // ภูม flag: ย้ายมาจาก /admin/forwarders "งาน" dropdown.
+      {
+        label: "รวมบิลสินค้า (ใบส่งสินค้า)",
+        href: "/admin/forwarders/combine-bill",
+        children: [
+          { label: "สร้างใบรวมบิล",   href: "/admin/forwarders/combine-bill/add" },
+          { label: "ดูทั้งหมด",        href: "/admin/forwarders/combine-bill" },
+        ],
+      },
     ],
   },
   {
@@ -238,6 +267,12 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       // 2026-06-02 sitting-I §3.4 Phase-C: 50-ทวิ cert tracking · juristic
       // customers withhold + send cert · admin marks received / waived.
       { label: "ติดตาม 50-ทวิ (WHT certs)",      href: "/admin/accounting/wht-certs" },
+      // 2026-06-04 (reachability audit §0d): the older WHT chase queue (ADR-0015 ·
+      // withholding_tax_entries table · per-shipment/tax-invoice WHT roll-up).
+      // Was orphan (no inbound link · URL-only). Distinct from "WHT certs" above
+      // (which reads the sitting-I tb_forwarder_tax_invoice queue) — kept adjacent
+      // so accounting sees both 50-ทวิ surfaces. Page gates super/accounting.
+      { label: "คุมยอดภาษีหัก ณ ที่จ่าย (WHT chase)", href: "/admin/wht" },
       // 2026-06-02 sitting-I · CEO directive 2026-06-01: profit-cap ≤ 15k/ตู้
       // retrospective monitor (forward quote-comparison tool = next surface).
       { label: "Margin Monitor (CEO ≤ ฿15k cap)", href: "/admin/accounting/margin-monitor" },
@@ -245,10 +280,20 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       // to Margin Monitor — sales reps compare 9 carriers' projected margin
       // BEFORE pitching, route via best carrier per CEO cap policy.
       { label: "Sales Quote Comparison",  href: "/admin/accounting/quote-compare" },
+      // Lane C 2026-06-04 (global-trade-group §5): the รถ/เรือ/แอร์ side-by-side
+      // compare (+ add-on services + per-route min-sell floor + CEO cap). Pair
+      // of quote-compare (which is per-carrier within one mode).
+      { label: "เทียบ รถ/เรือ/แอร์ (+ ค่าบริการ)", href: "/admin/accounting/quote-compare/modes" },
       // Wave 7.3 (2026-05-22): wired 2 orphan accounting pages here per
       // ภูม decision in page-inventory-2026-05-21-night.md §🔴 DEAD.
       { label: "งวดบัญชี",  href: "/admin/accounting/periods" },
       { label: "กระทบยอด", href: "/admin/accounting/reconcile" },
+      // 2026-06-04 (reachability audit §0d): slip↔order payment reconciliation
+      // (V-A3 · the OTHER side of กระทบยอด — matches completed deposit wallet_tx
+      // to pending forwarders / routes to refund queue · its own docstring names
+      // /admin/accounting/reconcile as companion). Was orphan (no inbound link ·
+      // URL-only). Page gates accounting.
+      { label: "จับคู่สลิป↔ออเดอร์ (Reconciliation)", href: "/admin/payment-reconciliation" },
       // TODO — legacy L496-597: ผังบัญชี / บัญชีรายวัน / บัญชีแยกประเภท / งบทดลอง / งบฐานะ / งบกำไรขาดทุน / งบกระแสเงินสด / DBD e-Filing / สินทรัพย์.
       // Wave 23 P0 (2026-05-27): stub instead of no-op "#".
       { label: "🚧 อยู่ระหว่างพัฒนา (Wave 24+)", href: "/admin/accounting/cargo/income/ledger/coming-soon" },
@@ -304,6 +349,22 @@ export const ACCOUNTING_HUB_CARDS = [
     title: "ใบลด/ใบจ่าย (Disbursements)",
     desc: "ใบเบิกจ่าย + เบิกเงิน",
     href: "/admin/accounting/disbursements",
+    badge: "live",
+  },
+  // 2026-06-03 (R-2 · เดฟ) — ใบวางบิล / billing-run (NEW · migration 0138).
+  // ใบเรียกเก็บค่าฝากนำเข้าให้ลูกค้าเครดิตเทอม. PEAK pattern: lives in
+  // ระบบบัญชี (not ฝากนำเข้า) — ภูม flag 2026-06-03.
+  {
+    title: "ใบวางบิล (Billing-Run)",
+    desc: "ใบเรียกเก็บลูกค้าเครดิตเทอม · ฝากนำเข้า fStatus=5 · PEAK tabs",
+    href: "/admin/billing-run",
+    badge: "live",
+  },
+  // 2026-06-03 (R-2 · เดฟ) — รวมบิลสินค้า (ใบส่งสินค้า) ย้ายมาจาก /admin/forwarders.
+  {
+    title: "รวมบิลสินค้า (ใบส่งสินค้า)",
+    desc: "รวมหลายรายการของลูกค้าเดียวกัน → ใบส่งสินค้าใบเดียว · พิมพ์ตามคนขับ",
+    href: "/admin/forwarders/combine-bill",
     badge: "live",
   },
   // 2026-06-01 (re-sweep A2 #23): admin-PUSH shop-affiliate disbursement.

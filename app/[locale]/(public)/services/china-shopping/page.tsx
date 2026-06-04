@@ -160,18 +160,18 @@ const WHY = [
 ];
 
 const PRODUCT_TYPES = [
-  { label: "ผลิตภัณฑ์ความงาม", img: "/images/categories/Beauty.png" },
-  { label: "เสื้อผ้าแฟชั่นผู้หญิง", img: "/images/categories/Women.png" },
-  { label: "เสื้อผ้าแฟชั่นผู้ชาย", img: "/images/categories/Man.png" },
-  { label: "กระเป๋าถือ", img: "/images/categories/Bag.png" },
-  { label: "รองเท้าผู้หญิง", img: "/images/categories/Womensshoes.png" },
-  { label: "รองเท้าผู้ชาย", img: "/images/categories/Mensshoes.png" },
-  { label: "เครื่องประดับ", img: "/images/categories/Jewelry.png" },
-  { label: "อุปกรณ์อิเล็กทรอนิกส์", img: "/images/categories/Electronics.png" },
-  { label: "เครื่องจักร", img: "/images/categories/Machinery.png" },
-  { label: "เฟอร์นิเจอร์", img: "/images/categories/Furniture.png" },
-  { label: "เครื่องใช้ในบ้าน", img: "/images/categories/Homeappliances.png" },
-  { label: "ของเล่น สินค้าแม่และเด็ก", img: "/images/categories/Mom.png" },
+  { label: "ผลิตภัณฑ์ความงาม", img: "/images/catagory/beaty.png" },
+  { label: "เสื้อผ้าแฟชั่นผู้หญิง", img: "/images/catagory/girlfashion.png" },
+  { label: "เสื้อผ้าแฟชั่นผู้ชาย", img: "/images/catagory/maleclothes.png" },
+  { label: "กระเป๋าถือ", img: "/images/catagory/handbag.png" },
+  { label: "รองเท้าผู้หญิง", img: "/images/catagory/girlshoe.png" },
+  { label: "รองเท้าผู้ชาย", img: "/images/catagory/shoe.png" },
+  { label: "เครื่องประดับ", img: "/images/catagory/necklace.png" },
+  { label: "อุปกรณ์อิเล็กทรอนิกส์", img: "/images/catagory/phone.png" },
+  { label: "เครื่องจักร", img: "/images/catagory/machine.png" },
+  { label: "เฟอร์นิเจอร์", img: "/images/catagory/homeuse.png" },
+  { label: "เครื่องใช้ในบ้าน", img: "/images/catagory/homeuse.png" },
+  { label: "ของเล่น สินค้าแม่และเด็ก", img: "/images/catagory/kidtoy.png" },
 ];
 
 const FAQ_ITEMS = [

@@ -166,7 +166,15 @@ export function AdminForwarderUpdateForm(p: Props) {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => markPaid(false)}
+              onClick={() => {
+                if (
+                  confirm(
+                    `ยืนยันหักเงิน ฿${p.totalPrice.toLocaleString()} จาก wallet ลูกค้า และเปลี่ยนสถานะเป็น “ออกจากจีน”?\nรายการนี้มีผลกับยอดเงินจริงของลูกค้า`,
+                  )
+                ) {
+                  markPaid(false);
+                }
+              }}
               disabled={pending}
               className="rounded-lg bg-green-600 text-white px-3 py-1.5 text-xs font-medium hover:bg-green-700 disabled:opacity-50"
             >

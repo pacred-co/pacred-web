@@ -101,6 +101,7 @@ import { sendSms } from "@/lib/sms/gateway";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
 import { spawnForwardersFromShopOrder } from "./service-orders-spawn";
+import { roundUp } from "@/lib/admin/shop-disbursement-calc";
 import { logger, redactId } from "@/lib/logger";
 
 // ────────────────────────────────────────────────────────────
@@ -290,6 +291,240 @@ export async function adminQuoteShopOrder(
     return {
       ok: true,
       data: { hno: header.hno, htotalpriceuser: d.htotalpriceuser, hdatepayment: deadlineIso },
+    };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// 1b. adminSaveShopOrderItemsAndQuote — 1/2 → 2 (the legacy `update2`)
+//     The MISSING CORE: per-item price entry + quote in ONE save.
+//
+//     Faithful port of pcs-admin/shops.php L916-1069 (update2 handler).
+//     The CS/interpreter staff key per-item cAmount/cPrice/cShippingCHN
+//     + the cost-side hRateCost/hCostAll, then press "บันทึก + เปลี่ยน
+//     เป็นรอชำระเงิน". This:
+//       0. GUARD (L919): refuse if any tb_wallet_hs row with
+//          (status='1' OR '2') AND refOrder=hNo exists → customer already
+//          paid; re-quoting would mis-state a settled order.
+//       1. (L942-953) UPDATE each tb_order row (cAmount/cPrice/cShippingCHN)
+//          WHERE cAmount>0; accumulate
+//            hTotalPriceCHN  = Σ round_up(cPrice × cAmount, 2)
+//            hShippingCHN    = Σ cShippingCHN
+//       2. (L954-955) UPDATE tb_header_order SET hRateCost, hCostAll,
+//          hCostAllTH(=hCostAll×hRateCost), hDate2=now, hStatus='2',
+//          hCount=#items, hDatePayment=NOW+5d, hTotalPriceCHN,
+//          hShippingCHN, hDateUpdate=now, adminIDUpdate.
+//       3. (L978-981) recompute + UPDATE hTotalPriceUser =
+//          round_up(((hTotalPriceCHN + hShippingCHN) × hRate) +
+//          hShippingService, 2).
+//       4. notify customer (reuse notifyShopOrderQuoted · 4-CH).
+//
+//     hStatus accepted: '1' (รอดำเนินการ) AND '2' (รอชำระเงิน · re-save
+//     before customer pays) AND '6' (legacy `update.php` switch routes
+//     '6' → update1.php too, so a cancelled-then-reopened order can be
+//     re-quoted). Already-paid (3/4/5) blocked by the wallet_hs guard.
+// ────────────────────────────────────────────────────────────
+
+const saveItemSchema = z.object({
+  id:           z.coerce.number().int().positive(),
+  cAmount:      z.coerce.number().int().nonnegative(),
+  cPrice:       z.coerce.number().nonnegative(),
+  cShippingCHN: z.coerce.number().nonnegative(),
+});
+
+const saveItemsAndQuoteSchema = z.object({
+  hNo:       z.string().trim().min(1, "missing hNo").max(30),
+  items:     z.array(saveItemSchema).min(1, "ต้องมีรายการสินค้าอย่างน้อย 1 รายการ").max(500),
+  hRateCost: z.coerce.number().nonnegative().max(99_999),
+  hCostAll:  z.coerce.number().nonnegative().max(99_999_999),
+});
+export type AdminSaveShopOrderItemsAndQuoteInput = z.infer<typeof saveItemsAndQuoteSchema>;
+
+type SaveItemsAndQuoteData = {
+  hno:             string;
+  rows_updated:    number;
+  htotalpricechn:  number;
+  hshippingchn:    number;
+  htotalpriceuser: number;
+  hdatepayment:    string;
+};
+
+export async function adminSaveShopOrderItemsAndQuote(
+  input: AdminSaveShopOrderItemsAndQuoteInput,
+): Promise<AdminActionResult<SaveItemsAndQuoteData>> {
+  const parsed = saveItemsAndQuoteSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  return withAdmin<SaveItemsAndQuoteData>(["super", "ops", "sales_admin"], async ({ adminId }) => {
+    const admin         = createAdminClient();
+    const legacyAdminId = safeLegacyAdminId(await resolveLegacyAdminId(), 10);
+
+    // 1. Load + guard the header.
+    const { data: header, error: headerErr } = await admin
+      .from("tb_header_order")
+      .select("id, hno, userid, hstatus, hrate, hshippingservice")
+      .eq("hno", d.hNo)
+      .maybeSingle<{
+        id: number; hno: string; userid: string; hstatus: string | null;
+        hrate: number | string | null; hshippingservice: number | string | null;
+      }>();
+    if (headerErr) {
+      console.error(`[tb_header_order save-items lookup] failed`, {
+        code: headerErr.code, message: headerErr.message,
+      });
+      return { ok: false, error: `db_error:${headerErr.code ?? "unknown"}` };
+    }
+    if (!header) return { ok: false, error: "ไม่พบออเดอร์ฝากสั่งซื้อ (hNo ไม่ตรง)" };
+
+    const status = (header.hstatus ?? "").trim();
+    if (status !== "1" && status !== "2" && status !== "6") {
+      return {
+        ok: false,
+        error: `สถานะ ${status || "?"} ไม่สามารถแก้ราคา/ตั้งราคาได้ (อนุญาตเฉพาะ รอดำเนินการ/รอชำระเงิน)`,
+      };
+    }
+
+    // 0. Already-paid guard — legacy shops.php L919: any tb_wallet_hs with
+    //    (status='1' OR '2') AND refOrder=hNo means the customer has a
+    //    pending/settled payment → re-quoting would mis-state money.
+    const { data: paidRows, error: paidErr } = await admin
+      .from("tb_wallet_hs")
+      .select("id")
+      .eq("reforder", d.hNo)
+      .in("status", ["1", "2"])
+      .limit(1);
+    if (paidErr) {
+      console.error(`[tb_wallet_hs already-paid guard] failed`, {
+        code: paidErr.code, message: paidErr.message,
+      });
+      return { ok: false, error: `db_error:${paidErr.code ?? "unknown"}` };
+    }
+    if (paidRows && paidRows.length > 0) {
+      return { ok: false, error: "ลูกค้าชำระเงินมาแล้ว — แก้ราคา/ตั้งราคาไม่ได้" };
+    }
+
+    // 2. UPDATE each tb_order line + accumulate the CN totals.
+    //    Legacy L942-953: only rows with cAmount>0 are updated; the running
+    //    hTotalPriceCHN = Σ round_up(cPrice × cAmount, 2) (per-line round_up)
+    //    and hShippingCHN = Σ cShippingCHN.
+    let rowsUpdated      = 0;
+    let sumTotalChnAll   = 0;
+    let sumShippingChnAll = 0;
+    for (const it of d.items) {
+      if (it.cAmount <= 0) continue;
+      const { error: itemUpdErr } = await admin
+        .from("tb_order")
+        .update({
+          camount:      it.cAmount,
+          cprice:       it.cPrice,
+          cshippingchn: it.cShippingCHN,
+        })
+        .eq("id", it.id)
+        .eq("hno", d.hNo); // belt-and-suspenders — scope to this order
+      if (itemUpdErr) {
+        console.error(`[tb_order save-item update] failed`, {
+          code: itemUpdErr.code, message: itemUpdErr.message, id: it.id,
+        });
+        return {
+          ok: false,
+          error: `บันทึกรายการสินค้า id=${it.id} ล้มเหลว: ${itemUpdErr.message}`,
+        };
+      }
+      rowsUpdated += 1;
+      sumTotalChnAll   = roundUp(sumTotalChnAll + roundUp(it.cPrice * it.cAmount, 2), 2);
+      sumShippingChnAll = roundUp(sumShippingChnAll + it.cShippingCHN, 2);
+    }
+
+    if (rowsUpdated === 0) {
+      return { ok: false, error: "ไม่มีรายการที่มีจำนวน > 0 — กรอกจำนวนสินค้าก่อนบันทึก" };
+    }
+
+    // 3. Recompute money + flip header to '2'.
+    const hRate            = Number(header.hrate ?? 0);
+    const hShippingService = Number(header.hshippingservice ?? 0);
+    const hCostAllTh       = roundUp(d.hCostAll * d.hRateCost, 2);
+    // Legacy L978-979: hTotalPriceUser = round_up(((CHN+shipCHN)×rate)+svc, 2).
+    const htotalpriceuser  = roundUp(
+      (sumTotalChnAll + sumShippingChnAll) * hRate + hShippingService,
+      2,
+    );
+
+    const nowIso      = new Date().toISOString();
+    const deadline    = defaultQuoteDeadline();
+    const deadlineIso = deadline.toISOString();
+
+    const { error: hdrErr } = await admin
+      .from("tb_header_order")
+      .update({
+        hcostallth:      hCostAllTh,
+        hcostall:        d.hCostAll,
+        hratecost:       d.hRateCost,
+        hdate2:          nowIso,
+        htotalpricechn:  sumTotalChnAll,
+        hshippingchn:    sumShippingChnAll,
+        hdateupdate:     nowIso,
+        hstatus:         "2",
+        // Legacy L954: hCount = the loop counter over ALL POSTed items (it
+        // increments per for-iteration regardless of cAmount), i.e. the total
+        // number of item rows in the order — NOT just the cAmount>0 ones.
+        hcount:          d.items.length,
+        hdatepayment:    deadlineIso,
+        htotalpriceuser: htotalpriceuser,
+        adminidupdate:   legacyAdminId,
+      })
+      .eq("id", header.id);
+    if (hdrErr) {
+      console.error(`[tb_header_order save-items header update] failed`, {
+        code: hdrErr.code, message: hdrErr.message, hNo: d.hNo,
+      });
+      return {
+        ok: false,
+        error: `บันทึกรายการสินค้าสำเร็จ (${rowsUpdated} แถว) แต่อัพเดท header ล้มเหลว: ${hdrErr.message}`,
+      };
+    }
+
+    // 4. Audit.
+    await logAdminAction(
+      adminId,
+      "service_order.save_items_and_quote",
+      "tb_header_order",
+      header.hno,
+      {
+        hno:             header.hno,
+        userid:          header.userid,
+        rows_updated:    rowsUpdated,
+        htotalpricechn:  sumTotalChnAll,
+        hshippingchn:    sumShippingChnAll,
+        hratecost:       d.hRateCost,
+        hcostall:        d.hCostAll,
+        hcostallth:      hCostAllTh,
+        htotalpriceuser: htotalpriceuser,
+        hdatepayment:    deadlineIso,
+        before_status:   status,
+        after_status:    "2",
+      },
+    );
+
+    // 5. Notify (4 channels — in-app + LINE OA + email + SMS).
+    void notifyShopOrderQuoted(admin, header.userid, header.hno, htotalpriceuser, deadline);
+
+    revalidatePath("/admin/service-orders");
+    revalidatePath(`/admin/service-orders/${header.hno}`);
+    revalidatePath(`/service-order/${header.hno}`);
+
+    return {
+      ok: true,
+      data: {
+        hno:             header.hno,
+        rows_updated:    rowsUpdated,
+        htotalpricechn:  sumTotalChnAll,
+        hshippingchn:    sumShippingChnAll,
+        htotalpriceuser: htotalpriceuser,
+        hdatepayment:    deadlineIso,
+      },
     };
   });
 }

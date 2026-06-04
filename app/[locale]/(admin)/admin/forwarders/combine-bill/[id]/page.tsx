@@ -180,13 +180,15 @@ export default async function CombineBillDetailPage({
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      {/* Breadcrumb */}
+      {/* Breadcrumb — 2026-06-03 ภูม flag · moved to ระบบบัญชี → รายรับ */}
       <nav aria-label="breadcrumb" className="text-xs text-muted flex gap-1.5 items-center flex-wrap">
         <Link href="/admin" className="hover:text-primary-600">หน้าแรก</Link>
         <span>/</span>
-        <Link href="/admin/forwarders" className="hover:text-primary-600">ฝากนำเข้า</Link>
+        <Link href="/admin/accounting" className="hover:text-primary-600">ระบบบัญชี</Link>
         <span>/</span>
-        <Link href="/admin/forwarders/combine-bill" className="hover:text-primary-600">ประวัติรายการรวมบิล</Link>
+        <span className="text-muted">รายรับ</span>
+        <span>/</span>
+        <Link href="/admin/forwarders/combine-bill" className="hover:text-primary-600">รวมบิลสินค้า</Link>
         <span>/</span>
         <span className="text-foreground">บิล #{billData.billid}</span>
       </nav>
@@ -194,8 +196,8 @@ export default async function CombineBillDetailPage({
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ฝากนำเข้า</p>
-          <h1 className="mt-1 text-2xl font-bold">รายละเอียดบิลรวม #{billData.billid}</h1>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ระบบบัญชี · รายรับ</p>
+          <h1 className="mt-1 text-2xl font-bold">รวมบิลสินค้า #{billData.billid}</h1>
           <p className="mt-1 text-sm text-muted">
             {lines.length.toLocaleString("th-TH")} รายการฝากนำเข้า · รวม {fmtBoxes(totalBoxes)} กล่อง
           </p>

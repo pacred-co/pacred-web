@@ -1,6 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CarrierForm } from "./carrier-form";
 import { CarrierRowActions } from "./row-actions";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
+
+export const dynamic = "force-dynamic";
 
 /**
  * /admin/carriers — manage shipping carriers (U2-3).
@@ -29,7 +33,12 @@ type Row = {
   updated_at:            string;
 };
 
-export default async function AdminCarriersPage() {
+export default async function AdminCarriersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const sp = await searchParams;
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("carriers")
@@ -45,6 +54,12 @@ export default async function AdminCarriersPage() {
   const rows = data ?? [];
   const activeCount   = rows.filter((r) => r.is_active).length;
   const inactiveCount = rows.length - activeCount;
+
+  // PERF (2026-06-03): client-slice the displayed table (50/page) — counts
+  // above stay full-set-correct (JS-derived over all rows).
+  const page = parsePage(sp.page);
+  const offset = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-5xl">
@@ -78,7 +93,7 @@ export default async function AdminCarriersPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
+                {pageRows.map((r) => (
                   <tr key={r.id} className={`border-t border-border align-top ${!r.is_active ? "opacity-50" : ""}`}>
                     <td className="px-4 py-3 text-xs font-mono text-muted">{r.sort_order}</td>
                     <td className="px-4 py-3 text-xs font-mono">{r.code}</td>
@@ -124,6 +139,12 @@ export default async function AdminCarriersPage() {
             </table>
           </div>
         )}
+        <Pagination
+          page={page}
+          pageSize={DEFAULT_PAGE_SIZE}
+          total={rows.length}
+          basePath="/admin/carriers"
+        />
       </div>
 
       {/* Create panel */}

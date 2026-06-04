@@ -359,27 +359,30 @@ export function CartInteractivity({
     const pro2 = pro2Checked ? "77" : null;
     const hNote = fd.get("hNote");
 
-    // P1 (เดฟ 2026-05-30) — tax-document selector at /cart. The
-    // CartTaxDocPref client component writes these form fields; the action
-    // persists them on tb_header_order so billing/payment-land can issue the
-    // right doc (P2 will route 'tax_invoice' to the existing tax_invoices
-    // machinery + VAT 7%; 'receipt' is the legacy default).
+    // P1 (เดฟ 2026-05-30 · 3-mode 2026-06-04) — tax-document selector at /cart.
+    // The CartTaxDocPref client component writes these form fields (taxDocPref
+    // carries the column value tax_invoice|customs|receipt); the action
+    // persists them on tb_header_order. Both VAT-doc modes (ใบกำกับ + ใบขน)
+    // need the buyer snapshot; ไม่รับเอกสาร (receipt) needs nothing. (Server
+    // re-validates via lib/tax/tax-doc-mode — this is the friendly UX gate.)
     const taxDocPref = fd.get("taxDocPref");
     const taxDocTaxId = fd.get("taxDocTaxId");
     const taxDocBillingName = fd.get("taxDocBillingName");
     const taxDocAddress = fd.get("taxDocAddress");
-    if (taxDocPref === "tax_invoice") {
+    const needsTaxBilling = taxDocPref === "tax_invoice" || taxDocPref === "customs";
+    if (needsTaxBilling) {
+      const docName = taxDocPref === "customs" ? "ใบขนสินค้า" : "ใบกำกับภาษี";
       const t = String(taxDocTaxId ?? "").trim();
       if (!/^\d{13}$/.test(t)) {
         await alert("กรุณากรอกเลขผู้เสียภาษี 13 หลักให้ครบ");
         return;
       }
       if (!String(taxDocBillingName ?? "").trim()) {
-        await alert("กรุณากรอกชื่อบริษัทสำหรับใบกำกับภาษี");
+        await alert(`กรุณากรอกชื่อบริษัทสำหรับ${docName}`);
         return;
       }
       if (!String(taxDocAddress ?? "").trim()) {
-        await alert("กรุณากรอกที่อยู่สำหรับใบกำกับภาษี");
+        await alert(`กรุณากรอกที่อยู่สำหรับ${docName}`);
         return;
       }
     }

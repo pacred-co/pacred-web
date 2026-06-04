@@ -129,7 +129,7 @@ export default async function CustomerFreightHubPage() {
     if (invsRawErr) {
       console.error(`[freight_invoices list] failed`, { code: invsRawErr.code, message: invsRawErr.message });
     }
-    for (const r of (invsRaw ?? []) as InvoicePaymentRow[]) {
+    for (const r of (invsRaw ?? []) as unknown as InvoicePaymentRow[]) {
       if (!paymentByShipment.has(r.freight_shipment_id)) {
         paymentByShipment.set(r.freight_shipment_id, r.payment_status);
       }

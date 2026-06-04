@@ -80,7 +80,7 @@ export function PcsFooterNav({ data }: { data: PcsChromeData }) {
           <FooterBadge n={data.countCart} />
         </Link>
         <a
-          href="https://line.me/ti/p/@PCSCARGO"
+          href="https://lin.ee/Yg3fU0I"
           target="_blank"
           rel="noreferrer"
           className="nav__link"

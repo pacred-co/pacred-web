@@ -35,6 +35,8 @@ import { ForwardersSearchBar } from "./search-bar";
 import { Suspense } from "react";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 
@@ -60,7 +62,11 @@ const FORWARDER_MENUBAR: MenubarItem[] = [
   {
     label: "งาน",
     children: [
-      { label: "รวมบิลสินค้า",            href: "/admin/forwarders/combine-bill" },
+      // 2026-06-03 (ภูม flag · R-2 close-out): รวมบิลสินค้า + ใบวางบิล ย้ายไป
+      // หมวด "ระบบบัญชี → รายรับ" ตาม PEAK pattern (acc-system-cargo.php).
+      // เหตุผล: ใบวางบิล/รวมบิลสินค้า = เอกสารบัญชี (income surface) ไม่ใช่
+      // operational งาน-โกดัง. PEAK เก็บใบวางบิลใต้ "รายรับ" — Pacred ทำตาม.
+      // Kept the หมายเหตุ / มอบงาน / ต้นทุน leaves here (ops-flavor).
       { label: "ประวัติเข้าโกดังไทย",     href: "/admin/forwarders/warehouse-history" },
       // Wave 20 P1 (ภูม flag 2026-05-26): the dedicated หมายเหตุนำเข้า
       // page exists at /admin/forwarders/notes but was unreachable from
@@ -114,6 +120,7 @@ type SearchParams = {
   status?: string;      // 1..7, 6.1, c, p — legacy 10-tab filter
   q?: string;           // single-line keyword search
   q_multi?: string;     // U2-5: multi-line bulk tracking search
+  page?: string;        // server/client pagination (?page=N)
   date_from?: string;
   date_to?: string;
   segment?: string;     // DEPRECATED — kept for old bookmark links (cargo-fcl etc.)
@@ -327,6 +334,18 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
   // so badges align with what's on screen.
   const dateWindow = resolveDateWindow(sp);
 
+  // ─── Pagination (2026-06-04) ──────────────────────────────────────────
+  // This list has THREE post-fetch filters that shrink rows AFTER the DB
+  // fetch: the 6-vs-6.1 driver-item split, and the q / q_multi keyword
+  // filters (which also match the JS-joined customer name/phone). When any
+  // of those is active a DB count:exact would over-count vs what's rendered,
+  // so we client-slice (fetch the bounded filtered set + slice + total =
+  // filtered length). On the common path (no search, status ≠ 6/6.1) there
+  // is NO post-fetch shrink → we use the efficient DB count:exact + .range.
+  const page = parsePage(sp.page);
+  const { from, to } = pageRange(page);
+  const hasPostFetchFilter = !!(sp.q || sp.q_multi || sp.status === "6" || sp.status === "6.1");
+
   // ─── Main query against tb_forwarder ──────────────────────────────────
   // Note: PostgREST cannot reliably auto-join the legacy `tb_users` table
   // (the FK is by `userid` text not a true relational FK). We pull the
@@ -349,9 +368,12 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
       // ETA base date · pallet code · all from legacy forwarder.php L575-653).
       "printstatus1,printstatus2,printstatus3,printstatus4," +
       "fstatuscaron,fstatuscaroff,fdatetothai,fpallet",
+      // count:exact only on the common path (no post-fetch shrink) so the
+      // pager total matches the rendered rows; the search/6.1 views compute
+      // total from the JS-filtered length instead.
+      hasPostFetchFilter ? undefined : { count: "exact" },
     )
-    .order("fdate", { ascending: false, nullsFirst: false })
-    .limit(300);
+    .order("fdate", { ascending: false, nullsFirst: false });
 
   // Wave 18-B — default-30-day window (escape via ?all=1) — applied to
   // both the data query and the per-tab counts below.
@@ -490,7 +512,16 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
     q = q.or(parts.join(","));
   }
 
-  const { data: forwarderRows, error: forwarderErr } = await q;
+  // Window the fetch: common path → DB .range() (one page); post-fetch-filter
+  // path → bounded cap, then JS-filter + slice below (search/status-6 sets are
+  // bounded, esp. with the date window / specific status).
+  if (hasPostFetchFilter) {
+    q = q.limit(2000);
+  } else {
+    q = q.range(from, to);
+  }
+
+  const { data: forwarderRows, error: forwarderErr, count: forwarderCount } = await q;
   let raw = (forwarderRows ?? []) as unknown as RawForwarderRow[];
 
   // 6 vs 6.1 post-fetch split (driver-in-progress set was loaded above).
@@ -645,6 +676,16 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
       (r.customer?.name ?? "").toLowerCase().includes(keyword) ||
       (r.cabinet_number ?? "").toLowerCase().includes(keyword)
     );
+  }
+
+  // ─── Pagination total + window (2026-06-04) ──────────────────────────
+  // Common path: rows are already the DB .range() window → total = the
+  // count:exact. Post-fetch path: rows is the full JS-filtered set → total =
+  // its length, and we slice the display window here (BEFORE the cover-URL
+  // resolve below, so signed URLs are generated only for the visible page).
+  const totalForwarders = hasPostFetchFilter ? rows.length : (forwarderCount ?? 0);
+  if (hasPostFetchFilter) {
+    rows = rows.slice(from, to + 1);
   }
 
   // ─── Wave 13 — resolve cover filenames to signed Supabase URLs ────────
@@ -966,6 +1007,17 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
         statusLabel={STATUS_LABEL}
         modeLabel={MODE_LABEL}
         currentStatus={sp.status}
+      />
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={totalForwarders}
+        basePath="/admin/forwarders"
+        params={{
+          status: sp.status, q: sp.q, q_multi: sp.q_multi, create: sp.create,
+          mode: sp.mode, date_from: sp.date_from, date_to: sp.date_to,
+          service: sp.service, container: sp.container, all: sp.all,
+        }}
       />
     </main>
     </>

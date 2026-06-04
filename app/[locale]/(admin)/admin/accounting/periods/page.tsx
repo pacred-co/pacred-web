@@ -96,7 +96,7 @@ export default async function AdminAccountingPeriodsPage() {
   if (periodsRawErr) {
     console.error(`[accounting_periods list] failed`, { code: periodsRawErr.code, message: periodsRawErr.message });
   }
-  const periods = (periodsRaw ?? []) as PeriodRow[];
+  const periods = (periodsRaw ?? []) as unknown as PeriodRow[];
   const periodMap = new Map<string, PeriodRow>(periods.map((p) => [p.period_yyyymm, p]));
 
   // Latest close-event row per (period, table) — pulled flat, then

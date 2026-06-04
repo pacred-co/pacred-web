@@ -9,6 +9,7 @@ import {
 } from "@/lib/validators/tax-invoice";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { issueForwarderTaxInvoice } from "@/lib/admin/forwarder-tax-invoice";
+import { modeFromPref } from "@/lib/tax/tax-doc-mode";
 
 /**
  * Customer-side tax invoice actions.
@@ -105,11 +106,13 @@ export async function requestTaxInvoice(
   const admin = createAdminClient();
 
   // 1. Read the forwarder row + ownership gate (tb_forwarder.userid == member_code).
+  //    Also read tax_doc_pref so we issue the RIGHT document mode (ใบกำกับ vs
+  //    ใบขน) — the customer chose this at order time (migration 0127).
   const { data: fwd, error: fwdErr } = await admin
     .from("tb_forwarder")
-    .select("id, userid, fstatus")
+    .select("id, userid, fstatus, tax_doc_pref")
     .eq("id", fid)
-    .maybeSingle<{ id: number; userid: string | null; fstatus: string | null }>();
+    .maybeSingle<{ id: number; userid: string | null; fstatus: string | null; tax_doc_pref: string | null }>();
   if (fwdErr) {
     console.error(`[tax-invoice: tb_forwarder lookup] failed`, {
       code: fwdErr.code, message: fwdErr.message, fid, memberCode,
@@ -139,11 +142,17 @@ export async function requestTaxInvoice(
 
   // 4. Issue via ภูม's engine (idempotent on fid; computes per-line tax +
   //    buyer snapshot from tb_corporate/tb_users itself). issuedBy marks the
-  //    customer-request origin in the audit log.
+  //    customer-request origin in the audit log. The mode comes from the
+  //    order's tax_doc_pref (ใบกำกับ vs ใบขน); if the order was 'receipt'/NULL
+  //    (ไม่รับเอกสาร) but the customer is now actively REQUESTING a tax doc,
+  //    issue the standard ใบกำกับภาษี.
+  const storedMode = modeFromPref(fwd.tax_doc_pref);
+  const issueMode = storedMode === "none" ? "tax_invoice" : storedMode;
   const issued = await issueForwarderTaxInvoice(admin, {
     userid:   memberCode,
     fids:     [fid],
     issuedBy: "customer-request",
+    mode:     issueMode,
   });
 
   if (!issued.ok) {

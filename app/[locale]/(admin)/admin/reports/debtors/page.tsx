@@ -26,6 +26,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton } from "@/components/admin/csv-button";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -49,8 +51,13 @@ function thb(n: number): string {
   return sign + "฿" + Math.abs(n).toLocaleString("th-TH", { minimumFractionDigits: 2 });
 }
 
-export default async function DebtorsReport() {
+export default async function DebtorsReport({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   await requireAdmin(["super", "accounting"]);
+  const sp = await searchParams;
   const admin = createAdminClient();
 
   // Wallet-balance debtors — tb_wallet where wallettotal < 0.
@@ -67,7 +74,7 @@ export default async function DebtorsReport() {
     });
     throw new Error(`Failed to load tb_wallet (${walletErr.code ?? "unknown"}): ${walletErr.message}`);
   }
-  const wallets = (walletRaw ?? []) as WalletRow[];
+  const wallets = (walletRaw ?? []) as unknown as WalletRow[];
 
   // 2-pass: customer names + cashback balances (parallel).
   const useridList = wallets.map((w) => w.userid).filter(Boolean);
@@ -81,16 +88,22 @@ export default async function DebtorsReport() {
     if (usersRes.error) {
       console.error(`[tb_users debtors join] failed`, { code: usersRes.error.code, message: usersRes.error.message });
     } else {
-      userMap = Object.fromEntries(((usersRes.data ?? []) as UserRow[]).map((u) => [u.userID, u]));
+      userMap = Object.fromEntries(((usersRes.data ?? []) as unknown as UserRow[]).map((u) => [u.userID, u]));
     }
     if (cbRes.error) {
       console.error(`[tb_cash_back debtors join] failed`, { code: cbRes.error.code, message: cbRes.error.message });
     } else {
-      cbMap = Object.fromEntries(((cbRes.data ?? []) as CashBackRow[]).map((c) => [c.userid, Number(c.cbtotal ?? 0)]));
+      cbMap = Object.fromEntries(((cbRes.data ?? []) as unknown as CashBackRow[]).map((c) => [c.userid, Number(c.cbtotal ?? 0)]));
     }
   }
 
   const totalDebt = wallets.reduce((s, w) => s + Number(w.wallettotal), 0);
+
+  // PERF (2026-06-03): paginate the displayed table (50/page); totalDebt above
+  // stays full-set-correct. ?page=N drives the window (shared <Pagination>).
+  const page = parsePage(sp.page);
+  const offset = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageWallets = wallets.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
   const csvRows = wallets.map((w) => {
     const u = userMap[w.userid];
@@ -162,7 +175,7 @@ export default async function DebtorsReport() {
                 </tr>
               </thead>
               <tbody>
-                {wallets.map((w) => {
+                {pageWallets.map((w) => {
                   const u = userMap[w.userid];
                   const customerName = u ? [u.userName, u.userLastName].filter(Boolean).join(" ") : "";
                   return (
@@ -186,6 +199,12 @@ export default async function DebtorsReport() {
             </table>
           </div>
         )}
+        <Pagination
+          page={page}
+          pageSize={DEFAULT_PAGE_SIZE}
+          total={wallets.length}
+          basePath="/admin/reports/debtors"
+        />
       </div>
     </main>
   );

@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import {
   CUSTOMS_DECLARATION_STATUSES,
   CUSTOMS_DECLARATION_STATUS_LABEL,
@@ -60,7 +62,7 @@ function thb(n: number | null): string {
 export default async function AdminCustomsDeclarationsListPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; q?: string }>;
+  searchParams: Promise<{ status?: string; q?: string; page?: string }>;
 }) {
   await requireAdmin(["super", "accounting"]);
   const sp = await searchParams;
@@ -68,6 +70,8 @@ export default async function AdminCustomsDeclarationsListPage({
     ? (sp.status as CustomsDeclarationStatus)
     : null;
   const q = sp.q?.trim() ?? "";
+  const page = parsePage(sp.page);
+  const { from, to } = pageRange(page);
 
   const admin = createAdminClient();
   let query = admin
@@ -81,16 +85,16 @@ export default async function AdminCustomsDeclarationsListPage({
         job_no,
         profile:profiles!profile_id ( member_code, first_name, last_name, company_name )
       )
-    `)
+    `, { count: "exact" })
     .order("created_at", { ascending: false })
-    .limit(200);
+    .range(from, to);
   if (status) query = query.eq("status", status);
   if (q) {
     query = query.or(
       `declaration_no.ilike.%${q}%,customs_control_no.ilike.%${q}%,broker_name.ilike.%${q}%`,
     );
   }
-  const { data: raw, error: rawErr } = await query;
+  const { data: raw, error: rawErr, count: total } = await query;
   if (rawErr) {
     console.error(`[customs_declarations list] failed`, { code: rawErr.code, message: rawErr.message });
   }
@@ -294,6 +298,14 @@ export default async function AdminCustomsDeclarationsListPage({
           </table>
         )}
       </div>
+
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={total ?? 0}
+        basePath="/admin/freight/declarations"
+        params={{ status: status ?? undefined, q: q || undefined }}
+      />
     </main>
   );
 }

@@ -2,6 +2,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton } from "@/components/admin/csv-button";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 /**
  * V-G6 #1 — Forwarder volume per period.
@@ -57,7 +59,7 @@ function daysAgoIso(days: number): string {
 export default async function ForwarderVolumeReport({
   searchParams,
 }: {
-  searchParams: Promise<{ days?: string }>;
+  searchParams: Promise<{ days?: string; page?: string }>;
 }) {
   await requireAdmin(["super", "ops", "accounting"]);
   const sp = await searchParams;
@@ -137,6 +139,12 @@ export default async function ForwarderVolumeReport({
 
   const dayOptions = [7, 30, 90, 365];
 
+  // PERF (2026-06-03): paginate the DISPLAYED aggregate table — summary stats
+  // + CSV above are over the full `aggregates` array, so they stay correct.
+  const page = parsePage(sp.page);
+  const offset = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageRows = aggregates.slice(offset, offset + DEFAULT_PAGE_SIZE);
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -213,7 +221,7 @@ export default async function ForwarderVolumeReport({
                 </td>
               </tr>
             ) : (
-              aggregates.map((a) => (
+              pageRows.map((a) => (
                 <tr key={`${a.warehouse}-${a.transport}`} className="border-t border-border">
                   <td className="px-3 py-2">{WAREHOUSE_LABEL[a.warehouse] ?? a.warehouse}</td>
                   <td className="px-3 py-2">{TRANSPORT_LABEL[a.transport] ?? a.transport}</td>
@@ -232,6 +240,14 @@ export default async function ForwarderVolumeReport({
           </tbody>
         </table>
       </section>
+
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={aggregates.length}
+        basePath="/admin/reports/forwarder-volume"
+        params={{ days }}
+      />
 
       <p className="text-[11px] text-muted">
         แสดงผลรวมจากตัวอย่าง 10,000 แถวล่าสุด · สำหรับงวดยาวขึ้น (1 ปี+) ใช้ออก CSV

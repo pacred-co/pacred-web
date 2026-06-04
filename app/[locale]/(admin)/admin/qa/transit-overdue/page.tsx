@@ -19,6 +19,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { nowMs, cutoffIsoDaysAgo } from "@/lib/datetime-helpers";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -57,9 +59,14 @@ const TRANSPORT_LABEL: Record<string, string> = {
   "3": "แอร์",
 };
 
-export default async function TransitOverduePage() {
+export default async function TransitOverduePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   await requireAdmin(["ops", "accounting", "super"]);
 
+  const sp = await searchParams;
   const admin = createAdminClient();
 
   // 7-day SLA heuristic. Real per-container ETA join (tb_cnt.cntDateETA)
@@ -107,6 +114,13 @@ export default async function TransitOverduePage() {
       return new Date(transitStart).getTime() < new Date(cutoff).getTime();
     })
     .slice(0, 200);
+
+  // PERF (2026-06-03): client-slice the displayed table (50/page). The
+  // header breach chip stays full-set-correct (it uses the two exact counts
+  // above); only the rendered window is paginated over the filtered `rows`.
+  const page = parsePage(sp.page);
+  const offset = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
   // 2nd query: tb_users merge
   const userIds = Array.from(new Set(rows.map((r) => r.userid).filter(Boolean))) as string[];
@@ -178,7 +192,7 @@ export default async function TransitOverduePage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
+                {pageRows.map((r) => {
                   const u = r.userid ? userMap.get(r.userid) : undefined;
                   const customerName = u
                     ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || r.userid
@@ -236,6 +250,12 @@ export default async function TransitOverduePage() {
             </table>
           </div>
         )}
+        <Pagination
+          page={page}
+          pageSize={DEFAULT_PAGE_SIZE}
+          total={rows.length}
+          basePath="/admin/qa/transit-overdue"
+        />
       </div>
 
       <p className="text-[11px] text-muted">

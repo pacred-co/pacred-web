@@ -188,7 +188,7 @@ export async function getMarginReport(range: MarginRange): Promise<MarginReport>
     if (srErr) {
       console.error("[margin-monitor tb_sales_report] failed", { code: srErr.code, message: srErr.message });
     }
-    for (const r of ((srRaw ?? []) as SrRow[])) {
+    for (const r of ((srRaw ?? []) as unknown as SrRow[])) {
       if (!srByFid.has(r.fid)) srByFid.set(r.fid, r.sradminidsale);
     }
   }

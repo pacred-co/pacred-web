@@ -1,6 +1,8 @@
 import { listOrders } from "@/actions/orders";
 import { Link } from "@/i18n/navigation";
 import { Plus } from "lucide-react";
+import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "รอดำเนินการ",
@@ -18,9 +20,20 @@ const STATUS_COLOR: Record<string, string> = {
   cancelled: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
 };
 
-export default async function OrdersPage() {
+export default async function OrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const sp = await searchParams;
   const res = await listOrders();
   const orders = res.ok ? res.data ?? [] : [];
+
+  // PERF (2026-06-03): paginate the displayed rows (50/page) — listOrders()
+  // returns the full set; slice only what we render.
+  const page = parsePage(sp.page);
+  const offset = (page - 1) * DEFAULT_PAGE_SIZE;
+  const pageOrders = orders.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
   return (
     <>
@@ -69,7 +82,7 @@ export default async function OrdersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border text-sm">
-                {orders.map((o) => (
+                {pageOrders.map((o) => (
                   <tr key={o.id} className="hover:bg-zinc-50 dark:hover:bg-surface-alt">
                     <td className="px-5 py-3 text-muted whitespace-nowrap">
                       {new Date(o.created_at).toLocaleDateString("th-TH")}
@@ -96,6 +109,12 @@ export default async function OrdersPage() {
                 ))}
               </tbody>
             </table>
+            <Pagination
+              page={page}
+              pageSize={DEFAULT_PAGE_SIZE}
+              total={orders.length}
+              basePath="/orders"
+            />
           </div>
         )}
 

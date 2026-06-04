@@ -73,6 +73,7 @@ export function ImportExportBanner() {
                 src="/images/banner/popimportboded.png"
                 alt="บริการนำเข้า-ส่งออก ครบวงจร Pacred Shipping"
                 fill
+                sizes="100vw"
                 className="object-cover object-center transition-transform duration-700 group-hover:scale-[1.035]"
                 priority
               />

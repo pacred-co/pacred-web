@@ -37,6 +37,8 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildCombineBillPrintHref, buildCombineBillDetailHref } from "@/lib/admin/combine-bill-urls";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import { CombineBillRowActions } from "./combine-bill-row-actions";
 // ^ Wired client island (delete + print buttons). Kept on the page so super
 //   role retains the existing functional delete; visual chrome of the
@@ -92,6 +94,7 @@ type SP = {
   historyTable?: string;
   historyTableAll?: string;
   date?: string;
+  page?: string;
 };
 
 export default async function CombineBillPage({
@@ -107,6 +110,11 @@ export default async function CombineBillPage({
 
   const sp = await searchParams;
   const admin = createAdminClient();
+
+  // PERF (2026-06-03): paginate — one 50-row window via .range() + exact
+  // count instead of pulling every bill on each render.
+  const page = parsePage(sp.page);
+  const { from: rowFrom, to: rowTo } = pageRange(page);
 
   // ── Filter resolution (forwarder-bill.php L115-132) ──────────
   let filterStart: string | null = null;
@@ -133,8 +141,9 @@ export default async function CombineBillPage({
   // ── tb_bill filtered query (forwarder-bill.php L116-132) ─────
   let billsQ = admin
     .from("tb_bill")
-    .select("billid, date, printstatus, adminid")
-    .order("billid", { ascending: false });
+    .select("billid, date, printstatus, adminid", { count: "exact" })
+    .order("billid", { ascending: false })
+    .range(rowFrom, rowTo);
 
   if (filterStart && filterEnd) {
     billsQ = billsQ
@@ -143,6 +152,7 @@ export default async function CombineBillPage({
   }
 
   const billsRes = await billsQ;
+  const totalBills = billsRes.count ?? 0;
 
   // §0c — destructure error + log on the load-bearing read.
   if (billsRes.error) {
@@ -182,10 +192,28 @@ export default async function CombineBillPage({
   let rawItems: BillItemRow[] = [];
   if (bills.length > 0) {
     const visibleBillIds = bills.map((b) => b.billid);
+    // ── 2026-06-03 (ภูม flag · Pacred R-2 close-out) — silent 1000-cap fix ──
+    //
+    // The Wave 23 P0 fix #3 (Task #153) above collapsed the embed-join to a
+    // .in() pattern but did NOT set an explicit .limit() — so PostgREST's
+    // default 1000-row cap silently truncated the items result. With 953
+    // visible bills × ~3-5 items each the items table has ~3-5k rows in
+    // scope, but only the first 1000 (ordered unspecified by PostgREST →
+    // happens to be the OLDEST billids) came back. The newest bills (highest
+    // billid) got nothing in the Map → every `รายการฝากนำเข้า` cell rendered
+    // empty `—`. Live-verified 2026-06-03: items returned 1000 with first
+    // billid=9691 (= an OLD bill, NOT among the visible top-rows 10632-10643).
+    //
+    // Fix: explicit .limit(50000) + ascending sort by billid so the result
+    // set is deterministic. 50k is far above the ~26k total tb_bill_item
+    // row count today + leaves headroom; if it ever caps the page warns
+    // in the console.
     const itemsRes = await admin
       .from("tb_bill_item")
       .select("id, billid, fid")
-      .in("billid", visibleBillIds);
+      .in("billid", visibleBillIds)
+      .order("billid", { ascending: true })
+      .limit(50000);
     if (itemsRes.error) {
       // §0c — log + surface; do NOT swallow. Items being null here is
       // a real bug (already-visible bills must have item rows by
@@ -201,6 +229,11 @@ export default async function CombineBillPage({
       );
     }
     rawItems = (itemsRes.data ?? []) as unknown as BillItemRow[];
+    if (rawItems.length >= 50000) {
+      console.warn("[combine-bill] tb_bill_item hit the 50k cap — paginate", {
+        visibleBillCount: visibleBillIds.length,
+      });
+    }
   }
 
   // Build the (billID -> fID[]) Map — replaces legacy `search()` helper.
@@ -226,22 +259,27 @@ export default async function CombineBillPage({
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      {/* Breadcrumb */}
+      {/* Breadcrumb — 2026-06-03 (ภูม flag): ย้ายจาก ฝากนำเข้า → ระบบบัญชี →
+          รายรับ → รวมบิลสินค้า ตาม PEAK pattern (acc-system-cargo.php). The
+          /admin/forwarders/combine-bill URL stays for bookmark stability;
+          only the breadcrumb + section label reflect the move. */}
       <nav aria-label="breadcrumb" className="text-xs text-muted flex gap-1.5 items-center flex-wrap">
         <Link href="/admin" className="hover:text-primary-600">หน้าแรก</Link>
         <span>/</span>
-        <Link href="/admin/forwarders" className="hover:text-primary-600">ฝากนำเข้า</Link>
+        <Link href="/admin/accounting" className="hover:text-primary-600">ระบบบัญชี</Link>
         <span>/</span>
-        <span className="text-foreground">ประวัติรายการรวมบิล</span>
+        <span className="text-muted">รายรับ</span>
+        <span>/</span>
+        <span className="text-foreground">รวมบิลสินค้า (ใบส่งสินค้า)</span>
       </nav>
 
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ฝากนำเข้า</p>
-          <h1 className="mt-1 text-2xl font-bold">ประวัติรายการรวมบิล</h1>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ระบบบัญชี · รายรับ</p>
+          <h1 className="mt-1 text-2xl font-bold">รวมบิลสินค้า (ใบส่งสินค้า)</h1>
           <p className="mt-1 text-sm text-muted">
-            รวมหลายรายการฝากนำเข้าของลูกค้าเดียวกันเป็นบิลค่าส่งเดียว · {bills.length.toLocaleString("th-TH")} รายการ
+            รวมหลายรายการฝากนำเข้าของลูกค้าเดียวกันเป็นใบส่งสินค้าใบเดียว · {totalBills.toLocaleString("th-TH")} รายการ
           </p>
         </div>
         {canMutate && (
@@ -396,6 +434,7 @@ export default async function CombineBillPage({
                             <CombineBillRowActions
                               billId={row.billid}
                               printHref={printHref}
+                              hasItems={fids.length > 0}
                             />
                           )}
                         </div>
@@ -408,6 +447,18 @@ export default async function CombineBillPage({
           </div>
         )}
       </div>
+
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={totalBills}
+        basePath="/admin/forwarders/combine-bill"
+        params={{
+          historyTable: sp.historyTable,
+          historyTableAll: sp.historyTableAll,
+          date: sp.date,
+        }}
+      />
     </main>
   );
 }

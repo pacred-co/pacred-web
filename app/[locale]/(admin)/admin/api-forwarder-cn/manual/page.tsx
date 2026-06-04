@@ -27,7 +27,7 @@ export default async function AdminApiForwarderCnManualPage() {
   await requireAdmin(["super", "ops", "warehouse"]);
 
   return (
-    <main className="p-4 lg:p-8 max-w-5xl mx-auto space-y-5">
+    <main className="p-4 lg:p-8 space-y-5">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-xs text-muted">
         <Link href="/admin" className="hover:text-primary-600">Admin</Link>

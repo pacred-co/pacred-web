@@ -1,287 +1,534 @@
 "use client";
 
 /**
- * MODE-A add-to-cart client island for the /search URL-paste screen.
+ * URL-paste add-to-cart island — wires the legacy MODE A
+ * "หยิบใส่รถเข็น" button in `app/[locale]/(protected)/search/page.tsx`
+ * UrlPasteMode.
  *
- * Closes a dead-button gap: the legacy MODE-A product card
- * (`search/page.tsx` `UrlPasteMode`) rendered a `<form method="POST"
- * action="">` with a "หยิบใส่รถเข็น" submit button and NO handler — the
- * page is a Server Component, so clicking did nothing (the legacy jQuery
- * `$.ajax` → cart.php that the form relied on was never ported).
+ * Why this file exists (2026-06-02 §0c §0e):
+ *   The legacy `<form action="" name="addCartURL">` button posted to no
+ *   handler — customer click → green ripple, nothing inserted into
+ *   tb_cart. The whole MODE A url-paste flow was a silent dead end on
+ *   the customer side (the admin-side equivalent at
+ *   /admin/service-orders/cart/add was wired in Wave 23 P2 #16).
  *
- * The product detail is ALREADY fetched server-side
- * (`convertProductUrlDetail` → passed as `detail` into UrlPasteMode), so
- * this island just reads the derived props + a qty (+ optional note) and
- * calls the wired `addCartItem` server action — reusing the exact
- * onAddToCart logic + qty-stepper proven on /service-order/add
- * (link-paste-search.tsx). It preserves the legacy MODE-A price/qty/total
- * block; only the inert form is swapped for this working island.
+ * This island wraps the bottom of the MODE A product card:
+ *   - qty stepper (min/max guarded; default = minQty)
+ *   - color + size text inputs (legacy plain inputs · we keep parity)
+ *   - free-text "รายละเอียดเพิ่มเติม" textarea (color/size description
+ *     when the legacy sku_axes radio set wasn't filled — common path)
+ *   - "หยิบใส่รถเข็น" submit → addCartItem (writes tb_cart faithfully)
  *
- * ── Mobile-first per AGENTS.md §6 + docs/conventions.md §11 ────
- *   - qty stepper buttons + CTA are ≥ 44px tall
- *   - body text ≥ 16px on the controls
- *   - layout stays single-column on phones; CTA thumb-reachable at the
- *     bottom of the card
+ * If TAMIT hasn't resolved the product detail yet (price = 0 OR title
+ * blank), the button renders disabled with "กำลังโหลดข้อมูลสินค้า…"
+ * so the customer doesn't submit an empty cart row.
+ *
+ * Mobile-first per AGENTS.md §6:
+ *   - tap targets ≥ 44px (qty -/+ buttons, the main CTA)
+ *   - body text ≥ 16px (no iOS zoom-on-focus)
+ *   - primary CTA (red, full-width on mobile) thumb-reachable
  */
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { ShoppingCart, Plus, Minus, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { addCartItem } from "@/actions/cart";
-import type { Provider } from "@/lib/validators/cart";
 
-type UrlPasteAddToCartProps = {
-  /** Cart provider — ChinaProductDetail.provider ("1688"|"taobao"|"tmall")
-   *  is a strict subset of the cart PROVIDERS enum, so it passes through. */
-  provider: Provider;
-  title: string;
-  /** Already https-upgraded main image URL (may be undefined → no image). */
-  imageUrl?: string;
-  shopName?: string;
-  /** Unit price in CNY (promo price preferred over base, computed by caller). */
-  priceCny: number;
-  /** The product source URL (the pasted link). */
-  sourceUrl: string;
-  /** Live yuan exchange rate (tb_settings.rsdefault) for the ฿ conversion. */
-  rsDefault: number;
-  /** Minimum order quantity, if the upstream provided one (legacy `#minnum`). */
-  minOrder?: number;
+// Mirrors PROVIDERS in lib/validators/cart.ts L7 (only these 5 are
+// accepted by the cart Zod schema).
+type Provider = "1688" | "taobao" | "tmall" | "shop" | "nice";
+
+// Mirrors ChinaProductDetail.sku_axes / sku_map (lib/china-search/types.ts).
+// Re-declared here so the client component bundle doesn't drag
+// `server-only`-flagged modules into the browser.
+export type SkuAxis = {
+  name: string;
+  values: Array<{ label: string; image?: string; data?: string; is_image?: boolean }>;
+};
+export type SkuRow = {
+  sku_id:     string;
+  prop_path:  Record<string, string>;
+  price_cny:  number;
+  stock:      number;
+  image?:     string;
 };
 
-function numberFormat2(n: number): string {
-  return n.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
-function truncate(s: string, n: number): string {
-  const chars = Array.from(s ?? "");
-  if (chars.length <= n) return s;
-  return chars.slice(0, n).join("") + "...";
-}
+// Heuristic column-axis detectors — copy of admin's COLOR_AXIS_RE +
+// SIZE_AXIS_RE so the cart `ccolor`/`csize` columns get populated.
+const COLOR_AXIS_RE = /(colou?r|颜色|色|สี|seleksi.*warna)/i;
+const SIZE_AXIS_RE  = /(size|尺寸|尺码|码|ขนาด|ไซ?ส์|ยาว|กว้าง|ส่วนสูง)/i;
 
 export function UrlPasteAddToCart({
+  url,
   provider,
   title,
   shopName,
+  mainImage,
   priceCny,
-  sourceUrl,
+  priceThb,
   rsDefault,
-  minOrder,
-}: UrlPasteAddToCartProps) {
-  const minQty = minOrder && minOrder > 0 ? minOrder : 1;
-  const [qty, setQty] = useState(minQty);
-  const [note, setNote] = useState("");
-  const [adding, startAdd] = useTransition();
-  // Post-add flash (sticky until the next add attempt).
-  const [flash, setFlash] = useState<
-    | { kind: "added" }
-    | { kind: "cart_full"; message: string }
-    | { kind: "add_failed"; message: string }
-    | null
-  >(null);
+  minQty,
+  maxQty,
+  detailAvailable,
+  skuAxes,
+  skuMap,
+  basePriceCny,
+  promoPriceCny,
+}: {
+  url:        string;
+  provider:   Provider;
+  title:      string;
+  shopName:   string;
+  mainImage:  string | null;
+  priceCny:   number;
+  priceThb:   number;
+  rsDefault:  number;
+  minQty:     number;
+  maxQty:     number;
+  /** True when TAMIT returned a product detail · false when TAMIT
+   *  failed (URL not supported, vendor down, scraper blocked).
+   *  When false the island shows an error fallback + link to the
+   *  proper manual-entry workflow at /service-order/add. */
+  detailAvailable: boolean;
+  /** SKU axes (color, size, style, etc.) — mirrors admin pattern. */
+  skuAxes?:       SkuAxis[];
+  /** Flattened SKU rows with per-combination price + stock. */
+  skuMap?:        SkuRow[];
+  /** Underlying TAMIT base + promo (the prop `priceCny` above is
+   *  already the precomputed promo|base; these are passed so the
+   *  island can show ราคาเริ่มต้น vs ราคา SKU ที่เลือก). */
+  basePriceCny?:  number;
+  promoPriceCny?: number;
+}) {
+  const minClamp = Math.max(1, minQty);
+  const maxClamp = Math.max(minClamp, maxQty || 999);
 
-  const totalCny = priceCny * qty;
-  const totalThb = totalCny * rsDefault;
+  // priceThb is computed locally from priceCny × rsDefault inside this
+  // island (so the qty stepper recomputes the total live).  Kept as a
+  // prop only so the server-rendered card above can show its own ¥→฿
+  // line without duplicating the math.  Silence the unused-vars lint.
+  void priceThb;
 
-  function onAddToCart() {
-    setFlash(null);
-    startAdd(async () => {
-      const r = await addCartItem({
+  const [qty,        setQty]        = useState<number>(minClamp);
+  const [color,      setColor]      = useState<string>("");
+  const [size,       setSize]       = useState<string>("");
+  const [details,    setDetails]    = useState<string>("");
+  // SKU picker state — keyed by axis.name, value = the selected
+  // axis-value label. Mirrors the admin pattern at
+  // app/[locale]/(admin)/admin/service-orders/cart/add/link-paste-search.tsx L151.
+  const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
+  // Manual price override — only relevant when no SKU is selected AND
+  // TAMIT didn't return base/promo. Pre-filled with TAMIT's value
+  // when present.
+  const [manualPrice, setManualPrice] = useState<string>(priceCny > 0 ? String(priceCny) : "");
+  const [error,      setError]      = useState<string | null>(null);
+  const [success,    setSuccess]    = useState<boolean>(false);
+  const [pending,    startTransition] = useTransition();
+
+  // ── Derived: matched SKU + effective price/image ──────────────────
+  const matchedSku = useMemo<SkuRow | undefined>(() => {
+    if (!skuAxes || skuAxes.length === 0 || !skuMap || skuMap.length === 0) return undefined;
+    if (skuAxes.some((ax) => !selectedVariants[ax.name])) return undefined;
+    return skuMap.find((row) =>
+      skuAxes.every((ax) => row.prop_path[ax.name] === selectedVariants[ax.name]),
+    );
+  }, [skuAxes, skuMap, selectedVariants]);
+
+  const matchedSkuImage = useMemo<string | undefined>(() => {
+    if (matchedSku?.image) return matchedSku.image;
+    if (!skuAxes) return undefined;
+    for (const ax of skuAxes) {
+      const valLabel = selectedVariants[ax.name];
+      if (!valLabel) continue;
+      const val = ax.values.find((v) => v.label === valLabel);
+      if (val?.image) return val.image;
+    }
+    return undefined;
+  }, [matchedSku, skuAxes, selectedVariants]);
+
+  // Auto-compose color/size strings from selected axes — saves the
+  // customer from re-typing what the picker already says.
+  const composedFromAxes = useMemo(() => {
+    if (!skuAxes || skuAxes.length === 0) return { ccolor: "", csize: "", other: "" };
+    let cc = "", cs = "";
+    const other: string[] = [];
+    for (const ax of skuAxes) {
+      const val = selectedVariants[ax.name];
+      if (!val) continue;
+      if (!cc && COLOR_AXIS_RE.test(ax.name))      cc = val;
+      else if (!cs && SIZE_AXIS_RE.test(ax.name))  cs = val;
+      else                                          other.push(`${ax.name}: ${val}`);
+    }
+    return { ccolor: cc, csize: cs, other: other.join(" · ") };
+  }, [skuAxes, selectedVariants]);
+
+  // axesIncomplete = true when SKU axes exist but not all are picked.
+  // Lets the button switch from "หยิบใส่รถเข็น" → "เลือกตัวเลือกก่อน".
+  const axesIncomplete = !!skuAxes && skuAxes.length > 0
+    && skuAxes.some((ax) => !selectedVariants[ax.name]);
+
+  // Render fallback only when TAMIT failed COMPLETELY — no image AND
+  // no usable title AND no SKU data. If we got ANY of: the product
+  // card (image + title), or skuMap (admin gets ¥188 by picking a SKU
+  // even when base price is blank — same here), let the customer
+  // proceed.
+  const hasUsableTitle = title.trim().length > 0
+    && !title.trim().match(/^สินค้าจาก (TMALL|TAOBAO|1688) \(รหัส /);
+  const hasRealImage = !!mainImage;
+  const hasSkuData   = !!skuMap && skuMap.length > 0;
+  if (!detailAvailable || (!hasRealImage && !hasUsableTitle && !hasSkuData)) {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3" role="alert">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="h-6 w-6 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-semibold text-amber-900 text-base">
+              ดึงรายละเอียดสินค้าจากลิงก์นี้ไม่สำเร็จ
+            </p>
+            <p className="text-sm text-amber-800">
+              ระบบยังเปิดดูร้าน {shopName || "นี้"} ไม่ได้ · กรอกข้อมูลสินค้าเองได้ที่หน้า &ldquo;เพิ่มสินค้าในรถเข็น&rdquo;
+            </p>
+          </div>
+        </div>
+        <Link
+          href="/service-order/add"
+          className="inline-flex items-center justify-center gap-2 rounded-full bg-amber-600 hover:bg-amber-700 text-white text-base font-semibold px-5 py-3 min-h-[44px] w-full md:w-auto transition-colors"
+        >
+          <ShoppingCart className="h-5 w-5" />
+          เปิดหน้าเพิ่มสินค้า (กรอกเอง)
+        </Link>
+        {url && (
+          <p className="text-xs text-amber-800 break-all">
+            ลิงก์เดิมที่คุณวาง: <code className="bg-amber-100 px-1 rounded">{url}</code>
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // 2) Detail loaded → render island. Price resolution order
+  //    (mirrors admin/link-paste-search.tsx L177):
+  //    matched SKU price → TAMIT promo → TAMIT base → priceCny prop
+  //    → customer's manual input. The manual input is only displayed
+  //    when every prior source is 0 (skipping the picker).
+  const effectivePriceCny = (() => {
+    if (matchedSku?.price_cny && matchedSku.price_cny > 0) return matchedSku.price_cny;
+    if (promoPriceCny && promoPriceCny > 0)                return promoPriceCny;
+    if (basePriceCny  && basePriceCny  > 0)                return basePriceCny;
+    if (priceCny      && priceCny      > 0)                return priceCny;
+    const n = Number(manualPrice);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  })();
+  const effectivePriceThb = effectivePriceCny * rsDefault;
+  // Show the manual price input only when SKU picker can't supply a
+  // price (no axes OR axes complete but matched row has 0) AND TAMIT
+  // didn't give us a base/promo either.
+  const priceMissing =
+    effectivePriceCny === 0
+    || (!matchedSku && !promoPriceCny && !basePriceCny && priceCny === 0);
+  const isReady = effectivePriceCny > 0 && title.trim().length > 0 && !axesIncomplete;
+
+  function adjQty(delta: number) {
+    setQty((q) => {
+      const next = q + delta;
+      if (next < minClamp) return minClamp;
+      if (next > maxClamp) return maxClamp;
+      return next;
+    });
+  }
+
+  function onSubmit() {
+    if (axesIncomplete) {
+      setError("เลือกตัวเลือกสินค้าให้ครบก่อน");
+      return;
+    }
+    if (effectivePriceCny <= 0) {
+      setError("ยังไม่ใส่ราคา CNY · กรอกราคาก่อน");
+      return;
+    }
+    if (!title.trim()) {
+      setError("ไม่พบชื่อสินค้า · ลองวาง URL ใหม่หรือใช้ /service-order/add");
+      return;
+    }
+    setError(null); setSuccess(false);
+    // SKU-aware compose: color/size first from explicit inputs,
+    // fall through to auto-detected from axes. details gets the
+    // "other" axes appended so admin sees the full picker context.
+    const finalColor    = color.trim() || composedFromAxes.ccolor || undefined;
+    const finalSize     = size.trim()  || composedFromAxes.csize  || undefined;
+    const detailsParts  = [details.trim(), composedFromAxes.other].filter(Boolean);
+    const finalDetails  = detailsParts.length > 0 ? detailsParts.join(" · ") : undefined;
+    const finalImage    = matchedSkuImage ?? mainImage ?? undefined;
+    startTransition(async () => {
+      const res = await addCartItem({
         provider,
-        shop_name: shopName || "pacred",
-        url: sourceUrl,
-        title,
-        // The MODE-A card has no SKU axis grid yet (the full picker lives at
-        // /service-order/add); a free-text note carries สี/ขนาด/รุ่น instead.
-        color: undefined,
-        size: undefined,
-        price_cny: priceCny,
-        amount: qty,
-        details: note.trim() || undefined,
+        shop_name:  shopName || "pacred",
+        url:        url || undefined,
+        title:      title || undefined,
+        image_path: finalImage,
+        color:      finalColor,
+        size:       finalSize,
+        price_cny:  effectivePriceCny,
+        amount:     qty,
+        details:    finalDetails,
       });
-      if (r.ok) {
-        setFlash({ kind: "added" });
-        setQty(minQty);
-        setNote("");
+      if (res.ok) {
+        setSuccess(true);
+        // Clear form so customer can paste another URL without stale qty.
+        // Keep manualPrice — TAMIT often fails on a whole shop, so the
+        // next URL from the same vendor likely shares the price posture.
+        // Clear SKU picks too — next product has different axes.
+        setQty(minClamp); setColor(""); setSize(""); setDetails("");
+        setSelectedVariants({});
+        setTimeout(() => setSuccess(false), 4000);
       } else {
-        const isCartFull = /cart cap reached/i.test(r.error);
-        setFlash(
-          isCartFull
-            ? {
-                kind: "cart_full",
-                message:
-                  "ตะกร้าเต็มแล้ว (สูงสุด 151 รายการ) กรุณาชำระเงิน หรือลบรายการก่อน",
-              }
-            : { kind: "add_failed", message: r.error || "เพิ่มไม่สำเร็จ" },
-        );
+        // Translate the few error codes the customer cares about.
+        const msg =
+          res.error === "cart cap reached (151 items)"
+            ? "ตะกร้าเต็มแล้ว (151 ชิ้น) · ลบรายการบางตัวออกก่อน"
+            : res.error === "not_signed_in"
+              ? "เซสชั่นหมดอายุ · เข้าสู่ระบบใหม่"
+              : `ใส่ตะกร้าไม่สำเร็จ: ${res.error}`;
+        setError(msg);
       }
     });
   }
 
+  const lineTotalThb = effectivePriceThb * qty;
+
   return (
-    <div>
-      {/* Flash banner — post-add toast or error */}
-      {flash && (
-        <div
-          role="status"
-          aria-live="polite"
-          className={`mb-3 px-4 py-3 rounded-lg text-[14px] font-medium ${
-            flash.kind === "added"
-              ? "bg-green-50 text-green-800 border border-green-200"
-              : flash.kind === "cart_full"
-              ? "bg-yellow-50 text-yellow-800 border border-yellow-200"
-              : "bg-red-50 text-red-800 border border-red-200"
-          }`}
-        >
-          {flash.kind === "added" ? (
-            <span>
-              เพิ่มลงตะกร้าแล้ว:{" "}
-              <span className="font-semibold">{truncate(title, 60)}</span> ·{" "}
-              <Link
-                href="/cart"
-                className="underline underline-offset-2 hover:text-green-900"
-              >
-                ไปที่ตะกร้า
-              </Link>
-            </span>
-          ) : (
-            <span>{flash.message}</span>
-          )}
+    <div className="space-y-3">
+      {/* ── SKU PICKER — clickable axes (color · size · style · ...) ─
+          Mirrors admin pattern at
+          /admin/service-orders/cart/add/link-paste-search.tsx L428-490.
+          Each axis renders a row of clickable button chips; selecting
+          one updates state, looks up the matched SKU in skuMap, and
+          re-computes effectivePriceCny. Image thumbs render on chips
+          that are themselves images (rare — Taobao colour swatches). */}
+      {skuAxes && skuAxes.length > 0 && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 space-y-3">
+          <p className="text-sm font-semibold text-emerald-900">
+            เลือกตัวเลือกสินค้า{" "}
+            {axesIncomplete && (
+              <span className="text-red-600 font-bold ml-1">(จำเป็น)</span>
+            )}
+            {matchedSku && (
+              <span className="text-emerald-700 ml-2 text-xs font-normal">
+                ✓ เลือกครบ · ราคา ¥{matchedSku.price_cny.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            )}
+          </p>
+          {skuAxes.map((axis) => {
+            const selectedLabel = selectedVariants[axis.name];
+            return (
+              <div key={axis.name}>
+                <p className="text-sm text-emerald-800 mb-1.5">
+                  <strong className="text-foreground">{axis.name}</strong>
+                  {selectedLabel && (
+                    <span className="ml-2 text-primary-600 font-medium">: {selectedLabel}</span>
+                  )}
+                  <span className="ml-1.5 text-xs text-emerald-600">({axis.values.length} ตัวเลือก)</span>
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {axis.values.map((v) => {
+                    const isSelected = selectedLabel === v.label;
+                    const showThumb  = v.is_image && v.image;
+                    return (
+                      <button
+                        key={v.label}
+                        type="button"
+                        onClick={() => {
+                          setSelectedVariants((prev) => {
+                            // Toggle: clicking the selected chip clears it.
+                            if (prev[axis.name] === v.label) {
+                              const next = { ...prev };
+                              delete next[axis.name];
+                              return next;
+                            }
+                            return { ...prev, [axis.name]: v.label };
+                          });
+                          setError(null);
+                          setSuccess(false);
+                        }}
+                        disabled={pending}
+                        title={v.label}
+                        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm min-h-[44px] transition ${
+                          isSelected
+                            ? "border-primary-500 bg-primary-50 text-primary-700 ring-2 ring-primary-500/30 font-semibold"
+                            : "border-border bg-white hover:border-primary-300 text-foreground"
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                      >
+                        {showThumb && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={v.image}
+                            alt=""
+                            className="h-7 w-7 rounded object-contain bg-white border border-border/50"
+                          />
+                        )}
+                        <span className="max-w-[16rem] truncate">{v.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* Price / qty / total block — preserves the legacy MODE-A
-          `.border-total-product` card, with a working qty stepper + CTA. */}
-      <div
-        className="border-total-product pay-c rounded-xl border border-border bg-surface-alt/50 dark:bg-surface-alt/30 p-3"
-        style={{ zIndex: 99 }}
-      >
-        <div className="grid grid-cols-12 items-center gap-y-3">
-          {/* ราคารวม */}
-          <div className="col-span-4 md:col-span-6 text-right">
-            <h4 className="text-base font-semibold text-foreground">ราคารวม</h4>
-          </div>
-          <div className="col-span-8 md:col-span-6 text-left md:text-right notranslate text-sm">
-            <span id="CHNTotal">{numberFormat2(totalCny)}</span>¥
-            <span>
-              {" "}
-              x {rsDefault}฿/¥ ={" "}
-              <b id="THBtotal" className="text-red-600">
-                {numberFormat2(totalThb)}
-              </b>{" "}
-              ฿
-            </span>
-          </div>
-
-          {/* จำนวน + stepper */}
-          <div className="col-span-4 md:col-span-6 text-right">
-            <h4 className="text-base font-semibold text-foreground">จำนวน</h4>
-            {minOrder && minOrder > 1 ? (
-              <b className="text-xs text-red-600">
-                {" "}
-                (ขั้นต่ำ {minOrder} ชิ้น)
-              </b>
-            ) : null}
-          </div>
-          <div className="col-span-8 md:col-span-6 flex md:justify-end">
-            <div className="flex items-stretch border border-gray-300 rounded-lg overflow-hidden bg-white">
-              <button
-                type="button"
-                onClick={() => setQty(Math.max(minQty, qty - 1))}
-                disabled={adding || qty <= minQty}
-                aria-label="ลดจำนวน"
-                className="w-[44px] h-[44px] text-[20px] font-bold text-gray-700 hover:bg-gray-100 disabled:text-gray-300 disabled:cursor-not-allowed transition"
-              >
-                -
-              </button>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={minQty}
-                max={9999}
-                value={qty}
-                onChange={(e) => {
-                  const n = parseInt(e.target.value, 10);
-                  if (Number.isFinite(n) && n >= minQty) setQty(Math.min(9999, n));
-                  else if (e.target.value === "") setQty(minQty);
-                }}
-                disabled={adding}
-                aria-label="จำนวน"
-                className="w-[64px] text-center text-[16px] border-x border-gray-300 outline-none focus:bg-red-50 disabled:bg-gray-50"
-              />
-              <button
-                type="button"
-                onClick={() => setQty(Math.min(9999, qty + 1))}
-                disabled={adding}
-                aria-label="เพิ่มจำนวน"
-                className="w-[44px] h-[44px] text-[20px] font-bold text-gray-700 hover:bg-gray-100 disabled:text-gray-300 disabled:cursor-not-allowed transition"
-              >
-                +
-              </button>
-            </div>
-          </div>
-
-          {/* หมายเหตุ (สี / ขนาด / รุ่น) */}
-          <div className="col-span-12">
-            <label
-              htmlFor="urlpaste-note"
-              className="block text-[14px] font-medium text-foreground mb-1"
-            >
-              หมายเหตุ <span className="text-muted">(สี / ขนาด / รุ่น)</span>
-            </label>
+      {/* Manual price input — only when the matched SKU + TAMIT base/promo
+          all came back 0. Pre-filled with TAMIT's value when present. */}
+      {priceMissing ? (
+        <label className="block rounded-xl border border-amber-300 bg-amber-50 p-3">
+          <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 mb-1.5">
+            <AlertTriangle className="h-4 w-4" />
+            ราคา CNY (ระบบดึงราคาจาก {shopName || "ร้านนี้"} ไม่ได้ · กรอกราคาที่เห็นเอง)
+          </span>
+          <div className="flex items-center gap-2">
             <input
-              id="urlpaste-note"
-              type="text"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="เช่น สีดำ ขนาด M"
-              maxLength={200}
-              disabled={adding}
-              className="w-full h-[44px] px-3 text-[16px] rounded-lg border border-border bg-white dark:bg-surface focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none transition disabled:bg-gray-50"
+              type="number"
+              value={manualPrice}
+              onChange={(e) => setManualPrice(e.target.value)}
+              placeholder="เช่น 19.90"
+              step="0.01"
+              min="0"
+              inputMode="decimal"
+              className="flex-1 rounded-lg border border-amber-400 bg-white px-3 py-2 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/50"
             />
-          </div>
-
-          {/* หยิบใส่รถเข็น — the real CTA */}
-          <div className="col-span-12 text-left md:text-right">
-            <button
-              type="button"
-              onClick={onAddToCart}
-              disabled={adding || priceCny <= 0}
-              className="btn-main inline-flex items-center justify-center gap-1.5 h-[44px] rounded-full bg-red-600 hover:bg-red-700 text-white text-[16px] font-semibold px-6 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <circle cx="8" cy="21" r="1" />
-                <circle cx="19" cy="21" r="1" />
-                <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
-              </svg>
-              {adding ? "กำลังเพิ่ม..." : "หยิบใส่รถเข็น"}
-            </button>
-            {priceCny <= 0 && (
-              <p className="mt-2 text-[13px] text-muted">
-                ราคายังไม่พร้อม —{" "}
-                <Link
-                  href="/cart"
-                  className="text-red-600 underline underline-offset-2 hover:text-red-700"
-                >
-                  ไปที่ตะกร้าเพื่อกรอกเอง
-                </Link>
-              </p>
+            <span className="text-lg font-bold text-amber-700">¥</span>
+            {effectivePriceCny > 0 && (
+              <span className="text-sm text-amber-800">
+                ≈ {effectivePriceThb.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ฿
+              </span>
             )}
           </div>
+        </label>
+      ) : null}
+
+      {/* Color / size / details — legacy customer cart parity */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <label className="block">
+          <span className="text-sm text-muted block mb-1">สี (ถ้ามี)</span>
+          <input
+            type="text"
+            value={color}
+            onChange={(e) => setColor(e.target.value)}
+            placeholder="เช่น แดง · ดำ"
+            maxLength={200}
+            className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+          />
+        </label>
+        <label className="block">
+          <span className="text-sm text-muted block mb-1">ไซส์ (ถ้ามี)</span>
+          <input
+            type="text"
+            value={size}
+            onChange={(e) => setSize(e.target.value)}
+            placeholder="เช่น M · L · 38"
+            maxLength={200}
+            className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+          />
+        </label>
+      </div>
+      <label className="block">
+        <span className="text-sm text-muted block mb-1">รายละเอียดเพิ่มเติม (ถ้ามี)</span>
+        <textarea
+          value={details}
+          onChange={(e) => setDetails(e.target.value)}
+          placeholder="คำสั่งพิเศษ · สิ่งที่อยากให้ admin รู้"
+          maxLength={2000}
+          rows={2}
+          className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+        />
+      </label>
+
+      {/* qty stepper + total */}
+      <div className="rounded-xl border border-border bg-surface-alt/50 dark:bg-surface-alt/30 p-3 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="text-base font-semibold text-foreground">จำนวน</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => adjQty(-1)}
+              disabled={pending || qty <= minClamp}
+              aria-label="ลดจำนวน"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white dark:bg-surface text-foreground hover:bg-surface-alt disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Minus className="h-5 w-5" />
+            </button>
+            <input
+              type="number"
+              value={qty}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                if (!Number.isFinite(n) || Number.isNaN(n)) return;
+                if (n < minClamp) setQty(minClamp);
+                else if (n > maxClamp) setQty(maxClamp);
+                else setQty(Math.floor(n));
+              }}
+              min={minClamp}
+              max={maxClamp}
+              inputMode="numeric"
+              className="w-20 h-11 text-center rounded-lg border border-border bg-white dark:bg-surface text-base font-semibold focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+            />
+            <button
+              type="button"
+              onClick={() => adjQty(1)}
+              disabled={pending || qty >= maxClamp}
+              aria-label="เพิ่มจำนวน"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white dark:bg-surface text-foreground hover:bg-surface-alt disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-baseline justify-between text-sm">
+          <span className="text-muted">ราคารวม</span>
+          <span>
+            <b className="text-red-600 text-lg">{lineTotalThb.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>
+            {" "}฿
+            <span className="text-xs text-muted">
+              ({effectivePriceCny.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}¥ × {qty} × {rsDefault}฿/¥)
+            </span>
+          </span>
         </div>
       </div>
+
+      {/* Status flash */}
+      {error && (
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div role="status" className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700 flex items-center gap-2">
+          <CheckCircle2 className="h-5 w-5 flex-shrink-0" />
+          <span>
+            ใส่ตะกร้าเรียบร้อย ·{" "}
+            <Link href="/cart" className="underline font-semibold">ไปดูตะกร้า</Link>
+          </span>
+        </div>
+      )}
+
+      {/* Submit CTA */}
+      <button
+        type="button"
+        onClick={onSubmit}
+        disabled={pending || !isReady}
+        className="w-full md:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-red-600 hover:bg-red-700 text-white text-base font-semibold px-6 py-3 min-h-[44px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <ShoppingCart className="h-5 w-5" />
+        {pending
+          ? "กำลังใส่ตะกร้า…"
+          : !title.trim()
+            ? "ไม่พบชื่อสินค้า"
+            : axesIncomplete
+              ? "เลือกตัวเลือกสินค้าให้ครบก่อน"
+              : effectivePriceCny <= 0
+                ? "กรอกราคา CNY ด้านบน"
+                : "หยิบใส่รถเข็น"}
+      </button>
     </div>
   );
 }

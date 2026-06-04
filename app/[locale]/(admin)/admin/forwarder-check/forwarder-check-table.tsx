@@ -33,6 +33,7 @@
 import { useMemo, useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
+import { ArrowUpDown } from "lucide-react";
 import {
   adminCallPriceUser,
   adminRemoveFromCheckQueue,
@@ -131,6 +132,79 @@ function thb(n: number): string {
   return n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Lane C 2026-06-02 — sortable column headers (ภูม flag #3).
+// Module-level component per Next 16 react-hooks/static-components rule.
+// ─────────────────────────────────────────────────────────────────────
+type FwckSortKey =
+  | "id"
+  | "userid"
+  | "amount"
+  | "transport"
+  | "outstanding"
+  | "onePercent"
+  | "cost"
+  | "profit"
+  | "status"
+  | "checkAddedAt";
+type FwckSortDir = "asc" | "desc";
+
+function fwckSortValue(r: ForwarderCheckRow, k: FwckSortKey): string | number {
+  switch (k) {
+    case "id":            return r.id;
+    case "userid":        return (r.userid ?? "").toLowerCase();
+    case "amount":        return r.amount;
+    case "transport":     return r.transport_price;
+    case "outstanding":   return r.outstanding_thb;
+    case "onePercent":    return r.one_percent;
+    case "cost":          return r.cost_total_price;
+    case "profit":        return r.profit_item;
+    case "status":        return r.status;
+    case "checkAddedAt":  return r.check_added_at ? Date.parse(r.check_added_at) : 0;
+  }
+}
+
+function FwckSortableTh({
+  label,
+  sortKey,
+  activeKey,
+  activeDir,
+  onSort,
+  align = "left",
+  title,
+}: {
+  label: string;
+  sortKey: FwckSortKey;
+  activeKey: FwckSortKey | null;
+  activeDir: FwckSortDir;
+  onSort: (k: FwckSortKey) => void;
+  align?: "left" | "right" | "center";
+  title?: string;
+}) {
+  const active = activeKey === sortKey;
+  const alignCls = align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left";
+  const ariaSort: "ascending" | "descending" | "none" =
+    active ? (activeDir === "asc" ? "ascending" : "descending") : "none";
+  return (
+    <th className={`px-2 py-3 ${alignCls}`} title={title} aria-sort={ariaSort}>
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className={`inline-flex items-center gap-1 hover:text-foreground transition-colors ${
+          active ? "text-primary-700 font-semibold" : ""
+        } ${align === "right" ? "flex-row-reverse" : ""}`}
+        aria-label={`เรียงตาม ${label}`}
+      >
+        <span>{label}</span>
+        <ArrowUpDown
+          className={`w-3 h-3 ${active ? "opacity-100" : "opacity-40"}`}
+          aria-hidden
+        />
+      </button>
+    </th>
+  );
+}
+
 // ────────────────────────────────────────────────────────────
 // Component
 // ────────────────────────────────────────────────────────────
@@ -151,6 +225,25 @@ export function ForwarderCheckTable({
     | { kind: "err"; text: string }
     | null
   >(null);
+  // Lane C 2026-06-02 — sortable column headers (ภูม flag #3). Default
+  // sort preserves the server's order until staff clicks a header.
+  const [sortKey, setSortKey] = useState<FwckSortKey | null>(null);
+  const [sortDir, setSortDir] = useState<FwckSortDir>("desc");
+  const handleSort = (k: FwckSortKey) => {
+    if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(k); setSortDir("desc"); }
+  };
+  const viewRows = useMemo(() => {
+    if (!sortKey) return rows;
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      const av = fwckSortValue(a, sortKey);
+      const bv = fwckSortValue(b, sortKey);
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    });
+  }, [rows, sortKey, sortDir]);
 
   const toggleRow = (id: number) =>
     setSelected((prev) => {
@@ -294,26 +387,24 @@ export function ForwarderCheckTable({
                       aria-label="เลือกทั้งหมด"
                     />
                   </th>
-                  <th className="px-2 py-3">ID / ตู้</th>
-                  <th className="px-2 py-3">รหัส / ลูกค้า</th>
+                  <FwckSortableTh label="ID / ตู้"            sortKey="id"           activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
+                  <FwckSortableTh label="รหัส / ลูกค้า"        sortKey="userid"       activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
                   <th className="px-2 py-3">รายละเอียด</th>
-                  <th className="px-2 py-3 text-right" title="กล่อง · CBM · Kg">ปริมาณ</th>
+                  <FwckSortableTh label="ปริมาณ"              sortKey="amount"       activeKey={sortKey} activeDir={sortDir} onSort={handleSort} align="right" title="กล่อง · CBM · Kg" />
                   <th className="px-2 py-3 text-right">ค่านำเข้า/อัปเดต</th>
                   <th className="px-2 py-3 text-right">ค่าตีลัง / ขนส่งจีน+ / อื่นๆ</th>
-                  <th className="px-2 py-3">ขนส่งไทย</th>
+                  <FwckSortableTh label="ขนส่งไทย"            sortKey="transport"    activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
                   <th className="px-2 py-3 text-right">ส่วนลด</th>
-                  <th className="px-2 py-3 text-right" title="ยอดที่จะแจ้งลูกค้า (calPriceForwarderMain)">
-                    รวมขาย (ยอดบิล)
-                  </th>
-                  <th className="px-2 py-3 text-right">1%</th>
+                  <FwckSortableTh label="รวมขาย (ยอดบิล)"     sortKey="outstanding"  activeKey={sortKey} activeDir={sortDir} onSort={handleSort} align="right" title="ยอดที่จะแจ้งลูกค้า (calPriceForwarderMain)" />
+                  <FwckSortableTh label="1%"                  sortKey="onePercent"   activeKey={sortKey} activeDir={sortDir} onSort={handleSort} align="right" />
                   {showMoneyColumns && (
                     <>
-                      <th className="px-2 py-3 text-right">ต้นทุน</th>
-                      <th className="px-2 py-3 text-right">กำไร</th>
+                      <FwckSortableTh label="ต้นทุน" sortKey="cost"   activeKey={sortKey} activeDir={sortDir} onSort={handleSort} align="right" />
+                      <FwckSortableTh label="กำไร"   sortKey="profit" activeKey={sortKey} activeDir={sortDir} onSort={handleSort} align="right" />
                     </>
                   )}
-                  <th className="px-2 py-3">สถานะ</th>
-                  <th className="px-2 py-3">ตรวจโดย</th>
+                  <FwckSortableTh label="สถานะ"     sortKey="status"       activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
+                  <FwckSortableTh label="ตรวจโดย"   sortKey="checkAddedAt" activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
                   <th className="px-2 py-3">หมายเหตุ</th>
                 </tr>
               </thead>
@@ -353,7 +444,7 @@ export function ForwarderCheckTable({
               </tbody>
 
               <tbody>
-                {rows.map((r) => {
+                {viewRows.map((r) => {
                   const isOn = selected.has(r.id);
                   const statusCls = STATUS_BADGE[r.status] ?? "bg-gray-50 text-gray-600 border-gray-200";
                   const transportBadge = TRANSPORT_BADGE[r.transport_type];

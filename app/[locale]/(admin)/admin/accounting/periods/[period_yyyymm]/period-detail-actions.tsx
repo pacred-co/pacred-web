@@ -78,7 +78,7 @@ export function PeriodDetailActions({ period_yyyymm, status, canWrite, canReopen
           </button>
           <button
             type="button"
-            onClick={() => call(() => adminMarkPeriodClosing({ period_yyyymm }))}
+            onClick={() => { if (confirm("ทำเครื่องหมายงวดบัญชีนี้เป็น “กำลังปิด”?")) call(() => adminMarkPeriodClosing({ period_yyyymm })); }}
             disabled={pending}
             className="rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm hover:bg-amber-50 disabled:opacity-50"
           >

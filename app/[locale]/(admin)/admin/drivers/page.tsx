@@ -22,6 +22,8 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import { Plus, Truck, AlertCircle, CheckCircle2, XCircle, Clock } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -68,7 +70,7 @@ type DriverDirectoryEntry = { member_code: string; name: string };
 export default async function AdminDriversPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; range?: string }>;
+  searchParams: Promise<{ status?: string; range?: string; page?: string }>;
 }) {
   await requireAdmin(["ops", "super"]);
 
@@ -77,12 +79,16 @@ export default async function AdminDriversPage({
   const range  = sp.range ?? "90d";   // "90d" default · "all" override
   const admin  = createAdminClient();
 
+  // Pagination — server-side window via ?page=N (PERF 2026-06-03).
+  const page = parsePage(sp.page);
+  const { from: rowFrom, to: rowTo } = pageRange(page);
+
   // Build the WHERE clause. Default is "last 90 days" (legacy behaviour).
   let q = admin
     .from("tb_forwarder_driver")
-    .select("id, fddate, fdname, fdadminid, fdadmincreator, fdstatus, fdamount, endtime")
+    .select("id, fddate, fdname, fdadminid, fdadmincreator, fdstatus, fdamount, endtime", { count: "exact" })
     .order("id", { ascending: false })
-    .limit(200);
+    .range(rowFrom, rowTo);
 
   if (status) q = q.eq("fdstatus", status);
 
@@ -92,12 +98,12 @@ export default async function AdminDriversPage({
     q = q.gte("fddate", cutoff.toISOString().substring(0, 10));
   }
 
-  const { data: rowsData, error: rowsErr } = await q;
+  const { data: rowsData, error: rowsErr, count: totalBatches } = await q;
   if (rowsErr) {
     console.error("/admin/drivers: list query failed", rowsErr, { status, range });
     throw new Error(`ไม่สามารถอ่านรายการรอบจัดส่ง: ${rowsErr.message}`);
   }
-  const rows = (rowsData ?? []) as BatchRow[];
+  const rows = (rowsData ?? []) as unknown as BatchRow[];
 
   // Status tally (filter chips show counts of the active range).
   // Next 16 react-hooks/purity rule rejects raw `Date.now()` inline in render
@@ -130,7 +136,7 @@ export default async function AdminDriversPage({
     if (itemAggErr) {
       console.error("/admin/drivers: item agg failed", itemAggErr);
     }
-    items = (itemAggData ?? []) as AggItemRow[];
+    items = (itemAggData ?? []) as unknown as AggItemRow[];
   }
   // For box-count we need to look up tb_forwarder.famount — but since items
   // can be 5000+ that's a separate concurrent query bounded to the visible
@@ -146,7 +152,7 @@ export default async function AdminDriversPage({
     if (error) {
       console.error("/admin/drivers: forwarder amount lookup failed", error);
     }
-    fwdAmtData = (data ?? []) as FwdAmtRow[];
+    fwdAmtData = (data ?? []) as unknown as FwdAmtRow[];
   }
   const famountById = new Map(fwdAmtData.map((r) => [r.id, r.famount ?? 0]));
   const itemAgg = new Map<number, { itemCount: number; boxSum: number; doneCount: number }>();
@@ -321,6 +327,14 @@ export default async function AdminDriversPage({
           </div>
         )}
       </div>
+
+      <Pagination
+        page={page}
+        pageSize={DEFAULT_PAGE_SIZE}
+        total={totalBatches ?? 0}
+        basePath="/admin/drivers"
+        params={{ status: sp.status, range: sp.range }}
+      />
 
       <p className="text-[10px] text-muted">
         ฐานข้อมูล: legacy <code className="rounded bg-surface-alt px-1">tb_forwarder_driver</code>{" "}
