@@ -88,6 +88,49 @@ const TRANSPORT_OPTIONS = [
 
 type TransportType = (typeof TRANSPORT_OPTIONS)[number]["value"];
 
+// 2026-06-04 ภูม flag — โกดังประเทศจีน picker + auto-detect from tracking.
+// Codes per WAREHOUSE_NAME_LABEL in actions/admin/reports-profit-types.ts.
+// Empty value = ยังไม่ระบุ (admin fills in later via /edit when goods arrive).
+const WAREHOUSE_OPTIONS: { value: "" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8"; label: string }[] = [
+  { value: "",  label: "— ยังไม่ระบุ (admin เลือกตอนของถึงโกดังจีน) —" },
+  { value: "1", label: "1 · แสง (Sang)" },
+  { value: "2", label: "2 · CTT" },
+  { value: "3", label: "3 · MK" },
+  { value: "4", label: "4 · MX" },
+  { value: "5", label: "5 · JMF" },
+  { value: "6", label: "6 · GOGO" },
+  { value: "7", label: "7 · Cargo Center" },
+  { value: "8", label: "8 · MOMO" },
+];
+
+type WarehouseCode = (typeof WAREHOUSE_OPTIONS)[number]["value"];
+
+/**
+ * Best-effort tracking → warehouse heuristic.
+ *
+ * Only two prefixes have a documented Pacred convention:
+ *   - "MO" prefix → 8 (MOMO)        — per lib/admin/commit-momo-row-core.ts:398
+ *     where MOMO-pulled rows get fIDorCO=`MO${trackingNo}` (the Pacred system
+ *     identity), and the canonical MOMO warehouse code is 8.
+ *   - "CC" prefix → 7 (Cargo Center) — per actions/admin/api-forwarder-manual.ts:42
+ *     where both CN + MOMO legacy manual entry pages use fIDorCOPrefix="CC"
+ *     with fWarehouseName="7". When the raw tracking the admin types itself
+ *     starts with CC, it's almost certainly a Cargo Center route.
+ *
+ * Everything else is a vendor-issued tracking with no Pacred-side prefix
+ * convention (carrier-side trackings vary too wildly to regex reliably) —
+ * return null so the dropdown stays empty and the admin picks.
+ *
+ * Match is case-insensitive · uses `startsWith` after trim.
+ */
+function guessWarehouseFromTracking(tracking: string): WarehouseCode | null {
+  const t = tracking.trim().toUpperCase();
+  if (!t) return null;
+  if (t.startsWith("MO")) return "8";
+  if (t.startsWith("CC")) return "7";
+  return null;
+}
+
 function customerLabel(c: CustomerOption | null | undefined): string {
   if (!c) return "—";
   const name = `${c.userName ?? ""} ${c.userLastName ?? ""}`.trim();
@@ -130,6 +173,16 @@ export function AdminForwarderNewForm({
   const [trackingChn, setTrackingChn] = useState<string>("");
   const [detail, setDetail]           = useState<string>("");
   const [amount, setAmount]           = useState<string>("1");
+
+  // ─── โกดังประเทศจีน (warehouseName · 2026-06-04 ภูม flag) ────────
+  // - Default = "" (ยังไม่ระบุ) per legacy `forwarder.php` which doesn't
+  //   set fWarehouseName on INSERT.
+  // - Auto-fill from tracking prefix (MO→8, CC→7) ONLY when the admin
+  //   hasn't manually picked yet — `warehouseTouched` flips true on the
+  //   first dropdown change and prevents auto-fill from overwriting.
+  const [warehouseName, setWarehouseName]       = useState<WarehouseCode>("");
+  const [warehouseTouched, setWarehouseTouched] = useState<boolean>(false);
+  const [warehouseAutoFilled, setWarehouseAutoFilled] = useState<boolean>(false);
   const [coverFile, setCoverFile]     = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const coverInputRef = useRef<HTMLInputElement | null>(null);
@@ -195,6 +248,26 @@ export function AdminForwarderNewForm({
       }
     };
   }, []);
+
+  // ─── auto-detect warehouse from tracking prefix (2026-06-04 ภูม) ───
+  // Inlined into the tracking onChange handler (handleTrackingChange) below —
+  // React 19's `react-hooks/set-state-in-effect` rule rejects setState inside
+  // useEffect for cascading-render reasons; doing the work in the change
+  // handler also makes the data flow easier to follow (1 source of truth =
+  // the keystroke).
+  function applyTrackingAutoDetect(nextTracking: string) {
+    if (warehouseTouched) return;            // admin has taken control
+    const guess = guessWarehouseFromTracking(nextTracking);
+    if (guess !== null) {
+      setWarehouseName(guess);
+      setWarehouseAutoFilled(true);
+    } else if (warehouseAutoFilled) {
+      // Tracking doesn't match any known prefix — clear any prior auto-fill
+      // so the dropdown re-empties on a typo correction.
+      setWarehouseName("");
+      setWarehouseAutoFilled(false);
+    }
+  }
 
   // ─── when coID changes → fetch users for that tier ─────────────
   async function onCoidChange(next: string) {
@@ -294,6 +367,9 @@ export function AdminForwarderNewForm({
     setAddresses([]);
     setAddressId(null);
     setTransportType("1");
+    setWarehouseName("");
+    setWarehouseTouched(false);
+    setWarehouseAutoFilled(false);
     setError(null);
     setSuccess(null);
     setFieldErrors(new Set());
@@ -333,6 +409,7 @@ export function AdminForwarderNewForm({
           shipBy:         shipBy,
           addressId:      shipBy === "PCS" ? null : addressId,
           transportType:  transportType,
+          warehouseName:  warehouseName,
         },
         coverFile ?? undefined,
       );
@@ -487,8 +564,10 @@ export function AdminForwarderNewForm({
             type="text"
             value={trackingChn}
             onChange={(e) => {
-              setTrackingChn(e.target.value);
+              const next = e.target.value;
+              setTrackingChn(next);
               setFieldErrors((p) => { const n = new Set(p); n.delete("trackingChn"); return n; });
+              applyTrackingAutoDetect(next);
             }}
             maxLength={50}
             placeholder="เลข Tracking"
@@ -496,6 +575,37 @@ export function AdminForwarderNewForm({
             className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ${errCls("trackingChn")}`}
             required
           />
+        </div>
+
+        {/* ─── โกดังประเทศจีน (2026-06-04 ภูม flag) ─────────────────── */}
+        <div className="mt-4">
+          <label className="block text-xs font-medium text-muted mb-1">
+            โกดังประเทศจีน
+            <span className="ml-1 text-[10px] text-muted">(ไม่บังคับ · แก้ไขทีหลังได้ใน /edit)</span>
+          </label>
+          <select
+            value={warehouseName}
+            onChange={(e) => {
+              setWarehouseName(e.target.value as WarehouseCode);
+              setWarehouseTouched(true);
+              setWarehouseAutoFilled(false);
+            }}
+            disabled={pending}
+            className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+          >
+            {WAREHOUSE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          {warehouseAutoFilled && warehouseName ? (
+            <p className="mt-1 text-[11px] text-emerald-700">
+              ✨ ตรวจจับจาก prefix tracking อัตโนมัติ · กดเลือกเองได้ทับ
+            </p>
+          ) : (
+            <p className="mt-1 text-[11px] text-muted">
+              ปล่อยว่างไว้ก็ได้ · admin เลือกตอนของถึงโกดังจีนผ่านหน้า /edit · ระบบเดาให้อัตโนมัติเมื่อ tracking ขึ้นต้นด้วย <code className="rounded bg-gray-100 px-1">MO</code> (MOMO) หรือ <code className="rounded bg-gray-100 px-1">CC</code> (Cargo Center)
+            </p>
+          )}
         </div>
 
         <div className="mt-4 grid gap-4 md:grid-cols-[2fr_1fr]">
