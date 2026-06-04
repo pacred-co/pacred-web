@@ -68,6 +68,13 @@ export type PendingRow = {
   qty:                number | null;
   lastSyncedAt:       string | null;
   momoUpdatedAt:      string | null;
+  /**
+   * 2026-06-04 (ภูม flag) — รูปป้ายแปะที่ MOMO ถ่ายตอนรับของลงโกดัง.
+   * URL list สกัดจาก raw.images. ใช้ตรวจสอบว่า MOMO กรอก user_code ถูกต้อง
+   * มั้ย (เคสจริง: MOMO กรอก "023" แต่ป้ายของจริงเขียน "PR025") · admin
+   * คลิกรูปเพื่อ quick-zoom ตอนตรวจสอบก่อน commit.
+   */
+  imageUrls:          string[];
 };
 
 type CommittedRow = {
@@ -150,6 +157,8 @@ export function ReviewGridClient({
   const [bulkSummary, setBulkSummary] = useState<{
     total: number; succeeded: number; failed: number;
   } | null>(null);
+  // 2026-06-04 (ภูม flag) — lightbox state สำหรับ quick-zoom ป้าย MOMO
+  const [zoomImage, setZoomImage] = useState<{ url: string; tracking: string } | null>(null);
 
   // Set the form value for one row.
   const setRowField = <K extends keyof RowFormState>(
@@ -456,6 +465,10 @@ export function ReviewGridClient({
                   <th className="text-left px-3 py-2 border-b w-8">#</th>
                   <th className="text-left px-3 py-2 border-b">Tracking</th>
                   <th className="text-left px-3 py-2 border-b">ตู้ / Sack</th>
+                  <th className="text-center px-3 py-2 border-b w-20">
+                    รูปป้าย
+                    <div className="text-[9px] font-normal text-muted">(คลิกซูม · ตรวจ user_code)</div>
+                  </th>
                   <th className="text-left px-3 py-2 border-b">Phase</th>
                   <th className="text-left px-3 py-2 border-b">Qty</th>
                   <th className="text-left px-3 py-2 border-b w-32">userID *</th>
@@ -504,6 +517,36 @@ export function ReviewGridClient({
                         )}
                         {r.momoSackNo && (
                           <div className="text-[10px] text-muted">sack: {r.momoSackNo}</div>
+                        )}
+                      </td>
+                      {/* 2026-06-04 (ภูม flag) — รูปป้ายแปะ thumbnail ที่
+                          MOMO ถ่ายตอนรับของลงโกดัง · admin คลิกเพื่อ
+                          quick-zoom ตรวจว่า user_code ที่ MOMO กรอกตรงกับ
+                          ป้ายของจริงรึเปล่า (เคสจริง: MOMO กรอก "023" แต่
+                          ป้ายเขียน "PR025"). */}
+                      <td className="px-2 py-2 text-center">
+                        {r.imageUrls.length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => setZoomImage({ url: r.imageUrls[0], tracking: r.momoTrackingNo ?? "—" })}
+                            className="group relative inline-block"
+                            title="คลิกเพื่อ quick-zoom"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={r.imageUrls[0]}
+                              alt={`MOMO label · ${r.momoTrackingNo ?? "—"}`}
+                              className="h-12 w-12 rounded border border-border object-cover group-hover:ring-2 group-hover:ring-primary-400 transition-all"
+                              loading="lazy"
+                            />
+                            {r.imageUrls.length > 1 && (
+                              <span className="absolute -top-1.5 -right-1.5 rounded-full bg-primary-500 text-white text-[9px] px-1.5 py-0.5 font-bold">
+                                +{r.imageUrls.length - 1}
+                              </span>
+                            )}
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-muted">—</span>
                         )}
                       </td>
                       <td className="px-3 py-2">
@@ -687,6 +730,60 @@ export function ReviewGridClient({
             </table>
           </div>
         </section>
+      )}
+
+      {/* 2026-06-04 (ภูม flag) — Quick-zoom lightbox สำหรับรูปป้าย MOMO.
+          ภูมคลิกรูปเล็กในตาราง → modal full-screen แสดงรูปขนาดเต็ม +
+          tracking + ปุ่มเปิดในแท็บใหม่ (ถ้าจะซูมต่อบน MOMO). Esc/คลิกพื้นที่
+          ดำ = ปิด. */}
+      {zoomImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 cursor-zoom-out"
+          onClick={() => setZoomImage(null)}
+          onKeyDown={(e) => e.key === "Escape" && setZoomImage(null)}
+          role="button"
+          tabIndex={0}
+        >
+          <div
+            className="relative max-w-5xl max-h-[92vh] flex flex-col gap-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 text-white">
+              <div>
+                <div className="text-xs text-white/60">รูปป้ายที่ MOMO แนบ</div>
+                <div className="font-mono text-sm font-bold">{zoomImage.tracking}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={zoomImage.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-lg bg-white/10 hover:bg-white/20 px-3 py-1.5 text-xs"
+                >
+                  เปิดในแท็บใหม่ ↗
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setZoomImage(null)}
+                  className="rounded-lg bg-white/10 hover:bg-white/20 px-3 py-1.5 text-xs"
+                  aria-label="ปิด"
+                >
+                  ✕ ปิด (Esc)
+                </button>
+              </div>
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={zoomImage.url}
+              alt={`MOMO label · ${zoomImage.tracking}`}
+              className="max-w-full max-h-[80vh] rounded-lg object-contain"
+            />
+            <p className="text-[10px] text-white/60 text-center">
+              ⚠️ ตรวจสอบเลข user_code บนป้ายให้ตรงกับ Pacred userID ก่อน commit ·
+              ถ้าไม่ตรง → แจ้งเซลให้ MOMO update
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );
