@@ -564,7 +564,7 @@ export async function submitCartOrder(input: {
   // For the INLINE (typed-in-form) path there's no saved tb_address row to
   // remember, so don't clobber the customer's userAddressID with the sentinel —
   // only persist ship-by + pay-method (still valid last-used picks).
-  await admin
+  const { error: userDefaultsErr } = await admin
     .from("tb_users")
     .update({
       ...(input.addressID !== "INLINE" ? { userAddressID: input.addressID } : {}),
@@ -572,6 +572,10 @@ export async function submitCartOrder(input: {
       userPayMethod: input.payMethod ?? "",
     })
     .eq("userID", userID);
+  if (userDefaultsErr) {
+    // Non-fatal: order is already placed; this only persists last-used picks.
+    console.error(`[submitCartOrder tb_users defaults] failed`, { code: userDefaultsErr.code, message: userDefaultsErr.message, userID });
+  }
 
   // shops.php L208-220 — UPDATE tb_header_order with rollup totals
   // (hTotalPriceCHN / hRate / hCount / hTitle / hCover).
@@ -590,7 +594,7 @@ export async function submitCartOrder(input: {
   );
   const hTitle = orderRowsPayload[0].ctitle || "";
   const hCover = orderRowsPayload[0].cimages || "";
-  await admin
+  const { error: headerRollupErr } = await admin
     .from("tb_header_order")
     .update({
       htotalpricechn: sumTotalCHN,
@@ -600,13 +604,25 @@ export async function submitCartOrder(input: {
       hcover: hCover,
     })
     .eq("hno", hNo);
+  if (headerRollupErr) {
+    // Non-fatal: order rows + header already inserted; the admin price flow
+    // recomputes hTotalPriceCHN from items, so a failed rollup is recoverable.
+    // Returning ok:false here would orphan the inserted order → customer retries
+    // → DUPLICATE. Log loudly (Sentry) instead.
+    console.error(`[submitCartOrder tb_header_order rollup] failed — order placed, totals not rolled up (admin recomputes on pricing)`, { code: headerRollupErr.code, message: headerRollupErr.message, hNo });
+  }
 
   // shops.php L231 — DELETE selected tb_cart rows (ownership-gated).
-  await admin
+  const { error: cartDeleteErr } = await admin
     .from("tb_cart")
     .delete()
     .in("id", input.ids)
     .eq("userid", userID);
+  if (cartDeleteErr) {
+    // Non-fatal: order is placed; a leftover cart row is a minor annoyance, not
+    // data loss. Don't fail the action (would risk a re-order). Log for Sentry.
+    console.error(`[submitCartOrder tb_cart cleanup] failed — order placed but cart not cleared`, { code: cartDeleteErr.code, message: cartDeleteErr.message, userID });
+  }
 
   revalidatePath("/cart");
   revalidatePath("/service-order");
@@ -1217,10 +1233,15 @@ export async function applyPromoToCart(
   // selection. Status flips to "2" (ใช้โปรแล้ว) at order-submit time.
   if (promo.id === 77) {
     await admin.from("tb_promotion33").delete().eq("userid", userID);
-    await admin.from("tb_promotion33").insert({
+    const { error: promo33Err } = await admin.from("tb_promotion33").insert({
       userid: userID,
       statuspro: "1",
     });
+    if (promo33Err) {
+      // Non-fatal: tb_pro_valentine (canonical) is already set above; this is
+      // just the legacy 3.3 opt-in tracker. Log for observability.
+      console.error(`[applyPromoToCart tb_promotion33 opt-in] failed`, { code: promo33Err.code, message: promo33Err.message, userID });
+    }
   }
 
   revalidatePath("/cart");
@@ -1264,11 +1285,15 @@ export async function removePromoFromCart(
 
   // Only clear the 3.3 opt-in if it was in "ยังไม่ใช้" state (status=1)
   // — never clear an already-redeemed (status=2) row.
-  await admin
+  const { error: clearPromo33Err } = await admin
     .from("tb_promotion33")
     .delete()
     .eq("userid", userID)
     .eq("statuspro", "1");
+  if (clearPromo33Err) {
+    // Non-fatal: tb_pro_valentine (canonical) already cleared above.
+    console.error(`[removePromoFromCart tb_promotion33 clear] failed`, { code: clearPromo33Err.code, message: clearPromo33Err.message, userID });
+  }
 
   revalidatePath("/cart");
   revalidatePath("/service-order/cart");

@@ -32,7 +32,7 @@ export default async function DashboardPage() {
   // index.php / header.php SELECTs — $countShops (header.php L105),
   // $countForwarder (L100), $countPayment (L104), $walletTotal (L86-92),
   // and the tb_corporate juristic-pending gate (index.php L40).
-  const [shopsRes, forwarderRes, paymentRes, walletRes, corpRes] = await Promise.all([
+  const [shopsRes, forwarderRes, paymentRes, corpRes] = await Promise.all([
     admin
       .from("tb_header_order")
       .select("*", { count: "exact", head: true })
@@ -46,11 +46,6 @@ export default async function DashboardPage() {
       .select("*", { count: "exact", head: true })
       .eq("userid", uid),
     admin
-      .from("tb_wallet")
-      .select("wallettotal")
-      .eq("userid", uid)
-      .maybeSingle<{ wallettotal: number | string | null }>(),
-    admin
       .from("tb_corporate")
       .select("*", { count: "exact", head: true })
       .eq("userid", uid)
@@ -60,11 +55,6 @@ export default async function DashboardPage() {
   const countShops = shopsRes.count ?? 0;
   const countForwarder = forwarderRes.count ?? 0;
   const countPayment = paymentRes.count ?? 0;
-  const walletTotal = Number(walletRes.data?.wallettotal ?? 0);
-  const walletText = walletTotal.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
 
   // index.php L40-42 — a tb_corporate row with corporateStatus=1 = a
   // juristic-person application still pending approval.
@@ -195,7 +185,7 @@ export default async function DashboardPage() {
             <div className="text-left">
               <div className="text-3xl font-bold text-amber-500">{countForwarder}</div>
               <div className="mt-1 text-sm font-medium text-foreground/80">
-                ฝากนำเข้าสินค้า
+                นำเข้าสินค้า
               </div>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-950/30">
@@ -217,6 +207,41 @@ export default async function DashboardPage() {
           </div>
           <div className="mt-4 h-[1.5px] w-full rounded-full bg-amber-500" />
         </Link>
+
+        {/* 2b — ส่งออกสินค้า · coming soon (owner 2026-06-04 — paired beside
+            นำเข้า; export module not built yet → greyed, non-navigating). */}
+        <div
+          aria-disabled
+          className="group block rounded-2xl bg-white dark:bg-surface border border-black/[0.10] dark:border-white/10 shadow-[0_2px_3px_rgba(15,23,42,0.10),0_6px_14px_rgba(15,23,42,0.12),0_18px_38px_rgba(15,23,42,0.16),inset_0_1.5px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.10),inset_0_0_0_1px_rgba(255,255,255,0.35)] p-4 md:p-5 cursor-not-allowed select-none opacity-80"
+        >
+          <div className="flex items-center justify-between">
+            <div className="text-left">
+              <span className="inline-block rounded-full bg-gray-200 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                เร็วๆนี้
+              </span>
+              <div className="mt-1.5 text-sm font-medium text-foreground/60">
+                ส่งออกสินค้า
+              </div>
+            </div>
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 dark:bg-white/5">
+              <div
+                className="h-8 w-8 bg-gray-400"
+                style={{
+                  WebkitMaskImage: "url(/images/home/iconfloating/export.png)",
+                  maskImage: "url(/images/home/iconfloating/export.png)",
+                  WebkitMaskSize: "contain",
+                  maskSize: "contain",
+                  WebkitMaskRepeat: "no-repeat",
+                  maskRepeat: "no-repeat",
+                  WebkitMaskPosition: "center",
+                  maskPosition: "center",
+                }}
+                aria-hidden
+              />
+            </div>
+          </div>
+          <div className="mt-4 h-[1.5px] w-full rounded-full bg-gray-300" />
+        </div>
 
         {/* 3 — ฝากชำระเงิน */}
         <Link
@@ -248,41 +273,6 @@ export default async function DashboardPage() {
             </div>
           </div>
           <div className="mt-4 h-[1.5px] w-full rounded-full bg-violet-500" />
-        </Link>
-
-        {/* 4 — กระเป๋าสตางค์เงินสด */}
-        <Link
-          href="/wallet"
-          className="group block rounded-2xl bg-white dark:bg-surface border border-black/[0.10] dark:border-white/10 shadow-[0_2px_3px_rgba(15,23,42,0.10),0_6px_14px_rgba(15,23,42,0.12),0_18px_38px_rgba(15,23,42,0.16),inset_0_1.5px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.10),inset_0_0_0_1px_rgba(255,255,255,0.35)] transition-[transform,box-shadow] duration-300 ease-out will-change-transform hover:-translate-y-2 hover:shadow-[0_3px_5px_rgba(15,23,42,0.12),0_12px_24px_rgba(15,23,42,0.18),0_28px_54px_rgba(15,23,42,0.20),inset_0_2px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.12),inset_0_0_0_1px_rgba(255,255,255,0.5)] active:translate-y-0.5 active:duration-75 p-4 md:p-5"
-        >
-          <div className="flex items-center justify-between">
-            <div className="text-left">
-              <div className="text-3xl font-bold text-emerald-500">
-                {walletText}
-                <span className="ml-1 text-sm font-normal text-foreground/70">บาท</span>
-              </div>
-              <div className="mt-1 text-sm font-medium text-foreground/80">
-                กระเป๋าสตางค์เงินสด
-              </div>
-            </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/30">
-              <div
-                className="h-8 w-8 bg-emerald-500"
-                style={{
-                  WebkitMaskImage: "url(/images/home/iconfloating/pcs-wallet.png)",
-                  maskImage: "url(/images/home/iconfloating/pcs-wallet.png)",
-                  WebkitMaskSize: "contain",
-                  maskSize: "contain",
-                  WebkitMaskRepeat: "no-repeat",
-                  maskRepeat: "no-repeat",
-                  WebkitMaskPosition: "center",
-                  maskPosition: "center",
-                }}
-                aria-hidden
-              />
-            </div>
-          </div>
-          <div className="mt-4 h-[1.5px] w-full rounded-full bg-emerald-500" />
         </Link>
       </div>
     </div>

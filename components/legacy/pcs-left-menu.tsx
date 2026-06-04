@@ -38,6 +38,18 @@ function SubLink({ href, children }: { href: string; children: React.ReactNode }
   );
 }
 
+/** A coming-soon sub-row — same shape as SubLink but greyed + non-navigating
+ *  (the export module isn't built yet, so a real <Link> would 404 · §0d). */
+function SubComingSoon({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 pl-12 pr-4 py-2 text-[13px] text-gray-400 cursor-not-allowed select-none">
+      <ChevronRight className="h-3.5 w-3.5 opacity-40" />
+      <span className="flex-1">{children}</span>
+      <span className="text-[9px] font-bold uppercase tracking-wide text-gray-400">soon</span>
+    </div>
+  );
+}
+
 /**
  * Legacy PCS Cargo customer left sidebar — Tailwind-only rebuild.
  * Section order matches the legacy `member/include/left-menu.php` 1:1:
@@ -157,12 +169,13 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
           <SubLink href="/cart/add">เพิ่มสินค้าในรถเข็น</SubLink>
         </PcsLeftMenuAccordion>
 
-        {/* บริการฝากนำเข้า — flat per ปอน 2026-05-30: 4 sub-rows, รอชำระ shows
+        {/* บริการนำเข้า — flat per ปอน 2026-05-30: 4 sub-rows, รอชำระ shows
             its pending-payment count (fstatus=5). LCL/FCL × รถ/เรือ/แอร์ nested
-            accordions removed; ประวัติ = ส่งแล้ว filter (q=7). */}
+            accordions removed; ประวัติ = ส่งแล้ว filter (q=7). Label trimmed
+            "บริการฝากนำเข้า" → "บริการนำเข้า" per owner 2026-06-04. */}
         <PcsLeftMenuAccordion
           icon="/images/home/iconfloating/pcs-forwarder.png"
-          label="บริการฝากนำเข้า"
+          label="บริการนำเข้า"
           badge={<MenuBadge n={data.countForwarder5 + data.countFCredit} />}
         >
           <SubLink href="/service-import">รายการนำเข้า</SubLink>
@@ -177,10 +190,29 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
           <SubLink href="/service-import?q=7">ประวัติการนำเข้า</SubLink>
         </PcsLeftMenuAccordion>
 
-        {/* บริการฝากชำระ/โอน */}
+        {/* บริการส่งออก — mirrors บริการนำเข้า (owner 2026-06-04). Export module
+            isn't built yet → coming-soon: greyed, non-navigating sub-rows + a
+            "เร็วๆนี้" header badge (a real <Link> would 404 · §0d). */}
+        <PcsLeftMenuAccordion
+          icon="/images/home/iconfloating/export.png"
+          label="บริการส่งออก"
+          badge={
+            <span className="ml-auto rounded-full bg-gray-200 px-2 text-[10px] font-medium leading-[18px] text-gray-500">
+              เร็วๆนี้
+            </span>
+          }
+        >
+          <SubComingSoon>รายการส่งออก</SubComingSoon>
+          <SubComingSoon>รอชำระ</SubComingSoon>
+          <SubComingSoon>เพิ่มรายการส่งออก</SubComingSoon>
+          <SubComingSoon>ประเมินราคาส่งออก</SubComingSoon>
+          <SubComingSoon>ประวัติการส่งออก</SubComingSoon>
+        </PcsLeftMenuAccordion>
+
+        {/* บริการฝากชำระสินค้า (เดิม "บริการฝากชำระ/โอน" · owner 2026-06-04) */}
         <PcsLeftMenuAccordion
           icon="/images/home/iconfloating/pcs-payment.png"
-          label="บริการฝากชำระ/โอน"
+          label="บริการฝากชำระสินค้า"
         >
           <SubLink href="/service-payment">รายการฝากชำระ</SubLink>
           <SubLink href="/service-payment/add">เพิ่มรายการฝากชำระ</SubLink>
