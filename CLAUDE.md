@@ -3,6 +3,24 @@
 
 ---
 
+# 🌙 2026-06-05 OVERNIGHT (Mac · เดฟ · owner asleep 02:00→08:00 ICT): platform-tidy — member relabel + customer-surface audit (CLEAN) + 11 test files + perf-investigate + learnings · read FIRST
+
+**main = `dave-pacred` = `fe0d9320`+ · all pushed · `pnpm verify && pnpm build` → CHAIN=0 (REAL exit codes) · both branches 0/0 · dev server on :3000 (nohup · serves `/Users/dev/pacred-web`).** Autonomous "เก็บงานทั้ง platform ให้เรียบร้อย" run — **NO collision** with ภูม (admin `/admin/**` · `actions/admin/**` · `lib/admin/**`) or ปอน (member-frontend redesign · `components/sections|ui`); only shared backend / lib / tests / docs touched. Guardrails held: no customer comms · no bugs/data-loss · gate-real-exit · save-points.
+
+**🚀 Shipped + pushed (each gated REAL-exit):**
+- **🅼 Member sidebar + dashboard relabel (owner directive · `be49c398`+`97890d77`):** บริการฝากนำเข้า→**บริการนำเข้า** · NEW **บริการส่งออก** accordion (greyed coming-soon · เร็วๆนี้ · export routes not built → no 404) · บริการฝากชำระ/โอน→**บริการฝากชำระสินค้า** · dashboard cards: ฝากนำเข้าสินค้า→**นำเข้าสินค้า** · NEW **ส่งออกสินค้า** card (เทา coming-soon) · ฝากชำระเงิน→**ฝากชำระสินค้า** · **removed the กระเป๋าสตางค์เงินสด card** (KEPT in sidebar). Verified live in Chrome (PR321). กระเป๋าเงินสด data-fetch + dead vars also removed.
+- **🧪 Test coverage +11 files / ~162 assertions (`70e90641`+`fe0d9320`):** the revenue-critical pure logic that had ZERO tests — `wallet-math` · `sales-commission/calc` · `forwarder/outstanding` · `cashback/note-tag` · `forwarder/reconfirm-gate` · `promo/catalog` · `cart/ship-by-eligibility` · `etax/build-xml` · `legacy-status-map` · `legacy-image` · `carrier/registry`. All green; no bugs surfaced (modules were already correct). Wired into `pnpm test:unit`.
+- **🔎 Customer-surface audit = CLEAN:** §0c bare-Supabase-destructure = **0 platform-wide** (cart.ts §0c sweep this session was the last) · NO live dead-write traps (createDeposit/createWithdraw = dead tombstones; the live deposit flow = LegacyDepositForm→`submitLegacyWalletDeposit`→`tb_wallet_hs`).
+- **⚡ Perf investigated · NO blind changes (§0f #4 no-regression):** `/api/payment-due-count` already optimal (Promise.all + indexed head-counts; dev 1.6-3.6s ≠ prod) · the Supabase auth `Failed to fetch` ×87 was a **TRANSIENT stale-session burst** (self-cleared on a fresh dev restart — not a code bug) · real prod P95 = the now-live Sentry.
+- **📚 Learnings + dev-server sync:** ci-and-deploy +1 ([2026-06-05] — the shared `:3000` dev server runs from the MAIN checkout not your worktree → edits invisible until push + `git -C <main> pull`; `setsid`≠macOS use `nohup … &`; stale `.next` after a big pull → kill + rm + restart; transient auth burst). Synced `/Users/dev/pacred-web` (was **38 commits behind** — owner had been reviewing a stale app) + restarted dev clean.
+
+**🔴 PENDING (owner / team · no-collision items I deliberately did NOT touch):**
+- **`deposit-form.tsx` orphan** (calls dead `createDeposit`→rebuilt empty table; the deposit page renders `LegacyDepositForm` instead) + `createDeposit`/`createWithdraw` dead tombstones → safe to delete when the rebuilt `wallet*` tables retire (ปอน UI + `actions/wallet.ts` · keep-one-sprint policy → flagged, not deleted).
+- **Mobile launchpad "กระเป๋าพักเงิน" tile** — hide to match the desktop dashboard? (owner decision · ปอน lane · mobile already pairs นำเข้า/ส่งออก).
+- Carryover: Vercel env (`PACRED_TAMIT_DETAIL_URL`-2026 · `THAIBULKSMS_FORCE` · FB tokens · 3 missing admins) · 🚢 Freight cost-side `tb_freight_rate_*` table + monthly FX + markup-tier (owner/accounting) · ภูม interpreter-badge · accounting ใบขน VAT sign-off.
+
+---
+
 # 💻 2026-06-04 PM — เดฟ WINDOWS SESSION CLOSE → Mac move: env-fix + ฝากสั่งซื้อ admin 1:1 + full-team merge · read FIRST
 
 **main = `dave-pacred` = (this session-close commit) · all pushed · `next build` EXIT 0 + `pnpm verify` EXIT 0 (REAL exit codes — direct `node next build`, NOT via the flaky pnpm script-shell) · Vercel auto-deploys main.** Resume on Mac: `git fetch origin && git pull origin main` → read this. ⚠️ **Mac needs `.env.local` first** (prod keys don't travel — memory [`local-dev-env-and-legacy-path`] + the 2026-06-04-night section below). **Legacy source on THIS Windows box = `C:\Users\Admin\Desktop\newrealdatapcs\pcscargo\member{,\pcs-admin}`** (42 customer + 187 admin `.php` + `pcsc_main.sql` dumps · AGENTS.md §0a/§0b corrected this session; the big `REALSHITDATAPCS.rar` = 35GB full backup, not extracted); on Mac use the `/Users/dev/Desktop/...` path.
