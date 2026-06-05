@@ -39,6 +39,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logger, redactPhone } from "@/lib/logger";
 import { pickLeastLoadedSalesRep } from "@/lib/admin/assign-sales-rep";
+import { pickLeastLoadedCsRep } from "@/lib/admin/assign-cs-rep";
 
 const SCOPE = "legacy-bridge-tb-users";
 
@@ -182,6 +183,10 @@ export async function insertLegacyTbUserRow(
   // (admin_center) so the lead is always owned. The register action re-reads
   // this via getSalesRepContactForUserid(memberCode) for the success popup.
   const assignedSalesRep = await pickLeastLoadedSalesRep(admin);
+  // CS round-robin (2026-06-05) — mirror the sales assignment so every new
+  // customer is owned by BOTH a เซล and a CS at signup. Never empty (central
+  // CS fallback = admin_ploy / พลอย).
+  const assignedCsRep = await pickLeastLoadedCsRep(admin);
 
   const payload: Record<string, unknown> = {
     userID:               memberCode,
@@ -213,6 +218,7 @@ export async function insertLegacyTbUserRow(
     userLineIDOA:         "",
     companyCustomer:      "0",
     adminIDSale:          assignedSalesRep,  // P1-15: rep owned at signup (never empty)
+    adminIDCS:            assignedCsRep,     // 2026-06-05: CS owned at signup (never empty)
   };
 
   const { error: insertErr } = await admin.from("tb_users").insert(payload);

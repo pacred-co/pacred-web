@@ -5,9 +5,11 @@
 
 ---
 
-## 🔢 NEXT FREE NUMBER = **0141**
+## 🔢 NEXT FREE NUMBER = **0142**
 
-ใครจะเขียน migration ใหม่ → ใช้ `0141_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
+ใครจะเขียน migration ใหม่ → ใช้ `0142_*` → เพิ่ม row ในตารางข้างล่าง → commit. ถ้ามีคนจองพร้อมกัน บอกเดฟ.
+
+> 2026-06-05 เดฟ: **0141** = `customer_cs_assignment` (per-customer CS · `tb_users.adminIDCS` varchar(20) NOT NULL DEFAULT '' + `tb_admin.adminStatusCS` varchar(1) DEFAULT '0' + index + seed พลอย `admin_ploy` into the CS pool · mirror of `adminIDSale`/`adminStatusSale` · camelCase). ✅ **applied prod 2026-06-05** (936ms · direct-host · verified: both cols present, admin_ploy in CS pool, 8,937 customers adminIDCS='').
 
 > 2026-06-04 Lane C: **0138** = `forwarder_invoice` (ใบวางบิล R-2 · 2 tables · ✅ **applied prod by ภูม** per CLAUDE.md session-close 2026-06-03) · **0139** = `min_sell_floor` (seed 1 `business_config` key `pricing.min_sell_floor` for the sales min-sell guardrail — กว่างโจว 2,900 / อี้อู 4,900 / เรือ +300 · global-trade-group §5). ✅ **0139 applied prod 2026-06-04** (72ms · idempotent seed · `business_config.pricing.min_sell_floor` verified present via REST).
 > 2026-06-04 Lane B: **0140** = `yuan_tax_doc_pref` (RENAMED from 0139 at integration — collided with Lane C's 0139 · tax_doc_pref + 2 snapshot cols on tb_payment · completes the 3-mode selection data model across all order types · issuance deferred per ADR-0027). ✅ **0140 applied prod 2026-06-04** (160ms · ADD COLUMN nullable · `tb_payment.tax_doc_pref` verified present).

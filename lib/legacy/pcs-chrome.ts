@@ -39,6 +39,9 @@ export function countText(text: string | null | undefined, num: number): string 
 }
 
 export type PcsSalesRep = { nickname: string; picture: string; tel: string };
+/** The customer's assigned CS (customer-service) contact — same shape as the
+ *  sales rep. Resolved from tb_users.adminIDCS (migration 0141). */
+export type PcsCsRep = { nickname: string; picture: string; tel: string };
 
 export type PcsChromeData = {
   userID: string;
@@ -72,6 +75,9 @@ export type PcsChromeData = {
   countCart: number;
   keywords: string[];
   sales: PcsSalesRep;
+  /** The customer's assigned CS (tb_users.adminIDCS → tb_admin) · central CS
+   *  line fallback. Shown beside the sales rep in the sidebar "ผู้ดูแล" card. */
+  cs: PcsCsRep;
   vipSvip: boolean;
   vipCorporate: boolean;
 };
@@ -83,6 +89,16 @@ const SALES_FALLBACK: PcsSalesRep = {
   nickname: "แนท",
   picture: "/images/pacred-logo-red.png",
   tel: "02-421-3325",
+};
+
+/** Fallback CS — the central CS line (CONTACT.phoneCs · พลอย · 062-603-4456),
+ *  stored as the raw 10-digit so `formatPhoneNumber` renders it uniformly with
+ *  a resolved CS tel. Shown when the customer has no adminIDCS yet (the
+ *  not-yet-assigned customers). Mirrors SALES_FALLBACK. */
+const CS_FALLBACK: PcsCsRep = {
+  nickname: "พลอย",
+  picture: "/images/pacred-logo-red.png",
+  tel: "0626034456",
 };
 
 /**
@@ -117,6 +133,7 @@ const EMPTY_CHROME: PcsChromeData = {
   countCart: 0,
   keywords: [],
   sales: { ...SALES_FALLBACK },
+  cs: { ...CS_FALLBACK },
   vipSvip: false,
   vipCorporate: false,
 };
@@ -182,6 +199,63 @@ async function resolveSalesRep(
 }
 
 /**
+ * Resolve the customer's assigned CS — same query path as resolveSalesRep, keyed
+ * on tb_users.adminIDCS (migration 0141). The tel-chain (tb_org_tell_ships →
+ * tb_organization_tell) is keyed on `adminid` generically, so a CS admin resolves
+ * a tel the same way a sales admin does. Falls back to the central CS line.
+ */
+async function resolveCsRep(
+  admin: AdminClient,
+  adminIdCs: string | null,
+): Promise<PcsCsRep> {
+  if (!adminIdCs) return { ...CS_FALLBACK };
+
+  const [{ data: adminRow, error: adminRowErr }, { data: shipRow, error: shipRowErr }] =
+    await Promise.all([
+      admin
+        .from("tb_admin")
+        .select("adminNickname, adminPicture")
+        .eq("adminID", adminIdCs)
+        .maybeSingle<{ adminNickname: string | null; adminPicture: string | null }>(),
+      admin
+        .from("tb_org_tell_ships")
+        .select("otid")
+        .eq("adminid", adminIdCs)
+        .order("id", { ascending: false })
+        .limit(1)
+        .maybeSingle<{ otid: number | null }>(),
+    ]);
+
+  if (adminRowErr) console.error(`[tb_admin cs] failed`, adminRowErr.message);
+  if (shipRowErr) console.error(`[tb_org_tell_ships cs] failed`, shipRowErr.message);
+  if (!adminRow) return { ...CS_FALLBACK };
+
+  let tel: string | null = null;
+  if (shipRow?.otid != null) {
+    const { data: tellRow, error: tellRowErr } = await admin
+      .from("tb_organization_tell")
+      .select("tell")
+      .eq("id", shipRow.otid)
+      .maybeSingle<{ tell: string | null }>();
+    if (tellRowErr) console.error(`[tb_organization_tell cs] failed`, tellRowErr.message);
+    tel = tellRow?.tell ?? null;
+  }
+
+  const picture =
+    adminRow.adminPicture &&
+    adminRow.adminPicture !== "user.jpg" &&
+    /^(https?:|\/)/.test(adminRow.adminPicture)
+      ? adminRow.adminPicture
+      : CS_FALLBACK.picture;
+
+  return {
+    nickname: adminRow.adminNickname?.trim() || CS_FALLBACK.nickname,
+    picture,
+    tel: tel ?? CS_FALLBACK.tel,
+  };
+}
+
+/**
  * Transcribes every SELECT in header.php (L86-134) + header-theme.php (L2-9)
  * + top-menu.php (keywords) + left-menu.php (sales rep, VIP badges).
  *
@@ -219,7 +293,7 @@ async function loadPcsChromeDataUncached(
     ] = await Promise.all([
       admin
         .from("tb_users")
-        .select("userName, userLastName, userEmail, userPicture, coID, adminIDSale")
+        .select("userName, userLastName, userEmail, userPicture, coID, adminIDSale, adminIDCS")
         .eq("userID", uid)
         .maybeSingle<{
           userName: string | null;
@@ -228,6 +302,7 @@ async function loadPcsChromeDataUncached(
           userPicture: string | null;
           coID: string | null;
           adminIDSale: string | null;
+          adminIDCS: string | null;
         }>(),
       admin
         .from("tb_wallet")
@@ -290,7 +365,11 @@ async function loadPcsChromeDataUncached(
       admin.from("tb_corporate").select("*", { count: "exact", head: true }).eq("userid", uid),
     ]);
 
-    const sales = await resolveSalesRep(admin, userRow.data?.adminIDSale ?? null);
+    // Sales + CS resolve in parallel (independent lookups).
+    const [sales, cs] = await Promise.all([
+      resolveSalesRep(admin, userRow.data?.adminIDSale ?? null),
+      resolveCsRep(admin, userRow.data?.adminIDCS ?? null),
+    ]);
     const keywordRows = (keywordRes.data ?? []) as { keyword: string | null }[];
 
     return {
@@ -318,6 +397,7 @@ async function loadPcsChromeDataUncached(
       countCart: cartAll.count ?? 0,
       keywords: keywordRows.map((r) => r.keyword ?? "").filter((k) => k !== ""),
       sales,
+      cs,
       vipSvip: (svipRes.count ?? 0) > 0,
       vipCorporate: (corpRes.count ?? 0) > 0,
     };

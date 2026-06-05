@@ -1,8 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
-import { ChevronRight, Headset } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { formatPhoneNumber, type PcsChromeData } from "@/lib/legacy/pcs-chrome";
-import { CONTACT } from "@/components/seo/site";
 import { PcsLeftMenuUserPill } from "./pcs-left-menu-user-pill";
 import { PcsLeftMenuAccordion, PcsLeftMenuAccordionGroup } from "./pcs-left-menu-accordion";
 
@@ -89,11 +88,10 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
         <div>{data.userEmail}</div>
       </div>
 
-      {/* 3. ผู้ดูแลลูกค้า — TWO contacts (owner 2026-06-05): เซล (รับลูกค้า ·
-          assigned per customer from tb_users.adminIDSale) + CS (ติดตามสถานะ /
-          สอบถาม · central CS line CONTACT.phoneCs = พลอย). Per-customer CS
-          assignment (each customer their own CS, like the sales round-robin) is
-          a separate bigger build — this shows the central CS line for now. */}
+      {/* 3. ผู้ดูแลลูกค้า — TWO contacts assigned per customer (owner 2026-06-05):
+          เซล (รับลูกค้า · tb_users.adminIDSale) + CS (ติดตามสถานะ · tb_users.adminIDCS
+          · migration 0141 · round-robin at signup · central พลอย/CONTACT.phoneCs
+          fallback baked into CS_FALLBACK for the not-yet-assigned customers). */}
       <div className="border-b border-border px-3 py-3">
         <div className="rounded-xl border border-border bg-gradient-to-br from-red-50 to-white px-3 py-2.5">
           {/* เซล — assigned sales rep */}
@@ -124,21 +122,28 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
               </div>
             </div>
           </div>
-          {/* CS — ฝ่ายบริการลูกค้า · ติดตามสถานะ (central line) */}
+          {/* CS — ฝ่ายบริการลูกค้า · the assigned CS (data.cs · tb_users.adminIDCS
+              → resolveCsRep), central CS line fallback inside CS_FALLBACK. */}
           <div className="mt-2.5 flex items-center gap-3 border-t border-red-100 pt-2.5">
-            <div className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600 ring-2 ring-red-200">
-              <Headset className="h-[22px] w-[22px]" />
-            </div>
+            <a className="image-popup-vertical-fit shrink-0" href={data.cs.picture}>
+              <img
+                src={data.cs.picture}
+                alt=""
+                className="h-[46px] w-[46px] rounded-full object-cover ring-2 ring-red-200"
+              />
+            </a>
             <div className="min-w-0 flex-1 text-[12px] leading-snug">
               <div className="text-muted">ฝ่ายบริการลูกค้า (CS)</div>
-              <div className="font-semibold text-foreground">ติดตามสถานะ / สอบถาม</div>
+              <div className="font-semibold text-foreground">
+                CS <span>{data.cs.nickname}</span>
+              </div>
               <div className="text-muted">
                 Tel:{" "}
                 <a
-                  href={`tel:${CONTACT.phoneCs}`}
+                  href={`tel:${data.cs.tel}`}
                   className="text-foreground hover:text-red-700"
                 >
-                  {CONTACT.phoneCsDisplay}
+                  {formatPhoneNumber(data.cs.tel)}
                 </a>
               </div>
             </div>
