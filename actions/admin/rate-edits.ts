@@ -478,6 +478,73 @@ export async function adminUpdateCustomerHsRates(
         return { ok: false, error: "ไม่มีการเปลี่ยนแปลง — ทุก cell ยังเท่าเดิม" };
       }
 
+      // ── LIVE rate write — THE MONEY FIX (2026-06-05) ─────────────────────
+      // Until now this action wrote ONLY the history tables (tb_hs_rate_custom_*)
+      // and NEVER the LIVE tables (tb_rate_custom_kg/cbm) that the forwarder
+      // price engine (lib/forwarder/resolve-rate.ts · SVIP tier) actually reads.
+      // → an operator set a customer's negotiated rate here, got a green toast,
+      // but billing never changed (silent money loss). Legacy users.php writes
+      // BOTH live + history in one save; so do we now. Live FIRST so that if the
+      // history append later fails, a retry still re-applies the correct live
+      // value (the diff is computed from history; live update is idempotent).
+      // Per-cell read-then-update-or-insert keyed userid+warehouse+transport+product.
+      for (const ch of kgChanges) {
+        const { data: ex, error: exErr } = await admin
+          .from("tb_rate_custom_kg")
+          .select("id")
+          .eq("userid", userid)
+          .eq("sourcewarehouse", ch.sourcewarehouse)
+          .eq("rtransporttype", ch.rtransporttype)
+          .eq("rproductstype", ch.rproductstype)
+          .maybeSingle<{ id: number }>();
+        if (exErr) return { ok: false, error: `live KG lookup [${ch.sourcewarehouse}|${ch.rtransporttype}|${ch.rproductstype}] failed: ${exErr.message}` };
+        if (ex?.id) {
+          const { error } = await admin
+            .from("tb_rate_custom_kg")
+            .update({ rkg: ch.after, adminidupdate: legacyAdminId })
+            .eq("id", ex.id);
+          if (error) return { ok: false, error: `live KG update [${ch.sourcewarehouse}|${ch.rtransporttype}|${ch.rproductstype}] failed: ${error.message}` };
+        } else {
+          const { error } = await admin.from("tb_rate_custom_kg").insert({
+            userid,
+            sourcewarehouse: ch.sourcewarehouse,
+            rtransporttype: ch.rtransporttype,
+            rproductstype: ch.rproductstype,
+            rkg: ch.after,
+            adminidupdate: legacyAdminId,
+          });
+          if (error) return { ok: false, error: `live KG insert [${ch.sourcewarehouse}|${ch.rtransporttype}|${ch.rproductstype}] failed: ${error.message}` };
+        }
+      }
+      for (const ch of cbmChanges) {
+        const { data: ex, error: exErr } = await admin
+          .from("tb_rate_custom_cbm")
+          .select("id")
+          .eq("userid", userid)
+          .eq("sourcewarehouse", ch.sourcewarehouse)
+          .eq("rtransporttype", ch.rtransporttype)
+          .eq("rproductstype", ch.rproductstype)
+          .maybeSingle<{ id: number }>();
+        if (exErr) return { ok: false, error: `live CBM lookup [${ch.sourcewarehouse}|${ch.rtransporttype}|${ch.rproductstype}] failed: ${exErr.message}` };
+        if (ex?.id) {
+          const { error } = await admin
+            .from("tb_rate_custom_cbm")
+            .update({ rcbm: ch.after, adminidupdate: legacyAdminId })
+            .eq("id", ex.id);
+          if (error) return { ok: false, error: `live CBM update [${ch.sourcewarehouse}|${ch.rtransporttype}|${ch.rproductstype}] failed: ${error.message}` };
+        } else {
+          const { error } = await admin.from("tb_rate_custom_cbm").insert({
+            userid,
+            sourcewarehouse: ch.sourcewarehouse,
+            rtransporttype: ch.rtransporttype,
+            rproductstype: ch.rproductstype,
+            rcbm: ch.after,
+            adminidupdate: legacyAdminId,
+          });
+          if (error) return { ok: false, error: `live CBM insert [${ch.sourcewarehouse}|${ch.rtransporttype}|${ch.rproductstype}] failed: ${error.message}` };
+        }
+      }
+
       // INSERT the history header.
       const { data: histRow, error: histErr } = await admin
         .from("tb_customrate_hs")
@@ -532,14 +599,17 @@ export async function adminUpdateCustomerHsRates(
         }
       }
 
-      await logAdminAction(adminId, "tb_customrate_hs.create", "tb_customrate_hs", String(crhsid), {
+      await logAdminAction(adminId, "tb_rate_custom.save_via_hs", "tb_rate_custom", `${userid}/${crhsid}`, {
         userid,
         crhsid,
+        live_kg_writes: kgChanges.length,
+        live_cbm_writes: cbmChanges.length,
         kg_changes: kgChanges,
         cbm_changes: cbmChanges,
       });
 
       revalidatePath("/admin/rates/custom-hs");
+      revalidatePath(`/admin/customers/${userid}`);
       return {
         ok: true,
         data: { crhsid, kg_writes: kgChanges.length, cbm_writes: cbmChanges.length },

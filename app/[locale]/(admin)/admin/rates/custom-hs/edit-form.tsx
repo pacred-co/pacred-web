@@ -28,9 +28,12 @@ import { Save, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { adminUpdateCustomerHsRates } from "@/actions/admin/rate-edits";
 
+// Warehouse encoding (legacy + price engine truth): 1=กวางโจว, 2=อี้อู.
+// (Was previously labelled BACKWARDS here → admin edited the wrong warehouse's
+// rate. Fixed 2026-06-05 to match lib/admin/customer-rate-tables.ts + the engine.)
 const WAREHOUSE_LABEL: Record<string, string> = {
-  "1": "อี้อู",
-  "2": "กวางโจว",
+  "1": "กวางโจว",
+  "2": "อี้อู",
 };
 const TRANSPORT_LABEL: Record<string, string> = {
   "1": "🚚 รถ",
@@ -208,7 +211,7 @@ export function HsRateEditForm({
         return;
       }
       setSuccess(
-        `บันทึก history #${res.data?.crhsid} แล้ว — KG ${res.data?.kg_writes ?? 0} cell · CBM ${res.data?.cbm_writes ?? 0} cell`,
+        `บันทึกเรท live + history #${res.data?.crhsid} แล้ว (มีผลกับการคิดเงินทันที) — KG ${res.data?.kg_writes ?? 0} cell · CBM ${res.data?.cbm_writes ?? 0} cell`,
       );
       router.refresh();
       setTimeout(() => setSuccess(null), 6000);
@@ -218,10 +221,11 @@ export function HsRateEditForm({
   return (
     <div className="space-y-3">
       <div className="rounded-md border border-blue-200 bg-blue-50 p-2 text-xs text-blue-700">
-        แก้ไขเรท → INSERT history row + per-cell snapshot ลง{" "}
-        <code className="bg-white px-1 rounded">tb_hs_rate_custom_kg/cbm</code> (เก็บ
-        ค่าเดิมไว้ใน <code className="bg-white px-1 rounded">rkgbefore</code>{" "}
-        เพื่อ audit). ลูกค้า: <span className="font-mono">{customerLabel}</span>
+        แก้ไขเรท → เขียนเรท <b>live</b> ลง{" "}
+        <code className="bg-white px-1 rounded">tb_rate_custom_kg/cbm</code>{" "}
+        (มีผลกับการคิดเงินจริงทันที) + บันทึก snapshot ก่อน/หลังลง{" "}
+        <code className="bg-white px-1 rounded">tb_hs_rate_custom_*</code>{" "}
+        เพื่อ audit. ลูกค้า: <span className="font-mono">{customerLabel}</span>
       </div>
 
       {error && (
@@ -354,8 +358,8 @@ export function HsRateEditForm({
               </button>
             </div>
             <p className="text-sm text-muted">
-              ลูกค้า <span className="font-mono text-primary-600">{userid}</span> · สร้าง
-              tb_customrate_hs history row ใหม่ + บันทึก snapshot ก่อน/หลังของแต่ละ cell
+              ลูกค้า <span className="font-mono text-primary-600">{userid}</span> · เขียนเรท
+              live (มีผลกับการคิดเงินจริงทันที) + บันทึก snapshot ก่อน/หลังลง history เพื่อ audit
             </p>
 
             <div className="rounded-lg border border-border max-h-64 overflow-y-auto">

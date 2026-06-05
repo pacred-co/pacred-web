@@ -22,9 +22,12 @@ import { Save, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { adminUpdateVipRateCells } from "@/actions/admin/rate-edits";
 
+// Warehouse encoding (legacy + price engine truth): 1=กวางโจว, 2=อี้อู.
+// (Was labelled BACKWARDS here → admin edited the wrong warehouse's VIP rate.
+// Fixed 2026-06-05 to match lib/admin/customer-rate-tables.ts + the engine.)
 const WAREHOUSE_LABEL: Record<string, string> = {
-  "1": "อี้อู (Yiwu)",
-  "2": "กวางโจว (Guangzhou)",
+  "1": "กวางโจว (Guangzhou)",
+  "2": "อี้อู (Yiwu)",
 };
 const TRANSPORT_LABEL: Record<string, string> = {
   "1": "🚚 รถ",

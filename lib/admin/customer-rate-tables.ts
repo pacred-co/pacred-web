@@ -14,9 +14,9 @@
  *
  * Encodings (legacy, do not "fix"):
  *   sourceWarehouse  '1' = กวางโจว (Guangzhou) · '2' = อี้อู (Yiwu)
- *     ⚠ NOTE: the existing /admin/rates/{vip,custom-user,custom-hs} forms
- *       label these BACKWARDS (1=อี้อู). Legacy + this file are correct:
- *       1=กวางโจว. (tracked: fix the other forms separately.)
+ *     (FIXED 2026-06-05: /admin/rates/custom-user + custom-hs forms had these
+ *       labelled BACKWARDS (1=อี้อู) → admin edited the wrong warehouse's rate.
+ *       Both now match legacy + this file: 1=กวางโจว, 2=อี้อู.)
  *   rTransportType   '1' = ทางรถ (truck/EK) · '2' = ทางเรือ (sea/SEA)
  *       per-user override supports ONLY truck + sea (no air — matches legacy).
  *   rProductsType    '1' ทั่วไป · '2' มอก. · '3' อย./น้ำยา · '4' พิเศษ

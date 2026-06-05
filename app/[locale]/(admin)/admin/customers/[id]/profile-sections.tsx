@@ -39,6 +39,12 @@ import {
   type SalesAdminOption,
 } from "@/actions/admin/customer-profile";
 import { adminUpdateUserIdentity } from "@/actions/admin/customers";
+import {
+  adminSetUserComparison,
+  adminRemoveUserComparison,
+  adminSetUserCredit,
+  adminRemoveUserCredit,
+} from "@/actions/admin/users-pricing";
 
 // ── shared types (mirror the legacy-view row shapes) ──────────────────────
 export type ProfileCorp = {
@@ -574,6 +580,299 @@ export function CsRepEditor({
         </div>
       )}
     </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 3c) ค่าเทียบ (CPS) editor — tb_users.userComparison + userComparisonValue
+//   Faithful to legacy users/comparison (add/edit/remove). The value is a
+//   kg-per-CBM DENSITY THRESHOLD (not a price): a CPS customer bills by KG when
+//   kgPerCbm > value, else CBM — exempt from the normal "ราคามากสุด" rule.
+//   Default seed 150. The price engine already reads these (resolve-rate.ts);
+//   this is the missing admin CRUD. (money-critical · 2026-06-05)
+// ──────────────────────────────────────────────────────────────────────────
+export function ComparisonEditor({
+  userid,
+  enabled,
+  value,
+}: {
+  userid: string;
+  enabled: boolean;
+  value: number | null;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value != null && value > 0 ? String(value) : "150");
+  const [error, setError] = useState<string | null>(null);
+
+  function save() {
+    setError(null);
+    const v = Number(draft.replace(/,/g, "").trim());
+    if (!Number.isFinite(v) || v < 0) {
+      setError("กรอกค่าเทียบเป็นตัวเลข ≥ 0");
+      return;
+    }
+    start(async () => {
+      const res = await adminSetUserComparison({ userid, value: v });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setEditing(false);
+      router.refresh();
+    });
+  }
+
+  async function remove() {
+    setError(null);
+    if (!(await confirm("ยืนยันลบลูกค้าออกจากการคิดราคาแบบค่าเทียบ? (กลับไปคิดราคาปกติ)"))) return;
+    start(async () => {
+      const res = await adminRemoveUserComparison({ userid });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setEditing(false);
+      router.refresh();
+    });
+  }
+
+  return (
+    <SectionShell
+      title="ค่าเทียบ (CPS) — เกณฑ์คิดราคา KG/CBM"
+      action={
+        !editing ? (
+          <button
+            type="button"
+            onClick={() => {
+              setDraft(value != null && value > 0 ? String(value) : "150");
+              setEditing(true);
+            }}
+            className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline"
+          >
+            <Pencil className="w-3.5 h-3.5" /> {enabled ? "แก้ไขค่าเทียบ" : "ตั้งค่าเทียบ"}
+          </button>
+        ) : null
+      }
+    >
+      <div className="p-4 space-y-3 text-sm">
+        {error && <ErrBox msg={error} />}
+        {!editing ? (
+          enabled ? (
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="text-[11px] text-muted">ค่าเทียบ (kg/CBM threshold)</p>
+                <p className="text-xl font-bold font-mono tabular-nums text-primary-600">
+                  {(value ?? 0).toLocaleString()}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={remove}
+                className="inline-flex items-center gap-1 rounded-md border border-red-200 text-red-600 px-2.5 py-1 text-xs hover:bg-red-50 disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> ลบค่าเทียบออก
+              </button>
+            </div>
+          ) : (
+            <p className="text-muted italic">
+              ลูกค้านี้คิดราคาแบบปกติ — กด &ldquo;ตั้งค่าเทียบ&rdquo; เพื่อเปลี่ยนเป็นคิดตามค่าเทียบ
+            </p>
+          )
+        ) : (
+          <>
+            <Field label="ค่าเทียบที่ใช้ในการคิดค่าขนส่ง (ค่าเริ่มต้น 150)">
+              <input
+                className={`${inputCls} font-mono`}
+                inputMode="decimal"
+                value={draft}
+                disabled={pending}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="150"
+              />
+            </Field>
+            <p className="text-[11px] text-muted">
+              ค่าน้อย → คิดตาม CBM บ่อยขึ้น (ถูกลง) · ลูกค้า CPS ได้รับยกเว้นจากกฎ &ldquo;ราคามากสุด&rdquo;
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => setEditing(false)}>
+                ยกเลิก
+              </Button>
+              <Button type="button" size="sm" disabled={pending} onClick={save}>
+                <Save className="size-4" /> {pending ? "กำลังบันทึก..." : "บันทึก"}
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </SectionShell>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 3d) เครดิต (credit line) editor — tb_users.userCredit/Value/Date
+//   Faithful to legacy users/credit (add/edit/remove). Shows วงเงิน + จำนวนวัน
+//   + คงเหลือ (limit − outstanding). Remove refuses while still owed.
+//   (money-critical · closes "credit limit un-editable from UI" gap · 2026-06-05)
+// ──────────────────────────────────────────────────────────────────────────
+export function CreditLineEditor({
+  userid,
+  enabled,
+  limit,
+  days,
+  outstanding,
+}: {
+  userid: string;
+  enabled: boolean;
+  limit: number;
+  days: number;
+  outstanding: number;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [editing, setEditing] = useState(false);
+  const [limitDraft, setLimitDraft] = useState(limit > 0 ? String(limit) : "");
+  const [daysDraft, setDaysDraft] = useState(days > 0 ? String(days) : "");
+  const [error, setError] = useState<string | null>(null);
+
+  const remaining = limit - outstanding;
+  const fmtB = (n: number) => `฿${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+
+  function save() {
+    setError(null);
+    const lim = Number(limitDraft.replace(/,/g, "").trim());
+    const dys = Number(daysDraft.replace(/,/g, "").trim());
+    if (!Number.isFinite(lim) || lim < 0) {
+      setError("กรอกวงเงินเป็นตัวเลข ≥ 0");
+      return;
+    }
+    if (!Number.isFinite(dys) || dys < 0 || !Number.isInteger(dys)) {
+      setError("กรอกจำนวนวันเป็นจำนวนเต็ม ≥ 0");
+      return;
+    }
+    start(async () => {
+      const res = await adminSetUserCredit({ userid, limit: lim, days: dys });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setEditing(false);
+      router.refresh();
+    });
+  }
+
+  async function remove() {
+    setError(null);
+    if (!(await confirm("ยืนยันยกเลิกวงเงินเครดิตของลูกค้ารายนี้?"))) return;
+    start(async () => {
+      const res = await adminRemoveUserCredit({ userid });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setEditing(false);
+      router.refresh();
+    });
+  }
+
+  return (
+    <SectionShell
+      title="วงเงินเครดิต (Credit line)"
+      action={
+        !editing ? (
+          <button
+            type="button"
+            onClick={() => {
+              setLimitDraft(limit > 0 ? String(limit) : "");
+              setDaysDraft(days > 0 ? String(days) : "");
+              setEditing(true);
+            }}
+            className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline"
+          >
+            <Pencil className="w-3.5 h-3.5" /> {enabled ? "แก้ไขเครดิต" : "ตั้งวงเงินเครดิต"}
+          </button>
+        ) : null
+      }
+    >
+      <div className="p-4 space-y-3 text-sm">
+        {error && <ErrBox msg={error} />}
+        {!editing ? (
+          enabled ? (
+            <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <p className="text-[11px] text-muted">วงเงิน</p>
+                  <p className="font-bold font-mono tabular-nums">{fmtB(limit)}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-muted">คงเหลือ</p>
+                  <p className={`font-bold font-mono tabular-nums ${remaining < 0 ? "text-red-600" : "text-emerald-600"}`}>
+                    {fmtB(remaining)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-muted">จำนวนวัน</p>
+                  <p className="font-bold font-mono tabular-nums">{days} วัน</p>
+                </div>
+              </div>
+              {outstanding > 0 && (
+                <p className="text-[11px] text-amber-700">ค้างชำระเครดิต {fmtB(outstanding)}</p>
+              )}
+              <button
+                type="button"
+                disabled={pending}
+                onClick={remove}
+                className="inline-flex items-center gap-1 rounded-md border border-red-200 text-red-600 px-2.5 py-1 text-xs hover:bg-red-50 disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> ยกเลิกเครดิต
+              </button>
+            </div>
+          ) : (
+            <p className="text-muted italic">
+              ลูกค้านี้ยังไม่มีวงเงินเครดิต — กด &ldquo;ตั้งวงเงินเครดิต&rdquo; เพื่อเปิดเครดิต
+            </p>
+          )
+        ) : (
+          <>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <Field label="วงเงินเครดิต (บาท)">
+                <input
+                  className={`${inputCls} font-mono`}
+                  inputMode="decimal"
+                  value={limitDraft}
+                  disabled={pending}
+                  onChange={(e) => setLimitDraft(e.target.value)}
+                  placeholder="0.00"
+                />
+              </Field>
+              <Field label="จำนวนวันเครดิต (วัน)">
+                <input
+                  className={`${inputCls} font-mono`}
+                  inputMode="numeric"
+                  value={daysDraft}
+                  disabled={pending}
+                  onChange={(e) => setDaysDraft(e.target.value.replace(/\D/g, ""))}
+                  placeholder="7"
+                />
+              </Field>
+            </div>
+            <p className="text-[11px] text-muted">
+              วงเงิน 0 = ปิดเครดิต · จำนวนวัน = เทอมเครดิตเริ่มต้น (วันครบกำหนดต่อออเดอร์มาจากค่านี้)
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => setEditing(false)}>
+                ยกเลิก
+              </Button>
+              <Button type="button" size="sm" disabled={pending} onClick={save}>
+                <Save className="size-4" /> {pending ? "กำลังบันทึก..." : "บันทึก"}
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </SectionShell>
   );
 }
 

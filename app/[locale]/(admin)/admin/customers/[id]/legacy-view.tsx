@@ -39,6 +39,8 @@ import {
   NoteEditor,
   SaleRepEditor,
   CsRepEditor,
+  ComparisonEditor,
+  CreditLineEditor,
   CorporateEditor,
   AddressManager,
 } from "./profile-sections";
@@ -63,6 +65,13 @@ type URow = {
   userLineID: string | null;
   userFacebook: string | null;
   coID: string | null;
+  // Pricing-segment fields (2026-06-05) — ค่าเทียบ (CPS) + เครดิต. The price
+  // engine reads userComparison/Value; userCredit/Value/Date drive the credit line.
+  userComparison: string | null;
+  userComparisonValue: number | string | null;
+  userCredit: string | null;
+  userCreditValue: number | string | null;
+  userCreditDate: number | string | null;
 };
 
 type FRow = {
@@ -140,7 +149,7 @@ export async function renderLegacyCustomerView(id: string) {
   const { data: userRaw, error: userErr } = await admin
     .from("tb_users")
     .select(
-      "userID,userName,userLastName,userCompany,userEmail,userTel,userActive,userRegistered,userLastLogin,adminIDSale,adminIDCS,userNote,userPicture,userSex,userBirthday,userLineID,userFacebook,coID",
+      "userID,userName,userLastName,userCompany,userEmail,userTel,userActive,userRegistered,userLastLogin,adminIDSale,adminIDCS,userNote,userPicture,userSex,userBirthday,userLineID,userFacebook,coID,userComparison,userComparisonValue,userCredit,userCreditValue,userCreditDate",
     )
     .eq("userID", id)
     .maybeSingle();
@@ -183,6 +192,7 @@ export async function renderLegacyCustomerView(id: string) {
     ordCountRes,
     payCountRes,
     walletHsCountRes,
+    creditRes,
   ] = await Promise.all([
     admin.from("tb_wallet").select("wallettotal").eq("userid", u.userID).maybeSingle(),
     admin
@@ -228,6 +238,9 @@ export async function renderLegacyCustomerView(id: string) {
     admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("userid", u.userID),
     admin.from("tb_payment").select("id", { count: "exact", head: true }).eq("userid", u.userID),
     admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("userid", u.userID),
+    // Credit outstanding (best-effort · for the credit-line "คงเหลือ"). Absent
+    // row = 0 owed; a transient error degrades to 0 (not in the throw-loop).
+    admin.from("tb_credit").select("creditvalue").eq("userid", u.userID).maybeSingle(),
   ]);
 
   // §0c — surface real errors on the load-bearing reads (wallet · corp ·
@@ -294,6 +307,16 @@ export async function renderLegacyCustomerView(id: string) {
   const csAdmins = csAdminsRes.ok ? csAdminsRes.data?.rows ?? [] : [];
   const walletBalance = Number(wallet?.wallettotal ?? 0);
 
+  // Pricing-segment state (ค่าเทียบ + เครดิต) for the in-profile editors.
+  const comparisonEnabled = (u.userComparison ?? "") === "1";
+  const comparisonValue = Number(u.userComparisonValue ?? 0);
+  const creditLimit = Number(u.userCreditValue ?? 0);
+  const creditDays = Number(u.userCreditDate ?? 0);
+  const creditEnabled = (u.userCredit ?? "") === "1" || creditLimit > 0;
+  const creditOutstanding = Number(
+    (creditRes.data as { creditvalue: number | string | null } | null)?.creditvalue ?? 0,
+  );
+
   // P0-17: the identity editor's senior-only fields (rep + coID) mirror the
   // legacy CEO/Manager/QAAndQC/Accounting/ITDT gate → Pacred senior roles.
   const adminRoles = (await getAdminRoles()) ?? [];
@@ -350,7 +373,7 @@ export async function renderLegacyCustomerView(id: string) {
               ) : null}
             </div>
             <p className="text-xs text-muted mt-1">
-              `tb_*` schema · status mutate / credit-line editor → Phase C
+              `tb_*` schema · ค่าเทียบ + เครดิต + เรท แก้ได้ในหน้านี้
             </p>
           </div>
         </div>
@@ -423,6 +446,21 @@ export async function renderLegacyCustomerView(id: string) {
           This is the in-profile "ปรับเรทขายต่อลูกค้า" the owner pointed at;
           it feeds the SVIP tier of the forwarder price waterfall. */}
       <CustomerRateEditor userid={u.userID} customerName={fullName} matrix={rateMatrix} />
+
+      {/* Pricing segments (money · 2026-06-05) — faithful port of legacy
+          users/comparison (ค่าเทียบ/CPS) + users/credit (เครดิต). The price +
+          credit engines already read these tb_users columns; this is the
+          missing set/edit/remove admin CRUD (§0d reachable on the profile). */}
+      <div className="grid lg:grid-cols-2 gap-5">
+        <ComparisonEditor userid={u.userID} enabled={comparisonEnabled} value={comparisonValue} />
+        <CreditLineEditor
+          userid={u.userID}
+          enabled={creditEnabled}
+          limit={creditLimit}
+          days={creditDays}
+          outstanding={creditOutstanding}
+        />
+      </div>
 
       {/* Inline note editor (tb_users.userNote) — เดฟ 2026-05-30 */}
       <NoteEditor userid={u.userID} initialNote={u.userNote} />

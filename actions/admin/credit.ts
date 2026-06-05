@@ -30,13 +30,17 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
 // ── adminSetCustomerCreditLimit ─────────────────────────────────────
-// super + accounting set a customer's credit cap. ADR-0023 D-5 #4: the
-// canonical limit column is tb_users.userCreditValue (NOT the dead
-// profiles.credit_limit). Resolve profile_id → member_code, then write the
-// legacy column. credit_terms_days is accepted for signature stability but
-// NOT persisted — the legacy has no global terms-days column (D-2/D-5 #1);
-// the per-grant due date lives on tb_forwarder.fcreditdate via
-// adminMarkForwarderCredit. We log it in the audit payload for traceability.
+// super + accounting set a customer's credit cap + default credit DAYS.
+// ADR-0023 D-5 #4: the canonical limit column is tb_users.userCreditValue
+// (NOT the dead profiles.credit_limit). Resolve profile_id → member_code,
+// then write the legacy columns.
+//
+// 2026-06-05 FIX: credit_terms_days IS persisted now → tb_users.userCreditDate.
+// The earlier note claimed "legacy has no global terms-days column" — that was
+// WRONG: legacy users.php (add/edit credit handlers) sets tb_users.userCreditDate
+// and the credit list shows it as "จำนวนวันเครดิต". It is the DEFAULT term in
+// days; the binding per-order due date still lives on tb_forwarder.fcreditdate
+// (computed from it at grant time via adminMarkForwarderCredit).
 
 const setCreditLimitSchema = z.object({
   profile_id:         z.string().uuid(),
@@ -73,12 +77,12 @@ export async function adminSetCustomerCreditLimit(
       return { ok: false, error: "no_member_code — ลูกค้ายังไม่มีรหัส PR (ยังไม่ migrate)" };
     }
 
-    // Read the current legacy limit for the before/after audit (tb_users · camelCase).
+    // Read the current legacy limit + days for the before/after audit (tb_users · camelCase).
     const { data: before, error: readErr } = await admin
       .from("tb_users")
-      .select("userID, userCreditValue")
+      .select("userID, userCreditValue, userCreditDate")
       .eq("userID", memberCode)
-      .maybeSingle<{ userID: string; userCreditValue: number | string | null }>();
+      .maybeSingle<{ userID: string; userCreditValue: number | string | null; userCreditDate: number | string | null }>();
     if (readErr) {
       console.error(`[tb_users credit read] failed`, { code: readErr.code, message: readErr.message, userid: memberCode });
       return { ok: false, error: readErr.message };
@@ -87,12 +91,16 @@ export async function adminSetCustomerCreditLimit(
       return { ok: false, error: "tb_users_not_found — ไม่พบบัญชีลูกค้าในระบบเดิม" };
     }
     const prevLimit = Number(before.userCreditValue ?? 0);
+    const prevDays = Number(before.userCreditDate ?? 0);
 
-    // Write the canonical legacy limit. userCreditValue>0 IS the enabled
-    // signal (no separate boolean) — setting 0 turns the credit line off.
+    // Write the canonical legacy limit (+ default days when supplied).
+    // userCreditValue>0 IS the enabled signal (no separate boolean) — setting
+    // 0 turns the credit line off. userCreditDate = the default term in days.
+    const patch: Record<string, number> = { userCreditValue: d.credit_limit_thb };
+    if (d.credit_terms_days != null) patch.userCreditDate = d.credit_terms_days;
     const { error: updErr } = await admin
       .from("tb_users")
-      .update({ userCreditValue: d.credit_limit_thb })
+      .update(patch)
       .eq("userID", memberCode);
     if (updErr) {
       console.error(`[tb_users credit update] failed`, { code: updErr.code, message: updErr.message, userid: memberCode });
@@ -102,11 +110,8 @@ export async function adminSetCustomerCreditLimit(
     await logAdminAction(adminId, "customer.credit_limit_set", "tb_users", memberCode, {
       profile_id:        d.profile_id,
       member_code:       memberCode,
-      // credit_terms_days has no legacy home — recorded for traceability only
-      // (the binding due date is per-order on tb_forwarder.fcreditdate).
-      credit_terms_days: d.credit_terms_days ?? null,
-      before:            { userCreditValue: prevLimit },
-      after:             { userCreditValue: d.credit_limit_thb },
+      before:            { userCreditValue: prevLimit, userCreditDate: prevDays },
+      after:             { userCreditValue: d.credit_limit_thb, userCreditDate: d.credit_terms_days ?? prevDays },
     });
 
     revalidatePath("/admin/customers");
