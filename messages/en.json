@@ -2750,7 +2750,7 @@
       "mx": "MX"
     },
     "payment": {
-      "title": "Yuan transfer service",
+      "title": "Goods-payment service",
       "list": "Yuan transfers — list",
       "add": "Add a request"
     },

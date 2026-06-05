@@ -173,12 +173,19 @@ type CbmSummary = {
   excludedWaiting: number;
 };
 
-async function loadCbmSummary(): Promise<CbmSummary> {
+// 2026-06-05 ภูม flag — accept optional date range. Filters on `created_at`
+// (when Pacred first saw this MOMO row · = "ลูกค้าเริ่มส่งของผ่าน MOMO").
+async function loadCbmSummary(
+  fromIso?: string | null,
+  toIso?: string | null,
+): Promise<CbmSummary> {
   const admin = createAdminClient();
-  const { data, error } = await admin
+  let q = admin
     .from("momo_import_tracks")
-    .select("cbm, weight_kg, quantity, shipment_status")
-    .range(0, 49_999);
+    .select("cbm, weight_kg, quantity, shipment_status");
+  if (fromIso) q = q.gte("created_at", fromIso);
+  if (toIso)   q = q.lte("created_at", toIso);
+  const { data, error } = await q.range(0, 49_999);
   if (error) {
     console.error("[momo cbm summary] failed", { code: error.code, message: error.message });
     return { totalCbm: 0, totalKgs: 0, totalQty: 0, totalRows: 0, excludedWaiting: 0 };
@@ -206,6 +213,14 @@ async function loadCbmSummary(): Promise<CbmSummary> {
     totalRows += 1;
   }
   return { totalCbm, totalKgs, totalQty, totalRows, excludedWaiting };
+}
+
+// Date range parser — accepts YYYY-MM-DD; clamps invalid to null.
+function parseDateParam(v: string | string[] | undefined, endOfDay = false): string | null {
+  const s = Array.isArray(v) ? v[0] : v;
+  if (!s) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  return endOfDay ? `${s}T23:59:59.999+07:00` : `${s}T00:00:00+07:00`;
 }
 
 function freshnessTone(min: number | null): {
@@ -252,11 +267,33 @@ const CARRIER_MENUBAR: MenubarItem[] = [
   { label: "CargoCenter", href: "/admin/api-forwarder-cn" },
 ];
 
-export default async function AdminApiForwarderMomoPage() {
+export default async function AdminApiForwarderMomoPage({
+  searchParams,
+}: {
+  // 2026-06-05 ภูม flag — date range filter for the CBM summary card.
+  searchParams?: Promise<{ from?: string; to?: string }>;
+}) {
   await requireAdmin(["super", "ops", "warehouse"]);
 
-  const [health, cbm] = await Promise.all([loadHealth(), loadCbmSummary()]);
+  const sp = (await searchParams) ?? {};
+  const fromIso = parseDateParam(sp.from, false);
+  const toIso   = parseDateParam(sp.to, true);
+  const hasFilter = !!(fromIso || toIso);
+
+  const [health, cbm] = await Promise.all([
+    loadHealth(),
+    loadCbmSummary(fromIso, toIso),
+  ]);
   const freshTone = freshnessTone(health.lastSuccessMinAgo);
+
+  // History link preserves the current date filter
+  const historyHref = (() => {
+    const params = new URLSearchParams();
+    if (sp.from) params.set("from", sp.from);
+    if (sp.to)   params.set("to",   sp.to);
+    const qs = params.toString();
+    return `/admin/api-forwarder-momo/history${qs ? `?${qs}` : ""}`;
+  })();
 
   return (
     <main className="p-4 lg:p-8 space-y-5">
@@ -297,12 +334,61 @@ export default async function AdminApiForwarderMomoPage() {
         <div className="flex items-baseline justify-between gap-3 flex-wrap mb-3">
           <h2 id="momo-cbm-h" className="flex items-center gap-2 text-sm font-bold text-primary-700">
             <BarChart3 className="h-4 w-4" />
-            ยอดรวมคิวจาก MOMO (สะสม)
+            ยอดรวมคิวจาก MOMO {hasFilter ? "(ตามช่วงเวลา)" : "(สะสม)"}
           </h2>
           <p className="text-[10px] text-muted">
-            ตั้งแต่รับลูกค้ามา · นับจากที่ MOMO sync เข้าระบบ
+            {hasFilter
+              ? `${sp.from ?? "(ไม่ระบุต้น)"} → ${sp.to ?? "(วันนี้)"}`
+              : "ตั้งแต่รับลูกค้ามา · นับจากที่ MOMO sync เข้าระบบ"}
           </p>
         </div>
+
+        {/* 2026-06-05 ภูม flag — date range filter + "ประวัติ" link.
+            Plain HTML <form method="GET"> reloads the page with new
+            searchParams — no client component needed. */}
+        <form
+          method="GET"
+          className="mb-4 flex items-end gap-2 flex-wrap p-2 rounded-lg bg-white/60 border border-primary-100"
+        >
+          <label className="text-[11px] font-medium text-primary-700">
+            <span className="block mb-0.5">ตั้งแต่</span>
+            <input
+              type="date"
+              name="from"
+              defaultValue={sp.from ?? ""}
+              className="rounded border border-primary-200 bg-white px-2 py-1 text-xs"
+            />
+          </label>
+          <label className="text-[11px] font-medium text-primary-700">
+            <span className="block mb-0.5">ถึง</span>
+            <input
+              type="date"
+              name="to"
+              defaultValue={sp.to ?? ""}
+              className="rounded border border-primary-200 bg-white px-2 py-1 text-xs"
+            />
+          </label>
+          <button
+            type="submit"
+            className="rounded-md bg-primary-600 text-white px-3 py-1.5 text-xs font-medium hover:bg-primary-700"
+          >
+            กรองข้อมูล
+          </button>
+          {hasFilter && (
+            <Link
+              href="/admin/api-forwarder-momo"
+              className="rounded-md border border-gray-300 bg-white text-gray-700 px-3 py-1.5 text-xs hover:bg-gray-50"
+            >
+              ล้างตัวกรอง
+            </Link>
+          )}
+          <Link
+            href={historyHref}
+            className="ml-auto rounded-md border border-primary-300 bg-white text-primary-700 px-3 py-1.5 text-xs font-medium hover:bg-primary-50 inline-flex items-center gap-1"
+          >
+            📊 ประวัติ (ตามลูกค้า)
+          </Link>
+        </form>
 
         <div className="grid gap-4 sm:grid-cols-3 items-end">
           {/* Big CBM number (the headline) */}
