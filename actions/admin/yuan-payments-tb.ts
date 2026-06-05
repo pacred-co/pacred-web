@@ -97,7 +97,7 @@ async function resolveLegacyAdminId(): Promise<string> {
     console.error(`[tb_admin list] failed`, { code: error.code, message: error.message });
   }
   if (data?.adminID) return data.adminID;
-  return email.slice(0, 30);
+  return (email.split("@")[0] || "system").slice(0, 20); // 2026-06-05 varchar(20)
 }
 
 // ────────────────────────────────────────────────────────────

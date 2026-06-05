@@ -99,7 +99,7 @@ async function resolveLegacyAdminId(): Promise<string> {
     });
   }
   if (data?.adminID) return data.adminID;
-  return email.slice(0, 30);
+  return (email.split("@")[0] || "system").slice(0, 20); // 2026-06-05 varchar(20)
 }
 
 // ────────────────────────────────────────────────────────────
@@ -136,7 +136,7 @@ export async function adminMarkServiceOrderPaidTb(
     ["super", "accounting"],
     async ({ adminId }) => {
       const admin = createAdminClient();
-      const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 30);
+      const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 20);
 
       // 1. Load the header row — need userid + status + price columns.
       const { data: header, error: headerErr } = await admin
