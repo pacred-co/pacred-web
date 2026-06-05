@@ -174,6 +174,7 @@ export const AdminCreateSchema = z
 
     // ── advanced ─────────────────────────────────────────────────
     birthday:           optionalDate,
+    employee_code:      optionalText(20),   // รหัสพนักงาน YYMMNO (login key)
     sex:                sexSchema.optional(),
     legacy_admin_id:    optionalText(64),
     admin_note:         optionalText(2000),

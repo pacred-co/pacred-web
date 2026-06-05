@@ -815,6 +815,7 @@ export async function adminCreateNew(
           avatar_url:    d.avatar_url ?? null,
           birthday:      d.birthday ?? null,
           sex:           d.sex ?? null,
+          employee_code: d.employee_code ?? null,
           account_type:  "personal",
           status:        "active",
           is_active:     true,

@@ -3,6 +3,22 @@
 
 ---
 
+# 🔐 2026-06-06 AM — เดฟ: refund UI-verified LIVE + login-by-id + employee-code + staff photos + ภูม-merge · read FIRST
+
+**main = `dave-pacred` = `ad848e17`+ (+ create-form employee_code) · all pushed · `pnpm verify` EXIT 0 + `pnpm build` EXIT 0 (REAL exit codes) · prod migrations 0143·**0144** APPLIED · tree clean (local `.claude/launch.json` autoPort:false kept for the preview server).** Live-driven with the owner — localhost preview on :3000 (admin Tadsakorn-super + customer PR321). This session:
+
+1. **💸 /refunds — FULL UI LOOP VERIFIED LIVE** (เดฟ drove · owner watched · `c2332ed9`): customer picker showed #14734 → ส่งคำขอ → admin สร้าง RF-260606-0001 → อนุมัติ → **จ่ายเงินคืน** → `tb_wallet_hs #105479 type-5 +฿1` + PR321 wallet ฿-732.58→-731.58 (real balance moved) + paid_wallet_hs_id linkage → **cleaned up, residue 0, wallet restored exactly.** §0e dead-write trap CLOSED + UI-proven (the PM-2 repoint + fno→id fix confirmed correct end-to-end). No customer comms.
+2. **🔑 Login flexible — พิมพ์ user-id ได้** (owner: "เกมเขา login ด้วย id กันทั้งนั้น" · `edf7f07a`): `actions/auth.ts` resolves a bare **`admin_xxx`** → `admin_xxx@pacred.co.th` (native email signin) + a bare **5-8 digit employee_code** → profiles.employee_code → email. Email/phone/PR-code + both legacy bridges UNTOUCHED (additive). Verified: admin_may→email + employee_code resolve + dup rejected (409).
+3. **🆔 Employee code (รหัสพนักงาน · format YYMMNO e.g. 690601)** — migration **0144** (`profiles.employee_code` text + partial-unique · applied prod) + field on **/admin/admins/[id]/edit AND /new** + the login key (#2). Owner fills the running numbers ("ไล่ใส่เอง").
+4. **📷 Staff photos** — the `public/images/Character_Icon/` files ARE the real photos → linked `avatar_url` for **admin_may/pee/ploy/win** (verified rendering live on /admin/admins). Toey/Visit (=admin_pop · no login-admin) left for owner.
+5. **🔀 ภูม-merge** (`ad848e17`) — integrated origin/Poom-pacred `65c478c6` (forwarder edit/detail 8-step + `<FreightBreakdownTable>` · his lane) into main; **hand-resolved the only money-path conflict** (`service-order/[hNo]/page.tsx` — kept BOTH เดฟ's ship-by/address-edit block AND ภูม's `computeRawTotal` 2dp-precision display). InwPond007 already in.
+
+**📋 ADMIN ACCESS LIST (15 · all super · active):** login id = **`admin_pond/got/win/nat/vam/web/jane/aom/may/pee/ploy/gring`** (= `admin_xxx@pacred.co.th` · pw 123456 · พิมพ์แค่ `admin_xxx` ก็ได้) · **PR009** (ภูม · poombaba1441@gmail.com) · **PR112** (Tadsakorn 📷) · **PR132** (วิสิฐ) — 3 ตัวท้าย = PR-code/เบอร์ (ไม่มี admin_xxx email).
+
+**🔴 PENDING (owner):** ใส่เลข employee_code ต่อคน · ส่งรูปสตาฟจริงจากปอน (อีก 11 คนยังไม่มี · มีแค่ may/pee/ploy/win + Tadsakorn) · จะ provision admin_xxx short-login ให้ PR009/112/132 มั้ย · carryover (Vercel env TAMIT-2026/Sentry/FB · Lane A 16-col diff · Lane D LINE · ใบขน VAT). **⚠️ CLAUDE.md > 2000 บรรทัด → archive (§12).**
+
+---
+
 # 🧾 2026-06-05 PM-2 — เดฟ: 4-task batch (ต้นทุนตู้ public-CSV · migrations 0141/0142/0143 · /refunds §0e repoint) · read FIRST
 
 **main = `dave-pacred` = `bd0cba61` · all pushed · `pnpm verify` EXIT 0 + `pnpm build` EXIT 0 (REAL exit codes) · Vercel auto-deploys main · prod migrations 0141·0142·0143 APPLIED+verified · tree clean.** Also merged **origin/InwPond007** (ปอน · `bd0cba61` · 1 file `lcl-price-cards.tsx` — Term-notes inline + Guangzhou LCL display prices · clean · gated). **🔵 HANDOFF → ภูม:** main พร้อมให้ดึง — `git fetch origin && git checkout Poom-pacred && git merge origin/main` (ภูม's own `65c478c6` forwarder batch ยังอยู่บน Poom-pacred · merge main เข้าไปได้งานผมครบ · ทิศทางถูก). Owner 4-task batch — all done:

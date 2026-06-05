@@ -115,6 +115,7 @@ export function AdminCreateNewForm({
   // ─── advanced (collapsible) ──────────────────────────────────────
   const [showAdvanced, setShowAdvanced] = useState<boolean>(Boolean(legacyPreset));
   const [birthday, setBirthday]         = useState<string>("");
+  const [employeeCode, setEmployeeCode] = useState<string>("");
   const [sex, setSex]                   = useState<"" | (typeof SEX_VALUES)[number]>("");
   const [legacyAdminId, setLegacyAdminId] = useState<string>(legacyPreset ?? "");
   const [adminNote, setAdminNote]       = useState<string>("");
@@ -156,6 +157,7 @@ export function AdminCreateNewForm({
     setHiredAt("");
     setAvatarUrl("");
     setBirthday("");
+    setEmployeeCode("");
     setSex("");
     setLegacyAdminId(legacyPreset ?? "");
     setAdminNote("");
@@ -203,6 +205,7 @@ export function AdminCreateNewForm({
         avatar_url:         avatarUrl.trim() || undefined,
 
         birthday:           birthday || undefined,
+        employee_code:      employeeCode.trim() || undefined,
         sex:                sex || undefined,
         legacy_admin_id:    legacyAdminId.trim() || undefined,
         admin_note:         adminNote.trim() || undefined,
@@ -527,6 +530,19 @@ export function AdminCreateNewForm({
                 disabled={pending}
                 className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
               />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">รหัสพนักงาน (YYMMNO)</label>
+              <input
+                type="text"
+                value={employeeCode}
+                onChange={(e) => setEmployeeCode(e.target.value)}
+                maxLength={20}
+                placeholder="เช่น 690601"
+                disabled={pending}
+                className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+              />
+              <p className="mt-1 text-[11px] text-muted">ใช้ login ได้ (เหมือน user id)</p>
             </div>
             <div>
               <label className="block text-xs font-medium text-muted mb-1">เพศ</label>
