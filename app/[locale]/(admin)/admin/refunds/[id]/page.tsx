@@ -100,20 +100,20 @@ export default async function AdminRefundDetailPage({
   // Parent context lookup — best-effort; show the parent if we can resolve it.
   let parentCtx: { label: string; details: Array<{ k: string; v: string }> } | null = null;
   if (row.source === "forwarder" && row.source_ref) {
-    // LIVE legacy tb_forwarder (the rebuilt `forwarders` twin is 0-row). fno is
-    // the source_ref the customer/admin picks.
+    // LIVE legacy tb_forwarder (the rebuilt `forwarders` twin is 0-row).
+    // source_ref = String(tb_forwarder.id) — there is no fno column.
     const { data, error: fErr } = await admin
       .from("tb_forwarder")
-      .select("fno, fstatus, ftotalprice, fdate")
-      .eq("fno", row.source_ref)
-      .maybeSingle<{ fno: string; fstatus: string | null; ftotalprice: number | null; fdate: string | null }>();
+      .select("id, fcabinetnumber, fstatus, ftotalprice, fdate")
+      .eq("id", row.source_ref)
+      .maybeSingle<{ id: number; fcabinetnumber: string | null; fstatus: string | null; ftotalprice: number | null; fdate: string | null }>();
     if (fErr) {
       // Soft-fail — parent context is best-effort; page still renders the refund detail without it.
       console.error(`[refunds/[id] forwarder parent lookup] ref=${row.source_ref}`, { code: fErr.code, message: fErr.message });
     }
     if (data) {
       parentCtx = {
-        label: `Forwarder ${data.fno}`,
+        label: `Forwarder #${data.id}${data.fcabinetnumber ? ` · ตู้ ${data.fcabinetnumber}` : ""}`,
         details: [
           { k: "สถานะ",     v: data.fstatus ?? "—" },
           { k: "ยอดรวม",    v: data.ftotalprice != null ? thb(Number(data.ftotalprice)) : "—" },

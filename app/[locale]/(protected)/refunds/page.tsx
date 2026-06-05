@@ -82,7 +82,7 @@ export default async function CustomerRefundsHubPage() {
     const admin = createAdminClient();
     const [{ data: fwdsRaw }, { data: ordersRaw }, { data: yuansRaw }] = await Promise.all([
       admin.from("tb_forwarder")
-        .select("fno, fstatus, fdate")
+        .select("id, fcabinetnumber, fstatus, fdate")
         .eq("userid", memberCode)
         .in("fstatus", ["6", "7"])
         .order("fdate", { ascending: false })
@@ -101,10 +101,10 @@ export default async function CustomerRefundsHubPage() {
     ]);
 
     sourceOptions = [
-      ...(((fwdsRaw ?? []) as Array<{ fno: string; fstatus: string | null }>).map((f) => ({
+      ...(((fwdsRaw ?? []) as Array<{ id: number; fcabinetnumber: string | null; fstatus: string | null }>).map((f) => ({
         source: "forwarder" as const,
-        value:  f.fno,
-        label:  `${f.fno} (สถานะ ${f.fstatus ?? "—"})`,
+        value:  String(f.id),
+        label:  `ฝากนำเข้า #${f.id}${f.fcabinetnumber ? ` · ตู้ ${f.fcabinetnumber}` : ""} (สถานะ ${f.fstatus ?? "—"})`,
       }))),
       ...(((ordersRaw ?? []) as Array<{ hno: string; hstatus: string | null }>).map((o) => ({
         source: "service_order" as const,

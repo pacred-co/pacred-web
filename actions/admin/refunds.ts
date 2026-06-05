@@ -503,22 +503,6 @@ function tbParentNeverPaid(source: string, status: string): boolean {
   return false; // yuan_payment + anything else → rely on the debit ceiling
 }
 
-/** Resolve a forwarder's numeric `tb_forwarder.id` from its `fno` (the debit
- *  ledger links `reforder` to the id, not the fno). Null if not found/owned. */
-async function forwarderIdByFno(admin: AdminClient, fno: string, memberCode: string): Promise<number | null> {
-  const { data, error } = await admin
-    .from("tb_forwarder")
-    .select("id")
-    .eq("fno", fno)
-    .eq("userid", memberCode)
-    .maybeSingle<{ id: number }>();
-  if (error) {
-    console.error(`[tb_forwarder id lookup] failed`, { code: error.code, message: error.message });
-    return null;
-  }
-  return data?.id ?? null;
-}
-
 /**
  * For non-manual sources, verify the referenced parent in the LEGACY `tb_*`
  * schema (the rebuilt twins are 0-row on prod):
@@ -537,11 +521,13 @@ async function verifySourceRef(
   if (!sourceRef) return "source_ref_required";
 
   if (source === "forwarder") {
+    // source_ref = String(tb_forwarder.id) — tb_forwarder has NO fno column;
+    // the forwarder is keyed by its integer id (= the type-4 debit's reforder).
     const { data, error } = await admin
       .from("tb_forwarder")
-      .select("fno, userid, fstatus")
-      .eq("fno", sourceRef)
-      .maybeSingle<{ fno: string; userid: string; fstatus: string | null }>();
+      .select("id, userid, fstatus")
+      .eq("id", sourceRef)
+      .maybeSingle<{ id: number; userid: string; fstatus: string | null }>();
     if (error) return error.message;
     if (!data)  return "forwarder_not_found";
     if (data.userid !== targetMemberCode) return "forwarder_belongs_to_other_customer";
@@ -585,8 +571,9 @@ function revalidateOne(refundId: string): void {
  * whether it may proceed. Cross-table: it reads what the customer actually
  * paid against the parent + sums refunds already paid for the same parent.
  *
- * "Collected" per source = Σ settled tb_wallet_hs debit rows for the parent:
- *   - forwarder      : type='4', reforder=tb_forwarder.id (resolved from fno)
+ * "Collected" per source = Σ settled tb_wallet_hs debit rows for the parent
+ * (reforder == source_ref in every case):
+ *   - forwarder      : type='4', reforder=tb_forwarder.id
  *   - service_order  : type='2', reforder=tb_header_order.hno
  *   - yuan_payment   : type='6', reforder=tb_payment.id
  *   (all WHERE userid=member_code AND status='2'; amount stored positive)
@@ -615,26 +602,17 @@ async function resolveRefundCeiling(
 
   // ── 1) Collected against the parent = Σ settled tb_wallet_hs DEBITS for it ──
   // The legacy ledger encodes "the customer paid this" as a status='2' debit
-  // row keyed by (userid, type, reforder); `amount` is stored POSITIVE.
-  //   forwarder     → type '4', reforder = tb_forwarder.id    (resolve from fno)
-  //   service_order → type '2', reforder = tb_header_order.hno (= source_ref)
-  //   yuan_payment  → type '6', reforder = tb_payment.id        (= source_ref)
+  // row keyed by (userid, type, reforder); `amount` is stored POSITIVE. In all
+  // three cases reforder == source_ref (the parent's primary id as text):
+  //   forwarder     → type '4', reforder = tb_forwarder.id
+  //   service_order → type '2', reforder = tb_header_order.hno
+  //   yuan_payment  → type '6', reforder = tb_payment.id
   let debitType: string;
-  let reforder:  string;
-  if (source === "forwarder") {
-    debitType = "4";
-    const fid = await forwarderIdByFno(admin, sourceRef, memberCode);
-    if (fid == null) return { ok: false, error: "refund_ceiling_parent_not_found" };
-    reforder = String(fid);
-  } else if (source === "service_order") {
-    debitType = "2";
-    reforder = sourceRef;
-  } else if (source === "yuan_payment") {
-    debitType = "6";
-    reforder = sourceRef;
-  } else {
-    return { ok: false, error: `refund_ceiling_unknown_source:${source}` };
-  }
+  if (source === "forwarder")          debitType = "4";
+  else if (source === "service_order") debitType = "2";
+  else if (source === "yuan_payment")  debitType = "6";
+  else return { ok: false, error: `refund_ceiling_unknown_source:${source}` };
+  const reforder = sourceRef;
 
   const { data: debitRows, error: debitErr } = await admin
     .from("tb_wallet_hs")

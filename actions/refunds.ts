@@ -81,12 +81,13 @@ export async function customerCreateRefundRequest(
   // order hstatus 1,2 (รอชำระเงิน=2). Yuan THB is wallet-debited at submit →
   // always refundable (the debit ceiling at mark-paid is the hard guard).
   if (d.source === "forwarder") {
+    // source_ref = String(tb_forwarder.id) — tb_forwarder has no fno column.
     const { data, error: error1 } = await admin
       .from("tb_forwarder")
-      .select("fno, fstatus")
-      .eq("fno", d.source_ref)
+      .select("id, fstatus")
+      .eq("id", d.source_ref)
       .eq("userid", memberCode)
-      .maybeSingle<{ fno: string; fstatus: string | null }>();
+      .maybeSingle<{ id: number; fstatus: string | null }>();
     if (error1) {
       console.error(`[tb_forwarder ownership lookup] failed`, { code: error1.code, message: error1.message });
       return { ok: false, error: `db_error:${error1.code ?? "unknown"}` };
