@@ -96,6 +96,15 @@ export async function updateProfileBasic(
       code: memberErr.code, message: memberErr.message, userId: user.id,
     });
   } else if (profileRow?.member_code) {
+    // 2026-06-05 (ภูม flag #2 · sex enum mismatch) — `tb_users.userSex` canonical
+    // = ภาษาไทย "ชาย"/"หญิง" (legacy SOT · 8898 migrated customers + customer
+    // EditProfileForm sends Thai). `profiles.sex` constraint = English enum
+    // (`male`/`female`/`other`). MAP English→Thai before writing tb_users so the
+    // legacy schema stays consistent.
+    const sexThai =
+      d.sex === "male" ? "ชาย" :
+      d.sex === "female" ? "หญิง" :
+      "";
     const { error: tbErr } = await admin
       .from("tb_users")
       .update({
@@ -103,7 +112,7 @@ export async function updateProfileBasic(
         userLastName: d.last_name,
         userEmail:    d.email ?? "",
         userTel:      d.phone,
-        userSex:      d.sex ?? "",
+        userSex:      sexThai,
         userBirthday: d.birthday ?? null,
         userLineID:   d.line_id ?? "",
         userFacebook: d.facebook_url ?? "",

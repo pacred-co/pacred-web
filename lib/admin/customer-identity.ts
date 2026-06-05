@@ -51,7 +51,18 @@ export const updateUserIdentitySchema = z.object({
   userLastName: z.string().trim().min(1, "กรอกนามสกุล").max(200),
   userEmail:    z.string().trim().toLowerCase().email("อีเมลไม่ถูกต้อง").max(100).or(z.literal("")),
   userTel:      z.string().trim().regex(/^\d{9,10}$/, "เบอร์โทร 9-10 หลัก (ไม่มีขีด)"),
-  userSex:      z.enum(["male", "female", ""]).optional().default(""),
+  // 2026-06-05 (ภูม flag #2) — tb_users.userSex canonical = ภาษาไทย
+  // "ชาย"/"หญิง"/"" (legacy SOT · ฟอร์มลูกค้า EditProfileForm ก็ส่ง Thai).
+  // Accept both English + Thai input + normalize to Thai before write — กัน
+  // split-brain ระหว่างฟอร์ม admin (เคยใช้ English) กับฟอร์มลูกค้า (ใช้ Thai).
+  userSex:      z.preprocess(
+    (v) => {
+      if (v === "male" || v === "ชาย") return "ชาย";
+      if (v === "female" || v === "หญิง") return "หญิง";
+      return "";
+    },
+    z.enum(["ชาย", "หญิง", ""]),
+  ).optional().default(""),
   // Optional; "" or omitted clears the column (legacy date is nullable). A
   // present value must be ISO yyyy-mm-dd.
   userBirthday: z.union([z.literal(""), z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "วันเกิดต้องเป็น YYYY-MM-DD")]).optional().default(""),
@@ -60,7 +71,9 @@ export const updateUserIdentitySchema = z.object({
   adminIDSale:  z.string().trim().max(20).optional(),
   coID:         z.string().trim().max(10).optional(),
 });
-export type UpdateUserIdentityInput = z.infer<typeof updateUserIdentitySchema>;
+// 2026-06-05 — use z.input (not z.infer) so preprocess input types stay broad
+// (userSex accepts any string · normalize happens inside the schema).
+export type UpdateUserIdentityInput = z.input<typeof updateUserIdentitySchema>;
 
 /** Convert-to-juristic field map (legacy update-corporate POST). */
 export const convertToJuristicSchema = z.object({

@@ -59,7 +59,9 @@ console.log("\nupdateUserIdentitySchema — valid input");
   ok("accepts full valid identity", r.success, r.success ? "" : JSON.stringify(r.error.issues));
   if (r.success) {
     eq("email lowercased", r.data.userEmail, "test@example.com");
-    eq("optional sex retained", r.data.userSex, "male");
+    // 2026-06-05 (ภูม flag #2) — schema preprocess normalizes English→Thai.
+    // Input "male" → output "ชาย" (canonical legacy SOT).
+    eq("sex normalized English→Thai", r.data.userSex, "ชาย");
     eq("blank-default lineid present", r.data.userLineID, "somchai");
   }
 }
@@ -101,9 +103,21 @@ ok("accepts 9-digit tel (landline)", updateUserIdentitySchema.safeParse({
 ok("rejects bad birthday format", !updateUserIdentitySchema.safeParse({
   userid: "PR1", userName: "A", userLastName: "B", userEmail: "", userTel: "0891234567", userBirthday: "20/05/1990",
 }).success);
-ok("rejects invalid sex enum", !updateUserIdentitySchema.safeParse({
-  userid: "PR1", userName: "A", userLastName: "B", userEmail: "", userTel: "0891234567", userSex: "other",
-}).success);
+// 2026-06-05 (ภูม flag #2) — schema preprocess maps any non-male/female/Thai
+// input → "" (acceptable, treated as "ไม่ระบุ"). So "other" → "" → accepted.
+{
+  const r = updateUserIdentitySchema.safeParse({
+    userid: "PR1", userName: "A", userLastName: "B", userEmail: "", userTel: "0891234567", userSex: "other",
+  });
+  ok("unknown sex value normalizes to '' (not rejected)", r.success && r.data?.userSex === "");
+}
+// Verify Thai input accepted too
+{
+  const r = updateUserIdentitySchema.safeParse({
+    userid: "PR1", userName: "A", userLastName: "B", userEmail: "", userTel: "0891234567", userSex: "หญิง",
+  });
+  ok("accepts Thai 'หญิง' directly", r.success && r.data?.userSex === "หญิง");
+}
 
 // ── convert-to-juristic schema (legacy update-corporate) ───────────────────
 console.log("\nconvertToJuristicSchema — tax id + company");

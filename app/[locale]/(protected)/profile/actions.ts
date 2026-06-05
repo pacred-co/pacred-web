@@ -155,6 +155,17 @@ export async function updateProfileAction(
   // via the legacy modal, /profile page + /admin/customers update (read
   // tb_users) but top-nav dropdown still shows "dev dev" → split-brain.
   // Best-effort — tb_users already committed.
+  //
+  // 2026-06-05 (ภูม flag #2) — MAP Thai→English for `profiles.sex` because the
+  // table has CHECK constraint `sex in ('male','female','other')`. Without
+  // mapping, "ชาย"/"หญิง" → constraint violation → ENTIRE UPDATE rejected →
+  // even birthday + email + line_id ไม่ update. Map first; write second.
+  const sexEnglish =
+    userSex === "ชาย" ? "male" :
+    userSex === "หญิง" ? "female" :
+    userSex === "male" ? "male" :     // accept English passthrough too
+    userSex === "female" ? "female" :
+    null;
   const { error: profilesErr } = await admin
     .from("profiles")
     .update({
@@ -162,7 +173,7 @@ export async function updateProfileAction(
       last_name:    userLastName,
       email:        userEmail || null,
       phone:        userTel,
-      sex:          userSex || null,
+      sex:          sexEnglish,
       birthday:     userBirthday || null,
       line_id:      userLineID || null,
       facebook_url: userFacebook || null,
@@ -170,7 +181,7 @@ export async function updateProfileAction(
     .eq("id", data.user.id);
   if (profilesErr) {
     console.error(`[profile updateProfileAction] dual-write profiles failed (non-fatal)`, {
-      code: profilesErr.code, message: profilesErr.message, userId: data.user.id,
+      code: profilesErr.code, message: profilesErr.message, userId: data.user.id, sexInput: userSex, sexMapped: sexEnglish,
     });
   }
 
