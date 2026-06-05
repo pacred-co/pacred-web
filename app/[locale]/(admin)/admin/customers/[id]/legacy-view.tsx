@@ -28,7 +28,7 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { Link } from "@/i18n/navigation";
 import { getAdminRoles } from "@/lib/auth/require-admin";
 import { getCustomerRateMatrix } from "@/actions/admin/customer-rate";
-import { getCustomerStatCounts, listSalesAdmins } from "@/actions/admin/customer-profile";
+import { getCustomerStatCounts, listSalesAdmins, listCsAdmins } from "@/actions/admin/customer-profile";
 import { getCustomerMarginSummary } from "@/actions/admin/customer-margin";
 import { CustomerRateEditor } from "./rate-editor";
 import { CustomerMarginPanel } from "./customer-margin-panel";
@@ -38,6 +38,7 @@ import {
   IdentityEditor,
   NoteEditor,
   SaleRepEditor,
+  CsRepEditor,
   CorporateEditor,
   AddressManager,
 } from "./profile-sections";
@@ -53,6 +54,7 @@ type URow = {
   userRegistered: string | null;
   userLastLogin: string | null;   // ← correct column (legacy schema)
   adminIDSale: string | null;
+  adminIDCS: string | null;        // FEATURE 1: assigned CS rep (migration 0141)
   userNote: string | null;
   userPicture: string | null;     // Wave 13: legacy avatar filename (col is `userPicture` not `userimage` — fix Wave 19 BUG#1 2026-05-26)
   // P0-17: identity-edit fields (faithful editUser modal).
@@ -138,7 +140,7 @@ export async function renderLegacyCustomerView(id: string) {
   const { data: userRaw, error: userErr } = await admin
     .from("tb_users")
     .select(
-      "userID,userName,userLastName,userCompany,userEmail,userTel,userActive,userRegistered,userLastLogin,adminIDSale,userNote,userPicture,userSex,userBirthday,userLineID,userFacebook,coID",
+      "userID,userName,userLastName,userCompany,userEmail,userTel,userActive,userRegistered,userLastLogin,adminIDSale,adminIDCS,userNote,userPicture,userSex,userBirthday,userLineID,userFacebook,coID",
     )
     .eq("userID", id)
     .maybeSingle();
@@ -281,13 +283,15 @@ export async function renderLegacyCustomerView(id: string) {
   // is fetched here in parallel with the other profile sub-readers. Best-
   // effort — never throws (the loader degrades to "0 delivered ตู้" empty
   // state if tb_forwarder query fails).
-  const [rateMatrix, statCounts, salesAdminsRes, marginSummary] = await Promise.all([
+  const [rateMatrix, statCounts, salesAdminsRes, csAdminsRes, marginSummary] = await Promise.all([
     getCustomerRateMatrix(u.userID),
     getCustomerStatCounts(u.userID),
     listSalesAdmins(),
+    listCsAdmins(),
     getCustomerMarginSummary(u.userID),
   ]);
   const salesAdmins = salesAdminsRes.ok ? salesAdminsRes.data?.rows ?? [] : [];
+  const csAdmins = csAdminsRes.ok ? csAdminsRes.data?.rows ?? [] : [];
   const walletBalance = Number(wallet?.wallettotal ?? 0);
 
   // P0-17: the identity editor's senior-only fields (rep + coID) mirror the
@@ -385,6 +389,10 @@ export async function renderLegacyCustomerView(id: string) {
             per-customer + bulk transfer-rep pages were repointed 2026-06-02 to
             also write this live column (was profiles.sales_admin_id death). */}
         <SaleRepEditor userid={u.userID} currentRep={u.adminIDSale} admins={salesAdmins} />
+        {/* editCs (FEATURE 1) — write tb_users.adminIDCS (migration 0141).
+            Mirrors the sales reassign; resolveCsRep (pcs-chrome.ts) renders
+            the chosen CS in the customer sidebar "ผู้ดูแล" card. */}
+        <CsRepEditor userid={u.userID} currentRep={u.adminIDCS} admins={csAdmins} />
       </div>
 
       {/* Identity editor (P0-17 · adm-08 WF#4) — faithful port of the legacy

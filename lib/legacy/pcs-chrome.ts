@@ -32,6 +32,31 @@ export function formatPhoneNumber(phone: string | null | undefined): string {
   return "เบอร์โทรไม่ถูกต้อง";
 }
 
+/**
+ * Normalize a free-form phone to a 10-digit local number (the shape
+ * `formatPhoneNumber` expects). Strips every non-digit; a leading "66"
+ * country code on an 11-digit string is rewritten to a "0" prefix
+ * (66812345678 → 0812345678). Returns the cleaned digits otherwise so the
+ * caller can still fall back if it isn't a clean 10-digit. Empty in →
+ * empty out (the resolvers treat empty as "no tel, use fallback").
+ */
+function normalizeTel(raw: string | null | undefined): string {
+  const digits = (raw ?? "").replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("66")) {
+    return `0${digits.slice(2)}`;
+  }
+  return digits;
+}
+
+/** First non-empty (post-normalize) tel from a candidate list, else "". */
+function pickTel(candidates: (string | null | undefined)[]): string {
+  for (const c of candidates) {
+    const n = normalizeTel(c);
+    if (n) return n;
+  }
+  return "";
+}
+
 /** member/include/function.php L14-24 — UTF-8-aware truncate to `num` glyphs. */
 export function countText(text: string | null | undefined, num: number): string {
   const chars = [...(text ?? "")];
@@ -139,9 +164,17 @@ const EMPTY_CHROME: PcsChromeData = {
 };
 
 /**
- * left-menu.php L17-34 — resolve the customer's assigned sales rep:
- *   tb_admin a ⋈ tb_org_tell_ships ots ⋈ tb_organization_tell ot
- *   WHERE a.adminID = $adminIDSale  ORDER BY ots.ID DESC
+ * Resolve the customer's assigned sales rep (left-menu.php L17-34).
+ *
+ * The legacy chain (tb_admin ⋈ tb_org_tell_ships ⋈ tb_organization_tell) only
+ * ever showed the LEGACY tb_admin fields, and the tell tables are empty after
+ * the rebuild → a sales admin editing their pic/name/phone via the modern
+ * /admin/admins/[id]/edit (which writes profiles + admin_contact_extras) never
+ * showed up. Option A (resolver-only): traverse the bridge
+ *   admin_contact_extras.legacy_admin_id == tb_admin.adminID
+ *     → admin_contact_extras.profile_id (uuid) → profiles.id
+ * read the modern profile, and PREFER it over the legacy tb_admin, then the
+ * central SALES_FALLBACK. Same query count as the old tell chain.
  */
 async function resolveSalesRep(
   admin: AdminClient,
@@ -149,60 +182,66 @@ async function resolveSalesRep(
 ): Promise<PcsSalesRep> {
   if (!adminIdSale) return { ...SALES_FALLBACK };
 
-  // Run both first-level queries in parallel — they only depend on adminIdSale,
-  // not on each other. Saves 1 serial RTT vs the original 3-sequential chain.
-  const [{ data: adminRow, error: adminRowErr }, { data: shipRow, error: shipRowErr }] =
+  // tb_admin (legacy fallback fields) + the bridge row (modern profile id +
+  // contact phones) only depend on adminIdSale, not each other → parallel.
+  const [{ data: adminRow, error: adminRowErr }, { data: bridgeRow, error: bridgeErr }] =
     await Promise.all([
       admin
         .from("tb_admin")
-        .select("adminNickname, adminPicture")
+        .select("adminNickname, adminPicture, adminTel")
         .eq("adminID", adminIdSale)
-        .maybeSingle<{ adminNickname: string | null; adminPicture: string | null }>(),
+        .maybeSingle<{ adminNickname: string | null; adminPicture: string | null; adminTel: string | null }>(),
       admin
-        .from("tb_org_tell_ships")
-        .select("otid")
-        .eq("adminid", adminIdSale)
-        .order("id", { ascending: false })
-        .limit(1)
-        .maybeSingle<{ otid: number | null }>(),
+        .from("admin_contact_extras")
+        .select("profile_id, nickname, work_phone, direct_phone")
+        .eq("legacy_admin_id", adminIdSale)
+        .maybeSingle<{ profile_id: string | null; nickname: string | null; work_phone: string | null; direct_phone: string | null }>(),
     ]);
 
   if (adminRowErr) console.error(`[tb_admin] failed`, adminRowErr.message);
-  if (shipRowErr) console.error(`[tb_org_tell_ships] failed`, shipRowErr.message);
+  if (bridgeErr) console.error(`[admin_contact_extras] failed`, bridgeErr.message);
   if (!adminRow) return { ...SALES_FALLBACK };
 
-  // tb_organization_tell depends on shipRow.otid — unavoidably sequential.
-  let tel: string | null = null;
-  if (shipRow?.otid != null) {
-    const { data: tellRow, error: tellRowErr } = await admin
-      .from("tb_organization_tell")
-      .select("tell")
-      .eq("id", shipRow.otid)
-      .maybeSingle<{ tell: string | null }>();
-    if (tellRowErr) console.error(`[tb_organization_tell] failed`, tellRowErr.message);
-    tel = tellRow?.tell ?? null;
+  // Modern profile (avatar/name/phone) depends on bridgeRow.profile_id.
+  let profile: { avatar_url: string | null; phone: string | null } | null = null;
+  if (bridgeRow?.profile_id) {
+    const { data: profileRow, error: profileErr } = await admin
+      .from("profiles")
+      .select("avatar_url, first_name, last_name, phone")
+      .eq("id", bridgeRow.profile_id)
+      .maybeSingle<{ avatar_url: string | null; first_name: string | null; last_name: string | null; phone: string | null }>();
+    if (profileErr) console.error(`[profiles] failed`, profileErr.message);
+    profile = profileRow ?? null;
   }
 
-  // left-menu.php L28: $adminPicture = basePath."images/admin/".picture.
-  const picture =
-    adminRow.adminPicture &&
-    adminRow.adminPicture !== "user.jpg" &&
-    /^(https?:|\/)/.test(adminRow.adminPicture)
-      ? adminRow.adminPicture
-      : SALES_FALLBACK.picture;
+  // PREFER modern (admin_contact_extras / profiles) → legacy tb_admin → fallback.
+  const nickname =
+    bridgeRow?.nickname?.trim() || adminRow.adminNickname?.trim() || SALES_FALLBACK.nickname;
 
-  return {
-    nickname: adminRow.adminNickname?.trim() || SALES_FALLBACK.nickname,
-    picture,
-    tel: tel ?? SALES_FALLBACK.tel,
-  };
+  const picture =
+    profile?.avatar_url && /^(https?:|\/)/.test(profile.avatar_url)
+      ? profile.avatar_url
+      : adminRow.adminPicture &&
+          adminRow.adminPicture !== "user.jpg" &&
+          /^(https?:|\/)/.test(adminRow.adminPicture)
+        ? adminRow.adminPicture
+        : SALES_FALLBACK.picture;
+
+  const tel =
+    pickTel([bridgeRow?.work_phone, bridgeRow?.direct_phone, profile?.phone, adminRow.adminTel]) ||
+    SALES_FALLBACK.tel;
+
+  return { nickname, picture, tel };
 }
 
 /**
- * Resolve the customer's assigned CS — same query path as resolveSalesRep, keyed
- * on tb_users.adminIDCS (migration 0141). The tel-chain (tb_org_tell_ships →
- * tb_organization_tell) is keyed on `adminid` generically, so a CS admin resolves
- * a tel the same way a sales admin does. Falls back to the central CS line.
+ * Resolve the customer's assigned CS, keyed on tb_users.adminIDCS (migration
+ * 0141). CS twin of resolveSalesRep — same modern-profile bridge so a CS admin
+ * editing their pic/name/phone via /admin/admins/[id]/edit shows up:
+ *   admin_contact_extras.legacy_admin_id == tb_admin.adminID
+ *     → admin_contact_extras.profile_id → profiles.id
+ * PREFER modern (admin_contact_extras / profiles) → legacy tb_admin → the
+ * central CS_FALLBACK line.
  */
 async function resolveCsRep(
   admin: AdminClient,
@@ -210,49 +249,52 @@ async function resolveCsRep(
 ): Promise<PcsCsRep> {
   if (!adminIdCs) return { ...CS_FALLBACK };
 
-  const [{ data: adminRow, error: adminRowErr }, { data: shipRow, error: shipRowErr }] =
+  const [{ data: adminRow, error: adminRowErr }, { data: bridgeRow, error: bridgeErr }] =
     await Promise.all([
       admin
         .from("tb_admin")
-        .select("adminNickname, adminPicture")
+        .select("adminNickname, adminPicture, adminTel")
         .eq("adminID", adminIdCs)
-        .maybeSingle<{ adminNickname: string | null; adminPicture: string | null }>(),
+        .maybeSingle<{ adminNickname: string | null; adminPicture: string | null; adminTel: string | null }>(),
       admin
-        .from("tb_org_tell_ships")
-        .select("otid")
-        .eq("adminid", adminIdCs)
-        .order("id", { ascending: false })
-        .limit(1)
-        .maybeSingle<{ otid: number | null }>(),
+        .from("admin_contact_extras")
+        .select("profile_id, nickname, work_phone, direct_phone")
+        .eq("legacy_admin_id", adminIdCs)
+        .maybeSingle<{ profile_id: string | null; nickname: string | null; work_phone: string | null; direct_phone: string | null }>(),
     ]);
 
   if (adminRowErr) console.error(`[tb_admin cs] failed`, adminRowErr.message);
-  if (shipRowErr) console.error(`[tb_org_tell_ships cs] failed`, shipRowErr.message);
+  if (bridgeErr) console.error(`[admin_contact_extras cs] failed`, bridgeErr.message);
   if (!adminRow) return { ...CS_FALLBACK };
 
-  let tel: string | null = null;
-  if (shipRow?.otid != null) {
-    const { data: tellRow, error: tellRowErr } = await admin
-      .from("tb_organization_tell")
-      .select("tell")
-      .eq("id", shipRow.otid)
-      .maybeSingle<{ tell: string | null }>();
-    if (tellRowErr) console.error(`[tb_organization_tell cs] failed`, tellRowErr.message);
-    tel = tellRow?.tell ?? null;
+  let profile: { avatar_url: string | null; phone: string | null } | null = null;
+  if (bridgeRow?.profile_id) {
+    const { data: profileRow, error: profileErr } = await admin
+      .from("profiles")
+      .select("avatar_url, first_name, last_name, phone")
+      .eq("id", bridgeRow.profile_id)
+      .maybeSingle<{ avatar_url: string | null; first_name: string | null; last_name: string | null; phone: string | null }>();
+    if (profileErr) console.error(`[profiles cs] failed`, profileErr.message);
+    profile = profileRow ?? null;
   }
 
-  const picture =
-    adminRow.adminPicture &&
-    adminRow.adminPicture !== "user.jpg" &&
-    /^(https?:|\/)/.test(adminRow.adminPicture)
-      ? adminRow.adminPicture
-      : CS_FALLBACK.picture;
+  const nickname =
+    bridgeRow?.nickname?.trim() || adminRow.adminNickname?.trim() || CS_FALLBACK.nickname;
 
-  return {
-    nickname: adminRow.adminNickname?.trim() || CS_FALLBACK.nickname,
-    picture,
-    tel: tel ?? CS_FALLBACK.tel,
-  };
+  const picture =
+    profile?.avatar_url && /^(https?:|\/)/.test(profile.avatar_url)
+      ? profile.avatar_url
+      : adminRow.adminPicture &&
+          adminRow.adminPicture !== "user.jpg" &&
+          /^(https?:|\/)/.test(adminRow.adminPicture)
+        ? adminRow.adminPicture
+        : CS_FALLBACK.picture;
+
+  const tel =
+    pickTel([bridgeRow?.work_phone, bridgeRow?.direct_phone, profile?.phone, adminRow.adminTel]) ||
+    CS_FALLBACK.tel;
+
+  return { nickname, picture, tel };
 }
 
 /**

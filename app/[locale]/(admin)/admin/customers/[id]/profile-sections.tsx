@@ -29,6 +29,7 @@ import { confirm } from "@/components/ui/confirm";
 import {
   adminUpdateUserNote,
   adminUpdateUserSaleRep,
+  adminUpdateUserCsRep,
   adminUpdateCorporate,
   adminAddAddress,
   adminUpdateAddress,
@@ -453,6 +454,102 @@ export function SaleRepEditor({
         {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
         {editing && admins.length === 0 && (
           <p className="text-xs text-amber-600 mt-1">ไม่พบเซลล์ที่ active ใน tb_admin</p>
+        )}
+      </div>
+      {!editing ? (
+        <button
+          type="button"
+          onClick={() => {
+            setChoice(rep);
+            setEditing(true);
+          }}
+          className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline shrink-0"
+        >
+          <Pencil className="w-3.5 h-3.5" /> แก้ไข
+        </button>
+      ) : (
+        <div className="flex gap-2 shrink-0">
+          <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => setEditing(false)}>
+            ยกเลิก
+          </Button>
+          <Button type="button" size="sm" disabled={pending} onClick={save}>
+            <Save className="size-4" /> {pending ? "..." : "บันทึก"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 3b) CS-rep editor — editCs → tb_users.adminIDCS (FEATURE 1 · twin of 3)
+// ──────────────────────────────────────────────────────────────────────────
+export function CsRepEditor({
+  userid,
+  currentRep,
+  admins,
+}: {
+  userid: string;
+  currentRep: string | null;
+  admins: SalesAdminOption[];
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [editing, setEditing] = useState(false);
+  const [rep, setRep] = useState(currentRep ?? "");
+  const [choice, setChoice] = useState(currentRep ?? "");
+  const [error, setError] = useState<string | null>(null);
+
+  function save() {
+    setError(null);
+    if (!choice) {
+      setError("เลือก CS ผู้ดูแล");
+      return;
+    }
+    start(async () => {
+      const res = await adminUpdateUserCsRep({ userid, adminID: choice });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setRep(choice);
+      setEditing(false);
+      router.refresh();
+    });
+  }
+
+  const repLabel = (() => {
+    const found = admins.find((a) => a.adminID === rep);
+    if (found) return `${found.nickname ? found.nickname + " · " : ""}${found.name} (${found.adminID})`;
+    return rep || "ยังไม่กำหนด";
+  })();
+
+  return (
+    <div className="rounded-xl border border-border bg-surface-alt/30 px-4 py-3 text-sm flex items-center justify-between gap-3 flex-wrap">
+      <div className="min-w-0">
+        <p className="text-[11px] text-muted">CS ผู้ดูแล (adminIDCS)</p>
+        {!editing ? (
+          <p className="font-medium truncate">{repLabel}</p>
+        ) : (
+          <div className="mt-1 flex items-center gap-2 flex-wrap">
+            <select
+              value={choice}
+              onChange={(e) => setChoice(e.target.value)}
+              disabled={pending}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm bg-white dark:bg-surface focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+            >
+              <option value="">— เลือก CS —</option>
+              {admins.map((a) => (
+                <option key={a.adminID} value={a.adminID}>
+                  {a.nickname ? `${a.nickname} · ` : ""}{a.name} ({a.adminID})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+        {editing && admins.length === 0 && (
+          <p className="text-xs text-amber-600 mt-1">ไม่พบ CS ที่ active ใน tb_admin</p>
         )}
       </div>
       {!editing ? (

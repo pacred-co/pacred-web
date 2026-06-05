@@ -182,6 +182,40 @@ export async function listSalesAdmins(): Promise<AdminActionResult<{ rows: Sales
 }
 
 // ────────────────────────────────────────────────────────────
+// CS reader — active CS admins for the CS-rep dropdown (FEATURE 1)
+// ────────────────────────────────────────────────────────────
+//
+// CS twin of listSalesAdmins. Same shape, but filters tb_admin on the
+// CS flag (adminStatusCS='1') instead of the sales flag (adminStatusSale).
+// Populates the in-profile "CS ผู้ดูแล" reassign dropdown. Writes to
+// tb_users.adminIDCS (migration 0141) via adminUpdateUserCsRep below.
+export async function listCsAdmins(): Promise<AdminActionResult<{ rows: SalesAdminOption[] }>> {
+  return withAdmin<{ rows: SalesAdminOption[] }>([...WRITE_ROLES], async () => {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("tb_admin")
+      .select("adminID, adminName, adminLastName, adminNickname, adminStatusCS")
+      .eq("adminStatusA", "1")
+      .eq("adminStatusCS", "1")
+      .order("adminNickname", { ascending: true })
+      .limit(500);
+    if (error) {
+      console.error(`[listCsAdmins tb_admin] failed`, { code: error.code, message: error.message });
+      return { ok: false, error: `db_error:${error.code ?? "unknown"}` };
+    }
+    type Raw = { adminID: string; adminName: string | null; adminLastName: string | null; adminNickname: string | null };
+    const rows: SalesAdminOption[] = ((data ?? []) as unknown as Raw[])
+      .filter((r) => !!r.adminID)
+      .map((r) => ({
+        adminID: r.adminID,
+        name: `${r.adminName ?? ""} ${r.adminLastName ?? ""}`.trim() || r.adminID,
+        nickname: r.adminNickname,
+      }));
+    return { ok: true, data: { rows } };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
 // Task 3 — inline edit note (tb_users.userNote)
 // ────────────────────────────────────────────────────────────
 const noteSchema = z.object({
@@ -292,6 +326,77 @@ export async function adminUpdateUserSaleRep(
 
     await logAdminAction(adminId, "tb_users.update_sale_rep", "tb_users", userid, {
       before: before.adminIDSale ?? null,
+      after: adminID,
+    });
+    revalidatePath(`/admin/customers/${userid}`);
+    return { ok: true };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// editCs (tb_users.adminIDCS) — FEATURE 1 · CS twin of editSale
+// ────────────────────────────────────────────────────────────
+//
+// CS twin of adminUpdateUserSaleRep: UPDATE tb_users SET adminIDCS=$adminID.
+// VALIDATEs the chosen adminID exists + is CS-active in tb_admin
+// (adminStatusA='1' AND adminStatusCS='1') before writing — prevents typo'd /
+// dead CS ids. Writes the legacy varchar tb_users.adminIDCS (migration 0141)
+// which resolveCsRep (lib/legacy/pcs-chrome.ts) reads to render the customer-
+// sidebar CS contact. Mirrors the sales reassign exactly (same ownership /
+// audit / revalidatePath shape).
+const csRepSchema = z.object({
+  userid: useridSchema,
+  adminID: z.string().trim().min(1, "เลือก CS").max(20),
+});
+
+export async function adminUpdateUserCsRep(
+  input: z.infer<typeof csRepSchema>,
+): Promise<AdminActionResult> {
+  const parsed = csRepSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const userid = parsed.data.userid.toUpperCase();
+  const adminID = parsed.data.adminID;
+
+  return withAdmin([...WRITE_ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    // Validate the target CS.
+    const { data: rep, error: repErr } = await admin
+      .from("tb_admin")
+      .select("adminID, adminStatusA, adminStatusCS")
+      .eq("adminID", adminID)
+      .maybeSingle<{ adminID: string; adminStatusA: string | null; adminStatusCS: string | null }>();
+    if (repErr) {
+      console.error(`[adminUpdateUserCsRep rep read] failed`, { adminID, code: repErr.code, message: repErr.message });
+      return { ok: false, error: repErr.message };
+    }
+    if (!rep) return { ok: false, error: "ไม่พบ CS ปลายทาง (adminID ไม่ตรงกับ tb_admin)" };
+    if (rep.adminStatusA !== "1") return { ok: false, error: "CS ปลายทางถูกปิดใช้งาน" };
+    if (rep.adminStatusCS !== "1") return { ok: false, error: "admin ปลายทางไม่ได้เปิดสิทธิ์ CS" };
+
+    const { data: before, error: beforeErr } = await admin
+      .from("tb_users")
+      .select("userID, adminIDCS")
+      .eq("userID", userid)
+      .maybeSingle<{ userID: string; adminIDCS: string | null }>();
+    if (beforeErr) {
+      console.error(`[adminUpdateUserCsRep customer read] failed`, { userid, code: beforeErr.code, message: beforeErr.message });
+      return { ok: false, error: beforeErr.message };
+    }
+    if (!before) return { ok: false, error: "ไม่พบลูกค้า" };
+    if (before.adminIDCS === adminID) return { ok: true }; // no-op
+
+    const { error } = await admin
+      .from("tb_users")
+      .update({ adminIDCS: adminID })
+      .eq("userID", userid);
+    if (error) {
+      console.error(`[adminUpdateUserCsRep update] failed`, { userid, code: error.code, message: error.message });
+      return { ok: false, error: error.message };
+    }
+
+    await logAdminAction(adminId, "tb_users.update_cs_rep", "tb_users", userid, {
+      before: before.adminIDCS ?? null,
       after: adminID,
     });
     revalidatePath(`/admin/customers/${userid}`);
