@@ -40,6 +40,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendNotification } from "@/lib/notifications";
+import { notifyStaffGroup } from "@/lib/notifications/staff-group";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
 // ────────────────────────────────────────────────────────────
@@ -113,9 +115,19 @@ export async function createDriverBatch(
     };
     const driverList = (driverCheck ?? []) as unknown as DriverRow[];
     const driverLower = driverMemberCode.toLowerCase();
+    // Capture the matched driver's profile_id + display name so we can LINE-push
+    // them after the batch is created (legacy `getTokenLineDriver` equivalent).
+    let driverProfileId: string | null = null;
+    let driverDisplayName = driverMemberCode;
     const driverFound = driverList.some((d) => {
       const prof = Array.isArray(d.profile) ? d.profile[0] : d.profile;
-      return prof?.member_code?.toLowerCase() === driverLower;
+      if (prof?.member_code?.toLowerCase() === driverLower) {
+        driverProfileId = d.profile_id;
+        const full = `${prof.first_name ?? ""} ${prof.last_name ?? ""}`.trim();
+        if (full) driverDisplayName = full;
+        return true;
+      }
+      return false;
     });
     if (!driverFound) {
       return { ok: false, error: `ไม่พบคนขับรหัส ${driverMemberCode}` };
@@ -126,7 +138,7 @@ export async function createDriverBatch(
     // create overlapping batches.
     const { data: fwdRows, error: fwdErr } = await admin
       .from("tb_forwarder")
-      .select("id, fstatus, paydeposit")
+      .select("id, fstatus, paydeposit, famount")
       .in("id", forwarderIds);
     if (fwdErr) {
       console.error("createDriverBatch: forwarder verify failed", fwdErr);
@@ -214,6 +226,84 @@ export async function createDriverBatch(
         end_time_hours: endTimeHours,
       },
     );
+
+    // ── LINE dispatch notify (legacy `forwarder-driver.php` L93-105).
+    //
+    // The legacy handler pinged TWO LINE targets the moment a batch was
+    // created: (1) a hardcoded ops/warehouse staff token, and (2) the
+    // assigned driver's personal token via `getTokenLineDriver($driverId)`.
+    // Both went through `sendLine2()` → the now-EOL LINE Notify API.
+    //
+    // Pacred equivalents on the live LINE Messaging API:
+    //   - DRIVER push → `sendNotification(driverProfileId, …)` which resolves
+    //     the driver's `profiles.line_user_id` (linked via /liff/link) and
+    //     pushes via `api.line.me/v2/bot/message/push` (falls back to email).
+    //     This is the modern stand-in for the per-driver `getTokenLineDriver`
+    //     token map — drivers link their own LINE once instead of us holding
+    //     a hardcoded token per driver.
+    //   - OPS/STAFF ping → `notifyStaffGroup(…)` (the staff LINE-OA group;
+    //     no-op until LINE_STAFF_GROUP_ID is set — same pluggable pattern as
+    //     every other staff ping in the system).
+    //
+    // BEST-EFFORT: this runs AFTER the batch + items are committed and the
+    // audit row is written, and is fire-and-forget (`void` + internal
+    // try/catch in both helpers) so a LINE outage can NEVER fail or roll
+    // back the dispatch the ops staff just created. Errors are logged inside
+    // the helpers; we additionally guard here against a synchronous throw.
+    try {
+      const boxTotal = (fwdRows ?? []).reduce((sum, r) => {
+        const n = Number((r as { famount: string | number | null }).famount);
+        return sum + (Number.isFinite(n) ? n : 0);
+      }, 0);
+      const deepLink = `/admin/drivers/${batchId}`;
+      const driverMsg =
+        `คุณ${driverDisplayName} มีรายการส่งของใหม่\n` +
+        `เลขที่รอบ ${batchId} (${fdName})\n` +
+        `จุดที่ต้องส่ง ${stopCount}\n` +
+        `จำนวนแทรคกิ้ง ${forwarderIds.length}\n` +
+        `จำนวนกล่อง ${boxTotal}\n` +
+        `ส่งก่อนเวลา ${endTime}`;
+
+      // Driver personal push (in-app + LINE OA + email fallback).
+      if (driverProfileId) {
+        void sendNotification(driverProfileId, {
+          category:       "forwarder",
+          severity:       "info",
+          title:          "รายการส่งของใหม่",
+          body:           driverMsg,
+          link_href:      deepLink,
+          reference_type: "forwarder",
+          reference_id:   String(batchId),
+        });
+      } else {
+        // Driver verified above but has no profile_id → cannot push.
+        // (Shouldn't happen — driverFound implies a matched admins row.)
+        console.error("createDriverBatch: no driverProfileId for LINE push", {
+          batchId,
+          driver: driverMemberCode,
+        });
+      }
+
+      // Ops/warehouse staff group ping (replaces the hardcoded staff token).
+      void notifyStaffGroup(
+        `🚚 มอบงานคนขับใหม่ — รอบ ${batchId}\n` +
+          `คนขับ : คุณ${driverDisplayName} (${driverMemberCode})\n` +
+          `ผู้สร้างรายการ : ${fdAdminCreator}\n` +
+          `จุดที่ต้องส่ง ${stopCount} · แทรคกิ้ง ${forwarderIds.length} · กล่อง ${boxTotal}\n` +
+          `ส่งก่อนเวลา ${endTime}`,
+        {
+          title:    `🚚 มอบงานคนขับ — รอบ ${batchId}`,
+          url:      deepLink,
+          urlLabel: "เปิดดูรอบจัดส่ง",
+        },
+      );
+    } catch (notifyErr) {
+      // Never let a notify failure break the (already-committed) batch create.
+      console.error("createDriverBatch: dispatch LINE notify threw", {
+        batchId,
+        error: notifyErr instanceof Error ? notifyErr.message : String(notifyErr),
+      });
+    }
 
     revalidatePath("/admin/drivers");
     revalidatePath("/admin/drivers/new");
