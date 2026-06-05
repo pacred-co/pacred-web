@@ -68,7 +68,7 @@ async function resolveLegacyAdminId(): Promise<string> {
   if (error) {
     console.error(`[customer-profile tb_admin] failed`, { code: error.code, message: error.message });
   }
-  return (data?.adminID ?? email).slice(0, 30);
+  return ((data?.adminID || email.split("@")[0] || "system")).slice(0, 20); // 2026-06-05 varchar(20)
 }
 
 const useridSchema = z.string().trim().min(1).max(20);

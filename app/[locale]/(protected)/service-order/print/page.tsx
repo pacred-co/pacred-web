@@ -545,14 +545,21 @@ export default async function ServiceOrderPrintPage({
             <thead>
               <tr className="">
                 <th colSpan={4} style={{ float: "left" }} className="text-left">
-                  {/* logo-header-12.png — legacy PCS asset placeholder
-                      (flagged for ปอน's PR brand swap). */}
+                  {/* 2026-06-05 (ภูม flag) — Pacred logo · company info (was
+                      legacy PCS logo-header-12.png + PCS company info). */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={`${THEME_BASE}/logo-header-12.png`}
-                    style={{ width: "100mm" }}
-                    alt=""
+                    src="/images/pacred-logo-red.png"
+                    style={{ width: "35mm", display: "block" }}
+                    alt="Pacred"
                   />
+                  <div style={{ fontSize: 14, lineHeight: 1.55, marginTop: 4, color: "#333" }}>
+                    <div style={{ fontSize: 16, fontWeight: 700 }}>บริษัท แพคเรด (ประเทศไทย) จำกัด</div>
+                    <div>28/40 หมู่บ้าน สิริ อเวนิว เพชรเกษม 81 ถนนมาเจริญ</div>
+                    <div>แขวงหนองแขม เขตหนองแขม กรุงเทพมหานคร 10160</div>
+                    <div>โทร 02-421-3325 · sales@pacred.co</div>
+                    <div>เลขประจำตัวผู้เสียภาษี : 0105564077716</div>
+                  </div>
                 </th>
                 <th
                   colSpan={3}
@@ -877,11 +884,10 @@ function ShopItemRows({ doc }: { doc: PrintDoc }) {
           <th colSpan={7} className="text-center p-1">
             <span>ขอบคุณที่เลือกใช้ Pacred</span>
             <br />
-            {/* stamp.png — legacy PCS asset placeholder
-                (flagged for ปอน's PR brand swap). */}
+            {/* 2026-06-05 (ภูม flag) — Pacred stamp (was legacy PCS stamp.png). */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={`${THEME_BASE}/stamp.png`}
+              src="/images/pacred-stamp.png"
               style={{ width: "35mm" }}
               alt=""
             />

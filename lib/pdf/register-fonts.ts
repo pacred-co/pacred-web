@@ -30,6 +30,20 @@ export function registerPdfFonts(): void {
     ],
   });
 
+  // 2026-06-05 (ภูม flag · PDF Chinese garbled) — Noto Sans SC for CJK glyphs.
+  // Sarabun doesn't include any CJK glyphs → Chinese product titles + shop
+  // names render as garbage Latin-1 bytes (e.g. "z À ÇaÉÇaQÛ"). Register
+  // separately + apply via `<Text style={{ fontFamily: "NotoSansSC" }}>` on
+  // fields known to contain Chinese (ctitle, cnameshop). Noto Sans SC subset
+  // OTF from googlefonts/noto-cjk (~8MB · covers all CJK Simplified glyphs
+  // commonly seen in Taobao/1688 listings + Latin/digits).
+  Font.register({
+    family: "NotoSansSC",
+    fonts: [
+      { src: path.join(fontsDir, "NotoSansSC-Regular.otf"), fontWeight: "normal" },
+    ],
+  });
+
   // Disable hyphenation — Thai doesn't use word boundaries the same way
   Font.registerHyphenationCallback((word) => [word]);
 

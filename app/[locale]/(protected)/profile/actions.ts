@@ -148,6 +148,43 @@ export async function updateProfileAction(
     return { sweetalert: "errorUpdate" };
   }
 
+  // 2026-06-05 (ภูม flag · dual-write fix · §0e) — DUAL-WRITE to REBUILT
+  // `profiles` so top-nav avatar dropdown (reads `profiles.first_name +
+  // last_name`) reflects the change. Mirror of updateProfileBasic's fix in
+  // the other direction. Without this: customer edits "dev dev"→"Test Poom"
+  // via the legacy modal, /profile page + /admin/customers update (read
+  // tb_users) but top-nav dropdown still shows "dev dev" → split-brain.
+  // Best-effort — tb_users already committed.
+  //
+  // 2026-06-05 (ภูม flag #2) — MAP Thai→English for `profiles.sex` because the
+  // table has CHECK constraint `sex in ('male','female','other')`. Without
+  // mapping, "ชาย"/"หญิง" → constraint violation → ENTIRE UPDATE rejected →
+  // even birthday + email + line_id ไม่ update. Map first; write second.
+  const sexEnglish =
+    userSex === "ชาย" ? "male" :
+    userSex === "หญิง" ? "female" :
+    userSex === "male" ? "male" :     // accept English passthrough too
+    userSex === "female" ? "female" :
+    null;
+  const { error: profilesErr } = await admin
+    .from("profiles")
+    .update({
+      first_name:   userName,
+      last_name:    userLastName,
+      email:        userEmail || null,
+      phone:        userTel,
+      sex:          sexEnglish,
+      birthday:     userBirthday || null,
+      line_id:      userLineID || null,
+      facebook_url: userFacebook || null,
+    })
+    .eq("id", data.user.id);
+  if (profilesErr) {
+    console.error(`[profile updateProfileAction] dual-write profiles failed (non-fatal)`, {
+      code: profilesErr.code, message: profilesErr.message, userId: data.user.id, sexInput: userSex, sexMapped: sexEnglish,
+    });
+  }
+
   // profile.php L53-57 — phone changed → drop the customer's OTP rows.
   // Pacred-port addition (runbook §9.7): the legacy stores the phone only
   // in tb_users, but Pacred auth is SPLIT — the sign-in phone lives in

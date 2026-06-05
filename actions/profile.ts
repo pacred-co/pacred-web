@@ -77,6 +77,54 @@ export async function updateProfileBasic(
 
   if (error) return { ok: false, error: error.message };
 
+  // 2026-06-05 (ภูม flag · dual-write fix · §0e) — DUAL-WRITE the same
+  // fields onto LEGACY `tb_users` so /admin/customers + /profile main card
+  // (which read tb_users) reflect the change. Mirrors ADR-0021 corporate
+  // dual-write pattern. Without this: customer edits "dev dev"→"Test Poom"
+  // here, top-nav dropdown shows new name (reads profiles) but admin grid +
+  // profile page card still show "dev dev" (read tb_users) → split-brain.
+  // Best-effort: log loud but DON'T fail the action (profiles write already
+  // committed). Resolve member_code via admin client (bypass RLS).
+  const admin = createAdminClient();
+  const { data: profileRow, error: memberErr } = await admin
+    .from("profiles")
+    .select("member_code")
+    .eq("id", user.id)
+    .maybeSingle<{ member_code: string | null }>();
+  if (memberErr) {
+    console.error(`[profile updateProfileBasic] member_code lookup failed — skipping tb_users mirror`, {
+      code: memberErr.code, message: memberErr.message, userId: user.id,
+    });
+  } else if (profileRow?.member_code) {
+    // 2026-06-05 (ภูม flag #2 · sex enum mismatch) — `tb_users.userSex` canonical
+    // = ภาษาไทย "ชาย"/"หญิง" (legacy SOT · 8898 migrated customers + customer
+    // EditProfileForm sends Thai). `profiles.sex` constraint = English enum
+    // (`male`/`female`/`other`). MAP English→Thai before writing tb_users so the
+    // legacy schema stays consistent.
+    const sexThai =
+      d.sex === "male" ? "ชาย" :
+      d.sex === "female" ? "หญิง" :
+      "";
+    const { error: tbErr } = await admin
+      .from("tb_users")
+      .update({
+        userName:     d.first_name,
+        userLastName: d.last_name,
+        userEmail:    d.email ?? "",
+        userTel:      d.phone,
+        userSex:      sexThai,
+        userBirthday: d.birthday ?? null,
+        userLineID:   d.line_id ?? "",
+        userFacebook: d.facebook_url ?? "",
+      })
+      .eq("userID", profileRow.member_code);
+    if (tbErr) {
+      console.error(`[profile updateProfileBasic] dual-write tb_users failed (non-fatal)`, {
+        code: tbErr.code, message: tbErr.message, memberCode: profileRow.member_code,
+      });
+    }
+  }
+
   revalidatePath("/profile");
   revalidatePath("/dashboard");
   return { ok: true };

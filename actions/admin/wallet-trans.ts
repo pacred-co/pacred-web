@@ -76,8 +76,13 @@ async function resolveLegacyAdminId(): Promise<string> {
   if (error) {
     console.error(`[tb_admin list] failed`, { code: error.code, message: error.message });
   }
-  if (data?.adminID) return data.adminID;
-  return email.slice(0, 30);
+  if (data?.adminID) return data.adminID.slice(0, 20);
+  // 2026-06-05 (ภูม flag · varchar overflow) — fallback was email.slice(0, 30)
+  // which overflows tb_wallet_hs.adminid/adminidupdate (varchar(20)). Use
+  // the username part of the email (truncated to 20) so logged-in admin
+  // is still attributable, then fall back to "system".
+  const localPart = email.split("@")[0] ?? "";
+  return (localPart || "system").slice(0, 20);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -100,13 +105,21 @@ export async function adminUpdateWalletHsDateSlip(
   const { id, dateslip } = parsed.data;
 
   // Parse the wall-clock datetime string from the form. Treat as local time
-  // (legacy stored "YYYY-MM-DD HH:mm" as a wall clock); ISO-encode to
-  // preserve the entered moment.
+  // (legacy stored "YYYY-MM-DD HH:mm:ss" as a wall clock).
+  //
+  // 2026-06-05 (ภูม flag) — toISOString() returns "2026-06-05T14:33:00.000Z"
+  // (24 chars) which overflows tb_wallet_hs.dateslip varchar(20). Format
+  // instead as MySQL DATETIME "YYYY-MM-DD HH:MM:SS" (19 chars) which is
+  // what the legacy PHP wrote · also preserves the wall-clock semantics
+  // (no UTC shift) the legacy mysqli relied on.
   const dt = new Date(dateslip);
   if (Number.isNaN(dt.getTime())) {
     return { ok: false, error: "วันที่ไม่ถูกต้อง" };
   }
-  const dateslipIso = dt.toISOString();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const dateslipIso =
+    `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())} ` +
+    `${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}`;
 
   return withAdmin<{ id: number; dateslip: string }>(
     ["accounting"],

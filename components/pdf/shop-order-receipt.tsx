@@ -16,6 +16,19 @@ import { readThaiBaht } from "@/lib/utils/thai-number";
 import { CONTACT, ADDRESSES, BANK } from "@/components/seo/site";
 import type { ShopOrderReceiptData } from "@/actions/service-order";
 
+// 2026-06-05 (ภูม flag) — detect CJK chars in a string. When present,
+// render with NotoSansSC font (registered in lib/pdf/register-fonts.ts);
+// otherwise Sarabun. Mixed Thai+Chinese strings get NotoSansSC too (its
+// Latin glyphs are fine · Thai chars will fall back to Sarabun-like glyphs
+// via the PDF reader's substitution — acceptable for product names).
+function hasChinese(s: string | null | undefined): boolean {
+  if (!s) return false;
+  // CJK Unified Ideographs · CJK Compatibility · Halfwidth/Fullwidth · Hiragana/Katakana
+  return /[　-〿぀-ゟ゠-ヿ㐀-䶿一-鿿豈-﫿＀-￯]/.test(s);
+}
+
+const cnFont = { fontFamily: "NotoSansSC" } as const;
+
 const PROVIDER_LABEL: Record<string, string> = {
   "1688":  "1688",
   taobao:  "Taobao",
@@ -157,7 +170,13 @@ export function ShopOrderReceipt({ data }: { data: ShopOrderReceiptData }) {
           </View>
         </View>
 
-        {/* Items grouped by provider → shop */}
+        {/* Items grouped by provider → shop
+            2026-06-05 (ภูม flag) — Image column REMOVED · marketplace CDN
+            blocks the image fetch in some cases (and pre-fetched data URIs
+            still don't render reliably across all rows) · ภูม "ตัดรูปออก
+            ไปเลย เพราะมันเกินมา 2 หน้า". กลับมา layout เดิม (no รูป) ·
+            CJK font ยังคงอยู่ให้ชื่อจีนอ่านได้. Image column จะกลับมาตอน
+            re-port ใหม่เป็น HTML print template (legacy admin form). */}
         <View style={styles.table}>
           <View style={styles.tableHead}>
             <Text style={[styles.tableHeadCell, { flex: 0.5,  textAlign: "center" }]}>#</Text>
@@ -190,16 +209,22 @@ export function ShopOrderReceipt({ data }: { data: ShopOrderReceiptData }) {
               );
 
               pg.shops.forEach((sg, si) => {
-                const shopLines: string[] = [`ร้าน: ${sg.shop_name}`];
+                // 2026-06-05 (ภูม flag) — split shop label so the Chinese shop
+                // name renders with NotoSansSC while the Thai label uses Sarabun.
                 const shippingNos = sg.items
                   .map((it) => it.shipping_number)
                   .filter((s): s is string => !!s);
-                if (shippingNos.length > 0) {
-                  shopLines.push(`เลขออเดอร์ร้านจีน: ${[...new Set(shippingNos)].join(", ")}`);
-                }
+                const shopNameIsCn = hasChinese(sg.shop_name);
+                const shippingLine = shippingNos.length > 0
+                  ? `  ·  เลขออเดอร์ร้านจีน: ${[...new Set(shippingNos)].join(", ")}`
+                  : "";
                 rendered.push(
                   <View key={`p-${pi}-s-${si}`} style={[styles.tableRow, { backgroundColor: "#eff9ff" }]}>
-                    <Text style={[styles.tableCell, { flex: 1 }]}>{shopLines.join("  ·  ")}</Text>
+                    <Text style={[styles.tableCell, { flex: 1 }]}>
+                      <Text>ร้าน: </Text>
+                      <Text style={shopNameIsCn ? cnFont : {}}>{sg.shop_name}</Text>
+                      {shippingLine ? <Text>{shippingLine}</Text> : null}
+                    </Text>
                   </View>,
                 );
 
@@ -210,13 +235,14 @@ export function ShopOrderReceipt({ data }: { data: ShopOrderReceiptData }) {
                   const lineTotalThb  = (lineSubCny + lineShipCny) * rate;
                   const detail        = [it.color, it.size].filter(Boolean).join(" / ");
                   const stripe        = runningNo % 2 === 0 ? { backgroundColor: COLORS.surfaceAlt } : {};
+                  const titleIsCn     = hasChinese(it.title);
 
                   rendered.push(
                     <View key={`p-${pi}-s-${si}-i-${ii}`} style={[styles.tableRow, stripe]}>
                       <Text style={[styles.tableCell, { flex: 0.5, textAlign: "center" }]}>
                         {runningNo}
                       </Text>
-                      <Text style={[styles.tableCell, { flex: 4 }]}>
+                      <Text style={[styles.tableCell, { flex: 4 }, titleIsCn ? cnFont : {}]}>
                         {it.title ?? "—"}
                         {detail ? `\n${detail}` : ""}
                         {it.tracking_number ? `\ntrack: ${it.tracking_number}` : ""}
@@ -266,7 +292,7 @@ export function ShopOrderReceipt({ data }: { data: ShopOrderReceiptData }) {
 
         {/* Bank-transfer payment info (BANK constant — wired from site.ts after T-G3 Bundle 1) */}
         {!isPaid && (
-          <View style={styles.bankBlock}>
+          <View style={styles.bankBlock} wrap={false}>
             <Text style={styles.bankTitle}>ช่องทางการชำระเงิน · โอนผ่านธนาคาร</Text>
             <View style={styles.bankRow}>
               <Text style={styles.bankLabel}>ธนาคาร</Text>
@@ -290,8 +316,10 @@ export function ShopOrderReceipt({ data }: { data: ShopOrderReceiptData }) {
           </View>
         )}
 
-        {/* Signature lines */}
-        <View style={styles.signature}>
+        {/* Signature lines — wrap={false} so the two boxes always stay
+            together (else they wrap mid-block onto page 2 with a blank
+            page above · ภูม flag 2026-06-05). */}
+        <View style={styles.signature} wrap={false}>
           <View style={styles.signatureBox}>
             <View style={styles.signatureLine}>
               <Text style={styles.signatureLabel}>

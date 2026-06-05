@@ -110,13 +110,22 @@ export type IdentityValues = {
   userLastName: string;
   userEmail: string;
   userTel: string;
-  userSex: string;        // "male" | "female" | ""
+  userSex: string;        // 2026-06-05 (ภูม flag #2) canonical = ภาษาไทย "ชาย"/"หญิง"/"" (legacy SOT)
   userBirthday: string;   // YYYY-MM-DD | ""
   userLineID: string;
   userFacebook: string;
   adminIDSale: string;
   coID: string;
 };
+
+// 2026-06-05 (ภูม flag #2) — sex display helper. tb_users.userSex canonical =
+// ภาษาไทย "ชาย"/"หญิง" (legacy + customer EditProfileForm). Accept English
+// fallback for legacy data that might've been written via the rebuilt path.
+function sexDisplay(s: string): string {
+  if (s === "ชาย" || s === "male") return "ชาย";
+  if (s === "หญิง" || s === "female") return "หญิง";
+  return "—";
+}
 
 export function IdentityEditor({
   userid,
@@ -150,7 +159,9 @@ export function IdentityEditor({
         userLastName: v.userLastName.trim(),
         userEmail:    v.userEmail.trim(),
         userTel:      v.userTel.trim(),
-        userSex:      (v.userSex as "male" | "female" | ""),
+        // 2026-06-05 (ภูม flag #2) — schema preprocess accepts both English +
+        // Thai input + normalizes to Thai. Pass through as-is (form sends Thai).
+        userSex:      v.userSex,
         userBirthday: v.userBirthday.trim(),
         userLineID:   v.userLineID.trim(),
         userFacebook: v.userFacebook.trim(),
@@ -188,7 +199,7 @@ export function IdentityEditor({
             <IdField label="นามสกุล" value={initial.userLastName || "—"} />
             <IdField label="อีเมล" value={initial.userEmail || "—"} />
             <IdField label="โทรศัพท์" value={initial.userTel || "—"} />
-            <IdField label="เพศ" value={initial.userSex === "male" ? "ชาย" : initial.userSex === "female" ? "หญิง" : "—"} />
+            <IdField label="เพศ" value={sexDisplay(initial.userSex)} />
             <IdField label="วันเกิด" value={initial.userBirthday || "—"} />
             <IdField label="LINE ID" value={initial.userLineID || "—"} />
             <IdField label="Facebook" value={initial.userFacebook || "—"} />
@@ -200,10 +211,13 @@ export function IdentityEditor({
             <Labeled label="อีเมล"><input className={inputCls} value={v.userEmail} onChange={(e) => set("userEmail", e.target.value)} type="email" maxLength={100} placeholder="(เว้นว่างได้)" /></Labeled>
             <Labeled label="โทรศัพท์ *"><input className={inputCls} value={v.userTel} onChange={(e) => set("userTel", e.target.value.replace(/\D/g, "").slice(0, 10))} inputMode="numeric" placeholder="0812345678" /></Labeled>
             <Labeled label="เพศ">
+              {/* 2026-06-05 (ภูม flag #2) — value = ภาษาไทย ตรงกับ tb_users
+                  canonical · ฟอร์มลูกค้า EditProfileForm ก็ส่ง Thai · ห้ามใช้
+                  English ที่นี่อีก (กัน split-brain). */}
               <select className={inputCls} value={v.userSex} onChange={(e) => set("userSex", e.target.value)}>
                 <option value="">— ไม่ระบุ —</option>
-                <option value="male">ชาย</option>
-                <option value="female">หญิง</option>
+                <option value="ชาย">ชาย</option>
+                <option value="หญิง">หญิง</option>
               </select>
             </Labeled>
             <Labeled label="วันเกิด"><input className={inputCls} value={v.userBirthday} onChange={(e) => set("userBirthday", e.target.value)} type="date" /></Labeled>

@@ -100,7 +100,7 @@ async function resolveLegacyAdminId(): Promise<string> {
   if (data?.adminID) return data.adminID;
 
   // Fall back to a 30-char email slice so the NOT NULL never trips.
-  return email.slice(0, 30);
+  return (email.split("@")[0] || "system").slice(0, 20); // 2026-06-05 varchar(20)
 }
 
 // ────────────────────────────────────────────────────────────

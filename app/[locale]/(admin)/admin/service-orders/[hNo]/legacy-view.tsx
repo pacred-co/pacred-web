@@ -411,28 +411,14 @@ export async function renderLegacyServiceOrderView(hno: string) {
       </div>
 
       {/* ── Items — READ-ONLY on detail (to edit prices/qty, advance status,
-          spawn, refund, or settle from wallet → click "แก้ไข/อัปเดต") ── */}
+          spawn, refund, or settle from wallet → click "แก้ไข/อัปเดต" สีแดง
+          มุมขวาบนของหน้า · top-of-page CTA cover นี้แล้ว) ── */}
       <ItemSummary items={editorItems} completed={status === "5"} />
 
-      {/* ── Edit-page CTA — repeated near the items as a discoverability nudge.
-          Staff used to "ราคา แก้ตรงไหน" — now the next click is right here. ── */}
-      <div className="rounded-2xl border border-dashed border-primary-200 bg-primary-50/40 px-4 py-3 sm:px-5 sm:py-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm text-primary-700">
-            <p className="font-semibold">ต้องการแก้ราคา / จำนวน / สั่งสินค้า / ปั่นเข้าฝากนำเข้า / คืนเงิน?</p>
-            <p className="text-xs text-primary-600/80">
-              ทุกการเปลี่ยนแปลงตารางสินค้า + ฟังก์ชั่นอัปเดตสถานะ ทำในหน้าแก้ไข
-            </p>
-          </div>
-          <Link
-            href={editHref}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-primary-500 bg-primary-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-600"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-            ไปหน้าแก้ไข / อัปเดต
-          </Link>
-        </div>
-      </div>
+      {/* 2026-06-05 (ภูม flag) — amber signpost "ไปหน้าแก้ไข/อัปเดต" ลบออก
+          เพราะซ้ำกับปุ่ม "แก้ไข/อัปเดต" สีแดงมุมขวาบน (เด่นกว่าอยู่แล้ว ·
+          ไปที่ editHref เดียวกัน). หน้านี้ = read-only display · footer ต่อด้วย
+          note + bill-to + danger zone อย่างเดียว */}
 
       {/* ── footer: note + bill-to + danger zone ── */}
       <div className="grid gap-5 lg:grid-cols-2">

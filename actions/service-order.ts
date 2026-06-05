@@ -386,6 +386,11 @@ export type ShopOrderReceiptData = {
     domestic_china_cny:  number;          // per-item china domestic shipping (CNY)
     shipping_number:     string | null;   // เลขออเดอร์ร้านจีน
     tracking_number:     string | null;
+    // 2026-06-05 (ภูม flag) — product thumbnail URL · used in PDF receipt to
+    // give customer a visual reference (Chinese titles ลูกค้าอ่านไม่ออก).
+    // Full http(s) URL (marketplace CDN) or bare legacy filename (skipped
+    // in PDF for now · would need resolveLegacyUrl signing).
+    image_path:          string | null;
   }>;
 };
 
@@ -599,6 +604,7 @@ export async function getServiceOrderForReceipt(
         domestic_china_cny: Number(it.cshippingchn ?? 0),
         shipping_number:    it.cshippingnumber && it.cshippingnumber.trim() ? it.cshippingnumber : null,
         tracking_number:    it.ctrackingnumber && it.ctrackingnumber.trim() ? it.ctrackingnumber : null,
+        image_path:         it.cimages && it.cimages.trim() ? it.cimages : null,
       })),
     },
   };
@@ -1013,7 +1019,13 @@ export async function payServiceOrderFromWallet(
     return { ok: false, error: `db_error:${walletReadErr.code ?? "unknown"}` };
   }
   const currentBalance = Number(walletBefore?.wallettotal ?? 0);
-  if (!(currentBalance >= walletNeededPrecheck)) {
+  // 2026-06-05 (ภูม flag) — rounding tolerance 0.01 (1 สตางค์) · gate denies
+  // pay only when shortfall is BIGGER than 1 satang. Without this, a 176.53
+  // wallet can't pay a 176.54 total even though it's the same money modulo
+  // round_up vs round_half-up. Mirrors the client guard in pay-from-wallet-
+  // button.tsx so the UI ↔ server agree.
+  const ROUNDING_TOLERANCE_THB = 0.01;
+  if (!(currentBalance + ROUNDING_TOLERANCE_THB >= walletNeededPrecheck)) {
     return {
       ok: false,
       error: `wallet_insufficient — มี ฿${currentBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ต้อง ฿${walletNeededPrecheck.toLocaleString("th-TH", { minimumFractionDigits: 2 })} เติมเงินก่อนชำระ`,

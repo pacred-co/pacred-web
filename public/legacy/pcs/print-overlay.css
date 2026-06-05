@@ -27,6 +27,20 @@
    Uses flex centering + overflow:hidden so the scaled A4 sheet sits
    centered in the viewport with NO scroll bar — the user sees the
    whole receipt at once. */
+/* 2026-06-05 (ภูม flag) — Bootstrap-color fallbacks scoped to the overlay.
+   Customer print page inherits these from (protected)/layout.tsx's Bootstrap
+   bundle. Admin print page doesn't load Bootstrap → "เลขออเดอร์ร้านจีน"
+   `.text-danger` rendered black on admin instead of red. Define the
+   handful of Bootstrap color utilities the print template actually uses
+   so BOTH sides render identically. */
+.print-fullscreen-overlay .text-danger    { color: #dc3545 !important; }
+.print-fullscreen-overlay .text-primary   { color: #007bff !important; }
+.print-fullscreen-overlay .text-success   { color: #28a745 !important; }
+.print-fullscreen-overlay .text-warning   { color: #ffc107 !important; }
+.print-fullscreen-overlay .text-info      { color: #17a2b8 !important; }
+.print-fullscreen-overlay .text-muted     { color: #6c757d !important; }
+.print-fullscreen-overlay .text-secondary { color: #6c757d !important; }
+
 .print-fullscreen-overlay {
   position: fixed !important;
   inset: 0 !important;
@@ -201,11 +215,26 @@
   html, body {
     background: #fff !important;
   }
-  body > *:not(.print-fullscreen-overlay) {
-    display: none !important;
+  /* 2026-06-05 (ภูม flag) — admin print page nests the overlay under
+     AdminLayout's <div class="min-h-screen flex"> wrapper. The old
+     `body > *:not(.print-fullscreen-overlay)` rule hid the flex wrapper
+     too → overlay (its descendant) disappeared → blank print. Switch to
+     visibility-based hide so the overlay subtree stays visible regardless
+     of nesting depth, then re-anchor the overlay to the viewport. */
+  body * {
+    visibility: hidden !important;
   }
+  .print-fullscreen-overlay,
+  .print-fullscreen-overlay * {
+    visibility: visible !important;
+  }
+  /* Re-position the overlay to top-left of paper so the printed content
+     starts at the page edge (not wherever its flex wrapper was). */
   .print-fullscreen-overlay {
-    position: static !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
     /* padding is set below to 10mm — survives Chrome's "Margins: None"
        in the print dialog. DON'T zero it here. */
     background: #fff !important;
@@ -229,8 +258,9 @@
     overflow: visible !important;
     /* No transform on print — real A4 paper. */
     transform: none !important;
-    /* Shrink the legacy 20px base font slightly on print to fit one page. */
-    font-size: 14px !important;
+    /* 2026-06-05 (ภูม flag) — base font bumped 14→16px · ภูม "ตัวอักษรยัง
+       ดูเล็กไปหน่อยนึง". h-title at 1.9em scales · h-sub literal 20px stays. */
+    font-size: 16px !important;
     /* Top-anchored — owner directive (2026-05-21): content sticks
        to the top of the A4 page; horizontal centering (below) handles
        left/right; DON'T vertical-center (was wrong on 2026-05-21 night). */
