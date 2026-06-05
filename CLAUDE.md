@@ -3,6 +3,17 @@
 
 ---
 
+# 🧾 2026-06-05 PM-2 — เดฟ: 4-task batch (ต้นทุนตู้ public-CSV · migrations 0141/0142/0143 · /refunds §0e repoint) · read FIRST
+
+**main = `dave-pacred` = `f186005f` · all pushed · `pnpm verify` EXIT 0 + `pnpm build` EXIT 0 (REAL exit codes) · Vercel auto-deploys main · prod migrations 0141·0142·0143 APPLIED+verified.** Owner 4-task batch — all done:
+1. **🚚 ต้นทุนตู้ ไอแต้ม Sheet → auto-sync INVISIBLE (`92677f2d`):** discovered the sheet is **public-CSV-readable** → `readSheetPublicCsv()` (docs.google export `?format=csv&gid=`, no auth, **adds no viewer = ไอแต้มไม่รู้ตัว**) is now the PRIMARY path in `container-cost-sheet-adapter` (service-account = fallback only). **Killed the ก๊อต `GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON` blocker entirely** (= task 4 "งานก๊อตทำมาเลย"). Verified end-to-end: cron populated prod cache **452 parcels / ฿326,969.47** (exact match).
+2. **🗄 migrations 0141 + 0142 → prod (เอาขึ้นเลย):** `0141_customer_cs_assignment` (tb_users.adminIDCS + tb_admin.adminStatusCS) + `0142_container_cost_sheet_cache`. Both applied + verified (direct host · pooler tenant-fail expected).
+3. **💸 /refunds §0e repoint (customer money · เลนผม · `f186005f`):** the refund money path wrote/read the **rebuilt 0-row twins** (wallet_transactions/forwarders/service_orders/yuan_payments) = reachable dead-write trap (admin mark-paid → green toast → **real wallet never moved**; customer source-picker showed 0 orders). Repointed end-to-end → live `tb_*`: credit = **tb_wallet_hs type='5' status='2' + tb_wallet.wallettotal++** (mirrors deposit-approve EXACTLY · compensate on flip-fail) · ceiling = Σ settled tb_wallet_hs DEBITS (fwd type4/reforder=id · order type2/reforder=hno · yuan type6/reforder=payment.id) · identity = profiles.member_code ← refund_requests.profile_id · customer picker+verify read tb_* via admin client. **Migration 0143** (APPLIED prod · additive/safe) = `refund_requests.paid_wallet_hs_id` bigint + widened paid CHECK (either linkage). **🔴 OWNER MUST verify a TEST refund** (admin create→approve→mark-paid → customer tb_wallet_hs type-5 + wallettotal++) before relying — ผมไม่ได้ click-test prod (mutates real money). **No customer comms touched** (mark-paid = ledger + audit only).
+
+**🔴 STILL PENDING (carryover):** Lane A 16-col diff browser-test บนตู้ TEST · migration 0142 already applied (was carryover, now done) · Vercel env (TAMIT-2026 · Sentry · FB · 3 missing admins) · Lane D LINE env + คนขับ-link · ภูม interpreter-badge · accounting ใบขน VAT. **⚠️ CLAUDE.md > 2000 lines → archive old sections (§12).**
+
+---
+
 # 🔱 2026-06-05 PM — เดฟ: team-merge + 4-lane parallel build (ต้นทุนตู้ Sheet-sync · นิติ WHT · ค่าเทียบ/เครดิต/VIP · driver P1) · read FIRST
 
 **main = `dave-pacred` = `2afa6496` · all pushed · `next build` EXIT 0 (REAL exit · `rm -rf .next` ก่อน · direct `node next build`) + `pnpm test:unit` 134/0 + `pnpm lint` 0-errors · clean tree.** Owner: *"แยกร่างแบ่งทำเลย แก้ให้จบจะส่งงานแล้ว เอาของน้องๆทุกคนมารวมอัพเดทก่อนรัน"* → (1) **integrate teammates FIRST** (`0a40e9af`): merged origin/Poom-pacred (17 · PDF CJK-font ใบแจ้งหนี้ · profile dual-write · cart-URL normalize · wallet 0.01 rounding · resolveLegacyAdminId varchar(20) overflow · MOMO history) + origin/InwPond007 (1 · LCL redesign) — **clean ทั้งคู่**. (2) **4 worktree agents ขนาน → รวม-serial + review money ด้วยมือ + build-รวม-ครั้งเดียว + push** (proven flat-Agent+worktree pattern · ไม่มี conflict ทั้ง 4):
