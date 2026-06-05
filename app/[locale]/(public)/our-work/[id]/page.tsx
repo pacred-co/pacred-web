@@ -63,7 +63,7 @@ export async function generateMetadata({
 
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const content = getReviewContent(review, typedLocale);
-  const canonical = `${typedLocale === "th" ? "" : `/${typedLocale}`}/reviews/${id}`;
+  const canonical = `${typedLocale === "th" ? "" : `/${typedLocale}`}/our-work/${id}`;
   const imageUrl = review.image ? `${SITE_URL}${review.image}` : undefined;
 
   return {
@@ -75,9 +75,9 @@ export async function generateMetadata({
     alternates: {
       canonical,
       languages: {
-        "th-TH": `/reviews/${id}`,
-        "en-US": `/en/reviews/${id}`,
-        "x-default": `/reviews/${id}`,
+        "th-TH": `/our-work/${id}`,
+        "en-US": `/en/our-work/${id}`,
+        "x-default": `/our-work/${id}`,
       },
     },
     openGraph: {
@@ -156,8 +156,8 @@ export default async function ReviewLandingPage({
           breadcrumbSchema(
             [
               { name: ui.home, path: "/" },
-              { name: ui.reviews, path: "/reviews" },
-              { name: serviceTitle, path: `/reviews/${id}` },
+              { name: ui.reviews, path: "/our-work" },
+              { name: serviceTitle, path: `/our-work/${id}` },
             ],
             typedLocale,
           ),
@@ -174,7 +174,7 @@ export default async function ReviewLandingPage({
                 {ui.home}
               </Link>
               <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-              <Link href="/reviews" className="hover:text-primary-600 transition-colors font-bold">
+              <Link href="/our-work" className="hover:text-primary-600 transition-colors font-bold">
                 {ui.reviews}
               </Link>
               <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
@@ -378,7 +378,7 @@ export default async function ReviewLandingPage({
                     </h2>
                   </div>
                   <Link
-                    href="/reviews"
+                    href="/our-work"
                     className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full bg-white dark:bg-surface text-[#111827] dark:text-white border border-border text-[12px] font-black hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all duration-300"
                   >
                     {ui.viewAll}
@@ -390,7 +390,7 @@ export default async function ReviewLandingPage({
                   {related.map((r) => (
                     <Link
                       key={r.id}
-                      href={`/reviews/${r.id}`}
+                      href={`/our-work/${r.id}`}
                       className="group relative flex flex-col bg-white dark:bg-surface rounded-xl md:rounded-2xl border border-border overflow-hidden shadow-[0_4px_14px_rgba(15,23,42,0.05)] hover:shadow-[0_16px_32px_rgba(179,0,0,0.10)] hover:border-primary-200 dark:hover:border-primary-900 hover:-translate-y-1 transition-all duration-300"
                     >
                       <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-gray-200 via-gray-400 to-gray-700 dark:from-surface-alt dark:via-surface dark:to-background">
@@ -435,7 +435,7 @@ export default async function ReviewLandingPage({
               {/* Back to listing */}
               <div className="mx-auto mt-10 md:mt-12 w-full max-w-[1080px]">
                 <Link
-                  href="/reviews"
+                  href="/our-work"
                   className="inline-flex items-center gap-1.5 text-[12.5px] md:text-[14px] font-black text-primary-600 hover:text-primary-700 transition-colors"
                 >
                   <ArrowLeft className="w-4 h-4" strokeWidth={2.6} />

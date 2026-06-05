@@ -8,9 +8,12 @@ import type { TabMode } from "@/types/booking";
 interface BookingTabsProps {
   active: TabMode | null;
   onChange: (mode: TabMode) => void;
+  /** Restrict which tabs render (in order). Import-only pages pass
+   *  e.g. ["sea","truck","air","customs"] to hide ฝากสั่งซื้อ + ฝากโอน. */
+  only?: TabMode[];
 }
 
-export function BookingTabs({ active, onChange }: BookingTabsProps) {
+export function BookingTabs({ active, onChange, only }: BookingTabsProps) {
   const t = useTranslations("bookingCalc");
   const scrollerRef = useRef<HTMLDivElement>(null);
 
@@ -46,7 +49,7 @@ export function BookingTabs({ active, onChange }: BookingTabsProps) {
     return () => observer.disconnect();
   }, []);
 
-  const tabs: { mode: TabMode; emoji: string; label: string; sub: string }[] = [
+  const allTabs: { mode: TabMode; emoji: string; label: string; sub: string }[] = [
     { mode: "sea",      emoji: "🚢", label: t("tabSeaTitle"),      sub: t("tabSeaSub") },
     { mode: "truck",    emoji: "🚛", label: t("tabTruckTitle"),    sub: t("tabTruckSub") },
     { mode: "air",      emoji: "✈️", label: t("tabAirTitle"),      sub: t("tabAirSub") },
@@ -54,6 +57,10 @@ export function BookingTabs({ active, onChange }: BookingTabsProps) {
     { mode: "sourcing", emoji: "🛒", label: t("tabSourcingTitle"), sub: t("tabSourcingSub") },
     { mode: "remit",    emoji: "🏦", label: t("tabRemitTitle"),    sub: t("tabRemitSub") },
   ];
+  // Optional allow-list (preserves the `only` array's order).
+  const tabs = only
+    ? only.map((m) => allTabs.find((tab) => tab.mode === m)).filter((tab): tab is (typeof allTabs)[number] => Boolean(tab))
+    : allTabs;
 
   // Scroll the active tab into view (so users see it even after layout switch)
   useEffect(() => {

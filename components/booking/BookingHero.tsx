@@ -8,6 +8,17 @@ import type { TabMode, SeaMode } from "@/types/booking";
 interface BookingHeroProps {
   activeTab: TabMode | null;
   seaMode: SeaMode;
+  /** Force the default (main/home) banner + content regardless of the active tab.
+   *  Used by import-china-lcl to show the standard site banner instead of the
+   *  per-tab one. */
+  forceDefault?: boolean;
+  /** Page-specific headline shown over the (default) banner — overrides the
+   *  i18n hero content. e.g. import-china-lcl: "นำเข้าสินค้าจากจีน" + "LCL แชร์ตู้". */
+  customTitle?: string;
+  customHighlight?: string;
+  /** Page-specific banner image overrides (used with the custom-title variant). */
+  customBgMobile?: string;
+  customBgDesktop?: string;
 }
 
 // Per-tab background overrides — mobile/desktop pair for landing pages that
@@ -24,7 +35,7 @@ const BG_OVERRIDES_DESKTOP: Record<string, string> = {
   fcl:     "/images/bannerdesktop/bannershipdesktop01.png",
 };
 
-export function BookingHero({ activeTab, seaMode }: BookingHeroProps) {
+export function BookingHero({ activeTab, seaMode, forceDefault = false, customTitle, customHighlight, customBgMobile, customBgDesktop }: BookingHeroProps) {
   const t = useTranslations("bookingCalc.hero");
   // Raw messages for the sub-line emptiness guard below. A plain t(subKey) on a
   // message containing rich tags (<hl>/<em>, e.g. customsSub) throws
@@ -35,7 +46,7 @@ export function BookingHero({ activeTab, seaMode }: BookingHeroProps) {
     bookingCalc?: { hero?: Record<string, string> };
   };
 
-  const isDefault = activeTab === null;
+  const isDefault = forceDefault || activeTab === null;
 
   const imgKey = isDefault
     ? "default"
@@ -68,6 +79,25 @@ export function BookingHero({ activeTab, seaMode }: BookingHeroProps) {
   const contentCls  = isDefault
     ? "relative z-10 w-full max-w-[1000px] mx-auto text-center text-white"
     : "relative z-10 max-w-[1000px] mx-auto text-center text-white";
+
+  // Custom headline variant — default banner image + a page-specific title
+  // (overrides the i18n hero text). Used by import-china-lcl.
+  if (customTitle) {
+    return (
+      <div className="relative overflow-hidden aspect-[768/340] md:aspect-auto md:h-[400px] flex flex-col items-center justify-center px-3 md:px-7 pb-[64px] md:pb-[180px] rounded-b-2xl md:rounded-b-3xl">
+        <div aria-hidden className="md:hidden absolute inset-0" style={{ background: `url('${customBgMobile ?? bgMobile}') center/cover no-repeat` }} />
+        <div aria-hidden className="hidden md:block absolute inset-0" style={{ background: `url('${customBgDesktop ?? bgDesktop}') center/cover no-repeat` }} />
+        <div className="relative z-10 w-full max-w-[1000px] mx-auto text-center text-white">
+          <h1 className="relative -top-8 md:-top-10 text-[clamp(26px,7.3vw,28px)] md:text-[clamp(34px,4.2vw,56px)] font-black tracking-tight leading-[1.1] md:leading-[1.1] text-white [-webkit-text-stroke:1px_#7f1d1d] sm:[-webkit-text-stroke:2px_#7f1d1d] md:[-webkit-text-stroke:8px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_3px_8px_rgba(0,0,0,0.85),0_6px_18px_rgba(0,0,0,0.6)]">
+            {customTitle}
+            {customHighlight && (
+              <> <span className="text-yellow-300 whitespace-nowrap">{customHighlight}</span></>
+            )}
+          </h1>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`relative overflow-hidden aspect-[768/340] md:aspect-auto md:h-[400px] flex flex-col ${outerAlign} justify-center ${outerPad} ${mobilePb} ${desktopPb} rounded-b-2xl md:rounded-b-3xl`}>

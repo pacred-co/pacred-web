@@ -191,7 +191,7 @@ export const LINE_OA = {
 export const STAFF = {
   sales: [
     { name: "พี",       phone: "061-779-9299", phoneIntl: "+66617799299" },
-    { name: "เรด้าห์",   phone: "099-253-1415", phoneIntl: "+66992531415" },
+    { name: "เตย",       phone: "099-253-1415", phoneIntl: "+66992531415" },
     { name: "เมย์",      phone: "066-125-3006", phoneIntl: "+66661253006" },
     { name: "แนท",      phone: "066-131-0253", phoneIntl: "+66661310253" },
   ],

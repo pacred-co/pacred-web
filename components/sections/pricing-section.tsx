@@ -19,6 +19,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
+import { WarehouseRateGroup, RouteImportGroup } from "@/components/sections/lcl-price-cards";
 
 const LINE_URL = "/line";
 const HOTLINE = "062-603-0456";
@@ -272,7 +273,8 @@ export function PricingSection({
     <section id="pricing" className="relative pt-2 md:pt-4 pb-10 md:pb-14">
       <div className="relative mx-auto w-full max-w-[1140px] px-[10px]">
 
-        {/* ─── Heading ─── */}
+        {/* ─── Heading (hidden on the LCL-landing variant · owner 2026-06-05) ─── */}
+        {!lclExpanded && (
         <div className="mx-auto w-full max-w-[1120px]">
           <div className="flex items-center gap-2 mb-1.5 text-primary-600 text-[13px] font-black tracking-[0.08em] uppercase">
             <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
@@ -283,6 +285,7 @@ export function PricingSection({
             <span className="text-primary-600">{t("titleHighlight")}</span>
           </h2>
         </div>
+        )}
 
         {/* ─── Country picker (hidden in the lclExpanded variant) ─── */}
         {!lclExpanded && (
@@ -457,24 +460,10 @@ export function PricingSection({
         <div className="mx-auto mt-6 w-full max-w-[1120px]">
           {lclExpanded ? (
             <div className="flex flex-col gap-7 md:gap-10">
-              {/* ═════ Cargo LCL (ชื่อชิปปิ้ง · โกดังถึงโกดัง) ═════ */}
-              <CargoGroupRow
-                eyebrow={t("cargoLclSectionEyebrow")}
-                title={t("cargoLclSectionTitle")}
-                sub={t("cargoLclSectionSub")}
-                cards={CARGO_CARDS}
-                cols={3}
-                t={t}
-              />
-              {/* ═════ Freight LCL (ชื่อลูกค้า · Port-to-Port) ═════ */}
-              <FreightGroupRow
-                eyebrow={t("lclSectionEyebrow")}
-                title={t("lclSectionTitle")}
-                sub={t("lclSectionSub")}
-                cards={LCL_CARDS}
-                term="DDP"
-                t={t}
-              />
+              {/* ═════ Group 1 — Warehouse rate cards (ชื่อชิปปิ้ง · รถ/เรือ/แอร์) ═════ */}
+              <WarehouseRateGroup />
+              {/* ═════ Group 2 — Customer-name import + ใบขนสินค้า (รถ/เรือ/แอร์) ═════ */}
+              <RouteImportGroup />
             </div>
           ) : mode === "cargo" ? (
             <div className="flex flex-col gap-7 md:gap-10">
