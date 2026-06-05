@@ -3,7 +3,7 @@ import { ChevronRight } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { formatPhoneNumber, type PcsChromeData } from "@/lib/legacy/pcs-chrome";
 import { PcsLeftMenuUserPill } from "./pcs-left-menu-user-pill";
-import { PcsLeftMenuAccordion } from "./pcs-left-menu-accordion";
+import { PcsLeftMenuAccordion, PcsLeftMenuAccordionGroup } from "./pcs-left-menu-accordion";
 
 /** Central Pacred line is shown pre-formatted (skips formatPhoneNumber which
  *  expects mobile format). Matches the SALES_FALLBACK tel in pcs-chrome.ts. */
@@ -119,7 +119,9 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
         </div>
       </div>
 
-      {/* 4. Top-level nav */}
+      {/* 4. Top-level nav — wrapped in the accordion group so only ONE dropdown
+          is open at a time + smooth collapse (owner 2026-06-05). */}
+      <PcsLeftMenuAccordionGroup>
       <nav className="py-1">
         {/* หน้าแรก */}
         <Link
@@ -288,6 +290,7 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
           <span>ที่อยู่จัดส่งสินค้า</span>
         </Link>
       </nav>
+      </PcsLeftMenuAccordionGroup>
     </div>
   );
 }

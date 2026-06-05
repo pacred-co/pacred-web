@@ -84,7 +84,7 @@ export default async function DashboardPage() {
     <div className="pcs-content-pad w-full px-[10px] py-3 md:py-5">
       {/* Top section — 2/3 carousel + 1/3 side-banner stack (md+); banners
           hidden < sm to match legacy `d-none d-sm-block`. */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 md:items-stretch">
         <div className="md:col-span-2">
           <PcsCarousel>
             {showMarchPromo && (
@@ -117,10 +117,19 @@ export default async function DashboardPage() {
             </div>
           </PcsCarousel>
         </div>
-        <div className="hidden sm:block md:col-span-1">
-          <Link href="/service-order" className="block group mb-2">
+        {/* Right column — 2 stacked banners. At md+ the column stretches to the
+            carousel's height (md:items-stretch on the grid) and each banner fills
+            half via flex-1 + an absolutely-positioned object-cover image, so the
+            two sides are EXACTLY the same height (owner 2026-06-05). All 4 assets
+            are 1840×540, so this only absorbs the ~8px inter-banner gap → no
+            visible crop. Below md it falls back to the natural stacked layout. */}
+        <div className="hidden sm:block md:flex md:flex-col md:gap-2 md:col-span-1">
+          <Link
+            href="/service-order"
+            className="group relative block overflow-hidden rounded-2xl shadow-md transition duration-300 hover:shadow-xl mb-2 md:mb-0 md:flex-1 md:min-h-0"
+          >
             <img
-              className="w-full rounded-2xl shadow-md group-hover:shadow-xl group-hover:brightness-105 transition-all duration-300"
+              className="block w-full h-auto transition duration-300 group-hover:brightness-105 md:absolute md:inset-0 md:h-full md:w-full md:object-cover"
               src="/images/customertheme/bill.png"
               alt=""
             />
@@ -129,9 +138,12 @@ export default async function DashboardPage() {
               that page with /line-settings (LIFF flow, task L 2026-05-26).
               LINE Notify EOL'd 2025-03-31; the new page links via Messaging
               API push. */}
-          <Link href="/line-settings" className="block group">
+          <Link
+            href="/line-settings"
+            className="group relative block overflow-hidden rounded-2xl shadow-md transition duration-300 hover:shadow-xl md:flex-1 md:min-h-0"
+          >
             <img
-              className="w-full rounded-2xl shadow-md group-hover:shadow-xl group-hover:brightness-105 transition-all duration-300"
+              className="block w-full h-auto transition duration-300 group-hover:brightness-105 md:absolute md:inset-0 md:h-full md:w-full md:object-cover"
               src="/images/customertheme/line.png"
               alt=""
             />
