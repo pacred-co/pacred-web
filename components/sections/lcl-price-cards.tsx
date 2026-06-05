@@ -8,7 +8,6 @@ import {
   Plane,
   ArrowRight,
   FileText,
-  Info,
   Warehouse,
   Phone,
   Clock,
@@ -188,8 +187,8 @@ const WAREHOUSE_CARDS: WarehouseCard[] = [
     image: "/images/main/importcard/gwangzhou.png", accent: "from-primary-500/30 to-primary-800/40",
     recommended: true,
     rates: [
-      { mode: "road", label: "ทางรถ",  code: "LCL · TRUCK", price: "฿5,300", unit: "/CBM", kgRate: "฿18/kg" },
-      { mode: "sea",  label: "ทางเรือ", code: "LCL · SEA",   price: "฿3,300", unit: "/CBM", kgRate: "฿11/kg" },
+      { mode: "road", label: "ทางรถ",  code: "LCL · TRUCK", price: "฿4,900", unit: "/CBM", kgRate: "฿17/kg" },
+      { mode: "sea",  label: "ทางเรือ", code: "LCL · SEA",   price: "฿2,900", unit: "/CBM", kgRate: "฿10/kg" },
       { mode: "air",  label: "ทางแอร์", code: "LCL · AIR",   price: "สอบถาม", unit: "/kg" },
     ],
   },
@@ -212,32 +211,19 @@ const TERM_NOTES = [
 ];
 
 function TermInfo({ feat }: { feat: boolean }) {
-  const [open, setOpen] = useState(false);
   return (
-    <div className="group/term relative mt-auto">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className={`inline-flex items-center gap-1 text-[10.5px] font-bold leading-snug ${feat ? "text-white/75" : "text-muted"}`}
-      >
+    <div className="mt-auto">
+      <div className={`text-[10.5px] font-bold leading-snug ${feat ? "text-white/75" : "text-muted"}`}>
         Term : <span className={feat ? "text-white" : "text-foreground"}>EXW</span>
-        <Info className="w-3 h-3 shrink-0 opacity-70" strokeWidth={2.6} />
-      </button>
-      <div
-        role="tooltip"
-        className={`${open ? "block" : "hidden"} group-hover/term:block absolute bottom-full left-0 z-30 mb-2 w-[240px] max-w-[88vw] rounded-lg border p-3 text-left backdrop-blur-md shadow-[0_10px_28px_rgba(0,0,0,0.22)] ${feat ? "bg-white/10 border-white/20" : "bg-surface/80 dark:bg-background/80 border-border"}`}
-      >
-        <ul className="space-y-1.5">
-          {TERM_NOTES.map((note) => (
-            <li key={note} className={`flex items-start gap-1.5 text-[11px] font-semibold leading-snug ${feat ? "text-white" : "text-foreground"}`}>
-              <span aria-hidden className={`mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full ${feat ? "bg-yellow-300" : "bg-primary-500"}`} />
-              <span>{note}</span>
-            </li>
-          ))}
-        </ul>
-        <span aria-hidden className={`absolute left-5 top-full -mt-1 h-2 w-2 rotate-45 border-b border-r backdrop-blur-md ${feat ? "bg-white/10 border-white/20" : "bg-surface/80 dark:bg-background/80 border-border"}`} />
       </div>
+      <ul className={`mt-1.5 space-y-1 rounded-lg border p-2 ${feat ? "bg-white/10 border-white/20" : "bg-surface/60 dark:bg-background/60 border-border"}`}>
+        {TERM_NOTES.map((note) => (
+          <li key={note} className={`flex items-start gap-1.5 text-[10.5px] font-semibold leading-snug ${feat ? "text-white" : "text-foreground"}`}>
+            <span aria-hidden className={`mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full ${feat ? "bg-yellow-300" : "bg-primary-500"}`} />
+            <span>{note}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
