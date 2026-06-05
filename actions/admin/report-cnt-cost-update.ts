@@ -103,6 +103,174 @@ export type BulkUpdateCostSheetResult = {
 // the legacy loop which never rolls back on UPDATE error).
 // ─────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────
+// LANE A — adminApplyContainerCostFromSheet
+//
+// Apply แสง's Google Sheet cost into the LIVE cost column
+// (`tb_forwarder.fcosttotalprice`) per parcel. Owner decision (locked
+// 2026-06-05): write `fcosttotalprice` directly — the live cost the
+// price/profit engine reads — exactly like legacy `upCostSheet`
+// (report-cnt.php L1065-1078: `UPDATE tb_forwarder SET fCostTotalPrice
+// = <sheetCost> WHERE ID = fID`). NOT the safe-separation
+// `fcosttotalpricesheet` column.
+//
+// Guardrails on top of legacy:
+//   - LOCK if the container is already paid (a tb_cnt_item row exists for
+//     the cabinet) — legacy lets you edit a paid container's cost from the
+//     bill page; here we refuse and point staff there (matches the
+//     existing report-cnt page lock).
+//   - Confirm-before-mutate is enforced in the UI (§0f); this action
+//     trusts the caller already confirmed.
+//   - logAdminAction with before/after per row.
+// ─────────────────────────────────────────────────────────────────────
+
+const applyRow = z.object({
+  fid:       z.number().int().positive(),
+  sheetCost: z.number().min(0).max(99999999.99),
+});
+
+const applyFromSheetSchema = z.object({
+  fCabinetNumber: z.string().trim().min(1).max(190),
+  updates:        z.array(applyRow).min(1, { message: "ไม่มีรายการให้บันทึก" }).max(5000),
+});
+
+export type ApplyContainerCostFromSheetInput = z.infer<typeof applyFromSheetSchema>;
+
+export type ApplyContainerCostFromSheetResult = {
+  updated: number;
+  failed:  number;
+  errors:  Array<{ fid: number; error: string }>;
+};
+
+export async function adminApplyContainerCostFromSheet(
+  input: ApplyContainerCostFromSheetInput,
+): Promise<AdminActionResult<ApplyContainerCostFromSheetResult>> {
+  const parsed = applyFromSheetSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { fCabinetNumber, updates } = parsed.data;
+
+  return withAdmin<ApplyContainerCostFromSheetResult>(
+    ["super", "ops", "accounting"],
+    async ({ adminId }) => {
+      const admin         = createAdminClient();
+      const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+      const nowIso        = new Date().toISOString();
+
+      // ─── Lock if the container is already paid ─────────────────────
+      const { data: cntItem, error: cntItemErr } = await admin
+        .from("tb_cnt_item")
+        .select("ID, cntID")
+        .eq("fCabinetNumber", fCabinetNumber)
+        .maybeSingle<{ ID: number; cntID: number | null }>();
+      if (cntItemErr) {
+        return { ok: false, error: cntItemErr.message };
+      }
+      if (cntItem) {
+        return {
+          ok: false,
+          error:
+            "ตู้นี้จ่ายค่าตู้แล้ว — แก้ไขต้นทุนจากบิลจ่ายเงินตู้แทน" +
+            (cntItem.cntID ? ` (รายการจ่ายเงินตู้ #${cntItem.cntID})` : ""),
+        };
+      }
+
+      // ─── Read existing rows for before/after audit + cabinet guard ──
+      const fids = updates.map((u) => u.fid);
+      const { data: existing, error: readErr } = await admin
+        .from("tb_forwarder")
+        .select("id, fidorco, ftrackingchn, fcosttotalprice, fcabinetnumber")
+        .in("id", fids);
+      if (readErr) return { ok: false, error: readErr.message };
+
+      const existingMap = new Map<number, {
+        fidorco:        string | null;
+        ftrackingchn:   string | null;
+        fcosttotalprice: number;
+        fcabinetnumber: string | null;
+      }>();
+      for (const r of (existing ?? []) as Array<{
+        id: number; fidorco: string | null; ftrackingchn: string | null;
+        fcosttotalprice: number | string; fcabinetnumber: string | null;
+      }>) {
+        existingMap.set(Number(r.id), {
+          fidorco:         r.fidorco,
+          ftrackingchn:    r.ftrackingchn,
+          fcosttotalprice: Number(r.fcosttotalprice ?? 0),
+          fcabinetnumber:  r.fcabinetnumber,
+        });
+      }
+
+      // ─── Per-row UPDATE loop (writes the LIVE cost) ────────────────
+      const errors: Array<{ fid: number; error: string }> = [];
+      let updated = 0;
+      const changes: Array<{
+        fid: number; tracking: string | null; before: number; after: number;
+      }> = [];
+
+      for (const u of updates) {
+        const prior = existingMap.get(u.fid);
+        if (!prior) {
+          errors.push({ fid: u.fid, error: "ไม่พบรายการ (fid ไม่ตรงกับ tb_forwarder)" });
+          continue;
+        }
+        // Guard: the fid must actually belong to this cabinet (prevents a
+        // crafted payload writing into another container's rows).
+        if (prior.fcabinetnumber !== fCabinetNumber) {
+          errors.push({ fid: u.fid, error: "รายการไม่อยู่ในตู้นี้" });
+          continue;
+        }
+        const { error: updErr } = await admin
+          .from("tb_forwarder")
+          .update({
+            fcosttotalprice:  u.sheetCost,
+            adminidupdate:    legacyAdminId,
+            fdateadminstatus: nowIso,
+          })
+          .eq("id", u.fid);
+        if (updErr) {
+          errors.push({ fid: u.fid, error: updErr.message });
+          continue;
+        }
+        updated += 1;
+        changes.push({
+          fid: u.fid,
+          tracking: prior.ftrackingchn,
+          before: prior.fcosttotalprice,
+          after: u.sheetCost,
+        });
+      }
+
+      // ─── Audit log — single summary row ───────────────────────────
+      await logAdminAction(
+        adminId,
+        "tb_forwarder.apply_cost_from_sheet",
+        "tb_forwarder",
+        fCabinetNumber,
+        {
+          bulk_action:   "report_cnt.cost.apply_from_sheet",
+          cabinet:       fCabinetNumber,
+          target_column: "fcosttotalprice", // owner-locked: live cost
+          updated_count: updated,
+          failed_count:  errors.length,
+          changes,
+          errors,
+        },
+      );
+
+      // ─── Revalidate consumers ─────────────────────────────────────
+      revalidatePath(`/admin/report-cnt/${fCabinetNumber}`);
+      revalidatePath("/admin/report-cnt");
+      revalidatePath("/admin/forwarders");
+      revalidatePath("/admin/forwarders/container-cost-check");
+      revalidatePath("/admin/accounting/forwarder");
+
+      return { ok: true, data: { updated, failed: errors.length, errors } };
+    },
+  );
+}
+
 export async function adminBulkUpdateForwarderCostSheet(
   input: BulkUpdateCostSheetInput,
 ): Promise<AdminActionResult<BulkUpdateCostSheetResult>> {

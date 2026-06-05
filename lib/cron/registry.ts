@@ -116,6 +116,18 @@ export const CRON_REGISTRY: readonly CronEntry[] = [
     description:   "ดึง tb_forwarder ที่ staff PCS แก้ไข (status/ตู้/driver/...) มาเข้า Pacred ทุก 10 นาที",
     scheduleLabel: "ทุก 10 นาที",
   },
+  // 2026-06-05 (LANE A) — แสง's container-cost Google Sheet → cache.
+  // Read-only mirror into container_cost_sheet_cache so the cost-check
+  // worklist + per-parcel diff read fast + stay fresh. NEVER writes
+  // tb_forwarder (applying costs stays a confirm-gated admin action).
+  // Adapter: lib/integrations/google-sheets/container-cost-sheet-sync.ts.
+  {
+    path:          "/api/cron/sync-container-cost-sheet",
+    schedule:      "*/20 * * * *",
+    label:         "Sync ต้นทุนตู้ (Sheet แสง)",
+    description:   "ดึงชีตต้นทุนตู้ของแสง → cache (worklist + diff อ่านเร็ว) · ไม่เขียน tb_forwarder (ปรับต้นทุนยังเป็น action ที่ต้องยืนยัน)",
+    scheduleLabel: "ทุก 20 นาที",
+  },
 ] as const;
 
 /** Look up a registry entry by path; returns null if unknown (means
