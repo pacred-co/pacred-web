@@ -201,11 +201,26 @@
   html, body {
     background: #fff !important;
   }
-  body > *:not(.print-fullscreen-overlay) {
-    display: none !important;
+  /* 2026-06-05 (ภูม flag) — admin print page nests the overlay under
+     AdminLayout's <div class="min-h-screen flex"> wrapper. The old
+     `body > *:not(.print-fullscreen-overlay)` rule hid the flex wrapper
+     too → overlay (its descendant) disappeared → blank print. Switch to
+     visibility-based hide so the overlay subtree stays visible regardless
+     of nesting depth, then re-anchor the overlay to the viewport. */
+  body * {
+    visibility: hidden !important;
   }
+  .print-fullscreen-overlay,
+  .print-fullscreen-overlay * {
+    visibility: visible !important;
+  }
+  /* Re-position the overlay to top-left of paper so the printed content
+     starts at the page edge (not wherever its flex wrapper was). */
   .print-fullscreen-overlay {
-    position: static !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
     /* padding is set below to 10mm — survives Chrome's "Margins: None"
        in the print dialog. DON'T zero it here. */
     background: #fff !important;
