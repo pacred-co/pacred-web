@@ -47,6 +47,14 @@ function registerSarabunForTest(): void {
       { src: path.join(fontsDir, "Sarabun-Bold.ttf"),    fontWeight: "bold"   },
     ],
   });
+  // 2026-06-05 (ภูม flag) — also register NotoSansSC for CJK glyphs (Chinese
+  // product titles + shop names). Mirrors lib/pdf/register-fonts.ts.
+  Font.register({
+    family: "NotoSansSC",
+    fonts: [
+      { src: path.join(fontsDir, "NotoSansSC-Regular.otf"), fontWeight: "normal" },
+    ],
+  });
   Font.registerHyphenationCallback((word) => [word]);
 }
 
@@ -168,6 +176,7 @@ function baseShopOrder(): ShopOrderReceiptData {
         domestic_china_cny:  50,
         shipping_number:     "1688-ORDER-12345",
         tracking_number:     "SF1234567890",
+        image_path:          null,
       },
     ],
   };
@@ -184,8 +193,8 @@ function juristicShopOrderWithOverride(): ShopOrderReceiptData {
     company_address: EDGE_ADDRESS,
   };
   o.items = [
-    { id: "i1", provider: "1688",   shop_name: "Shop A 商店",   title: "เสื้อยืดสั่งทำ ฯลฯ ๒๓ สี",      color: "ดำ ก่ก้",         size: "XXL",      price_cny: 89.5,  amount: 100, domestic_china_cny: 200, shipping_number: "12345", tracking_number: null },
-    { id: "i2", provider: "taobao", shop_name: "Shop B ロト",    title: "หน้ากากผ้าฤดูร้อน",            color: null,             size: null,        price_cny: 35.5,  amount: 50,  domestic_china_cny: null as unknown as number, shipping_number: null,    tracking_number: "TH987654321" },
+    { id: "i1", provider: "1688",   shop_name: "Shop A 商店",   title: "เสื้อยืดสั่งทำ ฯลฯ ๒๓ สี",      color: "ดำ ก่ก้",         size: "XXL",      price_cny: 89.5,  amount: 100, domestic_china_cny: 200, shipping_number: "12345", tracking_number: null, image_path: null },
+    { id: "i2", provider: "taobao", shop_name: "Shop B ロト",    title: "หน้ากากผ้าฤดูร้อน",            color: null,             size: null,        price_cny: 35.5,  amount: 50,  domestic_china_cny: null as unknown as number, shipping_number: null,    tracking_number: "TH987654321", image_path: null },
   ];
   return o;
 }

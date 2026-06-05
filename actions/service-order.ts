@@ -386,6 +386,11 @@ export type ShopOrderReceiptData = {
     domestic_china_cny:  number;          // per-item china domestic shipping (CNY)
     shipping_number:     string | null;   // เลขออเดอร์ร้านจีน
     tracking_number:     string | null;
+    // 2026-06-05 (ภูม flag) — product thumbnail URL · used in PDF receipt to
+    // give customer a visual reference (Chinese titles ลูกค้าอ่านไม่ออก).
+    // Full http(s) URL (marketplace CDN) or bare legacy filename (skipped
+    // in PDF for now · would need resolveLegacyUrl signing).
+    image_path:          string | null;
   }>;
 };
 
@@ -599,6 +604,7 @@ export async function getServiceOrderForReceipt(
         domestic_china_cny: Number(it.cshippingchn ?? 0),
         shipping_number:    it.cshippingnumber && it.cshippingnumber.trim() ? it.cshippingnumber : null,
         tracking_number:    it.ctrackingnumber && it.ctrackingnumber.trim() ? it.ctrackingnumber : null,
+        image_path:         it.cimages && it.cimages.trim() ? it.cimages : null,
       })),
     },
   };

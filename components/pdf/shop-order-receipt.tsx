@@ -10,11 +10,24 @@
  * forwarder receipt so the look-and-feel stays unified.
  */
 
-import { Document, Page, Text, View } from "@react-pdf/renderer";
+import { Document, Image, Page, Text, View } from "@react-pdf/renderer";
 import { styles, fmtBaht, COLORS } from "./styles";
 import { readThaiBaht } from "@/lib/utils/thai-number";
 import { CONTACT, ADDRESSES, BANK } from "@/components/seo/site";
 import type { ShopOrderReceiptData } from "@/actions/service-order";
+
+// 2026-06-05 (ภูม flag) — detect CJK chars in a string. When present,
+// render with NotoSansSC font (registered in lib/pdf/register-fonts.ts);
+// otherwise Sarabun. Mixed Thai+Chinese strings get NotoSansSC too (its
+// Latin glyphs are fine · Thai chars will fall back to Sarabun-like glyphs
+// via the PDF reader's substitution — acceptable for product names).
+function hasChinese(s: string | null | undefined): boolean {
+  if (!s) return false;
+  // CJK Unified Ideographs · CJK Compatibility · Halfwidth/Fullwidth · Hiragana/Katakana
+  return /[　-〿぀-ゟ゠-ヿ㐀-䶿一-鿿豈-﫿＀-￯]/.test(s);
+}
+
+const cnFont = { fontFamily: "NotoSansSC" } as const;
 
 const PROVIDER_LABEL: Record<string, string> = {
   "1688":  "1688",
@@ -160,12 +173,13 @@ export function ShopOrderReceipt({ data }: { data: ShopOrderReceiptData }) {
         {/* Items grouped by provider → shop */}
         <View style={styles.table}>
           <View style={styles.tableHead}>
-            <Text style={[styles.tableHeadCell, { flex: 0.5,  textAlign: "center" }]}>#</Text>
-            <Text style={[styles.tableHeadCell, { flex: 4 }]}>รายการสินค้า</Text>
-            <Text style={[styles.tableHeadCell, { flex: 0.8, textAlign: "right" }]}>จำนวน</Text>
-            <Text style={[styles.tableHeadCell, { flex: 1.2, textAlign: "right" }]}>ราคา/ชิ้น</Text>
-            <Text style={[styles.tableHeadCell, { flex: 1.2, textAlign: "right" }]}>ค่าส่งจีน</Text>
-            <Text style={[styles.tableHeadCell, { flex: 1.4, textAlign: "right" }]}>รวม</Text>
+            <Text style={[styles.tableHeadCell, { flex: 0.4,  textAlign: "center" }]}>#</Text>
+            <Text style={[styles.tableHeadCell, { flex: 1.2, textAlign: "center" }]}>รูป</Text>
+            <Text style={[styles.tableHeadCell, { flex: 3.4 }]}>รายการสินค้า</Text>
+            <Text style={[styles.tableHeadCell, { flex: 0.7, textAlign: "right" }]}>จำนวน</Text>
+            <Text style={[styles.tableHeadCell, { flex: 1.1, textAlign: "right" }]}>ราคา/ชิ้น</Text>
+            <Text style={[styles.tableHeadCell, { flex: 1.1, textAlign: "right" }]}>ค่าส่งจีน</Text>
+            <Text style={[styles.tableHeadCell, { flex: 1.3, textAlign: "right" }]}>รวม</Text>
           </View>
 
           {grouped.length === 0 && (
@@ -190,16 +204,22 @@ export function ShopOrderReceipt({ data }: { data: ShopOrderReceiptData }) {
               );
 
               pg.shops.forEach((sg, si) => {
-                const shopLines: string[] = [`ร้าน: ${sg.shop_name}`];
+                // 2026-06-05 (ภูม flag) — split shop label so the Chinese shop
+                // name renders with NotoSansSC while the Thai label uses Sarabun.
                 const shippingNos = sg.items
                   .map((it) => it.shipping_number)
                   .filter((s): s is string => !!s);
-                if (shippingNos.length > 0) {
-                  shopLines.push(`เลขออเดอร์ร้านจีน: ${[...new Set(shippingNos)].join(", ")}`);
-                }
+                const shopNameIsCn = hasChinese(sg.shop_name);
+                const shippingLine = shippingNos.length > 0
+                  ? `  ·  เลขออเดอร์ร้านจีน: ${[...new Set(shippingNos)].join(", ")}`
+                  : "";
                 rendered.push(
                   <View key={`p-${pi}-s-${si}`} style={[styles.tableRow, { backgroundColor: "#eff9ff" }]}>
-                    <Text style={[styles.tableCell, { flex: 1 }]}>{shopLines.join("  ·  ")}</Text>
+                    <Text style={[styles.tableCell, { flex: 1 }]}>
+                      <Text>ร้าน: </Text>
+                      <Text style={shopNameIsCn ? cnFont : {}}>{sg.shop_name}</Text>
+                      {shippingLine ? <Text>{shippingLine}</Text> : null}
+                    </Text>
                   </View>,
                 );
 
@@ -210,27 +230,43 @@ export function ShopOrderReceipt({ data }: { data: ShopOrderReceiptData }) {
                   const lineTotalThb  = (lineSubCny + lineShipCny) * rate;
                   const detail        = [it.color, it.size].filter(Boolean).join(" / ");
                   const stripe        = runningNo % 2 === 0 ? { backgroundColor: COLORS.surfaceAlt } : {};
+                  const titleIsCn     = hasChinese(it.title);
+                  const imageUrl      = it.image_path && /^https?:\/\//i.test(it.image_path) ? it.image_path : null;
 
                   rendered.push(
                     <View key={`p-${pi}-s-${si}-i-${ii}`} style={[styles.tableRow, stripe]}>
-                      <Text style={[styles.tableCell, { flex: 0.5, textAlign: "center" }]}>
+                      <Text style={[styles.tableCell, { flex: 0.4, textAlign: "center" }]}>
                         {runningNo}
                       </Text>
-                      <Text style={[styles.tableCell, { flex: 4 }]}>
+                      {/* 2026-06-05 (ภูม flag) — รูปสินค้า เพราะลูกค้าอ่านชื่อจีน
+                          ไม่ออก ใช้รูปประกอบจำให้ง่ายขึ้น. cimages ที่เป็น
+                          full URL (Taobao/1688 CDN) → render ตรง · bare
+                          filename → skip (legacy product images ตอนนี้ไม่ resolve). */}
+                      <View style={{ flex: 1.2, alignItems: "center", justifyContent: "center", padding: 2 }}>
+                        {imageUrl ? (
+                          // eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf Image does not support alt prop
+                          <Image src={imageUrl} style={{ width: 48, height: 48, objectFit: "cover" }} />
+                        ) : (
+                          <View style={{ width: 48, height: 48, backgroundColor: "#f3f4f6", alignItems: "center", justifyContent: "center" }}>
+                            <Text style={{ fontSize: 7, color: COLORS.muted }}>—</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={[styles.tableCell, { flex: 3.4 }, titleIsCn ? cnFont : {}]}>
                         {it.title ?? "—"}
                         {detail ? `\n${detail}` : ""}
                         {it.tracking_number ? `\ntrack: ${it.tracking_number}` : ""}
                       </Text>
-                      <Text style={[styles.tableCell, styles.tableCellRight, { flex: 0.8 }]}>
+                      <Text style={[styles.tableCell, styles.tableCellRight, { flex: 0.7 }]}>
                         × {it.amount}
                       </Text>
-                      <Text style={[styles.tableCell, styles.tableCellRight, { flex: 1.2 }]}>
+                      <Text style={[styles.tableCell, styles.tableCellRight, { flex: 1.1 }]}>
                         ฿{fmtBaht(it.price_cny * rate)}
                       </Text>
-                      <Text style={[styles.tableCell, styles.tableCellRight, { flex: 1.2 }]}>
+                      <Text style={[styles.tableCell, styles.tableCellRight, { flex: 1.1 }]}>
                         ฿{fmtBaht(lineShipCny * rate)}
                       </Text>
-                      <Text style={[styles.tableCell, styles.tableCellRight, styles.tableCellBold, { flex: 1.4 }]}>
+                      <Text style={[styles.tableCell, styles.tableCellRight, styles.tableCellBold, { flex: 1.3 }]}>
                         ฿{fmtBaht(lineTotalThb)}
                       </Text>
                     </View>,
