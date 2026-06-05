@@ -67,8 +67,12 @@ const CUSTOMERS_MENUBAR: MenubarItem[] = [
       { label: "VIP",                href: "/admin/customers?group=vip" },
       { label: "SVIP",               href: "/admin/customers?group=svip" },
       { label: "นิติบุคคล",          href: "/admin/customers?group=corporate" },
-      { label: "เครดิต",             href: "/admin/customers?group=credit" },
-      { label: "คิดค่าเทียบ",        href: "/admin/customers?group=comparison" },
+      // 2026-06-05 (LANE C) — point เครดิต/คิดค่าเทียบ at their dedicated
+      // faithful-port pages (legacy users-credit.php / users-comparison.php),
+      // which carry the วงเงิน/วัน/คงเหลือ + ค่าเทียบ columns + add/edit/remove —
+      // richer than the inline ?group= filter (which only narrows the list).
+      { label: "เครดิต",             href: "/admin/customers/credit" },
+      { label: "คิดค่าเทียบ (CPS)",  href: "/admin/customers/comparison" },
       { label: "ลูกค้า Freight",     href: "/admin/customers?segment=freight" },
     ],
   },
