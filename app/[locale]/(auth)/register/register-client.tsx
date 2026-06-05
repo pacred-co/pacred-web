@@ -1485,9 +1485,21 @@ function RegisterSuccessModal({
             </div>
           </div>
 
-          {/* Assigned sales rep */}
+          {/* Assigned sales rep — photo + name + phone (owner 2026-06-06:
+              "รูปหน้า sales ... บอกเบอร์โทรเซล์ และชื่อ") */}
           <div className="flex items-center gap-3 rounded-2xl bg-gray-50 dark:bg-gray-800 px-4 py-3">
-            <UserRound className="h-5 w-5 shrink-0 text-primary-600" />
+            {data.repAvatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={data.repAvatarUrl}
+                alt={`Sales ${data.repName}`}
+                className="h-12 w-12 shrink-0 rounded-full object-cover ring-2 ring-primary-100 dark:ring-primary-900/40"
+              />
+            ) : (
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary-50 dark:bg-primary-900/30">
+                <UserRound className="h-6 w-6 text-primary-600" />
+              </span>
+            )}
             <div className="min-w-0">
               <p className="text-[13px] text-gray-500 dark:text-gray-400">เซลที่ดูแล</p>
               <p className="text-[16px] font-semibold text-gray-900 dark:text-white">

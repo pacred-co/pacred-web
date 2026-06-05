@@ -28,6 +28,13 @@ export type SalesRepContact = {
   phoneDisplay: string;
   /** Email (best-effort — may be empty). */
   email:       string;
+  /**
+   * Rep photo URL (a public `/images/Character_Icon/*.png` path or storage URL)
+   * resolved from the rep's `profiles.avatar_url` via the legacy bridge
+   * `admin_contact_extras.legacy_admin_id = adminID → profile_id → profiles`.
+   * `null` when the rep has no photo on file (or fallback CS).
+   */
+  avatarUrl:   string | null;
   /** True when this is the assigned sales rep · false when fallback CS. */
   isAssigned:  boolean;
 };
@@ -44,6 +51,7 @@ export async function getSalesRepContactForUserid(
     phone:        CONTACT.phoneCs,
     phoneDisplay: CONTACT.phoneCsDisplay,
     email:        CONTACT.emailDocs,
+    avatarUrl:    null,
     isAssigned:   false,
   };
   if (!userid) return fallback;
@@ -85,6 +93,38 @@ export async function getSalesRepContactForUserid(
   }
   if (!adminRow) return fallback;
 
+  // Rep photo — resolve via the legacy bridge admin_contact_extras
+  // .legacy_admin_id (= adminID) → profile_id → profiles.avatar_url.
+  // Best-effort: a missing link / no photo just yields null (the UI then
+  // falls back to a generic icon). Two indexed lookups; the helper runs only
+  // on registration-success + the invoice fallback banner, so cost is fine.
+  let avatarUrl: string | null = null;
+  const { data: extraRow, error: extraErr } = await admin
+    .from("admin_contact_extras")
+    .select("profile_id")
+    .eq("legacy_admin_id", adminIdSale)
+    .maybeSingle<{ profile_id: string | null }>();
+  if (extraErr) {
+    console.error(`[sales-rep-contact admin_contact_extras lookup] failed`, {
+      code: extraErr.code, message: extraErr.message, adminIdSale,
+    });
+  }
+  const repProfileId = extraRow?.profile_id ?? null;
+  if (repProfileId) {
+    const { data: repProfile, error: repProfErr } = await admin
+      .from("profiles")
+      .select("avatar_url")
+      .eq("id", repProfileId)
+      .maybeSingle<{ avatar_url: string | null }>();
+    if (repProfErr) {
+      console.error(`[sales-rep-contact profiles avatar lookup] failed`, {
+        code: repProfErr.code, message: repProfErr.message, repProfileId,
+      });
+    }
+    const a = repProfile?.avatar_url?.trim();
+    avatarUrl = a && a !== "" ? a : null;
+  }
+
   const fullName =
     `${adminRow.adminName ?? ""} ${adminRow.adminLastName ?? ""}`.trim() ||
     fallback.name;
@@ -97,6 +137,7 @@ export async function getSalesRepContactForUserid(
     phone:        intl,
     phoneDisplay: disp,
     email:        adminRow.adminEmail?.trim() || fallback.email,
+    avatarUrl,
     isAssigned:   true,
   };
 }

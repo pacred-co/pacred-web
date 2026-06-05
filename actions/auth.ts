@@ -58,6 +58,8 @@ export type RegisterSuccess = {
   repName: string;
   /** Assigned sales rep phone — display form (or Pacred CS fallback). */
   repPhone: string;
+  /** Assigned sales rep photo URL (public path) — null when none on file. */
+  repAvatarUrl: string | null;
 };
 
 /**
@@ -72,8 +74,9 @@ async function buildRegisterSuccess(memberCode: string): Promise<RegisterSuccess
   const rep = await getSalesRepContactForUserid(memberCode);
   return {
     memberCode,
-    repName:  rep.name,
-    repPhone: rep.phoneDisplay,
+    repName:      rep.name,
+    repPhone:     rep.phoneDisplay,
+    repAvatarUrl: rep.avatarUrl,
   };
 }
 
