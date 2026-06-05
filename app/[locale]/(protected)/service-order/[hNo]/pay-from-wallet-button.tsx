@@ -33,7 +33,12 @@ export function PayFromWalletButton({ hNo, totalThb, walletBalance }: Props) {
   const [msg, setMsg]     = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const sufficient = walletBalance >= totalThb;
+  // 2026-06-05 (ภูม flag) — rounding tolerance · legacy PHP used `round_up(x,2)`
+  // for the order total but the wallet wallettotal is stored as Math.round*100
+  // → can differ by ≤1 satang (e.g. wallet ฿176.53 vs total ฿176.54). Without
+  // tolerance the customer sees NO pay button at all · ภูม "ไม่มีให้กดชำระเลย".
+  const ROUNDING_TOLERANCE_THB = 0.01;
+  const sufficient = walletBalance + ROUNDING_TOLERANCE_THB >= totalThb;
   const totalFmt   = totalThb.toLocaleString("th-TH",  { minimumFractionDigits: 2 });
   const balanceFmt = walletBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 });
   const shortfall  = sufficient ? 0 : totalThb - walletBalance;

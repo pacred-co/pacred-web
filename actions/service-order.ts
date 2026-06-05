@@ -1019,7 +1019,13 @@ export async function payServiceOrderFromWallet(
     return { ok: false, error: `db_error:${walletReadErr.code ?? "unknown"}` };
   }
   const currentBalance = Number(walletBefore?.wallettotal ?? 0);
-  if (!(currentBalance >= walletNeededPrecheck)) {
+  // 2026-06-05 (ภูม flag) — rounding tolerance 0.01 (1 สตางค์) · gate denies
+  // pay only when shortfall is BIGGER than 1 satang. Without this, a 176.53
+  // wallet can't pay a 176.54 total even though it's the same money modulo
+  // round_up vs round_half-up. Mirrors the client guard in pay-from-wallet-
+  // button.tsx so the UI ↔ server agree.
+  const ROUNDING_TOLERANCE_THB = 0.01;
+  if (!(currentBalance + ROUNDING_TOLERANCE_THB >= walletNeededPrecheck)) {
     return {
       ok: false,
       error: `wallet_insufficient — มี ฿${currentBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ต้อง ฿${walletNeededPrecheck.toLocaleString("th-TH", { minimumFractionDigits: 2 })} เติมเงินก่อนชำระ`,
