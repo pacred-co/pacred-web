@@ -1,18 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { assertOwnedProfileId } from "@/lib/auth/owned-write";
 import {
   yuanPaymentSchema,
   type YuanPaymentInput,
 } from "@/lib/validators/payment";
 import { sendNotification } from "@/lib/notifications";
 import { notifyStaffGroup } from "@/lib/notifications/staff-group";
-import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
+import { checkYuanPaymentEligibility } from "@/lib/payment/yuan-eligibility";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -334,21 +332,20 @@ export async function createYuanPayment(
   const userId      = userData.user.id;
   const memberCode  = userData.profile.member_code;
 
-  // If paying via wallet, verify the PENDING-AWARE available balance — not
-  // the raw wallet.balance, which (0007 trigger) ignores this customer's
-  // other not-yet-approved debits. Stacked pending wallet-paid transfers
-  // would otherwise each pass yet aggregate-overdraw on admin approval
-  // (gap-customer.md §H-1). Migration 0064's trigger is the hard backstop.
-  const supabase = await createClient();
+  // Eligibility backstop (legacy payment.php L256-276) — same gate the list
+  // page enforces; closes the deep-link-to-/add bypass.
+  const eligErr = await checkYuanPaymentEligibility(memberCode);
+  if (eligErr) return { ok: false, error: eligErr };
+
+  // SLIP-ONLY lane (2026-06-05 §0e cleanup). Wallet-paid ฝากโอน goes through
+  // createYuanPaymentFromWallet (actions/payment-tb.ts → debits the LIVE
+  // tb_wallet_hs). This action must NEVER touch wallet money — the old wallet
+  // branch here wrote the dead rebuilt `wallet_transactions` twin (a latent
+  // double-spend landmine · never debited tb_wallet). Reject wallet-paid + require a slip.
   if (d.paid_via_wallet) {
-    const available = await getWalletAvailableBalance(supabase, userId);
-    if (available === null) {
-      return { ok: false, error: "ไม่สามารถตรวจสอบยอดเงินได้ กรุณาลองใหม่อีกครั้ง" };
-    }
-    if (available < thb_amount) {
-      return { ok: false, error: "ยอดเงินในกระเป๋าไม่พอ (รวมรายการที่รออนุมัติ)" };
-    }
-  } else if (!d.slip_url) {
+    return { ok: false, error: "wrong_branch: ชำระจากกระเป๋าต้องใช้ช่องทางตัดเงินกระเป๋า (createYuanPaymentFromWallet)" };
+  }
+  if (!d.slip_url) {
     return { ok: false, error: "กรุณาแนบสลิปโอนเงิน" };
   }
 
@@ -385,40 +382,6 @@ export async function createYuanPayment(
   if (error || !created) {
     console.error(`[tb_payment insert] failed`, { code: error?.code, message: error?.message });
     return { ok: false, error: error?.message ?? "insert_failed" };
-  }
-
-  // If wallet-paid, write a pending debit to the ledger. Status stays
-  // pending; admin flips both rows to completed atomically in Phase G.
-  //
-  // P0-2: this MUST use the admin client. The RLS INSERT policy
-  // wallet_tx_insert_self_serve (migration 0007) only permits self-serve
-  // inserts with kind in ('deposit','withdraw') — a kind='yuan_payment'
-  // insert from the user-scoped client is silently rejected by RLS, so
-  // the customer's wallet would never be debited. The ownership check is
-  // satisfied above (profile_id = the authenticated user.id). We also
-  // CHECK the insert error now — a failed money insert must fail the
-  // whole action and roll back the orphan tb_payment row.
-  if (d.paid_via_wallet) {
-    // W-1/S-2: assertOwnedProfileId makes the ownership check
-    // un-skippable — a future edit that sets profile_id from an
-    // untrusted input throws here instead of debiting another wallet.
-    const { error: walletErr } = await admin.from("wallet_transactions").insert(
-      assertOwnedProfileId(userId, {
-        profile_id:     userId,
-        bucket:         "main",
-        amount:         -thb_amount,
-        kind:           "yuan_payment",
-        status:         "pending",
-        reference_type: "yuan_payment",
-        reference_id:   String(created.id),       // legacy tb_payment.id is bigint; ref col is text
-      }),
-    );
-    if (walletErr) {
-      // Roll back the orphan tb_payment row so the customer is not
-      // shown success for a transfer the wallet was never reserved for.
-      await admin.from("tb_payment").delete().eq("id", created.id);
-      return { ok: false, error: `wallet_debit_failed: ${walletErr.message}` };
-    }
   }
 
   revalidatePath("/service-payment");

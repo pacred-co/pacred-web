@@ -660,7 +660,7 @@ function WalletHsRowView({ row }: { row: WalletHsRow }) {
             เลขที่ออเดอร์{" "}
             {row.type === "2" ? (
               <a
-                href={`/shops/detail/${row.refOrder}`}
+                href={`/service-order/${row.refOrder}`}
                 target="_blank"
                 className="font-mono text-red-600 hover:underline"
               >
@@ -668,7 +668,7 @@ function WalletHsRowView({ row }: { row: WalletHsRow }) {
               </a>
             ) : row.type === "4" ? (
               <a
-                href={`/forwarder/detail/${row.refOrder}`}
+                href={`/service-import/${row.refOrder}`}
                 target="_blank"
                 className="font-mono text-red-600 hover:underline"
               >

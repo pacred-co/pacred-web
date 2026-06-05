@@ -103,6 +103,7 @@ import { sendNotification } from "@/lib/notifications";
 import { notifyStaffGroup } from "@/lib/notifications/staff-group";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
+import { checkYuanPaymentEligibility } from "@/lib/payment/yuan-eligibility";
 import { spendCashbackAtCheckout, refundCashbackOnReject } from "@/actions/admin/wallet-hs";
 import { cashbackRefId } from "@/lib/cashback/note-tag";
 import {
@@ -169,6 +170,12 @@ export async function createYuanPaymentFromWallet(
   }
   const userId     = userData.user.id;
   const memberCode = userData.profile.member_code;  // PR####
+
+  // Eligibility backstop (legacy payment.php L256-276) — same gate the list
+  // page enforces; closes the deep-link-to-/add bypass.
+  const eligErr = await checkYuanPaymentEligibility(memberCode);
+  if (eligErr) return { ok: false, error: eligErr };
+
   const thb_amount = computePayThb(d.yuan_amount, d.exchange_rate);
 
   const admin = createAdminClient();
