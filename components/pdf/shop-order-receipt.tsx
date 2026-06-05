@@ -302,7 +302,7 @@ export function ShopOrderReceipt({ data }: { data: ShopOrderReceiptData }) {
 
         {/* Bank-transfer payment info (BANK constant — wired from site.ts after T-G3 Bundle 1) */}
         {!isPaid && (
-          <View style={styles.bankBlock}>
+          <View style={styles.bankBlock} wrap={false}>
             <Text style={styles.bankTitle}>ช่องทางการชำระเงิน · โอนผ่านธนาคาร</Text>
             <View style={styles.bankRow}>
               <Text style={styles.bankLabel}>ธนาคาร</Text>
@@ -326,8 +326,10 @@ export function ShopOrderReceipt({ data }: { data: ShopOrderReceiptData }) {
           </View>
         )}
 
-        {/* Signature lines */}
-        <View style={styles.signature}>
+        {/* Signature lines — wrap={false} so the two boxes always stay
+            together (else they wrap mid-block onto page 2 with a blank
+            page above · ภูม flag 2026-06-05). */}
+        <View style={styles.signature} wrap={false}>
           <View style={styles.signatureBox}>
             <View style={styles.signatureLine}>
               <Text style={styles.signatureLabel}>

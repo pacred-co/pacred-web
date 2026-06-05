@@ -18,6 +18,7 @@ import { NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { getServiceOrderForReceipt } from "@/actions/service-order";
 import { registerPdfFonts } from "@/lib/pdf/register-fonts";
+import { prefetchAllItemImages } from "@/lib/pdf/prefetch-image";
 import { ShopOrderReceipt } from "@/components/pdf/shop-order-receipt";
 
 export const runtime  = "nodejs";
@@ -37,7 +38,13 @@ export async function GET(
 
   registerPdfFonts();
 
-  const buffer = await renderToBuffer(<ShopOrderReceipt data={res.data} />);
+  // 2026-06-05 (ภูม flag) — pre-fetch product images server-side. alicdn
+  // auto-serves WebP based on User-Agent; @react-pdf only decodes JPG/PNG/GIF.
+  // Pre-fetching with empty UA → JPG response → embed as data URI in PDF.
+  const enrichedItems = await prefetchAllItemImages(res.data.items);
+  const enrichedData = { ...res.data, items: enrichedItems };
+
+  const buffer = await renderToBuffer(<ShopOrderReceipt data={enrichedData} />);
 
   return new NextResponse(buffer as unknown as BodyInit, {
     status: 200,
