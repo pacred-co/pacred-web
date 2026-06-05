@@ -53,6 +53,10 @@
     {
       "path": "/api/cron/billing-run-overdue",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/sync-container-cost-sheet",
+      "schedule": "*/20 * * * *"
     }
   ]
 }

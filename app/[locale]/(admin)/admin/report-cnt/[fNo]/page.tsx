@@ -44,6 +44,10 @@ import {
 } from "./container-detail-client";
 import { CostUpdateView } from "./cost-update-view";
 import { CntPaySlipPanel } from "./cnt-pay-slip-panel";
+import {
+  getContainerCostSheetParcels,
+  type SheetParcel,
+} from "@/lib/integrations/google-sheets/container-cost-sheet-adapter";
 
 export const dynamic = "force-dynamic";
 
@@ -436,6 +440,23 @@ export default async function AdminReportCntDetailPage({
   // The legacy MX/Sang disabled banner is gone.
   const canEditCost = showMoney && !cabinetIsPaid;
 
+  // ── LANE A — fetch แสง's Google Sheet parcels for the cost-update diff ──
+  // Only when on the cost-update tab + money-tier. Cache-first (kept fresh
+  // by /api/cron/sync-container-cost-sheet), live fallback. Degrades to a
+  // banner when the Sheets service account is unconfigured.
+  let sheetParcels: SheetParcel[] = [];
+  let sheetSource: "cache" | "live" | null = null;
+  let sheetUnavailable: { reason: string; message?: string } | null = null;
+  if (isCostUpdate && showMoney) {
+    const sp = await getContainerCostSheetParcels(admin, fCabinetNumber);
+    if (sp.ok) {
+      sheetParcels = sp.parcels;
+      sheetSource = sp.source;
+    } else {
+      sheetUnavailable = { reason: sp.reason, message: sp.message };
+    }
+  }
+
   return (
     <>
       <TopMenuReport activeHref="/admin/report-cnt" />
@@ -491,7 +512,7 @@ export default async function AdminReportCntDetailPage({
                   ไม่สามารถแก้ไขต้นทุนรายตู้ได้เนื่องจากรายการนี้จ่ายเงินค่าตู้แล้ว{" "}
                   {paidCntId && (
                     <Link
-                      href={`/admin/cnt-hs/detail/${paidCntId}?action=cost-update`}
+                      href={`/admin/cnt-hs/${paidCntId}`}
                       className="text-primary-600 hover:underline"
                     >
                       ไปยังรายการจ่ายเงินตู้เพื่อแก้ไขต้นทุนจากบิลจ่ายเงิน
@@ -551,6 +572,11 @@ export default async function AdminReportCntDetailPage({
               fCabinetNumber={fCabinetNumber}
               warehouseLabel={warehouseLabel}
               rows={detailRows}
+              sheetParcels={sheetParcels}
+              sheetSource={sheetSource}
+              sheetUnavailable={sheetUnavailable}
+              cabinetIsPaid={cabinetIsPaid}
+              paidCntId={paidCntId}
             />
           ) : (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 p-6 text-sm text-amber-800 dark:text-amber-200">
