@@ -400,8 +400,16 @@ export async function lookupDbdJuristic(
  * (deleted) account — `userstatus='0'` — is restored by setting it back
  * to `'1'`. Both flags are cleared so the derived status becomes active.
  */
-export async function approveCustomer(id: string): Promise<AdminActionResult> {
+export async function approveCustomer(
+  id: string,
+  opts?: { salesRepId?: string },
+): Promise<AdminActionResult> {
   if (!id || typeof id !== "string") return { ok: false, error: "invalid_input" };
+  // Optional inline sales-rep handoff at approve (owner 2026-06-05): the admin
+  // may pick/change the assigned rep at the moment of approval (random round-
+  // robin is the default, but allow a manual handoff if the auto-picked rep is
+  // busy). Empty/whitespace → no override (keep the register-time pick).
+  const repOverride = (opts?.salesRepId ?? "").trim() || null;
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
@@ -423,20 +431,41 @@ export async function approveCustomer(id: string): Promise<AdminActionResult> {
       return { ok: false, error: beforeErr.message };
     }
     if (!before) return { ok: false, error: "not_found" };
-    // No-op when already active (userActive='1' and not deleted).
-    if (before.userActive === "1" && before.userStatus !== "0") return { ok: true };
+    // No-op when already active (userActive='1' and not deleted) AND no rep
+    // handoff was requested. A rep-only change on an already-active customer
+    // still goes through (the admin explicitly picked a new rep).
+    if (before.userActive === "1" && before.userStatus !== "0" && !repOverride) return { ok: true };
 
-    // P1-15 (2026-05-31): the sales rep is now assigned at REGISTER time
-    // (lib/auth/legacy-bridge-tb-users.ts → pickLeastLoadedSalesRep) so a new
-    // lead is owned the moment they sign up — matching legacy
-    // check-otp-register.php. Here we only assign if the register-time pick
-    // came back empty (no rep available then) — NEVER re-assign an
-    // already-owned customer (that would steal the lead from the rep who's
-    // been calling them). Original behaviour (Agent F1 · 2026-05-29 Gap #3)
-    // assigned unconditionally at approve; that window is now closed.
-    const assignedLegacyAdminId = before.adminIDSale
-      ? null
-      : await pickLeastLoadedSalesRep(admin);
+    // Resolve the rep to assign:
+    //  1. An explicit admin handoff pick (repOverride) — validated against
+    //     tb_admin (must be an active sales rep · prevents a typo'd/dead id
+    //     stealing a lead into a black hole).
+    //  2. Else P1-15 (2026-05-31): the sales rep is assigned at REGISTER time
+    //     (lib/auth/legacy-bridge-tb-users.ts → pickLeastLoadedSalesRep) so a
+    //     new lead is owned the moment they sign up — matching legacy
+    //     check-otp-register.php. Here we only auto-assign if the register-time
+    //     pick came back empty — NEVER auto-re-assign an already-owned customer
+    //     (that would steal the lead from the rep who's been calling them).
+    let assignedLegacyAdminId: string | null;
+    if (repOverride) {
+      const { data: rep, error: repErr } = await admin
+        .from("tb_admin")
+        .select("adminID, adminStatusA, adminStatusSale")
+        .eq("adminID", repOverride)
+        .maybeSingle<{ adminID: string; adminStatusA: string | null; adminStatusSale: string | null }>();
+      if (repErr) {
+        console.error(`[approveCustomer rep validate] failed`, { code: repErr.code, message: repErr.message, repOverride });
+        return { ok: false, error: repErr.message };
+      }
+      if (!rep) return { ok: false, error: "ไม่พบเซลล์ปลายทาง (adminID ไม่ตรงกับ tb_admin)" };
+      if (rep.adminStatusA !== "1") return { ok: false, error: "เซลล์ปลายทางถูกปิดใช้งาน" };
+      // Only write if it actually changes (avoid a no-op audit row).
+      assignedLegacyAdminId = before.adminIDSale === repOverride ? null : repOverride;
+    } else {
+      assignedLegacyAdminId = before.adminIDSale
+        ? null
+        : await pickLeastLoadedSalesRep(admin);
+    }
 
     const updatePayload: Record<string, unknown> = {
       userActive: "1",

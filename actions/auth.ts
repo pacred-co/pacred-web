@@ -559,6 +559,39 @@ export async function saveJuristicStep2(
       corporateName:    data.companyName,
       corporateAddress: companyAddress,
     });
+
+    // Lane B (2026-06-05) — hydrate tb_users.userName from the company name.
+    // Juristic step 1 created the tb_users row with userName="" (the contact
+    // name isn't collected at step 1 · see registerJuristicStep1). Without
+    // this the admin customer list + pending queue showed a bare "-" for the
+    // company (the PR047 bug). Legacy single-step register wrote userName at
+    // signup; our 3-step flow only has the company name once step 2 lands, so
+    // we backfill it HERE — but ONLY when userName is still empty, so we never
+    // clobber a real contact name an admin may have entered. Best-effort: a
+    // failure here logs but never fails the step-2 save (corporate already
+    // committed). companyName is zod-required (min 1) so it's always non-empty.
+    const { data: curUser, error: curUserErr } = await admin
+      .from("tb_users")
+      .select("userID, userName")
+      .eq("userID", profileRow.member_code)
+      .maybeSingle<{ userID: string; userName: string | null }>();
+    if (curUserErr) {
+      logger.warn("auth", "saveJuristicStep2: tb_users name-read failed — skipping userName hydrate", {
+        memberCode: profileRow.member_code,
+        reason: curUserErr.message,
+      });
+    } else if (curUser && !(curUser.userName ?? "").trim()) {
+      const { error: nameErr } = await admin
+        .from("tb_users")
+        .update({ userName: data.companyName })
+        .eq("userID", profileRow.member_code);
+      if (nameErr) {
+        logger.warn("auth", "saveJuristicStep2: tb_users userName hydrate failed", {
+          memberCode: profileRow.member_code,
+          reason: nameErr.message,
+        });
+      }
+    }
   } else {
     logger.error(
       "auth",

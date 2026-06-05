@@ -50,6 +50,7 @@
 import type { createAdminClient } from "@/lib/supabase/admin";
 import type { ForwarderPriceFields } from "@/lib/forwarder/outstanding";
 import { mintReceiptDocNo } from "@/lib/admin/mint-receipt-doc-no";
+import { legacyReceiptAmount } from "@/lib/tax/wht";
 import { issueForwarderTaxInvoice } from "@/lib/admin/forwarder-tax-invoice";
 import { modeFromPref, type TaxDocMode } from "@/lib/tax/tax-doc-mode";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
@@ -275,13 +276,12 @@ export async function autoIssueReceiptOnPaymentLand(
     num(r.fdiscount);
 
   const pricePayAll = rows.reduce((s, r) => s + perRowRaw(r), 0);
-  const totalBeforeWithholding = Math.round(pricePayAll * 100) / 100;
 
   // Legacy L557-559: 1% WHT applies only to juristic AND total ≥ 1000.
-  const applyJuristic1Pct = corporate === 1 && pricePayAll >= 1000;
-  const rAmount = applyJuristic1Pct
-    ? Math.round(pricePayAll * 0.99 * 100) / 100
-    : totalBeforeWithholding;
+  // Shared, unit-tested rule (lib/tax/wht.ts:legacyReceiptAmount) so the
+  // grenrateReceiptF juristic-1% behaviour can't silently drift untested.
+  const { totalBeforeWithholding, rAmount, applied: applyJuristic1Pct } =
+    legacyReceiptAmount(pricePayAll, corporate === 1);
 
   // 5. Customer header info — name/address for the printable receipt.
   type UserRow = { userID: string; userName: string | null; userLastName: string | null; userTel: string | null; userEmail: string | null };

@@ -51,6 +51,8 @@ export type JuristicBundle = {
   /** For the top review queue card header (corporate-driven, may not be in tb_users). */
   memberCode?: string;
   customerName?: string;
+  /** Contact phone (tb_users.userTel) — shown on the pending-review queue card. */
+  phone?: string;
 };
 
 export type CustomerTableRow = {
@@ -239,7 +241,7 @@ export function CustomersTable({ rows }: { rows: CustomerTableRow[] }) {
                       <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{r.registered ? new Date(r.registered).toLocaleDateString("th-TH") : "—"}</td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <CustomerRowActions id={r.userID} status={r.status} />
+                          <CustomerRowActions id={r.userID} status={r.status} currentSalesRep={r.adminIDSale} />
                           <ResetPwdButton userid={r.userID} />
                         </div>
                       </td>
@@ -328,7 +330,7 @@ function CustomerExpandPanel({ row: r }: { row: CustomerTableRow }) {
 
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
           <span className="text-[11px] font-medium text-muted">การจัดการ:</span>
-          <CustomerRowActions id={r.userID} status={r.status} />
+          <CustomerRowActions id={r.userID} status={r.status} currentSalesRep={r.adminIDSale} />
           <ResetPwdButton userid={r.userID} />
         </div>
       </div>
@@ -380,6 +382,7 @@ export function PendingJuristicReviews({ bundles }: { bundles: JuristicBundle[] 
                 <span className="font-medium">{b.companyName || b.customerName || "—"}</span>
                 {b.customerName && b.companyName && <span className="text-xs text-muted">· {b.customerName}</span>}
                 <span className="font-mono text-xs text-muted">{b.taxId}</span>
+                {b.phone && <span className="font-mono text-xs text-muted">📞 {b.phone}</span>}
                 <span className="ml-auto rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">รอตรวจ</span>
               </button>
               {isOpen && (

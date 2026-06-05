@@ -377,17 +377,19 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
     };
     const pcorpList = (pcorps ?? []) as PCorp[];
 
-    // Resolve customer name from tb_users (member_code === userid).
+    // Resolve customer name + phone from tb_users (member_code === userid).
     const pUserIds = [...new Set(pcorpList.map((c) => c.userid))];
     const nameByUser = new Map<string, string>();
+    const phoneByUser = new Map<string, string>();
     if (pUserIds.length > 0) {
       const { data: pusers, error: pusersErr } = await admin
         .from("tb_users")
-        .select("userID, userName, userLastName")
+        .select("userID, userName, userLastName, userTel")
         .in("userID", pUserIds);
       if (pusersErr) console.error(`[tb_users pending-juristic] failed`, { code: pusersErr.code, message: pusersErr.message });
-      for (const u of (pusers ?? []) as { userID: string; userName: string | null; userLastName: string | null }[]) {
+      for (const u of (pusers ?? []) as { userID: string; userName: string | null; userLastName: string | null; userTel: string | null }[]) {
         nameByUser.set(u.userID, `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim());
+        if ((u.userTel ?? "").trim()) phoneByUser.set(u.userID, u.userTel!.trim());
       }
     }
 
@@ -410,6 +412,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
         docs: pcorpDocsList[i],
         memberCode: c.userid || undefined,
         customerName,
+        phone: phoneByUser.get(c.userid) || undefined,
       });
     });
   }
@@ -418,11 +421,18 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
   const tableRows: CustomerTableRow[] = rows.map((r) => {
     const birthday = formatBirthday(r.userBirthday);
     const fb = (r.userFacebook ?? "").trim();
+    // Display name: prefer the personal name (userName + userLastName). For a
+    // juristic customer whose personal name is empty (e.g. PR047 — registered
+    // as a company, no contact name captured), fall back to the company name
+    // from tb_corporate so the row shows the company instead of a bare "—".
+    const personalName = `${r.userName ?? ""} ${r.userLastName ?? ""}`.trim();
+    const companyName = (juristicByMember.get(r.userID)?.companyName ?? "").trim();
+    const displayName = personalName || companyName || "—";
     return {
       userID: r.userID,
       isJuristic: r.userCompany === "1" || juristicByMember.has(r.userID),
       status: deriveStatus(r),
-      fullName: `${r.userName ?? ""} ${r.userLastName ?? ""}`.trim() || "—",
+      fullName: displayName,
       tel: r.userTel ?? "",
       email: r.userEmail ?? "",
       address: summarizeAddress(addressByUser.get(r.userID)),

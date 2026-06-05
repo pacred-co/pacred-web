@@ -952,7 +952,20 @@ export function CorporateEditor({ userid, corp }: { userid: string; corp: Profil
           <div className="grid sm:grid-cols-2 gap-3">
             <KV label="ชื่อบริษัท" value={corp.corporatename ?? "-"} />
             <KV label="เลขผู้เสียภาษี" value={corp.corporatenumber ?? "-"} mono />
-            <KV label="สถานะอนุมัติ" value={corp.corporatestatus === "1" ? "อนุมัติแล้ว" : "รออนุมัติ"} />
+            {/* Legacy corporatestatus codes (pcs-admin statusComp · function.php:530):
+                '1'=รอตรวจสอบ (pending) · '2'=อนุมัติแล้ว (verified) · '3'=ไม่ผ่าน (rejected).
+                Prior code had this INVERTED ('1'→"อนุมัติแล้ว"), so a pending juristic
+                showed as approved. Fixed 2026-06-05 (Lane B). */}
+            <KV
+              label="สถานะอนุมัติ"
+              value={
+                corp.corporatestatus === "2"
+                  ? "อนุมัติแล้ว"
+                  : corp.corporatestatus === "3"
+                    ? "ไม่ผ่าน"
+                    : "รอตรวจสอบ"
+              }
+            />
             <KV label="ที่อยู่บริษัท" value={corp.corporateaddress ?? "-"} />
           </div>
         ) : (
