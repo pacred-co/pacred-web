@@ -115,25 +115,21 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
   // any legacy HS256 token getClaims() falls back to a server call internally,
   // and we also fall back to getUser() below on any failure — so this can
   // never be LESS secure or LESS correct than before, only faster.
+  //
+  // NOTE on the random-logout (2026-06-06, owner-reported): it is NOT fixable
+  // here. The cause is Supabase refresh-token ROTATION racing under concurrent
+  // requests (Next.js prefetch fires many parallel renders). getClaims()-no-arg
+  // and getSession() both call __loadSession(), which — when the access token
+  // is within EXPIRY_MARGIN_MS (~90 s) of expiry — calls _callRefreshToken()
+  // UNCONDITIONALLY (verified in auth-js source; autoRefreshToken does NOT gate
+  // it). N concurrent refreshes of the one-time-use refresh token → one wins,
+  // the rest consume-then-fail → the browser can hold a consumed token → random
+  // logout. The DURABLE fix is the GoTrue "refresh token reuse interval" project
+  // setting (Supabase dashboard → Auth → Sessions; raise to ~10 s) — server
+  // config, not code. Refresh is owned by proxy.ts (middleware, the one place
+  // that can persist the rotated cookie); do NOT add another refresh path here.
   try {
-    // 🔐 2026-06-06 random-logout fix — do NOT let this RSC client rotate the
-    // refresh token. `getClaims()` with no arg internally calls getSession(),
-    // which (within the 90 s expiry margin) refreshes + ROTATES the one-time-use
-    // refresh token. But an RSC client cannot persist cookie writes (cookies()
-    // .set() throws in a Server Component → swallowed by server.ts's setAll
-    // catch), so that rotation is LOST: the browser keeps the consumed token and
-    // gets logged out on the next request — random, mid-session. Token refresh
-    // is owned SOLELY by proxy.ts (the middleware), which persists the rotated
-    // cookie to the response. Here we read the current access token and pass it
-    // to getClaims(token) → pure local ES256 signature verification, no refresh.
-    const { data: sessionData, error: sessErr } = await supabase.auth.getSession();
-    if (sessErr) {
-      console.error(`[get-user getSession] failed`, { message: sessErr.message });
-    }
-    const accessToken = sessionData?.session?.access_token;
-    const { data, error } = accessToken
-      ? await supabase.auth.getClaims(accessToken)
-      : { data: null, error: null };
+    const { data, error } = await supabase.auth.getClaims();
     const claims = data?.claims;
     if (!error && claims?.sub) {
       // Reconstruct a minimal Supabase User from the verified claims. Callers
