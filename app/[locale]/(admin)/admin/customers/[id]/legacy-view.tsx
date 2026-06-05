@@ -29,7 +29,9 @@ import { Link } from "@/i18n/navigation";
 import { getAdminRoles } from "@/lib/auth/require-admin";
 import { getCustomerRateMatrix } from "@/actions/admin/customer-rate";
 import { getCustomerStatCounts, listSalesAdmins } from "@/actions/admin/customer-profile";
+import { getCustomerMarginSummary } from "@/actions/admin/customer-margin";
 import { CustomerRateEditor } from "./rate-editor";
+import { CustomerMarginPanel } from "./customer-margin-panel";
 import { HardDeletePanel } from "./hard-delete-panel";
 import {
   StatCards,
@@ -275,10 +277,15 @@ export async function renderLegacyCustomerView(id: string) {
   // Stat-card counts (8 cards · cheap COUNT/head) + the sales-admin dropdown
   // for the editSale control fetched alongside. Each reader logs+degrades on
   // error (never throws — the profile must still render).
-  const [rateMatrix, statCounts, salesAdminsRes] = await Promise.all([
+  // 2026-06-05 ภูม lane (CEO CRM-activation): per-customer margin baseline
+  // is fetched here in parallel with the other profile sub-readers. Best-
+  // effort — never throws (the loader degrades to "0 delivered ตู้" empty
+  // state if tb_forwarder query fails).
+  const [rateMatrix, statCounts, salesAdminsRes, marginSummary] = await Promise.all([
     getCustomerRateMatrix(u.userID),
     getCustomerStatCounts(u.userID),
     listSalesAdmins(),
+    getCustomerMarginSummary(u.userID),
   ]);
   const salesAdmins = salesAdminsRes.ok ? salesAdminsRes.data?.rows ?? [] : [];
   const walletBalance = Number(wallet?.wallettotal ?? 0);
@@ -352,6 +359,14 @@ export async function renderLegacyCustomerView(id: string) {
           tb_header_order / tb_forwarder / tb_payment / tb_wallet(_hs) /
           tb_cash_back_hs). Unverifiable counts render "—" not a wrong number. */}
       <StatCards userid={u.userID} walletBalance={walletBalance} counts={statCounts} />
+
+      {/* Per-customer Margin Profile (2026-06-05 ภูม · CEO CRM-activation):
+          surfaces the margin history of THIS customer so the sales rep can
+          see at a glance whether they've been historically over-charged
+          (avg margin > ฿15k cap) and should be quoted at a lower margin
+          going forward. Pairs with /admin/accounting/margin-monitor (the
+          portfolio view). Empty state → "ยังไม่เคยมีตู้ส่งสำเร็จ". */}
+      <CustomerMarginPanel summary={marginSummary} />
 
       {/* Profile card */}
       <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3 text-sm">
