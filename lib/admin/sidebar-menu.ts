@@ -421,7 +421,10 @@ const blockSettingsCargo: MenuItem = {
         { labelKey: "settingsCargo.rateCustomHs",   href: "/admin/rates/custom-hs",   icon: "Users" },
       ],
     },
-    { labelKey: "settingsCargo.vipTiers",  href: "/admin/settings/business-config",  icon: "Users" },
+    // 2026-06-05 (LANE C) — repointed from the /admin/settings/business-config
+    // placeholder to the faithful VIP-tier CRUD page (port of legacy
+    // settings-vip.php → tb_co + auto-seeded tb_rate_vip_kg/cbm).
+    { labelKey: "settingsCargo.vipTiers",  href: "/admin/settings/vip-tiers",        icon: "Users" },
     {
       labelKey: "settingsCargo.system",
       icon: "Activity",
