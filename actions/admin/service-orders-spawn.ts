@@ -240,7 +240,13 @@ export async function spawnForwardersFromShopOrder(
             fstatus:               "1",   // รอเข้าโกดังจีน
             paydeposit:            "0",
             fwarehousechina:       "1",   // กวางโจว default
-            fwarehousename:        "1",
+            // 2026-06-05 (ภูม flag — "spawn ขึ้นโกดัง แสง อัตโนมัติ"): the
+            // shop-order auto-spawn doesn't know which China partner
+            // warehouse the goods will arrive at (1=แสง 2=CTT 3=MK 4=MX
+            // 5=JMF 6=GOGO 7=Cargo Center 8=MOMO). Leave blank — admin sets
+            // it in /edit when the partner-API or manual confirmation lands.
+            // Mirrors the fix on actions/admin/forwarders-new.ts:397.
+            fwarehousename:        "",
             fcabinetnumber:        "",
             ftrackingth:           "-",
             famount:               1,

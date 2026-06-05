@@ -222,7 +222,12 @@ export async function createLegacyForwarder(
     fstatuscaradminoff:  "",
     printstatus4:        "0",
     fwarehousechina:     "1",
-    fwarehousename:      "1",
+    // 2026-06-05 (ภูม flag — "spawn ขึ้นโกดัง แสง อัตโนมัติ"): the customer
+    // self-service import-create flow doesn't know which China partner
+    // warehouse the goods will land at. Leave blank — admin sets it later
+    // when the partner-API / manual confirmation arrives. Mirrors
+    // actions/admin/forwarders-new.ts:397 + service-orders-spawn.ts:243.
+    fwarehousename:      "",
     fcabinetnumber:      "",
     ftrackingth:         "-",
     fcover:              "",

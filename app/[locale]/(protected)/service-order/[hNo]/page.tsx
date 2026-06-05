@@ -91,8 +91,30 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
 
   const admin = createAdminClient();
 
+  // 2026-06-05 (ภูม flag — "โอนขาด เพราะ display 2dp ไม่ตรง raw") — compute the
+  // FULL-PRECISION total alongside the rounded stored value (`o.total_thb` =
+  // ceil(2dp) for safety). Show "(฿176.5344)" grey paren next to "฿176.54" so
+  // the customer can see the un-rounded reference + transfer the rounded value
+  // without guessing half-up (which is short by 0.01). Formula mirrors legacy
+  // `(htotalpricechn + hshippingchn) × hrate + hshippingservice`. Returns null
+  // if the rate isn't locked yet (rare race · hstatus='1') OR if raw === stored
+  // (no info gain).
+  function computeRawTotal(): number | null {
+    const rate = Number(o.yuan_rate_locked ?? 0);
+    if (!(rate > 0)) return null;
+    const cnySubtotal = itemsTotalCny + Number(o.domestic_china_cny);
+    const raw = cnySubtotal * rate + Number(o.service_fee);
+    if (Math.abs(raw - Number(o.total_thb)) < 0.0001) return null;
+    return raw;
+  }
+  const rawThb = computeRawTotal();
+  const rawThbFmt = rawThb !== null
+    ? rawThb.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 4 })
+    : null;
+
   // Wallet balance — only when payable (hstatus='2' รอชำระเงิน). Closes the cargo
-  // loop (customer self-pay from balance). Reads the ported legacy tb_wallet.
+  // loop (customer self-pay from balance). Reads the ported legacy tb_wallet
+  // (RLS-locked → admin client), keyed by the customer's member_code.
   let walletBalance: number | null = null;
   if (o.status === "2") {
     if (memberCode) {
@@ -161,13 +183,28 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
               <p className="text-sm font-semibold text-yellow-900">{t("payByBanner")}</p>
               <p className="text-2xl font-bold font-mono text-yellow-800 mt-1">
                 ฿{Number(o.total_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                {rawThbFmt && (
+                  <span className="ml-2 text-sm font-normal text-yellow-700/70">
+                    (฿{rawThbFmt})
+                  </span>
+                )}
               </p>
+              {rawThbFmt && (
+                <p className="text-[11px] text-yellow-700/80 -mt-0.5">
+                  ตัวเลขใน <span className="font-mono">( )</span> = ทศนิยมเต็ม · โอนตามยอดหลักได้เลย
+                </p>
+              )}
               <p className="text-xs text-yellow-700 mt-1">{t("payBy", { date: new Date(o.payment_due_at).toLocaleString("th-TH") })}</p>
             </div>
 
             {/* Primary pay action — wallet balance permitting */}
             {walletBalance !== null && o.h_no && (
-              <PayFromWalletButton hNo={o.h_no} totalThb={Number(o.total_thb)} walletBalance={walletBalance} />
+              <PayFromWalletButton
+                hNo={o.h_no}
+                totalThb={Number(o.total_thb)}
+                totalThbRaw={rawThb}
+                walletBalance={walletBalance}
+              />
             )}
 
             {/* Fallback / wallet management links */}
@@ -251,7 +288,12 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
                 )}
                 <Row label={t("serviceFee")} value={`฿${Number(o.service_fee).toFixed(2)}`} />
                 <hr className="border-primary-200" />
-                <Row label={t("totalThb")} value={`฿${Number(o.total_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`} bold />
+                <Row
+                  label={t("totalThb")}
+                  value={`฿${Number(o.total_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}
+                  subValue={rawThbFmt ? `(฿${rawThbFmt})` : undefined}
+                  bold
+                />
               </div>
             </div>
 
@@ -331,11 +373,14 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
   );
 }
 
-function Row({ label, value, bold, small }: { label: string; value: string; bold?: boolean; small?: boolean }) {
+function Row({ label, value, subValue, bold, small }: { label: string; value: string; subValue?: string; bold?: boolean; small?: boolean }) {
   return (
     <div className={`flex justify-between gap-3 ${bold ? "font-bold text-base" : ""} ${small ? "text-xs text-muted" : ""}`}>
       <span className={bold ? "" : "text-muted"}>{label}</span>
-      <span className="font-mono">{value}</span>
+      <span className="font-mono">
+        {value}
+        {subValue && <span className="ml-1.5 text-xs font-normal text-gray-500">{subValue}</span>}
+      </span>
     </div>
   );
 }

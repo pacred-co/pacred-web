@@ -65,6 +65,7 @@ import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { getAdminRoles } from "@/lib/auth/require-admin";
 import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
+import { TB_FORWARDER_STATUSES, type TbForwarderStatus } from "./forwarders-bulk-types";
 
 // ── Shared types ──────────────────────────────────────────────────────────────
 
@@ -92,8 +93,17 @@ import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver"
  * which writes `tb_forwarder.fstatus` + `tb_log_forwarder_status` + fires
  * customer notifications.
  */
-export const TB_FORWARDER_STATUSES = ["1", "2", "3", "4", "5", "6", "7", "99"] as const;
-export type TbForwarderStatus = (typeof TB_FORWARDER_STATUSES)[number];
+// 2026-06-05 (ภูม flag · /admin/forwarders/52015/edit 500): TB_FORWARDER_STATUSES
+// was exported from this file, but Next 16 rejects ANY non-async-function value
+// export from a `"use server"` file ("found object" because Next sees the
+// readonly array as an object) → the chunk failed to evaluate → every page that
+// pulled this action 500'd. Const + type now live in `./forwarders-bulk-types.ts`
+// (regular module, safe from client + server). Same fix as Wave 25 #196.
+//
+// Re-export the TYPE so existing `import type { TbForwarderStatus } from ".../forwarders-bulk"`
+// callers don't break — type-only re-exports are erased at compile time and stay
+// legal inside a "use server" module.
+export type { TbForwarderStatus } from "./forwarders-bulk-types";
 
 /**
  * Result shape of every bulk action — `succeeded` carries the raw input

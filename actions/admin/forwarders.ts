@@ -463,6 +463,43 @@ export async function adminBulkUpdateForwarderTbStatus(
       fdatecontainerclose: string | null;
     }>;
 
+    // 2026-06-05 (ภูม flag — "ถ้าใส่เลขตู้ ก็เปลี่ยนสถานะให้เลยงี้ได้มั้ย"):
+    // forward-only fstatus auto-advance based on which fields the caller
+    // actually populated. Mirrors the MOMO partner-sync rule
+    // (lib/integrations/momo-isolated/propagate.ts:71-90):
+    //   - cabinet_number set (ลงตู้แล้ว)           → fstatus ≥ "3" กำลังส่งมาไทย
+    //   - tracking_th  set (พัสดุไทย · ออกขนส่ง)  → fstatus ≥ "6" เตรียมส่ง
+    // The admin no longer has to remember to bump the dropdown when they
+    // type a cabinet — typing the field IS the signal.
+    //
+    // Forward-only guard: if ANY row in the batch is already past the
+    // implied phase, we KEEP the admin's explicitly-submitted fstatus
+    // (= no auto-advance) so a single mistyped cabinet on a delivered row
+    // can't roll a "7" back to a "3". The form is single-row in practice
+    // (tb-action-panel) so this edge only kicks in for the bulk-bar; the
+    // bulk-bar doesn't expose cabinet/tracking inputs → derivedFstatus
+    // stays equal to fstatus there.
+    const FSTATUS_ORDER_AUTOADV: Record<string, number> = {
+      "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "99": 0,
+    };
+    const rankFs = (v: string): number => FSTATUS_ORDER_AUTOADV[v] ?? 0;
+    let derivedFstatus = fstatus;
+    if (cabinet_number !== undefined && cabinet_number.trim() !== "") {
+      if (rankFs(derivedFstatus) < 3) derivedFstatus = "3";
+    }
+    if (tracking_th !== undefined && tracking_th.trim() !== "" && tracking_th.trim() !== "-") {
+      if (rankFs(derivedFstatus) < 6) derivedFstatus = "6";
+    }
+    if (derivedFstatus !== fstatus) {
+      // Forward-only safety: if any row is already at a later phase than
+      // the derived target, skip the auto-advance (use admin's explicit
+      // dropdown choice instead — keeps the bulk-bar behavior intact).
+      const wouldDemote = beforeRows.some(
+        (r) => rankFs(r.fstatus) > rankFs(derivedFstatus),
+      );
+      if (wouldDemote) derivedFstatus = fstatus;
+    }
+
     // Wave 26 G5 (2026-05-28 ดึก) — status-transition role gate.
     // Per-row check: every row in the bulk must satisfy the legacy
     // owner-role matrix for its own (from → to) transition. Mixed-status
@@ -471,12 +508,15 @@ export async function adminBulkUpdateForwarderTbStatus(
     // if the rest don't. Rather than partial-process (which the bulk-bill
     // action does), this top-level any-vs-all bulk REFUSES the whole batch
     // when any row fails — caller can split and retry.
+    //
+    // 2026-06-05: gate checked against `derivedFstatus` (the value we'll
+    // actually write) so the auto-advance can't bypass the role matrix.
     const callerRoles = (await getAdminRoles()) ?? [];
     const forbidden = beforeRows.filter(
-      (r) => !canAnyRoleFlipFstatus(callerRoles, r.fstatus, fstatus),
+      (r) => !canAnyRoleFlipFstatus(callerRoles, r.fstatus, derivedFstatus),
     );
     if (forbidden.length > 0) {
-      const sample = forbidden.slice(0, 5).map((r) => `#${r.id}(${r.fstatus}→${fstatus})`).join(", ");
+      const sample = forbidden.slice(0, 5).map((r) => `#${r.id}(${r.fstatus}→${derivedFstatus})`).join(", ");
       const more = forbidden.length > 5 ? ` (และอีก ${forbidden.length - 5} รายการ)` : "";
       return {
         ok: false,
@@ -485,7 +525,7 @@ export async function adminBulkUpdateForwarderTbStatus(
     }
 
     const nowIso = new Date().toISOString();
-    const dateCol = TB_STATUS_DATE_COL[fstatus];
+    const dateCol = TB_STATUS_DATE_COL[derivedFstatus];
     // tb_forwarder.adminidupdate is varchar(10) — same legacy pcsc_main
     // constraint that bit /admin/forwarders/new (Wave 23 P0 fix 5254f8d).
     // Sister bug-fix 2026-05-27 — ภูม bulk-update of #51973 hit the same
@@ -522,7 +562,7 @@ export async function adminBulkUpdateForwarderTbStatus(
       : new Set<number>();
 
     const update: Record<string, unknown> = {
-      fstatus,
+      fstatus:          derivedFstatus,
       fdateadminstatus: nowIso,
       adminidupdate:    adminIdSafe,
       ...(dateCol ? { [dateCol]: nowIso } : {}),
@@ -569,7 +609,11 @@ export async function adminBulkUpdateForwarderTbStatus(
     await logAdminAction(adminId, "forwarder.bulk_update_tb", "tb_forwarder", "bulk", {
       fids,
       before_statuses: beforeRows.map((r) => ({ id: r.id, fstatus: r.fstatus })),
-      after:           { fstatus },
+      after:           {
+        fstatus:           derivedFstatus,
+        submitted_fstatus: fstatus !== derivedFstatus ? fstatus : undefined,
+        auto_advanced:     fstatus !== derivedFstatus ? true : undefined,
+      },
     });
 
     // G8 (2026-05-28 ดึก): append one tb_log_forwarder_status row per
@@ -578,9 +622,9 @@ export async function adminBulkUpdateForwarderTbStatus(
     // a log insert failure does NOT roll back the UPDATE that already
     // succeeded above. The legacy report screens (status-history view)
     // depend on this trail being populated.
-    const changed = beforeRows.filter((r) => r.fstatus !== fstatus);
+    const changed = beforeRows.filter((r) => r.fstatus !== derivedFstatus);
     for (const row of changed) {
-      await appendStatusLog(admin, row.id, row.fstatus, fstatus, adminIdSafe);
+      await appendStatusLog(admin, row.id, row.fstatus, derivedFstatus, adminIdSafe);
     }
 
     // Wave 16 follow-up A (2026-05-25): resolver wired. Bulk-resolve every
@@ -601,7 +645,7 @@ export async function adminBulkUpdateForwarderTbStatus(
           try {
             await sendNotification(profileId, notify.forwarderStatusChanged({
               fNo:         row.fidorco ?? String(row.id),
-              status:      fstatus,
+              status:      derivedFstatus,
               forwarderId: String(row.id),
             }));
             notified++;
@@ -615,7 +659,7 @@ export async function adminBulkUpdateForwarderTbStatus(
         }
         logger.info("forwarder.bulk_update_tb", `notifications fired ${notified}/${changed.length} (no profile: ${noProfile})`, {
           adminId:       redactId(adminId),
-          fstatus,
+          fstatus:       derivedFstatus,
           notified,
           no_profile:    noProfile,
         });
@@ -635,7 +679,7 @@ export async function adminBulkUpdateForwarderTbStatus(
     // SIN.VIP / OOAEOM.VIP / SWAN). Idempotent — re-flipping the same row
     // won't double-accrue. Best-effort — a failed earn-trigger does NOT
     // roll back the status flip that already succeeded above.
-    if (fstatus === "7" && changed.length > 0) {
+    if (derivedFstatus === "7" && changed.length > 0) {
       try {
         const earnResult = await fireUserSalesEarnTriggerOnDelivery(
           admin,

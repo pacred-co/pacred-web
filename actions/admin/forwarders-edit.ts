@@ -89,6 +89,15 @@ export type ItemCrateInput = z.infer<typeof itemCrateSchema>;
 // ────────────────────────────────────────────────────────────
 // Main edit schema — fweight / fwidth / flength / fheight + cbm-derived.
 // All optional individually but at least one must change (validated below).
+//
+// 2026-06-05 (this commit): added the legacy `update.php` override block:
+//   customrate switch + customratekg / customratecbm   (forwarder.php L1801-1818
+//                                                         + L1074-1086 form)
+//   fdiscount, ftransportpricechnthb, priceother,
+//   ftransportprice, fshippingservice                    (L1217-1241 form)
+//   fwarehousechina, fwarehousename                      (L1112-1132 form)
+// All optional + default to legacy-row value (read from `before.*`) when omitted
+// — the schema is non-breaking for existing callers.
 // ────────────────────────────────────────────────────────────
 const editForwarderSchema = z.object({
   fNo:           z.string().trim().min(1).max(50),
@@ -102,6 +111,31 @@ const editForwarderSchema = z.object({
   refPrice:      z.enum(["1", "2"] as const),
   // admin-facing note (tb_forwarder.fnote — TEXT, no length cap in schema; we cap at 2000)
   note:          z.string().trim().max(2000).optional(),
+
+  // ── Custom-rate override block (legacy `customRate` toggle, L1074-1086) ──
+  /** '0' = system pricing waterfall · '1' = admin override (customratekg/cbm) */
+  customRate:    z.enum(["0", "1"] as const).optional(),
+  customRateKg:  z.number().min(0).max(99999.99).optional(),
+  customRateCbm: z.number().min(0).max(99999.99).optional(),
+
+  // ── Money-side adders / discount (legacy L1217-1241) ──
+  fDiscount:              z.number().min(0).max(9999999.99).optional(),
+  fTransportPriceChnThb:  z.number().min(0).max(9999999.99).optional(),
+  priceOther:             z.number().min(0).max(9999999.99).optional(),
+  /** ค่าขนส่งในไทย — domestic delivery leg (legacy L1206) */
+  fTransportPrice:        z.number().min(0).max(9999999.99).optional(),
+  /** ค่าบริการฝากนำเข้า (legacy fshippingservice — not on update.php form
+   *  itself but on calPrice preview L243 + the receipt; admin can set it
+   *  in the edit form per ภูม flag). */
+  fShippingService:       z.number().min(0).max(9999999.99).optional(),
+
+  // ── Warehouses (legacy L1112-1132) ──
+  /** โกดังต้นทางในจีน · varchar(1) '1' กวางโจว · '2' อี้อู */
+  fWarehouseChina: z.enum(["1", "2"] as const).optional(),
+  /** โกดังที่รับในไทย · varchar(1) '1' แสง · '2' CTT · '3' MK · '4' MX ·
+   *  '5' JMF · '6' GOGO · '7' Cargo Center · '8' MOMO */
+  fWarehouseName:  z.enum(["1", "2", "3", "4", "5", "6", "7", "8"] as const).optional(),
+
   // Per-item crate list. Empty list = no crate updates.
   items:         z.array(itemCrateSchema).max(200).default([]),
 });
@@ -388,10 +422,25 @@ export async function adminUpdateForwarderDimensions(
       // fRefRate (unit rate) + fRefPrice ('1' KG · '2' CBM). The manual-
       // override path (customrate switch on) keeps the admin-typed rate.
       //
-      // ⚠️ Faithful note: the dimension-edit form does NOT send warehouse /
-      //    transport-type / comparison — legacy reads those from the row in
-      //    update_data, so we do the same (use `before.*`).
-      const customRateSwitch = String(before.customrate ?? "0").trim() === "1";
+      // 2026-06-05: when the admin submits the customrate override block, use
+      //   the just-submitted values for the rate waterfall — that's the whole
+      //   point of the toggle (legacy L1801 reads `$_POST['customRate']`,
+      //   `$_POST['customRateKG']`, `$_POST['customRateCBM']`). Fall back to
+      //   the existing row when the field is omitted (backwards-compat).
+      // Faithful note: the dimension-edit form may now send warehouse —
+      //   when omitted, legacy reads from the row in update_data; we do the
+      //   same.
+      const effectiveCustomRate =
+        d.customRate !== undefined ? d.customRate : String(before.customrate ?? "0").trim();
+      const customRateSwitch = effectiveCustomRate === "1";
+      const effectiveCustomRateKg =
+        d.customRateKg !== undefined ? d.customRateKg : num(before.customratekg);
+      const effectiveCustomRateCbm =
+        d.customRateCbm !== undefined ? d.customRateCbm : num(before.customratecbm);
+      const effectiveWarehouseChina =
+        d.fWarehouseChina !== undefined
+          ? d.fWarehouseChina
+          : String(before.fwarehousechina ?? "1");
       const famountCount = before.famountcount;
       const famount = num(before.famount);
       // CBMProduct — legacy L1935-1941: famountcount==1 → fvolume; else fvolume*famount.
@@ -413,7 +462,7 @@ export async function adminUpdateForwarderDimensions(
 
       const priceResult = await resolveLiveForwarderRate(admin, {
         userid:            before.userid,
-        fwarehousechina:   before.fwarehousechina,
+        fwarehousechina:   effectiveWarehouseChina,
         ftransporttype:    before.ftransporttype,
         fproductstype:     d.productType,          // the JUST-submitted product type
         weightKg:          d.weightKg,
@@ -422,8 +471,8 @@ export async function adminUpdateForwarderDimensions(
         famount,
         reforder:          before.reforder,
         customRateSwitch,
-        customRateKg:      num(before.customratekg),
-        customRateCbm:     num(before.customratecbm),
+        customRateKg:      effectiveCustomRateKg,
+        customRateCbm:     effectiveCustomRateCbm,
         userComparison,
         userComparisonValue,
       });
@@ -462,19 +511,38 @@ export async function adminUpdateForwarderDimensions(
       //   ftotalprice (NEW transport) + fpriceupdate + fshippingservice +
       //   ftransportpricechnthb + pricecrate + priceother + ftransportprice
       //   − fdiscount.
-      // (We do NOT mutate the service adders / discount here — the dimension
-      //  edit only changes the transport leg. fTransportPrice = TH-domestic,
-      //  left untouched — legacy update_data also leaves it as the POST value.)
+      // 2026-06-05: the form now sends fshippingservice / ftransportpricechnthb
+      //   / priceother / ftransportprice / fdiscount when the admin types them —
+      //   when omitted, fall back to the existing row (=legacy behaviour, leaves
+      //   them as the POST value). The dimension edit still does NOT touch
+      //   fpriceupdate (driven by the shop-order auto-update path).
+      const effectiveDiscount =
+        d.fDiscount !== undefined ? d.fDiscount : num(before.fdiscount);
+      const effectiveTransportChnThb =
+        d.fTransportPriceChnThb !== undefined
+          ? d.fTransportPriceChnThb
+          : num(before.ftransportpricechnthb);
+      const effectivePriceOther =
+        d.priceOther !== undefined ? d.priceOther : num(before.priceother);
+      const effectiveTransportPrice =
+        d.fTransportPrice !== undefined
+          ? d.fTransportPrice
+          : num(before.ftransportprice);
+      const effectiveShippingService =
+        d.fShippingService !== undefined
+          ? d.fShippingService
+          : num(before.fshippingservice);
+
       const newFTotalPrice = resolved.transportSubtotal;
       const grandTotal =
         newFTotalPrice +
         num(before.fpriceupdate) +
-        num(before.fshippingservice) +
-        num(before.ftransportpricechnthb) +
+        effectiveShippingService +
+        effectiveTransportChnThb +
         num(before.pricecrate) +
-        num(before.priceother) +
-        num(before.ftransportprice) -
-        num(before.fdiscount);
+        effectivePriceOther +
+        effectiveTransportPrice -
+        effectiveDiscount;
       const newGrandTotal = Math.round(grandTotal * 100) / 100;
 
       // ─── Lane C — min-sell guardrail advisory (global-trade-group §5) ──
@@ -482,12 +550,12 @@ export async function adminUpdateForwarderDimensions(
       // = the shipping subtotal a customer is charged) against the per-route
       // sales floor. We do NOT block the save (faithful — the legacy engine just
       // priced the row); we return the advisory so the edit form can hard-WARN
-      // the pricer. The floor is per (warehouse, transport) — both read from the
-      // row (before.*), the same source the rate engine used above.
+      // the pricer. The floor is per (warehouse, transport) — both use the
+      // effective values (the just-submitted one wins).
       const minSellFloors = await getMinSellFloors();
       const minSell = getMinSellAdvisory({
         floors: minSellFloors,
-        warehouse: (String(before.fwarehousechina ?? "1").trim() as MinSellWarehouse) || "1",
+        warehouse: (effectiveWarehouseChina.trim() as MinSellWarehouse) || "1",
         transport: (String(before.ftransporttype ?? "1").trim() as MinSellTransport) || "1",
         quotedThb: newFTotalPrice,
       });
@@ -509,6 +577,20 @@ export async function adminUpdateForwarderDimensions(
         adminidupdate:     legacyAdminId,
         fdateadminstatus:  nowIso,
       };
+
+      // 2026-06-05 — write the override block + adders only when the admin
+      // actually typed something (each field is optional in the schema). This
+      // preserves backwards-compat for callers that still send the old payload.
+      if (d.customRate !== undefined)            update.customrate            = d.customRate;
+      if (d.customRateKg !== undefined)          update.customratekg          = d.customRateKg;
+      if (d.customRateCbm !== undefined)         update.customratecbm         = d.customRateCbm;
+      if (d.fDiscount !== undefined)             update.fdiscount             = d.fDiscount;
+      if (d.fTransportPriceChnThb !== undefined) update.ftransportpricechnthb = d.fTransportPriceChnThb;
+      if (d.priceOther !== undefined)            update.priceother            = d.priceOther;
+      if (d.fTransportPrice !== undefined)       update.ftransportprice       = d.fTransportPrice;
+      if (d.fShippingService !== undefined)      update.fshippingservice      = d.fShippingService;
+      if (d.fWarehouseChina !== undefined)       update.fwarehousechina       = d.fWarehouseChina;
+      if (d.fWarehouseName !== undefined)        update.fwarehousename        = d.fWarehouseName;
 
       const { error: updErr } = await admin
         .from("tb_forwarder")
@@ -592,6 +674,17 @@ export async function adminUpdateForwarderDimensions(
             fproductstype: d.productType,
             frefprice:     String(resolved.refPrice),
             fnote:         d.note ?? null,
+            // 2026-06-05 — overrides + adders (only when the admin typed them)
+            ...(d.customRate            !== undefined ? { customrate:            d.customRate } : {}),
+            ...(d.customRateKg          !== undefined ? { customratekg:          d.customRateKg } : {}),
+            ...(d.customRateCbm         !== undefined ? { customratecbm:         d.customRateCbm } : {}),
+            ...(d.fDiscount             !== undefined ? { fdiscount:             d.fDiscount } : {}),
+            ...(d.fTransportPriceChnThb !== undefined ? { ftransportpricechnthb: d.fTransportPriceChnThb } : {}),
+            ...(d.priceOther            !== undefined ? { priceother:            d.priceOther } : {}),
+            ...(d.fTransportPrice       !== undefined ? { ftransportprice:       d.fTransportPrice } : {}),
+            ...(d.fShippingService      !== undefined ? { fshippingservice:      d.fShippingService } : {}),
+            ...(d.fWarehouseChina       !== undefined ? { fwarehousechina:       d.fWarehouseChina } : {}),
+            ...(d.fWarehouseName        !== undefined ? { fwarehousename:        d.fWarehouseName } : {}),
           },
           // ── money-path audit trail (the live-pricing change) ──
           pricing: {

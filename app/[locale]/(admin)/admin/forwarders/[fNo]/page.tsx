@@ -3,7 +3,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
-import { ForwarderItemsTable } from "./forwarder-items-table";
+// 2026-06-05 PM (ภูม flag): ForwarderItemsTable replaced by combined
+// FreightBreakdownTable (per-item rows ¥ + freight breakdown row ฿).
+import { FreightBreakdownTable } from "./edit/freight-breakdown-table";
 import {
   User as UserIcon,
   Package,
@@ -218,7 +220,9 @@ async function tryRenderTbForwarder(
       "faddressdistrict, faddressprovince, faddresszipcode, " +
       "faddresstel, faddresstel2, faddressnote, " +
       "fnote, fdetail, fcover, fcredit, reforder, " +
-      "adminid, adminidcreator, adminidupdate, paymethod, paydeposit, crate, fpallet, fbilltoname",
+      "adminid, adminidcreator, adminidupdate, paymethod, paydeposit, crate, fpallet, fbilltoname, " +
+      // 2026-06-05 PM (ภูม flag · breakdown table on detail page too).
+      "fusercompany",
     )
     .limit(1);
   tbq = isId ? tbq.eq("id", asNumber) : tbq.eq("fidorco", fNo);
@@ -260,11 +264,12 @@ async function tryRenderTbForwarder(
     paymethod: string | null; paydeposit: string | null;
     crate: string | null; fpallet: number | null;
     fbilltoname: string | null;
+    fusercompany: string | null;
   };
 
   const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
-    .select("userID, userName, userLastName, userTel, userEmail, userPicture, adminIDSale")
+    .select("userID, userName, userLastName, userTel, userEmail, userPicture, adminIDSale, userCompany")
     .eq("userID", r.userid)
     .maybeSingle();
   if (userRowErr) {
@@ -274,6 +279,7 @@ async function tryRenderTbForwarder(
     userID: string; userName: string | null; userLastName: string | null;
     userTel: string | null; userEmail: string | null;
     userPicture: string | null; adminIDSale: string | null;
+    userCompany: string | null;
   } | null;
 
   // Items table loading is now owned by <ForwarderItemsTable> further down —
@@ -282,6 +288,23 @@ async function tryRenderTbForwarder(
   //
   // 2026-06-04 F1: removed the driver-assignment + inline-edits data loads —
   // those panels moved to /edit/page.tsx (this page is READ-ONLY).
+
+  // 2026-06-05 (ภูม flag): driver-assigned detection — needed to split
+  // fstatus=6 timeline pill into "เตรียมส่ง" vs "กำลังจัดส่ง" (legacy
+  // function.php L1225-1230 · fStatusDriver flag from
+  // `tb_forwarder_driver_item WHERE fdiStatus=''`).
+  const { data: assignItemRow, error: assignItemErr } = await admin
+    .from("tb_forwarder_driver_item")
+    .select("fdistatus")
+    .eq("fid", r.id)
+    .order("id", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ fdistatus: string | null }>();
+  if (assignItemErr) {
+    console.error(`[tb_forwarder_driver_item detail] failed`, { code: assignItemErr.code, message: assignItemErr.message, fid: r.id });
+  }
+  const isDriverDispatched =
+    assignItemRow != null && (assignItemRow.fdistatus ?? "") === "";
 
   // Resolve cover image — shop-spawned rows may have alicdn URL, legacy path, or empty.
   const coverHref = r.fcover && r.fcover.trim() !== ""
@@ -300,14 +323,22 @@ async function tryRenderTbForwarder(
   };
 
   const currentStatusInt = parseInt(r.fstatus, 10);
-  const TIMELINE: Array<{ key: number; label: string; date: string | null; Icon: typeof Package }> = [
-    { key: 1, label: "เข้าโกดังจีน",  date: r.fdate ?? null,         Icon: Package },
-    { key: 2, label: "อยู่โกดังจีน",  date: r.fdatestatus2 ?? null,  Icon: Warehouse },
-    { key: 3, label: "ส่งมาไทย",      date: r.fdatestatus3 ?? null,  Icon: r.ftransporttype === "3" ? Plane : Truck },
-    { key: 4, label: "ถึงไทย",         date: r.fdatestatus4 ?? null,  Icon: Warehouse },
-    { key: 5, label: "รอชำระเงิน",    date: r.fdatestatus5 ?? null,  Icon: Clock },
-    { key: 6, label: "เตรียมส่ง",     date: r.fdatestatus6 ?? null,  Icon: Truck },
-    { key: 7, label: "ส่งแล้ว",        date: r.fdatestatus7 ?? null,  Icon: CheckCircle2 },
+  // 2026-06-05 (ภูม flag): 8-step timeline with fstatus=6 split into
+  // "เตรียมส่ง" (no driver yet) vs "กำลังจัดส่ง" (driver assigned · fdistatus='')
+  // per legacy function.php L1225-1230. `rank` ≠ key when 6.5 is current.
+  const currentRank: number =
+    currentStatusInt === 6 && isDriverDispatched ? 6.5
+      : currentStatusInt === 7 ? 8
+      : currentStatusInt;
+  const TIMELINE: Array<{ key: number; rank: number; label: string; date: string | null; Icon: typeof Package }> = [
+    { key: 1, rank: 1,   label: "เข้าโกดังจีน",  date: r.fdate ?? null,         Icon: Package },
+    { key: 2, rank: 2,   label: "อยู่โกดังจีน",  date: r.fdatestatus2 ?? null,  Icon: Warehouse },
+    { key: 3, rank: 3,   label: "ส่งมาไทย",      date: r.fdatestatus3 ?? null,  Icon: r.ftransporttype === "3" ? Plane : Truck },
+    { key: 4, rank: 4,   label: "ถึงไทย",         date: r.fdatestatus4 ?? null,  Icon: Warehouse },
+    { key: 5, rank: 5,   label: "รอชำระเงิน",    date: r.fdatestatus5 ?? null,  Icon: Clock },
+    { key: 6, rank: 6,   label: "เตรียมส่ง",     date: r.fdatestatus6 ?? null,  Icon: Truck },
+    { key: 7, rank: 6.5, label: "กำลังจัดส่ง",   date: r.fdatestatus6 ?? null,  Icon: Truck },
+    { key: 8, rank: 8,   label: "ส่งแล้ว",        date: r.fdatestatus7 ?? null,  Icon: CheckCircle2 },
   ];
 
   // Cost breakdown (legacy "ราคารวม" = sum of these parts).
@@ -387,9 +418,12 @@ async function tryRenderTbForwarder(
         <div className="overflow-x-auto scrollbar-x-visible">
           <ol className="flex items-start gap-2 min-w-max lg:min-w-0 lg:justify-between">
             {TIMELINE.map((step, idx) => {
-              const isActive = step.key === currentStatusInt;
-              const isComplete = step.key < currentStatusInt || (step.key === currentStatusInt && currentStatusInt >= 7);
-              const isFuture = step.key > currentStatusInt && currentStatusInt !== 99;
+              // Compare by `rank` (decimal-aware) not `key` — the new step
+              // 6.5 "กำลังจัดส่ง" needs to be active vs visited based on
+              // driver-assigned flag (computed in currentRank above).
+              const isActive = step.rank === currentRank;
+              const isComplete = step.rank < currentRank || (step.rank === currentRank && currentRank >= 8);
+              const isFuture = step.rank > currentRank && currentStatusInt !== 99;
               const StepIcon = isComplete ? CheckCircle2 : step.Icon;
               return (
                 <li key={step.key} className="flex flex-col items-center text-center min-w-[80px] lg:flex-1 relative">
@@ -487,7 +521,16 @@ async function tryRenderTbForwarder(
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
               <LegacyKV label="วันที่สร้าง" value={r.fdate ? new Date(r.fdate).toLocaleString("th-TH") : "—"} />
               <LegacyKV label="วันที่ถึงไทย" value={r.fdatetothai ? new Date(r.fdatetothai).toLocaleDateString("th-TH") : "—"} />
-              <LegacyKV label="โกดังจีน" value={WAREHOUSE_LABEL[r.fwarehousename] ?? r.fwarehousename} />
+              {/* 2026-06-05 (ภูม flag): blank fwarehousename = "ยังไม่ระบุ"
+                  → render "—" instead of an empty cell. */}
+              <LegacyKV
+                label="โกดังจีน"
+                value={
+                  (r.fwarehousename && WAREHOUSE_LABEL[r.fwarehousename]) ||
+                  (r.fwarehousename && r.fwarehousename.trim()) ||
+                  "—"
+                }
+              />
               <LegacyKV
                 label="หมายเลขตู้"
                 value={r.fcabinetnumber ?? "—"}
@@ -553,24 +596,14 @@ async function tryRenderTbForwarder(
             </div>
           </section>
 
-          {/* Items table — PCS-style (2026-06-03 ภูม flag · forwarder-items-table.tsx) ──
-              When the forwarder is shop-spawned (reforder set), joins to tb_order
-              to render product cards grouped by Chinese vendor with thumbnails +
-              per-item ¥ price + qty + variant (color/size) + tracking +
-              tfoot totals row.
-              When fdetail is set or only box dimensions exist, renders an
-              empty-state with cover + dimensions panel. */}
-          <ForwarderItemsTable
-            forwarderId={r.id}
-            forwarderNo={r.fidorco ?? String(r.id)}
-            reforder={r.reforder}
-            fdetail={r.fdetail}
-            fcover={r.fcover}
-            fwidth={r.fwidth}
-            flength={r.flength}
-            fheight={r.fheight}
-            famount={r.famount}
-            mode="view"
+          {/* 2026-06-05 PM (ภูม flag round 2): combined รายการสินค้า +
+              freight breakdown table — N per-item rows (¥ from tb_order) +
+              ¥ subtotal + final ฿ breakdown row (legacy detail.php L380-441
+              16-col layout + WHT 1% for juristic ≥ ฿1000). Same component
+              powers /edit (read-write context) and /detail (this page). */}
+          <FreightBreakdownTable
+            r={r}
+            isJuristic={u?.userCompany === "1" || r.fusercompany === "1"}
           />
 
           {/* Note */}

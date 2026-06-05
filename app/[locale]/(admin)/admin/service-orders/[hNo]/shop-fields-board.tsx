@@ -49,6 +49,14 @@ export type ShopFieldsItem = {
   cprice: number;
   cpriceupdate: number;
   crewallet: string | null;
+  // 2026-06-05 (ภูม flag — merge tracking inputs INTO items table per legacy
+  // PCS shops/update.php) — display fields so this card can render the full
+  // per-shop items table (image + link + variant + ค่าส่งจีน + รวม).
+  coverUrl?: string | null;
+  curl?: string | null;
+  ccolor?: string | null;
+  csize?: string | null;
+  cshippingchn?: number;
 };
 export type ShopFieldsRow = {
   cnameshop: string;
@@ -194,85 +202,187 @@ export function ShopFieldsBoard({
           {isStatus5 && "ออเดอร์สำเร็จแล้ว · ระบบเปิดใบฝากนำเข้าให้ครบแล้ว"}
         </p>
 
-        <div className="space-y-2">
+        <div className="space-y-3">
           {shops.map((sh) => {
             const d = draft[sh.cnameshop] ?? { cshippingnumber: "", ctrackingnumber: "" };
             const shopFwdSearchHref = sh.ctrackingnumber
               ? `/admin/forwarders?q=${encodeURIComponent(sh.ctrackingnumber)}`
               : null;
+            // ── Per-shop totals (legacy shops/update.php) ──────────────
+            // sum(amount × price + cshippingchn) — in ¥; the table at the
+            // top of /edit already shows the ¥ rate × THB summary, so we
+            // surface only the ¥ subtotal in the shop header chip.
+            const shopItems = sh.items ?? [];
+            const shopSubtotalCny = shopItems.reduce((sum, it) => {
+              if (it.crewallet === "1") return sum;
+              return sum + it.camount * it.cprice + Number(it.cshippingchn ?? 0);
+            }, 0);
             return (
               <div
                 key={sh.cnameshop}
-                className="rounded-xl border border-border bg-white dark:bg-surface p-3 space-y-2 shadow-sm"
+                className="rounded-xl border-2 border-primary-200 bg-white dark:bg-surface shadow-sm overflow-hidden"
               >
-                <div className="flex items-center gap-2 border-b border-border pb-2">
-                  <Store className="h-3.5 w-3.5 text-muted" />
-                  <span className="text-xs font-bold text-foreground">
-                    ชื่อร้าน: <span className="font-normal text-muted">{sh.cnameshop}</span>
+                {/* ── Shop band header (legacy shops/update.php — ชื่อร้าน band) */}
+                <div className="bg-primary-50 dark:bg-primary-950/30 border-b border-primary-200 px-3 py-2 flex flex-wrap items-center gap-2">
+                  <Store className="h-4 w-4 text-primary-600 shrink-0" />
+                  <span className="text-sm font-bold text-foreground">
+                    ชื่อร้าน: <span className="font-normal">{sh.cnameshop}</span>
+                  </span>
+                  <span className="ml-auto inline-flex items-center gap-2 text-[11px]">
+                    <span className="rounded bg-white/80 border border-border px-2 py-0.5 font-mono tabular-nums">
+                      {shopItems.length} รายการ
+                    </span>
+                    <span className="rounded bg-white/80 border border-border px-2 py-0.5 font-mono tabular-nums">
+                      ¥ {shopSubtotalCny.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
                   </span>
                 </div>
 
-                {/* cshippingnumber — editable at status 3 · locked at 4/5 */}
-                <label className="block space-y-1">
-                  <span className="text-[11px] font-medium text-muted">
-                    เลขออเดอร์ร้านจีน {isStatus3 && <span className="text-red-500">*</span>}
-                  </span>
-                  <input
-                    type="text"
-                    value={d.cshippingnumber}
-                    onChange={(e) => setField(sh.cnameshop, "cshippingnumber", e.target.value)}
-                    disabled={!isStatus3 || pending}
-                    placeholder="เช่น 5119114033176034116"
-                    className={inputCls}
-                  />
-                </label>
-
-                {/* ctrackingnumber — editable at status 4 · shown read-only at 5 */}
-                {(isStatus4 || isStatus5) && (
+                {/* ── Tracking inputs (top of the shop card) ──
+                    Legacy `shops/update3.php` + `update4.php` put these
+                    INSIDE the shop's items table; we use a 2-up grid that
+                    sits between the shop header and the items table so the
+                    admin sees them right next to the items they belong to. */}
+                <div className="px-3 py-2.5 bg-amber-50/40 border-b border-border grid sm:grid-cols-2 gap-2">
+                  {/* cshippingnumber — editable at status 3 · locked at 4/5 */}
                   <label className="block space-y-1">
-                    <span className="text-[11px] font-medium text-muted flex items-center gap-1">
-                      <Truck className="h-3 w-3" /> เลข Tracking จีน
-                      {isStatus4 && <span className="text-muted/70">(หากมีหลายเลข ใส่คอมม่าคั่น)</span>}
+                    <span className="text-[11px] font-semibold text-muted flex items-center gap-1">
+                      เลขออเดอร์ร้านจีน{" "}
+                      {isStatus3 && <span className="text-red-500">*</span>}
                     </span>
-                    <div className="flex gap-2 items-center">
-                      <input
-                        type="text"
-                        value={d.ctrackingnumber}
-                        onChange={(e) => setField(sh.cnameshop, "ctrackingnumber", e.target.value)}
-                        disabled={!isStatus4 || pending}
-                        placeholder="เลข Tracking จีน · หากจำนวนช่องไม่ตรงให้แก้ไขเลขออเดอร์จีน"
-                        className={inputCls}
-                      />
-                      {shopFwdSearchHref && (
-                        <Link
-                          href={shopFwdSearchHref}
-                          className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-primary-300 bg-primary-50 px-3 py-2 text-xs font-medium text-primary-700 hover:bg-primary-100"
-                          title="ค้นหารายการฝากนำเข้าตามเลข tracking นี้"
-                        >
-                          <ExternalLink className="h-3 w-3" />
-                          ตรวจสอบรายการนำเข้า
-                        </Link>
-                      )}
-                    </div>
+                    <input
+                      type="text"
+                      value={d.cshippingnumber}
+                      onChange={(e) => setField(sh.cnameshop, "cshippingnumber", e.target.value)}
+                      disabled={!isStatus3 || pending}
+                      placeholder="เช่น 5119114033176034116"
+                      className={inputCls}
+                    />
                   </label>
-                )}
 
-                {/* per-line ¥ cPriceUpdate — เพิ่ม/ลด ราคาตอนของถึงจีน
-                    (legacy update3.php L85 cPriceUpdate[] + update4 inline).
-                    Editable at status 3/4, read-only at 5. */}
-                {sh.items && sh.items.length > 0 && (
-                  <div className="space-y-1 border-t border-border/60 pt-2">
-                    <span className="text-[11px] font-medium text-muted flex items-center gap-1">
-                      <Coins className="h-3 w-3" /> เพิ่ม/ลด ราคาต่อชิ้น (¥ · ตอนของถึงจีน)
-                    </span>
-                    {sh.items.map((it) => (
-                      <ItemPriceUpdateRow
-                        key={it.id}
-                        item={it}
-                        editable={isStatus3 || isStatus4}
-                        onSaved={() => router.refresh()}
-                      />
-                    ))}
+                  {/* ctrackingnumber — editable at status 4 · readonly at 5
+                      · placeholder cell at status 3 (so the grid keeps shape) */}
+                  {(isStatus4 || isStatus5) ? (
+                    <label className="block space-y-1">
+                      <span className="text-[11px] font-semibold text-muted flex items-center gap-1">
+                        <Truck className="h-3 w-3" /> เลข Tracking จีน
+                        {isStatus4 && <span className="text-muted/70 font-normal">(หลายเลข ใส่ , คั่น)</span>}
+                      </span>
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type="text"
+                          value={d.ctrackingnumber}
+                          onChange={(e) => setField(sh.cnameshop, "ctrackingnumber", e.target.value)}
+                          disabled={!isStatus4 || pending}
+                          placeholder="เลข Tracking จีน"
+                          className={inputCls}
+                        />
+                        {shopFwdSearchHref && (
+                          <Link
+                            href={shopFwdSearchHref}
+                            className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-primary-300 bg-primary-50 px-2.5 py-2 text-[11px] font-medium text-primary-700 hover:bg-primary-100"
+                            title="ค้นหารายการฝากนำเข้าตามเลข tracking นี้"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            ตรวจสอบ
+                          </Link>
+                        )}
+                      </div>
+                    </label>
+                  ) : (
+                    <div className="hidden sm:block" />
+                  )}
+                </div>
+
+                {/* ── Items table (per-shop · legacy shops/update.php รายการสินค้า)
+                    Columns mirror legacy: ข้อมูลสินค้า · จำนวน · ¥ราคาต่อชิ้น
+                    · ค่าส่งจีน · เพิ่ม/ลด ¥ (inline editable at status 3/4)
+                    · รวม ¥. Hidden if items[] not provided. */}
+                {shopItems.length > 0 && (
+                  <div className="overflow-x-auto scrollbar-x-visible">
+                    <table className="w-full min-w-[640px] text-xs">
+                      <thead className="bg-surface-alt/60 text-[10px] uppercase tracking-wide text-muted">
+                        <tr>
+                          <th className="px-2 py-2 text-left">ข้อมูลสินค้า</th>
+                          <th className="px-2 py-2 text-right w-14">จำนวน</th>
+                          <th className="px-2 py-2 text-right w-20">¥/ชิ้น</th>
+                          <th className="px-2 py-2 text-right w-20">ค่าส่งจีน</th>
+                          <th className="px-2 py-2 text-right w-36">
+                            <span className="inline-flex items-center gap-1">
+                              <Coins className="h-3 w-3" /> เพิ่ม/ลด ¥
+                            </span>
+                          </th>
+                          <th className="px-2 py-2 text-right w-24">รวม ¥</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {shopItems.map((it) => {
+                          const refunded = it.crewallet === "1";
+                          const shipping = Number(it.cshippingchn ?? 0);
+                          const line = refunded
+                            ? 0
+                            : it.camount * it.cprice + shipping;
+                          return (
+                            <tr
+                              key={it.id}
+                              className={`border-t border-border ${refunded ? "bg-red-50/40" : ""}`}
+                            >
+                              <td className="px-2 py-2 align-top">
+                                <div className="flex gap-2">
+                                  {it.coverUrl ? (
+                                    <a href={it.coverUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img src={it.coverUrl} alt={it.ctitle ?? ""} className="h-10 w-10 rounded border border-border object-cover" />
+                                    </a>
+                                  ) : null}
+                                  <div className="min-w-0">
+                                    {it.curl ? (
+                                      <a
+                                        href={it.curl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="block truncate max-w-[280px] text-primary-600 hover:underline"
+                                        title={it.ctitle ?? ""}
+                                      >
+                                        {it.ctitle || it.curl}
+                                      </a>
+                                    ) : (
+                                      <span className="block truncate max-w-[280px]" title={it.ctitle ?? ""}>
+                                        {it.ctitle || "—"}
+                                      </span>
+                                    )}
+                                    {(it.ccolor || it.csize) && (
+                                      <p className="text-[10px] text-muted">
+                                        {it.ccolor}{it.ccolor && it.csize ? " · " : ""}{it.csize}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-2 py-2 text-right align-top font-mono tabular-nums">
+                                {refunded ? 0 : it.camount}
+                              </td>
+                              <td className="px-2 py-2 text-right align-top font-mono tabular-nums">
+                                {it.cprice.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                              <td className="px-2 py-2 text-right align-top font-mono tabular-nums">
+                                {shipping.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                              <td className="px-2 py-2 align-top">
+                                <InlinePriceUpdateCell
+                                  item={it}
+                                  editable={isStatus3 || isStatus4}
+                                  onSaved={() => router.refresh()}
+                                />
+                              </td>
+                              <td className="px-2 py-2 text-right align-top font-mono tabular-nums font-semibold">
+                                {line.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
@@ -326,12 +436,14 @@ export function ShopFieldsBoard({
 }
 
 // ────────────────────────────────────────────────────────────
-// ItemPriceUpdateRow — per-line ¥ add/subtract (cPriceUpdate) under a shop.
+// InlinePriceUpdateCell — per-line ¥ add/subtract (cPriceUpdate) rendered
+// INSIDE the per-shop items table cell (2026-06-05 ภูม flag — merge tracking
+// + price-update inputs INTO the items table per legacy PCS layout).
 // Legacy update3.php L85 (cPriceUpdate[]) + update4 inline update_cPriceUpdate
 // (shops.php L1806). Saves via adminUpdateCartItemPriceUpdate → delta-adjusts
-// the header hPriceUpdate. confirm-before-mutate (§0f · native, matches board).
+// the header hPriceUpdate. confirm-before-mutate (§0f · native dialog).
 // ────────────────────────────────────────────────────────────
-function ItemPriceUpdateRow({
+function InlinePriceUpdateCell({
   item,
   editable,
   onSaved,
@@ -358,33 +470,34 @@ function ItemPriceUpdateRow({
     });
   }
 
+  if (refunded) {
+    return <div className="text-right text-[10px] text-red-500">คืนเงินแล้ว</div>;
+  }
   return (
-    <div className="flex items-center gap-2 text-xs">
-      <span className="min-w-0 flex-1 truncate text-muted" title={item.ctitle}>
-        {item.ctitle || `#${item.id}`}
-        <span className="ml-1 text-muted/70">({item.camount}×¥{item.cprice})</span>
-      </span>
-      <input
-        type="number"
-        min={0}
-        step={0.01}
-        value={val}
-        onChange={(e) => setVal(e.target.value)}
-        disabled={!editable || pending || refunded}
-        className="w-20 rounded border border-border px-2 py-1 text-right font-mono text-xs disabled:opacity-50"
-      />
-      {editable && !refunded && (
-        <button
-          type="button"
-          onClick={save}
-          disabled={pending}
-          className="shrink-0 rounded border border-primary-300 text-primary-700 px-2 py-1 text-[11px] hover:bg-primary-50 disabled:opacity-50"
-        >
-          บันทึก
-        </button>
-      )}
-      {refunded && <span className="text-[10px] text-red-500 shrink-0">คืนเงินแล้ว</span>}
-      {rowErr && <span className="text-[10px] text-red-600 shrink-0">{rowErr}</span>}
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center justify-end gap-1.5">
+        <input
+          type="number"
+          min={0}
+          step={0.01}
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          disabled={!editable || pending}
+          className="w-20 rounded border border-border px-2 py-1 text-right font-mono text-xs disabled:opacity-50 disabled:bg-surface-alt"
+        />
+        {editable && (
+          <button
+            type="button"
+            onClick={save}
+            disabled={pending}
+            className="shrink-0 rounded border border-primary-300 text-primary-700 px-2 py-1 text-[11px] hover:bg-primary-50 disabled:opacity-50"
+            title="บันทึก ¥ เพิ่ม/ลด รายการนี้"
+          >
+            บันทึก
+          </button>
+        )}
+      </div>
+      {rowErr && <span className="text-[10px] text-red-600">{rowErr}</span>}
     </div>
   );
 }

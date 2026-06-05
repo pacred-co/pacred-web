@@ -38,6 +38,39 @@
 
 ---
 
+# 🌆 2026-06-05 LATE-PM SAVE-POINT — read FIRST on home computer (ภูม สั่ง "save · ให้คอมที่บ้านทำงานต่อเนื่อง")
+
+**Branch:** `Poom-pacred` (= HEAD this commit · pushed) · `main` / `dave-pacred` lanes unchanged (this is ภูม-lane work only). ภูม browser session at `/admin/forwarders/52017` was live-testing when he closed work.
+
+**Resume:** `git fetch && git checkout Poom-pacred && git pull --no-edit` → read **[`docs/research/poom-save-point-2026-06-05-late-pm.md`](docs/research/poom-save-point-2026-06-05-late-pm.md)** FIRST (canonical resume · 9 sections: A-I work shipped · browser-test queue · report-cnt fix plan ภูม approved Option A).
+
+**🚀 What landed (one combined save-point commit · 17 files · +1,400 / −650):**
+- **A**·**B**·**C**·**D**·**E**·**F**·**G** = pre-compaction work (full-precision display · per-shop tracking inputs · fwarehousename "" fix · ใบเสร็จ 404 smart-route · `"use server"` array-export bomb fix · server-side fstatus auto-advance · PCS-faithful 1-card /admin/forwarders/[fNo]/edit form with 10 new fields)
+- **H** (TODAY) = 8-step status pipeline · fstatus=6 split visually into "เตรียมส่ง" (no driver) vs "กำลังจัดส่ง" (driver dispatched · `tb_forwarder_driver_item.fdistatus=''`) per legacy `function.php` L1218-1233 · on /edit AND /detail
+- **I** (TODAY) = NEW `<FreightBreakdownTable>` async server component · N per-item rows ¥ (from `tb_order`) + ¥ subtotal + ∑ ฿ legacy 16-col freight breakdown + WHT 1% for juristic ≥ ฿1000 · replaces old `<ForwarderItemsTable>` on /edit AND /detail
+
+**Gates:** typecheck EXIT 0 · lint 0 errors / 138 warnings (pre-existing) · smoke /admin/forwarders/52017 + /edit = 307. ⚠️ NOT yet click-tested on prod (ภูม wants to verify at home).
+
+**🟡 Browser-test ที่บ้าน (~10 min):**
+1. /admin/forwarders/52017/edit — 8 pills + 3-item breakdown table + PCS edit form
+2. /admin/forwarders/52017 (detail) — same 8 pills + same breakdown table · NO duplicate items table below
+3. Pick fstatus=6 forwarder with driver → pill "กำลังจัดส่ง" highlights
+4. Juristic order ≥ ฿1000 → WHT 1% column appears in ∑ row
+5. Mobile 360px — 8 pills wrap to 2 rows cleanly
+
+**🔴 ภูม approved next batch (Option A · 2-3h · report-cnt audit):**
+1. **B1 backfill `tb_cnt_item`** — `tb_cnt` 970 rows have CSV in `cntName` but child `tb_cnt_item` is 0 rows → every cabinet shows "ยังไม่จ่าย" falsely · SQL backfill script (dry-run + `--apply` per AGENTS §11)
+2. **B2 tab badge fix** — currently shows **8.8×** overcount (283 rows / 32 containers · 46,339 rows / 5,603 containers) · need RPC `count_distinct_cabinets` (next migration `0141`) + repoint 6 calls
+3. **B5 wire bloat** — succeed-tab pulls 46k rows (~12-23MB JSON) per page-load · new RPC `get_container_summary` does SUM/GROUP_BY server-side · cuts wire 88×
+4. B3 (air pill missing) + B4 (redundant pre-sort) = defer · cosmetic
+
+**⚠️ Cleanup carry-over:**
+- `app/[locale]/(admin)/admin/forwarders/[fNo]/forwarder-items-table.tsx` = ORPHAN after this batch (no callers in /admin/forwarders/*) — audit at home + delete in next batch if no other surface needs it.
+
+> The เดฟ overnight Mac work below (member relabel + audits + tests + perf) is on **`dave-pacred`** lane = main, no collision with this Poom-pacred batch. Keep both contexts available — read this section first, then below for full project state.
+
+---
+
 # 🌙 2026-06-05 OVERNIGHT (Mac · เดฟ · owner asleep 02:00→08:00 ICT): platform-tidy — member relabel + customer+admin audits (CLEAN) + 13 test files + perf-investigate + learnings · read FIRST
 
 **main = `dave-pacred` = `f0829c29`+ (+ this doc) · all pushed · `pnpm verify && pnpm build` → CHAIN=0 (REAL exit codes · every save-point) · both branches 0/0 · dev server on :3000 (nohup · serves `/Users/dev/pacred-web` · runtime app current; test-only commits not re-pulled — no runtime effect).** Autonomous "เก็บงานทั้ง platform ให้เรียบร้อย" run — **NO collision** with ภูม (admin `/admin/**` · `actions/admin/**` · `lib/admin/**`) or ปอน (member-frontend redesign · `components/sections|ui`); only shared backend / lib / tests / docs touched. Guardrails held: no customer comms · no bugs/data-loss · gate-real-exit · save-points.
