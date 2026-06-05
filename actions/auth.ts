@@ -12,6 +12,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { bridgeLegacyLogin } from "@/lib/auth/pcs-legacy-bridge";
+import { bridgeLegacyAdminLogin } from "@/lib/auth/pcs-legacy-admin-bridge";
 import { legacySyntheticEmail } from "@/lib/auth/pcs-legacy-password";
 import { detectIdentifier, normalizePhone } from "@/lib/utils/phone";
 import { checkRateLimit, getClientIpFromHeaders } from "@/lib/rate-limit";
@@ -162,7 +163,18 @@ export async function signIn(input: SignInInput): Promise<ActionResult<{ isAdmin
   // Phase-A legacy data load. Provisional pending ก๊อต Q2 ratification.
   if (!nativeOk) {
     const bridged = await bridgeLegacyLogin(identifier, password);
-    if (!bridged.ok) return { ok: false, error: "invalid_credentials" };
+    if (!bridged.ok) {
+      // 3. Legacy PCS STAFF bridge (2026-06-05 · owner directive) — the shared
+      // warehouse/transport crew (พนักงานโกดัง / คนขับรถ / เด็กรถ) first login:
+      // verify the typed password against the legacy tb_admin.adminPass (same
+      // passTam hash) + provision auth+profile+admins-role. Role is grounded in
+      // tb_admin.adminStatus ('6'→warehouse, '7'→driver); office/privileged
+      // codes are refused (provision via /admin/admins). ADDITIVE — only runs
+      // when native + the customer bridge both miss, so it cannot affect any
+      // existing login. NOT click-tested on prod — verify with one staff login.
+      const staffBridged = await bridgeLegacyAdminLogin(identifier, password);
+      if (!staffBridged.ok) return { ok: false, error: "invalid_credentials" };
+    }
   }
 
   // Check if admin to return correct redirect target
