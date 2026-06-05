@@ -98,7 +98,17 @@ export async function signIn(input: SignInInput): Promise<ActionResult<{ isAdmin
   let resolvedEmail: string | null = null;
   let resolvedPhone: string | null = null;
 
-  if (kind === "email") {
+  const idTrim = identifier.trim();
+  // Staff shorthand (owner 2026-06-06): a bare provisioned-admin username
+  // ("admin_may") resolves to its Pacred email, so staff don't have to type
+  // the full "@pacred.co.th". The office admins were provisioned as
+  // admin_<name>@pacred.co.th (see /admin/admins). Only the admin_* shape
+  // qualifies — `detectIdentifier` returns "phone" for it; customers
+  // (email / phone / PR-code) are untouched, and a non-existent admin_* email
+  // simply misses native signin and falls through to the bridges below.
+  if (kind !== "email" && /^admin_[a-z0-9_]+$/i.test(idTrim)) {
+    resolvedEmail = `${idTrim.toLowerCase()}@pacred.co.th`;
+  } else if (kind === "email") {
     resolvedEmail = identifier.trim();
   } else if (kind === "memberCode") {
     // Look up the profile by member_code via admin client (bypass RLS — pre-auth).
