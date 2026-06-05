@@ -546,6 +546,46 @@ export default async function ProfilePage() {
                                 </a>
                               </li>
                             </ul>
+                            {/* ผูกบัญชีโซเชียล (owner 2026-06-05) — connect LINE /
+                                Facebook / Google to THIS account. การล็อกอินด้วย
+                                โซเชียล = เร็วๆนี้ (ต้องตั้งค่า OAuth provider + DB
+                                ก่อน); LINE ใช้ flow เดิม (/line-settings). */}
+                            <div className="mt-2 rounded-xl border border-border bg-surface-alt/40 p-3">
+                              <p className="text-sm font-semibold text-foreground">เชื่อมต่อ / ผูกบัญชี</p>
+                              <p className="mt-0.5 text-xs text-muted">
+                                ผูกบัญชี LINE / Facebook / Google เข้ากับบัญชีนี้ — แล้วเข้าสู่ระบบได้หลายช่องทาง
+                                (ล็อกอินด้วยโซเชียล <span className="font-medium text-amber-600">เร็วๆนี้</span>)
+                              </p>
+                              <div className="mt-2.5 flex flex-wrap gap-2">
+                                {/* LINE — real (LIFF / line-settings) */}
+                                <Link
+                                  href="/line-settings"
+                                  className="inline-flex items-center gap-2 rounded-lg bg-[#06c755] px-3 py-2 text-sm font-medium text-white hover:brightness-110 active:scale-[0.98] transition-all"
+                                >
+                                  <i className="fab fa-line"></i> เชื่อมต่อ LINE
+                                </Link>
+                                {/* Facebook — coming soon (OAuth provider + DB pending) */}
+                                <button
+                                  type="button"
+                                  disabled
+                                  title="เร็วๆนี้ — กำลังตั้งค่าระบบ"
+                                  className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg bg-[#1877f2]/55 px-3 py-2 text-sm font-medium text-white"
+                                >
+                                  <i className="fab fa-facebook-f"></i> Facebook
+                                  <span className="rounded-full bg-white/25 px-1.5 text-[9px] font-medium leading-[15px]">เร็วๆนี้</span>
+                                </button>
+                                {/* Google — coming soon */}
+                                <button
+                                  type="button"
+                                  disabled
+                                  title="เร็วๆนี้ — กำลังตั้งค่าระบบ"
+                                  className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg border border-border bg-white px-3 py-2 text-sm font-medium text-gray-600"
+                                >
+                                  <span className="font-bold text-[#ea4335]">G</span> Google
+                                  <span className="rounded-full bg-gray-100 px-1.5 text-[9px] font-medium leading-[15px] text-gray-500">เร็วๆนี้</span>
+                                </button>
+                              </div>
+                            </div>
                           </div>
                           <div>
                             {/* L286 — main address + add-address link */}
@@ -594,7 +634,7 @@ export default async function ProfilePage() {
                 cards (grid: 1-col phone · 2-col sm · 4-col xl). Same hrefs +
                 tam-counter/data-count hooks + counts. Bootstrap progress bars
                 → thin Tailwind accent bars; theme colours kept per-card. */}
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
               {/* L308-329 — ฝากสั่งซื้อสินค้า → shops/ */}
               <Link
                 href="/service-order"
@@ -621,7 +661,7 @@ export default async function ProfilePage() {
                     <h2 className="text-2xl font-bold text-[#ff9149] tam-counter" data-count={countForwarder}>
                       {countForwarder}
                     </h2>
-                    <h4 className="text-sm text-muted">ฝากนำเข้าสินค้า</h4>
+                    <h4 className="text-sm text-muted">ฝากนำเข้า</h4>
                   </div>
                   <i className="ft-box text-3xl text-[#ff9149]"></i>
                 </div>
@@ -629,7 +669,30 @@ export default async function ProfilePage() {
                   <div className="h-full w-full rounded-full bg-gradient-to-r from-[#ff9149] to-[#ff6707]"></div>
                 </div>
               </Link>
-              {/* L352-373 — ฝากชำระเงิน → payment/ */}
+              {/* ฝากส่งออก — coming soon (export module not built · greyed,
+                  non-navigating so it never 404s · §0d · owner 2026-06-05) */}
+              <div className="group rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 opacity-70 cursor-not-allowed select-none">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="text-left">
+                    <h2 className="text-2xl font-bold text-gray-400">0</h2>
+                    <h4 className="text-sm text-muted flex items-center gap-1.5">
+                      ฝากส่งออก
+                      <span className="rounded-full bg-gray-200 px-1.5 text-[9px] font-medium leading-[16px] text-gray-500">เร็วๆนี้</span>
+                    </h4>
+                  </div>
+                  <i className="text-gray-400">
+                    <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="17 8 12 3 7 8"></polyline>
+                      <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                  </i>
+                </div>
+                <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-alt">
+                  <div className="h-full w-1/4 rounded-full bg-gray-300"></div>
+                </div>
+              </div>
+              {/* L352-373 — ฝากชำระสินค้า → payment/ */}
               <Link
                 href="/service-payment"
                 className="group rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 transition-all hover:shadow-md hover:-translate-y-0.5"
@@ -639,7 +702,7 @@ export default async function ProfilePage() {
                     <h2 className="text-2xl font-bold text-[#9c27b0] tam-counter" data-count={countPayment}>
                       {countPayment}
                     </h2>
-                    <h4 className="text-sm text-muted">ฝากชำระเงิน</h4>
+                    <h4 className="text-sm text-muted">ฝากชำระสินค้า</h4>
                   </div>
                   <i className="text-[#9c27b0]">
                     <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="css-i6dzq1">

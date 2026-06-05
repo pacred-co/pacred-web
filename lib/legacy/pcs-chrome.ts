@@ -332,6 +332,7 @@ async function loadPcsChromeDataUncached(
       keywordRes,
       svipRes,
       corpRes,
+      profileRow,
     ] = await Promise.all([
       admin
         .from("tb_users")
@@ -405,6 +406,11 @@ async function loadPcsChromeDataUncached(
         .limit(20),  // Sprint-8b: cap legacy keyword strip at 20 (was unbounded — full table scan + serialise on every nav)
       admin.from("tb_rate_custom_cbm").select("*", { count: "exact", head: true }).eq("userid", uid),
       admin.from("tb_corporate").select("*", { count: "exact", head: true }).eq("userid", uid),
+      // The customer's uploaded avatar (profiles.avatar_url · keyed by
+      // member_code = the PR code). The customer uploads it via
+      // actions/profile-avatar.ts → this column; the sidebar user-pill should
+      // show it instead of the static placeholder (owner 2026-06-05).
+      admin.from("profiles").select("avatar_url").eq("member_code", uid).maybeSingle<{ avatar_url: string | null }>(),
     ]);
 
     // Sales + CS resolve in parallel (independent lookups).
@@ -419,7 +425,10 @@ async function loadPcsChromeDataUncached(
       userName: userRow.data?.userName ?? "",
       userLastName: userRow.data?.userLastName ?? "",
       userEmail: (userRow.data?.userEmail ?? "").toLowerCase(),
-      userPicture: PCS_DEFAULT_AVATAR,
+      userPicture:
+        profileRow.data?.avatar_url && profileRow.data.avatar_url.trim()
+          ? profileRow.data.avatar_url
+          : PCS_DEFAULT_AVATAR,
       coID: userRow.data?.coID ?? "",
       walletTotal: Number(walletRow.data?.wallettotal ?? 0),
       cbTotal: Number(cashbackRow.data?.cbtotal ?? 0),
