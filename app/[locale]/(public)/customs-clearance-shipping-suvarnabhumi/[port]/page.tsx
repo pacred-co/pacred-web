@@ -224,14 +224,14 @@ export default async function CustomsPortDetailPage({
                         className="rounded-2xl border border-border bg-white dark:bg-surface p-4 md:p-5"
                       >
                         <div className="text-[13px] md:text-[15px] font-black text-[#111827] dark:text-white mb-3 flex items-center gap-1.5">
-                          <Image
-                            src={sec.icon}
-                            alt=""
-                            width={22}
-                            height={22}
+                          {/* sec.icon is an emoji ("🚢"/"🚆") — render as text, NOT next/image
+                              (incident: "Failed to parse src '🚢' on next/image"). */}
+                          <span
                             aria-hidden
-                            className="w-5 h-5 md:w-[22px] md:h-[22px] shrink-0 object-contain"
-                          />
+                            className="text-[18px] md:text-[20px] leading-none shrink-0"
+                          >
+                            {sec.icon}
+                          </span>
                           <span>{sec.heading}</span>
                         </div>
                         <ul className="divide-y divide-border/70">
