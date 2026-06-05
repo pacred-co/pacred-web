@@ -107,7 +107,7 @@ export const sexSchema = z.enum(SEX_VALUES);
  */
 const adminPasswordSchema = z
   .string()
-  .min(8, "รหัสผ่านขั้นต่ำ 8 ตัวอักษร")
+  .min(6, "รหัสผ่านขั้นต่ำ 6 ตัวอักษร")   // owner 2026-06-06: staff standard = 123456 (6 ตัว)
   .max(72, "รหัสผ่านยาวสุด 72 ตัวอักษร"); // bcrypt cap
 
 const emailAddress = z
