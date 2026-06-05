@@ -49,6 +49,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -422,6 +423,9 @@ export async function adminCreateCntPayment(
 
     revalidatePath("/admin/report-cnt");
     revalidatePath("/admin/cnt-hs");
+    // New tb_cnt row created (cntStatus='1') → the "ค่าตู้รออนุมัติ" (cntUnpaid)
+    // sidebar badge grew; refresh the admin chrome.
+    bustAdminChrome();
     return {
       ok:   true,
       data: { cntId, cabinetNumbers, filePath },
@@ -628,6 +632,9 @@ export async function adminCreateCntPaymentSingle(
       revalidatePath(`/admin/report-cnt/${cabinetNumber}`);
       revalidatePath("/admin/report-cnt");
       revalidatePath("/admin/cnt-hs");
+      // New tb_cnt row created (cntStatus='1') → the "ค่าตู้รออนุมัติ" (cntUnpaid)
+      // sidebar badge grew; refresh the admin chrome.
+      bustAdminChrome();
       return { ok: true, data: { cntId, cabinetNumber, slipPath } };
     },
   );

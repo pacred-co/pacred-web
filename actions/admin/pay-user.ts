@@ -48,6 +48,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -457,6 +458,9 @@ export async function adminPayOrdersOnBehalf(
         error: skipped.length ? skipped.map((s) => `${s.hno}: ${s.reason}`).join(" · ") : "ไม่มีรายการที่ชำระได้",
       };
     }
+    // Paid on behalf → wallet debited + orders moved 2→3; refresh the admin
+    // sidebar/wallet-total badges immediately.
+    bustAdminChrome();
     return { ok: true, data: { paid, skipped, total_debited: Math.round(totalDebited * 100) / 100 } };
   });
 }
@@ -741,6 +745,9 @@ export async function adminPayForwardersOnBehalf(
         error: skipped.length ? skipped.map((s) => `${s.fid}: ${s.reason}`).join(" · ") : "ไม่มีรายการที่ชำระได้",
       };
     }
+    // Paid on behalf → wallet debited + forwarders moved out of รอชำระเงิน;
+    // refresh the admin sidebar/wallet-total badges immediately.
+    bustAdminChrome();
     return { ok: true, data: { paid, skipped, total_debited: Math.round(totalDebited * 100) / 100 } };
   });
 }
@@ -1140,6 +1147,9 @@ export async function adminPayOrdersWithTopUp(
     revalidatePath("/admin/service-orders");
     revalidatePath(`/admin/wallet/${whID}`);
     revalidatePath("/admin/wallet");
+    // The top-up credit landed (+ orders paid) → wallet totals + order queues
+    // changed; refresh the admin sidebar/wallet-total badges immediately.
+    bustAdminChrome();
 
     if (paid.length === 0) {
       return {
@@ -1434,6 +1444,9 @@ export async function adminPayForwardersWithTopUp(
     revalidatePath("/admin/forwarders");
     revalidatePath(`/admin/wallet/${whID}`);
     revalidatePath("/admin/wallet");
+    // The top-up credit landed (+ forwarders paid) → wallet totals + forwarder
+    // queues changed; refresh the admin sidebar/wallet-total badges immediately.
+    bustAdminChrome();
 
     if (paid.length === 0) {
       return {

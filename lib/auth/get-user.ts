@@ -116,7 +116,24 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
   // and we also fall back to getUser() below on any failure — so this can
   // never be LESS secure or LESS correct than before, only faster.
   try {
-    const { data, error } = await supabase.auth.getClaims();
+    // 🔐 2026-06-06 random-logout fix — do NOT let this RSC client rotate the
+    // refresh token. `getClaims()` with no arg internally calls getSession(),
+    // which (within the 90 s expiry margin) refreshes + ROTATES the one-time-use
+    // refresh token. But an RSC client cannot persist cookie writes (cookies()
+    // .set() throws in a Server Component → swallowed by server.ts's setAll
+    // catch), so that rotation is LOST: the browser keeps the consumed token and
+    // gets logged out on the next request — random, mid-session. Token refresh
+    // is owned SOLELY by proxy.ts (the middleware), which persists the rotated
+    // cookie to the response. Here we read the current access token and pass it
+    // to getClaims(token) → pure local ES256 signature verification, no refresh.
+    const { data: sessionData, error: sessErr } = await supabase.auth.getSession();
+    if (sessErr) {
+      console.error(`[get-user getSession] failed`, { message: sessErr.message });
+    }
+    const accessToken = sessionData?.session?.access_token;
+    const { data, error } = accessToken
+      ? await supabase.auth.getClaims(accessToken)
+      : { data: null, error: null };
     const claims = data?.claims;
     if (!error && claims?.sub) {
       // Reconstruct a minimal Supabase User from the verified claims. Callers

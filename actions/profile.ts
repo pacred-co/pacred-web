@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { bustCustomerChrome } from "@/lib/cache/revalidate-chrome";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveTosVersion } from "@/lib/tos-server";
@@ -127,6 +128,10 @@ export async function updateProfileBasic(
 
   revalidatePath("/profile");
   revalidatePath("/dashboard");
+  // The name was dual-written to tb_users.userName, which the cached sidebar/
+  // header chrome (`userName`) reads → purge so the header name updates at once
+  // instead of after the 60s TTL.
+  bustCustomerChrome();
   return { ok: true };
 }
 

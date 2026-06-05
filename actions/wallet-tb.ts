@@ -85,6 +85,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { bustCustomerChrome } from "@/lib/cache/revalidate-chrome";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withdrawSchema, type WithdrawInput } from "@/lib/validators/wallet";
 import { sendNotification } from "@/lib/notifications";
@@ -270,6 +271,9 @@ export async function submitWithdrawRequest(
   revalidatePath("/wallet");
   revalidatePath("/wallet/withdraw");
   revalidatePath("/wallet/history");
+  // The wallet balance was just debited (the hold) → purge the chrome cache so
+  // the header/sidebar balance badge reflects it immediately, not 60s later.
+  bustCustomerChrome();
 
   console.info(`[submitWithdrawRequest] tb_wallet_hs=${hsId} userid=${memberCode} amount=${amount} balance ${currentBalance} → ${newBalance} (hold · status=1)`);
 

@@ -26,6 +26,7 @@
 // ────────────────────────────────────────────────────────────────────
 
 import { revalidatePath } from "next/cache";
+import { bustCustomerChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -352,6 +353,9 @@ export async function customerPayCreditFromWallet(
   revalidatePath("/wallet/history");
   revalidatePath("/wallet");
   revalidatePath("/dashboard");
+  // Wallet balance was debited to pay down credit → purge the chrome cache so
+  // the header/sidebar wallet badge reflects the new balance immediately.
+  bustCustomerChrome();
 
   return {
     ok: true,

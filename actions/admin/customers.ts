@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
@@ -214,6 +215,9 @@ export async function verifyJuristic(input: z.infer<typeof verifyJuristicSchema>
     revalidatePath("/admin/juristic-check");
     revalidatePath("/admin/customers");
     revalidatePath(`/admin/customers/${userid}`);
+    // Juristic verified → the corporate/customer-pending queue badges changed;
+    // refresh the admin sidebar.
+    bustAdminChrome();
     return { ok: true };
   });
 }
@@ -252,6 +256,9 @@ export async function rejectJuristic(input: z.infer<typeof rejectJuristicSchema>
     revalidatePath("/admin/juristic-check");
     revalidatePath("/admin/customers");
     revalidatePath(`/admin/customers/${userid}`);
+    // Juristic rejected → the corporate/customer-pending queue badges changed;
+    // refresh the admin sidebar.
+    bustAdminChrome();
     return { ok: true };
   });
 }
@@ -527,6 +534,9 @@ export async function approveCustomer(
     revalidatePath("/admin/customers");
     revalidatePath("/admin/customers/pending");
     revalidatePath(`/admin/customers/${id}`);
+    // Customer approved (+ sales rep assigned) → the customer-pending queue
+    // badge shrank; refresh the admin sidebar.
+    bustAdminChrome();
     return { ok: true };
   });
 }
@@ -728,6 +738,9 @@ export async function adminConvertToJuristic(
     revalidatePath("/admin/juristic-check");
     revalidatePath(`/admin/customers/${userid}`);
     revalidatePath(`/admin/customers/${userid}/convert-to-juristic`);
+    // Converted to juristic → the corporate-pending queue badge changed;
+    // refresh the admin sidebar.
+    bustAdminChrome();
     return { ok: true };
   });
 }
@@ -771,6 +784,8 @@ export async function suspendCustomer(id: string): Promise<AdminActionResult> {
 
     revalidatePath("/admin/customers");
     revalidatePath(`/admin/customers/${id}`);
+    // Customer suspended → refresh the admin sidebar (customer queue badges).
+    bustAdminChrome();
     return { ok: true };
   });
 }
@@ -885,6 +900,9 @@ export async function deletePendingCustomer(
     revalidatePath("/admin/customers/pending");
     revalidatePath("/admin/customers");
     revalidatePath("/admin");
+    // Pending customer deleted → the customer-pending queue badge shrank;
+    // refresh the admin sidebar.
+    bustAdminChrome();
     return { ok: true };
   });
 }

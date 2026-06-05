@@ -51,6 +51,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -456,6 +457,9 @@ export async function adminMarkSalesPayoutPaidTb(
 
       revalidatePath("/admin/sales-payouts");
       revalidatePath(`/admin/sales-payouts/${id}`);
+      // Sales payout marked paid (status 2→3) → the "เบิกค่าคอม" (salesPayout)
+      // sidebar badge shrank; refresh the admin chrome.
+      bustAdminChrome();
       return { ok: true, data: { id, imagesSlip } };
     },
   );

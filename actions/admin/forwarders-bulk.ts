@@ -55,6 +55,7 @@
 //     fdstatus 1→3 once endtime<NOW · used by the endTimeHours selector)
 
 import { revalidatePath } from "next/cache";
+import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
@@ -252,6 +253,9 @@ export async function bulkUpdateStatus(
   void note;
 
   revalidatePath("/admin/forwarders");
+  // Bulk fstatus change moved the forwarder queue badges (the delegate also
+  // busts; this covers the wrapper's own entry point).
+  bustAdminChrome();
   return { ok: true, data: { succeeded, failed } };
 }
 
@@ -577,6 +581,9 @@ export async function bulkAssignDriver(
 
     revalidatePath("/admin/forwarders");
     revalidatePath("/admin/drivers");
+    // Drivers assigned → the driver-items + forwarder delivery queue badges
+    // changed; refresh the admin sidebar.
+    bustAdminChrome();
     return {
       ok: true,
       data: {
@@ -863,6 +870,9 @@ export async function bulkCancel(
       }
 
       revalidatePath("/admin/forwarders");
+      // Bulk cancel moved forwarders to special status (99) → forwarder queue
+      // badges changed; refresh the admin sidebar.
+      bustAdminChrome();
       return { ok: true, data: { succeeded, failed } };
     },
   );

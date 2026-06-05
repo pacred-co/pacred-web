@@ -97,6 +97,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { bustCustomerChrome } from "@/lib/cache/revalidate-chrome";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { yuanPaymentSchema, type YuanPaymentInput } from "@/lib/validators/payment";
 import { sendNotification } from "@/lib/notifications";
@@ -421,6 +422,9 @@ export async function createYuanPaymentFromWallet(
   revalidatePath(`/service-payment/${paymentId}`);
   revalidatePath("/wallet");
   revalidatePath("/wallet/history");
+  // Wallet was debited + a new ฝากโอน payment row created → wallet balance and
+  // payment-count chrome badges changed; purge for an instant update.
+  bustCustomerChrome();
 
   // Audit log — customer activity (logAdminAction would be wrong; this
   // is a customer mutation). The notification + console.info are the

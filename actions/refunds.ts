@@ -23,6 +23,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { bustCustomerChrome } from "@/lib/cache/revalidate-chrome";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logger, redactId } from "@/lib/logger";
@@ -178,5 +179,8 @@ export async function customerCreateRefundRequest(
 
   revalidatePath("/refunds");
   revalidatePath("/admin/refunds");
+  // Refund request lodged → refresh the customer chrome (conservative: keeps the
+  // header/sidebar consistent the moment the request lands).
+  bustCustomerChrome();
   return { ok: true, data: { id: inserted.id, request_no: inserted.request_no } };
 }

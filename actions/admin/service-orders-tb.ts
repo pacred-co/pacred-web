@@ -64,6 +64,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -234,6 +235,7 @@ export async function adminMarkServiceOrderPaidTb(
         const balance = Number(wRow?.wallettotal ?? 0);
         revalidatePath("/admin/service-orders");
         revalidatePath(`/admin/service-orders/${header.hno}`);
+        bustAdminChrome();
         return {
           ok: true,
           data: {
@@ -398,6 +400,9 @@ export async function adminMarkServiceOrderPaidTb(
       revalidatePath("/admin/service-orders");
       revalidatePath(`/admin/service-orders/${header.hno}`);
       revalidatePath("/admin/wallet");
+      // Shop order paid from wallet (2→3) → wallet totals + the shop-order
+      // queues changed; refresh the admin sidebar/wallet-total badges.
+      bustAdminChrome();
       return {
         ok: true,
         data: {

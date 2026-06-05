@@ -26,6 +26,7 @@ import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { uploadToBucket } from "@/lib/storage/upload";
 import { revalidatePath } from "next/cache";
+import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 
 type Result = { ok: true } | { ok: false; error: string };
 type UploadResult = { ok: true; filename: string } | { ok: false; error: string };
@@ -64,6 +65,9 @@ async function setCntStatus(cntId: number, newStatus: "2" | "3"): Promise<Result
 
     revalidatePath(`/admin/cnt-hs/${cntId}`);
     revalidatePath("/admin/cnt-hs");
+    // cntStatus moved out of '1' → the "ค่าตู้รออนุมัติ" (cntUnpaid) sidebar
+    // badge shrank; refresh the admin chrome.
+    bustAdminChrome();
     return { ok: true };
   });
 }
@@ -141,6 +145,9 @@ export async function adminUploadCntSlip(
 
       revalidatePath(`/admin/cnt-hs/${cntId}`);
       revalidatePath("/admin/cnt-hs");
+      // Slip upload auto-approved the cnt (cntStatus 1→2) → the "ค่าตู้รออนุมัติ"
+      // (cntUnpaid) sidebar badge shrank; refresh the admin chrome.
+      bustAdminChrome();
       return { ok: true, data: { filename: up.filename } };
     },
   );

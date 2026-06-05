@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { bustCustomerChrome } from "@/lib/cache/revalidate-chrome";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   yuanPaymentSchema,
@@ -385,6 +386,9 @@ export async function createYuanPayment(
   }
 
   revalidatePath("/service-payment");
+  // New pending ฝากโอน (paystatus=1) → the payment-due / payment-count chrome
+  // badges changed; purge so they refresh immediately, not after the 60s TTL.
+  bustCustomerChrome();
 
   void sendNotification(userId, {
     category: "yuan_payment",

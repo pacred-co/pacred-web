@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { bustCustomerChrome } from "@/lib/cache/revalidate-chrome";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import {
@@ -183,6 +184,7 @@ export async function deleteCartItem(input: { id: number }): Promise<ActionResul
     .eq("userid", userID);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/cart");
+  bustCustomerChrome();
   return { ok: true };
 }
 
@@ -631,6 +633,10 @@ export async function submitCartOrder(input: {
 
   revalidatePath("/cart");
   revalidatePath("/service-order");
+  // Cart rows were deleted + a new order header inserted → both the cart-count
+  // and forwarder/order-count chrome badges are now stale. Purge so they update
+  // the moment the order lands (not 60s later).
+  bustCustomerChrome();
   return { ok: true, data: { hNo } };
 }
 
@@ -806,6 +812,7 @@ export async function addCartItem(
   revalidatePath("/service-order/cart");
   revalidatePath("/service-order/add");
   revalidatePath("/cart");
+  bustCustomerChrome();
   return { ok: true, data: { id: String(created.id) } };
 }
 
@@ -886,6 +893,7 @@ export async function removeCartItem(id: string): Promise<ActionResult> {
 
   revalidatePath("/service-order/cart");
   revalidatePath("/cart");
+  bustCustomerChrome();
   return { ok: true };
 }
 
@@ -912,6 +920,7 @@ export async function clearCart(): Promise<ActionResult> {
 
   revalidatePath("/service-order/cart");
   revalidatePath("/cart");
+  bustCustomerChrome();
   return { ok: true };
 }
 
@@ -993,6 +1002,7 @@ export async function addCartItemsBulk(rows: CartItemBulkRow[]): Promise<ActionR
   revalidatePath("/service-order/cart");
   revalidatePath("/service-order/add");
   revalidatePath("/cart");
+  bustCustomerChrome();
   return { ok: true, data: { count: count ?? payload.length } };
 }
 

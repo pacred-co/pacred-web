@@ -28,6 +28,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -172,6 +173,9 @@ function revalidate(bookingNo: string) {
   revalidatePath("/bookings");
   revalidatePath(`/bookings/${bookingNo}`);
   revalidatePath("/admin/board");
+  // A booking status moved → the bookings-pending sidebar badge (counts
+  // status IN submitted/contacted) may have changed; refresh the admin chrome.
+  bustAdminChrome();
 }
 
 // ────────────────────────────────────────────────────────────

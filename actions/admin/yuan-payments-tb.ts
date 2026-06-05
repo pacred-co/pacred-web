@@ -69,6 +69,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -315,6 +316,9 @@ export async function adminCreateYuanPaymentManual(
       revalidatePath("/admin/wallet");                          // wallet list (balance changed)
       revalidatePath(`/admin/wallet/${customer.userID}`);       // per-customer wallet history
       revalidatePath("/admin");
+      // Manual yuan-payment debited the wallet + created a ฝากโอน row → wallet
+      // totals + the yuan-payment queue changed; refresh the admin sidebar.
+      bustAdminChrome();
       return { ok: true, data: { id: row.id, paythb, new_wallet_balance: newBalance } };
     },
   );

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -273,6 +274,9 @@ export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput)
     revalidatePath("/admin/yuan-payments");
     revalidatePath(`/admin/yuan-payments/${existing.id}`);
     revalidatePath("/admin");
+    // Yuan-payment status changed (+ any wallet refund) → the yuan-payment queue
+    // + wallet totals may have changed; refresh the admin sidebar.
+    bustAdminChrome();
     return { ok: true };
   });
 }
@@ -562,6 +566,9 @@ export async function adminMarkYuanPaymentRefunded(
     revalidatePath("/admin/yuan-payments");
     revalidatePath(`/admin/yuan-payments/${existing.id}`);
     revalidatePath("/admin");
+    // Yuan-payment refunded (paystatus→3 + wallet credit) → the yuan-payment
+    // queue + wallet totals changed; refresh the admin sidebar.
+    bustAdminChrome();
     return { ok: true, data: { refunded_at: refundedAt } };
   });
 }

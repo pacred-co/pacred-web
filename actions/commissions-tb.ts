@@ -37,6 +37,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { resolveSalesAgent } from "@/app/[locale]/(protected)/sales/team-map";
@@ -411,6 +412,12 @@ export async function submitSalesWithdrawal(
     });
     return { ok: false, error: `withdrawal_flip_failed: ${flipErr.message}` };
   }
+
+  // A sales-rep payout request landed (tb_user_sales_admin_pay status='2') →
+  // the admin "เบิกค่าคอม" (salesPayout) sidebar badge grew; bust the admin
+  // chrome so staff see the new request immediately. (This is a customer-context
+  // action that changes an ADMIN queue, so it uses bustAdminChrome.)
+  bustAdminChrome();
 
   return { ok: true, data: { id: idusap, amount: breakdown.net } };
 }

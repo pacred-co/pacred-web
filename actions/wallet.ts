@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { bustCustomerChrome } from "@/lib/cache/revalidate-chrome";
 import { createClient } from "@/lib/supabase/server";
 import {
   depositSchema,
@@ -599,6 +600,9 @@ export async function submitLegacyWalletDeposit(
   revalidatePath("/wallet/deposit");
   revalidatePath("/wallet/history");
   revalidatePath("/wallet-credit");
+  // New pending top-up row → refresh the customer chrome (wallet/header badges)
+  // so the deposit surfaces instantly instead of after the 60s cache TTL.
+  bustCustomerChrome();
 
   return { ok: true, data: { id: inserted.id } };
 }

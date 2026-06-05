@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
@@ -53,6 +54,9 @@ export async function adminUpdateContactStatus(
     });
 
     revalidatePath("/admin/contact-messages");
+    // Contact-message status changed (possibly out of 'new') → the contact-
+    // messages sidebar badge may have changed; refresh the admin chrome.
+    bustAdminChrome();
     return { ok: true };
   });
 }

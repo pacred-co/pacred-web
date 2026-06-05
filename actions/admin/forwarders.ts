@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
@@ -250,6 +251,9 @@ export async function adminUpdateForwarder(input: UpdateForwarderInput): Promise
 
     revalidatePath("/admin/forwarders");
     revalidatePath(`/admin/forwarders/${d.f_no}`);
+    // Forwarder fstatus changed → the forwarder queue badges changed; refresh
+    // the admin sidebar.
+    bustAdminChrome();
     return { ok: true };
   });
 }
@@ -704,6 +708,9 @@ export async function adminBulkUpdateForwarderTbStatus(
     }
 
     revalidatePath("/admin/forwarders");
+    // Bulk forwarder fstatus change → the forwarder queue badges changed;
+    // refresh the admin sidebar.
+    bustAdminChrome();
     return { ok: true, data: { updated: beforeRows.length } };
   });
 }
@@ -962,6 +969,9 @@ export async function adminRestoreForwarderFromSpecial(
       }
 
       revalidatePath("/admin/forwarders");
+      // Forwarders restored from special status (99→prior) → forwarder queue
+      // badges changed; refresh the admin sidebar.
+      bustAdminChrome();
       return { ok: true, data: { restored: eligible.length } };
     },
   );
@@ -1098,6 +1108,9 @@ export async function adminSaveForwarderNote(
 
       revalidatePath("/admin/forwarders");
       revalidatePath(`/admin/forwarders/${fNo}`);
+      // Forwarder note changed → the "หมายเหตุนำเข้า" note-queue badge (counts
+      // fnote <> '') changed; refresh the admin sidebar.
+      bustAdminChrome();
       return { ok: true, data: { fID, adminOnly } };
     },
   );

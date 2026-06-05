@@ -21,6 +21,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { logger, redactPhone } from "@/lib/logger";
@@ -246,6 +247,8 @@ export async function adminCreateCustomer(
 
     revalidatePath("/admin/customers");
     revalidatePath("/admin/customers/pending");
+    // New customer provisioned → refresh the admin sidebar customer badges.
+    bustAdminChrome();
 
     return { ok: true, data: { memberCode, password, generated } };
   });
@@ -416,6 +419,9 @@ export async function adminHardDeleteCustomer(
 
     revalidatePath("/admin/customers");
     revalidatePath("/admin/customers/pending");
+    // Customer hard-deleted (incl. their tb_wallet/tb_cash_back rows) → the
+    // customer queue + wallet-total badges changed; refresh the admin sidebar.
+    bustAdminChrome();
 
     return { ok: true };
   });

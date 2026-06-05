@@ -31,6 +31,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import {
@@ -49,6 +50,9 @@ const ROLES = ["super", "ops"] as const;
 /** Re-render every surface that reads platform_incidents. */
 function revalidateIncidents(): void {
   revalidatePath("/admin/incidents");
+  // An incident status moved (possibly out of open/acknowledged) → the
+  // incidents sidebar badge may have changed; refresh the admin chrome.
+  bustAdminChrome();
 }
 
 type IncidentRow = {

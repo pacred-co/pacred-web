@@ -56,6 +56,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -537,6 +538,9 @@ export async function adminCreateWalletHsManual(
       revalidatePath("/admin/wallet");
       revalidatePath(`/admin/wallet/${row.id}`);
       revalidatePath("/admin");
+      // Manual ledger entry moved the system wallet balance → refresh the admin
+      // wallet/cashback total cards + sidebar queues instantly.
+      bustAdminChrome();
       return { ok: true, data: { id: row.id, new_balance: newTotal } };
     },
   );
@@ -906,6 +910,9 @@ export async function adminApproveWalletDeposit(
         revalidatePath("/admin/wallet");
         revalidatePath("/admin");
         revalidatePath(`/admin/forwarders/${fid}`);
+        // Deposit approved → topup queue shrank + wallet balance credited;
+        // refresh the admin sidebar/wallet-total badges immediately.
+        bustAdminChrome();
 
         return {
           ok: true,
@@ -1021,6 +1028,9 @@ export async function adminApproveWalletDeposit(
         revalidatePath(`/admin/wallet/${id}`);
         revalidatePath("/admin/wallet");
         revalidatePath("/admin");
+        // Deposit approved → topup queue shrank + wallet balance credited;
+        // refresh the admin sidebar/wallet-total badges immediately.
+        bustAdminChrome();
 
         return {
           ok: true,
@@ -1384,6 +1394,9 @@ export async function adminApproveWalletDeposit(
           revalidatePath(`/admin/forwarders/${link.hno}`);
         }
       }
+      // Deposit + cascaded pay landed → topup queue + the paid parents' queues
+      // + wallet totals all changed; refresh the admin chrome immediately.
+      bustAdminChrome();
 
       return {
         ok: true,
@@ -1853,6 +1866,9 @@ export async function adminRejectWalletDeposit(
             revalidatePath(`/admin/forwarders/${link.hno}`);
           }
         }
+        // Deposit rejected + cascade reversed → topup queue + reversed parents'
+        // queues + wallet totals changed; refresh the admin chrome immediately.
+        bustAdminChrome();
 
         return {
           ok: true,
@@ -1885,6 +1901,9 @@ export async function adminRejectWalletDeposit(
       revalidatePath(`/admin/wallet/${id}`);
       revalidatePath("/admin/wallet");
       revalidatePath("/admin");
+      // Deposit row moved 1→3 (rejected) → the topup pending-queue badge shrank;
+      // refresh the admin sidebar immediately.
+      bustAdminChrome();
 
       return {
         ok: true,
@@ -1959,6 +1978,9 @@ export async function adminBulkApproveWalletDeposits(
 
   revalidatePath("/admin/wallet");
   revalidatePath("/admin");
+  // Bulk deposit-approve moved the topup queue + wallet totals (each inner
+  // approve also busts; this covers the batch as a whole).
+  bustAdminChrome();
 
   return {
     ok: true,
@@ -2130,6 +2152,9 @@ export async function adminApproveWithdraw(
       revalidatePath("/admin/wallet");
       revalidatePath("/admin/wallet/withdrawals");
       revalidatePath("/admin");
+      // Withdraw approved (1→2) → the withdraw pending-queue badge shrank;
+      // refresh the admin sidebar immediately.
+      bustAdminChrome();
 
       return {
         ok: true,
@@ -2314,6 +2339,9 @@ export async function adminRejectWithdraw(
       revalidatePath("/admin/wallet");
       revalidatePath("/admin/wallet/withdrawals");
       revalidatePath("/admin");
+      // Withdraw rejected (1→3) + held money refunded → withdraw queue + wallet
+      // totals changed; refresh the admin chrome immediately.
+      bustAdminChrome();
 
       return {
         ok: true,

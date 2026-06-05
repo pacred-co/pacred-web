@@ -36,6 +36,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { logger } from "@/lib/logger";
@@ -131,6 +132,9 @@ export async function adminCreateRefund(
 
     revalidatePath("/admin/refunds");
     revalidatePath("/refunds");
+    // New refund request created → the admin refunds-pending queue badge grew;
+    // refresh the chrome.
+    bustAdminChrome();
     return { ok: true, data: { id: inserted.id, request_no: inserted.request_no } };
   });
 }
@@ -564,6 +568,9 @@ function revalidateOne(refundId: string): void {
   revalidatePath("/admin/refunds");
   revalidatePath(`/admin/refunds/${refundId}`);
   revalidatePath("/refunds");
+  // A refund status moved (approve/reject/mark-paid) → the admin refunds-pending
+  // queue badge + (on mark-paid) wallet totals changed; refresh the chrome.
+  bustAdminChrome();
 }
 
 /**

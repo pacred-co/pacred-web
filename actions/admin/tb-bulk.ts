@@ -18,6 +18,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -327,6 +328,9 @@ export async function adminBulkApproveWalletHs(
 
       revalidatePath("/admin/wallet");
       revalidatePath("/admin");
+      // Bulk wallet-hs approve moved the topup/withdraw queues + wallet totals;
+      // refresh the admin sidebar/total badges immediately.
+      bustAdminChrome();
 
       return { ok: true, data: { processed, failed, errors } };
     },
@@ -408,6 +412,9 @@ export async function adminBulkApproveYuanPaymentsTb(
 
       revalidatePath("/admin/yuan-payments");
       revalidatePath("/admin");
+      // Bulk yuan-payment approve moved the ฝากโอน pending queue; refresh the
+      // admin sidebar badge immediately.
+      bustAdminChrome();
 
       return { ok: true, data: { processed, failed: 0, errors: [] } };
     },
@@ -524,6 +531,9 @@ export async function adminBulkApproveCustomers(
       revalidatePath("/admin/customers/pending");
       revalidatePath("/admin/customers");
       revalidatePath("/admin");
+      // Customers approved → the customer-pending queue badge shrank; refresh
+      // the admin sidebar immediately.
+      bustAdminChrome();
 
       return {
         ok: true,

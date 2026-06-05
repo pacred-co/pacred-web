@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { bustCustomerChrome } from "@/lib/cache/revalidate-chrome";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { placeOrderSchema, type PlaceOrderInput, type Provider } from "@/lib/validators/cart";
@@ -796,6 +797,7 @@ export async function cancelServiceOrder(hNo: string): Promise<ActionResult> {
   // Already cancelled → idempotent success.
   if (status === "6") {
     revalidatePath("/service-order");
+    bustCustomerChrome();
     return { ok: true };
   }
   // Past the cancellable window (hStatus≥3) → refuse (legacy guard hStatus<3).
@@ -821,6 +823,9 @@ export async function cancelServiceOrder(hNo: string): Promise<ActionResult> {
   revalidatePath("/service-order");
   revalidatePath("/service-order/pending");
   revalidatePath(`/service-order/${header.hno}`);
+  // Order moved to cancelled (hstatus=6) → the order-count + payment-due chrome
+  // badges changed; purge so they refresh immediately.
+  bustCustomerChrome();
   return { ok: true };
 }
 
@@ -1068,6 +1073,7 @@ export async function payServiceOrderFromWallet(
     }
     revalidatePath(`/service-order/${header.hno}`);
     revalidatePath("/service-order");
+    bustCustomerChrome();
     return { ok: true, data: { tx_id: String(existingHs.id), already_paid: true } };
   }
 
@@ -1206,6 +1212,9 @@ export async function payServiceOrderFromWallet(
   revalidatePath("/pay");
   revalidatePath("/wallet");
   revalidatePath("/wallet/history");
+  // Wallet was debited + the order moved 2→3 (paid) → wallet balance, order
+  // count, and payment-due chrome badges all changed; purge for instant update.
+  bustCustomerChrome();
 
   console.info(`[payServiceOrderFromWallet] hno=${header.hno} userid=${memberCode} priceToPay=${priceToPay} balance ${currentBalance} → ${newBalance} · tb_wallet_hs=${hsRow.id}`);
 

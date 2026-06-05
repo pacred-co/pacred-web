@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { bustCustomerChrome } from "@/lib/cache/revalidate-chrome";
 import { BANK } from "@/components/seo/site";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -604,6 +605,9 @@ export async function submitForwarderPayment(
 
   revalidatePath("/service-import");
   revalidatePath("/service-import/pending");
+  // Pending import payment submitted → refresh the customer chrome so the
+  // forwarder/payment-due badges reflect it without waiting for the 60s TTL.
+  bustCustomerChrome();
 
   // Pacred addition — surface the pending payment in the notification
   // feed (the legacy fires a LINE Notify to admin here; Pacred's admin
@@ -732,13 +736,14 @@ export async function cancelOwnForwarder(
     return { ok: false, error: "not_cancellable" };
   }
 
-  // Refresh the list pages. The sidebar badge counts (loadPcsChromeData)
-  // are served from the 60s-TTL pcs-chrome cache; we do NOT revalidateTag
-  // it here — Next 16's revalidateTag now requires a cache-profile arg
-  // (see actions/admin/forwarders-edit.ts L596-600). A ≤60s-stale "รอ
-  // สินค้าเข้าโกดังจีน" badge after a self-cancel is acceptable.
+  // Refresh the list pages + purge the chrome cache. The sidebar badge counts
+  // (loadPcsChromeData) are served from the 60s-TTL pcs-chrome cache; a hard-
+  // deleted forwarder changes the "รอสินค้าเข้าโกดังจีน" count, so bust it now
+  // (the helper passes the Next-16-required cache-profile arg) instead of
+  // leaving the badge ≤60s stale.
   revalidatePath("/service-import");
   revalidatePath("/service-import/pending");
+  bustCustomerChrome();
 
   return { ok: true, data: { id } };
 }

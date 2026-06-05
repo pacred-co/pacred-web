@@ -92,6 +92,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -287,6 +288,9 @@ export async function adminQuoteShopOrder(
     revalidatePath("/admin/service-orders");
     revalidatePath(`/admin/service-orders/${header.hno}`);
     revalidatePath(`/service-order/${header.hno}`);
+    // Shop order quoted (hStatus→2 รอชำระเงิน) → the shop-order queue badges
+    // changed; refresh the admin sidebar.
+    bustAdminChrome();
 
     return {
       ok: true,
@@ -514,6 +518,9 @@ export async function adminSaveShopOrderItemsAndQuote(
     revalidatePath("/admin/service-orders");
     revalidatePath(`/admin/service-orders/${header.hno}`);
     revalidatePath(`/service-order/${header.hno}`);
+    // Shop order priced + quoted (hStatus→2 รอชำระเงิน) → the shop-order queue
+    // badges changed; refresh the admin sidebar.
+    bustAdminChrome();
 
     return {
       ok: true,
@@ -718,6 +725,9 @@ export async function adminMarkShopOrderOrdered(
     revalidatePath("/admin/service-orders");
     revalidatePath(`/admin/service-orders/${header.hno}`);
     revalidatePath(`/service-order/${header.hno}`);
+    // Shop order moved to สั่งสินค้า (hStatus→3) → the shop-order queue badges
+    // changed; refresh the admin sidebar.
+    bustAdminChrome();
 
     return {
       ok: true,
@@ -1059,6 +1069,9 @@ export async function adminSpawnForwarderFromShopOrder(
     revalidatePath(`/admin/service-orders/${header.hno}`);
     revalidatePath(`/service-order/${header.hno}`);
     revalidatePath("/admin/forwarders");
+    // Forwarder(s) spawned + the shop order moved on → both the shop-order and
+    // forwarder queue badges changed; refresh the admin sidebar.
+    bustAdminChrome();
 
     return {
       ok: true,
@@ -1473,6 +1486,9 @@ export async function adminAddOrderNote(
     revalidatePath("/admin/service-orders");
     revalidatePath(`/admin/service-orders/${header.hno}`);
     revalidatePath(`/service-order/${header.hno}`);
+    // Order note changed → the "หมายเหตุฝากสั่ง" note-queue badge (counts
+    // hnote <> '') changed; refresh the admin sidebar.
+    bustAdminChrome();
 
     return { ok: true, data: { hno: header.hno } };
   });
