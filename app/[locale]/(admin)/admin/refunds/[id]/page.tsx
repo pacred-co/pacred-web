@@ -50,6 +50,7 @@ type RefundDetailRaw = {
   rejected_reason:      string | null;
   paid_at:              string | null;
   paid_wallet_tx_id:    string | null;
+  paid_wallet_hs_id:    number | null;
   created_by_admin_id:  string | null;
   created_at:           string;
   updated_at:           string;
@@ -81,7 +82,7 @@ export default async function AdminRefundDetailPage({
     .from("refund_requests")
     .select(`
       id, request_no, source, source_ref, amount_thb, reason, status,
-      approved_at, rejected_at, rejected_reason, paid_at, paid_wallet_tx_id,
+      approved_at, rejected_at, rejected_reason, paid_at, paid_wallet_tx_id, paid_wallet_hs_id,
       created_by_admin_id, created_at, updated_at, profile_id,
       profile:profiles!profile_id(member_code, first_name, last_name, phone, email)
     `)
@@ -99,62 +100,66 @@ export default async function AdminRefundDetailPage({
   // Parent context lookup — best-effort; show the parent if we can resolve it.
   let parentCtx: { label: string; details: Array<{ k: string; v: string }> } | null = null;
   if (row.source === "forwarder" && row.source_ref) {
+    // LIVE legacy tb_forwarder (the rebuilt `forwarders` twin is 0-row). fno is
+    // the source_ref the customer/admin picks.
     const { data, error: fErr } = await admin
-      .from("forwarders")
-      .select("f_no, status, total_price, created_at")
-      .eq("f_no", row.source_ref)
-      .maybeSingle<{ f_no: string; status: string; total_price: number | null; created_at: string }>();
+      .from("tb_forwarder")
+      .select("fno, fstatus, ftotalprice, fdate")
+      .eq("fno", row.source_ref)
+      .maybeSingle<{ fno: string; fstatus: string | null; ftotalprice: number | null; fdate: string | null }>();
     if (fErr) {
       // Soft-fail — parent context is best-effort; page still renders the refund detail without it.
       console.error(`[refunds/[id] forwarder parent lookup] ref=${row.source_ref}`, { code: fErr.code, message: fErr.message });
     }
     if (data) {
       parentCtx = {
-        label: `Forwarder ${data.f_no}`,
+        label: `Forwarder ${data.fno}`,
         details: [
-          { k: "สถานะ",     v: data.status },
-          { k: "ยอดรวม",    v: data.total_price != null ? thb(Number(data.total_price)) : "—" },
-          { k: "วันที่สร้าง", v: new Date(data.created_at).toLocaleString("th-TH") },
+          { k: "สถานะ",     v: data.fstatus ?? "—" },
+          { k: "ยอดรวม",    v: data.ftotalprice != null ? thb(Number(data.ftotalprice)) : "—" },
+          { k: "วันที่สร้าง", v: data.fdate ? new Date(data.fdate).toLocaleString("th-TH") : "—" },
         ],
       };
     }
   } else if (row.source === "service_order" && row.source_ref) {
+    // LIVE legacy tb_header_order (the rebuilt `service_orders` twin is 0-row).
     const { data, error: soErr } = await admin
-      .from("service_orders")
-      .select("h_no, status, total_thb, created_at")
-      .eq("h_no", row.source_ref)
-      .maybeSingle<{ h_no: string; status: string; total_thb: number | null; created_at: string }>();
+      .from("tb_header_order")
+      .select("hno, hstatus, htotalpriceuser, hdate")
+      .eq("hno", row.source_ref)
+      .maybeSingle<{ hno: string; hstatus: string | null; htotalpriceuser: number | null; hdate: string | null }>();
     if (soErr) {
       console.error(`[refunds/[id] service_order parent lookup] ref=${row.source_ref}`, { code: soErr.code, message: soErr.message });
     }
     if (data) {
       parentCtx = {
-        label: `Service order ${data.h_no}`,
+        label: `Service order ${data.hno}`,
         details: [
-          { k: "สถานะ",     v: data.status },
-          { k: "ยอดรวม",    v: data.total_thb != null ? thb(Number(data.total_thb)) : "—" },
-          { k: "วันที่สร้าง", v: new Date(data.created_at).toLocaleString("th-TH") },
+          { k: "สถานะ",     v: data.hstatus ?? "—" },
+          { k: "ยอดรวม",    v: data.htotalpriceuser != null ? thb(Number(data.htotalpriceuser)) : "—" },
+          { k: "วันที่สร้าง", v: data.hdate ? new Date(data.hdate).toLocaleString("th-TH") : "—" },
         ],
       };
     }
   } else if (row.source === "yuan_payment" && row.source_ref) {
+    // LIVE legacy tb_payment (the rebuilt `yuan_payments` twin is 0-row).
+    // source_ref = String(tb_payment.id) — the same id the type-6 debit references.
     const { data, error: ypErr } = await admin
-      .from("yuan_payments")
-      .select("id, status, yuan_amount, thb_amount, channel, created_at")
+      .from("tb_payment")
+      .select("id, paystatus, payyuan, paythb, paydate")
       .eq("id", row.source_ref)
-      .maybeSingle<{ id: string; status: string; yuan_amount: number; thb_amount: number; channel: string; created_at: string }>();
+      .maybeSingle<{ id: number; paystatus: string | null; payyuan: number | null; paythb: number | null; paydate: string | null }>();
     if (ypErr) {
       console.error(`[refunds/[id] yuan_payment parent lookup] ref=${row.source_ref}`, { code: ypErr.code, message: ypErr.message });
     }
     if (data) {
       parentCtx = {
-        label: `Yuan payment ${data.id.slice(0, 8)}…`,
+        label: `Yuan payment #${data.id}`,
         details: [
-          { k: "สถานะ",   v: data.status },
-          { k: "ช่อง",    v: data.channel },
-          { k: "ยอด CNY", v: `¥${data.yuan_amount}` },
-          { k: "ยอด THB", v: thb(Number(data.thb_amount)) },
-          { k: "วันที่สร้าง", v: new Date(data.created_at).toLocaleString("th-TH") },
+          { k: "สถานะ",   v: data.paystatus ?? "—" },
+          { k: "ยอด CNY", v: `¥${data.payyuan ?? "—"}` },
+          { k: "ยอด THB", v: data.paythb != null ? thb(Number(data.paythb)) : "—" },
+          { k: "วันที่สร้าง", v: data.paydate ? new Date(data.paydate).toLocaleString("th-TH") : "—" },
         ],
       };
     }
@@ -194,9 +199,25 @@ export default async function AdminRefundDetailPage({
 
   const canMutate = roles.includes("super") || roles.includes("accounting");
 
-  // Resolve paid wallet tx amount/note for transparency when status='paid'.
+  // Resolve the paid ledger row's amount/note for transparency when paid.
+  // New refunds credit the LIVE legacy ledger (tb_wallet_hs, linked via
+  // paid_wallet_hs_id); legacy-era paid rows used the deprecated
+  // wallet_transactions (paid_wallet_tx_id). Best-effort either way.
   let paidTxNote: string | null = null;
-  if (row.paid_wallet_tx_id) {
+  if (row.paid_wallet_hs_id != null) {
+    const { data: w, error: wErr } = await admin
+      .from("tb_wallet_hs")
+      .select("id, amount, note, date")
+      .eq("id", row.paid_wallet_hs_id)
+      .maybeSingle<{ id: number; amount: number; note: string | null; date: string | null }>();
+    if (wErr) {
+      console.error(`[refunds/[id] paid tb_wallet_hs lookup] hsId=${row.paid_wallet_hs_id}`, { code: wErr.code, message: wErr.message });
+    }
+    if (w) {
+      paidTxNote = `wallet_hs #${w.id} (type 5 คืนเงิน) +${thb(Number(w.amount))}` +
+        (w.date ? ` @ ${new Date(w.date).toLocaleString("th-TH")}` : "");
+    }
+  } else if (row.paid_wallet_tx_id) {
     const { data: w, error: wErr } = await admin
       .from("wallet_transactions")
       .select("id, amount, note, created_at")

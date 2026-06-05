@@ -28,7 +28,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logger, redactId } from "@/lib/logger";
 import {
   createRefundRequestSchema,
-  isNeverPaidParentStatus,
   type CreateRefundRequestInput,
 } from "@/lib/validators/refund";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
@@ -57,61 +56,79 @@ export async function customerCreateRefundRequest(
   }
   if (!user) return { ok: false, error: "not_signed_in" };
 
+  // The parent + its money live in the LEGACY tb_* schema (the rebuilt
+  // forwarders/service_orders/yuan_payments twins are 0-row on prod) which is
+  // service_role-locked — so we verify ownership with the admin client +
+  // member_code (the legacy identity tb_users.userID every tb_* row keys on),
+  // not the user's RLS client.
+  const admin = createAdminClient();
+  const { data: prof, error: profErr } = await admin
+    .from("profiles")
+    .select("member_code")
+    .eq("id", user.id)
+    .maybeSingle<{ member_code: string | null }>();
+  if (profErr) {
+    console.error(`[profiles member_code lookup] failed`, { code: profErr.code, message: profErr.message });
+    return { ok: false, error: `db_error:${profErr.code ?? "unknown"}` };
+  }
+  const memberCode = prof?.member_code ?? null;
+  if (!memberCode) return { ok: false, error: "no_member_code" };
+
   // ── Verify the source_ref is owned by this customer + was ever paid ──
-  // RLS already filters reads to profile_id = auth.uid() on forwarders /
-  // service_orders / yuan_payments, so a missing row here = "not yours
-  // or doesn't exist". We also pull the parent's status: P0-1 — a refund
-  // against a never-paid parent (pending_payment / awaiting_payment /
-  // pending) has nothing to refund and is rejected at creation time.
+  // A missing row under (ref + userid=member_code) = "not yours or doesn't
+  // exist". P0-1: a refund against a never-paid parent has nothing to refund.
+  // Legacy never-paid status codes: forwarder fstatus 1..5 (pay = COD 5→6),
+  // order hstatus 1,2 (รอชำระเงิน=2). Yuan THB is wallet-debited at submit →
+  // always refundable (the debit ceiling at mark-paid is the hard guard).
   if (d.source === "forwarder") {
-    const { data, error: error1 } = await supabase
-      .from("forwarders")
-      .select("f_no, status")
-      .eq("f_no", d.source_ref)
-      .maybeSingle<{ f_no: string; status: string }>();
+    const { data, error: error1 } = await admin
+      .from("tb_forwarder")
+      .select("fno, fstatus")
+      .eq("fno", d.source_ref)
+      .eq("userid", memberCode)
+      .maybeSingle<{ fno: string; fstatus: string | null }>();
     if (error1) {
-      console.error(`[forwarders mutation lookup] failed`, { code: error1.code, message: error1.message });
+      console.error(`[tb_forwarder ownership lookup] failed`, { code: error1.code, message: error1.message });
       return { ok: false, error: `db_error:${error1.code ?? "unknown"}` };
     }
     if (!data) return { ok: false, error: "forwarder_not_found_or_not_owned" };
-    if (isNeverPaidParentStatus(d.source, data.status)) {
+    if (["1", "2", "3", "4", "5"].includes(data.fstatus ?? "")) {
       return { ok: false, error: "forwarder_not_paid — ฝากนำเข้านี้ยังไม่ได้ชำระเงิน ไม่มียอดให้คืน" };
     }
   } else if (d.source === "service_order") {
-    const { data, error: error1 } = await supabase
-      .from("service_orders")
-      .select("h_no, status")
-      .eq("h_no", d.source_ref)
-      .maybeSingle<{ h_no: string; status: string }>();
+    const { data, error: error1 } = await admin
+      .from("tb_header_order")
+      .select("hno, hstatus")
+      .eq("hno", d.source_ref)
+      .eq("userid", memberCode)
+      .maybeSingle<{ hno: string; hstatus: string | null }>();
     if (error1) {
-      console.error(`[service_orders mutation lookup] failed`, { code: error1.code, message: error1.message });
+      console.error(`[tb_header_order ownership lookup] failed`, { code: error1.code, message: error1.message });
       return { ok: false, error: `db_error:${error1.code ?? "unknown"}` };
     }
     if (!data) return { ok: false, error: "service_order_not_found_or_not_owned" };
-    if (isNeverPaidParentStatus(d.source, data.status)) {
+    if (["1", "2"].includes(data.hstatus ?? "")) {
       return { ok: false, error: "service_order_not_paid — ออเดอร์นี้ยังไม่ได้ชำระเงิน ไม่มียอดให้คืน" };
     }
   } else if (d.source === "yuan_payment") {
-    const { data, error: error1 } = await supabase
-      .from("yuan_payments")
-      .select("id, status")
+    const { data, error: error1 } = await admin
+      .from("tb_payment")
+      .select("id, paystatus")
       .eq("id", d.source_ref)
-      .maybeSingle<{ id: string; status: string }>();
+      .eq("userid", memberCode)
+      .maybeSingle<{ id: number; paystatus: string | null }>();
     if (error1) {
-      console.error(`[yuan_payments mutation lookup] failed`, { code: error1.code, message: error1.message });
+      console.error(`[tb_payment ownership lookup] failed`, { code: error1.code, message: error1.message });
       return { ok: false, error: `db_error:${error1.code ?? "unknown"}` };
     }
     if (!data) return { ok: false, error: "yuan_payment_not_found_or_not_owned" };
-    if (isNeverPaidParentStatus(d.source, data.status)) {
-      return { ok: false, error: "yuan_payment_not_paid — รายการโอนหยวนนี้ยังไม่ได้ชำระเงิน ไม่มียอดให้คืน" };
-    }
+    // yuan: THB wallet-debited at submit → always refundable; no never-paid gate.
   }
 
-  // ── Reserve serial via admin client (the fn is service_role only) ──
+  // ── Reserve serial (the fn is service_role only) ──
   // P2-1 accepted gap: the serial is consumed before the INSERT below, so a
   // failed INSERT burns the number → non-contiguous RF- sequence. Matches the
   // accepted freight-quote/invoice serial precedent; not worth a txn rewrite.
-  const admin = createAdminClient();
   const { data: requestNo, error: serialErr } = await admin.rpc("next_refund_request_no");
   if (serialErr || typeof requestNo !== "string") {
     return { ok: false, error: `serial_reserve_failed: ${serialErr?.message ?? "rpc"}` };

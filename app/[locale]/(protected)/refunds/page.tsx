@@ -1,5 +1,6 @@
 import { Link } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth/require-auth";
 import { LINE_OA } from "@/components/seo/site";
 import { ArrowRightLeft, ChevronRight, Home, MessageCircle, History } from "lucide-react";
@@ -49,8 +50,9 @@ function thb(n: number): string {
 }
 
 export default async function CustomerRefundsHubPage() {
-  await requireAuth();
+  const { profile } = await requireAuth();
   const sb = await createClient();
+  const memberCode = profile?.member_code ?? null;
 
   // ── Own refund_requests (RLS-filtered to profile_id = auth.uid()) ──
   const { data: refundsRaw, error: refundsRawErr } = await sb
@@ -67,41 +69,55 @@ export default async function CustomerRefundsHubPage() {
   const refunds = refundsRaw ?? [];
 
   // ── Source options for the form's type-ahead picker ──
-  // Surface user's own forwarders + service_orders + yuan_payments so they
-  // can pick a parent ref by f_no / h_no / id with a label. RLS scopes
-  // each list to their own.
-  const [{ data: fwdsRaw }, { data: ordersRaw }, { data: yuansRaw }] = await Promise.all([
-    sb.from("forwarders")
-      .select("f_no, status, created_at")
-      .order("created_at", { ascending: false })
-      .limit(50),
-    sb.from("service_orders")
-      .select("h_no, status, created_at")
-      .order("created_at", { ascending: false })
-      .limit(50),
-    sb.from("yuan_payments")
-      .select("id, status, yuan_amount, thb_amount, created_at")
-      .order("created_at", { ascending: false })
-      .limit(50),
-  ]);
+  // Surface the customer's PAID/refundable parents from the LIVE legacy tb_*
+  // schema (the rebuilt forwarders/service_orders/yuan_payments twins are
+  // 0-row). tb_* is service_role-locked → read via the admin client, scoped by
+  // member_code. Only "ever paid" parents appear (the action re-checks at
+  // submit): forwarder fstatus 6,7 (ชำระแล้ว/ส่งแล้ว) · order hstatus 3,4,5
+  // (post-payment) · yuan all (THB is wallet-debited at submit). The picker
+  // `value` is exactly the source_ref the action expects (fno / hno /
+  // String(tb_payment.id)).
+  let sourceOptions: SourceOption[] = [];
+  if (memberCode) {
+    const admin = createAdminClient();
+    const [{ data: fwdsRaw }, { data: ordersRaw }, { data: yuansRaw }] = await Promise.all([
+      admin.from("tb_forwarder")
+        .select("fno, fstatus, fdate")
+        .eq("userid", memberCode)
+        .in("fstatus", ["6", "7"])
+        .order("fdate", { ascending: false })
+        .limit(50),
+      admin.from("tb_header_order")
+        .select("hno, hstatus, hdate")
+        .eq("userid", memberCode)
+        .in("hstatus", ["3", "4", "5"])
+        .order("hdate", { ascending: false })
+        .limit(50),
+      admin.from("tb_payment")
+        .select("id, paystatus, payyuan, paythb, paydate")
+        .eq("userid", memberCode)
+        .order("paydate", { ascending: false })
+        .limit(50),
+    ]);
 
-  const sourceOptions: SourceOption[] = [
-    ...(((fwdsRaw ?? []) as Array<{ f_no: string; status: string; created_at: string }>).map((f) => ({
-      source: "forwarder" as const,
-      value:  f.f_no,
-      label:  `${f.f_no} (${f.status})`,
-    }))),
-    ...(((ordersRaw ?? []) as Array<{ h_no: string; status: string; created_at: string }>).map((o) => ({
-      source: "service_order" as const,
-      value:  o.h_no,
-      label:  `${o.h_no} (${o.status})`,
-    }))),
-    ...(((yuansRaw ?? []) as Array<{ id: string; status: string; yuan_amount: number; thb_amount: number; created_at: string }>).map((y) => ({
-      source: "yuan_payment" as const,
-      value:  y.id,
-      label:  `${y.id.slice(0, 8)}… (${y.status}) · ¥${y.yuan_amount} → ${thb(y.thb_amount)}`,
-    }))),
-  ];
+    sourceOptions = [
+      ...(((fwdsRaw ?? []) as Array<{ fno: string; fstatus: string | null }>).map((f) => ({
+        source: "forwarder" as const,
+        value:  f.fno,
+        label:  `${f.fno} (สถานะ ${f.fstatus ?? "—"})`,
+      }))),
+      ...(((ordersRaw ?? []) as Array<{ hno: string; hstatus: string | null }>).map((o) => ({
+        source: "service_order" as const,
+        value:  o.hno,
+        label:  `${o.hno} (สถานะ ${o.hstatus ?? "—"})`,
+      }))),
+      ...(((yuansRaw ?? []) as Array<{ id: number; paystatus: string | null; payyuan: number | null; paythb: number | null }>).map((y) => ({
+        source: "yuan_payment" as const,
+        value:  String(y.id),
+        label:  `#${y.id} · ¥${y.payyuan ?? "—"} → ${thb(Number(y.paythb ?? 0))}`,
+      }))),
+    ];
+  }
 
   return (
     <>
