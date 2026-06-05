@@ -90,6 +90,7 @@ export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
   const [lastName, setLastName]   = useState<string>(initial.last_name ?? "");
   const [phone, setPhone]         = useState<string>(initial.phone ?? "");
   const [avatarUrl, setAvatarUrl] = useState<string>(initial.avatar_url ?? "");
+  const [employeeCode, setEmployeeCode] = useState<string>(initial.employee_code ?? "");
   const [birthday, setBirthday]   = useState<string>(initial.birthday ?? "");
   const [sex, setSex]             = useState<"" | (typeof SEX_VALUES)[number]>(
     (initial.sex as (typeof SEX_VALUES)[number] | null) ?? "",
@@ -150,6 +151,7 @@ export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
         avatar_url: avatarUrl.trim() || undefined,
         birthday:   birthday || undefined,
         sex:        sex || undefined,
+        employee_code: employeeCode.trim() || undefined,
 
         nickname:           nickname.trim() || undefined,
         company,
@@ -302,6 +304,19 @@ export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
                 disabled={pending}
                 className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
               />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">รหัสพนักงาน (YYMMNO)</label>
+              <input
+                type="text"
+                value={employeeCode}
+                onChange={(e) => setEmployeeCode(e.target.value)}
+                maxLength={20}
+                placeholder="เช่น 690601"
+                disabled={pending}
+                className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+              />
+              <p className="mt-1 text-[11px] text-muted">ใช้ login เข้าระบบได้ (เหมือน user id) · รูปแบบ ปี-เดือน-ลำดับ</p>
             </div>
             <div>
               <AdminAvatarUploadField

@@ -204,6 +204,7 @@ export const AdminUpdateSchema = z
     avatar_url:    optionalUrl,
     birthday:      optionalDate,
     sex:           sexSchema.optional(),
+    employee_code: optionalText(20),   // รหัสพนักงาน YYMMNO (login key · owner-assigned)
 
     // HR sidecar
     nickname:           optionalText(120),

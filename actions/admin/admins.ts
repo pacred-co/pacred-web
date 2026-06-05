@@ -957,6 +957,7 @@ export async function adminUpdateProfileFields(
     if (d.avatar_url !== undefined) profileUpdate.avatar_url = d.avatar_url ?? null;
     if (d.birthday   !== undefined) profileUpdate.birthday   = d.birthday ?? null;
     if (d.sex        !== undefined) profileUpdate.sex        = d.sex ?? null;
+    if (d.employee_code !== undefined) profileUpdate.employee_code = d.employee_code ?? null;
 
     if (Object.keys(profileUpdate).length > 0) {
       const { error: profErr } = await admin
@@ -1145,6 +1146,7 @@ export type AdminEditLoad = {
   avatar_url:       string | null;
   birthday:         string | null;
   sex:              "male" | "female" | "other" | null;
+  employee_code:    string | null;
   member_code:      string | null;
   is_active:        boolean;
   roles:            Array<{ role: string; is_active: boolean }>;
@@ -1172,13 +1174,13 @@ export async function loadAdminForEdit(
       admin
         .from("profiles")
         .select(
-          "id, email, first_name, last_name, phone, avatar_url, birthday, sex, member_code, is_active",
+          "id, email, first_name, last_name, phone, avatar_url, birthday, sex, employee_code, member_code, is_active",
         )
         .eq("id", profileId)
         .maybeSingle<{
           id: string; email: string | null; first_name: string | null; last_name: string | null;
           phone: string | null; avatar_url: string | null; birthday: string | null;
-          sex: "male" | "female" | "other" | null; member_code: string | null; is_active: boolean;
+          sex: "male" | "female" | "other" | null; employee_code: string | null; member_code: string | null; is_active: boolean;
         }>(),
       admin
         .from("admins")
@@ -1238,6 +1240,7 @@ export async function loadAdminForEdit(
           avatar_url:       p.avatar_url,
           birthday:         p.birthday,
           sex:              p.sex,
+          employee_code:    p.employee_code,
           member_code:      p.member_code,
           is_active:        p.is_active,
           roles,

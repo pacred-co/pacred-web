@@ -151,6 +151,23 @@ export async function signIn(input: SignInInput): Promise<ActionResult<{ isAdmin
       // if it doesn't, both native + bridge return invalid_credentials.
       resolvedEmail = legacySyntheticEmail(code);
     }
+  } else if (/^\d{5,8}$/.test(idTrim)) {
+    // Staff employee code (รหัสพนักงาน, format YYMMNO e.g. 690601 — owner
+    // 2026-06-06): log in like a game user-id. 5-8 digits can't be a Thai
+    // phone (9-10) or a PR-code, so the shape is unambiguous → resolve to the
+    // staffer's email via profiles.employee_code (admin client, pre-auth RLS
+    // bypass). A code with no match leaves resolvedEmail null → native miss →
+    // bridges → invalid_credentials.
+    const admin = createAdminClient();
+    const { data: ecProfile, error: ecErr } = await admin
+      .from("profiles")
+      .select("email")
+      .eq("employee_code", idTrim)
+      .maybeSingle<{ email: string | null }>();
+    if (ecErr) {
+      console.error(`[profiles employee_code lookup] failed`, { code: ecErr.code, message: ecErr.message });
+    }
+    resolvedEmail = ecProfile?.email ?? null;
   } else {
     resolvedPhone = normalizePhone(identifier);
   }
