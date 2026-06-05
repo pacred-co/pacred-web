@@ -11,6 +11,11 @@ import {
   type Provider,
 } from "@/lib/validators/cart";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
+// 2026-06-05 (ภูม flag) — normalize marketplace URLs before insert.
+// `tb_cart.curl` is varchar(300) but customer-pasted Taobao/1688 URLs carry
+// 600+ chars of tracking params (utparam/scm/spm/abtest/etc.) → overflow.
+// Strip to canonical id+skuId only.
+import { normalizeProductUrl } from "@/lib/url/normalize-product-url";
 import { ADDRESSES, CONTACT } from "@/components/seo/site";
 import {
   modeFromPref,
@@ -780,7 +785,7 @@ export async function addCartItem(
     .from("tb_cart")
     .insert({
       cdetails:  d.details ?? "",
-      curl:      d.url ?? "",
+      curl:      normalizeProductUrl(d.url ?? ""),
       ctitle:    d.title ?? "",
       cnameshop: d.shop_name && d.shop_name !== "pacred" ? d.shop_name : "pcs",
       cprovider: providerToLegacyCode(d.provider),
@@ -965,7 +970,7 @@ export async function addCartItemsBulk(rows: CartItemBulkRow[]): Promise<ActionR
 
   const payload = validated.map((d) => ({
     cdetails:  d.details ?? "",
-    curl:      d.url ?? "",
+    curl:      normalizeProductUrl(d.url ?? ""),
     ctitle:    d.title ?? "",
     cnameshop: d.shop_name && d.shop_name !== "pacred" ? d.shop_name : "pcs",
     cprovider: providerToLegacyCode(d.provider),
