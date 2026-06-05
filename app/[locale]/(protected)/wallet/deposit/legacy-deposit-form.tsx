@@ -3,6 +3,10 @@
 import { useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+// 2026-06-05 (E2E audit · §0f confirm-before-mutate) — deposit submits a slip
+// + creates pending tb_wallet_hs row; admin reviews. Without confirm the
+// customer can't double-check the amount + slip file before commit.
+import { confirm } from "@/components/ui/confirm";
 import { getDepositQr, submitLegacyWalletDeposit } from "@/actions/wallet";
 
 /**
@@ -74,7 +78,7 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
     });
   }
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (pending) return;
     setMsg(null);
@@ -95,6 +99,17 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
       setMsg({ tone: "err", text: "กรุณเลือกรูปข้อมูลให้ครบ" });
       return;
     }
+
+    // §0f confirm-before-mutate — let the customer double-check the amount +
+    // slip filename. ป้องกัน "เผลอกดเติม" ผิดยอด/ผิดสลิป.
+    const slipKB = Math.round(slipFile.size / 1024);
+    const ok = await confirm(
+      `ยืนยันเติมเงิน ฿${amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}\n\n` +
+      `สลิป: ${slipFile.name}\n` +
+      `ขนาด: ${slipKB.toLocaleString("th-TH")} KB\n\n` +
+      `หลังกดยืนยัน ระบบจะส่งให้แอดมินตรวจสอบสลิป · ยอดจะเข้ากระเป๋าเมื่อแอดมินอนุมัติ`,
+    );
+    if (!ok) return;
 
     startTransition(async () => {
       const res = await submitLegacyWalletDeposit({

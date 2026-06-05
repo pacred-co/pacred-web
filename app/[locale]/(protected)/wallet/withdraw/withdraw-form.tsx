@@ -4,6 +4,10 @@ import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+// 2026-06-05 (E2E audit · §0f confirm-before-mutate) — withdraw debits
+// tb_wallet.wallettotal IMMEDIATELY on submit (wallet-tb.ts:199). Without
+// confirm, fat-finger click = real money leaves account. Add modal gate.
+import { confirm } from "@/components/ui/confirm";
 // ADR-0018 §D-2 rule 1 + §D-3 #4 (2026-05-30 · P0-7): the live withdraw
 // submit now writes the LEGACY SOT (tb_wallet + tb_wallet_hs) via
 // submitWithdrawRequest. The old createWithdraw wrote the rebuilt
@@ -37,7 +41,7 @@ export function WithdrawForm({ balance }: Props) {
   const fee = useMemo(() => (Number.isFinite(amt) && amt > 0 && amt < FEE_THRESHOLD) ? FEE_AMOUNT : 0, [amt]);
   const net = Number.isFinite(amt) && amt > 0 ? Math.max(0, amt - fee) : 0;
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     if (!Number.isFinite(amt) || amt <= 0) {
@@ -52,6 +56,18 @@ export function WithdrawForm({ balance }: Props) {
       setError(t("amountExceedsBalance"));
       return;
     }
+    // §0f confirm-before-mutate — withdraw debits wallet immediately on submit.
+    // Show clear summary so customer can't fat-finger the wrong bank/amount.
+    const ok = await confirm(
+      `ยืนยันสั่งถอน ฿${amt.toLocaleString("th-TH", { minimumFractionDigits: 2 })}\n` +
+      `${fee > 0 ? `ค่าบริการ ฿${fee.toFixed(2)} (ยอดต่ำกว่า ฿${FEE_THRESHOLD})\n` : ""}` +
+      `ยอดที่จะได้รับ ฿${net.toLocaleString("th-TH", { minimumFractionDigits: 2 })}\n\n` +
+      `เข้าบัญชี: ${bank}\n` +
+      `ชื่อ: ${accountName}\n` +
+      `เลขที่: ${accountNumber}\n\n` +
+      `⚠️ เมื่อกดยืนยัน ระบบจะหักเงินจาก wallet ทันที + เปิดคำขอให้แอดมินตรวจสอบ`,
+    );
+    if (!ok) return;
     startTransition(async () => {
       const res = await submitWithdrawRequest({
         amount:         amt,

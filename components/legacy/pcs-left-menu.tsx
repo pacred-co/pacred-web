@@ -188,6 +188,11 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
           <SubLink href="/service-import/add">เพิ่มรายการนำเข้า</SubLink>
           <SubLink href="/service-import/estimate">ประเมินราคานำเข้า</SubLink>
           <SubLink href="/service-import?q=7">ประวัติการนำเข้า</SubLink>
+          {/* 2026-06-05 (E2E audit) — wire /billing-run to sidebar (was orphan ·
+              §0d violation). ลูกค้าฝากนำเข้าได้รับใบวางบิลจาก admin combine-bill
+              flow → ต้องเข้ามาดูได้ ≤3 clicks. Reads tb_forwarder_invoice
+              (forwarders ที่ admin รวมเป็นบิลเดียวกัน) · group by status. */}
+          <SubLink href="/billing-run">ใบวางบิลรวม</SubLink>
         </PcsLeftMenuAccordion>
 
         {/* บริการส่งออก — mirrors บริการนำเข้า (owner 2026-06-04). Export module
