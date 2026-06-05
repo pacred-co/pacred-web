@@ -550,13 +550,14 @@ export default async function ServiceOrderPrintPage({
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src="/images/pacred-logo-red.png"
-                    style={{ width: "60mm" }}
+                    style={{ width: "35mm", display: "block" }}
                     alt="Pacred"
                   />
-                  <div style={{ fontSize: 11, lineHeight: 1.4, marginTop: 6, color: "#444" }}>
-                    <div><b>บริษัท แพคเรด (ประเทศไทย) จำกัด</b></div>
-                    <div>28/40 หมู่บ้าน สิริ อเวนิว เพชรเกษม 81 ถนนมาเจริญ แขวงหนองแขม เขตหนองแขม กรุงเทพมหานคร 10160</div>
-                    <div>โทร 02-421-3325 · sales@pacred.co · pacred.co</div>
+                  <div style={{ fontSize: 14, lineHeight: 1.55, marginTop: 4, color: "#333" }}>
+                    <div style={{ fontSize: 16, fontWeight: 700 }}>บริษัท แพคเรด (ประเทศไทย) จำกัด</div>
+                    <div>28/40 หมู่บ้าน สิริ อเวนิว เพชรเกษม 81 ถนนมาเจริญ</div>
+                    <div>แขวงหนองแขม เขตหนองแขม กรุงเทพมหานคร 10160</div>
+                    <div>โทร 02-421-3325 · sales@pacred.co</div>
                     <div>เลขประจำตัวผู้เสียภาษี : 0105564077716</div>
                   </div>
                 </th>
