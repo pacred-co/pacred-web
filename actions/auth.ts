@@ -156,21 +156,39 @@ export async function signIn(input: SignInInput): Promise<ActionResult<{ isAdmin
     }
   } else if (/^\d{5,8}$/.test(idTrim)) {
     // Staff employee code (รหัสพนักงาน, format YYMMNO e.g. 690601 — owner
-    // 2026-06-06): log in like a game user-id. 5-8 digits can't be a Thai
-    // phone (9-10) or a PR-code, so the shape is unambiguous → resolve to the
-    // staffer's email via profiles.employee_code (admin client, pre-auth RLS
-    // bypass). A code with no match leaves resolvedEmail null → native miss →
-    // bridges → invalid_credentials.
+    // 2026-06-06): log in by the CODE ALONE, DECOUPLED from email ("เลิกเอาไป
+    // พ่วงกับอีเมลเลยนะ มันคนละอย่างกัน"). 5-8 digits can't be a Thai phone
+    // (9-10) or a PR-code, so the shape is unambiguous. Resolve the profile by
+    // employee_code (admin client, pre-auth RLS bypass), then map to whatever
+    // credential the account ACTUALLY has — mirroring the member-code branch:
+    //   • migrated PCS account → synthetic legacy email (dodges the shared-phone
+    //     collision, e.g. PR132/PR321 both carry +66948782006)
+    //   • Pacred-native with an email → that email
+    //   • email-LESS staff (e.g. ป๊อป PR132 · Tadsakorn PR112 · any office
+    //     staffer who only has a phone) → their phone
+    // So an admin with NO email still logs in by code. No match → null → native
+    // miss → bridges → invalid_credentials.
     const admin = createAdminClient();
     const { data: ecProfile, error: ecErr } = await admin
       .from("profiles")
-      .select("email")
+      .select("email, phone, member_code, migrated_from_pcs")
       .eq("employee_code", idTrim)
-      .maybeSingle<{ email: string | null }>();
+      .maybeSingle<{
+        email: string | null;
+        phone: string | null;
+        member_code: string | null;
+        migrated_from_pcs: boolean | null;
+      }>();
     if (ecErr) {
       console.error(`[profiles employee_code lookup] failed`, { code: ecErr.code, message: ecErr.message });
     }
-    resolvedEmail = ecProfile?.email ?? null;
+    if (ecProfile?.migrated_from_pcs && ecProfile.member_code) {
+      resolvedEmail = legacySyntheticEmail(ecProfile.member_code);
+    } else if (ecProfile?.email) {
+      resolvedEmail = ecProfile.email;
+    } else if (ecProfile?.phone) {
+      resolvedPhone = ecProfile.phone;
+    }
   } else {
     resolvedPhone = normalizePhone(identifier);
   }
