@@ -314,9 +314,10 @@ function MenuRow({
 
 // ── Sidebar header — avatar + adminID + role badge (legacy itop). ──────
 function SidebarHeader({
-  adminLabel, roleKey, t,
+  adminLabel, adminAvatar, roleKey, t,
 }: {
   adminLabel: string;
+  adminAvatar?: string | null;
   roleKey: string | null;
   t: (k: string) => string;
 }) {
@@ -330,9 +331,20 @@ function SidebarHeader({
         className="flex items-center gap-3 w-full text-left rounded-lg hover:bg-surface-alt px-1 py-1 transition-colors"
         aria-expanded={open}
       >
-        <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-primary-600 text-white font-bold text-sm shrink-0">
-          {initial}
-        </span>
+        {adminAvatar && adminAvatar.trim() ? (
+          // The admin's uploaded avatar (profiles.avatar_url · same image set in
+          // /admin/admins/[id]/edit). Falls back to the initial when unset.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={adminAvatar}
+            alt=""
+            className="w-10 h-10 rounded-full object-cover shrink-0 ring-2 ring-primary-200"
+          />
+        ) : (
+          <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-primary-600 text-white font-bold text-sm shrink-0">
+            {initial}
+          </span>
+        )}
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold text-foreground truncate">{adminLabel}</span>
           {roleKey && (
@@ -367,12 +379,15 @@ export function AdminSidebar({
   roles,
   counts = {},
   adminLabel = "Admin",
+  adminAvatar = null,
 }: {
   roles: AdminRole[];
   /** Live-count badges, resolved server-side (getSidebarCounts). */
   counts?: BadgeCounts;
   /** The signed-in admin's display name / member code for the header. */
   adminLabel?: string;
+  /** The signed-in admin's uploaded avatar (profiles.avatar_url) for the header. */
+  adminAvatar?: string | null;
 }) {
   const pathname = usePathname() ?? "";
   // useSearchParams() is the current URL's query string — needed by
@@ -441,7 +456,7 @@ export function AdminSidebar({
         </div>
 
         {/* Avatar + adminID + role badge — legacy itop block */}
-        <SidebarHeader adminLabel={adminLabel} roleKey={roleKey} t={t} />
+        <SidebarHeader adminLabel={adminLabel} adminAvatar={adminAvatar} roleKey={roleKey} t={t} />
 
         {/*
           Per-role nested-accordion menu, grouped by the 6 fixed legacy

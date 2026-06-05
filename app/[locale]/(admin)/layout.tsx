@@ -43,7 +43,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // wrappers (tab strips, tables) now activate horizontal scroll correctly.
   return (
     <div className="min-h-screen flex text-foreground">
-      <AdminSidebar roles={roles} counts={counts} adminLabel={adminLabel} />
+      <AdminSidebar roles={roles} counts={counts} adminLabel={adminLabel} adminAvatar={profile?.avatar_url ?? null} />
       <div className="flex-1 lg:ml-64 min-h-screen min-w-0 overflow-x-hidden">
         {children}
       </div>
