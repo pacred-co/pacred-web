@@ -62,9 +62,16 @@ EXIT 0, route 307, prod columns + 152 editable orders confirmed. ⚠️ NOT clic
 authed order (preview flaky) — open a status-1..4 TEST order, change carrier + re-pick address.
 
 ### 🟡 Smaller (flag)
-- **Profile avatar** writes `profiles.avatar_url` not legacy `tb_users.userPicture` → admin
-  back-office avatar stale. Mirror is non-trivial (legacy stores a FILENAME, this stores a full
-  URL — the admin reader would need both). Low impact (customer sees their avatar).
+- **Profile avatar** writes `profiles.avatar_url` (full public URL) not legacy
+  `tb_users.userPicture` (filename) → admin back-office shows a STALE portrait after a customer
+  changes their picture. **DON'T mirror** (writing a full URL into `userPicture` would break the
+  ~12 readers that prepend a path to the legacy filename). **Safe ภูม-lane fix (5 lines, no
+  regression):** in `app/[locale]/(admin)/admin/customers/[id]/legacy-view.tsx`, right before
+  `const userImageUrl = await resolveLegacyUrl(u.userPicture, "profile")`, also
+  `admin.from("profiles").select("avatar_url").eq("member_code", id).maybeSingle()` and
+  `const userImageUrl = (profRow?.avatar_url?.trim() ? profRow.avatar_url : null) ?? await resolveLegacyUrl(...)`.
+  Targeted to this primary customer-detail reader only — leave the other userPicture readers on the
+  legacy filename. (เดฟ drafted + reverted this 2026-06-05 to respect the admin/** lane boundary.)
 - **Shop-order slip-top-up at checkout** (`shops.php` L328-429) — pay shortfall + upload slip in
   one click when wallet insufficient. Pacred refuses + routes to `/wallet/deposit` (2-step). Missing.
 - **Customer withdraw** missing legacy KYC controls (`wallet.php` L601-722): password re-confirm,
