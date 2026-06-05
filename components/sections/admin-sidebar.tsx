@@ -18,7 +18,7 @@
  *   Audit source: docs/research/d1-fidelity-admin.md §1
  */
 
-import { useState } from "react";
+import { createContext, useContext, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
@@ -237,6 +237,11 @@ function CountBadge({ value }: { value: number }) {
   );
 }
 
+// One-open-at-a-time group for the top-level (depth-0) accordions — opening a
+// section auto-collapses the previous (owner 2026-06-05 · "ไม่รกตา"). Nested
+// accordions (depth ≥ 1) keep their own local state.
+const AdminAccordionCtx = createContext<{ openId: string | null; toggle: (id: string) => void } | null>(null);
+
 // ── One menu row — recursive (handles nested accordion). ───────────────
 function MenuRow({
   item, depth, counts, pathname, search, t, onNavigate,
@@ -252,7 +257,14 @@ function MenuRow({
   const hasChildren = !!item.children?.length;
   const active = item.href ? hrefMatches(item.href, pathname, search) : false;
   const branchActive = subtreeHasActive(item, pathname, search);
-  const [open, setOpen] = useState(branchActive);
+  // Depth-0 accordions share the group (one open at a time · auto-close others);
+  // nested accordions (depth ≥ 1) keep their own local state.
+  const group = useContext(AdminAccordionCtx);
+  const rowId = item.href ?? item.labelKey ?? "";
+  const [localOpen, setLocalOpen] = useState(branchActive);
+  const open = depth === 0 && group ? group.openId === rowId : localOpen;
+  const handleToggle = () =>
+    depth === 0 && group ? group.toggle(rowId) : setLocalOpen((v) => !v);
 
   const badgeVal = item.badge ? counts[item.badge] ?? 0 : 0;
   // Indentation grows with depth (legacy nested <ul> visual nesting).
@@ -269,7 +281,7 @@ function MenuRow({
       <li>
         <button
           type="button"
-          onClick={() => setOpen((v) => !v)}
+          onClick={handleToggle}
           className={`${rowClasses} w-full text-left`}
           aria-expanded={open}
         >
@@ -280,22 +292,25 @@ function MenuRow({
             ? <ChevronDown className={`${badgeVal > 0 ? "ml-1.5" : "ml-auto"} w-3.5 h-3.5 opacity-50 shrink-0`} />
             : <ChevronRight className={`${badgeVal > 0 ? "ml-1.5" : "ml-auto"} w-3.5 h-3.5 opacity-50 shrink-0`} />}
         </button>
-        {open && (
-          <ul className="mt-0.5 space-y-0.5">
-            {item.children!.map((child, i) => (
-              <MenuRow
-                key={child.href ?? `${child.labelKey}-${i}`}
-                item={child}
-                depth={depth + 1}
-                counts={counts}
-                pathname={pathname}
-                search={search}
-                t={t}
-                onNavigate={onNavigate}
-              />
-            ))}
-          </ul>
-        )}
+        {/* smooth grid 0fr→1fr reveal — adapts to any sub-list height */}
+        <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+          <div className="overflow-hidden" aria-hidden={!open}>
+            <ul className="mt-0.5 space-y-0.5">
+              {item.children!.map((child, i) => (
+                <MenuRow
+                  key={child.href ?? `${child.labelKey}-${i}`}
+                  item={child}
+                  depth={depth + 1}
+                  counts={counts}
+                  pathname={pathname}
+                  search={search}
+                  t={t}
+                  onNavigate={onNavigate}
+                />
+              ))}
+            </ul>
+          </div>
+        </div>
       </li>
     );
   }
@@ -422,6 +437,25 @@ export function AdminSidebar({
   }));
   const roleKey = role ? ROLE_LABEL_KEY[role] : null;
 
+  // One-open-at-a-time for the depth-0 accordions (owner 2026-06-05): the
+  // branch-active section opens on first load, then opening any section
+  // auto-collapses the previous one. id = the depth-0 item's href ?? labelKey.
+  const initialOpenAccordion = (() => {
+    for (const sec of sections) {
+      for (const it of sec.items) {
+        if (it.children?.length && subtreeHasActive(it, pathname, search)) {
+          return it.href ?? it.labelKey ?? null;
+        }
+      }
+    }
+    return null;
+  })();
+  const [openAccordion, setOpenAccordion] = useState<string | null>(initialOpenAccordion);
+  const accordionGroup = {
+    openId: openAccordion,
+    toggle: (id: string) => setOpenAccordion((cur) => (cur === id ? null : id)),
+  };
+
   const closeMobile = () => setOpenMobile(false);
 
   return (
@@ -466,6 +500,7 @@ export function AdminSidebar({
           Empty sections (zero items) are suppressed so e.g. a Warehouse
           worker never sees a Freight divider with nothing under it.
         */}
+        <AdminAccordionCtx.Provider value={accordionGroup}>
         <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-3">
           {sections.filter((sec) => sec.items.length > 0).map((sec, si) => (
             <div key={sec.header || `sec-${si}`} className="space-y-0.5">
@@ -491,6 +526,7 @@ export function AdminSidebar({
             </div>
           ))}
         </nav>
+        </AdminAccordionCtx.Provider>
 
         <div className="px-2.5 py-3 border-t border-border space-y-1">
           {/* G4 — super-only escape hatch (Wave 26 · 2026-05-28 ดึก). Lets a
