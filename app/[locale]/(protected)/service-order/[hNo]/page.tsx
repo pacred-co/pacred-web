@@ -5,8 +5,11 @@ import { getServiceOrder } from "@/actions/service-order";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { legacyOrderStatusThai } from "@/lib/legacy-status-map";
+import { loadCustomerAddressOptions } from "@/lib/legacy/customer-address-options";
 import { CancelButton } from "./cancel-button";
 import { PayFromWalletButton } from "./pay-from-wallet-button";
+import { ShopOrderEditShipByForm } from "./shop-order-edit-ship-by-form";
+import { ShopOrderEditAddressForm } from "./shop-order-edit-address-form";
 
 // Badge colours keyed by the legacy tb_header_order.hstatus code ('1'-'6').
 const STATUS_BADGE: Record<string, string> = {
@@ -22,6 +25,32 @@ const PROVIDER_LABEL: Record<string, string> = {
   "1688": "1688", taobao: "Taobao", tmall: "Tmall", shop: "Shop", nice: "Nice",
 };
 
+// Legacy `nameShipBy($hShipBy)` — function.php L91-143. Same carrier table the
+// forwarder detail page uses; the customer-side <select> enumerates the full
+// list (matching the Pacred forwarder edit-ship-by precedent — the legacy ZIP
+// gating is a refinement deferred to keep both cargo edit flows consistent).
+const NAME_SHIP_BY: Record<string, string> = {
+  "1": "DHL Express", "2": "Flash Express", "3": "J.K. เอ็กซ์เพรส",
+  "4": "Kerry Express", "5": "Nim Express", "6": "S & J ขนส่งด่วนสุพรรณบุรี",
+  "7": "SB สมใจขนส่ง", "8": "SCG Express", "9": "เคพีเอ็น",
+  "10": "เฟิร์ส เอ็กเพรส ขนส่ง", "11": "ไปรษณีย์ไทย", "12": "จันทร์สว่างขนส่ง",
+  "13": "ธนามัย ขนส่งด่วน", "14": "บุญอนันต์ขนส่ง", "15": "พี.เจ. ด่วนอีสาน ขนส่ง",
+  "16": "มะม่วงขนส่ง", "17": "วันชนะ แอนด์ วันณิสา ขนส่ง", "18": "สมพงษ์อุบลรัตน์ ขนส่ง",
+  "19": "อาร์.ซี.อาร์ เพลส", "20": "ตองสอง ขนส่ง", "21": "นิ่มซี่เส็งขนส่ง 1988",
+  "22": "ธนาไพศาล ขนส่ง", "23": "PL ขนส่งด่วน", "24": "J&T Express",
+  "25": "มังกรทองขนส่ง 2019", "26": "PM ชลบุรี ขนส่งด่วน", "27": "ทรัพย์ปรีชา",
+  "28": "พัฒนาเอ็กซ์เพลส", "29": "หาดใหญ่ทัวร์", "30": "หาดใหญ่ โอ.พี. 2012",
+  "31": "อาร์.ซี.เอ็กซเพรส", "32": "สี่สหาย", "33": "แพปลา​สมบัติ​วัฒนา",
+  "34": "ทวีทรัพย์ระยอง", "35": "ศิริสมบูรณ์", "36": "นิวสอง อัศวินขนส่ง",
+  "37": "โชคสถาพรขนส่ง", "38": "ทรัพย์สมบูรณ์ถาวร", "39": "MNB Transport",
+  "40": "หจก.โชคพูลทรัพย์ขนส่ง 2014", "41": "สิรินครขนส่ง", "42": "พาณิชย์การขนส่ง KSD",
+  PCS: "รับเองโกดัง Pacred (สมุทรสาคร)", F: "บริษัทจัดหาให้อัตโนมัติ",
+  PCSF: "Pacred เหมาเหมา", PCSE: "Pacred Express",
+};
+function nameShipBy(hShipBy: string | null): string {
+  return NAME_SHIP_BY[hShipBy ?? ""] ?? "—";
+}
+
 export default async function ServiceOrderDetailPage({ params }: { params: Promise<{ hNo: string }> }) {
   const { hNo } = await params;
   const t = await getTranslations("serviceOrder");
@@ -35,42 +64,58 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
   const canPrintReceipt = o.status !== "1" && o.status !== "6";   // mirrors PHP printShop.php (status 2..5 only)
   const itemsTotalCny = o.items.reduce((s, it) => s + Number(it.price_cny) * Number(it.amount), 0);
 
-  // Fetch main wallet balance only when relevant (hstatus='2' รอชำระเงิน)
-  // — closes the cargo loop by letting customer self-pay from balance.
-  // Reads the ported legacy tb_wallet (RLS-locked → admin client), keyed by
-  // the customer's member_code.
+  // shops.php L1679/L1701 — the customer may change carrier + delivery address
+  // until the order is สำเร็จ ('5'). We additionally lock '6' (ยกเลิก / terminal).
+  const canEditShipping = o.status !== "5" && o.status !== "6";
+  const warehousePickup = o.ship_by === "PCS";
+
+  // Resolve the member_code once (the tb_* join key) — used by BOTH the wallet
+  // balance (รอชำระเงิน) and the address picker (when shipping is editable).
+  const supabase = await createClient();
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr) {
+    console.error(`[service-order/[hNo] auth] failed`, { code: authErr.code, message: authErr.message });
+  }
+  let memberCode = "";
+  if (user) {
+    const { data: profile, error: profileErr } = await supabase
+      .from("profiles")
+      .select("member_code")
+      .eq("id", user.id)
+      .maybeSingle<{ member_code: string | null }>();
+    if (profileErr) {
+      console.error(`[service-order/[hNo] profiles] failed`, { code: profileErr.code, message: profileErr.message });
+    }
+    memberCode = profile?.member_code ?? "";
+  }
+
+  const admin = createAdminClient();
+
+  // Wallet balance — only when payable (hstatus='2' รอชำระเงิน). Closes the cargo
+  // loop (customer self-pay from balance). Reads the ported legacy tb_wallet.
   let walletBalance: number | null = null;
   if (o.status === "2") {
-    const supabase = await createClient();
-    const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-    if (dataErr) {
-      console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
-    }
-    if (user) {
-      const { data: profile, error: profileErr } = await supabase
-        .from("profiles")
-        .select("member_code")
-        .eq("id", user.id)
-        .maybeSingle<{ member_code: string | null }>();
-      if (profileErr) {
-        console.error(`[profiles list] failed`, { code: profileErr.code, message: profileErr.message });
+    if (memberCode) {
+      const { data: wallet, error: walletErr } = await admin
+        .from("tb_wallet")
+        .select("wallettotal")
+        .eq("userid", memberCode)
+        .maybeSingle<{ wallettotal: number }>();
+      if (walletErr) {
+        console.error(`[tb_wallet list] failed`, { code: walletErr.code, message: walletErr.message });
       }
-      if (profile?.member_code) {
-        const admin = createAdminClient();
-        const { data: wallet, error: walletErr } = await admin
-          .from("tb_wallet")
-          .select("wallettotal")
-          .eq("userid", profile.member_code)
-          .maybeSingle<{ wallettotal: number }>();
-        if (walletErr) {
-          console.error(`[tb_wallet list] failed`, { code: walletErr.code, message: walletErr.message });
-        }
-        walletBalance = Number(wallet?.wallettotal ?? 0);
-      } else {
-        walletBalance = 0;
-      }
+      walletBalance = Number(wallet?.wallettotal ?? 0);
+    } else {
+      walletBalance = 0;
     }
   }
+
+  // Address-picker options for the inline "แก้ไข ที่อยู่จัดส่ง" form — loaded only
+  // when the customer can still change shipping AND it's not warehouse pickup.
+  const addressOptions =
+    canEditShipping && !warehousePickup && memberCode
+      ? await loadCustomerAddressOptions(admin, memberCode)
+      : [];
 
   return (
     <>
@@ -210,6 +255,31 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
               <h3 className="font-bold text-sm">{t("shipmentInfo")}</h3>
               <Meta label={t("warehouseChina")} value={o.warehouse_china === "yiwu" ? "อี้อู" : "กวางโจว"} />
               <Meta label={t("transportType")}  value={t(`transport.${o.transport_type}` as Parameters<typeof t>[0])} />
+              {/* บริษัทขนส่ง (carrier) — inline-editable while not completed/cancelled
+                  (shops.php L1673-1688 · update_hShipBy). */}
+              <div className="text-sm">
+                <span className="text-muted">บริษัทขนส่ง</span>
+                <div className="mt-0.5 font-medium">
+                  {canEditShipping && o.h_no ? (
+                    <ShopOrderEditShipByForm
+                      hNo={o.h_no}
+                      currentShipBy={o.ship_by ?? ""}
+                      currentLabel={nameShipBy(o.ship_by)}
+                      options={Object.entries(NAME_SHIP_BY).map(([code, label]) => ({ code, label }))}
+                      isEditable={canEditShipping}
+                    />
+                  ) : (
+                    <>
+                      {nameShipBy(o.ship_by)}
+                      {o.status === "5" && (
+                        <span className="block text-xs text-muted mt-0.5">
+                          เปลี่ยนบริษัทขนส่งได้อีกครั้งในระบบฝากนำเข้า
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
               <Meta label={t("payMethod")}      value={o.pay_method === "origin" ? t("payMethodOrigin") : t("payMethodDestination")} />
               {o.crate && <Meta label={t("crate")} value="✓" />}
               {o.free_shipping && <Meta label={t("freeShipping")} value="✓" />}
@@ -228,6 +298,19 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
                 </div>
               ) : (
                 <p className="text-xs text-muted">—</p>
+              )}
+              {/* แก้ไข ที่อยู่จัดส่ง (shops.php L1692-1759 · update_hAddress). The form
+                  self-hides on warehouse pickup / locked status. */}
+              {canEditShipping && o.h_no && (
+                <ShopOrderEditAddressForm
+                  hNo={o.h_no}
+                  options={addressOptions}
+                  isEditable={canEditShipping}
+                  warehousePickup={warehousePickup}
+                />
+              )}
+              {canEditShipping && warehousePickup && (
+                <p className="text-xs text-muted">📦 รับเองที่โกดัง Pacred — ไม่สามารถเปลี่ยนที่อยู่ได้</p>
               )}
             </div>
 
