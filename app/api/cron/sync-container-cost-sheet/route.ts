@@ -14,8 +14,11 @@
  * check + writes a row to `cron_invocations` for /admin/system/crons.
  * Schedule: registered in vercel.json + lib/cron/registry.ts (every 20m).
  *
- * Degrades gracefully when GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON is unset
- * (returns status: "failure", reason: "not_configured" — logged, no crash).
+ * Reads แสง's PUBLIC sheet via the CSV export (no auth, no service account,
+ * invisible to the sheet owner — owner directive 2026-06-05 "ดึงต่อใช้เองออโต้
+ * ... ไม่ต้องเข้ามาให้เขารู้ตัว"). No credential needed. Falls back to the
+ * authenticated Sheets API only if the sheet goes private AND
+ * GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON is set; degrades gracefully otherwise.
  */
 import { instrumentCron } from "@/lib/cron/instrument";
 import { syncContainerCostSheet } from "@/lib/integrations/google-sheets/container-cost-sheet-sync";

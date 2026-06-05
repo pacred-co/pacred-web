@@ -132,3 +132,73 @@ export async function readSheet(
     return { ok: false, reason: "fetch_failed", message };
   }
 }
+
+/**
+ * RFC-4180-ish CSV parser. Handles quoted fields with embedded commas
+ * (e.g. a cost cell `"3,308.00"`), `""` escapes, and CRLF/LF line ends.
+ * Returns `string[][]` — one inner array per row. Pure (no IO).
+ */
+export function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }   // escaped quote
+        else inQuotes = false;
+      } else field += ch;
+      continue;
+    }
+    if (ch === '"') inQuotes = true;
+    else if (ch === ",") { row.push(field); field = ""; }
+    else if (ch === "\r") { /* swallow — handled by the \n */ }
+    else if (ch === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
+    else field += ch;
+  }
+  // flush the final field/row when the file doesn't end with a newline
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+/**
+ * Read a PUBLIC (link-shared "anyone with the link can view") sheet tab via
+ * the CSV export endpoint — **no auth, no service account**. This is the
+ * invisible-consume path: it adds NO viewer/editor to the sheet, so the
+ * sheet owner never sees that we're reading it. `gid` is the tab's numeric
+ * id (the `gid=` in the sheet URL). `skipRows` drops leading header rows so
+ * a legacy `A2:` range start is reproduced (the export always includes row 1).
+ *
+ * Returns `auth_failed` when the sheet is NOT public (Google serves an HTML
+ * login page instead of CSV) so the caller can fall back to `readSheet`
+ * (the authenticated path) if a service account is configured.
+ */
+export async function readSheetPublicCsv(
+  spreadsheetId: string,
+  gid: number | string,
+  skipRows = 0,
+): Promise<SheetsReadResult> {
+  try {
+    const url =
+      `https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}` +
+      `/export?format=csv&gid=${encodeURIComponent(String(gid))}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(15_000), redirect: "follow" });
+    if (!res.ok) {
+      return { ok: false, reason: "fetch_failed", message: `${res.status} ${res.statusText}` };
+    }
+    const text = await res.text();
+    // A private sheet 302→login → Google returns an HTML page, not CSV.
+    const head = text.slice(0, 200).toLowerCase();
+    if (head.includes("<!doctype html") || head.includes("<html")) {
+      return { ok: false, reason: "auth_failed", message: "sheet not public (got HTML, not CSV)" };
+    }
+    const rows = parseCsv(text);
+    return { ok: true, rows: skipRows > 0 ? rows.slice(skipRows) : rows };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn("google-sheets", "public-csv fetch failed", { spreadsheetId, gid, message });
+    return { ok: false, reason: "fetch_failed", message };
+  }
+}
