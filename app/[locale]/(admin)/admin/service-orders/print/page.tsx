@@ -834,6 +834,16 @@ function ShopItemRows({ doc }: { doc: PrintDoc }) {
 
     // printShop.php — INSIDE the provider loop: the grand-total row
     // (running $priceShopAll) + the receipt-only thank-you row.
+    //
+    // 2026-06-05 (ภูม flag — "ลูกค้าจะโอนมาขาด") — `priceShopAll` is
+    // the FULL-PRECISION running sum; the legacy showed it rounded
+    // 2dp (number_format) and customers under-transferred when they
+    // computed half-up locally. Append the raw full-precision value
+    // in grey parens next to the rounded total as a reference, so
+    // customers transfer the rounded headline + know it's ceil-safe.
+    const totalRaw = priceShopAll;
+    const totalRounded = Math.round(totalRaw * 100) / 100;
+    const showRaw = Math.abs(totalRaw - totalRounded) > 0.0001;
     out.push(
       <tr
         key={`total-${provider.cProvider}`}
@@ -841,13 +851,25 @@ function ShopItemRows({ doc }: { doc: PrintDoc }) {
         className="p-1"
       >
         <th colSpan={3} className="text-center p-1">
-          {convert(priceShopAll)}
+          {convert(totalRaw)}
         </th>
         <th colSpan={3} className="text-right p-1">
           ราคารวมทั้งหมด
         </th>
         <th colSpan={1} className="p-1">
-          {numberFormat(priceShopAll)}
+          {numberFormat(totalRaw)}
+          {showRaw && (
+            <div
+              style={{
+                fontSize: "11px",
+                fontWeight: "normal",
+                color: "#666",
+                marginTop: "2px",
+              }}
+            >
+              ({numberFormat(totalRaw, 4)})
+            </div>
+          )}
         </th>
       </tr>,
     );

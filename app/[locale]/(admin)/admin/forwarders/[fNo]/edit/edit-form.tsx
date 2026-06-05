@@ -30,8 +30,10 @@ export type EditItemRow = {
   crateType:     "1" | "2";   // '1' ไม่ตี · '2' ตีลัง (legacy enum)
 };
 
-type ProductType = "1" | "2" | "3" | "4";
-type RefPrice    = "1" | "2";
+type ProductType    = "1" | "2" | "3" | "4";
+type RefPrice       = "1" | "2";
+type WarehouseChina = "1" | "2";
+type WarehouseTh    = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8";
 
 const PRODUCT_TYPE_OPTIONS: { value: ProductType; label: string; sub: string }[] = [
   { value: "1", label: "ทั่วไป",  sub: "Generic" },
@@ -45,14 +47,34 @@ const REF_PRICE_OPTIONS: { value: RefPrice; label: string; sub: string }[] = [
   { value: "2", label: "คิดตามปริมาตร", sub: "ราคา = CBM × เรท/cbm" },
 ];
 
-function numberInputCls(error?: boolean) {
-  return [
-    "w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2",
-    "font-mono tabular-nums",
-    error
-      ? "border-red-400 ring-1 ring-red-200 focus:border-red-500 focus:ring-red-300"
-      : "border-border focus:border-primary-500 focus:ring-primary-200",
-  ].join(" ");
+// Match legacy optionWarehouse() (member/pcs-admin/include/function.php L1823-1833)
+// + nameWarehouseChina() (L1049). Order matches the legacy dropdown.
+const WAREHOUSE_CHINA_OPTIONS: { value: WarehouseChina; label: string }[] = [
+  { value: "1", label: "กวางโจว (Guangzhou)" },
+  { value: "2", label: "อี้อู (Yiwu)" },
+];
+const WAREHOUSE_TH_OPTIONS: { value: WarehouseTh; label: string }[] = [
+  { value: "1", label: "แสง" },
+  { value: "2", label: "CTT" },
+  { value: "3", label: "MK" },
+  { value: "4", label: "MX" },
+  { value: "5", label: "JMF" },
+  { value: "6", label: "GOGO" },
+  { value: "7", label: "Cargo Center" },
+  { value: "8", label: "MOMO" },
+];
+
+// 2026-06-05 (ภูม flag · PCS-style summary): tiny row for the right-column
+// summary block. Mirrors legacy update.php right-aligned label/value list.
+function Summary({ label, value, negative }: { label: string; value: number; negative?: boolean }) {
+  return (
+    <p className="flex items-baseline justify-between gap-2 text-[11px]">
+      <span className="text-muted">{label}</span>
+      <span className={`font-mono tabular-nums ${negative ? "text-red-600" : "text-foreground"}`}>
+        {negative ? "−" : ""}฿{value.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+      </span>
+    </p>
+  );
 }
 
 export function AdminForwarderEditForm({
@@ -67,6 +89,17 @@ export function AdminForwarderEditForm({
   refPriceInit,
   noteInit,
   itemsInit,
+  // 2026-06-05 — legacy update.php parity props (all optional defaults)
+  customRateInit         = "0",
+  customRateKgInit       = 40,      // legacy default L1080
+  customRateCbmInit      = 7500,    // legacy default L1084
+  fDiscountInit          = 0,
+  fTransportPriceChnThbInit = 0,
+  priceOtherInit         = 0,
+  fTransportPriceInit    = 0,
+  fShippingServiceInit   = 0,
+  fWarehouseChinaInit    = "1",
+  fWarehouseNameInit     = "1",
 }: {
   fNo:              string;
   idNumeric:        number;
@@ -79,6 +112,17 @@ export function AdminForwarderEditForm({
   refPriceInit:     RefPrice;
   noteInit:         string;
   itemsInit:        EditItemRow[];
+  // 2026-06-05 — legacy update.php parity
+  customRateInit?:           "0" | "1";
+  customRateKgInit?:         number;
+  customRateCbmInit?:        number;
+  fDiscountInit?:            number;
+  fTransportPriceChnThbInit?: number;
+  priceOtherInit?:           number;
+  fTransportPriceInit?:      number;
+  fShippingServiceInit?:     number;
+  fWarehouseChinaInit?:      WarehouseChina;
+  fWarehouseNameInit?:       WarehouseTh;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -91,6 +135,18 @@ export function AdminForwarderEditForm({
   const [refPrice,    setRefPrice]    = useState<RefPrice>(refPriceInit);
   const [note,        setNote]        = useState<string>(noteInit);
   const [items,       setItems]       = useState<EditItemRow[]>(itemsInit);
+
+  // 2026-06-05 — legacy override block + warehouses + cost adders
+  const [customRate,    setCustomRate]    = useState<"0" | "1">(customRateInit);
+  const [customRateKg,  setCustomRateKg]  = useState<string>(String(customRateKgInit));
+  const [customRateCbm, setCustomRateCbm] = useState<string>(String(customRateCbmInit));
+  const [fDiscount,             setFDiscount]             = useState<string>(String(fDiscountInit));
+  const [fTransportPriceChnThb, setFTransportPriceChnThb] = useState<string>(String(fTransportPriceChnThbInit));
+  const [priceOther,            setPriceOther]            = useState<string>(String(priceOtherInit));
+  const [fTransportPrice,       setFTransportPrice]       = useState<string>(String(fTransportPriceInit));
+  const [fShippingService,      setFShippingService]      = useState<string>(String(fShippingServiceInit));
+  const [fWarehouseChina, setFWarehouseChina] = useState<WarehouseChina>(fWarehouseChinaInit);
+  const [fWarehouseName,  setFWarehouseName]  = useState<WarehouseTh>(fWarehouseNameInit);
 
   const [error,   setError]   = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -114,21 +170,9 @@ export function AdminForwarderEditForm({
     };
   }, [weight, width, length, height]);
 
-  const cbmDelta = parsed.cbm - (volumeInit || 0);
-  const cbmChanged = Math.abs(cbmDelta) > 0.00001;
-
-  // Update one item row (immutably).
-  function updateItem(itemId: number, patch: Partial<EditItemRow>) {
-    setItems((prev) => prev.map((it) => (it.itemId === itemId ? { ...it, ...patch } : it)));
-  }
-
-  function setAllCrate(type: "1" | "2") {
-    setItems((prev) => prev.map((it) => ({ ...it, crateType: type })));
-  }
-
-  function setAllCrateFee(fee: number) {
-    setItems((prev) => prev.map((it) => ({ ...it, crateFee: fee, crateType: fee > 0 ? "2" : "1" })));
-  }
+  // Per-item crate UI is intentionally dropped in this PCS-style one-card
+  // layout (state preserved via `items` for future re-introduction). The
+  // crateSummary still drives the read-only "ค่าตีลังไม้ (sum)" cell.
 
   const crateSummary = useMemo(() => {
     const cratedCount = items.filter((it) => it.crateType === "2").length;
@@ -137,6 +181,44 @@ export function AdminForwarderEditForm({
       .reduce((sum, it) => sum + (Number(it.crateFee) || 0), 0);
     return { cratedCount, totalFee };
   }, [items]);
+
+  // ── Live calc preview (mirrors legacy calPrice.php L210-269) ───────────
+  // Numbers parsed for the preview. Server still resolves the authoritative
+  // rate (waterfall) — this is just a visual sanity-check for the admin.
+  const preview = useMemo(() => {
+    const w  = parseFloat(weight)                || 0;
+    const v  = (parsed.width * parsed.length * parsed.height) / 1_000_000;
+    const cr = customRate === "1";
+    const rateKg  = parseFloat(customRateKg)  || 0;
+    const rateCbm = parseFloat(customRateCbm) || 0;
+    // Only honest when the override is on (we have a rate to multiply by).
+    const showRates = cr;
+    const priceByKg  = showRates ? w * rateKg     : 0;
+    const priceByCbm = showRates ? v * rateCbm    : 0;
+    // Legacy preview chooses the higher of the two when "ราคามากสุด" mode
+    // is active (no comparison override per the user's submitted fields).
+    const transport = showRates ? Math.max(priceByKg, priceByCbm) : 0;
+    const adders =
+      transport +
+      (parseFloat(fShippingService)        || 0) +
+      (parseFloat(fTransportPriceChnThb)   || 0) +
+      crateSummary.totalFee +
+      (parseFloat(priceOther)              || 0) +
+      (parseFloat(fTransportPrice)         || 0);
+    const grand = adders - (parseFloat(fDiscount) || 0);
+    return {
+      showRates,
+      priceByKg,
+      priceByCbm,
+      transport,
+      adders,
+      grand,
+    };
+  }, [
+    weight, parsed.width, parsed.length, parsed.height, customRate,
+    customRateKg, customRateCbm, fShippingService, fTransportPriceChnThb,
+    crateSummary.totalFee, priceOther, fTransportPrice, fDiscount,
+  ]);
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -164,6 +246,17 @@ export function AdminForwarderEditForm({
           crateType: it.crateType,
           crateFee:  Number(it.crateFee) || 0,
         })),
+        // 2026-06-05 — legacy update.php override block + adders + warehouses
+        customRate,
+        customRateKg:          parseFloat(customRateKg)        || 0,
+        customRateCbm:         parseFloat(customRateCbm)       || 0,
+        fDiscount:             parseFloat(fDiscount)           || 0,
+        fTransportPriceChnThb: parseFloat(fTransportPriceChnThb) || 0,
+        priceOther:            parseFloat(priceOther)          || 0,
+        fTransportPrice:       parseFloat(fTransportPrice)     || 0,
+        fShippingService:      parseFloat(fShippingService)    || 0,
+        fWarehouseChina,
+        fWarehouseName,
       });
       if (!res.ok) {
         setError(res.error);
@@ -229,310 +322,255 @@ export function AdminForwarderEditForm({
         </div>
       )}
 
-      {/* ─── DIMENSIONS ─────────────────────────────────────────── */}
-      <section className="rounded-2xl border border-border bg-white p-5 shadow-sm">
-        <h2 className="mb-3 text-sm font-semibold tracking-wide text-foreground">
-          📐 น้ำหนัก / ขนาดกล่อง
-        </h2>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          {/* Weight */}
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">
-              น้ำหนัก (kg)
+      {/* ─── 📋 PCS-STYLE ONE-CARD LAYOUT (2026-06-05 ภูม flag — "ใหญ่ลายตา · เอาแบบนี้
+            เลย ข้อมูลอะไรก็ขึ้นให้เหมือนไปเลย") · faithful port of pcs-admin's
+            forwarder/update.php "กรอกรายละเอียดสินค้า" block (the screenshot).
+            ALL fields in ONE card · 3 row grid · live calc + summary at bottom.
+            Replaces what used to be 4 separate "DIMENSIONS / PRODUCT TYPE /
+            REF PRICE / per-item-crate" sections + 4 more agent-port sections.
+            Per-item crate UI deferred (state preserved through `items`). */}
+      <section className="rounded-xl border border-border bg-white p-4 shadow-sm">
+        {/* Header row: title left · 2 toggles right */}
+        <div className="mb-3 flex items-start justify-between gap-3 flex-wrap">
+          <h2 className="text-sm font-bold text-foreground">📦 กรอกรายละเอียดสินค้า</h2>
+          <div className="flex items-center gap-4 text-[11px]">
+            <label className="flex cursor-pointer items-center gap-1.5 select-none">
+              <input
+                type="checkbox"
+                checked={customRate === "1"}
+                onChange={(e) => setCustomRate(e.target.checked ? "1" : "0")}
+                disabled={pending}
+                className="h-3.5 w-3.5 rounded border-border text-primary-600 focus:ring-primary-500"
+              />
+              <span className={customRate === "1" ? "font-medium text-red-700" : "text-muted"}>
+                คิดราคาแบบกำหนดเอง
+              </span>
             </label>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              value={weight}
-              onChange={(e) => setWeight(e.target.value)}
+            <span className="rounded-full bg-primary-50 px-2 py-0.5 text-primary-700 border border-primary-200 font-medium">item #1</span>
+          </div>
+        </div>
+
+        {/* ── ROW 1: warehouse × 2 · product type · tracking · note · weight ── */}
+        <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 mb-3">
+          <label className="block">
+            <span className="text-[11px] font-medium text-muted">โกดังต้นทาง (จีน)</span>
+            <select
+              value={fWarehouseChina}
+              onChange={(e) => setFWarehouseChina(e.target.value as WarehouseChina)}
               disabled={pending}
-              className={numberInputCls()}
+              className="mt-0.5 w-full rounded-md border border-border bg-white px-2 py-1.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+            >
+              {WAREHOUSE_CHINA_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-[11px] font-medium text-muted">โกดังที่รับ (ไทย)</span>
+            <select
+              value={fWarehouseName}
+              onChange={(e) => setFWarehouseName(e.target.value as WarehouseTh)}
+              disabled={pending}
+              className="mt-0.5 w-full rounded-md border border-border bg-white px-2 py-1.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+            >
+              {WAREHOUSE_TH_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-[11px] font-medium text-muted">ประเภทสินค้า</span>
+            <select
+              value={productType}
+              onChange={(e) => setProductType(e.target.value as ProductType)}
+              disabled={pending}
+              className="mt-0.5 w-full rounded-md border border-border bg-white px-2 py-1.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+            >
+              {PRODUCT_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-[11px] font-medium text-muted">คิดเรทตาม</span>
+            <select
+              value={refPrice}
+              onChange={(e) => setRefPrice(e.target.value as RefPrice)}
+              disabled={pending}
+              className="mt-0.5 w-full rounded-md border border-border bg-white px-2 py-1.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+            >
+              {REF_PRICE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </label>
+          {customRate === "1" ? (
+            <label className="block">
+              <span className="text-[11px] font-medium text-muted">เรท/น้ำหนัก (฿/kg)</span>
+              <input
+                type="number" min={0} step="0.01" value={customRateKg}
+                onChange={(e) => setCustomRateKg(e.target.value)} disabled={pending}
+                className="mt-0.5 w-full rounded-md border border-border px-2 py-1.5 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+                placeholder="40"
+              />
+            </label>
+          ) : (
+            <div /> /* spacer */
+          )}
+          <label className="block">
+            <span className="text-[11px] font-medium text-muted">น้ำหนัก (Kg)</span>
+            <input
+              type="number" min={0} step="0.01" value={weight}
+              onChange={(e) => setWeight(e.target.value)} disabled={pending}
+              className="mt-0.5 w-full rounded-md border border-border px-2 py-1.5 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
               placeholder="0.00"
             />
-            <p className="mt-1 text-[11px] text-muted">
-              ใส่หลังชั่งสินค้าที่โกดังจีน — ทศนิยม 2 ตำแหน่ง
-            </p>
-          </div>
-
-          {/* CBM live preview */}
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">
-              CBM (m³) — คำนวณอัตโนมัติ
-            </label>
-            <div className="rounded-xl border border-border bg-surface-alt px-3 py-2.5 text-sm font-mono tabular-nums">
-              {parsed.cbm.toFixed(5)}
-              {cbmChanged && (
-                <span
-                  className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                    cbmDelta > 0
-                      ? "bg-amber-100 text-amber-800"
-                      : "bg-blue-100 text-blue-800"
-                  }`}
-                >
-                  {cbmDelta > 0 ? "▲" : "▼"} {Math.abs(cbmDelta).toFixed(5)}
-                </span>
-              )}
-            </div>
-            <p className="mt-1 text-[11px] text-muted">
-              สูตร legacy: (W × L × H) ÷ 1,000,000 — เดิม {Number(volumeInit ?? 0).toFixed(5)}
-            </p>
-          </div>
-        </div>
-
-        {/* L × W × H */}
-        <div className="mt-4">
-          <label className="block text-xs font-medium text-muted mb-1">
-            กว้าง × ยาว × สูง (cm)
           </label>
-          <div className="grid gap-2 grid-cols-3">
-            <div>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={width}
-                onChange={(e) => setWidth(e.target.value)}
-                disabled={pending}
-                className={numberInputCls()}
-                placeholder="กว้าง"
-                aria-label="กว้าง (cm)"
-              />
-              <p className="mt-1 text-[10px] text-center text-muted">กว้าง</p>
-            </div>
-            <div>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={length}
-                onChange={(e) => setLength(e.target.value)}
-                disabled={pending}
-                className={numberInputCls()}
-                placeholder="ยาว"
-                aria-label="ยาว (cm)"
-              />
-              <p className="mt-1 text-[10px] text-center text-muted">ยาว</p>
-            </div>
-            <div>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={height}
-                onChange={(e) => setHeight(e.target.value)}
-                disabled={pending}
-                className={numberInputCls()}
-                placeholder="สูง"
-                aria-label="สูง (cm)"
-              />
-              <p className="mt-1 text-[10px] text-center text-muted">สูง</p>
-            </div>
-          </div>
         </div>
-      </section>
 
-      {/* ─── PRODUCT TYPE (fproductstype) ──────────────────────────── */}
-      <section className="rounded-2xl border border-border bg-white p-5 shadow-sm">
-        <h2 className="mb-3 text-sm font-semibold tracking-wide text-foreground">
-          🏷 ประเภทสินค้า (typeservice)
-        </h2>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {PRODUCT_TYPE_OPTIONS.map((o) => (
-            <button
-              key={o.value}
-              type="button"
-              onClick={() => setProductType(o.value)}
-              disabled={pending}
-              className={`rounded-xl border px-4 py-3 text-sm text-left transition ${
-                productType === o.value
-                  ? "border-primary-500 bg-primary-50 text-primary-700 font-medium ring-2 ring-primary-200"
-                  : "border-border bg-white text-muted hover:bg-surface-alt"
-              }`}
-            >
-              <div className="font-medium">{o.label}</div>
-              <div className="text-[11px] text-muted mt-0.5">{o.sub}</div>
-            </button>
-          ))}
-        </div>
-        <p className="mt-2 text-[11px] text-muted">
-          ตรงกับ legacy <code className="rounded bg-surface-alt px-1">fproductstype</code> · ลูกค้าเห็นใน /service-import
-        </p>
-      </section>
-
-      {/* ─── REF PRICE (frefprice) ─────────────────────────────────── */}
-      <section className="rounded-2xl border border-border bg-white p-5 shadow-sm">
-        <h2 className="mb-3 text-sm font-semibold tracking-wide text-foreground">
-          ⚖️ คิดเรทตาม
-        </h2>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {REF_PRICE_OPTIONS.map((o) => (
-            <button
-              key={o.value}
-              type="button"
-              onClick={() => setRefPrice(o.value)}
-              disabled={pending}
-              className={`rounded-xl border px-4 py-3 text-sm text-left transition ${
-                refPrice === o.value
-                  ? "border-primary-500 bg-primary-50 text-primary-700 font-medium ring-2 ring-primary-200"
-                  : "border-border bg-white text-muted hover:bg-surface-alt"
-              }`}
-            >
-              <div className="font-medium">{o.label}</div>
-              <div className="text-[11px] text-muted mt-0.5">{o.sub}</div>
-            </button>
-          ))}
-        </div>
-        <p className="mt-2 text-[11px] text-muted">
-          ตรงกับ legacy <code className="rounded bg-surface-alt px-1">frefprice</code> · บอกระบบว่าจะคิดบิลจากน้ำหนัก หรือปริมาตร
-        </p>
-      </section>
-
-      {/* ─── PER-ITEM CRATE ────────────────────────────────────────── */}
-      <section className="rounded-2xl border border-border bg-white p-5 shadow-sm">
-        <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
-          <h2 className="text-sm font-semibold tracking-wide text-foreground">
-            🪵 ค่าตีลังไม้ (ต่อรายการสินค้า)
-          </h2>
-          {items.length > 0 && (
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setAllCrate("1")}
-                disabled={pending}
-                className="rounded-md border border-border bg-white px-2.5 py-1 text-[11px] text-muted hover:bg-surface-alt"
-              >
-                ทั้งหมด: ไม่ตี
-              </button>
-              <button
-                type="button"
-                onClick={() => setAllCrate("2")}
-                disabled={pending}
-                className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] text-amber-800 hover:bg-amber-100"
-              >
-                ทั้งหมด: ตีลัง
-              </button>
-              <button
-                type="button"
-                onClick={() => setAllCrateFee(0)}
-                disabled={pending}
-                className="rounded-md border border-green-300 bg-green-50 px-2.5 py-1 text-[11px] text-green-800 hover:bg-green-100"
-              >
-                ฟรีทั้งหมด
-              </button>
-            </div>
+        {/* ── ROW 2: dimensions (gw, gy, gs) + CBM auto + custom-rate cbm when toggle ── */}
+        <div className={`grid gap-2 grid-cols-2 sm:grid-cols-4 ${customRate === "1" ? "lg:grid-cols-5" : ""} mb-3`}>
+          <label className="block">
+            <span className="text-[11px] font-medium text-muted">ความกว้าง (cm.)</span>
+            <input
+              type="number" min={0} step="0.01" value={width}
+              onChange={(e) => setWidth(e.target.value)} disabled={pending}
+              className="mt-0.5 w-full rounded-md border border-border px-2 py-1.5 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+              placeholder="0.00"
+            />
+          </label>
+          <label className="block">
+            <span className="text-[11px] font-medium text-muted">ความยาว (cm.)</span>
+            <input
+              type="number" min={0} step="0.01" value={length}
+              onChange={(e) => setLength(e.target.value)} disabled={pending}
+              className="mt-0.5 w-full rounded-md border border-border px-2 py-1.5 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+              placeholder="0.00"
+            />
+          </label>
+          <label className="block">
+            <span className="text-[11px] font-medium text-muted">ความสูง (cm.)</span>
+            <input
+              type="number" min={0} step="0.01" value={height}
+              onChange={(e) => setHeight(e.target.value)} disabled={pending}
+              className="mt-0.5 w-full rounded-md border border-border px-2 py-1.5 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+              placeholder="0.00"
+            />
+          </label>
+          <label className="block">
+            <span className="text-[11px] font-medium text-red-600">ปริมาตรรวม CBM (auto)</span>
+            <input
+              type="text" readOnly value={parsed.cbm.toFixed(5)}
+              className="mt-0.5 w-full rounded-md border border-red-200 bg-red-50/30 px-2 py-1.5 text-sm font-mono tabular-nums text-right text-red-700"
+            />
+          </label>
+          {customRate === "1" && (
+            <label className="block">
+              <span className="text-[11px] font-medium text-muted">เรท/ปริมาตร (฿/CBM)</span>
+              <input
+                type="number" min={0} step="0.01" value={customRateCbm}
+                onChange={(e) => setCustomRateCbm(e.target.value)} disabled={pending}
+                className="mt-0.5 w-full rounded-md border border-border px-2 py-1.5 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+                placeholder="7500"
+              />
+            </label>
           )}
         </div>
 
-        {items.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-border bg-surface-alt px-3 py-4 text-center text-sm text-muted">
-            ออเดอร์นี้ยังไม่มีรายการสินค้าใน <code className="rounded bg-white px-1">tb_forwarder_item</code> —
-            ตีลังจะตั้งค่าทีหลังเมื่อสินค้าถูกจัดรายการ
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {items.map((it) => (
-              <div
-                key={it.itemId}
-                className={`rounded-xl border p-3 transition ${
-                  it.crateType === "2"
-                    ? "border-amber-300 bg-amber-50"
-                    : "border-border bg-white"
-                }`}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium truncate">
-                      {it.name || "(ไม่มีชื่อ)"}
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-muted">
-                      {it.tracking && (
-                        <span className="font-mono mr-2">{it.tracking}</span>
-                      )}
-                      × {it.qty} · {Number(it.weightAll).toFixed(2)} kg · {Number(it.cbmAll).toFixed(4)} cbm
-                    </div>
-                  </div>
+        {/* ── ROW 3: cost adders + crate sum readonly + count ── */}
+        <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 mb-3">
+          {([
+            { label: "ค่าขนส่งในไทย", value: fTransportPrice,       set: setFTransportPrice,       red: true },
+            { label: "ส่วนลด",          value: fDiscount,             set: setFDiscount,             red: false },
+            { label: "ค่าจีน+ ภายหลัง", value: fTransportPriceChnThb, set: setFTransportPriceChnThb, red: false },
+          ] as const).map((f) => (
+            <label key={f.label} className="block">
+              <span className={`text-[11px] font-medium ${f.red ? "text-red-600" : "text-muted"}`}>{f.label}</span>
+              <input
+                type="number" min={0} step="0.01" value={f.value}
+                onChange={(e) => f.set(e.target.value)} disabled={pending}
+                className="mt-0.5 w-full rounded-md border border-border px-2 py-1.5 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+                placeholder="0.00"
+              />
+            </label>
+          ))}
+          <label className="block">
+            <span className="text-[11px] font-medium text-red-600">ค่าตีลังไม้ (sum)</span>
+            <input
+              type="text" readOnly
+              value={crateSummary.totalFee.toFixed(2)}
+              className="mt-0.5 w-full rounded-md border border-red-200 bg-red-50/30 px-2 py-1.5 text-sm font-mono tabular-nums text-right text-red-700"
+            />
+          </label>
+          <label className="block">
+            <span className="text-[11px] font-medium text-muted">ค่าอื่นๆ</span>
+            <input
+              type="number" min={0} step="0.01" value={priceOther}
+              onChange={(e) => setPriceOther(e.target.value)} disabled={pending}
+              className="mt-0.5 w-full rounded-md border border-border px-2 py-1.5 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+              placeholder="0.00"
+            />
+          </label>
+          <label className="block">
+            <span className="text-[11px] font-medium text-muted">ค่าบริการ</span>
+            <input
+              type="number" min={0} step="0.01" value={fShippingService}
+              onChange={(e) => setFShippingService(e.target.value)} disabled={pending}
+              className="mt-0.5 w-full rounded-md border border-border px-2 py-1.5 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+              placeholder="0.00"
+            />
+          </label>
+        </div>
 
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={it.crateType === "2"}
-                      onChange={(e) =>
-                        updateItem(it.itemId, {
-                          crateType: e.target.checked ? "2" : "1",
-                          crateFee:  e.target.checked ? it.crateFee : 0,
-                        })
-                      }
-                      disabled={pending}
-                      className="h-4 w-4 rounded border-border text-primary-600 focus:ring-primary-500"
-                    />
-                    <span className="text-xs font-medium text-foreground">ตีลังไม้</span>
-                  </label>
+        {/* ── Info text (1 บรรทัด) ── */}
+        <p className="text-[11px] text-muted mb-3 pl-1">
+          ⚠ ควรกรอกข้อมูลเมื่อสินค้าถึงไทยเท่านั้น · ส่วนลด + ค่าขนส่งโปรโมจะถูกคำนวณอัตโนมัติตอนลูกค้าชำระ
+        </p>
 
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={String(it.crateFee)}
-                      onChange={(e) =>
-                        updateItem(it.itemId, {
-                          crateFee:  parseFloat(e.target.value) || 0,
-                          crateType: parseFloat(e.target.value) > 0 ? "2" : it.crateType,
-                        })
-                      }
-                      disabled={pending || it.crateType !== "2"}
-                      placeholder="0.00"
-                      className={`w-28 rounded-lg border bg-white px-3 py-1.5 text-sm font-mono tabular-nums ${
-                        it.crateType === "2"
-                          ? "border-border focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none"
-                          : "border-border/40 text-muted bg-surface-alt"
-                      }`}
-                    />
-                    <span className="text-[11px] text-muted">฿</span>
-                    <button
-                      type="button"
-                      onClick={() => updateItem(it.itemId, { crateFee: 0 })}
-                      disabled={pending || it.crateType !== "2"}
-                      className="rounded-md border border-green-300 bg-green-50 px-2 py-1 text-[10px] text-green-800 hover:bg-green-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                      title="ตีลังฟรี (ฟรีค่าตี)"
-                    >
-                      ฟรี
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            {/* Crate summary */}
-            <div className="mt-3 rounded-xl bg-surface-alt/60 px-4 py-2.5 text-xs text-muted flex flex-wrap items-center justify-between gap-2">
-              <span>
-                ตีลัง <strong className="text-foreground">{crateSummary.cratedCount}</strong> / {items.length} รายการ
-              </span>
-              <span>
-                ค่าตีลังรวม <strong className="text-foreground font-mono tabular-nums">฿{crateSummary.totalFee.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong>
-              </span>
+        {/* ── Bottom: 2-col grid · live calc breakdown LEFT · summary block RIGHT ── */}
+        <div className="grid gap-4 sm:grid-cols-[1fr,260px] border-t border-border pt-3">
+          {/* LEFT — calc breakdown */}
+          <div className="space-y-1 text-xs font-mono tabular-nums">
+            <p className="font-semibold text-foreground mb-1 font-sans not-italic">ราคานำเข้าจีน-ไทย:</p>
+            <p>คิดตามน้ำหนัก {parsed.weight.toFixed(2)} × {(parseFloat(customRateKg) || 0).toFixed(2)} = <strong>฿{preview.priceByKg.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong></p>
+            <p>คิดตามปริมาตร {parsed.cbm.toFixed(5)} × {(parseFloat(customRateCbm) || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })} = <strong>฿{preview.priceByCbm.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong></p>
+            <p className="inline-flex items-center gap-1 rounded bg-red-100 text-red-700 px-2 py-0.5 text-[10px] font-medium mt-1">
+              ระบบเลือก คิดตามราคามากสุด → ฿{preview.transport.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+            </p>
+            <div className="border-t border-border mt-2 pt-2 space-y-0.5">
+              <p>รวมค่าใช้จ่าย: <strong className="text-foreground">฿{preview.adders.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong></p>
+              <p>− ส่วนลด: <strong className="text-red-600">฿{(parseFloat(fDiscount) || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong></p>
+              <p className="text-[10px] text-muted italic">* กำไรสุทธิคำนวณตอนกดบันทึก (ต้นทุนจาก server-side rate waterfall)</p>
             </div>
           </div>
-        )}
+          {/* RIGHT — summary block */}
+          <div className="rounded-lg border border-border bg-surface-alt/50 p-3 space-y-1 text-xs">
+            <Summary label="ค่านำเข้าจีน-ไทย" value={preview.transport} />
+            <Summary label="ค่าขนส่งจีน+ ภายหลัง" value={parseFloat(fTransportPriceChnThb) || 0} />
+            <Summary label="ค่าบริการ" value={parseFloat(fShippingService) || 0} />
+            <Summary label="ค่าตีลังไม้" value={crateSummary.totalFee} />
+            <Summary label="ค่าอื่นๆ (CO)" value={parseFloat(priceOther) || 0} />
+            <Summary label="ค่าขนส่งในไทย" value={parseFloat(fTransportPrice) || 0} />
+            <Summary label="ส่วนลด" value={parseFloat(fDiscount) || 0} negative />
+            <div className="border-t border-border pt-1.5 mt-1.5">
+              <p className="flex items-baseline justify-between gap-2">
+                <span className="font-semibold text-foreground">ราคารวมสุทธิ:</span>
+                <strong className="text-red-600 text-sm font-mono tabular-nums">
+                  ฿{preview.grand.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                </strong>
+              </p>
+            </div>
+          </div>
+        </div>
       </section>
 
-      {/* ─── ADMIN NOTE ────────────────────────────────────────────── */}
-      <section className="rounded-2xl border border-border bg-white p-5 shadow-sm">
-        <h2 className="mb-3 text-sm font-semibold tracking-wide text-foreground">
-          📝 หมายเหตุแอดมิน (fnote)
-        </h2>
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          rows={4}
-          maxLength={2000}
-          placeholder="หมายเหตุ — เห็นเฉพาะแอดมิน (legacy field: fnote)"
-          disabled={pending}
-          className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
-        />
-        <p className="mt-1 text-[11px] text-muted">{note.length} / 2,000</p>
+      {/* ─── 📝 ADMIN NOTE ────────────────────────────────────────── */}
+      <section className="rounded-xl border border-border bg-white p-4 shadow-sm">
+        <label className="block">
+          <span className="text-xs font-semibold tracking-wide text-foreground">📝 หมายเหตุแอดมิน</span>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+            maxLength={2000}
+            placeholder="หมายเหตุ — เห็นเฉพาะแอดมิน"
+            disabled={pending}
+            className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+          />
+          <p className="mt-0.5 text-right text-[10px] text-muted">{note.length}/2,000</p>
+        </label>
       </section>
 
       {/* ─── STICKY ACTIONS ─────────────────────────────────────── */}

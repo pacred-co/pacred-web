@@ -64,8 +64,16 @@ import Image from "next/image";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 
 import { TbForwarderActionPanel } from "../tb-action-panel";
+// 2026-06-05 (ภูม flag — "ไหนวะ ไม่เห็นมีอะไรเพิ่ม"): the AdminForwarderEditForm
+// component was extended by the legacy-port agent (4 new sections incl. warehouse
+// dropdowns + custom-rate override + cost adders + live calc preview) but the
+// page.tsx never imported it — so the component sat orphan + ภูม saw zero change
+// on /admin/forwarders/[fNo]/edit. Wiring it in below as §4.6.
+import { AdminForwarderEditForm } from "./edit-form";
 import { TbForwarderPaymentPanel } from "../tb-payment-panel";
-import { ForwarderItemsTable } from "../forwarder-items-table";
+// ForwarderItemsTable removed 2026-06-05 PM (ภูม flag): legacy doesn't have
+// the per-shop-board section · its 3 items now live inside FreightBreakdownTable.
+import { FreightBreakdownTable } from "./freight-breakdown-table";
 import {
   // 2026-06-04 ภูม UX F1 Issue 1 — individual field components, interleaved
   // inline next to their sibling data fields in the 2-col data blocks below
@@ -108,12 +116,22 @@ type RawForwarderRow = {
   fvolume:           number | string | null;
   fproductstype:     string | null;
   frefprice:         string | null;
+  frefrate:          number | string | null;
   fnote:             string | null;
   fnoteuser:         string | null;
   ftotalprice:       number | string | null;
   fpriceupdate:      number | string | null;
   fdiscount:         number | string | null;
   priceother:        number | string | null;
+  // 2026-06-05 (ภูม flag) — legacy update.php parity columns. All exist
+  // on tb_forwarder per migration 0081; previously not read because the
+  // legacy-port EditForm wasn't wired into this page.
+  customrate:           string | null;
+  customratekg:         number | string | null;
+  customratecbm:        number | string | null;
+  ftransportprice:      number | string | null;
+  ftransportpricechnthb: number | string | null;
+  fshippingservice:     number | string | null;
   fdate:             string | null;
   fdatestatus2:      string | null;
   fdatestatus3:      string | null;
@@ -144,6 +162,9 @@ type RawForwarderRow = {
   adminidcreator:    string | null;
   reforder:          string | null;
   tax_doc_pref:      string | null;
+  // 2026-06-05 (ภูม flag · freight-breakdown table) — juristic flag
+  // for WHT 1% display per legacy detail.php L374.
+  fusercompany:      string | null;
 };
 
 export default async function AdminForwarderEditPage({
@@ -165,7 +186,7 @@ export default async function AdminForwarderEditPage({
     .select(
       "id, fidorco, userid, fstatus, ftransporttype, fwarehousechina, fwarehousename, " +
       "fcabinetnumber, ftrackingchn, ftrackingth, fshipby, famount, famountcount, " +
-      "fdetail, fcover, fweight, fwidth, flength, fheight, fvolume, fproductstype, frefprice, " +
+      "fdetail, fcover, fweight, fwidth, flength, fheight, fvolume, fproductstype, frefprice, frefrate, " +
       "fnote, fnoteuser, ftotalprice, fpriceupdate, fdiscount, priceother, " +
       "fdate, fdatestatus2, fdatestatus3, fdatestatus4, fdatestatus5, fdatestatus6, fdatestatus7, " +
       "fdateadminstatus, fdatecontainerclose, " +
@@ -173,7 +194,11 @@ export default async function AdminForwarderEditPage({
       "faddressdistrict, faddressprovince, faddresszipcode, " +
       "faddresstel, faddresstel2, faddressnote, " +
       "crate, pricecrate, fcredit, paydeposit, paymethod, fbilltoname, fpallet, " +
-      "adminidcreator, reforder, tax_doc_pref",
+      "adminidcreator, reforder, tax_doc_pref, " +
+      // 2026-06-05 (ภูม flag · faithful-port edit-form wiring) — legacy
+      // update.php override columns.
+      "customrate, customratekg, customratecbm, " +
+      "ftransportprice, ftransportpricechnthb, fshippingservice, fusercompany",
     )
     .limit(1);
   q = isId ? q.eq("id", asNumber) : q.eq("fidorco", fNo);
@@ -184,10 +209,43 @@ export default async function AdminForwarderEditPage({
   if (!row) notFound();
   const r = row as unknown as RawForwarderRow;
 
+  // ─── 2026-06-05 (ภูม flag — "พอกดใบเสร็จแล้วขึ้น 404"): resolve the
+  // ── tb_receipt id (if any) that this forwarder row sits on. The link
+  // ── on the header button previously sent `tb_forwarder.id` to
+  // ── /admin/accounting/forwarder-invoice/[id], but that route expects
+  // ── `tb_receipt.id`. Join: tb_receipt_item.fid = tb_forwarder.id →
+  // ── tb_receipt_item.rid = tb_receipt.id. When no receipt exists yet
+  // ── (status 4→5 not crossed · accounting hasn't billed), the button
+  // ── will instead link to /forwarder-invoice/add?fid=… to create one.
+  let receiptId: number | null = null;
+  {
+    const { data: receiptItem, error: ridErr } = await admin
+      .from("tb_receipt_item")
+      .select("rid")
+      .eq("fid", r.id)
+      .limit(1)
+      .maybeSingle<{ rid: string | number | null }>();
+    if (ridErr) {
+      console.error(`[tb_receipt_item lookup] failed`, { code: ridErr.code, message: ridErr.message, fid: r.id });
+    }
+    if (receiptItem?.rid != null) {
+      const { data: receiptRow, error: rcptErr } = await admin
+        .from("tb_receipt")
+        .select("id")
+        .eq("rid", receiptItem.rid)
+        .limit(1)
+        .maybeSingle<{ id: number }>();
+      if (rcptErr) {
+        console.error(`[tb_receipt lookup] failed`, { code: rcptErr.code, message: rcptErr.message, rid: receiptItem.rid });
+      }
+      if (receiptRow?.id) receiptId = receiptRow.id;
+    }
+  }
+
   // ─── Customer profile (extended: email + picture + salesrep) ──────
   const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
-    .select("userID, userName, userLastName, userTel, userEmail, userPicture, adminIDSale")
+    .select("userID, userName, userLastName, userTel, userEmail, userPicture, adminIDSale, userCompany")
     .eq("userID", r.userid)
     .maybeSingle();
   if (userRowErr) {
@@ -201,6 +259,7 @@ export default async function AdminForwarderEditPage({
     userEmail: string | null;
     userPicture: string | null;
     adminIDSale: string | null;
+    userCompany: string | null;
   } | null;
 
   // Wallet balance for the payment panel (display only — action re-reads).
@@ -382,56 +441,90 @@ export default async function AdminForwarderEditPage({
                   <Package className="h-3 w-3" /> พิมพ์กล่อง
                 </a>
               )}
+              {/* 2026-06-05 (ภูม flag — 404 fix): if a receipt already
+                  exists, link to it; otherwise (status reached the bill
+                  phase but accounting hasn't issued yet) link to the
+                  "ออกใบเสร็จใหม่" page with fid pre-filled. The legacy
+                  flag set (>5 + not paydeposit + not fcredit) governs
+                  WHO sees the button — when shown, it always goes to a
+                  live URL now (never a 404). */}
               {currentStatusInt > 5 && r.paydeposit !== "1" && r.fcredit !== "1" && (
-                <a
-                  href={`/admin/accounting/forwarder-invoice/${r.id}`}
-                  target="_blank"
-                  className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 text-emerald-700 px-2.5 py-1.5 text-xs hover:bg-emerald-100"
-                >
-                  📄 ใบเสร็จ
-                </a>
+                receiptId !== null ? (
+                  <a
+                    href={`/admin/accounting/forwarder-invoice/${receiptId}`}
+                    target="_blank"
+                    className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 text-emerald-700 px-2.5 py-1.5 text-xs hover:bg-emerald-100"
+                  >
+                    📄 ใบเสร็จ
+                  </a>
+                ) : (
+                  <a
+                    href={`/admin/accounting/forwarder-invoice/add?fid=${r.id}`}
+                    target="_blank"
+                    className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 text-amber-700 px-2.5 py-1.5 text-xs hover:bg-amber-100"
+                    title="ยังไม่ได้ออกใบเสร็จ — คลิกเพื่อสร้าง"
+                  >
+                    📄 ออกใบเสร็จ
+                  </a>
+                )
               )}
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── 3. 8-STEP PIPELINE TIMELINE ── matches legacy L432-512 */}
+      {/* ── 3. 8-STEP PIPELINE TIMELINE ── matches legacy L432-512 +
+          fstatus=6 split into "เตรียมส่ง" (no driver yet) vs
+          "กำลังจัดส่ง" (driver assigned · fdistatus='') per
+          legacy function.php L1225-1230 — the missing 8th pill
+          flagged by ภูม 2026-06-05 PM.
+          Driver-assigned = driverAssignment != null && fdistatus is empty
+          (matches legacy `tb_forwarder_driver_item WHERE fdiStatus=''`). */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-3 lg:p-4 shadow-sm">
         <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
-          {[
-            { n: 1, label: "รอเข้าโกดังจีน",   Icon: Package },
-            { n: 2, label: "ถึงโกดังจีน",      Icon: Warehouse },
-            { n: 3, label: "ส่งมาไทย",          Icon: r.ftransporttype === "3" ? Plane : Truck },
-            { n: 4, label: "ถึงไทย",             Icon: Warehouse },
-            { n: 5, label: "รอชำระเงิน",        Icon: Clock },
-            { n: 6, label: "เตรียมส่ง",         Icon: Truck },
-            { n: 7, label: "ส่งแล้ว",            Icon: CheckCircle2 },
-          ].map((step) => {
-            const isCurrent = currentStatusInt === step.n;
-            const isVisited = currentStatusInt > step.n;
-            return (
-              <div
-                key={step.n}
-                className={`flex flex-col items-center text-center p-2 rounded-lg border transition-colors ${
-                  isCurrent
-                    ? "border-primary-500 bg-primary-50 dark:bg-primary-950/20 ring-2 ring-primary-300"
-                    : isVisited
-                      ? "border-emerald-300 bg-emerald-50/40"
-                      : "border-border bg-surface-alt/30 opacity-60"
-                }`}
-              >
-                <step.Icon className={`h-5 w-5 mb-1 ${
-                  isCurrent ? "text-primary-600" : isVisited ? "text-emerald-600" : "text-gray-400"
-                }`} />
-                <span className={`text-[10px] leading-tight ${
-                  isCurrent ? "font-bold text-primary-700" : isVisited ? "text-emerald-700" : "text-muted"
-                }`}>
-                  {step.label}
-                </span>
-              </div>
-            );
-          })}
+          {(() => {
+            const isDriverDispatched =
+              driverAssignment != null && (driverAssignment.fdistatus ?? "") === "";
+            const stepRank: number =
+              currentStatusInt === 6 && isDriverDispatched ? 6.5
+                : currentStatusInt === 7 ? 8
+                : currentStatusInt;
+            const steps: Array<{ n: number; rank: number; label: string; Icon: typeof Package }> = [
+              { n: 1, rank: 1,   label: "รอเข้าโกดังจีน",   Icon: Package },
+              { n: 2, rank: 2,   label: "ถึงโกดังจีน",      Icon: Warehouse },
+              { n: 3, rank: 3,   label: "ส่งมาไทย",          Icon: r.ftransporttype === "3" ? Plane : Truck },
+              { n: 4, rank: 4,   label: "ถึงไทย",             Icon: Warehouse },
+              { n: 5, rank: 5,   label: "รอชำระเงิน",        Icon: Clock },
+              { n: 6, rank: 6,   label: "เตรียมส่ง",         Icon: Truck },
+              { n: 7, rank: 6.5, label: "กำลังจัดส่ง",       Icon: Truck },
+              { n: 8, rank: 8,   label: "ส่งแล้ว",            Icon: CheckCircle2 },
+            ];
+            return steps.map((step) => {
+              const isCurrent = stepRank === step.rank;
+              const isVisited = stepRank > step.rank;
+              return (
+                <div
+                  key={step.n}
+                  className={`flex flex-col items-center text-center p-2 rounded-lg border transition-colors ${
+                    isCurrent
+                      ? "border-primary-500 bg-primary-50 dark:bg-primary-950/20 ring-2 ring-primary-300"
+                      : isVisited
+                        ? "border-emerald-300 bg-emerald-50/40"
+                        : "border-border bg-surface-alt/30 opacity-60"
+                  }`}
+                >
+                  <step.Icon className={`h-5 w-5 mb-1 ${
+                    isCurrent ? "text-primary-600" : isVisited ? "text-emerald-600" : "text-gray-400"
+                  }`} />
+                  <span className={`text-[10px] leading-tight ${
+                    isCurrent ? "font-bold text-primary-700" : isVisited ? "text-emerald-700" : "text-muted"
+                  }`}>
+                    {step.label}
+                  </span>
+                </div>
+              );
+            });
+          })()}
         </div>
       </section>
 
@@ -535,7 +628,9 @@ export default async function AdminForwarderEditPage({
           <EditTransportTypeField fId={r.id} ftransporttype={r.ftransporttype} />
 
           <InfoLine label="โกดังประเทศจีน">
-            {WAREHOUSE_LABEL[r.fwarehousename] ?? r.fwarehousename ?? "—"}
+            {/* 2026-06-05 (ภูม flag): blank fwarehousename ("" or null) is
+                the "ยังไม่ระบุ" state · render "—" instead of an empty cell. */}
+            {(r.fwarehousename && WAREHOUSE_LABEL[r.fwarehousename]) || (r.fwarehousename && r.fwarehousename.trim()) || "—"}
           </InfoLine>
 
           <InfoLine label="เลขที่ตู้">
@@ -657,22 +752,58 @@ export default async function AdminForwarderEditPage({
         </div>
       </details>
 
-      {/* ── 4.5 ITEMS TABLE ── PCS-style line-item display (2026-06-03 ภูม flag)
-          For shop-spawned forwarders (reforder set) renders the tb_order rows
-          grouped by Chinese vendor with thumbnails + ¥ pricing. Otherwise
-          shows an empty-state with cover + box dimensions. */}
-      <ForwarderItemsTable
-        forwarderId={r.id}
-        forwarderNo={r.fidorco ?? String(r.id)}
-        reforder={r.reforder}
-        fdetail={r.fdetail}
-        fcover={r.fcover}
-        fwidth={r.fwidth === null ? null : Number(r.fwidth)}
-        flength={r.flength === null ? null : Number(r.flength)}
-        fheight={r.fheight === null ? null : Number(r.fheight)}
-        famount={r.famount}
-        mode="edit"
+      {/* ── 4.4 รายการสินค้า + freight breakdown ── 2026-06-05 PM (ภูม flag
+          round 2): now ONE combined table — N per-item rows (¥ from tb_order)
+          + final summary row (฿ legacy 16-col freight breakdown) +
+          WHT 1% for juristic ≥ ฿1000.
+          The old standalone <ForwarderItemsTable> section below was REMOVED
+          per ภูม: "ตามpcs มันก็ไม่มี ต้องลบออก". */}
+      <FreightBreakdownTable
+        r={r}
+        isJuristic={u?.userCompany === "1" || r.fusercompany === "1"}
       />
+
+      {/* ── 4.6 LEGACY-PARITY EDIT FORM ── 2026-06-05 (ภูม flag · faithful
+            port of pcs-admin/include/pages/forwarder/update.php's "กรอกรายละเอียด
+            สินค้า" block):
+              - 🏭 โกดัง (ต้นทางจีน · ปลายทางไทย)
+              - 💰 คิดราคาแบบกำหนดเอง (customrate toggle + customratekg/cbm)
+              - ➕ ค่าบริการ / ค่าใช้จ่ายเพิ่ม / ส่วนลด
+              - 🧮 ตรวจสอบราคา (live calc preview — mirror calPrice.php L210-269)
+            Writes via adminUpdateForwarderDimensions which now covers all
+            10 new columns (Zod schema L93-152 of forwarders-edit.ts). */}
+      <section className="rounded-2xl border-2 border-indigo-300 bg-indigo-50/30 dark:bg-indigo-950/20 shadow-md overflow-hidden">
+        <header className="bg-indigo-500 text-white px-4 py-2.5 flex items-center gap-2">
+          <span className="text-base">📝</span>
+          <h2 className="text-sm font-bold">กรอกรายละเอียดสินค้า · ขนาด · ราคา · โกดัง</h2>
+          <span className="ml-auto text-[10px] bg-white/20 rounded px-1.5 py-0.5">PCS-style</span>
+        </header>
+        <div className="p-3 sm:p-4">
+          <AdminForwarderEditForm
+            fNo={String(r.id)}
+            idNumeric={r.id}
+            weightInit={Number(r.fweight ?? 0)}
+            widthInit={Number(r.fwidth ?? 0)}
+            lengthInit={Number(r.flength ?? 0)}
+            heightInit={Number(r.fheight ?? 0)}
+            volumeInit={Number(r.fvolume ?? 0)}
+            productTypeInit={((r.fproductstype ?? "1") as "1" | "2" | "3" | "4")}
+            refPriceInit={((r.frefprice ?? "1") as "1" | "2")}
+            noteInit={r.fnote ?? ""}
+            itemsInit={[]}
+            customRateInit={((r.customrate ?? "0") as "0" | "1")}
+            customRateKgInit={Number(r.customratekg ?? 40)}
+            customRateCbmInit={Number(r.customratecbm ?? 7500)}
+            fDiscountInit={Number(r.fdiscount ?? 0)}
+            fTransportPriceChnThbInit={Number(r.ftransportpricechnthb ?? 0)}
+            priceOtherInit={Number(r.priceother ?? 0)}
+            fTransportPriceInit={Number(r.ftransportprice ?? 0)}
+            fShippingServiceInit={Number(r.fshippingservice ?? 0)}
+            fWarehouseChinaInit={((r.fwarehousechina ?? "1") as "1" | "2")}
+            fWarehouseNameInit={((r.fwarehousename ?? "1") as "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8")}
+          />
+        </div>
+      </section>
 
       {/* ── 5. PRIMARY ACTION — always-open, eye-catching ── */}
       <section className="rounded-2xl border-2 border-primary-300 bg-primary-50/30 dark:bg-primary-950/20 shadow-md overflow-hidden">

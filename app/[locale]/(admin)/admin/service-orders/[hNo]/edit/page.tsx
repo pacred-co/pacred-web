@@ -45,7 +45,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import {
-  ArrowLeft, Eye, CheckCircle2, Lock,
+  ArrowLeft, Eye, CheckCircle2,
   ClipboardList, CircleDollarSign, ShoppingCart, Clock, PackageCheck,
 } from "lucide-react";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
@@ -69,10 +69,6 @@ function roundUp2(v: number): number {
   const r = Math.ceil(v * 100 - eps) / 100;
   return r === 0 ? 0 : r;
 }
-function cny(n: number): string {
-  return n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
 // ── status taxonomy (legacy '1'..'6') — mirrors legacy-view.tsx ──
 // 2026-06-04 (ภูม flag): step bar เปลี่ยนจาก "เลข 1-5 ในวงกลม" → "icon + label"
 // แบบเดียวกับ /admin/forwarders/[fNo]/edit (ที่ภูมบอก "ทำถูกต้องสวยเลย").
@@ -240,9 +236,21 @@ export default async function AdminServiceOrderEditPage({
   // legacy update3/update4 → SELECT DISTINCT cnameshop, cshippingnumber,
   // ctrackingnumber FROM tb_order WHERE hno=? GROUP BY cnameshop.
   // We do the dedup client-side here against the already-loaded items list.
+  //
+  // 2026-06-05 (ภูม flag — merge tracking inputs INTO the items table per
+  // legacy PCS shops/update.php) — pass coverUrl/curl/ccolor/csize/cshippingchn
+  // so `ShopFieldsBoard` can render the full per-shop items table itself.
+  const coverUrlById = new Map<number, string | null>(
+    items.map((it, i) => [it.id, coverUrls[i] ?? null]),
+  );
   const shopFieldsMap = new Map<string, {
     cshippingnumber: string; ctrackingnumber: string;
-    items: { id: number; ctitle: string; camount: number; cprice: number; cpriceupdate: number; crewallet: string | null }[];
+    items: {
+      id: number; ctitle: string; camount: number; cprice: number;
+      cpriceupdate: number; crewallet: string | null;
+      coverUrl: string | null; curl: string | null;
+      ccolor: string | null; csize: string | null; cshippingchn: number;
+    }[];
   }>();
   for (const it of items) {
     const shop = (it.cnameshop ?? "").trim();
@@ -258,7 +266,12 @@ export default async function AdminServiceOrderEditPage({
     }
     g.items.push({
       id: it.id, ctitle: it.ctitle ?? "", camount: Number(it.camount ?? 0),
-      cprice: Number(it.cprice ?? 0), cpriceupdate: Number(it.cpriceupdate ?? 0), crewallet: it.crewallet,
+      cprice: Number(it.cprice ?? 0), cpriceupdate: Number(it.cpriceupdate ?? 0),
+      crewallet: it.crewallet,
+      coverUrl: coverUrlById.get(it.id) ?? null,
+      curl: it.curl ?? null,
+      ccolor: it.ccolor ?? null, csize: it.csize ?? null,
+      cshippingchn: Number(it.cshippingchn ?? 0),
     });
   }
   const shopFields = Array.from(shopFieldsMap.entries()).map(([cnameshop, v]) => ({
@@ -407,8 +420,14 @@ export default async function AdminServiceOrderEditPage({
         <OrderAddressPanel hNo={r.hno} hShipBy={r.hshipby} addresses={savedAddresses} />
       )}
 
-      {/* ── 4. PRIMARY — รายการสินค้า (editable / read-only) ── */}
-      {isEditable ? (
+      {/* ── 4. PRIMARY — รายการสินค้า ──
+          status 1/2/6  → editable `ShopItemsEditor` (price/qty/cshippingchn)
+          status 3/4/5  → SKIP this section; the items table is rendered per
+                          shop INSIDE `ShopFieldsBoard` below (2026-06-05 ภูม
+                          flag · merge tracking inputs INTO the items table
+                          per legacy PCS shops/update.php). Showing both =
+                          two-tables drift; the unified per-shop card wins. */}
+      {isEditable && (
         <ShopItemsEditor
           hNo={r.hno}
           hRate={rate}
@@ -419,8 +438,6 @@ export default async function AdminServiceOrderEditPage({
           items={editorItems}
           superAdmin={superAdmin}
         />
-      ) : (
-        <ItemSummaryReadOnly items={editorItems} netThb={netThb} status={status} />
       )}
 
       {/* ── 5. STATUS-AWARE WORKFLOW ACTIONS ── */}
@@ -496,84 +513,7 @@ export default async function AdminServiceOrderEditPage({
   );
 }
 
-/**
- * Read-only items table for status 3/4/5 — shown on /edit when items are
- * already committed (locked). Banner explains why no editor + points back
- * to detail for full context.
- */
-function ItemSummaryReadOnly({
-  items,
-  netThb,
-  status,
-}: {
-  items: EditorItem[];
-  netThb: number;
-  status: string;
-}) {
-  if (items.length === 0) return null;
-  return (
-    <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 sm:p-5 shadow-sm space-y-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h3 className="font-bold text-sm">รายการสินค้า ({items.length})</h3>
-          <p className="text-xs text-muted">
-            ราคาสุทธิ ฿{netThb.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </p>
-        </div>
-        <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-700">
-          <Lock className="h-3 w-3" />
-          ตารางสินค้าล็อกแล้ว (สถานะ {status})
-        </div>
-      </div>
-      <div className="overflow-x-auto scrollbar-x-visible rounded-lg border border-border">
-        <table className="w-full min-w-[640px] text-xs">
-          <thead className="bg-surface-alt/60 text-[10px] uppercase tracking-wide text-muted">
-            <tr>
-              <th className="px-2 py-2 text-left">ข้อมูลสินค้า</th>
-              <th className="px-2 py-2 text-right w-16">จำนวน</th>
-              <th className="px-2 py-2 text-right w-24">¥/ชิ้น</th>
-              <th className="px-2 py-2 text-right w-24">ค่าส่งจีน</th>
-              <th className="px-2 py-2 text-right w-28">รวม (¥)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((it) => {
-              const refunded = it.crewallet === "1";
-              const line = refunded ? 0 : roundUp2(it.camount * it.cprice + it.cshippingchn);
-              return (
-                <tr key={it.id} className={`border-t border-border ${refunded ? "bg-red-50/40" : ""}`}>
-                  <td className="px-2 py-2">
-                    <div className="flex gap-2">
-                      {it.coverUrl ? (
-                        <a href={it.coverUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={it.coverUrl} alt={it.ctitle ?? ""} className="h-10 w-10 rounded border border-border object-cover" />
-                        </a>
-                      ) : null}
-                      <div className="min-w-0">
-                        {it.curl ? (
-                          <a href={it.curl} target="_blank" rel="noopener noreferrer" className="block truncate max-w-[280px] text-primary-600 hover:underline" title={it.ctitle ?? ""}>
-                            {it.ctitle || it.curl}
-                          </a>
-                        ) : (
-                          <span className="block truncate max-w-[280px]">{it.ctitle || "—"}</span>
-                        )}
-                        {(it.ccolor || it.csize) && (
-                          <p className="text-[10px] text-muted">{it.ccolor}{it.ccolor && it.csize ? " · " : ""}{it.csize}</p>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-2 py-2 text-right font-mono tabular-nums">{refunded ? 0 : it.camount}</td>
-                  <td className="px-2 py-2 text-right font-mono tabular-nums">{cny(it.cprice)}</td>
-                  <td className="px-2 py-2 text-right font-mono tabular-nums">{cny(it.cshippingchn)}</td>
-                  <td className="px-2 py-2 text-right font-mono tabular-nums">{cny(line)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
+// 2026-06-05 (ภูม flag — merge tracking into items table) — the prior
+// `ItemSummaryReadOnly` is deleted; the per-shop items table is now
+// rendered INSIDE `ShopFieldsBoard` (legacy shops/update.php layout) so
+// the admin sees ONE table with shop band + tracking input + items.

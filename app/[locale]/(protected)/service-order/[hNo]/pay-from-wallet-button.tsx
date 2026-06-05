@@ -23,10 +23,11 @@ import { payServiceOrderFromWallet } from "@/actions/service-order";
 type Props = {
   hNo:           string;
   totalThb:      number;
-  walletBalance: number;   // main bucket balance (THB)
+  totalThbRaw?:  number | null;   // full-precision reference (null if equals rounded)
+  walletBalance: number;          // main bucket balance (THB)
 };
 
-export function PayFromWalletButton({ hNo, totalThb, walletBalance }: Props) {
+export function PayFromWalletButton({ hNo, totalThb, totalThbRaw, walletBalance }: Props) {
   const t = useTranslations("serviceOrder");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -40,20 +41,32 @@ export function PayFromWalletButton({ hNo, totalThb, walletBalance }: Props) {
   const ROUNDING_TOLERANCE_THB = 0.01;
   const sufficient = walletBalance + ROUNDING_TOLERANCE_THB >= totalThb;
   const totalFmt   = totalThb.toLocaleString("th-TH",  { minimumFractionDigits: 2 });
+  const rawFmt     = totalThbRaw != null
+    ? totalThbRaw.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 4 })
+    : null;
+  // Used to label both the button + confirm — round + raw together.
+  const totalDual  = rawFmt ? `${totalFmt} (฿${rawFmt})` : totalFmt;
   const balanceFmt = walletBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 });
   const shortfall  = sufficient ? 0 : totalThb - walletBalance;
   const shortFmt   = shortfall.toLocaleString("th-TH", { minimumFractionDigits: 2 });
 
   if (!sufficient) {
     return (
-      <p className="text-xs text-yellow-800">
-        {t("payInsufficientHint", { balance: balanceFmt, shortfall: shortFmt })}
-      </p>
+      <div className="space-y-1">
+        <p className="text-xs text-yellow-800">
+          {t("payInsufficientHint", { balance: balanceFmt, shortfall: shortFmt })}
+        </p>
+        {rawFmt && (
+          <p className="text-[11px] text-yellow-700/80">
+            <span className="font-mono">฿{totalFmt}</span> = ปัดขึ้นจากยอดจริง <span className="font-mono">฿{rawFmt}</span> · โอนตามยอดหลักได้เลย
+          </p>
+        )}
+      </div>
     );
   }
 
   async function onPay() {
-    if (!(await confirm(t("payFromWalletConfirm", { total: totalFmt })))) return;
+    if (!(await confirm(t("payFromWalletConfirm", { total: totalDual })))) return;
     setMsg(null);
     setError(null);
     startTransition(async () => {

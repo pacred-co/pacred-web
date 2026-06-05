@@ -70,6 +70,23 @@ export function TbForwarderActionPanel(p: Props) {
     );
   }
 
+  // 2026-06-05 (ภูม flag — "ถ้าใส่เลขตู้ ก็เปลี่ยนสถานะให้เลย"):
+  // forward-only auto-advance hint. Server (adminBulkUpdateForwarderTbStatus)
+  // applies the same rule:
+  //   - cabinet filled  → fstatus ≥ "3" (กำลังส่งมาไทย)
+  //   - tracking filled → fstatus ≥ "6" (เตรียมส่ง)
+  // We show a small hint under the dropdown so admin sees WHY the status
+  // might land different from what they picked.
+  const FSTATUS_RANK_HINT: Record<string, number> = {
+    "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "99": 0,
+  };
+  const _rank = (v: string) => FSTATUS_RANK_HINT[v] ?? 0;
+  let _derived: Status = status;
+  if (cabinet.trim() !== "" && _rank(_derived) < 3) _derived = "3";
+  if (tracking.trim() !== "" && _rank(_derived) < 6) _derived = "6";
+  const willAutoAdvance = _derived !== status;
+  const derivedLabel = STATUS_OPTIONS.find((o) => o.v === _derived)?.l ?? _derived;
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -154,6 +171,13 @@ export function TbForwarderActionPanel(p: Props) {
         {isRollback && (
           <p className="mt-1 text-[11px] text-amber-700">
             ⚠ กำลังย้อนสถานะ — confirm dialog จะถามอีกครั้ง
+          </p>
+        )}
+        {willAutoAdvance && !isRollback && (
+          <p className="mt-1 text-[11px] text-sky-700 bg-sky-50 border border-sky-200 rounded px-2 py-1">
+            💡 ระบบจะปรับสถานะเป็น <strong>{derivedLabel}</strong> ให้อัตโนมัติ ตามฟิลด์ที่กรอก
+            {cabinet.trim() !== "" && " (เลขตู้ → กำลังส่งมาไทย)"}
+            {tracking.trim() !== "" && " (Tracking TH → เตรียมส่ง)"}
           </p>
         )}
       </div>
