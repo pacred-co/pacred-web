@@ -1,7 +1,8 @@
 /* eslint-disable @next/next/no-img-element */
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Headset } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { formatPhoneNumber, type PcsChromeData } from "@/lib/legacy/pcs-chrome";
+import { CONTACT } from "@/components/seo/site";
 import { PcsLeftMenuUserPill } from "./pcs-left-menu-user-pill";
 import { PcsLeftMenuAccordion, PcsLeftMenuAccordionGroup } from "./pcs-left-menu-accordion";
 
@@ -88,32 +89,58 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
         <div>{data.userEmail}</div>
       </div>
 
-      {/* 3. Sales card */}
+      {/* 3. ผู้ดูแลลูกค้า — TWO contacts (owner 2026-06-05): เซล (รับลูกค้า ·
+          assigned per customer from tb_users.adminIDSale) + CS (ติดตามสถานะ /
+          สอบถาม · central CS line CONTACT.phoneCs = พลอย). Per-customer CS
+          assignment (each customer their own CS, like the sales round-robin) is
+          a separate bigger build — this shows the central CS line for now. */}
       <div className="border-b border-border px-3 py-3">
-        <div className="flex items-center gap-3 rounded-xl border border-border bg-gradient-to-br from-red-50 to-white px-3 py-3">
-          <a
-            className="image-popup-vertical-fit shrink-0"
-            href={data.sales.picture}
-          >
-            <img
-              src={data.sales.picture}
-              alt=""
-              className="h-[55px] w-[55px] rounded-full object-cover ring-2 ring-red-200"
-            />
-          </a>
-          <div className="min-w-0 flex-1 text-[12px] leading-snug">
-            <div className="text-muted">ผู้ดูแล</div>
-            <div className="font-semibold text-foreground">
-              เซลล์ <span>{data.sales.nickname}</span>
+        <div className="rounded-xl border border-border bg-gradient-to-br from-red-50 to-white px-3 py-2.5">
+          {/* เซล — assigned sales rep */}
+          <div className="flex items-center gap-3">
+            <a
+              className="image-popup-vertical-fit shrink-0"
+              href={data.sales.picture}
+            >
+              <img
+                src={data.sales.picture}
+                alt=""
+                className="h-[46px] w-[46px] rounded-full object-cover ring-2 ring-red-200"
+              />
+            </a>
+            <div className="min-w-0 flex-1 text-[12px] leading-snug">
+              <div className="text-muted">เซลดูแลลูกค้า</div>
+              <div className="font-semibold text-foreground">
+                เซลล์ <span>{data.sales.nickname}</span>
+              </div>
+              <div className="text-muted">
+                Tel:{" "}
+                <a
+                  href={`tel:${data.sales.tel}`}
+                  className="text-foreground hover:text-red-700"
+                >
+                  {salesTel}
+                </a>
+              </div>
             </div>
-            <div className="text-muted">
-              Tel:{" "}
-              <a
-                href={`tel:${data.sales.tel}`}
-                className="text-foreground hover:text-red-700"
-              >
-                {salesTel}
-              </a>
+          </div>
+          {/* CS — ฝ่ายบริการลูกค้า · ติดตามสถานะ (central line) */}
+          <div className="mt-2.5 flex items-center gap-3 border-t border-red-100 pt-2.5">
+            <div className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600 ring-2 ring-red-200">
+              <Headset className="h-[22px] w-[22px]" />
+            </div>
+            <div className="min-w-0 flex-1 text-[12px] leading-snug">
+              <div className="text-muted">ฝ่ายบริการลูกค้า (CS)</div>
+              <div className="font-semibold text-foreground">ติดตามสถานะ / สอบถาม</div>
+              <div className="text-muted">
+                Tel:{" "}
+                <a
+                  href={`tel:${CONTACT.phoneCs}`}
+                  className="text-foreground hover:text-red-700"
+                >
+                  {CONTACT.phoneCsDisplay}
+                </a>
+              </div>
             </div>
           </div>
         </div>
