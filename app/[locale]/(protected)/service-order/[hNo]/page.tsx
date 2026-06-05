@@ -92,13 +92,17 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
               ← {t("backToList")}
             </Link>
             {canPrintReceipt && o.h_no && (
+              // 2026-06-05 (ภูม flag) — switch from @react-pdf binary
+              // (/api/pdf/shop-order/[hNo]) to legacy HTML print template
+              // (/service-order/print) · same template as admin print ·
+              // unified Pacred-branded receipt for customer + admin both.
               <a
-                href={`/api/pdf/shop-order/${o.h_no}`}
+                href={`/service-order/print?print=${o.status === "5" ? "1" : "2"}&id=${o.h_no}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700"
               >
-                {o.status === "5" ? "📄 ดาวน์โหลดใบเสร็จ PDF" : "📄 ดาวน์โหลดใบแจ้งหนี้ PDF"}
+                {o.status === "5" ? "📄 พิมพ์ใบเสร็จ" : "📄 พิมพ์ใบแจ้งหนี้"}
               </a>
             )}
             {canCancel && <CancelButton hNo={o.h_no!} />}

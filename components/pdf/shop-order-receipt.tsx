@@ -10,7 +10,7 @@
  * forwarder receipt so the look-and-feel stays unified.
  */
 
-import { Document, Image, Page, Text, View } from "@react-pdf/renderer";
+import { Document, Page, Text, View } from "@react-pdf/renderer";
 import { styles, fmtBaht, COLORS } from "./styles";
 import { readThaiBaht } from "@/lib/utils/thai-number";
 import { CONTACT, ADDRESSES, BANK } from "@/components/seo/site";
@@ -170,16 +170,21 @@ export function ShopOrderReceipt({ data }: { data: ShopOrderReceiptData }) {
           </View>
         </View>
 
-        {/* Items grouped by provider → shop */}
+        {/* Items grouped by provider → shop
+            2026-06-05 (ภูม flag) — Image column REMOVED · marketplace CDN
+            blocks the image fetch in some cases (and pre-fetched data URIs
+            still don't render reliably across all rows) · ภูม "ตัดรูปออก
+            ไปเลย เพราะมันเกินมา 2 หน้า". กลับมา layout เดิม (no รูป) ·
+            CJK font ยังคงอยู่ให้ชื่อจีนอ่านได้. Image column จะกลับมาตอน
+            re-port ใหม่เป็น HTML print template (legacy admin form). */}
         <View style={styles.table}>
           <View style={styles.tableHead}>
-            <Text style={[styles.tableHeadCell, { flex: 0.4,  textAlign: "center" }]}>#</Text>
-            <Text style={[styles.tableHeadCell, { flex: 1.2, textAlign: "center" }]}>รูป</Text>
-            <Text style={[styles.tableHeadCell, { flex: 3.4 }]}>รายการสินค้า</Text>
-            <Text style={[styles.tableHeadCell, { flex: 0.7, textAlign: "right" }]}>จำนวน</Text>
-            <Text style={[styles.tableHeadCell, { flex: 1.1, textAlign: "right" }]}>ราคา/ชิ้น</Text>
-            <Text style={[styles.tableHeadCell, { flex: 1.1, textAlign: "right" }]}>ค่าส่งจีน</Text>
-            <Text style={[styles.tableHeadCell, { flex: 1.3, textAlign: "right" }]}>รวม</Text>
+            <Text style={[styles.tableHeadCell, { flex: 0.5,  textAlign: "center" }]}>#</Text>
+            <Text style={[styles.tableHeadCell, { flex: 4 }]}>รายการสินค้า</Text>
+            <Text style={[styles.tableHeadCell, { flex: 0.8, textAlign: "right" }]}>จำนวน</Text>
+            <Text style={[styles.tableHeadCell, { flex: 1.2, textAlign: "right" }]}>ราคา/ชิ้น</Text>
+            <Text style={[styles.tableHeadCell, { flex: 1.2, textAlign: "right" }]}>ค่าส่งจีน</Text>
+            <Text style={[styles.tableHeadCell, { flex: 1.4, textAlign: "right" }]}>รวม</Text>
           </View>
 
           {grouped.length === 0 && (
@@ -231,42 +236,27 @@ export function ShopOrderReceipt({ data }: { data: ShopOrderReceiptData }) {
                   const detail        = [it.color, it.size].filter(Boolean).join(" / ");
                   const stripe        = runningNo % 2 === 0 ? { backgroundColor: COLORS.surfaceAlt } : {};
                   const titleIsCn     = hasChinese(it.title);
-                  const imageUrl      = it.image_path && /^https?:\/\//i.test(it.image_path) ? it.image_path : null;
 
                   rendered.push(
                     <View key={`p-${pi}-s-${si}-i-${ii}`} style={[styles.tableRow, stripe]}>
-                      <Text style={[styles.tableCell, { flex: 0.4, textAlign: "center" }]}>
+                      <Text style={[styles.tableCell, { flex: 0.5, textAlign: "center" }]}>
                         {runningNo}
                       </Text>
-                      {/* 2026-06-05 (ภูม flag) — รูปสินค้า เพราะลูกค้าอ่านชื่อจีน
-                          ไม่ออก ใช้รูปประกอบจำให้ง่ายขึ้น. cimages ที่เป็น
-                          full URL (Taobao/1688 CDN) → render ตรง · bare
-                          filename → skip (legacy product images ตอนนี้ไม่ resolve). */}
-                      <View style={{ flex: 1.2, alignItems: "center", justifyContent: "center", padding: 2 }}>
-                        {imageUrl ? (
-                          // eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf Image does not support alt prop
-                          <Image src={imageUrl} style={{ width: 48, height: 48, objectFit: "cover" }} />
-                        ) : (
-                          <View style={{ width: 48, height: 48, backgroundColor: "#f3f4f6", alignItems: "center", justifyContent: "center" }}>
-                            <Text style={{ fontSize: 7, color: COLORS.muted }}>—</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={[styles.tableCell, { flex: 3.4 }, titleIsCn ? cnFont : {}]}>
+                      <Text style={[styles.tableCell, { flex: 4 }, titleIsCn ? cnFont : {}]}>
                         {it.title ?? "—"}
                         {detail ? `\n${detail}` : ""}
                         {it.tracking_number ? `\ntrack: ${it.tracking_number}` : ""}
                       </Text>
-                      <Text style={[styles.tableCell, styles.tableCellRight, { flex: 0.7 }]}>
+                      <Text style={[styles.tableCell, styles.tableCellRight, { flex: 0.8 }]}>
                         × {it.amount}
                       </Text>
-                      <Text style={[styles.tableCell, styles.tableCellRight, { flex: 1.1 }]}>
+                      <Text style={[styles.tableCell, styles.tableCellRight, { flex: 1.2 }]}>
                         ฿{fmtBaht(it.price_cny * rate)}
                       </Text>
-                      <Text style={[styles.tableCell, styles.tableCellRight, { flex: 1.1 }]}>
+                      <Text style={[styles.tableCell, styles.tableCellRight, { flex: 1.2 }]}>
                         ฿{fmtBaht(lineShipCny * rate)}
                       </Text>
-                      <Text style={[styles.tableCell, styles.tableCellRight, styles.tableCellBold, { flex: 1.3 }]}>
+                      <Text style={[styles.tableCell, styles.tableCellRight, styles.tableCellBold, { flex: 1.4 }]}>
                         ฿{fmtBaht(lineTotalThb)}
                       </Text>
                     </View>,
