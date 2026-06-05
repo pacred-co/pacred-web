@@ -183,6 +183,7 @@ type AdminRow = {
     avatar_url: string | null;
     birthday: string | null;
     sex: string | null;
+    employee_code: string | null;
     last_login_at: string | null;
     is_active: boolean | null;
     migrated_from_pcs: boolean | null;
@@ -312,7 +313,7 @@ export default async function AdminTablePage({
         admin.from("profiles")
           .select(
             "id, member_code, first_name, last_name, email, phone, avatar_url, " +
-            "birthday, sex, last_login_at, is_active, migrated_from_pcs, legacy_pcs_user_id",
+            "birthday, sex, employee_code, last_login_at, is_active, migrated_from_pcs, legacy_pcs_user_id",
           )
           .in("id", profileIds),
         admin.from("admin_contact_extras")
@@ -525,6 +526,7 @@ export default async function AdminTablePage({
                 <tr className="text-left">
                   <SortTh label="วันที่เพิ่ม"    field="granted_at" activeKey={sortKeyRaw} activeDir={sortDir} hrefs={sortHrefs} />
                   <Th>รหัส</Th>
+                  <Th>รหัสพนักงาน</Th>
                   <SortTh label="ชื่อ - นามสกุล" field="name"       activeKey={sortKeyRaw} activeDir={sortDir} hrefs={sortHrefs} />
                   <Th>ชื่อเล่น</Th>
                   <SortTh label="Role"           field="role"       activeKey={sortKeyRaw} activeDir={sortDir} hrefs={sortHrefs} />
@@ -548,7 +550,13 @@ export default async function AdminTablePage({
                   const avatar   = p?.avatar_url && p.avatar_url.trim() !== "" ? p.avatar_url : "/legacy/pcs/admin/images/user.jpg";
                   const memberCode = p?.member_code ?? "—";
                   const legacyAdminId = x?.legacy_admin_id;
-                  const idCodeDisplay = legacyAdminId ?? memberCode;
+                  // Show the staff username (e.g. "admin_toey") so every admin reads
+                  // the same way. Admins created via /admin/admins/new have no
+                  // legacy_admin_id yet → derive it from their @pacred.co.th email;
+                  // fall back to the PR member-code only as a last resort.
+                  const emailUser =
+                    p?.email && p.email.endsWith("@pacred.co.th") ? p.email.split("@")[0] : null;
+                  const idCodeDisplay = legacyAdminId ?? emailUser ?? memberCode;
 
                   const roleBadge    = nameRole(row.role);
                   const companyBadge = nameCompany(x?.company);
@@ -579,6 +587,7 @@ export default async function AdminTablePage({
                           {idCodeDisplay}
                         </Link>
                       </Td>
+                      <Td mono>{p?.employee_code ?? "—"}</Td>
                       <Td>
                         <div className="flex items-center gap-2 min-w-[180px]">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
