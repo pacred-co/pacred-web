@@ -283,6 +283,22 @@ export async function deleteAddressAction(formData: FormData): Promise<void> {
 
   const admin = createAdminClient();
 
+  // Legacy parity (deleteAddress.php) — REFUSE deleting the MAIN address; the
+  // customer must set another address as main first (else they'd be left with
+  // no delivery address — Pacred previously allowed it + dropped the pointer).
+  const { data: mainRow, error: mainErr } = await admin
+    .from("tb_address_main")
+    .select("addressid")
+    .eq("userid", userID)
+    .maybeSingle<{ addressid: number }>();
+  if (mainErr) {
+    console.error(`[tb_address_main main-check] failed`, { code: mainErr.code, message: mainErr.message });
+    redirect("/addresses?error=save");
+  }
+  if (mainRow && Number(mainRow.addressid) === addressId) {
+    redirect("/addresses?error=delete_main");
+  }
+
   // Soft-delete: addressstatus '1' → '0' (the list reads only '1').
   const { error: delError } = await admin
     .from("tb_address")

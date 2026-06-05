@@ -14,6 +14,7 @@ import { CheckCircle2, AlertCircle, X } from "lucide-react";
 const ERROR_TEXT: Record<string, string> = {
   save: "เกิดข้อผิดพลาด ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง",
   incomplete: "กรุณากรอกข้อมูลที่อยู่ให้ครบถ้วน",
+  delete_main: "ไม่สามารถลบที่อยู่หลักได้ — กรุณาตั้งที่อยู่อื่นเป็นที่อยู่หลักก่อน",
 };
 
 export function AddressFlash({
