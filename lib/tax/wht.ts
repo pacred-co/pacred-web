@@ -223,3 +223,62 @@ export function calcForwarderNetPayable(
 ): number {
   return computeForwarderTax(c, { isJuristic, withVat: false, rates }).netPayable;
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// Legacy flat-1% receipt rule (the RECEIPT/grenrateReceiptF path)
+// ════════════════════════════════════════════════════════════════════════
+//
+// This is the rule that fires when a forwarder payment LANDS and an auto-
+// receipt is minted (lib/admin/auto-issue-receipt.ts). It is DISTINCT from the
+// per-line `computeTax` engine above:
+//   - `computeTax` = the correct per-charge-type WHT engine (transport 1% /
+//     service 3% / rental 5% / goods 0%) used for the tax-INVOICE step.
+//   - `legacyReceiptAmount` (this) = the legacy flat 1%-off-the-grand-total
+//     allowance the legacy `grenrateReceiptF` wrote onto tb_receipt.ramount.
+//
+// Faithful to legacy `pcs-admin/include/function.php`:
+//   - grenrateReceiptF (L557-559): the 1% allowance applies only when the
+//     customer is juristic AND the total ≥ 1000 (small juristic orders get no
+//     allowance).
+//   - calPriceForwarderMainNew (L1875-1885) uses the SAME `userCompany==1 &&
+//     priceFull>=1000` gate (plus an `fUserCompany==1` per-order override that
+//     forces the allowance regardless of amount).
+//
+// WHT eligibility = the JURISTIC flag — there is NO separate per-customer "WHT
+// enable" field in legacy. A customer is juristic ⇔ they registered with
+// `type==2` → `tb_users.userCompany='1'` (check-otp-register.php L98-100) +
+// have a `tb_corporate` row. Pacred derives `isJuristic` the same way
+// (tb_corporate existence in auto-issue-receipt; userCompany='1' elsewhere).
+//
+// Pure + rounded to 2 satang. Returns BOTH the pre-WHT total and the amount
+// the customer actually pays so callers (and tests) can assert each.
+export const LEGACY_RECEIPT_WHT_MIN = 1000; // legacy threshold (≥ 1000 to withhold)
+export const LEGACY_RECEIPT_WHT_PCT = 1;    // legacy flat allowance %
+
+export interface LegacyReceiptAmount {
+  /** Pre-WHT raw sum (tb_receipt.totalbeforewithholding). */
+  totalBeforeWithholding: number;
+  /** What the customer pays (tb_receipt.ramount) — pre-WHT minus the allowance. */
+  rAmount: number;
+  /** Whether the juristic 1% allowance was applied. */
+  applied: boolean;
+}
+
+/**
+ * Compute the legacy receipt amount + whether the juristic 1% allowance fired.
+ *
+ * @param pricePayAll  the pre-WHT grand total (sum of charge buckets − discount)
+ * @param isJuristic   the customer's juristic flag (userCompany='1' / has tb_corporate)
+ */
+export function legacyReceiptAmount(
+  pricePayAll: number,
+  isJuristic: boolean,
+): LegacyReceiptAmount {
+  const total = round2(pricePayAll);
+  // Legacy gate: juristic AND total ≥ 1000.
+  const applied = isJuristic && pricePayAll >= LEGACY_RECEIPT_WHT_MIN;
+  const rAmount = applied
+    ? round2(pricePayAll * (1 - LEGACY_RECEIPT_WHT_PCT / 100))
+    : total;
+  return { totalBeforeWithholding: total, rAmount, applied };
+}

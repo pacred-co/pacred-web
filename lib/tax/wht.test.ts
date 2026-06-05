@@ -2,12 +2,24 @@
 // Run: tsx lib/tax/wht.test.ts
 // Rules (owner-confirmed 2026-05-30): transport 1% · service 3% · rental 5% ·
 // goods 0% WHT (but in VAT base) · VAT 7% (intl transport leg = 0%, excluded).
-import { computeForwarderTax, computeTax, calcForwarderNetPayable, DEFAULT_TAX_RATES } from "./wht";
+import {
+  computeForwarderTax,
+  computeTax,
+  calcForwarderNetPayable,
+  DEFAULT_TAX_RATES,
+  legacyReceiptAmount,
+  LEGACY_RECEIPT_WHT_MIN,
+} from "./wht";
 
 let pass = 0, fail = 0;
 function eq(label: string, got: number, want: number, tol = 0.01) {
   const ok = Math.abs(got - want) <= tol;
   console.log(`${ok ? "✓" : "✗"} ${label}  got=${got} want=${want}`);
+  if (ok) pass++; else fail++;
+}
+function is(label: string, got: unknown, want: unknown) {
+  const ok = got === want;
+  console.log(`${ok ? "✓" : "✗"} ${label}  got=${String(got)} want=${String(want)}`);
   if (ok) pass++; else fail++;
 }
 
@@ -132,6 +144,56 @@ function eq(label: string, got: number, want: number, tol = 0.01) {
   eq("default rental 5", DEFAULT_TAX_RATES.rentalPct, 5);
   eq("default goods 0", DEFAULT_TAX_RATES.goodsPct, 0);
   eq("default vat 7", DEFAULT_TAX_RATES.vatPct, 7);
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// legacyReceiptAmount — the grenrateReceiptF / auto-issue-receipt flat-1% rule
+// (Lane B 2026-06-05). Asserts the JURISTIC 1% WHT-on-payment-land behaviour.
+// Legacy: 1% allowance applies ⇔ customer is juristic AND total ≥ 1000.
+// ════════════════════════════════════════════════════════════════════════
+
+// 12. Juristic, total ≥ 1000 → 1% allowance applied
+{
+  const r = legacyReceiptAmount(10000, true);
+  eq("legacyReceipt juristic≥1000: totalBefore = 10000", r.totalBeforeWithholding, 10000);
+  eq("legacyReceipt juristic≥1000: rAmount = 9900 (×0.99)", r.rAmount, 9900);
+  is("legacyReceipt juristic≥1000: applied = true", r.applied, true);
+}
+
+// 13. Juristic but total < 1000 → NO allowance (legacy small-order exemption)
+{
+  const r = legacyReceiptAmount(999.99, true);
+  eq("legacyReceipt juristic<1000: rAmount unchanged", r.rAmount, 999.99);
+  is("legacyReceipt juristic<1000: applied = false", r.applied, false);
+}
+
+// 14. Exactly at the threshold (1000) → applied (>= boundary)
+{
+  const r = legacyReceiptAmount(1000, true);
+  eq("legacyReceipt juristic=1000: rAmount = 990", r.rAmount, 990);
+  is("legacyReceipt juristic=1000: applied = true (>= boundary)", r.applied, true);
+  is("legacyReceipt threshold constant = 1000", LEGACY_RECEIPT_WHT_MIN, 1000);
+}
+
+// 15. Personal (non-juristic) → NEVER withheld, even on a large total
+{
+  const r = legacyReceiptAmount(50000, false);
+  eq("legacyReceipt personal: rAmount = total (no WHT)", r.rAmount, 50000);
+  is("legacyReceipt personal: applied = false", r.applied, false);
+}
+
+// 16. Rounding — juristic 12345.67 × 0.99 = 12222.21 (2 satang)
+{
+  const r = legacyReceiptAmount(12345.67, true);
+  eq("legacyReceipt rounding: rAmount = 12222.21", r.rAmount, 12222.21);
+  eq("legacyReceipt rounding: totalBefore = 12345.67", r.totalBeforeWithholding, 12345.67);
+}
+
+// 17. Zero total → no allowance, zero amount (defensive)
+{
+  const r = legacyReceiptAmount(0, true);
+  eq("legacyReceipt zero: rAmount = 0", r.rAmount, 0);
+  is("legacyReceipt zero: applied = false", r.applied, false);
 }
 
 console.log(`\n${pass} pass, ${fail} fail`);
