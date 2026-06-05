@@ -544,3 +544,29 @@ const fUserCompany = customer.userCompany === "1" ? "" : "0";  // ✅ writes emp
 - [`actions/admin/api-forwarder-manual.ts:430`](../../actions/admin/api-forwarder-manual.ts) — CargoCenter manual entry
 - Legacy `api-forwarder-momo.php:241-243` + `:434-436` — the bug
 - AGENTS.md §0a (workflow vs UI · faithful first then improve)
+
+---
+
+## Legacy `pcsc_main.sql` lives INSIDE the .rar — stream a single table, don't extract 35 GB (2026-06-06)
+
+Needed the warehouse/driver `tb_admin` rows for the staff login bridge. The full
+dump is **`REALSHITDATAPCS/pcsc_main.sql` (≈945 MB) inside
+`/Users/dev/Desktop/REALSHITDATAPCS.rar` (≈35 GB)** — NOT in the extracted
+`/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/` folder (that holds only PHP).
+A `find … -iname "*.sql"` on the extract finds nothing → you wrongly conclude
+"the data isn't on this machine" (an agent did exactly that; the owner: "ดูไฟล์ที่
+ส่งให้สิ มันมีครบ").
+
+- **List the rar:** `lsar REALSHITDATAPCS.rar | grep -iE '\.sql'` → `pcsc_main.sql`, `pcsc_cargo.sql.zip`, `pcsc_freight.sql.zip`.
+- **Stream ONE member (no 35 GB extract):** `bsdtar -xOf REALSHITDATAPCS.rar "REALSHITDATAPCS/pcsc_main.sql" | …` — built-in `/usr/bin/bsdtar` reads rar; `unrar`/`7z` aren't installed but `unar`/`lsar`/`bsdtar` are.
+- **Grab one table cheaply:** tables are near the top; `grep -m3 -nE 'CREATE TABLE \`tb_admin\`|INSERT INTO \`tb_admin\`'` to find the line, then `… | sed -n 'START,ENDp;ENDq'` — the `;ENDq` STOPS the stream after the range so you don't read all 945 MB.
+- **Parse:** INSERT lists columns explicitly + positional values; a small JS tuple-splitter (respect quotes/parens) maps by name. `mysqldump` zero-dates `0000-00-00 00:00:00` → `null` for **date cols ONLY** (else PG `22008`); keep `""` for NOT-NULL varchars (nulling them → PG `23502`). Prod `tb_admin` relaxed the legacy NOT-NULL datetimes to nullable.
+
+**Staff role taxonomy in this dump:** `tb_admin.adminStatus` (the bridge's
+warehouse=6/driver=7 source per `function.php` L626-634) is **empty for everyone**
+here — the org is `department`/`section` instead: `dept3/sec6 = warehouse`
+(มาร์ค `admin_alongkor` · แหวน `admin_saiu_4` · เบียร์), `dept3/sec7 = driver`
+(ป๊อด `admin_pod` · แมน · พุด). So when loading warehouse/driver rows for the bridge,
+**SET `adminStatus` 6/7 yourself** (from section) — don't trust the dump value.
+They log in with their legacy `adminID` + original password (the bridge verifies
+vs the preserved `adminPass` passTam hash + auto-provisions the role on first login).
