@@ -26,10 +26,10 @@ export const HERO_CONTENT_KEYS: Record<string, { titleKey: string; subKey: strin
 
 // SALES_CARDS: name/phone are literal data (proper nouns), the rest comes from i18n.
 // `personKey` resolves under `salesTeam.{personKey}.{slogan|alt|button}`.
-// Lineup = 2 sales (เมย์ · แนท) + 2 customer-service (วิน · พลอย). วิน + พลอย are
+// Lineup = 4 sales (เมย์ · แนท · พี · เตย) + 2 customer-service (วิน · พลอย). วิน + พลอย are
 // CS, not sales — per owner directive 2026-05-29 (apply site-wide).
 export interface SalesCardData extends Omit<SalesCard, 'slogan' | 'alt' | 'button'> {
-  personKey: 'may' | 'nat' | 'win' | 'ploy';
+  personKey: 'may' | 'nat' | 'win' | 'ploy' | 'pee' | 'toey';
 }
 
 // All 4 reps currently route to the main Pacred OA. Swap to per-rep
@@ -42,6 +42,8 @@ export interface SalesCardData extends Omit<SalesCard, 'slogan' | 'alt' | 'butto
 export const SALES_CARDS_DATA: SalesCardData[] = [
   { personKey: 'may',  name: 'เมย์', phone: '066-125-3006', image: '/images/Character_Icon/may.png',    link: LINE_OA.shortUrl },
   { personKey: 'nat',  name: 'แนท',  phone: '066-131-0253', image: '/images/pacred-logo-red.png',       link: LINE_OA.shortUrl },
+  { personKey: 'pee',  name: 'พี',   phone: '061-779-9299', image: '/images/Character_Icon/pee01.png',  link: LINE_OA.shortUrl },
+  { personKey: 'toey', name: 'เตย',  phone: '099-253-1415', image: '/images/Character_Icon/Toey01.png', link: LINE_OA.shortUrl },
   { personKey: 'win',  name: 'วิน',  phone: '062-603-0456', image: '/images/Character_Icon/win01.png',  link: LINE_OA.shortUrl },
   { personKey: 'ploy', name: 'พลอย', phone: '062-603-4456', image: '/images/Character_Icon/ploy01.png', link: LINE_OA.shortUrl },
 ];

@@ -16,7 +16,7 @@ import { REVIEWS } from "@/lib/reviews/catalog";
 // static prerender would throw DYNAMIC_SERVER_USAGE in production.
 export const dynamic = "force-dynamic";
 
-const PATH = "/reviews";
+const PATH = "/our-work";
 
 export async function generateMetadata({
   params,
@@ -50,7 +50,7 @@ export default async function ReviewsListingPage({
     itemListElement: REVIEWS.map((r, i) => ({
       "@type": "ListItem",
       position: i + 1,
-      url: `${SITE_URL}${typedLocale === "en" ? "/en" : ""}/reviews/${r.id}`,
+      url: `${SITE_URL}${typedLocale === "en" ? "/en" : ""}/our-work/${r.id}`,
       name: t(r.titleKey),
     })),
   };

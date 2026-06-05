@@ -1444,6 +1444,18 @@
       "button": "Chat with Ploy",
       "role": "Customer Service (CS)"
     },
+    "pee": {
+      "slogan": "End-to-end import & export — free consult, one-stop service",
+      "alt": "Sales — Pee (Pacred)",
+      "button": "Chat with Pee",
+      "role": "Sales"
+    },
+    "toey": {
+      "slogan": "Import, export & China sourcing — free consult, fast deals",
+      "alt": "Sales — Toey (Pacred)",
+      "button": "Chat with Toey",
+      "role": "Sales"
+    },
     "lineCta": "Quick chat on LINE"
   },
   "heroBanner": {

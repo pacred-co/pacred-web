@@ -68,7 +68,28 @@ function PanelFooter({ hint, calcLabel, tel, callPrefix, contactLabel, onCalc, o
   );
 }
 
-export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
+export function BookingCalculator({
+  landing,
+  services,
+  defaultHero = false,
+  heroTitle,
+  heroHighlight,
+  heroBgMobile,
+  heroBgDesktop,
+}: {
+  landing?: TabMode;
+  /** Restrict the tab strip (in order). e.g. import-only pages pass
+   *  ["sea","truck","air","customs"] to hide ฝากสั่งซื้อ + ฝากโอน. */
+  services?: TabMode[];
+  /** Force the standard/main site banner instead of the per-tab banner. */
+  defaultHero?: boolean;
+  /** Page-specific hero headline over the default banner (with optional yellow highlight). */
+  heroTitle?: string;
+  heroHighlight?: string;
+  /** Page-specific hero banner image overrides. */
+  heroBgMobile?: string;
+  heroBgDesktop?: string;
+} = {}) {
   const t = useTranslations("bookingCalc");
   const tData = useTranslations("bookingCalc.data");
   const tCalc = useTranslations("bookingCalc.calc");
@@ -232,7 +253,7 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
 
   return (
     <div className="w-full max-w-[1280px] mx-auto pb-6 md:pb-10">
-      <BookingHero activeTab={activeTab} seaMode={seaMode} />
+      <BookingHero activeTab={activeTab} seaMode={seaMode} forceDefault={defaultHero} customTitle={heroTitle} customHighlight={heroHighlight} customBgMobile={heroBgMobile} customBgDesktop={heroBgDesktop} />
 
       <div className="relative z-10 max-w-[1280px] mx-auto -mt-10 md:-mt-16 px-3 md:px-5">
         <div className="bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.08)] border border-gray-100">
@@ -243,7 +264,7 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
               onChange={handleCustomsPortChange}
             />
           ) : (
-            <BookingTabs active={activeTab} onChange={handleTabChange} />
+            <BookingTabs active={activeTab} onChange={handleTabChange} only={services} />
           )}
 
           {panelOpen && activeTab && (

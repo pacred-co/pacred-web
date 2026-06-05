@@ -270,7 +270,7 @@ function ReviewCard({ review, index = 0, t, typeConfig }: { review: Review; inde
 
   return (
     <Link
-      href={`/reviews/${review.id}`}
+      href={`/our-work/${review.id}`}
       data-review-card
       aria-label={title}
       style={{ contain: "layout paint" }}

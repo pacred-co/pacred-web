@@ -116,8 +116,17 @@ export default async function ImportChinaLclPage({
       <NavBar />
       <SearchBar hideOnMobile defaultCollapsed />
       <main>
-        {/* 1 — Booking calculator (LCL is sea) */}
-        <BookingCalculator landing="sea" />
+        {/* 1 — Booking calculator — import-from-China only (no ฝากสั่งซื้อ/ฝากโอน)
+            + standard site banner (defaultHero), per owner 2026-06-05. */}
+        <BookingCalculator
+          landing="sea"
+          services={["sea", "truck", "air", "customs"]}
+          defaultHero
+          heroTitle="นำเข้าสินค้าจากจีน"
+          heroHighlight="LCL แชร์ตู้"
+          heroBgMobile="/images/bannerdesktop/lclbannermobile.png"
+          heroBgDesktop="/images/bannerdesktop/lclbannercom.png"
+        />
 
         {/* 2 — Breadcrumb */}
         <nav

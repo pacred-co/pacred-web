@@ -118,6 +118,22 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+
+  /**
+   * Permanent redirects.
+   *
+   * `/reviews` → `/our-work` (2026-06-05): the case-studies section was
+   * renamed from "reviews" to "Our Work". 308-permanent so Google
+   * transfers ranking signals and any old links / backlinks don't 404.
+   * `:path*` matches the bare path AND sub-paths (e.g. /reviews/fcl-1).
+   * Both the TH (no prefix) and EN (/en) locale paths are covered.
+   */
+  async redirects() {
+    return [
+      { source: "/reviews/:path*",    destination: "/our-work/:path*",    permanent: true },
+      { source: "/en/reviews/:path*", destination: "/en/our-work/:path*", permanent: true },
+    ];
+  },
 };
 
 /**

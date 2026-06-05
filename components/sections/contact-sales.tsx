@@ -43,6 +43,26 @@ const SALES: SalesPerson[] = [
     alt: "ฝ่ายขายแนท Pacred",
   },
   {
+    name: "พี",
+    role: "ฝ่ายขาย (Sales)",
+    tagline: "นำเข้า-ส่งออก ครบวงจร ปรึกษาฟรี ดูแลจบในที่เดียว",
+    phone: "061-779-9299",
+    image: "/images/Character_Icon/pee01.png",
+    badge: "Sales Expert",
+    badgeIcon: Award,
+    alt: "ฝ่ายขายพี Pacred",
+  },
+  {
+    name: "เตย",
+    role: "ฝ่ายขาย (Sales)",
+    tagline: "นำเข้า-ส่งออก สั่งซื้อจีน ปรึกษาฟรี ปิดดีลไว",
+    phone: "099-253-1415",
+    image: "/images/Character_Icon/Toey01.png",
+    badge: "Sales Expert",
+    badgeIcon: Award,
+    alt: "ฝ่ายขายเตย Pacred",
+  },
+  {
     name: "วิน",
     role: "ผู้จัดการโลจิสติกส์",
     tagline: "ดูแลทุกขั้นตอน ตอบทุกคำถาม ตลอดการใช้บริการ",
@@ -65,7 +85,7 @@ const SALES: SalesPerson[] = [
 ];
 
 // Mobile order classes — must be literal Tailwind strings (the JIT can't see template-built names).
-const MOBILE_ORDER = ["order-2", "order-3", "order-4", "order-5", "order-6"];
+const MOBILE_ORDER = ["order-2", "order-3", "order-4", "order-5", "order-6", "order-7", "order-8"];
 
 interface ContactSalesProps {
   /** Sales person name to feature in the middle slot (defaults to "แนท") */

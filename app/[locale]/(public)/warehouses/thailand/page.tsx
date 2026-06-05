@@ -53,8 +53,8 @@ const HIGHLIGHTS = [
   },
   {
     icon: Clock,
-    title: "เปิดทุกวัน 8:00–18:00",
-    desc: "พร้อมรับ–ส่งสินค้าทุกวัน ไม่มีวันหยุด (ยกเว้นเทศกาลใหญ่)",
+    title: "เปิดจันทร์-เสาร์ 8:30-17:30น.",
+    desc: "พร้อมรับ–ส่งสินค้า จันทร์-เสาร์ (หยุดอาทิตย์ และเทศกาลใหญ่)",
   },
 ];
 
@@ -169,7 +169,7 @@ export default async function Page({
                     <div>
                       <div className="text-[10.5px] md:text-[11px] font-bold text-muted uppercase tracking-wider">เวลาเปิด</div>
                       <div className="text-[12.5px] md:text-[13.5px] font-black text-[#111827] dark:text-white mt-0.5">
-                        ทุกวัน 8:00–18:00
+                        จันทร์-เสาร์ เวลา 8:30-17:30น.
                       </div>
                     </div>
                   </div>
