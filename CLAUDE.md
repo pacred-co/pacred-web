@@ -3,6 +3,15 @@
 
 ---
 
+# 🔎 2026-06-05 — เดฟ resume long-run: CUSTOMER-flow legacy-fidelity audit + 4 fixes · read FIRST
+
+**main = `dave-pacred` = `2e1dbcbb`+ · all pushed · `next build` EXIT 0 + `pnpm verify` EXIT 0 (gate-real-exit via direct `node next build` — NOT the flaky pnpm script-shell) · teammates 0/0 · clean tree.** Resumed the overnight (synced the 15 platform-tidy + ภูม-CRM commits). Ran a **3-agent CUSTOMER-flow legacy-fidelity audit** (vs legacy `…\Desktop\newrealdatapcs\pcscargo\member\*.php`) → fixed (each gated + pushed · เดฟ-lane · **NO collision** with ภูม-admin / ปอน-member-UI):
+- **6 broken wallet-history order links → 404** (§0d · `/shops/detail/` `/forwarder/detail/` `/service-order/detail/` → real `/service-order/{hNo}` + `/service-import/{fNo}`) · **`createYuanPayment` → SLIP-ONLY** (removed dead `wallet_transactions` write · latent double-spend · §0e) · **ฝากโอน eligibility gate** (NEW `lib/payment/yuan-eligibility.ts` · both create actions · legacy `payment.php` L256-276 · closes deep-link bypass) · **delete-main-address parity** (refuse · legacy `deleteAddress.php`).
+
+**🚩 HANDOFFS — full tables in [`docs/research/customer-flow-fidelity-audit-2026-06-05.md`](docs/research/customer-flow-fidelity-audit-2026-06-05.md):** customer money loop is faithful (writes live `tb_*`, no create/cart/pay dead-writes). Open: **`/refunds` = Potemkin** (customer source-picker + `adminMarkRefundPaid` both on rebuilt-empty twins incl. dead `wallet_transactions` → inert/contact-team-fallback for all; cross-lane ภูม + owner: full-repoint vs contact-team-only) · **shop-order customer ship-by/address inline-edit MISSING** (legacy `shops.php` L1470-1551; the forwarder side HAS the pattern → เดฟ-actions + ปอน-UI) · avatar→`tb_users.userPicture` mirror (filename-vs-URL) · slip-top-up at checkout · withdraw KYC (pwd+docs+gate) · address maps-pin. **Deferred verify:** ฝากสั่งซื้อ `/edit` admin per-shop board NOT browser-click-tested (build+verify+route-307 green; prior-session §0c). ⚠️ **CLAUDE.md = 1900+ lines → archive old sections soon (§12).**
+
+---
+
 # 🌙 2026-06-05 OVERNIGHT (Mac · เดฟ · owner asleep 02:00→08:00 ICT): platform-tidy — member relabel + customer+admin audits (CLEAN) + 13 test files + perf-investigate + learnings · read FIRST
 
 **main = `dave-pacred` = `f0829c29`+ (+ this doc) · all pushed · `pnpm verify && pnpm build` → CHAIN=0 (REAL exit codes · every save-point) · both branches 0/0 · dev server on :3000 (nohup · serves `/Users/dev/pacred-web` · runtime app current; test-only commits not re-pulled — no runtime effect).** Autonomous "เก็บงานทั้ง platform ให้เรียบร้อย" run — **NO collision** with ภูม (admin `/admin/**` · `actions/admin/**` · `lib/admin/**`) or ปอน (member-frontend redesign · `components/sections|ui`); only shared backend / lib / tests / docs touched. Guardrails held: no customer comms · no bugs/data-loss · gate-real-exit · save-points.
