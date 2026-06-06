@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
+import { calPriceForwarderSumCompany } from "@/lib/forwarder/calc-company-total";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { legacyMemberUrl } from "@/lib/legacy-image";
@@ -283,32 +284,7 @@ function convertIMGCHN(url: string | null): string {
   return legacyMemberUrl(`images/shops/${u}`);
 }
 
-// Legacy `calPriceForwarderSumCompany(...)` — function.php L1384-1392.
-function calPriceForwarderSumCompany(
-  fUserCompany: string | null,
-  fPriceUpdate: number,
-  fTotalPrice: number,
-  fTransportPrice: number,
-  fShippingService: number,
-  fDiscount: number,
-  priceCrate: number,
-  fTransportPriceChnThb: number,
-  priceOther: number,
-): number {
-  let pricePayAll =
-    fPriceUpdate +
-    fTotalPrice +
-    fTransportPrice +
-    fShippingService +
-    priceCrate +
-    fTransportPriceChnThb +
-    priceOther -
-    fDiscount;
-  if (fUserCompany === "1") {
-    pricePayAll = pricePayAll - pricePayAll * 0.01;
-  }
-  return pricePayAll;
-}
+// calPriceForwarderSumCompany — shared in @/lib/forwarder/calc-company-total (imported above).
 
 // The 7-step process tabs (forwarder.php L1827-1906). The legacy emits
 // a per-`fStatus` `<li>` cluster — encoded here as a per-step state

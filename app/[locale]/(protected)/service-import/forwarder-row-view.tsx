@@ -35,6 +35,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "@/i18n/navigation";
+import { calPriceForwarderSumCompany } from "@/lib/forwarder/calc-company-total";
 import { cancelOwnForwarder } from "@/actions/forwarder";
 import { confirm } from "@/components/ui/confirm";
 
@@ -135,32 +136,10 @@ function TagPro({ id }: { id: string | null }) {
   ) : chip;
 }
 
-// Legacy `calPriceForwarderSumCompany(...)` — function.php L1384-1392.
-export function calPriceForwarderSumCompany(
-  fUserCompany: string | null,
-  fPriceUpdate: number,
-  fTotalPrice: number,
-  fTransportPrice: number,
-  fShippingService: number,
-  fDiscount: number,
-  priceCrate: number,
-  fTransportPriceChnThb: number,
-  priceOther: number,
-): number {
-  let pricePayAll =
-    fPriceUpdate +
-    fTotalPrice +
-    fTransportPrice +
-    fShippingService +
-    priceCrate +
-    fTransportPriceChnThb +
-    priceOther -
-    fDiscount;
-  if (fUserCompany === "1") {
-    pricePayAll = pricePayAll - pricePayAll * 0.01;
-  }
-  return pricePayAll;
-}
+// calPriceForwarderSumCompany — moved to @/lib/forwarder/calc-company-total
+// (imported above). Re-exported so existing `./forwarder-row-view` importers
+// keep working without a churn of import-path changes.
+export { calPriceForwarderSumCompany };
 
 // Legacy `convertIMGCHN($url,$size)` — function.php L1414-1437.
 export function convertIMGCHN(url: string | null, size: string): string {

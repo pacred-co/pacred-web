@@ -1,5 +1,6 @@
 import { type ReactNode } from "react";
 import { redirect } from "next/navigation";
+import { calPriceForwarderSumCompany } from "@/lib/forwarder/calc-company-total";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -11,24 +12,7 @@ import { type ForwarderRow } from "../forwarder-row-view";
 //    cross the server boundary; extract to a shared util file when more
 //    server callers need them.
 
-/** Legacy `calPriceForwarderSumCompany($fUserCompany, ...)` — function.php L1384-1392. */
-function calPriceForwarderSumCompany(
-  fUserCompany: string | null,
-  fPriceUpdate: number,
-  fTotalPrice: number,
-  fTransportPrice: number,
-  fShippingService: number,
-  fDiscount: number,
-  priceCrate: number,
-  fTransportPriceChnThb: number,
-  priceOther: number,
-): number {
-  let p =
-    fPriceUpdate + fTotalPrice + fTransportPrice + fShippingService +
-    priceCrate + fTransportPriceChnThb + priceOther - fDiscount;
-  if (fUserCompany === "1") p = p - p * 0.01;
-  return p;
-}
+// calPriceForwarderSumCompany — shared in @/lib/forwarder/calc-company-total (imported above).
 
 /** Legacy `convertIMGCHN($url,$size)` — function.php L1414-1437. */
 function convertIMGCHN(url: string | null, size: string): string {

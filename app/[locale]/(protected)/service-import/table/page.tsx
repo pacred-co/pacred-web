@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
+import { calPriceForwarderSumCompany } from "@/lib/forwarder/calc-company-total";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { legacyMemberUrl } from "@/lib/legacy-image";
@@ -148,37 +149,9 @@ function countText(text: string | null, num: number): string {
   return text;
 }
 
-// ── Legacy helper: calPriceForwarderSumCompany(...) ──
-// member/include/function.php L1384-1392. The row net price. The
-// legacy call passes the SAME column (fUserCompany) as both
-// $userCompany and $fUserCompany — once `==1` holds, the `!=2`
-// sub-clause is always true — so the whole condition reduces exactly
-// to `fUserCompany=='1'`. The WHT-1% reduction is identical 1:1.
-function calPriceForwarderSumCompany(
-  fPriceUpdate: number,
-  fTotalPrice: number,
-  fTransportPrice: number,
-  fShippingService: number,
-  fDiscount: number,
-  priceCrate: number,
-  fTransportPriceChnThb: number,
-  priceOther: number,
-  fUserCompany: string | null,
-): number {
-  let pricePayAll =
-    fPriceUpdate +
-    fTotalPrice +
-    fTransportPrice +
-    fShippingService +
-    priceCrate +
-    fTransportPriceChnThb +
-    priceOther -
-    fDiscount;
-  if (fUserCompany === "1") {
-    pricePayAll = pricePayAll - pricePayAll * 0.01;
-  }
-  return pricePayAll;
-}
+// calPriceForwarderSumCompany — shared in @/lib/forwarder/calc-company-total
+// (imported above). The canonical signature takes fUserCompany FIRST (the call
+// site below was reordered to match; same 9 values, identical WHT-1% math).
 
 // NOTE — the legacy forwarder-table.php L9-34 defines a
 // `number_format_short()` helper (K+/M+/B+/T+ short form). It is NOT
@@ -424,6 +397,7 @@ export default async function ForwarderTablePage({
   const rowNet = new Map<number, number>();
   for (const row of rows) {
     const net = calPriceForwarderSumCompany(
+      row.fusercompany,
       row.fpriceupdate ?? 0,
       row.ftotalprice ?? 0,
       row.ftransportprice ?? 0,
@@ -432,7 +406,6 @@ export default async function ForwarderTablePage({
       row.pricecrate ?? 0,
       row.ftransportpricechnthb ?? 0,
       row.priceother ?? 0,
-      row.fusercompany,
     );
     rowNet.set(row.id, net);
   }
