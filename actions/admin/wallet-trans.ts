@@ -478,6 +478,28 @@ export async function adminRejectWalletHs(
         }
       }
 
+      // ADR-0028 Phase 2 — refund the wallet DISCOUNT when a shop-order slip is
+      // rejected. The ORIGINAL row.note carries a [WALLET:<thb>] tag (the amount
+      // the customer applied from their wallet at submit, debit-at-submit). The
+      // bank payment failed verification → re-credit it. Runs ONCE (the status
+      // 1→3 flip above is the gate; a re-reject bounces at the status guard).
+      const walletRefund = (() => {
+        const m = /\[WALLET:([\d.]+)\]/.exec(row.note ?? "");
+        return m ? Math.round(Number(m[1]) * 100) / 100 : 0;
+      })();
+      if (walletRefund > 0) {
+        try {
+          const { data: w, error: wRdErr } = await admin.from("tb_wallet").select("wallettotal").eq("userid", row.userid).maybeSingle<{ wallettotal: number | string | null }>();
+          if (wRdErr) console.error(`[reject wallet-refund read] failed`, { message: wRdErr.message });
+          await admin.from("tb_wallet").update({ wallettotal: Math.round((Number(w?.wallettotal ?? 0) + walletRefund) * 100) / 100 }).eq("userid", row.userid);
+          logger.info("wallet-trans", "shop-order wallet-discount refunded on reject", { wallet_hs_id: id, userid: row.userid, amount: walletRefund });
+        } catch (e) {
+          logger.warn("wallet-trans", "shop-order wallet-discount refund failed (non-fatal)", {
+            wallet_hs_id: id, userid: row.userid, amount: walletRefund, error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+
       await logAdminAction(adminId, "tb_wallet_hs.reject", "tb_wallet_hs", String(id), {
         userid: row.userid,
         note,

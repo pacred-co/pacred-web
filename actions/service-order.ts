@@ -1286,7 +1286,7 @@ export async function uploadShopOrderSlip(
  */
 export async function submitShopOrderSlipPayment(
   hNo: string,
-  opts: { slipPath: string; slipDate?: string },
+  opts: { slipPath: string; slipDate?: string; walletApplied?: number },
 ): Promise<ActionResult<{ tx_id: string; already_submitted: boolean }>> {
   const impErr = await assertNotImpersonating();
   if (impErr) return impErr;
@@ -1357,6 +1357,49 @@ export async function submitShopOrderSlipPayment(
   const nowIso = new Date().toISOString();
   const slipDate = (opts.slipDate ?? "").trim();
 
+  // ── ADR-0028 Phase 2 — optional wallet discount ("หักจาก wallet เท่าไหร่") ──
+  // The customer may apply part of their wallet (cashback) balance; the slip
+  // covers the rest. DEBIT-AT-SUBMIT (reserve it now so the balance can't drop
+  // below it before approval) · REFUND-ON-REJECT (adminRejectWalletHs re-credits
+  // the [WALLET:x] tag). Clamp to the LIVE balance + leave ≥0.01 for the slip
+  // (a full-wallet pay should use the "ชำระจากกระเป๋า" button, not this flow).
+  let walletApplied = Math.max(0, Math.round((Number(opts.walletApplied) || 0) * 100) / 100);
+  if (walletApplied > 0) {
+    const { data: wRow, error: wErr } = await admin
+      .from("tb_wallet")
+      .select("wallettotal")
+      .eq("userid", memberCode)
+      .maybeSingle<{ wallettotal: number | string | null }>();
+    if (wErr) {
+      console.error(`[submitShopOrderSlipPayment wallet read] failed`, { code: wErr.code, message: wErr.message, hNo });
+      return { ok: false, error: `db_error:${wErr.code ?? "unknown"}` };
+    }
+    const bal = Number(wRow?.wallettotal ?? 0);
+    walletApplied = Math.round(Math.min(walletApplied, Math.max(0, bal), priceToPay - 0.01) * 100) / 100;
+    if (walletApplied > 0) {
+      const { error: debErr } = await admin
+        .from("tb_wallet")
+        .update({ wallettotal: Math.round((bal - walletApplied) * 100) / 100 })
+        .eq("userid", memberCode);
+      if (debErr) {
+        console.error(`[submitShopOrderSlipPayment wallet debit] failed`, { code: debErr.code, message: debErr.message, hNo });
+        return { ok: false, error: "wallet_debit_failed — กรุณาลองใหม่" };
+      }
+    }
+  }
+  const slipAmount = Math.round((priceToPay - walletApplied) * 100) / 100;
+  // Re-credit helper for any post-debit failure (the slip leg never recorded).
+  const refundWallet = async () => {
+    if (walletApplied <= 0) return;
+    const { data: w2, error: w2Err } = await admin.from("tb_wallet").select("wallettotal").eq("userid", memberCode).maybeSingle<{ wallettotal: number | string | null }>();
+    if (w2Err) console.error(`[submitShopOrderSlipPayment refundWallet read] failed`, { message: w2Err.message });
+    await admin.from("tb_wallet").update({ wallettotal: Math.round((Number(w2?.wallettotal ?? 0) + walletApplied) * 100) / 100 }).eq("userid", memberCode);
+  };
+  if (!(slipAmount > 0)) {
+    await refundWallet();
+    return { ok: false, error: "wallet_covers_all — ยอดกระเป๋าพอจ่ายเต็มแล้ว ใช้ปุ่ม 'ชำระจากกระเป๋า' ได้เลย" };
+  }
+
   // INSERT the PENDING shop-slip row. type='8' → approve does delta=0 (no
   // wallet move). status='1' → admin verifies the slip, then flips the order.
   const { data: hsRow, error: insErr } = await admin
@@ -1364,7 +1407,7 @@ export async function submitShopOrderSlipPayment(
     .insert({
       date:            nowIso,
       dateslip:        slipDate || null,
-      amount:          priceToPay,
+      amount:          slipAmount,                 // bank-transfer portion (bill − wallet)
       status:          "1",                       // PENDING admin slip-verify
       type:            "8",                       // ฝากสั่งซื้อ ชำระด้วยสลิป (ADR-0028 · delta=0)
       typenew:         "3",                       // ชำระฝากสั่ง
@@ -1374,7 +1417,7 @@ export async function submitShopOrderSlipPayment(
       depositnamebank: `KBANK-${BANK.accountNumber}`,
       nameuserbank:    "",
       nouserbank:      "",
-      note:            `ชำระเงิน ฝากสั่งสินค้า #${header.hno} (QR+สลิป โดยลูกค้า · รอตรวจสอบ)`,
+      note:            `ชำระเงิน ฝากสั่งสินค้า #${header.hno} (QR+สลิป โดยลูกค้า · รอตรวจสอบ)${walletApplied > 0 ? ` [WALLET:${walletApplied}]` : ""}`,
       adminid:         "",
       adminidupdate:   "",
       session:         "customer-self",
@@ -1387,6 +1430,7 @@ export async function submitShopOrderSlipPayment(
     .select("id")
     .single<{ id: number }>();
   if (insErr || !hsRow) {
+    await refundWallet();   // the slip leg never recorded → give the discount back
     console.error(`[submitShopOrderSlipPayment insert] failed`, { code: insErr?.code, message: insErr?.message, hNo });
     return { ok: false, error: `insert_failed: ${insErr?.message ?? "no_row"}` };
   }
