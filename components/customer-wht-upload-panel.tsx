@@ -13,6 +13,7 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { customerUploadWhtCert } from "@/actions/wht";
+import { StyledFileInput } from "@/components/ui/styled-file-input";
 
 type Props = {
   whtEntryId: string;
@@ -78,13 +79,12 @@ export function CustomerWhtUploadPanel({ whtEntryId }: Props) {
       <div className="space-y-2">
         <label className="block">
           <span className="text-xs text-muted">ไฟล์ใบรับรอง</span>
-          <input
+          <StyledFileInput
             ref={fileRef}
-            type="file"
             accept="application/pdf,image/jpeg,image/png"
-            className="mt-1 block w-full text-xs"
+            label="เลือกไฟล์ใบรับรอง"
+            hint="รองรับ PDF / JPG / PNG (ไม่เกิน 10 MB)"
           />
-          <span className="text-[10px] text-muted">รองรับ PDF / JPG / PNG (ไม่เกิน 10 MB)</span>
         </label>
 
         <label className="block">

@@ -8,6 +8,7 @@ import { createYuanPayment } from "@/actions/payment";
 import { createYuanPaymentFromWallet } from "@/actions/payment-tb";
 import { uploadSlip } from "@/lib/storage-upload";
 import { Wallet as WalletIcon, Plus } from "lucide-react";
+import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { trackPlaceOrder } from "@/lib/analytics";
 
 const inputCls = "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
@@ -264,17 +265,25 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
 
         {!paidViaWallet && (
           <>
-            <label className="block space-y-1">
+            <div className="space-y-1">
               <span className="text-sm font-medium">{t("slipUploadLabel")}<span className="text-red-600 ml-0.5">*</span></span>
-              <input type="file" accept="image/*,application/pdf" onChange={onSlipFile} className="block w-full text-sm" />
-              {slipPath && <span className="block text-xs text-green-700">{t("slipUploaded")}</span>}
-            </label>
-            <label className="block space-y-1">
+              <StyledFileInput
+                accept="image/*,application/pdf"
+                onChange={onSlipFile}
+                label="แนบสลิปการโอน (รูป/PDF)"
+                selectedLabel={slipPath ? t("slipUploaded") : undefined}
+              />
+            </div>
+            <div className="space-y-1">
               <span className="text-sm font-medium">{t("idDocLabel")}</span>
-              <input type="file" accept="image/*,application/pdf" onChange={onIdDocFile} className="block w-full text-sm" />
-              <span className="block text-xs text-muted">{t("idDocHint")}</span>
-              {idDocPath && <span className="block text-xs text-green-700">{t("idDocUploaded")}</span>}
-            </label>
+              <StyledFileInput
+                accept="image/*,application/pdf"
+                onChange={onIdDocFile}
+                label="แนบสำเนาบัตร (รูป/PDF)"
+                hint={t("idDocHint")}
+                selectedLabel={idDocPath ? t("idDocUploaded") : undefined}
+              />
+            </div>
           </>
         )}
       </div>

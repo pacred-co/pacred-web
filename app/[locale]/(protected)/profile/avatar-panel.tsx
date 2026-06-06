@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { uploadAvatar } from "@/lib/storage-upload";
 import { updateAvatar } from "@/actions/profile";
+import { StyledFileInput } from "@/components/ui/styled-file-input";
 
 type Props = {
   currentAvatarUrl: string | null;
@@ -63,17 +64,16 @@ export function AvatarPanel({ currentAvatarUrl, fallbackInitial }: Props) {
           )}
         </div>
         <div className="flex-1 space-y-2">
-          <label className="block">
+          <div>
             <span className="block text-sm font-medium mb-1">{t("avatarChange")}</span>
-            <input
-              type="file"
+            <StyledFileInput
               accept="image/*"
               onChange={onPick}
               disabled={pending}
-              className="block w-full text-sm"
+              label="อัปโหลดรูปโปรไฟล์"
+              hint={t("avatarHint")}
             />
-          </label>
-          <p className="text-xs text-muted">{t("avatarHint")}</p>
+          </div>
           {error   && <p className="text-xs text-red-700">{error}</p>}
           {success && <p className="text-xs text-green-700">{t("avatarUpdated")}</p>}
         </div>

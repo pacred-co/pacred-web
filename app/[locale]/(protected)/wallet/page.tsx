@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { StyledFileInput } from "@/components/ui/styled-file-input";
 
 /**
  * Customer wallet screen — a FAITHFUL 1:1 TRANSCRIPTION of the legacy
@@ -557,16 +558,13 @@ export default async function WalletPage() {
                             <label className="form-control-label mb-1 block text-sm font-medium text-foreground" htmlFor="imagesSlip">
                               {t("slipEvidenceLabel")}
                             </label>
-                            <div className="fallback">
-                              <input
-                                type="file"
-                                name="imagesSlip"
-                                className="dropify block w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground file:mr-3 file:rounded-md file:border-0 file:bg-red-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-red-600 dark:bg-surface"
-                                accept="image/*"
-                                data-max-file-size="9M"
-                                required
-                              />
-                            </div>
+                            <StyledFileInput
+                              name="imagesSlip"
+                              accept="image/*"
+                              required
+                              label="แนบสลิปการโอน (คลิกเพื่อเลือกรูป)"
+                              hint="รองรับรูปภาพ ไม่เกิน 9 MB"
+                            />
                           </div>
                           <div className="mb-1 mt-4 rounded-lg border border-border bg-surface-alt/40 p-3">
                             <div className="text-sm font-semibold text-foreground">

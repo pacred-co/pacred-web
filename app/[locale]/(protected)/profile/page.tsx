@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { EditProfileForm } from "./edit-profile-form";
 import { ProfileAvatarUpload } from "./profile-avatar-upload";
+import { StyledFileInput } from "@/components/ui/styled-file-input";
 
 /**
  * Customer profile screen — a FAITHFUL 1:1 TRANSCRIPTION of the legacy
@@ -409,19 +410,14 @@ export default async function ProfilePage() {
                                   />
                                   <div className="form-group">
                                     <div className="mb-1">
-                                      <div className="fallback">
-                                        <input
-                                          type="file"
-                                          className="dropify"
-                                          accept="image/*"
-                                          name="userPicture"
-                                          id="upload_image"
-                                          {...(userPictureFile !== "user.jpg"
-                                            ? { "data-default-file": userPicture }
-                                            : {})}
-                                          required
-                                        />
-                                      </div>
+                                      <StyledFileInput
+                                        name="userPicture"
+                                        id="upload_image"
+                                        accept="image/*"
+                                        required
+                                        label="อัปโหลดรูปโปรไฟล์"
+                                        hint="รองรับรูปภาพ JPG / PNG"
+                                      />
                                     </div>
                                   </div>
                                   <div className="text-center">
