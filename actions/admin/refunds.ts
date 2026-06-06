@@ -69,6 +69,12 @@ export async function adminCreateRefund(
   }
   const d = parsed.data;
 
+  // Refund 1:1 (owner 2026-06-06 · option ก) — the legacy PCS refund covers SHOP
+  // ORDERS only. forwarder/yuan refunds were a Pacred-original extension; cut them.
+  if (d.source === "forwarder" || d.source === "yuan_payment") {
+    return { ok: false, error: "คืนเงินได้เฉพาะออเดอร์ฝากสั่งซื้อ (shop-order) ตาม legacy 1:1" };
+  }
+
   return withAdmin([...REFUND_ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
