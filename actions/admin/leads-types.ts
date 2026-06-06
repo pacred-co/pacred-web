@@ -49,6 +49,12 @@ export type LeadQueueFilter = {
   q?: string;
   /** 1-based page (200 rows/page). */
   page?: number;
+  /**
+   * When true, ignore pagination and return up to the export cap (5,000) in a
+   * single result — for the "export all filtered" CSV. Same filters/joins as
+   * the paged path, so the export can never drift from the on-screen view.
+   */
+  exportAll?: boolean;
 };
 
 /** Result of `getLeadQueue`. */

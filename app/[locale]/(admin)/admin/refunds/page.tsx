@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { exportRefundsAll } from "@/actions/admin/export/refunds";
 import {
   REFUND_STATUSES,
   REFUND_STATUS_LABEL,
@@ -185,6 +186,12 @@ export default async function AdminRefundsListPage({
             rejected_at: r.rejected_at ? r.rejected_at.slice(0, 10) : "",
             created_by_admin_id: r.created_by_admin_id ?? "",
           }))}
+          fetchAll={async () => {
+            "use server";
+            // Export the FULL filtered refund list (all pages) — audited via
+            // admin_export_log (customer name + reason are PII · owner directive).
+            return exportRefundsAll({ status, q });
+          }}
           cols={[
             { key: "request_no",          label: "เลขที่ RF" },
             { key: "customer_name",       label: "ชื่อลูกค้า" },

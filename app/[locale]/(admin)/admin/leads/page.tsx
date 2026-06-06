@@ -2,7 +2,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
-import { getLeadQueue, getLeadStats } from "@/actions/admin/leads";
+import { getLeadQueue, getLeadStats, exportLeadsAll } from "@/actions/admin/leads";
 import {
   LEAD_CALL_STATUSES,
   type LeadCallStatus,
@@ -188,6 +188,12 @@ export default async function AdminLeadsPage({
                 callStatus: r.callStatus,
                 registered: r.registered ?? "",
               }))}
+              fetchAll={async () => {
+                "use server";
+                // Export the FULL filtered lead list (all pages) — audited via
+                // admin_export_log (PII walk-off trail · owner directive).
+                return exportLeadsAll({ segment, status: statusFilter, q });
+              }}
               cols={[
                 { key: "tel",        label: "เบอร์โทร" },
                 { key: "name",       label: "ชื่อ" },

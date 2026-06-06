@@ -48,6 +48,7 @@ import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { exportForwarderCheckAll } from "@/actions/admin/export/forwarder-check";
 import {
   ForwarderCheckTable,
   type ForwarderCheckRow,
@@ -434,6 +435,13 @@ export default async function AdminForwarderCheckPage({
               };
               return row;
             })}
+            fetchAll={async () => {
+              "use server";
+              // Export the ENTIRE filtered queue (all rows · not just the 500-row
+              // page window) — audited via admin_export_log (PII: names + address ·
+              // MONEY: cost/profit gated by showMoneyColumns · owner directive).
+              return exportForwarderCheckAll(tab, showMoneyColumns);
+            }}
             cols={[
               { key: "id",              label: "Forwarder ID" },
               { key: "fno_cargo",       label: "เลขที่ Cargo" },

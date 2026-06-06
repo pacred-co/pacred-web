@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { exportCustomersComparisonAll } from "@/actions/admin/export/customers-comparison";
 import { ComparisonTable, type ComparisonRow, type CustomerPick } from "./comparison-table";
 
 // ────────────────────────────────────────────────────────────────────
@@ -189,6 +190,12 @@ export default async function AdminCustomerComparisonPage() {
                 { key: "adminIDSale",     label: "เซลล์ผู้ดูแล" },
                 { key: "deleted",         label: "สถานะ" },
               ]}
+              fetchAll={async () => {
+                "use server";
+                // Export the FULL CPS list (audited via admin_export_log — PII
+                // walk-off trail · owner directive). Same filter/columns as above.
+                return exportCustomersComparisonAll();
+              }}
               filename={`customers-comparison-${new Date().toISOString().slice(0, 10)}.csv`}
             />
             <Link href="/admin/customers" className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-surface-alt">← ลูกค้าทั้งหมด</Link>

@@ -9,6 +9,7 @@ import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { exportCustomersAll } from "@/actions/admin/export/customers";
 import { CustomersTable, PendingJuristicReviews, type CustomerTableRow, type JuristicBundle } from "./customers-table";
 
 // P0-21 (ADR-0021 corporate-SOT): the inline juristic review reads the LEGACY
@@ -537,6 +538,19 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
             { key: "juristic_company", label: "ชื่อบริษัท" },
             { key: "juristic_status",  label: "สถานะเอกสารนิติฯ" },
           ]}
+          fetchAll={async () => {
+            "use server";
+            // Export the FULL filtered customer list (all pages, capped) —
+            // audited via admin_export_log (PII walk-off trail · owner
+            // directive). Captures the page's active filters so the export
+            // matches the on-screen list byte-for-byte.
+            return exportCustomersAll({
+              type: typeof sp.type === "string" ? sp.type : undefined,
+              group: group ?? undefined,
+              adminidsale: adminidsale ?? undefined,
+              q: typeof sp.q === "string" ? sp.q : undefined,
+            });
+          }}
           filename={`customers${group ? `-${group}` : ""}${sp.type ? `-${sp.type}` : ""}${adminidsale ? `-${adminidsale}` : ""}-page${page}-${new Date().toISOString().slice(0, 10)}.csv`}
         />
         </div>

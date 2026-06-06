@@ -43,6 +43,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { exportReportCntAll } from "@/actions/admin/export/report-cnt";
 import { CntListTable, type CntListRow } from "./cnt-list-table";
 
 export const dynamic = "force-dynamic";
@@ -426,6 +427,22 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
               rows={csvRows}
               cols={Object.keys(csvRows[0] ?? {}).map((k) => ({ key: k, label: k }))}
               filename={csvFilename}
+              fetchAll={async () => {
+                "use server";
+                // The page is NOT paginated (the get_container_summary RPC
+                // returns ALL distinct cabinets), so "ทั้งหมด" mirrors the same
+                // rows as the on-screen CSV — its added value is the
+                // admin_export_log audit trail. Re-runs the page's EXACT
+                // filtered pipeline (zero drift).
+                return exportReportCntAll({
+                  isWaiting,
+                  transportType,
+                  actionPay,
+                  startDate,
+                  endDate,
+                  showMoney,
+                });
+              }}
             />
           </div>
         </div>

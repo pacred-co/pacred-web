@@ -24,6 +24,7 @@ import { getWalletSystemTotals } from "@/lib/admin/wallet-totals";
 import { pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { exportWalletBalanceAll } from "@/actions/admin/export/wallet-balance";
 import { Link } from "@/i18n/navigation";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -198,6 +199,12 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
               { key: "status",      label: "สถานะ" },
             ]}
             filename={`wallet-balance-page${page}${q ? `-${q}` : ""}-${new Date().toISOString().slice(0, 10)}.csv`}
+            fetchAll={async () => {
+              "use server";
+              // Export ALL rows matching the current filter/sort (not just this
+              // page). Reuses the exact balance-view query → zero drift. Audited.
+              return exportWalletBalanceAll({ q, sort, dir });
+            }}
           />
         </div>
       </form>

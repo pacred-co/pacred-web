@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { exportCustomersCreditAll } from "@/actions/admin/export/customers-credit";
 import { CreditTable, type CreditRow, type CustomerPick } from "./credit-table";
 
 // ────────────────────────────────────────────────────────────────────
@@ -197,6 +198,13 @@ export default async function AdminCustomerCreditPage() {
                 adminIDSale: r.adminIDSale,
                 deleted: r.deleted ? "ลบบัญชี" : "ใช้งาน",
               }))}
+              fetchAll={async () => {
+                "use server";
+                // Export the FULL credit member list (no on-screen filters) —
+                // audited via admin_export_log (PII + money walk-off trail ·
+                // owner directive).
+                return exportCustomersCreditAll();
+              }}
               cols={[
                 { key: "userID",      label: "รหัสสมาชิก" },
                 { key: "fullName",    label: "ชื่อ-นามสกุล" },

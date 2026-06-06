@@ -29,6 +29,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { exportYuanPaymentsAll } from "@/actions/admin/export/yuan-payments";
 import { TbYuanBulkBar, TbYuanRowCheckbox } from "./tb-bulk-bar";
 
 export const dynamic = "force-dynamic";
@@ -364,6 +365,21 @@ export default async function AdminYuanPaymentsPage({
             { key: "adminid",      label: "Admin" },
           ]}
           filename={`yuan-payments-page${page}${sp.status ? `-status${sp.status}` : ""}${sp.q ? `-${sp.q}` : ""}-${new Date().toISOString().slice(0, 10)}.csv`}
+          fetchAll={async () => {
+            "use server";
+            // Export EVERY row matching the page's active filter (all pages,
+            // capped) — reuses the page-identical query in exportYuanPaymentsAll
+            // so the export never drifts from the on-screen table.
+            return exportYuanPaymentsAll({
+              status: sp.status,
+              q: sp.q,
+              from: sp.from,
+              to: sp.to,
+              all: sp.all,
+              sort: sp.sort,
+              dir: sp.dir,
+            });
+          }}
         />
       </div>
 

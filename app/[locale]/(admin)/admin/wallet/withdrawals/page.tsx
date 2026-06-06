@@ -27,6 +27,7 @@ import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-me
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { exportWithdrawalsAll } from "@/actions/admin/export/withdrawals";
 import { ArrowLeft } from "lucide-react";
 import { WithdrawRowActions } from "./withdraw-row-actions";
 
@@ -213,6 +214,13 @@ export default async function AdminWithdrawalsQueuePage({
                 };
                 return row;
               })}
+              fetchAll={async () => {
+                "use server";
+                // Export the FULL filtered withdrawal queue (all pages of the
+                // active status tab) — audited via admin_export_log
+                // (PII walk-off trail: bank account name + note · MONEY).
+                return exportWithdrawalsAll(statusFilter);
+              }}
               cols={[
                 { key: "id",                label: "Wallet HS ID" },
                 { key: "date",              label: "วันที่ขอ" },

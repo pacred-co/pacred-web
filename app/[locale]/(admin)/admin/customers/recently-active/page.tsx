@@ -21,6 +21,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { exportRecentlyActiveAll } from "@/actions/admin/export/customers-recently-active";
 
 export const dynamic = "force-dynamic";
 
@@ -158,6 +159,13 @@ export default async function RecentlyActiveCustomersPage({
                         : "ใช้งานล่าสุด ≤ 30 วัน",
               };
             })}
+            fetchAll={async () => {
+              "use server";
+              // Export the FULL filtered list (all pages, capped) — audited via
+              // admin_export_log (PII walk-off trail · owner directive). Captures
+              // the active `type` filter so the export == the on-screen query.
+              return exportRecentlyActiveAll({ type });
+            }}
             cols={[
               { key: "userID",      label: "รหัสสมาชิก" },
               { key: "fullName",    label: "ชื่อ-นามสกุล" },

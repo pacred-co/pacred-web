@@ -46,6 +46,7 @@ import { toLegacyOrderCode } from "@/lib/legacy-status-map";
 import { parsePage, pageRange } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { exportServiceOrdersAll } from "@/actions/admin/export/service-orders";
 import { ServiceOrdersTable, type ServiceOrderRow } from "./service-orders-table";
 
 export const dynamic = "force-dynamic";
@@ -641,6 +642,21 @@ export default async function AdminServiceOrdersPage({
                   { key: "adminCreate",    label: "Admin สร้าง" },
                   { key: "adminUpdate",    label: "Admin อัพเดท" },
                 ]}
+                fetchAll={async () => {
+                  "use server";
+                  // Export the FULL filtered shop-order list (all pages, capped) —
+                  // reuses the page's EXACT derived filter (status tab · date
+                  // window · keyword · sort) so there is zero query drift. Audited
+                  // via admin_export_log (PII walk-off trail · owner directive).
+                  return exportServiceOrdersAll({
+                    statusFilter,
+                    effectiveFrom,
+                    effectiveTo,
+                    keyword,
+                    sort: currentSort,
+                    dir: currentDir,
+                  });
+                }}
                 filename={`service-orders${statusFilter ? `-status${statusFilter}` : ""}${keyword ? `-${keyword}` : ""}-page${page}-${new Date().toISOString().slice(0, 10)}.csv`}
               />
             </div>

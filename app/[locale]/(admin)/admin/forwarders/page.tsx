@@ -40,6 +40,7 @@ import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
+import { exportForwardersAll } from "@/actions/admin/export/forwarders";
 
 export const dynamic = "force-dynamic";
 
@@ -117,7 +118,7 @@ const MODE_LABEL: Record<string, string> = {
   "3": "✈️ เครื่องบิน",
 };
 
-type SearchParams = {
+export type SearchParams = {
   status?: string;      // 1..7, 6.1, c, p — legacy 10-tab filter
   q?: string;           // single-line keyword search
   q_multi?: string;     // U2-5: multi-line bulk tracking search
@@ -334,371 +335,19 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
   // forwarder.php L318-323). Applied to the main query AND counts below
   // so badges align with what's on screen.
   const dateWindow = resolveDateWindow(sp);
-
-  // ─── Pagination (2026-06-04) ──────────────────────────────────────────
-  // This list has THREE post-fetch filters that shrink rows AFTER the DB
-  // fetch: the 6-vs-6.1 driver-item split, and the q / q_multi keyword
-  // filters (which also match the JS-joined customer name/phone). When any
-  // of those is active a DB count:exact would over-count vs what's rendered,
-  // so we client-slice (fetch the bounded filtered set + slice + total =
-  // filtered length). On the common path (no search, status ≠ 6/6.1) there
-  // is NO post-fetch shrink → we use the efficient DB count:exact + .range.
   const page = parsePage(sp.page);
-  const { from, to } = pageRange(page);
-  const hasPostFetchFilter = !!(sp.q || sp.q_multi || sp.status === "6" || sp.status === "6.1");
 
-  // ─── Main query against tb_forwarder ──────────────────────────────────
-  // Note: PostgREST cannot reliably auto-join the legacy `tb_users` table
-  // (the FK is by `userid` text not a true relational FK). We pull the
-  // forwarder rows here, then fetch matching tb_users rows in a 2nd query.
-  let q = admin
-    .from("tb_forwarder")
-    .select(
-      "id,fdate,fstatus,ftransporttype,fwarehousechina,fwarehousename," +
-      "fcabinetnumber,ftrackingchn,ftrackingth,fidorco,userid,fnote,fcover," +
-      "fweight,fvolume,famount,ftotalprice,fcosttotalprice," +
-      "faddressname,faddresslastname,faddresszipcode,fcredit,fdetail," +
-      // Wave 11 fidelity port — extra cols for the legacy 12-column layout
-      "adminidcreator,reforder,fdatestatus2,fdatestatus3,fdatestatus4," +
-      "fdateadminstatus,adminid,paydeposit," +
-      // Wave 15 P0-3 — extra cols required by calcForwarderOutstanding()
-      // (port of legacy calPriceForwarderMain · shows ยอดค้างชำระ in the list)
-      "fpriceupdate,ftransportprice,fshippingservice,pricecrate," +
-      "ftransportpricechnthb,priceother,fdiscount,fusercompany,adminidkey," +
-      // Wave 18-B — 7-col fidelity backfill (print badges · car on/off ·
-      // ETA base date · pallet code · all from legacy forwarder.php L575-653).
-      "printstatus1,printstatus2,printstatus3,printstatus4," +
-      "fstatuscaron,fstatuscaroff,fdatetothai,fpallet",
-      // count:exact only on the common path (no post-fetch shrink) so the
-      // pager total matches the rendered rows; the search/6.1 views compute
-      // total from the JS-filtered length instead.
-      hasPostFetchFilter ? undefined : { count: "exact" },
-    )
-    .order("fdate", { ascending: false, nullsFirst: false });
-
-  // Wave 18-B — default-30-day window (escape via ?all=1) — applied to
-  // both the data query and the per-tab counts below.
-  // 🟠 ภูม #2 (2026-05-30): when a keyword search is active, BYPASS the
-  // 30-day window. The search box is meant to find a customer/order/tracking
-  // anywhere in history — limiting to the last 30 days is exactly what made
-  // ภูม think the search "didn't work" (silent zero-results when the order
-  // was from > 30 days ago).
-  const skipDateWindow = !!(sp.q && sp.q.trim().length > 0);
-  if (!skipDateWindow) {
-    if (dateWindow.from) q = q.gte("fdate", dateWindow.from);
-    if (dateWindow.to)   q = q.lte("fdate", dateWindow.to + "T23:59:59");
-  }
-
-  // Wave 11 — `create=` top-tab filter (legacy: ?create=user|system|admin).
-  //   user   = customer-initiated (adminidcreator empty AND reforder empty)
-  //   system = system-replicated (reforder non-empty)
-  //   admin  = admin-initiated   (adminidcreator non-empty AND reforder empty)
-  // Per sample data both fields default to "" (not NULL) on prod, so a
-  // plain .eq("", "") + .neq is reliable. PostgREST .or() with empty
-  // value didn't translate cleanly via supabase-js (returned unfiltered
-  // rows in browser even though raw curl with `eq.` worked).
-  if (sp.create === "user") {
-    q = q.eq("adminidcreator", "").eq("reforder", "");
-  } else if (sp.create === "system") {
-    q = q.neq("reforder", "");
-  } else if (sp.create === "admin") {
-    q = q.neq("adminidcreator", "").eq("reforder", "");
-  }
-
-  // Status filter — legacy keys (1..7, 6.1, c, p).
-  //
-  // 6 vs 6.1 split (resolved 2026-05-21):
-  //   tab "เตรียมส่ง" (status=6)   = fstatus='6' AND NOT in tb_forwarder_driver_item
-  //                                  with fdistatus='' (legacy: "ยังไม่ขึ้นรถ" set)
-  //   tab "กำลังจัดส่ง" (status=6.1) = fstatus='6' AND     in tb_forwarder_driver_item
-  //                                  with fdistatus=''
-  //
-  // We resolve the 6.1 set via a 2nd query (PostgREST has no subquery
-  // syntax). For the unfiltered + most-status views the 6.1 join is
-  // skipped (saves a roundtrip on the common path).
-  let driverInProgressIds: Set<number> | null = null;
-  if (sp.status === "6" || sp.status === "6.1") {
-    const { data: driverItemRows, error: driverItemRowsErr } = await admin
-      .from("tb_forwarder_driver_item")
-      .select("fid")
-      .eq("fdistatus", "");
-    if (driverItemRowsErr) {
-      console.error(`[tb_forwarder_driver_item list] failed`, { code: driverItemRowsErr.code, message: driverItemRowsErr.message });
-    }
-    driverInProgressIds = new Set(
-      (driverItemRows ?? []).map((r) => Number((r as { fid: number | string }).fid)),
-    );
-  }
-
-  if (sp.status === "c") {
-    q = q.eq("fcredit", "1");
-  } else if (sp.status === "p") {
-    q = q.eq("fstatus", "99");
-  } else if (sp.status === "6") {
-    q = q.eq("fstatus", "6");
-    // เตรียมส่ง = NOT in driver_item with fdistatus='' (filtered post-fetch · see L~248)
-  } else if (sp.status === "6.1") {
-    q = q.eq("fstatus", "6");
-    // กำลังจัดส่ง = IN driver_item with fdistatus='' (filtered post-fetch · see L~248)
-  } else if (sp.status && /^[1-7]$/.test(sp.status)) {
-    q = q.eq("fstatus", sp.status);
-  }
-
-  if (sp.mode && MODE_LABEL[sp.mode]) q = q.eq("ftransporttype", sp.mode);
-
-  if (sp.date_from) q = q.gte("fdate", sp.date_from);
-  if (sp.date_to)   q = q.lte("fdate", sp.date_to + "T23:59:59");
-
-  // 🟠 ภูม #2 (2026-05-30): server-side keyword search across the fields ภูม
-  // listed — รหัสลูกค้า (userid) · ออเดอร์ (id) · เลขพัสดุจีน (ftrackingchn +
-  // ftrackingchn2) · เลขตู้ (fcabinetnumber) · plus bonus: customer name +
-  // phone via a tb_users prefetch. Was previously a CLIENT-side filter
-  // against only the rows in the current page → if the match wasn't on page
-  // 1, you got silent zero-results (the bug ภูม flagged). PostgREST .or()
-  // pushes the match to Postgres so it scans the entire table (paired with
-  // the date-window bypass above + the 300-row cap → admin can see any
-  // matching row across all of history).
-  if (sp.q && sp.q.trim().length > 0) {
-    const kw = sp.q.trim();
-    // Escape PostgREST `or` reserved chars: `,` `(` `)` would break the
-    // comma-separated tuple list. Replace with %25 placeholders (ilike
-    // tolerates them as wildcards-against-wildcards).
-    const safe = kw.replace(/[,()*]/g, "%");
-
-    // Prefetch tb_users matching name OR phone OR userID → collect their
-    // userIDs so we can ALSO match forwarder rows whose `userid` is one of
-    // those. This lets ภูม type "John" or "0812345678" and find their
-    // order, not just type the exact PR code.
-    const { data: nameMatchedUsers, error: nameMatchErr } = await admin
-      .from("tb_users")
-      .select("userID")
-      .or(
-        [
-          `userID.ilike.%${safe}%`,
-          `userName.ilike.%${safe}%`,
-          `userLastName.ilike.%${safe}%`,
-          `userTel.ilike.%${safe}%`,
-        ].join(","),
-      )
-      .limit(500);
-    if (nameMatchErr) {
-      console.error("[tb_users keyword prefetch] failed", {
-        code: nameMatchErr.code,
-        message: nameMatchErr.message,
-      });
-    }
-    const matchedUserIds = (nameMatchedUsers ?? [])
-      .map((u) => (u as { userID: string | null }).userID)
-      .filter((u): u is string => !!u);
-
-    const parts = [
-      `userid.ilike.%${safe}%`,
-      `ftrackingchn.ilike.%${safe}%`,
-      `ftrackingchn2.ilike.%${safe}%`,
-      `fcabinetnumber.ilike.%${safe}%`,
-      `fidorco.ilike.%${safe}%`,
-    ];
-    // Numeric input → also match the integer id column (= "ออเดอร์").
-    const asInt = /^\d+$/.test(safe) ? Number(safe) : null;
-    if (asInt !== null && Number.isFinite(asInt)) {
-      parts.unshift(`id.eq.${asInt}`);
-    }
-    // Name/phone matches → add `userid.in.(PR123,PR456,...)` to the OR.
-    // Cap at 200 ids so the URL stays sane (the limit:500 above already
-    // upper-bounds, but cap once more here as defense).
-    if (matchedUserIds.length > 0) {
-      const idsList = matchedUserIds.slice(0, 200).join(",");
-      parts.push(`userid.in.(${idsList})`);
-    }
-    q = q.or(parts.join(","));
-  }
-
-  // Window the fetch: common path → DB .range() (one page); post-fetch-filter
-  // path → bounded cap, then JS-filter + slice below (search/status-6 sets are
-  // bounded, esp. with the date window / specific status).
-  if (hasPostFetchFilter) {
-    q = q.limit(2000);
-  } else {
-    q = q.range(from, to);
-  }
-
-  const { data: forwarderRows, error: forwarderErr, count: forwarderCount } = await q;
-  let raw = (forwarderRows ?? []) as unknown as RawForwarderRow[];
-
-  // 6 vs 6.1 post-fetch split (driver-in-progress set was loaded above).
-  if (sp.status === "6" && driverInProgressIds) {
-    raw = raw.filter((r) => !driverInProgressIds!.has(Number(r.id)));
-  } else if (sp.status === "6.1" && driverInProgressIds) {
-    raw = raw.filter((r) => driverInProgressIds!.has(Number(r.id)));
-  }
-
-  // ─── 2nd query: tb_users for customer name/phone (+ VIP/Sale chips) ───
-  const uniqueUserIds = Array.from(new Set(raw.map((r) => r.userid).filter(Boolean)));
-  let usersByUserId = new Map<string, RawUserRow>();
-  // Wave 18-B — SVIP + นิติ sets (legacy badgeVIP3 + tb_corporate join).
-  // SVIP membership = ≥1 row in tb_rate_custom_cbm with matching userid.
-  // นิติ membership  = ≥1 row in tb_corporate with matching userid.
-  let svipUserIds = new Set<string>();
-  let corporateUserIds = new Set<string>();
-  if (uniqueUserIds.length > 0) {
-    const [userRowsRes, svipRowsRes, corpRowsRes] = await Promise.all([
-      admin
-        .from("tb_users")
-        .select(
-          "userID,userName,userLastName,userTel,coID,userComparison,userCompany,adminIDSale",
-        )
-        .in("userID", uniqueUserIds),
-      admin
-        .from("tb_rate_custom_cbm")
-        .select("userid")
-        .in("userid", uniqueUserIds),
-      admin
-        .from("tb_corporate")
-        .select("userid")
-        .in("userid", uniqueUserIds),
-    ]);
-    usersByUserId = new Map(
-      ((userRowsRes.data ?? []) as unknown as RawUserRow[]).map((u) => [u.userID, u]),
-    );
-    svipUserIds = new Set(
-      ((svipRowsRes.data ?? []) as unknown as { userid: string }[])
-        .map((r) => r.userid)
-        .filter(Boolean),
-    );
-    corporateUserIds = new Set(
-      ((corpRowsRes.data ?? []) as unknown as { userid: string }[])
-        .map((r) => r.userid)
-        .filter(Boolean),
-    );
-  }
-
-  // Shape into our Row type for the table.
-  let rows: Row[] = raw.map((r) => {
-    const user = usersByUserId.get(r.userid);
-    const name = user
-      ? `${user.userName ?? ""} ${user.userLastName ?? ""}`.trim()
-      : "";
-    // Wave 18-B — fpallet column is empty-string-by-default in legacy; treat
-    // both null and "" as "no location set".
-    const pallet = r.fpallet && r.fpallet.trim() !== "" ? r.fpallet.trim() : null;
-    // Legacy uses '0000-00-00' as the "no ETA yet" sentinel; map to null.
-    const eta = r.fdatetothai && r.fdatetothai !== "0000-00-00" ? r.fdatetothai : null;
-    return {
-      id: r.id,
-      order_no: `ออเดอร์ #${r.id}`,           // Wave 11 — legacy display label
-      f_no_cargo: r.fidorco,                  // Cargo API tracking (separate from order id)
-      status: r.fstatus,
-      warehouse_china: r.fwarehousechina,
-      partner_warehouse: r.fwarehousename,
-      transport_type: r.ftransporttype,
-      amount_count: Number(r.famount ?? 0),
-      weight_kg: Number(r.fweight ?? 0),
-      volume_cbm: Number(r.fvolume ?? 0),
-      total_price: Number(r.ftotalprice ?? 0),
-      tracking_chn: r.ftrackingchn,
-      tracking_th: r.ftrackingth,
-      cabinet_number: r.fcabinetnumber,
-      created_at: r.fdate ?? "",
-      date_status2: r.fdatestatus2,
-      date_status3: r.fdatestatus3,
-      date_status4: r.fdatestatus4,
-      date_admin_status: r.fdateadminstatus,
-      admin_id_last: r.adminid,
-      admin_creator: r.adminidcreator,
-      ref_order: r.reforder,
-      fcredit: r.fcredit ?? "0",
-      paydeposit: r.paydeposit,
-      note: r.fnote,
-      detail: r.fdetail,
-      cover: r.fcover,
-      coverUrl: null,            // filled in after the URL-resolve step below
-      // Wave 15 P0-3 — outstanding balance computed from legacy formula.
-      // paydeposit='1' = paid in full → outstanding = 0; otherwise compute.
-      outstanding_thb: r.paydeposit === "1" ? 0 : calcForwarderOutstanding(r),
-      measured_by_admin: r.adminidkey ?? null,
-      // Wave 18-B — 7-col fidelity backfill flags.
-      print_status_1: r.printstatus1 === "1",
-      print_status_2: r.printstatus2 === "1",
-      print_status_3: r.printstatus3 === "1",
-      print_status_4: r.printstatus4 === "1",
-      car_on:  r.fstatuscaron  === "1",
-      car_off: r.fstatuscaroff === "1",
-      eta_base: eta,
-      pallet,
-      customer: user
-        ? {
-            userid: user.userID,
-            name,
-            phone: user.userTel ?? "",
-            coid: user.coID ?? "",
-            is_svip: svipUserIds.has(user.userID),
-            is_corporate: corporateUserIds.has(user.userID),
-            is_comparison: user.userComparison === "1",
-            is_juristic: user.userCompany === "1",
-            sale_admin:
-              user.adminIDSale && user.adminIDSale.trim() !== ""
-                ? user.adminIDSale.trim()
-                : null,
-          }
-        : null,
-    };
-  });
-
-  // ─── Client-side keyword filter across multiple fields ────────────────
-  // q_multi (U2-5): multi-line bulk search — match if ANY line matches ANY field.
-  // q       (legacy single): one keyword across all fields.
-  if (sp.q_multi) {
-    const lines = sp.q_multi
-      .split(/\r?\n/)
-      .map((l) => l.trim().toLowerCase())
-      .filter(Boolean);
-    if (lines.length > 0) {
-      rows = rows.filter((r) => {
-        const fields = [
-          String(r.id),
-          (r.f_no_cargo ?? "").toLowerCase(),
-          (r.tracking_chn ?? "").toLowerCase(),
-          (r.tracking_th  ?? "").toLowerCase(),
-          (r.customer?.userid ?? "").toLowerCase(),
-          (r.cabinet_number ?? "").toLowerCase(),
-        ];
-        return lines.some((kw) => fields.some((f) => f.includes(kw)));
-      });
-    }
-  } else if (sp.q) {
-    const keyword = sp.q.toLowerCase();
-    rows = rows.filter((r) =>
-      String(r.id).includes(keyword) ||
-      (r.f_no_cargo ?? "").toLowerCase().includes(keyword) ||
-      (r.tracking_chn ?? "").toLowerCase().includes(keyword) ||
-      (r.tracking_th  ?? "").toLowerCase().includes(keyword) ||
-      (r.customer?.userid ?? "").toLowerCase().includes(keyword) ||
-      (r.customer?.phone ?? "").includes(keyword) ||
-      (r.customer?.name ?? "").toLowerCase().includes(keyword) ||
-      (r.cabinet_number ?? "").toLowerCase().includes(keyword)
-    );
-  }
-
-  // ─── Pagination total + window (2026-06-04) ──────────────────────────
-  // Common path: rows are already the DB .range() window → total = the
-  // count:exact. Post-fetch path: rows is the full JS-filtered set → total =
-  // its length, and we slice the display window here (BEFORE the cover-URL
-  // resolve below, so signed URLs are generated only for the visible page).
-  const totalForwarders = hasPostFetchFilter ? rows.length : (forwarderCount ?? 0);
-  if (hasPostFetchFilter) {
-    rows = rows.slice(from, to + 1);
-  }
-
-  // ─── Wave 13 — resolve cover filenames to signed Supabase URLs ────────
-  // `fcover` is a bare filename (e.g. "PR10691_67e0..._8c1735.jpg"). Legacy
-  // covers live at `forwarder-covers/legacy-shops/<file>`; newer admin-
-  // initiated uploads already use a bucket-relative path (`admin/...`).
-  // Batch-resolve all in parallel — much faster than per-row await.
-  const coverMap = await resolveLegacyUrlMap(
-    rows.map((r) => ({ id: r.id, filename: r.cover })),
-    "cover",
+  // ─── Main fetch + shaping (extracted to fetchForwarderList) ───────────
+  // The page-rendered window AND the "export ทั้งหมด" CSV path both run the
+  // SAME filtered query via fetchForwarderList — guaranteeing the export
+  // mirrors exactly what's on screen (only pagination differs). See the
+  // function below + actions/admin/export/forwarders.ts.
+  const { rows, totalForwarders, forwarderErr } = await fetchForwarderList(
+    admin,
+    sp,
+    dateWindow,
+    { page },
   );
-  rows = rows.map((r) => ({ ...r, coverUrl: coverMap[String(r.id)] ?? null }));
 
   // ─── Per-tab counts (head queries against tb_forwarder) ──────────────
   // We run these in parallel; each returns the count for that status
@@ -1078,6 +727,24 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
             { key: "admin_creator",     label: "Admin สร้าง" },
             { key: "note",              label: "หมายเหตุ" },
           ]}
+          fetchAll={async () => {
+            "use server";
+            // Export EVERY filtered row (all pages, capped) — reuses the page's
+            // exact filtered query via fetchForwarderList({ exportAll: true })
+            // and audits the PII/money walk-off in admin_export_log.
+            return exportForwardersAll({
+              status: sp.status,
+              q: sp.q,
+              q_multi: sp.q_multi,
+              create: sp.create,
+              mode: sp.mode,
+              date_from: sp.date_from,
+              date_to: sp.date_to,
+              service,
+              container,
+              all: sp.all,
+            });
+          }}
           filename={`forwarders${sp.status ? `-status${sp.status}` : ""}${sp.mode ? `-mode${sp.mode}` : ""}${sp.q ? `-${sp.q}` : ""}-page${page}-${new Date().toISOString().slice(0, 10)}.csv`}
         />
       </div>
@@ -1103,6 +770,418 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
     </main>
     </>
   );
+}
+
+/**
+ * Safety cap for the "export ทั้งหมด" CSV path (owner directive 2026-06-07).
+ * 10,000 comfortably covers any single filtered slice (a status tab / date
+ * window) while bounding the in-memory build + signed-URL resolve. When a
+ * slice would exceed this the export flags `truncated` so the operator knows
+ * to narrow the filter.
+ */
+export const FORWARDER_EXPORT_CAP = 10000;
+
+/**
+ * The ONE filtered fetch + row-shape used by BOTH the on-screen page window
+ * and the "export ทั้งหมด" CSV path. Parameterise with `opts.page` for the
+ * 50-row display window, or `opts.exportAll` for the full capped slice. Every
+ * filter (date window · create tab · status 1..7/6/6.1/c/p · transport mode ·
+ * keyword q / q_multi · customer-name prefetch) is IDENTICAL on both paths —
+ * the only difference is the row window. This guarantees the export mirrors
+ * exactly what the page shows (no drift).
+ *
+ * Note: `coverUrl` (signed Supabase URLs) is only resolved on the page-window
+ * path — the CSV export does not emit cover images, so we skip that work when
+ * `exportAll` is set.
+ */
+export async function fetchForwarderList(
+  admin: ReturnType<typeof createAdminClient>,
+  sp: SearchParams,
+  dateWindow: { from: string | null; to: string | null; isDefault: boolean },
+  opts: { page?: number; exportAll?: boolean },
+): Promise<{ rows: Row[]; totalForwarders: number; forwarderErr: { message: string } | null }> {
+  const exportAll = opts.exportAll === true;
+
+  // ─── Pagination (2026-06-04) ──────────────────────────────────────────
+  // This list has THREE post-fetch filters that shrink rows AFTER the DB
+  // fetch: the 6-vs-6.1 driver-item split, and the q / q_multi keyword
+  // filters (which also match the JS-joined customer name/phone). When any
+  // of those is active a DB count:exact would over-count vs what's rendered,
+  // so we client-slice (fetch the bounded filtered set + slice + total =
+  // filtered length). On the common path (no search, status ≠ 6/6.1) there
+  // is NO post-fetch shrink → we use the efficient DB count:exact + .range.
+  const page = opts.page ?? 1;
+  const { from, to } = pageRange(page);
+  const hasPostFetchFilter = !!(sp.q || sp.q_multi || sp.status === "6" || sp.status === "6.1");
+
+  // ─── Main query against tb_forwarder ──────────────────────────────────
+  // Note: PostgREST cannot reliably auto-join the legacy `tb_users` table
+  // (the FK is by `userid` text not a true relational FK). We pull the
+  // forwarder rows here, then fetch matching tb_users rows in a 2nd query.
+  let q = admin
+    .from("tb_forwarder")
+    .select(
+      "id,fdate,fstatus,ftransporttype,fwarehousechina,fwarehousename," +
+      "fcabinetnumber,ftrackingchn,ftrackingth,fidorco,userid,fnote,fcover," +
+      "fweight,fvolume,famount,ftotalprice,fcosttotalprice," +
+      "faddressname,faddresslastname,faddresszipcode,fcredit,fdetail," +
+      // Wave 11 fidelity port — extra cols for the legacy 12-column layout
+      "adminidcreator,reforder,fdatestatus2,fdatestatus3,fdatestatus4," +
+      "fdateadminstatus,adminid,paydeposit," +
+      // Wave 15 P0-3 — extra cols required by calcForwarderOutstanding()
+      // (port of legacy calPriceForwarderMain · shows ยอดค้างชำระ in the list)
+      "fpriceupdate,ftransportprice,fshippingservice,pricecrate," +
+      "ftransportpricechnthb,priceother,fdiscount,fusercompany,adminidkey," +
+      // Wave 18-B — 7-col fidelity backfill (print badges · car on/off ·
+      // ETA base date · pallet code · all from legacy forwarder.php L575-653).
+      "printstatus1,printstatus2,printstatus3,printstatus4," +
+      "fstatuscaron,fstatuscaroff,fdatetothai,fpallet",
+      // count:exact only on the common path (no post-fetch shrink) so the
+      // pager total matches the rendered rows; the search/6.1 views compute
+      // total from the JS-filtered length instead.
+      hasPostFetchFilter ? undefined : { count: "exact" },
+    )
+    .order("fdate", { ascending: false, nullsFirst: false });
+
+  // Wave 18-B — default-30-day window (escape via ?all=1) — applied to
+  // both the data query and the per-tab counts below.
+  // 🟠 ภูม #2 (2026-05-30): when a keyword search is active, BYPASS the
+  // 30-day window. The search box is meant to find a customer/order/tracking
+  // anywhere in history — limiting to the last 30 days is exactly what made
+  // ภูม think the search "didn't work" (silent zero-results when the order
+  // was from > 30 days ago).
+  const skipDateWindow = !!(sp.q && sp.q.trim().length > 0);
+  if (!skipDateWindow) {
+    if (dateWindow.from) q = q.gte("fdate", dateWindow.from);
+    if (dateWindow.to)   q = q.lte("fdate", dateWindow.to + "T23:59:59");
+  }
+
+  // Wave 11 — `create=` top-tab filter (legacy: ?create=user|system|admin).
+  //   user   = customer-initiated (adminidcreator empty AND reforder empty)
+  //   system = system-replicated (reforder non-empty)
+  //   admin  = admin-initiated   (adminidcreator non-empty AND reforder empty)
+  // Per sample data both fields default to "" (not NULL) on prod, so a
+  // plain .eq("", "") + .neq is reliable. PostgREST .or() with empty
+  // value didn't translate cleanly via supabase-js (returned unfiltered
+  // rows in browser even though raw curl with `eq.` worked).
+  if (sp.create === "user") {
+    q = q.eq("adminidcreator", "").eq("reforder", "");
+  } else if (sp.create === "system") {
+    q = q.neq("reforder", "");
+  } else if (sp.create === "admin") {
+    q = q.neq("adminidcreator", "").eq("reforder", "");
+  }
+
+  // Status filter — legacy keys (1..7, 6.1, c, p).
+  //
+  // 6 vs 6.1 split (resolved 2026-05-21):
+  //   tab "เตรียมส่ง" (status=6)   = fstatus='6' AND NOT in tb_forwarder_driver_item
+  //                                  with fdistatus='' (legacy: "ยังไม่ขึ้นรถ" set)
+  //   tab "กำลังจัดส่ง" (status=6.1) = fstatus='6' AND     in tb_forwarder_driver_item
+  //                                  with fdistatus=''
+  //
+  // We resolve the 6.1 set via a 2nd query (PostgREST has no subquery
+  // syntax). For the unfiltered + most-status views the 6.1 join is
+  // skipped (saves a roundtrip on the common path).
+  let driverInProgressIds: Set<number> | null = null;
+  if (sp.status === "6" || sp.status === "6.1") {
+    const { data: driverItemRows, error: driverItemRowsErr } = await admin
+      .from("tb_forwarder_driver_item")
+      .select("fid")
+      .eq("fdistatus", "");
+    if (driverItemRowsErr) {
+      console.error(`[tb_forwarder_driver_item list] failed`, { code: driverItemRowsErr.code, message: driverItemRowsErr.message });
+    }
+    driverInProgressIds = new Set(
+      (driverItemRows ?? []).map((r) => Number((r as { fid: number | string }).fid)),
+    );
+  }
+
+  if (sp.status === "c") {
+    q = q.eq("fcredit", "1");
+  } else if (sp.status === "p") {
+    q = q.eq("fstatus", "99");
+  } else if (sp.status === "6") {
+    q = q.eq("fstatus", "6");
+    // เตรียมส่ง = NOT in driver_item with fdistatus='' (filtered post-fetch · see L~248)
+  } else if (sp.status === "6.1") {
+    q = q.eq("fstatus", "6");
+    // กำลังจัดส่ง = IN driver_item with fdistatus='' (filtered post-fetch · see L~248)
+  } else if (sp.status && /^[1-7]$/.test(sp.status)) {
+    q = q.eq("fstatus", sp.status);
+  }
+
+  if (sp.mode && MODE_LABEL[sp.mode]) q = q.eq("ftransporttype", sp.mode);
+
+  if (sp.date_from) q = q.gte("fdate", sp.date_from);
+  if (sp.date_to)   q = q.lte("fdate", sp.date_to + "T23:59:59");
+
+  // 🟠 ภูม #2 (2026-05-30): server-side keyword search across the fields ภูม
+  // listed — รหัสลูกค้า (userid) · ออเดอร์ (id) · เลขพัสดุจีน (ftrackingchn +
+  // ftrackingchn2) · เลขตู้ (fcabinetnumber) · plus bonus: customer name +
+  // phone via a tb_users prefetch. Was previously a CLIENT-side filter
+  // against only the rows in the current page → if the match wasn't on page
+  // 1, you got silent zero-results (the bug ภูม flagged). PostgREST .or()
+  // pushes the match to Postgres so it scans the entire table (paired with
+  // the date-window bypass above + the 300-row cap → admin can see any
+  // matching row across all of history).
+  if (sp.q && sp.q.trim().length > 0) {
+    const kw = sp.q.trim();
+    // Escape PostgREST `or` reserved chars: `,` `(` `)` would break the
+    // comma-separated tuple list. Replace with %25 placeholders (ilike
+    // tolerates them as wildcards-against-wildcards).
+    const safe = kw.replace(/[,()*]/g, "%");
+
+    // Prefetch tb_users matching name OR phone OR userID → collect their
+    // userIDs so we can ALSO match forwarder rows whose `userid` is one of
+    // those. This lets ภูม type "John" or "0812345678" and find their
+    // order, not just type the exact PR code.
+    const { data: nameMatchedUsers, error: nameMatchErr } = await admin
+      .from("tb_users")
+      .select("userID")
+      .or(
+        [
+          `userID.ilike.%${safe}%`,
+          `userName.ilike.%${safe}%`,
+          `userLastName.ilike.%${safe}%`,
+          `userTel.ilike.%${safe}%`,
+        ].join(","),
+      )
+      .limit(500);
+    if (nameMatchErr) {
+      console.error("[tb_users keyword prefetch] failed", {
+        code: nameMatchErr.code,
+        message: nameMatchErr.message,
+      });
+    }
+    const matchedUserIds = (nameMatchedUsers ?? [])
+      .map((u) => (u as { userID: string | null }).userID)
+      .filter((u): u is string => !!u);
+
+    const parts = [
+      `userid.ilike.%${safe}%`,
+      `ftrackingchn.ilike.%${safe}%`,
+      `ftrackingchn2.ilike.%${safe}%`,
+      `fcabinetnumber.ilike.%${safe}%`,
+      `fidorco.ilike.%${safe}%`,
+    ];
+    // Numeric input → also match the integer id column (= "ออเดอร์").
+    const asInt = /^\d+$/.test(safe) ? Number(safe) : null;
+    if (asInt !== null && Number.isFinite(asInt)) {
+      parts.unshift(`id.eq.${asInt}`);
+    }
+    // Name/phone matches → add `userid.in.(PR123,PR456,...)` to the OR.
+    // Cap at 200 ids so the URL stays sane (the limit:500 above already
+    // upper-bounds, but cap once more here as defense).
+    if (matchedUserIds.length > 0) {
+      const idsList = matchedUserIds.slice(0, 200).join(",");
+      parts.push(`userid.in.(${idsList})`);
+    }
+    q = q.or(parts.join(","));
+  }
+
+  // Window the fetch:
+  //   export-all → one capped page (FORWARDER_EXPORT_CAP rows, no .range());
+  //   common page → DB .range() (one 50-row window);
+  //   post-fetch-filter page → bounded cap, then JS-filter + slice below.
+  // The post-fetch-filter path keeps its 2000-row scan cap on the page; for
+  // export-all we raise the scan to the export cap so the full filtered set
+  // is collected before the JS keyword/6.1 filter runs.
+  if (exportAll) {
+    q = q.limit(FORWARDER_EXPORT_CAP);
+  } else if (hasPostFetchFilter) {
+    q = q.limit(2000);
+  } else {
+    q = q.range(from, to);
+  }
+
+  const { data: forwarderRows, error: forwarderErrRaw, count: forwarderCount } = await q;
+  const forwarderErr = forwarderErrRaw ? { message: forwarderErrRaw.message } : null;
+  let raw = (forwarderRows ?? []) as unknown as RawForwarderRow[];
+
+  // 6 vs 6.1 post-fetch split (driver-in-progress set was loaded above).
+  if (sp.status === "6" && driverInProgressIds) {
+    raw = raw.filter((r) => !driverInProgressIds!.has(Number(r.id)));
+  } else if (sp.status === "6.1" && driverInProgressIds) {
+    raw = raw.filter((r) => driverInProgressIds!.has(Number(r.id)));
+  }
+
+  // ─── 2nd query: tb_users for customer name/phone (+ VIP/Sale chips) ───
+  const uniqueUserIds = Array.from(new Set(raw.map((r) => r.userid).filter(Boolean)));
+  let usersByUserId = new Map<string, RawUserRow>();
+  // Wave 18-B — SVIP + นิติ sets (legacy badgeVIP3 + tb_corporate join).
+  // SVIP membership = ≥1 row in tb_rate_custom_cbm with matching userid.
+  // นิติ membership  = ≥1 row in tb_corporate with matching userid.
+  let svipUserIds = new Set<string>();
+  let corporateUserIds = new Set<string>();
+  if (uniqueUserIds.length > 0) {
+    const [userRowsRes, svipRowsRes, corpRowsRes] = await Promise.all([
+      admin
+        .from("tb_users")
+        .select(
+          "userID,userName,userLastName,userTel,coID,userComparison,userCompany,adminIDSale",
+        )
+        .in("userID", uniqueUserIds),
+      admin
+        .from("tb_rate_custom_cbm")
+        .select("userid")
+        .in("userid", uniqueUserIds),
+      admin
+        .from("tb_corporate")
+        .select("userid")
+        .in("userid", uniqueUserIds),
+    ]);
+    usersByUserId = new Map(
+      ((userRowsRes.data ?? []) as unknown as RawUserRow[]).map((u) => [u.userID, u]),
+    );
+    svipUserIds = new Set(
+      ((svipRowsRes.data ?? []) as unknown as { userid: string }[])
+        .map((r) => r.userid)
+        .filter(Boolean),
+    );
+    corporateUserIds = new Set(
+      ((corpRowsRes.data ?? []) as unknown as { userid: string }[])
+        .map((r) => r.userid)
+        .filter(Boolean),
+    );
+  }
+
+  // Shape into our Row type for the table.
+  let rows: Row[] = raw.map((r) => {
+    const user = usersByUserId.get(r.userid);
+    const name = user
+      ? `${user.userName ?? ""} ${user.userLastName ?? ""}`.trim()
+      : "";
+    // Wave 18-B — fpallet column is empty-string-by-default in legacy; treat
+    // both null and "" as "no location set".
+    const pallet = r.fpallet && r.fpallet.trim() !== "" ? r.fpallet.trim() : null;
+    // Legacy uses '0000-00-00' as the "no ETA yet" sentinel; map to null.
+    const eta = r.fdatetothai && r.fdatetothai !== "0000-00-00" ? r.fdatetothai : null;
+    return {
+      id: r.id,
+      order_no: `ออเดอร์ #${r.id}`,           // Wave 11 — legacy display label
+      f_no_cargo: r.fidorco,                  // Cargo API tracking (separate from order id)
+      status: r.fstatus,
+      warehouse_china: r.fwarehousechina,
+      partner_warehouse: r.fwarehousename,
+      transport_type: r.ftransporttype,
+      amount_count: Number(r.famount ?? 0),
+      weight_kg: Number(r.fweight ?? 0),
+      volume_cbm: Number(r.fvolume ?? 0),
+      total_price: Number(r.ftotalprice ?? 0),
+      tracking_chn: r.ftrackingchn,
+      tracking_th: r.ftrackingth,
+      cabinet_number: r.fcabinetnumber,
+      created_at: r.fdate ?? "",
+      date_status2: r.fdatestatus2,
+      date_status3: r.fdatestatus3,
+      date_status4: r.fdatestatus4,
+      date_admin_status: r.fdateadminstatus,
+      admin_id_last: r.adminid,
+      admin_creator: r.adminidcreator,
+      ref_order: r.reforder,
+      fcredit: r.fcredit ?? "0",
+      paydeposit: r.paydeposit,
+      note: r.fnote,
+      detail: r.fdetail,
+      cover: r.fcover,
+      coverUrl: null,            // filled in after the URL-resolve step below
+      // Wave 15 P0-3 — outstanding balance computed from legacy formula.
+      // paydeposit='1' = paid in full → outstanding = 0; otherwise compute.
+      outstanding_thb: r.paydeposit === "1" ? 0 : calcForwarderOutstanding(r),
+      measured_by_admin: r.adminidkey ?? null,
+      // Wave 18-B — 7-col fidelity backfill flags.
+      print_status_1: r.printstatus1 === "1",
+      print_status_2: r.printstatus2 === "1",
+      print_status_3: r.printstatus3 === "1",
+      print_status_4: r.printstatus4 === "1",
+      car_on:  r.fstatuscaron  === "1",
+      car_off: r.fstatuscaroff === "1",
+      eta_base: eta,
+      pallet,
+      customer: user
+        ? {
+            userid: user.userID,
+            name,
+            phone: user.userTel ?? "",
+            coid: user.coID ?? "",
+            is_svip: svipUserIds.has(user.userID),
+            is_corporate: corporateUserIds.has(user.userID),
+            is_comparison: user.userComparison === "1",
+            is_juristic: user.userCompany === "1",
+            sale_admin:
+              user.adminIDSale && user.adminIDSale.trim() !== ""
+                ? user.adminIDSale.trim()
+                : null,
+          }
+        : null,
+    };
+  });
+
+  // ─── Client-side keyword filter across multiple fields ────────────────
+  // q_multi (U2-5): multi-line bulk search — match if ANY line matches ANY field.
+  // q       (legacy single): one keyword across all fields.
+  if (sp.q_multi) {
+    const lines = sp.q_multi
+      .split(/\r?\n/)
+      .map((l) => l.trim().toLowerCase())
+      .filter(Boolean);
+    if (lines.length > 0) {
+      rows = rows.filter((r) => {
+        const fields = [
+          String(r.id),
+          (r.f_no_cargo ?? "").toLowerCase(),
+          (r.tracking_chn ?? "").toLowerCase(),
+          (r.tracking_th  ?? "").toLowerCase(),
+          (r.customer?.userid ?? "").toLowerCase(),
+          (r.cabinet_number ?? "").toLowerCase(),
+        ];
+        return lines.some((kw) => fields.some((f) => f.includes(kw)));
+      });
+    }
+  } else if (sp.q) {
+    const keyword = sp.q.toLowerCase();
+    rows = rows.filter((r) =>
+      String(r.id).includes(keyword) ||
+      (r.f_no_cargo ?? "").toLowerCase().includes(keyword) ||
+      (r.tracking_chn ?? "").toLowerCase().includes(keyword) ||
+      (r.tracking_th  ?? "").toLowerCase().includes(keyword) ||
+      (r.customer?.userid ?? "").toLowerCase().includes(keyword) ||
+      (r.customer?.phone ?? "").includes(keyword) ||
+      (r.customer?.name ?? "").toLowerCase().includes(keyword) ||
+      (r.cabinet_number ?? "").toLowerCase().includes(keyword)
+    );
+  }
+
+  // ─── Export-all path: skip the page-slice + cover-URL resolve ──────────
+  // The CSV export emits every filtered row (no cover images) → no .range
+  // window, no signed-URL work. Total = the full filtered length.
+  if (exportAll) {
+    return { rows, totalForwarders: rows.length, forwarderErr };
+  }
+
+  // ─── Pagination total + window (2026-06-04) ──────────────────────────
+  // Common path: rows are already the DB .range() window → total = the
+  // count:exact. Post-fetch path: rows is the full JS-filtered set → total =
+  // its length, and we slice the display window here (BEFORE the cover-URL
+  // resolve below, so signed URLs are generated only for the visible page).
+  const totalForwarders = hasPostFetchFilter ? rows.length : (forwarderCount ?? 0);
+  if (hasPostFetchFilter) {
+    rows = rows.slice(from, to + 1);
+  }
+
+  // ─── Wave 13 — resolve cover filenames to signed Supabase URLs ────────
+  // `fcover` is a bare filename (e.g. "PR10691_67e0..._8c1735.jpg"). Legacy
+  // covers live at `forwarder-covers/legacy-shops/<file>`; newer admin-
+  // initiated uploads already use a bucket-relative path (`admin/...`).
+  // Batch-resolve all in parallel — much faster than per-row await.
+  const coverMap = await resolveLegacyUrlMap(
+    rows.map((r) => ({ id: r.id, filename: r.cover })),
+    "cover",
+  );
+  rows = rows.map((r) => ({ ...r, coverUrl: coverMap[String(r.id)] ?? null }));
+
+  return { rows, totalForwarders, forwarderErr };
 }
 
 /**

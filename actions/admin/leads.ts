@@ -30,6 +30,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, type AdminActionResult } from "./common";
+import { logAdminExport } from "./export-log";
 import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
 import {
   LEAD_CALL_STATUSES,
@@ -43,6 +44,11 @@ import {
 
 const ROLES = ["super", "sales_admin", "sales", "ops"] as const;
 const PAGE_SIZE = 200;
+// Safety cap for the "export all filtered" path (owner directive 2026-06-07).
+// 10,000 comfortably covers the full cold-lead pool (~6,936) in one file while
+// bounding the in-memory build. If a slice ever exceeds this the export flags
+// `truncated` so the operator knows to narrow the filter.
+const EXPORT_CAP = 10000;
 
 // Bound for the big-PCS ranking scan. True full-base ranking over the 47,636
 // tb_forwarder orders needs an aggregate RPC (a follow-up); for the day-1
@@ -105,9 +111,11 @@ export async function getLeadQueue(
   return withAdmin([...ROLES], async () => {
     const admin = createAdminClient();
     const segment = filter.segment ?? "cold";
-    const page = Math.max(1, Math.floor(filter.page ?? 1));
-    const from = (page - 1) * PAGE_SIZE;
-    const to = from + PAGE_SIZE; // fetch one extra to compute hasMore
+    // "export all" path: one big page (capped) instead of the 200-row window.
+    const pageSize = filter.exportAll ? EXPORT_CAP : PAGE_SIZE;
+    const page = filter.exportAll ? 1 : Math.max(1, Math.floor(filter.page ?? 1));
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize; // fetch one extra to compute hasMore
 
     let users: TbUserRow[] = [];
     // Per-lead order count (big-PCS ranking signal + display).
@@ -217,11 +225,11 @@ export async function getLeadQueue(
     }
 
     // hasMore + trim the extra row (only for the direct-paged segments;
-    // big-pcs already sliced exactly to PAGE_SIZE above).
+    // big-pcs already sliced exactly to pageSize above).
     let hasMore = false;
-    if (segment !== "big-pcs" && users.length > PAGE_SIZE) {
+    if (segment !== "big-pcs" && users.length > pageSize) {
       hasMore = true;
-      users = users.slice(0, PAGE_SIZE);
+      users = users.slice(0, pageSize);
     }
 
     // Latest call-state per visible lead (one query, newest-first, dedup in JS).
@@ -255,6 +263,43 @@ export async function getLeadQueue(
 
     return { ok: true, data: { rows, page, hasMore } };
   });
+}
+
+/** One CSV row for the leads export (matches the on-screen columns). */
+export type LeadExportRow = Record<string, string | number | null | undefined>;
+
+/**
+ * Export the ENTIRE filtered lead list (all pages, capped at EXPORT_CAP) as
+ * CSV rows — for the "⬇ CSV ทั้งหมด" button on /admin/leads. Reuses
+ * getLeadQueue with `exportAll` so the export can never drift from the table.
+ * Writes an admin_export_log audit row (PII walk-off trail — owner directive).
+ */
+export async function exportLeadsAll(
+  filter: Omit<LeadQueueFilter, "page" | "exportAll">,
+): Promise<{ rows: LeadExportRow[]; truncated: boolean }> {
+  const res = await getLeadQueue({ ...filter, exportAll: true });
+  if (!res.ok || !res.data) {
+    console.error("[exportLeadsAll] query failed:", res.ok ? "no_data" : res.error);
+    return { rows: [], truncated: false };
+  }
+  const rows: LeadExportRow[] = res.data.rows.map((r) => ({
+    tel: r.tel ?? "",
+    name: r.name,
+    userid: r.userid,
+    orderCount: r.orderCount,
+    rep: r.rep ?? "",
+    lastCall: r.lastCall ?? "",
+    callStatus: r.callStatus,
+    registered: r.registered ?? "",
+  }));
+  const truncated = rows.length >= EXPORT_CAP;
+  await logAdminExport({
+    dataset: "leads",
+    filters: { segment: filter.segment, status: filter.status ?? "all", q: filter.q ?? "" },
+    rowCount: rows.length,
+    truncated,
+  });
+  return { rows, truncated };
 }
 
 /**

@@ -40,6 +40,7 @@ import { buildCombineBillPrintHref, buildCombineBillDetailHref } from "@/lib/adm
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { exportCombineBillAll } from "@/actions/admin/export/combine-bill";
 import { CombineBillRowActions } from "./combine-bill-row-actions";
 // ^ Wired client island (delete + print buttons). Kept on the page so super
 //   role retains the existing functional delete; visual chrome of the
@@ -371,6 +372,14 @@ export default async function CombineBillPage({
               };
               return csvRow;
             })}
+            fetchAll={async () => {
+              "use server";
+              // Export the FULL filtered bill list (all pages, capped) — audited
+              // via admin_export_log (export walk-off trail · owner directive).
+              // Captures the page's already-derived date window so the export's
+              // WHERE clause matches the on-screen table exactly (no drift).
+              return exportCombineBillAll({ filterMode, filterStart, filterEnd });
+            }}
             cols={[
               { key: "billid",        label: "billID" },
               { key: "date",          label: "วันที่บันทึก" },
