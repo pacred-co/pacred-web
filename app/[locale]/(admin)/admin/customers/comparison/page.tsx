@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { ComparisonTable, type ComparisonRow, type CustomerPick } from "./comparison-table";
 
 // ────────────────────────────────────────────────────────────────────
@@ -158,7 +159,40 @@ export default async function AdminCustomerComparisonPage() {
               ลูกค้าที่คิดค่าขนส่งตาม “ค่าเทียบ” (ความหนาแน่น กก./คิว) — เกินค่าเทียบคิดตามกิโล ต่ำกว่าคิดตามคิว · ค่าเริ่มต้น 150
             </p>
           </div>
-          <Link href="/admin/customers" className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-surface-alt">← ลูกค้าทั้งหมด</Link>
+          <div className="flex items-center gap-2 flex-wrap">
+            <CsvButton
+              rows={rows.map((r): CsvRow => ({
+                userID: r.userID,
+                fullName: r.fullName,
+                isJuristic: r.isJuristic ? "นิติบุคคล" : "บุคคล",
+                tel: r.tel,
+                email: r.email,
+                lineId: r.lineId,
+                facebook: r.facebook,
+                address: r.address,
+                registered: r.registered ? r.registered.slice(0, 10) : "",
+                comparisonValue: r.comparisonValue,
+                adminIDSale: r.adminIDSale,
+                deleted: r.deleted ? "ลบบัญชี" : "ใช้งาน",
+              }))}
+              cols={[
+                { key: "userID",          label: "รหัสสมาชิก" },
+                { key: "fullName",        label: "ชื่อ-นามสกุล" },
+                { key: "isJuristic",      label: "ประเภท" },
+                { key: "tel",             label: "เบอร์โทร" },
+                { key: "email",           label: "อีเมล" },
+                { key: "lineId",          label: "LINE ID" },
+                { key: "facebook",        label: "Facebook" },
+                { key: "address",         label: "ที่อยู่หลัก" },
+                { key: "registered",      label: "วันสมัคร" },
+                { key: "comparisonValue", label: "ค่าเทียบ (kg/CBM)" },
+                { key: "adminIDSale",     label: "เซลล์ผู้ดูแล" },
+                { key: "deleted",         label: "สถานะ" },
+              ]}
+              filename={`customers-comparison-${new Date().toISOString().slice(0, 10)}.csv`}
+            />
+            <Link href="/admin/customers" className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-surface-alt">← ลูกค้าทั้งหมด</Link>
+          </div>
         </div>
 
         <ComparisonTable rows={rows} picks={picks} />

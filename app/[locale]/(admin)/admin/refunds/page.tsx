@@ -3,6 +3,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import {
   REFUND_STATUSES,
   REFUND_STATUS_LABEL,
@@ -152,19 +153,57 @@ export default async function AdminRefundsListPage({
         ))}
       </nav>
 
-      {/* Search */}
-      <form className="flex gap-2" action="/admin/refunds" method="get">
-        {status && <input type="hidden" name="status" value={status} />}
-        <input
-          name="q"
-          placeholder="ค้นหา: เลขที่ RF / source_ref / เหตุผล"
-          defaultValue={q}
-          className="flex-1 rounded-lg border border-border bg-white px-3 py-2 text-sm"
+      {/* Search + CSV export — accounting uses this when reconciling refunds
+          against tb_wallet_hs type-5 credits in PEAK / Excel. */}
+      <div className="flex gap-2 flex-wrap items-center">
+        <form className="flex gap-2 flex-1" action="/admin/refunds" method="get">
+          {status && <input type="hidden" name="status" value={status} />}
+          <input
+            name="q"
+            placeholder="ค้นหา: เลขที่ RF / source_ref / เหตุผล"
+            defaultValue={q}
+            className="flex-1 rounded-lg border border-border bg-white px-3 py-2 text-sm"
+          />
+          <button type="submit" className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700">
+            ค้นหา
+          </button>
+        </form>
+        <CsvButton
+          rows={rows.map((r): CsvRow => ({
+            request_no: r.request_no,
+            customer_name: [r.profile?.first_name, r.profile?.last_name].filter(Boolean).join(" "),
+            member_code: r.profile?.member_code ?? "",
+            phone: r.profile?.phone ?? "",
+            source: REFUND_SOURCE_LABEL[r.source],
+            source_ref: r.source_ref ?? "",
+            amount_thb: Number(r.amount_thb).toFixed(2),
+            reason: r.reason,
+            status: REFUND_STATUS_LABEL[r.status],
+            created_at: r.created_at ? r.created_at.slice(0, 10) : "",
+            approved_at: r.approved_at ? r.approved_at.slice(0, 10) : "",
+            paid_at: r.paid_at ? r.paid_at.slice(0, 10) : "",
+            rejected_at: r.rejected_at ? r.rejected_at.slice(0, 10) : "",
+            created_by_admin_id: r.created_by_admin_id ?? "",
+          }))}
+          cols={[
+            { key: "request_no",          label: "เลขที่ RF" },
+            { key: "customer_name",       label: "ชื่อลูกค้า" },
+            { key: "member_code",         label: "รหัสสมาชิก" },
+            { key: "phone",               label: "เบอร์โทร" },
+            { key: "source",              label: "แหล่ง" },
+            { key: "source_ref",          label: "Source Ref" },
+            { key: "amount_thb",          label: "ยอด (฿)" },
+            { key: "reason",              label: "เหตุผล" },
+            { key: "status",              label: "สถานะ" },
+            { key: "created_at",          label: "สร้างเมื่อ" },
+            { key: "approved_at",         label: "อนุมัติเมื่อ" },
+            { key: "paid_at",             label: "จ่ายเมื่อ" },
+            { key: "rejected_at",         label: "ปฏิเสธเมื่อ" },
+            { key: "created_by_admin_id", label: "Admin ที่สร้าง" },
+          ]}
+          filename={`refunds${status ? `-${status}` : ""}-page${page}-${new Date().toISOString().slice(0, 10)}.csv`}
         />
-        <button type="submit" className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700">
-          ค้นหา
-        </button>
-      </form>
+      </div>
 
       {/* Table */}
       <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">

@@ -23,6 +23,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getWalletSystemTotals } from "@/lib/admin/wallet-totals";
 import { pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { Link } from "@/i18n/navigation";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -146,7 +147,7 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
       </section>
 
       {/* ── Search box (Pacred improvement — legacy used DataTables only) ── */}
-      <form className="flex gap-2 flex-wrap" action="/admin/wallet">
+      <form className="flex gap-2 flex-wrap items-center" action="/admin/wallet">
         <input type="hidden" name="view" value="balance" />
         <input
           name="q"
@@ -165,6 +166,40 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
             ล้าง
           </Link>
         ) : null}
+        {/* CSV export — current page only (paginate 50/page · faithful to what's
+            on screen). Operators export per-page slices for spreadsheets;
+            wallet system-wide totals card already shows the grand sum. */}
+        <div className="ml-auto">
+          <CsvButton
+            rows={walletRows.map((r) => {
+              const u = userMap.get(r.userid);
+              const fullName = u
+                ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim()
+                : "";
+              const cb = cbMap.get(r.userid) ?? 0;
+              const wt = Number(r.wallettotal ?? 0);
+              const isSuspended = u?.userStatus === "0";
+              const row: CsvRow = {
+                memberCode: r.userid,
+                coID: u?.coID ?? "",
+                fullName,
+                walletTotal: wt.toFixed(2),
+                cashBack: cb.toFixed(2),
+                status: isSuspended ? "ระงับ" : "ใช้งาน",
+              };
+              return row;
+            })}
+            cols={[
+              { key: "memberCode",  label: "รหัสสมาชิก" },
+              { key: "coID",        label: "รหัสเก่า (coID)" },
+              { key: "fullName",    label: "ชื่อ-นามสกุล" },
+              { key: "walletTotal", label: "ยอดเงินคงเหลือ (฿)" },
+              { key: "cashBack",    label: "Cash Back (฿)" },
+              { key: "status",      label: "สถานะ" },
+            ]}
+            filename={`wallet-balance-page${page}${q ? `-${q}` : ""}-${new Date().toISOString().slice(0, 10)}.csv`}
+          />
+        </div>
       </form>
 
       {error && (

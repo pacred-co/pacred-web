@@ -45,6 +45,7 @@ import { AdminDateFilter } from "@/components/admin/date-filter";
 import { toLegacyOrderCode } from "@/lib/legacy-status-map";
 import { parsePage, pageRange } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { ServiceOrdersTable, type ServiceOrderRow } from "./service-orders-table";
 
 export const dynamic = "force-dynamic";
@@ -585,6 +586,64 @@ export default async function AdminServiceOrdersPage({
                 ดูทั้งหมด (ไม่จำกัด 90 วัน)
               </Link>
             )}
+            {/* CSV export — current page (50 rows default). Accounting +
+                ops use this for shop-order reconciliation against MOMO + bank.
+                Each row carries the resolved customer name + sales rep + the
+                3-money-column trio (¥ cost · ฿ shipping · ฿ total) the legacy
+                detail page renders. */}
+            <div className="ml-auto">
+              <CsvButton
+                rows={rows.map((r): CsvRow => {
+                  const totalThb =
+                    (r.htotalpricechn + r.hshippingchn) * r.hrate + r.hshippingservice;
+                  return {
+                    id: r.id,
+                    hno: r.hno,
+                    status: STATUS_LABEL[r.hstatus] ?? r.hstatus,
+                    hdate: r.hdate ?? "",
+                    hdatepayment: r.hdatepayment ?? "",
+                    hdateupdate: r.hdateupdate ?? "",
+                    userid: r.userid,
+                    customerName: r.customerName ?? "",
+                    vipTier: r.vipTier ?? "",
+                    isCorporate: r.isCorporate ? "นิติบุคคล" : "",
+                    salesRep: r.salesRep ?? "",
+                    htitle: r.htitle ?? "",
+                    hcount: r.hcount,
+                    yuanGoods: r.htotalpricechn.toFixed(2),
+                    yuanShipChina: r.hshippingchn.toFixed(2),
+                    rate: r.hrate.toFixed(4),
+                    shipService: r.hshippingservice.toFixed(2),
+                    totalThb: totalThb.toFixed(2),
+                    adminCreate: r.adminidcreate ?? "",
+                    adminUpdate: r.adminidupdate ?? "",
+                  };
+                })}
+                cols={[
+                  { key: "id",             label: "Order ID" },
+                  { key: "hno",            label: "เลขออเดอร์" },
+                  { key: "status",         label: "สถานะ" },
+                  { key: "hdate",          label: "วันที่สั่ง" },
+                  { key: "hdatepayment",   label: "ครบกำหนดจ่าย" },
+                  { key: "hdateupdate",    label: "อัพเดทล่าสุด" },
+                  { key: "userid",         label: "รหัสลูกค้า" },
+                  { key: "customerName",   label: "ชื่อลูกค้า" },
+                  { key: "vipTier",        label: "VIP" },
+                  { key: "isCorporate",    label: "นิติบุคคล" },
+                  { key: "salesRep",       label: "เซลล์" },
+                  { key: "htitle",         label: "สินค้า" },
+                  { key: "hcount",         label: "จำนวนชิ้น" },
+                  { key: "yuanGoods",      label: "มูลค่าสินค้า (¥)" },
+                  { key: "yuanShipChina",  label: "ค่าส่งจีน (¥)" },
+                  { key: "rate",           label: "เรท" },
+                  { key: "shipService",    label: "ค่าบริการ (฿)" },
+                  { key: "totalThb",       label: "รวมยอด (฿)" },
+                  { key: "adminCreate",    label: "Admin สร้าง" },
+                  { key: "adminUpdate",    label: "Admin อัพเดท" },
+                ]}
+                filename={`service-orders${statusFilter ? `-status${statusFilter}` : ""}${keyword ? `-${keyword}` : ""}-page${page}-${new Date().toISOString().slice(0, 10)}.csv`}
+              />
+            </div>
           </form>
         </div>
 

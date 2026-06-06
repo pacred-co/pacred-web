@@ -1,6 +1,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { getLeadQueue, getLeadStats } from "@/actions/admin/leads";
 import {
   LEAD_CALL_STATUSES,
@@ -150,7 +151,9 @@ export default async function AdminLeadsPage({
           })}
         </div>
 
-        {/* Search + active filters */}
+        {/* Search + active filters + CSV export — sales hands the cold list to
+            external callers / VAs as a spreadsheet. Includes tel, name, code,
+            order count, current rep, last-call note. */}
         <div className="flex flex-wrap items-center gap-2">
           <form action="/admin/leads" className="flex gap-2 flex-wrap">
             <input type="hidden" name="segment" value={segment} />
@@ -173,6 +176,31 @@ export default async function AdminLeadsPage({
               สถานะ: {statusFilter} <span className="rounded-full px-1 leading-none hover:bg-primary-100">×</span>
             </Link>
           ) : null}
+          <div className="ml-auto">
+            <CsvButton
+              rows={rows.map((r): CsvRow => ({
+                tel:        r.tel ?? "",
+                name:       r.name,
+                userid:     r.userid,
+                orderCount: r.orderCount,
+                rep:        r.rep ?? "",
+                lastCall:   r.lastCall ?? "",
+                callStatus: r.callStatus,
+                registered: r.registered ?? "",
+              }))}
+              cols={[
+                { key: "tel",        label: "เบอร์โทร" },
+                { key: "name",       label: "ชื่อ" },
+                { key: "userid",     label: "รหัสลูกค้า" },
+                { key: "orderCount", label: "จำนวนนำเข้า" },
+                { key: "rep",        label: "เซลล์ผู้ดูแล" },
+                { key: "lastCall",   label: "โทรล่าสุด" },
+                { key: "callStatus", label: "สถานะโทร" },
+                { key: "registered", label: "ลงทะเบียน" },
+              ]}
+              filename={`leads-${segment}${statusFilter !== "all" ? `-${statusFilter}` : ""}-page${page}-${new Date().toISOString().slice(0, 10)}.csv`}
+            />
+          </div>
         </div>
 
         {/* Big-PCS ranking note (flagged: recent-slice, not full-base) */}

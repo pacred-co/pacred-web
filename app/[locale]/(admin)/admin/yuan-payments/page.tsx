@@ -28,6 +28,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { TbYuanBulkBar, TbYuanRowCheckbox } from "./tb-bulk-bar";
 
 export const dynamic = "force-dynamic";
@@ -310,17 +311,61 @@ export default async function AdminYuanPaymentsPage({
         )}
       </form>
 
-      {/* Date-window status chip — explicit feedback for what's loaded */}
-      <p className="text-[11px] text-muted">
-        {window.isDefault ? (
-          <>📅 แสดง <strong className="text-foreground">60 วันล่าสุด</strong> ({window.from} → {window.to}) ·{" "}
-          <Link href="/admin/yuan-payments?all=1" className="text-primary-600 hover:underline">ดูทั้งหมด</Link></>
-        ) : sp.all === "1" ? (
-          <>📅 แสดง <strong className="text-foreground">ทั้งหมด</strong> · <Link href="/admin/yuan-payments" className="text-primary-600 hover:underline">กลับ 60 วัน</Link></>
-        ) : (
-          <>📅 ช่วง: <strong className="text-foreground">{window.from ?? "ตั้งแต่เริ่ม"} → {window.to ?? "ปัจจุบัน"}</strong></>
-        )}
-      </p>
+      {/* Date-window status chip + CSV export — explicit feedback for what's loaded */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <p className="text-[11px] text-muted">
+          {window.isDefault ? (
+            <>📅 แสดง <strong className="text-foreground">60 วันล่าสุด</strong> ({window.from} → {window.to}) ·{" "}
+            <Link href="/admin/yuan-payments?all=1" className="text-primary-600 hover:underline">ดูทั้งหมด</Link></>
+          ) : sp.all === "1" ? (
+            <>📅 แสดง <strong className="text-foreground">ทั้งหมด</strong> · <Link href="/admin/yuan-payments" className="text-primary-600 hover:underline">กลับ 60 วัน</Link></>
+          ) : (
+            <>📅 ช่วง: <strong className="text-foreground">{window.from ?? "ตั้งแต่เริ่ม"} → {window.to ?? "ปัจจุบัน"}</strong></>
+          )}
+        </p>
+        {/* CSV export — current page only (50 rows/page · honours active filter/window/sort).
+            Accounting often exports the รอตรวจ tab to reconcile against ธนาคาร statements. */}
+        <CsvButton
+          rows={rows.map((r) => {
+            const u = r.userid ? userMap.get(r.userid) : undefined;
+            const fullName = u
+              ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim()
+              : "";
+            const row: CsvRow = {
+              id: r.id,
+              paydate: r.paydate ?? "",
+              userid: r.userid ?? "",
+              customer: fullName,
+              paytype: PAYTYPE_LABEL[r.paytype ?? ""] ?? r.paytype ?? "",
+              payyuan: r.payyuan != null ? Number(r.payyuan).toFixed(2) : "",
+              payrate: r.payrate != null ? Number(r.payrate).toFixed(4) : "",
+              paythb: r.paythb != null ? Number(r.paythb).toFixed(2) : "",
+              payprofitthb: r.payprofitthb != null ? Number(r.payprofitthb).toFixed(2) : "",
+              status: STATUS_LABEL[r.paystatus ?? ""] ?? r.paystatus ?? "",
+              detail: r.paydetail ?? "",
+              paydateadmin: r.paydateadmin ?? "",
+              adminid: r.adminid ?? "",
+            };
+            return row;
+          })}
+          cols={[
+            { key: "id",           label: "Payment ID" },
+            { key: "paydate",      label: "วันที่สร้าง" },
+            { key: "userid",       label: "รหัสลูกค้า" },
+            { key: "customer",     label: "ชื่อลูกค้า" },
+            { key: "paytype",      label: "ช่องทาง" },
+            { key: "payyuan",      label: "จำนวนหยวน (¥)" },
+            { key: "payrate",      label: "เรท" },
+            { key: "paythb",       label: "บาท (฿)" },
+            { key: "payprofitthb", label: "กำไร (฿)" },
+            { key: "status",       label: "สถานะ" },
+            { key: "detail",       label: "รายละเอียด" },
+            { key: "paydateadmin", label: "วันที่อนุมัติ" },
+            { key: "adminid",      label: "Admin" },
+          ]}
+          filename={`yuan-payments-page${page}${sp.status ? `-status${sp.status}` : ""}${sp.q ? `-${sp.q}` : ""}-${new Date().toISOString().slice(0, 10)}.csv`}
+        />
+      </div>
 
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">

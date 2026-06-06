@@ -20,6 +20,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 
 export const dynamic = "force-dynamic";
 
@@ -115,7 +116,9 @@ export default async function RecentlyActiveCustomersPage({
         </Link>
       </div>
 
-      {/* Type filter chips */}
+      {/* Type filter chips + CSV export (closes the "CSV → Wave 8" gap from
+          the page docstring). Sales rep uses the export to feed dormant
+          customers into the call-queue + win-back drip. */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-muted">ประเภทลูกค้า:</span>
         {(["all", "personal", "juristic"] as const).map((t) => (
@@ -131,6 +134,45 @@ export default async function RecentlyActiveCustomersPage({
             {t === "all" ? "ทั้งหมด" : t === "personal" ? "บุคคล" : "นิติบุคคล"}
           </Link>
         ))}
+        <div className="ml-auto">
+          <CsvButton
+            rows={rows.map((r): CsvRow => {
+              const days = daysSince(r.userLastLogin);
+              return {
+                userID: r.userID,
+                fullName: `${r.userName ?? ""} ${r.userLastName ?? ""}`.trim(),
+                type: r.userCompany === "1" ? "นิติบุคคล" : "บุคคล",
+                tel: r.userTel ?? "",
+                email: r.userEmail ?? "",
+                adminIDSale: r.adminIDSale ?? "",
+                registered: r.userRegistered ? r.userRegistered.slice(0, 10) : "",
+                lastLogin: r.userLastLogin ? r.userLastLogin.slice(0, 10) : "",
+                daysDormant: days === null ? "" : days,
+                bucket:
+                  days === null
+                    ? "ยังไม่เคย login"
+                    : days > 90
+                      ? "หายไป > 90 วัน"
+                      : days > 30
+                        ? "หายไป > 30 วัน"
+                        : "ใช้งานล่าสุด ≤ 30 วัน",
+              };
+            })}
+            cols={[
+              { key: "userID",      label: "รหัสสมาชิก" },
+              { key: "fullName",    label: "ชื่อ-นามสกุล" },
+              { key: "type",        label: "ประเภท" },
+              { key: "tel",         label: "เบอร์โทร" },
+              { key: "email",       label: "อีเมล" },
+              { key: "adminIDSale", label: "เซลล์ดูแล" },
+              { key: "registered",  label: "วันสมัคร" },
+              { key: "lastLogin",   label: "login ล่าสุด" },
+              { key: "daysDormant", label: "หายไป (วัน)" },
+              { key: "bucket",      label: "Bucket" },
+            ]}
+            filename={`customers-recently-active${type !== "all" ? `-${type}` : ""}-${new Date().toISOString().slice(0, 10)}.csv`}
+          />
+        </div>
       </div>
 
       {/* Summary cards */}

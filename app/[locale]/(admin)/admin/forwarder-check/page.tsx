@@ -47,6 +47,7 @@ import { TopMenuReport } from "@/components/admin/top-menu-report";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import {
   ForwarderCheckTable,
   type ForwarderCheckRow,
@@ -398,6 +399,68 @@ export default async function AdminForwarderCheckPage({
               ⏳ LINE OA push + email: รอ resolver userid→profile_id (กำลังพัฒนา)
             </span>
           </div>
+        </div>
+
+        {/* CSV export — honours the active tab filter (all / credit / normal).
+            Accounting uses this to hand a spreadsheet to the finance team
+            before firing the bulk-bill SMS run. Money columns gated by role. */}
+        <div className="flex justify-end">
+          <CsvButton
+            rows={rows.map((r) => {
+              const row: CsvRow = {
+                id: r.id,
+                fno_cargo: r.fno_cargo ?? "",
+                tracking_chn: r.tracking_chn ?? "",
+                cabinet_number: r.cabinet_number ?? "",
+                userid: r.userid,
+                customer_name: r.customer_name,
+                customer_type: r.customer_company === 1 ? "นิติบุคคล" : "บุคคล",
+                credit_type: r.user_credit === "1" ? "เครดิต" : "ปกติ",
+                amount: r.amount,
+                weight_kg: r.weight_kg.toFixed(2),
+                volume_cbm: r.volume_cbm.toFixed(4),
+                transport: r.transport_type === "1" ? "รถ" : r.transport_type === "2" ? "เรือ" : r.transport_type === "3" ? "แอร์" : r.transport_type,
+                outstanding_thb: r.outstanding_thb.toFixed(2),
+                ship_by: r.ship_by,
+                pay_method: r.pay_method ?? "",
+                address: [r.address_district, r.address_province, r.address_zipcode].filter(Boolean).join(" "),
+                check_added_at: r.check_added_at ?? "",
+                check_added_by: r.check_added_by ?? "",
+                ...(showMoneyColumns ? {
+                  cost_total_price: r.cost_total_price.toFixed(2),
+                  one_percent: r.one_percent.toFixed(2),
+                  profit_item: r.profit_item.toFixed(2),
+                } : {}),
+              };
+              return row;
+            })}
+            cols={[
+              { key: "id",              label: "Forwarder ID" },
+              { key: "fno_cargo",       label: "เลขที่ Cargo" },
+              { key: "tracking_chn",    label: "Tracking จีน" },
+              { key: "cabinet_number",  label: "หมายเลขตู้" },
+              { key: "userid",          label: "รหัสลูกค้า" },
+              { key: "customer_name",   label: "ชื่อลูกค้า" },
+              { key: "customer_type",   label: "ประเภทลูกค้า" },
+              { key: "credit_type",     label: "เครดิต / ปกติ" },
+              { key: "amount",          label: "จำนวน" },
+              { key: "weight_kg",       label: "น้ำหนัก (KG)" },
+              { key: "volume_cbm",      label: "ปริมาตร (CBM)" },
+              { key: "transport",       label: "ขนส่ง" },
+              { key: "outstanding_thb", label: "ยอดเรียกเก็บ (฿)" },
+              { key: "ship_by",         label: "วิธีรับ" },
+              { key: "pay_method",      label: "วิธีจ่าย" },
+              { key: "address",         label: "ที่อยู่จัดส่ง" },
+              { key: "check_added_at",  label: "เข้าคิวเมื่อ" },
+              { key: "check_added_by",  label: "เข้าคิวโดย" },
+              ...(showMoneyColumns ? [
+                { key: "cost_total_price", label: "ต้นทุน (฿)" },
+                { key: "one_percent",      label: "หัก 1% นิติฯ (฿)" },
+                { key: "profit_item",      label: "กำไร (฿)" },
+              ] : []),
+            ]}
+            filename={`forwarder-check-${tab}-${new Date().toISOString().slice(0, 10)}.csv`}
+          />
         </div>
 
         <ForwarderCheckTable rows={rows} showMoneyColumns={showMoneyColumns} />

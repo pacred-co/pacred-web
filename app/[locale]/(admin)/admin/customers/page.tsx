@@ -8,6 +8,7 @@ import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { CustomersTable, PendingJuristicReviews, type CustomerTableRow, type JuristicBundle } from "./customers-table";
 
 // P0-21 (ADR-0021 corporate-SOT): the inline juristic review reads the LEGACY
@@ -492,6 +493,52 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
           </select>
           <button type="submit" className="rounded-lg bg-primary-500 text-white px-4 text-sm">ค้นหา</button>
         </form>
+        {/* CSV export — current page only (50/page · honours all filters incl.
+            group/type/adminidsale/q). Sales hands the segment list to
+            external callers / VAs; accounting reconciles the wallet column
+            against tb_wallet. PII surface — page-level gate already enforces
+            ops/sales_admin/accounting. */}
+        <CsvButton
+          rows={tableRows.map((r): CsvRow => ({
+            userID: r.userID,
+            fullName: r.fullName,
+            type: r.isJuristic ? "นิติบุคคล" : "บุคคล",
+            status: r.status,
+            tel: r.tel,
+            email: r.email,
+            address: r.address,
+            birthday: r.birthdayDm + (r.birthdayAge ? ` (อายุ ${r.birthdayAge})` : ""),
+            vip: r.vip ? "VIP" : "",
+            lineId: r.lineId,
+            facebook: r.facebook,
+            adminIDSale: r.adminIDSale,
+            wallet: r.wallet.toFixed(2),
+            registered: r.registered ? r.registered.slice(0, 10) : "",
+            juristic_tax_id: r.juristic?.taxId ?? "",
+            juristic_company: r.juristic?.companyName ?? "",
+            juristic_status: r.juristic?.corpStatus ?? "",
+          }))}
+          cols={[
+            { key: "userID",           label: "รหัสสมาชิก" },
+            { key: "fullName",         label: "ชื่อ-นามสกุล" },
+            { key: "type",             label: "ประเภท" },
+            { key: "status",           label: "สถานะ" },
+            { key: "tel",              label: "เบอร์โทร" },
+            { key: "email",            label: "อีเมล" },
+            { key: "address",          label: "ที่อยู่หลัก" },
+            { key: "birthday",         label: "วันเกิด / อายุ" },
+            { key: "vip",              label: "VIP" },
+            { key: "lineId",           label: "LINE ID" },
+            { key: "facebook",         label: "Facebook" },
+            { key: "adminIDSale",      label: "เซลล์ดูแล" },
+            { key: "wallet",           label: "ยอด Wallet (฿)" },
+            { key: "registered",       label: "วันสมัคร" },
+            { key: "juristic_tax_id",  label: "เลขผู้เสียภาษี" },
+            { key: "juristic_company", label: "ชื่อบริษัท" },
+            { key: "juristic_status",  label: "สถานะเอกสารนิติฯ" },
+          ]}
+          filename={`customers${group ? `-${group}` : ""}${sp.type ? `-${sp.type}` : ""}${adminidsale ? `-${adminidsale}` : ""}-page${page}-${new Date().toISOString().slice(0, 10)}.csv`}
+        />
         </div>
       </div>
 

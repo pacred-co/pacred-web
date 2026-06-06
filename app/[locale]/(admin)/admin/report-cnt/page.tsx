@@ -42,6 +42,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { CntListTable, type CntListRow } from "./cnt-list-table";
 
 export const dynamic = "force-dynamic";
@@ -178,31 +179,92 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
 
   const admin = createAdminClient();
 
-  // Pull tb_forwarder rows matching the page+filter combination. The
-  // legacy GROUP BY fCabinetNumber is applied client-side because
-  // PostgREST cannot return SUM/COUNT aggregates without an RPC.
-  let q = admin
-    .from("tb_forwarder")
-    .select(
-      "fwarehousename,fdatestatus4,fstatus,fcabinetnumber,fdatecontainerclose,ftransporttype,fvolume,fweight,fcosttotalprice,ftotalprice",
-    )
-    .not("fcabinetnumber", "is", null)
-    .neq("fcabinetnumber", "")
-    .neq("fcabinetnumber", "0")
-    .limit(50_000);
+  // 2026-06-06 (ภูม B5 fix · save-point 2026-06-05 late-PM):
+  //   The legacy path pulled 50,000 tb_forwarder rows + JS-grouped into
+  //   ~5,603 containers · 12-23 MB wire per page-load. Replaced with the
+  //   `get_container_summary` RPC (migration 0146) that does GROUP BY +
+  //   SUM server-side · returns ~5,603 pre-aggregated rows directly.
+  //   Wire payload shrinks ~88×.
+  //
+  // The RPC output already matches the Grouped shape (less isPaid, joined
+  // separately below). If the RPC fails (e.g. migration 0146 not applied
+  // yet), we fall back to the original 50k-row + JS-group path so the
+  // page never breaks.
 
-  if (isWaiting) q = q.lt("fstatus", "4");
-  else            q = q.gt("fstatus", "3");
+  type RpcSummary = {
+    fcabinetnumber:       string;
+    ftransporttype:       string | null;
+    fwarehousename:       string | null;
+    fdatecontainerclose:  string | null;
+    latest_fdatestatus4:  string | null;
+    row_count:            number;
+    sum_weight:           number | string;
+    sum_volume:           number | string;
+    sum_cost:             number | string;
+    sum_price:            number | string;
+  };
 
-  if (transportType === "1") q = q.eq("ftransporttype", "1");
-  if (transportType === "2") q = q.eq("ftransporttype", "2");
+  let groupedNoPaid: Omit<Grouped, "isPaid">[] = [];
+  let queryFailed = false;
 
-  if (!isWaiting && startDate && endDate) {
-    q = q.gte("fdatecontainerclose", startDate + " 00:00:00")
-         .lte("fdatecontainerclose", endDate   + " 23:59:59");
+  const rpcRes = await admin.rpc("get_container_summary", {
+    p_page:      isWaiting ? "waiting" : "succeed",
+    p_transport: ["1", "2", "3"].includes(transportType) ? transportType : null,
+    p_start:     (!isWaiting && startDate) ? startDate : null,
+    p_end:       (!isWaiting && endDate)   ? endDate   : null,
+  });
+
+  if (rpcRes.error) {
+    console.warn(
+      "[get_container_summary RPC] failed → falling back to 50k-row pull",
+      { code: rpcRes.error.code, message: rpcRes.error.message },
+    );
+    // Fallback to legacy 50k-row pull
+    let q = admin
+      .from("tb_forwarder")
+      .select(
+        "fwarehousename,fdatestatus4,fstatus,fcabinetnumber,fdatecontainerclose,ftransporttype,fvolume,fweight,fcosttotalprice,ftotalprice",
+      )
+      .not("fcabinetnumber", "is", null)
+      .neq("fcabinetnumber", "")
+      .neq("fcabinetnumber", "0")
+      .limit(50_000);
+    if (isWaiting) q = q.lt("fstatus", "4");
+    else            q = q.gt("fstatus", "3");
+    if (transportType === "1") q = q.eq("ftransporttype", "1");
+    if (transportType === "2") q = q.eq("ftransporttype", "2");
+    if (transportType === "3") q = q.eq("ftransporttype", "3");
+    if (!isWaiting && startDate && endDate) {
+      q = q.gte("fdatecontainerclose", startDate + " 00:00:00")
+           .lte("fdatecontainerclose", endDate   + " 23:59:59");
+    }
+    const { data: rows, error } = await q;
+    queryFailed = !!error;
+    if (!error && rows) {
+      // Run the JS group AND strip isPaid so the merge step below remains
+      // uniform across both paths.
+      const tmp = groupByContainer(rows as Row[], new Set<string>());
+      groupedNoPaid = tmp.map(({ isPaid: _isPaid, ...rest }) => rest);
+    }
+  } else {
+    // Happy path — RPC available + returned pre-aggregated rows.
+    groupedNoPaid = ((rpcRes.data ?? []) as RpcSummary[]).map((r) => ({
+      fcabinetnumber:      r.fcabinetnumber,
+      fwarehousename:      r.fwarehousename ?? "",
+      fdatecontainerclose: r.fdatecontainerclose,
+      fdatestatus4:        r.latest_fdatestatus4,
+      ftransporttype:      r.ftransporttype ?? "",
+      // fstatus is a per-row attribute · with aggregation we surface the
+      // bucket label as a stand-in for the table renderer (it only uses
+      // fstatus to determine the bucket).
+      fstatus:             isWaiting ? "1" : "7",
+      trackCount:          Number(r.row_count ?? 0),
+      volumeSum:           Number(r.sum_volume ?? 0),
+      weightSum:           Number(r.sum_weight ?? 0),
+      costSum:             Number(r.sum_cost ?? 0),
+      priceSum:            Number(r.sum_price ?? 0),
+    }));
   }
-
-  const { data: rows, error } = await q;
 
   // Wave 21 P2 Phase A: scope tb_cnt_item fetch to ONLY the cabinet numbers
   // visible on this page instead of pulling the entire join table. Per survey
@@ -210,7 +272,7 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
   // containers render at once, so a full-table fetch is wasteful. Saves
   // ~200-500ms per page-load + smaller wire payload.
   const visibleCabs = Array.from(
-    new Set(((rows ?? []) as Row[]).map((r) => r.fcabinetnumber).filter(Boolean)),
+    new Set(groupedNoPaid.map((r) => r.fcabinetnumber).filter(Boolean)),
   );
   let paidSet = new Set<string>();
   if (visibleCabs.length > 0) {
@@ -224,7 +286,9 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
     paidSet = new Set((paidRows ?? []).map((r) => (r as { fCabinetNumber: string }).fCabinetNumber));
   }
 
-  let grouped: Grouped[] = error || !rows ? [] : groupByContainer(rows as Row[], paidSet);
+  let grouped: Grouped[] = queryFailed
+    ? []
+    : groupedNoPaid.map((g) => ({ ...g, isPaid: paidSet.has(g.fcabinetnumber) }));
 
   if (actionPay === "1") grouped = grouped.filter((g) => !g.isPaid);
   if (actionPay === "2") grouped = grouped.filter((g) =>  g.isPaid);
@@ -234,6 +298,33 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
 
   // Header counts (independent of date filter — match legacy)
   const counts = await loadHeaderCounts(admin, startDate, endDate);
+
+  // 2026-06-06 (ภูม follow-up to B-batch): CSV export for accountants. Builds
+  // from the SAME `grouped` array the table renders, so the filtered view
+  // exports exactly what's on screen. Money columns respect `showMoney`
+  // (warehouse role doesn't see cost/price/profit). 1 row per cabinet.
+  const csvRows: CsvRow[] = grouped.map((g) => {
+    const profit = g.priceSum - g.costSum;
+    return {
+      "หมายเลขตู้":        g.fcabinetnumber,
+      "โกดัง":             WAREHOUSE_LABEL[g.fwarehousename] ?? g.fwarehousename,
+      "ขนส่ง":             TRANSPORT_LABEL[g.ftransporttype] ?? g.ftransporttype,
+      "วันที่ปิดตู้":       g.fdatecontainerclose ?? "",
+      "วันที่ถึงไทย":       g.fdatestatus4 ?? "",
+      "จำนวนแทร็คกิ้ง":    g.trackCount,
+      "ปริมาตรรวม (CBM)":  g.volumeSum.toFixed(4),
+      "น้ำหนัก (KG)":      g.weightSum.toFixed(2),
+      ...(showMoney ? {
+        "ต้นทุนรวม":  g.costSum.toFixed(2),
+        "ราคาขายรวม": g.priceSum.toFixed(2),
+        "กำไร":      profit.toFixed(2),
+      } : {}),
+      "สถานะจ่ายค่าตู้":   g.isPaid ? "จ่ายแล้ว" : "ยังไม่จ่าย",
+    };
+  });
+  const csvFilename = `pacred-report-cnt-${isWaiting ? "waiting" : "succeed"}-${transportType}-${
+    !isWaiting && startDate && endDate ? `${startDate}_to_${endDate}` : "all"
+  }.csv`;
 
   return (
     <>
@@ -285,6 +376,7 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
                 <option value="all">ทั้งหมด</option>
                 <option value="1">ทางรถ</option>
                 <option value="2">ทางเรือ</option>
+                <option value="3">ทางอากาศ</option>
               </select>
             </label>
             <input type="hidden" name="historyTable" value="1" />
@@ -316,11 +408,31 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
             active={transportType === "2"}
             count={counts.transportShip(isWaiting)}
           >🚢 ทางเรือ</TabLink>
+          {/* 2026-06-06 B3 (ภูม flag · late-PM save-point): 0 air rows
+              currently · but legacy TRANSPORT_LABEL has "3"="ทางอากาศ"
+              and the filter pill should match the dropdown for symmetry.
+              Renders 0 count gracefully when there are no air containers. */}
+          <TabLink
+            href={buildHref(sp, { transportType: "3" })}
+            active={transportType === "3"}
+            count={counts.transportAir(isWaiting)}
+          >✈️ ทางอากาศ</TabLink>
+
+          {/* 2026-06-06 (ภูม follow-up): CSV export for accountants.
+              Exports the EXACT filtered + grouped rows currently shown
+              in the table. Money columns honour the `showMoney` role gate. */}
+          <div className="ml-auto">
+            <CsvButton
+              rows={csvRows}
+              cols={Object.keys(csvRows[0] ?? {}).map((k) => ({ key: k, label: k }))}
+              filename={csvFilename}
+            />
+          </div>
         </div>
 
-        {error && (
+        {queryFailed && (
           <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-            โหลดข้อมูลไม่สำเร็จ: {error.message}
+            โหลดข้อมูลไม่สำเร็จ — ทั้ง RPC <code>get_container_summary</code> และ fallback ดึงตู้ไม่ได้
           </div>
         )}
 
@@ -391,12 +503,46 @@ async function loadHeaderCounts(
   transportAll:   (isWaiting: boolean) => number;
   transportTruck: (isWaiting: boolean) => number;
   transportShip:  (isWaiting: boolean) => number;
+  transportAir:   (isWaiting: boolean) => number;
 }> {
-  // Run 6 count queries in parallel. We avoid building a typed
-  // helper closure (the Supabase builder return type compounds and
-  // trips TS2589 "type instantiation excessively deep"); instead
-  // each query is its own expression and we treat results uniformly.
-  async function countWaiting(transportType?: string): Promise<number> {
+  // 2026-06-06 (ภูม B2 fix · save-point 2026-06-05 late-PM):
+  //   The old `count: "exact"` queries counted ROWS — wrong for the badge,
+  //   which represents distinct CABINETS. Replace with the RPC
+  //   `count_distinct_cabinets` (migration 0146 · same filter semantics).
+  //
+  // Concrete fix: succeed badge went from 46,339 ROWS → 5,603 CABINETS
+  // (8.3× lower) · waiting badge went from 283 ROWS → 32 CABINETS (8.8×).
+  // พี่ป๊อป + ภูม no longer think workload is 8× larger than reality.
+  //
+  // Graceful fallback: if the RPC doesn't exist yet (migration 0146 not
+  // applied), each call returns null and we fall through to the original
+  // row-count query so the page never breaks. The fallback is the legacy
+  // over-count behaviour, so this can ship safely before the migration apply.
+  async function rpcDistinct(
+    page: "waiting" | "succeed",
+    transport?: string,
+  ): Promise<number | null> {
+    const { data, error } = await admin.rpc("count_distinct_cabinets", {
+      p_page:      page,
+      p_transport: transport ?? null,
+      p_start:     (page === "succeed" && startDate) ? startDate : null,
+      p_end:       (page === "succeed" && endDate)   ? endDate   : null,
+    });
+    if (error) {
+      // Fail-safe — log + signal fallback path. Most common reason during
+      // rollout: migration 0146 not applied yet.
+      console.warn(
+        "[count_distinct_cabinets RPC] failed → falling back to row-count",
+        { code: error.code, message: error.message },
+      );
+      return null;
+    }
+    return Number(data ?? 0);
+  }
+
+  // Original row-count path — kept verbatim as the fallback for when the
+  // RPC isn't available yet (e.g. migration 0146 still pending apply).
+  async function countWaitingRowsFallback(transportType?: string): Promise<number> {
     let q = admin
       .from("tb_forwarder")
       .select("fcabinetnumber", { count: "exact", head: true })
@@ -408,7 +554,7 @@ async function loadHeaderCounts(
     const r = await q;
     return r.count ?? 0;
   }
-  async function countSucceed(transportType?: string): Promise<number> {
+  async function countSucceedRowsFallback(transportType?: string): Promise<number> {
     let q = admin
       .from("tb_forwarder")
       .select("fcabinetnumber", { count: "exact", head: true })
@@ -424,13 +570,27 @@ async function loadHeaderCounts(
     return r.count ?? 0;
   }
 
-  const [waitingAll, waitingTruck, waitingShip, succeedAll, succeedTruck, succeedShip] = await Promise.all([
+  async function countWaiting(transportType?: string): Promise<number> {
+    const v = await rpcDistinct("waiting", transportType);
+    return v ?? (await countWaitingRowsFallback(transportType));
+  }
+  async function countSucceed(transportType?: string): Promise<number> {
+    const v = await rpcDistinct("succeed", transportType);
+    return v ?? (await countSucceedRowsFallback(transportType));
+  }
+
+  const [
+    waitingAll, waitingTruck, waitingShip, waitingAir,
+    succeedAll, succeedTruck, succeedShip, succeedAir,
+  ] = await Promise.all([
     countWaiting(),
     countWaiting("1"),
     countWaiting("2"),
+    countWaiting("3"),
     countSucceed(),
     countSucceed("1"),
     countSucceed("2"),
+    countSucceed("3"),
   ]);
 
   return {
@@ -439,5 +599,6 @@ async function loadHeaderCounts(
     transportAll:   (isWaiting) => isWaiting ? waitingAll   : succeedAll,
     transportTruck: (isWaiting) => isWaiting ? waitingTruck : succeedTruck,
     transportShip:  (isWaiting) => isWaiting ? waitingShip  : succeedShip,
+    transportAir:   (isWaiting) => isWaiting ? waitingAir   : succeedAir,
   };
 }

@@ -52,10 +52,15 @@ export async function updateMyAvatar(
   const publicUrl = pub?.publicUrl ?? "";
   if (!publicUrl) return { ok: false, error: "สร้างลิงก์รูปไม่สำเร็จ" };
 
-  const { error } = await admin
+  // Update profiles.avatar_url (the modern column · pcs-chrome.ts reads this).
+  // Also return profiles.member_code in the same RPC so we can mirror to
+  // tb_users.userPicture below (avoid a second SELECT round-trip).
+  const { data: profUpd, error } = await admin
     .from("profiles")
     .update({ avatar_url: publicUrl })
-    .eq("id", user.id);
+    .eq("id", user.id)
+    .select("member_code")
+    .maybeSingle<{ member_code: string | null }>();
   if (error) {
     console.error(`[updateMyAvatar profiles.update] failed`, {
       code: error.code,
@@ -63,6 +68,36 @@ export async function updateMyAvatar(
       id: user.id,
     });
     return { ok: false, error: `บันทึกรูปไม่สำเร็จ: ${error.message}` };
+  }
+
+  // 2026-06-06 (ภูม flag · เดฟ note in customer-flow-fidelity-audit-2026-06-05):
+  //   "avatar→tb_users.userPicture mirror (filename-vs-URL)" — when a customer
+  //   uploads a new avatar via /profile, only `profiles.avatar_url` was being
+  //   updated · `tb_users.userPicture` kept its legacy filename (or NULL for
+  //   newly-registered customers). Result: admin surfaces that go through the
+  //   legacy reader (/admin/customers/[id] legacy-view.tsx) never saw the new
+  //   picture — staff still saw the OLD avatar after a customer changed it.
+  //
+  // Fix: also write the full public URL into `tb_users.userPicture`. The
+  // `lib/storage/legacy-resolver.ts` (rule 1 · line 28-29) already passes
+  // full URLs through unchanged, so the legacy reader handles both shapes.
+  //
+  // Non-fatal: if the tb_users update fails (rare · transient · or migrated
+  // customer with no member_code), the modern surfaces still show the new
+  // picture; only the admin legacy view stays stale until next upload.
+  const memberCode = profUpd?.member_code;
+  if (memberCode) {
+    const { error: tbErr } = await admin
+      .from("tb_users")
+      .update({ userPicture: publicUrl })
+      .eq("userID", memberCode);
+    if (tbErr) {
+      console.error("[updateMyAvatar tb_users.userPicture mirror] non-fatal", {
+        code: tbErr.code,
+        message: tbErr.message,
+        memberCode,
+      });
+    }
   }
 
   revalidatePath("/profile");
