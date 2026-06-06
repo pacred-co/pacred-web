@@ -37,6 +37,7 @@ import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-me
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 
@@ -999,6 +1000,86 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
             </Link>
           );
         })}
+      </div>
+
+      {/* CSV export — current page (50 rows/page · honours all filters incl.
+          status + mode + date window + service + container + keyword). The
+          single biggest cargo surface; accounting + ops download per-status
+          slices to hand to warehouse / driver / PEAK. Money cols always
+          present (page-level gate already enforces super/ops/accounting). */}
+      <div className="flex justify-end">
+        <CsvButton
+          rows={rows.map((r): CsvRow => ({
+            id: r.id,
+            f_no_cargo: r.f_no_cargo ?? "",
+            status: STATUS_LABEL[r.status] ?? r.status,
+            transport: MODE_LABEL[r.transport_type] ?? r.transport_type,
+            warehouse_china: r.warehouse_china ?? "",
+            partner_warehouse: r.partner_warehouse ?? "",
+            cabinet: r.cabinet_number ?? "",
+            tracking_chn: r.tracking_chn ?? "",
+            tracking_th: r.tracking_th ?? "",
+            userid: r.customer?.userid ?? "",
+            customer: r.customer?.name ?? "",
+            phone: r.customer?.phone ?? "",
+            customer_flags: [
+              r.customer?.is_juristic ? "นิติฯ" : "",
+              r.customer?.is_corporate ? "นิติบุคคล" : "",
+              r.customer?.is_svip ? "SVIP" : "",
+              r.customer?.coid ?? "",
+            ].filter(Boolean).join(" / "),
+            sales_rep: r.customer?.sale_admin ?? "",
+            amount_count: r.amount_count,
+            weight_kg: r.weight_kg.toFixed(2),
+            volume_cbm: r.volume_cbm.toFixed(4),
+            total_price: r.total_price.toFixed(2),
+            outstanding_thb: r.outstanding_thb.toFixed(2),
+            paydeposit: r.paydeposit === "1" ? "ชำระแล้ว" : "",
+            fcredit: r.fcredit === "1" ? "เครดิต" : "",
+            created_at: r.created_at,
+            date_status2: r.date_status2 ?? "",
+            date_status3: r.date_status3 ?? "",
+            date_status4: r.date_status4 ?? "",
+            eta_base: r.eta_base ?? "",
+            pallet: r.pallet ?? "",
+            admin_id_last: r.admin_id_last ?? "",
+            admin_creator: r.admin_creator ?? "",
+            note: r.note ?? "",
+          }))}
+          cols={[
+            { key: "id",                label: "Forwarder ID" },
+            { key: "f_no_cargo",        label: "เลขที่ Cargo" },
+            { key: "status",            label: "สถานะ" },
+            { key: "transport",         label: "ขนส่ง" },
+            { key: "warehouse_china",   label: "โกดังจีน" },
+            { key: "partner_warehouse", label: "Partner Warehouse" },
+            { key: "cabinet",           label: "หมายเลขตู้" },
+            { key: "tracking_chn",      label: "Tracking จีน" },
+            { key: "tracking_th",       label: "Tracking ไทย" },
+            { key: "userid",            label: "รหัสลูกค้า" },
+            { key: "customer",          label: "ชื่อลูกค้า" },
+            { key: "phone",             label: "เบอร์โทร" },
+            { key: "customer_flags",    label: "ประเภทลูกค้า" },
+            { key: "sales_rep",         label: "เซลล์" },
+            { key: "amount_count",      label: "จำนวน" },
+            { key: "weight_kg",         label: "น้ำหนัก (KG)" },
+            { key: "volume_cbm",        label: "ปริมาตร (CBM)" },
+            { key: "total_price",       label: "ราคารวม (฿)" },
+            { key: "outstanding_thb",   label: "ยอดค้างชำระ (฿)" },
+            { key: "paydeposit",        label: "สถานะจ่ายมัดจำ" },
+            { key: "fcredit",           label: "เครดิต" },
+            { key: "created_at",        label: "วันที่สร้าง" },
+            { key: "date_status2",      label: "ถึงโกดังจีน" },
+            { key: "date_status3",      label: "ออกจากจีน" },
+            { key: "date_status4",      label: "ถึงไทย" },
+            { key: "eta_base",          label: "ETA ไทย" },
+            { key: "pallet",            label: "Pallet" },
+            { key: "admin_id_last",     label: "Admin ล่าสุด" },
+            { key: "admin_creator",     label: "Admin สร้าง" },
+            { key: "note",              label: "หมายเหตุ" },
+          ]}
+          filename={`forwarders${sp.status ? `-status${sp.status}` : ""}${sp.mode ? `-mode${sp.mode}` : ""}${sp.q ? `-${sp.q}` : ""}-page${page}-${new Date().toISOString().slice(0, 10)}.csv`}
+        />
       </div>
 
       {/* Table */}
