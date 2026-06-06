@@ -1,5 +1,7 @@
 "use client";
 
+import { escapeCsvCell } from "@/lib/csv/escape";
+
 export type CsvRow = Record<string, string | number | null | undefined>;
 
 export function CsvButton({
@@ -12,11 +14,9 @@ export function CsvButton({
   filename: string;
 }) {
   function download() {
-    const header = cols.map((c) => `"${c.label}"`).join(",");
+    const header = cols.map((c) => escapeCsvCell(c.label)).join(",");
     const lines = rows.map((row) =>
-      cols
-        .map((c) => `"${String(row[c.key] ?? "").replace(/"/g, '""')}"`)
-        .join(",")
+      cols.map((c) => escapeCsvCell(row[c.key])).join(",")
     );
     const csv = [header, ...lines].join("\r\n");
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });

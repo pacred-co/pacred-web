@@ -5,7 +5,7 @@
  * Run:  pnpm tsx lib/legacy-image.test.ts   (wired into pnpm test:unit)
  */
 
-import { legacyMemberUrl, legacyMemberBase } from "./legacy-image";
+import { legacyMemberUrl, legacyMemberBase, legacyUserPictureUrl } from "./legacy-image";
 
 let pass = 0;
 let fail = 0;
@@ -45,6 +45,22 @@ const base = "https://abc.supabase.co/storage/v1/object/public/pcsracgo/public/m
 assertEq("relative path joined", legacyMemberUrl("images/users/PR123.jpg"), `${base}/images/users/PR123.jpg`);
 assertEq("leading slash stripped", legacyMemberUrl("/storage/slip/abc.png"), `${base}/storage/slip/abc.png`);
 assertEq("multiple leading slashes stripped", legacyMemberUrl("///images/shops/x.jpg"), `${base}/images/shops/x.jpg`);
+
+section("legacyUserPictureUrl — filename-vs-URL hazard (avatar mirror 2026-06-06)");
+setEnv("https://abc.supabase.co", undefined);
+assertEq("bare legacy filename → joined under images/users/",
+  legacyUserPictureUrl("PR123.jpg"), `${base}/images/users/PR123.jpg`);
+assertEq("empty → default user image",
+  legacyUserPictureUrl(""), `${base}/images/users/user.jpg`);
+assertEq("null → default user image",
+  legacyUserPictureUrl(null), `${base}/images/users/user.jpg`);
+assertEq("FULL https URL (avatar mirror) passes through unchanged — no nested-URL break",
+  legacyUserPictureUrl("https://abc.supabase.co/storage/v1/object/public/avatars/x.png"),
+  "https://abc.supabase.co/storage/v1/object/public/avatars/x.png");
+assertEq("root-absolute path passes through unchanged",
+  legacyUserPictureUrl("/legacy/pcs/images/users/y.jpg"), "/legacy/pcs/images/users/y.jpg");
+assertEq("whitespace is trimmed before classification",
+  legacyUserPictureUrl("  PR9.jpg  "), `${base}/images/users/PR9.jpg`);
 
 // restore original env
 setEnv(origSupa, origOverride);

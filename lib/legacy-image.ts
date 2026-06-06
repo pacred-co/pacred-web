@@ -50,6 +50,31 @@ export function legacyMemberUrl(relativePath: string): string {
 }
 
 /**
+ * Resolve a customer profile-picture column (`tb_users.userPicture`) to a
+ * renderable URL, handling the filename-vs-URL ambiguity.
+ *
+ * Background: that legacy column historically held a BARE filename
+ * (`PR123.jpg` → `images/users/PR123.jpg`). But since 2026-06-06 ภูม's
+ * avatar mirror also writes a FULL Supabase public URL into it (when a
+ * customer uploads a new avatar via the modern profile flow). A reader that
+ * blindly does `legacyMemberUrl('images/users/' + value)` would produce a
+ * malformed nested URL (`.../images/users/https://...`) → broken image.
+ *
+ * Rule (matches lib/legacy/pcs-chrome.ts + the admin legacy-view): if the
+ * value is already an absolute URL (`http(s)://`) or root-absolute path
+ * (`/`), pass it through as-is; otherwise treat it as a legacy filename.
+ *
+ * @param userPicture  Raw `tb_users.userPicture` value (filename | full URL | empty)
+ * @returns A renderable URL (the legacy default user image when empty).
+ */
+export function legacyUserPictureUrl(userPicture: string | null | undefined): string {
+  const v = (userPicture ?? "").trim();
+  if (!v) return legacyMemberUrl("images/users/user.jpg");
+  if (/^(https?:\/\/|\/)/i.test(v)) return v;
+  return legacyMemberUrl(`images/users/${v}`);
+}
+
+/**
  * The current base URL for the legacy `member/` folder mirror.
  *
  * Resolution order:

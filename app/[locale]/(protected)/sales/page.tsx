@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { legacyMemberUrl } from "@/lib/legacy-image";
+import { legacyUserPictureUrl } from "@/lib/legacy-image";
 import { resolveSalesAgent } from "./team-map";
 
 /**
@@ -306,11 +306,11 @@ export default async function SalesTeamMembersPage() {
                       <div className="flex items-start gap-3">
                         <a
                           className="image-popup-vertical-fit el-link shrink-0"
-                          href={legacyMemberUrl(`images/users/${row.userPicture ?? ""}`)}
+                          href={legacyUserPictureUrl(row.userPicture)}
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={legacyMemberUrl(`images/users/${row.userPicture ?? ""}`)}
+                            src={legacyUserPictureUrl(row.userPicture)}
                             alt="user"
                             className="h-11 w-11 rounded-full border border-border object-cover"
                             width={44}
@@ -383,11 +383,11 @@ export default async function SalesTeamMembersPage() {
                             <span className="flex items-center gap-2">
                               <a
                                 className="image-popup-vertical-fit el-link shrink-0"
-                                href={legacyMemberUrl(`images/users/${row.userPicture ?? ""}`)}
+                                href={legacyUserPictureUrl(row.userPicture)}
                               >
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
-                                  src={legacyMemberUrl(`images/users/${row.userPicture ?? ""}`)}
+                                  src={legacyUserPictureUrl(row.userPicture)}
                                   alt="user"
                                   className="h-9 w-9 rounded-full border border-border object-cover"
                                   width={35}
