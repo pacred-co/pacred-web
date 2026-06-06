@@ -4508,7 +4508,16 @@
       "transferDateTime": "วันเวลาที่โอน (ถ้ามี)",
       "confirmPayment": "ยืนยันการชำระเงิน",
       "payFromWallet": "หรือชำระจากกระเป๋าเงิน (฿{balance})"
-    }
+    },
+    "walletUse": "ใช้ยอดในกระเป๋า",
+    "walletHave": "มี ฿{amount}",
+    "walletMax": "ใช้สูงสุด",
+    "walletClear": "ล้าง",
+    "walletDeducted": "หักจากกระเป๋า ฿{applied}",
+    "remainingToPay": "เหลือจ่าย ฿{remaining}",
+    "payFullFromWallet": "ชำระจากกระเป๋าเต็มจำนวน (฿{amount})",
+    "scanToPay": "สแกนจ่าย ฿{amount}",
+    "confirmPaymentSplit": "ยืนยันการชำระเงิน (หัก wallet ฿{applied} + สลิป ฿{remaining})"
   },
   "serviceImportPage": {
     "corporatePendingTitle": "รอเจ้าหน้าที่ดำเนิน อนุมัติการเป็นนิติบุคคล ภายใน 24 ชม.",
@@ -5402,7 +5411,8 @@
       "errNotOwner": "รายการนี้ไม่ใช่ของคุณ",
       "errAlreadyReceived": "Pacred รับใบรับรองแล้ว — ไม่ต้องอัพโหลดซ้ำ",
       "errAlreadyWaived": "รายการนี้ได้รับการยกเว้นแล้ว"
-    }
+    },
+    "fileButton": "เลือกไฟล์ใบรับรอง"
   },
   "costReconfirm": {
     "customerWhtUpload": {
@@ -6571,5 +6581,22 @@
     "truckDoc2": "ใบขนสินค้าทางบก",
     "truckDoc3": "เอกสารอนุญาตเฉพาะ (ถ้ามี)",
     "registerNow": "สมัครเลย"
+  },
+  "docAttachSelector": {
+    "title": "เอกสารที่ต้องเตรียม",
+    "help": "แนบเอกสารเหล่านี้ในขั้นตอน \"ตรวจสอบการจอง\" (หลังเข้าสู่ระบบ) — ทีมขายใช้พิจารณาราคาจริงได้เร็วขึ้น",
+    "reviewNotice": "อัปโหลดไฟล์จริง (PDF / รูปภาพ ≤ 10 MB) ได้หลังกด \"จองเลย\" และเข้าสู่ระบบ",
+    "slot_booking_invoice_label": "ใบกำกับสินค้า (Invoice)",
+    "slot_booking_invoice_hint": "ถ้ามีจากคู่ค้าจีน",
+    "slot_booking_packing_list_label": "Packing List",
+    "slot_booking_packing_list_hint": "รายการบรรจุภัณฑ์",
+    "slot_booking_certificate_label": "Certificate / Form E",
+    "slot_booking_certificate_hint": "ใช้ลดภาษีนำเข้า",
+    "slot_booking_vat_paw20_label": "ภพ.20",
+    "slot_booking_vat_paw20_hint": "ผู้ประกอบการนิติบุคคล",
+    "slot_booking_national_id_label": "บัตรประชาชน",
+    "slot_booking_national_id_hint": "ผู้ประกอบการบุคคลธรรมดา",
+    "slot_booking_passport_label": "พาสปอร์ต",
+    "slot_booking_passport_hint": "ชาวต่างชาติ"
   }
 }

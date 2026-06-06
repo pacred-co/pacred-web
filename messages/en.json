@@ -4508,7 +4508,16 @@
       "transferDateTime": "Transfer date/time (if any)",
       "confirmPayment": "Confirm payment",
       "payFromWallet": "Or pay from wallet (฿{balance})"
-    }
+    },
+    "walletUse": "Use wallet credit",
+    "walletHave": "Have ฿{amount}",
+    "walletMax": "Use max",
+    "walletClear": "Clear",
+    "walletDeducted": "From wallet ฿{applied}",
+    "remainingToPay": "Left to pay ฿{remaining}",
+    "payFullFromWallet": "Pay fully from wallet (฿{amount})",
+    "scanToPay": "Scan to pay ฿{amount}",
+    "confirmPaymentSplit": "Confirm payment (wallet ฿{applied} + slip ฿{remaining})"
   },
   "serviceImportPage": {
     "corporatePendingTitle": "Awaiting staff approval of your juristic-entity status within 24 hours.",
@@ -5402,7 +5411,8 @@
       "errNotOwner": "This entry is not yours",
       "errAlreadyReceived": "Pacred already received the certificate — no need to upload again",
       "errAlreadyWaived": "This entry has already been waived"
-    }
+    },
+    "fileButton": "Choose file"
   },
   "costReconfirm": {
     "customerWhtUpload": {
@@ -6571,5 +6581,22 @@
     "truckDoc2": "Land cargo declaration form",
     "truckDoc3": "Special permit documents (if applicable)",
     "registerNow": "Register now"
+  },
+  "docAttachSelector": {
+    "title": "Documents to prepare",
+    "help": "Attach these at the \"Review booking\" step (after sign-in) — our sales team can quote the real price faster",
+    "reviewNotice": "Upload the actual files (PDF / image ≤ 10 MB) after tapping \"Book now\" and signing in",
+    "slot_booking_invoice_label": "Commercial Invoice",
+    "slot_booking_invoice_hint": "If your China supplier has one",
+    "slot_booking_packing_list_label": "Packing List",
+    "slot_booking_packing_list_hint": "Packing details",
+    "slot_booking_certificate_label": "Certificate / Form E",
+    "slot_booking_certificate_hint": "Cuts import duty",
+    "slot_booking_vat_paw20_label": "Por.Por.20 (VAT)",
+    "slot_booking_vat_paw20_hint": "For juristic entities",
+    "slot_booking_national_id_label": "National ID card",
+    "slot_booking_national_id_hint": "For sole proprietors",
+    "slot_booking_passport_label": "Passport",
+    "slot_booking_passport_hint": "For foreign nationals"
   }
 }
