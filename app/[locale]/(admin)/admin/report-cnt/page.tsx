@@ -208,7 +208,7 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
 
   const rpcRes = await admin.rpc("get_container_summary", {
     p_page:      isWaiting ? "waiting" : "succeed",
-    p_transport: transportType === "1" || transportType === "2" ? transportType : null,
+    p_transport: ["1", "2", "3"].includes(transportType) ? transportType : null,
     p_start:     (!isWaiting && startDate) ? startDate : null,
     p_end:       (!isWaiting && endDate)   ? endDate   : null,
   });
@@ -232,6 +232,7 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
     else            q = q.gt("fstatus", "3");
     if (transportType === "1") q = q.eq("ftransporttype", "1");
     if (transportType === "2") q = q.eq("ftransporttype", "2");
+    if (transportType === "3") q = q.eq("ftransporttype", "3");
     if (!isWaiting && startDate && endDate) {
       q = q.gte("fdatecontainerclose", startDate + " 00:00:00")
            .lte("fdatecontainerclose", endDate   + " 23:59:59");
@@ -347,6 +348,7 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
                 <option value="all">ทั้งหมด</option>
                 <option value="1">ทางรถ</option>
                 <option value="2">ทางเรือ</option>
+                <option value="3">ทางอากาศ</option>
               </select>
             </label>
             <input type="hidden" name="historyTable" value="1" />
@@ -378,6 +380,15 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
             active={transportType === "2"}
             count={counts.transportShip(isWaiting)}
           >🚢 ทางเรือ</TabLink>
+          {/* 2026-06-06 B3 (ภูม flag · late-PM save-point): 0 air rows
+              currently · but legacy TRANSPORT_LABEL has "3"="ทางอากาศ"
+              and the filter pill should match the dropdown for symmetry.
+              Renders 0 count gracefully when there are no air containers. */}
+          <TabLink
+            href={buildHref(sp, { transportType: "3" })}
+            active={transportType === "3"}
+            count={counts.transportAir(isWaiting)}
+          >✈️ ทางอากาศ</TabLink>
         </div>
 
         {queryFailed && (
@@ -453,6 +464,7 @@ async function loadHeaderCounts(
   transportAll:   (isWaiting: boolean) => number;
   transportTruck: (isWaiting: boolean) => number;
   transportShip:  (isWaiting: boolean) => number;
+  transportAir:   (isWaiting: boolean) => number;
 }> {
   // 2026-06-06 (ภูม B2 fix · save-point 2026-06-05 late-PM):
   //   The old `count: "exact"` queries counted ROWS — wrong for the badge,
@@ -528,13 +540,18 @@ async function loadHeaderCounts(
     return v ?? (await countSucceedRowsFallback(transportType));
   }
 
-  const [waitingAll, waitingTruck, waitingShip, succeedAll, succeedTruck, succeedShip] = await Promise.all([
+  const [
+    waitingAll, waitingTruck, waitingShip, waitingAir,
+    succeedAll, succeedTruck, succeedShip, succeedAir,
+  ] = await Promise.all([
     countWaiting(),
     countWaiting("1"),
     countWaiting("2"),
+    countWaiting("3"),
     countSucceed(),
     countSucceed("1"),
     countSucceed("2"),
+    countSucceed("3"),
   ]);
 
   return {
@@ -543,5 +560,6 @@ async function loadHeaderCounts(
     transportAll:   (isWaiting) => isWaiting ? waitingAll   : succeedAll,
     transportTruck: (isWaiting) => isWaiting ? waitingTruck : succeedTruck,
     transportShip:  (isWaiting) => isWaiting ? waitingShip  : succeedShip,
+    transportAir:   (isWaiting) => isWaiting ? waitingAir   : succeedAir,
   };
 }
