@@ -74,7 +74,7 @@ export default async function DashboardPage() {
     return (
       <div className="pcs-content-pad w-full px-[10px] py-3 md:py-5">
         <div className="max-w-[670px] mx-auto">
-          <div className="rounded-2xl bg-primary-600 text-white px-6 py-8 text-center shadow-md">
+          <div className="rounded-2xl bg-primary-600 text-white px-5 py-5 text-center shadow-sm">
             {t("juristicPending")}
           </div>
         </div>
@@ -105,14 +105,14 @@ export default async function DashboardPage() {
             )}
             <div>
               <img
-                className="w-full h-auto rounded-2xl shadow-md hover:shadow-xl hover:brightness-105 transition-all duration-300 ease-out cursor-pointer"
+                className="w-full h-auto rounded-2xl shadow-sm hover:shadow-md hover:brightness-105 transition-all duration-300 ease-out cursor-pointer"
                 src="/images/customertheme/drive.png"
                 alt=""
               />
             </div>
             <div>
               <img
-                className="w-full h-auto rounded-2xl shadow-md hover:shadow-xl hover:brightness-105 transition-all duration-300 ease-out cursor-pointer"
+                className="w-full h-auto rounded-2xl shadow-sm hover:shadow-md hover:brightness-105 transition-all duration-300 ease-out cursor-pointer"
                 src="/images/customertheme/shop.png"
                 alt=""
               />
@@ -161,11 +161,11 @@ export default async function DashboardPage() {
         {/* 1 — ฝากสั่งซื้อสินค้า */}
         <Link
           href="/service-order"
-          className="group block rounded-2xl bg-white dark:bg-surface border border-black/[0.10] dark:border-white/10 shadow-[0_2px_3px_rgba(15,23,42,0.10),0_6px_14px_rgba(15,23,42,0.12),0_18px_38px_rgba(15,23,42,0.16),inset_0_1.5px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.10),inset_0_0_0_1px_rgba(255,255,255,0.35)] transition-[transform,box-shadow] duration-300 ease-out will-change-transform hover:-translate-y-2 hover:shadow-[0_3px_5px_rgba(15,23,42,0.12),0_12px_24px_rgba(15,23,42,0.18),0_28px_54px_rgba(15,23,42,0.20),inset_0_2px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.12),inset_0_0_0_1px_rgba(255,255,255,0.5)] active:translate-y-0.5 active:duration-75 p-4 md:p-5"
+          className="group block rounded-2xl bg-white dark:bg-surface border border-black/[0.10] dark:border-white/10 shadow-sm transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:duration-75 p-4 md:p-5"
         >
           <div className="flex items-center justify-between">
             <div className="text-left">
-              <div className="text-3xl font-bold text-primary-600">{countShops}</div>
+              <div className="text-xl font-bold text-primary-600">{countShops}</div>
               <div className="mt-1 text-sm font-medium text-foreground/80">
                 {t("cardShopOrder")}
               </div>
@@ -193,7 +193,7 @@ export default async function DashboardPage() {
         {/* 2 — ฝากนำเข้าสินค้า */}
         <Link
           href="/service-import"
-          className="group block rounded-2xl bg-white dark:bg-surface border border-black/[0.10] dark:border-white/10 shadow-[0_2px_3px_rgba(15,23,42,0.10),0_6px_14px_rgba(15,23,42,0.12),0_18px_38px_rgba(15,23,42,0.16),inset_0_1.5px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.10),inset_0_0_0_1px_rgba(255,255,255,0.35)] transition-[transform,box-shadow] duration-300 ease-out will-change-transform hover:-translate-y-2 hover:shadow-[0_3px_5px_rgba(15,23,42,0.12),0_12px_24px_rgba(15,23,42,0.18),0_28px_54px_rgba(15,23,42,0.20),inset_0_2px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.12),inset_0_0_0_1px_rgba(255,255,255,0.5)] active:translate-y-0.5 active:duration-75 p-4 md:p-5"
+          className="group block rounded-2xl bg-white dark:bg-surface border border-black/[0.10] dark:border-white/10 shadow-sm transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:duration-75 p-4 md:p-5"
         >
           <div className="flex items-center justify-between">
             <div className="text-left">
@@ -260,7 +260,7 @@ export default async function DashboardPage() {
         {/* 3 — ฝากชำระเงิน */}
         <Link
           href="/service-payment"
-          className="group block rounded-2xl bg-white dark:bg-surface border border-black/[0.10] dark:border-white/10 shadow-[0_2px_3px_rgba(15,23,42,0.10),0_6px_14px_rgba(15,23,42,0.12),0_18px_38px_rgba(15,23,42,0.16),inset_0_1.5px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.10),inset_0_0_0_1px_rgba(255,255,255,0.35)] transition-[transform,box-shadow] duration-300 ease-out will-change-transform hover:-translate-y-2 hover:shadow-[0_3px_5px_rgba(15,23,42,0.12),0_12px_24px_rgba(15,23,42,0.18),0_28px_54px_rgba(15,23,42,0.20),inset_0_2px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.12),inset_0_0_0_1px_rgba(255,255,255,0.5)] active:translate-y-0.5 active:duration-75 p-4 md:p-5"
+          className="group block rounded-2xl bg-white dark:bg-surface border border-black/[0.10] dark:border-white/10 shadow-sm transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:duration-75 p-4 md:p-5"
         >
           <div className="flex items-center justify-between">
             <div className="text-left">

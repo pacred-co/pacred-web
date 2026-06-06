@@ -80,7 +80,7 @@ export default async function CustomerBillingRunPage() {
   const totalUnpaid = [...issued, ...overdue].reduce((s, r) => s + r.total_thb, 0);
 
   return (
-    <main className="p-4 md:p-6 lg:p-8 space-y-5">
+    <main className="p-4 md:p-6 lg:p-5 space-y-5">
       <title>ใบวางบิลของฉัน | Pacred</title>
 
       <header className="space-y-1">
@@ -93,7 +93,7 @@ export default async function CustomerBillingRunPage() {
           <div className="flex items-center justify-between">
             <div>
               <div className="text-xs text-amber-700 font-medium">ยอดค้างชำระทั้งหมด</div>
-              <div className="text-2xl md:text-3xl font-bold text-amber-800">฿{thbFmt(totalUnpaid)}</div>
+              <div className="text-2xl md:text-xl font-bold text-amber-800">฿{thbFmt(totalUnpaid)}</div>
             </div>
             <div className="text-xs text-amber-700 text-right">
               <div>{issued.length} ใบรอชำระ</div>
@@ -104,7 +104,7 @@ export default async function CustomerBillingRunPage() {
       )}
 
       {rows.length === 0 && (
-        <section className="rounded-2xl border border-border bg-white dark:bg-surface p-8 text-center shadow-sm">
+        <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 text-center shadow-sm">
           <p className="text-sm text-muted">ยังไม่มีใบวางบิล</p>
         </section>
       )}

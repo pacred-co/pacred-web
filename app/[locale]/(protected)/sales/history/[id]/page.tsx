@@ -352,7 +352,7 @@ export default async function SalesHistoryDetailPage({
           </div>
           <div className="px-3 py-3 md:px-5 md:py-4">
             {items.length === 0 ? (
-              <p className="py-12 text-center text-sm text-muted">{t("noItems")}</p>
+              <p className="py-8 text-center text-sm text-muted">{t("noItems")}</p>
             ) : (
               <>
                 {/* ── Mobile: stacked cards (md:hidden) ── */}

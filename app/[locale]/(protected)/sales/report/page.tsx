@@ -358,7 +358,7 @@ export default async function SalesReportPage({
 
             {/* ── The report list ── */}
             {rows.length === 0 ? (
-              <p className="py-12 text-center text-sm text-muted">{t("noItemsFound")}</p>
+              <p className="py-8 text-center text-sm text-muted">{t("noItemsFound")}</p>
             ) : (
               <>
                 {/* ── Mobile: stacked cards (md:hidden) ── */}

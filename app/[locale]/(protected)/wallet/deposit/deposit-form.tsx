@@ -87,7 +87,7 @@ export function DepositForm() {
 
   if (step === "done") {
     return (
-      <div className="rounded-2xl border border-green-200 bg-green-50 p-8 text-center space-y-4">
+      <div className="rounded-2xl border border-green-200 bg-green-50 p-5 text-center space-y-3">
         <h2 className="text-xl font-bold text-green-800">{t("depositSubmittedTitle")}</h2>
         <p className="text-sm text-green-700">{t("depositSubmittedSubtitle")}</p>
         <div className="flex justify-center gap-2">
@@ -131,7 +131,7 @@ export function DepositForm() {
                 step="0.01"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className={`${inputCls} text-3xl font-mono font-bold pr-14 text-right`}
+                className={`${inputCls} text-lg font-mono font-bold pr-14 text-right`}
                 placeholder="0.00"
                 autoFocus
               />
@@ -158,7 +158,7 @@ export function DepositForm() {
             type="button"
             onClick={onGenerateQr}
             disabled={pending || !amount || amt <= 0}
-            className={`w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary-500 to-primary-700 text-white font-bold text-base px-6 py-3 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:hover:shadow-lg ${amt > 0 && !pending ? "animate-pulse" : ""}`}
+            className={`w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary-500 to-primary-700 text-white font-bold text-sm px-5 py-2.5 shadow-sm hover:shadow-md transition-all disabled:opacity-50`}
           >
             <QrCode className="w-5 h-5" />
             {pending
@@ -173,7 +173,7 @@ export function DepositForm() {
       {step === "pay" && qr && (
         <>
           {/* QR card */}
-          <div className="rounded-2xl border-2 border-primary-200 bg-gradient-to-br from-primary-50/50 to-white p-6 shadow-md">
+          <div className="rounded-2xl border-2 border-primary-200 bg-gradient-to-br from-primary-50/50 to-white p-5 shadow-sm">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-bold text-foreground flex items-center gap-2">
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary-500 text-white text-xs font-bold">2</span>
@@ -195,7 +195,7 @@ export function DepositForm() {
                 <Image src={qr} alt="PromptPay QR" width={256} height={256} unoptimized />
               </div>
               <p className="text-xs text-muted">{t("amountToTransfer")}</p>
-              <p className="font-mono text-3xl font-bold text-red-600">฿{amt.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
+              <p className="font-mono text-lg font-bold text-red-600">฿{amt.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
               <p className="mt-2 text-[11px] text-muted">{t("qrFooter")}</p>
             </div>
           </div>
@@ -260,7 +260,7 @@ export function DepositForm() {
             <button
               type="submit"
               disabled={pending || !slipPath}
-              className={`w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-700 text-white font-bold text-base px-6 py-3 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:hover:shadow-lg ${slipPath && !pending ? "animate-pulse" : ""}`}
+              className={`w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-700 text-white font-bold text-sm px-5 py-2.5 shadow-sm hover:shadow-md transition-all disabled:opacity-50`}
             >
               {pending
                 ? t("submitting")

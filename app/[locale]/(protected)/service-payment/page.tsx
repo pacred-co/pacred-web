@@ -319,8 +319,8 @@ export default async function ServicePaymentPage({
       <div className="pcs-content-pad w-full px-3 md:px-6 pt-3 pb-24 md:py-6">
         {!statusCheckJuristic ? (
           /* payment.php L448-451 — active tb_corporate row → awaiting approval. */
-          <div className="mx-auto max-w-[640px] mt-16 md:mt-24 text-center">
-            <h2 className="rounded-2xl bg-red-600 text-white px-4 py-6 text-base md:text-lg font-bold leading-relaxed shadow-md">
+          <div className="mx-auto max-w-[640px] mt-8 md:mt-12 text-center">
+            <h2 className="rounded-2xl bg-red-600 text-white px-4 py-4 text-sm md:text-base font-bold leading-relaxed shadow-sm">
               {t("juristicPending")}
               <br />
               <span className="text-sm font-normal opacity-90">
@@ -330,8 +330,8 @@ export default async function ServicePaymentPage({
           </div>
         ) : showNeverPaidBlock ? (
           /* payment.php L278-280 — never used ฝากสั่งซื้อ / ฝากนำเข้า before. */
-          <div className="mx-auto max-w-[600px] mt-16 md:mt-24 text-center">
-            <h2 className="rounded-2xl bg-red-600 text-white px-4 py-6 text-base md:text-lg font-bold leading-relaxed shadow-md">
+          <div className="mx-auto max-w-[600px] mt-8 md:mt-12 text-center">
+            <h2 className="rounded-2xl bg-red-600 text-white px-4 py-4 text-sm md:text-base font-bold leading-relaxed shadow-sm">
               {t("neverPaidLine1")}
               <br />
               {t("neverPaidLine2")}

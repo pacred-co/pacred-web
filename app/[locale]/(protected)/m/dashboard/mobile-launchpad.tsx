@@ -117,7 +117,7 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
               `-mt-8` keeps the legacy-PCS "bite into the search bar" overlap.
               Min-height 180px reveals the full truck illustration in
               `bannermobilemain.png` (`cover` scales with container height). */}
-      <section className="relative overflow-hidden rounded-b-3xl text-white px-4 pt-14 pb-5 shadow-[0_10px_30px_rgba(179,0,0,0.25)] min-h-[190px] -mt-8 -mx-3">
+      <section className="relative overflow-hidden rounded-b-2xl text-white px-4 pt-14 pb-5 shadow-md min-h-[190px] -mt-8 -mx-3">
         <div
           aria-hidden
           className="absolute inset-0"
@@ -177,7 +177,7 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
               red banner's lower half; the sky-tinted lift shadow tells the
               eye it floats above the red. Card stays compact + clean per
               earlier "ขาวๆ ไม่ต้องโปร่ง" rule. */}
-      <section className="relative z-10 -mt-12 overflow-hidden rounded-2xl bg-white border border-border shadow-[0_8px_24px_rgba(2,132,199,0.18)] px-3 py-2.5 flex items-center gap-3">
+      <section className="relative z-10 -mt-12 overflow-hidden rounded-2xl bg-white border border-border shadow-sm px-3 py-2.5 flex items-center gap-3">
         <span
           aria-hidden
           className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-gradient-to-b from-sky-500 to-sky-700"
@@ -236,7 +236,7 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
               per ปอน. */}
       <Link
         href="/wallet"
-        className="relative overflow-hidden rounded-2xl bg-white border border-border shadow-[0_8px_24px_rgba(5,150,105,0.18)] px-3 py-2.5 flex items-center gap-3 active:scale-[0.99] transition-transform"
+        className="relative overflow-hidden rounded-2xl bg-white border border-border shadow-sm px-3 py-2.5 flex items-center gap-3 active:scale-[0.99] transition-transform"
       >
         <span
           aria-hidden

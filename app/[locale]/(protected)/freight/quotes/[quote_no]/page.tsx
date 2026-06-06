@@ -202,7 +202,7 @@ export default async function CustomerFreightQuoteDetailPage({
             <h2 className="font-bold text-sm">รายการ ({items.length})</h2>
           </div>
           {items.length === 0 ? (
-            <p className="p-8 text-center text-sm text-muted">ไม่มีรายการ</p>
+            <p className="p-5 text-center text-sm text-muted">ไม่มีรายการ</p>
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">

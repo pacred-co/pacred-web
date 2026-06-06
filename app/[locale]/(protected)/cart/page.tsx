@@ -499,12 +499,12 @@ export default async function CartPage() {
 async function EmptyCartState() {
   const t = await getTranslations("cartPage");
   return (
-    <div className="rounded-2xl bg-white border border-border p-8 md:p-12 text-center shadow-[0_4px_14px_rgba(0,0,0,0.04)]">
+    <div className="rounded-2xl bg-white border border-border p-5 md:p-6 text-center shadow-sm">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/legacy/pcs/shop-2-300x300.png"
         alt=""
-        className="mx-auto w-40 h-40 md:w-52 md:h-52 object-contain opacity-70 mb-4"
+        className="mx-auto w-28 h-28 md:w-36 md:h-36 object-contain opacity-70 mb-3"
       />
       <h3 className="text-[15px] md:text-[17px] font-bold text-foreground">
         {t("emptyTitle")}

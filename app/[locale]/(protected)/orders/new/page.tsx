@@ -41,7 +41,7 @@ export default function NewOrderPage() {
 
   return (
     <>
-      <main className="mx-auto w-full max-w-[640px] px-4 py-12">
+      <main className="mx-auto w-full max-w-[640px] px-4 py-6">
         <Link
           href="/orders"
           className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted hover:text-primary-600"
@@ -49,7 +49,7 @@ export default function NewOrderPage() {
           <ArrowLeft className="h-4 w-4" /> {t("backToList")}
         </Link>
 
-        <div className="rounded-2xl border border-border bg-white dark:bg-surface p-8 shadow-sm">
+        <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
           <h1 className="text-2xl font-bold text-foreground">{t("heading")}</h1>
           <p className="mt-1 text-sm text-muted">
             {t("subtitle")}

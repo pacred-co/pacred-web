@@ -181,7 +181,7 @@ export default async function CustomerFreightHubPage() {
             </h2>
           </div>
           {quotes.length === 0 ? (
-            <p className="p-8 text-center text-sm text-muted">
+            <p className="p-5 text-center text-sm text-muted">
               ยังไม่มีใบเสนอราคา —{" "}
               <a href={LINE_OA.addFriendUrl} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline">
                 ติดต่อทีมเพื่อขอใบเสนอราคา
@@ -240,7 +240,7 @@ export default async function CustomerFreightHubPage() {
             </Link>
           </div>
           {shipments.length === 0 ? (
-            <p className="p-8 text-center text-sm text-muted">
+            <p className="p-5 text-center text-sm text-muted">
               ยังไม่มีงานขนส่ง — ใบเสนอราคาที่ตอบรับแล้วจะกลายเป็นงานขนส่งให้อัตโนมัติ
             </p>
           ) : (

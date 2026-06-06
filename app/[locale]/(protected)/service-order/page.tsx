@@ -306,7 +306,7 @@ export default async function ServiceOrderPage({
           </p>
           <Link
             href="/cart/add"
-            className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[12.5px] md:text-[14px] font-bold px-3.5 md:px-4 py-2 md:py-2.5 shadow-lg shadow-primary-600/30 hover:shadow-primary-600/40 hover:-translate-y-0.5 transition-all"
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[12.5px] md:text-[14px] font-bold px-3.5 md:px-4 py-2 md:py-2.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
           >
             <Plus className="w-4 h-4" strokeWidth={2.5} />
             สั่งสินค้าเพิ่ม
@@ -449,7 +449,7 @@ function OrderCard({
   return (
     <article
       id={isAnchor ? row.hno : undefined}
-      className={`relative rounded-2xl bg-white border shadow-[0_4px_14px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_22px_rgba(0,0,0,0.07)] transition-shadow overflow-hidden ${
+      className={`relative rounded-2xl bg-white border shadow-sm hover:shadow-md transition-shadow overflow-hidden ${
         isAnchor ? "border-primary-400 ring-2 ring-primary-100" : "border-border"
       }`}
     >
@@ -578,18 +578,18 @@ function OrderCard({
 /* ─────────────────────────── EMPTY STATE ─────────────────────────── */
 function EmptyState({ title, showCta }: { title: string; showCta: boolean }) {
   return (
-    <div className="rounded-2xl bg-white border border-border p-8 md:p-12 text-center shadow-sm">
+    <div className="rounded-2xl bg-white border border-border p-5 md:p-6 text-center shadow-sm">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/legacy/pcs/shop-2-300x300.png"
         alt=""
-        className="mx-auto w-40 h-40 md:w-52 md:h-52 object-contain opacity-70 mb-4"
+        className="mx-auto w-28 h-28 md:w-36 md:h-36 object-contain opacity-70 mb-4"
       />
-      <h3 className="text-[15px] md:text-[17px] font-bold text-foreground">{title}</h3>
+      <h3 className="text-sm md:text-[15px] font-bold text-foreground">{title}</h3>
       {showCta && (
         <Link
           href="/cart/add"
-          className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[13px] font-bold px-4 py-2 shadow-lg shadow-primary-600/30 hover:shadow-primary-600/40 hover:-translate-y-0.5 transition-all"
+          className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[13px] font-bold px-4 py-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
         >
           <Plus className="w-4 h-4" strokeWidth={2.5} />
           สั่งสินค้าเพิ่ม
@@ -603,7 +603,7 @@ function EmptyState({ title, showCta }: { title: string; showCta: boolean }) {
 function PaymentBar({ count }: { count: number }) {
   return (
     <div className="fixed bottom-24 md:bottom-6 left-3 right-20 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-[640px] z-40">
-      <div className="rounded-2xl bg-gradient-to-br from-primary-600 to-primary-700 text-white px-4 py-3 shadow-2xl shadow-primary-600/40 flex items-center gap-3">
+      <div className="rounded-2xl bg-gradient-to-br from-primary-600 to-primary-700 text-white px-4 py-3 shadow-lg flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-[11px] opacity-90">มีรายการรอชำระ</p>
           <p className="text-[15px] font-bold">

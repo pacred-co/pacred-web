@@ -268,7 +268,7 @@ export default async function WalletPage() {
               wallet.php L108-131. Keeps `tam-counter` + `data-count` so
               tam-it.js's count-up animation still runs, and the
               /wallet/deposit CTA. ── */}
-          <section className="overflow-hidden rounded-2xl border-2 border-red-500/70 bg-gradient-to-br from-white to-red-50/40 shadow-lg shadow-red-500/10 dark:from-surface dark:to-red-950/20">
+          <section className="overflow-hidden rounded-2xl border-2 border-red-500/70 bg-gradient-to-br from-white to-red-50/40 shadow-sm dark:from-surface dark:to-red-950/20">
             <div className="flex items-start justify-between gap-3 px-5 pt-5 md:px-6 md:pt-6">
               <div className="min-w-0">
                 <p className="truncate text-base font-bold text-foreground md:text-lg">
@@ -279,7 +279,7 @@ export default async function WalletPage() {
                 </p>
                 <p className="mt-1 flex items-baseline gap-1 leading-none">
                   <span
-                    className="tam-counter notranslate font-mono text-4xl font-extrabold tabular-nums text-red-600 md:text-5xl"
+                    className="tam-counter notranslate font-mono text-2xl font-extrabold tabular-nums text-red-600 md:text-3xl"
                     data-count={walletTotal}
                   >
                     {numberFormat2(walletTotal)}
@@ -301,7 +301,7 @@ export default async function WalletPage() {
             <div className="px-5 py-4 text-center md:px-6">
               <Link
                 href="/wallet/deposit"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#cc3333] to-[#f15a24] px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-red-600/25 transition-all hover:brightness-110 active:scale-[0.98]"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#cc3333] to-[#f15a24] px-6 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:brightness-110 active:scale-[0.98]"
               >
                 <span className="text-lg leading-none" aria-hidden>
                   +
@@ -380,7 +380,7 @@ export default async function WalletPage() {
                                   >
                                     <div id="load_data_wallet_hs">
                                       {rowsHistory.length === 0 ? (
-                                        <div className="py-12 text-center text-sm text-muted">
+                                        <div className="py-8 text-center text-sm text-muted">
                                           {t("noRecords")}
                                         </div>
                                       ) : (
@@ -399,7 +399,7 @@ export default async function WalletPage() {
                                   >
                                     <div id="load_data_wallet_hs_add">
                                       {rowsAdd.length === 0 ? (
-                                        <div className="py-12 text-center text-sm text-muted">
+                                        <div className="py-8 text-center text-sm text-muted">
                                           {t("noRecords")}
                                         </div>
                                       ) : (
@@ -418,7 +418,7 @@ export default async function WalletPage() {
                                   >
                                     <div id="load_data_wallet_hs_payments">
                                       {rowsPayments.length === 0 ? (
-                                        <div className="py-12 text-center text-sm text-muted">
+                                        <div className="py-8 text-center text-sm text-muted">
                                           {t("noRecords")}
                                         </div>
                                       ) : (
@@ -437,7 +437,7 @@ export default async function WalletPage() {
                                   >
                                     <div id="load_data_wallet_hs_withdraw">
                                       {rowsWithdraw.length === 0 ? (
-                                        <div className="py-12 text-center text-sm text-muted">
+                                        <div className="py-8 text-center text-sm text-muted">
                                           {t("noRecords")}
                                         </div>
                                       ) : (
@@ -478,7 +478,7 @@ export default async function WalletPage() {
                 aria-hidden="true"
               >
                 <div className="modal-dialog fixed inset-0 z-[100] m-0 flex items-end justify-center p-0 sm:items-center sm:p-4">
-                  <div className="modal-content relative max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-border bg-white shadow-2xl dark:bg-surface sm:max-w-md sm:rounded-2xl">
+                  <div className="modal-content relative max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-border bg-white shadow-lg dark:bg-surface sm:max-w-md sm:rounded-2xl">
                     <div className="modal-header header-from flex items-center justify-between gap-2 border-b border-border px-4 py-3">
                       <h4 className="modal-title text-base font-bold text-foreground">{t("depositModalTitle")}</h4>
                       <button

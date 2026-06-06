@@ -135,7 +135,7 @@ export default async function PayPage() {
 
           {/* ── QR-generator form — pay.php L35-62. Same #pp-id / #amount /
               #myBtn ids the inline init script binds to. ── */}
-          <div className="px-4 py-5 md:px-8 md:py-8">
+          <div className="px-4 py-5 md:px-5 md:py-5">
             <form className="space-y-4">
               <div>
                 <label

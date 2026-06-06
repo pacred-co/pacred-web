@@ -156,7 +156,7 @@ export function CartManager({ cart: initialCart, yuanRate, serviceFee, defaultAd
 
   if (done) {
     return (
-      <div className="rounded-2xl border border-green-200 bg-green-50 p-8 text-center space-y-3">
+      <div className="rounded-2xl border border-green-200 bg-green-50 p-5 text-center space-y-3">
         <h2 className="text-xl font-bold text-green-800">{t("placedTitle")}</h2>
         <p className="text-sm text-green-700">
           {t("placedSubtitle", {
@@ -179,7 +179,7 @@ export function CartManager({ cart: initialCart, yuanRate, serviceFee, defaultAd
 
   if (cart.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-border p-12 text-center space-y-3">
+      <div className="rounded-2xl border border-dashed border-border p-8 text-center space-y-3">
         <p className="text-sm text-muted">{t("cartEmpty")}</p>
         <Button type="button" onClick={() => router.push("/service-order/add")}>
           + {t("addItem")}
@@ -440,7 +440,7 @@ export function CartManager({ cart: initialCart, yuanRate, serviceFee, defaultAd
             🎁 โปรโมชันสำหรับคุณ
           </h3>
           <div className="mt-3 rounded-xl border-2 border-dashed border-primary-200 bg-primary-50/30 p-4 text-center">
-            <p className="text-3xl">🚚</p>
+            <p className="text-xl">🚚</p>
             <p className="font-bold text-sm mt-2">Pacred เหมาๆ — จัดส่งฟรีทั่วกรุงเทพฯ/ปริมณฑล</p>
             <p className="text-xs text-muted mt-1">โปรโมชันจะใช้อัตโนมัติเมื่อยอดถึงเกณฑ์</p>
           </div>
@@ -449,7 +449,7 @@ export function CartManager({ cart: initialCart, yuanRate, serviceFee, defaultAd
           </p>
         </div>
 
-        <div className="rounded-2xl border-2 border-primary-200 bg-gradient-to-br from-primary-50 to-white p-5 shadow-md">
+        <div className="rounded-2xl border-2 border-primary-200 bg-gradient-to-br from-primary-50 to-white p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-foreground flex items-center gap-2">
               🧾 สรุปรายการสั่งซื้อ
@@ -479,7 +479,7 @@ export function CartManager({ cart: initialCart, yuanRate, serviceFee, defaultAd
           <button
             type="submit"
             disabled={pending || selected.size === 0}
-            className={`mt-4 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary-500 to-primary-700 text-white font-bold text-base px-4 py-3 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:hover:shadow-lg ${selected.size > 0 && !pending ? "animate-pulse" : ""}`}
+            className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary-500 to-primary-700 text-white font-bold text-sm px-4 py-2.5 shadow-sm hover:shadow-md transition-all disabled:opacity-50"
           >
             {pending ? "กำลังบันทึก..." : "สั่งซื้อสินค้า"}
           </button>

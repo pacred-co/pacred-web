@@ -67,8 +67,8 @@ export function NotificationsList({ initial }: { initial: NotificationRow[] }) {
       </div>
 
       {list.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border p-12 text-center space-y-2">
-          <div className="text-4xl" aria-hidden>🔔</div>
+        <div className="rounded-2xl border border-dashed border-border p-6 text-center space-y-2">
+          <div className="text-2xl" aria-hidden>🔔</div>
           <p className="text-sm font-medium text-foreground">{t("empty")}</p>
           <p className="text-xs text-muted max-w-md mx-auto">
             {t("emptyHint")}

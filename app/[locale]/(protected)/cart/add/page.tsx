@@ -43,26 +43,26 @@ export default async function CartAddPage() {
       </div>
 
       {/* Hero — title + the centered URL-paste search bar */}
-      <div className="rounded-3xl bg-white border border-border shadow-[0_4px_24px_rgba(0,0,0,0.05)] p-6 md:p-10 text-center">
-        <span className="inline-flex w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 text-white items-center justify-center shadow-lg shadow-primary-600/25 mb-4">
-          <ShoppingCart className="w-7 h-7 md:w-8 md:h-8" strokeWidth={2} />
+      <div className="rounded-2xl bg-white border border-border shadow-sm p-5 md:p-6 text-center">
+        <span className="inline-flex w-11 h-11 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white items-center justify-center shadow-sm mb-3">
+          <ShoppingCart className="w-5 h-5" strokeWidth={2} />
         </span>
-        <h1 className="text-[22px] md:text-[30px] font-black tracking-tight text-foreground">
+        <h2 className="text-lg md:text-xl font-bold tracking-tight text-foreground">
           {t("addHeroTitle")}
-        </h1>
-        <p className="mt-2 text-[13.5px] md:text-[15px] text-muted max-w-lg mx-auto">
+        </h2>
+        <p className="mt-1.5 text-[13px] text-muted max-w-lg mx-auto">
           {t.rich("addHeroDesc", {
             b: (chunks) => <b className="text-foreground">{chunks}</b>,
           })}
         </p>
 
         {/* The centered search bar */}
-        <div className="mt-6 max-w-xl mx-auto">
+        <div className="mt-4 max-w-xl mx-auto">
           <CartAddUrlForm />
         </div>
 
         {/* Supported sites */}
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[12px] text-muted">
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[12px] text-muted">
           <span>{t("supportedShops")}</span>
           {SUPPORTED_SITES.map((s) => (
             <span

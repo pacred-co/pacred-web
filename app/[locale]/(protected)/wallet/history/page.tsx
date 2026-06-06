@@ -82,12 +82,12 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
         </nav>
 
         {/* Wallet hero card (PCS-style orange/amber gradient, centered) */}
-        <div className="mx-auto max-w-2xl rounded-2xl border-2 border-amber-300/40 bg-gradient-to-br from-amber-400 to-orange-500 text-white p-6 shadow-md overflow-hidden">
+        <div className="mx-auto max-w-2xl rounded-2xl border-2 border-amber-300/40 bg-gradient-to-br from-amber-400 to-orange-500 text-white p-5 shadow-sm overflow-hidden">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
-              <p className="text-base font-bold">{fullName}</p>
+              <p className="text-sm font-bold">{fullName}</p>
               <p className="text-xs opacity-85 mt-0.5">{t("walletBalanceLabel")}</p>
-              <p className="font-mono text-5xl sm:text-6xl font-black mt-2 leading-none">
+              <p className="font-mono text-2xl sm:text-3xl font-black mt-2 leading-none">
                 {Number(balance?.balance ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </p>
             </div>
@@ -173,8 +173,8 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
           </div>
 
           {txs.length === 0 ? (
-            <div className="p-12 text-center space-y-2">
-              <div className="text-4xl" aria-hidden>👛</div>
+            <div className="p-8 text-center space-y-2">
+              <div className="text-2xl" aria-hidden>👛</div>
               <p className="text-sm font-medium text-foreground">
                 {activeTab === "deposit"  ? t("emptyDepositTitle")
                 : activeTab === "withdraw" ? t("emptyWithdrawTitle")

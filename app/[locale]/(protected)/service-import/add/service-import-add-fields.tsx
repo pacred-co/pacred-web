@@ -29,7 +29,7 @@ import { ServiceImportShipBySelect } from "./service-import-shipby-select";
 export type AddrOption = { addressid: number; full: string };
 
 const inputBase =
-  "w-full rounded-lg border border-border bg-white px-3 text-base text-foreground placeholder:text-muted focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-600/20";
+  "w-full rounded-lg border border-border bg-white px-3 text-sm text-foreground placeholder:text-muted focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-600/20";
 const labelClass = "mb-1 block text-sm font-medium text-foreground";
 
 export function ServiceImportAddFields({
@@ -45,14 +45,14 @@ export function ServiceImportAddFields({
 
   // Spacing scales down in compact (modal) mode; identical to the original
   // roomy values otherwise (full-page form is untouched).
-  const sectionCls = `rounded-2xl border border-border bg-white shadow-sm ${
-    compact ? "p-3.5" : "p-4 sm:p-5"
+  const sectionCls = `rounded-xl border border-border bg-white shadow-sm ${
+    compact ? "p-3" : "p-3.5 sm:p-4"
   }`;
-  const headCls = `flex items-center gap-2 text-base font-semibold text-foreground ${
-    compact ? "mb-3" : "mb-4"
+  const headCls = `flex items-center gap-2 text-sm font-semibold text-foreground ${
+    compact ? "mb-2.5" : "mb-3"
   }`;
-  const fieldMb = compact ? "mb-3" : "mb-4";
-  const inputCls = `${inputBase} ${compact ? "py-2" : "py-2.5"}`;
+  const fieldMb = compact ? "mb-2.5" : "mb-3";
+  const inputCls = `${inputBase} ${compact ? "py-1.5" : "py-2"}`;
 
   const sections = (
     <>

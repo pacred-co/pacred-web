@@ -92,14 +92,14 @@ export function ServiceImportAddForm({ children, onCancel, onSuccess }: Props) {
             type="button"
             onClick={onCancel}
             disabled={isPending}
-            className="inline-flex items-center justify-center rounded-xl border border-border bg-white px-5 py-3 text-base font-medium text-foreground transition hover:bg-surface disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center justify-center rounded-xl border border-border bg-white px-4 py-2 text-sm font-medium text-foreground transition hover:bg-surface disabled:cursor-not-allowed disabled:opacity-60"
           >
             ยกเลิก
           </button>
         ) : (
           <Link
             href="/service-import"
-            className="inline-flex items-center justify-center rounded-xl border border-border bg-white px-5 py-3 text-base font-medium text-foreground transition hover:bg-surface"
+            className="inline-flex items-center justify-center rounded-xl border border-border bg-white px-4 py-2 text-sm font-medium text-foreground transition hover:bg-surface"
           >
             ยกเลิก
           </Link>
@@ -108,7 +108,7 @@ export function ServiceImportAddForm({ children, onCancel, onSuccess }: Props) {
           type="submit"
           name="save"
           disabled={isPending}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isPending && <Loader2 className="h-5 w-5 animate-spin" />}
           {isPending ? "กำลังสร้างออเดอร์…" : "สร้างออเดอร์"}

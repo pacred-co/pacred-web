@@ -201,8 +201,8 @@ export default async function CustomerRefundsHubPage() {
             </h2>
           </div>
           {refunds.length === 0 ? (
-            <div className="p-8 text-center space-y-2">
-              <div className="text-4xl" aria-hidden>💸</div>
+            <div className="p-5 text-center space-y-2">
+              <div className="text-2xl" aria-hidden>💸</div>
               <p className="text-sm font-medium text-foreground">{t("historyEmptyTitle")}</p>
               <p className="text-xs text-muted max-w-sm mx-auto">
                 {t("historyEmptyBody")}

@@ -94,7 +94,7 @@ export default async function BookingDetailPage({
       notFound();
     }
     return (
-      <main className="mx-auto w-full max-w-[920px] px-4 py-10">
+      <main className="mx-auto w-full max-w-[920px] px-4 py-5">
         <div className="rounded-2xl border border-red-200 bg-red-50 dark:bg-red-900/20 p-6 text-sm text-red-700 dark:text-red-300">
           {/* i18n-key: booking.detail.loadError */}
           {t("loadError")}: {res.error}
@@ -151,7 +151,7 @@ export default async function BookingDetailPage({
     : [];
 
   return (
-    <main className="mx-auto w-full max-w-[920px] px-4 py-8 lg:py-10 space-y-5">
+    <main className="mx-auto w-full max-w-[920px] px-4 py-5 lg:py-5 space-y-5">
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>

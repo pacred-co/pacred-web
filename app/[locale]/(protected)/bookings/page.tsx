@@ -51,7 +51,7 @@ export default async function MyBookingsPage() {
   const bookings = res.ok ? res.data : [];
 
   return (
-    <main className="mx-auto w-full max-w-[1140px] px-4 py-10 lg:py-12 space-y-5">
+    <main className="mx-auto w-full max-w-[1140px] px-4 py-5 lg:py-6 space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           {/* i18n-key: booking.list.kicker */}
@@ -59,7 +59,7 @@ export default async function MyBookingsPage() {
             BOOKINGS
           </p>
           {/* i18n-key: booking.list.title */}
-          <h1 className="mt-1 text-2xl font-bold text-foreground sm:text-3xl">
+          <h1 className="mt-1 text-lg font-bold text-foreground sm:text-xl">
             {t("title")}
           </h1>
           {/* i18n-key: booking.list.subtitle */}
@@ -173,10 +173,10 @@ function EmptyState({
   t: Awaited<ReturnType<typeof getTranslations<"bookingsPage">>>;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-border bg-white dark:bg-surface p-10 text-center space-y-3">
-      <p className="text-4xl">📋</p>
+    <div className="rounded-2xl border border-dashed border-border bg-white dark:bg-surface p-6 text-center space-y-3">
+      <p className="text-2xl">📋</p>
       {/* i18n-key: booking.list.empty.title */}
-      <h2 className="text-lg font-bold text-foreground">{t("emptyTitle")}</h2>
+      <h2 className="text-sm font-bold text-foreground">{t("emptyTitle")}</h2>
       {/* i18n-key: booking.list.empty.body */}
       <p className="text-sm text-muted max-w-sm mx-auto">
         {t("emptyBody")}

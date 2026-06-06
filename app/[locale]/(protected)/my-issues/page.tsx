@@ -19,7 +19,7 @@ export default async function MyIssuesPage() {
   const { user } = await requireAuth();
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6 sm:py-8 space-y-5">
+    <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6 sm:py-5 space-y-5">
       <header>
         <h1 className="text-xl font-bold sm:text-2xl">{t("title")}</h1>
         <p className="mt-1 text-sm text-muted">

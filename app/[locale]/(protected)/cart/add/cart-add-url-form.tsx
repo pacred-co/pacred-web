@@ -61,7 +61,7 @@ export function CartAddUrlForm() {
       className="w-full space-y-3"
     >
       <div className="relative">
-        <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 md:h-6 md:w-6 text-primary-500" />
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-primary-500" />
         <input
           ref={inputRef}
           type="text"
@@ -72,7 +72,7 @@ export function CartAddUrlForm() {
           autoComplete="off"
           inputMode="url"
           suppressHydrationWarning
-          className="w-full h-14 md:h-16 rounded-2xl border-2 border-primary-200 bg-white pl-12 md:pl-14 pr-14 text-[16px] md:text-[17px] font-medium text-gray-900 placeholder:text-gray-400 shadow-[0_8px_30px_rgba(179,0,0,0.08)] outline-none transition focus:border-primary-500 focus:shadow-[0_8px_30px_rgba(179,0,0,0.15)]"
+          className="w-full h-11 rounded-xl border border-primary-200 bg-white pl-11 pr-12 text-sm font-medium text-gray-900 placeholder:text-gray-400 shadow-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
         />
         {/* Reverse-image / camera search → the /search image panel
             (?img=1 auto-scrolls + highlights it there). An <a> inside the
@@ -88,7 +88,7 @@ export function CartAddUrlForm() {
 
       <button
         type="submit"
-        className="w-full inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[16px] font-bold shadow-lg shadow-primary-600/30 hover:shadow-primary-600/40 hover:-translate-y-0.5 transition-all"
+        className="w-full inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white text-sm font-bold shadow-sm hover:shadow-md transition-all"
       >
         <Search className="h-5 w-5" strokeWidth={2.5} />
         {t("searchAndOrder")}

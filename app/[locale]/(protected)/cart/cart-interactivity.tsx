@@ -439,7 +439,7 @@ export function CartInteractivity({
   return (
     <>
       {/* ── Shopping-cart item list — cart.php L510-600 ── */}
-      <div className="rounded-2xl bg-white border border-border shadow-[0_4px_14px_rgba(0,0,0,0.04)] overflow-hidden">
+      <div className="rounded-2xl bg-white border border-border shadow-sm overflow-hidden">
         {/* Section header — select-all bar */}
         <div className="flex items-center gap-3 px-4 md:px-5 py-3 border-b border-border bg-gradient-to-r from-rose-50/60 via-white to-white">
           <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -650,7 +650,7 @@ export function CartInteractivity({
       {/* ── Promotion + order-summary card — cart.php L652-727 ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
         {/* Promotions (left) */}
-        <div className="lg:col-span-7 rounded-2xl bg-white border border-border shadow-[0_4px_14px_rgba(0,0,0,0.04)] p-4 md:p-5">
+        <div className="lg:col-span-7 rounded-2xl bg-white border border-border shadow-sm p-4 md:p-5">
           <h3 className="flex items-center gap-2 text-[15px] md:text-[16px] font-bold text-foreground mb-3">
             <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-rose-50 text-primary-600">
               <Gift className="w-4 h-4" strokeWidth={2.2} />
@@ -815,7 +815,7 @@ export function CartInteractivity({
         </div>
 
         {/* Order summary (right) */}
-        <div className="lg:col-span-5 rounded-2xl bg-gradient-to-br from-white via-rose-50/30 to-rose-100/40 border border-rose-100 shadow-[0_6px_20px_rgba(179,0,0,0.08)] p-4 md:p-5 flex flex-col">
+        <div className="lg:col-span-5 rounded-2xl bg-gradient-to-br from-white via-rose-50/30 to-rose-100/40 border border-rose-100 shadow-sm p-4 md:p-5 flex flex-col">
           <div className="flex items-start justify-between gap-2 mb-3">
             <h3 className="flex items-center gap-2 text-[15px] md:text-[16px] font-bold text-foreground">
               <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-primary-600 text-white shadow-md shadow-primary-600/25">
@@ -864,7 +864,7 @@ export function CartInteractivity({
             name="addOrder"
             disabled={submitDisabled || submitting}
             onClick={handleSubmitOrder}
-            className="mt-4 w-full inline-flex items-center justify-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[14px] md:text-[15px] font-bold px-4 py-2.5 md:py-3 shadow-lg shadow-primary-600/30 hover:shadow-primary-600/40 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-lg"
+            className="mt-4 w-full inline-flex items-center justify-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-sm font-bold px-4 py-2.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
           >
             {submitting ? (
               <>

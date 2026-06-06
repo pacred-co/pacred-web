@@ -141,7 +141,7 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
 
   return (
     <>
-      <main className="mx-auto w-full max-w-[1100px] px-4 py-8 space-y-6">
+      <main className="mx-auto w-full max-w-[1100px] px-4 py-5 space-y-6">
         {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

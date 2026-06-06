@@ -289,8 +289,8 @@ export default async function FreightReceiptsHistoryPage({
 
               {receipts.length === 0 ? (
                 /* Empty state */
-                <div className="flex flex-col items-center gap-2 py-12 text-center">
-                  <i className="la la-print text-4xl text-muted/40" aria-hidden></i>
+                <div className="flex flex-col items-center gap-2 py-8 text-center">
+                  <i className="la la-print text-2xl text-muted/40" aria-hidden></i>
                   <p className="text-sm text-muted">
                     ไม่พบใบเสร็จในช่วงวันที่ที่เลือก
                   </p>
@@ -464,7 +464,7 @@ export default async function FreightReceiptsHistoryPage({
           <button
             type="submit"
             id="select1"
-            className="inline-flex items-center gap-2 rounded-full bg-emerald-600 text-white px-5 py-2.5 text-sm font-bold shadow-lg shadow-emerald-600/30 hover:bg-emerald-700 active:scale-[0.98] transition-all"
+            className="inline-flex items-center gap-2 rounded-full bg-emerald-600 text-white px-5 py-2.5 text-sm font-bold shadow-sm hover:bg-emerald-700 active:scale-[0.98] transition-all"
             name="type"
             value="1"
           >

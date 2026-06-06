@@ -88,7 +88,7 @@ export function WithdrawForm({ balance }: Props) {
 
   if (done) {
     return (
-      <div className="rounded-2xl border border-green-200 bg-green-50 p-8 text-center space-y-3">
+      <div className="rounded-2xl border border-green-200 bg-green-50 p-5 text-center space-y-3">
         <h2 className="text-xl font-bold text-green-800">{t("withdrawSubmittedTitle")}</h2>
         <p className="text-sm text-green-700">{t("withdrawSubmittedSubtitle")}</p>
         <div className="flex justify-center gap-2">
@@ -101,7 +101,7 @@ export function WithdrawForm({ balance }: Props) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="rounded-2xl border border-border bg-white dark:bg-surface p-6 shadow-sm space-y-5">
+    <form onSubmit={onSubmit} className="rounded-2xl border border-border bg-white dark:bg-surface p-4 sm:p-5 shadow-sm space-y-4">
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
       )}
@@ -117,11 +117,11 @@ export function WithdrawForm({ balance }: Props) {
             max={balance}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className={`${inputCls} text-2xl font-mono font-bold pr-12`}
+            className={`${inputCls} text-lg font-mono font-bold pr-12`}
             required
             placeholder="0.00"
           />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xl font-bold text-muted">฿</span>
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-base font-bold text-muted">฿</span>
         </div>
         <span className="block text-xs text-muted">
           {t("withdrawableLabel")} <b className="font-mono text-foreground">฿{balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</b>
@@ -143,7 +143,7 @@ export function WithdrawForm({ balance }: Props) {
           <hr className="border-amber-200" />
           <div className="flex justify-between items-baseline">
             <span className="text-xs text-muted">{t("netReceiveLabel")}</span>
-            <span className="font-mono text-2xl font-bold text-emerald-600">
+            <span className="font-mono text-lg font-bold text-emerald-600">
               ฿{net.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
             </span>
           </div>
@@ -183,7 +183,7 @@ export function WithdrawForm({ balance }: Props) {
       <button
         type="submit"
         disabled={pending || !amount || amt < MIN_AMOUNT || amt > balance}
-        className={`w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary-500 to-primary-700 text-white font-bold text-base px-6 py-3 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:hover:shadow-lg ${amt >= MIN_AMOUNT && amt <= balance && !pending ? "animate-pulse" : ""}`}
+        className={`w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary-500 to-primary-700 text-white font-bold text-sm px-5 py-2.5 shadow-sm hover:shadow-md transition-all disabled:opacity-50`}
       >
         {pending ? t("submittingRequest") : `💸 ${t("confirmWithdrawButton")}${net > 0 ? ` ฿${net.toLocaleString("th-TH", { minimumFractionDigits: 2 })}` : ""}`}
       </button>

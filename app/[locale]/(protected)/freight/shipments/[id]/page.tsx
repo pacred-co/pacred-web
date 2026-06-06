@@ -374,7 +374,7 @@ export default async function CustomerFreightShipmentDetailPage({
           </div>
 
           {!activeInvoice ? (
-            <p className="p-8 text-center text-sm text-muted">
+            <p className="p-5 text-center text-sm text-muted">
               ยังไม่มี Commercial Invoice — ทีมจะออกให้เมื่อพร้อมจัดส่งเอกสาร
             </p>
           ) : activeInvoice.status === "draft" ? (

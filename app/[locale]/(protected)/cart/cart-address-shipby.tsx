@@ -164,7 +164,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
 
   return (
     <>
-      <div className="rounded-2xl bg-white border border-border shadow-[0_4px_14px_rgba(0,0,0,0.04)] overflow-hidden">
+      <div className="rounded-2xl bg-white border border-border shadow-sm overflow-hidden">
         {/* Header strip */}
         <div className="px-4 md:px-5 py-3 border-b border-border bg-gradient-to-r from-rose-50/60 via-white to-white">
           <h3 className="flex items-center gap-2 text-[14px] md:text-[15px] font-bold text-foreground">
@@ -263,7 +263,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
               <button
                 type="button"
                 onClick={openModal}
-                className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[13px] font-bold px-4 py-2 shadow-lg shadow-primary-600/30 hover:shadow-primary-600/40 hover:-translate-y-0.5 transition-all"
+                className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[13px] font-bold px-4 py-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
               >
                 <MapPin className="w-4 h-4" strokeWidth={2.2} />
                 {t("addAddressOrPickup")}
@@ -340,7 +340,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
           role="dialog"
           aria-modal="true"
         >
-          <div className="w-full md:max-w-2xl bg-white rounded-t-2xl md:rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="w-full md:max-w-2xl bg-white rounded-t-2xl md:rounded-2xl shadow-lg overflow-hidden max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between gap-3 px-4 md:px-5 py-3 border-b border-border bg-gradient-to-r from-primary-50 via-white to-white">
               <h4 className="flex items-center gap-2 text-[15px] md:text-[16px] font-bold text-foreground">
                 <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-primary-600 text-white">
@@ -451,7 +451,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
           role="dialog"
           aria-modal="true"
         >
-          <div className="relative w-full max-w-sm bg-gradient-to-br from-primary-600 to-primary-800 rounded-3xl shadow-2xl shadow-primary-900/40 overflow-hidden">
+          <div className="relative w-full max-w-sm bg-gradient-to-br from-primary-600 to-primary-800 rounded-2xl shadow-lg overflow-hidden">
             <div className="flex items-start justify-between gap-2 px-4 pt-4 pb-2">
               <h4 className="text-white text-[17px] font-black leading-tight flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-yellow-300 shrink-0" strokeWidth={2.5} />
@@ -481,7 +481,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
               <button
                 type="button"
                 onClick={acceptMaomao}
-                className="mt-4 w-full inline-flex items-center justify-center gap-1.5 rounded-full bg-white text-primary-700 text-[14px] font-black px-4 py-2.5 shadow-xl shadow-black/30 hover:bg-primary-50 hover:-translate-y-0.5 transition-all animate-pulse"
+                className="mt-4 w-full inline-flex items-center justify-center gap-1.5 rounded-full bg-white text-primary-700 text-[14px] font-black px-4 py-2.5 shadow-sm hover:bg-primary-50 hover:-translate-y-0.5 transition-all"
               >
                 <Sparkles className="w-4 h-4" strokeWidth={2.5} />
                 {t("acceptMaomaoPromo")}

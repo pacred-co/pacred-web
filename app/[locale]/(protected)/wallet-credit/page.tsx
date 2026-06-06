@@ -289,7 +289,7 @@ export default async function WalletCreditPage() {
                 {/* `tam-counter` + data-count kept as the legacy count-up
                     hook (animation JS may attach later). */}
                 <p
-                  className="tam-counter mt-0.5 font-mono text-3xl font-bold tabular-nums md:text-4xl"
+                  className="tam-counter mt-0.5 font-mono text-xl font-bold tabular-nums md:text-2xl"
                   data-count={creditAvailable}
                 >
                   {numberFormat2(creditAvailable)}
@@ -354,7 +354,7 @@ export default async function WalletCreditPage() {
             <div className="px-3 py-3 md:px-4 md:py-4">
               <div id="load_data_wallet_hs" className="space-y-2.5">
                 {rowsHistory.length === 0 ? (
-                  <div className="flex flex-col items-center gap-2 py-12 text-center">
+                  <div className="flex flex-col items-center gap-2 py-8 text-center">
                     <Inbox className="h-10 w-10 text-muted/50" />
                     <p className="text-sm text-muted">{t("noRecords")}</p>
                   </div>

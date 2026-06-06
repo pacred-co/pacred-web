@@ -75,7 +75,7 @@ export default async function ShipmentDetailPage({
       notFound();
     }
     return (
-      <main className="p-6 lg:p-8">
+      <main className="p-6 lg:p-5">
         <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
           {t("detailError", { error: res.error })}
         </div>
@@ -100,7 +100,7 @@ export default async function ShipmentDetailPage({
   const freshness = freshnessClass(latestScannedAt);
 
   return (
-    <main className="p-6 lg:p-8 space-y-5 max-w-4xl">
+    <main className="p-6 lg:p-5 space-y-5 max-w-4xl">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-600">SHIPMENT</p>

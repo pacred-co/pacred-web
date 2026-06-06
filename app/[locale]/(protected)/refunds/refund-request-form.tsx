@@ -176,7 +176,7 @@ export function RefundRequestForm({ sourceOptions }: Props) {
       <button
         type="submit"
         disabled={pending || filteredOptions.length === 0}
-        className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary-500 to-primary-700 text-white font-bold text-sm px-6 py-3 shadow-md hover:shadow-lg transition-all disabled:opacity-50"
+        className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary-500 to-primary-700 text-white font-bold text-sm px-6 py-3 shadow-sm hover:shadow-md transition-all disabled:opacity-50"
       >
         {pending ? t("submitting") : t("submit")}
       </button>

@@ -39,13 +39,13 @@ export default async function OrdersPage({
 
   return (
     <>
-      <main className="mx-auto w-full max-w-[1140px] px-4 py-12">
+      <main className="mx-auto w-full max-w-[1140px] px-4 py-6">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <p className="text-sm font-semibold tracking-widest text-primary-600">
               ORDERS
             </p>
-            <h1 className="mt-1 text-3xl font-bold text-foreground">
+            <h1 className="mt-1 text-xl font-bold text-foreground">
               {t("heading")}
             </h1>
           </div>
@@ -64,7 +64,7 @@ export default async function OrdersPage({
         )}
 
         {res.ok && orders.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-border bg-white dark:bg-surface p-12 text-center">
+          <div className="rounded-2xl border border-dashed border-border bg-white dark:bg-surface p-6 text-center">
             <p className="text-muted">
               {t("emptyState")}
             </p>

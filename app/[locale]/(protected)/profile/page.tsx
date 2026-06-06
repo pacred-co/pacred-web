@@ -644,14 +644,14 @@ export default async function ProfilePage() {
               {/* L308-329 — ฝากสั่งซื้อสินค้า → shops/ */}
               <Link
                 href="/service-order"
-                className="group rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 transition-all hover:shadow-md hover:-translate-y-0.5"
+                className="group rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 transition-all hover:shadow-sm hover:-translate-y-0.5"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="text-left">
                     <h2 className="text-2xl font-bold text-[#1e9ff2] tam-counter" data-count={countShops}>{countShops}</h2>
                     <h4 className="text-sm text-muted">{t("statShopOrder")}</h4>
                   </div>
-                  <i className="icon-basket-loaded text-3xl text-[#1e9ff2]"></i>
+                  <i className="icon-basket-loaded text-xl text-[#1e9ff2]"></i>
                 </div>
                 <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-alt">
                   <div className="h-full w-full rounded-full bg-gradient-to-r from-[#1e9ff2] to-[#144b7f]"></div>
@@ -660,7 +660,7 @@ export default async function ProfilePage() {
               {/* L330-351 — ฝากนำเข้าสินค้า → forwarder/ */}
               <Link
                 href="/service-import"
-                className="group rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 transition-all hover:shadow-md hover:-translate-y-0.5"
+                className="group rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 transition-all hover:shadow-sm hover:-translate-y-0.5"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="text-left">
@@ -669,7 +669,7 @@ export default async function ProfilePage() {
                     </h2>
                     <h4 className="text-sm text-muted">{t("statImport")}</h4>
                   </div>
-                  <i className="ft-box text-3xl text-[#ff9149]"></i>
+                  <i className="ft-box text-xl text-[#ff9149]"></i>
                 </div>
                 <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-alt">
                   <div className="h-full w-full rounded-full bg-gradient-to-r from-[#ff9149] to-[#ff6707]"></div>
@@ -701,7 +701,7 @@ export default async function ProfilePage() {
               {/* L352-373 — ฝากชำระสินค้า → payment/ */}
               <Link
                 href="/service-payment"
-                className="group rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 transition-all hover:shadow-md hover:-translate-y-0.5"
+                className="group rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 transition-all hover:shadow-sm hover:-translate-y-0.5"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="text-left">
@@ -724,7 +724,7 @@ export default async function ProfilePage() {
               {/* L374-395 — กระเป๋าสตางค์ → wallet/ */}
               <Link
                 href="/wallet"
-                className="group rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 transition-all hover:shadow-md hover:-translate-y-0.5"
+                className="group rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 transition-all hover:shadow-sm hover:-translate-y-0.5"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="text-left">
@@ -736,7 +736,7 @@ export default async function ProfilePage() {
                     </h2>
                     <h4 className="text-sm text-muted">{t("statWallet")}</h4>
                   </div>
-                  <i className="icon-wallet text-3xl text-[#0cc27e]"></i>
+                  <i className="icon-wallet text-xl text-[#0cc27e]"></i>
                 </div>
                 <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-alt">
                   <div className="h-full w-full rounded-full bg-gradient-to-r from-[#0cc27e] to-[#0a8e5e]"></div>

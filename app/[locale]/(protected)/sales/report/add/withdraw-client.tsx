@@ -270,7 +270,7 @@ export function WithdrawClient({
           type="button"
           onClick={onOpenModal}
           disabled={selected.size === 0}
-          className="inline-flex items-center justify-center rounded-full bg-red-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-red-600/30 hover:bg-red-700 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          className="inline-flex items-center justify-center rounded-full bg-red-600 px-6 py-3 text-sm font-bold text-white shadow-sm shadow-red-600/30 hover:bg-red-700 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {t("withdrawSelectedCta")}
         </button>
@@ -279,7 +279,7 @@ export function WithdrawClient({
       {/* ── Modal: bank info + ID-card PDF ── */}
       {modalOpen && (
         <div className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
-          <div className="w-full max-w-lg rounded-t-2xl sm:rounded-2xl bg-white dark:bg-surface shadow-xl max-h-[92vh] overflow-y-auto">
+          <div className="w-full max-w-lg rounded-t-2xl sm:rounded-2xl bg-white dark:bg-surface shadow-lg max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <h4 className="text-base font-bold text-foreground">
                 {t("withdrawModalTitle", { count: selected.size })}

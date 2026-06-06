@@ -71,7 +71,7 @@ export default async function WalletShopPage() {
 
   if (!summaryRes.ok) {
     return (
-      <main className="p-4 sm:p-6 lg:p-8 space-y-4">
+      <main className="p-4 sm:p-6 lg:p-5 space-y-4">
         <h1 className="text-2xl font-bold">{t("title")}</h1>
         <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
           {t("loadError", { error: summaryRes.error })}
@@ -84,7 +84,7 @@ export default async function WalletShopPage() {
   const txns = txnsRes.ok ? (txnsRes.data ?? []) : [];
 
   return (
-    <main className="p-4 sm:p-6 lg:p-8 space-y-5 max-w-5xl">
+    <main className="p-4 sm:p-6 lg:p-5 space-y-5 max-w-5xl">
       {/* Header */}
       <header>
         <p className="text-xs font-semibold tracking-widest text-primary-600">
@@ -160,7 +160,7 @@ export default async function WalletShopPage() {
         </div>
 
         {txns.length === 0 ? (
-          <p className="p-8 text-center text-sm text-muted">{t("noTransactions")}</p>
+          <p className="p-5 text-center text-sm text-muted">{t("noTransactions")}</p>
         ) : (
           <>
             {/* Mobile card list */}

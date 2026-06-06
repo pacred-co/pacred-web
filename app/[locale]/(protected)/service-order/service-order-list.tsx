@@ -94,7 +94,7 @@ export function ServiceOrderList({
 
   if (items.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-border bg-white dark:bg-surface p-12 text-center">
+      <div className="rounded-2xl border border-dashed border-border bg-white dark:bg-surface p-6 text-center">
         <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-surface-alt text-muted">
           <Package className="w-7 h-7" />
         </div>
@@ -281,7 +281,7 @@ export function ServiceOrderList({
       {/* Sticky "ชำระเงิน" bar — legacy .b-pay fixed bottom bar */}
       {payableRows.length > 0 && (
         <div className="sticky bottom-3 z-30 mx-auto max-w-[680px]">
-          <div className="rounded-2xl border border-primary-200 bg-white dark:bg-surface shadow-lg shadow-primary-900/10 px-4 py-3">
+          <div className="rounded-2xl border border-primary-200 bg-white dark:bg-surface shadow-sm shadow-primary-900/10 px-4 py-3">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <label className="flex items-center gap-2 text-xs sm:text-sm">
                 <input

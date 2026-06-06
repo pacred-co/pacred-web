@@ -222,7 +222,7 @@ export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
         {filtered.length === 0 ? (
           items.length === 0 ? (
             /* Nothing due anywhere — the happy "all clear" state. */
-            <div className="flex flex-col items-center gap-2 py-12 text-center">
+            <div className="flex flex-col items-center gap-2 py-8 text-center">
               <span className="grid h-14 w-14 place-items-center rounded-full bg-emerald-50 text-emerald-600">
                 <CheckCircle2 className="h-8 w-8" />
               </span>
@@ -235,7 +235,7 @@ export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
             </div>
           ) : (
             /* This service tab has no pending items (e.g. ส่งออก / พิธีการฯ). */
-            <div className="flex flex-col items-center gap-2 py-12 text-center">
+            <div className="flex flex-col items-center gap-2 py-8 text-center">
               <Inbox className="h-10 w-10 text-muted/50" />
               <p className="text-[13.5px] text-muted">
                 ไม่มีรายการ{activeLabel}ที่ต้องชำระ

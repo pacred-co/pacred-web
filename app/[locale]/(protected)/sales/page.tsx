@@ -293,7 +293,7 @@ export default async function SalesTeamMembersPage() {
           {/* L70-141 — the team-member list */}
           <div className="px-3 py-3 md:px-5 md:py-4">
             {rows.length === 0 ? (
-              <p className="py-12 text-center text-sm text-muted">{t("emptyTeamMembers")}</p>
+              <p className="py-8 text-center text-sm text-muted">{t("emptyTeamMembers")}</p>
             ) : (
               <>
                 {/* ── Mobile: stacked cards (md:hidden) ── */}

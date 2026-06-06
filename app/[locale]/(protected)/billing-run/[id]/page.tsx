@@ -130,7 +130,7 @@ export default async function CustomerBillingRunDetailPage({
   const isOverdue = hdrRaw.status === "issued" && hdrRaw.date_due < isoToday();
 
   return (
-    <main className="p-4 md:p-6 lg:p-8 space-y-4">
+    <main className="p-4 md:p-6 lg:p-5 space-y-4">
       <title>{`ใบวางบิล ${hdrRaw.doc_no} | Pacred`}</title>
 
       <Link href="/billing-run" className="text-xs text-muted hover:text-foreground underline-offset-2 hover:underline inline-block">

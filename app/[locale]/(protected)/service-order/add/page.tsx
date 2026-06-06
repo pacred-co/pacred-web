@@ -371,8 +371,8 @@ export default async function ServiceOrderAddPage({
         <div className="content-body">
             {corporatePending ? (
               // shops.php L1090 — juristic-pending message.
-              <div className="mx-auto max-w-[670px] mt-16 md:mt-24 text-center">
-                <h2 className="rounded-2xl bg-red-600 text-white px-4 py-6 text-base md:text-lg font-bold leading-relaxed shadow-md">
+              <div className="mx-auto max-w-[670px] mt-8 md:mt-12 text-center">
+                <h2 className="rounded-2xl bg-red-600 text-white px-4 py-6 text-base md:text-lg font-bold leading-relaxed shadow-sm">
                   รอเจ้าหน้าที่ดำเนิน อนุมัติการเป็นนิติบุคคล ภายใน 24 ชม. <br /> (ยกเว้นวันอาทิตย์และวันหยุดนักขัตฤกษ์)
                 </h2>
               </div>
@@ -932,7 +932,7 @@ export default async function ServiceOrderAddPage({
                                 >
                                   <button
                                     type="submit"
-                                    className="bg-red-600 hover:bg-red-700 text-white rounded-lg px-4 py-2 text-sm font-bold shadow-lg transition-colors"
+                                    className="bg-red-600 hover:bg-red-700 text-white rounded-lg px-4 py-2 text-sm font-bold shadow-sm transition-colors"
                                     name="print"
                                     value="2"
                                   >
@@ -941,7 +941,7 @@ export default async function ServiceOrderAddPage({
                                   {q === "5" && (
                                     <button
                                       type="submit"
-                                      className="bg-red-600 hover:bg-red-700 text-white rounded-lg px-4 py-2 text-sm font-bold shadow-lg transition-colors"
+                                      className="bg-red-600 hover:bg-red-700 text-white rounded-lg px-4 py-2 text-sm font-bold shadow-sm transition-colors"
                                       name="print"
                                       value="1"
                                     >

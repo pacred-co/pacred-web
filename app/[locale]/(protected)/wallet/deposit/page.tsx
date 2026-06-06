@@ -232,7 +232,7 @@ export default async function WalletDepositPage() {
         <section className="max-w-3xl mx-auto">
           {/* ── Wallet balance card — wallet.php L108-131 ── */}
           <div className="mx-auto max-w-lg">
-            <div className="rounded-3xl border-2 border-red-500 bg-white dark:bg-surface shadow-md p-5">
+            <div className="rounded-2xl border-2 border-red-500 bg-white dark:bg-surface shadow-sm p-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="text-left">
                   <span className="block text-base font-semibold text-foreground">
@@ -242,7 +242,7 @@ export default async function WalletDepositPage() {
                     {t("walletBalanceBaht")}
                   </span>
                   <span
-                    className="tam-counter notranslate block text-4xl md:text-5xl font-bold text-foreground mt-1"
+                    className="tam-counter notranslate block text-2xl md:text-3xl font-bold text-foreground mt-1"
                     data-count={walletTotal}
                   >
                     {numberFormat2(walletTotal)}
@@ -359,7 +359,7 @@ export default async function WalletDepositPage() {
                 >
                   <div id="load_data_wallet_hs" className="space-y-2">
                     {rowsHistory.length === 0 ? (
-                      <div className="text-center text-no-data text-red-500 py-10">
+                      <div className="text-center text-no-data text-red-500 py-6">
                         {t("noTransactions")}
                       </div>
                     ) : (
@@ -377,7 +377,7 @@ export default async function WalletDepositPage() {
                 >
                   <div id="load_data_wallet_hs_add" className="space-y-2">
                     {rowsAdd.length === 0 ? (
-                      <div className="text-center text-no-data text-red-500 py-10">
+                      <div className="text-center text-no-data text-red-500 py-6">
                         {t("noTransactions")}
                       </div>
                     ) : (
@@ -395,7 +395,7 @@ export default async function WalletDepositPage() {
                 >
                   <div id="load_data_wallet_hs_payments" className="space-y-2">
                     {rowsPayments.length === 0 ? (
-                      <div className="text-center text-no-data text-red-500 py-10">
+                      <div className="text-center text-no-data text-red-500 py-6">
                         {t("noTransactions")}
                       </div>
                     ) : (
@@ -413,7 +413,7 @@ export default async function WalletDepositPage() {
                 >
                   <div id="load_data_wallet_hs_withdraw" className="space-y-2">
                     {rowsWithdraw.length === 0 ? (
-                      <div className="text-center text-no-data text-red-500 py-10">
+                      <div className="text-center text-no-data text-red-500 py-6">
                         {t("noTransactions")}
                       </div>
                     ) : (
@@ -451,7 +451,7 @@ export default async function WalletDepositPage() {
           aria-hidden="true"
         >
           <div className="modal-dialog mx-auto w-full max-w-xl my-6">
-            <div className="modal-content rounded-2xl border border-border bg-white dark:bg-surface shadow-xl overflow-hidden">
+            <div className="modal-content rounded-2xl border border-border bg-white dark:bg-surface shadow-lg overflow-hidden">
               <div className="modal-header header-from flex items-center justify-between border-b border-border px-4 py-3 md:px-5 md:py-4">
                 <h4 className="modal-title text-base md:text-lg font-bold text-foreground">
                   {t("modalTitle")}

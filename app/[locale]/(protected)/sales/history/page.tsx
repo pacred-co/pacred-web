@@ -182,7 +182,7 @@ export default async function SalesHistoryPage({
           {/* L172-221 — the payout-history list */}
           <div className="px-3 py-3 md:px-5 md:py-4">
             {rows.length === 0 ? (
-              <p className="py-12 text-center text-sm text-muted">
+              <p className="py-8 text-center text-sm text-muted">
                 {t("emptyPayoutHistory")}
               </p>
             ) : (

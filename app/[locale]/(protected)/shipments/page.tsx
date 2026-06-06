@@ -50,7 +50,7 @@ export default async function ShipmentsPage() {
 
   if (!res.ok) {
     return (
-      <main className="p-6 lg:p-8 space-y-4">
+      <main className="p-6 lg:p-5 space-y-4">
         <h1 className="text-2xl font-bold">{t("title")}</h1>
         <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
           {t("loadError", { error: res.error })}
@@ -72,7 +72,7 @@ export default async function ShipmentsPage() {
   const freshness = freshnessClass(latestEventAt);
 
   return (
-    <main className="p-6 lg:p-8 space-y-5">
+    <main className="p-6 lg:p-5 space-y-5">
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-600">{t("kicker")}</p>
@@ -218,8 +218,8 @@ function EmptyState({
   t: Awaited<ReturnType<typeof getTranslations<"shipments">>>;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-border p-10 text-center space-y-3">
-      <p className="text-4xl">📦</p>
+    <div className="rounded-2xl border border-dashed border-border p-6 text-center space-y-3">
+      <p className="text-2xl">📦</p>
       <h2 className="font-bold text-lg">{t("emptyTitle")}</h2>
       <p className="text-sm text-muted max-w-sm mx-auto">
         {t("emptyBody")}

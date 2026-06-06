@@ -114,11 +114,11 @@ export default async function ShopOrderReceiptPage({
         <PrintButton />
       </div>
 
-      <main className="mx-auto max-w-[800px] p-8 space-y-6">
+      <main className="mx-auto max-w-[800px] p-5 space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between border-b-2 border-black pb-4">
           <div>
-            <h1 className="text-3xl font-black text-primary-700">Pacred</h1>
+            <h1 className="text-xl font-black text-primary-700">Pacred</h1>
             <p className="text-xs">{ADDRESSES.office.full}</p>
             <p className="text-xs">โทร {CONTACT.phoneCompanyDisplay} · {CONTACT.email}</p>
           </div>

@@ -319,14 +319,14 @@ export function ForwarderInteractivity({
               `<table id="myTable">` is gone; rows are stacked cards. */}
       <form id="frm-example2" className="space-y-3">
         {enrichedRows.length === 0 ? (
-          <div className="rounded-2xl border border-border bg-white p-8 text-center shadow-sm dark:bg-surface md:p-12">
+          <div className="rounded-2xl border border-border bg-white p-5 text-center shadow-sm dark:bg-surface md:p-6">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/images/Iconistpack/transport%20system.png"
               alt=""
-              className="mx-auto mb-4 h-40 w-40 object-contain opacity-70 md:h-52 md:w-52"
+              className="mx-auto mb-4 h-28 w-28 object-contain opacity-70 md:h-36 md:w-36"
             />
-            <h3 className="text-[15px] font-bold text-foreground md:text-[17px]">
+            <h3 className="text-sm font-bold text-foreground md:text-[15px]">
               ไม่พบรายการ
             </h3>
           </div>
@@ -358,7 +358,7 @@ export function ForwarderInteractivity({
 
       {/* ── (cond.) "รวมบิลจ่าย" PCSF strip — forwarder.php L831-836 ── */}
       {showPayStrip && (
-        <div className="my-3 rounded-2xl bg-red-600 text-white text-center px-4 py-3 shadow-md shadow-red-600/20 animate__animated animate__infinite animate__headShake">
+        <div className="my-3 rounded-2xl bg-red-600 text-white text-center px-4 py-3 shadow-sm animate__animated animate__infinite animate__headShake">
           <div className="text-xs md:text-sm leading-snug">
             คุณมีรายการรอชำระเงินที่ใช้ Pacred เหมาๆ มากกว่า 1 รายการ
             <br />
@@ -387,7 +387,7 @@ export function ForwarderInteractivity({
                the bottom to clear). z-[55] > desktop LINE bubble (z-51).
             ·  Hidden on auth/admin via the route group. */}
       {showPayBar && (
-        <div className="fixed left-2 right-2 md:left-0 md:right-0 z-[55] bottom-[92px] md:bottom-0 bg-white/95 dark:bg-surface/95 backdrop-blur-md border border-border md:border-0 md:border-t rounded-2xl md:rounded-none shadow-[0_-6px_24px_rgba(0,0,0,0.12)] md:shadow-[0_-6px_20px_rgba(0,0,0,0.08)] overflow-hidden">
+        <div className="fixed left-2 right-2 md:left-0 md:right-0 z-[55] bottom-[92px] md:bottom-0 bg-white/95 dark:bg-surface/95 backdrop-blur-md border border-border md:border-0 md:border-t rounded-2xl md:rounded-none shadow-lg overflow-hidden">
           <div className="flex items-center gap-2 md:gap-3 px-3 py-2 md:px-6 md:py-3 md:pl-[280px] md:pr-[88px]">
             {/* Select-all — icon-only on tight viewports, label appears ≥360px */}
             <label className="flex items-center gap-1.5 shrink-0 cursor-pointer">
@@ -423,7 +423,7 @@ export function ForwarderInteractivity({
               className={`shrink-0 inline-flex items-center justify-center gap-1 rounded-full px-4 md:px-6 py-2 md:py-2.5 text-sm md:text-base font-bold transition-all ${
                 submitDisabled
                   ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                  : "bg-red-600 text-white hover:bg-red-700 active:scale-[0.98] shadow-md shadow-red-600/30 animate__animated animate__infinite animate__headShake"
+                  : "bg-red-600 text-white hover:bg-red-700 active:scale-[0.98] shadow-sm animate__animated animate__infinite animate__headShake"
               }`}
             >
               ชำระเงิน

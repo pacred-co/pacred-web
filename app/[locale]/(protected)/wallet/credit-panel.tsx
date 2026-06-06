@@ -161,7 +161,7 @@ export function CreditLinePanel({ credit, walletBalance }: Props) {
           onClick={() => !pending && setConfirmOpen(false)}
         >
           <div
-            className="w-full max-w-sm rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-xl"
+            className="w-full max-w-sm rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-lg"
             onClick={(e) => e.stopPropagation()}
           >
             <h4 className="text-base font-bold">{t("confirmPayTitle")}</h4>
