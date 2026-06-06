@@ -1,4 +1,5 @@
 import Script from "next/script";
+import { getTranslations } from "next-intl/server";
 import { QrCode } from "lucide-react";
 import { requireAuth } from "@/lib/auth/require-auth";
 
@@ -105,6 +106,7 @@ export default async function PayPage() {
   // `pay.php` reads no per-user data — the auth gate is the only thing
   // header.php contributes that survives into the transcription.
   await requireAuth();
+  const t = await getTranslations("payPage");
   const promptPayId = process.env.PROMPTPAY_ID ?? "";
 
   return (
@@ -126,10 +128,10 @@ export default async function PayPage() {
           <div className="border-b border-border px-4 py-3 md:px-5 md:py-4">
             <h1 className="flex items-center gap-2 text-base md:text-xl font-bold text-foreground">
               <QrCode className="h-5 w-5 md:h-6 md:w-6 shrink-0 text-primary-600" />
-              <span>สร้าง QR Code รับเงิน</span>
+              <span>{t("title")}</span>
             </h1>
             <p className="mt-1 text-xs md:text-sm text-muted">
-              สร้างคิวอาร์โค้ดพร้อมเพย์สำหรับรับเงิน
+              {t("subtitle")}
             </p>
           </div>
 
@@ -142,7 +144,7 @@ export default async function PayPage() {
                   htmlFor="pp-id"
                   className="mb-1 block text-sm font-medium text-foreground"
                 >
-                  พร้อมเพย์ ไอดี
+                  {t("promptPayIdLabel")}
                 </label>
                 {/* pay.php L46 puts an inline
                     `onKeyPress="if(this.value.length==15) return false;"`
@@ -157,7 +159,7 @@ export default async function PayPage() {
                   defaultValue={promptPayId}
                   className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-foreground placeholder:text-muted transition-colors focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/30 dark:bg-surface"
                   id="pp-id"
-                  placeholder="เบอร์มือถือ, รหัสประจำตัวประชาชน, TAX ID, e-Wallet"
+                  placeholder={t("promptPayIdPlaceholder")}
                   required
                 />
               </div>
@@ -166,7 +168,7 @@ export default async function PayPage() {
                   htmlFor="amount"
                   className="mb-1 block text-sm font-medium text-foreground"
                 >
-                  จำนวนเงิน
+                  {t("amountLabel")}
                 </label>
                 <input
                   type="number"
@@ -183,7 +185,7 @@ export default async function PayPage() {
                 id="myBtn"
               >
                 <QrCode className="h-4 w-4" />
-                สร้าง QR Code รับเงิน
+                {t("generateButton")}
               </button>
             </form>
           </div>
@@ -214,7 +216,7 @@ export default async function PayPage() {
                 <span aria-hidden="true">&times;</span>
               </button>
               <h4 className="modal-title" id="myModalLabel">
-                QR Code รับเงิน
+                {t("modalTitle")}
               </h4>
             </div>
             <div className="modal-body" style={{ margin: "auto" }}>
@@ -225,7 +227,7 @@ export default async function PayPage() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/legacy/pcs/PromptPay-logo.jpg"
-                alt="พร้อมเพย์"
+                alt={t("promptPayLogoAlt")}
                 style={{ maxWidth: "250px", marginBottom: "10px" }}
               />
               <div
@@ -246,7 +248,7 @@ export default async function PayPage() {
                   color: "#A6A6A6",
                 }}
               >
-                สร้าง QR Code เองที่ pp.js.org
+                {t("modalInfo")}
               </div>
             </div>
             <div className="modal-footer">

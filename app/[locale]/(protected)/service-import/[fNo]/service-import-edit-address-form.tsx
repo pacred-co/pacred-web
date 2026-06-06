@@ -14,6 +14,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { updateLegacyForwarderAddress } from "@/actions/forwarder-legacy";
 
@@ -34,6 +35,7 @@ export function ServiceImportEditAddressForm({
   options,
   isEditable,
 }: Props) {
+  const t = useTranslations("serviceImportEditAddressForm");
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +72,7 @@ export function ServiceImportEditAddressForm({
                 setOpen(true);
               }}
             >
-              แก้ไข
+              {t("edit")}
             </a>
           )}
         </span>
@@ -91,14 +93,14 @@ export function ServiceImportEditAddressForm({
           >
             <div className="mb-2 flex items-center justify-between gap-2">
               <label className="block text-xs font-medium text-muted" htmlFor="addressID">
-                ที่อยู่จัดส่ง
+                {t("deliveryAddress")}
               </label>
               <Link
                 href="/addresses/add"
                 target="_blank"
                 className="inline-flex items-center gap-1 text-xs font-medium text-sky-600 hover:underline"
               >
-                เพิ่มที่อยู่ใหม่ <i className="fa fa-plus"></i>
+                {t("addNewAddress")} <i className="fa fa-plus"></i>
               </Link>
             </div>
             {error && (
@@ -114,7 +116,7 @@ export function ServiceImportEditAddressForm({
               required
               defaultValue=""
             >
-              <option value="">กรุณาเลือกที่อยู่ในการจัดส่ง</option>
+              <option value="">{t("selectAddressPlaceholder")}</option>
               {options.map((o) => (
                 <option key={o.addressid} value={o.addressid}>
                   {o.label}
@@ -128,7 +130,7 @@ export function ServiceImportEditAddressForm({
                 id="to-text-fAddress"
                 onClick={() => setOpen(false)}
               >
-                ยกเลิก
+                {t("cancel")}
               </button>
               <button
                 type="submit"
@@ -136,13 +138,13 @@ export function ServiceImportEditAddressForm({
                 className="inline-flex items-center justify-center rounded-full bg-red-600 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-red-700 active:scale-[0.98] transition-all disabled:opacity-60"
                 disabled={isPending}
               >
-                บันทึก
+                {t("save")}
               </button>
             </div>
           </form>
         ) : (
           <span className="inline-flex items-center rounded bg-red-600 px-2 py-1 text-sm text-white">
-            ไม่สามารถเปลี่ยนที่อยู่ได้เนื่องจากสินค้าถึงไทยแล้ว
+            {t("cannotChangeArrived")}
           </span>
         )}
       </div>

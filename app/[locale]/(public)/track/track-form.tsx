@@ -6,6 +6,7 @@
 // page and at the bottom of a result page ("ค้นหาเลขอื่น").
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { Search } from "lucide-react";
 
@@ -16,6 +17,7 @@ export function TrackForm({
   initial?: string;
   autoFocus?: boolean;
 }) {
+  const t = useTranslations("publicTrackStatus");
   const router = useRouter();
   const [code, setCode] = useState(initial);
 
@@ -36,8 +38,8 @@ export function TrackForm({
           autoFocus={autoFocus}
           value={code}
           onChange={(e) => setCode(e.target.value)}
-          placeholder="กรอกเลขพัสดุ / เลขแทร็คกิ้งจีน"
-          aria-label="เลขพัสดุ"
+          placeholder={t("inputPlaceholder")}
+          aria-label={t("inputAriaLabel")}
           className="h-12 w-full rounded-xl border border-border bg-white pl-11 pr-4 text-base text-foreground outline-none placeholder:text-muted focus:border-red-300 focus:shadow-[0_0_0_3px_#fef2f2] dark:bg-surface"
         />
       </div>
@@ -46,7 +48,7 @@ export function TrackForm({
         className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary-600 px-6 text-base font-bold text-white transition-colors hover:bg-primary-700"
       >
         <Search className="h-5 w-5" />
-        ติดตามพัสดุ
+        {t("submitButton")}
       </button>
     </form>
   );

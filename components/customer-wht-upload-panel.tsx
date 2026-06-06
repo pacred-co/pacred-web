@@ -12,6 +12,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { customerUploadWhtCert } from "@/actions/wht";
 
 type Props = {
@@ -19,6 +20,7 @@ type Props = {
 };
 
 export function CustomerWhtUploadPanel({ whtEntryId }: Props) {
+  const t = useTranslations("customerWhtUpload");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -30,7 +32,7 @@ export function CustomerWhtUploadPanel({ whtEntryId }: Props) {
     setErr(null);
     const file = fileRef.current?.files?.[0];
     if (!file) {
-      setErr("กรุณาเลือกไฟล์ใบ 50 ทวิ (PDF / JPG / PNG)");
+      setErr(t("errChooseFile"));
       return;
     }
     startTransition(async () => {
@@ -38,7 +40,8 @@ export function CustomerWhtUploadPanel({ whtEntryId }: Props) {
       if (res.ok) {
         router.refresh();
       } else {
-        setErr(translateError(res.error));
+        const key = errorKey(res.error);
+        setErr(key ? t(key, { code: res.error }) : res.error);
       }
     });
   }
@@ -46,16 +49,16 @@ export function CustomerWhtUploadPanel({ whtEntryId }: Props) {
   if (!open) {
     return (
       <div className="no-print mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2">
-        <p className="text-xs font-bold text-amber-900">📤 มีหนังสือรับรองหัก ณ ที่จ่าย (50 ทวิ) แล้ว?</p>
+        <p className="text-xs font-bold text-amber-900">📤 {t("ctaHeading")}</p>
         <p className="text-[11px] text-amber-800">
-          อัพโหลดได้เลย — Pacred จะออกใบกำกับภาษีให้คุณทันทีหลัง verify
+          {t("ctaBody")}
         </p>
         <button
           type="button"
           onClick={() => setOpen(true)}
           className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700"
         >
-          อัพโหลดไฟล์ →
+          {t("ctaButton")} →
         </button>
       </div>
     );
@@ -64,34 +67,34 @@ export function CustomerWhtUploadPanel({ whtEntryId }: Props) {
   return (
     <div className="no-print mt-3 rounded-lg border border-amber-300 bg-white p-4 space-y-3">
       <div className="flex items-baseline justify-between">
-        <p className="text-xs font-bold text-amber-900">📤 อัพโหลดใบ 50 ทวิ</p>
+        <p className="text-xs font-bold text-amber-900">📤 {t("formHeading")}</p>
         <button
           type="button"
           onClick={() => { setOpen(false); setErr(null); }}
           disabled={pending}
           className="text-xs text-muted hover:underline"
         >
-          ปิด
+          {t("close")}
         </button>
       </div>
 
       <div className="space-y-2">
         <label className="block">
-          <span className="text-xs text-muted">ไฟล์ใบรับรอง</span>
+          <span className="text-xs text-muted">{t("fileLabel")}</span>
           <input
             ref={fileRef}
             type="file"
             accept="application/pdf,image/jpeg,image/png"
             className="mt-1 block w-full text-xs"
           />
-          <span className="text-[10px] text-muted">รองรับ PDF / JPG / PNG (ไม่เกิน 10 MB)</span>
+          <span className="text-[10px] text-muted">{t("fileHint")}</span>
         </label>
 
         <label className="block">
-          <span className="text-xs text-muted">เลขที่ใบ 50 ทวิ (ถ้ามี)</span>
+          <span className="text-xs text-muted">{t("certNoLabel")}</span>
           <input
             type="text"
-            placeholder="เช่น 2026/12345"
+            placeholder={t("certNoPlaceholder")}
             value={certNo}
             onChange={(e) => setCertNo(e.target.value)}
             maxLength={100}
@@ -111,30 +114,30 @@ export function CustomerWhtUploadPanel({ whtEntryId }: Props) {
           disabled={pending}
           className="rounded-lg bg-green-600 px-4 py-2 text-xs font-bold text-white hover:bg-green-700 disabled:opacity-50"
         >
-          {pending ? "กำลังอัพโหลด..." : "✓ ส่งใบรับรอง"}
+          {pending ? t("uploading") : `✓ ${t("submitCert")}`}
         </button>
       </div>
 
       <p className="text-[10px] text-muted">
-        ⚠️ Pacred จะตรวจสอบใบรับรองและออกใบกำกับภาษีให้คุณภายใน 1-2 วันทำการ
+        ⚠️ {t("footerNote")}
       </p>
     </div>
   );
 }
 
-function translateError(code: string): string {
-  if (code.startsWith("upload_failed")) return `อัพโหลดล้มเหลว: ${code}`;
-  if (code.startsWith("update_failed")) return `บันทึกล้มเหลว: ${code}`;
+function errorKey(code: string): string | null {
+  if (code.startsWith("upload_failed")) return "errUploadFailed";
+  if (code.startsWith("update_failed")) return "errUpdateFailed";
   switch (code) {
-    case "invalid_input":             return "ข้อมูลไม่ถูกต้อง";
-    case "not_signed_in":             return "กรุณา login ก่อน";
-    case "no_file":                   return "กรุณาเลือกไฟล์";
-    case "file_too_large":            return "ไฟล์ใหญ่เกิน 10 MB";
-    case "invalid_mime_type":         return "ไฟล์ต้องเป็น PDF / JPG / PNG เท่านั้น";
-    case "not_found_or_unauthorised": return "ไม่พบรายการ WHT ของคุณ";
-    case "not_owner":                 return "รายการนี้ไม่ใช่ของคุณ";
-    case "already_received":          return "Pacred รับใบรับรองแล้ว — ไม่ต้องอัพโหลดซ้ำ";
-    case "already_waived":            return "รายการนี้ได้รับการยกเว้นแล้ว";
-    default:                          return code;
+    case "invalid_input":             return "errInvalidInput";
+    case "not_signed_in":             return "errNotSignedIn";
+    case "no_file":                   return "errNoFile";
+    case "file_too_large":            return "errFileTooLarge";
+    case "invalid_mime_type":         return "errInvalidMimeType";
+    case "not_found_or_unauthorised": return "errNotFoundOrUnauthorised";
+    case "not_owner":                 return "errNotOwner";
+    case "already_received":          return "errAlreadyReceived";
+    case "already_waived":            return "errAlreadyWaived";
+    default:                          return null;
   }
 }

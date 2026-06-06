@@ -18,6 +18,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { customerDecideCostAdjustment } from "@/actions/forwarder";
 
@@ -31,13 +32,13 @@ export type ReconfirmRow = {
   reconfirm_required_at: string | null;
 };
 
-const KIND_LABEL_TH: Record<string, string> = {
-  do_fee:        "ค่า D/O",
-  gateway_fee:   "ค่า gateway",
-  weight_rebill: "ค่าน้ำหนักเพิ่ม",
-  customs_extra: "ค่าศุลกากรเพิ่ม",
-  other:         "อื่นๆ",
-};
+const KNOWN_KINDS = new Set<string>([
+  "do_fee",
+  "gateway_fee",
+  "weight_rebill",
+  "customs_extra",
+  "other",
+]);
 
 type Props = {
   /** All pending_reconfirm adjustments for this forwarder. */
@@ -45,6 +46,7 @@ type Props = {
 };
 
 export function CostReconfirmPanel({ rows }: Props) {
+  const t = useTranslations("costReconfirm");
   if (!rows || rows.length === 0) return null;
 
   // Pick the most-recent row as the "headline" preview/actual numbers —
@@ -68,11 +70,10 @@ export function CostReconfirmPanel({ rows }: Props) {
         <span className="text-3xl" aria-hidden>⚠️</span>
         <div className="flex-1 min-w-0">
           <h3 className="font-bold text-amber-900 text-base">
-            ราคาจริงสูงกว่าราคาประเมิน — รอคุณยืนยันก่อนชำระ
+            {t("headline")}
           </h3>
           <p className="text-sm text-amber-800 mt-1">
-            ตามนโยบาย Pacred: หากราคาจริง <strong>สูงกว่าราคาประเมินเกิน 10%</strong> ทีมงานจะหยุดการตัดยอดและขอให้คุณยืนยันก่อนเสมอ —
-            ป้องกันการตัดเงินโดยไม่ทราบ
+            {t.rich("policyNote", { strong: (chunks) => <strong>{chunks}</strong> })}
           </p>
         </div>
       </div>
@@ -80,17 +81,17 @@ export function CostReconfirmPanel({ rows }: Props) {
       {/* Headline price comparison */}
       <div className="grid sm:grid-cols-3 gap-3">
         <PriceBox
-          label="ราคาประเมินตอนสั่ง"
+          label={t("labelPreviewTotal")}
           value={preview}
           tone="muted"
         />
         <PriceBox
-          label="ราคาจริง"
+          label={t("labelActualTotal")}
           value={actual}
           tone="bold"
         />
         <PriceBox
-          label={`เพิ่มขึ้น (${deltaPct.toFixed(1)}%)`}
+          label={t("priceIncrease", { pct: deltaPct.toFixed(1) })}
           value={delta}
           tone="warn"
         />
@@ -107,6 +108,7 @@ export function CostReconfirmPanel({ rows }: Props) {
 }
 
 function ReconfirmCard({ row }: { row: ReconfirmRow }) {
+  const t = useTranslations("costReconfirm");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [decision, setDecision] = useState<"accept" | "dispute" | null>(null);
@@ -133,13 +135,14 @@ function ReconfirmCard({ row }: { row: ReconfirmRow }) {
       if (res.ok) {
         router.refresh();
       } else {
-        setErr(translateError(res.error));
+        const key = errorKey(res.error);
+        setErr(key ? t(key) : res.error);
         setDecision(null);
       }
     });
   }
 
-  const kindLabel = KIND_LABEL_TH[row.kind] ?? row.kind;
+  const kindLabel = KNOWN_KINDS.has(row.kind) ? t(`kind_${row.kind}`) : row.kind;
   const amountFmt = Number(row.amount_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 });
 
   return (
@@ -150,7 +153,7 @@ function ReconfirmCard({ row }: { row: ReconfirmRow }) {
           <p className="font-bold text-lg text-amber-950 mt-0.5">฿{amountFmt}</p>
           {row.note && (
             <p className="text-xs text-amber-800 mt-1 whitespace-pre-wrap">
-              <span className="text-amber-700">เหตุผล:</span> {row.note}
+              <span className="text-amber-700">{t("reasonLabel")}</span> {row.note}
             </p>
           )}
         </div>
@@ -163,12 +166,12 @@ function ReconfirmCard({ row }: { row: ReconfirmRow }) {
       {decision === "dispute" ? (
         <div className="space-y-2">
           <label className="block space-y-1">
-            <span className="text-xs font-medium text-amber-900">โน้ตขอตรวจสอบ (ถ้ามี)</span>
+            <span className="text-xs font-medium text-amber-900">{t("disputeNoteLabel")}</span>
             <textarea
               rows={2}
               value={note}
               onChange={(e) => setNote(e.target.value.slice(0, 500))}
-              placeholder="เช่น น้ำหนักไม่น่าเพิ่มขนาดนี้ / ขอดูใบรับน้ำหนักจริงก่อน"
+              placeholder={t("disputeNotePlaceholder")}
               className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
               disabled={pending}
             />
@@ -180,7 +183,7 @@ function ReconfirmCard({ row }: { row: ReconfirmRow }) {
               disabled={pending}
               className="bg-amber-600 hover:bg-amber-700 text-white"
             >
-              {pending ? "กำลังส่ง..." : "📨 ส่งเรื่องตรวจสอบ"}
+              {pending ? t("submittingDispute") : `📨 ${t("submitDispute")}`}
             </Button>
             <Button
               type="button"
@@ -188,7 +191,7 @@ function ReconfirmCard({ row }: { row: ReconfirmRow }) {
               onClick={() => { setDecision(null); setNote(""); setErr(null); }}
               disabled={pending}
             >
-              ย้อนกลับ
+              {t("back")}
             </Button>
           </div>
         </div>
@@ -199,7 +202,7 @@ function ReconfirmCard({ row }: { row: ReconfirmRow }) {
             disabled={pending}
             className="bg-green-600 hover:bg-green-700 text-white"
           >
-            {pending && decision === "accept" ? "กำลังบันทึก..." : "✅ ยืนยันชำระ"}
+            {pending && decision === "accept" ? t("submittingAccept") : `✅ ${t("accept")}`}
           </Button>
           <Button
             type="button"
@@ -208,7 +211,7 @@ function ReconfirmCard({ row }: { row: ReconfirmRow }) {
             disabled={pending}
             className="border-amber-400 text-amber-900 hover:bg-amber-100"
           >
-            🔎 ขอตรวจสอบ
+            🔎 {t("dispute")}
           </Button>
         </div>
       )}
@@ -239,13 +242,13 @@ function PriceBox({
   );
 }
 
-function translateError(code: string): string {
+function errorKey(code: string): string | null {
   switch (code) {
-    case "not_signed_in":          return "กรุณาเข้าสู่ระบบใหม่";
-    case "not_found":              return "ไม่พบรายการนี้";
-    case "not_pending_reconfirm":  return "รายการนี้ไม่อยู่ในสถานะรอยืนยันแล้ว — รีเฟรชหน้าเพื่อดูสถานะล่าสุด";
-    case "invalid_input":          return "ข้อมูลไม่ถูกต้อง — โน้ตยาวสูงสุด 500 ตัวอักษร";
-    case "ownership_mismatch":     return "ไม่ได้รับสิทธิ์ดำเนินการกับรายการนี้";
-    default:                       return code;
+    case "not_signed_in":          return "errNotSignedIn";
+    case "not_found":              return "errNotFound";
+    case "not_pending_reconfirm":  return "errNotPendingReconfirm";
+    case "invalid_input":          return "errInvalidInput";
+    case "ownership_mismatch":     return "errOwnershipMismatch";
+    default:                       return null;
   }
 }

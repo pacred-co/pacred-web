@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Home, Wallet, PlusCircle, CreditCard, Truck } from "lucide-react";
 
@@ -10,13 +11,14 @@ import { Home, Wallet, PlusCircle, CreditCard, Truck } from "lucide-react";
  * pay-shipping.
  */
 export function FloatingActionMenu() {
+  const t = useTranslations("floatingActionMenu");
   const pathname = usePathname() ?? "";
   const items = [
-    { href: "/dashboard",        label: "หน้าแรก",    Icon: Home,        match: ["/dashboard"] },
-    { href: "/wallet/history",   label: "กระเป๋า",     Icon: Wallet,      match: ["/wallet"] },
-    { href: "/wallet/deposit",   label: "เติมเงิน",    Icon: PlusCircle,  match: ["/wallet/deposit"], primary: true },
-    { href: "/service-order/pending",   label: "ชำระสินค้า",  Icon: CreditCard,  match: ["/service-order"] },
-    { href: "/service-import",          label: "ขนส่ง",       Icon: Truck,       match: ["/service-import"] },
+    { href: "/dashboard",        label: t("home"),       Icon: Home,        match: ["/dashboard"] },
+    { href: "/wallet/history",   label: t("wallet"),     Icon: Wallet,      match: ["/wallet"] },
+    { href: "/wallet/deposit",   label: t("deposit"),    Icon: PlusCircle,  match: ["/wallet/deposit"], primary: true },
+    { href: "/service-order/pending",   label: t("payGoods"), Icon: CreditCard,  match: ["/service-order"] },
+    { href: "/service-import",          label: t("shipping"), Icon: Truck,       match: ["/service-import"] },
   ];
 
   const isActive = (m: string[]) => m.some((p) => pathname.includes(p));

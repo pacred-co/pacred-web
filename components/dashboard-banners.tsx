@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
 import { Link } from "@/i18n/navigation";
 
@@ -15,6 +16,7 @@ type Banner = {
  *  Admin manages via /admin/banners (later) — for now seeded with
  *  3 default banners by migration 0016. */
 export async function DashboardBanners() {
+  const t = await getTranslations("dashboardBanners");
   const supabase = await createClient();
   const { data } = await supabase
     .from("dashboard_banners")
@@ -27,9 +29,9 @@ export async function DashboardBanners() {
   // migration 0016 hasn't run yet) — so the dashboard always has the
   // visual row, matching the PCS legacy layout.
   const DEFAULT_BANNERS: Banner[] = [
-    { id: "default-search-china", slug: "search-china", title: "ค้นหาสินค้าจากเว็บ 1688 / Taobao / Tmall", subtitle: "วางลิ้งสินค้าหรือพิมพ์คำค้น แปลภาษาไทยทันที", image_path: null, link_href: "/cart/add", cta_label: "เริ่มค้นหา" },
-    { id: "default-billing",      slug: "billing",      title: "ออกบิลใบเสร็จ / ใบแจ้งหนี้",                 subtitle: "ฝากสั่งซื้อด้วยตัวคุณเอง — Pacred ออกบิลให้อัตโนมัติ", image_path: null, link_href: "/cart", cta_label: "ดูตัวอย่าง" },
-    { id: "default-line-oa",      slug: "line-oa",      title: "ไม่พลาดทุกการแจ้งเตือน",                     subtitle: "เพิ่ม Pacred LINE OA เป็นเพื่อน รับข่าวสาร + โปรโมชั่น",  image_path: null, link_href: "/line",               cta_label: "เพิ่มเพื่อน LINE" },
+    { id: "default-search-china", slug: "search-china", title: t("searchChinaTitle"), subtitle: t("searchChinaSubtitle"), image_path: null, link_href: "/cart/add", cta_label: t("searchChinaCta") },
+    { id: "default-billing",      slug: "billing",      title: t("billingTitle"),      subtitle: t("billingSubtitle"), image_path: null, link_href: "/cart", cta_label: t("billingCta") },
+    { id: "default-line-oa",      slug: "line-oa",      title: t("lineOaTitle"),                     subtitle: t("lineOaSubtitle"),  image_path: null, link_href: "/line",               cta_label: t("lineOaCta") },
   ];
   const banners = ((data ?? []) as Banner[]).length > 0 ? (data as Banner[]) : DEFAULT_BANNERS;
 

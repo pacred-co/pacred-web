@@ -25,6 +25,7 @@
  */
 
 import { useMemo, useState, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import {
   ShoppingBag,
@@ -112,7 +113,13 @@ function numberLimit(n: number): string {
 }
 
 export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
+  const t = useTranslations("paymentDueList");
   const [tab, setTab] = useState<TabKey>("all");
+
+  // Display label per tab/service — keyed on the stable enum so the Thai-keyed
+  // logic (TABS.key, SERVICE_META[service]) stays untouched.
+  const tabLabel = (key: TabKey) => t(`tab.${key}`);
+  const serviceLabel = (service: PaymentDueService) => t(`service.${service}`);
 
   const counts: Record<TabKey, number> = {
     all: items.length,
@@ -126,7 +133,7 @@ export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
 
   const filtered =
     tab === "all" ? items : items.filter((it) => it.service === tab);
-  const activeLabel = TABS.find((t) => t.key === tab)?.label ?? "";
+  const activeLabel = tabLabel(tab);
 
   // ── นำเข้า: feed the full forwarder rows into the SAME grouped-by-ตู้
   //    <ForwarderInteractivity> used on /service-import. It owns its own
@@ -181,17 +188,17 @@ export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
           aria-level={2}
         >
           <span className="w-1.5 h-1.5 rounded-full bg-primary-600" />
-          แยกตามบริการ
+          {t("byServiceHeading")}
         </p>
         <div className="flex flex-wrap gap-2">
-          {TABS.map((t) => {
-            const isActive = t.key === tab;
-            const count = counts[t.key];
+          {TABS.map((tabItem) => {
+            const isActive = tabItem.key === tab;
+            const count = counts[tabItem.key];
             return (
               <button
-                key={t.key}
+                key={tabItem.key}
                 type="button"
-                onClick={() => setTab(t.key)}
+                onClick={() => setTab(tabItem.key)}
                 aria-pressed={isActive}
                 className={`inline-flex items-center gap-1.5 rounded-full px-3 md:px-3.5 py-1.5 text-[11.5px] md:text-[12.5px] font-bold border transition-all ${
                   isActive
@@ -199,7 +206,7 @@ export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
                     : "bg-white dark:bg-surface text-foreground border-border hover:border-primary-300 hover:text-primary-600"
                 }`}
               >
-                {t.label}
+                {tabLabel(tabItem.key)}
                 {count > 0 && (
                   <span
                     className={`inline-flex items-center justify-center min-w-[18px] h-[16px] px-1 rounded-full text-[9.5px] font-black ${
@@ -227,10 +234,10 @@ export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
                 <CheckCircle2 className="h-8 w-8" />
               </span>
               <p className="mt-1 text-[15px] font-bold text-foreground">
-                ไม่มีรายการที่ต้องชำระ
+                {t("emptyAllClearTitle")}
               </p>
               <p className="text-[12.5px] text-muted">
-                ทุกบริการชำระเงินครบแล้ว 🎉
+                {t("emptyAllClearSubtitle")}
               </p>
             </div>
           ) : (
@@ -238,7 +245,7 @@ export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
             <div className="flex flex-col items-center gap-2 py-12 text-center">
               <Inbox className="h-10 w-10 text-muted/50" />
               <p className="text-[13.5px] text-muted">
-                ไม่มีรายการ{activeLabel}ที่ต้องชำระ
+                {t("emptyTab", { label: activeLabel })}
               </p>
             </div>
           )
@@ -254,14 +261,18 @@ export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
           // ทั้งหมด — each service stacked under its own section, in its own format.
           <div className="space-y-5">
             {importView && (
-              <PdSection Icon={Ship} label="นำเข้า" count={importRows.length}>
+              <PdSection
+                Icon={Ship}
+                label={serviceLabel("import")}
+                count={importRows.length}
+              >
                 {importView}
               </PdSection>
             )}
             {orderItems.length > 0 && (
               <PdSection
                 Icon={ShoppingBag}
-                label="ฝากสั่งซื้อ"
+                label={serviceLabel("order")}
                 count={orderItems.length}
               >
                 {cards(orderItems)}
@@ -270,7 +281,7 @@ export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
             {paymentItems.length > 0 && (
               <PdSection
                 Icon={CircleDollarSign}
-                label="ฝากชำระ"
+                label={serviceLabel("payment")}
                 count={paymentItems.length}
               >
                 {cards(paymentItems)}
@@ -312,6 +323,7 @@ function PdSection({
 }
 
 function PaymentDueCard({ item }: { item: PaymentDueItem }) {
+  const t = useTranslations("paymentDueList");
   const meta = SERVICE_META[item.service];
   const Icon = meta.Icon;
   const [imgFailed, setImgFailed] = useState(false);
@@ -319,6 +331,17 @@ function PaymentDueCard({ item }: { item: PaymentDueItem }) {
     STATUS_CLS[item.statusLabel] ??
     "bg-slate-100 text-slate-700 border-slate-200";
   const showImage = !!item.imageUrl && !imgFailed;
+  // Display-only translation of the per-item labels — keyed on the Thai data
+  // value (which still keys STATUS_CLS / SERVICE_META); falls back to the raw
+  // value if a custom legacy label has no mapping.
+  const statusText: Record<string, string> = {
+    รอชำระเงิน: t("status.awaitingPayment"),
+    รอดำเนินการ: t("status.pending"),
+  };
+  const ctaText: Record<string, string> = {
+    ชำระเงิน: t("cta.pay"),
+    ดูรายละเอียด: t("cta.viewDetail"),
+  };
 
   return (
     <article className="relative rounded-2xl bg-white dark:bg-surface border border-border shadow-[0_4px_14px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_22px_rgba(0,0,0,0.07)] transition-shadow overflow-hidden">
@@ -355,12 +378,12 @@ function PaymentDueCard({ item }: { item: PaymentDueItem }) {
             <span
               className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10.5px] font-bold ${meta.pillCls}`}
             >
-              {meta.label}
+              {t(`service.${item.service}`)}
             </span>
             <span
               className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10.5px] font-bold ${statusCls}`}
             >
-              {item.statusLabel}
+              {statusText[item.statusLabel] ?? item.statusLabel}
             </span>
           </div>
           <Link
@@ -377,11 +400,11 @@ function PaymentDueCard({ item }: { item: PaymentDueItem }) {
               </span>
             )}
             <span className="font-mono text-[12px]">
-              ยอด{" "}
+              {t("amountPrefix")}{" "}
               <span className="text-primary-600 font-black">
                 {numberFormat2(item.amountThb)}
               </span>{" "}
-              บาท
+              {t("currencyBaht")}
             </span>
           </div>
         </div>
@@ -392,7 +415,7 @@ function PaymentDueCard({ item }: { item: PaymentDueItem }) {
             href={item.ctaHref}
             className="inline-flex items-center justify-center gap-1 rounded-full bg-sky-600 text-white text-[12px] font-bold px-3.5 py-2 md:py-1.5 shadow-md shadow-sky-600/25 hover:bg-sky-700 transition-colors w-auto"
           >
-            {item.ctaLabel}
+            {ctaText[item.ctaLabel] ?? item.ctaLabel}
             <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.4} />
           </Link>
         </div>

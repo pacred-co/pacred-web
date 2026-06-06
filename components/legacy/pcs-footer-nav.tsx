@@ -1,4 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import type { PcsChromeData } from "@/lib/legacy/pcs-chrome";
 
@@ -27,7 +28,8 @@ function FooterBadge({ n }: { n: number }) {
  * The legacy `!login && !register` guard is always true inside (protected)
  * (every screen here is a signed-in portal page), so both always render.
  */
-export function PcsFooterNav({ data }: { data: PcsChromeData }) {
+export async function PcsFooterNav({ data }: { data: PcsChromeData }) {
+  const t = await getTranslations("pcsFooterNav");
   const year = new Date().getFullYear();
 
   return (
@@ -49,7 +51,7 @@ export function PcsFooterNav({ data }: { data: PcsChromeData }) {
             alt=""
           />
           <span className="nav__text">
-            <span className="menu-home">หน้าแรก</span>
+            <span className="menu-home">{t("home")}</span>
           </span>
         </Link>
         <Link href="/service-order?q=2" className="nav__link">
@@ -58,7 +60,7 @@ export function PcsFooterNav({ data }: { data: PcsChromeData }) {
             className="pcs-icon2"
             alt=""
           />
-          <span className="nav__text lang-shop-pay2">ชำระสินค้า </span>
+          <span className="nav__text lang-shop-pay2">{t("payGoods")} </span>
           <FooterBadge n={data.countShops2} />
         </Link>
         <Link href="/service-import?q=5" className="nav__link">
@@ -67,7 +69,7 @@ export function PcsFooterNav({ data }: { data: PcsChromeData }) {
             className="pcs-icon2"
             alt=""
           />
-          <span className="nav__text lang-forwarder-pay2">ชำระขนส่ง </span>
+          <span className="nav__text lang-forwarder-pay2">{t("payShipping")} </span>
           <FooterBadge n={data.countForwarder5} />
         </Link>
         <Link href="/cart" className="nav__link">
@@ -76,7 +78,7 @@ export function PcsFooterNav({ data }: { data: PcsChromeData }) {
             className="pcs-icon2"
             alt=""
           />
-          <span className="nav__text lang-cart">สั่งซื้อ</span>
+          <span className="nav__text lang-cart">{t("cart")}</span>
           <FooterBadge n={data.countCart} />
         </Link>
         <a
@@ -90,11 +92,11 @@ export function PcsFooterNav({ data }: { data: PcsChromeData }) {
             className="pcs-icon2"
             alt=""
           />
-          <span className="nav__text lang-chat">แชท</span>
+          <span className="nav__text lang-chat">{t("chat")}</span>
         </a>
         <Link href="/dashboard" className="nav__link">
           <i className="ft-menu font-large-1"></i>
-          <span className="nav__text lang-menu">เมนู</span>
+          <span className="nav__text lang-menu">{t("menu")}</span>
         </Link>
       </nav>
       {/* Desktop right rail (`.nav-right-pcs`) removed per ปอน 2026-05-24 —

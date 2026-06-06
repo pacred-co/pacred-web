@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { calPriceForwarderSumCompany } from "@/lib/forwarder/calc-company-total";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
@@ -108,6 +109,9 @@ import type { ForwarderRow } from "../forwarder-row-view";
 // Server Components reading cookies/auth under a layout must be dynamic.
 export const dynamic = "force-dynamic";
 
+// Translator function from getTranslations("serviceImportDetailPage").
+type T = (key: string, values?: Record<string, string | number>) => string;
+
 // PHP `number_format($n, 2)` — 2 decimals, comma thousands separator.
 function numberFormat2(n: number): string {
   return n.toLocaleString("en-US", {
@@ -146,22 +150,22 @@ function modifyDmy(dmyStr: string, days: number): string {
 // Bootstrap `badge badge-*` → Tailwind chips, matching the canonical
 // STATUS_CHIP palette in forwarder-row-view.tsx (same tones per status).
 const STATUS_BADGE_CHIP = "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold";
-function statusForwarderBadge(fStatus: string | null) {
+function statusForwarderBadge(fStatus: string | null, t: T) {
   switch (fStatus) {
     case "1":
-      return <span className={`${STATUS_BADGE_CHIP} bg-amber-100 text-amber-700 border-amber-200`}>รอสินค้าเข้าโกดังจีน</span>;
+      return <span className={`${STATUS_BADGE_CHIP} bg-amber-100 text-amber-700 border-amber-200`}>{t("status1")}</span>;
     case "2":
-      return <span className={`${STATUS_BADGE_CHIP} bg-sky-100 text-sky-700 border-sky-200`}>สินค้าถึงโกดังจีนแล้ว</span>;
+      return <span className={`${STATUS_BADGE_CHIP} bg-sky-100 text-sky-700 border-sky-200`}>{t("status2")}</span>;
     case "3":
-      return <span className={`${STATUS_BADGE_CHIP} bg-pink-100 text-pink-700 border-pink-200`}>กำลังส่งมาประเทศไทย</span>;
+      return <span className={`${STATUS_BADGE_CHIP} bg-pink-100 text-pink-700 border-pink-200`}>{t("status3")}</span>;
     case "4":
-      return <span className={`${STATUS_BADGE_CHIP} bg-amber-200 text-amber-900 border-amber-300`}>สินค้าถึงประเทศไทยแล้ว</span>;
+      return <span className={`${STATUS_BADGE_CHIP} bg-amber-200 text-amber-900 border-amber-300`}>{t("status4")}</span>;
     case "5":
-      return <span className={`${STATUS_BADGE_CHIP} bg-red-100 text-red-700 border-red-200`}>รอชำระเงิน</span>;
+      return <span className={`${STATUS_BADGE_CHIP} bg-red-100 text-red-700 border-red-200`}>{t("status5")}</span>;
     case "6":
-      return <span className={`${STATUS_BADGE_CHIP} bg-indigo-100 text-indigo-700 border-indigo-200`}>เตรียมส่ง</span>;
+      return <span className={`${STATUS_BADGE_CHIP} bg-indigo-100 text-indigo-700 border-indigo-200`}>{t("status6")}</span>;
     case "7":
-      return <span className={`${STATUS_BADGE_CHIP} bg-emerald-100 text-emerald-700 border-emerald-200`}>ส่งแล้ว</span>;
+      return <span className={`${STATUS_BADGE_CHIP} bg-emerald-100 text-emerald-700 border-emerald-200`}>{t("status7")}</span>;
     default:
       return null;
   }
@@ -186,45 +190,45 @@ const NAME_SHIP_BY: Record<string, string> = {
   PCS: "รับเองโกดัง Pacred (สมุทรสาคร)", F: "บริษัทจัดหาให้อัตโนมัติ",
   PCSF: "Pacred เหมาเหมา", PCSE: "Pacred Express",
 };
-function nameShipBy(fShipBy: string | null): string {
-  return NAME_SHIP_BY[fShipBy ?? ""] ?? "ไม่พบข้อมูล";
+function nameShipBy(fShipBy: string | null, t: T): string {
+  return NAME_SHIP_BY[fShipBy ?? ""] ?? t("notFound");
 }
 
 // Legacy `namePayMethod($data)` — function.php L624-633.
-function namePayMethod(data: string | null) {
+function namePayMethod(data: string | null, t: T) {
   if (data === "2")
-    return <span className="inline-flex items-center rounded bg-red-600 px-1.5 py-0.5 text-xs font-medium text-white">ปลายทาง</span>;
-  return "ต้นทาง";
+    return <span className="inline-flex items-center rounded bg-red-600 px-1.5 py-0.5 text-xs font-medium text-white">{t("payMethodDestination")}</span>;
+  return t("payMethodOrigin");
 }
 
 // Legacy `nameCrate($data)` — function.php L634-643.
-function nameCrate(data: string | null) {
+function nameCrate(data: string | null, t: T) {
   if (data === "1")
-    return <span className="inline-flex items-center rounded bg-red-600 px-1.5 py-0.5 text-xs font-medium text-white">ตีลังไม้</span>;
-  return "ไม่ตีลังไม้";
+    return <span className="inline-flex items-center rounded bg-red-600 px-1.5 py-0.5 text-xs font-medium text-white">{t("crateYes")}</span>;
+  return t("crateNo");
 }
 
 // Legacy `nameWarehouseChina($fWarehouseChina)` — function.php L593-600.
-function nameWarehouseChina(v: string | null): string {
-  if (v === "1") return "กวางโจว";
-  if (v === "2") return "อีฮู";
-  return "รอตรวจสอบ";
+function nameWarehouseChina(v: string | null, t: T): string {
+  if (v === "1") return t("warehouseGuangzhou");
+  if (v === "2") return t("warehouseYiwu");
+  return t("warehousePending");
 }
 
 // Legacy `nameProductsType($productsType)` — function.php L320-330.
-function nameProductsType(v: string | null): string {
-  if (v === "1") return "ทั่วไป";
-  if (v === "2") return "มอก.";
-  if (v === "3") return "อย.";
-  if (v === "4") return "พิเศษ";
-  return "รอตรวจสอบ";
+function nameProductsType(v: string | null, t: T): string {
+  if (v === "1") return t("productsTypeGeneral");
+  if (v === "2") return t("productsTypeTisi");
+  if (v === "3") return t("productsTypeFda");
+  if (v === "4") return t("productsTypeSpecial");
+  return t("productsTypePending");
 }
 
 // Legacy `nameRefPrice($refPrice)` — function.php L615-623.
-function nameRefPrice(v: string | null): string {
-  if (v === "1") return "น้ำหนัก";
-  if (v === "2") return "ปริมาตร";
-  return "ไม่พบข้อมูล";
+function nameRefPrice(v: string | null, t: T): string {
+  if (v === "1") return t("refPriceWeight");
+  if (v === "2") return t("refPriceVolume");
+  return t("notFound");
 }
 
 // Legacy `tagPro($ID)` — function.php L1274+. Detail screen only ever
@@ -314,14 +318,14 @@ function computeSteps(fStatus: string | null, fidDriver: 0 | 1): StepState[] {
 
 const ICON_BASE = "/legacy/pcs/assets/images/icon/forwarder/";
 const STEPS = [
-  { ctrl: "step1", label: "รอเข้าโกดังจีน", icon: "forwarder-1.png" },
-  { ctrl: "step2", label: "ถึงโกดังจีน", icon: "forwarder-2.png" },
-  { ctrl: "step3", label: "กำลังส่งมาไทย", icon: "forwarder-3.png" },
-  { ctrl: "step4", label: "สินค้าถึงไทย", icon: "forwarder-4.png" },
-  { ctrl: "step5", label: "รอชำระเงิน", icon: "forwarder-5.png" },
-  { ctrl: "step6", label: "เตรียมส่ง", icon: "forwarder-6.png" },
-  { ctrl: "step62", label: "กำลังจัดส่ง", icon: "forwarder-6.1.png" },
-  { ctrl: "step7", label: "ส่งแล้ว", icon: "forwarder-7.png" },
+  { ctrl: "step1", labelKey: "stepWaitChinaWarehouse", icon: "forwarder-1.png" },
+  { ctrl: "step2", labelKey: "stepArrivedChinaWarehouse", icon: "forwarder-2.png" },
+  { ctrl: "step3", labelKey: "stepShippingToThailand", icon: "forwarder-3.png" },
+  { ctrl: "step4", labelKey: "stepArrivedThailand", icon: "forwarder-4.png" },
+  { ctrl: "step5", labelKey: "stepWaitPayment", icon: "forwarder-5.png" },
+  { ctrl: "step6", labelKey: "stepPreparing", icon: "forwarder-6.png" },
+  { ctrl: "step62", labelKey: "stepDelivering", icon: "forwarder-6.1.png" },
+  { ctrl: "step7", labelKey: "stepDelivered", icon: "forwarder-7.png" },
 ];
 
 export default async function ServiceImportDetailPage({
@@ -330,6 +334,8 @@ export default async function ServiceImportDetailPage({
   params: Promise<{ fNo: string }>;
 }) {
   const { fNo } = await params;
+
+  const t = await getTranslations("serviceImportDetailPage");
 
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
@@ -517,11 +523,11 @@ export default async function ServiceImportDetailPage({
       a.addressname ?? "",
       a.addresslastname ?? "",
       a.addressno ?? "",
-      "ตำบล/แขวง",
+      t("addressSubdistrict"),
       a.addresssubdistrict ?? "",
-      "อำเภอ/เขต",
+      t("addressDistrict"),
       a.addressdistrict ?? "",
-      "จังหวัด",
+      t("addressProvince"),
       a.addressprovince ?? "",
       a.addresszipcode ?? "",
     ].filter((s) => s !== "").join(" ");
@@ -529,7 +535,7 @@ export default async function ServiceImportDetailPage({
       String(a.addressid) === String(mainAddressId);
     addressOptions.push({
       addressid: a.addressid,
-      label: isMain ? `[ที่อยู่หลัก] ${parts}` : parts,
+      label: isMain ? `${t("addressMainPrefix")} ${parts}` : parts,
       isMain,
     });
   }
@@ -781,7 +787,7 @@ export default async function ServiceImportDetailPage({
       <div>
         <Link href={`/service-order/${row.reforder}`}>
           <span className="inline-flex items-center rounded-full bg-sky-100 px-3 py-1 text-sm font-medium text-sky-700 border border-sky-200">
-            รายการฝากสั่งซื้อ : {row.reforder}
+            {t("refOrderLabel")} : {row.reforder}
           </span>
         </Link>
       </div>
@@ -812,11 +818,11 @@ export default async function ServiceImportDetailPage({
         {/* L1707-1719 — breadcrumb header */}
         <nav className="mb-3 flex flex-wrap items-center gap-1.5 text-xs md:text-sm text-muted">
           <Link href="/dashboard" className="hover:text-red-600 transition-colors">
-            <span className="menu-home">หน้าแรก</span>
+            <span className="menu-home">{t("breadcrumbHome")}</span>
           </Link>
           <span aria-hidden className="text-border">/</span>
           <Link href="/service-import" className="hover:text-red-600 transition-colors">
-            รายการฝากนำเข้าสินค้า
+            {t("breadcrumbImportList")}
           </Link>
           <span aria-hidden className="text-border">/</span>
           <span className="font-medium text-foreground">#{row.id}</span>
@@ -828,19 +834,19 @@ export default async function ServiceImportDetailPage({
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
             <div className="min-w-0">
               <h3 className="text-lg md:text-xl font-bold text-foreground">
-                ออเดอร์นำเข้าสินค้า{" "}
+                {t("orderTitle")}{" "}
                 <span className="text-red-600">
-                  เลขที่ #{row.id}
+                  {t("orderNumberLabel")} #{row.id}
                   <TagPro id={promoIdStr} />
                 </span>
               </h3>
               {row.ftrackingchn2 && row.ftrackingchn2 !== "" ? (
                 <p className="mt-1 text-base md:text-lg font-semibold text-red-600 break-all">
-                  เลขแทรคกิ้ง {row.ftrackingchn2}
+                  {t("trackingNumberLabel")} {row.ftrackingchn2}
                 </p>
               ) : (
                 <p className="mt-1 text-base md:text-lg font-semibold text-red-600 break-all">
-                  เลขแทรคกิ้ง {row.ftrackingchn}
+                  {t("trackingNumberLabel")} {row.ftrackingchn}
                 </p>
               )}
               {row.ftrackingchn &&
@@ -870,28 +876,28 @@ export default async function ServiceImportDetailPage({
               {FID_driver2 === 1 ? (
                 <>
                   <p className="flex items-center gap-2 md:justify-end text-sm md:text-base font-semibold text-foreground">
-                    <b className="font-bold">สถานะ :</b>
+                    <b className="font-bold">{t("statusLabel")} :</b>
                     <span className="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-100 px-2.5 py-0.5 text-[11px] font-semibold text-cyan-700">
-                      กำลังจัดส่ง
+                      {t("stepDelivering")}
                     </span>
                   </p>
                   {fShipBy === "PCSF" ? (
                     <p className="mt-1 text-sm text-foreground">
-                      <b className="font-semibold">ส่งสินค้าโดย : </b>
-                      {adminName} โทร.
+                      <b className="font-semibold">{t("shipByLabel")} : </b>
+                      {adminName} {t("telPrefix")}
                       <a href={`tel:${adminTel}`} className="text-red-600"> {adminTel}</a>
                     </p>
                   ) : (
                     <p className="mt-1 text-sm text-foreground">
-                      <b className="font-semibold">ส่งสินค้าโดย : </b>
-                      {nameShipBy(fShipBy)}
+                      <b className="font-semibold">{t("shipByLabel")} : </b>
+                      {nameShipBy(fShipBy, t)}
                     </p>
                   )}
                 </>
               ) : (
                 <p className="flex items-center gap-2 md:justify-end text-sm md:text-base font-semibold text-foreground">
-                  <b className="font-bold">สถานะ :</b>
-                  {statusForwarderBadge(fStatusValue)}
+                  <b className="font-bold">{t("statusLabel")} :</b>
+                  {statusForwarderBadge(fStatusValue, t)}
                 </p>
               )}
               <div>
@@ -910,7 +916,7 @@ export default async function ServiceImportDetailPage({
                     className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 active:scale-[0.98] transition-all"
                   >
                     <i className="mdi mdi-check-circle-outline"></i>{" "}
-                    ใบเสร็จรับเงิน
+                    {t("receiptLink")}
                   </a>
                 )}
               </div>
@@ -918,13 +924,13 @@ export default async function ServiceImportDetailPage({
                 {row.fdateadminstatus &&
                   dmyHms(row.fdateadminstatus) !==
                     "00/00/0000 00:00:00" &&
-                  `อัปเดตล่าสุด : ${dmyHms(row.fdateadminstatus)} น.`}
+                  t("lastUpdated", { time: dmyHms(row.fdateadminstatus) })}
               </p>
               {etaFrom !== "" && (
                 <p className="mt-1 text-sm text-foreground">
-                  จะมาถึงไทยประมาณ :{" "}
+                  {t("etaLabel")} :{" "}
                   <span className="text-sky-600">
-                    {etaFrom} ถึง {etaTo}
+                    {etaFrom} {t("etaTo")} {etaTo}
                   </span>
                 </p>
               )}
@@ -999,7 +1005,7 @@ export default async function ServiceImportDetailPage({
                               : "text-muted"
                         }`}
                       >
-                        {step.label}
+                        {t(step.labelKey)}
                       </p>
                     </span>
                   </li>
@@ -1016,15 +1022,15 @@ export default async function ServiceImportDetailPage({
                           <div className="space-y-2.5">
                             {refOrderEl}
                             <p className="text-sm text-foreground">
-                              <b className="font-semibold">วันที่สร้าง : </b>
-                              {dmyHms(row.fdate)} น.
+                              <b className="font-semibold">{t("createdDateLabel")} : </b>
+                              {t("dateTimeWithHour", { value: dmyHms(row.fdate) })}
                             </p>
                             <div className="text-sm">
-                              <b className="font-semibold text-foreground">บริษัทขนส่ง : </b>
+                              <b className="font-semibold text-foreground">{t("carrierLabel")} : </b>
                               <ServiceImportEditShipByForm
                                 forwarderId={row.id}
                                 currentFShipBy={fShipBy}
-                                currentLabel={nameShipBy(fShipBy)}
+                                currentLabel={nameShipBy(fShipBy, t)}
                                 options={
                                   /* forwarder.php L1593 → `optionHShipBy2()` —
                                      legacy lists every carrier from
@@ -1043,20 +1049,20 @@ export default async function ServiceImportDetailPage({
                               />
                             </div>
                             <p className="text-sm text-foreground">
-                              <b className="font-semibold">การเก็บเงินค่าขนส่งในไทย : </b>
-                              {namePayMethod(row.paymethod)}
+                              <b className="font-semibold">{t("payMethodLabel")} : </b>
+                              {namePayMethod(row.paymethod, t)}
                             </p>
                             <div className="text-sm">
-                              <b className="font-semibold text-foreground">ที่อยู่จัดส่งสินค้า : </b>
+                              <b className="font-semibold text-foreground">{t("deliveryAddressLabel")} : </b>
                               <div className="mt-1 text-foreground leading-relaxed">
                                 {/* forwarder.php L1663 — CONCAT 'คุณ' addressName … */}
-                                คุณ{row.faddressname} {row.faddresslastname}
+                                {t("addressNamePrefix")}{row.faddressname} {row.faddresslastname}
                                 <br />
-                                {row.faddressno} ตำบล/แขวง {row.faddresssubdistrict}
-                                <br /> อำเภอ/เขต {row.faddressdistrict} จังหวัด{" "}
+                                {row.faddressno} {t("addressSubdistrict")} {row.faddresssubdistrict}
+                                <br /> {t("addressDistrict")} {row.faddressdistrict} {t("addressProvince")}{" "}
                                 {row.faddressprovince} {row.faddresszipcode}
                                 <br />
-                                โทร. {row.faddresstel}, {row.faddresstel2}
+                                {t("telPrefix")} {row.faddresstel}, {row.faddresstel2}
                                 <ServiceImportEditAddressForm
                                   forwarderId={row.id}
                                   options={addressOptions}
@@ -1065,13 +1071,13 @@ export default async function ServiceImportDetailPage({
                               </div>
                             </div>
                             <p className="text-sm text-foreground">
-                              <b className="font-semibold">เลขพัสดุในไทย : </b>
+                              <b className="font-semibold">{t("trackingThLabel")} : </b>
                               {row.ftrackingth}
                             </p>
                             {multiBillSiblings.length > 0 && (
                               <div className="rounded-lg bg-red-50 border border-red-200 p-2.5">
                                 <p className="text-sm font-semibold text-red-700">
-                                  รายการนี้ถูกคิดค่าขนส่งในไทยรวมกับรายการดังต่อไปนี้
+                                  {t("multiBillWarning")}
                                 </p>
                                 <div className="mt-1 space-y-0.5">
                                   {multiBillSiblings.map((s, i) => (
@@ -1081,7 +1087,7 @@ export default async function ServiceImportDetailPage({
                                         target="_blank"
                                         className="text-sm text-red-600 hover:underline"
                                       >
-                                        {i + 1}. รายการเลขที่ #{s.fID} เลขเทรคกิ้ง :{" "}
+                                        {i + 1}. {t("siblingItemLabel")} #{s.fID} {t("siblingTrackingLabel")} :{" "}
                                         {s.fTrackingCHN}
                                       </Link>
                                     </div>
@@ -1092,7 +1098,7 @@ export default async function ServiceImportDetailPage({
                             {row.fphotoend && row.fphotoend !== "" && (
                               <div>
                                 <p className="text-sm font-semibold text-foreground">
-                                  ภาพถ่ายส่งสินค้า :
+                                  {t("deliveryPhotoLabel")} :
                                 </p>
                                 <a
                                   className="image-popup-vertical-fit el-link mt-1 inline-block"
@@ -1108,11 +1114,11 @@ export default async function ServiceImportDetailPage({
                               </div>
                             )}
                             {!row.fphotoend && fStatusValue === "7" && (
-                              <p className="text-sm text-red-600">ยังไม่ได้ถ่ายรูป</p>
+                              <p className="text-sm text-red-600">{t("noPhotoYet")}</p>
                             )}
                             {driverRow?.fdistatus === "2" && (
                               <p className="text-sm text-foreground">
-                                ส่งของเวลา : {row.fdatestatus7}
+                                {t("deliveredTimeLabel")} : {row.fdatestatus7}
                               </p>
                             )}
                           </div>
@@ -1120,42 +1126,42 @@ export default async function ServiceImportDetailPage({
                           {/* RIGHT col — L2065-2123 */}
                           <div className="space-y-2.5 md:text-right">
                             <p className="text-sm text-foreground">
-                              <b className="font-semibold">เลขพัสดุจีน : </b>
+                              <b className="font-semibold">{t("trackingChnLabel")} : </b>
                               <span className="text-red-600 break-all" id="text-fTrackingCHN">
                                 {row.ftrackingchn}
                               </span>
                             </p>
                             <p className="text-sm text-foreground">
-                              <b className="font-semibold">รูปแบบขนส่ง จีน-ไทย : </b>
+                              <b className="font-semibold">{t("transportTypeLabel")} : </b>
                               <span id="text-fTransportType">
                                 {row.ftransporttype === "1"
-                                  ? "ขนส่งทางรถ"
-                                  : "ขนส่งทางเรือ"}
+                                  ? t("transportByTruck")
+                                  : t("transportBySea")}
                               </span>
                             </p>
                             <p className="text-sm text-foreground">
-                              <b className="font-semibold">การตีลังไม้ : </b>
-                              {nameCrate(row.crate)}
+                              <b className="font-semibold">{t("crateLabel")} : </b>
+                              {nameCrate(row.crate, t)}
                             </p>
                             <p className="text-sm text-foreground">
-                              <b className="font-semibold">โกดังประเทศจีน : </b>
-                              {nameWarehouseChina(row.fwarehousechina)}
+                              <b className="font-semibold">{t("warehouseChinaLabel")} : </b>
+                              {nameWarehouseChina(row.fwarehousechina, t)}
                             </p>
                             <p className="text-sm text-foreground">
-                              <b className="font-semibold">เลขที่ตู้ : </b>
+                              <b className="font-semibold">{t("cabinetNumberLabel")} : </b>
                               {row.fcabinetnumber}
                             </p>
                             <p className="text-sm text-foreground">
-                              <b className="font-semibold">วันที่ปิดตู้ : </b>
+                              <b className="font-semibold">{t("containerCloseDateLabel")} : </b>
                               {containerCloseStr}
                             </p>
                             <p className="text-sm text-foreground">
-                              <b className="font-semibold">จำนวน : </b>
-                              {fAmount} กล่อง
+                              <b className="font-semibold">{t("amountLabel")} : </b>
+                              {t("boxCount", { count: fAmount })}
                             </p>
                             <p className="text-sm text-foreground">
-                              <b className="font-semibold">ประเภทสินค้า : </b>
-                              {nameProductsType(row.fproductstype)}
+                              <b className="font-semibold">{t("productsTypeLabel")} : </b>
+                              {nameProductsType(row.fproductstype, t)}
                             </p>
                             <div className="rounded-lg border border-border bg-surface-alt/40 p-3 md:text-left">
                               <p className="text-sm text-foreground">
@@ -1175,7 +1181,7 @@ export default async function ServiceImportDetailPage({
                             </div>
                             {row.fnoteuser === "2" && row.fnote && row.fnote !== "" && (
                               <div className="rounded-lg bg-red-600 px-3 py-2 text-sm text-white md:text-left">
-                                **หมายเหตุ : {row.fnote}
+                                {t("adminNotePrefix")} {row.fnote}
                               </div>
                             )}
                           </div>
@@ -1187,7 +1193,7 @@ export default async function ServiceImportDetailPage({
                             <hr className="my-4 border-t border-dashed border-border" />
                             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                               <h4 className="text-base md:text-lg font-bold text-red-600">
-                                รายละเอียดสินค้า
+                                {t("productDetailHeading")}
                               </h4>
                               {fStatusValue === "5" && (
                                 <div className="md:text-right">
@@ -1203,33 +1209,33 @@ export default async function ServiceImportDetailPage({
                                 figures as the desktop table, definition-list
                                 style so it never h-scrolls at 360px. */}
                             <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl border border-border bg-surface-alt/40 p-3 text-sm md:hidden">
-                              <dt className="text-muted">จำนวนกล่อง</dt>
+                              <dt className="text-muted">{t("colBoxCount")}</dt>
                               <dd className="text-right font-medium tabular-nums">{fAmount}</dd>
-                              <dt className="text-muted">น้ำหนัก</dt>
+                              <dt className="text-muted">{t("colWeight")}</dt>
                               <dd className="text-right font-medium tabular-nums">{fWeight} kg.</dd>
-                              <dt className="text-muted">กว้าง × ยาว × สูง</dt>
-                              <dd className="text-right font-medium tabular-nums">{fWidth} × {fLength} × {fHeight} ซม.</dd>
-                              <dt className="text-muted">ปริมาตรรวม</dt>
+                              <dt className="text-muted">{t("colDimensions")}</dt>
+                              <dd className="text-right font-medium tabular-nums">{fWidth} × {fLength} × {fHeight} {t("unitCm")}</dd>
+                              <dt className="text-muted">{t("colVolume")}</dt>
                               <dd className="text-right font-medium tabular-nums">{fVolume}</dd>
-                              <dt className="text-muted">คิดราคาตาม</dt>
-                              <dd className="text-right font-medium">{nameRefPrice(row.frefprice)}</dd>
-                              <dt className="text-muted">เรทนำเข้า</dt>
+                              <dt className="text-muted">{t("colPriceBasis")}</dt>
+                              <dd className="text-right font-medium">{nameRefPrice(row.frefprice, t)}</dd>
+                              <dt className="text-muted">{t("colImportRate")}</dt>
                               <dd className="text-right font-medium tabular-nums">฿{numberFormat2(Number(row.frefrate ?? 0))}</dd>
-                              <dt className="text-muted">ค่านำเข้าจีน-ไทย</dt>
+                              <dt className="text-muted">{t("colImportCost")}</dt>
                               <dd className="text-right font-medium tabular-nums">฿{numberFormat2(fTotalPrice)}</dd>
-                              <dt className="text-muted">ค่าสินค้า เพิ่ม/ลด</dt>
+                              <dt className="text-muted">{t("colPriceAdjust")}</dt>
                               <dd className="text-right font-medium tabular-nums">฿{numberFormat2(fPriceUpdate)}</dd>
-                              <dt className="text-muted">ค่าตีลัง</dt>
+                              <dt className="text-muted">{t("colCrate")}</dt>
                               <dd className="text-right font-medium tabular-nums">฿{numberFormat2(priceCrate)}</dd>
-                              <dt className="text-muted">ค่าขนส่งจีน+</dt>
+                              <dt className="text-muted">{t("colChinaTransport")}</dt>
                               <dd className="text-right font-medium tabular-nums">฿{numberFormat2(fTransportPriceChnThb)}</dd>
-                              <dt className="text-muted">ค่าขนส่งไทย</dt>
+                              <dt className="text-muted">{t("colThaiTransport")}</dt>
                               <dd className="text-right font-medium tabular-nums">฿{numberFormat2(fTransportPrice)}</dd>
-                              <dt className="text-muted">ค่าบริการ</dt>
+                              <dt className="text-muted">{t("colService")}</dt>
                               <dd className="text-right font-medium tabular-nums">฿{numberFormat2(fShippingService)}</dd>
-                              <dt className="text-muted">ค่าอื่นๆ</dt>
+                              <dt className="text-muted">{t("colOther")}</dt>
                               <dd className="text-right font-medium tabular-nums">฿{numberFormat2(priceOther)}</dd>
-                              <dt className="text-muted">ส่วนลด</dt>
+                              <dt className="text-muted">{t("colDiscount")}</dt>
                               <dd className="text-right font-medium tabular-nums">฿{numberFormat2(fDiscount)}</dd>
                               {fUserCompany === "1" && (
                                 <>
@@ -1250,7 +1256,7 @@ export default async function ServiceImportDetailPage({
                                   </dd>
                                 </>
                               )}
-                              <dt className="font-semibold text-foreground border-t border-border pt-2">ราคารวม</dt>
+                              <dt className="font-semibold text-foreground border-t border-border pt-2">{t("colTotalPrice")}</dt>
                               <dd className="text-right font-bold tabular-nums text-red-600 border-t border-border pt-2">
                                 ฿{numberFormat2(priceAllUser)}
                               </dd>
@@ -1265,22 +1271,20 @@ export default async function ServiceImportDetailPage({
                                 <thead>
                                   <tr className="text-center bg-surface-alt">
                                     <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">
-                                      จำนวน
-                                      <br />
-                                      กล่อง
+                                      {t("colBoxCount")}
                                     </th>
-                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">น้ำหนัก</th>
-                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ปริมาตรรวม</th>
-                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">คิดราคาตาม</th>
-                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">เรทนำเข้า</th>
-                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ค่านำเข้าจีน-ไทย</th>
-                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ค่าสินค้า เพิ่ม/ลด</th>
-                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ค่าตีลัง</th>
-                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ค่าขนส่งจีน+</th>
-                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ค่าขนส่งไทย</th>
-                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ค่าบริการ</th>
-                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ค่าอื่นๆ</th>
-                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ส่วนลด</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">{t("colWeight")}</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">{t("colVolume")}</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">{t("colPriceBasis")}</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">{t("colImportRate")}</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">{t("colImportCost")}</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">{t("colPriceAdjust")}</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">{t("colCrate")}</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">{t("colChinaTransport")}</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">{t("colThaiTransport")}</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">{t("colService")}</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">{t("colOther")}</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">{t("colDiscount")}</th>
                                     {fUserCompany === "1" && (
                                       <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">
                                         LESS
@@ -1288,7 +1292,7 @@ export default async function ServiceImportDetailPage({
                                         TAX 1%
                                       </th>
                                     )}
-                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ราคารวม</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">{t("colTotalPrice")}</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -1297,7 +1301,7 @@ export default async function ServiceImportDetailPage({
                                     <td className="px-2 py-2 text-right tabular-nums border-b border-border">{fWeight} kg.</td>
                                     <td className="px-2 py-2 text-right tabular-nums border-b border-border">{fVolume}</td>
                                     <td className="px-2 py-2 text-center border-b border-border">
-                                      {nameRefPrice(row.frefprice)}
+                                      {nameRefPrice(row.frefprice, t)}
                                     </td>
                                     <td className="px-2 py-2 text-right tabular-nums border-b border-border">
                                       ฿{numberFormat2(Number(row.frefrate ?? 0))}
@@ -1354,22 +1358,22 @@ export default async function ServiceImportDetailPage({
                           <>
                             <hr className="my-4 border-t border-dashed border-border" />
                             <h4 className="text-base md:text-lg font-bold text-red-600">
-                              รายละเอียดสินค้า
+                              {t("productDetailHeading")}
                             </h4>
 
                             {/* Mobile: item card (md:hidden). */}
                             <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl border border-border bg-surface-alt/40 p-3 text-sm md:hidden">
                               <dt className="text-muted">#</dt>
                               <dd className="text-right font-medium">1</dd>
-                              <dt className="text-muted">รายละเอียดสินค้า</dt>
+                              <dt className="text-muted">{t("colItemDetail")}</dt>
                               <dd className="text-right font-medium break-words">{row.fdetail}</dd>
-                              <dt className="text-muted">จำนวนกล่อง</dt>
+                              <dt className="text-muted">{t("colBoxCount")}</dt>
                               <dd className="text-right font-medium tabular-nums">{fAmount}</dd>
-                              <dt className="text-muted">น้ำหนัก</dt>
+                              <dt className="text-muted">{t("colWeight")}</dt>
                               <dd className="text-right font-medium tabular-nums">{fWeight} kg.</dd>
-                              <dt className="text-muted">กว้าง × ยาว × สูง</dt>
-                              <dd className="text-right font-medium tabular-nums">{fWidth} × {fLength} × {fHeight} ซม.</dd>
-                              <dt className="text-muted">ปริมาตรรวม</dt>
+                              <dt className="text-muted">{t("colDimensions")}</dt>
+                              <dd className="text-right font-medium tabular-nums">{fWidth} × {fLength} × {fHeight} {t("unitCm")}</dd>
+                              <dt className="text-muted">{t("colVolume")}</dt>
                               <dd className="text-right font-medium tabular-nums">
                                 {row.famountcount === "1"
                                   ? fVolume
@@ -1387,10 +1391,10 @@ export default async function ServiceImportDetailPage({
                                 <thead>
                                   <tr className="text-center bg-surface-alt">
                                     <th className="px-2 py-2 font-semibold text-foreground border-b border-border">#</th>
-                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border">รายละเอียดสินค้า</th>
-                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">จำนวนกล่อง</th>
-                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border">น้ำหนัก</th>
-                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">ปริมาตรรวม</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border">{t("colItemDetail")}</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">{t("colBoxCount")}</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border">{t("colWeight")}</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">{t("colVolume")}</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -1419,7 +1423,7 @@ export default async function ServiceImportDetailPage({
                             href={`/service-import?q=${fStatusValue}`}
                             className="inline-flex w-full md:w-auto items-center justify-center gap-1.5 rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 active:scale-[0.98] transition-all"
                           >
-                            <i className="fas fa-arrow-left"></i> ย้อนกลับ
+                            <i className="fas fa-arrow-left"></i> {t("backButton")}
                           </Link>
                         </div>
         </section>

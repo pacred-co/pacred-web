@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { ChevronRight, Check, Phone, MessageCircle, MapPin, Copy } from "lucide-react";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
@@ -19,7 +20,7 @@ export type WarehouseDetailProps = {
   hubLink?: string;
 };
 
-export function WarehouseDetail({
+export async function WarehouseDetail({
   eyebrow,
   city,
   cityEn,
@@ -32,6 +33,7 @@ export function WarehouseDetail({
   photo,
   hubLink = "/warehouses/china",
 }: WarehouseDetailProps) {
+  const t = await getTranslations("warehouseDetail");
   return (
     <section className="relative py-5 md:py-10">
       <div className="mx-auto w-full max-w-[1140px] px-3 md:px-4">
@@ -39,14 +41,14 @@ export function WarehouseDetail({
         {/* Breadcrumb */}
         <nav className="flex items-center gap-1 text-[11.5px] md:text-[12.5px] text-muted mb-4 md:mb-5 flex-wrap">
           <Link href="/" className="hover:text-primary-600 transition-colors font-bold">
-            หน้าหลัก
+            {t("breadcrumbHome")}
           </Link>
           <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
           <Link href={hubLink} className="hover:text-primary-600 transition-colors font-bold">
-            ที่อยู่โกดังจีน
+            {t("breadcrumbHub")}
           </Link>
           <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-          <span className="font-bold text-[#111827] dark:text-white">โกดัง{city}</span>
+          <span className="font-bold text-[#111827] dark:text-white">{t("breadcrumbWarehouse", { city })}</span>
         </nav>
 
         {/* Header */}
@@ -56,7 +58,7 @@ export function WarehouseDetail({
             {eyebrow}
           </div>
           <h1 className="text-[24px] md:text-[40px] leading-[1.18] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
-            โกดังรับสินค้า{city}{" "}
+            {t("headingPrefix", { city })}{" "}
             <span className="text-primary-600">{flag} {cityEn}</span>
           </h1>
           <p className="mt-2 md:mt-3 text-[13px] md:text-[15.5px] leading-[1.6] font-medium text-muted max-w-[820px]">
@@ -68,7 +70,7 @@ export function WarehouseDetail({
         <div className="relative aspect-[16/9] md:aspect-[21/9] w-full mb-5 md:mb-8 overflow-hidden rounded-2xl md:rounded-3xl border border-border shadow-[0_14px_34px_rgba(15,23,42,0.10)] bg-gradient-to-br from-gray-100 to-gray-200 dark:from-surface-alt dark:to-background">
           <Image
             src={photo}
-            alt={`โกดัง${city} (${cityEn}) Pacred Shipping`}
+            alt={t("photoAlt", { city, cityEn })}
             fill
             sizes="(max-width: 1140px) 100vw, 1140px"
             className="object-cover"
@@ -98,7 +100,7 @@ export function WarehouseDetail({
             {/* Features */}
             <div className="bg-white dark:bg-surface rounded-2xl border border-border shadow-[0_4px_14px_rgba(15,23,42,0.04)] p-4 md:p-6">
               <h2 className="text-[16px] md:text-[20px] font-black text-[#111827] dark:text-white mb-3 md:mb-4">
-                ขอบเขตบริการของโกดัง{city}
+                {t("featuresHeading", { city })}
               </h2>
               <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-2.5">
                 {features.map((f) => (
@@ -122,7 +124,7 @@ export function WarehouseDetail({
                 SHIPPING MARK
               </div>
               <h3 className="text-[16px] md:text-[20px] font-black text-[#111827] dark:text-white mb-3 md:mb-4">
-                ที่อยู่โกดัง / ที่อยู่จัดส่ง
+                {t("shippingMarkHeading")}
               </h3>
 
               <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_180px] gap-4 md:gap-5 items-start">
@@ -149,7 +151,7 @@ export function WarehouseDetail({
                 <div className="relative aspect-[3/4] w-full max-w-[180px] mx-auto md:max-w-none rounded-xl overflow-hidden border border-border bg-white">
                   <Image
                     src="/images/shippingmark.png"
-                    alt="ตัวอย่าง Shipping Mark Pacred"
+                    alt={t("shippingMarkImageAlt")}
                     fill
                     sizes="(max-width: 768px) 180px, 200px"
                     className="object-contain"
@@ -175,10 +177,10 @@ export function WarehouseDetail({
                 </span>
               </div>
               <h3 className="text-[16px] md:text-[18px] font-black text-[#111827] dark:text-white leading-snug mb-2">
-                ใช้บริการโกดัง{city} ติดต่อทีม Pacred
+                {t("ctaHeading", { city })}
               </h3>
               <p className="text-[12px] md:text-[13px] text-muted leading-[1.55] mb-4">
-                ทีมจีนของเราพร้อมรับสินค้า — ตรวจสอบ รวมบิล แพ็ก และส่งกลับไทยให้แบบครบจบ
+                {t("ctaIntro")}
               </p>
 
               <div className="flex flex-col gap-2">
@@ -187,7 +189,7 @@ export function WarehouseDetail({
                   className="inline-flex items-center justify-center gap-2 h-10 rounded-xl bg-primary-600 text-white text-[13px] md:text-[13.5px] font-extrabold shadow-[0_8px_18px_rgba(220,38,38,0.25)] hover:bg-primary-700 transition-all"
                 >
                   <Phone className="h-4 w-4" strokeWidth={2.6} />
-                  โทร 066-131-0253
+                  {t("callPrefix")} 066-131-0253
                 </a>
                 <TrackedExternalLink
                   href="/line"
@@ -197,25 +199,25 @@ export function WarehouseDetail({
                   className="inline-flex items-center justify-center gap-2 h-10 rounded-xl border border-[#06C755] text-[#06C755] text-[13px] md:text-[13.5px] font-extrabold bg-white dark:bg-transparent hover:bg-[#06C755] hover:text-white transition-all"
                 >
                   <MessageCircle className="h-4 w-4" strokeWidth={2.6} />
-                  ทักไลน์ติดต่อด่วน
+                  {t("lineCta")}
                 </TrackedExternalLink>
                 <Link
                   href="/register"
                   className="inline-flex items-center justify-center gap-2 h-10 rounded-xl bg-[#111827] text-white text-[13px] md:text-[13.5px] font-extrabold hover:bg-black transition-all"
                 >
-                  สมัครสมาชิกเพื่อใช้โกดัง
+                  {t("registerCta")}
                 </Link>
               </div>
 
               <div className="mt-4 pt-4 border-t border-dashed border-border">
                 <div className="text-[10.5px] md:text-[11px] font-black uppercase tracking-wider text-muted mb-1.5">
-                  วิธีใช้โกดังในจีน
+                  {t("howToTitle")}
                 </div>
                 <ol className="text-[12px] md:text-[12.5px] leading-[1.6] text-[#374151] dark:text-white/85 space-y-1.5 list-decimal pl-4">
-                  <li>สมัครสมาชิก Pacred Shipping (ฟรี)</li>
-                  <li>นำรหัส PR ที่ได้แปะข้างกล่อง (Shipping Mark)</li>
-                  <li>ใช้ที่อยู่โกดังด้านบนแจ้งโรงงาน/ร้านค้า</li>
-                  <li>สินค้าถึงโกดัง ทีมเราตรวจสอบและจัดส่งกลับไทย</li>
+                  <li>{t("howToStep1")}</li>
+                  <li>{t("howToStep2")}</li>
+                  <li>{t("howToStep3")}</li>
+                  <li>{t("howToStep4")}</li>
                 </ol>
               </div>
             </div>

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { calPriceForwarderSumCompany } from "@/lib/forwarder/calc-company-total";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -96,17 +97,21 @@ export const dynamic = "force-dynamic";
 // table's last column. Rebuilt to the Tailwind chip pattern that
 // matches forwarder-row-view.tsx's STATUS_CHIP map — same tones, same
 // labels, same 6.1 driver-item split.
-const TABLE_STATUS_CHIP: Record<string, { label: string; cls: string }> = {
-  "1":   { label: "รอเข้าโกดังจีน",  cls: "bg-amber-100 text-amber-700 border-amber-200"      },
-  "2":   { label: "ถึงโกดังจีนแล้ว", cls: "bg-sky-100 text-sky-700 border-sky-200"            },
-  "3":   { label: "กำลังส่งมาไทย",   cls: "bg-pink-100 text-pink-700 border-pink-200"         },
-  "4":   { label: "ถึงไทยแล้ว",      cls: "bg-amber-200 text-amber-900 border-amber-300"      },
-  "5":   { label: "รอชำระเงิน",      cls: "bg-red-100 text-red-700 border-red-200"            },
-  "6":   { label: "เตรียมส่ง",       cls: "bg-indigo-100 text-indigo-700 border-indigo-200"   },
-  "6.1": { label: "กำลังจัดส่ง",     cls: "bg-cyan-100 text-cyan-700 border-cyan-200"         },
-  "7":   { label: "ส่งแล้ว",         cls: "bg-emerald-100 text-emerald-700 border-emerald-200"},
+const TABLE_STATUS_CHIP: Record<string, { labelKey: string; cls: string }> = {
+  "1":   { labelKey: "statusWaitChinaWarehouse",  cls: "bg-amber-100 text-amber-700 border-amber-200"      },
+  "2":   { labelKey: "statusAtChinaWarehouse",    cls: "bg-sky-100 text-sky-700 border-sky-200"            },
+  "3":   { labelKey: "statusShippingToThailand",  cls: "bg-pink-100 text-pink-700 border-pink-200"         },
+  "4":   { labelKey: "statusArrivedThailand",     cls: "bg-amber-200 text-amber-900 border-amber-300"      },
+  "5":   { labelKey: "statusWaitPayment",         cls: "bg-red-100 text-red-700 border-red-200"            },
+  "6":   { labelKey: "statusPreparing",           cls: "bg-indigo-100 text-indigo-700 border-indigo-200"   },
+  "6.1": { labelKey: "statusDelivering",          cls: "bg-cyan-100 text-cyan-700 border-cyan-200"         },
+  "7":   { labelKey: "statusDelivered",           cls: "bg-emerald-100 text-emerald-700 border-emerald-200"},
 };
-function statusForwarderAll4(fStatus: string, fStatusDriver: number): React.ReactNode {
+function statusForwarderAll4(
+  fStatus: string,
+  fStatusDriver: number,
+  t: (key: string) => string,
+): React.ReactNode {
   let key: string = fStatus;
   if (fStatus === "6" && fStatusDriver === 1) key = "6.1";
   const chip = TABLE_STATUS_CHIP[key];
@@ -115,23 +120,26 @@ function statusForwarderAll4(fStatus: string, fStatusDriver: number): React.Reac
     <span
       className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap ${chip.cls}`}
     >
-      {chip.label}
+      {t(chip.labelKey)}
     </span>
   );
 }
 
 // ── Legacy helper: nameProductsType2($productsType) ──
 // member/include/function.php L331-341.
-function nameProductsType2(productsType: string | null): string {
+function nameProductsType2(
+  productsType: string | null,
+  t: (key: string) => string,
+): string {
   switch (productsType) {
     case "1":
-      return "ทั่วไป";
+      return t("productTypeGeneral");
     case "2":
-      return "มอก.";
+      return t("productTypeTisi");
     case "3":
-      return "อย.";
+      return t("productTypeFda");
     case "4":
-      return "พิเศษ";
+      return t("productTypeSpecial");
     default:
       return "";
   }
@@ -228,6 +236,7 @@ export default async function ForwarderTablePage({
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
   const { profile } = data;
+  const t = await getTranslations("serviceImportTable");
 
   const admin = createAdminClient();
   const memberCode = profile.member_code ?? "";
@@ -443,7 +452,7 @@ export default async function ForwarderTablePage({
     if (mainRowRes.data) {
       addressOptions.push({
         addressID: String(mainRowRes.data.addressid ?? ""),
-        fullAddress: "[ที่อยู่หลัก] " + buildFullAddress(mainRowRes.data),
+        fullAddress: t("mainAddressPrefix") + " " + buildFullAddress(mainRowRes.data, t),
       });
     }
   }
@@ -459,7 +468,7 @@ export default async function ForwarderTablePage({
     if (mainAddressID != null && Number(row.addressid) === mainAddressID) continue;
     addressOptions.push({
       addressID: String(row.addressid ?? ""),
-      fullAddress: buildFullAddress(row),
+      fullAddress: buildFullAddress(row, t),
     });
   }
 
@@ -482,15 +491,15 @@ export default async function ForwarderTablePage({
   // Status-chip badge colors map the legacy `badge-*` palette to Tailwind,
   // exactly mirroring page.tsx's statusChips for visual parity.
   const statusChips: { href: string; label: string; count: number; chipColor: string }[] = [
-    { href: "/service-import/table?q=all", label: "ทั้งหมด",         count: countAll,                          chipColor: "bg-slate-100 text-slate-700"   },
-    { href: "/service-import/table?q=1",   label: "รอเข้าโกดัง",     count: arrStatus[1],                      chipColor: "bg-amber-100 text-amber-700"   },
-    { href: "/service-import/table?q=2",   label: "ถึงโกดังจีนแล้ว", count: arrStatus[2],                      chipColor: "bg-sky-100 text-sky-700"       },
-    { href: "/service-import/table?q=3",   label: "กำลังส่งมาไทย",   count: arrStatus[3],                      chipColor: "bg-pink-100 text-pink-700"     },
-    { href: "/service-import/table?q=4",   label: "ถึงไทยแล้ว",      count: arrStatus[4],                      chipColor: "bg-amber-200 text-amber-900"   },
-    { href: "/service-import/table?q=5",   label: "รอชำระเงิน",       count: arrStatus[5],                      chipColor: "bg-red-100 text-red-700"       },
-    { href: "/service-import/table?q=6",   label: "เตรียมส่ง",        count: arrStatus[6] - statusDriverItem,   chipColor: "bg-indigo-100 text-indigo-700" },
-    { href: "/service-import/table?q=6.1", label: "กำลังจัดส่ง",      count: statusDriverItem,                  chipColor: "bg-cyan-100 text-cyan-700"     },
-    { href: "/service-import/table?q=7",   label: "ส่งแล้ว",          count: arrStatus[7],                      chipColor: "bg-emerald-100 text-emerald-700" },
+    { href: "/service-import/table?q=all", label: t("tabAll"),               count: countAll,                          chipColor: "bg-slate-100 text-slate-700"   },
+    { href: "/service-import/table?q=1",   label: t("tabWaitWarehouse"),     count: arrStatus[1],                      chipColor: "bg-amber-100 text-amber-700"   },
+    { href: "/service-import/table?q=2",   label: t("statusAtChinaWarehouse"), count: arrStatus[2],                    chipColor: "bg-sky-100 text-sky-700"       },
+    { href: "/service-import/table?q=3",   label: t("statusShippingToThailand"), count: arrStatus[3],                  chipColor: "bg-pink-100 text-pink-700"     },
+    { href: "/service-import/table?q=4",   label: t("tabArrivedThailand"),   count: arrStatus[4],                      chipColor: "bg-amber-200 text-amber-900"   },
+    { href: "/service-import/table?q=5",   label: t("statusWaitPayment"),    count: arrStatus[5],                      chipColor: "bg-red-100 text-red-700"       },
+    { href: "/service-import/table?q=6",   label: t("statusPreparing"),      count: arrStatus[6] - statusDriverItem,   chipColor: "bg-indigo-100 text-indigo-700" },
+    { href: "/service-import/table?q=6.1", label: t("statusDelivering"),     count: statusDriverItem,                  chipColor: "bg-cyan-100 text-cyan-700"     },
+    { href: "/service-import/table?q=7",   label: t("statusDelivered"),      count: arrStatus[7],                      chipColor: "bg-emerald-100 text-emerald-700" },
   ];
 
   const isQActive = (val: string) => q === val || (val === "all" && (q === "" || q === "all"));
@@ -531,7 +540,7 @@ export default async function ForwarderTablePage({
                   className="shrink-0 inline-flex items-end gap-2 px-4 pb-2.5 text-base md:text-xl font-medium text-muted hover:text-foreground border-b-[3px] border-transparent hover:border-border whitespace-nowrap transition-colors"
                 >
                   <span aria-hidden className="ft-box" />
-                  ฝากนำเข้าสินค้าแบบเต็ม
+                  {t("tabFullView")}
                 </Link>
               </li>
               <li>
@@ -540,7 +549,7 @@ export default async function ForwarderTablePage({
                   className="shrink-0 inline-flex items-end gap-2 px-4 pb-2.5 text-base md:text-xl font-bold text-red-600 border-b-[3px] border-red-600 whitespace-nowrap"
                 >
                   <span aria-hidden className="fas fa-table" />
-                  ฝากนำเข้าสินค้าแบบตาราง
+                  {t("tabTableView")}
                 </Link>
               </li>
             </ul>
@@ -562,20 +571,20 @@ export default async function ForwarderTablePage({
             >
               <div className="min-w-0 md:flex-1">
                 <label className="block text-xs font-medium text-muted mb-1" htmlFor="fTrackingCHN">
-                  ค้นหา Tracking
+                  {t("searchTrackingLabel")}
                 </label>
                 <input
                   className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-colors"
                   name="fTrackingCHN"
                   id="fTrackingCHN"
                   type="text"
-                  placeholder="เลขแทรคกิ้ง"
+                  placeholder={t("trackingPlaceholder")}
                   defaultValue={fTrackingCHNRaw}
                 />
               </div>
               <div className="min-w-0 md:flex-1">
                 <label className="block text-xs font-medium text-muted mb-1" htmlFor="fCabinetNumber">
-                  ล๊อตสินค้า
+                  {t("lotLabel")}
                 </label>
                 <select
                   className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-colors"
@@ -583,7 +592,7 @@ export default async function ForwarderTablePage({
                   id="fCabinetNumber"
                   defaultValue={fCabinetNumberRaw || "all"}
                 >
-                  <option value="all">ทั้งหมด</option>
+                  <option value="all">{t("tabAll")}</option>
                   {cabinetOptions.map((c) => (
                     <option key={c} value={c}>
                       {c}
@@ -596,7 +605,7 @@ export default async function ForwarderTablePage({
                 className="inline-flex w-full md:w-auto items-center justify-center rounded-lg bg-red-600 text-white px-5 py-2 text-sm font-bold shadow-sm hover:bg-red-700 active:scale-[0.98] transition-all whitespace-nowrap"
                 name="search"
               >
-                ค้นหารายการ
+                {t("searchButton")}
               </button>
               <Link
                 href="/service-import/add"
@@ -605,14 +614,14 @@ export default async function ForwarderTablePage({
                 <span className="inline-flex w-7 h-7 items-center justify-center rounded-full bg-white text-emerald-600 font-black text-lg leading-none shadow-sm" aria-hidden>
                   +
                 </span>
-                <span>เพิ่มรายการนำเข้า</span>
+                <span>{t("addImportItem")}</span>
               </Link>
             </form>
             {sp.fTrackingCHN !== undefined && (
               <div className="text-xs text-red-600 mt-2">
-                ผลลัพธ์การค้นหาโดย{" "}
-                {sp.fTrackingCHN ? <>เลขแทรคกิ้ง: {sp.fTrackingCHN}</> : null}
-                {sp.fCabinetNumber ? <> ล๊อตสินค้า: {sp.fCabinetNumber}</> : null}
+                {t("searchResultsBy")}{" "}
+                {sp.fTrackingCHN ? <>{t("searchResultTracking", { value: sp.fTrackingCHN })}</> : null}
+                {sp.fCabinetNumber ? <> {t("searchResultLot", { value: sp.fCabinetNumber })}</> : null}
               </div>
             )}
 
@@ -624,7 +633,7 @@ export default async function ForwarderTablePage({
                 (forwarder-table.php L795-830): plain nav-link buttons in a
                 row, active = light-pink bg + red text + red borders. */}
             <h4 className="mb-2.5 text-sm font-bold text-foreground md:text-lg">
-              สถานะรายการ
+              {t("statusHeading")}
             </h4>
             <ul className="flex flex-wrap items-end gap-0 border-b border-border">
               {statusChips.map((chip) => {
@@ -681,7 +690,7 @@ export default async function ForwarderTablePage({
                     ปอน 2026-05-30 "มือถือ ทำให้ดูง่ายๆ". ── */}
                 <div className="space-y-2.5 p-2 md:hidden">
                   {rows.length === 0 ? (
-                    <p className="py-10 text-center text-sm text-muted">ไม่พบรายการ</p>
+                    <p className="py-10 text-center text-sm text-muted">{t("noItems")}</p>
                   ) : (
                     pageRows.map((row) => {
                       const fStatusDriver = arrFIDDriver.has(row.id) ? 1 : 0;
@@ -704,7 +713,7 @@ export default async function ForwarderTablePage({
                               {row.ftrackingchn2 || row.ftrackingchn || `#${row.id}`}
                             </Link>
                             <span className="shrink-0">
-                              {statusForwarderAll4(row.fstatus ?? "", fStatusDriver)}
+                              {statusForwarderAll4(row.fstatus ?? "", fStatusDriver, t)}
                             </span>
                           </div>
                           <div className="mt-2 flex items-center gap-2.5">
@@ -721,34 +730,34 @@ export default async function ForwarderTablePage({
                                 {countText(row.fdetail, 40) || "—"}
                               </p>
                               <p className="mt-0.5 text-[11px] text-muted">
-                                {row.ftransporttype === "1" ? "รถ" : "เรือ"}
+                                {row.ftransporttype === "1" ? t("transportTruck") : t("transportSea")}
                                 {row.fcabinetnumber
-                                  ? ` · ล๊อต ${countText(row.fcabinetnumber.replace(/รถ /g, "").replace(/大/g, ""), 16)}`
+                                  ? ` · ${t("lotLabel")} ${countText(row.fcabinetnumber.replace(/รถ /g, "").replace(/大/g, ""), 16)}`
                                   : ""}
                               </p>
                             </div>
                           </div>
                           <div className="mt-2.5 grid grid-cols-4 gap-1 border-t border-dashed border-border pt-2 text-center">
                             <div>
-                              <div className="text-[10px] text-muted">ลัง</div>
+                              <div className="text-[10px] text-muted">{t("colBoxes")}</div>
                               <div className="text-sm font-semibold tabular-nums">
                                 {(row.famount ?? 0) > 0 ? row.famount : "-"}
                               </div>
                             </div>
                             <div>
-                              <div className="text-[10px] text-muted">หนัก</div>
+                              <div className="text-[10px] text-muted">{t("colWeight")}</div>
                               <div className="text-sm font-semibold tabular-nums">
                                 {(row.fweight ?? 0) > 0 ? numberFormat(row.fweight!, 2) : "-"}
                               </div>
                             </div>
                             <div>
-                              <div className="text-[10px] text-muted">คิว</div>
+                              <div className="text-[10px] text-muted">{t("colVolume")}</div>
                               <div className="text-sm font-semibold tabular-nums">
                                 {(row.fvolume ?? 0) > 0 ? numberFormat(row.fvolume!, 3) : "-"}
                               </div>
                             </div>
                             <div>
-                              <div className="text-[10px] text-muted">ราคา</div>
+                              <div className="text-[10px] text-muted">{t("colPrice")}</div>
                               <div className="text-sm font-bold tabular-nums text-red-600">
                                 {numberFormat(net, 2)}
                               </div>
@@ -783,26 +792,26 @@ export default async function ForwarderTablePage({
                     }}
                   >
                     <tr className="text-center bg-gradient-to-r from-[#f59e0b] to-[#dc2626]">
-                      <th className="all add-text-all px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">เลขแทรคกิ้งจีน</th>
-                      <th className="all add-text-all hidden xl:table-cell px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">ออเดอร์สั่งซื้อ</th>
-                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">ล๊อต/ลำดับ</th>
-                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">รายละเอียด</th>
-                      <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">ลัง</th>
-                      <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">หนัก</th>
-                      <th className="all add-text-all hidden xl:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">กว้าง</th>
-                      <th className="all add-text-all hidden xl:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">สูง</th>
-                      <th className="all add-text-all hidden xl:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">ยาว</th>
-                      <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">คิว</th>
-                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">ประเภท</th>
-                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">ค่าตีลัง</th>
-                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">ขนส่งจีน+</th>
-                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">ค่าอื่นๆ</th>
-                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">ขนส่งไทย</th>
-                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">เข้าโกดังจีน</th>
-                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">ออกโกดังจีน</th>
-                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">ถึงโกดังไทย</th>
-                      <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">ราคา</th>
-                      <th className="all add-text-all px-3 py-3 text-center text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap">สถานะ</th>
+                      <th className="all add-text-all px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colTrackingChn")}</th>
+                      <th className="all add-text-all hidden xl:table-cell px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colPurchaseOrder")}</th>
+                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colLotSeq")}</th>
+                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colDetail")}</th>
+                      <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colBoxes")}</th>
+                      <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colWeight")}</th>
+                      <th className="all add-text-all hidden xl:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colWidth")}</th>
+                      <th className="all add-text-all hidden xl:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colHeight")}</th>
+                      <th className="all add-text-all hidden xl:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colLength")}</th>
+                      <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colVolume")}</th>
+                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colType")}</th>
+                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colCratePrice")}</th>
+                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colChinaTransport")}</th>
+                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colOther")}</th>
+                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colThaiTransport")}</th>
+                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colEnterChinaWarehouse")}</th>
+                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colLeaveChinaWarehouse")}</th>
+                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colArriveThaiWarehouse")}</th>
+                      <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colPrice")}</th>
+                      <th className="all add-text-all px-3 py-3 text-center text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap">{t("colStatus")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -821,7 +830,7 @@ export default async function ForwarderTablePage({
                                         <td className="t3 px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
                                         <td className="t4 hidden xl:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
                                         <td className="t5 hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
-                                        <td className="t6 text-right hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-bold text-white">รวม</td>
+                                        <td className="t6 text-right hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-bold text-white">{t("summaryTotal")}</td>
                                         <td className="t7 text-right px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums font-mono"></td>
                                         <td className="t8 text-right px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums font-mono"></td>
                                         <td className="t9 hidden xl:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums font-mono"></td>
@@ -886,7 +895,7 @@ export default async function ForwarderTablePage({
                                               ) : null}
                                             </td>
                                             <td className="hidden sm:table-cell px-2 py-1.5 text-xs md:text-sm text-foreground whitespace-nowrap">
-                                              {row.ftransporttype === "1" ? "รถ:" : "เรือ:"}
+                                              {row.ftransporttype === "1" ? t("transportTruckColon") : t("transportSeaColon")}
                                               {countText(
                                                 (row.fcabinetnumber ?? "")
                                                   .replace(/รถ /g, "")
@@ -940,7 +949,7 @@ export default async function ForwarderTablePage({
                                                 : "-"}
                                             </td>
                                             <td className="hidden sm:table-cell px-2 py-1.5 text-center text-xs md:text-sm text-foreground">
-                                              {nameProductsType2(row.fproductstype)}
+                                              {nameProductsType2(row.fproductstype, t)}
                                             </td>
                                             <td className="hidden sm:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums font-mono">
                                               {Number(row.fstatus) > 4
@@ -980,6 +989,7 @@ export default async function ForwarderTablePage({
                                               {statusForwarderAll4(
                                                 row.fstatus ?? "",
                                                 fStatusDriver,
+                                                t,
                                               )}
                                             </td>
                                           </tr>
@@ -1018,19 +1028,19 @@ export default async function ForwarderTablePage({
                 className="dt-checkboxes check-all c6 w-4 h-4 rounded border-border accent-red-600 cursor-pointer"
                 defaultChecked
               />
-              <span className="text-[10.5px] md:text-xs text-muted whitespace-nowrap">ทั้งหมด</span>
+              <span className="text-[10.5px] md:text-xs text-muted whitespace-nowrap">{t("tabAll")}</span>
             </label>
 
             <div className="flex-1 min-w-0 leading-tight">
               <div className="text-[10px] md:text-xs text-muted">
-                จำนวน <span className="countPay font-bold text-foreground notranslate">-</span> รายการ
+                {t("payBarCountPrefix")} <span className="countPay font-bold text-foreground notranslate">-</span> {t("payBarCountSuffix")}
               </div>
               <div className="font-bold text-foreground text-xs md:text-sm">
-                รวม{" "}
+                {t("summaryTotal")}{" "}
                 <span className="notranslate price-all text-red-600 text-base md:text-lg">
                   0.00
                 </span>{" "}
-                <span className="text-[10px] md:text-xs text-muted font-normal">บ.</span>
+                <span className="text-[10px] md:text-xs text-muted font-normal">{t("bahtUnit")}</span>
               </div>
             </div>
 
@@ -1039,7 +1049,7 @@ export default async function ForwarderTablePage({
               id="select"
               className="shrink-0 inline-flex items-center justify-center gap-1 rounded-full bg-red-600 text-white px-4 md:px-6 py-2 md:py-2.5 text-sm md:text-base font-bold hover:bg-red-700 active:scale-[0.98] shadow-md shadow-red-600/30 animate__animated animate__infinite animate__headShake transition-all"
             >
-              ชำระเงิน
+              {t("payButton")}
             </button>
           </div>
         </div>
@@ -1062,7 +1072,7 @@ export default async function ForwarderTablePage({
         <div className="modal-dialog">
           <div className="modal-content header-from">
             <div className="modal-header">
-              <h4 className="modal-title">สร้างออเดอร์ฝากนำเข้าสินค้า</h4>
+              <h4 className="modal-title">{t("modalTitle")}</h4>
               <button
                 type="button"
                 className="close"
@@ -1082,7 +1092,7 @@ export default async function ForwarderTablePage({
               <ServiceImportAddForm>
                 <div className="form-group">
                   <div className="border-bottom-2"></div>
-                  <h5 className="text-center">กรอกรายละเอียดนำเข้าสินค้า</h5>
+                  <h5 className="text-center">{t("modalFillDetails")}</h5>
                   <div className="border-bottom-2">
                     <hr />
                   </div>
@@ -1094,17 +1104,17 @@ export default async function ForwarderTablePage({
                         rel="noreferrer"
                         className="text-info"
                       >
-                        ที่อยู่โกดังจีน
+                        {t("chinaWarehouseAddress")}
                       </a>
                     </div>
                     <label className="form-control-label" htmlFor="fTrackingCHN">
-                      เลข Tracking
+                      {t("trackingNumberLabel")}
                     </label>
                     <input
                       className="form-control form-control-lg"
                       name="fTrackingCHN"
                       type="text"
-                      placeholder="เลข Tracking"
+                      placeholder={t("trackingNumberLabel")}
                       maxLength={50}
                       required
                     />
@@ -1113,13 +1123,13 @@ export default async function ForwarderTablePage({
 
                   <div className="mb-1">
                     <label className="form-control-label" htmlFor="fDetail">
-                      รายละเอียด
+                      {t("colDetail")}
                     </label>
                     <textarea
                       className="form-control"
                       rows={3}
                       name="fDetail"
-                      placeholder="รายละเอียด"
+                      placeholder={t("colDetail")}
                       maxLength={500}
                       required
                     ></textarea>
@@ -1127,7 +1137,7 @@ export default async function ForwarderTablePage({
 
                   <div className="mb-1">
                     <label className="form-control-label" htmlFor="fAmount">
-                      จำนวนกล่อง
+                      {t("boxCountLabel")}
                     </label>
                     <input
                       className="form-control form-control-lg"
@@ -1140,41 +1150,41 @@ export default async function ForwarderTablePage({
                       required
                     />
                   </div>
-                  <h5 className="text-center">ข้อมูลการจัดส่ง </h5>
+                  <h5 className="text-center">{t("shippingInfoHeading")} </h5>
                   <div className="border-bottom-2">
                     <hr />
                   </div>
                   <label className="form-control-label" htmlFor="fTransportType">
-                    เลือกรูปแบบการขนส่งระหว่างประเทศจีน-ไทย
+                    {t("transportTypeLabel")}
                   </label>
                   <div className="form-group">
                     <select id="transportType" className="form-control" name="fTransportType" required>
-                      <option value="1">ขนส่งทางรถ (ใช้เวลาประมาณ 5-7 วัน)</option>
-                      <option value="2">ขนส่งทางเรือ (ใช้เวลาประมาณ 12-16 วัน)</option>
+                      <option value="1">{t("transportTruckOption")}</option>
+                      <option value="2">{t("transportSeaOption")}</option>
                     </select>
                   </div>
                   <div className="mb-1">
                     <label className="form-control-label" htmlFor="fAmount">
-                      ที่อยู่ในการจัดส่ง{" "}
+                      {t("deliveryAddressLabel")}{" "}
                       <Link
                         href="/addresses/add"
                         target="_blank"
                         className="text-info font-10"
                       >
-                        เพิ่มที่อยู่ <i className="ti-plus"></i>
+                        {t("addAddress")} <i className="ti-plus"></i>
                       </Link>
                     </label>
 
                     <select className="form-control" name="addressID" id="addressID" required>
                       <option value="" defaultValue="">
-                        กรุณาเลือกที่อยู่ในการจัดส่ง
+                        {t("selectDeliveryAddress")}
                       </option>
                       {addressOptions.map((a) => (
                         <option key={a.addressID} value={a.addressID}>
                           {a.fullAddress}
                         </option>
                       ))}
-                      <option value="PCS">รับเองหน้าโกดัง Pacred (สมุทรสาคร)</option>
+                      <option value="PCS">{t("selfPickupWarehouse")}</option>
                     </select>
                   </div>
                   <div id="selectShipBy"></div>
@@ -1185,7 +1195,7 @@ export default async function ForwarderTablePage({
                       className="btn btn-outline-secondary round waves-effect"
                       data-dismiss="modal"
                     >
-                      ยกเลิก
+                      {t("cancel")}
                     </button>
                     <button
                       type="submit"
@@ -1193,7 +1203,7 @@ export default async function ForwarderTablePage({
                       name="save"
                       id="btnSubmit"
                     >
-                      บันทึก
+                      {t("save")}
                     </button>
                   </div>
                 </div>
@@ -1211,21 +1221,30 @@ export default async function ForwarderTablePage({
  * Builds the legacy CONCAT('คุณ',addressName,' ',…) full-address string
  * the modal <select> options show (forwarder-table.php L1149 / L1156).
  */
-function buildFullAddress(r: Record<string, string | number | null>): string {
+function buildFullAddress(
+  r: Record<string, string | number | null>,
+  t: (key: string) => string,
+): string {
   const s = (v: string | number | null | undefined): string =>
     v == null ? "" : String(v);
   return (
-    "คุณ" +
+    t("addressHonorific") +
     s(r.addressname) +
     " " +
     s(r.addresslastname) +
     " " +
     s(r.addressno) +
-    " ตำบล/แขวง " +
+    " " +
+    t("addressSubdistrictLabel") +
+    " " +
     s(r.addresssubdistrict) +
-    " อำเภอ/เขต " +
+    " " +
+    t("addressDistrictLabel") +
+    " " +
     s(r.addressdistrict) +
-    " จังหวัด " +
+    " " +
+    t("addressProvinceLabel") +
+    " " +
     s(r.addressprovince) +
     " " +
     s(r.addresszipcode)

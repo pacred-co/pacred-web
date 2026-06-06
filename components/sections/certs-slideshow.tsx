@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight, X, ZoomIn } from "lucide-react";
 
@@ -44,17 +45,19 @@ type CellProps = {
 
 function Cell({ i, big, onOpen }: CellProps) {
   const s = SLIDES[i];
+  const t = useTranslations("certsSlideshow");
+  const caption = t(`slide${i}.caption`);
   return (
     <button
       type="button"
       suppressHydrationWarning
       onClick={() => onOpen(i)}
-      aria-label={`ดูภาพใหญ่ — ${s.caption}`}
+      aria-label={t("cellAria", { caption })}
       className="group relative block w-full h-full overflow-hidden rounded-xl md:rounded-2xl border border-border bg-white dark:bg-surface shadow-[0_8px_22px_-10px_rgba(15,23,42,0.18)] hover:shadow-[0_14px_30px_-8px_rgba(15,23,42,0.25)] transition-shadow duration-300"
     >
       <Image
         src={s.src}
-        alt={s.alt}
+        alt={t(`slide${i}.alt`)}
         fill
         sizes={big ? "(max-width: 1024px) 65vw, 540px" : "(max-width: 1024px) 33vw, 280px"}
         quality={92}
@@ -79,11 +82,11 @@ function Cell({ i, big, onOpen }: CellProps) {
         <span className={`block font-black leading-tight tracking-tight drop-shadow-[0_2px_6px_rgba(0,0,0,0.5)] truncate ${
           big ? "text-[13px] md:text-[15px]" : "text-[10.5px] md:text-[12px]"
         }`}>
-          {s.caption}
+          {caption}
         </span>
         {big && (
           <span className="block mt-0.5 text-[10.5px] md:text-[12px] font-semibold opacity-95 leading-snug drop-shadow-[0_1px_4px_rgba(0,0,0,0.4)] truncate">
-            {s.sub}
+            {t(`slide${i}.sub`)}
           </span>
         )}
       </span>
@@ -100,6 +103,7 @@ function Cell({ i, big, onOpen }: CellProps) {
 }
 
 export function CertsSlideshow() {
+  const t = useTranslations("certsSlideshow");
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const open = (i: number) => setLightboxIdx(i);
   const close = useCallback(() => setLightboxIdx(null), []);
@@ -150,11 +154,11 @@ export function CertsSlideshow() {
         </div>
       </div>
 
-      {active && (
+      {active && lightboxIdx !== null && (
         <div
           role="dialog"
           aria-modal="true"
-          aria-label={`ภาพ — ${active.caption}`}
+          aria-label={t("lightboxAria", { caption: t(`slide${lightboxIdx}.caption`) })}
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 md:p-8 animate-in fade-in duration-200"
           onClick={close}
         >
@@ -167,7 +171,7 @@ export function CertsSlideshow() {
               <Image
                 key={active.src}
                 src={active.src}
-                alt={active.alt}
+                alt={t(`slide${lightboxIdx}.alt`)}
                 fill
                 sizes="100vw"
                 quality={95}
@@ -179,10 +183,10 @@ export function CertsSlideshow() {
             {/* Caption */}
             <div className="absolute bottom-2 md:bottom-4 left-2 md:left-4 right-2 md:right-4 px-3 md:px-4 py-2.5 md:py-3 rounded-xl bg-black/55 backdrop-blur-sm text-white max-w-[640px] mx-auto">
               <p className="text-[14px] md:text-[16px] font-black leading-tight tracking-tight truncate">
-                {active.caption}
+                {t(`slide${lightboxIdx}.caption`)}
               </p>
               <p className="mt-0.5 text-[11.5px] md:text-[13px] font-semibold opacity-95 leading-snug truncate">
-                {active.sub}
+                {t(`slide${lightboxIdx}.sub`)}
               </p>
             </div>
 
@@ -191,7 +195,7 @@ export function CertsSlideshow() {
               type="button"
               suppressHydrationWarning
               onClick={close}
-              aria-label="ปิด"
+              aria-label={t("close")}
               className="absolute -top-2 -right-2 md:top-2 md:right-2 z-10 flex items-center justify-center w-10 h-10 md:w-11 md:h-11 rounded-full bg-white text-[#111827] shadow-[0_4px_14px_rgba(0,0,0,0.35)] hover:scale-105 transition-transform"
             >
               <X className="w-5 h-5 md:w-6 md:h-6" strokeWidth={2.6} />
@@ -202,7 +206,7 @@ export function CertsSlideshow() {
               type="button"
               suppressHydrationWarning
               onClick={prev}
-              aria-label="ภาพก่อนหน้า"
+              aria-label={t("prev")}
               className="absolute left-1 md:left-3 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-11 h-11 md:w-12 md:h-12 rounded-full bg-white/90 hover:bg-white text-[#111827] shadow-[0_4px_14px_rgba(0,0,0,0.35)] hover:scale-105 transition-all"
             >
               <ChevronLeft className="w-6 h-6 md:w-7 md:h-7" strokeWidth={2.8} />
@@ -211,7 +215,7 @@ export function CertsSlideshow() {
               type="button"
               suppressHydrationWarning
               onClick={next}
-              aria-label="ภาพถัดไป"
+              aria-label={t("next")}
               className="absolute right-1 md:right-3 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-11 h-11 md:w-12 md:h-12 rounded-full bg-white/90 hover:bg-white text-[#111827] shadow-[0_4px_14px_rgba(0,0,0,0.35)] hover:scale-105 transition-all"
             >
               <ChevronRight className="w-6 h-6 md:w-7 md:h-7" strokeWidth={2.8} />

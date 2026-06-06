@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
+import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { ArrowRight, BookOpen, ChevronLeft, ChevronRight, Newspaper } from "lucide-react";
 import { Link } from "@/i18n/navigation";
@@ -23,6 +24,7 @@ const CATEGORY_BADGE: Record<string, string> = {
  */
 export function KnowledgeNewsBlock() {
   const [tab, setTab] = useState<"knowledge" | "news">("knowledge");
+  const t = useTranslations("knowledgeNewsBlock");
 
   return (
     <div className="flex flex-col gap-4">
@@ -35,9 +37,9 @@ export function KnowledgeNewsBlock() {
           </div>
           <h2 className="text-[22px] md:text-[28px] leading-[1.2] font-black tracking-[-0.03em] text-[#111827] dark:text-white">
             {tab === "news" ? (
-              <>ข่าวสาร <span className="text-primary-600">Pacred</span></>
+              t.rich("newsTitle", { highlight: (chunks) => <span className="text-primary-600">{chunks}</span> })
             ) : (
-              <>สาระน่ารู้ <span className="text-primary-600">นำเข้า–ส่งออก</span></>
+              t.rich("knowledgeTitle", { highlight: (chunks) => <span className="text-primary-600">{chunks}</span> })
             )}
           </h2>
         </div>
@@ -45,7 +47,7 @@ export function KnowledgeNewsBlock() {
           href={tab === "news" ? "/news" : "/knowledge"}
           className="hidden sm:inline-flex shrink-0 items-center gap-1.5 h-9 md:h-10 px-3.5 md:px-4 rounded-full bg-white text-[#111827] border border-border text-[12px] md:text-[13px] font-black hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all duration-300"
         >
-          ดูทั้งหมด
+          {t("viewAll")}
           <ArrowRight className="w-3.5 h-3.5" strokeWidth={3} />
         </Link>
       </div>
@@ -64,7 +66,7 @@ export function KnowledgeNewsBlock() {
           ].join(" ")}
         >
           <BookOpen className="w-3.5 h-3.5" strokeWidth={2.6} />
-          สาระน่ารู้
+          {t("tabKnowledge")}
         </button>
         <button
           type="button"
@@ -78,7 +80,7 @@ export function KnowledgeNewsBlock() {
           ].join(" ")}
         >
           <Newspaper className="w-3.5 h-3.5" strokeWidth={2.6} />
-          ข่าวสาร Pacred
+          {t("tabNews")}
         </button>
       </div>
 
@@ -92,7 +94,7 @@ export function KnowledgeNewsBlock() {
         href={tab === "news" ? "/news" : "/knowledge"}
         className="sm:hidden mx-auto inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-white text-[#111827] border border-border text-[12px] font-black hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all duration-300"
       >
-        {tab === "news" ? "ดูทั้งหมดข่าวสาร" : "ดูทั้งหมดสาระน่ารู้"}
+        {tab === "news" ? t("viewAllNews") : t("viewAllKnowledge")}
         <ArrowRight className="w-3.5 h-3.5" strokeWidth={3} />
       </Link>
     </div>
@@ -101,6 +103,7 @@ export function KnowledgeNewsBlock() {
 
 // ─────────── Knowledge Carousel — native scroll + drag + nav ───────────
 function KnowledgeCarousel() {
+  const t = useTranslations("knowledgeNewsBlock");
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(false);
@@ -170,7 +173,7 @@ function KnowledgeCarousel() {
     <div className="relative">
       <button
         type="button"
-        aria-label="เลื่อนซ้าย"
+        aria-label={t("scrollLeft")}
         onClick={goPrev}
         suppressHydrationWarning
         className={[
@@ -229,7 +232,7 @@ function KnowledgeCarousel() {
 
       <button
         type="button"
-        aria-label="เลื่อนขวา"
+        aria-label={t("scrollRight")}
         onClick={goNext}
         suppressHydrationWarning
         className={[
@@ -245,6 +248,7 @@ function KnowledgeCarousel() {
 
 // ─────────── News Carousel — same scroller pattern, PACRED_NEWS data ───────────
 function NewsCarousel() {
+  const t = useTranslations("knowledgeNewsBlock");
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(false);
@@ -314,7 +318,7 @@ function NewsCarousel() {
     <div className="relative">
       <button
         type="button"
-        aria-label="เลื่อนซ้าย"
+        aria-label={t("scrollLeft")}
         onClick={goPrev}
         suppressHydrationWarning
         className={[
@@ -373,7 +377,7 @@ function NewsCarousel() {
 
       <button
         type="button"
-        aria-label="เลื่อนขวา"
+        aria-label={t("scrollRight")}
         onClick={goNext}
         suppressHydrationWarning
         className={[

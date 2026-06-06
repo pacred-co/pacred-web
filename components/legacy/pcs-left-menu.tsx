@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import { ChevronRight } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { formatPhoneNumber, type PcsChromeData } from "@/lib/legacy/pcs-chrome";
 import { PcsLeftMenuUserPill } from "./pcs-left-menu-user-pill";
@@ -65,7 +66,8 @@ function SubComingSoon({ children }: { children: React.ReactNode }) {
  * on the md breakpoint. Icons keep `className="pcs-icon"` so the
  * grayscale→color filter override still latches.
  */
-export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
+export async function PcsLeftMenu({ data }: { data: PcsChromeData }) {
+  const t = await getTranslations("pcsLeftMenu");
   const isAgent = AGENT_CODES.includes(data.userID);
   const salesTel =
     data.sales.tel === CENTRAL_TEL
@@ -107,9 +109,9 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
               />
             </a>
             <div className="min-w-0 flex-1 text-[12px] leading-snug">
-              <div className="text-muted">เซลดูแลลูกค้า</div>
+              <div className="text-muted">{t("salesCaresCustomer")}</div>
               <div className="font-semibold text-foreground">
-                เซลล์ <span>{data.sales.nickname}</span>
+                {t("salesPrefix")} <span>{data.sales.nickname}</span>
               </div>
               <div className="text-muted">
                 Tel:{" "}
@@ -133,7 +135,7 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
               />
             </a>
             <div className="min-w-0 flex-1 text-[12px] leading-snug">
-              <div className="text-muted">ฝ่ายบริการลูกค้า (CS)</div>
+              <div className="text-muted">{t("customerServiceDept")}</div>
               <div className="font-semibold text-foreground">
                 CS <span>{data.cs.nickname}</span>
               </div>
@@ -165,7 +167,7 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
             alt=""
             className="pcs-icon h-6 w-6"
           />
-          <span>หน้าแรก</span>
+          <span>{t("home")}</span>
         </Link>
 
         {/* ระบบสมาชิก */}
@@ -178,29 +180,29 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
             alt=""
             className="pcs-icon h-6 w-6"
           />
-          <span>ระบบสมาชิก</span>
+          <span>{t("memberSystem")}</span>
         </Link>
 
         {/* บริการฝากสั่งสินค้า */}
         <PcsLeftMenuAccordion
           icon="/images/home/iconfloating/pcs-cart.png"
-          label="บริการฝากสั่งสินค้า"
+          label={t("orderService")}
           badge={<MenuBadge n={data.countShops2 + data.countCart} />}
         >
-          <SubLink href="/service-order">รายการสั่งสินค้าทั้งหมด</SubLink>
+          <SubLink href="/service-order">{t("allOrders")}</SubLink>
           <SubLink href="/service-order?q=2">
             <span className="inline-flex w-full items-center">
-              <span>รอชำระเงิน</span>
+              <span>{t("pendingPayment")}</span>
               <MenuBadge n={data.countShops2} />
             </span>
           </SubLink>
           <SubLink href="/cart">
             <span className="inline-flex w-full items-center">
-              <span>รถเข็นสินค้า</span>
+              <span>{t("cart")}</span>
               <MenuBadge n={data.countCart} />
             </span>
           </SubLink>
-          <SubLink href="/cart/add">เพิ่มสินค้าในรถเข็น</SubLink>
+          <SubLink href="/cart/add">{t("addToCart")}</SubLink>
         </PcsLeftMenuAccordion>
 
         {/* บริการนำเข้า — flat per ปอน 2026-05-30: 4 sub-rows, รอชำระ shows
@@ -209,19 +211,19 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
             "บริการฝากนำเข้า" → "บริการนำเข้า" per owner 2026-06-04. */}
         <PcsLeftMenuAccordion
           icon="/images/home/iconfloating/pcs-forwarder.png"
-          label="บริการนำเข้า"
+          label={t("importService")}
           badge={<MenuBadge n={data.countForwarder5 + data.countFCredit} />}
         >
-          <SubLink href="/service-import">รายการนำเข้า</SubLink>
+          <SubLink href="/service-import">{t("importList")}</SubLink>
           <SubLink href="/service-import?q=5">
             <span className="inline-flex w-full items-center">
-              <span>รอชำระ</span>
+              <span>{t("pendingPaymentShort")}</span>
               <MenuBadge n={data.countForwarder5} />
             </span>
           </SubLink>
-          <SubLink href="/service-import/add">เพิ่มรายการนำเข้า</SubLink>
-          <SubLink href="/service-import/estimate">ประเมินราคานำเข้า</SubLink>
-          <SubLink href="/service-import?q=7">ประวัติการนำเข้า</SubLink>
+          <SubLink href="/service-import/add">{t("addImport")}</SubLink>
+          <SubLink href="/service-import/estimate">{t("estimateImport")}</SubLink>
+          <SubLink href="/service-import?q=7">{t("importHistory")}</SubLink>
           {/* 2026-06-05 (ภูม REVERT) — /billing-run ไม่ใส่ใน sidebar เพราะ
               admin notify ลูกค้าผ่าน SMS+LINE อยู่แล้ว + tab "รอชำระ"
               (`?q=5` ด้านบน) cover ช่องทาง pay ทั้งหมด. ใส่เพิ่ม = clutter ·
@@ -233,27 +235,27 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
             "เร็วๆนี้" header badge (a real <Link> would 404 · §0d). */}
         <PcsLeftMenuAccordion
           icon="/images/home/iconfloating/export.png"
-          label="บริการส่งออก"
+          label={t("exportService")}
           badge={
             <span className="ml-auto rounded-full bg-gray-200 px-2 text-[10px] font-medium leading-[18px] text-gray-500">
-              เร็วๆนี้
+              {t("comingSoon")}
             </span>
           }
         >
-          <SubComingSoon>รายการส่งออก</SubComingSoon>
-          <SubComingSoon>รอชำระ</SubComingSoon>
-          <SubComingSoon>เพิ่มรายการส่งออก</SubComingSoon>
-          <SubComingSoon>ประเมินราคาส่งออก</SubComingSoon>
-          <SubComingSoon>ประวัติการส่งออก</SubComingSoon>
+          <SubComingSoon>{t("exportList")}</SubComingSoon>
+          <SubComingSoon>{t("pendingPaymentShort")}</SubComingSoon>
+          <SubComingSoon>{t("addExport")}</SubComingSoon>
+          <SubComingSoon>{t("estimateExport")}</SubComingSoon>
+          <SubComingSoon>{t("exportHistory")}</SubComingSoon>
         </PcsLeftMenuAccordion>
 
         {/* บริการฝากชำระสินค้า (เดิม "บริการฝากชำระ/โอน" · owner 2026-06-04) */}
         <PcsLeftMenuAccordion
           icon="/images/home/iconfloating/pcs-payment.png"
-          label="บริการฝากชำระสินค้า"
+          label={t("paymentService")}
         >
-          <SubLink href="/service-payment">รายการฝากชำระ</SubLink>
-          <SubLink href="/service-payment/add">เพิ่มรายการฝากชำระ</SubLink>
+          <SubLink href="/service-payment">{t("paymentList")}</SubLink>
+          <SubLink href="/service-payment/add">{t("addPayment")}</SubLink>
         </PcsLeftMenuAccordion>
 
         {/* รายการที่ต้องชำระ — aggregated payment-due across every service
@@ -269,31 +271,31 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
             alt=""
             className="pcs-icon h-6 w-6"
           />
-          <span>รายการที่ต้องชำระ</span>
+          <span>{t("paymentDue")}</span>
           <MenuBadge n={data.countPaymentDue} />
         </Link>
 
         {/* กระเป๋าสตางค์เงินสด */}
         <PcsLeftMenuAccordion
           icon="/images/home/iconfloating/pcs-wallet.png"
-          label="กระเป๋าสตางค์เงินสด"
+          label={t("cashWallet")}
         >
-          <SubLink href="/wallet">รายการเดินบัญชี</SubLink>
-          <SubLink href="/wallet/withdraw">ถอนเงิน</SubLink>
-          <SubLink href="/wallet/deposit">เติมเงิน</SubLink>
+          <SubLink href="/wallet">{t("accountStatement")}</SubLink>
+          <SubLink href="/wallet/withdraw">{t("withdraw")}</SubLink>
+          <SubLink href="/wallet/deposit">{t("deposit")}</SubLink>
         </PcsLeftMenuAccordion>
 
         {/* กระเป๋าสตางค์เครดิต (creditUser only) */}
         {data.creditUser && (
           <PcsLeftMenuAccordion
             icon="/images/home/iconfloating/pcs-wallet.png"
-            label="กระเป๋าสตางค์เครดิต"
+            label={t("creditWallet")}
             badge={<MenuBadge n={data.countFCreditError} />}
           >
-            <SubLink href="/wallet-credit">รายการเดินบัญชี</SubLink>
+            <SubLink href="/wallet-credit">{t("accountStatement")}</SubLink>
             <SubLink href="/service-import?q=c">
               <span className="inline-flex w-full items-center">
-                <span>ชำระเงิน</span>
+                <span>{t("payCredit")}</span>
                 <MenuBadge n={data.countFCreditError} />
               </span>
             </SubLink>
@@ -304,12 +306,12 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
         {isAgent && (
           <PcsLeftMenuAccordion
             icon="/images/home/iconfloating/pacred_sales.png"
-            label="ประวัติตัวแทน"
+            label={t("agentHistory")}
           >
-            <SubLink href="/sales">สมาชิกในทีม</SubLink>
-            <SubLink href="/sales/report">ประวัติรายการทั้งหมด</SubLink>
-            <SubLink href="/sales/history">ประวัติการเบิกเงิน</SubLink>
-            <SubLink href="/sales/report/add">ทำรายการเบิกเงิน</SubLink>
+            <SubLink href="/sales">{t("teamMembers")}</SubLink>
+            <SubLink href="/sales/report">{t("allTransactionHistory")}</SubLink>
+            <SubLink href="/sales/history">{t("withdrawalHistory")}</SubLink>
+            <SubLink href="/sales/report/add">{t("makeWithdrawal")}</SubLink>
           </PcsLeftMenuAccordion>
         )}
 
@@ -323,7 +325,7 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
             alt=""
             className="pcs-icon h-6 w-6"
           />
-          <span>ที่อยู่จัดส่งสินค้า</span>
+          <span>{t("shippingAddresses")}</span>
         </Link>
       </nav>
       </PcsLeftMenuAccordionGroup>

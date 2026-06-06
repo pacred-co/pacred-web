@@ -8,18 +8,19 @@ import {
   Stamp,
   type LucideIcon,
 } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
-type Step = { num: string; icon: LucideIcon; title: string; desc: string };
+type Step = { num: string; icon: LucideIcon };
 
-// Step 02 (ส่งของถึงโกดังจีน) is the LINE-tap step — the whole card
-// becomes a clickable CTA into the LINE OA, like customs step 02.
+// Step 02 is the LINE-tap step — the whole card becomes a clickable CTA
+// into the LINE OA, like customs step 02. Display copy is keyed on `num`.
 const STEPS: Step[] = [
-  { num: "01", icon: MessageCircle,  title: "แจ้งสเปก + ปริมาณ",   desc: "ประเภทสินค้า · น้ำหนัก/CBM · ปลายทาง — ทีม quote ให้ก่อน" },
-  { num: "02", icon: Warehouse,      title: "ส่งของถึงโกดังจีน",   desc: "Pacred รับที่กวางโจว/เซินเจิ้น/อี้อู — หรือซัพพลายเออร์ส่งเข้าโกดังเอง" },
-  { num: "03", icon: PackageSearch,  title: "ตรวจ-แพ็ค-รวมตู้",   desc: "ตรวจสภาพ · ห่อกันกระแทก · รวมส่งกับลูกค้ารายอื่น" },
-  { num: "04", icon: Ship,           title: "ขนส่งทางเรือ",        desc: "Sea Freight LCL ถึง Port ไทย (คลองเตย/แหลมฉบัง)" },
-  { num: "05", icon: Stamp,          title: "เคลียร์ + ส่งต่อ",    desc: "เคลียร์ภาษี + ส่งถึงประตู Door-to-Door ทั่วประเทศ" },
+  { num: "01", icon: MessageCircle },
+  { num: "02", icon: Warehouse },
+  { num: "03", icon: PackageSearch },
+  { num: "04", icon: Ship },
+  { num: "05", icon: Stamp },
 ];
 
 /**
@@ -28,19 +29,20 @@ const STEPS: Step[] = [
  * step cards with a big number + red-gradient icon pill. Step 02 is the
  * LINE-CTA card (whole card → LINE).
  */
-export function LclSteps() {
+export async function LclSteps() {
+  const t = await getTranslations("lclSteps");
   return (
     <section className="relative pt-1.5 md:pt-3 pb-1 md:pb-2">
       <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
         <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
           <ListChecks className="w-3.5 h-3.5" strokeWidth={2.6} />
-          5 STEPS · LCL จีน-ไทย ครบจบใน 5 ขั้น
+          {t("eyebrow")}
         </div>
         <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-          ส่ง LCL ง่าย ๆ — <span className="text-primary-600">ครบจบใน 5 ขั้นตอน</span>
+          {t("headingPrefix")} <span className="text-primary-600">{t("headingHighlight")}</span>
         </h2>
         <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
-          ทักมาก่อนได้เลย — quote ฟรี ไม่ต้องเดาเอง ทีมแจ้งที่อยู่โกดังจีน รับของ รวมตู้ เคลียร์ภาษี ส่งถึงประตู จบในคุยเดียว
+          {t("intro")}
         </p>
 
         <div className="mt-6 md:mt-8 flex overflow-x-auto gap-3 -mx-4 px-4 pb-3 snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-2 lg:grid-cols-5 md:gap-4 md:overflow-visible md:mx-0 md:px-0 md:pb-0 md:snap-none">
@@ -60,10 +62,10 @@ export function LclSteps() {
                   </span>
                 </div>
                 <h3 className="text-[14px] md:text-[15.5px] font-black text-[#111827] dark:text-white leading-snug tracking-tight">
-                  {s.title}
+                  {t(`step${s.num}Title`)}
                 </h3>
                 <p className="mt-1 text-[12px] md:text-[12.5px] leading-[1.55] text-muted">
-                  {s.desc}
+                  {t(`step${s.num}Desc`)}
                 </p>
               </>
             );

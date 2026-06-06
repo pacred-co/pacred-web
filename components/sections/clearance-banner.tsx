@@ -3,6 +3,7 @@
 import { useState, type CSSProperties } from "react";
 import Image from "next/image";
 import { X, Phone, Check } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { LINE_OA } from "@/components/seo/site";
 import { trackCtaClick } from "@/lib/analytics";
 
@@ -16,17 +17,13 @@ const LINE_URL = LINE_OA.shortUrl;
 // เมย์ · แนท = sales · วิน = Logistics Manager (ผู้จัดการโลจิสติกส์) · พลอย = customer-service.
 // Per owner directive — apply site-wide.
 const SALES = [
-  { name: "เมย์", slogan: "นำเข้า-ส่งออก ครบวงจร ปรึกษาฟรี ปิดดีลให้จบในที่เดียว", phone: "066-125-3006", image: "/images/Character_Icon/may.png",    useContain: false, alt: "ฝ่ายขายเมย์ Pacred",      button: "ทักเมย์เลย" },
-  { name: "แนท",  slogan: "นำเข้าสั่งซื้อจีน ทุกแพลตฟอร์ม ครบจบในที่เดียว",       phone: "066-131-0253", image: "/images/pacred-logo-red.png",      useContain: true,  alt: "ฝ่ายขายแนท Pacred",      button: "ทักแนทเลย"  },
-  { name: "วิน",  slogan: "ดูแลทุกขั้นตอน ตอบทุกคำถาม ตลอดการใช้บริการ",          phone: "062-603-0456", image: "/images/Character_Icon/win01.png", useContain: false, alt: "ผู้จัดการโลจิสติกส์วิน Pacred",  button: "ทักวินเลย"  },
-  { name: "พลอย", slogan: "พร้อมช่วยเหลือ ดูแลคุณทุกเรื่องนำเข้า-ส่งออก เร็ว ใส่ใจ", phone: "062-603-4456", image: "/images/Character_Icon/ploy01.png", useContain: false, alt: "ทีมดูแลลูกค้าพลอย Pacred", button: "ทักพลอยเลย" },
+  { name: "เมย์", sloganKey: "sloganMay", phone: "066-125-3006", image: "/images/Character_Icon/may.png",    useContain: false, altKey: "altMay",  buttonKey: "buttonMay" },
+  { name: "แนท",  sloganKey: "sloganNat", phone: "066-131-0253", image: "/images/pacred-logo-red.png",      useContain: true,  altKey: "altNat",  buttonKey: "buttonNat"  },
+  { name: "วิน",  sloganKey: "sloganWin", phone: "062-603-0456", image: "/images/Character_Icon/win01.png", useContain: false, altKey: "altWin",  buttonKey: "buttonWin"  },
+  { name: "พลอย", sloganKey: "sloganPloy", phone: "062-603-4456", image: "/images/Character_Icon/ploy01.png", useContain: false, altKey: "altPloy", buttonKey: "buttonPloy" },
 ];
 
-const FEATURES = [
-  "ทั่วไป มอก. เกษตร ประมง",
-  "จะด่านไหนก็เคลียร์ได้หมด",
-  "เปลี่ยนผู้ดูแลได้ตลอด 24 ชม.",
-];
+const FEATURES = ["featureGeneral", "featureAllPorts", "featureSwitch"];
 
 const STROKE_LG: CSSProperties = {
   WebkitTextStroke: "2.6px rgba(0,0,0,0.82)",
@@ -55,6 +52,7 @@ const STROKE_SM_MOBILE: CSSProperties = {
 const FEATURE_TEXT_SHADOW = "1px 1px 0 rgba(0,0,0,0.65), 0 2px 6px rgba(0,0,0,0.28)";
 
 export function ClearanceBanner() {
+  const t = useTranslations("clearanceBanner");
   const [open, setOpen] = useState(false);
 
   return (
@@ -70,13 +68,13 @@ export function ClearanceBanner() {
               href={LINE_URL}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="ติดต่อ Pacred ทาง LINE"
+              aria-label={t("contactLineAria")}
               onClick={() => trackCtaClick("banner_line", "home_clearance_banner", { surface: "banner_image" })}
               className="absolute inset-0 z-[1] block"
             >
               <Image
                 src="/images/banner/clearancebanboym.png"
-                alt="ชิปปิ้งเคลียร์สินค้าพิธีการศุลกากร Pacred"
+                alt={t("bannerImageAlt")}
                 fill
                 sizes="(max-width: 768px) 100vw, 1140px"
                 className="object-contain md:object-cover md:object-center transition-transform duration-700 group-hover:scale-[1.035]"
@@ -104,13 +102,13 @@ export function ClearanceBanner() {
                   className="block md:hidden text-white font-black leading-[1.02] whitespace-nowrap text-[17px] sm:text-[19px]"
                   style={STROKE_LG_MOBILE}
                 >
-                  ชิปปิ้งเคลียร์สินค้าติดด่าน
+                  {t("title")}
                 </span>
                 <span
                   className="block md:hidden text-white font-extrabold leading-[1.12] tracking-[-0.025em] whitespace-nowrap text-[12px] sm:text-[13px]"
                   style={STROKE_SM_MOBILE}
                 >
-                  เคลียร์จบปลดแน่ Pacred จัดให้
+                  {t("subtitle")}
                 </span>
 
                 {/* Desktop title */}
@@ -118,13 +116,13 @@ export function ClearanceBanner() {
                   className="hidden md:block text-white font-black leading-[1.02] whitespace-nowrap text-[clamp(28px,3.15vw,44px)]"
                   style={STROKE_LG}
                 >
-                  ชิปปิ้งเคลียร์สินค้าติดด่าน
+                  {t("title")}
                 </span>
                 <span
                   className="hidden md:block text-white font-extrabold leading-[1.12] tracking-[-0.025em] whitespace-nowrap text-[clamp(15px,1.55vw,23px)]"
                   style={STROKE_SM}
                 >
-                  เคลียร์จบปลดแน่ Pacred จัดให้
+                  {t("subtitle")}
                 </span>
               </h2>
 
@@ -141,7 +139,7 @@ export function ClearanceBanner() {
                       strokeWidth={3}
                       style={{ filter: "drop-shadow(1px 1px 0 rgba(0,0,0,0.55))" }}
                     />
-                    {f}
+                    {t(f)}
                   </div>
                 ))}
               </div>
@@ -158,7 +156,7 @@ export function ClearanceBanner() {
                   strokeWidth={3}
                   style={{ filter: "drop-shadow(1px 1px 0 rgba(0,0,0,0.55))" }}
                 />
-                ติดต่อ: 062-603-4456
+                {t("contactPhone")}
               </a>
 
               {/* Price + Buttons */}
@@ -168,10 +166,10 @@ export function ClearanceBanner() {
                   {/* Yellow corner accent */}
                   <span aria-hidden className="absolute -top-1 -left-1 w-2 h-2 md:w-2.5 md:h-2.5 rounded-full bg-yellow-300 shadow-[0_2px_4px_rgba(0,0,0,0.2)]" />
                   <div className="flex flex-col leading-none">
-                    <span className="text-[9px] md:text-[10px] font-bold text-gray-500 uppercase tracking-wider leading-none">เริ่มต้น</span>
+                    <span className="text-[9px] md:text-[10px] font-bold text-gray-500 uppercase tracking-wider leading-none">{t("priceStart")}</span>
                     <div className="flex items-baseline gap-0.5 mt-0.5 leading-none">
                       <span className="text-[20px] md:text-[28px] font-black text-[#dc2626] tracking-tight leading-none tabular-nums">2,800</span>
-                      <span className="text-[10px] md:text-[12px] font-bold text-gray-600">บาท</span>
+                      <span className="text-[10px] md:text-[12px] font-bold text-gray-600">{t("priceUnit")}</span>
                     </div>
                   </div>
                 </div>
@@ -194,7 +192,7 @@ export function ClearanceBanner() {
                   <svg className="w-[14px] h-[14px] md:w-[18px] md:h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
                   </svg>
-                  เลือกทีมงาน
+                  {t("selectTeam")}
                 </button>
 
                 <a
@@ -208,7 +206,7 @@ export function ClearanceBanner() {
                   <svg className="w-[14px] h-[14px] md:w-[18px] md:h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
                   </svg>
-                  ทักไลน์เลย
+                  {t("chatLine")}
                 </a>
                 </div>
               </div>
@@ -231,7 +229,7 @@ export function ClearanceBanner() {
             <button
               type="button"
               onClick={() => setOpen(false)}
-              aria-label="ปิด"
+              aria-label={t("close")}
               className="absolute top-5 right-5 w-10 h-10 rounded-full border border-gray-200 bg-white text-gray-500 flex items-center justify-center hover:bg-gray-50 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -239,8 +237,8 @@ export function ClearanceBanner() {
 
             {/* Header */}
             <div className="text-center mb-7">
-              <h3 className="text-[22px] md:text-[28px] font-black text-[#111827]">เลือกทีมงานที่ต้องการติดต่อ</h3>
-              <p className="text-[14px] md:text-[15px] text-gray-500 mt-1">ทีมขายและทีมดูแลลูกค้าพร้อมให้คำปรึกษาและดูแลทุกขั้นตอน</p>
+              <h3 className="text-[22px] md:text-[28px] font-black text-[#111827]">{t("modalTitle")}</h3>
+              <p className="text-[14px] md:text-[15px] text-gray-500 mt-1">{t("modalSubtitle")}</p>
             </div>
 
             {/* Sales grid */}
@@ -255,11 +253,11 @@ export function ClearanceBanner() {
 
                   {/* Avatar */}
                   <div className="relative z-[1] w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-[0_6px_15px_rgba(0,0,0,0.1)] bg-white mt-[10px] mb-3">
-                    <Image src={card.image} alt={card.alt} fill className={card.useContain ? "object-contain p-3" : "object-cover"} />
+                    <Image src={card.image} alt={t(card.altKey)} fill className={card.useContain ? "object-contain p-3" : "object-cover"} />
                   </div>
 
                   <p className="relative z-[1] text-[18px] font-black text-[#111827] mb-1">{card.name}</p>
-                  <p className="text-[12px] text-gray-500 leading-[1.4] mb-3 line-clamp-2 min-h-[34px]">{card.slogan}</p>
+                  <p className="text-[12px] text-gray-500 leading-[1.4] mb-3 line-clamp-2 min-h-[34px]">{t(card.sloganKey)}</p>
 
                   <a
                     href={`tel:${card.phone.replace(/-/g, "")}`}
@@ -278,7 +276,7 @@ export function ClearanceBanner() {
                     <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M12 3c-4.97 0-9 3.185-9 7.108 0 2.115 1.155 4.025 3.09 5.303-.234.996-1.127 2.378-1.218 2.518-.088.183.056.36.24.316.593-.14 2.875-.726 4.35-1.928 1.48.566 3.14.898 4.908.898 4.97 0 9-3.184 9-7.107S16.97 3 12 3z" />
                     </svg>
-                    {card.button}
+                    {t(card.buttonKey)}
                   </a>
                 </div>
               ))}

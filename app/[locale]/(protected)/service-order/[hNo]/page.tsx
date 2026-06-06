@@ -169,7 +169,7 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
                 rel="noopener noreferrer"
                 className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700"
               >
-                {o.status === "5" ? "📄 พิมพ์ใบเสร็จ" : "📄 พิมพ์ใบแจ้งหนี้"}
+                {o.status === "5" ? `📄 ${t("printReceipt")}` : `📄 ${t("printInvoice")}`}
               </a>
             )}
             {canCancel && <CancelButton hNo={o.h_no!} />}
@@ -191,7 +191,7 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
               </p>
               {rawThbFmt && (
                 <p className="text-[11px] text-yellow-700/80 -mt-0.5">
-                  ตัวเลขใน <span className="font-mono">( )</span> = ทศนิยมเต็ม · โอนตามยอดหลักได้เลย
+                  {t("rawTotalHintPrefix")} <span className="font-mono">( )</span> {t("rawTotalHintSuffix")}
                 </p>
               )}
               <p className="text-xs text-yellow-700 mt-1">{t("payBy", { date: new Date(o.payment_due_at).toLocaleString("th-TH") })}</p>
@@ -297,12 +297,12 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
 
             <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
               <h3 className="font-bold text-sm">{t("shipmentInfo")}</h3>
-              <Meta label={t("warehouseChina")} value={o.warehouse_china === "yiwu" ? "อี้อู" : "กวางโจว"} />
+              <Meta label={t("warehouseChina")} value={o.warehouse_china === "yiwu" ? t("warehouseYiwu") : t("warehouseGuangzhou")} />
               <Meta label={t("transportType")}  value={t(`transport.${o.transport_type}` as Parameters<typeof t>[0])} />
               {/* บริษัทขนส่ง (carrier) — inline-editable while not completed/cancelled
                   (shops.php L1673-1688 · update_hShipBy). */}
               <div className="text-sm">
-                <span className="text-muted">บริษัทขนส่ง</span>
+                <span className="text-muted">{t("carrierCompany")}</span>
                 <div className="mt-0.5 font-medium">
                   {canEditShipping && o.h_no ? (
                     <ShopOrderEditShipByForm
@@ -317,7 +317,7 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
                       {nameShipBy(o.ship_by)}
                       {o.status === "5" && (
                         <span className="block text-xs text-muted mt-0.5">
-                          เปลี่ยนบริษัทขนส่งได้อีกครั้งในระบบฝากนำเข้า
+                          {t("carrierChangeHint")}
                         </span>
                       )}
                     </>
@@ -354,7 +354,7 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
                 />
               )}
               {canEditShipping && warehousePickup && (
-                <p className="text-xs text-muted">📦 รับเองที่โกดัง Pacred — ไม่สามารถเปลี่ยนที่อยู่ได้</p>
+                <p className="text-xs text-muted">📦 {t("warehousePickupHint")}</p>
               )}
             </div>
 

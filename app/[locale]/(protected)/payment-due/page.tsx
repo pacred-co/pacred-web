@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { Wallet } from "lucide-react";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
@@ -88,6 +89,7 @@ function resolveCover(
 }
 
 export default async function PaymentDuePage() {
+  const t = await getTranslations("paymentDuePage");
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
   const { profile } = data;
@@ -140,7 +142,7 @@ export default async function PaymentDuePage() {
     const count = Number(r.hcount ?? 0);
     const title =
       String(r.htitle ?? "") +
-      (count > 1 ? ` และอีก ${Math.round(count - 1)} รายการ` : "");
+      (count > 1 ? t("orderTitleSuffix", { count: Math.round(count - 1) }) : "");
     withTs.push({
       ts: parseTs(r.hdate as string | null),
       item: {
@@ -211,7 +213,7 @@ export default async function PaymentDuePage() {
         imageUrl: resolveCover(r.fcover as string | null, "import"),
         // Some legacy rows store a bare "-" / "" as fdetail — show a clean
         // generic label instead of a lone dash.
-        title: detail && detail !== "-" ? detail : "รายการฝากนำเข้าสินค้า",
+        title: detail && detail !== "-" ? detail : t("importFallbackTitle"),
         dateText: fmtDate(r.fdate as string | null),
         amountThb: Number(r.ftotalprice ?? 0),
         statusLabel: "รอชำระเงิน",
@@ -234,7 +236,7 @@ export default async function PaymentDuePage() {
         ref: `#${id}`,
         refHref: `/service-payment/${id}`,
         imageUrl: null,
-        title: detail && detail !== "-" ? detail : "รายการฝากชำระ / โอนหยวน",
+        title: detail && detail !== "-" ? detail : t("paymentFallbackTitle"),
         dateText: fmtDate(r.paydate as string | null),
         amountThb: Number(r.paythb ?? 0),
         statusLabel: "รอดำเนินการ",
@@ -250,7 +252,7 @@ export default async function PaymentDuePage() {
 
   return (
     <>
-      <title>รายการที่ต้องชำระ | Pacred</title>
+      <title>{`${t("pageTitle")} | Pacred`}</title>
 
       <div className="pcs-content-pad w-full px-3 md:px-6 pt-4 pb-24 md:py-6">
         {/* ── Breadcrumb ── */}
@@ -259,10 +261,10 @@ export default async function PaymentDuePage() {
             href="/dashboard"
             className="hover:text-foreground transition-colors"
           >
-            หน้าแรก
+            {t("breadcrumbHome")}
           </Link>
           <span>/</span>
-          <span className="text-foreground font-medium">รายการที่ต้องชำระ</span>
+          <span className="text-foreground font-medium">{t("heading")}</span>
         </div>
 
         {/* ── Header ── */}
@@ -275,11 +277,11 @@ export default async function PaymentDuePage() {
             <span className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white flex items-center justify-center shadow-md shadow-primary-600/25 shrink-0">
               <Wallet className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2} />
             </span>
-            รายการที่ต้องชำระ
+            {t("heading")}
           </p>
           {items.length > 0 && (
             <span className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[12px] md:text-[13px] font-bold px-3 py-1.5">
-              รอชำระ {items.length} รายการ
+              {t("pendingCount", { count: items.length })}
             </span>
           )}
         </div>

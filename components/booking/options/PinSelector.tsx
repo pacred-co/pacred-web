@@ -12,6 +12,7 @@
  */
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { MapPin, Crosshair, Loader2 } from "lucide-react";
 import type { BookingOptionState } from "@/types/booking";
 
@@ -28,6 +29,7 @@ function emptyPin(): PinShape {
 }
 
 export function PinSelector({ pickup, dropoff, onChange }: PinSelectorProps) {
+  const t = useTranslations("booking");
   const [busyKey, setBusyKey] = useState<"pickup" | "dropoff" | null>(null);
 
   function patch(key: "pickup" | "dropoff", patchValues: Partial<PinShape>) {
@@ -63,7 +65,7 @@ export function PinSelector({ pickup, dropoff, onChange }: PinSelectorProps) {
       <legend className="px-2 inline-flex items-center gap-2 text-[13px] md:text-[14px] font-black text-[#111827] dark:text-white">
         <MapPin className="w-4 h-4 text-primary-600" strokeWidth={2.6} />
         {/* i18n-key: booking.selector.pin.title */}
-        จุดรับ + จุดส่ง
+        {t("selectors.pin.label")}
       </legend>
       <p className="mt-1 text-[12px] md:text-[12.5px] leading-[1.55] text-muted font-medium">
         {/* i18n-key: booking.selector.pin.help */}
@@ -73,7 +75,7 @@ export function PinSelector({ pickup, dropoff, onChange }: PinSelectorProps) {
       <div className="mt-4 grid grid-cols-1 gap-4">
         {(["pickup", "dropoff"] as const).map((key) => {
           const pin = key === "pickup" ? pickup : dropoff;
-          const labelTh = key === "pickup" ? "จุดรับสินค้า" : "จุดส่งสินค้า";
+          const labelTh = key === "pickup" ? t("selectors.pin.pickupLabel") : t("selectors.pin.dropoffLabel");
           const placeholder =
             key === "pickup"
               ? "เช่น คลังที่ Suvarnabhumi · 123 ถนน..."

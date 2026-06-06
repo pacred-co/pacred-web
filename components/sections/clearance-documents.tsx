@@ -1,8 +1,10 @@
 import Image from "next/image";
 import { FileText, ArrowRight } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 
 type DocMode = {
+  id: string;
   image: string;
   badge: string;
   title: string;
@@ -13,6 +15,7 @@ type DocMode = {
 
 const MODES: DocMode[] = [
   {
+    id: "sea",
     image: "/images/home/iconfloating/searicon.png",
     badge: "ทางเรือ",
     title: "Sea Freight",
@@ -21,6 +24,7 @@ const MODES: DocMode[] = [
     ring: "bg-blue-50 dark:bg-blue-900/20",
   },
   {
+    id: "air",
     image: "/images/home/iconfloating/airicon.png",
     badge: "ทางอากาศ",
     title: "Air Cargo",
@@ -29,6 +33,7 @@ const MODES: DocMode[] = [
     ring: "bg-orange-50 dark:bg-orange-900/20",
   },
   {
+    id: "truck",
     image: "/images/home/iconfloating/caricon.png",
     badge: "ทางรถ",
     title: "Truck DDP",
@@ -38,7 +43,8 @@ const MODES: DocMode[] = [
   },
 ];
 
-export function ClearanceDocuments() {
+export async function ClearanceDocuments() {
+  const t = await getTranslations("clearanceDocuments");
   return (
     <section className="py-4 md:py-8">
       <div className="mx-auto w-full max-w-[1240px] px-3 md:px-4">
@@ -50,22 +56,22 @@ export function ClearanceDocuments() {
             REQUIRED DOCUMENTS
           </div>
           <h2 className="text-[20px] md:text-[38px] leading-[1.25] md:leading-[1.15] font-black tracking-[-0.03em] md:tracking-[-0.04em] text-[#111827] dark:text-white">
-            เอกสารที่ต้องเตรียม
-            <span className="text-primary-600"> ก่อนเริ่มเคลียร์</span>
+            {t("headingBefore")}
+            <span className="text-primary-600"> {t("headingHighlight")}</span>
           </h2>
           <p className="mt-1.5 md:mt-2 max-w-[820px] text-[12px] md:text-[15px] leading-[1.5] md:leading-[1.55] font-medium text-muted">
-            Pacred จัดเตรียมเอกสารเพิ่มและประสานหน่วยงานราชการให้ครบ — ลูกค้าส่งเฉพาะเอกสารพื้นฐานก็เริ่มได้
+            {t("subheading")}
           </p>
         </div>
 
         {/* 3 modes — horizontal swipe on mobile */}
         <div className="relative">
         <div className="flex overflow-x-auto gap-3 pb-2 -mx-3 px-3 snap-x snap-mandatory md:mx-0 md:px-0 md:pb-0 md:overflow-visible md:grid md:grid-cols-3 md:gap-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {MODES.map(({ image, badge, title, subtitle, docs, ring }) => (
+          {MODES.map(({ id, image, title, docs, ring }) => (
             <Link
               key={title}
               href="/register"
-              aria-label={`สมัครเลย · ${title}`}
+              aria-label={`${t("registerNow")} · ${title}`}
               className="group relative shrink-0 w-[82%] min-w-[280px] md:w-auto md:min-w-0 snap-start block overflow-hidden bg-white dark:bg-surface rounded-xl md:rounded-2xl border border-border p-3.5 md:p-6 shadow-[0_4px_18px_rgba(15,23,42,0.05)] hover:shadow-[0_24px_50px_-12px_rgba(179,0,0,0.18)] hover:border-primary-300 dark:hover:border-primary-800 hover:-translate-y-1 transition-all duration-400 cursor-pointer"
             >
               {/* Dot pattern overlay */}
@@ -99,7 +105,7 @@ export function ClearanceDocuments() {
                     <div className="h-11 w-11 md:h-16 md:w-16 inline-flex items-center justify-center rounded-xl md:rounded-2xl bg-white dark:bg-surface-alt border border-border group-hover:border-primary-200 dark:group-hover:border-primary-900/60 shadow-[0_4px_10px_rgba(15,23,42,0.06)] overflow-hidden transition-colors duration-400">
                       <Image
                         src={image}
-                        alt={badge}
+                        alt={t(`${id}Badge`)}
                         width={64}
                         height={64}
                         unoptimized
@@ -109,21 +115,21 @@ export function ClearanceDocuments() {
                     {/* Yellow accent dot */}
                     <div className="absolute -top-1 -right-1 w-3 h-3 md:w-3.5 md:h-3.5 rounded-full bg-gradient-to-br from-yellow-300 to-amber-400 border-2 border-white dark:border-surface shadow-[0_2px_6px_rgba(0,0,0,0.15)] scale-0 group-hover:scale-100 transition-transform duration-300" />
                   </div>
-                  <span className="text-[10px] md:text-[11px] font-black tracking-[0.12em] uppercase text-muted group-hover:text-primary-600 transition-colors duration-300">{badge}</span>
+                  <span className="text-[10px] md:text-[11px] font-black tracking-[0.12em] uppercase text-muted group-hover:text-primary-600 transition-colors duration-300">{t(`${id}Badge`)}</span>
                 </div>
 
                 <h3 className="mt-1 text-[15px] md:text-[22px] font-black text-[#111827] dark:text-white group-hover:text-primary-700 dark:group-hover:text-primary-300 transition-colors duration-300">
                   {title}
                 </h3>
-                <p className="text-[11.5px] md:text-[13px] font-bold text-muted">{subtitle}</p>
+                <p className="text-[11.5px] md:text-[13px] font-bold text-muted">{t(`${id}Subtitle`)}</p>
 
                 <div className="my-2.5 md:my-4 border-t border-dashed border-border" />
 
                 <ul className="flex flex-col gap-1.5 md:gap-2">
-                  {docs.map((d) => (
+                  {docs.map((d, i) => (
                     <li key={d} className="flex items-start gap-2 md:gap-2.5 text-[12px] md:text-[14px] font-medium text-[#374151] dark:text-white/85">
                       <FileText className="mt-0.5 h-3.5 w-3.5 md:h-4 md:w-4 shrink-0 text-primary-600" strokeWidth={2.4} />
-                      <span>{d}</span>
+                      <span>{t(`${id}Doc${i}`)}</span>
                     </li>
                   ))}
                 </ul>
@@ -134,7 +140,7 @@ export function ClearanceDocuments() {
                     <div className="h-full w-0 group-hover:w-full bg-gradient-to-r from-primary-500 to-primary-700 transition-all duration-500 ease-out rounded-full" />
                   </div>
                   <div className="flex items-center gap-1 text-[11px] font-black text-primary-600 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-300 whitespace-nowrap">
-                    สมัครเลย
+                    {t("registerNow")}
                     <ArrowRight className="w-3 h-3" strokeWidth={3} />
                   </div>
                 </div>

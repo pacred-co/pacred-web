@@ -16,6 +16,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { updateLegacyForwarderShipBy } from "@/actions/forwarder-legacy";
 
 type ShipByOption = { code: string; label: string };
@@ -35,6 +36,7 @@ export function ServiceImportEditShipByForm({
   options,
   isEditable,
 }: Props) {
+  const t = useTranslations("serviceImportEditShipByForm");
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +74,7 @@ export function ServiceImportEditShipByForm({
                 setOpen(true);
               }}
             >
-              แก้ไข
+              {t("edit")}
             </a>
           </span>
         )}
@@ -98,7 +100,7 @@ export function ServiceImportEditShipByForm({
                 )}
                 <input type="hidden" name="ID" value={forwarderId} />
                 <label className="block text-xs font-medium text-muted mb-1" htmlFor="fShipBy">
-                  บริษัทขนส่ง
+                  {t("shippingCompany")}
                 </label>
                 <select
                   className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base md:text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-colors"
@@ -120,7 +122,7 @@ export function ServiceImportEditShipByForm({
                     id="to-text-fShipBy"
                     onClick={() => setOpen(false)}
                   >
-                    ยกเลิก
+                    {t("cancel")}
                   </button>
                   <button
                     type="submit"
@@ -128,25 +130,23 @@ export function ServiceImportEditShipByForm({
                     className="inline-flex items-center justify-center rounded-full bg-red-600 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-red-700 active:scale-[0.98] transition-all disabled:opacity-60"
                     disabled={isPending}
                   >
-                    บันทึก
+                    {t("save")}
                   </button>
                 </div>
                 <p className="mt-2 text-xs text-red-600">
-                  หมายเหตุ : บริษัทขนส่งจะขึ้นอยู่กับพื้นที่ในการจัดส่ง
-                  ซึ่งเงื่อนไขเป็นไปตามที่บริษัทกำหนด
+                  {t("shippingCompanyNote")}
                 </p>
               </>
             ) : (
               <span className="inline-flex items-center rounded bg-red-600 px-2 py-1 text-sm text-white">
-                ไม่สามารถเปลี่ยนที่อยู่ได้เนื่องจากสินค้าถึงไทยแล้ว
+                {t("cannotChangeArrived")}
                 <span></span>
               </span>
             )}
           </form>
         ) : (
           <p className="text-sm text-red-600">
-            สั่งสินค้าในช่วงโปรโมชันฟรี ค่าขนส่งในไทย
-            ทางบริษัทขอสงวนสิทธิ์ในการเลือกบริษัทขนส่ง
+            {t("freePromoNote")}
           </p>
         )}
       </div>

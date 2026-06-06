@@ -14,6 +14,7 @@ import {
   Phone,
   Lock,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
@@ -22,100 +23,102 @@ const LINE_URL = "/line";
 
 type Stat = { icon: typeof Clock; label: string; value: string };
 
-// Display order = SEA (left) · AIR (middle, FEATURED) · TRUCK (right).
-// Middle card is the recommended option — dark red gradient with yellow
-// accents, "แนะนำ" badge + promo banner — so the eye lands on it first.
-const MODES = [
-  {
-    mode: "เรือ",
-    slug: "laem",
-    badge: "SEA FREIGHT",
-    badgeIcon: Ship,
-    title: "เคลียร์สินค้านำเข้าทางเรือ",
-    ports: "ท่าเรือคลองเตย / แหลมฉบัง / ICD",
-    image: "/images/countryport/laemchabanglong.png",
-    imageAlt: "เคลียร์สินค้านำเข้า ท่าเรือแหลมฉบัง / คลองเตย Pacred",
-    accent: "from-sky-500/35 to-blue-700/35",
-    price: "2,800",
-    featured: false,
-    stats: [
-      { icon: Clock, label: "เคลียร์ใน", value: "1 วัน" },
-      { icon: Package, label: "รองรับ", value: "LCL / FCL" },
-      { icon: Headphones, label: "ตอบไว", value: "24 ชม." },
-    ] as Stat[],
-    services: [
-      "ใบขนสินค้าขาเข้า · ขาออก ครบ",
-      "ประสาน สายเรือ · ท่าเรือ · กรมศุลกากร",
-      "Door-to-Door ทั่วประเทศ",
-    ],
-    carriers: [
-      { name: "COSCO", logo: "/images/partners/coscopartner.png", url: "https://lines.coscoshipping.com" },
-      { name: "Maersk", logo: "/images/partners/maerskpartner.png", url: "https://www.maersk.com" },
-      { name: "Laem Chabang", logo: "/images/partners/laemchabangpartner.png", url: "https://www.laemchabangport.com" },
-      { name: "BKP", logo: "/images/partners/bkp.png", url: "https://www.port.co.th/cs/bkp" },
-    ],
-  },
-  {
-    mode: "แอร์",
-    slug: "bkk",
-    badge: "AIR FREIGHT",
-    badgeIcon: Plane,
-    title: "เคลียร์สินค้านำเข้าทางอากาศ",
-    ports: "สนามบินสุวรรณภูมิ / ไปรษณีย์หลักสี่",
-    image: "/images/countryport/suvannapoomlong.png",
-    imageAlt: "เคลียร์สินค้านำเข้า สนามบินสุวรรณภูมิ Pacred",
-    accent: "from-amber-400/35 to-orange-600/35",
-    price: "2,800",
-    featured: true,
-    stats: [
-      { icon: Clock, label: "เคลียร์ใน", value: "1 วัน" },
-      { icon: Package, label: "รองรับ", value: "Air Cargo" },
-      { icon: Headphones, label: "ตอบไว", value: "24 ชม." },
-    ] as Stat[],
-    services: [
-      "Invoice · Packing List · ใบอนุญาต",
-      "ตรวจสอบ HS Code แม่นยำ",
-      "เคลียร์เขต Free Zone",
-    ],
-    carriers: [
-      { name: "DHL", logo: "/images/partners/dhlpartner.png", url: "https://www.dhl.com" },
-      { name: "Thai Cargo", logo: "/images/partners/thaicargo.png", url: "https://www.thaicargo.com" },
-      { name: "UPS", logo: "/images/partners/upspartner.png", url: "https://www.ups.com" },
-      { name: "TNT", logo: "/images/partners/tntpartner.png", url: "https://www.tnt.com" },
-    ],
-  },
-  {
-    mode: "รถ",
-    slug: "border",
-    badge: "TRUCK · LAND",
-    badgeIcon: Truck,
-    title: "เคลียร์สินค้านำเข้าทางรถ",
-    ports: "ด่านมุกดาหาร / นครพนม / แม่สอด",
-    image: "/images/countryport/mukdahanlong.png",
-    imageAlt: "เคลียร์สินค้านำเข้า ด่านมุกดาหาร / นครพนม Pacred",
-    accent: "from-red-500/35 to-orange-700/35",
-    price: "2,500",
-    featured: false,
-    stats: [
-      { icon: Clock, label: "เคลียร์ใน", value: "1 วัน" },
-      { icon: Package, label: "รองรับ", value: "Cross-Border" },
-      { icon: Headphones, label: "ตอบไว", value: "24 ชม." },
-    ] as Stat[],
-    services: [
-      "ขึ้นทะเบียน · จับคู่ (YY) ใน 30 นาที",
-      "Form D / Form E ครบ",
-      "Door-to-Door จากด่าน ถึงคลัง",
-    ],
-    carriers: [
-      { name: "FedEx", logo: "/images/partners/fedexpartner.png", url: "https://www.fedex.com" },
-      { name: "DHL", logo: "/images/partners/dhlpartner.png", url: "https://www.dhl.com" },
-      { name: "Alibaba", logo: "/images/partners/alibabapartner.png", url: "https://www.alibaba.com" },
-      { name: "e-Tracking", logo: "/images/partners/etracking.png", url: "https://www.etracking.com" },
-    ],
-  },
-];
-
 export function CustomsModeCards() {
+  const t = useTranslations("customsModeCards");
+
+  // Display order = SEA (left) · AIR (middle, FEATURED) · TRUCK (right).
+  // Middle card is the recommended option — dark red gradient with yellow
+  // accents, "แนะนำ" badge + promo banner — so the eye lands on it first.
+  const MODES = [
+    {
+      mode: "เรือ",
+      slug: "laem",
+      badge: "SEA FREIGHT",
+      badgeIcon: Ship,
+      title: t("seaTitle"),
+      ports: t("seaPorts"),
+      image: "/images/countryport/laemchabanglong.png",
+      imageAlt: t("seaImageAlt"),
+      accent: "from-sky-500/35 to-blue-700/35",
+      price: "2,800",
+      featured: false,
+      stats: [
+        { icon: Clock, label: t("statClearIn"), value: t("statOneDay") },
+        { icon: Package, label: t("statSupports"), value: "LCL / FCL" },
+        { icon: Headphones, label: t("statFastReply"), value: t("statTwentyFourHr") },
+      ] as Stat[],
+      services: [
+        t("seaService1"),
+        t("seaService2"),
+        t("seaService3"),
+      ],
+      carriers: [
+        { name: "COSCO", logo: "/images/partners/coscopartner.png", url: "https://lines.coscoshipping.com" },
+        { name: "Maersk", logo: "/images/partners/maerskpartner.png", url: "https://www.maersk.com" },
+        { name: "Laem Chabang", logo: "/images/partners/laemchabangpartner.png", url: "https://www.laemchabangport.com" },
+        { name: "BKP", logo: "/images/partners/bkp.png", url: "https://www.port.co.th/cs/bkp" },
+      ],
+    },
+    {
+      mode: "แอร์",
+      slug: "bkk",
+      badge: "AIR FREIGHT",
+      badgeIcon: Plane,
+      title: t("airTitle"),
+      ports: t("airPorts"),
+      image: "/images/countryport/suvannapoomlong.png",
+      imageAlt: t("airImageAlt"),
+      accent: "from-amber-400/35 to-orange-600/35",
+      price: "2,800",
+      featured: true,
+      stats: [
+        { icon: Clock, label: t("statClearIn"), value: t("statOneDay") },
+        { icon: Package, label: t("statSupports"), value: "Air Cargo" },
+        { icon: Headphones, label: t("statFastReply"), value: t("statTwentyFourHr") },
+      ] as Stat[],
+      services: [
+        t("airService1"),
+        t("airService2"),
+        t("airService3"),
+      ],
+      carriers: [
+        { name: "DHL", logo: "/images/partners/dhlpartner.png", url: "https://www.dhl.com" },
+        { name: "Thai Cargo", logo: "/images/partners/thaicargo.png", url: "https://www.thaicargo.com" },
+        { name: "UPS", logo: "/images/partners/upspartner.png", url: "https://www.ups.com" },
+        { name: "TNT", logo: "/images/partners/tntpartner.png", url: "https://www.tnt.com" },
+      ],
+    },
+    {
+      mode: "รถ",
+      slug: "border",
+      badge: "TRUCK · LAND",
+      badgeIcon: Truck,
+      title: t("truckTitle"),
+      ports: t("truckPorts"),
+      image: "/images/countryport/mukdahanlong.png",
+      imageAlt: t("truckImageAlt"),
+      accent: "from-red-500/35 to-orange-700/35",
+      price: "2,500",
+      featured: false,
+      stats: [
+        { icon: Clock, label: t("statClearIn"), value: t("statOneDay") },
+        { icon: Package, label: t("statSupports"), value: "Cross-Border" },
+        { icon: Headphones, label: t("statFastReply"), value: t("statTwentyFourHr") },
+      ] as Stat[],
+      services: [
+        t("truckService1"),
+        t("truckService2"),
+        t("truckService3"),
+      ],
+      carriers: [
+        { name: "FedEx", logo: "/images/partners/fedexpartner.png", url: "https://www.fedex.com" },
+        { name: "DHL", logo: "/images/partners/dhlpartner.png", url: "https://www.dhl.com" },
+        { name: "Alibaba", logo: "/images/partners/alibabapartner.png", url: "https://www.alibaba.com" },
+        { name: "e-Tracking", logo: "/images/partners/etracking.png", url: "https://www.etracking.com" },
+      ],
+    },
+  ];
+
   // On mobile (<768px), the carousel snaps to centre and locks the AIR
   // (recommended) card as the default — per ปอน 2026-05-20 night: AIR is the
   // recommended service, so on load AIR is centred and SEA + TRUCK peek
@@ -235,7 +238,7 @@ export function CustomsModeCards() {
                 <div className="absolute top-3 right-3 z-20">
                   <span className="relative inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-yellow-300 text-primary-800 text-[10px] md:text-[11px] font-black tracking-[0.10em] uppercase shadow-[0_4px_12px_rgba(255,213,0,0.45)]">
                     <Sparkles className="w-3 h-3" strokeWidth={2.8} />
-                    แนะนำ
+                    {t("recommended")}
                     <span aria-hidden className="absolute inset-0 rounded-full bg-yellow-300 animate-ping opacity-60" />
                   </span>
                 </div>
@@ -303,7 +306,7 @@ export function CustomsModeCards() {
                       isFeatured ? "text-yellow-200/90" : "text-primary-700/80 dark:text-primary-300/80",
                     ].join(" ")}
                   >
-                    ค่าพิธีการศุลกากร · เริ่มต้น
+                    {t("priceLabel")}
                   </div>
                   <div className="mt-1 flex items-baseline gap-1.5">
                     <span
@@ -320,7 +323,7 @@ export function CustomsModeCards() {
                         isFeatured ? "text-yellow-200" : "text-primary-700 dark:text-primary-300",
                       ].join(" ")}
                     >
-                      บาท
+                      {t("baht")}
                     </span>
                     <span
                       className={[
@@ -328,7 +331,7 @@ export function CustomsModeCards() {
                         isFeatured ? "text-white/70" : "text-muted",
                       ].join(" ")}
                     >
-                      + ค่าใช้จ่ายอื่น
+                      {t("plusOtherFees")}
                     </span>
                   </div>
                 </div>
@@ -401,7 +404,7 @@ export function CustomsModeCards() {
                       isFeatured ? "text-white/65" : "text-foreground/55",
                     ].join(" ")}
                   >
-                    พาร์ทเนอร์
+                    {t("partners")}
                   </div>
                   <div className="grid grid-cols-4 gap-1.5 items-center">
                     {c.carriers.map((carrier) => (
@@ -410,7 +413,7 @@ export function CustomsModeCards() {
                         href={carrier.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        aria-label={`เปิดเว็บไซต์ ${carrier.name}`}
+                        aria-label={t("openWebsite", { name: carrier.name })}
                         title={carrier.name}
                         className={[
                           "relative h-7 md:h-8 rounded-md flex items-center justify-center p-1 transition-all hover:scale-110",
@@ -447,7 +450,7 @@ export function CustomsModeCards() {
                   ].join(" ")}
                 >
                   <Lock className="w-3.5 h-3.5" strokeWidth={2.6} />
-                  ขอราคา {c.mode} ฟรี
+                  {t("requestPrice", { mode: t(`mode_${c.slug}`) })}
                   <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.6} />
                 </Link>
                 <TrackedExternalLink
@@ -463,7 +466,7 @@ export function CustomsModeCards() {
                   ].join(" ")}
                 >
                   <Phone className="w-3.5 h-3.5" strokeWidth={2.6} />
-                  062-603-0456 · ปรึกษา LINE
+                  {t("ctaLineConsult")}
                 </TrackedExternalLink>
               </div>
             </article>

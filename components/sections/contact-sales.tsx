@@ -3,84 +3,92 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { Phone, Sparkles, Headset, Award, MessageCircle, ChevronLeft, ChevronRight, Truck } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { trackCtaClick } from "@/lib/analytics";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
 const LINE_URL = "/line";
 
 type SalesPerson = {
+  id: string;
   name: string;
-  role: string;
-  tagline: string;
+  roleKey: string;
+  taglineKey: string;
   phone: string;
   image: string;
   useContain?: boolean;
   badge: string;
   badgeIcon: typeof Award;
-  alt: string;
+  altKey: string;
 };
 
 const SALES: SalesPerson[] = [
   {
+    id: "may",
     name: "เมย์",
-    role: "ฝ่ายขาย (Sales)",
-    tagline: "นำเข้า-ส่งออก ครบวงจร ปรึกษาฟรี ปิดดีลให้จบในที่เดียว",
+    roleKey: "roleSales",
+    taglineKey: "taglineMay",
     phone: "066-125-3006",
     image: "/images/Character_Icon/may.png",
     badge: "Sales Expert",
     badgeIcon: Award,
-    alt: "ฝ่ายขายเมย์ Pacred",
+    altKey: "altMay",
   },
   {
+    id: "nat",
     name: "แนท",
-    role: "ฝ่ายขาย (Sales)",
-    tagline: "นำเข้าสั่งซื้อจีน ทุกแพลตฟอร์ม ครบจบในที่เดียว",
+    roleKey: "roleSales",
+    taglineKey: "taglineNat",
     phone: "066-131-0253",
     image: "/images/pacred-logo-red.png",
     useContain: true,
     badge: "China Cargo Expert",
     badgeIcon: Sparkles,
-    alt: "ฝ่ายขายแนท Pacred",
+    altKey: "altNat",
   },
   {
+    id: "pee",
     name: "พี",
-    role: "ฝ่ายขาย (Sales)",
-    tagline: "นำเข้า-ส่งออก ครบวงจร ปรึกษาฟรี ดูแลจบในที่เดียว",
+    roleKey: "roleSales",
+    taglineKey: "taglinePee",
     phone: "061-779-9299",
     image: "/images/Character_Icon/pee01.png",
     badge: "Sales Expert",
     badgeIcon: Award,
-    alt: "ฝ่ายขายพี Pacred",
+    altKey: "altPee",
   },
   {
+    id: "toey",
     name: "เตย",
-    role: "ฝ่ายขาย (Sales)",
-    tagline: "นำเข้า-ส่งออก สั่งซื้อจีน ปรึกษาฟรี ปิดดีลไว",
+    roleKey: "roleSales",
+    taglineKey: "taglineToey",
     phone: "099-253-1415",
     image: "/images/Character_Icon/Toey01.png",
     badge: "Sales Expert",
     badgeIcon: Award,
-    alt: "ฝ่ายขายเตย Pacred",
+    altKey: "altToey",
   },
   {
+    id: "win",
     name: "วิน",
-    role: "ผู้จัดการโลจิสติกส์",
-    tagline: "ดูแลทุกขั้นตอน ตอบทุกคำถาม ตลอดการใช้บริการ",
+    roleKey: "roleLogistics",
+    taglineKey: "taglineWin",
     phone: "062-603-0456",
     image: "/images/Character_Icon/win01.png",
     badge: "Logistics Manager",
     badgeIcon: Truck,
-    alt: "ผู้จัดการโลจิสติกส์วิน Pacred",
+    altKey: "altWin",
   },
   {
+    id: "ploy",
     name: "พลอย",
-    role: "ดูแลลูกค้า (CS)",
-    tagline: "พร้อมช่วยเหลือ ดูแลคุณทุกเรื่องนำเข้า-ส่งออก เร็ว ใส่ใจ",
+    roleKey: "roleCs",
+    taglineKey: "taglinePloy",
     phone: "062-603-4456",
     image: "/images/Character_Icon/ploy01.png",
     badge: "Customer Service",
     badgeIcon: Headset,
-    alt: "ทีมดูแลลูกค้าพลอย Pacred",
+    altKey: "altPloy",
   },
 ];
 
@@ -97,6 +105,7 @@ interface ContactSalesProps {
 }
 
 export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = false, compact = false }: ContactSalesProps = {}) {
+  const t = useTranslations("contactSales");
   // Reorder so the requested person lands at the visual middle position of the row.
   const featuredIdx = SALES.findIndex((s) => s.name === featuredName);
   const middleIdx = Math.floor(SALES.length / 2);
@@ -184,11 +193,11 @@ export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = 
             CONTACT OUR TEAM
           </div>
           <h2 className="text-[20px] md:text-[38px] leading-[1.2] md:leading-[1.15] font-black tracking-[-0.03em] md:tracking-[-0.04em] text-[#111827] dark:text-white">
-            ทักทีมงาน{" "}
-            <span className="text-primary-600">Pacred</span> ได้เลย
+            {t("headingBefore")}{" "}
+            <span className="text-primary-600">Pacred</span> {t("headingAfter")}
           </h2>
           <p className="mt-2 text-[12px] md:text-[15px] leading-[1.5] md:leading-[1.55] font-medium text-muted max-w-[680px]">
-            ทีมขายและทีมดูแลลูกค้าพร้อมช่วยคุณ — ตอบเร็วทุกช่องทาง ตลอด 24 ชม.
+            {t("subheading")}
           </p>
         </div>
 
@@ -197,7 +206,7 @@ export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = 
         {/* Prev / Next chevrons — desktop only, hidden at scroll boundaries */}
         <button
           type="button"
-          aria-label="เลื่อนซ้าย"
+          aria-label={t("scrollLeft")}
           onClick={() => scrollByCard(-1)}
           className={`hidden md:flex absolute left-0 md:-left-3 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-white dark:bg-surface shadow-[0_6px_18px_rgba(15,23,42,0.18)] border border-border items-center justify-center text-[#111827] dark:text-white hover:bg-primary-50 hover:border-primary-300 hover:text-primary-700 transition-all ${canScrollLeft ? "opacity-100" : "opacity-0 pointer-events-none"}`}
         >
@@ -205,7 +214,7 @@ export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = 
         </button>
         <button
           type="button"
-          aria-label="เลื่อนขวา"
+          aria-label={t("scrollRight")}
           onClick={() => scrollByCard(1)}
           className={`hidden md:flex absolute right-0 md:-right-3 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-white dark:bg-surface shadow-[0_6px_18px_rgba(15,23,42,0.18)] border border-border items-center justify-center text-[#111827] dark:text-white hover:bg-primary-50 hover:border-primary-300 hover:text-primary-700 transition-all ${canScrollRight ? "opacity-100" : "opacity-0 pointer-events-none"}`}
         >
@@ -267,7 +276,7 @@ export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = 
                     >
                       <Image
                         src={s.image}
-                        alt={s.alt}
+                        alt={t(s.altKey)}
                         fill
                         sizes="72px"
                         className={s.useContain ? "object-contain p-2" : "object-cover"}
@@ -302,7 +311,7 @@ export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = 
                         ].join(" ")}
                       >
                         <BadgeIcon className="w-3 h-3" strokeWidth={2.6} />
-                        {s.role}
+                        {t(s.roleKey)}
                       </div>
                     </div>
                   </div>
@@ -314,7 +323,7 @@ export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = 
                       featured ? "text-white/90" : "text-muted",
                     ].join(" ")}
                   >
-                    {s.tagline}
+                    {t(s.taglineKey)}
                   </p>
 
                   {/* Specialty badge */}
@@ -334,7 +343,7 @@ export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = 
                   <div className="mt-4 md:mt-5 grid grid-cols-2 gap-2">
                     <a
                       href={`tel:${s.phone.replace(/-/g, "")}`}
-                      onClick={() => trackCtaClick("sales_phone", `home_sales_${s.name}`, { rep: s.name, role: s.role })}
+                      onClick={() => trackCtaClick("sales_phone", `home_sales_${s.name}`, { rep: s.name, role: s.roleKey })}
                       className={[
                         "inline-flex items-center justify-center gap-1.5 h-10 rounded-xl text-[12px] md:text-[12.5px] font-black border transition-all duration-300",
                         featured
@@ -349,7 +358,7 @@ export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = 
                       href={LINE_URL}
                       cta="line_consult"
                       surface="contact_sales"
-                      ctaProps={{ rep: s.name, role: s.role }}
+                      ctaProps={{ rep: s.name, role: s.roleKey }}
                       className={[
                         "relative inline-flex items-center justify-center gap-1.5 h-10 rounded-xl text-[12px] md:text-[12.5px] font-black transition-all duration-300 overflow-hidden",
                         featured
@@ -358,7 +367,7 @@ export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = 
                       ].join(" ")}
                     >
                       <MessageCircle className="w-3.5 h-3.5" strokeWidth={2.6} fill="currentColor" />
-                      ทักไลน์
+                      {t("chatLine")}
                     </TrackedExternalLink>
                   </div>
                 </div>
@@ -373,15 +382,15 @@ export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = 
         <div className="mt-6 md:mt-8 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[11.5px] md:text-[12.5px] font-bold text-muted">
           <span className="inline-flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-            ตอบไว ภายใน 5 นาที
+            {t("assuranceFast")}
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-            ปรึกษาฟรี ไม่มีค่าใช้จ่าย
+            {t("assuranceFree")}
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-            ทีมมืออาชีพ 14+ ปี
+            {t("assuranceExpert")}
           </span>
         </div>
         )}

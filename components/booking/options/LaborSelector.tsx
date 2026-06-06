@@ -10,6 +10,7 @@
  * effect — recorded so the rep can plan the job).
  */
 
+import { useTranslations } from "next-intl";
 import { Minus, Plus, Users } from "lucide-react";
 
 const MAX = 4;
@@ -22,6 +23,7 @@ interface LaborSelectorProps {
 }
 
 export function LaborSelector({ count, heavyLift, onChange }: LaborSelectorProps) {
+  const t = useTranslations("booking");
   const safe = Math.max(MIN, Math.min(MAX, count));
 
   function step(delta: number) {
@@ -33,7 +35,7 @@ export function LaborSelector({ count, heavyLift, onChange }: LaborSelectorProps
       <legend className="px-2 inline-flex items-center gap-2 text-[13px] md:text-[14px] font-black text-[#111827] dark:text-white">
         <Users className="w-4 h-4 text-primary-600" strokeWidth={2.6} />
         {/* i18n-key: booking.selector.labor.title */}
-        แรงงาน
+        {t("selectors.labor.label")}
       </legend>
       <p className="mt-1 text-[12px] md:text-[12.5px] leading-[1.55] text-muted font-medium">
         {/* i18n-key: booking.selector.labor.help */}
@@ -43,7 +45,7 @@ export function LaborSelector({ count, heavyLift, onChange }: LaborSelectorProps
       <div className="mt-4 flex items-center justify-between gap-3">
         <span className="text-[12.5px] md:text-[13px] font-bold text-foreground">
           {/* i18n-key: booking.selector.labor.workers */}
-          คนงาน
+          {t("selectors.labor.stepperLabel")}
         </span>
         <div className="inline-flex items-center gap-3">
           <button

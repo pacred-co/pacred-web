@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
 import { CONTACT } from "@/components/seo/site";
 
@@ -18,6 +19,7 @@ import { CONTACT } from "@/components/seo/site";
  * chain to read the canonical column directly.
  */
 export async function SalesRepCard({ profileId }: { profileId: string }) {
+  const t = await getTranslations("salesRepCard");
   const supabase = await createClient();
   const { data: customer } = await supabase
     .from("profiles")
@@ -48,13 +50,13 @@ export async function SalesRepCard({ profileId }: { profileId: string }) {
 
   const displayName = extras?.display_name
     ?? `${rep.first_name ?? ""} ${rep.last_name ?? ""}`.trim()
-    ?? "เซลล์ดูแล";
+    ?? t("repFallbackName");
   const phone = extras?.direct_phone ?? rep.phone ?? null;
   const initial = (displayName || "?").charAt(0).toUpperCase();
 
   return (
     <div className="rounded-2xl border-2 border-primary-500/30 bg-gradient-to-br from-primary-50 to-primary-100/30 p-4 shadow-sm">
-      <p className="text-[10px] uppercase tracking-widest text-primary-700 font-semibold">ผู้ดูแล</p>
+      <p className="text-[10px] uppercase tracking-widest text-primary-700 font-semibold">{t("supervisor")}</p>
       <div className="mt-2 flex items-center gap-3">
         <div className="relative h-14 w-14 rounded-full overflow-hidden border-2 border-white bg-surface-alt flex items-center justify-center shrink-0 shadow-md">
           {rep.avatar_url ? (
@@ -64,7 +66,7 @@ export async function SalesRepCard({ profileId }: { profileId: string }) {
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="font-bold text-foreground text-sm leading-tight">เซลล์ {displayName}</p>
+          <p className="font-bold text-foreground text-sm leading-tight">{t("repName", { name: displayName })}</p>
           {extras?.department && (
             <p className="text-[10px] text-muted">{extras.department}</p>
           )}
@@ -86,17 +88,18 @@ export async function SalesRepCard({ profileId }: { profileId: string }) {
  *  rep yet — points to Pacred's main contact number. Keeps the dashboard
  *  visually balanced (no missing card slot) and gives the user someone to
  *  call from day one. */
-function SalesRepFallback() {
+async function SalesRepFallback() {
+  const t = await getTranslations("salesRepCard");
   return (
     <div className="rounded-2xl border-2 border-primary-500/30 bg-gradient-to-br from-primary-50 to-primary-100/30 p-4 shadow-sm">
-      <p className="text-[10px] uppercase tracking-widest text-primary-700 font-semibold">ผู้ดูแล</p>
+      <p className="text-[10px] uppercase tracking-widest text-primary-700 font-semibold">{t("supervisor")}</p>
       <div className="mt-2 flex items-center gap-3">
         <div className="relative h-14 w-14 rounded-full overflow-hidden border-2 border-white bg-surface-alt flex items-center justify-center shrink-0 shadow-md">
           <span className="text-xl font-bold text-primary-700">P</span>
         </div>
         <div className="min-w-0 flex-1">
-          <p className="font-bold text-foreground text-sm leading-tight">ทีมงาน Pacred</p>
-          <p className="text-[10px] text-muted">Customer Care</p>
+          <p className="font-bold text-foreground text-sm leading-tight">{t("teamName")}</p>
+          <p className="text-[10px] text-muted">{t("customerCare")}</p>
           <a
             href={`tel:${CONTACT.phoneCompany}`}
             className="mt-1 inline-flex items-center gap-1 text-xs text-primary-700 font-mono hover:underline"

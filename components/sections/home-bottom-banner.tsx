@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { Phone } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
 /**
@@ -11,14 +12,15 @@ import { TrackedExternalLink } from "@/components/analytics/tracked-link";
  *
  * Layout: image bg + banner-wide LINE click (z-0) + text/QR/phones overlay (z-10).
  */
-export function HomeBottomBanner() {
+export async function HomeBottomBanner() {
+  const t = await getTranslations("homeBottomBanner");
   return (
     <>
       {/* ── Desktop · full-bleed banner ── */}
       <div className="hidden md:block relative w-screen left-1/2 -translate-x-1/2 mt-12 group">
         <Image
           src="/images/bannerdesktop/bannerbottom02.png"
-          alt="Pacred Shipping — เร็ว ไว ไม่มีคำว่าทำไม่ได้ · นำเข้า ส่งออก เคลียร์ภาษี"
+          alt={t("imageAlt")}
           width={3840}
           height={800}
           sizes="100vw"
@@ -33,21 +35,21 @@ export function HomeBottomBanner() {
           cta="line_banner"
           surface="home_bottom_banner"
           className="absolute inset-0 z-0"
-          aria-label="ทักไลน์ Pacred Shipping"
+          aria-label={t("lineAria")}
         >
-          <span className="sr-only">ทักไลน์ Pacred Shipping</span>
+          <span className="sr-only">{t("lineAria")}</span>
         </TrackedExternalLink>
 
         {/* Text overlay (z-10) — left column · gradient mask handled by the image itself */}
         <div className="absolute inset-y-0 left-0 right-[45%] z-10 pointer-events-none flex flex-col justify-center px-[6%] lg:px-[8%] xl:px-[10%] py-2 lg:py-3">
           <h3 className="text-[20px] lg:text-[30px] xl:text-[40px] font-black text-white leading-[1.05] tracking-[-0.025em] drop-shadow-[0_3px_12px_rgba(0,0,0,0.6)]">
-            <span className="text-yellow-300">เร็ว ไว ไม่มีคำว่าทำไม่ได้</span>
+            <span className="text-yellow-300">{t("slogan")}</span>
             <br />
-            เลือก <span className="text-yellow-300">Pacred Shipping</span>
+            {t("chooseLabel")} <span className="text-yellow-300">Pacred Shipping</span>
           </h3>
           <p className="mt-1 lg:mt-1.5 text-[11.5px] lg:text-[13px] xl:text-[15px] leading-[1.4] font-medium text-white/95 drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]">
-            นำเข้า-ส่งออก · เคลียร์ภาษี · สั่งซื้อ · พิธีการศุลกากร{" "}
-            <strong className="text-yellow-200 font-black">ปรึกษาฟรี 24 ชม.</strong>
+            {t("services")}{" "}
+            <strong className="text-yellow-200 font-black">{t("consultFree")}</strong>
           </p>
 
           {/* CTA row — QR + 2 phone tel: badges */}
@@ -60,17 +62,17 @@ export function HomeBottomBanner() {
             >
               <Image
                 src="/images/qr-line-oa.png"
-                alt="สแกน QR เพื่อทักไลน์ Pacred Shipping"
+                alt={t("qrAlt")}
                 width={140}
                 height={140}
                 className="w-[60px] lg:w-[74px] xl:w-[88px] h-auto block rounded-sm"
               />
               <div className="leading-tight">
                 <p className="text-[9px] lg:text-[10.5px] xl:text-[11.5px] font-bold text-primary-600 tracking-[0.05em] uppercase">
-                  สแกน QR
+                  {t("scanQr")}
                 </p>
                 <p className="text-[12.5px] lg:text-[15px] xl:text-[17px] font-black text-primary-700 leading-tight">
-                  ทักไลน์ฟรี →
+                  {t("chatLineFree")}
                 </p>
               </div>
             </TrackedExternalLink>
@@ -103,7 +105,7 @@ export function HomeBottomBanner() {
       <div className="md:hidden relative w-screen left-1/2 -translate-x-1/2 mt-8 group aspect-[6/5] overflow-hidden">
         <Image
           src="/images/bannermobile/pacredbannermobile01.png"
-          alt="Pacred Shipping — เร็ว ไว ไม่มีคำว่าทำไม่ได้ · นำเข้า ส่งออก เคลียร์ภาษี"
+          alt={t("imageAlt")}
           fill
           sizes="100vw"
           className="object-cover object-top"
@@ -116,21 +118,21 @@ export function HomeBottomBanner() {
           cta="line_banner_mobile"
           surface="home_bottom_banner_mobile"
           className="absolute inset-0 z-0"
-          aria-label="ทักไลน์ Pacred Shipping"
+          aria-label={t("lineAria")}
         >
-          <span className="sr-only">ทักไลน์ Pacred Shipping</span>
+          <span className="sr-only">{t("lineAria")}</span>
         </TrackedExternalLink>
 
         <div className="absolute inset-0 z-10 pointer-events-none px-4 pt-3.5 pb-6 bg-gradient-to-r from-black/55 via-black/20 to-transparent flex flex-col items-start gap-2.5">
           <div>
             <h3 className="text-[24px] font-black text-white leading-[1.1] tracking-[-0.02em] drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
-              <span className="text-yellow-300">เร็ว ไว ไม่มีคำว่าทำไม่ได้</span>
+              <span className="text-yellow-300">{t("slogan")}</span>
               <br />
-              เลือก <span className="text-yellow-300">Pacred Shipping</span>
+              {t("chooseLabel")} <span className="text-yellow-300">Pacred Shipping</span>
             </h3>
             <p className="mt-2 text-[13.5px] leading-[1.45] font-medium text-white/95 drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]">
-              นำเข้า-ส่งออก · เคลียร์ภาษี · สั่งซื้อ · พิธีการศุลกากร{" "}
-              <strong className="text-yellow-200 font-black">ปรึกษาฟรี 24 ชม.</strong>
+              {t("services")}{" "}
+              <strong className="text-yellow-200 font-black">{t("consultFree")}</strong>
             </p>
           </div>
 
@@ -140,11 +142,11 @@ export function HomeBottomBanner() {
             cta="line_qr_banner_mobile"
             surface="home_bottom_banner_mobile_qr"
             className="inline-block bg-white rounded-xl p-1.5 shadow-[0_8px_22px_rgba(0,0,0,0.32)] pointer-events-auto"
-            aria-label="สแกน QR เพื่อทักไลน์ Pacred Shipping"
+            aria-label={t("qrAlt")}
           >
             <Image
               src="/images/qr-line-oa.png"
-              alt="สแกน QR เพื่อทักไลน์ Pacred Shipping"
+              alt={t("qrAlt")}
               width={140}
               height={140}
               className="w-[80px] h-auto block rounded-sm"

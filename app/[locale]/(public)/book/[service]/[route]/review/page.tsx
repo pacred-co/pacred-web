@@ -1,5 +1,5 @@
 import { redirect } from "@/i18n/navigation";
-import { getLocale } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Footer } from "@/components/sections/footer";
@@ -70,6 +70,7 @@ export default async function BookingReviewPage({
   const { service: serviceParam, route: routeParam } = await params;
   const sp = await searchParams;
   const locale = await getLocale();
+  const t = await getTranslations("booking");
 
   const draftId =
     typeof sp.draft === "string" && sp.draft.length > 0 ? sp.draft : null;
@@ -202,15 +203,15 @@ export default async function BookingReviewPage({
       <main className="mx-auto w-full max-w-[920px] px-4 py-10">
         {/* i18n-key: booking.review.kicker */}
         <p className="text-xs font-semibold tracking-widest text-primary-600">
-          REVIEW · ตรวจสอบการจอง
+          {t("review.kicker")}
         </p>
         {/* i18n-key: booking.review.title */}
         <h1 className="mt-1 text-2xl font-bold text-foreground sm:text-3xl">
-          ตรวจสอบรายละเอียดก่อนยืนยัน
+          {t("review.heading")}
         </h1>
         {/* i18n-key: booking.review.subtitle */}
         <p className="mt-1 text-sm text-muted">
-          ดูตัวเลือกที่เลือกและราคาประมาณการอีกครั้ง — กดยืนยันเพื่อให้ทีมขายติดต่อกลับ
+          {t("review.subtitle")}
         </p>
 
         <div className="mt-6 grid gap-5 lg:grid-cols-[1fr_360px] lg:items-start">
@@ -224,9 +225,10 @@ export default async function BookingReviewPage({
               docMode={draft.doc_mode}
               pickup={draft.pickup_address}
               dropoff={draft.dropoff_address}
+              t={t}
             />
 
-            <OptionsSummaryCard options={options ?? []} />
+            <OptionsSummaryCard options={options ?? []} t={t} />
 
             <ReviewForm
               bookingId={draft.id}
@@ -244,9 +246,10 @@ export default async function BookingReviewPage({
             <EstimatePanel
               total={Number(draft.estimate_total ?? 0)}
               rows={breakdown}
+              t={t}
             />
 
-            <FallbackChannelsCard />
+            <FallbackChannelsCard t={t} />
           </aside>
         </div>
       </main>
@@ -267,6 +270,7 @@ function ServiceCard({
   docMode,
   pickup,
   dropoff,
+  t,
 }: {
   title: string;
   sub: string;
@@ -275,12 +279,13 @@ function ServiceCard({
   docMode: string;
   pickup: string | null;
   dropoff: string | null;
+  t: Awaited<ReturnType<typeof getTranslations<"booking">>>;
 }) {
   // i18n-key: booking.review.docMode.{none|tax_invoice|customs_declaration}
   const DOC_LABEL: Record<string, string> = {
-    none: "ไม่รับเอกสาร",
-    tax_invoice: "ออกใบกำกับภาษี",
-    customs_declaration: "ออกใบขนสินค้า",
+    none: t("review.docMode.none"),
+    tax_invoice: t("review.docMode.tax_invoice"),
+    customs_declaration: t("review.docMode.customs_declaration"),
   };
 
   return (
@@ -290,25 +295,31 @@ function ServiceCard({
 
       <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 text-sm">
         {routeSlug && (
-          <Row label="เส้นทาง" value={routeSlug} mono />
+          <Row label={t("review.field.route")} value={routeSlug} mono />
         )}
         {transportMode && (
-          <Row label="ประเภทขนส่ง" value={transportMode} />
+          <Row label={t("review.field.transportMode")} value={transportMode} />
         )}
-        <Row label="การจัดการเอกสาร" value={DOC_LABEL[docMode] ?? docMode} />
-        {pickup && <Row label="จุดรับสินค้า" value={pickup} />}
-        {dropoff && <Row label="จุดส่งสินค้า" value={dropoff} />}
+        <Row label={t("review.field.docHandling")} value={DOC_LABEL[docMode] ?? docMode} />
+        {pickup && <Row label={t("review.field.pickup")} value={pickup} />}
+        {dropoff && <Row label={t("review.field.dropoff")} value={dropoff} />}
       </dl>
     </section>
   );
 }
 
-function OptionsSummaryCard({ options }: { options: BookingOptionRow[] }) {
+function OptionsSummaryCard({
+  options,
+  t,
+}: {
+  options: BookingOptionRow[];
+  t: Awaited<ReturnType<typeof getTranslations<"booking">>>;
+}) {
   if (options.length === 0) {
     return (
       <section className="rounded-2xl border border-dashed border-border p-5 text-sm text-muted">
         {/* i18n-key: booking.review.options.empty */}
-        ไม่ได้เลือกตัวเลือกเพิ่มเติม — เป็นบริการมาตรฐาน
+        {t("review.options.empty")}
       </section>
     );
   }
@@ -316,7 +327,7 @@ function OptionsSummaryCard({ options }: { options: BookingOptionRow[] }) {
   return (
     <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
       {/* i18n-key: booking.review.options.title */}
-      <h3 className="text-sm font-bold text-foreground">ตัวเลือกที่เลือก</h3>
+      <h3 className="text-sm font-bold text-foreground">{t("review.options.title")}</h3>
       <ul className="mt-3 divide-y divide-border text-sm">
         {options.map((o) => (
           <li
@@ -342,15 +353,17 @@ function OptionsSummaryCard({ options }: { options: BookingOptionRow[] }) {
 function EstimatePanel({
   total,
   rows,
+  t,
 }: {
   total: number;
   rows: QuoteLine[];
+  t: Awaited<ReturnType<typeof getTranslations<"booking">>>;
 }) {
   return (
     <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
       {/* i18n-key: booking.review.estimate.title */}
       <p className="text-xs font-semibold tracking-widest text-primary-600">
-        ราคาประมาณการ
+        {t("review.estimate.title")}
       </p>
 
       {rows.length > 0 && (
@@ -376,7 +389,7 @@ function EstimatePanel({
 
       <div className="mt-3 border-t border-border pt-3 flex items-baseline justify-between">
         {/* i18n-key: booking.review.estimate.total */}
-        <p className="text-sm font-semibold text-foreground">รวมประมาณการ</p>
+        <p className="text-sm font-semibold text-foreground">{t("review.estimate.total")}</p>
         <p className="text-xl font-bold text-primary-600 tabular-nums">
           ฿{Number(total).toLocaleString("th-TH")}
         </p>
@@ -385,17 +398,21 @@ function EstimatePanel({
       {/* The estimate-honesty rule (§4.7) — must repeat here. */}
       {/* i18n-key: booking.review.estimate.disclaimer */}
       <p className="mt-2 text-[11px] leading-snug text-muted">
-        * ราคาเริ่มต้น — ทีมขายจะยืนยันราคาจริงหลังตรวจสินค้าและรายละเอียดงาน
+        {t("review.estimate.disclaimer")}
       </p>
     </section>
   );
 }
 
-function FallbackChannelsCard() {
+function FallbackChannelsCard({
+  t,
+}: {
+  t: Awaited<ReturnType<typeof getTranslations<"booking">>>;
+}) {
   return (
     <section className="mt-4 rounded-2xl border border-border bg-white dark:bg-surface p-4">
       {/* i18n-key: booking.review.help.title */}
-      <p className="text-xs font-semibold text-foreground">มีคำถาม?</p>
+      <p className="text-xs font-semibold text-foreground">{t("review.help.title")}</p>
       <div className="mt-2 flex flex-col gap-1.5 text-xs">
         <a
           href={LINE_OA.addFriendUrl}
@@ -403,13 +420,13 @@ function FallbackChannelsCard() {
           rel="noopener noreferrer"
           className="text-primary-600 hover:text-primary-700 hover:underline"
         >
-          ทักไลน์ {LINE_OA.premiumId}
+          {t("review.help.line", { id: LINE_OA.premiumId })}
         </a>
         <a
           href={`tel:${CONTACT.phone}`}
           className="text-primary-600 hover:text-primary-700 hover:underline"
         >
-          โทร {CONTACT.phoneDisplay}
+          {t("review.help.phone", { phone: CONTACT.phoneDisplay })}
         </a>
       </div>
     </section>

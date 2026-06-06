@@ -13,27 +13,28 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { Truck, Ship, Plane, Package, Calculator, Sparkles } from "lucide-react";
+import { useTranslations } from "next-intl";
 import {
   getCustomerImportEstimate,
   type CustomerEstimateMode,
 } from "@/actions/forwarder-quote";
 
 const WAREHOUSES = [
-  { id: "1", label: "กวางโจว (Guangzhou)" },
-  { id: "2", label: "อี้อู (Yiwu)" },
+  { id: "1", labelKey: "warehouseGuangzhou" },
+  { id: "2", labelKey: "warehouseYiwu" },
 ] as const;
 
 const PRODUCT_TYPES = [
-  { id: "1", label: "ทั่วไป" },
-  { id: "2", label: "มอก." },
-  { id: "3", label: "อย." },
-  { id: "4", label: "พิเศษ" },
+  { id: "1", labelKey: "productGeneral" },
+  { id: "2", labelKey: "productTis" },
+  { id: "3", labelKey: "productFda" },
+  { id: "4", labelKey: "productSpecial" },
 ] as const;
 
 const BASES = [
-  { id: "auto", label: "อัตโนมัติ (ราคาสูงสุด)" },
-  { id: "kg", label: "คิดตามน้ำหนัก (กก.)" },
-  { id: "cbm", label: "คิดตามปริมาตร (คิว)" },
+  { id: "auto", labelKey: "basisAuto" },
+  { id: "kg", labelKey: "basisKg" },
+  { id: "cbm", labelKey: "basisCbm" },
 ] as const;
 
 const MODE_ICON: Record<string, typeof Truck> = { "1": Truck, "2": Ship, "3": Plane };
@@ -43,6 +44,7 @@ function fmt(n: number): string {
 }
 
 export function ImportEstimateClient() {
+  const t = useTranslations("importEstimate");
   const [warehouse, setWarehouse] = useState<"1" | "2">("1");
   const [productType, setProductType] = useState<"1" | "2" | "3" | "4">("1");
   const [basis, setBasis] = useState<"auto" | "kg" | "cbm">("auto");
@@ -112,47 +114,47 @@ export function ImportEstimateClient() {
       <div className="rounded-2xl border border-border bg-white p-4 shadow-sm space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelCls}>โกดังต้นทาง</label>
+            <label className={labelCls}>{t("warehouseLabel")}</label>
             <select className={inputCls} value={warehouse} onChange={(e) => setWarehouse(e.target.value as "1" | "2")}>
-              {WAREHOUSES.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+              {WAREHOUSES.map((o) => <option key={o.id} value={o.id}>{t(o.labelKey)}</option>)}
             </select>
           </div>
           <div>
-            <label className={labelCls}>ประเภทสินค้า</label>
+            <label className={labelCls}>{t("productTypeLabel")}</label>
             <select className={inputCls} value={productType} onChange={(e) => setProductType(e.target.value as "1"|"2"|"3"|"4")}>
-              {PRODUCT_TYPES.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+              {PRODUCT_TYPES.map((o) => <option key={o.id} value={o.id}>{t(o.labelKey)}</option>)}
             </select>
           </div>
         </div>
 
         <div>
-          <label className={labelCls}>น้ำหนักรวม (กก.)</label>
-          <input className={inputCls} inputMode="decimal" placeholder="เช่น 25" value={weight} onChange={(e) => setWeight(e.target.value)} />
+          <label className={labelCls}>{t("weightLabel")}</label>
+          <input className={inputCls} inputMode="decimal" placeholder={t("weightPlaceholder")} value={weight} onChange={(e) => setWeight(e.target.value)} />
         </div>
 
         <div>
-          <label className={labelCls}>ขนาดพัสดุ (ซม.) — กว้าง × ยาว × สูง → คำนวณคิวอัตโนมัติ</label>
+          <label className={labelCls}>{t("dimensionsLabel")}</label>
           <div className="grid grid-cols-3 gap-2">
-            <input className={inputCls} inputMode="decimal" placeholder="กว้าง" value={w} onChange={(e) => setW(e.target.value)} />
-            <input className={inputCls} inputMode="decimal" placeholder="ยาว" value={l} onChange={(e) => setL(e.target.value)} />
-            <input className={inputCls} inputMode="decimal" placeholder="สูง" value={h} onChange={(e) => setH(e.target.value)} />
+            <input className={inputCls} inputMode="decimal" placeholder={t("widthPlaceholder")} value={w} onChange={(e) => setW(e.target.value)} />
+            <input className={inputCls} inputMode="decimal" placeholder={t("lengthPlaceholder")} value={l} onChange={(e) => setL(e.target.value)} />
+            <input className={inputCls} inputMode="decimal" placeholder={t("heightPlaceholder")} value={h} onChange={(e) => setH(e.target.value)} />
           </div>
           <div className="mt-2 flex items-center gap-2">
-            <span className="text-xs text-muted">หรือกรอกคิวตรงๆ:</span>
-            <input className={`${inputCls} max-w-[120px]`} inputMode="decimal" placeholder="คิว (CBM)" value={directCbm} onChange={(e) => setDirectCbm(e.target.value)} />
-            {cbm > 0 && <span className="text-xs font-bold text-primary-600">= {cbm} คิว</span>}
+            <span className="text-xs text-muted">{t("orEnterCbm")}</span>
+            <input className={`${inputCls} max-w-[120px]`} inputMode="decimal" placeholder={t("cbmPlaceholder")} value={directCbm} onChange={(e) => setDirectCbm(e.target.value)} />
+            {cbm > 0 && <span className="text-xs font-bold text-primary-600">{t("cbmEquals", { cbm })}</span>}
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelCls}>วิธีคิดราคา</label>
+            <label className={labelCls}>{t("basisLabel")}</label>
             <select className={inputCls} value={basis} onChange={(e) => setBasis(e.target.value as "auto"|"kg"|"cbm")}>
-              {BASES.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+              {BASES.map((o) => <option key={o.id} value={o.id}>{t(o.labelKey)}</option>)}
             </select>
           </div>
           <div>
-            <label className={labelCls}>ตีลังไม้</label>
+            <label className={labelCls}>{t("crateLabel")}</label>
             <div className="flex items-center gap-2 pt-1.5">
               <button
                 type="button"
@@ -161,10 +163,10 @@ export function ImportEstimateClient() {
                   crate ? "border-primary-500 bg-primary-50 text-primary-700" : "border-border bg-white text-muted"
                 }`}
               >
-                <Package className="h-3.5 w-3.5" /> {crate ? "ตีลังไม้" : "ไม่ตีลัง"}
+                <Package className="h-3.5 w-3.5" /> {crate ? t("crateOn") : t("crateOff")}
               </button>
               {crate && (
-                <input className={`${inputCls} max-w-[100px] py-1.5`} inputMode="decimal" value={crateThb} onChange={(e) => setCrateThb(e.target.value)} aria-label="ค่าตีลัง" />
+                <input className={`${inputCls} max-w-[100px] py-1.5`} inputMode="decimal" value={crateThb} onChange={(e) => setCrateThb(e.target.value)} aria-label={t("crateCostAria")} />
               )}
             </div>
           </div>
@@ -174,15 +176,15 @@ export function ImportEstimateClient() {
       {/* ── Result ── */}
       <div className="rounded-2xl border border-border bg-gradient-to-br from-rose-50/40 via-white to-white p-4 shadow-sm">
         <h3 className="mb-1 flex items-center gap-2 text-sm font-bold text-foreground">
-          <Calculator className="h-4 w-4 text-primary-600" /> ราคาประเมินขนส่งจีน→ไทย
+          <Calculator className="h-4 w-4 text-primary-600" /> {t("resultTitle")}
         </h3>
         <p className="mb-3 text-[11px] text-muted">
-          เปลี่ยนตัวเลือก ราคาจะคำนวณใหม่อัตโนมัติ · <b>เป็นราคาประเมินเท่านั้น</b> — ราคาจริงคำนวณหลังชั่ง/วัดจริงที่โกดัง
+          {t.rich("resultNote", { b: (chunks) => <b>{chunks}</b> })}
         </p>
 
         {weightKg <= 0 && cbm <= 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-surface/40 px-4 py-8 text-center text-sm text-muted">
-            กรอกน้ำหนัก หรือ ขนาดพัสดุ เพื่อดูราคาประเมิน
+            {t("emptyState")}
           </div>
         ) : error ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</div>
@@ -203,18 +205,22 @@ export function ImportEstimateClient() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-bold text-foreground">{m.label}</span>
-                      {m.comingSoon && <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-[10px] font-bold text-neutral-600">เร็วๆ นี้</span>}
-                      {isCheapest && <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700"><Sparkles className="h-2.5 w-2.5" />คุ้มสุด</span>}
+                      {m.comingSoon && <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-[10px] font-bold text-neutral-600">{t("comingSoon")}</span>}
+                      {isCheapest && <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700"><Sparkles className="h-2.5 w-2.5" />{t("cheapest")}</span>}
                     </div>
                     {!m.comingSoon && m.hasRate ? (
                       <div className="text-[11px] text-muted">
-                        เรท {fmt(m.unitRate)}/{m.basisUsed === "kg" ? "กก." : "คิว"} × {fmt(m.billableValue)} {m.basisUsed === "kg" ? "กก." : "คิว"}
-                        {m.crateThb > 0 ? ` + ตีลัง ${fmt(m.crateThb)}` : ""}
+                        {t("rateLine", {
+                          unitRate: fmt(m.unitRate),
+                          unit: m.basisUsed === "kg" ? t("unitKg") : t("unitCbm"),
+                          billableValue: fmt(m.billableValue),
+                        })}
+                        {m.crateThb > 0 ? t("rateCrateSuffix", { crateThb: fmt(m.crateThb) }) : ""}
                       </div>
                     ) : m.comingSoon ? (
-                      <div className="text-[11px] text-muted">ยังไม่เปิดให้บริการ</div>
+                      <div className="text-[11px] text-muted">{t("notYetAvailable")}</div>
                     ) : (
-                      <div className="text-[11px] text-amber-700">ยังไม่มีเรทสำหรับเส้นทางนี้ — สอบถามทีมงาน</div>
+                      <div className="text-[11px] text-amber-700">{t("noRate")}</div>
                     )}
                   </div>
                   {!m.comingSoon && m.hasRate && (

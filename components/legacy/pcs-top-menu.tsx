@@ -1,4 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { signOutAction } from "@/actions/auth";
 import { countText, type PcsChromeData } from "@/lib/legacy/pcs-chrome";
@@ -23,7 +24,8 @@ function nf2(n: number): string {
  * ปอน wires the Pacred marketing routes (flagged, non-blocking — the legacy
  * portal links these out to the public CMS pages).
  */
-export function PcsTopMenu({ data }: { data: PcsChromeData }) {
+export async function PcsTopMenu({ data }: { data: PcsChromeData }) {
+  const t = await getTranslations("pcsTopMenu");
   return (
     <nav
       id="header-navbar"
@@ -84,7 +86,7 @@ export function PcsTopMenu({ data }: { data: PcsChromeData }) {
                 <ul className="nav navbar-nav">
                   <li className="nav-item d-n-1199">
                     <a href="#" className="mr-1">
-                      <span className="lang-follow-us-on">ติดตามเราบน </span>
+                      <span className="lang-follow-us-on">{t("followUsOn")} </span>
                     </a>
                   </li>
                   {/* Social icons — legacy top-menu.php L34-37 had 3 (Line/FB/YT);
@@ -115,7 +117,7 @@ export function PcsTopMenu({ data }: { data: PcsChromeData }) {
                 <ul className="nav navbar-nav flex-direction-unset float-right">
                   <li className="nav-item d-n-578">
                     <a href="#" className="at">
-                      <span className="lang-deposit-rate">ฝากสั่ง</span>{" "}
+                      <span className="lang-deposit-rate">{t("depositRate")}</span>{" "}
                       {nf2(data.rsDefault)}
                     </a>
                   </li>
@@ -126,17 +128,17 @@ export function PcsTopMenu({ data }: { data: PcsChromeData }) {
                   </li>
                   <li className="nav-item d-block d-sm-none">
                     <Link href="/" className="at">
-                      <span className="menu-home">หน้าแรก</span>
+                      <span className="menu-home">{t("home")}</span>
                     </Link>
                   </li>
                   <li className="nav-item">
                     <a href="#" className="at">
-                      &nbsp;<span className="lang-rate-forwarder">เรทนำเข้า</span>
+                      &nbsp;<span className="lang-rate-forwarder">{t("rateForwarder")}</span>
                     </a>
                   </li>
                   <li className="nav-item d-n-578">
                     <a href="#" className="at">
-                      &nbsp;<span>โปรโมชัน</span>
+                      &nbsp;<span>{t("promotion")}</span>
                     </a>
                   </li>
                   <li className="dropdown dropdown-user nav-item">
@@ -145,45 +147,45 @@ export function PcsTopMenu({ data }: { data: PcsChromeData }) {
                       href="#"
                       data-toggle="dropdown"
                     >
-                      <span className="lang-about-us">เกี่ยวกับเรา</span>{" "}
+                      <span className="lang-about-us">{t("aboutUs")}</span>{" "}
                       <i className="ft-chevron-down"></i>
                     </a>
                     <div className="dropdown-menu dropdown-menu-right">
                       <a className="dropdown-item" href="#">
-                        <span className="lang-about-us">เกี่ยวกับเรา</span>
+                        <span className="lang-about-us">{t("aboutUs")}</span>
                       </a>
                       <a className="dropdown-item" href="#">
-                        <span className="lang-our-service">บริการของเรา</span>
+                        <span className="lang-our-service">{t("ourService")}</span>
                       </a>
                       <a className="dropdown-item" href="#">
-                        <span>คำถามที่พบบ่อย</span>
+                        <span>{t("faq")}</span>
                       </a>
                       <a className="dropdown-item" href="#">
-                        <span className="lang-ch-address">ที่อยู่โกดังจีน</span>
+                        <span className="lang-ch-address">{t("chinaWarehouseAddress")}</span>
                       </a>
                       <a className="dropdown-item" href="#">
-                        <span>โปรโมชัน</span>
+                        <span>{t("promotion")}</span>
                       </a>
                       <a className="dropdown-item" href="#">
-                        <span>พื้นที่จัดส่ง Pacred เหมาๆ</span>
+                        <span>{t("deliveryArea")}</span>
                       </a>
                       <a className="dropdown-item" href="#">
-                        <span>วิธีการสั่งซื้อ</span>
+                        <span>{t("howToOrder")}</span>
                       </a>
                       <a className="dropdown-item" href="#">
-                        <span>สาระน่ารู้</span>
+                        <span>{t("articles")}</span>
                       </a>
                       <a className="dropdown-item" href="#">
-                        <span>วันหยุด PCS 2025</span>
+                        <span>{t("holidays2025")}</span>
                       </a>
                       <a className="dropdown-item" href="#">
-                        <span className="lang-terms-service">เงื่อนไขการใช้บริการ</span>
+                        <span className="lang-terms-service">{t("termsOfService")}</span>
                       </a>
                       <a className="dropdown-item" href="#">
-                        <span className="lang-privacy-policy">นโยบายความเป็นส่วนตัว</span>
+                        <span className="lang-privacy-policy">{t("privacyPolicy")}</span>
                       </a>
                       <a className="dropdown-item" href="#">
-                        <span className="lang-contact-us">ติดต่อเรา</span>
+                        <span className="lang-contact-us">{t("contactUs")}</span>
                       </a>
                     </div>
                   </li>
@@ -197,7 +199,7 @@ export function PcsTopMenu({ data }: { data: PcsChromeData }) {
                       aria-expanded="false"
                     >
                       <i className="flag-icon flag-icon-th"></i>
-                      <span className="selected-language">ภาษาไทย</span>{" "}
+                      <span className="selected-language">{t("languageThai")}</span>{" "}
                       <i className="ft-chevron-down"></i>
                     </a>
                     <div className="dropdown-menu" aria-labelledby="dropdown-flag">
@@ -208,7 +210,7 @@ export function PcsTopMenu({ data }: { data: PcsChromeData }) {
                         <i className="flag-icon flag-icon-ch"></i> Chinese
                       </a>
                       <a className="dropdown-item" href="#" data-language="th">
-                        <i className="flag-icon flag-icon-th"></i> ภาษาไทย
+                        <i className="flag-icon flag-icon-th"></i> {t("languageThai")}
                       </a>
                     </div>
                   </li>
@@ -229,17 +231,17 @@ export function PcsTopMenu({ data }: { data: PcsChromeData }) {
                     <div className="dropdown-menu dropdown-menu-right">
                       <Link className="dropdown-item" href="/profile">
                         <i className="ft-user"></i>
-                        <span className="lang-profile">แก้ไขโปรไฟล์</span>
+                        <span className="lang-profile">{t("editProfile")}</span>
                       </Link>
                       <Link className="dropdown-item" href="/account-settings">
                         <i className="ft-clipboard"></i>{" "}
-                        <span className="lang-account-settings">ตั้งค่าบัญชี</span>
+                        <span className="lang-account-settings">{t("accountSettings")}</span>
                       </Link>
                       <div className="dropdown-divider"></div>
                       <form action={signOutAction}>
                         <button type="submit" className="dropdown-item">
                           <i className="ft-power"></i>{" "}
-                          <span className="lang-logout">ออกจากระบบ</span>
+                          <span className="lang-logout">{t("logout")}</span>
                         </button>
                       </form>
                     </div>
@@ -255,7 +257,7 @@ export function PcsTopMenu({ data }: { data: PcsChromeData }) {
                     type="text"
                     name="url"
                     id="input-search"
-                    placeholder="พิมค้นหาสั่งซื้อสินค้า+วางลิ้งสินค้า1688 เถาเปา แปลภาษาไทยทันที"
+                    placeholder={t("searchPlaceholder")}
                   />
                   <button className="btn btn-main btn-search-h" type="submit">
                     <svg

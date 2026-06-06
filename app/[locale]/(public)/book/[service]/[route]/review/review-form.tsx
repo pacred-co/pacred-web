@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { Loader2, Phone, User, MessageSquare } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { submitBooking } from "@/actions/bookings";
@@ -29,13 +30,13 @@ interface Props {
 }
 
 // i18n-key: booking.review.errors.{key}
-const ERR_LABELS: Record<string, string> = {
-  invalid_input: "ข้อมูลไม่ครบหรือไม่ถูกต้อง",
-  not_signed_in: "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่",
-  not_found: "ไม่พบการจองนี้แล้ว — อาจถูกลบหรือหมดอายุ",
-  not_implemented:
-    "ระบบยังพร้อมไม่เต็มที่ — กรุณาทักไลน์ทีมขายเพื่อยืนยันการจอง",
-};
+// Known server error codes that have a dedicated translated label.
+const KNOWN_ERR_CODES = [
+  "invalid_input",
+  "not_signed_in",
+  "not_found",
+  "not_implemented",
+] as const;
 
 const INPUT_BASE =
   "w-full rounded-2xl border-[1.5px] border-border bg-white dark:bg-surface px-5 py-[15px] text-[15px] text-foreground placeholder:text-muted transition focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/10";
@@ -49,6 +50,7 @@ export function ReviewForm({
   initialContactLine,
   initialNote,
 }: Props) {
+  const t = useTranslations("booking");
   const router = useRouter();
   const [name, setName] = useState(initialContactName);
   const [phone, setPhone] = useState(initialContactPhone);
@@ -63,7 +65,7 @@ export function ReviewForm({
 
     if (!name.trim() || !phone.trim()) {
       // i18n-key: booking.review.errors.missing_contact
-      setError("กรุณากรอกชื่อและเบอร์โทรศัพท์");
+      setError(t("review.errors.missing_contact"));
       return;
     }
 
@@ -77,7 +79,11 @@ export function ReviewForm({
       });
 
       if (!res.ok) {
-        setError(ERR_LABELS[res.error] ?? res.error);
+        setError(
+          (KNOWN_ERR_CODES as readonly string[]).includes(res.error)
+            ? t(`review.errors.${res.error}`)
+            : res.error,
+        );
         return;
       }
 
@@ -101,15 +107,15 @@ export function ReviewForm({
       >
       <div>
         {/* i18n-key: booking.review.contact.title */}
-        <h3 className="text-sm font-bold text-foreground">ข้อมูลติดต่อกลับ</h3>
+        <h3 className="text-sm font-bold text-foreground">{t("review.contact.title")}</h3>
         {/* i18n-key: booking.review.contact.subtitle */}
         <p className="mt-1 text-xs text-muted">
-          ทีมขายจะใช้ข้อมูลนี้ติดต่อกลับเพื่อยืนยันราคาจริงและรายละเอียดงาน
+          {t("review.contact.subtitle")}
         </p>
       </div>
 
       <Field
-        label="ชื่อ-นามสกุล"
+        label={t("review.contact.nameLabel")}
         icon={<User className="h-4 w-4" />}
         required
       >
@@ -117,14 +123,14 @@ export function ReviewForm({
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="ชื่อ-นามสกุล"
+          placeholder={t("review.contact.namePlaceholder")}
           className={`${INPUT_BASE} pl-11`}
           autoComplete="name"
         />
       </Field>
 
       <Field
-        label="เบอร์โทรศัพท์"
+        label={t("review.contact.phoneLabel")}
         icon={<Phone className="h-4 w-4" />}
         required
       >
@@ -132,14 +138,14 @@ export function ReviewForm({
           type="tel"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
-          placeholder="081 234 5678"
+          placeholder={t("review.contact.phonePlaceholder")}
           className={`${INPUT_BASE} pl-11`}
           autoComplete="tel"
         />
       </Field>
 
       <Field
-        label="LINE ID (ไม่บังคับ)"
+        label={t("review.contact.lineLabel")}
         icon={<MessageSquare className="h-4 w-4" />}
       >
         <input
@@ -154,13 +160,13 @@ export function ReviewForm({
       <div>
         <label className="mb-1.5 block text-[12.5px] font-semibold text-foreground">
           {/* i18n-key: booking.review.contact.note */}
-          รายละเอียดเพิ่มเติม (ไม่บังคับ)
+          {t("review.contact.note")}
         </label>
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
           rows={4}
-          placeholder="ระบุข้อมูลเพิ่มเติมที่อยากบอกทีมขาย เช่น ขนาดสินค้า ประเภทกล่อง วันที่ต้องการ ฯลฯ"
+          placeholder={t("review.contact.notePlaceholder")}
           className={`${INPUT_BASE} resize-none`}
         />
       </div>
@@ -178,12 +184,12 @@ export function ReviewForm({
       >
         {pending && <Loader2 className="h-4 w-4 animate-spin" />}
         {/* i18n-key: booking.review.submit */}
-        ยืนยันการจอง
+        {t("review.submit")}
       </button>
 
       {/* i18n-key: booking.review.fineprint */}
       <p className="text-center text-[11px] leading-snug text-muted">
-        เมื่อยืนยัน — ทีมขายจะติดต่อกลับเร็วๆ นี้เพื่อยืนยันราคาจริง · ไม่มีการชำระเงินทันที
+        {t("review.fineprint")}
       </p>
       </form>
     </div>

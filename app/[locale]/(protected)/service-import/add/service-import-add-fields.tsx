@@ -1,4 +1,5 @@
 import { BadgePercent, Box, MapPin, Plus, Ship } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { ServiceImportShipBySelect } from "./service-import-shipby-select";
 
@@ -41,6 +42,7 @@ export function ServiceImportAddFields({
   others: AddrOption[];
   compact?: boolean;
 }) {
+  const t = useTranslations("serviceImportAdd");
   const hasAddress = Boolean(mainAddr) || others.length > 0;
 
   // Spacing scales down in compact (modal) mode; identical to the original
@@ -60,19 +62,19 @@ export function ServiceImportAddFields({
       <section className={sectionCls}>
         <h2 className={headCls}>
           <Box className="h-5 w-5 text-primary-600" />
-          ข้อมูลการฝากนำเข้า
+          {t("sectionImportInfo")}
         </h2>
 
         <div className={fieldMb}>
           <label className={labelClass} htmlFor="fTrackingCHN">
-            เลข Tracking
+            {t("trackingLabel")}
           </label>
           <input
             className={inputCls}
             name="fTrackingCHN"
             id="fTrackingCHN"
             type="text"
-            placeholder="เลข Tracking จากร้านค้าจีน"
+            placeholder={t("trackingPlaceholder")}
             maxLength={50}
             required
           />
@@ -80,14 +82,14 @@ export function ServiceImportAddFields({
 
         <div className={fieldMb}>
           <label className={labelClass} htmlFor="fDetail">
-            รายละเอียดสินค้า
+            {t("detailLabel")}
           </label>
           <textarea
             className={inputCls}
             rows={compact ? 2 : 4}
             name="fDetail"
             id="fDetail"
-            placeholder="เช่น เสื้อผ้า 3 ตัว, อะไหล่รถ ฯลฯ"
+            placeholder={t("detailPlaceholder")}
             maxLength={500}
             required
           />
@@ -95,7 +97,7 @@ export function ServiceImportAddFields({
 
         <div>
           <label className={labelClass} htmlFor="fAmount">
-            จำนวนกล่อง
+            {t("amountLabel")}
           </label>
           <input
             className={`${inputCls} max-w-[140px]`}
@@ -116,12 +118,12 @@ export function ServiceImportAddFields({
       <section className={sectionCls}>
         <h2 className={headCls}>
           <Ship className="h-5 w-5 text-primary-600" />
-          การขนส่งจากจีนมาไทย
+          {t("sectionShipping")}
         </h2>
 
         {/* รูปแบบการขนส่ง */}
         <p className="mb-2 text-sm font-medium text-foreground">
-          รูปแบบการขนส่งจีน-ไทย
+          {t("transportTypeLabel")}
         </p>
         <div className={`grid grid-cols-2 gap-3 ${compact ? "mb-3" : "mb-5"}`}>
           <RadioCard
@@ -129,23 +131,23 @@ export function ServiceImportAddFields({
             name="hTransportType"
             value="1"
             img="/images/Iconistpack/car.png"
-            title="รถ (EK)"
-            subtitle="5-7 วัน"
+            title={t("transportTruckTitle")}
+            subtitle={t("transportTruckSubtitle")}
           />
           <RadioCard
             compact={compact}
             name="hTransportType"
             value="2"
             img="/images/Iconistpack/ship.png"
-            title="เรือ (SEA)"
-            subtitle="12-16 วัน"
+            title={t("transportSeaTitle")}
+            subtitle={t("transportSeaSubtitle")}
             defaultChecked
           />
         </div>
 
         {/* การตีลังไม้ */}
         <p className="mb-2 text-sm font-medium text-foreground">
-          การตีลังไม้สินค้า
+          {t("crateLabel")}
         </p>
         <div className="grid grid-cols-2 gap-3">
           <RadioCard
@@ -153,7 +155,7 @@ export function ServiceImportAddFields({
             name="crate"
             value="2"
             img="/images/Iconistpack/unbox.png"
-            title="ไม่ตีลังไม้"
+            title={t("crateNoTitle")}
             defaultChecked
           />
           <RadioCard
@@ -161,8 +163,8 @@ export function ServiceImportAddFields({
             name="crate"
             value="1"
             img="/images/Iconistpack/box.png"
-            title="ตีลังไม้"
-            subtitle="มีค่าบริการ"
+            title={t("crateYesTitle")}
+            subtitle={t("crateYesSubtitle")}
           />
         </div>
       </section>
@@ -176,7 +178,7 @@ export function ServiceImportAddFields({
         >
           <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
             <MapPin className="h-5 w-5 text-primary-600" />
-            ที่อยู่ในการจัดส่งในไทย
+            {t("sectionAddress")}
           </h2>
           <Link
             href="/addresses/add"
@@ -184,7 +186,7 @@ export function ServiceImportAddFields({
             className="inline-flex items-center gap-1 text-[13px] font-medium text-primary-600 hover:text-primary-700"
           >
             <Plus className="h-3.5 w-3.5" />
-            เพิ่มที่อยู่ใหม่
+            {t("addNewAddress")}
           </Link>
         </div>
 
@@ -195,10 +197,10 @@ export function ServiceImportAddFields({
           required
           defaultValue=""
         >
-          <option value="">กรุณาเลือกที่อยู่ในการจัดส่ง</option>
+          <option value="">{t("addressSelectPlaceholder")}</option>
           {mainAddr && (
             <option value={mainAddr.addressid}>
-              [ที่อยู่หลัก] {mainAddr.full}
+              {t("mainAddressPrefix")} {mainAddr.full}
             </option>
           )}
           {others.map((a) => (
@@ -206,7 +208,7 @@ export function ServiceImportAddFields({
               {a.full}
             </option>
           ))}
-          <option value="PCS">รับเองหน้าโกดัง Pacred (สมุทรสาคร)</option>
+          <option value="PCS">{t("warehousePickup")}</option>
         </select>
 
         {/* P1-18 — carrier (#hShipBy) picker. Repopulates when the address
@@ -217,15 +219,17 @@ export function ServiceImportAddFields({
 
         {!hasAddress && (
           <p className="mt-2 text-[13px] text-muted">
-            คุณยังไม่มีที่อยู่จัดส่ง — เลือก &ldquo;รับเองหน้าโกดัง Pacred
-            (สมุทรสาคร)&rdquo; หรือ{" "}
-            <Link
-              href="/addresses/add"
-              target="_blank"
-              className="text-primary-600 hover:underline"
-            >
-              เพิ่มที่อยู่ใหม่
-            </Link>
+            {t.rich("noAddressNote", {
+              link: (chunks) => (
+                <Link
+                  href="/addresses/add"
+                  target="_blank"
+                  className="text-primary-600 hover:underline"
+                >
+                  {chunks}
+                </Link>
+              ),
+            })}
           </p>
         )}
 
@@ -234,17 +238,18 @@ export function ServiceImportAddFields({
             compact ? "mt-2" : "mt-3"
           }`}
         >
-          หมายเหตุ : หากพื้นที่นอกเขตขนส่งของ Pacred
-          ทางบริษัทจะเก็บเงินปลายทางเท่านั้น ยกเว้น แฟลช เอ็กซ์เพรส และ เจแอนด์ที
-          เอ็กซ์เพรส ที่เก็บต้นทางเท่านั้น{" "}
-          <a
-            href="/services/import-china"
-            target="_blank"
-            rel="noreferrer"
-            className="text-primary-600 hover:underline"
-          >
-            (เช็คพื้นที่ได้ที่นี่)
-          </a>
+          {t.rich("areaNote", {
+            link: (chunks) => (
+              <a
+                href="/services/import-china"
+                target="_blank"
+                rel="noreferrer"
+                className="text-primary-600 hover:underline"
+              >
+                {chunks}
+              </a>
+            ),
+          })}
         </p>
       </section>
 
@@ -252,7 +257,7 @@ export function ServiceImportAddFields({
       <section className={sectionCls}>
         <h2 className={headCls}>
           <BadgePercent className="h-5 w-5 text-primary-600" />
-          โปรโมชันสำหรับคุณ
+          {t("sectionPromo")}
         </h2>
 
         <label
@@ -273,7 +278,7 @@ export function ServiceImportAddFields({
                 compact ? "max-w-[150px]" : "max-w-[240px]"
               }`}
               src="/legacy/pcs/theme/free50-3.png"
-              alt="โปรโมชัน Pacred เหมา ๆ"
+              alt={t("promoImageAlt")}
             />
             <a
               href="/services/import-china"
@@ -281,7 +286,7 @@ export function ServiceImportAddFields({
               rel="noreferrer"
               className="text-[13px] text-primary-600 hover:underline"
             >
-              ดูพื้นที่จัดส่งและรายละเอียด
+              {t("promoDetailLink")}
             </a>
           </span>
         </label>
@@ -289,8 +294,7 @@ export function ServiceImportAddFields({
         <p
           className={`text-[13px] text-muted ${compact ? "mt-2" : "mt-3"}`}
         >
-          *หากสินค้ามีขนาดเล็ก บริษัทแนะนำให้เลือกขนส่ง Flash Express (เริ่มต้น
-          30 บ.)
+          {t("promoFootnote")}
         </p>
       </section>
     </>

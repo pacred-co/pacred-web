@@ -18,6 +18,7 @@
 
 import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Loader2 } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { createLegacyForwarder } from "@/actions/forwarder-legacy";
@@ -36,6 +37,7 @@ type Props = {
 };
 
 export function ServiceImportAddForm({ children, onCancel, onSuccess }: Props) {
+  const t = useTranslations("serviceImportAdd");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -94,14 +96,14 @@ export function ServiceImportAddForm({ children, onCancel, onSuccess }: Props) {
             disabled={isPending}
             className="inline-flex items-center justify-center rounded-xl border border-border bg-white px-5 py-3 text-base font-medium text-foreground transition hover:bg-surface disabled:cursor-not-allowed disabled:opacity-60"
           >
-            ยกเลิก
+            {t("cancel")}
           </button>
         ) : (
           <Link
             href="/service-import"
             className="inline-flex items-center justify-center rounded-xl border border-border bg-white px-5 py-3 text-base font-medium text-foreground transition hover:bg-surface"
           >
-            ยกเลิก
+            {t("cancel")}
           </Link>
         )}
         <button
@@ -111,7 +113,7 @@ export function ServiceImportAddForm({ children, onCancel, onSuccess }: Props) {
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isPending && <Loader2 className="h-5 w-5 animate-spin" />}
-          {isPending ? "กำลังสร้างออเดอร์…" : "สร้างออเดอร์"}
+          {isPending ? t("submitting") : t("submit")}
         </button>
       </div>
     </form>

@@ -1,13 +1,14 @@
 import Image from "next/image";
 import { FileBadge, ArrowRight } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 
 type Permit = {
   image?: string;
   icon?: typeof FileBadge;
   code: string;
-  name: string;
-  desc: string;
+  nameKey: string;
+  descKey: string;
   color: string;
 };
 
@@ -15,55 +16,56 @@ const PERMITS: Permit[] = [
   {
     image: "/images/tsi/มอก.png",
     code: "มอก.",
-    name: "มาตรฐานผลิตภัณฑ์",
-    desc: "เครื่องใช้ไฟฟ้า · ของเล่น · วัสดุก่อสร้าง",
+    nameKey: "nameTisi",
+    descKey: "descTisi",
     color: "from-blue-500 to-blue-700",
   },
   {
     image: "/images/tsi/สมอ.png",
     code: "สมอ.",
-    name: "สำนักงานมาตรฐาน",
-    desc: "ใบรับรองมาตรฐานอุตสาหกรรม",
+    nameKey: "nameSmo",
+    descKey: "descSmo",
     color: "from-emerald-500 to-emerald-700",
   },
   {
     image: "/images/tsi/กสทช.png",
     code: "กสทช.",
-    name: "โทรคมนาคม",
-    desc: "อุปกรณ์วิทยุ · มือถือ · WiFi · IoT",
+    nameKey: "nameNbtc",
+    descKey: "descNbtc",
     color: "from-violet-500 to-violet-700",
   },
   {
     image: "/images/tsi/เกษตร.png",
     code: "กรมเกษตร",
-    name: "พืช เกษตรกรรม",
-    desc: "เมล็ดพันธุ์ · ปุ๋ย · ยาฆ่าแมลง · เครื่องจักรเกษตร",
+    nameKey: "nameAgriculture",
+    descKey: "descAgriculture",
     color: "from-amber-500 to-amber-700",
   },
   {
     image: "/images/tsi/ประมง.png",
     code: "กรมประมง",
-    name: "ประมง สัตว์น้ำ",
-    desc: "อาหารสัตว์น้ำ · อุปกรณ์ประมง · สัตว์น้ำ",
+    nameKey: "nameFisheries",
+    descKey: "descFisheries",
     color: "from-cyan-500 to-cyan-700",
   },
   {
     image: "/images/tsi/ศุลกากร.png",
     code: "กรมศุลกากร",
-    name: "Customs",
-    desc: "ใบขนสินค้า · ขึ้นทะเบียนผู้นำเข้า · พิกัด HS",
+    nameKey: "nameCustoms",
+    descKey: "descCustoms",
     color: "from-primary-500 to-primary-700",
   },
   {
     icon: FileBadge,
     code: "Form E / FTA",
-    name: "ลดภาษีนำเข้า",
-    desc: "Form E · Form D · AANZFTA · TAFTA",
+    nameKey: "nameFormE",
+    descKey: "descFormE",
     color: "from-orange-500 to-orange-700",
   },
 ];
 
-export function ClearancePermits() {
+export async function ClearancePermits() {
+  const t = await getTranslations("clearancePermits");
   return (
     <section className="py-4 md:py-8">
       <div className="mx-auto w-full max-w-[1240px] px-3 md:px-4">
@@ -75,21 +77,21 @@ export function ClearancePermits() {
             LICENSES & PERMITS
           </div>
           <h2 className="text-[20px] md:text-[38px] leading-[1.25] md:leading-[1.15] font-black tracking-[-0.03em] md:tracking-[-0.04em] text-[#111827] dark:text-white">
-            ใบอนุญาต / หน่วยงาน
-            <span className="text-primary-600"> ที่เราเคลียร์ให้ครบ</span>
+            {t("headingBefore")}
+            <span className="text-primary-600"> {t("headingHighlight")}</span>
           </h2>
           <p className="mt-1.5 md:mt-2 max-w-[820px] text-[12px] md:text-[15px] leading-[1.5] md:leading-[1.55] font-medium text-muted">
-            สินค้าควบคุมหรือต้องขออนุญาตเฉพาะ — เราดูแลเอกสารและประสานหน่วยงานราชการให้ครบ
+            {t("subheading")}
           </p>
         </div>
 
         {/* Grid 4 cols */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
-          {PERMITS.map(({ image, icon: Icon, code, name, desc, color }) => (
+          {PERMITS.map(({ image, icon: Icon, code, nameKey, descKey, color }) => (
             <Link
               key={code}
               href="/register"
-              aria-label={`สมัครเลย · ${code}`}
+              aria-label={`${t("registerNow")} · ${code}`}
               className="group relative block bg-white dark:bg-surface rounded-xl md:rounded-2xl border border-border p-3 md:p-5 shadow-[0_4px_14px_rgba(15,23,42,0.04)] hover:shadow-[0_22px_44px_-12px_rgba(179,0,0,0.18)] hover:border-primary-300 dark:hover:border-primary-800 hover:-translate-y-1 transition-all duration-400 overflow-hidden cursor-pointer"
             >
               {/* Dot pattern overlay */}
@@ -142,10 +144,10 @@ export function ClearancePermits() {
                 {code}
               </div>
               <div className="relative text-[10px] md:text-[12px] font-bold text-primary-600 mt-0.5">
-                {name}
+                {t(nameKey)}
               </div>
               <p className="relative mt-1 md:mt-2 text-[10.5px] md:text-[12.5px] leading-[1.4] md:leading-[1.45] text-muted">
-                {desc}
+                {t(descKey)}
               </p>
 
               {/* Bottom: progress + "สมัครเลย →" */}
@@ -154,7 +156,7 @@ export function ClearancePermits() {
                   <div className="h-full w-0 group-hover:w-full bg-gradient-to-r from-primary-500 to-primary-700 transition-all duration-500 ease-out rounded-full" />
                 </div>
                 <div className="flex items-center gap-1 text-[10.5px] font-black text-primary-600 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-300 whitespace-nowrap">
-                  สมัครเลย
+                  {t("registerNow")}
                   <ArrowRight className="w-3 h-3" strokeWidth={3} />
                 </div>
               </div>

@@ -1,34 +1,36 @@
 import { FileText, Calculator, Workflow, PackageCheck, ArrowRight } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 
 const STEPS = [
   {
     num: "01",
     icon: FileText,
-    title: "ส่ง Invoice + Packing List",
-    text: "ส่งผ่าน LINE: pacred / Email: sales@pacred.co / โทร — ฟอเวิร์ดเมล DHL · FedEx ก็ได้",
+    titleKey: "step1Title",
+    textKey: "step1Text",
   },
   {
     num: "02",
     icon: Calculator,
-    title: "ประเมินราคา ภายใน 1 ชม.",
-    text: "แจ้งค่าบริการและแนวทางเคลียร์แบบโปร่งใส ไม่มีค่าแอบแฝง 100%",
+    titleKey: "step2Title",
+    textKey: "step2Text",
   },
   {
     num: "03",
     icon: Workflow,
-    title: "เริ่มเคลียร์ + จัดการเอกสาร",
-    text: "ดำเนินการตามขั้นตอนศุลกากร / มอก. · กสทช. · หน่วยงานอื่นๆ ครบทุกขั้น",
+    titleKey: "step3Title",
+    textKey: "step3Text",
   },
   {
     num: "04",
     icon: PackageCheck,
-    title: "ปลดสินค้า + จัดส่งต่อ",
-    text: "สินค้าออกจากด่าน พร้อมนัดรับหรือจัดส่งถึงโกดัง / โรงงาน / หน้าบ้านทันที",
+    titleKey: "step4Title",
+    textKey: "step4Text",
   },
 ];
 
-export function ClearanceProcess() {
+export async function ClearanceProcess() {
+  const t = await getTranslations("clearanceProcess");
   return (
     <section className="py-4 md:py-8">
       <div className="mx-auto w-full max-w-[1240px] px-3 md:px-4">
@@ -40,21 +42,21 @@ export function ClearanceProcess() {
             HOW IT WORKS
           </div>
           <h2 className="text-[20px] md:text-[38px] leading-[1.25] md:leading-[1.15] font-black tracking-[-0.03em] md:tracking-[-0.04em] text-[#111827] dark:text-white">
-            วิธีใช้บริการง่ายๆ
-            <span className="text-primary-600"> ครบจบ ปลดใน 1 ชม.</span>
+            {t("headingBefore")}
+            <span className="text-primary-600"> {t("headingHighlight")}</span>
           </h2>
           <p className="mt-1.5 md:mt-2 max-w-[760px] text-[12px] md:text-[15px] leading-[1.5] md:leading-[1.55] font-medium text-muted">
-            วางขั้นตอนให้ชัดเจน เริ่มได้ทันที ไม่ต้องเดา ไม่ต้องวิ่งเอกสารหลายรอบ
+            {t("subheading")}
           </p>
         </div>
 
         {/* 4 steps */}
         <div className="relative grid grid-cols-2 lg:grid-cols-4 gap-2.5 md:gap-5">
-          {STEPS.map(({ num, icon: Icon, title, text }, i) => (
+          {STEPS.map(({ num, icon: Icon, titleKey, textKey }, i) => (
             <div key={num} className="relative">
               <Link
                 href="/register"
-                aria-label={`สมัครเลย · ${title}`}
+                aria-label={`${t("registerNow")} · ${t(titleKey)}`}
                 className="group relative h-full flex flex-col bg-white dark:bg-surface border border-border rounded-xl md:rounded-2xl p-3 md:p-6 shadow-[0_4px_16px_rgba(15,23,42,0.04)] hover:shadow-[0_24px_50px_-12px_rgba(179,0,0,0.18)] hover:border-primary-300 dark:hover:border-primary-800 hover:-translate-y-1 transition-all duration-400 overflow-hidden cursor-pointer"
               >
                 {/* Dot pattern overlay */}
@@ -95,10 +97,10 @@ export function ClearanceProcess() {
                   STEP {num}
                 </div>
                 <h3 className="relative text-[12.5px] md:text-[16px] font-extrabold text-[#111827] dark:text-white leading-[1.3] md:leading-[1.35] mb-1 md:mb-2 group-hover:text-primary-700 dark:group-hover:text-primary-300 transition-colors duration-300">
-                  {title}
+                  {t(titleKey)}
                 </h3>
                 <p className="relative text-[11px] md:text-[13px] leading-[1.45] md:leading-[1.55] text-muted">
-                  {text}
+                  {t(textKey)}
                 </p>
 
                 {/* Bottom: progress + "สมัครเลย →" */}
@@ -107,7 +109,7 @@ export function ClearanceProcess() {
                     <div className="h-full w-0 group-hover:w-full bg-gradient-to-r from-primary-500 to-primary-700 transition-all duration-500 ease-out rounded-full" />
                   </div>
                   <div className="flex items-center gap-1 text-[11px] font-black text-primary-600 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-300 whitespace-nowrap">
-                    สมัครเลย
+                    {t("registerNow")}
                     <ArrowRight className="w-3 h-3" strokeWidth={3} />
                   </div>
                 </div>

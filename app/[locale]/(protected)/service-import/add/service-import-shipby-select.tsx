@@ -30,6 +30,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   getShipByOptions,
   type LegacyShipByOption,
@@ -48,6 +49,7 @@ type Mode =
   | { kind: "error"; message: string };
 
 export function ServiceImportShipBySelect({ compact = false }: { compact?: boolean }) {
+  const t = useTranslations("serviceImportAdd");
   const [mode, setMode] = useState<Mode>({ kind: "idle" });
   // The "Pacred เหมา ๆ" promo (#input-12, pro='f'). Legacy hides the courier
   // select + drops `required` when ticked because the action forces
@@ -128,8 +130,8 @@ export function ServiceImportShipBySelect({ compact = false }: { compact?: boole
   if (mode.kind === "loading") {
     return (
       <div className={wrap}>
-        <label className={labelClass}>บริษัทขนส่งในไทย</label>
-        <div className={`${selectCls} text-muted`}>กำลังโหลด…</div>
+        <label className={labelClass}>{t("carrierLabel")}</label>
+        <div className={`${selectCls} text-muted`}>{t("loading")}</div>
       </div>
     );
   }
@@ -137,9 +139,9 @@ export function ServiceImportShipBySelect({ compact = false }: { compact?: boole
   if (mode.kind === "error") {
     return (
       <div className={wrap}>
-        <label className={labelClass}>บริษัทขนส่งในไทย</label>
+        <label className={labelClass}>{t("carrierLabel")}</label>
         <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">
-          โหลดรายชื่อบริษัทขนส่งไม่สำเร็จ — {mode.message}
+          {t("carrierLoadError", { message: mode.message })}
         </p>
       </div>
     );
@@ -157,10 +159,10 @@ export function ServiceImportShipBySelect({ compact = false }: { compact?: boole
   return (
     <div className={wrap}>
       <label className={labelClass} htmlFor="hShipBy">
-        บริษัทขนส่งในไทย
+        {t("carrierLabel")}
         {mode.inFreeArea && (
           <span className="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
-            พื้นที่จัดส่งฟรี
+            {t("freeAreaChip")}
           </span>
         )}
       </label>
@@ -176,7 +178,7 @@ export function ServiceImportShipBySelect({ compact = false }: { compact?: boole
             : ""
         }
       >
-        <option value="">กรุณาเลือกบริษัทขนส่ง</option>
+        <option value="">{t("carrierSelectPlaceholder")}</option>
         {mode.options.map((o) => (
           <option key={o.id} value={o.id}>
             {o.name}

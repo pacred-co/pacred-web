@@ -15,6 +15,7 @@
  */
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { CheckCircle2, ListChecks, Map, Phone } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import type {
@@ -78,6 +79,7 @@ export function BookingDetailPage({
   sourceUrl,
 }: BookingDetailPageProps) {
   const router = useRouter();
+  const t = useTranslations("booking");
   const [options, setOptions] = useState<BookingOptionState>(freshState());
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -106,7 +108,7 @@ export function BookingDetailPage({
     if (!res.ok) {
       setErrorMessage(
         res.error === "not_implemented"
-          ? "ระบบจองยังเปิดให้ใช้บางส่วน — โปรดติดต่อทีมขายผ่านไลน์ในระหว่างนี้"
+          ? t("review.errors.not_implemented")
           : `เกิดข้อผิดพลาด: ${res.error}`,
       );
       return;
@@ -134,7 +136,7 @@ export function BookingDetailPage({
           </h2>
           {routeSlug && (
             <p className="mt-2 text-[12.5px] md:text-[14px] text-muted">
-              <span className="font-bold text-foreground">เส้นทาง:</span>{" "}
+              <span className="font-bold text-foreground">{t("review.field.route")}:</span>{" "}
               <span className="text-primary-600 font-bold">{routeSlug}</span>
             </p>
           )}

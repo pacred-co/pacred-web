@@ -17,6 +17,7 @@
  */
 
 import { useEffect, useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { Paperclip, FileText, UploadCloud, Loader2, X, Download } from "lucide-react";
 import {
   listBookingDocuments,
@@ -48,6 +49,7 @@ interface BookingDocUploaderProps {
 }
 
 export function BookingDocUploader({ bookingId }: BookingDocUploaderProps) {
+  const t = useTranslations("booking");
   const [docs, setDocs] = useState<BookingDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -125,7 +127,7 @@ export function BookingDocUploader({ bookingId }: BookingDocUploaderProps) {
         <div>
           <h3 className="text-sm font-bold text-foreground">
             {/* i18n-key: booking.review.documents.title */}
-            แนบเอกสาร (ไม่บังคับ)
+            {t("selectors.docAttach.label")}
           </h3>
           <p className="mt-1 text-xs text-muted">
             {/* i18n-key: booking.review.documents.subtitle */}
