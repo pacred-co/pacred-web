@@ -109,16 +109,16 @@ export type PcsChromeData = {
 
 /** Fallback sales rep — shown when the customer has no `adminidsale` set
  *  (or is routed to `admin_center`, whose tb_admin.adminPicture is "user.jpg"
- *  → also lands here for the picture). Central sales line — "ส่วนกลาง" + a real
- *  face (เมย์, sales head) so the avatar fills the 46px circle cleanly instead
- *  of the wide Pacred logo, which object-cover cropped into a broken-looking
- *  blob (owner 2026-06-06: "ไม่แตก ... รูปต้องขึ้น กดดูได้"). */
+ *  → also lands here for the picture). This is the CENTRAL sales line, NOT a
+ *  specific person → it shows the Pacred logo + "ส่วนกลาง" (owner 2026-06-06:
+ *  "รูปเซลส่วนกลางจะไปเอารูปเซลเมย์มาใส่ทำไม เอารูป logo pacred เหมือนเดิม" — a
+ *  named rep's face on an anonymous "ส่วนกลาง" card is a mismatch). */
 const SALES_FALLBACK: PcsSalesRep = {
   // The fallback tel is the CENTRAL sales line (02-421-3325), not a personal
   // rep — so show "ส่วนกลาง" (central sales), not a person's nickname (owner
   // 2026-06-06: "ให้ใช้ชื่อเซลล์ส่วนกลางไปเลย" — it was wrongly showing "แนท").
   nickname: "ส่วนกลาง",
-  picture: "/images/Character_Icon/may.png",
+  picture: "/images/pacred-logo-red.png",
   tel: "02-421-3325",
 };
 
