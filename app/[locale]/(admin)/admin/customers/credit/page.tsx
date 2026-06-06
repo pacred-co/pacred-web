@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { CreditTable, type CreditRow, type CustomerPick } from "./credit-table";
 
 // ────────────────────────────────────────────────────────────────────
@@ -178,7 +179,44 @@ export default async function AdminCustomerCreditPage() {
               ลูกค้าที่ได้รับวงเงินเครดิตค่าขนส่ง — วงเงิน / จำนวนวันเครดิต / ยอดคงเหลือ (วงเงิน − ยอดค้างชำระ)
             </p>
           </div>
-          <Link href="/admin/customers" className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-surface-alt">← ลูกค้าทั้งหมด</Link>
+          <div className="flex items-center gap-2 flex-wrap">
+            <CsvButton
+              rows={rows.map((r): CsvRow => ({
+                userID: r.userID,
+                fullName: r.fullName,
+                isJuristic: r.isJuristic ? "นิติบุคคล" : "บุคคล",
+                tel: r.tel,
+                email: r.email,
+                lineId: r.lineId,
+                address: r.address,
+                registered: r.registered ? r.registered.slice(0, 10) : "",
+                creditDays: r.creditDays,
+                creditLimit: r.creditLimit.toFixed(2),
+                outstanding: r.outstanding.toFixed(2),
+                remaining: r.remaining.toFixed(2),
+                adminIDSale: r.adminIDSale,
+                deleted: r.deleted ? "ลบบัญชี" : "ใช้งาน",
+              }))}
+              cols={[
+                { key: "userID",      label: "รหัสสมาชิก" },
+                { key: "fullName",    label: "ชื่อ-นามสกุล" },
+                { key: "isJuristic",  label: "ประเภท" },
+                { key: "tel",         label: "เบอร์โทร" },
+                { key: "email",       label: "อีเมล" },
+                { key: "lineId",      label: "LINE ID" },
+                { key: "address",     label: "ที่อยู่หลัก" },
+                { key: "registered",  label: "วันสมัคร" },
+                { key: "creditDays",  label: "วันเครดิต" },
+                { key: "creditLimit", label: "วงเงิน (฿)" },
+                { key: "outstanding", label: "ยอดค้างชำระ (฿)" },
+                { key: "remaining",   label: "คงเหลือ (฿)" },
+                { key: "adminIDSale", label: "เซลล์ผู้ดูแล" },
+                { key: "deleted",     label: "สถานะ" },
+              ]}
+              filename={`customers-credit-${new Date().toISOString().slice(0, 10)}.csv`}
+            />
+            <Link href="/admin/customers" className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-surface-alt">← ลูกค้าทั้งหมด</Link>
+          </div>
         </div>
 
         <CreditTable rows={rows} picks={picks} />
