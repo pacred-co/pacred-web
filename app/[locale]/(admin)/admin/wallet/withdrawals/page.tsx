@@ -26,6 +26,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { ArrowLeft } from "lucide-react";
 import { WithdrawRowActions } from "./withdraw-row-actions";
 
@@ -168,8 +169,9 @@ export default async function AdminWithdrawalsQueuePage({
           </Link>
         </div>
 
-        {/* Status filter chips */}
-        <div className="flex flex-wrap gap-2">
+        {/* Status filter chips + CSV export — accounting downloads the
+            withdrawal queue per status to reconcile against bank transfers. */}
+        <div className="flex flex-wrap items-center gap-2">
           {statusTabs.map((t) => {
             const isActive = t.key === statusFilter;
             const href = t.key === "1" ? "/admin/wallet/withdrawals" : `/admin/wallet/withdrawals?status=${t.key}`;
@@ -188,6 +190,46 @@ export default async function AdminWithdrawalsQueuePage({
               </Link>
             );
           })}
+          <div className="ml-auto">
+            <CsvButton
+              rows={rows.map((r) => {
+                const u = r.userid ? userMap.get(r.userid) : undefined;
+                const customerName = u
+                  ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim()
+                  : "";
+                const row: CsvRow = {
+                  id: r.id,
+                  date: r.date ?? "",
+                  userid: r.userid ?? "",
+                  customer: customerName,
+                  tel: u?.userTel ?? "",
+                  amount: Number(r.amount ?? 0).toFixed(2),
+                  bank: r.depositnamebank ?? "",
+                  bank_account_name: r.nameuserbank ?? "",
+                  bank_account_no: r.nouserbank ?? "",
+                  status: STATUS_LABEL[r.status ?? ""] ?? r.status ?? "",
+                  admin_action_by: r.adminidupdate ?? "",
+                  note: r.note ?? "",
+                };
+                return row;
+              })}
+              cols={[
+                { key: "id",                label: "Wallet HS ID" },
+                { key: "date",              label: "วันที่ขอ" },
+                { key: "userid",            label: "รหัสลูกค้า" },
+                { key: "customer",          label: "ชื่อลูกค้า" },
+                { key: "tel",               label: "เบอร์โทร" },
+                { key: "amount",            label: "จำนวน (฿)" },
+                { key: "bank",              label: "ธนาคาร" },
+                { key: "bank_account_name", label: "ชื่อบัญชี" },
+                { key: "bank_account_no",   label: "เลขที่บัญชี" },
+                { key: "status",            label: "สถานะ" },
+                { key: "admin_action_by",   label: "Admin ดำเนินการ" },
+                { key: "note",              label: "หมายเหตุ" },
+              ]}
+              filename={`withdrawals-status${statusFilter}-page${page}-${new Date().toISOString().slice(0, 10)}.csv`}
+            />
+          </div>
         </div>
 
         <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">

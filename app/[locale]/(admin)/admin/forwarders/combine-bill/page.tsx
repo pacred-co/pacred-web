@@ -39,6 +39,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { buildCombineBillPrintHref, buildCombineBillDetailHref } from "@/lib/admin/combine-bill-urls";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { CombineBillRowActions } from "./combine-bill-row-actions";
 // ^ Wired client island (delete + print buttons). Kept on the page so super
 //   role retains the existing functional delete; visual chrome of the
@@ -349,6 +350,39 @@ export default async function CombineBillPage({
           กรอบเวลาปัจจุบัน: <span className="font-medium text-foreground">{filterBanner}</span>
         </p>
       </form>
+
+      {/* CSV export — current page of bills (50/page · honours date filter).
+          Accounting uses the export to attach to PEAK / Excel reconciliation
+          when handing the อ.ก. trail to finance. Each row lists the linked
+          forwarder IDs in one column so the recipient can drill back to the
+          source items. */}
+      {bills.length > 0 && (
+        <div className="flex justify-end">
+          <CsvButton
+            rows={bills.map((row) => {
+              const fids = itemsByBill.get(row.billid) ?? [];
+              const csvRow: CsvRow = {
+                billid: row.billid,
+                date: row.date ?? "",
+                adminid: row.adminid ?? "",
+                printstatus: row.printstatus === "1" ? "พิมพ์แล้ว" : "ยังไม่พิมพ์",
+                item_count: fids.length,
+                forwarder_ids: fids.join(", "),
+              };
+              return csvRow;
+            })}
+            cols={[
+              { key: "billid",        label: "billID" },
+              { key: "date",          label: "วันที่บันทึก" },
+              { key: "adminid",       label: "ผู้รวมบิล" },
+              { key: "printstatus",   label: "สถานะการพิมพ์" },
+              { key: "item_count",    label: "จำนวนรายการ" },
+              { key: "forwarder_ids", label: "เลขที่ฝากนำเข้า (fID)" },
+            ]}
+            filename={`combine-bill-page${page}-${filterMode}-${new Date().toISOString().slice(0, 10)}.csv`}
+          />
+        </div>
+      )}
 
       {/* Table */}
       <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
