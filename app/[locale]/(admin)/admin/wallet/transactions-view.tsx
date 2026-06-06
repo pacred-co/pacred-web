@@ -57,6 +57,8 @@ const KIND_TABS: { key: string | null; label: string; types: string[] | null }[]
   { key: "topup",    label: "เติมเงิน (รอตรวจ + manual)", types: ["1", "2"] },
   { key: "withdraw", label: "ถอนเงิน", types: ["3"] },
   { key: "orderpay", label: "ชำระจากกระเป๋า", types: ["4"] },
+  // ADR-0028 — ฝากสั่งซื้อ QR+slip payments (type='8', pending slip-verify).
+  { key: "shoppay",  label: "ชำระฝากสั่งซื้อ (รอตรวจสลิป)", types: ["8"] },
 ];
 
 const STATUS_TABS: { key: string | null; label: string }[] = [

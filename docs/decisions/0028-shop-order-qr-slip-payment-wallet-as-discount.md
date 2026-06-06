@@ -1,6 +1,11 @@
 # ADR-0028 — ฝากสั่งซื้อ pays by QR + slip (not forced wallet top-up); wallet becomes an optional discount
 
-**Status:** Designed + de-risked (ready to implement) — 2026-06-06 (เดฟ)
+**Status:** **Phase 1 SHIPPED + money-loop VERIFIED** (2026-06-06 · เดฟ) — pure QR+slip
+(zero wallet touch) is live; **Phase 2 (the optional wallet/cashback partial-discount
+"หักจาก wallet เท่าไหร่") is the documented follow-up** (the HELD-pattern below).
+Phase-1 verification on a TEST order (P22309/PR038, ฿49.21): submit pending type='8'
+row → approve → order `hstatus 2→3` (PAID) · wallet **50.8→50.8 UNTOUCHED** · slip
+`status 1→2` · then fully reverted. `pnpm verify` + `pnpm build` EXIT 0.
 **Owner directive (verbatim):** *"ยกเลิกระบบเติมเงินเข้ากระเป๋า … flow จะเปลี่ยนแค่ตอนชำระเงินของบริการฝากสั่งซื้อ ตอนจะกดชำระเงิน มันดันต้องเติมกระเป๋า wallet อย่างเดียว เราจะเอาระบบนั้นออก แล้วเอา QR มาให้ลูกค้าสแกนจ่าย แล้วแนบสลิปต่อได้เลยใน flow เดียว ให้อิงแบบตอนจะกดชำระของบริการฝากนำเข้า … กระเป๋าตังให้เอาไว้เป็น cashback … ลูกค้าอยากเอายอดในกระเป๋าตังใช้เป็นส่วนลด … เลือกได้ว่าจะหักจาก wallet เท่าไหร่ก็ใส่ไป อย่าให้บัคเรื่องเงินๆทองๆ ของานละเอียด"*
 
 > ⚠️ **MONEY-CRITICAL. Do NOT ship to `main` (Vercel auto-deploys live) until the FULL loop is browser-tested on a TEST order** (customer submit slip → admin approve → order paid + wallet correct + receipt). The owner explicitly demanded "ของานละเอียด อย่าให้บัคเรื่องเงิน".

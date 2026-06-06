@@ -7,7 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { legacyOrderStatusThai } from "@/lib/legacy-status-map";
 import { loadCustomerAddressOptions } from "@/lib/legacy/customer-address-options";
 import { CancelButton } from "./cancel-button";
-import { PayFromWalletButton } from "./pay-from-wallet-button";
+import { ShopOrderPayButton } from "./shop-order-pay-modal";
 import { ShopOrderEditShipByForm } from "./shop-order-edit-ship-by-form";
 import { ShopOrderEditAddressForm } from "./shop-order-edit-address-form";
 
@@ -197,21 +197,19 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
               <p className="text-xs text-yellow-700 mt-1">{t("payBy", { date: new Date(o.payment_due_at).toLocaleString("th-TH") })}</p>
             </div>
 
-            {/* Primary pay action — wallet balance permitting */}
-            {walletBalance !== null && o.h_no && (
-              <PayFromWalletButton
+            {/* ADR-0028 — pay by PromptPay QR + slip (no forced wallet top-up).
+                The button's modal still offers wallet-pay as a SECONDARY option
+                when the balance already covers the bill. */}
+            {o.h_no && (
+              <ShopOrderPayButton
                 hNo={o.h_no}
                 totalThb={Number(o.total_thb)}
-                totalThbRaw={rawThb}
                 walletBalance={walletBalance}
               />
             )}
 
-            {/* Fallback / wallet management links */}
+            {/* Wallet (cashback) — check balance/history only (no forced top-up) */}
             <div className="flex flex-wrap gap-2">
-              <Link href="/wallet/deposit" className="rounded-lg bg-white border border-yellow-300 px-4 py-2 text-sm font-medium text-yellow-900 hover:bg-yellow-100">
-                {t("payNowDeposit")}
-              </Link>
               <Link href="/wallet/history" className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium hover:bg-surface-alt">
                 {t("checkWallet")}
               </Link>

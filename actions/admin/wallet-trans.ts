@@ -374,6 +374,27 @@ export async function adminApproveWalletHs(
         }
       }
 
+      // ADR-0028 — shop-order (ฝากสั่งซื้อ) slip-pay settle: type='8' /
+      // typeservice='1' → mark the order PAID (hstatus '2'→'3'). delta was 0
+      // (type='8' ∉ {1,2,4,7}) so NO wallet balance moved (bank transfer).
+      // Best-effort + logged · idempotent via the hstatus='2' guard.
+      if (row.typeservice === "1" && row.type === "8" && row.reforder) {
+        const shopNow = new Date().toISOString();
+        const { error: shopFlipErr } = await admin
+          .from("tb_header_order")
+          .update({ hstatus: "3", hdate3: shopNow, hdateupdate: shopNow, paydeposit: "1" })
+          .eq("hno", row.reforder)
+          .eq("userid", row.userid)
+          .eq("hstatus", "2");
+        if (shopFlipErr) {
+          logger.warn("wallet-trans", "shop-order settle flip failed (non-fatal · slip approved)", {
+            wallet_hs_id: id, userid: row.userid, hno: row.reforder, error: shopFlipErr.message,
+          });
+        }
+        revalidatePath(`/service-order/${row.reforder}`);
+        revalidatePath("/service-order");
+      }
+
       revalidatePath(`/admin/wallet/${id}`);
       revalidatePath("/admin/wallet");
       revalidatePath("/admin");

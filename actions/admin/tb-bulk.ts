@@ -285,6 +285,26 @@ export async function adminBulkApproveWalletHs(
             }
           }
         }
+
+        // ADR-0028 — shop-order (ฝากสั่งซื้อ) slip-pay settle: a pending
+        // type='8' / typeservice='1' row → mark the order PAID
+        // (tb_header_order.hstatus '2'→'3'). The wallet delta was already 0
+        // (type='8' ∉ {1,2,4,7}) so NO balance moved — this is a bank-transfer
+        // payment. Best-effort + logged · idempotent via the hstatus='2' guard.
+        if (r.typeservice === "1" && r.type === "8" && r.reforder) {
+          const shopNow = new Date().toISOString();
+          const { error: shopFlipErr } = await admin
+            .from("tb_header_order")
+            .update({ hstatus: "3", hdate3: shopNow, hdateupdate: shopNow, paydeposit: "1" })
+            .eq("hno", r.reforder)
+            .eq("userid", r.userid)
+            .eq("hstatus", "2");
+          if (shopFlipErr) {
+            logger.warn("tb-bulk", "shop-order settle flip failed (non-fatal · slip approved)", {
+              wallet_hs_id: r.id, userid: r.userid, hno: r.reforder, error: shopFlipErr.message,
+            });
+          }
+        }
       }
 
       // 3. Wave 29: fire auto-receipt for each (userid · dateSlip-day) batch.

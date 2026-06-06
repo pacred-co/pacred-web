@@ -115,7 +115,7 @@ export default async function AdminWalletPage({
     { count: totalPending },
     { count: customerCount },
   ] = await Promise.all([
-    admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).in("type", ["1", "2"]).eq("status", "1"),
+    admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).in("type", ["1", "2", "8"]).eq("status", "1"),
     // ADR-0018 P1-25: customer withdraw pending = type='3' (was wrongly '7').
     admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("type", "3").eq("status", "1"),
     admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("status", "1"),

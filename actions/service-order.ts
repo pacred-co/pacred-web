@@ -11,6 +11,8 @@ import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { computeShopOrderDebitTotal } from "@/lib/service-order/debit-total";
+import { BANK } from "@/components/seo/site";
+import { validateStoredFile } from "@/lib/file-validation";
 import { spendCashbackAtCheckout, refundCashbackOnReject } from "@/actions/admin/wallet-hs";
 import { cashbackRefId } from "@/lib/cashback/note-tag";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
@@ -1229,4 +1231,168 @@ export async function payServiceOrderFromWallet(
   });
 
   return { ok: true, data: { tx_id: String(hsRow.id), already_paid: false } };
+}
+
+// ════════════════════════════════════════════════════════════════════
+// ADR-0028 — ฝากสั่งซื้อ pays by PromptPay QR + slip (no forced wallet top-up)
+// ════════════════════════════════════════════════════════════════════
+// Mirrors the proven forwarder QR+slip flow (actions/forwarder.ts):
+// the customer scans the PromptPay QR (use getForwarderPaymentQr for the
+// image — it is amount-only), uploads the slip, and submits. We record a
+// PENDING tb_wallet_hs row (status='1', imagesslip=slip) and DO NOT touch
+// tb_wallet OR flip the order status — an admin verifies the slip later via
+// the /admin/wallet pending queue (adminApproveWalletHs / bulk), which then
+// flips tb_header_order.hstatus '2'→'3'.
+//
+// 🚨 MONEY-SAFETY (ADR-0028): the row uses **type='8'** (a dedicated shop-slip
+// type) — NOT the wallet-paid type='2'. The approve path's wallet-delta is
+// `(type 1/2)→+amt · (4/7)→−amt · else 0`, so type='8' yields delta=0: the
+// wallet is NEVER credited/debited by this bank-transfer payment. (A naive
+// type='2' would make the approve ADD money — the trap this avoids.)
+
+/** Upload a shop-order payment slip to the `slips` bucket → `{uid}/shop_payment/…`. */
+export async function uploadShopOrderSlip(
+  formData: FormData,
+): Promise<ActionResult<{ path: string }>> {
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
+  const supabase = await createClient();
+  const { data: { user }, error: uErr } = await supabase.auth.getUser();
+  if (uErr) console.error(`[uploadShopOrderSlip getUser] failed`, { message: uErr.message });
+  if (!user) return { ok: false, error: "not_signed_in" };
+
+  const file = formData.get("slip");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "slip_missing — กรุณาแนบไฟล์สลิป" };
+  }
+  const isImage = file.type.startsWith("image/");
+  const isPdf = file.type === "application/pdf";
+  if (!isImage && !isPdf) return { ok: false, error: "slip_type — ต้องเป็นรูปภาพหรือ PDF" };
+  if (file.size > 5 * 1024 * 1024) return { ok: false, error: "slip_too_large — ไฟล์ใหญ่เกิน 5 MB" };
+
+  const ext = (file.name.split(".").pop() ?? "bin").toLowerCase();
+  const path = `${user.id}/shop_payment/${Date.now()}.${ext}`;
+  const { error: upErr } = await supabase.storage
+    .from("slips")
+    .upload(path, file, { upsert: false, contentType: file.type });
+  if (upErr) return { ok: false, error: `slip_upload: ${upErr.message}` };
+  return { ok: true, data: { path } };
+}
+
+/**
+ * Submit a shop-order (ฝากสั่งซื้อ) payment by QR + slip — records a PENDING
+ * tb_wallet_hs row (status='1', type='8'). No wallet touch, no status flip.
+ */
+export async function submitShopOrderSlipPayment(
+  hNo: string,
+  opts: { slipPath: string; slipDate?: string },
+): Promise<ActionResult<{ tx_id: string; already_submitted: boolean }>> {
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
+  const userData = await getCurrentUserWithProfile();
+  if (!userData?.user) return { ok: false, error: "not_signed_in" };
+  if (!userData.profile?.member_code) {
+    return { ok: false, error: "ยังไม่ได้รับ member_code — กรุณาติดต่อทีมงาน" };
+  }
+  const userId = userData.user.id;
+  const memberCode = userData.profile.member_code;
+
+  const slipPath = (opts.slipPath ?? "").trim();
+  if (!slipPath) return { ok: false, error: "slip_missing — กรุณาแนบสลิป" };
+  // Ownership: the slip must live under the customer's own uid prefix.
+  if (!slipPath.startsWith(`${userId}/`)) return { ok: false, error: "slip_not_owned" };
+  const slipOk = await validateStoredFile("slips", slipPath, ["image", "pdf"]);
+  if (!slipOk.ok) return { ok: false, error: `slip_invalid: ${slipOk.error}` };
+
+  const admin = createAdminClient();
+
+  // Load the order (ownership-gated) — same shape as payServiceOrderFromWallet.
+  const { data: header, error: headerErr } = await admin
+    .from("tb_header_order")
+    .select("id,hno,userid,hstatus,htotalpriceuser,htotalpricechn,hshippingchn,hshippingservice,hrate")
+    .eq("hno", hNo)
+    .eq("userid", memberCode)
+    .maybeSingle<{
+      id: number; hno: string; userid: string; hstatus: string | null;
+      htotalpriceuser: number | string | null; htotalpricechn: number | string | null;
+      hshippingchn: number | string | null; hshippingservice: number | string | null;
+      hrate: number | string | null;
+    }>();
+  if (headerErr) {
+    console.error(`[submitShopOrderSlipPayment header] failed`, { code: headerErr.code, message: headerErr.message, hNo });
+    return { ok: false, error: `db_error:${headerErr.code ?? "unknown"}` };
+  }
+  if (!header) return { ok: false, error: "not_found" };
+  const status = (header.hstatus ?? "").trim();
+  if (status === "3" || status === "4" || status === "5") {
+    return { ok: true, data: { tx_id: "", already_submitted: true } };
+  }
+  if (status !== "2") return { ok: false, error: "order_not_payable" };
+
+  const priceToPay = computeShopOrderDebitTotal(header);
+  if (!Number.isFinite(priceToPay) || priceToPay <= 0) {
+    return { ok: false, error: "total_thb_invalid" };
+  }
+
+  // Idempotency — a pending OR approved shop-slip already exists for this hNo?
+  const { data: existing, error: existErr } = await admin
+    .from("tb_wallet_hs")
+    .select("id, status")
+    .eq("userid", memberCode)
+    .eq("type", "8")
+    .eq("reforder", header.hno)
+    .in("status", ["1", "2"])
+    .limit(1)
+    .maybeSingle<{ id: number; status: string }>();
+  if (existErr) {
+    console.error(`[submitShopOrderSlipPayment idempotency] failed`, { code: existErr.code, message: existErr.message, hNo });
+    return { ok: false, error: `db_error:${existErr.code ?? "unknown"}` };
+  }
+  if (existing) {
+    return { ok: true, data: { tx_id: String(existing.id), already_submitted: true } };
+  }
+
+  const nowIso = new Date().toISOString();
+  const slipDate = (opts.slipDate ?? "").trim();
+
+  // INSERT the PENDING shop-slip row. type='8' → approve does delta=0 (no
+  // wallet move). status='1' → admin verifies the slip, then flips the order.
+  const { data: hsRow, error: insErr } = await admin
+    .from("tb_wallet_hs")
+    .insert({
+      date:            nowIso,
+      dateslip:        slipDate || null,
+      amount:          priceToPay,
+      status:          "1",                       // PENDING admin slip-verify
+      type:            "8",                       // ฝากสั่งซื้อ ชำระด้วยสลิป (ADR-0028 · delta=0)
+      typenew:         "3",                       // ชำระฝากสั่ง
+      typeservice:     "1",                       // ฝากสั่งซื้อ
+      paydeposit:      "",                        // NOT wallet-paid (bank transfer)
+      imagesslip:      slipPath,                  // the slip
+      depositnamebank: `KBANK-${BANK.accountNumber}`,
+      nameuserbank:    "",
+      nouserbank:      "",
+      note:            `ชำระเงิน ฝากสั่งสินค้า #${header.hno} (QR+สลิป โดยลูกค้า · รอตรวจสอบ)`,
+      adminid:         "",
+      adminidupdate:   "",
+      session:         "customer-self",
+      reforder:        header.hno,
+      whno:            "",
+      wusercredit:     "0",
+      userid:          memberCode,
+      adminidcrate:    memberCode,
+    })
+    .select("id")
+    .single<{ id: number }>();
+  if (insErr || !hsRow) {
+    console.error(`[submitShopOrderSlipPayment insert] failed`, { code: insErr?.code, message: insErr?.message, hNo });
+    return { ok: false, error: `insert_failed: ${insErr?.message ?? "no_row"}` };
+  }
+
+  revalidatePath(`/service-order/${header.hno}`);
+  revalidatePath("/service-order");
+  bustCustomerChrome();
+  return { ok: true, data: { tx_id: String(hsRow.id), already_submitted: false } };
 }
