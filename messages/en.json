@@ -4510,26 +4510,6 @@
       "payFromWallet": "Or pay from wallet (฿{balance})"
     }
   },
-  "forwarderInteractivity + forwarderRowView (one lowerCamel namespace per file/unit)": {},
-  "serviceOrder + shopOrderPayModal": {
-    "shopOrderPayModal": {
-      "payScanQr": "Pay — scan QR + attach slip",
-      "modalTitle": "Pay for order #{hNo}",
-      "close": "Close",
-      "slipSentTitle": "Slip sent",
-      "slipSentSubtitle": "Our team is reviewing the slip — the order will update to \"Paid\" after review",
-      "ok": "OK",
-      "amountDue": "Amount due",
-      "slipAttached": "Attached: {name}",
-      "attachSlip": "Attach transfer slip (image/PDF)",
-      "transferDateTime": "Transfer date & time (if any)",
-      "confirmPayment": "Confirm payment",
-      "payFromWallet": "Or pay from wallet (฿{balance})",
-      "qrError": "Could not generate QR — transfer to the account number and attach the slip",
-      "uploadFailed": "Slip upload failed",
-      "attachSlipFirst": "Please attach the slip before confirming"
-    }
-  },
   "serviceImportPage": {
     "corporatePendingTitle": "Awaiting staff approval of your juristic-entity status within 24 hours.",
     "corporatePendingNote": "(excluding Sundays and public holidays)",
@@ -5690,8 +5670,6 @@
     "step4Text": "Goods leave the checkpoint, ready for pickup or immediate delivery to your warehouse / factory / doorstep",
     "registerNow": "Register now"
   },
-  "clearanceDocuments (one lowerCamel namespace per file": {},
-  "keys below are prefixed with their namespace)": {},
   "homeBottomBanner": {
     "imageAlt": "Pacred Shipping — Fast, sharp, never say it can't be done · Import, export, tax clearance",
     "lineAria": "Message Pacred Shipping on LINE",

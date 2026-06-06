@@ -4510,26 +4510,6 @@
       "payFromWallet": "หรือชำระจากกระเป๋าเงิน (฿{balance})"
     }
   },
-  "forwarderInteractivity + forwarderRowView (one lowerCamel namespace per file/unit)": {},
-  "serviceOrder + shopOrderPayModal": {
-    "shopOrderPayModal": {
-      "payScanQr": "ชำระเงิน — สแกน QR + แนบสลิป",
-      "modalTitle": "ชำระเงินฝากสั่งซื้อ #{hNo}",
-      "close": "ปิด",
-      "slipSentTitle": "ส่งสลิปเรียบร้อย",
-      "slipSentSubtitle": "ทีมงานกำลังตรวจสอบสลิป — ออเดอร์จะอัปเดตเป็น \"ชำระแล้ว\" หลังตรวจสอบ",
-      "ok": "ตกลง",
-      "amountDue": "ยอดที่ต้องชำระ",
-      "slipAttached": "แนบแล้ว: {name}",
-      "attachSlip": "แนบสลิปการโอน (รูป/PDF)",
-      "transferDateTime": "วันเวลาที่โอน (ถ้ามี)",
-      "confirmPayment": "ยืนยันการชำระเงิน",
-      "payFromWallet": "หรือชำระจากกระเป๋าเงิน (฿{balance})",
-      "qrError": "ไม่สามารถสร้าง QR ได้ — โอนตามเลขบัญชีแล้วแนบสลิปได้เลย",
-      "uploadFailed": "อัปโหลดสลิปไม่สำเร็จ",
-      "attachSlipFirst": "กรุณาแนบสลิปก่อนยืนยัน"
-    }
-  },
   "serviceImportPage": {
     "corporatePendingTitle": "รอเจ้าหน้าที่ดำเนิน อนุมัติการเป็นนิติบุคคล ภายใน 24 ชม.",
     "corporatePendingNote": "(ยกเว้นวันอาทิตย์และวันหยุดนักขัตฤกษ์)",
@@ -5690,8 +5670,6 @@
     "step4Text": "สินค้าออกจากด่าน พร้อมนัดรับหรือจัดส่งถึงโกดัง / โรงงาน / หน้าบ้านทันที",
     "registerNow": "สมัครเลย"
   },
-  "clearanceDocuments (one lowerCamel namespace per file": {},
-  "keys below are prefixed with their namespace)": {},
   "homeBottomBanner": {
     "imageAlt": "Pacred Shipping — เร็ว ไว ไม่มีคำว่าทำไม่ได้ · นำเข้า ส่งออก เคลียร์ภาษี",
     "lineAria": "ทักไลน์ Pacred Shipping",
