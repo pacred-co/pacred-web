@@ -448,7 +448,7 @@ export default async function SearchPage({
             // not_configured), mirroring legacy search.php L292-298
             // ($apiERROR2=1).
             apiError2 === 1 ? (
-              <div className="text-center py-10">
+              <div className="text-center py-6">
                 <span className="text-red-600">
                   {t("noResults")}
                 </span>

@@ -140,7 +140,7 @@ export function ShopOrderPayButton({
 
       {open && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-3xl bg-white dark:bg-gray-900 p-5 shadow-2xl">
+          <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white dark:bg-gray-900 p-5 shadow-lg">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">
                 ชำระเงินฝากสั่งซื้อ #{hNo}

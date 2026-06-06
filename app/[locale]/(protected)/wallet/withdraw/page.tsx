@@ -58,7 +58,7 @@ export default async function WalletWithdrawPage() {
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold opacity-90">{fullName}</p>
               <p className="text-xs opacity-80 mt-0.5">{t("withdrawableBalanceLabel")}</p>
-              <p className="font-mono text-4xl sm:text-5xl font-black mt-1 leading-none">
+              <p className="font-mono text-2xl sm:text-3xl font-black mt-1 leading-none">
                 {balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </p>
             </div>

@@ -209,7 +209,7 @@ export default async function CustomerFreightShipmentsPage({
         {/* Table */}
         <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
           {shipments.length === 0 ? (
-            <p className="p-12 text-center text-sm text-muted">
+            <p className="p-6 text-center text-sm text-muted">
               ไม่มีงานขนส่ง
               {status && ` สถานะ "${FREIGHT_SHIPMENT_STATUS_LABEL[status]}"`}
               {q && ` ตรงกับ "${q}"`}

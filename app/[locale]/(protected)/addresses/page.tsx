@@ -230,7 +230,7 @@ export default async function AddressesPage({
         >
             {addresses.length === 0 ? (
               /* Empty state */
-              <div className="flex flex-col items-center gap-3 py-12 text-center">
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
                 <Inbox className="h-10 w-10 text-muted/50" />
                 <p className="text-sm text-muted">{t("emptyList")}</p>
                 <AddAddressModal

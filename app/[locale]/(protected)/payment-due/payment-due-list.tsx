@@ -321,7 +321,7 @@ function PaymentDueCard({ item }: { item: PaymentDueItem }) {
   const showImage = !!item.imageUrl && !imgFailed;
 
   return (
-    <article className="relative rounded-2xl bg-white dark:bg-surface border border-border shadow-[0_4px_14px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_22px_rgba(0,0,0,0.07)] transition-shadow overflow-hidden">
+    <article className="relative rounded-2xl bg-white dark:bg-surface border border-border shadow-sm hover:shadow-md transition-shadow overflow-hidden">
       <div className="grid grid-cols-[52px_1fr] md:grid-cols-[60px_1fr_auto] gap-3 md:gap-4 p-3 flex-1 min-w-0">
         {/* Real item cover (order hcover) — falls back to the service icon. */}
         {showImage ? (

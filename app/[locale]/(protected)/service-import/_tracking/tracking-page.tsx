@@ -397,7 +397,7 @@ export default async function TrackingPage({
         {/* 3. Container cards */}
         <div className="mt-4">
           {containers.length === 0 ? (
-            <div className="mx-2 md:mx-4 rounded-2xl border border-dashed border-border bg-surface-alt/40 px-6 py-12 text-center text-muted">
+            <div className="mx-2 md:mx-4 rounded-2xl border border-dashed border-border bg-surface-alt/40 px-6 py-8 text-center text-muted">
               <Box className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p className="text-sm">
                 {q ? (

@@ -532,7 +532,7 @@ async function EmptyCartState() {
 async function ShippingOptionsCard({ userTransportType }: { userTransportType: number }) {
   const t = await getTranslations("cartPage");
   return (
-    <div className="rounded-2xl bg-white border border-border shadow-[0_4px_14px_rgba(0,0,0,0.04)] p-4 md:p-5">
+    <div className="rounded-2xl bg-white border border-border shadow-sm p-4 md:p-5">
       <h3 className="flex items-center gap-2 text-[15px] md:text-[16px] font-bold text-foreground mb-3">
         <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-primary-50 text-primary-600">
           <Truck className="w-4 h-4" strokeWidth={2.2} />

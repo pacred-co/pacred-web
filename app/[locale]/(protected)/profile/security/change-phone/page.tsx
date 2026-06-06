@@ -22,7 +22,7 @@ export default async function ChangePhonePage() {
 
   return (
     <>
-      <main className="mx-auto w-full max-w-[640px] px-4 py-12">
+      <main className="mx-auto w-full max-w-[640px] px-4 py-6">
         <div className="mb-6">
           <Link href="/profile" className="text-sm text-muted hover:text-primary-600">
             ← {t("backToProfile")}

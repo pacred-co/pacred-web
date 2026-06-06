@@ -136,7 +136,7 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold opacity-90">{customerName || t("defaultCustomerName")}</p>
             <p className="text-xs opacity-80 mt-0.5">{t("walletLabelBaht")}</p>
-            <p className="font-mono text-4xl sm:text-5xl font-black mt-1 leading-none">
+            <p className="font-mono text-2xl sm:text-3xl font-black mt-1 leading-none">
               {walletBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
             </p>
           </div>
@@ -292,7 +292,7 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
         <button
           type="submit"
           disabled={pending || thb <= 0}
-          className={`inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary-500 to-primary-700 text-white font-bold text-base px-6 py-3 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:hover:shadow-lg ${thb > 0 && !pending ? "animate-pulse" : ""}`}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary-500 to-primary-700 text-white font-bold text-sm px-5 py-2.5 shadow-sm hover:shadow-md transition-all disabled:opacity-50"
         >
           {pending
             ? t("saving")

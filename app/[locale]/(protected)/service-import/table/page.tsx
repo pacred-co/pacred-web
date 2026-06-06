@@ -681,7 +681,7 @@ export default async function ForwarderTablePage({
                     ปอน 2026-05-30 "มือถือ ทำให้ดูง่ายๆ". ── */}
                 <div className="space-y-2.5 p-2 md:hidden">
                   {rows.length === 0 ? (
-                    <p className="py-10 text-center text-sm text-muted">ไม่พบรายการ</p>
+                    <p className="py-8 text-center text-sm text-muted">ไม่พบรายการ</p>
                   ) : (
                     pageRows.map((row) => {
                       const fStatusDriver = arrFIDDriver.has(row.id) ? 1 : 0;
@@ -1010,7 +1010,7 @@ export default async function ForwarderTablePage({
                `check-all c6` + `countPay` + `price-all` classes that
                the legacy DataTables JS reads/writes. */}
       {arrStatus[5] > 0 && (
-        <div className="fixed left-2 right-20 md:left-0 md:right-0 z-[44] bottom-24 md:bottom-0 bg-white/95 dark:bg-surface/95 backdrop-blur-md border border-border md:border-0 md:border-t rounded-2xl md:rounded-none shadow-[0_-6px_24px_rgba(0,0,0,0.12)] md:shadow-[0_-6px_20px_rgba(0,0,0,0.08)] overflow-hidden">
+        <div className="fixed left-2 right-20 md:left-0 md:right-0 z-[44] bottom-24 md:bottom-0 bg-white/95 dark:bg-surface/95 backdrop-blur-md border border-border md:border-0 md:border-t rounded-2xl md:rounded-none shadow-lg overflow-hidden">
           <div className="flex items-center gap-2 md:gap-3 px-3 py-2 md:px-6 md:py-3 md:pl-[280px] md:pr-[88px]">
             <label className="flex items-center gap-1.5 shrink-0 cursor-pointer">
               <input

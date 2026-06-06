@@ -56,7 +56,7 @@ export function CartTaxDocPref({ defaults }: { defaults: TaxDocDefaults }) {
   const needsBilling = modeRequiresBillingSnapshot(mode);
 
   return (
-    <div className="rounded-2xl bg-white border border-border shadow-[0_4px_14px_rgba(0,0,0,0.04)] overflow-hidden">
+    <div className="rounded-2xl bg-white border border-border shadow-sm overflow-hidden">
       <div className="px-4 md:px-5 py-3 border-b border-border bg-gradient-to-r from-rose-50/60 via-white to-white">
         <h3 className="text-[13px] font-bold text-foreground">{t("taxDocHeader")}</h3>
         <p className="mt-0.5 text-[11px] text-muted">{t("taxDocSubheader")}</p>
