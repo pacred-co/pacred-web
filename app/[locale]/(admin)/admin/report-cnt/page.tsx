@@ -42,6 +42,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { CntListTable, type CntListRow } from "./cnt-list-table";
 
 export const dynamic = "force-dynamic";
@@ -298,6 +299,33 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
   // Header counts (independent of date filter — match legacy)
   const counts = await loadHeaderCounts(admin, startDate, endDate);
 
+  // 2026-06-06 (ภูม follow-up to B-batch): CSV export for accountants. Builds
+  // from the SAME `grouped` array the table renders, so the filtered view
+  // exports exactly what's on screen. Money columns respect `showMoney`
+  // (warehouse role doesn't see cost/price/profit). 1 row per cabinet.
+  const csvRows: CsvRow[] = grouped.map((g) => {
+    const profit = g.priceSum - g.costSum;
+    return {
+      "หมายเลขตู้":        g.fcabinetnumber,
+      "โกดัง":             WAREHOUSE_LABEL[g.fwarehousename] ?? g.fwarehousename,
+      "ขนส่ง":             TRANSPORT_LABEL[g.ftransporttype] ?? g.ftransporttype,
+      "วันที่ปิดตู้":       g.fdatecontainerclose ?? "",
+      "วันที่ถึงไทย":       g.fdatestatus4 ?? "",
+      "จำนวนแทร็คกิ้ง":    g.trackCount,
+      "ปริมาตรรวม (CBM)":  g.volumeSum.toFixed(4),
+      "น้ำหนัก (KG)":      g.weightSum.toFixed(2),
+      ...(showMoney ? {
+        "ต้นทุนรวม":  g.costSum.toFixed(2),
+        "ราคาขายรวม": g.priceSum.toFixed(2),
+        "กำไร":      profit.toFixed(2),
+      } : {}),
+      "สถานะจ่ายค่าตู้":   g.isPaid ? "จ่ายแล้ว" : "ยังไม่จ่าย",
+    };
+  });
+  const csvFilename = `pacred-report-cnt-${isWaiting ? "waiting" : "succeed"}-${transportType}-${
+    !isWaiting && startDate && endDate ? `${startDate}_to_${endDate}` : "all"
+  }.csv`;
+
   return (
     <>
       <TopMenuReport activeHref="/admin/report-cnt" />
@@ -389,6 +417,17 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
             active={transportType === "3"}
             count={counts.transportAir(isWaiting)}
           >✈️ ทางอากาศ</TabLink>
+
+          {/* 2026-06-06 (ภูม follow-up): CSV export for accountants.
+              Exports the EXACT filtered + grouped rows currently shown
+              in the table. Money columns honour the `showMoney` role gate. */}
+          <div className="ml-auto">
+            <CsvButton
+              rows={csvRows}
+              cols={Object.keys(csvRows[0] ?? {}).map((k) => ({ key: k, label: k }))}
+              filename={csvFilename}
+            />
+          </div>
         </div>
 
         {queryFailed && (
