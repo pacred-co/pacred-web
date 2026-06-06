@@ -3,6 +3,21 @@
 
 ---
 
+# 🔧 2026-06-06 PM — เดฟ: 2 RED bugs + staff/login/warehouse + incidents→0 + กอต-PR038 + 💰 wallet-rework DESIGNED · read FIRST
+
+**main = `dave-pacred` = `b46e8bd4`+ (this ADR doc) · all pushed to dave-pacred + main (+ Poom-pacred/InwPond007/podeng made equal) · `pnpm verify` + `pnpm build` EXIT 0 (REAL) · tree clean · localhost :3000 live (admin Tadsakorn-super tab).** Owner live-driven, big batch. SHIPPED (each gated + pushed):
+1. **🟢 Realtime/stale-data RED bug FIXED** (`lib/cache/revalidate-chrome.ts` → 29 actions): unstable_cache badges (`pcs-chrome`·`admin-sidebar-counts`·`wallet-system-totals`) had 744 `revalidatePath`/0 `revalidateTag` → 60 s stale. Now bust on every mutation (Next-16 `revalidateTag(tag,{expire:0})`). **NEEDS owner live-confirm.**
+2. **🟠 Random-logout RED bug = INFRA not code:** root-caused from auth-js source (getSession/getClaims-no-arg `_callRefreshToken` within 90 s margin, no autoRefreshToken gate → prefetch-concurrent rotation race · RSC can't persist rotated cookie). My code "fix" was a verified no-op → reverted. **DURABLE FIX = Supabase Dashboard → Auth → Sessions → "refresh token reuse interval" ~10 s (ก๊อต/owner).** Learning: `docs/learnings/supabase-auth-rotation-and-realtime.md`.
+3. **register popup rep PHOTO** · **employee_code login DECOUPLED from email** (ป๊อป 690601/PR132 + Tadsakorn 690603/PR112 had no email → now phone-login) · **admin pw min 8→6** (123456 unblocked).
+4. **🚚 Warehouse/driver staff LOADED** (the dump was inside `REALSHITDATAPCS.rar` — `bsdtar -xOf … pcsc_main.sql | sed` streams one table): dept3/sec6=warehouse (มาร์ค admin_alongkor·แหวน admin_saiu_4·เบียร์) + sec7=driver (ป๊อด·แมน·พุด) → loaded to prod tb_admin (adminPass preserved, adminStatus set 6/7) → login by legacy id+pass via `pcs-legacy-admin-bridge.ts`. Learning: `php-port-patterns.md`. ⚠️ not login-tested.
+5. **/admin/incidents 98 → 0** (closed 95 transient/fixed + fixed 🚢 emoji-as-next/image + extracted calPriceForwarderSumCompany→`lib/forwarder/calc-company-total.ts` (4 copies→1) + deleted orphan WalletCounter).
+6. **กอต → PR038** (owner "ยึด 038 · ล้าง 019"): PR038 = super + 690604 + admin_got identity (displays like peers); PR019 wiped to empty inactive slot. **Toey phone = 0992531415 set.**
+7. **💰 BIG: wallet/payment rework DESIGNED (NOT built — money-critical):** ฝากสั่งซื้อ to pay by QR+slip (mirror forwarder), drop forced wallet-topup, wallet→optional cashback/discount. **`docs/decisions/0028-…md`** — ⚠️ found the trap: `tb_wallet_hs.type='2'`=CREDIT (approve `+=`) → naive shop-slip approve would ADD money. DO NOT ship until full money loop browser-tested on a TEST order ("ของานละเอียด").
+
+**🔴 PENDING (owner):** Supabase refresh-token setting (bug 2) · set pw 123456 all staff + test logins (warehouse/driver/กอต 690604/เตย) · **the wallet rework = careful build + browser-test next (ADR-0028 ready).** CRM/quote-compare/cockpit/kpi = already built. **⚠️ CLAUDE.md >2000 lines → archive (§12).**
+
+---
+
 # 🔐 2026-06-06 AM — เดฟ: refund UI-verified LIVE + login-by-id + employee-code + staff photos + ภูม-merge · read FIRST
 
 **main = `dave-pacred` = `ad848e17`+ (+ create-form employee_code) · all pushed · `pnpm verify` EXIT 0 + `pnpm build` EXIT 0 (REAL exit codes) · prod migrations 0143·**0144** APPLIED · tree clean (local `.claude/launch.json` autoPort:false kept for the preview server).** Live-driven with the owner — localhost preview on :3000 (admin Tadsakorn-super + customer PR321). This session:
