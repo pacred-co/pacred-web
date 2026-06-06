@@ -133,8 +133,8 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
       <div className="rounded-2xl border-2 border-amber-300/40 bg-gradient-to-br from-amber-400 to-orange-500 text-white p-5 shadow-md overflow-hidden relative">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold opacity-90">{customerName || "ลูกค้า Pacred"}</p>
-            <p className="text-xs opacity-80 mt-0.5">กระเป๋าสตางค์ (บาท)</p>
+            <p className="text-sm font-semibold opacity-90">{customerName || t("defaultCustomerName")}</p>
+            <p className="text-xs opacity-80 mt-0.5">{t("walletLabelBaht")}</p>
             <p className="font-mono text-4xl sm:text-5xl font-black mt-1 leading-none">
               {walletBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
             </p>
@@ -148,21 +148,21 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
         </div>
         <div className="mt-3 flex items-center justify-between flex-wrap gap-2">
           <p className="text-[11px] opacity-80">
-            เรท: <b className="font-mono">1 ¥ = ฿{rate.toFixed(4)}</b>
-            <span className="ml-2 opacity-70">(อัพเดท {new Date(rateUpdatedAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })})</span>
+            {t("rateLabel")} <b className="font-mono">1 ¥ = ฿{rate.toFixed(4)}</b>
+            <span className="ml-2 opacity-70">{t("rateUpdatedTime", { time: new Date(rateUpdatedAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) })}</span>
           </p>
           <Link
             href="/wallet/deposit"
             className="inline-flex items-center gap-1 rounded-full bg-white text-amber-700 px-3 py-1 text-xs font-bold hover:bg-white/90"
           >
-            <Plus className="w-3.5 h-3.5" /> เติมเงินเข้ากระเป๋า
+            <Plus className="w-3.5 h-3.5" /> {t("topUpWallet")}
           </Link>
         </div>
       </div>
 
       {/* Reference number strip */}
       <div className="text-right">
-        <span className="text-[11px] text-muted">เลขฝากจ่าย:</span>{" "}
+        <span className="text-[11px] text-muted">{t("refNoLabel")}</span>{" "}
         <b className="font-mono text-red-600 text-sm">{refNo}</b>
       </div>
 
@@ -218,10 +218,10 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
         {/* Live math display (PCS-style: "1 หยวน = X.XX บาท / ยอดเงินที่ต้องชำระ: Y.YY บาท") */}
         <div className="rounded-xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-4">
           <p className="text-right text-xs text-red-700">
-            1 หยวน = <b className="font-mono">{rate.toFixed(2)}</b> บาท
+            {t("oneYuanEquals")} <b className="font-mono">{rate.toFixed(2)}</b> {t("bahtUnit")}
           </p>
           <div className="mt-1 flex items-baseline justify-end gap-2">
-            <span className="text-xs text-muted">ยอดเงินที่ต้องชำระ:</span>
+            <span className="text-xs text-muted">{t("amountDue")}</span>
             <span className="font-mono text-3xl font-bold text-red-600">
               ฿{thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
             </span>
@@ -285,7 +285,11 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
           disabled={pending || thb <= 0}
           className={`inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary-500 to-primary-700 text-white font-bold text-base px-6 py-3 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:hover:shadow-lg ${thb > 0 && !pending ? "animate-pulse" : ""}`}
         >
-          {pending ? "กำลังบันทึก..." : `✅ ยืนยันสั่งฝากชำระ${thb > 0 ? ` ฿${thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}` : ""}`}
+          {pending
+            ? t("saving")
+            : thb > 0
+              ? `✅ ${t("confirmPaymentWithAmount", { amount: thb.toLocaleString("th-TH", { minimumFractionDigits: 2 }) })}`
+              : `✅ ${t("confirmPayment")}`}
         </button>
       </div>
     </form>

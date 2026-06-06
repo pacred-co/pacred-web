@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { customerCreateRefundRequest } from "@/actions/refunds";
 import {
   CUSTOMER_REFUND_SOURCES,
@@ -21,6 +22,7 @@ const inputCls =
   "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
 
 export function RefundRequestForm({ sourceOptions }: Props) {
+  const t = useTranslations("customerRefunds");
   const router = useRouter();
   const [source, setSource] = useState<CustomerRefundSource>(
     (sourceOptions[0]?.source ?? "forwarder") as CustomerRefundSource,
@@ -48,15 +50,15 @@ export function RefundRequestForm({ sourceOptions }: Props) {
     setError(null);
     const amt = Number(amount);
     if (!Number.isFinite(amt) || amt <= 0) {
-      setError("ยอดต้องมากกว่า 0");
+      setError(t("errAmountPositive"));
       return;
     }
     if (!sourceRef) {
-      setError("กรุณาเลือกรายการอ้างอิง");
+      setError(t("errSelectRef"));
       return;
     }
     if (reason.trim().length < 10) {
-      setError("กรุณาระบุเหตุผลอย่างน้อย 10 ตัวอักษร");
+      setError(t("errReasonMin"));
       return;
     }
     startTransition(async () => {
@@ -78,17 +80,16 @@ export function RefundRequestForm({ sourceOptions }: Props) {
   if (done) {
     return (
       <div className="rounded-xl border border-green-200 bg-green-50 p-6 text-center space-y-3">
-        <h3 className="text-lg font-bold text-green-800">ส่งคำขอคืนเงินสำเร็จ</h3>
+        <h3 className="text-lg font-bold text-green-800">{t("successTitle")}</h3>
         <p className="text-sm text-green-700">
-          ทีม Pacred จะตรวจสอบและแจ้งผลภายใน 1-3 วันทำการ
-          เช็คสถานะคำขอด้านล่าง
+          {t("successBody")}
         </p>
         <button
           type="button"
           onClick={() => { setDone(false); setAmount(""); setReason(""); setError(null); }}
           className="rounded-lg border border-green-300 bg-white px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
         >
-          ขอคืนเงินอีกรายการ
+          {t("successAnother")}
         </button>
       </div>
     );
@@ -103,7 +104,7 @@ export function RefundRequestForm({ sourceOptions }: Props) {
       {/* Source picker */}
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block space-y-1">
-          <span className="text-xs font-medium">ประเภทออเดอร์<span className="text-red-600 ml-0.5">*</span></span>
+          <span className="text-xs font-medium">{t("labelOrderType")}<span className="text-red-600 ml-0.5">*</span></span>
           <select
             value={source}
             onChange={(e) => onSourceChange(e.target.value as CustomerRefundSource)}
@@ -117,7 +118,7 @@ export function RefundRequestForm({ sourceOptions }: Props) {
         </label>
 
         <label className="block space-y-1">
-          <span className="text-xs font-medium">รายการอ้างอิง<span className="text-red-600 ml-0.5">*</span></span>
+          <span className="text-xs font-medium">{t("labelRef")}<span className="text-red-600 ml-0.5">*</span></span>
           <select
             value={sourceRef}
             onChange={(e) => setSourceRef(e.target.value)}
@@ -126,7 +127,7 @@ export function RefundRequestForm({ sourceOptions }: Props) {
             disabled={filteredOptions.length === 0}
           >
             {filteredOptions.length === 0 ? (
-              <option value="">— ไม่มีรายการประเภทนี้ —</option>
+              <option value="">{t("noRefOfType")}</option>
             ) : (
               filteredOptions.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -138,7 +139,7 @@ export function RefundRequestForm({ sourceOptions }: Props) {
 
       {/* Amount */}
       <label className="block space-y-1">
-        <span className="text-xs font-medium">ยอดที่ขอคืน (บาท)<span className="text-red-600 ml-0.5">*</span></span>
+        <span className="text-xs font-medium">{t("labelAmount")}<span className="text-red-600 ml-0.5">*</span></span>
         <div className="relative">
           <input
             type="number"
@@ -156,7 +157,7 @@ export function RefundRequestForm({ sourceOptions }: Props) {
 
       {/* Reason */}
       <label className="block space-y-1">
-        <span className="text-xs font-medium">เหตุผล (อย่างน้อย 10 ตัวอักษร)<span className="text-red-600 ml-0.5">*</span></span>
+        <span className="text-xs font-medium">{t("labelReason")}<span className="text-red-600 ml-0.5">*</span></span>
         <textarea
           rows={4}
           value={reason}
@@ -165,10 +166,10 @@ export function RefundRequestForm({ sourceOptions }: Props) {
           required
           minLength={10}
           maxLength={2000}
-          placeholder="เช่น สินค้าไม่ตรงตามที่สั่ง / Pacred ยกเลิกการนำเข้า / เก็บค่าบริการเกิน ฯลฯ"
+          placeholder={t("reasonPlaceholder")}
         />
         <span className="block text-xs text-muted">
-          {reason.trim().length} / 10 ตัวอักษรขั้นต่ำ
+          {t("reasonCounter", { count: reason.trim().length })}
         </span>
       </label>
 
@@ -177,7 +178,7 @@ export function RefundRequestForm({ sourceOptions }: Props) {
         disabled={pending || filteredOptions.length === 0}
         className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary-500 to-primary-700 text-white font-bold text-sm px-6 py-3 shadow-md hover:shadow-lg transition-all disabled:opacity-50"
       >
-        {pending ? "กำลังส่งคำขอ..." : "ส่งคำขอคืนเงิน"}
+        {pending ? t("submitting") : t("submit")}
       </button>
     </form>
   );

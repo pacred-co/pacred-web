@@ -19,6 +19,7 @@
  */
 
 import { useEffect, useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   clearMySearchHistory,
@@ -33,6 +34,7 @@ type Props = {
 };
 
 export function SearchRecents({ limit = 8 }: Props) {
+  const t = useTranslations("searchPage");
   const router = useRouter();
   const [items, setItems] = useState<RecentSearch[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -58,7 +60,7 @@ export function SearchRecents({ limit = 8 }: Props) {
   }
 
   async function clear() {
-    if (!(await confirm("ล้างประวัติการค้นหาทั้งหมด?"))) return;
+    if (!(await confirm(t("clearAllHistoryConfirm")))) return;
     startTransition(async () => {
       const res = await clearMySearchHistory();
       if (res.ok) setItems([]);
@@ -87,14 +89,14 @@ export function SearchRecents({ limit = 8 }: Props) {
           flexShrink: 0,
         }}
       >
-        ค้นหาล่าสุด:
+        {t("recentSearches")}
       </span>
       {items.map((row) => (
         <button
           key={`${row.query}-${row.created_at}`}
           type="button"
           onClick={() => rerun(row.query)}
-          title={`ค้นหา "${row.query}" อีกครั้ง`}
+          title={t("rerunSearchTitle", { query: row.query })}
           style={{
             background:   "#fff",
             border:       "1px solid #d1d5db",
@@ -116,8 +118,8 @@ export function SearchRecents({ limit = 8 }: Props) {
         type="button"
         onClick={clear}
         disabled={pending}
-        title="ล้างประวัติ"
-        aria-label="ล้างประวัติการค้นหา"
+        title={t("clearHistory")}
+        aria-label={t("clearHistoryAriaLabel")}
         style={{
           background: "transparent",
           border:     "none",

@@ -39,6 +39,7 @@
  */
 
 import { useActionState, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   updatePasswordAction,
   accountSettingsLogoutAction,
@@ -58,29 +59,33 @@ type SwalContent = { title: string; text: string; type: "success" | "error" };
  * type — account-settings.php L206-247. Pure: the popup is fully derived
  * from the action result, so it is computed during render (no effect).
  */
-function deriveSwal(state: AccountSettingsResult | null): SwalContent | null {
+function deriveSwal(
+  state: AccountSettingsResult | null,
+  t: (key: string) => string,
+): SwalContent | null {
   if (!state) return null;
   switch (state.sweetalert) {
     case "sPass": // L208-219
       return {
-        title: "อัปเดตข้อมูลสำเร็จ",
-        text: "กรุณาเข้าสู่ระบบใหม่อีกครั้ง!!!",
+        title: t("swalSuccessTitle"),
+        text: t("swalSuccessText"),
         type: "success",
       };
     case "eSQL": // L220-228
-      return { title: "ผิดพลาด", text: "กรุณาลองใหม่อีกครั้ง!!!", type: "error" };
+      return { title: t("swalErrorTitle"), text: t("swalRetryText"), type: "error" };
     case "ePass": // L229-237
-      return { title: "ผิดพลาด", text: "รหัสผ่านเดิมไม่ถูกต้อง!!!", type: "error" };
+      return { title: t("swalErrorTitle"), text: t("swalWrongOldPassText"), type: "error" };
     case "eConfirm": // L238-246
-      return { title: "ผิดพลาด", text: "รหัสใหม่ไม่ตรงกัน!!!", type: "error" };
+      return { title: t("swalErrorTitle"), text: t("swalMismatchText"), type: "error" };
     case "empty": // L7 — legacy alert("กรุณากรอกข้อมูลให้ครบ")
-      return { title: "กรุณากรอกข้อมูลให้ครบ", text: "", type: "error" };
+      return { title: t("swalFillAllTitle"), text: "", type: "error" };
     default:
       return null;
   }
 }
 
 export function PasswordForm() {
+  const t = useTranslations("accountSettingsPage");
   const [state, formAction] = useActionState<AccountSettingsResult | null, FormData>(
     updatePasswordAction,
     null,
@@ -110,7 +115,7 @@ export function PasswordForm() {
   // dismissed (by object identity — `useActionState` mints a fresh result
   // object per submit) hides it without a derive-in-effect anti-pattern.
   const [dismissed, setDismissed] = useState<AccountSettingsResult | null>(null);
-  const alertMsg = state && state !== dismissed ? deriveSwal(state) : null;
+  const alertMsg = state && state !== dismissed ? deriveSwal(state, t) : null;
 
   // The ONLY real side effect: on `sPass` the legacy page does
   // `window.setTimeout(... logout/ ,4500)`. No setState here.
@@ -129,20 +134,20 @@ export function PasswordForm() {
           form wiring (ids · names · types · server action · validation
           state), only presentation classes converted. Mobile-first inputs
           use text-base to stop iOS zoom. */}
-      <span className="text-base font-bold text-foreground">เปลี่ยนรหัสผ่านใหม่ </span>
+      <span className="text-base font-bold text-foreground">{t("changePasswordHeading")} </span>
       <hr className="my-3 border-t border-border" />
       <form className="mt-2" action={formAction} autoComplete="off">
         {/* L80-88 — รหัสผ่านเดิม */}
         <div className="mb-3">
           <div className="relative" id="show_hide_password">
-            <label className="block text-xs font-medium text-muted mb-1">รหัสผ่านเดิม</label>
+            <label className="block text-xs font-medium text-muted mb-1">{t("oldPasswordLabel")}</label>
             <input
               id="password"
               className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 pr-11 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
               name="password"
               type={show1 ? "text" : "password"}
               required
-              placeholder="รหัสผ่านเดิม"
+              placeholder={t("oldPasswordLabel")}
               minLength={6}
               maxLength={20}
               value={oldPass}
@@ -167,10 +172,10 @@ export function PasswordForm() {
         <div className="mb-3">
           <div className="relative" id="show_hide_password2">
             <label className="block text-xs font-medium text-muted mb-1">
-              รหัสผ่านใหม่{" "}
+              {t("newPasswordLabel")}{" "}
               <span id="showText" className={`text-red-600 ${newSameAsOld ? "" : "hidden"}`}>
                 {" "}
-                รหัสผ่านใหม่ต้องไม่ตรงกับรหัสผ่านเดิม
+                {t("newPasswordSameAsOld")}
               </span>
             </label>
             <input
@@ -179,7 +184,7 @@ export function PasswordForm() {
               name="password1"
               type={show2 ? "text" : "password"}
               required
-              placeholder="รหัสผ่านใหม่"
+              placeholder={t("newPasswordLabel")}
               minLength={6}
               maxLength={20}
               value={newPass}
@@ -201,17 +206,17 @@ export function PasswordForm() {
                 <i className={show2 ? "fa fa-eye" : "fa fa-eye-slash"} aria-hidden="true"></i>
               </a>
             </div>
-            <div className="text-xs text-muted mt-1">(6-20 ตัวอักษร)</div>
+            <div className="text-xs text-muted mt-1">{t("passwordLengthHint")}</div>
           </div>
         </div>
         {/* L100-108 — ยืนยันรหัสผ่านใหม่ */}
         <div className="mb-3">
           <div className="relative" id="show_hide_password3">
             <label className="block text-xs font-medium text-muted mb-1">
-              ยืนยันรหัสผ่านใหม่{" "}
+              {t("confirmPasswordLabel")}{" "}
               <span id="showText2" className={`text-red-600 ${confirmMismatch ? "" : "hidden"}`}>
                 {" "}
-                รหัสผ่านใหม่ไม่ตรงกัน
+                {t("confirmPasswordMismatch")}
               </span>
             </label>
             <input
@@ -224,7 +229,7 @@ export function PasswordForm() {
               name="password2"
               type={show3 ? "text" : "password"}
               required
-              placeholder="ยืนยันรหัสผ่านใหม่"
+              placeholder={t("confirmPasswordLabel")}
               minLength={6}
               maxLength={20}
               value={confirmPass}
@@ -255,7 +260,7 @@ export function PasswordForm() {
             className="rounded-lg border border-border bg-white dark:bg-surface text-foreground hover:bg-surface-alt px-4 py-2 text-sm font-bold"
             data-dismiss="modal"
           >
-            ยกเลิก
+            {t("cancel")}
           </button>
           <button
             type="submit"
@@ -265,7 +270,7 @@ export function PasswordForm() {
             className="rounded-lg bg-red-600 hover:bg-red-700 text-white px-4 py-2 text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={submitDisabled}
           >
-            เปลี่ยนรหัสผ่านใหม่
+            {t("changePasswordHeading")}
           </button>
         </div>
       </form>
@@ -289,7 +294,7 @@ export function PasswordForm() {
                 className="btn btn-outline-info round btn-min-width"
                 onClick={() => setDismissed(state)}
               >
-                ตกลง
+                {t("ok")}
               </button>
             )}
           </div>

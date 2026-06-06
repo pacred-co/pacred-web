@@ -30,6 +30,7 @@
  */
 
 import { useMemo, useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { ShoppingCart, Plus, Minus, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { addCartItem } from "@/actions/cart";
@@ -100,6 +101,7 @@ export function UrlPasteAddToCart({
   basePriceCny?:  number;
   promoPriceCny?: number;
 }) {
+  const t = useTranslations("searchPage");
   const minClamp = Math.max(1, minQty);
   const maxClamp = Math.max(minClamp, maxQty || 999);
 
@@ -183,10 +185,10 @@ export function UrlPasteAddToCart({
           <AlertTriangle className="h-6 w-6 text-amber-600 flex-shrink-0 mt-0.5" />
           <div className="space-y-1">
             <p className="font-semibold text-amber-900 text-base">
-              ดึงรายละเอียดสินค้าจากลิงก์นี้ไม่สำเร็จ
+              {t("fetchDetailFailed")}
             </p>
             <p className="text-sm text-amber-800">
-              ระบบยังเปิดดูร้าน {shopName || "นี้"} ไม่ได้ · กรอกข้อมูลสินค้าเองได้ที่หน้า &ldquo;เพิ่มสินค้าในรถเข็น&rdquo;
+              {t("fetchDetailFailedHint", { shop: shopName || t("thisShopFallback") })}
             </p>
           </div>
         </div>
@@ -195,11 +197,11 @@ export function UrlPasteAddToCart({
           className="inline-flex items-center justify-center gap-2 rounded-full bg-amber-600 hover:bg-amber-700 text-white text-base font-semibold px-5 py-3 min-h-[44px] w-full md:w-auto transition-colors"
         >
           <ShoppingCart className="h-5 w-5" />
-          เปิดหน้าเพิ่มสินค้า (กรอกเอง)
+          {t("openAddProductManual")}
         </Link>
         {url && (
           <p className="text-xs text-amber-800 break-all">
-            ลิงก์เดิมที่คุณวาง: <code className="bg-amber-100 px-1 rounded">{url}</code>
+            {t("originalLinkPasted")}: <code className="bg-amber-100 px-1 rounded">{url}</code>
           </p>
         )}
       </div>
@@ -239,15 +241,15 @@ export function UrlPasteAddToCart({
 
   function onSubmit() {
     if (axesIncomplete) {
-      setError("เลือกตัวเลือกสินค้าให้ครบก่อน");
+      setError(t("selectAllOptionsFirst"));
       return;
     }
     if (effectivePriceCny <= 0) {
-      setError("ยังไม่ใส่ราคา CNY · กรอกราคาก่อน");
+      setError(t("priceNotEnteredError"));
       return;
     }
     if (!title.trim()) {
-      setError("ไม่พบชื่อสินค้า · ลองวาง URL ใหม่หรือใช้ /service-order/add");
+      setError(t("noProductNameError"));
       return;
     }
     setError(null); setSuccess(false);
@@ -285,10 +287,10 @@ export function UrlPasteAddToCart({
         // Translate the few error codes the customer cares about.
         const msg =
           res.error === "cart cap reached (151 items)"
-            ? "ตะกร้าเต็มแล้ว (151 ชิ้น) · ลบรายการบางตัวออกก่อน"
+            ? t("cartFullError")
             : res.error === "not_signed_in"
-              ? "เซสชั่นหมดอายุ · เข้าสู่ระบบใหม่"
-              : `ใส่ตะกร้าไม่สำเร็จ: ${res.error}`;
+              ? t("sessionExpiredError")
+              : t("addToCartFailedError", { error: res.error });
         setError(msg);
       }
     });
@@ -308,13 +310,13 @@ export function UrlPasteAddToCart({
       {skuAxes && skuAxes.length > 0 && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 space-y-3">
           <p className="text-sm font-semibold text-emerald-900">
-            เลือกตัวเลือกสินค้า{" "}
+            {t("selectProductOptions")}{" "}
             {axesIncomplete && (
-              <span className="text-red-600 font-bold ml-1">(จำเป็น)</span>
+              <span className="text-red-600 font-bold ml-1">{t("required")}</span>
             )}
             {matchedSku && (
               <span className="text-emerald-700 ml-2 text-xs font-normal">
-                ✓ เลือกครบ · ราคา ¥{matchedSku.price_cny.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {t("allSelectedPrice", { price: matchedSku.price_cny.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) })}
               </span>
             )}
           </p>
@@ -327,7 +329,7 @@ export function UrlPasteAddToCart({
                   {selectedLabel && (
                     <span className="ml-2 text-primary-600 font-medium">: {selectedLabel}</span>
                   )}
-                  <span className="ml-1.5 text-xs text-emerald-600">({axis.values.length} ตัวเลือก)</span>
+                  <span className="ml-1.5 text-xs text-emerald-600">{t("optionsCount", { count: axis.values.length })}</span>
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {axis.values.map((v) => {
@@ -383,14 +385,14 @@ export function UrlPasteAddToCart({
         <label className="block rounded-xl border border-amber-300 bg-amber-50 p-3">
           <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 mb-1.5">
             <AlertTriangle className="h-4 w-4" />
-            ราคา CNY (ระบบดึงราคาจาก {shopName || "ร้านนี้"} ไม่ได้ · กรอกราคาที่เห็นเอง)
+            {t("manualPriceLabel", { shop: shopName || t("thisShopFallback2") })}
           </span>
           <div className="flex items-center gap-2">
             <input
               type="number"
               value={manualPrice}
               onChange={(e) => setManualPrice(e.target.value)}
-              placeholder="เช่น 19.90"
+              placeholder={t("priceExamplePlaceholder")}
               step="0.01"
               min="0"
               inputMode="decimal"
@@ -409,34 +411,34 @@ export function UrlPasteAddToCart({
       {/* Color / size / details — legacy customer cart parity */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         <label className="block">
-          <span className="text-sm text-muted block mb-1">สี (ถ้ามี)</span>
+          <span className="text-sm text-muted block mb-1">{t("colorLabel")}</span>
           <input
             type="text"
             value={color}
             onChange={(e) => setColor(e.target.value)}
-            placeholder="เช่น แดง · ดำ"
+            placeholder={t("colorPlaceholder")}
             maxLength={200}
             className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-primary-500/50"
           />
         </label>
         <label className="block">
-          <span className="text-sm text-muted block mb-1">ไซส์ (ถ้ามี)</span>
+          <span className="text-sm text-muted block mb-1">{t("sizeLabel")}</span>
           <input
             type="text"
             value={size}
             onChange={(e) => setSize(e.target.value)}
-            placeholder="เช่น M · L · 38"
+            placeholder={t("sizePlaceholder")}
             maxLength={200}
             className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-primary-500/50"
           />
         </label>
       </div>
       <label className="block">
-        <span className="text-sm text-muted block mb-1">รายละเอียดเพิ่มเติม (ถ้ามี)</span>
+        <span className="text-sm text-muted block mb-1">{t("detailsLabel")}</span>
         <textarea
           value={details}
           onChange={(e) => setDetails(e.target.value)}
-          placeholder="คำสั่งพิเศษ · สิ่งที่อยากให้ admin รู้"
+          placeholder={t("detailsPlaceholder")}
           maxLength={2000}
           rows={2}
           className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-primary-500/50"
@@ -446,13 +448,13 @@ export function UrlPasteAddToCart({
       {/* qty stepper + total */}
       <div className="rounded-xl border border-border bg-surface-alt/50 dark:bg-surface-alt/30 p-3 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-base font-semibold text-foreground">จำนวน</span>
+          <span className="text-base font-semibold text-foreground">{t("quantity")}</span>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => adjQty(-1)}
               disabled={pending || qty <= minClamp}
-              aria-label="ลดจำนวน"
+              aria-label={t("decreaseQuantity")}
               className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white dark:bg-surface text-foreground hover:bg-surface-alt disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Minus className="h-5 w-5" />
@@ -476,7 +478,7 @@ export function UrlPasteAddToCart({
               type="button"
               onClick={() => adjQty(1)}
               disabled={pending || qty >= maxClamp}
-              aria-label="เพิ่มจำนวน"
+              aria-label={t("increaseQuantity")}
               className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white dark:bg-surface text-foreground hover:bg-surface-alt disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Plus className="h-5 w-5" />
@@ -484,7 +486,7 @@ export function UrlPasteAddToCart({
           </div>
         </div>
         <div className="flex flex-wrap items-baseline justify-between text-sm">
-          <span className="text-muted">ราคารวม</span>
+          <span className="text-muted">{t("total")}</span>
           <span>
             <b className="text-red-600 text-lg">{lineTotalThb.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>
             {" "}฿
@@ -505,8 +507,8 @@ export function UrlPasteAddToCart({
         <div role="status" className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700 flex items-center gap-2">
           <CheckCircle2 className="h-5 w-5 flex-shrink-0" />
           <span>
-            ใส่ตะกร้าเรียบร้อย ·{" "}
-            <Link href="/cart" className="underline font-semibold">ไปดูตะกร้า</Link>
+            {t("addedToCart")} ·{" "}
+            <Link href="/cart" className="underline font-semibold">{t("viewCart")}</Link>
           </span>
         </div>
       )}
@@ -520,14 +522,14 @@ export function UrlPasteAddToCart({
       >
         <ShoppingCart className="h-5 w-5" />
         {pending
-          ? "กำลังใส่ตะกร้า…"
+          ? t("addingToCart")
           : !title.trim()
-            ? "ไม่พบชื่อสินค้า"
+            ? t("noProductName")
             : axesIncomplete
-              ? "เลือกตัวเลือกสินค้าให้ครบก่อน"
+              ? t("selectAllOptionsFirst")
               : effectivePriceCny <= 0
-                ? "กรอกราคา CNY ด้านบน"
-                : "หยิบใส่รถเข็น"}
+                ? t("enterPriceAbove")
+                : t("addToCart")}
       </button>
     </div>
   );

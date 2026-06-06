@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -102,6 +103,7 @@ export default async function SalesHistoryPage({
   searchParams: Promise<{ page?: string }>;
 }) {
   const sp = await searchParams;
+  const t = await getTranslations("salesPort");
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
 
@@ -164,7 +166,7 @@ export default async function SalesHistoryPage({
           <div className="flex flex-col gap-2.5 border-b border-border px-3 py-3 md:flex-row md:items-center md:justify-between md:px-5 md:py-4">
             <h3 className="flex items-center gap-2 text-base md:text-xl font-bold text-foreground">
               <span className="font-30 ft-users" aria-hidden></span>
-              ประวัติจ่ายเงินลูกค้าตัวแทน
+              {t("payoutHistoryTitle")}
             </h3>
             <Link
               href="/sales/report/add"
@@ -173,7 +175,7 @@ export default async function SalesHistoryPage({
               <span className="grid h-6 w-6 place-items-center rounded-full bg-white/25">
                 <i className="ft-plus" aria-hidden></i>
               </span>
-              ทำรายการเบิกเงิน
+              {t("makeWithdrawal")}
             </Link>
           </div>
 
@@ -181,7 +183,7 @@ export default async function SalesHistoryPage({
           <div className="px-3 py-3 md:px-5 md:py-4">
             {rows.length === 0 ? (
               <p className="py-12 text-center text-sm text-muted">
-                ยังไม่มีประวัติการจ่ายเงิน
+                {t("emptyPayoutHistory")}
               </p>
             ) : (
               <>
@@ -196,15 +198,15 @@ export default async function SalesHistoryPage({
                         <span className="font-mono text-xs text-muted">
                           {row.userIDMain}
                         </span>
-                        {nameStatusUserPay(row.status)}
+                        {nameStatusUserPay(row.status, t)}
                       </div>
                       <div className="mt-1.5 font-mono text-lg font-bold tabular-nums text-red-600">
                         {numberFormat(row.amount, 2)}{" "}
-                        <span className="text-xs font-normal text-muted">บาท</span>
+                        <span className="text-xs font-normal text-muted">{t("baht")}</span>
                       </div>
                       <div className="mt-2 flex items-center justify-between gap-2 border-t border-dashed border-border pt-2">
                         <span className="text-[11px] text-muted">
-                          {row.dateLabel} {row.timeLabel} น.
+                          {row.dateLabel} {row.timeLabel} {t("timeSuffix")}
                         </span>
                         <div className="flex items-center gap-3">
                           {/* L199-204 — slip link shows only when status==3. */}
@@ -213,14 +215,14 @@ export default async function SalesHistoryPage({
                               className="image-popup-vertical-fit el-link text-xs font-medium text-sky-600 hover:underline"
                               href={legacyMemberUrl(`storage/slip/${row.imagesSlip ?? ""}`)}
                             >
-                              ดูสลิป
+                              {t("viewSlip")}
                             </a>
                           )}
                           <Link
                             href={`/sales/history/${row.ID}`}
                             className="rounded-full border border-emerald-500 px-3 py-1 text-xs font-medium text-emerald-600 hover:bg-emerald-50"
                           >
-                            ดูรายละเอียด
+                            {t("viewDetails")}
                           </Link>
                         </div>
                       </div>
@@ -235,12 +237,12 @@ export default async function SalesHistoryPage({
                   <table id="myTable" className="dataTable w-full text-sm">
                     <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                       <tr>
-                        <th className="px-4 py-3 font-medium text-center whitespace-nowrap">วันที่ทำรายการ</th>
-                        <th className="px-4 py-3 font-medium text-center whitespace-nowrap">รหัสตัวแทนขาย</th>
-                        <th className="px-4 py-3 font-medium text-right whitespace-nowrap">จำนวนเงิน</th>
-                        <th className="px-4 py-3 font-medium text-center whitespace-nowrap">สลิป</th>
-                        <th className="px-4 py-3 font-medium text-center whitespace-nowrap">สถานะรายการ</th>
-                        <th className="px-4 py-3 font-medium text-center whitespace-nowrap">ตัวเลือก</th>
+                        <th className="px-4 py-3 font-medium text-center whitespace-nowrap">{t("transactionDate")}</th>
+                        <th className="px-4 py-3 font-medium text-center whitespace-nowrap">{t("salesAgentCode")}</th>
+                        <th className="px-4 py-3 font-medium text-right whitespace-nowrap">{t("amount")}</th>
+                        <th className="px-4 py-3 font-medium text-center whitespace-nowrap">{t("slip")}</th>
+                        <th className="px-4 py-3 font-medium text-center whitespace-nowrap">{t("transactionStatus")}</th>
+                        <th className="px-4 py-3 font-medium text-center whitespace-nowrap">{t("options")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -250,7 +252,7 @@ export default async function SalesHistoryPage({
                           className="border-t border-border hover:bg-surface-alt/30"
                         >
                           <td className="px-4 py-3 text-center text-xs text-muted whitespace-nowrap">
-                            {row.dateLabel} {row.timeLabel} น.
+                            {row.dateLabel} {row.timeLabel} {t("timeSuffix")}
                           </td>
                           <td className="px-4 py-3 text-center font-mono text-xs text-foreground">
                             {row.userIDMain}
@@ -265,19 +267,19 @@ export default async function SalesHistoryPage({
                                 className="image-popup-vertical-fit el-link text-xs font-medium text-sky-600 hover:underline"
                                 href={legacyMemberUrl(`storage/slip/${row.imagesSlip ?? ""}`)}
                               >
-                                ดูสลิป
+                                {t("viewSlip")}
                               </a>
                             )}
                           </td>
                           <td className="px-4 py-3 text-center">
-                            {nameStatusUserPay(row.status)}
+                            {nameStatusUserPay(row.status, t)}
                           </td>
                           <td className="px-4 py-3 text-center">
                             <Link
                               href={`/sales/history/${row.ID}`}
                               className="inline-block rounded-full border border-emerald-500 px-3 py-1 text-xs font-medium text-emerald-600 hover:bg-emerald-50"
                             >
-                              ดูรายละเอียด
+                              {t("viewDetails")}
                             </Link>
                           </td>
                         </tr>

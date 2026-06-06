@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CONTACT } from "@/components/seo/site";
@@ -16,6 +17,7 @@ import { MobileLaunchpad } from "./mobile-launchpad";
 export const dynamic = "force-dynamic";
 
 export default async function MobileDashboardPage() {
+  const t = await getTranslations("mobileDashboard");
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
   const { profile } = data;
@@ -52,7 +54,7 @@ export default async function MobileDashboardPage() {
   return (
     <MobileLaunchpad
       memberCode={profile.member_code ?? ""}
-      fullName={fullName || "ลูกค้า Pacred"}
+      fullName={fullName || t("customerFallback")}
       avatarUrl={profile.avatar_url}
       walletTotal={walletTotal}
       salesRep={salesRep}

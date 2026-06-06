@@ -22,6 +22,7 @@
  */
 
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getYuanPayment } from "@/actions/payment";
@@ -36,15 +37,17 @@ const STATUS_BADGE: Record<string, string> = {
   completed:  "bg-green-50 text-green-700 border-green-200",
   failed:     "bg-red-50 text-red-700 border-red-200",
 };
-const STATUS_LABEL: Record<string, string> = {
-  pending:    "รอตรวจสอบ",
-  completed:  "สำเร็จ",
-  failed:     "ไม่สำเร็จ",
+// payStatus → display-label translation key (the map key is the stable status id).
+const STATUS_LABEL_KEY: Record<string, string> = {
+  pending:    "detailStatusPending",
+  completed:  "detailStatusCompleted",
+  failed:     "detailStatusFailed",
 };
+// channel → display label. alipay/wechat are brand names (not translated); bank
+// resolves to a translation key for the Thai label.
 const CHANNEL_LABEL: Record<string, string> = {
   alipay: "Alipay",
   wechat: "WeChat",
-  bank:   "ธนาคารจีน",
 };
 
 export default async function YuanPaymentDetailPage({
@@ -53,9 +56,19 @@ export default async function YuanPaymentDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const t = await getTranslations("payment");
   const res = await getYuanPayment(id);
   if (!res.ok || !res.data) notFound();
   const yp = res.data;
+
+  // Resolve display labels (the map keys / yp.* values stay data; only labels translate).
+  const statusLabel = STATUS_LABEL_KEY[yp.status]
+    ? t(STATUS_LABEL_KEY[yp.status])
+    : yp.status;
+  const channelLabel =
+    yp.channel === "bank"
+      ? t("detailChannelBank")
+      : (CHANNEL_LABEL[yp.channel] ?? yp.channel);
 
   // U4-3b: tax-invoice eligibility — must be completed + customer has tax_id.
   // The auth user IS the customer who owns yp (getYuanPayment scopes by
@@ -99,17 +112,17 @@ export default async function YuanPaymentDetailPage({
       <main className="mx-auto w-full max-w-[900px] px-4 py-6 space-y-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-600">ฝากโอนหยวน</p>
+            <p className="text-xs font-semibold tracking-widest text-primary-600">{t("detailKicker")}</p>
             <h1 className="mt-1 text-2xl font-bold font-mono text-foreground">#{yp.id}</h1>
             <p className="text-xs text-muted mt-1">
-              สร้างเมื่อ {new Date(yp.created_at).toLocaleString("th-TH")}
+              {t("detailCreatedAt", { date: new Date(yp.created_at).toLocaleString("th-TH") })}
               {yp.paydateadmin && (
-                <> · ตรวจสอบเมื่อ {new Date(yp.paydateadmin).toLocaleString("th-TH")}</>
+                <> · {t("detailReviewedAt", { date: new Date(yp.paydateadmin).toLocaleString("th-TH") })}</>
               )}
             </p>
           </div>
           <Link href="/service-payment" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
-            ← กลับรายการ
+            {t("backToListArrow")}
           </Link>
         </div>
 
@@ -117,28 +130,28 @@ export default async function YuanPaymentDetailPage({
         <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
           <div className="flex flex-wrap items-center gap-3">
             <span className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_BADGE[yp.status] ?? ""}`}>
-              {STATUS_LABEL[yp.status] ?? yp.status}
+              {statusLabel}
             </span>
-            <span className="text-sm text-muted">ช่องทาง: <strong className="text-foreground">{CHANNEL_LABEL[yp.channel] ?? yp.channel}</strong></span>
+            <span className="text-sm text-muted">{t("detailChannelLabel")} <strong className="text-foreground">{channelLabel}</strong></span>
             {yp.paid_via_wallet && (
-              <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[11px]">💳 ตัดจากกระเป๋า</span>
+              <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[11px]">💳 {t("detailPaidViaWallet")}</span>
             )}
           </div>
 
           <div className="grid sm:grid-cols-2 gap-3 text-sm">
             <div className="rounded-lg border border-border p-3">
-              <p className="text-[10px] uppercase tracking-widest text-muted">ยอด CNY</p>
+              <p className="text-[10px] uppercase tracking-widest text-muted">{t("detailAmountCny")}</p>
               <p className="mt-1 text-xl font-bold font-mono">¥{Number(yp.yuan_amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
               <p className="text-[10px] text-muted">@ ฿{Number(yp.exchange_rate).toFixed(4)} / ¥</p>
             </div>
             <div className="rounded-lg border border-primary-200 bg-primary-50/40 p-3">
-              <p className="text-[10px] uppercase tracking-widest text-primary-700">ยอด THB ที่ตัด</p>
+              <p className="text-[10px] uppercase tracking-widest text-primary-700">{t("detailAmountThb")}</p>
               <p className="mt-1 text-xl font-bold font-mono text-primary-700">฿{Number(yp.thb_amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
             </div>
           </div>
 
           <div>
-            <p className="text-xs text-muted">ผู้รับ / รายละเอียด</p>
+            <p className="text-xs text-muted">{t("detailRecipient")}</p>
             <p className="mt-1 whitespace-pre-wrap text-sm">{yp.recipient_detail || "—"}</p>
           </div>
 
@@ -149,7 +162,7 @@ export default async function YuanPaymentDetailPage({
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 px-3 py-1.5 text-xs font-semibold hover:bg-blue-100"
             >
-              👁 ดูสลิป
+              👁 {t("detailViewSlip")}
             </a>
           )}
         </section>
@@ -171,9 +184,12 @@ export default async function YuanPaymentDetailPage({
           />
         ) : (
           <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">
-            <h3 className="font-bold text-amber-900 mb-1">ออกใบกำกับภาษีได้หลังการโอนสำเร็จ</h3>
+            <h3 className="font-bold text-amber-900 mb-1">{t("detailTaxInvoiceTitle")}</h3>
             <p className="text-xs text-amber-800">
-              รายการนี้สถานะ <strong>{STATUS_LABEL[yp.status] ?? yp.status}</strong> — ระบบจะเปิดปุ่ม &ldquo;ขอใบกำกับภาษี&rdquo; เมื่อทีมงานยืนยันโอนสำเร็จแล้ว
+              {t.rich("detailTaxInvoiceNote", {
+                status: statusLabel,
+                strong: (chunks) => <strong>{chunks}</strong>,
+              })}
             </p>
           </section>
         )}

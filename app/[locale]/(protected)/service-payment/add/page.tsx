@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { getCurrentYuanRate } from "@/actions/payment";
 import { getWallet } from "@/actions/wallet";
@@ -6,6 +7,7 @@ import { YuanPaymentForm } from "../yuan-payment-form";
 import { ArrowLeftRight, ChevronRight, Home } from "lucide-react";
 
 export default async function ServicePaymentAddPage() {
+  const t = await getTranslations("payment");
   const [rateRes, walletRes, userData] = await Promise.all([
     getCurrentYuanRate(),
     getWallet(),
@@ -23,12 +25,12 @@ export default async function ServicePaymentAddPage() {
         {/* Breadcrumb */}
         <nav className="flex items-center gap-1.5 text-xs text-muted">
           <Link href="/dashboard" className="hover:text-primary-600 inline-flex items-center gap-1">
-            <Home className="w-3.5 h-3.5" /> หน้าแรก
+            <Home className="w-3.5 h-3.5" /> {t("breadcrumbHome")}
           </Link>
           <ChevronRight className="w-3 h-3" />
-          <Link href="/service-payment" className="hover:text-primary-600">ฝากชำระ / โอนหยวน</Link>
+          <Link href="/service-payment" className="hover:text-primary-600">{t("breadcrumbList")}</Link>
           <ChevronRight className="w-3 h-3" />
-          <span className="text-foreground font-medium">เพิ่มรายการฝากชำระ</span>
+          <span className="text-foreground font-medium">{t("breadcrumbAdd")}</span>
         </nav>
 
         {/* Page header */}
@@ -39,15 +41,15 @@ export default async function ServicePaymentAddPage() {
                 <ArrowLeftRight className="h-6 w-6" />
               </div>
               <div>
-                <h1 className="text-xl sm:text-2xl font-bold text-foreground">สร้างออเดอร์ฝากชำระสินค้า</h1>
-                <p className="text-xs text-muted mt-0.5">ฝากให้ Pacred โอนเงินหยวนไปร้านค้าจีน — Alipay / WeChat / โอนผ่านธนาคาร</p>
+                <h1 className="text-xl sm:text-2xl font-bold text-foreground">{t("addPageTitle")}</h1>
+                <p className="text-xs text-muted mt-0.5">{t("addPageSubtitle")}</p>
               </div>
             </div>
             <Link
               href="/service-payment"
               className="rounded-lg border border-border px-3 py-2 text-xs sm:text-sm font-medium hover:bg-surface-alt"
             >
-              ← กลับรายการ
+              {t("backToListArrow")}
             </Link>
           </div>
         </div>

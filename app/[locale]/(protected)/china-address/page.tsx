@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { Link } from "@/i18n/navigation";
 
@@ -60,6 +61,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ChinaAddressPage() {
+  const t = await getTranslations("chinaAddressPage");
   // Mirrors china-address.php's header.php logged-in-member gate.
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
@@ -83,12 +85,12 @@ export default async function ChinaAddressPage() {
           <ol className="flex flex-wrap items-center gap-1.5 text-sm text-muted">
             <li>
               <Link href="/" className="hover:text-foreground transition-colors">
-                หน้าแรก
+                {t("breadcrumbHome")}
               </Link>
             </li>
             <li aria-hidden className="text-border">/</li>
             <li className="font-medium text-foreground" aria-current="page">
-              ที่อยู่โกดังจีน
+              {t("title")}
             </li>
           </ol>
         </nav>
@@ -98,7 +100,7 @@ export default async function ChinaAddressPage() {
           <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
             <div className="border-b border-border px-4 py-3 md:px-5 md:py-4">
               <h3 className="text-base md:text-lg font-bold text-foreground">
-                ที่อยู่โกดังจีน
+                {t("title")}
               </h3>
             </div>
             {/* china-address.php L35-37: the legacy card-body is empty — a

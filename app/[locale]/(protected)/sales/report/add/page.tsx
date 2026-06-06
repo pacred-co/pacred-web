@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveSalesAgent } from "../../team-map";
@@ -106,6 +107,7 @@ function splitDateTime(ts: string | null): { date: string; time: string } {
 }
 
 export default async function SalesReportAddPage() {
+  const t = await getTranslations("salesPort");
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
 
@@ -242,7 +244,7 @@ export default async function SalesReportAddPage() {
           {/* ── Header ── */}
           <div className="border-b border-border px-3 py-3 md:px-5 md:py-4">
             <h3 className="text-base md:text-xl font-bold text-foreground">
-              รายการที่ยังไม่ได้เบิกเงิน {userIDMain}
+              {t("unpaidItemsTitle", { userIDMain })}
             </h3>
           </div>
 
@@ -251,34 +253,34 @@ export default async function SalesReportAddPage() {
             <div className="border-b border-border bg-surface-alt/30 px-3 py-3 md:px-5 md:py-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-sm font-medium text-foreground">
-                  ส่วนแบ่งสะสมที่เบิกได้ทั้งหมด
+                  {t("totalCommissionAvailable")}
                 </span>
                 <span className="font-mono text-xl font-bold tabular-nums text-red-600">
                   {fmt2(summary.net)}{" "}
-                  <span className="text-xs font-normal text-muted">บาท</span>
+                  <span className="text-xs font-normal text-muted">{t("baht")}</span>
                 </span>
               </div>
               <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted sm:grid-cols-4">
                 <div className="flex justify-between sm:block">
-                  <dt>ค่าขนส่งจีนรวม</dt>
+                  <dt>{t("totalChinaShipping")}</dt>
                   <dd className="font-mono tabular-nums text-foreground sm:mt-0.5">{fmt2(summary.gross)}</dd>
                 </div>
                 <div className="flex justify-between sm:block">
-                  <dt>ส่วนแบ่ง 1%</dt>
+                  <dt>{t("commission1pct")}</dt>
                   <dd className="font-mono tabular-nums text-foreground sm:mt-0.5">{fmt2(summary.commission)}</dd>
                 </div>
                 <div className="flex justify-between sm:block">
-                  <dt>หักภาษี 3%</dt>
+                  <dt>{t("wht3pct")}</dt>
                   <dd className="font-mono tabular-nums text-foreground sm:mt-0.5">{fmt2(summary.wht)}</dd>
                 </div>
                 <div className="flex justify-between sm:block">
-                  <dt>รายการที่เบิกได้</dt>
+                  <dt>{t("withdrawableItems")}</dt>
                   <dd className="font-mono tabular-nums text-foreground sm:mt-0.5">{rows.length}</dd>
                 </div>
               </dl>
               {!summary.eligible && (
                 <p className="mt-2 text-xs text-amber-600">
-                  ยอดส่วนแบ่งสุทธิยังไม่ถึง 1,000 บาท — เลือกรายการเพื่อสะสมยอดให้ครบก่อนทำรายการเบิกเงิน
+                  {t("belowMinNote")}
                 </p>
               )}
             </div>
@@ -295,7 +297,7 @@ export default async function SalesReportAddPage() {
           <div className="px-3 py-3 md:px-5 md:py-4">
             {rows.length === 0 ? (
               <p className="py-12 text-center text-sm text-muted">
-                ไม่มีรายการที่ยังไม่ได้เบิกเงิน
+                {t("emptyUnpaidItems")}
               </p>
             ) : (
               <WithdrawClient rows={withdrawRows} percen={agent.percen} />

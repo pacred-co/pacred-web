@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Search, Camera, ClipboardPaste } from "lucide-react";
 
@@ -24,6 +25,7 @@ import { Search, Camera, ClipboardPaste } from "lucide-react";
  * tap targets ≥44px, the primary CTA is full-width + thumb-reachable.
  */
 export function CartAddUrlForm() {
+  const t = useTranslations("cartPage");
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [value, setValue] = useState("");
 
@@ -66,7 +68,7 @@ export function CartAddUrlForm() {
           name="url"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder="วางลิงก์สินค้า 1688 / Taobao / Tmall ที่นี่"
+          placeholder={t("urlInputPlaceholder")}
           autoComplete="off"
           inputMode="url"
           suppressHydrationWarning
@@ -77,7 +79,7 @@ export function CartAddUrlForm() {
             form does NOT submit it — the camera ≠ text search. */}
         <Link
           href="/search?img=1"
-          aria-label="ค้นหาด้วยรูปภาพ"
+          aria-label={t("imageSearch")}
           className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-11 w-11 items-center justify-center rounded-full text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition"
         >
           <Camera className="h-5 w-5" />
@@ -89,7 +91,7 @@ export function CartAddUrlForm() {
         className="w-full inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[16px] font-bold shadow-lg shadow-primary-600/30 hover:shadow-primary-600/40 hover:-translate-y-0.5 transition-all"
       >
         <Search className="h-5 w-5" strokeWidth={2.5} />
-        ค้นหาสินค้า &amp; สั่งซื้อ
+        {t("searchAndOrder")}
       </button>
 
       <div className="flex justify-center">
@@ -99,7 +101,7 @@ export function CartAddUrlForm() {
           className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white px-4 py-2 text-[13px] font-medium text-gray-600 hover:border-primary-300 hover:text-primary-600 transition min-h-[40px]"
         >
           <ClipboardPaste className="h-4 w-4" />
-          วางลิงก์จากคลิปบอร์ด
+          {t("pasteFromClipboard")}
         </button>
       </div>
     </form>

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { customerCancelPendingWalletTx } from "@/actions/wallet";
 
 /**
@@ -14,6 +15,7 @@ import { customerCancelPendingWalletTx } from "@/actions/wallet";
  */
 export function CancelPendingButton({ txId, kind }: { txId: string; kind: string }) {
   const router = useRouter();
+  const t = useTranslations("wallet");
   const [pending, startTransition] = useTransition();
   const [error, setError]   = useState<string | null>(null);
   const [confirm, setConfirm] = useState(false);
@@ -37,7 +39,7 @@ export function CancelPendingButton({ txId, kind }: { txId: string; kind: string
     });
   }
 
-  const kindLabel = kind === "deposit" ? "เติมเงิน" : kind === "withdraw" ? "ถอนเงิน" : kind;
+  const kindLabel = kind === "deposit" ? t("kind.deposit") : kind === "withdraw" ? t("kind.withdraw") : kind;
 
   return (
     <div className="mt-1 space-y-1">
@@ -50,9 +52,9 @@ export function CancelPendingButton({ txId, kind }: { txId: string; kind: string
             ? "border-red-500 bg-red-50 text-red-700 hover:bg-red-100"
             : "border-border bg-white text-muted hover:bg-surface-alt hover:text-foreground"
         } disabled:opacity-40`}
-        title={confirm ? "กดอีกครั้งเพื่อยืนยัน" : `ยกเลิกรายการ${kindLabel}นี้`}
+        title={confirm ? t("cancelConfirmHint") : t("cancelRowTitle", { kind: kindLabel })}
       >
-        {pending ? "..." : confirm ? "⚠ กดอีกครั้งเพื่อยกเลิก" : "ยกเลิก"}
+        {pending ? "..." : confirm ? t("cancelConfirmBtn") : t("cancel")}
       </button>
       {error && <p className="text-[10px] text-red-600">{error}</p>}
     </div>

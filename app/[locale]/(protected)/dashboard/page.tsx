@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
@@ -22,6 +23,7 @@ import { PcsCarousel } from "@/components/legacy/pcs-carousel";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
+  const t = await getTranslations("dashboardPage");
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
   const { profile } = data;
@@ -73,7 +75,7 @@ export default async function DashboardPage() {
       <div className="pcs-content-pad w-full px-[10px] py-3 md:py-5">
         <div className="max-w-[670px] mx-auto">
           <div className="rounded-2xl bg-primary-600 text-white px-6 py-8 text-center shadow-md">
-            รอเจ้าหน้าที่ดำเนิน อนุมัติการเป็นนิติบุคคล ภายใน 24 ชม. (ยกเว้นวันอาทิตย์และวันหยุดนักขัตฤกษ์)
+            {t("juristicPending")}
           </div>
         </div>
       </div>
@@ -96,7 +98,7 @@ export default async function DashboardPage() {
                       this March-3.3 window re-activates. Placeholder
                       below avoids a brand-leaking URL in customer source. */}
                   <div className="w-full aspect-[2048/598] rounded-2xl bg-surface-alt shadow-md flex items-center justify-center text-muted text-sm">
-                    โปรโมชัน 3.3 (รอ asset ใหม่จากทีม brand)
+                    {t("promo33Placeholder")}
                   </div>
                 </a>
               </div>
@@ -165,7 +167,7 @@ export default async function DashboardPage() {
             <div className="text-left">
               <div className="text-3xl font-bold text-primary-600">{countShops}</div>
               <div className="mt-1 text-sm font-medium text-foreground/80">
-                ฝากสั่งซื้อสินค้า
+                {t("cardShopOrder")}
               </div>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 dark:bg-red-950/30">
@@ -197,7 +199,7 @@ export default async function DashboardPage() {
             <div className="text-left">
               <div className="text-3xl font-bold text-amber-500">{countForwarder}</div>
               <div className="mt-1 text-sm font-medium text-foreground/80">
-                นำเข้าสินค้า
+                {t("cardImport")}
               </div>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-950/30">
@@ -229,10 +231,10 @@ export default async function DashboardPage() {
           <div className="flex items-center justify-between">
             <div className="text-left">
               <span className="inline-block rounded-full bg-gray-200 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                เร็วๆนี้
+                {t("comingSoon")}
               </span>
               <div className="mt-1.5 text-sm font-medium text-foreground/60">
-                ส่งออกสินค้า
+                {t("cardExport")}
               </div>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 dark:bg-white/5">
@@ -264,7 +266,7 @@ export default async function DashboardPage() {
             <div className="text-left">
               <div className="text-3xl font-bold text-violet-500">{countPayment}</div>
               <div className="mt-1 text-sm font-medium text-foreground/80">
-                ฝากชำระสินค้า
+                {t("cardPayment")}
               </div>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-50 dark:bg-violet-950/30">

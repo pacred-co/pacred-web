@@ -1,4 +1,5 @@
 import { Link } from "@/i18n/navigation";
+import { getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth/require-auth";
@@ -50,6 +51,7 @@ function thb(n: number): string {
 }
 
 export default async function CustomerRefundsHubPage() {
+  const t = await getTranslations("customerRefunds");
   const { profile } = await requireAuth();
   const sb = await createClient();
   const memberCode = profile?.member_code ?? null;
@@ -104,12 +106,12 @@ export default async function CustomerRefundsHubPage() {
       ...(((fwdsRaw ?? []) as Array<{ id: number; fcabinetnumber: string | null; fstatus: string | null }>).map((f) => ({
         source: "forwarder" as const,
         value:  String(f.id),
-        label:  `ฝากนำเข้า #${f.id}${f.fcabinetnumber ? ` · ตู้ ${f.fcabinetnumber}` : ""} (สถานะ ${f.fstatus ?? "—"})`,
+        label:  `${t("optForwarder", { id: f.id })}${f.fcabinetnumber ? ` · ${t("optCabinet", { cabinet: f.fcabinetnumber })}` : ""} (${t("optStatus", { status: f.fstatus ?? "—" })})`,
       }))),
       ...(((ordersRaw ?? []) as Array<{ hno: string; hstatus: string | null }>).map((o) => ({
         source: "service_order" as const,
         value:  o.hno,
-        label:  `${o.hno} (สถานะ ${o.hstatus ?? "—"})`,
+        label:  `${o.hno} (${t("optStatus", { status: o.hstatus ?? "—" })})`,
       }))),
       ...(((yuansRaw ?? []) as Array<{ id: number; paystatus: string | null; payyuan: number | null; paythb: number | null }>).map((y) => ({
         source: "yuan_payment" as const,
@@ -125,10 +127,10 @@ export default async function CustomerRefundsHubPage() {
         {/* Breadcrumb */}
         <nav className="flex items-center gap-1.5 text-xs text-muted">
           <Link href="/dashboard" className="hover:text-primary-600 inline-flex items-center gap-1">
-            <Home className="w-3.5 h-3.5" /> หน้าแรก
+            <Home className="w-3.5 h-3.5" /> {t("breadcrumbHome")}
           </Link>
           <ChevronRight className="w-3 h-3" />
-          <span className="text-foreground font-medium">ขอคืนเงิน</span>
+          <span className="text-foreground font-medium">{t("breadcrumbRefund")}</span>
         </nav>
 
         {/* Page header */}
@@ -139,9 +141,9 @@ export default async function CustomerRefundsHubPage() {
                 <ArrowRightLeft className="h-6 w-6" />
               </div>
               <div>
-                <h1 className="text-xl sm:text-2xl font-bold text-foreground">ขอคืนเงิน (Refund)</h1>
+                <h1 className="text-xl sm:text-2xl font-bold text-foreground">{t("pageTitle")}</h1>
                 <p className="text-xs text-muted mt-0.5">
-                  ขอคืนเงินจากออเดอร์ฝากนำเข้า / ฝากสั่ง / ฝากโอนหยวน ของคุณ
+                  {t("pageSubtitle")}
                 </p>
               </div>
             </div>
@@ -151,33 +153,31 @@ export default async function CustomerRefundsHubPage() {
               rel="noopener noreferrer"
               className="rounded-lg bg-green-500 text-white px-3 py-2 text-xs sm:text-sm font-bold hover:bg-green-600 inline-flex items-center gap-1.5 shadow-sm"
             >
-              <MessageCircle className="w-4 h-4" /> ติดต่อทีมเพื่อขอ refund แบบอื่น
+              <MessageCircle className="w-4 h-4" /> {t("contactOtherRefund")}
             </a>
           </div>
           <p className="mt-3 text-xs text-muted leading-relaxed">
-            เลือกออเดอร์ที่จะขอคืนเงิน + ระบุยอดและเหตุผล ≥ 10 ตัวอักษร
-            ทีม Pacred จะตรวจสอบและคืนเงินเข้ากระเป๋าหลักของคุณภายใน 1-3 วันทำการ
+            {t("headerNote")}
           </p>
         </div>
 
         {/* Request form */}
         <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
           <h2 className="font-bold text-sm mb-3 flex items-center gap-2">
-            <ArrowRightLeft className="w-4 h-4 text-primary-600" /> ขอคืนเงินใหม่
+            <ArrowRightLeft className="w-4 h-4 text-primary-600" /> {t("newRefundHeading")}
           </h2>
           {sourceOptions.length === 0 ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/10 p-4 text-sm text-amber-800 space-y-2">
-              <p className="font-semibold">ยังไม่มีออเดอร์ที่ขอคืนเงินได้</p>
+              <p className="font-semibold">{t("emptyOrdersTitle")}</p>
               <p className="text-xs">
-                ระบบจะแสดงเฉพาะออเดอร์ที่ <strong>ชำระแล้ว</strong> (ฝากนำเข้า/ฝากสั่ง/ฝากโอน) —
-                เริ่มต้นใช้บริการก่อน หรือ{" "}
+                {t.rich("emptyOrdersBody", { strong: (c) => <strong>{c}</strong> })}{" "}
                 <a
                   href={LINE_OA.addFriendUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="underline hover:text-amber-900"
                 >
-                  ติดต่อทีมเพื่อขอ refund แบบ manual
+                  {t("contactManualRefund")}
                 </a>
               </p>
             </div>
@@ -190,28 +190,27 @@ export default async function CustomerRefundsHubPage() {
         <section className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
           <div className="px-5 py-3 border-b border-border flex items-center justify-between flex-wrap gap-2">
             <h2 className="font-bold text-sm inline-flex items-center gap-2">
-              <History className="w-4 h-4 text-primary-600" /> ประวัติคำขอคืนเงิน ({refunds.length})
+              <History className="w-4 h-4 text-primary-600" /> {t("historyHeading", { count: refunds.length })}
             </h2>
           </div>
           {refunds.length === 0 ? (
             <div className="p-8 text-center space-y-2">
               <div className="text-4xl" aria-hidden>💸</div>
-              <p className="text-sm font-medium text-foreground">ยังไม่มีคำขอคืนเงิน</p>
+              <p className="text-sm font-medium text-foreground">{t("historyEmptyTitle")}</p>
               <p className="text-xs text-muted max-w-sm mx-auto">
-                เมื่อมีปัญหาเรื่องสินค้าหรือยอด — ส่งคำขอที่ฟอร์มด้านบน
-                ทีมจะตรวจสอบและคืนเงินเข้ากระเป๋าให้ภายใน 1-3 วันทำการ
+                {t("historyEmptyBody")}
               </p>
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
-                  <th className="px-3 py-2">เลขที่</th>
-                  <th className="px-3 py-2">แหล่ง</th>
-                  <th className="px-3 py-2 text-right">ยอดคืน</th>
-                  <th className="px-3 py-2">เหตุผล</th>
-                  <th className="px-3 py-2">สถานะ</th>
-                  <th className="px-3 py-2">วันที่</th>
+                  <th className="px-3 py-2">{t("thNo")}</th>
+                  <th className="px-3 py-2">{t("thSource")}</th>
+                  <th className="px-3 py-2 text-right">{t("thAmount")}</th>
+                  <th className="px-3 py-2">{t("thReason")}</th>
+                  <th className="px-3 py-2">{t("thStatus")}</th>
+                  <th className="px-3 py-2">{t("thDate")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -231,7 +230,7 @@ export default async function CustomerRefundsHubPage() {
                       <p className="line-clamp-2" title={r.reason}>{r.reason}</p>
                       {r.status === "rejected" && r.rejected_reason && (
                         <p className="mt-1 text-red-600">
-                          <b>เหตุผลปฏิเสธ:</b> {r.rejected_reason}
+                          <b>{t("rejectedReasonLabel")}</b> {r.rejected_reason}
                         </p>
                       )}
                     </td>
@@ -241,12 +240,12 @@ export default async function CustomerRefundsHubPage() {
                       </span>
                     </td>
                     <td className="px-3 py-2 text-xs text-muted">
-                      <p>ส่ง: {new Date(r.created_at).toLocaleDateString("th-TH")}</p>
+                      <p>{t("dateSent")} {new Date(r.created_at).toLocaleDateString("th-TH")}</p>
                       {r.paid_at && (
-                        <p className="text-green-700">จ่าย: {new Date(r.paid_at).toLocaleDateString("th-TH")}</p>
+                        <p className="text-green-700">{t("datePaid")} {new Date(r.paid_at).toLocaleDateString("th-TH")}</p>
                       )}
                       {r.rejected_at && (
-                        <p className="text-red-600">ปฏิเสธ: {new Date(r.rejected_at).toLocaleDateString("th-TH")}</p>
+                        <p className="text-red-600">{t("dateRejected")} {new Date(r.rejected_at).toLocaleDateString("th-TH")}</p>
                       )}
                     </td>
                   </tr>
@@ -258,10 +257,9 @@ export default async function CustomerRefundsHubPage() {
 
         {/* Contact CTA */}
         <div className="rounded-2xl border border-green-200 bg-green-50 dark:bg-green-900/10 p-5">
-          <p className="text-sm font-medium text-green-900">ต้องการคืนเงินกรณีอื่น (ไม่อยู่ในออเดอร์ของคุณ)?</p>
+          <p className="text-sm font-medium text-green-900">{t("ctaTitle")}</p>
           <p className="text-xs text-green-800 mt-1">
-            เช่น ค่าบริการที่ยังไม่ได้ผูกกับออเดอร์ — แจ้งทีม Pacred ทาง LINE OA
-            พร้อมแนบรายละเอียดและสลิป ทีมจะสร้าง refund-request แทนคุณ
+            {t("ctaBody")}
           </p>
           <a
             href={LINE_OA.addFriendUrl}
@@ -269,7 +267,7 @@ export default async function CustomerRefundsHubPage() {
             rel="noopener noreferrer"
             className="mt-3 inline-flex items-center gap-2 rounded-lg bg-green-600 text-white px-4 py-2 text-sm font-bold hover:bg-green-700"
           >
-            <MessageCircle className="w-4 h-4" /> ติดต่อทีม Pacred
+            <MessageCircle className="w-4 h-4" /> {t("ctaButton")}
           </a>
         </div>
       </main>

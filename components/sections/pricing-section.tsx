@@ -84,49 +84,9 @@ type CargoCard = {
   heroImage?: string;
 };
 
-const CARGO_CARDS: CargoCard[] = [
-  {
-    id: "yiwu",
-    badgeKey: "yiwuBadge",
-    title: "Yiwu",
-    subtitleKey: "yiwuSubtitle",
-    prices: [
-      { mode: "road", cbm: "5,200", kg: "18", transitKey: "transit5to7"  },
-      { mode: "sea",  cbm: "3,200", kg: "11", transitKey: "transit12to15" },
-    ],
-    noteKey: "yiwuNote",
-    heroImage: "/images/main/importcard/wiwu.png",
-  },
-  {
-    id: "guangzhou",
-    title: "Guangzhou",
-    subtitleKey: "guangzhouSubtitle",
-    prices: [
-      { mode: "road", cbm: "4,900", kg: "18", transitKey: "transit5to7"  },
-      { mode: "sea",  cbm: "2,900", kg: "11", transitKey: "transit12to15" },
-    ],
-    noteKey: "guangzhouNote",
-    popular: true,
-    heroImage: "/images/main/importcard/gwangzhou.png",
-  },
-  {
-    id: "shenzhen",
-    comingBadgeKey: "shenzhenComingBadge",
-    title: "Shenzhen",
-    subtitleKey: "shenzhenSubtitle",
-    prices: [
-      { mode: "road", cbm: "—", kg: "—", transitKey: "transitDash" },
-      { mode: "sea",  cbm: "—", kg: "—", transitKey: "transitDash" },
-    ],
-    noteKey: "shenzhenNote",
-    comingSoon: true,
-    bgImages: [
-      "/images/catagory/phone.png",
-      "/images/catagory/camera.png",
-      "/images/catagory/comlaptop.png",
-    ],
-  },
-];
+// ปอน 2026-06-06: หน้าแรกกลุ่ม Cargo-LCL (การ์ดโกดัง 3 ใบ) เปลี่ยนไปใช้
+// <WarehouseRateGroup /> (ดีไซน์เดียวกับหน้านำเข้า) → CARGO_CARDS เดิมเลิกใช้แล้ว
+// (ดูใน git history ถ้าต้องการ data ชุดเก่า 5,200/3,200 road+sea กลับมา)
 
 // ───────────── Cargo FCL cards (full container, road + sea) ─────────────
 const CARGO_FCL_CARDS: CargoCard[] = [
@@ -467,15 +427,9 @@ export function PricingSection({
             </div>
           ) : mode === "cargo" ? (
             <div className="flex flex-col gap-7 md:gap-10">
-              {/* ═════ Cargo LCL Section ═════ */}
-              <CargoGroupRow
-                eyebrow={t("cargoLclSectionEyebrow")}
-                title={t("cargoLclSectionTitle")}
-                sub={t("cargoLclSectionSub")}
-                cards={CARGO_CARDS}
-                cols={3}
-                t={t}
-              />
+              {/* ═════ Cargo LCL Section — โกดัง 3 การ์ด · ปอน 2026-06-06:
+                      ใช้ดีไซน์การ์ดเดียวกับหน้านำเข้า (WarehouseRateGroup) ═════ */}
+              <WarehouseRateGroup />
               {/* ═════ Cargo FCL Section ═════ */}
               <CargoGroupRow
                 eyebrow={t("cargoFclSectionEyebrow")}

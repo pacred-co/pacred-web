@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   MapPin,
   Truck,
@@ -68,6 +69,7 @@ export type CartAddressShipByProps = {
 };
 
 export function CartAddressShipBy(props: CartAddressShipByProps) {
+  const t = useTranslations("cartPage");
   const {
     initialAddressBlock,
     addresses,
@@ -138,7 +140,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
         fullAddress: warehouseAddress,
         label:
           initialAddressBlock.mode === "warehouse-saved"
-            ? "ที่อยู่ล่าสุดที่เคยสั่ง"
+            ? t("addrLastOrdered")
             : "",
       };
     }
@@ -169,7 +171,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
             <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-primary-50 text-primary-600">
               <MapPin className="w-4 h-4" strokeWidth={2.2} />
             </span>
-            ที่อยู่ในการจัดส่งในไทย
+            {t("deliveryAddressTh")}
             <span className="inline-block w-5 h-3.5 rounded-sm overflow-hidden border border-border align-middle relative" aria-label="Thailand">
               <span className="absolute inset-0 grid grid-rows-5">
                 <span className="bg-[#A51931]"></span>
@@ -216,7 +218,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
                 className="shrink-0 inline-flex items-center gap-1 rounded-full bg-white text-primary-600 border-2 border-primary-600 text-[12px] font-bold px-3 py-1.5 hover:bg-primary-50 transition-colors"
               >
                 <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-                เปลี่ยนที่อยู่
+                {t("changeAddress")}
               </button>
             </div>
           )}
@@ -241,7 +243,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
                     className="mt-2 inline-flex items-center gap-1 text-[12px] font-bold text-primary-600 hover:underline"
                   >
                     <MapPin className="w-3 h-3" strokeWidth={2.2} />
-                    ดูแผนที่โกดัง Pacred ในไทย
+                    {t("viewWarehouseMap")}
                   </a>
                 )}
               </div>
@@ -251,7 +253,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
                 className="shrink-0 inline-flex items-center gap-1 rounded-full bg-white text-primary-600 border-2 border-primary-600 text-[12px] font-bold px-3 py-1.5 hover:bg-primary-50 transition-colors"
               >
                 <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-                เปลี่ยนที่อยู่
+                {t("changeAddress")}
               </button>
             </div>
           )}
@@ -264,7 +266,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
                 className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[13px] font-bold px-4 py-2 shadow-lg shadow-primary-600/30 hover:shadow-primary-600/40 hover:-translate-y-0.5 transition-all"
               >
                 <MapPin className="w-4 h-4" strokeWidth={2.2} />
-                เพิ่มที่อยู่ หรือเลือกรับเองโกดัง Pacred
+                {t("addAddressOrPickup")}
               </button>
             </div>
           )}
@@ -279,7 +281,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
                 className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-primary-600 hover:underline"
               >
                 <MapPin className="w-4 h-4" strokeWidth={2.2} />
-                ดูแผนที่โกดัง Pacred Cargo ในไทย
+                {t("viewWarehouseMapCargo")}
               </a>
             ) : (
               <div className="flex items-center gap-3 flex-wrap">
@@ -290,7 +292,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
                   <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-sky-50 text-sky-700">
                     <Truck className="w-3.5 h-3.5" strokeWidth={2.2} />
                   </span>
-                  บริษัทขนส่งในไทย
+                  {t("carrierLabel")}
                 </label>
                 <select
                   name="hShipBy"
@@ -302,7 +304,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
                   className="flex-1 min-w-[180px] max-w-[280px] px-3 py-1.5 text-[12.5px] rounded-lg border border-border bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-100 focus:outline-none"
                 >
                   {currentShipBy.length > 1 && (
-                    <option value="">กรุณาเลือกบริษัทขนส่ง</option>
+                    <option value="">{t("selectCarrier")}</option>
                   )}
                   {currentShipBy.map((opt) => (
                     <option key={opt.id} value={opt.id}>
@@ -315,14 +317,14 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
           </div>
 
           <p className="mt-2.5 text-[11px] text-rose-600 leading-relaxed">
-            หมายเหตุ: หากพื้นที่นอกเขตขนส่งของ Pacred ทางบริษัทจะเก็บเงินปลายทางเท่านั้น{" "}
+            {t("outOfAreaNote")}{" "}
             <a
               href="/services/import-china"
               target="_blank"
               rel="noreferrer"
               className="underline font-bold"
             >
-              (เช็คพื้นที่ได้ที่นี่)
+              {t("checkAreaHere")}
             </a>
           </p>
         </div>
@@ -344,12 +346,12 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
                 <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-primary-600 text-white">
                   <MapPin className="w-4 h-4" strokeWidth={2.2} />
                 </span>
-                ที่อยู่จัดส่งสินค้าของฉัน
+                {t("myDeliveryAddresses")}
               </h4>
               <button
                 type="button"
                 onClick={closeModal}
-                aria-label="ปิด"
+                aria-label={t("close")}
                 className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white border border-border text-muted hover:text-foreground hover:border-primary-300 transition-colors"
               >
                 <X className="w-4 h-4" strokeWidth={2.5} />
@@ -432,7 +434,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
                 onClick={closeModal}
                 className="rounded-full bg-white text-foreground border border-border text-[12.5px] font-bold px-4 py-2 hover:border-primary-300 hover:text-primary-600 transition-colors"
               >
-                ยกเลิก
+                {t("cancel")}
               </button>
             </div>
           </div>
@@ -453,13 +455,13 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
             <div className="flex items-start justify-between gap-2 px-4 pt-4 pb-2">
               <h4 className="text-white text-[17px] font-black leading-tight flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-yellow-300 shrink-0" strokeWidth={2.5} />
-                คุณได้รับสิทธิ์ร่วมโปรโมชัน
-                <br />Pacred เหมา ๆ
+                {t("maomaoEligibleLine1")}
+                <br />{t("maomaoEligibleLine2")}
               </h4>
               <button
                 type="button"
                 onClick={dismissMaomao}
-                aria-label="ปิด"
+                aria-label={t("close")}
                 className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full bg-white/15 border-2 border-white/60 text-white hover:bg-white/25 transition-colors"
               >
                 <X className="w-4 h-4" strokeWidth={2.5} />
@@ -472,7 +474,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
                 <img
                   src="/legacy/pcs/theme/free50-3.png"
                   className="block w-full h-auto rounded-xl"
-                  alt="โปรโมชัน Pacred เหมา ๆ ฟรี 50 บาท"
+                  alt={t("maomaoPromoImageAlt")}
                 />
               </div>
 
@@ -482,7 +484,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
                 className="mt-4 w-full inline-flex items-center justify-center gap-1.5 rounded-full bg-white text-primary-700 text-[14px] font-black px-4 py-2.5 shadow-xl shadow-black/30 hover:bg-primary-50 hover:-translate-y-0.5 transition-all animate-pulse"
               >
                 <Sparkles className="w-4 h-4" strokeWidth={2.5} />
-                รับโปรโมชัน เหมา ๆ
+                {t("acceptMaomaoPromo")}
               </button>
             </div>
           </div>

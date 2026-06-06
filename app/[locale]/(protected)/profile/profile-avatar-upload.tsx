@@ -11,11 +11,13 @@
  */
 
 import { useRef, useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { Camera, Loader2 } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { updateMyAvatar } from "@/actions/profile-avatar";
 
 export function ProfileAvatarUpload() {
+  const t = useTranslations("profileAvatar");
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -28,11 +30,11 @@ export function ProfileAvatarUpload() {
     if (!file) return;
     setError(null);
     if (!file.type.startsWith("image/")) {
-      setError("รับเฉพาะไฟล์รูปภาพ");
+      setError(t("errorImageOnly"));
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setError("ไฟล์ใหญ่เกิน 5 MB");
+      setError(t("errorTooLarge"));
       return;
     }
     const fd = new FormData();
@@ -55,7 +57,7 @@ export function ProfileAvatarUpload() {
         accept="image/*"
         className="hidden"
         onChange={onPick}
-        aria-label="เลือกรูปโปรไฟล์"
+        aria-label={t("pickAvatarAria")}
       />
       <button
         type="button"
@@ -68,10 +70,10 @@ export function ProfileAvatarUpload() {
         ) : (
           <Camera className="h-4 w-4" strokeWidth={2.5} />
         )}
-        {pending ? "กำลังอัปโหลด…" : "เปลี่ยนรูปโปรไฟล์"}
+        {pending ? t("uploading") : t("changeAvatar")}
       </button>
       {error && <p className="mt-1.5 text-[11px] font-medium text-red-600">{error}</p>}
-      <p className="mt-1 text-[10px] text-muted">รองรับ JPG / PNG / WEBP · ไม่เกิน 5 MB</p>
+      <p className="mt-1 text-[10px] text-muted">{t("avatarHint")}</p>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { CircleDollarSign, Plus, Inbox } from "lucide-react";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
@@ -53,26 +54,26 @@ export const dynamic = "force-dynamic";
 type PayQ = "1" | "2" | "3";
 
 // payment.php L396-399 — the payType pill (วิธีการชำระ column). Tailwind rebuild.
-function payTypeBadge(payType: string | null) {
+function payTypeBadge(payType: string | null, t: (key: string) => string) {
   const base =
     "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium border";
   switch (payType) {
     case "1":
       return (
         <span className={`${base} bg-blue-50 text-blue-700 border-blue-200`}>
-          จ่ายผ่านเว็บไซต์จีน
+          {t("payTypeWebsite")}
         </span>
       );
     case "2":
       return (
         <span className={`${base} bg-sky-50 text-sky-700 border-sky-200`}>
-          โอนเข้าบัญชี Alipay ร้านค้าจีน
+          {t("payTypeAlipayShop")}
         </span>
       );
     case "3":
       return (
         <span className={`${base} bg-slate-100 text-slate-600 border-slate-200`}>
-          อื่นๆ
+          {t("payTypeOther")}
         </span>
       );
     default:
@@ -82,26 +83,26 @@ function payTypeBadge(payType: string | null) {
 
 // payment.php L400-404 — the payStatus pill (สถานะ column). Tailwind rebuild
 // with clean semantic colours (รอ=amber · สำเร็จ=emerald · ไม่สำเร็จ=red).
-function payStatusBadge(payStatus: string | null) {
+function payStatusBadge(payStatus: string | null, t: (key: string) => string) {
   const base =
     "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold border";
   switch (payStatus) {
     case "1":
       return (
         <span className={`${base} bg-amber-50 text-amber-700 border-amber-200`}>
-          รอดำเนินการ
+          {t("statusPending")}
         </span>
       );
     case "2":
       return (
         <span className={`${base} bg-emerald-50 text-emerald-700 border-emerald-200`}>
-          สำเร็จ
+          {t("statusSuccess")}
         </span>
       );
     case "3":
       return (
         <span className={`${base} bg-red-50 text-red-700 border-red-200`}>
-          ไม่สำเร็จ
+          {t("statusFailed")}
         </span>
       );
     default:
@@ -168,6 +169,7 @@ export default async function ServicePaymentPage({
   searchParams: Promise<{ q?: string }>;
 }) {
   const sp = await searchParams;
+  const t = await getTranslations("payment");
 
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
@@ -300,10 +302,10 @@ export default async function ServicePaymentPage({
     active: boolean;
     chip: string;
   }[] = [
-    { href: "/service-payment",      label: "ทั้งหมด",      count: countStatusAll, active: q === null, chip: "bg-slate-100 text-slate-700" },
-    { href: "/service-payment?q=1",  label: "รอดำเนินการ",  count: countStatusF1,  active: q === "1",  chip: "bg-amber-100 text-amber-700" },
-    { href: "/service-payment?q=2",  label: "สำเร็จ",        count: countStatusF2,  active: q === "2",  chip: "bg-emerald-100 text-emerald-700" },
-    { href: "/service-payment?q=3",  label: "ไม่สำเร็จ",     count: countStatusF3,  active: q === "3",  chip: "bg-red-100 text-red-700" },
+    { href: "/service-payment",      label: t("filterAll"),      count: countStatusAll, active: q === null, chip: "bg-slate-100 text-slate-700" },
+    { href: "/service-payment?q=1",  label: t("statusPending"),  count: countStatusF1,  active: q === "1",  chip: "bg-amber-100 text-amber-700" },
+    { href: "/service-payment?q=2",  label: t("statusSuccess"),  count: countStatusF2,  active: q === "2",  chip: "bg-emerald-100 text-emerald-700" },
+    { href: "/service-payment?q=3",  label: t("statusFailed"),   count: countStatusF3,  active: q === "3",  chip: "bg-red-100 text-red-700" },
   ];
 
   return (
@@ -319,10 +321,10 @@ export default async function ServicePaymentPage({
           /* payment.php L448-451 — active tb_corporate row → awaiting approval. */
           <div className="mx-auto max-w-[640px] mt-16 md:mt-24 text-center">
             <h2 className="rounded-2xl bg-red-600 text-white px-4 py-6 text-base md:text-lg font-bold leading-relaxed shadow-md">
-              รอเจ้าหน้าที่ดำเนิน อนุมัติการเป็นนิติบุคคล ภายใน 24 ชม.
+              {t("juristicPending")}
               <br />
               <span className="text-sm font-normal opacity-90">
-                (ยกเว้นวันอาทิตย์และวันหยุดนักขัตฤกษ์)
+                {t("juristicPendingNote")}
               </span>
             </h2>
           </div>
@@ -330,12 +332,12 @@ export default async function ServicePaymentPage({
           /* payment.php L278-280 — never used ฝากสั่งซื้อ / ฝากนำเข้า before. */
           <div className="mx-auto max-w-[600px] mt-16 md:mt-24 text-center">
             <h2 className="rounded-2xl bg-red-600 text-white px-4 py-6 text-base md:text-lg font-bold leading-relaxed shadow-md">
-              คุณต้องเคยชำระเงินบริการ
+              {t("neverPaidLine1")}
               <br />
-              ฝากสั่งซื้อ หรือ ฝากนำเข้าสินค้ามาก่อน
+              {t("neverPaidLine2")}
               <br />
               <span className="mt-2 inline-block text-sm font-normal opacity-90">
-                ถึงจะสามารถทำฝากโอนหยวน / ฝากชำระเงินได้
+                {t("neverPaidNote")}
               </span>
             </h2>
           </div>
@@ -346,7 +348,7 @@ export default async function ServicePaymentPage({
             <div className="flex flex-col gap-2.5 border-b border-border px-3 py-3 md:flex-row md:items-center md:justify-between md:px-5 md:py-4">
               <h1 className="flex items-center gap-2 text-base md:text-xl font-bold text-foreground">
                 <CircleDollarSign className="h-5 w-5 md:h-6 md:w-6 shrink-0 text-primary-600" />
-                <span>รายการฝากชำระสินค้า/ฝากโอนหยวน</span>
+                <span>{t("listTitle")}</span>
               </h1>
               <Link
                 href="/service-payment/add"
@@ -355,14 +357,14 @@ export default async function ServicePaymentPage({
                 <span className="grid h-6 w-6 place-items-center rounded-full bg-white/25">
                   <Plus className="h-4 w-4" />
                 </span>
-                เพิ่มรายการ
+                {t("addItem")}
               </Link>
             </div>
 
             {/* ── Status filter chips ── */}
             <div className="px-3 py-3 md:px-5 md:py-4">
               <h2 className="mb-2.5 text-sm md:text-base font-bold text-foreground">
-                สถานะรายการ
+                {t("statusSection")}
               </h2>
               <div className="flex flex-wrap gap-2">
                 {statusChips.map((chip) => (
@@ -396,12 +398,12 @@ export default async function ServicePaymentPage({
               {rows.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 py-12 text-center">
                   <Inbox className="h-10 w-10 text-muted/50" />
-                  <p className="text-sm text-muted">ยังไม่มีรายการฝากชำระ</p>
+                  <p className="text-sm text-muted">{t("emptyState")}</p>
                   <Link
                     href="/service-payment/add"
                     className="mt-1 text-sm font-semibold text-emerald-600 hover:underline"
                   >
-                    + เพิ่มรายการแรก
+                    {t("addFirstItem")}
                   </Link>
                 </div>
               ) : (
@@ -417,9 +419,9 @@ export default async function ServicePaymentPage({
                         >
                           <div className="flex items-start justify-between gap-2">
                             <span className="font-mono text-xs text-muted">
-                              ออเดอร์ #{row.ID}
+                              {t("orderNo", { id: row.ID })}
                             </span>
-                            {payStatusBadge(row.payStatus)}
+                            {payStatusBadge(row.payStatus, t)}
                           </div>
                           {row.payDetail && (
                             <p
@@ -430,20 +432,20 @@ export default async function ServicePaymentPage({
                             </p>
                           )}
                           <div className="mt-2 flex items-center justify-between gap-2">
-                            <span>{payTypeBadge(row.payType)}</span>
+                            <span>{payTypeBadge(row.payType, t)}</span>
                             <span className="font-mono text-sm font-bold text-red-600">
                               -{numberFormat2(row.payTHB)} ฿
                             </span>
                           </div>
                           <div className="mt-2 flex items-center justify-between gap-2 border-t border-dashed border-border pt-2">
                             <span className="text-[11px] text-muted">
-                              {date} {time && `· ${time} น.`}
+                              {date} {time && `· ${time} ${t("timeSuffix")}`}
                             </span>
                             <Link
                               href={`/service-payment/${row.ID}`}
                               className="rounded-full border border-emerald-500 px-3 py-1 text-xs font-medium text-emerald-600 hover:bg-emerald-50"
                             >
-                              ดูรายละเอียด
+                              {t("viewDetail")}
                             </Link>
                           </div>
                         </div>
@@ -456,13 +458,13 @@ export default async function ServicePaymentPage({
                     <table className="w-full text-sm">
                       <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                         <tr>
-                          <th className="px-4 py-3 font-medium">วันที่สร้าง</th>
-                          <th className="px-4 py-3 font-medium">เลขที่ออเดอร์</th>
-                          <th className="px-4 py-3 font-medium">รายละเอียด</th>
-                          <th className="px-4 py-3 font-medium">วิธีการชำระ</th>
-                          <th className="px-4 py-3 text-right font-medium">ยอดรวม (บาท)</th>
-                          <th className="px-4 py-3 text-center font-medium">สถานะ</th>
-                          <th className="px-4 py-3 text-center font-medium">ตัวเลือก</th>
+                          <th className="px-4 py-3 font-medium">{t("colCreatedDate")}</th>
+                          <th className="px-4 py-3 font-medium">{t("colOrderNo")}</th>
+                          <th className="px-4 py-3 font-medium">{t("colDetail")}</th>
+                          <th className="px-4 py-3 font-medium">{t("colPayMethod")}</th>
+                          <th className="px-4 py-3 text-right font-medium">{t("colTotalBaht")}</th>
+                          <th className="px-4 py-3 text-center font-medium">{t("colStatusHead")}</th>
+                          <th className="px-4 py-3 text-center font-medium">{t("colOptions")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -476,7 +478,7 @@ export default async function ServicePaymentPage({
                               <td className="px-4 py-3 whitespace-nowrap text-xs text-muted">
                                 {date}
                                 <br />
-                                {time && `${time} น.`}
+                                {time && `${time} ${t("timeSuffix")}`}
                               </td>
                               <td className="px-4 py-3 font-mono text-xs">{row.ID}</td>
                               <td
@@ -485,19 +487,19 @@ export default async function ServicePaymentPage({
                               >
                                 {countText(row.payDetail, 120)}
                               </td>
-                              <td className="px-4 py-3">{payTypeBadge(row.payType)}</td>
+                              <td className="px-4 py-3">{payTypeBadge(row.payType, t)}</td>
                               <td className="px-4 py-3 text-right font-mono font-bold text-red-600">
                                 -{numberFormat2(row.payTHB)}
                               </td>
                               <td className="px-4 py-3 text-center">
-                                {payStatusBadge(row.payStatus)}
+                                {payStatusBadge(row.payStatus, t)}
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <Link
                                   href={`/service-payment/${row.ID}`}
                                   className="inline-block rounded-full border border-emerald-500 px-3 py-1 text-xs font-medium text-emerald-600 hover:bg-emerald-50"
                                 >
-                                  ดูรายละเอียด
+                                  {t("viewDetail")}
                                 </Link>
                               </td>
                             </tr>

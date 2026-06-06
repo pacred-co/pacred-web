@@ -47,6 +47,7 @@
  */
 
 import { useActionState, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   updateProfileAction,
   checkEmailTaken,
@@ -65,12 +66,14 @@ export type EditProfileFields = {
   userLineID: string;
 };
 
-type SwalContent = { title: string; text: string; type: "success" | "error" };
+type SwalContent = { titleKey: string; textKey?: string; type: "success" | "error" };
 
 /**
  * Maps the legacy `$sweetalert` outcome + the inline `alert()` branches
  * of profile.php to a popup title/text/type. Pure — derived from the
- * action result during render (no effect).
+ * action result during render (no effect). Keyed on the STABLE
+ * `state.sweetalert` identifier; the user-visible title/text are i18n
+ * keys resolved via `t()` in the component (not the Thai strings).
  *   successUpdate — L536-543 SweetAlert "อัปเดตข้อมูลสำเร็จ"
  *   errorUpdate   — L544-552 SweetAlert "ผิดพลาด" / "กรุณาลองใหม่อีกครั้ง!!!"
  *   empty         — L10  alert("กรุณากรอกข้อมูลให้ครบ")
@@ -81,21 +84,22 @@ function deriveSwal(state: ProfileUpdateResult | null): SwalContent | null {
   if (!state) return null;
   switch (state.sweetalert) {
     case "successUpdate":
-      return { title: "อัปเดตข้อมูลสำเร็จ", text: "", type: "success" };
+      return { titleKey: "swalSuccess", type: "success" };
     case "errorUpdate":
-      return { title: "ผิดพลาด", text: "กรุณาลองใหม่อีกครั้ง!!!", type: "error" };
+      return { titleKey: "swalError", textKey: "swalErrorText", type: "error" };
     case "empty":
-      return { title: "กรุณากรอกข้อมูลให้ครบ", text: "", type: "error" };
+      return { titleKey: "swalEmpty", type: "error" };
     case "noAccount":
-      return { title: "ไม่มีบัญชีผู้ใช้นี้แล้ว", text: "", type: "error" };
+      return { titleKey: "swalNoAccount", type: "error" };
     case "dupTel":
-      return { title: "มีอีเมลนี้แล้วในระบบ", text: "", type: "error" };
+      return { titleKey: "swalDupTel", type: "error" };
     default:
       return null;
   }
 }
 
 export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
+  const t = useTranslations("editProfileForm");
   const [state, formAction] = useActionState<ProfileUpdateResult | null, FormData>(
     updateProfileAction,
     null,
@@ -145,7 +149,7 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
         <div className="modal-dialog">
           <div className="modal-content ">
             <div className="modal-header header-from">
-              <h4 className="modal-title">แก้ไขข้อมูลโปรไฟล์</h4>
+              <h4 className="modal-title">{t("modalTitle")}</h4>
               <button
                 type="button"
                 className="close"
@@ -179,13 +183,13 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                       className="block text-xs font-medium text-muted mb-1"
                       htmlFor="userName"
                     >
-                      ชื่อจริง
+                      {t("firstNameLabel")}
                     </label>
                     <input
                       className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base md:text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
                       name="userName"
                       type="text"
-                      placeholder="กรุณากรอกชื่อจริง"
+                      placeholder={t("firstNamePlaceholder")}
                       maxLength={200}
                       defaultValue={fields.userName}
                       required
@@ -197,14 +201,14 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                       className="block text-xs font-medium text-muted mb-1"
                       htmlFor="userLastName"
                     >
-                      นามสกุล
+                      {t("lastNameLabel")}
                     </label>
                     <input
                       id="userLastName"
                       className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base md:text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
                       name="userLastName"
                       type="text"
-                      placeholder="กรุณากรอกนามสกุล"
+                      placeholder={t("lastNamePlaceholder")}
                       maxLength={100}
                       defaultValue={fields.userLastName}
                       required
@@ -218,7 +222,7 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                       className="block text-xs font-medium text-muted mb-1"
                       htmlFor="userEmail"
                     >
-                      อีเมล
+                      {t("emailLabel")}
                     </label>
                     <input
                       id="userEmail"
@@ -229,7 +233,7 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                       }`}
                       name="userEmail"
                       type="email"
-                      placeholder="กรุณากรอกอีเมล"
+                      placeholder={t("emailPlaceholder")}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       onBlur={async () => {
@@ -249,7 +253,7 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                       className="block text-xs font-medium text-muted mb-1"
                       htmlFor="userTel"
                     >
-                      เบอร์โทร
+                      {t("phoneLabel")}
                     </label>
                     <input
                       id="userTel"
@@ -261,7 +265,7 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                       name="userTel"
                       type="text"
                       pattern="\d*"
-                      placeholder="กรุณากรอกหมายเลขโทรศัพท์ (ไม่มีขีด)"
+                      placeholder={t("phonePlaceholder")}
                       minLength={10}
                       maxLength={10}
                       value={tel}
@@ -281,7 +285,7 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                       className="block text-xs font-medium text-muted mb-1"
                       htmlFor="userBirthday"
                     >
-                      วันเกิด (ตัวอย่าง. 1998-01-01)
+                      {t("birthdayLabel")}
                     </label>
                     <input
                       id="userBirthday"
@@ -291,7 +295,7 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                       maxLength={10}
                       type="text"
                       pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}"
-                      placeholder="กรุณากรอกวันเกิด (ปี ค.ศ.-เดือน-วัน)"
+                      placeholder={t("birthdayPlaceholder")}
                       defaultValue={fields.userBirthday}
                       required
                     />
@@ -302,7 +306,7 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                       className="block text-xs font-medium text-muted mb-1"
                       htmlFor="userSex"
                     >
-                      เพศ
+                      {t("sexLabel")}
                     </label>
                     <select
                       id="userSex"
@@ -312,13 +316,13 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                       required
                     >
                       {fields.userSex === "" && (
-                        <option value="">กรุณาเลือกเพศ</option>
+                        <option value="">{t("sexSelectPrompt")}</option>
                       )}
                       {fields.userSex !== "" && (
-                        <option value="">กรุณาเลือกเพศ...</option>
+                        <option value="">{t("sexSelectPromptAlt")}</option>
                       )}
-                      <option value="ชาย">ชาย</option>
-                      <option value="หญิง">หญิง</option>
+                      <option value="ชาย">{t("sexMale")}</option>
+                      <option value="หญิง">{t("sexFemale")}</option>
                     </select>
                   </div>
                   {/* L176-179 — เฟสบุ๊ค */}
@@ -327,14 +331,14 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                       className="block text-xs font-medium text-muted mb-1"
                       htmlFor="userFacebook"
                     >
-                      เฟสบุ๊ค
+                      {t("facebookLabel")}
                     </label>
                     <input
                       id="userFacebook"
                       className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base md:text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
                       name="userFacebook"
                       type="url"
-                      placeholder="URL เฟสบุ๊ค"
+                      placeholder={t("facebookPlaceholder")}
                       defaultValue={fields.userFacebook}
                     />
                   </div>
@@ -344,14 +348,14 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                       className="block text-xs font-medium text-muted mb-1"
                       htmlFor="userLineID"
                     >
-                      ไอดีไลน์
+                      {t("lineIdLabel")}
                     </label>
                     <input
                       id="userLineID"
                       className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base md:text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
                       name="userLineID"
                       type="text"
-                      placeholder="ไอดีไลน์"
+                      placeholder={t("lineIdPlaceholder")}
                       defaultValue={fields.userLineID}
                     />
                   </div>
@@ -364,7 +368,7 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                       className="rounded-lg border border-border bg-white dark:bg-surface px-4 py-2 text-sm font-medium text-foreground hover:bg-surface-alt"
                       data-dismiss="modal"
                     >
-                      ยกเลิก
+                      {t("cancel")}
                     </button>
                     <button
                       type="submit"
@@ -374,7 +378,7 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
                       className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
                       disabled={submitDisabled}
                     >
-                      บันทึก
+                      {t("save")}
                     </button>
                   </div>
                 </div>
@@ -394,15 +398,15 @@ export function EditProfileForm({ fields }: { fields: EditProfileFields }) {
             <div className={`pcs-swal-icon pcs-swal-icon-${alertMsg.type}`}>
               {alertMsg.type === "success" ? "✓" : "!"}
             </div>
-            <h2 className="pcs-swal-title">{alertMsg.title}</h2>
-            {alertMsg.text && <div className="pcs-swal-text">{alertMsg.text}</div>}
+            <h2 className="pcs-swal-title">{t(alertMsg.titleKey)}</h2>
+            {alertMsg.textKey && <div className="pcs-swal-text">{t(alertMsg.textKey)}</div>}
             {alertMsg.type === "error" && (
               <button
                 type="button"
                 className="btn btn-outline-info round btn-min-width"
                 onClick={() => setDismissed(state)}
               >
-                ตกลง
+                {t("ok")}
               </button>
             )}
           </div>

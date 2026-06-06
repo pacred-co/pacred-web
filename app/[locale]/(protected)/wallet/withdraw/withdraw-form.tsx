@@ -49,7 +49,7 @@ export function WithdrawForm({ balance }: Props) {
       return;
     }
     if (amt < MIN_AMOUNT) {
-      setError(`ยอดถอนขั้นต่ำ ฿${MIN_AMOUNT}`);
+      setError(t("minWithdrawError", { amount: MIN_AMOUNT }));
       return;
     }
     if (amt > balance) {
@@ -59,13 +59,13 @@ export function WithdrawForm({ balance }: Props) {
     // §0f confirm-before-mutate — withdraw debits wallet immediately on submit.
     // Show clear summary so customer can't fat-finger the wrong bank/amount.
     const ok = await confirm(
-      `ยืนยันสั่งถอน ฿${amt.toLocaleString("th-TH", { minimumFractionDigits: 2 })}\n` +
-      `${fee > 0 ? `ค่าบริการ ฿${fee.toFixed(2)} (ยอดต่ำกว่า ฿${FEE_THRESHOLD})\n` : ""}` +
-      `ยอดที่จะได้รับ ฿${net.toLocaleString("th-TH", { minimumFractionDigits: 2 })}\n\n` +
-      `เข้าบัญชี: ${bank}\n` +
-      `ชื่อ: ${accountName}\n` +
-      `เลขที่: ${accountNumber}\n\n` +
-      `⚠️ เมื่อกดยืนยัน ระบบจะหักเงินจาก wallet ทันที + เปิดคำขอให้แอดมินตรวจสอบ`,
+      t("confirmWithdrawAmount", { amount: amt.toLocaleString("th-TH", { minimumFractionDigits: 2 }) }) + "\n" +
+      `${fee > 0 ? t("confirmWithdrawFee", { fee: fee.toFixed(2), threshold: FEE_THRESHOLD }) + "\n" : ""}` +
+      t("confirmWithdrawNet", { amount: net.toLocaleString("th-TH", { minimumFractionDigits: 2 }) }) + "\n\n" +
+      t("confirmWithdrawBank", { bank }) + "\n" +
+      t("confirmWithdrawName", { name: accountName }) + "\n" +
+      t("confirmWithdrawNumber", { number: accountNumber }) + "\n\n" +
+      t("confirmWithdrawWarning"),
     );
     if (!ok) return;
     startTransition(async () => {
@@ -108,7 +108,7 @@ export function WithdrawForm({ balance }: Props) {
 
       {/* Amount */}
       <label className="block space-y-1">
-        <span className="text-sm font-medium">จำนวนเงินที่ต้องการถอน<span className="text-red-600 ml-0.5">*</span></span>
+        <span className="text-sm font-medium">{t("amountToWithdrawLabel")}<span className="text-red-600 ml-0.5">*</span></span>
         <div className="relative">
           <input
             type="number"
@@ -124,8 +124,8 @@ export function WithdrawForm({ balance }: Props) {
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xl font-bold text-muted">฿</span>
         </div>
         <span className="block text-xs text-muted">
-          ยอดที่สามารถถอนได้ <b className="font-mono text-foreground">฿{balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</b>
-          {" · "}ขั้นต่ำ <b>฿{MIN_AMOUNT}</b>
+          {t("withdrawableLabel")} <b className="font-mono text-foreground">฿{balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</b>
+          {" · "}{t("minLabel")} <b>฿{MIN_AMOUNT}</b>
         </span>
       </label>
 
@@ -133,16 +133,16 @@ export function WithdrawForm({ balance }: Props) {
       {amt > 0 && (
         <div className="rounded-xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-4 space-y-1 text-sm">
           <div className="flex justify-between">
-            <span className="text-muted">ยอดถอน</span>
+            <span className="text-muted">{t("withdrawAmountLabel")}</span>
             <span className="font-mono">฿{amt.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted">ค่าบริการ {fee > 0 ? `(ยอดต่ำกว่า ฿${FEE_THRESHOLD})` : "(ยกเว้น)"}</span>
+            <span className="text-muted">{t("feeLabel")} {fee > 0 ? t("feeBelowThreshold", { threshold: FEE_THRESHOLD }) : t("feeWaived")}</span>
             <span className="font-mono text-red-600">−฿{fee.toFixed(2)}</span>
           </div>
           <hr className="border-amber-200" />
           <div className="flex justify-between items-baseline">
-            <span className="text-xs text-muted">ยอดที่จะได้รับ</span>
+            <span className="text-xs text-muted">{t("netReceiveLabel")}</span>
             <span className="font-mono text-2xl font-bold text-emerald-600">
               ฿{net.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
             </span>
@@ -152,19 +152,19 @@ export function WithdrawForm({ balance }: Props) {
 
       {/* Bank details */}
       <div className="space-y-3 rounded-xl border border-border bg-surface-alt/30 p-4">
-        <h3 className="font-bold text-sm flex items-center gap-2"><Banknote className="w-4 h-4 text-primary-600" /> บัญชีปลายทาง</h3>
+        <h3 className="font-bold text-sm flex items-center gap-2"><Banknote className="w-4 h-4 text-primary-600" /> {t("destinationAccount")}</h3>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block space-y-1">
-            <span className="text-xs font-medium">ธนาคาร<span className="text-red-600 ml-0.5">*</span></span>
-            <input value={bank} onChange={(e) => setBank(e.target.value)} className={inputCls} required placeholder="เช่น ไทยพาณิชย์" />
+            <span className="text-xs font-medium">{t("bankLabel")}<span className="text-red-600 ml-0.5">*</span></span>
+            <input value={bank} onChange={(e) => setBank(e.target.value)} className={inputCls} required placeholder={t("bankFieldPlaceholder")} />
           </label>
           <label className="block space-y-1">
-            <span className="text-xs font-medium flex items-center gap-1"><User className="w-3 h-3" /> ชื่อบัญชี<span className="text-red-600">*</span></span>
-            <input value={accountName} onChange={(e) => setAccountName(e.target.value)} className={inputCls} required placeholder="ชื่อ-สกุล ตามสมุดบัญชี" />
+            <span className="text-xs font-medium flex items-center gap-1"><User className="w-3 h-3" /> {t("accountNameLabel")}<span className="text-red-600">*</span></span>
+            <input value={accountName} onChange={(e) => setAccountName(e.target.value)} className={inputCls} required placeholder={t("accountNamePlaceholder")} />
           </label>
         </div>
         <label className="block space-y-1">
-          <span className="text-xs font-medium flex items-center gap-1"><Hash className="w-3 h-3" /> เลขที่บัญชี<span className="text-red-600">*</span></span>
+          <span className="text-xs font-medium flex items-center gap-1"><Hash className="w-3 h-3" /> {t("accountNumberLabel")}<span className="text-red-600">*</span></span>
           <input
             value={accountNumber}
             onChange={(e) => setAccountNumber(e.target.value.replace(/[^0-9-]/g, ""))}
@@ -175,8 +175,8 @@ export function WithdrawForm({ balance }: Props) {
           />
         </label>
         <label className="block space-y-1">
-          <span className="text-xs font-medium">หมายเหตุ (ไม่บังคับ)</span>
-          <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} className={inputCls} placeholder="ระบุเงื่อนไขพิเศษถ้ามี" />
+          <span className="text-xs font-medium">{t("noteOptionalLabel")}</span>
+          <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} className={inputCls} placeholder={t("notePlaceholder")} />
         </label>
       </div>
 
@@ -185,7 +185,7 @@ export function WithdrawForm({ balance }: Props) {
         disabled={pending || !amount || amt < MIN_AMOUNT || amt > balance}
         className={`w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary-500 to-primary-700 text-white font-bold text-base px-6 py-3 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:hover:shadow-lg ${amt >= MIN_AMOUNT && amt <= balance && !pending ? "animate-pulse" : ""}`}
       >
-        {pending ? "กำลังส่งคำขอ..." : `💸 ยืนยันสั่งถอน${net > 0 ? ` ฿${net.toLocaleString("th-TH", { minimumFractionDigits: 2 })}` : ""}`}
+        {pending ? t("submittingRequest") : `💸 ${t("confirmWithdrawButton")}${net > 0 ? ` ฿${net.toLocaleString("th-TH", { minimumFractionDigits: 2 })}` : ""}`}
       </button>
     </form>
   );

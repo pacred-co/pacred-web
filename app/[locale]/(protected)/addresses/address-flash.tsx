@@ -8,13 +8,16 @@
 // query param so a refresh doesn't re-show it.
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { CheckCircle2, AlertCircle, X } from "lucide-react";
 
-const ERROR_TEXT: Record<string, string> = {
-  save: "เกิดข้อผิดพลาด ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง",
-  incomplete: "กรุณากรอกข้อมูลที่อยู่ให้ครบถ้วน",
-  delete_main: "ไม่สามารถลบที่อยู่หลักได้ — กรุณาตั้งที่อยู่อื่นเป็นที่อยู่หลักก่อน",
+// Stable error identifiers (set by the actions via ?error=…); the user-visible
+// text is resolved at render via t() so EN works.
+const ERROR_KEYS: Record<string, string> = {
+  save: "errorSave",
+  incomplete: "errorIncomplete",
+  delete_main: "errorDeleteMain",
 };
 
 export function AddressFlash({
@@ -24,6 +27,7 @@ export function AddressFlash({
   saved?: boolean;
   error?: string;
 }) {
+  const t = useTranslations("addressPage");
   const router = useRouter();
   const [open, setOpen] = useState(true);
   const isError = Boolean(error);
@@ -40,8 +44,8 @@ export function AddressFlash({
   if (!open || (!saved && !isError)) return null;
 
   const text = isError
-    ? (ERROR_TEXT[error as string] ?? "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง")
-    : "ดำเนินการสำเร็จ";
+    ? t(ERROR_KEYS[error as string] ?? "errorGeneric")
+    : t("success");
 
   return (
     <div
@@ -60,7 +64,7 @@ export function AddressFlash({
       <span className="flex-1">{text}</span>
       <button
         type="button"
-        aria-label="ปิด"
+        aria-label={t("close")}
         onClick={() => {
           setOpen(false);
           router.replace("/addresses");

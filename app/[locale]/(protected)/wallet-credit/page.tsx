@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { CreditCard, CircleDollarSign, History, Inbox } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
@@ -91,26 +92,27 @@ export const dynamic = "force-dynamic";
 
 // load_wallet_hs.php L21 — status badge. Tailwind rebuild with clean
 // semantic colours (รอ=amber · สำเร็จ=sky · ไม่สำเร็จ=red).
-function statusBadge(status: string | null) {
+type WalletT = Awaited<ReturnType<typeof getTranslations<"wallet">>>;
+function statusBadge(t: WalletT, status: string | null) {
   const base =
     "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold";
   if (status === "1") {
     return (
       <span className={`${base} border-amber-200 bg-amber-50 text-amber-700`}>
-        รอตรวจสอบ
+        {t("statusPending")}
       </span>
     );
   }
   if (status === "2") {
     return (
       <span className={`${base} border-sky-200 bg-sky-50 text-sky-700`}>
-        สำเร็จ
+        {t("statusSuccess")}
       </span>
     );
   }
   return (
     <span className={`${base} border-red-200 bg-red-50 text-red-700`}>
-      ไม่สำเร็จ
+      {t("statusFailed")}
     </span>
   );
 }
@@ -124,17 +126,20 @@ function numberFormat2(n: number): string {
 }
 
 // Legacy `nameWallet($type)` — member/include/function.php L156-169.
-const NAME_WALLET: Record<string, string> = {
-  "1": "รายการเติมเงิน",
-  "2": "รายการชำระเงิน\nฝากสั่งสินค้า",
-  "3": "รายการถอนเงิน",
-  "4": "รายการชำระเงิน\nฝากนำเข้า",
-  "5": "รายการคืนเงิน",
-  "6": "รายการชำระเงิน\nฝากชำระ",
-  "7": "รายการชำระเงิน\nแบบเติมเพิ่ม",
+// `t` is the "wallet" translator; keys hold the `\n` line-break marker so the
+// legacy two-line label rendering is preserved across locales.
+const NAME_WALLET_KEY: Record<string, string> = {
+  "1": "walletTypeDeposit",
+  "2": "walletTypeOrderPayment",
+  "3": "walletTypeWithdraw",
+  "4": "walletTypeImportPayment",
+  "5": "walletTypeRefund",
+  "6": "walletTypeBillPayment",
+  "7": "walletTypeTopUpExtra",
 };
-function nameWallet(type: string): string {
-  return NAME_WALLET[type] ?? "ไม่พบข้อมูล";
+function nameWallet(t: WalletT, type: string): string {
+  const key = NAME_WALLET_KEY[type];
+  return key ? t(key) : t("walletTypeNotFound");
 }
 
 // Legacy `DateThaiWallet($strDate)` — member/include/function.php L56-66.
@@ -165,6 +170,7 @@ type WalletHsRow = {
 };
 
 export default async function WalletCreditPage() {
+  const t = await getTranslations("wallet");
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
   const { profile } = data;
@@ -274,11 +280,11 @@ export default async function WalletCreditPage() {
                 <p className="flex items-center gap-1.5 text-sm font-semibold">
                   <CreditCard className="h-4 w-4 shrink-0" />
                   <span className="truncate">
-                    กระเป๋าสตางค์เครดิต ({fullName})
+                    {t("creditWalletNamed", { name: fullName })}
                   </span>
                 </p>
                 <p className="mt-2 text-xs text-white/80">
-                  วงเงินเครดิตที่ใช้งานได้ (บาท)
+                  {t("creditAvailableLabel")}
                 </p>
                 {/* `tam-counter` + data-count kept as the legacy count-up
                     hook (animation JS may attach later). */}
@@ -289,18 +295,18 @@ export default async function WalletCreditPage() {
                   {numberFormat2(creditAvailable)}
                 </p>
                 <p className="mt-2 text-xs text-white/80">
-                  ยอดเครดิตค้างชำระ :{" "}
+                  {t("creditOutstandingLabel")} :{" "}
                   <span className="font-mono tabular-nums">
                     {numberFormat2(creditValue)}
                   </span>{" "}
-                  (บาท)
+                  {t("bahtParen")}
                 </p>
                 <p className="mt-0.5 text-xs text-white/80">
-                  กระเป๋าสตางค์เงินสด :{" "}
+                  {t("cashWalletLabel")} :{" "}
                   <span className="font-mono tabular-nums">
                     {numberFormat2(walletTotal)}
                   </span>{" "}
-                  (บาท)
+                  {t("bahtParen")}
                 </p>
               </div>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -329,7 +335,7 @@ export default async function WalletCreditPage() {
                 className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2 text-sm font-bold text-red-700 shadow-sm transition-colors hover:bg-red-50"
               >
                 <CircleDollarSign className="h-4 w-4" />
-                ชำระเงินเครดิต
+                {t("payCreditLink")}
               </Link>
             </div>
           </div>
@@ -342,7 +348,7 @@ export default async function WalletCreditPage() {
             <div className="border-b border-border px-4 pt-3 md:px-5">
               <span className="inline-flex items-center gap-1.5 border-b-2 border-red-600 px-1 pb-2.5 text-sm font-bold text-red-600 md:text-base">
                 <History className="h-4 w-4" />
-                รายการเดินบัญชี
+                {t("tabAll")}
               </span>
             </div>
             <div className="px-3 py-3 md:px-4 md:py-4">
@@ -350,11 +356,11 @@ export default async function WalletCreditPage() {
                 {rowsHistory.length === 0 ? (
                   <div className="flex flex-col items-center gap-2 py-12 text-center">
                     <Inbox className="h-10 w-10 text-muted/50" />
-                    <p className="text-sm text-muted">คุณยังไม่มีรายการ</p>
+                    <p className="text-sm text-muted">{t("noRecords")}</p>
                   </div>
                 ) : (
                   rowsHistory.map((row) => (
-                    <WalletHsRowView key={row.ID} row={row} />
+                    <WalletHsRowView key={row.ID} row={row} t={t} />
                   ))
                 )}
               </div>
@@ -386,7 +392,7 @@ export default async function WalletCreditPage() {
                   <div className="modal-content ">
                     <div className="modal-header header-from">
                       <h4 className="modal-title">
-                        เติมเงินเข้าเป๋าตัง Pacred
+                        {t("depositModalTitle")}
                       </h4>
                       <button
                         type="button"
@@ -420,33 +426,33 @@ export default async function WalletCreditPage() {
                                   {BANK.name}
                                 </h2>
                                 <div className="text-center">
-                                  เลขที่บัญชี{" "}
+                                  {t("accountNumberLabelInline")}{" "}
                                   <span className="font-2rem mr-0-3" id="text2">
                                     {BANK.accountNumber}
                                   </span>
                                   <button
                                     data-toggle="tooltip"
                                     data-placement="top"
-                                    title="คัดลอกข้อความ"
+                                    title={t("copyTextTooltip")}
                                     type="button"
                                     className="btn btn-sm2 btn-rounded btn-secondary"
                                   >
-                                    คัดลอก
+                                    {t("copy")}
                                   </button>
                                   <br />
-                                  พร้อมเพย์{" "}
+                                  {t("promptpayLabel")}{" "}
                                   <span id="text1">0-1055-64077-71-6 </span>
                                   <button
                                     data-toggle="tooltip"
                                     data-placement="top"
-                                    title="คัดลอกข้อความ"
+                                    title={t("copyTextTooltip")}
                                     type="button"
                                     className="btn btn-sm2 btn-rounded btn-secondary"
                                   >
-                                    คัดลอก
+                                    {t("copy")}
                                   </button>
                                   <h5 className="text-white">
-                                    บริษัท แพคเรด (ประเทศไทย) จำกัด
+                                    {t("companyLegalName")}
                                   </h5>
                                 </div>
                               </div>
@@ -478,12 +484,12 @@ export default async function WalletCreditPage() {
  * including the legacy `nameWallet()` / `DateThaiWallet()` helpers and
  * the `$nameColor` +/- logic (L20).
  */
-function WalletHsRowView({ row }: { row: WalletHsRow }) {
+function WalletHsRowView({ row, t }: { row: WalletHsRow; t: WalletT }) {
   // load_wallet_hs.php L20 — type 1 or 5 = green (credit), else red.
   const nameColor = row.type === "1" || row.type === "5" ? "success" : "danger";
   const sign = nameColor === "success" ? "+" : "-";
   const { date, time } = dateThaiWallet(row.date);
-  const nameParts = nameWallet(row.type ?? "").split("\n");
+  const nameParts = nameWallet(t, row.type ?? "").split("\n");
 
   // load_wallet_hs.php L20 → Tailwind amount colour (credit green / debit red).
   const amountClass =
@@ -500,10 +506,10 @@ function WalletHsRowView({ row }: { row: WalletHsRow }) {
             </span>
           ))}
         </p>
-        <p className="mt-1 text-[11px] text-muted">เลขที่รายการ #{row.ID}</p>
+        <p className="mt-1 text-[11px] text-muted">{t("txNumber")} #{row.ID}</p>
         {row.refOrder != null && row.refOrder !== "" && (
           <p className="text-[11px] text-muted">
-            เลขที่ออเดอร์{" "}
+            {t("orderNumber")}{" "}
             {row.type === "2" ? (
               <a
                 href={`/service-order/${row.refOrder}`}
@@ -527,7 +533,7 @@ function WalletHsRowView({ row }: { row: WalletHsRow }) {
             )}
           </p>
         )}
-        <div className="mt-1.5">{statusBadge(row.status)}</div>
+        <div className="mt-1.5">{statusBadge(t, row.status)}</div>
       </div>
       <div className="shrink-0 text-right">
         <p className={`font-mono text-base font-bold tabular-nums ${amountClass}`}>

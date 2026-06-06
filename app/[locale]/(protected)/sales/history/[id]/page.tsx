@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -106,6 +107,7 @@ export default async function SalesHistoryDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const t = await getTranslations("salesPort");
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
 
@@ -252,10 +254,10 @@ export default async function SalesHistoryDetailPage({
       <div className="pcs-content-pad w-full px-3 md:px-6 py-3 md:py-6">
         {/* L320-332 — breadcrumb */}
         <nav className="mb-3 flex flex-wrap items-center gap-1.5 text-xs md:text-sm text-muted">
-          <Link href="/dashboard" className="hover:text-foreground">หน้าแรก</Link>
+          <Link href="/dashboard" className="hover:text-foreground">{t("home")}</Link>
           <span aria-hidden>/</span>
           <Link href="/sales/history" className="hover:text-foreground">
-            ประวัติจ่ายเงินลูกค้าตัวแทน
+            {t("payoutHistoryTitle")}
           </Link>
           <span aria-hidden>/</span>
           <span className="font-medium text-foreground">#{rowMain.id}</span>
@@ -271,24 +273,24 @@ export default async function SalesHistoryDetailPage({
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <dl className="space-y-1.5 text-sm">
                 <div className="flex flex-wrap gap-x-1">
-                  <dt className="text-muted">ชื่อธนาคาร :</dt>
+                  <dt className="text-muted">{t("bankNameColon")}</dt>
                   <dd className="font-medium text-foreground">{rowMain.name_blank}</dd>
                 </div>
                 <div className="flex flex-wrap gap-x-1">
-                  <dt className="text-muted">เลขที่บัญชี :</dt>
+                  <dt className="text-muted">{t("accountNumberColon")}</dt>
                   <dd className="font-mono font-medium text-foreground">{rowMain.no_blank}</dd>
                 </div>
                 <div className="flex flex-wrap gap-x-1">
-                  <dt className="text-muted">ชื่อบัญชี :</dt>
+                  <dt className="text-muted">{t("accountNameColon")}</dt>
                   <dd className="font-medium text-foreground">{rowMain.name_account}</dd>
                 </div>
                 <div className="flex flex-wrap items-baseline gap-x-1">
-                  <dt className="text-muted">จำนวนเงิน :</dt>
+                  <dt className="text-muted">{t("amountColon")}</dt>
                   <dd>
                     <span className="font-mono text-lg font-bold tabular-nums text-red-600">
                       {numberFormat(amount, 2)}
                     </span>{" "}
-                    <span className="text-xs text-muted">บาท</span>
+                    <span className="text-xs text-muted">{t("baht")}</span>
                   </dd>
                 </div>
               </dl>
@@ -296,29 +298,29 @@ export default async function SalesHistoryDetailPage({
                 {rowMain.status === "2" ? (
                   <>
                     <p className="flex items-center gap-2">
-                      <span className="text-muted">สถานะ :</span>
+                      <span className="text-muted">{t("statusColon")}</span>
                       <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700">
-                        รอดำเนินการ
+                        {t("pending")}
                       </span>
                     </p>
                     <p className="mt-2">
-                      <span className="text-muted">สำเนาบัตร : </span>
+                      <span className="text-muted">{t("idCardCopyColon")} </span>
                       <a
                         href={`${STORAGE}/file/${rowMain.file ?? ""}`}
                         className="font-medium text-sky-600 hover:underline"
                         target="_blank"
                         rel="noreferrer"
                       >
-                        ดูไฟล์
+                        {t("viewFile")}
                       </a>
                     </p>
                   </>
                 ) : (
                   <>
                     <p className="flex items-center gap-2">
-                      <span className="text-muted">สถานะ :</span>
+                      <span className="text-muted">{t("statusColon")}</span>
                       <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
-                        สำเร็จ
+                        {t("success")}
                       </span>
                     </p>
                     <a
@@ -345,12 +347,12 @@ export default async function SalesHistoryDetailPage({
           <div className="border-b border-border px-4 py-3 md:px-6 md:py-4">
             <h3 className="flex items-center gap-2 text-base md:text-xl font-bold text-foreground">
               <span className="font-30 ft-users" aria-hidden></span>
-              ประวัติจ่ายเงินลูกค้าตัวแทน #{rowMain.id}
+              {t("payoutDetailTitle", { id: rowMain.id })}
             </h3>
           </div>
           <div className="px-3 py-3 md:px-5 md:py-4">
             {items.length === 0 ? (
-              <p className="py-12 text-center text-sm text-muted">ไม่มีรายการ</p>
+              <p className="py-12 text-center text-sm text-muted">{t("noItems")}</p>
             ) : (
               <>
                 {/* ── Mobile: stacked cards (md:hidden) ── */}
@@ -365,7 +367,7 @@ export default async function SalesHistoryDetailPage({
                           <span className="mr-1 text-muted">#{i + 1}</span>
                           {row.fTrackingCHN || `#${row.usID}`}
                         </span>
-                        <span className="shrink-0">{fStatusBadge(row.fStatus)}</span>
+                        <span className="shrink-0">{fStatusBadge(row.fStatus, t)}</span>
                       </div>
                       <p className="mt-1 font-mono text-xs text-muted">{row.userID}</p>
                       <div className="mt-2.5 grid grid-cols-3 gap-1 border-t border-dashed border-border pt-2 text-center">
@@ -382,7 +384,7 @@ export default async function SalesHistoryDetailPage({
                           </div>
                         </div>
                         <div>
-                          <div className="text-[10px] text-muted">ค่าฝากนำเข้าจีน</div>
+                          <div className="text-[10px] text-muted">{t("chinaImportFee")}</div>
                           <div className="text-sm font-bold tabular-nums font-mono text-red-600">
                             {numberFormat(row.fTotalPrice, 2)}
                           </div>
@@ -390,9 +392,9 @@ export default async function SalesHistoryDetailPage({
                       </div>
                       <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-dashed border-border pt-2">
                         <span className="text-[11px] text-muted">
-                          {row.dateLabel} {row.timeLabel} น.
+                          {row.dateLabel} {row.timeLabel} {t("timeSuffix")}
                         </span>
-                        <span>{nameStatusUserPay(row.usStatus)}</span>
+                        <span>{nameStatusUserPay(row.usStatus, t)}</span>
                       </div>
                     </div>
                   ))}
@@ -405,15 +407,15 @@ export default async function SalesHistoryDetailPage({
                   <table id="myTable" className="dataTable w-full text-sm">
                     <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                       <tr>
-                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">ลำดับ</th>
-                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">วันที่สำเร็จ</th>
-                        <th className="px-3 py-3 font-medium whitespace-nowrap">รหัสสมาชิก</th>
-                        <th className="px-3 py-3 font-medium whitespace-nowrap">เลขแทรคกิ้ง</th>
-                        <th className="px-3 py-3 font-medium text-right whitespace-nowrap">ปริมาตร(CBM)</th>
-                        <th className="px-3 py-3 font-medium text-right whitespace-nowrap">น้ำหนัก(Kg)</th>
-                        <th className="px-3 py-3 font-medium text-right whitespace-nowrap">ค่าฝากนำเข้าจีน</th>
-                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">สถานะ</th>
-                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">สถานะเบิกเงินส่วนแบ่ง</th>
+                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">{t("sequence")}</th>
+                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">{t("completedDate")}</th>
+                        <th className="px-3 py-3 font-medium whitespace-nowrap">{t("memberCode")}</th>
+                        <th className="px-3 py-3 font-medium whitespace-nowrap">{t("trackingNumber")}</th>
+                        <th className="px-3 py-3 font-medium text-right whitespace-nowrap">{t("volumeCbm")}</th>
+                        <th className="px-3 py-3 font-medium text-right whitespace-nowrap">{t("weightKg")}</th>
+                        <th className="px-3 py-3 font-medium text-right whitespace-nowrap">{t("chinaImportFee")}</th>
+                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">{t("status")}</th>
+                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">{t("commissionWithdrawStatus")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -424,7 +426,7 @@ export default async function SalesHistoryDetailPage({
                         >
                           <td className="px-3 py-2.5 text-center text-xs text-muted">{i + 1}</td>
                           <td className="px-3 py-2.5 text-center text-xs text-muted whitespace-nowrap">
-                            {row.dateLabel} {row.timeLabel} น.
+                            {row.dateLabel} {row.timeLabel} {t("timeSuffix")}
                           </td>
                           <td className="px-3 py-2.5 font-mono text-xs text-foreground whitespace-nowrap">
                             {row.userID}
@@ -441,8 +443,8 @@ export default async function SalesHistoryDetailPage({
                           <td className="px-3 py-2.5 text-right tabular-nums font-mono font-semibold text-red-600">
                             {numberFormat(row.fTotalPrice, 2)}
                           </td>
-                          <td className="px-3 py-2.5 text-center">{fStatusBadge(row.fStatus)}</td>
-                          <td className="px-3 py-2.5 text-center">{nameStatusUserPay(row.usStatus)}</td>
+                          <td className="px-3 py-2.5 text-center">{fStatusBadge(row.fStatus, t)}</td>
+                          <td className="px-3 py-2.5 text-center">{nameStatusUserPay(row.usStatus, t)}</td>
                         </tr>
                       ))}
                     </tbody>

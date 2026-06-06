@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { submitSalesWithdrawal } from "@/actions/commissions-tb";
 import {
   computeCommission,
@@ -71,6 +72,7 @@ export function WithdrawClient({
   rows: UnpaidRowForWithdraw[];
   percen: number;
 }): ReactNode {
+  const t = useTranslations("salesPort");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -103,15 +105,15 @@ export function WithdrawClient({
   function onOpenModal() {
     setMsg(null);
     if (selected.size === 0) {
-      setMsg({ tone: "err", text: "กรุณาเลือกรายการที่ต้องการเบิกเงิน" });
+      setMsg({ tone: "err", text: t("errSelectItems") });
       return;
     }
     if (!breakdown.eligible) {
       setMsg({
         tone: "err",
-        text: `คุณมียอดการเบิกเงินน้อยกว่า ${SALES_MIN_WITHDRAWAL_THB.toLocaleString(
-          "en-US",
-        )} บาท กรุณาสะสมยอดให้ครบหรือมากกว่าเพื่อทำรายการ`,
+        text: t("errBelowMin", {
+          amount: SALES_MIN_WITHDRAWAL_THB.toLocaleString("en-US"),
+        }),
       });
       return;
     }
@@ -131,11 +133,11 @@ export function WithdrawClient({
     const idCardFile = fileInput?.files?.[0] ?? null;
 
     if (!nameBank || !noBank.trim() || !nameAccount.trim()) {
-      setMsg({ tone: "err", text: "กรุณากรอกข้อมูลบัญชีธนาคารให้ครบ" });
+      setMsg({ tone: "err", text: t("errFillBankInfo") });
       return;
     }
     if (!idCardFile) {
-      setMsg({ tone: "err", text: "กรุณาแนบสำเนาบัตรประชาชน (.pdf)" });
+      setMsg({ tone: "err", text: t("errAttachIdCard") });
       return;
     }
 
@@ -171,10 +173,10 @@ export function WithdrawClient({
           onClick={toggleAll}
           className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-alt"
         >
-          {selected.size === rows.length ? "ยกเลิกเลือกทั้งหมด" : "เลือกทั้งหมด"}
+          {selected.size === rows.length ? t("deselectAll") : t("selectAll")}
         </button>
         <span className="text-xs text-muted">
-          เลือกแล้ว {selected.size}/{rows.length} รายการ
+          {t("selectedCount", { selected: selected.size, total: rows.length })}
         </span>
       </div>
 
@@ -182,11 +184,11 @@ export function WithdrawClient({
         <table className="w-full text-sm">
           <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
             <tr>
-              <th className="px-3 py-3 font-medium text-center">เลือก</th>
+              <th className="px-3 py-3 font-medium text-center">{t("select")}</th>
               <th className="px-3 py-3 font-medium whitespace-nowrap">ID</th>
-              <th className="px-3 py-3 font-medium whitespace-nowrap">รหัสสมาชิก</th>
-              <th className="px-3 py-3 font-medium whitespace-nowrap">เลขแทรคกิ้ง</th>
-              <th className="px-3 py-3 font-medium text-right whitespace-nowrap">ยอดค่านำเข้า</th>
+              <th className="px-3 py-3 font-medium whitespace-nowrap">{t("memberCode")}</th>
+              <th className="px-3 py-3 font-medium whitespace-nowrap">{t("trackingNumber")}</th>
+              <th className="px-3 py-3 font-medium text-right whitespace-nowrap">{t("importAmount")}</th>
             </tr>
           </thead>
           <tbody>
@@ -205,7 +207,7 @@ export function WithdrawClient({
                     checked={selected.has(row.usID)}
                     onChange={() => toggle(row.usID)}
                     onClick={(e) => e.stopPropagation()}
-                    aria-label={`เลือกรายการ ${row.usID}`}
+                    aria-label={t("selectItemAria", { id: row.usID })}
                   />
                 </td>
                 <td className="px-3 py-2.5 font-mono text-xs text-foreground">{row.usID}</td>
@@ -228,22 +230,23 @@ export function WithdrawClient({
       <div className="mt-4 rounded-xl border border-border bg-surface-alt/40 dark:bg-surface px-4 py-3">
         <div className="flex flex-col gap-1 text-sm sm:flex-row sm:flex-wrap sm:justify-end sm:gap-x-6">
           <div className="text-muted">
-            ค่าขนส่งจีน : <span className="font-mono tabular-nums text-foreground">{fmt(breakdown.gross)}</span> บาท
+            {t("chinaShippingLabel")} <span className="font-mono tabular-nums text-foreground">{fmt(breakdown.gross)}</span> {t("baht")}
           </div>
           <div className="text-muted">
-            ส่วนแบ่ง 1% : <span className="font-mono tabular-nums text-foreground">{fmt(breakdown.commission)}</span> บาท
+            {t("commission1pctLabel")} <span className="font-mono tabular-nums text-foreground">{fmt(breakdown.commission)}</span> {t("baht")}
           </div>
           <div className="text-muted">
-            หักภาษี 3% : <span className="font-mono tabular-nums text-foreground">{fmt(breakdown.wht)}</span> บาท
+            {t("wht3pctLabel")} <span className="font-mono tabular-nums text-foreground">{fmt(breakdown.wht)}</span> {t("baht")}
           </div>
           <div className="font-semibold text-foreground">
-            ส่วนแบ่งสุทธิ :{" "}
-            <span className="font-mono tabular-nums text-red-600">{fmt(breakdown.net)}</span> บาท
+            {t("netCommissionLabel")}{" "}
+            <span className="font-mono tabular-nums text-red-600">{fmt(breakdown.net)}</span> {t("baht")}
           </div>
         </div>
         <p className="mt-2 text-xs text-red-600">
-          *หมายเหตุ ในการเบิกเงินแต่ละครั้งจะต้องมียอดขั้นต่ำ{" "}
-          {SALES_MIN_WITHDRAWAL_THB.toLocaleString("en-US")} บาท ขึ้นไป
+          {t("minWithdrawalNote", {
+            amount: SALES_MIN_WITHDRAWAL_THB.toLocaleString("en-US"),
+          })}
         </p>
       </div>
 
@@ -268,7 +271,7 @@ export function WithdrawClient({
           disabled={selected.size === 0}
           className="inline-flex items-center justify-center rounded-full bg-red-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-red-600/30 hover:bg-red-700 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          ทำรายการเบิกเงินรายการที่เลือก
+          {t("withdrawSelectedCta")}
         </button>
       </div>
 
@@ -278,13 +281,13 @@ export function WithdrawClient({
           <div className="w-full max-w-lg rounded-t-2xl sm:rounded-2xl bg-white dark:bg-surface shadow-xl max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <h4 className="text-base font-bold text-foreground">
-                ทำรายการเบิกเงิน {selected.size} รายการ
+                {t("withdrawModalTitle", { count: selected.size })}
               </h4>
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
                 className="text-muted hover:text-foreground"
-                aria-label="ปิด"
+                aria-label={t("close")}
               >
                 ✕
               </button>
@@ -297,14 +300,14 @@ export function WithdrawClient({
               className="px-4 py-4"
             >
               <div className="text-right text-sm text-muted mb-3">
-                ค่าขนส่งจีน :{" "}
-                <span className="font-mono tabular-nums text-foreground">{fmt(breakdown.gross)}</span> บาท
+                {t("chinaShippingLabel")}{" "}
+                <span className="font-mono tabular-nums text-foreground">{fmt(breakdown.gross)}</span> {t("baht")}
               </div>
 
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs font-medium text-muted mb-1" htmlFor="name_blank">
-                    ชื่อธนาคาร
+                    {t("bankName")}
                   </label>
                   <select
                     name="name_blank"
@@ -313,7 +316,7 @@ export function WithdrawClient({
                     defaultValue=""
                     className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base md:text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
                   >
-                    <option value="">เลือกธนาคาร</option>
+                    <option value="">{t("selectBank")}</option>
                     {THAI_BANKS.map((b) => (
                       <option key={b} value={b}>
                         {b}
@@ -323,7 +326,7 @@ export function WithdrawClient({
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-muted mb-1" htmlFor="no_blank">
-                    เลขที่บัญชี
+                    {t("accountNumber")}
                   </label>
                   <input
                     type="text"
@@ -335,7 +338,7 @@ export function WithdrawClient({
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-muted mb-1" htmlFor="name_account">
-                    ชื่อบัญชี
+                    {t("accountName")}
                   </label>
                   <input
                     type="text"
@@ -347,7 +350,7 @@ export function WithdrawClient({
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-muted mb-1" htmlFor="file">
-                    หลักฐานสำเนาบัตรประชาชนผู้เบิกเงิน ไฟล์ .pdf
+                    {t("idCardProofLabel")}
                   </label>
                   <input
                     type="file"
@@ -365,14 +368,14 @@ export function WithdrawClient({
 
               <div className="flex flex-col gap-1 text-sm sm:items-end">
                 <div className="text-muted">
-                  ส่วนแบ่ง 1% : <span className="font-mono tabular-nums text-foreground">{fmt(breakdown.commission)}</span> บาท
+                  {t("commission1pctLabel")} <span className="font-mono tabular-nums text-foreground">{fmt(breakdown.commission)}</span> {t("baht")}
                 </div>
                 <div className="text-muted">
-                  หักภาษี 3% : <span className="font-mono tabular-nums text-foreground">{fmt(breakdown.wht)}</span> บาท
+                  {t("wht3pctLabel")} <span className="font-mono tabular-nums text-foreground">{fmt(breakdown.wht)}</span> {t("baht")}
                 </div>
                 <div className="font-semibold text-foreground">
-                  ส่วนแบ่งสุทธิ :{" "}
-                  <span className="font-mono tabular-nums text-red-600">{fmt(breakdown.net)}</span> บาท
+                  {t("netCommissionLabel")}{" "}
+                  <span className="font-mono tabular-nums text-red-600">{fmt(breakdown.net)}</span> {t("baht")}
                 </div>
               </div>
 
@@ -396,14 +399,14 @@ export function WithdrawClient({
                   disabled={pending}
                   className="inline-flex items-center justify-center rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-surface-alt disabled:opacity-60"
                 >
-                  ยกเลิก
+                  {t("cancel")}
                 </button>
                 <button
                   type="submit"
                   disabled={pending}
                   className="inline-flex items-center justify-center rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
                 >
-                  {pending ? "กำลังทำรายการ..." : "ยืนยันรายการเบิกเงิน"}
+                  {pending ? t("processing") : t("confirmWithdrawal")}
                 </button>
               </div>
             </form>

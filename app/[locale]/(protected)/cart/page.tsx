@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -158,6 +159,7 @@ function convertIMGCHN(url: string | null, size: string): string {
 }
 
 export default async function CartPage() {
+  const t = await getTranslations("cartPage");
   // header.php L9-72: a logged-out visitor is redirected to /login.
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
@@ -244,7 +246,10 @@ export default async function CartPage() {
   // Only resolved when there are cart items (the whole address card
   // is wrapped in `if($countCart>0)`).
   const addressBlock = countCart > 0
-    ? await resolveAddressBlock(admin, userID, userAddressID)
+    ? await resolveAddressBlock(admin, userID, userAddressID, {
+        lastOrdered: t("addrLastOrdered"),
+        primary: t("addrPrimary"),
+      })
     : null;
 
   // ── All addresses (for the เปลี่ยนที่อยู่ modal — cart.php's
@@ -394,7 +399,7 @@ export default async function CartPage() {
 
   return (
     <>
-      <title>ตะกร้าสินค้า | Pacred</title>
+      <title>{t("pageTitle")}</title>
 
       <div className="pcs-content-pad w-full px-3 md:px-6 pt-4 pb-24 md:py-6 max-w-[1280px] mx-auto">
         {/* ── Header — title + add CTA ── */}
@@ -402,16 +407,16 @@ export default async function CartPage() {
           <div>
             <div className="flex items-center gap-2 text-[11px] text-muted mb-1">
               <Link href="/dashboard" className="hover:text-foreground transition-colors">
-                หน้าแรก
+                {t("breadcrumbHome")}
               </Link>
               <span>/</span>
-              <span className="text-foreground font-medium">ตะกร้าสินค้า</span>
+              <span className="text-foreground font-medium">{t("breadcrumbCart")}</span>
             </div>
             <h1 className="flex items-center gap-2 text-[20px] md:text-[26px] font-black tracking-tight text-foreground">
               <span className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white flex items-center justify-center shadow-md shadow-primary-600/25">
                 <ShoppingCart className="w-5 h-5" strokeWidth={2} />
               </span>
-              ตะกร้าสินค้า
+              {t("title")}
             </h1>
           </div>
           <Link
@@ -419,7 +424,7 @@ export default async function CartPage() {
             className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[12.5px] md:text-[14px] font-bold px-3.5 md:px-4 py-2 md:py-2.5 shadow-lg shadow-primary-600/30 hover:shadow-primary-600/40 hover:-translate-y-0.5 transition-all"
           >
             <Plus className="w-4 h-4" strokeWidth={2.5} />
-            เพิ่มสินค้า
+            {t("addItem")}
           </Link>
         </div>
 
@@ -491,7 +496,8 @@ export default async function CartPage() {
 }
 
 /* ─────────────────────────── EMPTY CART STATE ─────────────────────────── */
-function EmptyCartState() {
+async function EmptyCartState() {
+  const t = await getTranslations("cartPage");
   return (
     <div className="rounded-2xl bg-white border border-border p-8 md:p-12 text-center shadow-[0_4px_14px_rgba(0,0,0,0.04)]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -501,17 +507,17 @@ function EmptyCartState() {
         className="mx-auto w-40 h-40 md:w-52 md:h-52 object-contain opacity-70 mb-4"
       />
       <h3 className="text-[15px] md:text-[17px] font-bold text-foreground">
-        ไม่มีพบสินค้าในรถเข็น
+        {t("emptyTitle")}
       </h3>
       <p className="mt-2 text-[12.5px] text-muted">
-        เพิ่มสินค้าจากร้าน 1688 · Taobao · Tmall · Alibaba เพื่อเริ่มสั่งซื้อ
+        {t("emptyHint")}
       </p>
       <Link
         href="/cart/add"
         className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[13px] font-bold px-4 py-2 shadow-lg shadow-primary-600/30 hover:shadow-primary-600/40 hover:-translate-y-0.5 transition-all"
       >
         <Plus className="w-4 h-4" strokeWidth={2.5} />
-        เพิ่มสินค้า
+        {t("addItem")}
       </Link>
     </div>
   );
@@ -523,14 +529,15 @@ function EmptyCartState() {
  * type EK/SEA + crate option). All `name=` + `value=` attributes preserved
  * verbatim so the form submit to /service-order carries the same fields.
  */
-function ShippingOptionsCard({ userTransportType }: { userTransportType: number }) {
+async function ShippingOptionsCard({ userTransportType }: { userTransportType: number }) {
+  const t = await getTranslations("cartPage");
   return (
     <div className="rounded-2xl bg-white border border-border shadow-[0_4px_14px_rgba(0,0,0,0.04)] p-4 md:p-5">
       <h3 className="flex items-center gap-2 text-[15px] md:text-[16px] font-bold text-foreground mb-3">
         <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-primary-50 text-primary-600">
           <Truck className="w-4 h-4" strokeWidth={2.2} />
         </span>
-        การขนส่งจากจีนมาไทย
+        {t("shippingFromChina")}
         <span className="inline-block w-5 h-3.5 rounded-sm overflow-hidden border border-border align-middle">
           {/* China flag — simple flag pip */}
           <span className="block w-full h-full bg-[#EE1C25]" aria-label="China" />
@@ -541,7 +548,7 @@ function ShippingOptionsCard({ userTransportType }: { userTransportType: number 
         {/* ── Transport type — EK (รถ) / SEA (เรือ) ── */}
         <div>
           <label className="block text-[12.5px] font-bold text-muted mb-2">
-            รูปแบบการขนส่งจีน-ไทย
+            {t("transportMode")}
           </label>
           <div className="grid grid-cols-2 gap-2">
             <RadioCard
@@ -550,8 +557,8 @@ function ShippingOptionsCard({ userTransportType }: { userTransportType: number 
               id="transportType-ek"
               defaultChecked={userTransportType === 1}
               icon={<Truck className="w-5 h-5" strokeWidth={2.2} />}
-              title="ทางรถ (EK)"
-              hint="5-7 วัน"
+              title={t("transportTruck")}
+              hint={t("transportTruckHint")}
             />
             <RadioCard
               name="hTransportType"
@@ -559,8 +566,8 @@ function ShippingOptionsCard({ userTransportType }: { userTransportType: number 
               id="transportType-sea"
               defaultChecked={userTransportType !== 1}
               icon={<Ship className="w-5 h-5" strokeWidth={2.2} />}
-              title="ทางเรือ (SEA)"
-              hint="12-16 วัน"
+              title={t("transportSea")}
+              hint={t("transportSeaHint")}
             />
           </div>
         </div>
@@ -568,7 +575,7 @@ function ShippingOptionsCard({ userTransportType }: { userTransportType: number 
         {/* ── Crate option — ไม่ตีลังไม้ / ตีลังไม้ ── */}
         <div>
           <label className="block text-[12.5px] font-bold text-muted mb-2">
-            การตีลังไม้สินค้า
+            {t("crateLabel")}
           </label>
           <div className="grid grid-cols-2 gap-2">
             <RadioCard
@@ -577,20 +584,20 @@ function ShippingOptionsCard({ userTransportType }: { userTransportType: number 
               id="crate-1"
               defaultChecked
               icon={<PackageOpen className="w-5 h-5" strokeWidth={2.2} />}
-              title="ไม่ตีลังไม้"
-              hint="ปกติ"
+              title={t("crateNo")}
+              hint={t("crateNoHint")}
             />
             <RadioCard
               name="crate"
               value="1"
               id="crate-2"
               icon={<Package className="w-5 h-5" strokeWidth={2.2} />}
-              title="ตีลังไม้"
-              hint="มีค่าบริการ"
+              title={t("crateYes")}
+              hint={t("crateYesHint")}
             />
           </div>
           <p className="mt-2 text-[11px] text-rose-600 leading-relaxed">
-            ** หากต้องการตีลังไม้สินค้าบางร้าน ให้ทำการเลือกสั่งออเดอร์แยกรายการกัน
+            {t("crateNote")}
           </p>
         </div>
       </div>
@@ -670,6 +677,7 @@ async function resolveAddressBlock(
   admin: ReturnType<typeof createAdminClient>,
   userID: string,
   userAddressID: string,
+  labels: { lastOrdered: string; primary: string },
 ): Promise<
   | {
       mode: "saved";
@@ -725,7 +733,7 @@ async function resolveAddressBlock(
         mode: "saved",
         addressID: String(matchRow.addressid),
         fullAddress: buildFullAddressFromRow(matchRow),
-        lastAddressLabel: "ที่อยู่ล่าสุดที่เคยสั่ง",
+        lastAddressLabel: labels.lastOrdered,
       };
     }
 
@@ -762,8 +770,8 @@ async function resolveAddressBlock(
             fullAddress: buildFullAddressFromRow(mainAddr),
             lastAddressLabel:
               userAddressID !== ""
-                ? "ที่อยู่ล่าสุดที่เคยสั่ง"
-                : "ที่อยู่หลัก",
+                ? labels.lastOrdered
+                : labels.primary,
           };
         }
       }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { useRouter } from "next/navigation";
 import {
@@ -114,6 +115,7 @@ export function CartInteractivity({
   memberCode,
   shippingCard,
 }: CartInteractivityProps) {
+  const t = useTranslations("cartPage");
   // Selected row IDs — cart.php's `$("input:checkbox[name='ID[]']")`
   // collected into a comma-separated string at L843-851. Legacy default
   // ticks every row on page load (cart.php L799 `$('.dt-checkboxes').prop('checked', true);`)
@@ -255,7 +257,7 @@ export function CartInteractivity({
         return;
       }
       if (!v.valid) {
-        setPromoMsg({ tone: "err", text: v.message ?? "โค้ดส่วนลดไม่ถูกต้อง" });
+        setPromoMsg({ tone: "err", text: v.message ?? t("promoInvalid") });
         setPromoBusy(false);
         return;
       }
@@ -271,7 +273,7 @@ export function CartInteractivity({
         discount:     v.discount,
         discountType: v.discountType,
       });
-      setPromoMsg({ tone: "ok", text: v.message ?? "ใช้โค้ดส่วนลดสำเร็จ" });
+      setPromoMsg({ tone: "ok", text: v.message ?? t("promoApplied") });
       setPromoBusy(false);
     });
   }
@@ -313,13 +315,13 @@ export function CartInteractivity({
   const [busyDeleteId, setBusyDeleteId] = useState<number | null>(null);
   async function handleDelete(id: number) {
     if (busyDeleteId !== null) return;
-    if (!(await confirm("ลบรายการนี้ออกจากตะกร้า?"))) return;
+    if (!(await confirm(t("confirmDeleteItem")))) return;
     setBusyDeleteId(id);
     startTransition(async () => {
       const res = await deleteCartItem({ id });
       setBusyDeleteId(null);
       if (!res.ok) {
-        await alert("ลบไม่สำเร็จ: " + res.error);
+        await alert(t("deleteFailed") + res.error);
         return;
       }
       const ns = new Set(selectedIds);
@@ -346,7 +348,7 @@ export function CartInteractivity({
     if (selectedIds.size === 0 || submitting) return;
     const form = e.currentTarget.form;
     if (!form) {
-      await alert("ไม่พบฟอร์ม กรุณารีเฟรชหน้าใหม่");
+      await alert(t("formNotFound"));
       return;
     }
     const fd = new FormData(form);
@@ -371,35 +373,35 @@ export function CartInteractivity({
     const taxDocAddress = fd.get("taxDocAddress");
     const needsTaxBilling = taxDocPref === "tax_invoice" || taxDocPref === "customs";
     if (needsTaxBilling) {
-      const docName = taxDocPref === "customs" ? "ใบขนสินค้า" : "ใบกำกับภาษี";
-      const t = String(taxDocTaxId ?? "").trim();
-      if (!/^\d{13}$/.test(t)) {
-        await alert("กรุณากรอกเลขผู้เสียภาษี 13 หลักให้ครบ");
+      const docName = taxDocPref === "customs" ? t("taxDocCustoms") : t("taxDocInvoice");
+      const taxIdValue = String(taxDocTaxId ?? "").trim();
+      if (!/^\d{13}$/.test(taxIdValue)) {
+        await alert(t("taxIdRequired"));
         return;
       }
       if (!String(taxDocBillingName ?? "").trim()) {
-        await alert(`กรุณากรอกชื่อบริษัทสำหรับ${docName}`);
+        await alert(t("billingNameRequired", { doc: docName }));
         return;
       }
       if (!String(taxDocAddress ?? "").trim()) {
-        await alert(`กรุณากรอกที่อยู่สำหรับ${docName}`);
+        await alert(t("billingAddressRequired", { doc: docName }));
         return;
       }
     }
 
     if (!addressID) {
-      await alert("กรุณาเลือกที่อยู่จัดส่ง");
+      await alert(t("selectAddress"));
       return;
     }
     if (!hTransportType) {
-      await alert("กรุณาเลือกรูปแบบการขนส่งจีน-ไทย");
+      await alert(t("selectTransport"));
       return;
     }
     if (!crate) {
-      await alert("กรุณาเลือกการตีลังไม้");
+      await alert(t("selectCrate"));
       return;
     }
-    if (!(await confirm(`ยืนยันส่งออเดอร์ ${selectedIds.size} รายการ?`))) return;
+    if (!(await confirm(t("confirmSubmit", { count: selectedIds.size })))) return;
     setSubmitting(true);
     startTransition(async () => {
       const res = await submitCartOrder({
@@ -419,12 +421,12 @@ export function CartInteractivity({
       });
       setSubmitting(false);
       if (!res.ok) {
-        await alert("ส่งออเดอร์ไม่สำเร็จ: " + res.error);
+        await alert(t("submitFailed") + res.error);
         return;
       }
       if (res.data?.hNo) {
         await alert(
-          `ส่งออเดอร์เรียบร้อย เลขที่ ${res.data.hNo}\nกดตกลงเพื่อไปหน้ารายละเอียด`,
+          t("submitSuccess", { hNo: res.data.hNo }),
         );
         router.push(`/service-order/${res.data.hNo}`);
       }
@@ -450,12 +452,12 @@ export function CartInteractivity({
               className="w-4 h-4 rounded border-2 border-border accent-primary-600 cursor-pointer"
             />
             <span className="text-[12.5px] md:text-[13px] font-bold text-foreground">
-              เลือกทั้งหมด
+              {t("selectAll")}
             </span>
           </label>
           <span className="ml-auto inline-flex items-center gap-1.5 text-[11.5px] md:text-[12px] text-muted">
             <ShoppingBag className="w-3.5 h-3.5" strokeWidth={2.2} />
-            <span className="notranslate">{totalRowCount}</span> รายการในตะกร้า
+            <span className="notranslate">{totalRowCount}</span> {t("itemsInCart")}
           </span>
         </div>
 
@@ -486,7 +488,7 @@ export function CartInteractivity({
                   {/* Shop subheader */}
                   <div className="px-4 md:px-5 py-1.5 bg-amber-50/40 border-b border-amber-100/50">
                     <p className="text-[11.5px] md:text-[12px] font-bold text-amber-800">
-                      <span className="text-muted font-medium">ชื่อร้าน : </span>
+                      <span className="text-muted font-medium">{t("shopName")}</span>
                       {shop.shopName}
                     </p>
                   </div>
@@ -554,7 +556,7 @@ export function CartInteractivity({
                             )}
                             {r.cdetails && (
                               <p className="mt-1 text-[11px] text-muted line-clamp-2">
-                                <span className="font-bold">หมายเหตุ:</span> {r.cdetails}
+                                <span className="font-bold">{t("note")}</span> {r.cdetails}
                               </p>
                             )}
 
@@ -587,20 +589,20 @@ export function CartInteractivity({
                                 className="inline-flex items-center gap-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-bold px-2 py-0.5 hover:bg-rose-100 transition-colors disabled:opacity-50"
                               >
                                 <Trash2 className="w-3 h-3" strokeWidth={2.2} />
-                                {busyDeleteId === r.id ? "กำลังลบ..." : "ลบ"}
+                                {busyDeleteId === r.id ? t("deleting") : t("delete")}
                               </button>
                             </div>
                           </div>
 
                           {/* Desktop-only — price, qty, remove, line-total columns */}
                           <div className="hidden md:flex flex-col items-end pt-1">
-                            <div className="text-[12px] text-muted">ราคา/ชิ้น</div>
+                            <div className="text-[12px] text-muted">{t("pricePerPiece")}</div>
                             <div className="text-[13px] font-bold notranslate font-mono">
                               {numberFormat(r.cprice)}
                             </div>
                           </div>
                           <div className="hidden md:flex flex-col items-center pt-1">
-                            <div className="text-[12px] text-muted mb-1">จำนวน</div>
+                            <div className="text-[12px] text-muted mb-1">{t("quantity")}</div>
                             <input
                               type="number"
                               value={amt}
@@ -617,7 +619,7 @@ export function CartInteractivity({
                             />
                           </div>
                           <div className="hidden md:flex flex-col items-end pt-1">
-                            <div className="text-[12px] text-muted mb-1">ราคารวม</div>
+                            <div className="text-[12px] text-muted mb-1">{t("lineTotal")}</div>
                             <div className="text-[13.5px] font-black text-primary-600 notranslate font-mono">
                               {numberFormat(lineTotal)}
                             </div>
@@ -628,7 +630,7 @@ export function CartInteractivity({
                               className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-bold px-2 py-0.5 hover:bg-rose-100 transition-colors disabled:opacity-50"
                             >
                               <Trash2 className="w-3 h-3" strokeWidth={2.2} />
-                              {busyDeleteId === r.id ? "ลบ..." : "ลบ"}
+                              {busyDeleteId === r.id ? t("deletingShort") : t("delete")}
                             </button>
                           </div>
                         </div>
@@ -653,7 +655,7 @@ export function CartInteractivity({
             <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-rose-50 text-primary-600">
               <Gift className="w-4 h-4" strokeWidth={2.2} />
             </span>
-            โปรโมชันสำหรับคุณ
+            {t("promotionsForYou")}
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
@@ -678,7 +680,7 @@ export function CartInteractivity({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/legacy/pcs/theme/free50-3.png"
-                alt="Pacred เหมา ๆ ฟรี 50 บาท"
+                alt={t("maomaoPromoAlt")}
                 className="block w-full h-auto"
               />
               <div className="px-2.5 py-1.5 bg-white text-center">
@@ -686,7 +688,7 @@ export function CartInteractivity({
                   href="/services/import-china"
                   className="text-[11.5px] font-bold text-primary-600 hover:underline inline-flex items-center gap-0.5"
                 >
-                  ดูพื้นที่จัดส่งและรายละเอียด
+                  {t("viewDeliveryAreas")}
                   <ExternalLink className="w-2.5 h-2.5" strokeWidth={2.2} />
                 </Link>
               </div>
@@ -723,14 +725,14 @@ export function CartInteractivity({
                     still works (functional toggle); only the visual is
                     stubbed to avoid a brand-leaking URL in customer source. */}
                 <div className="block w-full aspect-[768/477] bg-surface-alt flex items-center justify-center text-muted text-xs">
-                  โปรโมชัน 3.3 (รอ asset ใหม่)
+                  {t("promo33Placeholder")}
                 </div>
                 <div className="px-2.5 py-1.5 bg-white text-center">
                   <Link
                     href="/services/import-china"
                     className="text-[11.5px] font-bold text-primary-600 hover:underline inline-flex items-center gap-0.5"
                   >
-                    ดูรายละเอียดโปรโมชัน
+                    {t("viewPromoDetails")}
                     <ExternalLink className="w-2.5 h-2.5" strokeWidth={2.2} />
                   </Link>
                 </div>
@@ -744,7 +746,7 @@ export function CartInteractivity({
           </div>
 
           <p className="mt-3 text-[11px] text-rose-700 leading-relaxed">
-            * หากสินค้ามีขนาดเล็กบริษัทแนะนำให้เลือกขนส่งเป็น Flash Express (เริ่มต้น 30 บ.)
+            {t("flashExpressNote")}
           </p>
 
           {/* ── G1 promo-code input ── */}
@@ -756,7 +758,7 @@ export function CartInteractivity({
                   {appliedPromo.label}
                 </span>
                 <span className="text-[12px] text-muted">
-                  ส่วนลด{" "}
+                  {t("discount")}{" "}
                   <span className="font-bold text-emerald-700 notranslate">
                     {appliedPromo.discountType === "pct"
                       ? `${appliedPromo.discount}%`
@@ -769,19 +771,19 @@ export function CartInteractivity({
                   disabled={promoBusy}
                   className="ml-auto text-[12px] text-rose-600 hover:text-rose-700 hover:underline disabled:opacity-50"
                 >
-                  ลบ
+                  {t("delete")}
                 </button>
               </div>
             ) : (
               <div className="flex items-center gap-2 flex-wrap">
                 <label htmlFor="promo-code-input" className="inline-flex items-center gap-1 text-[12.5px] font-bold text-foreground">
                   <Tag className="w-3.5 h-3.5 text-primary-600" strokeWidth={2.2} />
-                  มีโค้ดส่วนลด?
+                  {t("havePromoCode")}
                 </label>
                 <input
                   id="promo-code-input"
                   type="text"
-                  placeholder="เช่น PCSF"
+                  placeholder={t("promoCodePlaceholder")}
                   value={promoCode}
                   onChange={(e) => setPromoCode(e.target.value)}
                   onKeyDown={(e) => {
@@ -800,7 +802,7 @@ export function CartInteractivity({
                   disabled={promoBusy || promoCode.trim().length === 0}
                   className="inline-flex items-center gap-1 rounded-full bg-white text-primary-600 border-2 border-primary-600 text-[12px] font-bold px-3 py-1.5 hover:bg-primary-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {promoBusy ? "กำลังตรวจ..." : "ใช้โค้ด"}
+                  {promoBusy ? t("checking") : t("applyCode")}
                 </button>
               </div>
             )}
@@ -819,36 +821,36 @@ export function CartInteractivity({
               <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-primary-600 text-white shadow-md shadow-primary-600/25">
                 <ShoppingBag className="w-4 h-4" strokeWidth={2.2} />
               </span>
-              สรุปรายการสั่งซื้อ
+              {t("orderSummary")}
             </h3>
             <span className="text-[11px] text-muted shrink-0">
-              เลือก <span id="countID" className="font-bold text-primary-600 notranslate">{countDisplay}</span> รายการ
+              {t("selected")} <span id="countID" className="font-bold text-primary-600 notranslate">{countDisplay}</span> {t("itemsUnit")}
             </span>
           </div>
 
           <dl className="space-y-1.5 text-[13px]">
             <div className="flex items-baseline justify-between gap-2">
-              <dt className="text-muted">รวม (¥)</dt>
+              <dt className="text-muted">{t("subtotalCny")}</dt>
               <dd id="cart-subtotal" className="font-bold notranslate font-mono">
                 {totals.priceCny}
               </dd>
             </div>
             <div className="flex items-baseline justify-between gap-2">
-              <dt className="text-muted">เรทแลกเปลี่ยน</dt>
+              <dt className="text-muted">{t("exchangeRate")}</dt>
               <dd id="rsDefault" className="font-bold notranslate font-mono">
                 {totals.rate}
               </dd>
             </div>
             {appliedPromo && (
               <div className="flex items-baseline justify-between gap-2 text-emerald-700">
-                <dt>ส่วนลด ({appliedPromo.label})</dt>
+                <dt>{t("discountWithLabel", { label: appliedPromo.label })}</dt>
                 <dd id="cart-promo-discount" className="font-bold notranslate font-mono">
                   -{numberFormat(discountThb)}
                 </dd>
               </div>
             )}
             <div className="pt-2 mt-2 border-t border-rose-200/60 flex items-baseline justify-between gap-2">
-              <dt className="text-[13.5px] font-bold text-foreground">ราคารวมสุทธิ</dt>
+              <dt className="text-[13.5px] font-bold text-foreground">{t("netTotal")}</dt>
               <dd id="cart-total" className="text-[20px] md:text-[22px] font-black text-primary-600 notranslate font-mono leading-none">
                 {appliedPromo ? numberFormat(finalThb) : totals.priceThb}
                 <span className="text-[12px] font-bold text-muted ml-1">฿</span>
@@ -867,19 +869,19 @@ export function CartInteractivity({
             {submitting ? (
               <>
                 <span className="inline-block w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                กำลังส่งออเดอร์...
+                {t("submitting")}
               </>
             ) : (
               <>
                 <CheckCircle2 className="w-4 h-4" strokeWidth={2.5} />
-                สั่งซื้อสินค้า
+                {t("submitOrder")}
               </>
             )}
           </button>
           {submitDisabled && (
             <p className="mt-2 text-[11px] text-rose-600 text-center inline-flex items-center justify-center gap-1">
               <X className="w-3 h-3" strokeWidth={2.5} />
-              กรุณาเลือกสินค้าอย่างน้อย 1 รายการ
+              {t("selectAtLeastOne")}
             </p>
           )}
         </div>

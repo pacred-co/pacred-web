@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
+import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { legacyMemberUrl } from "@/lib/legacy-image";
@@ -108,6 +109,7 @@ type TeamMemberRow = {
 };
 
 export default async function SalesTeamMembersPage() {
+  const t = await getTranslations("salesPort");
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
 
@@ -269,7 +271,7 @@ export default async function SalesTeamMembersPage() {
           {/* ── Header: title + invite-link copy widget ── */}
           <div className="flex flex-col gap-3 border-b border-border px-3 py-3 md:px-5 md:py-4">
             <h3 className="text-base md:text-xl font-bold text-foreground">
-              สมาชิกในทีม
+              {t("teamMembersTitle")}
             </h3>
             {/* L60-65 — the "ลิงก์เชิญเพื่อน" copy widget. The legacy
                 `<span>` carried an inline onclick="copyToClipboard('#text1')"
@@ -277,9 +279,9 @@ export default async function SalesTeamMembersPage() {
                 preserved so the click-to-copy follow-up still targets it. */}
             <div>
               <label className="block text-xs font-medium text-muted mb-1" htmlFor="urlRecom">
-                ลิงก์เชิญเพื่อน{" "}
+                {t("inviteLinkLabel")}{" "}
                 <span className="inline-flex items-center rounded-full bg-red-600 text-white px-2.5 py-0.5 text-[11px] font-semibold cursor-pointer">
-                  คัดลอก
+                  {t("copy")}
                 </span>
               </label>
               <div className="rounded-lg border border-border bg-surface-alt/50 px-3 py-2 text-xs md:text-sm text-foreground break-all">
@@ -291,7 +293,7 @@ export default async function SalesTeamMembersPage() {
           {/* L70-141 — the team-member list */}
           <div className="px-3 py-3 md:px-5 md:py-4">
             {rows.length === 0 ? (
-              <p className="py-12 text-center text-sm text-muted">ยังไม่มีสมาชิกในทีม</p>
+              <p className="py-12 text-center text-sm text-muted">{t("emptyTeamMembers")}</p>
             ) : (
               <>
                 {/* ── Mobile: stacked cards (md:hidden) ── */}
@@ -319,30 +321,30 @@ export default async function SalesTeamMembersPage() {
                             คุณ{row.userName ?? ""} {row.userLastName ?? ""}
                           </p>
                           <p className="mt-0.5 flex flex-wrap items-center gap-1 font-mono text-xs text-muted">
-                            <span>{row.userID}</span> <BadgeVIP2 row={row} />
+                            <span>{row.userID}</span> <BadgeVIP2 row={row} t={t} />
                           </p>
                           {row.userStatus === "0" && (
                             <span className="mt-1 inline-block text-xs font-medium text-red-600">
-                              บัญชีนี้ถูกลบแล้ว
+                              {t("accountDeleted")}
                             </span>
                           )}
                         </div>
                       </div>
                       <dl className="mt-3 space-y-2 border-t border-dashed border-border pt-2 text-xs">
                         <div>
-                          <dt className="font-medium text-muted">ที่อยู่</dt>
+                          <dt className="font-medium text-muted">{t("address")}</dt>
                           <dd className="mt-0.5 text-foreground">
                             <MainAddress row={row} />
                           </dd>
                         </div>
                         <div>
-                          <dt className="font-medium text-muted">ข้อมูลติดต่อ</dt>
+                          <dt className="font-medium text-muted">{t("contactInfo")}</dt>
                           <dd className="mt-0.5 text-foreground [&_a]:text-red-600 [&_a]:break-all">
-                            <ContactInfo row={row} />
+                            <ContactInfo row={row} t={t} />
                           </dd>
                         </div>
                         <div className="flex items-center justify-between gap-2">
-                          <dt className="font-medium text-muted">วันที่สมัครสมาชิก</dt>
+                          <dt className="font-medium text-muted">{t("registerDate")}</dt>
                           <dd className="tabular-nums text-foreground">{row.userRegistered}</dd>
                         </div>
                       </dl>
@@ -359,11 +361,11 @@ export default async function SalesTeamMembersPage() {
                   >
                     <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                       <tr>
-                        <th className="px-4 py-3 font-medium whitespace-nowrap">รหัสสมาชิก</th>
-                        <th className="px-4 py-3 font-medium">ชื่อ-นามสกุล</th>
-                        <th className="px-4 py-3 font-medium">ที่อยู่</th>
-                        <th className="px-4 py-3 font-medium">ข้อมูลติดต่อ</th>
-                        <th className="px-4 py-3 font-medium text-center whitespace-nowrap">วันที่สมัครสมาชิก</th>
+                        <th className="px-4 py-3 font-medium whitespace-nowrap">{t("memberCode")}</th>
+                        <th className="px-4 py-3 font-medium">{t("fullName")}</th>
+                        <th className="px-4 py-3 font-medium">{t("address")}</th>
+                        <th className="px-4 py-3 font-medium">{t("contactInfo")}</th>
+                        <th className="px-4 py-3 font-medium text-center whitespace-nowrap">{t("registerDate")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -374,7 +376,7 @@ export default async function SalesTeamMembersPage() {
                         >
                           <td className="px-4 py-3 font-mono text-xs whitespace-nowrap">
                             <span className="flex flex-wrap items-center gap-1">
-                              <span>{row.userID}</span> <BadgeVIP2 row={row} />
+                              <span>{row.userID}</span> <BadgeVIP2 row={row} t={t} />
                             </span>
                           </td>
                           <td className="px-4 py-3 text-foreground">
@@ -397,7 +399,7 @@ export default async function SalesTeamMembersPage() {
                                   <>
                                     <br />
                                     <span className="text-xs font-medium text-red-600">
-                                      บัญชีนี้ถูกลบแล้ว
+                                      {t("accountDeleted")}
                                     </span>
                                   </>
                                 )}
@@ -408,7 +410,7 @@ export default async function SalesTeamMembersPage() {
                             <MainAddress row={row} />
                           </td>
                           <td className="px-4 py-3 text-xs text-foreground [&_a]:text-red-600 [&_a]:break-all">
-                            <ContactInfo row={row} />
+                            <ContactInfo row={row} t={t} />
                           </td>
                           <td className="px-4 py-3 text-center text-xs tabular-nums text-muted whitespace-nowrap">
                             {row.userRegistered}
@@ -433,7 +435,13 @@ export default async function SalesTeamMembersPage() {
  * the SVIP badge (when tb_rate_custom_cbm has a row), and the
  * corporate badge (when tb_corporate has a row).
  */
-function BadgeVIP2({ row }: { row: TeamMemberRow }): ReactNode {
+function BadgeVIP2({
+  row,
+  t,
+}: {
+  row: TeamMemberRow;
+  t: (key: string) => string;
+}): ReactNode {
   // switch ($coID): PCS → ''; STAR/DIAMOND/CROWN → that text;
   // default → the raw coID.
   const coId = row.coID ?? "";
@@ -454,7 +462,7 @@ function BadgeVIP2({ row }: { row: TeamMemberRow }): ReactNode {
       {row.hasCorporate ? (
         <>
           {" "}
-          <span className={vipChip}>บริษัท</span>
+          <span className={vipChip}>{t("companyBadge")}</span>
         </>
       ) : null}
     </>
@@ -491,30 +499,36 @@ function MainAddress({ row }: { row: TeamMemberRow }): ReactNode {
  * an optional `<a href=$link>` wrap and a trailing `$enter`) only
  * when `$data` is not NULL/empty.
  */
-function ContactInfo({ row }: { row: TeamMemberRow }): ReactNode {
+function ContactInfo({
+  row,
+  t,
+}: {
+  row: TeamMemberRow;
+  t: (key: string) => string;
+}): ReactNode {
   return (
     <>
       {row.userEmail ? (
         <>
-          อีเมล : <a href={`mailto:${row.userEmail}`}>{row.userEmail}</a>
+          {t("emailLabel")} <a href={`mailto:${row.userEmail}`}>{row.userEmail}</a>
           <br />
         </>
       ) : null}
       {row.userTel ? (
         <>
-          โทร : <a href={`tel:${row.userTel}`}>{row.userTel}</a>
+          {t("phoneLabel")} <a href={`tel:${row.userTel}`}>{row.userTel}</a>
           <br />
         </>
       ) : null}
       {row.userLineID ? (
         <>
-          ไอดีไลน์ : {row.userLineID}
+          {t("lineIdLabel")} {row.userLineID}
           <br />
         </>
       ) : null}
       {row.userFacebook ? (
         <>
-          เฟสบุ๊ค : <a href={row.userFacebook}>{row.userFacebook}</a>
+          {t("facebookLabel")} <a href={row.userFacebook}>{row.userFacebook}</a>
           <br />
         </>
       ) : null}

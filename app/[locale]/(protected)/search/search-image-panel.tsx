@@ -32,6 +32,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 type Hit = {
   provider: "1688" | "taobao" | "tmall";
@@ -69,6 +70,7 @@ export function SearchImagePanel({
   rsDefault: number;
   highlight?: boolean;
 }) {
+  const t = useTranslations("searchPage");
   const inputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -92,7 +94,7 @@ export function SearchImagePanel({
   async function handleFile(file: File) {
     // Mirror the API route's 5 MB cap + give a friendly message early.
     if (file.size > 5 * 1024 * 1024) {
-      setErrorMsg("ไฟล์รูปใหญ่เกินไป (สูงสุด 5 MB)");
+      setErrorMsg(t("imageTooLarge"));
       return;
     }
     setErrorMsg(null);
@@ -117,23 +119,23 @@ export function SearchImagePanel({
         setHits(json.hits);
         if (json.hits.length === 0) {
           // searchIMG.php L185-187 — empty → "ค้นหาอีกครั้ง" state.
-          setErrorMsg("ไม่พบสินค้าที่คล้ายกัน กรุณาลองรูปอื่น");
+          setErrorMsg(t("noSimilarProducts"));
         }
       } else {
         setHits([]);
         setErrorMsg(
           json.reason === "not_authorized"
-            ? "กรุณาเข้าสู่ระบบก่อนค้นหาด้วยรูปภาพ"
+            ? t("loginRequiredForImageSearch")
             : json.reason === "image_too_large"
-              ? "ไฟล์รูปใหญ่เกินไป (สูงสุด 5 MB)"
+              ? t("imageTooLarge")
               : json.reason === "no_image"
-                ? "กรุณาเลือกไฟล์รูปภาพ"
-                : "ค้นหาด้วยรูปภาพไม่สำเร็จ กรุณาลองใหม่",
+                ? t("selectImageFile")
+                : t("imageSearchFailed"),
         );
       }
     } catch {
       setHits([]);
-      setErrorMsg("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่");
+      setErrorMsg(t("connectionError"));
     } finally {
       setLoading(false);
     }
@@ -152,10 +154,10 @@ export function SearchImagePanel({
         <div className="flex flex-col sm:flex-row sm:items-center gap-2">
           <div className="flex-1 min-w-0">
             <h4 className="text-sm md:text-base font-bold text-foreground">
-              ค้นหาด้วยรูปภาพ
+              {t("imageSearchTitle")}
             </h4>
             <p className="text-[11px] md:text-xs text-muted mt-0.5">
-              อัปโหลดรูปสินค้า หรือถ่ายรูป เพื่อค้นหาสินค้าที่คล้ายกันจากจีน
+              {t("imageSearchDescription")}
             </p>
           </div>
           <button
@@ -164,7 +166,7 @@ export function SearchImagePanel({
             disabled={loading}
             className="shrink-0 inline-flex items-center justify-center gap-1.5 rounded-full bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 min-h-[44px] text-sm font-bold transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {loading ? "กำลังค้นหา…" : "เลือก / ถ่ายรูป"}
+            {loading ? t("searching") : t("selectOrTakePhoto")}
           </button>
           {/* capture="environment" → opens the rear camera on phones,
               falls back to file picker on desktop. */}
@@ -188,10 +190,10 @@ export function SearchImagePanel({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={previewUrl}
-              alt="รูปที่ค้นหา"
+              alt={t("searchImageAlt")}
               className="w-16 h-16 object-cover rounded-lg border border-border"
             />
-            <span className="text-xs text-muted">รูปที่ใช้ค้นหา</span>
+            <span className="text-xs text-muted">{t("imageUsedForSearch")}</span>
           </div>
         )}
 
@@ -221,7 +223,7 @@ export function SearchImagePanel({
                         alt=""
                       />
                       <div className="jss text-pre absolute top-1.5 left-1.5 rounded-md bg-red-600 text-white text-[10px] font-medium px-1.5 py-0.5">
-                        พรีออเดอร์
+                        {t("preOrder")}
                       </div>
                       <div className="absolute top-1.5 right-1.5 rounded-md bg-black/60 text-white text-[10px] font-medium px-1.5 py-0.5">
                         {hit.provider}
@@ -233,11 +235,11 @@ export function SearchImagePanel({
                       </h5>
                       {hit.price_cny != null && (
                         <span className="block mt-1 text-red-600 font-semibold text-sm">
-                          ราคา : {fmt2(priceThb)}฿
+                          {t("price")} : {fmt2(priceThb)}฿
                         </span>
                       )}
                       <span className="block mt-1 text-[11px] text-sky-600 group-hover:underline">
-                        ค้นหาสินค้าที่คล้ายกัน
+                        {t("findSimilarProducts")}
                       </span>
                     </div>
                   </a>
