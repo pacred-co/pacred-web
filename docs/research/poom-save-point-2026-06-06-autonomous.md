@@ -1,11 +1,11 @@
-# 🌅 2026-06-06 — ภูม autonomous run · B-batch + cleanup + avatar mirror + incidents · save-point
+# 🌅 2026-06-06 — ภูม autonomous run · B-batch + cleanup + avatar mirror + incidents + CSV-batch · save-point
 
-**Branch:** `Poom-pacred = 94a6f7d7` · pushed · synced 0/0
+**Branch:** `Poom-pacred = b344d354` · pushed · synced 0/0
 **Resume:** `git fetch origin && git pull origin Poom-pacred`
 
 ---
 
-## 🎯 ที่ Ship วันนี้ (4 commits)
+## 🎯 ที่ Ship วันนี้ (8 commits)
 
 | SHA | งาน |
 |---|---|
@@ -13,6 +13,10 @@
 | `03cc3641` | Rebased on เดฟ's heading fix |
 | `48f2d4b3` | Orphan delete (forwarder-items-table + shop-item-row-editor) + **B3** ✈️ ทางอากาศ filter pill |
 | `94a6f7d7` | **Avatar mirror** customer + admin → `tb_users.userPicture` + `tb_admin.adminPicture` |
+| `7ebf0327` | **CSV export** → `/admin/report-cnt` (accountants · 32-cabinet group + money cols gate) |
+| `fe1e6093` | **CSV bulk** → 6 surfaces: `/admin/wallet` (balance) · `/admin/yuan-payments` · `/admin/forwarder-check` · `/admin/forwarders/combine-bill` · `/admin/wallet/withdrawals` · `/admin/leads` |
+| `2be72521` | **CSV** → `/admin/refunds` (RF tracker for PEAK) + `/admin/service-orders` (ฝากสั่งสินค้า 20 cols) |
+| `b344d354` | **CSV** → `/admin/forwarders` main list (30 cols · 10 status tabs · all filters honoured) |
 
 ---
 
@@ -78,7 +82,9 @@ Pickup options พร้อมเลือกใน "ที่ค้าง" tabl
 
 ## 🎉 Closing remark
 
-วันนี้ ship 4 commits · apply migration prod · backfill 4,662 rows · -828 LOC orphan removed · verify 13+ surfaces · close 2 incidents. B-batch ของ ภูม's late-PM save-point ปิดงานครบ (B1+B2+B5+B3 · พี่ป๊อปไม่เห็น 8× over-count workload อีกแล้ว). Avatar staleness gap (เดฟ flag) ปิดด้วย single-fix write-mirror.
+วันนี้ ship 8 commits · apply migration prod · backfill 4,662 rows · -828 LOC orphan removed · verify 13+ surfaces · close 2 incidents · **CSV export wired ใน 10 admin pages** (report-cnt + wallet · yuan-payments · forwarder-check · combine-bill · withdrawals · leads · refunds · service-orders · forwarders). B-batch ของ ภูม's late-PM save-point ปิดงานครบ (B1+B2+B5+B3 · พี่ป๊อปไม่เห็น 8× over-count workload อีกแล้ว). Avatar staleness gap (เดฟ flag) ปิดด้วย single-fix write-mirror.
+
+**CSV impact:** ทุก list page ใน admin/cargo + admin/accounting + admin/wallet สามารถ export → spreadsheet ได้ทันที (BOM + RFC 4180 + honours active filter/sort/date-window/role-gate). PEAK / Excel reconciliation flow ไม่ต้อง screenshot อีกแล้ว. CEO directive §6 (acquisition cold-list to external callers / VAs) unblocked เพราะ /admin/leads CSV.
 
 CEO 3-directive trio + CRM activation 2.0 ทั้งคู่ปิดวงแล้ว. งานหลักที่เหลือเป็น P0 verification (wallet rework + customer inline-edit) ที่ต้องการ customer session · และ Coordination items กับทีมอื่น.
 
