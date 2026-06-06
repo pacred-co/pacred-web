@@ -11,7 +11,7 @@ import {
   type RefundSource,
   type RefundStatus,
 } from "@/lib/validators/refund";
-import { RefundRequestForm, type SourceOption } from "./refund-request-form";
+import { type SourceOption } from "./refund-request-form";
 
 /**
  * U1-6 — /refunds customer hub.
@@ -182,7 +182,14 @@ export default async function CustomerRefundsHubPage() {
               </p>
             </div>
           ) : (
-            <RefundRequestForm sourceOptions={sourceOptions} />
+            // Refund 1:1 (owner 2026-06-06 · option ก) — the legacy PCS refund flow
+            // is ADMIN-INITIATED ONLY (no customer self-request). The customer sees
+            // a contact message + their refund-status history (below); staff create
+            // refunds at /admin/refunds/new against a paid shop order.
+            <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-900/20 p-4 text-sm leading-relaxed text-amber-900 dark:text-amber-200">
+              การขอคืนเงินดำเนินการโดยทีมงาน Pacred — กรุณาแจ้งเซลล์หรือ CS ที่ดูแลคุณ
+              ทีมงานจะตรวจสอบและคืนเงินเข้ากระเป๋าเงินของคุณ คุณสามารถดูสถานะการคืนเงินได้ที่ด้านล่าง
+            </div>
           )}
         </section>
 

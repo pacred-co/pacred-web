@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { submitSalesWithdrawal } from "@/actions/commissions-tb";
 import {
   computeCommission,
@@ -352,14 +353,13 @@ export function WithdrawClient({
                   <label className="block text-xs font-medium text-muted mb-1" htmlFor="file">
                     {t("idCardProofLabel")}
                   </label>
-                  <input
-                    type="file"
+                  <StyledFileInput
                     name="file"
                     id="file"
                     accept=".pdf,application/pdf"
-                    data-max-file-size="9M"
                     required
-                    className="block w-full rounded-lg border border-border px-3 py-2 text-base md:text-sm file:mr-3 file:rounded-md file:border-0 file:bg-red-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-red-600"
+                    label="แนบสำเนาบัตรประชาชน (PDF)"
+                    hint="ไฟล์ PDF ไม่เกิน 9 MB"
                   />
                 </div>
               </div>

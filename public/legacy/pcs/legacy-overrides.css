@@ -460,3 +460,32 @@ body.pcs-legacy-body .footer {
     white-space: nowrap;
   }
 }
+
+/* =========================================================================
+   Page-content typography reset — kill the legacy heading "บวม" (2026-06-06)
+   -------------------------------------------------------------------------
+   The legacy Bootstrap base (style.css / theme) sets bare-element heading
+   sizes with !important:  h1 2.5rem · h2 2rem · h3 1.75rem · h4 1.5rem ·
+   h5 1.25rem.  Tailwind v4 utilities live in @layer, so an unlayered
+   !important element rule beats `.text-base`/`.text-2xl`/etc. → EVERY heading
+   on a content/form page rendered 40/32/28px regardless of the text-* class
+   the page author wrote.  On dense form pages (cart/add, service-import/add,
+   service-payment, wallet/withdraw) the many oversized section headers made
+   the content scale "บวม" — out of proportion with the compact sidebar
+   (owner 2026-06-06: "scale content บวมเกินไป ไม่สมมาตรกับ side bar").
+
+   Fix: scope `revert-layer !important` to the page-content wrapper
+   (`.pcs-page-content`, display:contents → layout-transparent, set in the
+   protected layout around {children}).  revert-layer rolls each heading's
+   size/line-height/weight/margin back to the lower cascade layers (Tailwind
+   utilities/base) → the heading uses its OWN text-* class (or Preflight's
+   `inherit` when bare).  The chrome (NavBar/sidebar/right-rail) is OUTSIDE the
+   wrapper → untouched.  Pre-2022 webviews without revert-layer ignore the
+   declaration → graceful fallback to the current sizes.  Verified live on
+   /service-import/add: h1 40→24px, section h2 32→16px, layout unchanged. */
+.pcs-page-content :is(h1, h2, h3, h4, h5, h6) {
+  font-size: revert-layer !important;
+  line-height: revert-layer !important;
+  font-weight: revert-layer !important;
+  margin-block: revert-layer !important;
+}

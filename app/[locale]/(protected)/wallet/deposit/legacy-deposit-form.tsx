@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 // + creates pending tb_wallet_hs row; admin reviews. Without confirm the
 // customer can't double-check the amount + slip file before commit.
 import { confirm } from "@/components/ui/confirm";
+import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { getDepositQr, submitLegacyWalletDeposit } from "@/actions/wallet";
 
 /**
@@ -259,18 +260,15 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
           >
             {t("transferProofLabel")}
           </label>
-          <div className="fallback">
-            <input
-              type="file"
-              name="imagesSlip"
-              id="imagesSlip"
-              className="dropify block w-full rounded-lg border border-border px-3 py-2 text-base md:text-sm file:mr-3 file:rounded-md file:border-0 file:bg-red-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 disabled:opacity-60"
-              accept="image/*"
-              data-max-file-size="9M"
-              required
-              disabled={pending}
-            />
-          </div>
+          <StyledFileInput
+            name="imagesSlip"
+            id="imagesSlip"
+            accept="image/*"
+            required
+            disabled={pending}
+            label="แนบสลิปการโอน (คลิกเพื่อเลือกรูป)"
+            hint="รองรับรูปภาพ ไม่เกิน 9 MB"
+          />
         </div>
         {kind === "wallet" && (
           <div className="mt-3 mb-1 rounded-lg border border-border bg-surface-alt/40 dark:bg-surface px-3 py-2.5 text-sm text-muted">

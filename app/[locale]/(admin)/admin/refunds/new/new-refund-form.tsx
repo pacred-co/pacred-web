@@ -89,7 +89,9 @@ export function NewRefundForm() {
             className={inputCls}
             required
           >
-            {REFUND_SOURCES.map((s) => (
+            {/* Refund 1:1 (owner option ก) — shop orders only (legacy refunds only
+                service_order); `manual` kept for admin discretion. forwarder/yuan cut. */}
+            {REFUND_SOURCES.filter((s) => s === "service_order" || s === "manual").map((s) => (
               <option key={s} value={s}>{REFUND_SOURCE_LABEL[s]}</option>
             ))}
           </select>

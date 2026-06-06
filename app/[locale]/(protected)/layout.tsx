@@ -219,8 +219,20 @@ export default async function ProtectedLayout({
       <PcsLeftMenu data={chrome} />
       <PcsSidebarToggle />
 
-      {/* 5. The per-screen `.app-content` body. */}
-      {children}
+      {/* 5. The per-screen body. Wrapped in `.pcs-page-content` (display:contents
+            → layout-transparent, the page stays the body's direct flex child) so
+            legacy-overrides.css §"page content typography" can scope a heading
+            reset to PAGE content only — NOT the chrome (NavBar/sidebar/footer are
+            siblings outside this wrapper). The legacy Bootstrap base sets
+            `h1{2.5rem!important}…h5{1.25rem!important}` on bare elements, which
+            (Tailwind v4 utilities live in @layer → they lose to unlayered
+            !important element rules) inflated EVERY heading on content/form pages
+            to 40/32/28px regardless of their text-* class → "บวม" (owner 2026-06-06:
+            "scale content บวมเกินไป ไม่สมมาตรกับ side bar"). The scoped revert-layer
+            restores each heading's own Tailwind size. */}
+      <div className="pcs-page-content" style={{ display: "contents" }}>
+        {children}
+      </div>
 
       {/* Customer login-popup announcement — faithful port of all-script.php's
           tb_notify popup (reaches all migrated customers via tb_notify /

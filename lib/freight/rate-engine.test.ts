@@ -85,5 +85,14 @@ assertTrue("EXW LCL chinaCostPending = true (origin+freight cost 0)", exwLcl.chi
 assertEq("CFR AIR chinaCostPending = false (air freight cost modelled)",
   composeFreightQuote({ mode: "air", incoterm: "CFR", kgm: 100 }).chinaCostPending, false);
 
+// ── (i) chinaFreightCostThb — fold the real China cost → TRUE NET margin (0145) ──
+section("(i) chinaFreightCostThb → true net margin");
+const exwLclNet = composeFreightQuote({ mode: "sea_lcl", incoterm: "EXW", deliveryTruck: "4W", tier: "regular", cbm: 5, chinaFreightCostThb: 3000 });
+assertEq("omitted → chinaFreightCostThb defaults 0", exwLcl.chinaFreightCostThb, 0);
+assertEq("provided → chinaCostPending flips false", exwLclNet.chinaCostPending, false);
+assertEq("chinaFreightCostThb echoed in result", exwLclNet.chinaFreightCostThb, 3000);
+assertEq("subtotalCost = local + 3000 China cost", exwLclNet.subtotalCost, exwLcl.subtotalCost + 3000);
+assertEq("profit = gross − 3000 China cost (NET)", exwLclNet.profit, exwLcl.profit - 3000);
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} freight rate-engine: ${pass} pass / ${fail} fail`);
 if (fail > 0) process.exit(1);

@@ -28,7 +28,14 @@ if (!PASSWORD) {
   process.exit(1);
 }
 
-const POOLER_HOST = "aws-0-ap-southeast-1.pooler.supabase.com";
+// 2026-06-06: the project's Supavisor pooler host MIGRATED aws-0 → aws-1. The old
+// aws-0 host now returns "tenant not found" + the direct db.<ref> host is IPv6-only
+// (times out on IPv4-only networks) → ALWAYS try aws-1 first. Keep aws-0 as a
+// fallback for older projects.
+const POOLER_HOSTS = [
+  "aws-1-ap-southeast-1.pooler.supabase.com",
+  "aws-0-ap-southeast-1.pooler.supabase.com",
+];
 const POOLER_USER = `postgres.${PROJECT_REF}`;
 const DIRECT_HOST = `db.${PROJECT_REF}.supabase.co`;
 
@@ -49,8 +56,10 @@ async function tryConnect(label, conn) {
 
 let client = null;
 const attempts = [
-  { label: "session-pooler 5432", conn: `postgresql://${POOLER_USER}:${encodeURIComponent(PASSWORD)}@${POOLER_HOST}:5432/postgres` },
-  { label: "transaction-pooler 6543", conn: `postgresql://${POOLER_USER}:${encodeURIComponent(PASSWORD)}@${POOLER_HOST}:6543/postgres` },
+  ...POOLER_HOSTS.flatMap((h) => [
+    { label: `session-pooler ${h}:5432`, conn: `postgresql://${POOLER_USER}:${encodeURIComponent(PASSWORD)}@${h}:5432/postgres` },
+    { label: `transaction-pooler ${h}:6543`, conn: `postgresql://${POOLER_USER}:${encodeURIComponent(PASSWORD)}@${h}:6543/postgres` },
+  ]),
   { label: "direct 5432", conn: `postgresql://postgres:${encodeURIComponent(PASSWORD)}@${DIRECT_HOST}:5432/postgres` },
 ];
 for (const a of attempts) {
