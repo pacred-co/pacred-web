@@ -38,6 +38,14 @@ export type FreightQuoteSpec = {
   kgm?: number;
   /** sea_fcl container count — drives per-container lines + the margin cap. */
   containers?: number;
+  /**
+   * The TRUE China-side freight cost in ฿ (migration 0145 · tb_freight_rate
+   * looked up + FX-converted by the compose action). When provided, it's added
+   * to subtotalCost → `profit` becomes a real NET margin (not gross "กำไรขั้นต้น")
+   * and `chinaCostPending` flips false. Omit it → unchanged gross behaviour
+   * (the 26 existing engine tests pass nothing → identical results).
+   */
+  chinaFreightCostThb?: number;
 };
 
 export type FreightLineResult = {
@@ -55,6 +63,8 @@ export type FreightLineResult = {
 export type FreightQuoteResult = {
   lines: FreightLineResult[];
   subtotalCost: number;
+  /** The China-side freight cost (฿) folded into subtotalCost (0 if not supplied). */
+  chinaFreightCostThb: number;
   subtotalSell: number;
   profit: number;
   vatPct: number;
@@ -127,7 +137,10 @@ export function composeFreightQuote(spec: FreightQuoteSpec): FreightQuoteResult 
     });
   }
 
-  const subtotalCost = round2(lines.reduce((s, l) => s + l.cost, 0));
+  const localCost = round2(lines.reduce((s, l) => s + l.cost, 0));
+  // 0145 — the admin-maintained China freight cost (FX-converted) makes profit NET.
+  const chinaFreightCostThb = Math.max(0, round2(spec.chinaFreightCostThb ?? 0));
+  const subtotalCost = round2(localCost + chinaFreightCostThb);
   const subtotalSell = round2(lines.reduce((s, l) => s + l.sell, 0));
   const profit = round2(subtotalSell - subtotalCost);
   const vat = round2((subtotalSell * FREIGHT_VAT_PCT) / 100);
@@ -141,9 +154,11 @@ export function composeFreightQuote(spec: FreightQuoteSpec): FreightQuoteResult 
   // modelled here yet) — if we bill any freight/origin line at cost 0, `profit`
   // is gross, not net. (Air freight carries a representative cost > 0, so an
   // air-only freight scope won't trip this.)
-  const chinaCostPending = lines.some(
-    (l) => (l.scope === "freight" || l.scope === "origin") && l.unitCost === 0,
-  );
+  const chinaCostPending =
+    spec.chinaFreightCostThb == null &&
+    lines.some(
+      (l) => (l.scope === "freight" || l.scope === "origin") && l.unitCost === 0,
+    );
 
   // ── Commission split (1% freight · 5% customs · 5% doc · −3% WHT) ──
   const sumScope = (s: ScopeCategory) =>
@@ -161,6 +176,7 @@ export function composeFreightQuote(spec: FreightQuoteSpec): FreightQuoteResult 
   return {
     lines,
     subtotalCost,
+    chinaFreightCostThb,
     subtotalSell,
     profit,
     vatPct: FREIGHT_VAT_PCT,
