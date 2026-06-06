@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { akucargoSearch } from "@/lib/china-search/akucargo";
@@ -161,6 +162,7 @@ export default async function SearchPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
+  const t = await getTranslations("searchPage");
   // header.php L9-72: a logged-out visitor is redirected to /login.
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
@@ -314,13 +316,13 @@ export default async function SearchPage({
                     defaultValue={getURL}
                     className="product-search w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:ring-2 focus:ring-red-500/30 focus:border-red-500 outline-none"
                     id="input-search"
-                    placeholder="พิมค้นหาสั่งซื้อสินค้า+วางลิ้งสินค้า1688 เถาเปา แปลภาษาไทยทันที"
+                    placeholder={t("searchPlaceholder")}
                   />
                 </div>
                 <button
                   className="shrink-0 inline-flex items-center justify-center rounded-lg bg-red-600 hover:bg-red-700 text-white h-10 w-10 transition-colors"
                   type="submit"
-                  aria-label="ค้นหา"
+                  aria-label={t("searchAriaLabel")}
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -366,28 +368,28 @@ export default async function SearchPage({
             <div className="mt-3">
               <h4 className="text-sm md:text-base font-bold text-foreground flex flex-wrap items-center gap-2">
                 <span>
-                  ค้นหา : <span className="text-red-600">{getURL}</span>
+                  {t("searchLabel")} : <span className="text-red-600">{getURL}</span>
                 </span>
-                <span className="text-muted font-normal">ตัวเลือกเพิ่มเติม</span>
+                <span className="text-muted font-normal">{t("moreOptions")}</span>
                 <select
                   name="order"
                   id="order"
                   className="rounded-lg border border-border bg-white dark:bg-surface px-2.5 py-1.5 text-sm text-foreground focus:ring-2 focus:ring-red-500/30 focus:border-red-500 outline-none"
                 >
                   <option className="order-new" value="new">
-                    สินค้ามาใหม่
+                    {t("orderNew")}
                   </option>
                   <option className="order-pop" value="pop">
-                    กำลังเป็นที่นิยม
+                    {t("orderPop")}
                   </option>
                   <option className="order-priceLow" value="priceLow">
-                    ราคาจากต่ำไปสูง
+                    {t("orderPriceLow")}
                   </option>
                   <option
                     className="order-priceHeight"
                     value="priceHeight"
                   >
-                    ราคาจากสูงไปต่ำ
+                    {t("orderPriceHigh")}
                   </option>
                 </select>
               </h4>
@@ -448,14 +450,14 @@ export default async function SearchPage({
             apiError2 === 1 ? (
               <div className="text-center py-10">
                 <span className="text-red-600">
-                  ไม่พบข้อมูล กรุณาลองค้นหาอีกครั้ง
+                  {t("noResults")}
                 </span>
                 <br />
                 <button
                   type="button"
                   className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-amber-400 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 px-4 py-2 text-sm font-medium transition-colors"
                 >
-                  <i className="fas fa-undo-alt"></i> ค้นหาอีกครั้ง
+                  <i className="fas fa-undo-alt"></i> {t("searchAgain")}
                 </button>
               </div>
             ) : null
@@ -476,7 +478,7 @@ export default async function SearchPage({
                         alt=""
                       />
                       <div className="jss text-pre absolute top-1.5 left-1.5 rounded-md bg-red-600 text-white text-[10px] font-medium px-1.5 py-0.5">
-                        พรีออเดอร์
+                        {t("preOrder")}
                       </div>
                     </div>
                     <div className="p-2 text-center">
@@ -484,7 +486,7 @@ export default async function SearchPage({
                         {countText(row.pnameth ?? "", 28)}
                       </h5>
                       <span className="block mt-1 text-red-600 font-semibold text-sm">
-                        ราคา :{" "}
+                        {t("price")} :{" "}
                         {numberFormat(Number(row.pprice ?? 0) * rsDefault)}฿
                       </span>
                     </div>
@@ -511,7 +513,7 @@ export default async function SearchPage({
                   }
                   aria-label="Previous"
                 >
-                  <span aria-hidden="true">ก่อนหน้า</span>
+                  <span aria-hidden="true">{t("previous")}</span>
                   <span className="sr-only">Previous</span>
                 </a>
               </li>
@@ -565,7 +567,7 @@ export default async function SearchPage({
                   href={`?url=${encodeURIComponent(getURL)}&page=${pageno + 1}&provider=${provider}`}
                   aria-label="Next"
                 >
-                  <span aria-hidden="true">ถัดไป</span>
+                  <span aria-hidden="true">{t("next")}</span>
                   <span className="sr-only">Next</span>
                 </a>
               </li>
@@ -590,7 +592,7 @@ export default async function SearchPage({
  * header, NOT wired. The card renders in its shimmer state, which
  * is exactly what the legacy screen shows before the AJAX returns.
  */
-function UrlPasteMode({
+async function UrlPasteMode({
   srcWeb,
   urlcut,
   rsDefault,
@@ -605,6 +607,7 @@ function UrlPasteMode({
   provider: string;
   detailAvailable: boolean;
 }) {
+  const t = await getTranslations("searchPage");
   // Map the URL-param provider to the cart-schema Provider enum.
   // Per cartItemSchema (lib/validators/cart.ts L7): only "1688" | "taobao"
   // | "tmall" | "shop" | "nice" are accepted. search.php uses "pcs" for
@@ -650,7 +653,7 @@ function UrlPasteMode({
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                 <div className="hidden md:block md:col-span-12">
                   <h2 className="text-lg font-bold text-foreground flex flex-wrap items-center gap-2 pb-0">
-                    ผลการค้นหาจาก{" "}
+                    {t("searchResultFrom")}{" "}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={srcWeb ? `/legacy/pcs/shops/${srcWeb}` : ""}
@@ -712,7 +715,7 @@ function UrlPasteMode({
                     id="google_translate_element"
                   ></span>{" "}
                   <span className="inline md:hidden">
-                    ผลการค้นหาจาก{" "}
+                    {t("searchResultFrom")}{" "}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={srcWeb ? `/legacy/pcs/shops/${srcWeb}` : ""}
@@ -722,7 +725,7 @@ function UrlPasteMode({
                     />
                   </span>
                   <h4 className="text-base text-foreground pb-1">
-                    ชื่อสินค้า :{" "}
+                    {t("productName")} :{" "}
                     {title ? (
                       <span className="title-pro font-semibold">{title}</span>
                     ) : (
@@ -730,7 +733,7 @@ function UrlPasteMode({
                     )}
                   </h4>
                   <div className="price-s rounded-lg bg-red-600 text-white px-3 py-2 flex flex-wrap items-baseline gap-x-2">
-                    <span className="text-base">ราคาสินค้า : </span>
+                    <span className="text-base">{t("productPrice")} : </span>
                     <span className="text-xl font-bold">
                       {priceCny > 0 ? `¥${fmt2(priceCny)}` : "¥"}
                     </span>
@@ -744,7 +747,7 @@ function UrlPasteMode({
                     <div>
                       <div className="">
                         <h4 className="text-base text-foreground">
-                          ชื่อร้าน :{" "}
+                          {t("shopName")} :{" "}
                           <span id="nick">
                             {shopName ? (
                               <span className="font-semibold">{shopName}</span>
@@ -758,7 +761,7 @@ function UrlPasteMode({
                     <div>
                       <div className="">
                         <h4 className="text-base text-foreground">
-                          ลิงค์สินค้า :{" "}
+                          {t("productLink")} :{" "}
                           <a
                             className="text-sm"
                             href={urlcut}
@@ -766,7 +769,7 @@ function UrlPasteMode({
                             rel="noreferrer"
                           >
                             <span className="inline-flex items-center gap-1 rounded-full bg-sky-500 text-white text-xs px-2 py-0.5">
-                              <i className="fas fa-link"></i> ไปยังเว็บสินค้า
+                              <i className="fas fa-link"></i> {t("goToProductSite")}
                             </span>{" "}
                           </a>
                         </h4>

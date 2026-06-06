@@ -30,6 +30,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { createPortal } from "react-dom";
 import { Plus, X, MapPin } from "lucide-react";
 import { addAddressAction } from "./add-address-action";
@@ -47,6 +48,7 @@ export function AddAddressModal({
   userLastName: string;
   userTel: string;
 }) {
+  const t = useTranslations("addressPage");
   const [open, setOpen] = useState(false);
 
   // Lock body scroll + wire Escape-to-close while the dialog is open.
@@ -76,7 +78,7 @@ export function AddAddressModal({
         <span className="grid h-6 w-6 place-items-center rounded-full bg-white/25">
           <Plus className="h-4 w-4" />
         </span>
-        เพิ่มที่อยู่
+        {t("addAddress")}
       </button>
 
       {open &&
@@ -85,7 +87,7 @@ export function AddAddressModal({
             {/* Backdrop */}
             <button
               type="button"
-              aria-label="ปิด"
+              aria-label={t("close")}
               onClick={() => setOpen(false)}
               className="absolute inset-0 bg-black/50"
             />
@@ -103,12 +105,12 @@ export function AddAddressModal({
                   className="inline-flex items-center gap-2 text-base font-bold text-foreground sm:text-lg"
                 >
                   <MapPin className="h-5 w-5 shrink-0 text-primary-600" />
-                  เพิ่มที่อยู่จัดส่งสินค้า
+                  {t("addModalTitle")}
                 </h2>
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  aria-label="ปิด"
+                  aria-label={t("close")}
                   className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted transition hover:bg-surface-alt hover:text-foreground"
                 >
                   <X className="h-5 w-5" />
@@ -125,7 +127,7 @@ export function AddAddressModal({
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
                       <label className={LABEL_CLASS} htmlFor="addressName">
-                        ชื่อจริง
+                        {t("firstName")}
                       </label>
                       <input
                         className={INPUT_CLASS}
@@ -133,14 +135,14 @@ export function AddAddressModal({
                         name="addressName"
                         type="text"
                         defaultValue={userName}
-                        placeholder="ชื่อจริง"
+                        placeholder={t("firstName")}
                         maxLength={200}
                         required
                       />
                     </div>
                     <div>
                       <label className={LABEL_CLASS} htmlFor="addressLastname">
-                        นามสกุล
+                        {t("lastName")}
                       </label>
                       <input
                         className={INPUT_CLASS}
@@ -148,7 +150,7 @@ export function AddAddressModal({
                         name="addressLastname"
                         type="text"
                         defaultValue={userLastName}
-                        placeholder="นามสกุล"
+                        placeholder={t("lastName")}
                         maxLength={200}
                         required
                       />
@@ -158,7 +160,7 @@ export function AddAddressModal({
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
                       <label className={LABEL_CLASS} htmlFor="addressTel">
-                        เบอร์โทรศัพท์ (สำหรับแจ้งส่งพัสดุ)
+                        {t("tel")}
                       </label>
                       <input
                         className={INPUT_CLASS}
@@ -167,7 +169,7 @@ export function AddAddressModal({
                         type="tel"
                         pattern="\d*"
                         defaultValue={userTel}
-                        placeholder="เบอร์โทร"
+                        placeholder={t("telPlaceholder")}
                         minLength={10}
                         maxLength={10}
                         required
@@ -175,7 +177,7 @@ export function AddAddressModal({
                     </div>
                     <div>
                       <label className={LABEL_CLASS} htmlFor="addressTel2">
-                        เบอร์โทรศัพท์สำรอง (ไม่จำเป็น)
+                        {t("tel2")}
                       </label>
                       <input
                         className={INPUT_CLASS}
@@ -183,7 +185,7 @@ export function AddAddressModal({
                         name="addressTel2"
                         type="tel"
                         pattern="\d*"
-                        placeholder="เบอร์โทร"
+                        placeholder={t("telPlaceholder")}
                         minLength={10}
                         maxLength={10}
                       />
@@ -192,20 +194,20 @@ export function AddAddressModal({
 
                   <div>
                     <label className={LABEL_CLASS} htmlFor="addressNo">
-                      ทึ่อยู่{" "}
-                      <span className="text-red-600">ชื่อหมู่บ้านและหมู่ที่*</span>
+                      {t("addressNo")}{" "}
+                      <span className="text-red-600">{t("addressNoEmphasis")}</span>
                     </label>
                     <input
                       className={INPUT_CLASS}
                       id="addressNo"
                       name="addressNo"
                       type="text"
-                      placeholder="บ้านเลขที่ ถนน ซอย ชื่อหมู่บ้านและหมู่ที่*"
+                      placeholder={t("addressNoPlaceholder")}
                       maxLength={200}
                       required
                     />
                     <p className="mt-1 text-xs text-muted">
-                      กรุณากรอกบ้านเลขที่ ถนน ซอย ชื่อหมู่บ้านและหมู่ที่
+                      {t("addressNoHelp")}
                     </p>
                   </div>
 
@@ -215,46 +217,46 @@ export function AddAddressModal({
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
                       <label className={LABEL_CLASS} htmlFor="district">
-                        ตำบล/แขวง
+                        {t("subdistrict")}
                       </label>
                       <input
                         className={INPUT_CLASS}
                         id="district"
                         name="district"
                         type="text"
-                        placeholder="ตำบล/แขวง"
+                        placeholder={t("subdistrict")}
                         required
                       />
                     </div>
                     <div>
                       <label className={LABEL_CLASS} htmlFor="amphoe">
-                        อำเภอ/เขต
+                        {t("district")}
                       </label>
                       <input
                         className={INPUT_CLASS}
                         id="amphoe"
                         name="amphoe"
                         type="text"
-                        placeholder="อำเภอ/เขต"
+                        placeholder={t("district")}
                         required
                       />
                     </div>
                     <div>
                       <label className={LABEL_CLASS} htmlFor="province">
-                        จังหวัด
+                        {t("province")}
                       </label>
                       <input
                         className={INPUT_CLASS}
                         id="province"
                         name="province"
                         type="text"
-                        placeholder="จังหวัด"
+                        placeholder={t("province")}
                         required
                       />
                     </div>
                     <div>
                       <label className={LABEL_CLASS} htmlFor="zipcode">
-                        รหัสไปรษณีย์
+                        {t("zipcode")}
                       </label>
                       <input
                         className={INPUT_CLASS}
@@ -262,7 +264,7 @@ export function AddAddressModal({
                         name="zipcode"
                         type="text"
                         pattern="\d*"
-                        placeholder="รหัสไปรษณีย์"
+                        placeholder={t("zipcode")}
                         required
                       />
                     </div>
@@ -270,14 +272,14 @@ export function AddAddressModal({
 
                   <div>
                     <label className={LABEL_CLASS} htmlFor="addressNote">
-                      หมายเหตุ (ไม่จำเป็น)
+                      {t("noteOptional")}
                     </label>
                     <textarea
                       className={INPUT_CLASS}
                       id="addressNote"
                       name="addressNote"
                       rows={3}
-                      placeholder="หมายเหตุ"
+                      placeholder={t("note")}
                       maxLength={500}
                     ></textarea>
                   </div>
@@ -288,14 +290,14 @@ export function AddAddressModal({
                       onClick={() => setOpen(false)}
                       className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-foreground hover:bg-surface-alt dark:bg-surface"
                     >
-                      ยกเลิก
+                      {t("cancel")}
                     </button>
                     <button
                       type="submit"
                       name="add"
                       className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-red-700"
                     >
-                      บันทึก
+                      {t("save")}
                     </button>
                   </div>
                 </form>

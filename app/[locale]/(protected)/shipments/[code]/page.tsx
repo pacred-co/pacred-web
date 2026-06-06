@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { getMyShipment } from "@/actions/shipments";
 import { relativeTimeTh, freshnessClass } from "@/lib/utils/relative-time";
@@ -33,17 +34,6 @@ const FRESHNESS_PILL: Record<ReturnType<typeof freshnessClass>, string> = {
  * automatically scoped to the customer's own shipments.
  */
 
-const STATUS_LABEL: Record<string, string> = {
-  received_cn:         "รับเข้าโกดังจีน",
-  packed_cn:           "บรรจุแล้ว (จีน)",
-  sealed_in_container: "ปิดตู้แล้ว (จีน)",
-  in_transit:          "กำลังเดินทาง",
-  arrived_th:          "ถึงไทยแล้ว",
-  unloaded:            "ลงจากตู้ (ไทย)",
-  out_for_delivery:    "กำลังจัดส่ง",
-  delivered:           "ส่งสำเร็จ",
-};
-
 const STATUS_BADGE: Record<string, string> = {
   received_cn:         "bg-gray-50 text-gray-700 border-gray-200",
   packed_cn:           "bg-blue-50 text-blue-700 border-blue-200",
@@ -55,27 +45,28 @@ const STATUS_BADGE: Record<string, string> = {
   delivered:           "bg-green-50 text-green-700 border-green-200",
 };
 
-const TRANSPORT_LABEL: Record<string, string> = {
-  truck: "🚚 รถ",
-  sea:   "🚢 เรือ",
-  air:   "✈️ เครื่องบิน",
+const TRANSPORT_EMOJI: Record<string, string> = {
+  truck: "🚚",
+  sea:   "🚢",
+  air:   "✈️",
 };
 
-const EVENT_LABEL: Record<string, string> = {
-  scan_receive: "รับสินค้าเข้าโกดัง",
-  scan_pack:    "บรรจุลงตู้",
-  scan_seal:    "ปิดตู้",
-  scan_depart:  "ออกจากต้นทาง",
-  scan_arrive:  "ถึงปลายทาง",
-  scan_unload:  "ขนลงจากตู้",
-  scan_deliver: "ส่งถึงผู้รับ",
-};
+const EVENT_KEYS = new Set([
+  "scan_receive",
+  "scan_pack",
+  "scan_seal",
+  "scan_depart",
+  "scan_arrive",
+  "scan_unload",
+  "scan_deliver",
+]);
 
 export default async function ShipmentDetailPage({
   params,
 }: {
   params: Promise<{ code: string }>;
 }) {
+  const t = await getTranslations("shipments");
   const { code } = await params;
   const res = await getMyShipment(code);
 
@@ -86,7 +77,7 @@ export default async function ShipmentDetailPage({
     return (
       <main className="p-6 lg:p-8">
         <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-          เกิดข้อผิดพลาด: {res.error}
+          {t("detailError", { error: res.error })}
         </div>
       </main>
     );
@@ -94,8 +85,11 @@ export default async function ShipmentDetailPage({
 
   const s = res.data;
   const statusBadge = STATUS_BADGE[s.status] ?? "bg-gray-50 text-gray-700 border-gray-200";
-  const statusLabel = STATUS_LABEL[s.status] ?? s.status;
-  const transport   = s.container?.transport_mode ? TRANSPORT_LABEL[s.container.transport_mode] : null;
+  const statusLabel = STATUS_BADGE[s.status] ? t(`status.${s.status}`) : s.status;
+  const transportEmoji = s.container?.transport_mode ? TRANSPORT_EMOJI[s.container.transport_mode] : null;
+  const transport = transportEmoji
+    ? `${transportEmoji} ${t(`transport.${s.container!.transport_mode}`)}`
+    : null;
 
   // V-E10 QA/QC inspection — disabled in Wave 3 (spine retired).
   // The freight_qa_inspections lookup was keyed on cargo_shipment_id which
@@ -116,7 +110,7 @@ export default async function ShipmentDetailPage({
           href="/shipments"
           className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt"
         >
-          ← กลับรายการ
+          ← {t("backToList")}
         </Link>
       </div>
 
@@ -124,7 +118,7 @@ export default async function ShipmentDetailPage({
       <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <p className="text-xs text-muted">สถานะปัจจุบัน</p>
+            <p className="text-xs text-muted">{t("currentStatus")}</p>
             <p className="mt-1 text-2xl font-bold">{statusLabel}</p>
           </div>
           <div className="flex flex-col items-end gap-1.5">
@@ -135,7 +129,7 @@ export default async function ShipmentDetailPage({
             {latestScannedAt && (
               <span
                 className={`rounded-full border px-2.5 py-0.5 text-[10px] font-medium ${FRESHNESS_PILL[freshness]}`}
-                title={`scan ล่าสุด: ${new Date(latestScannedAt).toLocaleString("th-TH")}`}
+                title={t("lastScan", { time: new Date(latestScannedAt).toLocaleString("th-TH") })}
               >
                 🔄 {relativeTimeTh(latestScannedAt)}
               </span>
@@ -146,8 +140,7 @@ export default async function ShipmentDetailPage({
         {/* Stale data hint — explicit nudge per chat audit L-4 */}
         {(freshness === "stale" || freshness === "very-old") && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
-            ข้อมูลไม่ได้อัพเดทมา {relativeTimeTh(latestScannedAt)} —
-            หากต้องการสอบถามสถานะล่าสุด กรุณาติดต่อทีมงาน
+            {t("staleHintDetail", { time: relativeTimeTh(latestScannedAt) })}
           </div>
         )}
 
@@ -156,24 +149,24 @@ export default async function ShipmentDetailPage({
           return (
             <>
               <div className="border-t border-border pt-3 grid grid-cols-2 gap-y-2 text-sm">
-                <Cell label="ตู้คอนเทนเนอร์" value={s.container.code} mono />
-                <Cell label="ประเภทขนส่ง"   value={transport ?? s.container.transport_mode} />
-                <Cell label="ต้นทาง" value={s.container.origin} />
-                <Cell label="ปลายทาง" value={s.container.destination} />
+                <Cell label={t("container")} value={s.container.code} mono />
+                <Cell label={t("transportType")}   value={transport ?? s.container.transport_mode} />
+                <Cell label={t("origin")} value={s.container.origin} />
+                <Cell label={t("destination")} value={s.container.destination} />
                 {s.container.eta && (
                   <Cell label="ETA" value={new Date(s.container.eta).toLocaleDateString("th-TH")} />
                 )}
                 {s.container.actual_arrival && (
                   <Cell
-                    label="ถึงจริง"
+                    label={t("actualArrival")}
                     value={new Date(s.container.actual_arrival).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
                   />
                 )}
                 {s.container.carrier_container_no && (
-                  <Cell label="เลขตู้สายเรือ (B/L)" value={s.container.carrier_container_no} mono />
+                  <Cell label={t("carrierContainerNo")} value={s.container.carrier_container_no} mono />
                 )}
                 {s.cargo_type && isCargoType(s.cargo_type) && (
-                  <Cell label="ประเภทสินค้า" value={CARGO_TYPE_LABEL_TH[s.cargo_type]} />
+                  <Cell label={t("cargoType")} value={CARGO_TYPE_LABEL_TH[s.cargo_type]} />
                 )}
               </div>
               {/* V-C3: ตัดตู้ visibility for the customer — only show if not yet sealed/closed */}
@@ -181,12 +174,12 @@ export default async function ShipmentDetailPage({
                 <div className={`mt-3 rounded-lg border p-3 text-xs ${
                   daysToClose <= 1 ? "border-amber-300 bg-amber-50 text-amber-800" : "border-blue-200 bg-blue-50 text-blue-800"
                 }`}>
-                  ⏰ ตู้จะปิดรับสินค้า (ตัดตู้) วันที่{" "}
+                  ⏰ {t("containerCloseDate")}{" "}
                   <span className="font-medium">
                     {new Date(s.container.close_at!).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
                   </span>
-                  {daysToClose === 0 ? <span className="ml-1 font-semibold">— วันนี้</span>
-                    : <span className="ml-1 font-semibold">(อีก {daysToClose} วัน)</span>}
+                  {daysToClose === 0 ? <span className="ml-1 font-semibold">— {t("today")}</span>
+                    : <span className="ml-1 font-semibold">({t("daysLeft", { count: daysToClose })})</span>}
                 </div>
               )}
             </>
@@ -202,7 +195,7 @@ export default async function ShipmentDetailPage({
               href={`/service-import/${s.forwarder_f_no}`}
               className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-amber-700 hover:bg-amber-100"
             >
-              ↗ ฝากนำเข้า: <span className="font-mono">{s.forwarder_f_no}</span>
+              ↗ {t("importRef")}: <span className="font-mono">{s.forwarder_f_no}</span>
             </Link>
           )}
           {s.service_order_h_no && (
@@ -210,7 +203,7 @@ export default async function ShipmentDetailPage({
               href={`/service-order/${s.service_order_h_no}`}
               className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-blue-700 hover:bg-blue-100"
             >
-              ↗ ฝากสั่ง: <span className="font-mono">{s.service_order_h_no}</span>
+              ↗ {t("shopRef")}: <span className="font-mono">{s.service_order_h_no}</span>
             </Link>
           )}
         </div>
@@ -221,20 +214,20 @@ export default async function ShipmentDetailPage({
       {/* Shipment metrics */}
       {(s.box_count || s.weight_kg || s.volume_cbm) && (
         <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
-          <h3 className="text-xs font-semibold text-muted uppercase tracking-wider">รายละเอียด</h3>
+          <h3 className="text-xs font-semibold text-muted uppercase tracking-wider">{t("details")}</h3>
 
           {/* U1-5: received/expected progress — "ได้รับแล้ว 40 / 85 กล่อง" */}
           {s.box_count != null && s.box_count > 0 && (
             <div className="space-y-1">
               <div className="flex justify-between text-xs">
-                <span className="text-muted">ได้รับแล้ว</span>
+                <span className="text-muted">{t("received")}</span>
                 <span className="font-medium">
                   <span className="font-mono">{s.received_box_count}</span>
                   {" / "}
                   <span className="font-mono">{s.box_count}</span>
-                  {" กล่อง"}
+                  {" "}{t("boxesUnit")}
                   {s.received_box_count >= s.box_count && (
-                    <span className="ml-2 text-green-600">✓ ครบ</span>
+                    <span className="ml-2 text-green-600">✓ {t("complete")}</span>
                   )}
                 </span>
               </div>
@@ -250,25 +243,25 @@ export default async function ShipmentDetailPage({
               </div>
               {s.received_at_partial && s.received_box_count > 0 && s.received_box_count < s.box_count && (
                 <p className="text-[10px] text-muted">
-                  รับเพิ่มล่าสุด: {relativeTimeTh(s.received_at_partial)}
+                  {t("latestPartialReceived")}: {relativeTimeTh(s.received_at_partial)}
                 </p>
               )}
             </div>
           )}
 
           <div className="grid grid-cols-3 gap-3 text-sm border-t border-border pt-3">
-            {s.weight_kg != null && <Cell label="น้ำหนัก" value={`${Number(s.weight_kg).toFixed(2)} kg`} />}
-            {s.volume_cbm != null && <Cell label="ปริมาตร" value={`${Number(s.volume_cbm).toFixed(3)} CBM`} />}
-            {s.box_count != null && <Cell label="กล่องคาดรับ" value={`${s.box_count} กล่อง`} />}
+            {s.weight_kg != null && <Cell label={t("weight")} value={`${Number(s.weight_kg).toFixed(2)} kg`} />}
+            {s.volume_cbm != null && <Cell label={t("volume")} value={`${Number(s.volume_cbm).toFixed(3)} CBM`} />}
+            {s.box_count != null && <Cell label={t("expectedBoxes")} value={t("boxesCount", { count: s.box_count })} />}
           </div>
         </div>
       )}
 
       {/* Timeline */}
       <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
-        <h3 className="text-sm font-bold mb-3">📍 ไทม์ไลน์การติดตาม</h3>
+        <h3 className="text-sm font-bold mb-3">📍 {t("trackingTimeline")}</h3>
         {s.events.length === 0 ? (
-          <p className="text-sm text-muted">ยังไม่มีบันทึก scan — ทีมงานจะอัพเดทเมื่อสินค้าถูกประมวลผล</p>
+          <p className="text-sm text-muted">{t("noScanRecords")}</p>
         ) : (
           <ol className="space-y-3 relative before:content-[''] before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-0.5 before:bg-border">
             {s.events.map((e, idx) => (
@@ -278,7 +271,7 @@ export default async function ShipmentDetailPage({
                     idx === 0 ? "bg-primary-500 border-primary-500" : "bg-white dark:bg-surface border-border"
                   }`}
                 />
-                <p className="text-sm font-medium">{EVENT_LABEL[e.event] ?? e.event}</p>
+                <p className="text-sm font-medium">{EVENT_KEYS.has(e.event) ? t(`event.${e.event}`) : e.event}</p>
                 <p className="text-xs text-muted mt-0.5">
                   {new Date(e.scanned_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
                   {e.location && <span> · 📍 {e.location}</span>}

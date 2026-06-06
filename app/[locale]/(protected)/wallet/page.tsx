@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -80,17 +81,21 @@ export const dynamic = "force-dynamic";
 
 // Legacy `nameWallet($type)` — member/include/function.php L156-169.
 // Returns the Thai transaction-type label; `\n` marks a legacy <br/>.
-const NAME_WALLET: Record<string, string> = {
-  "1": "รายการเติมเงิน",
-  "2": "รายการชำระเงิน\nฝากสั่งสินค้า",
-  "3": "รายการถอนเงิน",
-  "4": "รายการชำระเงิน\nฝากนำเข้า",
-  "5": "รายการคืนเงิน",
-  "6": "รายการชำระเงิน\nฝากชำระ",
-  "7": "รายการชำระเงิน\nแบบเติมเพิ่ม",
+// `t` is the "wallet" translator; keys hold the `\n` line-break marker so the
+// legacy two-line label rendering is preserved across locales.
+type WalletT = Awaited<ReturnType<typeof getTranslations<"wallet">>>;
+const NAME_WALLET_KEY: Record<string, string> = {
+  "1": "walletTypeDeposit",
+  "2": "walletTypeOrderPayment",
+  "3": "walletTypeWithdraw",
+  "4": "walletTypeImportPayment",
+  "5": "walletTypeRefund",
+  "6": "walletTypeBillPayment",
+  "7": "walletTypeTopUpExtra",
 };
-function nameWallet(type: string): string {
-  return NAME_WALLET[type] ?? "ไม่พบข้อมูล";
+function nameWallet(t: WalletT, type: string): string {
+  const key = NAME_WALLET_KEY[type];
+  return key ? t(key) : t("walletTypeNotFound");
 }
 
 // Legacy `DateThaiWallet($strDate)` — member/include/function.php
@@ -121,23 +126,23 @@ function numberFormat2(n: number): string {
 }
 
 // load_wallet_hs.php L21 — the wallet-hs row status badge (Tailwind chip).
-function statusBadge(status: string | null) {
+function statusBadge(t: WalletT, status: string | null) {
   const base =
     "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap";
   if (status === "1") {
     return (
       <span className={`${base} bg-amber-100 text-amber-700 border-amber-200`}>
-        รอตรวจสอบ
+        {t("statusPending")}
       </span>
     );
   }
   if (status === "2") {
     return (
-      <span className={`${base} bg-sky-100 text-sky-700 border-sky-200`}>สำเร็จ</span>
+      <span className={`${base} bg-sky-100 text-sky-700 border-sky-200`}>{t("statusSuccess")}</span>
     );
   }
   return (
-    <span className={`${base} bg-red-100 text-red-700 border-red-200`}>ไม่สำเร็จ</span>
+    <span className={`${base} bg-red-100 text-red-700 border-red-200`}>{t("statusFailed")}</span>
   );
 }
 
@@ -152,6 +157,7 @@ type WalletHsRow = {
 };
 
 export default async function WalletPage() {
+  const t = await getTranslations("wallet");
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
   const { profile } = data;
@@ -251,10 +257,10 @@ export default async function WalletPage() {
           {/* breadcrumb — wallet.php L89-100 */}
           <nav className="mb-3 flex items-center gap-1.5 text-xs text-muted md:text-sm">
             <Link href="/dashboard" className="hover:text-foreground transition-colors">
-              หน้าแรก
+              {t("breadcrumbHome")}
             </Link>
             <span className="text-muted/60">/</span>
-            <span className="font-medium text-foreground">กระเป๋าสตางค์</span>
+            <span className="font-medium text-foreground">{t("breadcrumbWallet")}</span>
           </nav>
 
           {/* ── Wallet balance summary — prominent Tailwind card.
@@ -268,7 +274,7 @@ export default async function WalletPage() {
                   {fullName}
                 </p>
                 <p className="mt-1 text-xs font-medium text-muted md:text-sm">
-                  กระเป๋าสตางค์ (บาท)
+                  {t("walletBalanceLabel")}
                 </p>
                 <p className="mt-1 flex items-baseline gap-1 leading-none">
                   <span
@@ -277,7 +283,7 @@ export default async function WalletPage() {
                   >
                     {numberFormat2(walletTotal)}
                   </span>
-                  <span className="text-sm font-semibold text-muted">บาท</span>
+                  <span className="text-sm font-semibold text-muted">{t("baht")}</span>
                 </p>
               </div>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -299,7 +305,7 @@ export default async function WalletPage() {
                 <span className="text-lg leading-none" aria-hidden>
                   +
                 </span>
-                เติมเงินเข้ากระเป๋า
+                {t("topUpWallet")}
               </Link>
             </div>
           </section>
@@ -326,7 +332,7 @@ export default async function WalletPage() {
                                       role="tab"
                                     >
                                       <i className="fas fa-history" aria-hidden></i>
-                                      รายการเดินบัญชี
+                                      {t("tabAll")}
                                     </a>
                                   </li>
                                   <li className="nav-item">
@@ -337,7 +343,7 @@ export default async function WalletPage() {
                                       role="tab"
                                     >
                                       <i className="la la-money" aria-hidden></i>
-                                      รายการเติมเงิน
+                                      {t("tabDeposit")}
                                     </a>
                                   </li>
                                   <li className="nav-item">
@@ -348,7 +354,7 @@ export default async function WalletPage() {
                                       role="tab"
                                     >
                                       <i className="far fa-credit-card" aria-hidden></i>
-                                      รายการชำระเงิน
+                                      {t("tabPayment")}
                                     </a>
                                   </li>
                                   <li className="nav-item">
@@ -359,7 +365,7 @@ export default async function WalletPage() {
                                       role="tab"
                                     >
                                       <i className="far fa-handshake" aria-hidden></i>
-                                      รายการถอนเงิน
+                                      {t("tabWithdraw")}
                                     </a>
                                   </li>
                                 </ul>
@@ -374,11 +380,11 @@ export default async function WalletPage() {
                                     <div id="load_data_wallet_hs">
                                       {rowsHistory.length === 0 ? (
                                         <div className="py-12 text-center text-sm text-muted">
-                                          คุณยังไม่มีรายการ
+                                          {t("noRecords")}
                                         </div>
                                       ) : (
                                         rowsHistory.map((row) => (
-                                          <WalletHsRowView key={row.ID} row={row} />
+                                          <WalletHsRowView key={row.ID} row={row} t={t} />
                                         ))
                                       )}
                                     </div>
@@ -393,11 +399,11 @@ export default async function WalletPage() {
                                     <div id="load_data_wallet_hs_add">
                                       {rowsAdd.length === 0 ? (
                                         <div className="py-12 text-center text-sm text-muted">
-                                          คุณยังไม่มีรายการ
+                                          {t("noRecords")}
                                         </div>
                                       ) : (
                                         rowsAdd.map((row) => (
-                                          <WalletHsRowView key={row.ID} row={row} />
+                                          <WalletHsRowView key={row.ID} row={row} t={t} />
                                         ))
                                       )}
                                     </div>
@@ -412,11 +418,11 @@ export default async function WalletPage() {
                                     <div id="load_data_wallet_hs_payments">
                                       {rowsPayments.length === 0 ? (
                                         <div className="py-12 text-center text-sm text-muted">
-                                          คุณยังไม่มีรายการ
+                                          {t("noRecords")}
                                         </div>
                                       ) : (
                                         rowsPayments.map((row) => (
-                                          <WalletHsRowView key={row.ID} row={row} />
+                                          <WalletHsRowView key={row.ID} row={row} t={t} />
                                         ))
                                       )}
                                     </div>
@@ -431,11 +437,11 @@ export default async function WalletPage() {
                                     <div id="load_data_wallet_hs_withdraw">
                                       {rowsWithdraw.length === 0 ? (
                                         <div className="py-12 text-center text-sm text-muted">
-                                          คุณยังไม่มีรายการ
+                                          {t("noRecords")}
                                         </div>
                                       ) : (
                                         rowsWithdraw.map((row) => (
-                                          <WalletHsRowView key={row.ID} row={row} />
+                                          <WalletHsRowView key={row.ID} row={row} t={t} />
                                         ))
                                       )}
                                     </div>
@@ -473,7 +479,7 @@ export default async function WalletPage() {
                 <div className="modal-dialog fixed inset-0 z-[100] m-0 flex items-end justify-center p-0 sm:items-center sm:p-4">
                   <div className="modal-content relative max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-border bg-white shadow-2xl dark:bg-surface sm:max-w-md sm:rounded-2xl">
                     <div className="modal-header header-from flex items-center justify-between gap-2 border-b border-border px-4 py-3">
-                      <h4 className="modal-title text-base font-bold text-foreground">เติมเงินเข้าเป๋าตัง Pacred</h4>
+                      <h4 className="modal-title text-base font-bold text-foreground">{t("depositModalTitle")}</h4>
                       <button
                         type="button"
                         className="close grid h-8 w-8 place-items-center rounded-full text-muted transition-colors hover:bg-surface-alt hover:text-foreground"
@@ -507,7 +513,7 @@ export default async function WalletPage() {
                         <div className="form-group pt-1">
                           <div>
                             <label className="form-control-label mb-1 block text-sm font-medium text-foreground" htmlFor="amount">
-                              จำนวนเงิน (บาท)
+                              {t("amountBahtLabel")}
                             </label>
                             <input
                               className="form-control form-control-lg w-full rounded-lg border border-border bg-white px-3 py-2.5 text-right text-lg font-semibold tabular-nums text-foreground focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/30 dark:bg-surface"
@@ -526,7 +532,7 @@ export default async function WalletPage() {
                                 className="btn btn-sm btn-outline-danger round m-1 inline-flex items-center justify-center rounded-full border border-red-500 px-4 py-1.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
                                 id="myBtn"
                               >
-                                สร้าง QR Code ชำระเงิน
+                                {t("createQrButton")}
                               </button>
                             </div>
                           </div>
@@ -539,17 +545,17 @@ export default async function WalletPage() {
                                 height: "250px",
                               }}
                             ></div>
-                            <h5 className="text-center">บริษัท แพคเรด (ประเทศไทย) จำกัด</h5>
+                            <h5 className="text-center">{t("companyLegalName")}</h5>
                             <div id="amount-show" style={{ textAlign: "center" }}></div>
                             <div className="text-right">
                               <a href="/wallet/deposit" target="_blank">
-                                ดูวิธีการเติมเงิน
+                                {t("howToTopUp")}
                               </a>
                             </div>
                           </div>
                           <div className="mb-1 mt-3">
                             <label className="form-control-label mb-1 block text-sm font-medium text-foreground" htmlFor="imagesSlip">
-                              หลักฐานการโอน (สลิปรายการ)
+                              {t("slipEvidenceLabel")}
                             </label>
                             <div className="fallback">
                               <input
@@ -564,36 +570,15 @@ export default async function WalletPage() {
                           </div>
                           <div className="mb-1 mt-4 rounded-lg border border-border bg-surface-alt/40 p-3">
                             <div className="text-sm font-semibold text-foreground">
-                              เงื่อนไขการถอนเงิน ที่ต้องทราบก่อนเติมเงินเข้าระบบ
+                              {t("withdrawConditionsTitle")}
                             </div>
                             <ol className="mt-1.5 list-decimal space-y-1 pl-5 text-xs text-muted">
-                              <li>
-                                {" "}
-                                สามารถถอนเงินได้เมื่อ
-                                ท่านเคยชำระเงินบริการฝากสั่งซื้อสินค้าหรือฝากนำเข้าสินค้ากับทางบริษัท
-                                Pacred มาก่อน
-                              </li>
-                              <li>
-                                {" "}
-                                การถอนเงินต้องแนบเอกสาร
-                                บัตรประจำตัวประชาชนและหน้าสมุดบัญชีธนาคาร
-                              </li>
-                              <li> ยอดถอนเงินขั้นต่ำ คือ 25 บาท</li>
-                              <li>
-                                {" "}
-                                หากยอดที่ทำรายการถอนเงินน้อยกว่า 500 บาท
-                                จะมีค่าบริการถอนเงิน 25 บาทต่อครั้ง
-                              </li>
-                              <li>
-                                {" "}
-                                ระยะเวลาดำเนินการใช้เวลา 7-10 วันทำการ
-                                (ไม่รวมวันหยุดนักขัตฤกษ์และวันอาทิตย์)
-                                เนื่องจากทางบริษัทจำเป็นต้องตรวจสอบข้อมูลและยอดเงินเพื่อดำเนินการประสานงานกับทางธนาคารที่ให้บริการ
-                              </li>
-                              <li>
-                                {" "}
-                                ทางบริษัทขอสงวนสิทธิ์ในการเปลี่ยนแปลงนโยบายไปตามเงื่อนไขที่บริษัทกำหนด
-                              </li>
+                              <li> {t("withdrawCondition1")}</li>
+                              <li> {t("withdrawCondition2")}</li>
+                              <li> {t("withdrawCondition3")}</li>
+                              <li> {t("withdrawCondition4")}</li>
+                              <li> {t("withdrawCondition5")}</li>
+                              <li> {t("withdrawCondition6")}</li>
                             </ol>
                           </div>
                           <div className="modal-footer mt-4 flex items-center justify-end gap-2 border-t border-border pt-3">
@@ -602,14 +587,14 @@ export default async function WalletPage() {
                               className="btn btn-outline-secondary round waves-effect inline-flex items-center justify-center rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface-alt"
                               data-dismiss="modal"
                             >
-                              ยกเลิก
+                              {t("cancel")}
                             </button>
                             <button
                               type="submit"
                               className="btn btn-outline-info round waves-effect submit-wait inline-flex items-center justify-center rounded-full bg-red-600 px-5 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-red-700"
                               name="addData"
                             >
-                              เติมเงิน
+                              {t("topUpShort2")}
                             </button>
                           </div>
                         </div>
@@ -629,14 +614,14 @@ export default async function WalletPage() {
  * (the legacy AJAX loader), including the legacy `nameWallet()` /
  * `DateThaiWallet()` helpers and the `$nameColor` +/- logic (L20).
  */
-function WalletHsRowView({ row }: { row: WalletHsRow }) {
+function WalletHsRowView({ row, t }: { row: WalletHsRow; t: WalletT }) {
   // load_wallet_hs.php L20 — type 1 or 5 = green (credit), else red.
   const nameColor = row.type === "1" || row.type === "5" ? "success" : "danger";
   const sign = nameColor === "success" ? "+" : "-";
   const { date, time } = dateThaiWallet(row.date);
   // nameWallet() returns Thai labels with embedded <br/> (the legacy
   // `<br>`); split on the `\n` marker to reproduce the line break.
-  const nameParts = nameWallet(row.type ?? "").split("\n");
+  const nameParts = nameWallet(t, row.type ?? "").split("\n");
 
   // Amount tone — credit (type 1/5) = green, everything else = red.
   const amountClass =
@@ -654,10 +639,10 @@ function WalletHsRowView({ row }: { row: WalletHsRow }) {
             </span>
           ))}
         </p>
-        <p className="mt-0.5 text-[11px] text-muted">เลขที่รายการ #{row.ID}</p>
+        <p className="mt-0.5 text-[11px] text-muted">{t("txNumber")} #{row.ID}</p>
         {row.refOrder != null && row.refOrder !== "" && (
           <p className="text-[11px] text-muted">
-            เลขที่ออเดอร์{" "}
+            {t("orderNumber")}{" "}
             {row.type === "2" ? (
               <a
                 href={`/service-order/${row.refOrder}`}
@@ -679,7 +664,7 @@ function WalletHsRowView({ row }: { row: WalletHsRow }) {
             )}
           </p>
         )}
-        <div className="mt-1.5">{statusBadge(row.status)}</div>
+        <div className="mt-1.5">{statusBadge(t, row.status)}</div>
       </div>
 
       {/* Right — signed amount (+/- colour) + date/time */}

@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { ShoppingCart, Pencil, ArrowRight, ArrowLeft } from "lucide-react";
 import { CartAddUrlForm } from "./cart-add-url-form";
@@ -24,20 +25,21 @@ export const dynamic = "force-dynamic";
 
 const SUPPORTED_SITES = ["1688", "Taobao", "Tmall", "Alibaba"] as const;
 
-export default function CartAddPage() {
+export default async function CartAddPage() {
+  const t = await getTranslations("cartPage");
   return (
     <div className="pcs-content-pad w-full px-3 md:px-6 pt-4 pb-24 md:py-10 max-w-[860px] mx-auto">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-[11px] text-muted mb-4">
         <Link href="/dashboard" className="hover:text-foreground transition-colors">
-          หน้าแรก
+          {t("breadcrumbHome")}
         </Link>
         <span>/</span>
         <Link href="/cart" className="hover:text-foreground transition-colors">
-          ตะกร้าสินค้า
+          {t("breadcrumbCart")}
         </Link>
         <span>/</span>
-        <span className="text-foreground font-medium">เพิ่มสินค้า</span>
+        <span className="text-foreground font-medium">{t("addItem")}</span>
       </div>
 
       {/* Hero — title + the centered URL-paste search bar */}
@@ -46,12 +48,12 @@ export default function CartAddPage() {
           <ShoppingCart className="w-7 h-7 md:w-8 md:h-8" strokeWidth={2} />
         </span>
         <h1 className="text-[22px] md:text-[30px] font-black tracking-tight text-foreground">
-          เพิ่มสินค้าในรถเข็น
+          {t("addHeroTitle")}
         </h1>
         <p className="mt-2 text-[13.5px] md:text-[15px] text-muted max-w-lg mx-auto">
-          วางลิงก์สินค้าจาก{" "}
-          <b className="text-foreground">1688 · Taobao · Tmall</b>{" "}
-          เพื่อสั่งซื้อ — ระบบดึงราคา + รูปสินค้าให้อัตโนมัติ
+          {t.rich("addHeroDesc", {
+            b: (chunks) => <b className="text-foreground">{chunks}</b>,
+          })}
         </p>
 
         {/* The centered search bar */}
@@ -61,7 +63,7 @@ export default function CartAddPage() {
 
         {/* Supported sites */}
         <div className="mt-6 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[12px] text-muted">
-          <span>รองรับร้าน:</span>
+          <span>{t("supportedShops")}</span>
           {SUPPORTED_SITES.map((s) => (
             <span
               key={s}
@@ -76,7 +78,7 @@ export default function CartAddPage() {
       {/* Divider → manual entry fallback */}
       <div className="my-6 flex items-center gap-3 text-[12px] text-muted">
         <span className="h-px flex-1 bg-border" />
-        <span>ไม่มีลิงก์สินค้า?</span>
+        <span>{t("noProductLink")}</span>
         <span className="h-px flex-1 bg-border" />
       </div>
 
@@ -89,10 +91,10 @@ export default function CartAddPage() {
         </span>
         <span className="flex-1 min-w-0">
           <span className="block text-[14px] md:text-[15px] font-bold text-foreground">
-            กรอกข้อมูลสินค้าเอง
+            {t("manualEntryTitle")}
           </span>
           <span className="block text-[12px] text-muted">
-            พิมพ์ชื่อ · ราคา · จำนวนเอง (กรณีไม่มีลิงก์ หรือสั่งจากร้านอื่น)
+            {t("manualEntryHint")}
           </span>
         </span>
         <ArrowRight className="w-5 h-5 text-muted group-hover:text-primary-600 transition shrink-0" />
@@ -105,7 +107,7 @@ export default function CartAddPage() {
           className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted hover:text-primary-600 transition"
         >
           <ArrowLeft className="w-4 h-4" />
-          กลับไปที่ตะกร้าสินค้า
+          {t("backToCart")}
         </Link>
       </div>
     </div>

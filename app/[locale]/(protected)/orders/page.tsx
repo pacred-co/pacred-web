@@ -3,14 +3,7 @@ import { Link } from "@/i18n/navigation";
 import { Plus } from "lucide-react";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
-
-const STATUS_LABEL: Record<string, string> = {
-  pending: "รอดำเนินการ",
-  processing: "กำลังดำเนินการ",
-  shipped: "จัดส่งแล้ว",
-  delivered: "ส่งถึงปลายทาง",
-  cancelled: "ยกเลิก",
-};
+import { getTranslations } from "next-intl/server";
 
 const STATUS_COLOR: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
@@ -20,11 +13,20 @@ const STATUS_COLOR: Record<string, string> = {
   cancelled: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
 };
 
+const STATUS_KEYS = new Set([
+  "pending",
+  "processing",
+  "shipped",
+  "delivered",
+  "cancelled",
+]);
+
 export default async function OrdersPage({
   searchParams,
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
+  const t = await getTranslations("ordersPage");
   const sp = await searchParams;
   const res = await listOrders();
   const orders = res.ok ? res.data ?? [] : [];
@@ -44,27 +46,27 @@ export default async function OrdersPage({
               ORDERS
             </p>
             <h1 className="mt-1 text-3xl font-bold text-foreground">
-              ออเดอร์ของคุณ
+              {t("heading")}
             </h1>
           </div>
           <Link
             href="/orders/new"
             className="flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-700"
           >
-            <Plus className="h-4 w-4" /> สร้างออเดอร์ใหม่
+            <Plus className="h-4 w-4" /> {t("createNew")}
           </Link>
         </div>
 
         {!res.ok && (
           <p className="rounded-lg bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-600 dark:text-red-400">
-            โหลดข้อมูลไม่สำเร็จ: {res.error}
+            {t("loadFailed")}: {res.error}
           </p>
         )}
 
         {res.ok && orders.length === 0 && (
           <div className="rounded-2xl border border-dashed border-border bg-white dark:bg-surface p-12 text-center">
             <p className="text-muted">
-              ยังไม่มีออเดอร์ กดปุ่ม &quot;สร้างออเดอร์ใหม่&quot; เพื่อเริ่ม
+              {t("emptyState")}
             </p>
           </div>
         )}
@@ -74,11 +76,11 @@ export default async function OrdersPage({
             <table className="w-full">
               <thead className="bg-zinc-50 dark:bg-surface-alt text-left text-xs uppercase tracking-wider text-muted">
                 <tr>
-                  <th className="px-5 py-3">วันที่</th>
-                  <th className="px-5 py-3">ประเภท</th>
-                  <th className="px-5 py-3">เส้นทาง</th>
-                  <th className="px-5 py-3">รายละเอียด</th>
-                  <th className="px-5 py-3">สถานะ</th>
+                  <th className="px-5 py-3">{t("colDate")}</th>
+                  <th className="px-5 py-3">{t("colType")}</th>
+                  <th className="px-5 py-3">{t("colRoute")}</th>
+                  <th className="px-5 py-3">{t("colDetails")}</th>
+                  <th className="px-5 py-3">{t("colStatus")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border text-sm">
@@ -102,7 +104,7 @@ export default async function OrdersPage({
                       <span
                         className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_COLOR[o.status]}`}
                       >
-                        {STATUS_LABEL[o.status] ?? o.status}
+                        {STATUS_KEYS.has(o.status) ? t(`status_${o.status}`) : o.status}
                       </span>
                     </td>
                   </tr>
@@ -119,8 +121,10 @@ export default async function OrdersPage({
         )}
 
         <p className="mt-6 text-xs text-muted">
-          หน้านี้เป็น <strong>demo</strong> — ใช้เป็น reference สำหรับเพิ่ม feature
-          ใหม่ในอนาคต ดู pattern เต็มที่ <code>docs/architecture.md</code> Section 9
+          {t.rich("demoNote", {
+            strong: (chunks) => <strong>{chunks}</strong>,
+            code: (chunks) => <code>{chunks}</code>,
+          })}
         </p>
       </main>
     </>

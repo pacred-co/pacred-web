@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
@@ -79,26 +80,29 @@ import { ProfileAvatarUpload } from "./profile-avatar-upload";
 // tb_address_main WHERE userID=…)` sub-select + CONCAT in one call, so
 // it is run as the same two-step lookup the PHP effectively does and
 // the string is concatenated here.
-function buildFullAddress(a: {
-  addressname: string | null;
-  addresslastname: string | null;
-  addressno: string | null;
-  addresssubdistrict: string | null;
-  addressdistrict: string | null;
-  addressprovince: string | null;
-  addresszipcode: string | null;
-}): string {
+function buildFullAddress(
+  a: {
+    addressname: string | null;
+    addresslastname: string | null;
+    addressno: string | null;
+    addresssubdistrict: string | null;
+    addressdistrict: string | null;
+    addressprovince: string | null;
+    addresszipcode: string | null;
+  },
+  labels: { subdistrict: string; district: string; province: string },
+): string {
   return [
     a.addressname ?? "",
     " ",
     a.addresslastname ?? "",
     " ",
     a.addressno ?? "",
-    " ตำบล/แขวง ",
+    ` ${labels.subdistrict} `,
     a.addresssubdistrict ?? "",
-    " อำเภอ/เขต ",
+    ` ${labels.district} `,
     a.addressdistrict ?? "",
-    " จังหวัด ",
+    ` ${labels.province} `,
     a.addressprovince ?? "",
     " ",
     a.addresszipcode ?? "",
@@ -106,6 +110,7 @@ function buildFullAddress(a: {
 }
 
 export default async function ProfilePage() {
+  const t = await getTranslations("profilePage");
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
   const { profile } = data;
@@ -214,7 +219,12 @@ export default async function ProfilePage() {
         code: addrErr.code, message: addrErr.message, mainAddressId,
       });
     }
-    if (addrRow) fullAddress = buildFullAddress(addrRow);
+    if (addrRow)
+      fullAddress = buildFullAddress(addrRow, {
+        subdistrict: t("addrSubdistrict"),
+        district: t("addrDistrict"),
+        province: t("addrProvince"),
+      });
   }
 
   // $_SESSION['userName'] . ' ' . $_SESSION['userLastName']
@@ -281,10 +291,10 @@ export default async function ProfilePage() {
         {/* L82-93 — breadcrumb header */}
         <nav className="mb-3 flex items-center gap-1.5 text-sm text-muted">
           <Link href="/dashboard" className="hover:text-foreground">
-            หน้าแรก
+            {t("breadcrumbHome")}
           </Link>
           <span aria-hidden>/</span>
-          <span className="text-foreground font-medium">โปรไฟล์</span>
+          <span className="text-foreground font-medium">{t("breadcrumbProfile")}</span>
         </nav>
 
         {/* Basic Carousel start — L95-96 */}
@@ -301,8 +311,8 @@ export default async function ProfilePage() {
                 data-toggle="modal"
                 data-target="#edit-profile"
                 className="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted hover:bg-surface-alt hover:text-foreground"
-                aria-label="แก้ไขข้อมูล"
-                title="แก้ไขข้อมูล"
+                aria-label={t("editProfileAria")}
+                title={t("editProfileAria")}
               >
                 <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="css-i6dzq1">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -313,8 +323,8 @@ export default async function ProfilePage() {
               <Link
                 href="/account-settings"
                 className="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted hover:bg-surface-alt hover:text-foreground"
-                aria-label="ตั้งค่าบัญชีผู้ใช้งาน"
-                title="ตั้งค่าบัญชีผู้ใช้งาน"
+                aria-label={t("accountSettingsAria")}
+                title={t("accountSettingsAria")}
               >
                 <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="css-i6dzq1">
                   <circle cx="12" cy="12" r="3"></circle>
@@ -377,7 +387,7 @@ export default async function ProfilePage() {
                             <div className="modal-dialog">
                               <div className="modal-content">
                                 <div className="modal-header header-from">
-                                  <h4 className="modal-title">แก้ไขรูปโปรไฟล์</h4>
+                                  <h4 className="modal-title">{t("editAvatarTitle")}</h4>
                                   <button
                                     type="button"
                                     className="close"
@@ -416,7 +426,7 @@ export default async function ProfilePage() {
                                   </div>
                                   <div className="text-center">
                                     <span>
-                                      ลากหรือคลิกที่ภาพและวางไฟล์เพื่อแทนที่
+                                      {t("dropToReplace")}
                                     </span>
                                   </div>
                                 </div>
@@ -437,7 +447,7 @@ export default async function ProfilePage() {
                               <div className="modal-content">
                                 <div className="modal-header header-from">
                                   <h4 className="modal-title">
-                                    ปรับตำแหน่งรูปโปรไฟล์
+                                    {t("repositionAvatarTitle")}
                                   </h4>
                                   <button
                                     type="button"
@@ -455,7 +465,7 @@ export default async function ProfilePage() {
                                   <div className="row">
                                     <div className=" container-fluid">
                                       <div className="col-md-12 text-center">
-                                        <span>เลื่อนและซูมรูปภาพตามต้องการ</span>
+                                        <span>{t("dragAndZoom")}</span>
                                         <div
                                           id="image_demo"
                                           style={{
@@ -466,7 +476,7 @@ export default async function ProfilePage() {
                                       </div>
                                       <div className="col-md-12 text-center">
                                         <button className="btn btn-outline-info round btn-min-width mr-1 mb-1 crop_image">
-                                          ตัดและบันทึกภาพ
+                                          {t("cropAndSave")}
                                         </button>
                                       </div>
                                     </div>
@@ -480,7 +490,7 @@ export default async function ProfilePage() {
                             <span>{fullName}</span>
                           </h2>
                           <h5 className="mt-1 text-sm text-muted">
-                            รหัสสมาชิก : <span className="font-medium text-foreground">{userID}</span>
+                            {t("memberCodeLabel")} : <span className="font-medium text-foreground">{userID}</span>
                             <span></span>
                           </h5>
                         </div>
@@ -492,7 +502,7 @@ export default async function ProfilePage() {
                           <div>
                             {/* L260-263 — email */}
                             <span className="text-sm font-semibold text-foreground">
-                              อีเมล{" "}
+                              {t("emailLabel")}{" "}
                             </span>
                             <p className="mt-0.5 mb-3 break-words">
                               <a
@@ -504,7 +514,7 @@ export default async function ProfilePage() {
                             </p>
                             {/* L264-269 — phone */}
                             <span className="text-sm font-semibold text-foreground">
-                              เบอร์โทร{" "}
+                              {t("phoneLabel")}{" "}
                             </span>
                             <ul className="mt-0.5 mb-3 list-none p-0">
                               <li>
@@ -530,7 +540,7 @@ export default async function ProfilePage() {
                                   </span>{" "}
                                   :{" "}
                                   {userFacebook === "" || userFacebook == null
-                                    ? "ยังไม่ระบุ"
+                                    ? t("notSpecified")
                                     : userFacebook}
                                 </a>
                               </li>
@@ -541,7 +551,7 @@ export default async function ProfilePage() {
                                   </span>{" "}
                                   :{" "}
                                   {userLineID === "" || userLineID == null
-                                    ? "ยังไม่ระบุ"
+                                    ? t("notSpecified")
                                     : userLineID}
                                 </a>
                               </li>
@@ -551,10 +561,10 @@ export default async function ProfilePage() {
                                 โซเชียล = เร็วๆนี้ (ต้องตั้งค่า OAuth provider + DB
                                 ก่อน); LINE ใช้ flow เดิม (/line-settings). */}
                             <div className="mt-2 rounded-xl border border-border bg-surface-alt/40 p-3">
-                              <p className="text-sm font-semibold text-foreground">เชื่อมต่อ / ผูกบัญชี</p>
+                              <p className="text-sm font-semibold text-foreground">{t("connectAccountTitle")}</p>
                               <p className="mt-0.5 text-xs text-muted">
-                                ผูกบัญชี LINE / Facebook / Google เข้ากับบัญชีนี้ — แล้วเข้าสู่ระบบได้หลายช่องทาง
-                                (ล็อกอินด้วยโซเชียล <span className="font-medium text-amber-600">เร็วๆนี้</span>)
+                                {t("connectAccountDesc")}
+                                ({t("socialLoginNote")} <span className="font-medium text-amber-600">{t("comingSoon")}</span>)
                               </p>
                               <div className="mt-2.5 flex flex-wrap gap-2">
                                 {/* LINE — real (LIFF / line-settings) */}
@@ -562,27 +572,27 @@ export default async function ProfilePage() {
                                   href="/line-settings"
                                   className="inline-flex items-center gap-2 rounded-lg bg-[#06c755] px-3 py-2 text-sm font-medium text-white hover:brightness-110 active:scale-[0.98] transition-all"
                                 >
-                                  <i className="fab fa-line"></i> เชื่อมต่อ LINE
+                                  <i className="fab fa-line"></i> {t("connectLine")}
                                 </Link>
                                 {/* Facebook — coming soon (OAuth provider + DB pending) */}
                                 <button
                                   type="button"
                                   disabled
-                                  title="เร็วๆนี้ — กำลังตั้งค่าระบบ"
+                                  title={t("comingSoonSetup")}
                                   className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg bg-[#1877f2]/55 px-3 py-2 text-sm font-medium text-white"
                                 >
                                   <i className="fab fa-facebook-f"></i> Facebook
-                                  <span className="rounded-full bg-white/25 px-1.5 text-[9px] font-medium leading-[15px]">เร็วๆนี้</span>
+                                  <span className="rounded-full bg-white/25 px-1.5 text-[9px] font-medium leading-[15px]">{t("comingSoon")}</span>
                                 </button>
                                 {/* Google — coming soon */}
                                 <button
                                   type="button"
                                   disabled
-                                  title="เร็วๆนี้ — กำลังตั้งค่าระบบ"
+                                  title={t("comingSoonSetup")}
                                   className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg border border-border bg-white px-3 py-2 text-sm font-medium text-gray-600"
                                 >
                                   <span className="font-bold text-[#ea4335]">G</span> Google
-                                  <span className="rounded-full bg-gray-100 px-1.5 text-[9px] font-medium leading-[15px] text-gray-500">เร็วๆนี้</span>
+                                  <span className="rounded-full bg-gray-100 px-1.5 text-[9px] font-medium leading-[15px] text-gray-500">{t("comingSoon")}</span>
                                 </button>
                               </div>
                             </div>
@@ -591,13 +601,13 @@ export default async function ProfilePage() {
                             {/* L286 — main address + add-address link */}
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-sm font-semibold text-foreground">
-                                ที่อยู่จัดส่งสินค้า (ที่อยู่หลัก)
+                                {t("shippingAddressLabel")}
                               </span>{" "}
                               <Link
                                 className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:underline"
                                 href="/addresses/add"
                               >
-                                <i className="ft-plus"></i> เพิ่มที่อยู่
+                                <i className="ft-plus"></i> {t("addAddress")}
                               </Link>
                             </div>
                             <p className="mt-0.5 mb-3 text-sm text-muted break-words">
@@ -605,24 +615,24 @@ export default async function ProfilePage() {
                                 fullAddress
                               ) : (
                                 <span className="text-red-600">
-                                  กรุณาเพิ่มที่อยู่ (จำเป็น*)
+                                  {t("pleaseAddAddress")}
                                 </span>
                               )}
                             </p>
                             {/* L290-293 — birthday */}
                             <span className="text-sm font-semibold text-foreground">
-                              เกิดเมื่อ{" "}
+                              {t("bornOnLabel")}{" "}
                             </span>
                             <p className="mt-0.5 mb-3 text-sm text-muted">
                               {userBirthday === "" || userBirthday == null
-                                ? "ยังไม่ระบุ"
+                                ? t("notSpecified")
                                 : userBirthday}
                             </p>
                             {/* L294-297 — sex */}
-                            <span className="text-sm font-semibold text-foreground">เพศ</span>
+                            <span className="text-sm font-semibold text-foreground">{t("sexLabel")}</span>
                             <p className="mt-0.5 text-sm text-muted">
                               {userSex === "" || userSex == null
-                                ? "ยังไม่ระบุ"
+                                ? t("notSpecified")
                                 : userSex}
                             </p>
                           </div>
@@ -643,7 +653,7 @@ export default async function ProfilePage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="text-left">
                     <h2 className="text-2xl font-bold text-[#1e9ff2] tam-counter" data-count={countShops}>{countShops}</h2>
-                    <h4 className="text-sm text-muted">ฝากสั่งซื้อสินค้า</h4>
+                    <h4 className="text-sm text-muted">{t("statShopOrder")}</h4>
                   </div>
                   <i className="icon-basket-loaded text-3xl text-[#1e9ff2]"></i>
                 </div>
@@ -661,7 +671,7 @@ export default async function ProfilePage() {
                     <h2 className="text-2xl font-bold text-[#ff9149] tam-counter" data-count={countForwarder}>
                       {countForwarder}
                     </h2>
-                    <h4 className="text-sm text-muted">ฝากนำเข้า</h4>
+                    <h4 className="text-sm text-muted">{t("statImport")}</h4>
                   </div>
                   <i className="ft-box text-3xl text-[#ff9149]"></i>
                 </div>
@@ -676,8 +686,8 @@ export default async function ProfilePage() {
                   <div className="text-left">
                     <h2 className="text-2xl font-bold text-gray-400">0</h2>
                     <h4 className="text-sm text-muted flex items-center gap-1.5">
-                      ฝากส่งออก
-                      <span className="rounded-full bg-gray-200 px-1.5 text-[9px] font-medium leading-[16px] text-gray-500">เร็วๆนี้</span>
+                      {t("statExport")}
+                      <span className="rounded-full bg-gray-200 px-1.5 text-[9px] font-medium leading-[16px] text-gray-500">{t("comingSoon")}</span>
                     </h4>
                   </div>
                   <i className="text-gray-400">
@@ -702,7 +712,7 @@ export default async function ProfilePage() {
                     <h2 className="text-2xl font-bold text-[#9c27b0] tam-counter" data-count={countPayment}>
                       {countPayment}
                     </h2>
-                    <h4 className="text-sm text-muted">ฝากชำระสินค้า</h4>
+                    <h4 className="text-sm text-muted">{t("statPayment")}</h4>
                   </div>
                   <i className="text-[#9c27b0]">
                     <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="css-i6dzq1">
@@ -726,9 +736,9 @@ export default async function ProfilePage() {
                       <span className="tam-counter" data-count={walletTotal}>
                         {walletTotal}
                       </span>
-                      <span className="text-sm font-medium"> บาท</span>
+                      <span className="text-sm font-medium"> {t("baht")}</span>
                     </h2>
-                    <h4 className="text-sm text-muted">กระเป๋าสตางค์</h4>
+                    <h4 className="text-sm text-muted">{t("statWallet")}</h4>
                   </div>
                   <i className="icon-wallet text-3xl text-[#0cc27e]"></i>
                 </div>

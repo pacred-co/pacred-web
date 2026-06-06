@@ -8,14 +8,17 @@ import { requestPhoneChangeOtp, confirmPhoneChange } from "@/actions/security";
 
 type Step = "request" | "verify" | "done";
 
-const ERR: Record<string, string> = {
-  invalid_phone:   "เบอร์โทรไม่ถูกต้อง",
-  invalid_otp:     "OTP ไม่ถูกต้องหรือหมดอายุ",
-  invalid_input:   "ข้อมูลไม่ครบหรือไม่ถูกต้อง",
-  rate_limit:      "ส่ง OTP เกิน 3 ครั้งใน 1 ชม. กรุณารอสักครู่",
-  sms_failed:      "ส่ง SMS ไม่สำเร็จ ลองอีกครั้ง",
-  db_error:        "ระบบขัดข้อง กรุณาลองใหม่",
-  not_signed_in:   "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่",
+// Stable error identifiers → next-intl message keys (the message text lives in
+// the `change_phone` namespace). Keyed on the STABLE server `res.error` code,
+// never on translated text.
+const ERR_KEYS: Record<string, string> = {
+  invalid_phone:   "errInvalidPhone",
+  invalid_otp:     "errInvalidOtp",
+  invalid_input:   "errInvalidInput",
+  rate_limit:      "errRateLimit",
+  sms_failed:      "errSmsFailed",
+  db_error:        "errDbError",
+  not_signed_in:   "errNotSignedIn",
 };
 
 export function ChangePhoneForm({ currentPhone }: { currentPhone: string | null }) {
@@ -35,7 +38,7 @@ export function ChangePhoneForm({ currentPhone }: { currentPhone: string | null 
     startTransition(async () => {
       const res = await requestPhoneChangeOtp({ currentPassword, newPhone });
       if (!res.ok) {
-        setError(ERR[res.error] ?? res.error);
+        setError(ERR_KEYS[res.error] ? t(ERR_KEYS[res.error]) : res.error);
         return;
       }
       setBypassNotice(!!res.bypass);
@@ -50,7 +53,7 @@ export function ChangePhoneForm({ currentPhone }: { currentPhone: string | null 
     startTransition(async () => {
       const res = await confirmPhoneChange({ newPhone, otp });
       if (!res.ok) {
-        setError(ERR[res.error] ?? res.error);
+        setError(ERR_KEYS[res.error] ? t(ERR_KEYS[res.error]) : res.error);
         return;
       }
       setStep("done");

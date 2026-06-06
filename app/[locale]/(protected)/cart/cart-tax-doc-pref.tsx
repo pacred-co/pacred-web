@@ -22,6 +22,7 @@
  */
 
 import { useState, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { FileText, Receipt, FileCheck2 } from "lucide-react";
 import {
   TAX_DOC_MODES,
@@ -45,6 +46,7 @@ const MODE_ICON: Record<TaxDocMode, ReactNode> = {
 };
 
 export function CartTaxDocPref({ defaults }: { defaults: TaxDocDefaults }) {
+  const t = useTranslations("cartPage");
   const [mode, setMode] = useState<TaxDocMode>(
     defaults.isJuristic && defaults.taxId ? "tax_invoice" : "none",
   );
@@ -56,8 +58,8 @@ export function CartTaxDocPref({ defaults }: { defaults: TaxDocDefaults }) {
   return (
     <div className="rounded-2xl bg-white border border-border shadow-[0_4px_14px_rgba(0,0,0,0.04)] overflow-hidden">
       <div className="px-4 md:px-5 py-3 border-b border-border bg-gradient-to-r from-rose-50/60 via-white to-white">
-        <h3 className="text-[13px] font-bold text-foreground">เอกสารภาษีสำหรับออเดอร์นี้</h3>
-        <p className="mt-0.5 text-[11px] text-muted">เลือกล่วงหน้า — ระบบจะออกเอกสารตามที่เลือกตอนชำระเงิน</p>
+        <h3 className="text-[13px] font-bold text-foreground">{t("taxDocHeader")}</h3>
+        <p className="mt-0.5 text-[11px] text-muted">{t("taxDocSubheader")}</p>
       </div>
       <div className="p-3 md:p-4 space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -87,11 +89,11 @@ export function CartTaxDocPref({ defaults }: { defaults: TaxDocDefaults }) {
         {needsBilling && (
           <div className="space-y-2 rounded-lg border border-primary-200 bg-rose-50/40 p-3">
             <p className="text-[11.5px] font-medium text-foreground">
-              ข้อมูลสำหรับ{TAX_DOC_MODE_META[mode].title}
+              {t("infoFor", { doc: TAX_DOC_MODE_META[mode].title })}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <label className="sm:col-span-1 block">
-                <span className="block text-[10.5px] text-muted mb-0.5">เลขผู้เสียภาษี (13 หลัก)</span>
+                <span className="block text-[10.5px] text-muted mb-0.5">{t("taxIdLabel")}</span>
                 <input
                   name="taxDocTaxId"
                   defaultValue={defaults.taxId}
@@ -104,38 +106,42 @@ export function CartTaxDocPref({ defaults }: { defaults: TaxDocDefaults }) {
                 />
               </label>
               <label className="sm:col-span-2 block">
-                <span className="block text-[10.5px] text-muted mb-0.5">ชื่อบริษัท / ผู้รับใบกำกับภาษี</span>
+                <span className="block text-[10.5px] text-muted mb-0.5">{t("companyNameLabel")}</span>
                 <input
                   name="taxDocBillingName"
                   defaultValue={defaults.companyName}
                   maxLength={300}
-                  placeholder="บริษัท แพคเรด (ประเทศไทย) จำกัด"
+                  placeholder={t("companyNamePlaceholder")}
                   className="w-full rounded-md border border-border px-2 py-1.5 text-xs"
                   required={needsBilling}
                 />
               </label>
               <label className="sm:col-span-3 block">
                 <span className="block text-[10.5px] text-muted mb-0.5">
-                  ที่อยู่ตาม{TAX_DOC_MODE_META[mode].title}
+                  {t("addressFor", { doc: TAX_DOC_MODE_META[mode].title })}
                 </span>
                 <textarea
                   name="taxDocAddress"
                   defaultValue={defaults.companyAddress}
                   maxLength={500}
                   rows={2}
-                  placeholder="เลขที่ / ถนน / ตำบล / อำเภอ / จังหวัด / รหัสไปรษณีย์"
+                  placeholder={t("addressPlaceholder")}
                   className="w-full rounded-md border border-border px-2 py-1.5 text-xs"
                   required={needsBilling}
                 />
               </label>
             </div>
             <p className="text-[10.5px] text-muted">
-              ระบบจะ <strong>คิด VAT 7%</strong> จาก<strong>{TAX_DOC_MODE_META[mode].vatBase}</strong>{" "}
-              + ออก{TAX_DOC_MODE_META[mode].title}ตอนคุณชำระเงิน
+              {t.rich("vatExplain", {
+                base: TAX_DOC_MODE_META[mode].vatBase,
+                doc: TAX_DOC_MODE_META[mode].title,
+                strong: (chunks) => <strong>{chunks}</strong>,
+              })}
               {defaults.isJuristic && " · "}
-              {defaults.isJuristic && (
-                <>นิติบุคคล <strong>หักภาษี ณ ที่จ่าย</strong> 1% (ค่าขนส่ง) / 3% (ค่าบริการ) — แสดงในบิล</>
-              )}
+              {defaults.isJuristic &&
+                t.rich("vatJuristic", {
+                  strong: (chunks) => <strong>{chunks}</strong>,
+                })}
             </p>
           </div>
         )}

@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 // 2026-06-05 (E2E audit · §0f confirm-before-mutate) — deposit submits a slip
 // + creates pending tb_wallet_hs row; admin reviews. Without confirm the
 // customer can't double-check the amount + slip file before commit.
@@ -29,6 +30,7 @@ import { getDepositQr, submitLegacyWalletDeposit } from "@/actions/wallet";
 type Kind = "wallet" | "credit";
 
 export function LegacyDepositForm({ kind }: { kind: Kind }) {
+  const t = useTranslations("walletDeposit");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
@@ -47,9 +49,9 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
   // returns (lib/promptpay.ts) — kept short so they fit the small
   // qrcodeMain area.
   const qrErrorText: Record<string, string> = {
-    promptpay_not_configured: "ยังไม่ได้ตั้งค่า PromptPay (ติดต่อทีมงาน)",
-    promptpay_invalid_amount: "กรุณากรอกจำนวนเงินให้ถูกต้อง",
-    qr_failed:                "สร้าง QR ไม่สำเร็จ กรุณาลองใหม่",
+    promptpay_not_configured: t("qrErrPromptpayNotConfigured"),
+    promptpay_invalid_amount: t("qrErrInvalidAmount"),
+    qr_failed:                t("qrErrFailed"),
   };
 
   function onGenerateQr() {
@@ -59,7 +61,7 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
     const amountStr = (form?.elements.namedItem("amount") as HTMLInputElement | null)?.value ?? "";
     const amount = Number(amountStr);
     if (!amountStr || !Number.isFinite(amount) || amount <= 0) {
-      setMsg({ tone: "err", text: "กรุณากรอกจำนวนเงิน" });
+      setMsg({ tone: "err", text: t("errEnterAmount") });
       return;
     }
     startQrTransition(async () => {
@@ -69,7 +71,7 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
         setQrAmount(null);
         setMsg({
           tone: "err",
-          text: qrErrorText[res.error] ?? "สร้าง QR ไม่สำเร็จ",
+          text: qrErrorText[res.error] ?? t("qrFailedGeneric"),
         });
         return;
       }
@@ -92,11 +94,11 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
     // L5-9) so the user gets the same UX as the original.
     const amount = Number(amountStr);
     if (!amountStr || !Number.isFinite(amount) || amount <= 0) {
-      setMsg({ tone: "err", text: "กรุณากรอกข้อมูลให้ครบ" });
+      setMsg({ tone: "err", text: t("errFillAllFields") });
       return;
     }
     if (!slipFile) {
-      setMsg({ tone: "err", text: "กรุณเลือกรูปข้อมูลให้ครบ" });
+      setMsg({ tone: "err", text: t("errSelectSlipImage") });
       return;
     }
 
@@ -104,10 +106,12 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
     // slip filename. ป้องกัน "เผลอกดเติม" ผิดยอด/ผิดสลิป.
     const slipKB = Math.round(slipFile.size / 1024);
     const ok = await confirm(
-      `ยืนยันเติมเงิน ฿${amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}\n\n` +
-      `สลิป: ${slipFile.name}\n` +
-      `ขนาด: ${slipKB.toLocaleString("th-TH")} KB\n\n` +
-      `หลังกดยืนยัน ระบบจะส่งให้แอดมินตรวจสอบสลิป · ยอดจะเข้ากระเป๋าเมื่อแอดมินอนุมัติ`,
+      t("confirmDepositLine", {
+        amount: amount.toLocaleString("th-TH", { minimumFractionDigits: 2 }),
+      }) + "\n\n" +
+      t("confirmSlipLine", { name: slipFile.name }) + "\n" +
+      t("confirmSizeLine", { size: slipKB.toLocaleString("th-TH") }) + "\n\n" +
+      t("confirmDepositNote"),
     );
     if (!ok) return;
 
@@ -125,7 +129,7 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
       // SweetAlert reads "เติมเงินสำเร็จ รอเจ้าหน้าที่ตรวจสอบสลิป").
       setMsg({
         tone: "ok",
-        text: `เติมเงินสำเร็จ #${res.data?.id ?? ""} — รอเจ้าหน้าที่ตรวจสอบสลิป`,
+        text: t("depositSuccessMsg", { id: res.data?.id ?? "" }),
       });
       formRef.current?.reset();
       router.refresh();
@@ -153,7 +157,7 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
             className="block text-xs font-medium text-muted mb-1"
             htmlFor="amount"
           >
-            จำนวนเงิน (บาท)
+            {t("amountLabel")}
           </label>
           <input
             className="w-full rounded-lg border border-border px-3 py-2 text-right text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 disabled:opacity-60"
@@ -175,7 +179,7 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
               onClick={onGenerateQr}
               disabled={pending || qrPending}
             >
-              {qrPending ? "กำลังสร้าง QR..." : "สร้าง QR Code ชำระเงิน"}
+              {qrPending ? t("generatingQr") : t("generateQrPay")}
             </button>
           </div>
         </div>
@@ -212,16 +216,16 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
           {kind === "credit" ? (
             <>
               <div className="mt-2 text-sm text-foreground">
-                เลขที่บัญชี : <span>225-2-91144-0</span>
+                {t("accountNo")} : <span>225-2-91144-0</span>
               </div>
               <div className="text-sm text-foreground">
-                พร้อมเพย์ :{" "}
+                {t("promptpayLabel")} :{" "}
                 <span id="pp-id-show2">0-1055-64077-71-6</span>
               </div>
             </>
           ) : null}
           <h5 className="mt-2 text-sm font-semibold text-foreground">
-            บริษัท แพคเรด (ประเทศไทย) จำกัด
+            {t("companyName")}
           </h5>
           {/* Legacy `#amount-show` was populated client-side from
               $("#amount").val() once the QR rendered. Pacred mirrors that
@@ -232,7 +236,7 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
             {qrDataUrl && qrAmount != null ? (
               <>
                 <strong>
-                  จำนวน {qrAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
+                  {t("amountBaht", { amount: qrAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 }) })}
                 </strong>
               </>
             ) : null}
@@ -244,7 +248,7 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
               rel="noreferrer"
               className="text-sm font-medium text-red-600 hover:underline"
             >
-              ดูวิธีการเติมเงิน
+              {t("howToDeposit")}
             </a>
           </div>
         </div>
@@ -253,7 +257,7 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
             className="block text-xs font-medium text-muted mb-1"
             htmlFor="imagesSlip"
           >
-            หลักฐานการโอน (สลิปรายการ)
+            {t("transferProofLabel")}
           </label>
           <div className="fallback">
             <input
@@ -271,35 +275,29 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
         {kind === "wallet" && (
           <div className="mt-3 mb-1 rounded-lg border border-border bg-surface-alt/40 dark:bg-surface px-3 py-2.5 text-sm text-muted">
             <div className="font-medium text-foreground mb-1">
-              เงื่อนไขการถอนเงิน ที่ต้องทราบก่อนเติมเงินเข้าระบบ
+              {t("withdrawConditionsTitle")}
             </div>
             <ol className="list-decimal space-y-1 pl-5">
               <li>
                 {" "}
-                สามารถถอนเงินได้เมื่อ
-                ท่านเคยชำระเงินบริการฝากสั่งซื้อสินค้าหรือฝากนำเข้าสินค้ากับทางบริษัท
-                Pacred มาก่อน
+                {t("withdrawCondition1")}
               </li>
               <li>
                 {" "}
-                การถอนเงินต้องแนบเอกสาร
-                บัตรประจำตัวประชาชนและหน้าสมุดบัญชีธนาคาร
+                {t("withdrawCondition2")}
               </li>
-              <li> ยอดถอนเงินขั้นต่ำ คือ 25 บาท</li>
+              <li> {t("withdrawCondition3")}</li>
               <li>
                 {" "}
-                หากยอดที่ทำรายการถอนเงินน้อยกว่า 500 บาท
-                จะมีค่าบริการถอนเงิน 25 บาทต่อครั้ง
+                {t("withdrawCondition4")}
               </li>
               <li>
                 {" "}
-                ระยะเวลาดำเนินการใช้เวลา 7-10 วันทำการ
-                (ไม่รวมวันหยุดนักขัตฤกษ์และวันอาทิตย์)
-                เนื่องจากทางบริษัทจำเป็นต้องตรวจสอบข้อมูลและยอดเงินเพื่อดำเนินการประสานงานกับทางธนาคารที่ให้บริการ
+                {t("withdrawCondition5")}
               </li>
               <li>
                 {" "}
-                ทางบริษัทขอสงวนสิทธิ์ในการเปลี่ยนแปลงนโยบายไปตามเงื่อนไขที่บริษัทกำหนด
+                {t("withdrawCondition6")}
               </li>
             </ol>
           </div>
@@ -323,7 +321,7 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
             data-dismiss="modal"
             disabled={pending}
           >
-            ยกเลิก
+            {t("cancel")}
           </button>
           <button
             type="submit"
@@ -331,7 +329,7 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
             name="addData"
             disabled={pending}
           >
-            {pending ? "กำลังเติมเงิน..." : "เติมเงิน"}
+            {pending ? t("depositing") : t("deposit")}
           </button>
         </div>
       </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Upload } from "lucide-react";
 import {
   getForwarderPaymentQr,
   submitForwarderPayment,
@@ -455,43 +456,88 @@ export function ForwarderPayModal({
                   )}
                 </div>
 
-                {/* Slip upload */}
-                <div className="rounded-xl border border-border bg-white dark:bg-surface px-4 py-3 space-y-3">
-                  <div>
-                    <label
-                      htmlFor="imagesSlip"
-                      className="block text-sm font-bold text-foreground mb-1.5"
-                    >
-                      หลักฐานการโอน (สลิปรายการ){" "}
-                      <span className="text-red-600">*</span>
-                    </label>
-                    <input
-                      ref={fileRef}
-                      id="imagesSlip"
-                      type="file"
-                      name="imagesSlip"
-                      accept="image/*"
-                      onChange={onSlipChange}
-                      className="block w-full text-sm text-foreground file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-red-50 file:text-red-700 hover:file:bg-red-100 cursor-pointer"
-                    />
-                    {slipUploading && (
-                      <div className="mt-1.5 text-xs text-amber-600">
-                        ⏳ กำลังอัปโหลดสลิป...
-                      </div>
-                    )}
-                    {slipPath && !slipUploading && (
-                      <div className="mt-1.5 text-xs text-emerald-600 font-medium">
-                        ✓ แนบสลิปเรียบร้อยแล้ว
-                      </div>
+                {/* Slip upload — the FINAL required step, pinned to the bottom
+                    as a big OBVIOUS dropzone so it's unmistakable that a slip
+                    must be attached (ปอน 2026-06-06: "เอาสลิปลงข้างล่าง · ทำให้
+                    ชัดๆ ว่าต้องอัปไฟล์ ดูง่ายๆ"). Logic unchanged — the real
+                    <input name="imagesSlip"> is kept (legacy contract) and just
+                    visually hidden behind the styled dropzone label. */}
+                <div className="rounded-xl border border-border bg-white dark:bg-surface px-4 py-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-black text-foreground">
+                      แนบสลิปการโอนเพื่อยืนยัน
+                    </span>
+                    <span className="text-red-600 font-black">*</span>
+                    {!slipPath && !slipUploading && (
+                      <span className="ml-auto inline-flex items-center rounded-full bg-red-100 text-red-700 text-[10.5px] font-bold px-2 py-0.5">
+                        ต้องแนบสลิป
+                      </span>
                     )}
                   </div>
+
+                  {/* Real input kept (id/name="imagesSlip" = legacy contract)
+                      but visually hidden — the big label below is the dropzone. */}
+                  <input
+                    ref={fileRef}
+                    id="imagesSlip"
+                    type="file"
+                    name="imagesSlip"
+                    accept="image/*"
+                    onChange={onSlipChange}
+                    className="sr-only"
+                  />
+                  <label
+                    htmlFor="imagesSlip"
+                    className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-7 text-center transition-colors ${
+                      slipUploading
+                        ? "border-amber-300 bg-amber-50/50"
+                        : slipPath
+                          ? "border-emerald-400 bg-emerald-50/50 hover:bg-emerald-50"
+                          : "border-red-300 bg-red-50/40 hover:bg-red-50"
+                    }`}
+                  >
+                    {slipUploading ? (
+                      <>
+                        <span className="text-3xl">⏳</span>
+                        <span className="text-sm font-bold text-amber-700">
+                          กำลังอัปโหลดสลิป...
+                        </span>
+                      </>
+                    ) : slipPath ? (
+                      <>
+                        <span className="grid h-12 w-12 place-items-center rounded-full bg-emerald-100 text-emerald-600 text-2xl">
+                          ✓
+                        </span>
+                        <span className="text-sm font-black text-emerald-700">
+                          แนบสลิปเรียบร้อยแล้ว
+                        </span>
+                        <span className="text-xs font-medium text-muted">
+                          แตะอีกครั้งเพื่อเปลี่ยนรูปสลิป
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="grid h-12 w-12 place-items-center rounded-full bg-red-100 text-red-600">
+                          <Upload className="h-6 w-6" strokeWidth={2.2} />
+                        </span>
+                        <span className="text-sm font-black text-red-700">
+                          แตะที่นี่เพื่อแนบสลิปการโอน
+                        </span>
+                        <span className="text-xs font-medium text-muted">
+                          ถ่ายรูปหรือเลือกรูปสลิป (รองรับ jpg, png)
+                        </span>
+                      </>
+                    )}
+                  </label>
+
+                  {/* Transfer datetime — optional, sits under the dropzone */}
                   <div>
                     <label
                       htmlFor="slipDate"
-                      className="block text-sm font-bold text-foreground mb-1.5"
+                      className="block text-xs font-bold text-muted mb-1"
                     >
                       วันเวลาที่โอน{" "}
-                      <span className="text-xs font-normal text-muted">(ไม่บังคับ)</span>
+                      <span className="font-normal">(ไม่บังคับ)</span>
                     </label>
                     <input
                       id="slipDate"

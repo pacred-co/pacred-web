@@ -112,16 +112,16 @@ export function DepositForm() {
 
       {/* Step indicator (PCS-style 3 dots) */}
       <div className="flex items-center justify-center gap-2 text-xs">
-        <StepDot active={step === "amount"} done={step !== "amount"} num={1} label="ระบุยอด" />
+        <StepDot active={step === "amount"} done={step !== "amount"} num={1} label={t("stepEnterAmount")} />
         <span className={`h-0.5 w-8 ${step !== "amount" ? "bg-primary-500" : "bg-border"}`} />
-        <StepDot active={step === "pay"} done={false} num={2} label="โอนผ่าน QR + แนบสลิป" />
+        <StepDot active={step === "pay"} done={false} num={2} label={t("stepTransferAndSlip")} />
       </div>
 
       {step === "amount" && (
         <div className="rounded-2xl border border-border bg-white dark:bg-surface p-6 shadow-sm space-y-4">
           <h2 className="text-base font-bold text-foreground flex items-center gap-2">
             <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary-500 text-white text-xs font-bold">1</span>
-            จำนวนเงินที่ต้องการเติม
+            {t("depositAmountHeading")}
           </h2>
           <label className="block space-y-1">
             <div className="relative">
@@ -161,7 +161,11 @@ export function DepositForm() {
             className={`w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary-500 to-primary-700 text-white font-bold text-base px-6 py-3 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:hover:shadow-lg ${amt > 0 && !pending ? "animate-pulse" : ""}`}
           >
             <QrCode className="w-5 h-5" />
-            {pending ? "กำลังสร้าง QR..." : `สร้าง QR Code ชำระเงิน${amt > 0 ? ` ฿${amt.toLocaleString("th-TH")}` : ""}`}
+            {pending
+              ? t("generatingQr")
+              : amt > 0
+                ? t("generateQrWithAmount", { amount: amt.toLocaleString("th-TH") })
+                : t("generateQrPay")}
           </button>
         </div>
       )}
@@ -173,24 +177,24 @@ export function DepositForm() {
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-bold text-foreground flex items-center gap-2">
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary-500 text-white text-xs font-bold">2</span>
-                สแกน QR เพื่อโอนผ่าน PromptPay
+                {t("scanQrHeading")}
               </h2>
               <button
                 type="button"
                 onClick={() => { setStep("amount"); setQr(null); }}
                 className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline"
               >
-                <RefreshCw className="w-3 h-3" /> แก้ยอด
+                <RefreshCw className="w-3 h-3" /> {t("editAmount")}
               </button>
             </div>
 
             <div className="rounded-xl bg-white border border-primary-100 p-4 text-center">
-              <p className="text-xs text-muted">บัญชีปลายทาง</p>
-              <p className="font-bold text-base">บริษัท แพคเรด (ประเทศไทย) จำกัด</p>
+              <p className="text-xs text-muted">{t("destinationAccount")}</p>
+              <p className="font-bold text-base">{t("companyName")}</p>
               <div className="my-4 inline-block rounded-xl border-2 border-primary-200 bg-white p-3 shadow-sm">
                 <Image src={qr} alt="PromptPay QR" width={256} height={256} unoptimized />
               </div>
-              <p className="text-xs text-muted">จำนวนที่ต้องโอน</p>
+              <p className="text-xs text-muted">{t("amountToTransfer")}</p>
               <p className="font-mono text-3xl font-bold text-red-600">฿{amt.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
               <p className="mt-2 text-[11px] text-muted">{t("qrFooter")}</p>
             </div>
@@ -200,11 +204,11 @@ export function DepositForm() {
           <form onSubmit={onSubmit} className="rounded-2xl border border-border bg-white dark:bg-surface p-6 shadow-sm space-y-4">
             <h2 className="text-base font-bold text-foreground flex items-center gap-2">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary-500 text-white text-xs font-bold">3</span>
-              แนบหลักฐานการโอน
+              {t("attachProofHeading")}
             </h2>
 
             <label className="block">
-              <span className="text-sm font-medium block mb-2">สลิปการโอน<span className="text-red-600 ml-0.5">*</span></span>
+              <span className="text-sm font-medium block mb-2">{t("transferSlipLabel")}<span className="text-red-600 ml-0.5">*</span></span>
               <div className={`relative rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
                 slipPath
                   ? "border-emerald-300 bg-emerald-50/30"
@@ -219,14 +223,14 @@ export function DepositForm() {
                 {slipPath ? (
                   <div className="text-emerald-700">
                     <CheckCircle2 className="w-10 h-10 mx-auto" />
-                    <p className="mt-2 font-bold text-sm">อัพโหลดสลิปแล้ว ✓</p>
-                    <p className="text-[11px] text-emerald-600 mt-1">คลิกเพื่อเปลี่ยนไฟล์</p>
+                    <p className="mt-2 font-bold text-sm">{t("slipUploadedCheck")}</p>
+                    <p className="text-[11px] text-emerald-600 mt-1">{t("clickToChangeFile")}</p>
                   </div>
                 ) : (
                   <div className="text-muted">
                     <Upload className="w-10 h-10 mx-auto" />
-                    <p className="mt-2 font-bold text-sm text-foreground">ลาก-วาง หรือ คลิกเพื่อเลือกไฟล์</p>
-                    <p className="text-[11px] mt-1">รองรับ JPG / PNG / PDF (สูงสุด 9 MB)</p>
+                    <p className="mt-2 font-bold text-sm text-foreground">{t("dragDropOrClick")}</p>
+                    <p className="text-[11px] mt-1">{t("fileSupportHint")}</p>
                   </div>
                 )}
               </div>
@@ -234,7 +238,7 @@ export function DepositForm() {
 
             <div className="grid sm:grid-cols-2 gap-3">
               <label className="block space-y-1">
-                <span className="text-xs font-medium">วันเวลาที่โอน</span>
+                <span className="text-xs font-medium">{t("transferDateTime")}</span>
                 <input
                   type="datetime-local"
                   value={slipDate}
@@ -243,12 +247,12 @@ export function DepositForm() {
                 />
               </label>
               <label className="block space-y-1">
-                <span className="text-xs font-medium">หมายเหตุ (ไม่บังคับ)</span>
+                <span className="text-xs font-medium">{t("noteOptional")}</span>
                 <input
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   className={inputCls}
-                  placeholder="เช่น โอนจากบัญชี SCB"
+                  placeholder={t("notePlaceholder")}
                 />
               </label>
             </div>
@@ -258,7 +262,9 @@ export function DepositForm() {
               disabled={pending || !slipPath}
               className={`w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-700 text-white font-bold text-base px-6 py-3 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:hover:shadow-lg ${slipPath && !pending ? "animate-pulse" : ""}`}
             >
-              {pending ? "กำลังส่ง..." : `✅ ยืนยันแจ้งเติมเงิน ฿${amt.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}
+              {pending
+                ? t("submitting")
+                : t("confirmDepositWithAmount", { amount: amt.toLocaleString("th-TH", { minimumFractionDigits: 2 }) })}
             </button>
           </form>
         </>

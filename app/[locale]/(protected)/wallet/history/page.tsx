@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { getWallet, listWalletTransactions, type WalletTransaction } from "@/actions/wallet";
 import { getMyCredit } from "@/actions/credit";
@@ -13,23 +14,10 @@ import { Pagination } from "@/components/admin/pagination";
 // rebuilt-table self-cancel action (see the cancel button below).
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const BUCKET_LABEL: Record<WalletTransaction["bucket"], string> = {
-  main:     "เงินสด",
-  cashback: "Cashback",
-  credit:   "เครดิต",
-};
-
 const BUCKET_BADGE: Record<WalletTransaction["bucket"], string> = {
   main:     "bg-primary-50 text-primary-700 border-primary-200",
   cashback: "bg-orange-50 text-orange-700 border-orange-200",
   credit:   "bg-blue-50 text-blue-700 border-blue-200",
-};
-
-const STATUS_LABEL: Record<WalletTransaction["status"], string> = {
-  pending:   "รอตรวจสอบ",
-  completed: "สำเร็จ",
-  failed:    "ไม่สำเร็จ",
-  cancelled: "ยกเลิก",
 };
 
 const STATUS_BADGE: Record<WalletTransaction["status"], string> = {
@@ -39,35 +27,17 @@ const STATUS_BADGE: Record<WalletTransaction["status"], string> = {
   cancelled: "bg-gray-100 text-gray-600",
 };
 
-const KIND_LABEL: Record<string, string> = {
-  deposit:         "เติมเงิน",
-  withdraw:        "ถอนเงิน",
-  refund:          "คืนเงิน",
-  adjustment:      "ปรับยอด",
-  order_payment:   "ชำระค่าฝากสั่ง",
-  order_top_up:    "เพิ่มยอดออเดอร์",
-  import_payment:  "ชำระค่านำเข้า",
-  import_top_up:   "เพิ่มยอดนำเข้า",
-  yuan_payment:    "ฝากโอนหยวน",
-  cashback_earn:   "ได้ Cashback",
-  cashback_redeem: "แลก Cashback",
-  // U4-2 credit-line ledger labels
-  credit_charge:              "ใช้วงเงินเครดิต",
-  credit_payment:             "ชำระยอดค้างเครดิต",
-  wallet_to_credit_transfer:  "โอนกระเป๋า → ชำระเครดิต",
-  cost_adjustment:            "ค่าปรับ/ส่วนต่างต้นทุน",
-};
-
 type TabKey = "all" | "deposit" | "payment" | "withdraw";
-const TAB_DEFS: { key: TabKey; label: string; icon: React.ReactNode; kinds: string[] | null }[] = [
-  { key: "all",      label: "รายการเดินบัญชี",   icon: <History className="w-4 h-4" />,           kinds: null },
-  { key: "deposit",  label: "รายการเติมเงิน",    icon: <Banknote className="w-4 h-4" />,          kinds: ["deposit"] },
-  { key: "payment",  label: "รายการชำระเงิน",    icon: <CreditCard className="w-4 h-4" />,        kinds: ["order_payment", "import_payment", "yuan_payment", "order_top_up", "import_top_up"] },
-  { key: "withdraw", label: "รายการถอนเงิน",     icon: <ArrowDownToLine className="w-4 h-4" />,   kinds: ["withdraw"] },
+const TAB_DEFS: { key: TabKey; labelKey: string; icon: React.ReactNode; kinds: string[] | null }[] = [
+  { key: "all",      labelKey: "tabAll",      icon: <History className="w-4 h-4" />,           kinds: null },
+  { key: "deposit",  labelKey: "tabDeposit",  icon: <Banknote className="w-4 h-4" />,          kinds: ["deposit"] },
+  { key: "payment",  labelKey: "tabPayment",  icon: <CreditCard className="w-4 h-4" />,        kinds: ["order_payment", "import_payment", "yuan_payment", "order_top_up", "import_top_up"] },
+  { key: "withdraw", labelKey: "tabWithdraw", icon: <ArrowDownToLine className="w-4 h-4" />,   kinds: ["withdraw"] },
 ];
 
 export default async function WalletHistoryPage({ searchParams }: { searchParams: Promise<{ q?: string; page?: string }> }) {
   const sp = await searchParams;
+  const t = await getTranslations("wallet");
   const [walletRes, txRes, userData, creditRes] = await Promise.all([
     getWallet(),
     listWalletTransactions(200),
@@ -81,8 +51,8 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
   const credit = creditRes.ok ? creditRes.data : null;
   const creditEnrolled = !!credit && Number(credit.credit_limit_thb) > 0;
   const fullName = profile
-    ? `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim() || profile.company_name || "ลูกค้า Pacred"
-    : "ลูกค้า Pacred";
+    ? `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim() || profile.company_name || t("customerFallbackName")
+    : t("customerFallbackName");
 
   const activeTab = (sp.q && TAB_DEFS.some((t) => t.key === sp.q)) ? (sp.q as TabKey) : "all";
   const activeTabDef = TAB_DEFS.find((t) => t.key === activeTab)!;
@@ -105,10 +75,10 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
         {/* Breadcrumb */}
         <nav className="flex items-center gap-1.5 text-xs text-muted">
           <Link href="/dashboard" className="hover:text-primary-600 inline-flex items-center gap-1">
-            <Home className="w-3.5 h-3.5" /> หน้าแรก
+            <Home className="w-3.5 h-3.5" /> {t("breadcrumbHome")}
           </Link>
           <ChevronRight className="w-3 h-3" />
-          <span className="text-foreground font-medium">กระเป๋าสตางค์</span>
+          <span className="text-foreground font-medium">{t("breadcrumbWallet")}</span>
         </nav>
 
         {/* Wallet hero card (PCS-style orange/amber gradient, centered) */}
@@ -116,7 +86,7 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
               <p className="text-base font-bold">{fullName}</p>
-              <p className="text-xs opacity-85 mt-0.5">กระเป๋าสตางค์ (บาท)</p>
+              <p className="text-xs opacity-85 mt-0.5">{t("walletBalanceLabel")}</p>
               <p className="font-mono text-5xl sm:text-6xl font-black mt-2 leading-none">
                 {Number(balance?.balance ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </p>
@@ -133,13 +103,13 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
               href="/wallet/deposit"
               className="inline-flex items-center gap-1.5 rounded-full bg-white text-amber-700 px-5 py-2 text-sm font-bold hover:bg-white/95 shadow-sm"
             >
-              <Plus className="w-4 h-4" /> เติมเงินเข้ากระเป๋า
+              <Plus className="w-4 h-4" /> {t("topUpWallet")}
             </Link>
             <Link
               href="/wallet/withdraw"
               className="inline-flex items-center gap-1.5 rounded-full border-2 border-white/40 text-white px-4 py-1.5 text-xs font-bold hover:bg-white/15"
             >
-              <ArrowDownToLine className="w-3.5 h-3.5" /> ถอนเงิน
+              <ArrowDownToLine className="w-3.5 h-3.5" /> {t("withdrawAction")}
             </Link>
           </div>
         </div>
@@ -151,16 +121,16 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
             <p className="mt-1 text-xl font-bold font-mono text-orange-700">
               ฿{Number(balance?.cashback_balance ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
             </p>
-            <p className="text-[10px] text-muted mt-1">ใช้ลดยอดออเดอร์ฝากสั่ง / นำเข้า</p>
+            <p className="text-[10px] text-muted mt-1">{t("cashbackHint")}</p>
           </div>
           {!creditEnrolled && (
             <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-blue-50/30 p-4">
-              <p className="text-xs font-semibold text-blue-700">เครดิต</p>
+              <p className="text-xs font-semibold text-blue-700">{t("balanceCredit")}</p>
               <p className="mt-1 text-xl font-bold font-mono text-blue-700">
                 ฿{Number(balance?.credit_balance ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </p>
               <p className="text-[10px] text-muted mt-1">
-                ยังไม่มีวงเงินเครดิต — สอบถามทีม Pacred เพื่อขอเปิดใช้
+                {t("creditNotEnrolledHint")}
               </p>
             </div>
           )}
@@ -189,7 +159,7 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
                   }`}
                 >
                   {tab.icon}
-                  <span>{tab.label}</span>
+                  <span>{t(tab.labelKey)}</span>
                   {count > 0 && (
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
                       isActive ? "bg-primary-100 text-primary-700" : "bg-surface-alt text-muted"
@@ -206,26 +176,26 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
             <div className="p-12 text-center space-y-2">
               <div className="text-4xl" aria-hidden>👛</div>
               <p className="text-sm font-medium text-foreground">
-                {activeTab === "deposit"  ? "ยังไม่มีรายการเติมเงิน"
-                : activeTab === "withdraw" ? "ยังไม่มีคำขอถอนเงิน"
-                : activeTab === "payment"  ? "ยังไม่มีการชำระผ่านกระเป๋า"
-                : "ยังไม่มีรายการเดินบัญชี"}
+                {activeTab === "deposit"  ? t("emptyDepositTitle")
+                : activeTab === "withdraw" ? t("emptyWithdrawTitle")
+                : activeTab === "payment"  ? t("emptyPaymentTitle")
+                : t("emptyAllTitle")}
               </p>
               <p className="text-xs text-muted max-w-sm mx-auto">
                 {activeTab === "deposit"
-                  ? "เริ่มเติมเงินครั้งแรกได้ที่ปุ่มด้านล่าง — Pacred รองรับ PromptPay + โอนธนาคาร"
+                  ? t("emptyDepositHint")
                 : activeTab === "withdraw"
-                  ? "ถ้ามียอดเหลือใน wallet กดถอนได้เลย ทีมจะอนุมัติภายในเวลาทำการ"
+                  ? t("emptyWithdrawHint")
                 : activeTab === "payment"
-                  ? "ทุกครั้งที่ชำระค่าฝากนำเข้า / ฝากสั่ง / ฝากโอน จาก wallet จะมาขึ้นที่นี่"
-                  : "ทุกการเติม-ถอน-ชำระจะมาขึ้นที่นี่ — แท็บด้านบนช่วยกรองรายการตามชนิด"}
+                  ? t("emptyPaymentHint")
+                  : t("emptyAllHint")}
               </p>
               {(activeTab === "deposit" || activeTab === "all") && (
                 <Link
                   href="/wallet/deposit"
                   className="mt-2 inline-flex rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-bold hover:bg-primary-600 shadow-sm"
                 >
-                  + เติมเงิน
+                  {t("topUpShort")}
                 </Link>
               )}
             </div>
@@ -234,11 +204,11 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-surface-alt/30 text-left text-xs uppercase tracking-wide text-muted">
-                    <th className="px-4 py-3 w-[140px]">วันที่</th>
-                    <th className="px-4 py-3">รายการ</th>
-                    <th className="px-4 py-3 w-[110px]">กระเป๋า</th>
-                    <th className="px-4 py-3 text-right w-[140px]">จำนวน (บาท)</th>
-                    <th className="px-4 py-3 w-[130px]">สถานะ</th>
+                    <th className="px-4 py-3 w-[140px]">{t("thDate")}</th>
+                    <th className="px-4 py-3">{t("thItem")}</th>
+                    <th className="px-4 py-3 w-[110px]">{t("thBucket")}</th>
+                    <th className="px-4 py-3 text-right w-[140px]">{t("thAmount")}</th>
+                    <th className="px-4 py-3 w-[130px]">{t("thStatus")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -249,10 +219,10 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
                       <tr key={tx.id} className="hover:bg-surface-alt/30 transition-colors">
                         <td className="px-4 py-3 text-xs text-muted whitespace-nowrap align-top">
                           <div>{created.toLocaleDateString("th-TH")}</div>
-                          <div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div>
+                          <div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} {t("timeSuffix")}</div>
                         </td>
                         <td className="px-4 py-3 align-top">
-                          <p className="font-medium text-foreground">{KIND_LABEL[tx.kind] ?? tx.kind}</p>
+                          <p className="font-medium text-foreground">{t.has(`kind.${tx.kind}`) ? t(`kind.${tx.kind}`) : tx.kind}</p>
                           {tx.note && <p className="mt-0.5 text-xs text-muted line-clamp-2">{tx.note}</p>}
                           {!tx.note && tx.reference_id && (
                             <p className="mt-0.5 text-[10px] text-muted font-mono">ref: {tx.reference_id}</p>
@@ -260,7 +230,7 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
                         </td>
                         <td className="px-4 py-3 align-top">
                           <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium ${BUCKET_BADGE[tx.bucket]}`}>
-                            {BUCKET_LABEL[tx.bucket]}
+                            {t(`bucket.${tx.bucket}`)}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right font-mono align-top">
@@ -270,7 +240,7 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
                         </td>
                         <td className="px-4 py-3 align-top">
                           <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${STATUS_BADGE[tx.status]}`}>
-                            {STATUS_LABEL[tx.status]}
+                            {t(`status.${tx.status}`)}
                           </span>
                           {/* gap-customer H-3: self-cancel pending deposit/withdraw — no need to call admin.
                               ADR-0018 §D-3 #1 (2026-05-30): the ledger now reads LEGACY tb_wallet_hs whose

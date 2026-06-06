@@ -1,20 +1,30 @@
 "use client";
 
 /**
- * รายการที่ต้องชำระ — the client tab switcher + unified card list
- * (ปอน 2026-05-30). The server page (`./page.tsx`) gathers every payment-due
- * item across the customer's services into one normalised `PaymentDueItem[]`
- * and hands it down here; this component renders the service-type tab strip
- * and filters the list CLIENT-side (instant switching, no navigation) — the
- * visual language mirrors the /service-order list (rounded pills + status
- * badges + stacked cards) per ปอน's "หน้าตาคล้ายๆ รายการสั่งสินค้าทั้งหมด".
+ * รายการที่ต้องชำระ — the client tab switcher + per-service rich views
+ * (ปอน 2026-05-30 · per-category rich views 2026-06-06). The server page
+ * (`./page.tsx`) gathers every payment-due item across the customer's services
+ * into one normalised `PaymentDueItem[]` (import items carry their full
+ * `ForwarderRow`) and hands it down here; this component renders the
+ * service-type tab strip and, per tab, the RICH view that belongs to that
+ * service — the display format differs by category (ปอน: "รูปแบบที่แสดงผล
+ * ต่างกันไปตามหมวดหมู่"):
  *
- * Tabs: ทั้งหมด · ฝากสั่งซื้อ(order) · นำเข้า(import) · ส่งออก(export) ·
- * ฝากชำระ(payment) · พิธีการศุลกากร(customs). Default = ทั้งหมด. ส่งออก +
- * พิธีการศุลกากร have no backing data yet, so those tabs render an empty state.
+ *   - นำเข้า (import)   → the EXACT grouped-by-ตู้ <ForwarderInteractivity>
+ *       view from /service-import (container accordions · tracking · ETA ·
+ *       per-ตู้ totals · sticky pay-bar · in-place QR/slip modal). Reused
+ *       as-is — it's already prop-driven (page.tsx reads ?q, not the
+ *       component) so embedding it here touches ZERO of the money flow.
+ *   - ฝากสั่งซื้อ (order) → stacked order cards (cover · ref · ยอด · ชำระเงิน).
+ *   - ฝากชำระ (payment)  → stacked yuan-transfer cards (ดูรายละเอียด).
+ *   - ส่งออก / พิธีการศุลกากร → no backing data yet → empty state.
+ *   - ทั้งหมด (all) → every service stacked under its own section header,
+ *       each in its own format.
+ *
+ * Tab filtering is CLIENT-side (instant switching, no navigation).
  */
 
-import { useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "@/i18n/navigation";
 import {
   ShoppingBag,
@@ -25,7 +35,7 @@ import {
   CheckCircle2,
   Inbox,
 } from "lucide-react";
-import { ForwarderPayModal } from "../service-import/forwarder-pay-modal";
+import { ForwarderInteractivity } from "../service-import/forwarder-interactivity";
 import type { ForwarderRow } from "../service-import/forwarder-row-view";
 
 export type PaymentDueService = "order" | "import" | "payment";
@@ -42,8 +52,8 @@ export type PaymentDueItem = {
   statusLabel: string; // per-item status (รอชำระเงิน / รอดำเนินการ)
   ctaLabel: string; // ชำระเงิน / ดูรายละเอียด
   ctaHref: string;
-  /** Import items only — the full forwarder row lets the card open the
-   *  in-place pay modal (QR + slip) instead of navigating to /service-import. */
+  /** Import items only — the full forwarder row feeds the grouped-by-ตู้
+   *  <ForwarderInteractivity> view (which owns the in-place pay modal). */
   forwarderRow?: ForwarderRow;
   isJuristic?: boolean;
 };
@@ -59,8 +69,8 @@ const TABS: readonly { key: TabKey; label: string }[] = [
   { key: "customs", label: "พิธีการศุลกากร" },
 ] as const;
 
-// Per-service card chrome (icon + colour). Only the three services that
-// produce items need an entry; export/customs never render a card.
+// Per-service card chrome (icon + colour). Used by the order/payment cards
+// and the "ทั้งหมด" section headers. (import has its own grouped view.)
 const SERVICE_META: Record<
   PaymentDueService,
   { label: string; Icon: typeof ShoppingBag; iconCls: string; pillCls: string }
@@ -103,13 +113,6 @@ function numberLimit(n: number): string {
 
 export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
   const [tab, setTab] = useState<TabKey>("all");
-  // Unified pay modal — driven by payRows so ONE instance serves both a single
-  // card's "ชำระเงิน" and the bulk select-all bar (ForwarderPayModal takes an array).
-  const [payRows, setPayRows] = useState<ForwarderRow[]>([]);
-  const [payJuristic, setPayJuristic] = useState(false);
-  const [payOpen, setPayOpen] = useState(false);
-  // Bulk-select state — keyed by item.key (only import items are bulk-payable).
-  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const counts: Record<TabKey, number> = {
     all: items.length,
@@ -125,51 +128,50 @@ export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
     tab === "all" ? items : items.filter((it) => it.service === tab);
   const activeLabel = TABS.find((t) => t.key === tab)?.label ?? "";
 
-  // ── Bulk select + pay (mirrors the /service-import pay-bar). Only import
-  //    items (with a forwarder row) are bulk-payable through the QR modal;
-  //    order/payment items keep their own per-card CTA.
-  const eligible = filtered.filter(
-    (it) => it.service === "import" && !!it.forwarderRow,
+  // ── นำเข้า: feed the full forwarder rows into the SAME grouped-by-ตู้
+  //    <ForwarderInteractivity> used on /service-import. It owns its own
+  //    selection · live total recompute · sticky pay-bar · QR/slip modal,
+  //    so no payment-due-local pay machinery is needed (and /service-import
+  //    is never touched → the money flow stays byte-identical).
+  const importRows = useMemo(
+    () =>
+      filtered
+        .filter((it) => it.service === "import" && it.forwarderRow)
+        .map((it) => it.forwarderRow as ForwarderRow),
+    [filtered],
   );
-  const eligibleKeys = eligible.map((it) => it.key);
-  const selectedItems = eligible.filter((it) => selected.has(it.key));
-  const selectedCount = selectedItems.length;
-  const allChecked =
-    eligibleKeys.length > 0 && eligibleKeys.every((k) => selected.has(k));
+  const importJuristic = filtered.some(
+    (it) => it.service === "import" && it.isJuristic,
+  );
+  const orderItems = filtered.filter((it) => it.service === "order");
+  const paymentItems = filtered.filter((it) => it.service === "payment");
 
-  function toggleOne(key: string, next: boolean) {
-    setSelected((prev) => {
-      const ns = new Set(prev);
-      if (next) ns.add(key);
-      else ns.delete(key);
-      return ns;
-    });
-  }
-  function toggleAll(next: boolean) {
-    setSelected((prev) => {
-      const ns = new Set(prev);
-      for (const k of eligibleKeys) {
-        if (next) ns.add(k);
-        else ns.delete(k);
-      }
-      return ns;
-    });
-  }
-  function openPay(rows: ForwarderRow[], juristic: boolean) {
-    if (rows.length === 0) return;
-    setPayRows(rows);
-    setPayJuristic(juristic);
-    setPayOpen(true);
-  }
-  function handleBulkPay() {
-    const rows = selectedItems
-      .map((it) => it.forwarderRow)
-      .filter((r): r is ForwarderRow => !!r);
-    openPay(rows, selectedItems.some((it) => !!it.isJuristic));
+  const importView =
+    importRows.length > 0 ? (
+      <ForwarderInteractivity
+        rowsData={importRows}
+        arrFidDriver={[]}
+        q="5"
+        isJuristic={importJuristic}
+        showPayBar
+        showPayStrip={false}
+        showMaoStrip={false}
+        columnCount={8}
+        maoPromos={[]}
+      />
+    ) : null;
+
+  function cards(list: PaymentDueItem[]) {
+    return (
+      <div className="space-y-2.5">
+        {list.map((it) => (
+          <PaymentDueCard key={it.key} item={it} />
+        ))}
+      </div>
+    );
   }
 
   return (
-    <>
     <section className="rounded-2xl bg-white dark:bg-surface border border-border shadow-sm overflow-hidden">
       {/* ── Status/service tab strip ── */}
       <div className="border-b border-border px-3 py-3 md:px-5 md:py-4">
@@ -215,7 +217,7 @@ export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
         </div>
       </div>
 
-      {/* ── List body ── */}
+      {/* ── List body — per-tab rich view ── */}
       <div className="px-3 py-3 md:px-5 md:py-4">
         {filtered.length === 0 ? (
           items.length === 0 ? (
@@ -232,7 +234,7 @@ export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
               </p>
             </div>
           ) : (
-            /* This service tab has no pending items. */
+            /* This service tab has no pending items (e.g. ส่งออก / พิธีการฯ). */
             <div className="flex flex-col items-center gap-2 py-12 text-center">
               <Inbox className="h-10 w-10 text-muted/50" />
               <p className="text-[13.5px] text-muted">
@@ -240,89 +242,76 @@ export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
               </p>
             </div>
           )
+        ) : tab === "import" ? (
+          // นำเข้า — grouped-by-ตู้ rich view (or fall back to cards if a row
+          // somehow lacks its forwarder payload).
+          (importView ?? cards(filtered))
+        ) : tab === "order" ? (
+          cards(orderItems)
+        ) : tab === "payment" ? (
+          cards(paymentItems)
         ) : (
-          <>
-            {/* Select-all + bulk-pay bar — shown when there are import items in
-                view (the bulk-payable service). Mirrors the import pay-bar. */}
-            {eligibleKeys.length > 0 && (
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface-alt/40 px-3 py-2.5">
-                <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={allChecked}
-                    onChange={(e) => toggleAll(e.target.checked)}
-                    className="w-4 h-4 rounded border-border accent-primary-600 cursor-pointer"
-                  />
-                  <span className="text-[12.5px] font-bold text-foreground">
-                    เลือกทั้งหมด
-                  </span>
-                  {selectedCount > 0 && (
-                    <span className="text-[11px] text-muted">
-                      · เลือก {selectedCount} รายการ
-                    </span>
-                  )}
-                </label>
-                <div className="flex items-center gap-2.5">
-                  <button
-                    type="button"
-                    disabled={selectedCount === 0}
-                    onClick={handleBulkPay}
-                    className="inline-flex items-center gap-1 rounded-full bg-primary-600 text-white text-[12.5px] font-bold px-4 py-2 shadow-md shadow-primary-600/25 hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    ชำระเงิน{selectedCount > 0 ? ` ${selectedCount} รายการ` : ""}
-                    <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.4} />
-                  </button>
-                </div>
-              </div>
+          // ทั้งหมด — each service stacked under its own section, in its own format.
+          <div className="space-y-5">
+            {importView && (
+              <PdSection Icon={Ship} label="นำเข้า" count={importRows.length}>
+                {importView}
+              </PdSection>
             )}
-            <div className="space-y-2.5">
-              {filtered.map((it) => (
-                <PaymentDueCard
-                  key={it.key}
-                  item={it}
-                  selectable={it.service === "import" && !!it.forwarderRow}
-                  checked={selected.has(it.key)}
-                  onToggle={toggleOne}
-                  onPay={(item) =>
-                    openPay(
-                      item.forwarderRow ? [item.forwarderRow] : [],
-                      !!item.isJuristic,
-                    )
-                  }
-                />
-              ))}
-            </div>
-          </>
+            {orderItems.length > 0 && (
+              <PdSection
+                Icon={ShoppingBag}
+                label="ฝากสั่งซื้อ"
+                count={orderItems.length}
+              >
+                {cards(orderItems)}
+              </PdSection>
+            )}
+            {paymentItems.length > 0 && (
+              <PdSection
+                Icon={CircleDollarSign}
+                label="ฝากชำระ"
+                count={paymentItems.length}
+              >
+                {cards(paymentItems)}
+              </PdSection>
+            )}
+          </div>
         )}
       </div>
     </section>
-
-    {/* In-place forwarder payment (QR + slip + submit) — reuses the verified
-        /service-import pay modal so import items pay right here, no navigation.
-        Renders hidden until an import card is tapped. */}
-    <ForwarderPayModal
-      rows={payRows}
-      isJuristic={payJuristic}
-      open={payOpen}
-      onClose={() => setPayOpen(false)}
-    />
-    </>
   );
 }
 
-function PaymentDueCard({
-  item,
-  onPay,
-  selectable = false,
-  checked = false,
-  onToggle,
+// Section header for the "ทั้งหมด" tab — labels each service group.
+function PdSection({
+  Icon,
+  label,
+  count,
+  children,
 }: {
-  item: PaymentDueItem;
-  onPay?: (item: PaymentDueItem) => void;
-  selectable?: boolean;
-  checked?: boolean;
-  onToggle?: (key: string, next: boolean) => void;
+  Icon: typeof ShoppingBag;
+  label: string;
+  count: number;
+  children: ReactNode;
 }) {
+  return (
+    <section>
+      <div className="mb-2.5 flex items-center gap-2">
+        <span className="grid h-6 w-6 place-items-center rounded-lg bg-primary-50 text-primary-600">
+          <Icon className="h-3.5 w-3.5" strokeWidth={2.2} />
+        </span>
+        <h3 className="text-[13.5px] font-black text-foreground">{label}</h3>
+        <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-primary-50 text-primary-700 text-[10px] font-black">
+          {numberLimit(count)}
+        </span>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function PaymentDueCard({ item }: { item: PaymentDueItem }) {
   const meta = SERVICE_META[item.service];
   const Icon = meta.Icon;
   const [imgFailed, setImgFailed] = useState(false);
@@ -332,25 +321,9 @@ function PaymentDueCard({
   const showImage = !!item.imageUrl && !imgFailed;
 
   return (
-    <article
-      className={`relative rounded-2xl bg-white dark:bg-surface border shadow-[0_4px_14px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_22px_rgba(0,0,0,0.07)] transition-shadow overflow-hidden ${
-        checked ? "border-primary-300 ring-1 ring-primary-200" : "border-border"
-      }`}
-    >
-      <div className="flex items-stretch">
-        {selectable && (
-          <label className="flex items-center pl-3 cursor-pointer shrink-0">
-            <input
-              type="checkbox"
-              checked={checked}
-              onChange={(e) => onToggle?.(item.key, e.target.checked)}
-              className="w-4 h-4 rounded border-border accent-primary-600 cursor-pointer"
-            />
-          </label>
-        )}
+    <article className="relative rounded-2xl bg-white dark:bg-surface border border-border shadow-[0_4px_14px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_22px_rgba(0,0,0,0.07)] transition-shadow overflow-hidden">
       <div className="grid grid-cols-[52px_1fr] md:grid-cols-[60px_1fr_auto] gap-3 md:gap-4 p-3 flex-1 min-w-0">
-        {/* Real item cover (order hcover / forwarder fcover) — falls back to
-            the service icon when there's no image or it fails to load. */}
+        {/* Real item cover (order hcover) — falls back to the service icon. */}
         {showImage ? (
           <div className="w-[52px] h-[52px] md:w-[60px] md:h-[60px] rounded-xl overflow-hidden shrink-0 border border-border bg-surface-alt">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -413,29 +386,16 @@ function PaymentDueCard({
           </div>
         </div>
 
-        {/* CTA — import items pay in-place via the QR modal; others navigate
-            to their own pay/detail flow. */}
+        {/* CTA — order/payment navigate to their own pay/detail flow. */}
         <div className="col-span-2 md:col-span-1 flex md:flex-col items-stretch md:items-end justify-end gap-1.5">
-          {item.service === "import" && item.forwarderRow && onPay ? (
-            <button
-              type="button"
-              onClick={() => onPay(item)}
-              className="inline-flex items-center justify-center gap-1 rounded-full bg-sky-600 text-white text-[12px] font-bold px-3.5 py-2 md:py-1.5 shadow-md shadow-sky-600/25 hover:bg-sky-700 transition-colors w-auto"
-            >
-              {item.ctaLabel}
-              <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.4} />
-            </button>
-          ) : (
-            <Link
-              href={item.ctaHref}
-              className="inline-flex items-center justify-center gap-1 rounded-full bg-sky-600 text-white text-[12px] font-bold px-3.5 py-2 md:py-1.5 shadow-md shadow-sky-600/25 hover:bg-sky-700 transition-colors w-auto"
-            >
-              {item.ctaLabel}
-              <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.4} />
-            </Link>
-          )}
+          <Link
+            href={item.ctaHref}
+            className="inline-flex items-center justify-center gap-1 rounded-full bg-sky-600 text-white text-[12px] font-bold px-3.5 py-2 md:py-1.5 shadow-md shadow-sky-600/25 hover:bg-sky-700 transition-colors w-auto"
+          >
+            {item.ctaLabel}
+            <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.4} />
+          </Link>
         </div>
-      </div>
       </div>
     </article>
   );

@@ -1,5 +1,6 @@
 import Script from "next/script";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -64,17 +65,20 @@ import { LegacyDepositForm } from "./legacy-deposit-form";
 export const dynamic = "force-dynamic";
 
 // Legacy `nameWallet($type)` — member/include/function.php L156-169.
-const NAME_WALLET: Record<string, string> = {
-  "1": "รายการเติมเงิน",
-  "2": "รายการชำระเงิน\nฝากสั่งสินค้า",
-  "3": "รายการถอนเงิน",
-  "4": "รายการชำระเงิน\nฝากนำเข้า",
-  "5": "รายการคืนเงิน",
-  "6": "รายการชำระเงิน\nฝากชำระ",
-  "7": "รายการชำระเงิน\nแบบเติมเพิ่ม",
+// The type keys ("1".."7") are stable identifiers (legacy tb_wallet_hs.type
+// data values) — only the display labels are translated.
+const NAME_WALLET_KEY: Record<string, string> = {
+  "1": "walletTypeDeposit",
+  "2": "walletTypeOrderPayment",
+  "3": "walletTypeWithdraw",
+  "4": "walletTypeImportPayment",
+  "5": "walletTypeRefund",
+  "6": "walletTypeBillPayment",
+  "7": "walletTypeTopUpExtra",
 };
-function nameWallet(type: string): string {
-  return NAME_WALLET[type] ?? "ไม่พบข้อมูล";
+function nameWallet(type: string, t: (key: string) => string): string {
+  const key = NAME_WALLET_KEY[type];
+  return key ? t(key) : t("walletTypeNotFound");
 }
 
 // Legacy `DateThaiWallet($strDate)` — member/include/function.php L56-66.
@@ -103,14 +107,14 @@ function numberFormat2(n: number): string {
 }
 
 // load_wallet_hs.php L21 — status badge.
-function statusBadge(status: string | null) {
+function statusBadge(status: string | null, t: (key: string) => string) {
   if (status === "1") {
-    return <span className="badge badge-warning badge-pill">รอตรวจสอบ</span>;
+    return <span className="badge badge-warning badge-pill">{t("statusPending")}</span>;
   }
   if (status === "2") {
-    return <span className="badge badge-info badge-pill">สำเร็จ</span>;
+    return <span className="badge badge-info badge-pill">{t("statusSuccess")}</span>;
   }
-  return <span className="badge badge-danger badge-pill">ไม่สำเร็จ</span>;
+  return <span className="badge badge-danger badge-pill">{t("statusFailed")}</span>;
 }
 
 type WalletHsRow = {
@@ -126,6 +130,8 @@ export default async function WalletDepositPage() {
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
   const { profile } = data;
+
+  const t = await getTranslations("walletDeposit");
 
   const admin = createAdminClient();
   const memberCode = profile.member_code ?? "";
@@ -213,12 +219,12 @@ export default async function WalletDepositPage() {
           <ol className="flex flex-wrap items-center gap-1.5 text-sm text-muted">
             <li>
               <Link href="/dashboard" className="hover:text-foreground transition-colors">
-                <span className="menu-home">หน้าแรก</span>
+                <span className="menu-home">{t("breadcrumbHome")}</span>
               </Link>
             </li>
             <li aria-hidden className="text-border">/</li>
             <li className="font-medium text-foreground" aria-current="page">
-              กระเป๋าสตางค์
+              {t("breadcrumbWallet")}
             </li>
           </ol>
         </nav>
@@ -233,7 +239,7 @@ export default async function WalletDepositPage() {
                     {fullName}
                   </span>
                   <span className="block text-sm text-muted">
-                    กระเป๋าสตางค์ (บาท)
+                    {t("walletBalanceBaht")}
                   </span>
                   <span
                     className="tam-counter notranslate block text-4xl md:text-5xl font-bold text-foreground mt-1"
@@ -264,7 +270,7 @@ export default async function WalletDepositPage() {
               <div className="mt-4 text-center">
                 <Link href="/wallet/deposit">
                   <span className="inline-flex items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-red-600 to-orange-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90 transition-opacity">
-                    <i className="ft-plus"></i> เติมเงินเข้ากระเป๋า
+                    <i className="ft-plus"></i> {t("topUpWallet")}
                   </span>
                 </Link>
               </div>
@@ -295,7 +301,7 @@ export default async function WalletDepositPage() {
                       <i className="fas fa-history pr-05"></i>
                     </span>
                     <span className="hidden-xs-down">
-                      รายการเดินบัญชี
+                      {t("tabHistory")}
                     </span>
                   </a>
                 </li>
@@ -310,7 +316,7 @@ export default async function WalletDepositPage() {
                       <i className="la la-money pr-05"></i>
                     </span>
                     <span className="hidden-xs-down">
-                      รายการเติมเงิน
+                      {t("tabDeposits")}
                     </span>
                   </a>
                 </li>
@@ -325,7 +331,7 @@ export default async function WalletDepositPage() {
                       <i className="far fa-credit-card pr-05"></i>
                     </span>
                     <span className="hidden-xs-down">
-                      รายการชำระเงิน
+                      {t("tabPayments")}
                     </span>
                   </a>
                 </li>
@@ -340,7 +346,7 @@ export default async function WalletDepositPage() {
                       <i className="far fa-handshake pr-05"></i>
                     </span>
                     <span className="hidden-xs-down">
-                      รายการถอนเงิน
+                      {t("tabWithdrawals")}
                     </span>
                   </a>
                 </li>
@@ -354,11 +360,11 @@ export default async function WalletDepositPage() {
                   <div id="load_data_wallet_hs" className="space-y-2">
                     {rowsHistory.length === 0 ? (
                       <div className="text-center text-no-data text-red-500 py-10">
-                        คุณยังไม่มีรายการ
+                        {t("noTransactions")}
                       </div>
                     ) : (
                       rowsHistory.map((row) => (
-                        <WalletHsRowView key={row.ID} row={row} />
+                        <WalletHsRowView key={row.ID} row={row} t={t} />
                       ))
                     )}
                   </div>
@@ -372,11 +378,11 @@ export default async function WalletDepositPage() {
                   <div id="load_data_wallet_hs_add" className="space-y-2">
                     {rowsAdd.length === 0 ? (
                       <div className="text-center text-no-data text-red-500 py-10">
-                        คุณยังไม่มีรายการ
+                        {t("noTransactions")}
                       </div>
                     ) : (
                       rowsAdd.map((row) => (
-                        <WalletHsRowView key={row.ID} row={row} />
+                        <WalletHsRowView key={row.ID} row={row} t={t} />
                       ))
                     )}
                   </div>
@@ -390,11 +396,11 @@ export default async function WalletDepositPage() {
                   <div id="load_data_wallet_hs_payments" className="space-y-2">
                     {rowsPayments.length === 0 ? (
                       <div className="text-center text-no-data text-red-500 py-10">
-                        คุณยังไม่มีรายการ
+                        {t("noTransactions")}
                       </div>
                     ) : (
                       rowsPayments.map((row) => (
-                        <WalletHsRowView key={row.ID} row={row} />
+                        <WalletHsRowView key={row.ID} row={row} t={t} />
                       ))
                     )}
                   </div>
@@ -408,11 +414,11 @@ export default async function WalletDepositPage() {
                   <div id="load_data_wallet_hs_withdraw" className="space-y-2">
                     {rowsWithdraw.length === 0 ? (
                       <div className="text-center text-no-data text-red-500 py-10">
-                        คุณยังไม่มีรายการ
+                        {t("noTransactions")}
                       </div>
                     ) : (
                       rowsWithdraw.map((row) => (
-                        <WalletHsRowView key={row.ID} row={row} />
+                        <WalletHsRowView key={row.ID} row={row} t={t} />
                       ))
                     )}
                   </div>
@@ -448,7 +454,7 @@ export default async function WalletDepositPage() {
             <div className="modal-content rounded-2xl border border-border bg-white dark:bg-surface shadow-xl overflow-hidden">
               <div className="modal-header header-from flex items-center justify-between border-b border-border px-4 py-3 md:px-5 md:py-4">
                 <h4 className="modal-title text-base md:text-lg font-bold text-foreground">
-                  เติมเงินเข้าเป๋าตัง Pacred
+                  {t("modalTitle")}
                 </h4>
                 <button
                   type="button"
@@ -512,11 +518,17 @@ export default async function WalletDepositPage() {
  * including the legacy `nameWallet()` / `DateThaiWallet()` helpers and
  * the `$nameColor` +/- logic (L20).
  */
-function WalletHsRowView({ row }: { row: WalletHsRow }) {
+function WalletHsRowView({
+  row,
+  t,
+}: {
+  row: WalletHsRow;
+  t: (key: string) => string;
+}) {
   const nameColor = row.type === "1" || row.type === "5" ? "success" : "danger";
   const sign = nameColor === "success" ? "+" : "-";
   const { date, time } = dateThaiWallet(row.date);
-  const nameParts = nameWallet(row.type ?? "").split("\n");
+  const nameParts = nameWallet(row.type ?? "", t).split("\n");
 
   // amount sign colour — legacy $nameColor (success = เงินเข้า / danger = เงินออก)
   const amountColor =
@@ -535,11 +547,11 @@ function WalletHsRowView({ row }: { row: WalletHsRow }) {
             ))}
           </h4>
           <span className="block text-xs text-muted mt-0.5">
-            เลขที่รายการ #{row.ID}
+            {t("transactionNo")} #{row.ID}
           </span>
           {row.refOrder != null && row.refOrder !== "" && (
             <span className="block text-xs text-muted">
-              เลขที่ออเดอร์{" "}
+              {t("orderNo")}{" "}
               {row.type === "2" ? (
                 <a
                   href={`/service-order/${row.refOrder}`}
@@ -561,7 +573,7 @@ function WalletHsRowView({ row }: { row: WalletHsRow }) {
               )}
             </span>
           )}
-          <div className="mt-1.5">{statusBadge(row.status)}</div>
+          <div className="mt-1.5">{statusBadge(row.status, t)}</div>
         </div>
         <div className="shrink-0 text-right">
           <h4 className={`text-base md:text-lg font-bold ${amountColor}`}>

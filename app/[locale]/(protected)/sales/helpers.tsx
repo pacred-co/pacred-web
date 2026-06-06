@@ -35,14 +35,17 @@ export function numberFormat(n: number, decimals: number): string {
  *   1 → "ยังไม่เบิกจ่าย" (danger)   2 → "รอดำเนินการ" (warning)
  *   3 → "เบิกจ่ายแล้ว" (success)    default → '' (empty)
  */
-export function nameStatusUserPay(status: string | null): ReactNode {
+export function nameStatusUserPay(
+  status: string | null,
+  t: (key: string) => string,
+): ReactNode {
   switch (status) {
     case "1":
-      return <span className={`${CHIP_BASE} bg-red-50 text-red-700 border-red-200`}>ยังไม่เบิกจ่าย</span>;
+      return <span className={`${CHIP_BASE} bg-red-50 text-red-700 border-red-200`}>{t("usStatusUnpaid")}</span>;
     case "2":
-      return <span className={`${CHIP_BASE} bg-amber-50 text-amber-700 border-amber-200`}>รอดำเนินการ</span>;
+      return <span className={`${CHIP_BASE} bg-amber-50 text-amber-700 border-amber-200`}>{t("usStatusProcessing")}</span>;
     case "3":
-      return <span className={`${CHIP_BASE} bg-emerald-50 text-emerald-700 border-emerald-200`}>เบิกจ่ายแล้ว</span>;
+      return <span className={`${CHIP_BASE} bg-emerald-50 text-emerald-700 border-emerald-200`}>{t("usStatusPaid")}</span>;
     default:
       return "";
   }
@@ -54,22 +57,25 @@ export function nameStatusUserPay(status: string | null): ReactNode {
  * report-user-sales-add.php L94-102 and report-user-sales-history.php
  * L455-463. The 7 `fStatus` codes → the Thai pill badge.
  */
-export function fStatusBadge(fStatus: string | null): ReactNode {
+export function fStatusBadge(
+  fStatus: string | null,
+  t: (key: string) => string,
+): ReactNode {
   switch (fStatus) {
     case "1":
-      return <span className={`${CHIP_BASE} bg-red-50 text-red-700 border-red-200`}>รอสินค้าเข้าโกดังจีน</span>;
+      return <span className={`${CHIP_BASE} bg-red-50 text-red-700 border-red-200`}>{t("fStatusWaitChinaWarehouse")}</span>;
     case "2":
-      return <span className={`${CHIP_BASE} bg-amber-50 text-amber-700 border-amber-200`}>สินค้าถึงโกดังจีนแล้ว</span>;
+      return <span className={`${CHIP_BASE} bg-amber-50 text-amber-700 border-amber-200`}>{t("fStatusAtChinaWarehouse")}</span>;
     case "3":
-      return <span className={`${CHIP_BASE} bg-amber-50 text-amber-700 border-amber-200`}>กำลังส่งมาประเทศไทย</span>;
+      return <span className={`${CHIP_BASE} bg-amber-50 text-amber-700 border-amber-200`}>{t("fStatusShippingToThailand")}</span>;
     case "4":
-      return <span className={`${CHIP_BASE} bg-sky-50 text-sky-700 border-sky-200`}>สินค้าถึงประเทศไทยแล้ว</span>;
+      return <span className={`${CHIP_BASE} bg-sky-50 text-sky-700 border-sky-200`}>{t("fStatusAtThailand")}</span>;
     case "5":
-      return <span className={`${CHIP_BASE} bg-red-50 text-red-700 border-red-200`}>รอชำระเงิน</span>;
+      return <span className={`${CHIP_BASE} bg-red-50 text-red-700 border-red-200`}>{t("fStatusWaitPayment")}</span>;
     case "6":
-      return <span className={`${CHIP_BASE} bg-indigo-50 text-indigo-700 border-indigo-200`}>เตรียมส่ง</span>;
+      return <span className={`${CHIP_BASE} bg-indigo-50 text-indigo-700 border-indigo-200`}>{t("fStatusPreparing")}</span>;
     case "7":
-      return <span className={`${CHIP_BASE} bg-emerald-50 text-emerald-700 border-emerald-200`}>ส่งแล้ว</span>;
+      return <span className={`${CHIP_BASE} bg-emerald-50 text-emerald-700 border-emerald-200`}>{t("fStatusShipped")}</span>;
     default:
       return null;
   }

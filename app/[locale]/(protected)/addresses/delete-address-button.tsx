@@ -8,10 +8,12 @@
 // and desktop-table render paths.
 
 import { useRef } from "react";
+import { useTranslations } from "next-intl";
 import { confirm } from "@/components/ui/confirm";
 import { deleteAddressAction } from "./add-address-action";
 
 export function DeleteAddressButton({ addressId }: { addressId: number }) {
+  const t = useTranslations("addressPage");
   // The styled confirm() is async, so we can't synchronously preventDefault
   // based on its result. Instead we always block the first submit, ask, then
   // programmatically resubmit on "yes" — the `confirmed` ref lets that second
@@ -27,7 +29,7 @@ export function DeleteAddressButton({ addressId }: { addressId: number }) {
         }
         e.preventDefault();
         const form = e.currentTarget;
-        if (await confirm("ลบที่อยู่นี้ออกจากสมุดที่อยู่?")) {
+        if (await confirm(t("deleteConfirm"))) {
           confirmed.current = true;
           form.requestSubmit();
         }
@@ -38,9 +40,9 @@ export function DeleteAddressButton({ addressId }: { addressId: number }) {
       <button
         type="submit"
         className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
-        title="ลบข้อมูล"
+        title={t("deleteDataTitle")}
       >
-        ลบที่อยู่
+        {t("deleteAddress")}
       </button>
     </form>
   );

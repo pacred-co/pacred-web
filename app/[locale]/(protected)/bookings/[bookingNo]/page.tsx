@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { MessageCircle, Phone, ChevronLeft, FileText, Download } from "lucide-react";
 import { getMyBookingByNo, listBookingDocuments } from "@/actions/bookings";
@@ -7,13 +8,14 @@ import { createClient } from "@/lib/supabase/server";
 import { CONTACT, LINE_OA } from "@/components/seo/site";
 import type { BookingDocKind, QuoteLine } from "@/types/booking";
 
-const DOC_LABEL_TH: Record<BookingDocKind, string> = {
-  booking_invoice:       "ใบกำกับสินค้า",
-  booking_packing_list:  "Packing List",
-  booking_certificate:   "Certificate / Form E",
-  booking_vat_paw20:     "ภพ.20",
-  booking_national_id:   "บัตรประชาชน",
-  booking_passport:      "พาสปอร์ต",
+// i18n-key: booking.detail.docKind.{key}
+const DOC_LABEL_KEYS: Record<BookingDocKind, string> = {
+  booking_invoice:       "docInvoice",
+  booking_packing_list:  "docPackingList",
+  booking_certificate:   "docCertificate",
+  booking_vat_paw20:     "docVatPaw20",
+  booking_national_id:   "docNationalId",
+  booking_passport:      "docPassport",
 };
 
 /**
@@ -36,13 +38,13 @@ const DOC_LABEL_TH: Record<BookingDocKind, string> = {
 export const dynamic = "force-dynamic";
 
 // i18n-key: booking.detail.status.{key}
-const STATUS_LABEL: Record<string, string> = {
-  submitted: "ส่งคำขอแล้ว",
-  contacted: "ทีมขายติดต่อแล้ว",
-  quoted: "ออกใบเสนอราคาแล้ว",
-  won: "ตกลงรับงาน",
-  lost: "ยกเลิก",
-  cancelled: "ยกเลิก",
+const STATUS_KEYS: Record<string, string> = {
+  submitted: "statusSubmitted",
+  contacted: "statusContacted",
+  quoted: "statusQuoted",
+  won: "statusWon",
+  lost: "statusLost",
+  cancelled: "statusCancelled",
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -61,13 +63,13 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 // i18n-key: booking.detail.status.message.{key}
-const STATUS_MESSAGE: Record<string, string> = {
-  submitted: "ทีมขายจะติดต่อกลับเร็วๆ นี้เพื่อยืนยันราคาจริงและรายละเอียดงาน",
-  contacted: "ทีมขายติดต่อแล้ว — กำลังจัดทำใบเสนอราคาจริงให้",
-  quoted: "ทีมขายส่งใบเสนอราคามาแล้ว — กรุณาตรวจสอบและยืนยัน",
-  won: "ขอบคุณที่ใช้บริการ — งานเริ่มดำเนินการแล้ว",
-  lost: "การจองถูกยกเลิก — สามารถเริ่มจองใหม่ได้ตลอดเวลา",
-  cancelled: "การจองถูกยกเลิก — สามารถเริ่มจองใหม่ได้ตลอดเวลา",
+const STATUS_MESSAGE_KEYS: Record<string, string> = {
+  submitted: "statusMsgSubmitted",
+  contacted: "statusMsgContacted",
+  quoted: "statusMsgQuoted",
+  won: "statusMsgWon",
+  lost: "statusMsgLost",
+  cancelled: "statusMsgCancelled",
 };
 
 interface BookingOptionRow {
@@ -84,6 +86,7 @@ export default async function BookingDetailPage({
   params: Promise<{ bookingNo: string }>;
 }) {
   const { bookingNo } = await params;
+  const t = await getTranslations("bookingDetailPage");
 
   const res = await getMyBookingByNo(bookingNo);
   if (!res.ok) {
@@ -94,7 +97,7 @@ export default async function BookingDetailPage({
       <main className="mx-auto w-full max-w-[920px] px-4 py-10">
         <div className="rounded-2xl border border-red-200 bg-red-50 dark:bg-red-900/20 p-6 text-sm text-red-700 dark:text-red-300">
           {/* i18n-key: booking.detail.loadError */}
-          เกิดข้อผิดพลาด: {res.error}
+          {t("loadError")}: {res.error}
         </div>
       </main>
     );
@@ -138,8 +141,10 @@ export default async function BookingDetailPage({
   const badge =
     STATUS_BADGE[b.status] ??
     "bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800/50 dark:text-zinc-400 dark:border-zinc-700";
-  const statusLabel = STATUS_LABEL[b.status] ?? b.status;
-  const statusMessage = STATUS_MESSAGE[b.status] ?? "";
+  const statusLabel = STATUS_KEYS[b.status] ? t(STATUS_KEYS[b.status]) : b.status;
+  const statusMessage = STATUS_MESSAGE_KEYS[b.status]
+    ? t(STATUS_MESSAGE_KEYS[b.status])
+    : "";
 
   const breakdown: QuoteLine[] = Array.isArray(b.estimate_breakdown)
     ? (b.estimate_breakdown as QuoteLine[])
@@ -156,7 +161,7 @@ export default async function BookingDetailPage({
           >
             <ChevronLeft className="h-3.5 w-3.5" />
             {/* i18n-key: booking.detail.back */}
-            กลับรายการการจอง
+            {t("back")}
           </Link>
           {/* i18n-key: booking.detail.kicker */}
           <p className="mt-2 text-xs font-semibold tracking-widest text-primary-600">
@@ -184,7 +189,7 @@ export default async function BookingDetailPage({
           <div className="rounded-xl border border-purple-200 bg-purple-50 dark:bg-purple-900/20 px-3 py-2.5 text-sm">
             {/* i18n-key: booking.detail.viewQuote */}
             <p className="font-semibold text-purple-700 dark:text-purple-300">
-              ทีมขายส่งใบเสนอราคามาแล้ว
+              {t("quoteSent")}
             </p>
             {freightQuoteNo && (
               <p className="text-xs text-purple-600 dark:text-purple-400 mt-0.5 font-mono">
@@ -192,7 +197,7 @@ export default async function BookingDetailPage({
               </p>
             )}
             <p className="mt-2 text-xs text-muted">
-              กรุณาติดต่อทีมขายเพื่อขอรายละเอียดใบเสนอราคาฉบับเต็ม
+              {t("quoteContactNote")}
             </p>
           </div>
         )}
@@ -201,33 +206,33 @@ export default async function BookingDetailPage({
       {/* Booking details */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
         {/* i18n-key: booking.detail.summary.title */}
-        <h2 className="text-sm font-bold text-foreground">รายละเอียดการจอง</h2>
+        <h2 className="text-sm font-bold text-foreground">{t("summaryTitle")}</h2>
         <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
           {b.route_slug && (
-            <Row label="เส้นทาง" value={b.route_slug} mono />
+            <Row label={t("fieldRoute")} value={b.route_slug} mono />
           )}
           {b.transport_mode && (
-            <Row label="ประเภทขนส่ง" value={b.transport_mode} />
+            <Row label={t("fieldTransportMode")} value={b.transport_mode} />
           )}
-          <Row label="การจัดการเอกสาร" value={docModeLabel(b.doc_mode)} />
+          <Row label={t("fieldDocMode")} value={docModeLabel(b.doc_mode, t)} />
           {b.contact_name && (
-            <Row label="ผู้ติดต่อ" value={b.contact_name} />
+            <Row label={t("fieldContactName")} value={b.contact_name} />
           )}
           {b.contact_phone && (
-            <Row label="เบอร์โทร" value={b.contact_phone} mono />
+            <Row label={t("fieldContactPhone")} value={b.contact_phone} mono />
           )}
           {b.contact_line && (
             <Row label="LINE ID" value={b.contact_line} mono />
           )}
           {b.pickup_address && (
-            <Row label="จุดรับสินค้า" value={b.pickup_address} />
+            <Row label={t("fieldPickupAddress")} value={b.pickup_address} />
           )}
           {b.dropoff_address && (
-            <Row label="จุดส่งสินค้า" value={b.dropoff_address} />
+            <Row label={t("fieldDropoffAddress")} value={b.dropoff_address} />
           )}
           {b.submitted_at && (
             <Row
-              label="วันที่ส่งคำขอ"
+              label={t("fieldSubmittedAt")}
               value={new Date(b.submitted_at).toLocaleString("th-TH", {
                 dateStyle: "medium",
                 timeStyle: "short",
@@ -238,7 +243,7 @@ export default async function BookingDetailPage({
 
         {b.customer_note && (
           <div className="mt-4 border-t border-border pt-3">
-            <p className="text-xs text-muted">รายละเอียดเพิ่มเติม</p>
+            <p className="text-xs text-muted">{t("customerNoteLabel")}</p>
             <p className="mt-1 text-sm text-foreground whitespace-pre-line">
               {b.customer_note}
             </p>
@@ -250,7 +255,7 @@ export default async function BookingDetailPage({
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
         {/* i18n-key: booking.detail.estimate.title */}
         <p className="text-xs font-semibold tracking-widest text-primary-600">
-          ราคาประมาณการ
+          {t("estimateTitle")}
         </p>
 
         {breakdown.length > 0 ? (
@@ -298,7 +303,7 @@ export default async function BookingDetailPage({
         )}
 
         <div className="mt-3 border-t border-border pt-3 flex items-baseline justify-between">
-          <p className="text-sm font-semibold text-foreground">รวมประมาณการ</p>
+          <p className="text-sm font-semibold text-foreground">{t("estimateTotal")}</p>
           <p className="text-xl font-bold text-primary-600 tabular-nums">
             ฿{Number(b.estimate_total ?? 0).toLocaleString("th-TH")}
           </p>
@@ -306,7 +311,7 @@ export default async function BookingDetailPage({
 
         {/* i18n-key: booking.detail.estimate.disclaimer */}
         <p className="mt-2 text-[11px] leading-snug text-muted">
-          * ราคาเริ่มต้น — ทีมขายจะยืนยันราคาจริงหลังตรวจสินค้า
+          {t("estimateDisclaimer")}
         </p>
       </section>
 
@@ -315,7 +320,7 @@ export default async function BookingDetailPage({
       {bookingDocs.length > 0 && (
         <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
           <h3 className="text-sm font-bold text-foreground">
-            เอกสารที่แนบ ({bookingDocs.length})
+            {t("attachmentsTitle", { count: bookingDocs.length })}
           </h3>
           <ul className="space-y-2">
             {bookingDocs.map((doc) => {
@@ -329,7 +334,7 @@ export default async function BookingDetailPage({
                   <FileText className="w-4 h-4 text-primary-600 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-foreground truncate">
-                      {DOC_LABEL_TH[doc.kind]}
+                      {DOC_LABEL_KEYS[doc.kind] ? t(DOC_LABEL_KEYS[doc.kind]) : doc.kind}
                     </p>
                     <p className="text-[11px] text-muted truncate">{cleanName}</p>
                   </div>
@@ -340,7 +345,7 @@ export default async function BookingDetailPage({
                       rel="noreferrer"
                       className="shrink-0 inline-flex items-center gap-1 h-8 px-3 rounded-md border border-primary-300 bg-white text-primary-600 hover:bg-primary-50 text-[11px] font-bold"
                     >
-                      <Download className="w-3 h-3" /> ดู
+                      <Download className="w-3 h-3" /> {t("view")}
                     </a>
                   )}
                 </li>
@@ -348,7 +353,7 @@ export default async function BookingDetailPage({
             })}
           </ul>
           <p className="text-[10px] text-muted">
-            ลิงก์มีอายุ ~1 ชั่วโมง · refresh หน้าเพื่อสร้างลิงก์ใหม่
+            {t("linkExpiryNote")}
           </p>
         </section>
       )}
@@ -356,30 +361,30 @@ export default async function BookingDetailPage({
       {/* Status history placeholder (until BK-2.8 / IC-1 ships booking_events) */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
         {/* i18n-key: booking.detail.history.title */}
-        <h3 className="text-sm font-bold text-foreground">ประวัติการจอง</h3>
+        <h3 className="text-sm font-bold text-foreground">{t("historyTitle")}</h3>
         <ol className="mt-3 space-y-2 text-sm">
           <HistoryItem
             active
-            label="ส่งคำขอจอง"
+            label={t("historySubmitted")}
             at={b.submitted_at ?? b.created_at}
           />
           {b.status !== "submitted" && (
             <HistoryItem
               active={["contacted", "quoted", "won"].includes(b.status)}
-              label="ทีมขายติดต่อแล้ว"
+              label={t("historyContacted")}
             />
           )}
           {["quoted", "won"].includes(b.status) && (
             <HistoryItem
               active={["quoted", "won"].includes(b.status)}
-              label="ออกใบเสนอราคา"
+              label={t("historyQuoted")}
             />
           )}
           {b.status === "won" && (
-            <HistoryItem active label="ตกลงรับงาน" />
+            <HistoryItem active label={t("historyWon")} />
           )}
           {(b.status === "lost" || b.status === "cancelled") && (
-            <HistoryItem active label={STATUS_LABEL[b.status] ?? b.status} />
+            <HistoryItem active label={STATUS_KEYS[b.status] ? t(STATUS_KEYS[b.status]) : b.status} />
           )}
         </ol>
       </section>
@@ -388,12 +393,12 @@ export default async function BookingDetailPage({
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
         {/* i18n-key: booking.detail.contact.title */}
         <h3 className="text-sm font-bold text-foreground">
-          ติดต่อทีมขาย Pacred
+          {t("contactTitle")}
         </h3>
         <p className="mt-1 text-xs text-muted">
-          แจ้งเลขที่การจอง{" "}
+          {t("contactNoteBefore")}{" "}
           <span className="font-mono text-foreground">{b.booking_no}</span>{" "}
-          เมื่อสอบถามเพื่อให้เจ้าหน้าที่ค้นหาข้อมูลได้เร็วขึ้น
+          {t("contactNoteAfter")}
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <a
@@ -403,14 +408,14 @@ export default async function BookingDetailPage({
             className="flex items-center gap-2 rounded-2xl bg-[#06C755] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#05b54c]"
           >
             <MessageCircle className="h-4 w-4" />
-            ทักไลน์ {LINE_OA.premiumId}
+            {t("lineCta")} {LINE_OA.premiumId}
           </a>
           <a
             href={`tel:${CONTACT.phone}`}
             className="flex items-center gap-2 rounded-2xl border-[1.5px] border-border bg-white dark:bg-surface px-4 py-2.5 text-sm font-semibold text-foreground transition hover:border-primary-300 hover:text-primary-600"
           >
             <Phone className="h-4 w-4" />
-            โทร {CONTACT.phoneDisplay}
+            {t("phoneCta")} {CONTACT.phoneDisplay}
           </a>
         </div>
       </section>
@@ -452,15 +457,18 @@ function HistoryItem({
   );
 }
 
-function docModeLabel(mode: string): string {
+function docModeLabel(
+  mode: string,
+  t: Awaited<ReturnType<typeof getTranslations<"bookingDetailPage">>>,
+): string {
   // i18n-key: booking.detail.docMode.{none|tax_invoice|customs_declaration}
   switch (mode) {
     case "tax_invoice":
-      return "ออกใบกำกับภาษี";
+      return t("docModeTaxInvoice");
     case "customs_declaration":
-      return "ออกใบขนสินค้า";
+      return t("docModeCustomsDeclaration");
     default:
-      return "ไม่รับเอกสาร";
+      return t("docModeNone");
   }
 }
 

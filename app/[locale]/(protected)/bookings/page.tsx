@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { Plus, Calendar, MapPin } from "lucide-react";
 import { getMyBookings, type MyBookingSummary } from "@/actions/bookings";
@@ -20,13 +21,13 @@ export const dynamic = "force-dynamic";
  */
 
 // i18n-key: booking.list.status.{key}
-const STATUS_LABEL: Record<string, string> = {
-  submitted: "ส่งคำขอแล้ว",
-  contacted: "ทีมขายติดต่อแล้ว",
-  quoted: "ออกใบเสนอราคาแล้ว",
-  won: "ตกลงรับงาน",
-  lost: "ยกเลิก",
-  cancelled: "ยกเลิก",
+const STATUS_KEYS: Record<string, string> = {
+  submitted: "statusSubmitted",
+  contacted: "statusContacted",
+  quoted: "statusQuoted",
+  won: "statusWon",
+  lost: "statusLost",
+  cancelled: "statusCancelled",
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -45,6 +46,7 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 export default async function MyBookingsPage() {
+  const t = await getTranslations("bookingsPage");
   const res = await getMyBookings();
   const bookings = res.ok ? res.data : [];
 
@@ -58,11 +60,11 @@ export default async function MyBookingsPage() {
           </p>
           {/* i18n-key: booking.list.title */}
           <h1 className="mt-1 text-2xl font-bold text-foreground sm:text-3xl">
-            การจองของฉัน
+            {t("title")}
           </h1>
           {/* i18n-key: booking.list.subtitle */}
           <p className="mt-1 text-sm text-muted">
-            ดูสถานะและรายละเอียดการจองที่ส่งไป — ทีมขายจะติดต่อกลับเพื่อยืนยันราคาจริง
+            {t("subtitle")}
           </p>
         </div>
         <Link
@@ -71,23 +73,27 @@ export default async function MyBookingsPage() {
         >
           <Plus className="h-4 w-4" />
           {/* i18n-key: booking.list.newAction */}
-          จองใหม่
+          {t("newAction")}
         </Link>
       </div>
 
       {!res.ok && (
         <div className="rounded-2xl border border-red-200 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-300">
           {/* i18n-key: booking.list.loadError */}
-          โหลดข้อมูลไม่สำเร็จ: {res.error}
+          {t("loadError")}: {res.error}
         </div>
       )}
 
       {res.ok && bookings.length === 0 ? (
-        <EmptyState />
+        <EmptyState t={t} />
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {bookings.map((b) => (
-            <BookingCard key={b.id} booking={b} />
+            <BookingCard
+              key={b.id}
+              booking={b}
+              statusLabel={STATUS_KEYS[b.status] ? t(STATUS_KEYS[b.status]) : b.status}
+            />
           ))}
         </ul>
       )}
@@ -95,11 +101,16 @@ export default async function MyBookingsPage() {
   );
 }
 
-function BookingCard({ booking: b }: { booking: MyBookingSummary }) {
+function BookingCard({
+  booking: b,
+  statusLabel: label,
+}: {
+  booking: MyBookingSummary;
+  statusLabel: string;
+}) {
   const badge =
     STATUS_BADGE[b.status] ??
     "bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800/50 dark:text-zinc-400 dark:border-zinc-700";
-  const label = STATUS_LABEL[b.status] ?? b.status;
 
   const cfg = getServiceConfig(b.service_slug);
   const serviceTitle = cfg ? cfg.titleTh : b.service_slug;
@@ -156,15 +167,19 @@ function BookingCard({ booking: b }: { booking: MyBookingSummary }) {
   );
 }
 
-function EmptyState() {
+function EmptyState({
+  t,
+}: {
+  t: Awaited<ReturnType<typeof getTranslations<"bookingsPage">>>;
+}) {
   return (
     <div className="rounded-2xl border border-dashed border-border bg-white dark:bg-surface p-10 text-center space-y-3">
       <p className="text-4xl">📋</p>
       {/* i18n-key: booking.list.empty.title */}
-      <h2 className="text-lg font-bold text-foreground">ยังไม่มีการจอง</h2>
+      <h2 className="text-lg font-bold text-foreground">{t("emptyTitle")}</h2>
       {/* i18n-key: booking.list.empty.body */}
       <p className="text-sm text-muted max-w-sm mx-auto">
-        เริ่มต้นจองบริการกับ Pacred — เลือกบริการ ใส่ข้อมูลคร่าวๆ ทีมขายจะติดต่อกลับเพื่อยืนยันราคาจริง
+        {t("emptyBody")}
       </p>
       <Link
         href="/book"
@@ -172,7 +187,7 @@ function EmptyState() {
       >
         <Plus className="h-4 w-4" />
         {/* i18n-key: booking.list.empty.action */}
-        เริ่มจองเลย
+        {t("emptyAction")}
       </Link>
     </div>
   );

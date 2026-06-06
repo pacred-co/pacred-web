@@ -27,17 +27,6 @@ const FRESHNESS_PILL: Record<ReturnType<typeof freshnessClass>, string> = {
  * for new customers who haven't placed a cargo order yet.
  */
 
-const STATUS_LABEL: Record<string, string> = {
-  received_cn:         "รับเข้าโกดังจีน",
-  packed_cn:           "บรรจุแล้ว (จีน)",
-  sealed_in_container: "ปิดตู้แล้ว (จีน)",
-  in_transit:          "กำลังเดินทาง",
-  arrived_th:          "ถึงไทยแล้ว",
-  unloaded:            "ลงจากตู้ (ไทย)",
-  out_for_delivery:    "กำลังจัดส่ง",
-  delivered:           "ส่งสำเร็จ",
-};
-
 const STATUS_BADGE: Record<string, string> = {
   received_cn:         "bg-gray-50 text-gray-700 border-gray-200",
   packed_cn:           "bg-blue-50 text-blue-700 border-blue-200",
@@ -49,10 +38,10 @@ const STATUS_BADGE: Record<string, string> = {
   delivered:           "bg-green-50 text-green-700 border-green-200",
 };
 
-const TRANSPORT_LABEL: Record<string, string> = {
-  truck: "🚚 รถ",
-  sea:   "🚢 เรือ",
-  air:   "✈️ เครื่องบิน",
+const TRANSPORT_EMOJI: Record<string, string> = {
+  truck: "🚚",
+  sea:   "🚢",
+  air:   "✈️",
 };
 
 export default async function ShipmentsPage() {
@@ -95,7 +84,7 @@ export default async function ShipmentsPage() {
             className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium ${FRESHNESS_PILL[freshness]}`}
             title={new Date(latestEventAt).toLocaleString("th-TH")}
           >
-            🔄 ข้อมูลล่าสุด: {relativeTimeTh(latestEventAt)}
+            🔄 {t("latestData")}: {relativeTimeTh(latestEventAt)}
           </div>
         )}
       </div>
@@ -103,17 +92,16 @@ export default async function ShipmentsPage() {
       {/* Stale / very-old data hint — nudge customer to contact sales if data hasn't moved */}
       {(freshness === "stale" || freshness === "very-old") && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-          ข้อมูลไม่ได้อัพเดทมา {relativeTimeTh(latestEventAt)} —
-          ถ้าคุณคาดว่าน่าจะมีการเคลื่อนไหวล่าสุด กรุณาติดต่อทีมงานเพื่อตรวจสอบ
+          {t("staleHint", { time: relativeTimeTh(latestEventAt) })}
         </div>
       )}
 
       {shipments.length === 0 ? (
-        <EmptyState />
+        <EmptyState t={t} />
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {shipments.map((s) => (
-            <ShipmentCard key={s.id} shipment={s} />
+            <ShipmentCard key={s.id} shipment={s} t={t} />
           ))}
         </ul>
       )}
@@ -121,10 +109,19 @@ export default async function ShipmentsPage() {
   );
 }
 
-function ShipmentCard({ shipment: s }: { shipment: ShipmentSummary }) {
+function ShipmentCard({
+  shipment: s,
+  t,
+}: {
+  shipment: ShipmentSummary;
+  t: Awaited<ReturnType<typeof getTranslations<"shipments">>>;
+}) {
   const statusBadge = STATUS_BADGE[s.status] ?? "bg-gray-50 text-gray-700 border-gray-200";
-  const statusLabel = STATUS_LABEL[s.status] ?? s.status;
-  const transport   = s.container?.transport_mode ? TRANSPORT_LABEL[s.container.transport_mode] : null;
+  const statusLabel = STATUS_BADGE[s.status] ? t(`status.${s.status}`) : s.status;
+  const transportEmoji = s.container?.transport_mode ? TRANSPORT_EMOJI[s.container.transport_mode] : null;
+  const transport = transportEmoji
+    ? `${transportEmoji} ${t(`transport.${s.container!.transport_mode}`)}`
+    : null;
 
   return (
     <Link
@@ -161,12 +158,12 @@ function ShipmentCard({ shipment: s }: { shipment: ShipmentSummary }) {
       {s.box_count != null && s.box_count > 0 && (
         <div className="text-xs border-t border-border pt-2 space-y-1">
           <div className="flex justify-between">
-            <span className="text-muted">รับเข้าโกดังไทย</span>
+            <span className="text-muted">{t("receivedThWarehouse")}</span>
             <span className="font-medium">
               <span className="font-mono">{s.received_box_count}</span>
               {" / "}
               <span className="font-mono">{s.box_count}</span>
-              {" กล่อง"}
+              {" "}{t("boxesUnit")}
               {s.received_box_count >= s.box_count && (
                 <span className="ml-1 text-green-600">✓</span>
               )}
@@ -202,12 +199,12 @@ function ShipmentCard({ shipment: s }: { shipment: ShipmentSummary }) {
       <div className="flex flex-wrap gap-1.5 text-[10px]">
         {s.forwarder_f_no && (
           <span className="rounded bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5">
-            ฝากนำเข้า: <span className="font-mono">{s.forwarder_f_no}</span>
+            {t("importRef")}: <span className="font-mono">{s.forwarder_f_no}</span>
           </span>
         )}
         {s.service_order_h_no && (
           <span className="rounded bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5">
-            ฝากสั่ง: <span className="font-mono">{s.service_order_h_no}</span>
+            {t("shopRef")}: <span className="font-mono">{s.service_order_h_no}</span>
           </span>
         )}
       </div>
@@ -215,26 +212,30 @@ function ShipmentCard({ shipment: s }: { shipment: ShipmentSummary }) {
   );
 }
 
-function EmptyState() {
+function EmptyState({
+  t,
+}: {
+  t: Awaited<ReturnType<typeof getTranslations<"shipments">>>;
+}) {
   return (
     <div className="rounded-2xl border border-dashed border-border p-10 text-center space-y-3">
       <p className="text-4xl">📦</p>
-      <h2 className="font-bold text-lg">ยังไม่มีรายการขนส่ง</h2>
+      <h2 className="font-bold text-lg">{t("emptyTitle")}</h2>
       <p className="text-sm text-muted max-w-sm mx-auto">
-        Shipment ถูกสร้างโดยทีมงานคลังสินค้า Pacred เมื่อสินค้าของคุณเข้าโกดังที่จีน — ไม่ใช่สิ่งที่คุณสร้างเอง
+        {t("emptyBody")}
       </p>
       <div className="flex flex-wrap gap-2 justify-center pt-2">
         <Link
           href="/service-import"
           className="rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs text-primary-700 hover:bg-primary-100"
         >
-          → ดูฝากนำเข้าของฉัน
+          → {t("viewMyImports")}
         </Link>
         <Link
           href="/service-order"
           className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs hover:bg-surface-alt"
         >
-          → ดูฝากสั่งของฉัน
+          → {t("viewMyOrders")}
         </Link>
       </div>
     </div>

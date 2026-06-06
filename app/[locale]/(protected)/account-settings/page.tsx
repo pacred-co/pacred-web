@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
@@ -49,6 +50,7 @@ import { PasswordForm } from "./password-form";
  */
 
 export default async function AccountSettingsPage() {
+  const t = await getTranslations("accountSettingsPage");
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
   const { profile } = data;
@@ -119,10 +121,10 @@ export default async function AccountSettingsPage() {
         {/* L48-59 — breadcrumb header */}
         <div className="flex items-center gap-2 text-[11px] text-muted mb-3">
           <Link href="/dashboard" className="hover:text-foreground transition-colors">
-            หน้าแรก
+            {t("breadcrumbHome")}
           </Link>
           <span>/</span>
-          <span className="text-foreground font-medium">ตั้งค่าบัญชีผู้ใช้</span>
+          <span className="text-foreground font-medium">{t("breadcrumbCurrent")}</span>
         </div>
 
         {/* L60-123 — content-body · the account card */}
@@ -141,7 +143,7 @@ export default async function AccountSettingsPage() {
               {fullName}
             </h2>
             <h5 className="text-sm text-muted mt-1">
-              รหัสสมาชิก : <span className="text-foreground font-medium">{userID}</span>
+              {t("memberCodeLabel")} : <span className="text-foreground font-medium">{userID}</span>
             </h5>
           </div>
 

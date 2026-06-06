@@ -17,6 +17,7 @@
  */
 
 import { Fragment, useState, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { MapPin, Copy, Check } from "lucide-react";
 
 export type WarehouseField = {
@@ -74,6 +75,7 @@ export function AddressBook({
   addButton: ReactNode;
   children: ReactNode;
 }) {
+  const t = useTranslations("addressPage");
   const [tab, setTab] = useState<"thai" | "china">("thai");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
@@ -108,12 +110,12 @@ export function AddressBook({
           <TabButton
             active={tab === "thai"}
             onClick={() => setTab("thai")}
-            label="ที่อยู่จัดส่งในไทย"
+            label={t("tabThai")}
           />
           <TabButton
             active={tab === "china"}
             onClick={() => setTab("china")}
-            label="ที่อยู่โกดังจีน"
+            label={t("tabChina")}
           />
         </div>
         {tab === "thai" && <div className="shrink-0">{addButton}</div>}
@@ -126,18 +128,19 @@ export function AddressBook({
         ) : (
           <div className="space-y-3">
             <p className="text-xs text-muted">
-              ใช้ที่อยู่นี้แจ้งให้ร้านค้าจีนส่งสินค้ามาที่โกดัง Pacred — เลือก{" "}
-              <span className="font-mono">EK</span> = ทางรถ หรือ{" "}
-              <span className="font-mono">SEA</span> = ทางเรือ
+              {t.rich("chinaIntro", {
+                ek: () => <span className="font-mono">EK</span>,
+                sea: () => <span className="font-mono">SEA</span>,
+              })}
             </p>
 
             <div className="overflow-hidden rounded-xl border border-border">
               <table className="w-full text-sm">
                 <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                   <tr>
-                    <th className="px-3 py-2.5 font-medium">ข้อมูล</th>
-                    <th className="px-3 py-2.5 font-medium">รายละเอียด</th>
-                    <th className="px-3 py-2.5 text-center font-medium">คัดลอก</th>
+                    <th className="px-3 py-2.5 font-medium">{t("colField")}</th>
+                    <th className="px-3 py-2.5 font-medium">{t("colDetail")}</th>
+                    <th className="px-3 py-2.5 text-center font-medium">{t("colCopy")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -157,7 +160,7 @@ export function AddressBook({
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <span className="inline-flex items-center gap-2 text-sm font-bold text-foreground">
                                 <span aria-hidden>{w.flag}</span>
-                                โกดัง{w.cityTh} ({w.cityEn})
+                                {t("warehouseTitle", { cityTh: w.cityTh, cityEn: w.cityEn })}
                                 <span className="text-xs font-normal text-muted">
                                   · {w.province}
                                 </span>
@@ -169,11 +172,11 @@ export function AddressBook({
                               >
                                 {allCopied ? (
                                   <>
-                                    <Check className="h-3 w-3" /> คัดลอกแล้ว
+                                    <Check className="h-3 w-3" /> {t("copied")}
                                   </>
                                 ) : (
                                   <>
-                                    <Copy className="h-3 w-3" /> คัดลอกทั้งหมด
+                                    <Copy className="h-3 w-3" /> {t("copyAll")}
                                   </>
                                 )}
                               </button>
@@ -205,7 +208,7 @@ export function AddressBook({
                                 <button
                                   type="button"
                                   onClick={() => copy(f.value, key)}
-                                  aria-label={`คัดลอก ${f.label}`}
+                                  aria-label={t("copyField", { label: f.label })}
                                   className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors ${
                                     isCopied
                                       ? "border-green-300 bg-green-50 text-green-700"
@@ -214,11 +217,11 @@ export function AddressBook({
                                 >
                                   {isCopied ? (
                                     <>
-                                      <Check className="h-3 w-3" /> ก็อปแล้ว
+                                      <Check className="h-3 w-3" /> {t("copiedShort")}
                                     </>
                                   ) : (
                                     <>
-                                      <Copy className="h-3 w-3" /> คัดลอก
+                                      <Copy className="h-3 w-3" /> {t("copy")}
                                     </>
                                   )}
                                 </button>

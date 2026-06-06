@@ -2,6 +2,7 @@
 
 import { useEffect, useTransition } from "react";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { Phone, Settings } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { signOutAction } from "@/actions/auth";
@@ -37,17 +38,17 @@ const ICON_BASE = "/images/home/iconfloating";
 // at the bottom of the launchpad. Sources are the same customer-theme PNGs
 // the desktop dashboard carousel draws from.
 const BOTTOM_BANNERS = [
-  { src: "/images/customertheme/shop.png",  alt: "ค้นหาสินค้าจาก 1688 Taobao Tmall", href: "/service-order"          },
-  { src: "/images/customertheme/drive.png", alt: "ส่งของในกรุงเทพ-ปริมณฑลเหมา 100 บาท", href: "/service-import"      },
-  { src: "/images/customertheme/bill.png",  alt: "ออกบิลใบเสร็จ / ใบแจ้งหนี้",        href: "/service-import/pending" },
-  { src: "/images/customertheme/line.png",  alt: "เชื่อมต่อ Line Notify",            href: "/notifications"          },
+  { src: "/images/customertheme/shop.png",  altKey: "bannerShop",   href: "/service-order"          },
+  { src: "/images/customertheme/drive.png", altKey: "bannerDrive",  href: "/service-import"      },
+  { src: "/images/customertheme/bill.png",  altKey: "bannerBill",   href: "/service-import/pending" },
+  { src: "/images/customertheme/line.png",  altKey: "bannerLine",   href: "/notifications"          },
 ] as const;
 
 // Launchpad item type — `comingSoon: true` flips the tile to disabled
 // grayscale + "COMING SOON" caption (no Link navigation).
 type LaunchpadItem = {
   icon: string;
-  label: string;
+  labelKey: string;
   href: string;
   comingSoon?: boolean;
 };
@@ -59,23 +60,24 @@ type LaunchpadItem = {
 // icon (already in the iconfloating set), grayscale + "COMING SOON" badge
 // applied in the render branch.
 const PRIMARY_SERVICES: readonly LaunchpadItem[] = [
-  { icon: "/images/hero-section/icon/cart.png", label: "ฝากสั่งซื้อ", href: "/cart/add"   },
-  { icon: `${ICON_BASE}/pcs-payment.png`,      label: "ฝากโอนชำระ", href: "/service-payment" },
-  { icon: `${ICON_BASE}/pcs-forwarder.png`,    label: "นำเข้า",     href: "/service-import"  },
-  { icon: `${ICON_BASE}/export.png`,           label: "ส่งออก",     href: "#", comingSoon: true },
+  { icon: "/images/hero-section/icon/cart.png", labelKey: "tileShopOrder", href: "/cart/add"   },
+  { icon: `${ICON_BASE}/pcs-payment.png`,      labelKey: "tileYuanTransfer", href: "/service-payment" },
+  { icon: `${ICON_BASE}/pcs-forwarder.png`,    labelKey: "tileImport",     href: "/service-import"  },
+  { icon: `${ICON_BASE}/export.png`,           labelKey: "tileExport",     href: "#", comingSoon: true },
 ];
 
 // ROW 2 — utility / account actions: address, wallet, topup, history.
 // ออกจากระบบ moves to row 3 as a single end-of-session cell (rendered as a
 // <button> after this list because logout is a Server Action, not a link).
 const SECONDARY_ACTIONS: readonly LaunchpadItem[] = [
-  { icon: `${ICON_BASE}/pcs-address.png`,                label: "ที่อยู่จัดส่ง", href: "/service-import/warehouse-addresses" },
-  { icon: `${ICON_BASE}/pcs-wallet.png`,                 label: "กระเป๋าพักเงิน", href: "/wallet"                 },
-  { icon: `${ICON_BASE}/pcs-wallet-add.png`,             label: "เติมเงิน",        href: "/wallet/deposit"         },
-  { icon: "/images/hero-section/icon/billingpacred.png", label: "ประวัติใบเสร็จ",  href: "/service-import/pending" },
+  { icon: `${ICON_BASE}/pcs-address.png`,                labelKey: "tileShipAddress", href: "/service-import/warehouse-addresses" },
+  { icon: `${ICON_BASE}/pcs-wallet.png`,                 labelKey: "tileWallet", href: "/wallet"                 },
+  { icon: `${ICON_BASE}/pcs-wallet-add.png`,             labelKey: "tileTopup",        href: "/wallet/deposit"         },
+  { icon: "/images/hero-section/icon/billingpacred.png", labelKey: "tileReceiptHistory",  href: "/service-import/pending" },
 ];
 
 export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, salesRep }: Props) {
+  const t = useTranslations("mobileLaunchpad");
   // Customer initial — first character of the display name, uppercased.
   // Used as a clean fallback if avatar_url is null / fails to load.
   const initial = (fullName || "?").trim().charAt(0).toUpperCase();
@@ -128,7 +130,7 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
             and reads against the photo background. */}
         <Link
           href="/account-settings"
-          aria-label="ตั้งค่าบัญชีผู้ใช้งาน"
+          aria-label={t("settingsAria")}
           className="absolute top-14 right-2 z-10 w-7 h-7 rounded-full bg-white/25 hover:bg-white/40 backdrop-blur-sm flex items-center justify-center text-white shadow-md ring-1 ring-white/30 active:scale-95 transition-all"
         >
           <Settings className="w-3.5 h-3.5" strokeWidth={2.2} />
@@ -153,14 +155,16 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[13px] font-bold text-white [-webkit-text-stroke:0.5px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_2px_6px_rgba(0,0,0,0.6)]">
-              ยินดีต้อนรับ
+              {t("welcome")}
             </p>
-            <p className="text-[18px] font-black leading-tight whitespace-nowrap truncate text-white [-webkit-text-stroke:1px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_2px_6px_rgba(0,0,0,0.7),0_4px_12px_rgba(0,0,0,0.45)]">
+            <p className="text-[15px] font-bold leading-tight whitespace-nowrap truncate text-white/95 [-webkit-text-stroke:0.5px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_2px_6px_rgba(0,0,0,0.7),0_4px_12px_rgba(0,0,0,0.45)]">
               {fullName}
             </p>
-            <p className="mt-0.5 text-[12px] font-bold text-white [-webkit-text-stroke:0.5px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_2px_5px_rgba(0,0,0,0.55)]">
-              รหัสสมาชิก :{" "}
-              <span className="font-black tracking-wider">{memberCode || "—"}</span>
+            <p className="mt-1 text-[13px] font-bold text-white [-webkit-text-stroke:0.5px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_2px_5px_rgba(0,0,0,0.55)]">
+              {t("memberCode")} :{" "}
+              <span className="text-[19px] font-black tracking-wider align-middle [-webkit-text-stroke:0.9px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_2px_7px_rgba(0,0,0,0.65)]">
+                {memberCode || "—"}
+              </span>
             </p>
           </div>
         </div>
@@ -199,7 +203,7 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
         <div className="relative min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <p className="text-[10.5px] font-semibold uppercase tracking-wider text-sky-700">
-              ผู้ดูแล
+              {t("salesRepLabel")}
             </p>
             <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[9px] font-bold px-1.5 py-0.5 border border-emerald-100">
               <span className="w-1 h-1 rounded-full bg-emerald-500" />
@@ -207,20 +211,20 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
             </span>
           </div>
           <p className="text-[14px] font-bold text-foreground truncate leading-tight">
-            เซลล์ {salesRep.nickname}
+            {t("salesRepName", { name: salesRep.nickname })}
           </p>
           <p className="mt-0.5 text-[11.5px] text-muted font-mono">
-            โทร : <span className="text-foreground">{salesRep.tel}</span>
+            {t("phoneLabel")} : <span className="text-foreground">{salesRep.tel}</span>
           </p>
         </div>
 
         <a
           href={`tel:${salesRep.tel.replace(/[^+0-9]/g, "")}`}
-          aria-label={`โทรหา เซลล์ ${salesRep.nickname}`}
+          aria-label={t("callSalesAria", { name: salesRep.nickname })}
           className="relative shrink-0 inline-flex items-center gap-1 rounded-full bg-sky-600 text-white text-[11px] font-bold px-3 py-1.5 shadow-md shadow-sky-600/25 active:scale-95 transition-transform"
         >
           <Phone className="w-3 h-3" fill="currentColor" />
-          ติดต่อเซลล์
+          {t("contactSales")}
         </a>
       </section>
 
@@ -243,18 +247,18 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
             "ไม่ต้องมีไอคอนกระเป๋าพักเงิน และทำให้ทุกอย่างเป็นแถวเดียวกัน"). */}
         <div className="relative min-w-0 flex-1 flex items-baseline gap-1.5 pl-1.5">
           <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wider text-emerald-700">
-            กระเป๋าพักเงิน
+            {t("walletLabel")}
           </span>
           <span className="truncate text-[18px] font-black tracking-tight text-emerald-600">
             {walletText}
           </span>
-          <span className="shrink-0 text-[11px] font-bold text-emerald-500/80">บาท</span>
+          <span className="shrink-0 text-[11px] font-bold text-emerald-500/80">{t("baht")}</span>
         </div>
 
         {/* Right button — same pill style as "ติดต่อเซลล์" so both cards have
             matching CTAs. */}
         <span className="relative shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-600 text-white text-[11px] font-bold px-3 py-1.5 shadow-md shadow-emerald-600/25">
-          เติม +
+          {t("topupShort")}
         </span>
       </Link>
 
@@ -262,7 +266,7 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
               red dot + uppercase-tracked label, centered on mobile. */}
       <div className="flex items-center justify-center gap-1.5 pt-2 text-red-600 text-[10.5px] font-black tracking-[0.08em] uppercase">
         <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-red-600 shrink-0" />
-        บริการของเรา
+        {t("ourServices")}
       </div>
 
       {/* ── 5. 9-tile launchpad — 4-col × 3-row (8 active links + 1 disabled
@@ -280,21 +284,21 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
           if (item.comingSoon) {
             return (
               <div
-                key={item.label}
+                key={item.labelKey}
                 aria-disabled
                 className="flex flex-col items-center justify-start gap-1 px-1 py-2.5 rounded-xl cursor-not-allowed select-none"
               >
                 <span className="relative w-11 h-11 shrink-0">
                   <Image
                     src={item.icon}
-                    alt={item.label}
+                    alt={t(item.labelKey)}
                     fill
                     sizes="44px"
                     className="object-contain grayscale opacity-50"
                   />
                 </span>
                 <span className="text-[10.5px] leading-[1.2] text-center font-medium text-gray-400 line-clamp-1">
-                  {item.label}
+                  {t(item.labelKey)}
                 </span>
                 <span className="text-[8px] leading-none font-bold text-gray-400 uppercase tracking-wider">
                   Coming Soon
@@ -311,14 +315,14 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
               <span className="relative w-11 h-11 shrink-0">
                 <Image
                   src={item.icon}
-                  alt={item.label}
+                  alt={t(item.labelKey)}
                   fill
                   sizes="44px"
                   className="object-contain"
                 />
               </span>
               <span className="text-[10.5px] leading-[1.2] text-center font-medium text-foreground line-clamp-2">
-                {item.label}
+                {t(item.labelKey)}
               </span>
             </Link>
           );
@@ -333,14 +337,14 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
           <span className="relative w-11 h-11 shrink-0">
             <Image
               src={`${ICON_BASE}/pcs-log-out.png`}
-              alt="ออกจากระบบ"
+              alt={t("logout")}
               fill
               sizes="44px"
               className="object-contain"
             />
           </span>
           <span className="text-[10.5px] leading-[1.2] text-center font-medium text-foreground line-clamp-2">
-            ออกจากระบบ
+            {t("logout")}
           </span>
         </button>
       </section>
@@ -350,7 +354,7 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
               The strip is duplicated 2× so the `marquee` keyframe (defined
               in app/globals.css §@keyframes marquee: translateX(0→-50%))
               loops seamlessly. Pauses on hover/active for tap accessibility. */}
-      <section className="relative overflow-hidden rounded-2xl" aria-label="โปรโมชั่นและบริการ Pacred">
+      <section className="relative overflow-hidden rounded-2xl" aria-label={t("promoMarqueeAria")}>
         <div className="flex w-max gap-3 animate-[marquee_28s_linear_infinite] hover:[animation-play-state:paused]">
           {[...BOTTOM_BANNERS, ...BOTTOM_BANNERS].map((b, i) => (
             <Link
@@ -360,7 +364,7 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
             >
               <Image
                 src={b.src}
-                alt={b.alt}
+                alt={t(b.altKey)}
                 width={460}
                 height={140}
                 className="w-full h-auto"

@@ -146,7 +146,7 @@ export function BookingHero({ activeTab, seaMode, forceDefault = false, customTi
         {isDefault && (
           <div className="flex justify-between items-baseline mt-2 md:mt-3">
             <span className="text-[clamp(26px,7.3vw,28px)] md:text-[clamp(34px,4.2vw,56px)] font-black text-white [-webkit-text-stroke:1px_#7f1d1d] md:[-webkit-text-stroke:8px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_3px_8px_rgba(0,0,0,0.85),0_6px_18px_rgba(0,0,0,0.6)] tracking-tight leading-[1.1]">
-              เคลียร์ภาษี
+              {t("defaultLeft")}
             </span>
             <span className="text-[clamp(26px,7.3vw,28px)] md:text-[clamp(34px,4.2vw,56px)] font-black text-white [-webkit-text-stroke:1px_#7f1d1d] md:[-webkit-text-stroke:8px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_3px_8px_rgba(0,0,0,0.85),0_6px_18px_rgba(0,0,0,0.6)] tracking-tight leading-[1.1]">
               {t("defaultSub")}

@@ -28,6 +28,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { createPortal } from "react-dom";
 import { X, MapPin } from "lucide-react";
 import { editAddressAction } from "./add-address-action";
@@ -55,6 +56,7 @@ export function EditAddressModal({
     longitude: number | null;
   };
 }) {
+  const t = useTranslations("addressPage");
   const [open, setOpen] = useState(false);
 
   // Lock body scroll + wire Escape-to-close while the dialog is open.
@@ -80,9 +82,9 @@ export function EditAddressModal({
         type="button"
         onClick={() => setOpen(true)}
         className="rounded-full border border-amber-300 px-3 py-1 text-xs font-medium text-amber-600 hover:bg-amber-50"
-        title="แก้ไขข้อมูล"
+        title={t("editDataTitle")}
       >
-        แก้ไขที่อยู่
+        {t("editAddress")}
       </button>
 
       {open &&
@@ -91,7 +93,7 @@ export function EditAddressModal({
             {/* Backdrop */}
             <button
               type="button"
-              aria-label="ปิด"
+              aria-label={t("close")}
               onClick={() => setOpen(false)}
               className="absolute inset-0 bg-black/50"
             />
@@ -109,12 +111,12 @@ export function EditAddressModal({
                   className="inline-flex items-center gap-2 text-base font-bold text-foreground sm:text-lg"
                 >
                   <MapPin className="h-5 w-5 shrink-0 text-primary-600" />
-                  แก้ไขที่อยู่จัดส่งสินค้า
+                  {t("editModalTitle")}
                 </h2>
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  aria-label="ปิด"
+                  aria-label={t("close")}
                   className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted transition hover:bg-surface-alt hover:text-foreground"
                 >
                   <X className="h-5 w-5" />
@@ -145,7 +147,7 @@ export function EditAddressModal({
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
                       <label className={LABEL_CLASS} htmlFor="addressName">
-                        ชื่อจริง
+                        {t("firstName")}
                       </label>
                       <input
                         className={INPUT_CLASS}
@@ -153,14 +155,14 @@ export function EditAddressModal({
                         name="addressName"
                         type="text"
                         defaultValue={address.addressname ?? ""}
-                        placeholder="ชื่อจริง"
+                        placeholder={t("firstName")}
                         maxLength={200}
                         required
                       />
                     </div>
                     <div>
                       <label className={LABEL_CLASS} htmlFor="addressLastname">
-                        นามสกุล
+                        {t("lastName")}
                       </label>
                       <input
                         className={INPUT_CLASS}
@@ -168,7 +170,7 @@ export function EditAddressModal({
                         name="addressLastname"
                         type="text"
                         defaultValue={address.addresslastname ?? ""}
-                        placeholder="นามสกุล"
+                        placeholder={t("lastName")}
                         maxLength={200}
                         required
                       />
@@ -178,7 +180,7 @@ export function EditAddressModal({
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
                       <label className={LABEL_CLASS} htmlFor="addressTel">
-                        เบอร์โทรศัพท์ (สำหรับแจ้งส่งพัสดุ)
+                        {t("tel")}
                       </label>
                       <input
                         className={INPUT_CLASS}
@@ -187,7 +189,7 @@ export function EditAddressModal({
                         type="tel"
                         pattern="\d*"
                         defaultValue={address.addresstel ?? ""}
-                        placeholder="เบอร์โทร"
+                        placeholder={t("telPlaceholder")}
                         minLength={10}
                         maxLength={10}
                         required
@@ -195,7 +197,7 @@ export function EditAddressModal({
                     </div>
                     <div>
                       <label className={LABEL_CLASS} htmlFor="addressTel2">
-                        เบอร์โทรศัพท์สำรอง (ไม่จำเป็น)
+                        {t("tel2")}
                       </label>
                       <input
                         className={INPUT_CLASS}
@@ -204,7 +206,7 @@ export function EditAddressModal({
                         type="tel"
                         pattern="\d*"
                         defaultValue={address.addresstel2 ?? ""}
-                        placeholder="เบอร์โทร"
+                        placeholder={t("telPlaceholder")}
                         minLength={10}
                         maxLength={10}
                       />
@@ -213,8 +215,8 @@ export function EditAddressModal({
 
                   <div>
                     <label className={LABEL_CLASS} htmlFor="addressNo">
-                      ทึ่อยู่{" "}
-                      <span className="text-red-600">ชื่อหมู่บ้านและหมู่ที่*</span>
+                      {t("addressNo")}{" "}
+                      <span className="text-red-600">{t("addressNoEmphasis")}</span>
                     </label>
                     <input
                       className={INPUT_CLASS}
@@ -222,12 +224,12 @@ export function EditAddressModal({
                       name="addressNo"
                       type="text"
                       defaultValue={address.addressno ?? ""}
-                      placeholder="บ้านเลขที่ ถนน ซอย ชื่อหมู่บ้านและหมู่ที่*"
+                      placeholder={t("addressNoPlaceholder")}
                       maxLength={200}
                       required
                     />
                     <p className="mt-1 text-xs text-muted">
-                      กรุณากรอกบ้านเลขที่ ถนน ซอย ชื่อหมู่บ้านและหมู่ที่
+                      {t("addressNoHelp")}
                     </p>
                   </div>
 
@@ -237,7 +239,7 @@ export function EditAddressModal({
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
                       <label className={LABEL_CLASS} htmlFor="district">
-                        ตำบล/แขวง
+                        {t("subdistrict")}
                       </label>
                       <input
                         className={INPUT_CLASS}
@@ -245,13 +247,13 @@ export function EditAddressModal({
                         name="district"
                         type="text"
                         defaultValue={address.addresssubdistrict ?? ""}
-                        placeholder="ตำบล/แขวง"
+                        placeholder={t("subdistrict")}
                         required
                       />
                     </div>
                     <div>
                       <label className={LABEL_CLASS} htmlFor="amphoe">
-                        อำเภอ/เขต
+                        {t("district")}
                       </label>
                       <input
                         className={INPUT_CLASS}
@@ -259,13 +261,13 @@ export function EditAddressModal({
                         name="amphoe"
                         type="text"
                         defaultValue={address.addressdistrict ?? ""}
-                        placeholder="อำเภอ/เขต"
+                        placeholder={t("district")}
                         required
                       />
                     </div>
                     <div>
                       <label className={LABEL_CLASS} htmlFor="province">
-                        จังหวัด
+                        {t("province")}
                       </label>
                       <input
                         className={INPUT_CLASS}
@@ -273,13 +275,13 @@ export function EditAddressModal({
                         name="province"
                         type="text"
                         defaultValue={address.addressprovince ?? ""}
-                        placeholder="จังหวัด"
+                        placeholder={t("province")}
                         required
                       />
                     </div>
                     <div>
                       <label className={LABEL_CLASS} htmlFor="zipcode">
-                        รหัสไปรษณีย์
+                        {t("zipcode")}
                       </label>
                       <input
                         className={INPUT_CLASS}
@@ -288,7 +290,7 @@ export function EditAddressModal({
                         type="text"
                         pattern="\d*"
                         defaultValue={address.addresszipcode ?? ""}
-                        placeholder="รหัสไปรษณีย์"
+                        placeholder={t("zipcode")}
                         required
                       />
                     </div>
@@ -296,7 +298,7 @@ export function EditAddressModal({
 
                   <div>
                     <label className={LABEL_CLASS} htmlFor="addressNote">
-                      หมายเหตุ (ไม่จำเป็น)
+                      {t("noteOptional")}
                     </label>
                     <textarea
                       className={INPUT_CLASS}
@@ -304,7 +306,7 @@ export function EditAddressModal({
                       name="addressNote"
                       rows={3}
                       defaultValue={address.addressnote ?? ""}
-                      placeholder="หมายเหตุ"
+                      placeholder={t("note")}
                       maxLength={500}
                     ></textarea>
                   </div>
@@ -315,14 +317,14 @@ export function EditAddressModal({
                       onClick={() => setOpen(false)}
                       className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-foreground hover:bg-surface-alt dark:bg-surface"
                     >
-                      ยกเลิก
+                      {t("cancel")}
                     </button>
                     <button
                       type="submit"
                       name="edit"
                       className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-red-700"
                     >
-                      บันทึก
+                      {t("save")}
                     </button>
                   </div>
                 </form>

@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { requireAuth } from "@/lib/auth/require-auth";
 import { MyIncidentsPanel } from "@/components/observability/my-incidents-panel";
 
@@ -14,15 +15,15 @@ import { MyIncidentsPanel } from "@/components/observability/my-incidents-panel"
 export const dynamic = "force-dynamic";
 
 export default async function MyIssuesPage() {
+  const t = await getTranslations("myIssuesPage");
   const { user } = await requireAuth();
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6 sm:py-8 space-y-5">
       <header>
-        <h1 className="text-xl font-bold sm:text-2xl">ปัญหาที่ฉันแจ้ง</h1>
+        <h1 className="text-xl font-bold sm:text-2xl">{t("title")}</h1>
         <p className="mt-1 text-sm text-muted">
-          ระบบ Pacred บันทึกข้อผิดพลาดที่เกิดขึ้นระหว่างใช้งานให้คุณอัตโนมัติ —
-          ไม่ต้องกดส่งเอง. หน้านี้แสดงสถานะการแก้ไขของแต่ละปัญหา
+          {t("subtitle")}
         </p>
       </header>
 

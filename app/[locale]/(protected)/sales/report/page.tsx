@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveSalesAgent } from "../team-map";
@@ -114,13 +115,14 @@ function lastDayOfThisMonth(): string {
   ).padStart(2, "0")}`;
 }
 
-// report-user-sales.php L122-126 — the usStatus → Thai label switch
-// used in the search-result caption.
+// report-user-sales.php L122-126 — the usStatus → label switch used in the
+// search-result caption. Keyed on the logic status codes ("1"/"2"/"3"/"all");
+// the values are stable i18n keys (resolved via t()), not display literals.
 const US_STATUS_LABEL: Record<string, string> = {
-  "1": "ยังไม่เบิกจ่าย",
-  "2": "กำลังดำเนินการ",
-  "3": "เบิกจ่ายแล้ว",
-  all: "ทั้งหมด",
+  "1": "usStatusUnpaid",
+  "2": "usStatusProcessing",
+  "3": "usStatusPaid",
+  all: "usStatusAll",
 };
 
 // PHP DATE(date) / TIME(date) — split a SQL timestamp into the two
@@ -136,6 +138,7 @@ export default async function SalesReportPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const t = await getTranslations("salesPort");
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
 
@@ -289,7 +292,7 @@ export default async function SalesReportPage({
           {/* ── Header: title ── */}
           <div className="border-b border-border px-3 py-3 md:px-5 md:py-4">
             <h3 className="text-base md:text-xl font-bold text-foreground">
-              รายงานยอดขายทีม {userIDMain}
+              {t("teamSalesReportTitle", { userIDMain })}
             </h3>
           </div>
 
@@ -305,22 +308,22 @@ export default async function SalesReportPage({
             >
               <div className="min-w-0">
                 <label className="block text-xs font-medium text-muted mb-1" htmlFor="usStatus">
-                  สถานะรายการจ่ายเงินส่วนแบ่ง
+                  {t("commissionStatusFilter")}
                 </label>
                 <select
                   className="usStatus w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base md:text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
                   name="usStatus"
                   defaultValue={usStatusRaw}
                 >
-                  <option value="all">ทั้งหมด</option>
-                  <option value="1">ยังไม่เบิกจ่าย</option>
-                  <option value="2">กำลังดำเนินการ</option>
-                  <option value="3">เบิกจ่ายแล้ว</option>
+                  <option value="all">{t("usStatusAll")}</option>
+                  <option value="1">{t("usStatusUnpaid")}</option>
+                  <option value="2">{t("usStatusProcessing")}</option>
+                  <option value="3">{t("usStatusPaid")}</option>
                 </select>
               </div>
               <div className="min-w-0">
                 <label className="block text-xs font-medium text-muted mb-1" htmlFor="date">
-                  วันที่ออเดอร์สำเร็จ
+                  {t("orderCompletedDate")}
                 </label>
                 <input
                   type="text"
@@ -335,15 +338,19 @@ export default async function SalesReportPage({
                 name="report_forwarderTable"
                 value="1"
               >
-                <i className="fas fa-search" aria-hidden></i> ค้นหาข้อมูล
+                <i className="fas fa-search" aria-hidden></i> {t("search")}
               </button>
             </form>
 
             {/* the search-result caption */}
             {didSearch && (
               <p className="mt-3 text-xs md:text-sm text-red-600">
-                ผลลัพธ์การค้นหา โดยสถานะ : {US_STATUS_LABEL[usStatusRaw] ?? ""}{" "}
-                ตั้งแต่วันที่ : {dateRaw}
+                {t("searchResultCaption", {
+                  status: US_STATUS_LABEL[usStatusRaw]
+                    ? t(US_STATUS_LABEL[usStatusRaw])
+                    : "",
+                  date: dateRaw,
+                })}
               </p>
             )}
 
@@ -351,7 +358,7 @@ export default async function SalesReportPage({
 
             {/* ── The report list ── */}
             {rows.length === 0 ? (
-              <p className="py-12 text-center text-sm text-muted">ไม่พบรายการ</p>
+              <p className="py-12 text-center text-sm text-muted">{t("noItemsFound")}</p>
             ) : (
               <>
                 {/* ── Mobile: stacked cards (md:hidden) ── */}
@@ -365,7 +372,7 @@ export default async function SalesReportPage({
                         <span className="min-w-0 break-all font-mono text-sm font-semibold text-foreground">
                           {row.fTrackingCHN || `#${row.usID}`}
                         </span>
-                        <span className="shrink-0">{fStatusBadge(row.fStatus)}</span>
+                        <span className="shrink-0">{fStatusBadge(row.fStatus, t)}</span>
                       </div>
                       <p className="mt-1 font-mono text-xs text-muted">{row.userID}</p>
                       <div className="mt-2.5 grid grid-cols-3 gap-1 border-t border-dashed border-border pt-2 text-center">
@@ -382,7 +389,7 @@ export default async function SalesReportPage({
                           </div>
                         </div>
                         <div>
-                          <div className="text-[10px] text-muted">ค่าฝากนำเข้าจีน</div>
+                          <div className="text-[10px] text-muted">{t("chinaImportFee")}</div>
                           <div className="text-sm font-bold tabular-nums font-mono text-red-600">
                             {numberFormat(row.fTotalPrice, 2)}
                           </div>
@@ -390,9 +397,9 @@ export default async function SalesReportPage({
                       </div>
                       <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-dashed border-border pt-2">
                         <span className="text-[11px] text-muted">
-                          {row.dateLabel} {row.timeLabel} น.
+                          {row.dateLabel} {row.timeLabel} {t("timeSuffix")}
                         </span>
-                        <span>{nameStatusUserPay(row.usStatus)}</span>
+                        <span>{nameStatusUserPay(row.usStatus, t)}</span>
                       </div>
                     </div>
                   ))}
@@ -404,14 +411,14 @@ export default async function SalesReportPage({
                   <table id="myTable" className="dataTable w-full text-sm">
                     <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                       <tr>
-                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">วันที่สถานะสำเร็จ</th>
-                        <th className="px-3 py-3 font-medium whitespace-nowrap">รหัสสมาชิก</th>
-                        <th className="px-3 py-3 font-medium whitespace-nowrap">เลขแทรคกิ้ง</th>
-                        <th className="px-3 py-3 font-medium text-right whitespace-nowrap">ปริมาตร(CBM)</th>
-                        <th className="px-3 py-3 font-medium text-right whitespace-nowrap">น้ำหนัก(Kg)</th>
-                        <th className="px-3 py-3 font-medium text-right whitespace-nowrap">ค่าฝากนำเข้าจีน</th>
-                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">สถานะ</th>
-                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">สถานะเบิกเงินส่วนแบ่ง</th>
+                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">{t("statusCompletedDate")}</th>
+                        <th className="px-3 py-3 font-medium whitespace-nowrap">{t("memberCode")}</th>
+                        <th className="px-3 py-3 font-medium whitespace-nowrap">{t("trackingNumber")}</th>
+                        <th className="px-3 py-3 font-medium text-right whitespace-nowrap">{t("volumeCbm")}</th>
+                        <th className="px-3 py-3 font-medium text-right whitespace-nowrap">{t("weightKg")}</th>
+                        <th className="px-3 py-3 font-medium text-right whitespace-nowrap">{t("chinaImportFee")}</th>
+                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">{t("status")}</th>
+                        <th className="px-3 py-3 font-medium text-center whitespace-nowrap">{t("commissionWithdrawStatus")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -421,7 +428,7 @@ export default async function SalesReportPage({
                           className="border-t border-border hover:bg-surface-alt/30"
                         >
                           <td className="px-3 py-2.5 text-center text-xs text-muted whitespace-nowrap">
-                            {row.dateLabel} {row.timeLabel} น.
+                            {row.dateLabel} {row.timeLabel} {t("timeSuffix")}
                           </td>
                           <td className="px-3 py-2.5 font-mono text-xs text-foreground whitespace-nowrap">
                             {row.userID}
@@ -439,10 +446,10 @@ export default async function SalesReportPage({
                             {numberFormat(row.fTotalPrice, 2)}
                           </td>
                           <td className="px-3 py-2.5 text-center">
-                            {fStatusBadge(row.fStatus)}
+                            {fStatusBadge(row.fStatus, t)}
                           </td>
                           <td className="px-3 py-2.5 text-center">
-                            {nameStatusUserPay(row.usStatus)}
+                            {nameStatusUserPay(row.usStatus, t)}
                           </td>
                         </tr>
                       ))}

@@ -8,6 +8,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { CreditCard, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { customerPayCreditFromWallet, type CustomerCreditState } from "@/actions/credit";
 
@@ -18,6 +19,7 @@ type Props = {
 
 export function CreditLinePanel({ credit, walletBalance }: Props) {
   const router = useRouter();
+  const t = useTranslations("wallet");
   const [pending, startTransition] = useTransition();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -54,14 +56,17 @@ export function CreditLinePanel({ credit, walletBalance }: Props) {
       if (res.ok) {
         setOk(
           res.data?.already_settled
-            ? "รายการนี้ถูกชำระไปแล้ว"
-            : `ชำระแล้ว ฿${(res.data?.amount_paid_thb ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })} (เหลือค้าง ฿${(res.data?.new_outstanding_thb ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })})`,
+            ? t("creditAlreadySettled")
+            : t("creditPaidToast", {
+                paid: (res.data?.amount_paid_thb ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 }),
+                remaining: (res.data?.new_outstanding_thb ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 }),
+              }),
         );
         setConfirmOpen(false);
         router.refresh();
         setTimeout(() => setOk(null), 5000);
       } else {
-        setErr(res.error ?? "เกิดข้อผิดพลาด");
+        setErr(res.error ?? t("genericError"));
       }
     });
   }
@@ -72,29 +77,29 @@ export function CreditLinePanel({ credit, walletBalance }: Props) {
         <div className="flex items-center gap-2">
           <CreditCard className="w-5 h-5 text-blue-700" />
           <h3 className="font-bold text-base text-blue-900 dark:text-blue-100">
-            วงเงินเครดิต (Pay later)
+            {t("creditLineTitle")}
           </h3>
         </div>
         <span className="text-[10px] font-mono uppercase text-blue-700/60">
-          {credit.credit_terms_days} วัน
+          {t("creditTermsDays", { days: credit.credit_terms_days })}
         </span>
       </div>
 
       <div className="mt-4 grid sm:grid-cols-3 gap-3">
         <div>
-          <p className="text-[10px] font-semibold text-blue-700/80">วงเงินทั้งหมด</p>
+          <p className="text-[10px] font-semibold text-blue-700/80">{t("creditLimitTotal")}</p>
           <p className="mt-0.5 text-lg font-bold font-mono text-blue-900">
             ฿{limit.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
           </p>
         </div>
         <div>
-          <p className="text-[10px] font-semibold text-red-700/80">ยอดค้างชำระ</p>
+          <p className="text-[10px] font-semibold text-red-700/80">{t("creditOutstanding")}</p>
           <p className="mt-0.5 text-lg font-bold font-mono text-red-700">
             ฿{outstanding.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
           </p>
         </div>
         <div>
-          <p className="text-[10px] font-semibold text-emerald-700/80">เครดิตคงเหลือ</p>
+          <p className="text-[10px] font-semibold text-emerald-700/80">{t("creditRemaining")}</p>
           <p className={`mt-0.5 text-lg font-bold font-mono ${overLimit ? "text-red-700" : "text-emerald-700"}`}>
             ฿{available.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
           </p>
@@ -109,14 +114,14 @@ export function CreditLinePanel({ credit, walletBalance }: Props) {
           />
         </div>
         <p className="mt-1 text-[10px] text-blue-700/70">
-          ใช้ไป {owedPct.toFixed(0)}% ของวงเงิน
+          {t("creditUsedPct", { pct: owedPct.toFixed(0) })}
         </p>
       </div>
 
       {overLimit && (
         <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 p-2.5 text-xs text-red-800">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-          <p>ใช้เครดิตเกินวงเงินที่กำหนด — กรุณาชำระยอดค้างก่อนใช้บริการเพิ่ม</p>
+          <p>{t("creditOverLimitWarning")}</p>
         </div>
       )}
 
@@ -133,16 +138,16 @@ export function CreditLinePanel({ credit, walletBalance }: Props) {
               disabled={pending}
             >
               <CreditCard className="w-4 h-4" />
-              ชำระยอดค้างเครดิต {partial ? `บางส่วน ฿${settleAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}` : `฿${outstanding.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}
+              {t("payCreditBtn")} {partial ? t("payCreditPartialSuffix", { amount: settleAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 }) }) : t("payCreditFullSuffix", { amount: outstanding.toLocaleString("th-TH", { minimumFractionDigits: 2 }) })}
             </button>
           ) : (
             <p className="text-xs text-muted">
-              ยอดในกระเป๋าหลักไม่พอชำระ — เติมเงินก่อน
+              {t("payCreditInsufficient")}
             </p>
           )}
           {partial && (
             <span className="text-[10px] text-amber-700 bg-amber-100 rounded-full px-2 py-0.5 font-medium">
-              ชำระบางส่วนจากยอดในกระเป๋า
+              {t("payCreditPartialBadge")}
             </span>
           )}
         </div>
@@ -159,13 +164,17 @@ export function CreditLinePanel({ credit, walletBalance }: Props) {
             className="w-full max-w-sm rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h4 className="text-base font-bold">ยืนยันการชำระเครดิต</h4>
+            <h4 className="text-base font-bold">{t("confirmPayTitle")}</h4>
             <p className="mt-2 text-sm text-muted">
-              ชำระยอดค้างเครดิต <span className="font-mono font-bold text-foreground">฿{settleAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span> โดยตัดจากกระเป๋าหลัก (เหลือ ฿{(walletBalance - settleAmount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}) ?
+              {t.rich("confirmPayBody", {
+                amount: settleAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 }),
+                remaining: (walletBalance - settleAmount).toLocaleString("th-TH", { minimumFractionDigits: 2 }),
+                b: (chunks) => <span className="font-mono font-bold text-foreground">{chunks}</span>,
+              })}
             </p>
             {partial && (
               <p className="mt-2 text-xs text-amber-700 bg-amber-50 rounded p-2">
-                ยอดในกระเป๋าไม่พอชำระทั้งหมด — จะชำระบางส่วน ยังเหลือค้าง ฿{(outstanding - settleAmount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                {t("confirmPayPartial", { remaining: (outstanding - settleAmount).toLocaleString("th-TH", { minimumFractionDigits: 2 }) })}
               </p>
             )}
             <div className="mt-4 flex justify-end gap-2">
@@ -175,7 +184,7 @@ export function CreditLinePanel({ credit, walletBalance }: Props) {
                 disabled={pending}
                 className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt"
               >
-                ยกเลิก
+                {t("cancel")}
               </button>
               <button
                 type="button"
@@ -183,7 +192,7 @@ export function CreditLinePanel({ credit, walletBalance }: Props) {
                 disabled={pending}
                 className="rounded-lg bg-blue-600 text-white px-3 py-1.5 text-sm font-bold hover:bg-blue-700 disabled:opacity-50"
               >
-                {pending ? "กำลังชำระ..." : "ยืนยันชำระ"}
+                {pending ? t("payingInProgress") : t("confirmPayBtn")}
               </button>
             </div>
           </div>

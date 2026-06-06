@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Inbox } from "lucide-react";
@@ -102,6 +103,7 @@ export default async function AddressesPage({
 }: {
   searchParams: Promise<{ saved?: string; error?: string }>;
 }) {
+  const t = await getTranslations("addressPage");
   // Feedback flags set by add/edit/delete/set-main actions (?saved=1 / ?error=…).
   const { saved, error } = await searchParams;
   const data = await getCurrentUserWithProfile();
@@ -230,7 +232,7 @@ export default async function AddressesPage({
               /* Empty state */
               <div className="flex flex-col items-center gap-3 py-12 text-center">
                 <Inbox className="h-10 w-10 text-muted/50" />
-                <p className="text-sm text-muted">ยังไม่มีที่อยู่จัดส่ง</p>
+                <p className="text-sm text-muted">{t("emptyList")}</p>
                 <AddAddressModal
                   userName={userName}
                   userLastName={userLastName}
@@ -260,11 +262,11 @@ export default async function AddressesPage({
                       >
                         <div className="flex items-start justify-between gap-2">
                           <span className="text-xs font-semibold text-muted">
-                            ลำดับ {no}
+                            {t("itemNo", { no })}
                           </span>
                           {isMain && (
                             <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-700">
-                              ที่อยู่หลัก
+                              {t("mainAddress")}
                             </span>
                           )}
                         </div>
@@ -274,7 +276,7 @@ export default async function AddressesPage({
                         />
                         {row.addressnote && (
                           <p className="mt-1.5 border-t border-dashed border-border pt-1.5 text-xs text-muted">
-                            หมายเหตุ: {row.addressnote}
+                            {t("note")}: {row.addressnote}
                           </p>
                         )}
                         <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-dashed border-border pt-2.5">
@@ -288,7 +290,7 @@ export default async function AddressesPage({
                               // address.php L605 — the main address shows a
                               // static "ที่อยู่หลัก" button.
                               <button className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-600">
-                                ที่อยู่หลัก
+                                {t("mainAddress")}
                               </button>
                             ) : (
                               <SetMainAddressButton addressId={row.addressid} />
@@ -310,10 +312,10 @@ export default async function AddressesPage({
                   >
                     <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                       <tr>
-                        <th className="px-4 py-3 font-medium">ลำดับ</th>
-                        <th className="px-4 py-3 font-medium">ชื่อสถานที่</th>
-                        <th className="px-4 py-3 font-medium">หมายเหตุ</th>
-                        <th className="px-4 py-3 text-center font-medium">ตัวเลือก</th>
+                        <th className="px-4 py-3 font-medium">{t("colNo")}</th>
+                        <th className="px-4 py-3 font-medium">{t("colPlace")}</th>
+                        <th className="px-4 py-3 font-medium">{t("note")}</th>
+                        <th className="px-4 py-3 text-center font-medium">{t("colOptions")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -356,7 +358,7 @@ export default async function AddressesPage({
                                     // address.php L605 — the main address
                                     // shows a static "ที่อยู่หลัก" button.
                                     <button className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-600">
-                                      ที่อยู่หลัก
+                                      {t("mainAddress")}
                                     </button>
                                   ) : (
                                     <SetMainAddressButton addressId={row.addressid} />
