@@ -39,6 +39,7 @@ import {
   type QuoteUnit,
 } from "@/lib/validators/freight-quote";
 import { composeFreightQuote } from "@/lib/freight/rate-engine";
+import { lookupChinaFreightCostThb } from "@/lib/freight/rate-lookup";
 
 const ROLES_CREATE  = ["super", "ops", "sales_admin", "accounting"] as const;
 const ROLES_APPROVE = ["super"] as const;
@@ -295,7 +296,13 @@ export async function adminComposeQuoteFromRateCard(
     if (!parent) return { ok: false, error: "not_found" };
     if (parent.status !== "draft") return { ok: false, error: "not_draft" };
 
-    // Price from the real rate cards (pure, no IO).
+    // 0145 — look up the admin-maintained China freight cost (FX-converted) so the
+    // quote's profit is a TRUE NET margin. null (no rate seeded) → gross fallback.
+    const chinaFreightCostThb = await lookupChinaFreightCostThb(d.mode, {
+      cbm: d.cbm, kgm: d.kgm, containers: d.containers,
+    });
+
+    // Price from the real rate cards (pure, no IO) + the looked-up China cost.
     const quote = composeFreightQuote({
       mode:          d.mode,
       incoterm:      d.incoterm,
@@ -304,6 +311,7 @@ export async function adminComposeQuoteFromRateCard(
       cbm:           d.cbm,
       kgm:           d.kgm,
       containers:    d.containers,
+      chinaFreightCostThb: chinaFreightCostThb ?? undefined,
     });
     if (quote.lines.length === 0) {
       return { ok: false, error: "rate_card_produced_no_lines" };
