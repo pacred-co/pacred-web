@@ -973,6 +973,46 @@ export async function adminUpdateProfileFields(
       }
     }
 
+    // 2026-06-06 (ภูม flag · เดฟ note): mirror avatar_url → tb_admin.adminPicture
+    // when an admin's avatar changes — same idea as the customer-side mirror
+    // in actions/profile-avatar.ts. The legacy admin reader (e.g. the staff
+    // directory on /admin/admins, the sidebar staff-pill, and any legacy
+    // PHP-shaped surface that still queries tb_admin) reads `adminPicture`;
+    // without the mirror it shows the old picture forever after a profile
+    // update. The bridge is `admin_contact_extras.legacy_admin_id` =
+    // tb_admin.adminID.
+    //
+    // Only fires when `avatar_url` was actually in the form payload — so
+    // editing just the name doesn't waste a round-trip. Non-fatal: if the
+    // mirror fails (e.g. no legacy_admin_id), modern surfaces still see the
+    // new picture via profiles.avatar_url.
+    if (d.avatar_url !== undefined) {
+      const { data: extras, error: extrasReadErr } = await admin
+        .from("admin_contact_extras")
+        .select("legacy_admin_id")
+        .eq("profile_id", d.profile_id)
+        .maybeSingle<{ legacy_admin_id: string | null }>();
+      if (extrasReadErr) {
+        console.error(
+          "[adminUpdateProfileFields tb_admin mirror · extras read] non-fatal",
+          { code: extrasReadErr.code, message: extrasReadErr.message },
+        );
+      }
+      const legacyAdminId = extras?.legacy_admin_id ?? null;
+      if (legacyAdminId) {
+        const { error: tbErr } = await admin
+          .from("tb_admin")
+          .update({ adminPicture: d.avatar_url ?? null })
+          .eq("adminID", legacyAdminId);
+        if (tbErr) {
+          console.error(
+            "[adminUpdateProfileFields tb_admin.adminPicture mirror] non-fatal",
+            { code: tbErr.code, message: tbErr.message, legacyAdminId },
+          );
+        }
+      }
+    }
+
     // ── HR sidecar (admin_contact_extras) — UPSERT ─────────────
     // Only fire when at least one HR field was provided; otherwise an
     // UPSERT with all-null columns would clear a row the form simply
