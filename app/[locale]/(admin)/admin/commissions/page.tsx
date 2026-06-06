@@ -6,6 +6,8 @@ import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { computeCommission } from "@/lib/sales-commission/calc";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportCommissionsAll } from "@/actions/admin/export/commissions";
 
 /**
  * /admin/commissions — sales-rep commission queue + top earners.
@@ -189,6 +191,30 @@ export default async function AdminCommissionsPage({
   const offset = (page - 1) * DEFAULT_PAGE_SIZE;
   const pagePayouts = payouts.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
+  // ── CSV export of the withdrawal-payout queue (owner directive 2026-06-07) ──
+  // Columns mirror the on-screen queue table 1:1 (money as formatted string,
+  // dates sliced to YYYY-MM-DD, codes as-is). "หน้านี้" exports the displayed
+  // page; "ทั้งหมด" re-runs the SAME status filter unpaginated (drift-free) +
+  // writes an admin_export_log audit row.
+  const csvCols: CsvCol[] = [
+    { key: "id", label: "เลขที่" },
+    { key: "useridmain", label: "ทีม" },
+    { key: "admincreate", label: "ผู้สร้าง" },
+    { key: "amount", label: "รับสุทธิ" },
+    { key: "status", label: "สถานะ" },
+    { key: "requested_at", label: "ขอเมื่อ" },
+    { key: "paid_at", label: "จ่ายเมื่อ" },
+  ];
+  const csvRows: CsvRow[] = pagePayouts.map((p) => ({
+    id: p.id,
+    useridmain: p.useridmain ?? "",
+    admincreate: p.admincreate ?? "",
+    amount: Number(p.amount ?? 0).toFixed(2),
+    status: STATUS_LABEL[p.status] ?? p.status,
+    requested_at: p.date ? p.date.slice(0, 10) : "",
+    paid_at: p.dateslip ? p.dateslip.slice(0, 10) : "",
+  }));
+
   return (
     <>
       <PageTopMenubar items={DISBURSEMENT_MENUBAR} activeHref="/admin/commissions" />
@@ -297,13 +323,24 @@ export default async function AdminCommissionsPage({
 
         {/* Withdrawal queue/history */}
         <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
-          <div className="px-5 py-3 border-b border-border flex items-baseline justify-between gap-3">
-            <h2 className="font-bold text-sm">📋 คำขอเบิกค่าคอม</h2>
-            {payouts.length > 0 && (
-              <p className="text-xs text-muted">
-                {payouts.length} แถว · รวม <span className="font-mono font-bold text-primary-700">{thb(sumAmount)}</span>
-              </p>
-            )}
+          <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-baseline gap-3 flex-wrap">
+              <h2 className="font-bold text-sm">📋 คำขอเบิกค่าคอม</h2>
+              {payouts.length > 0 && (
+                <p className="text-xs text-muted">
+                  {payouts.length} แถว · รวม <span className="font-mono font-bold text-primary-700">{thb(sumAmount)}</span>
+                </p>
+              )}
+            </div>
+            <CsvButton
+              rows={csvRows}
+              cols={csvCols}
+              filename="commissions-payouts.csv"
+              fetchAll={async () => {
+                "use server";
+                return exportCommissionsAll(status);
+              }}
+            />
           </div>
           {payouts.length === 0 ? (
             <p className="p-12 text-center text-sm text-muted">

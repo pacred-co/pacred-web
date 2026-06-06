@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { exportTaxInvoicesAll } from "@/actions/admin/export/tax-invoices";
 import { PrintReportButton } from "./print-button";
 
 export const dynamic = "force-dynamic";
@@ -241,6 +243,45 @@ export default async function AdminTaxInvoicesPage({
           >
             + สร้างใบกำกับภาษี
           </span>
+          <CsvButton
+            filename="ใบกำกับภาษีขาย.csv"
+            rows={rows.map((r): CsvRow => ({
+              serial_no: r.serial_no ?? "",
+              doc_ref: r.order_h_no
+                ? `ฝากสั่ง · ${r.order_h_no}`
+                : r.forwarder_f_no
+                  ? `ฝากนำเข้า · ${r.forwarder_f_no}`
+                  : "",
+              buyer_name: r.buyer_name,
+              buyer_tax_id: r.buyer_tax_id,
+              member_code: r.profile?.member_code ?? "",
+              customer_name: [r.profile?.first_name, r.profile?.last_name].filter(Boolean).join(" "),
+              issued_date: (r.issued_at ?? r.created_at)?.slice(0, 10) ?? "",
+              subtotal_thb: Number(r.subtotal_thb || 0).toFixed(2),
+              vat_thb: Number(r.vat_thb || 0).toFixed(2),
+              total_thb: Number(r.total_thb || 0).toFixed(2),
+              status: STATUS_LABEL[r.status] ?? r.status,
+            }))}
+            fetchAll={async () => {
+              "use server";
+              // Export the FULL filtered tax-invoice list (all pages) — audited
+              // via admin_export_log (buyer name + tax IDs are PII · RD Code 86).
+              return exportTaxInvoicesAll({ tab, dateFrom, dateTo, search });
+            }}
+            cols={[
+              { key: "serial_no",     label: "เลขที่เอกสาร" },
+              { key: "doc_ref",       label: "อ้างอิงงาน" },
+              { key: "buyer_name",    label: "ชื่อผู้ซื้อ" },
+              { key: "buyer_tax_id",  label: "เลขผู้เสียภาษี" },
+              { key: "member_code",   label: "รหัสสมาชิก" },
+              { key: "customer_name", label: "ชื่อลูกค้า" },
+              { key: "issued_date",   label: "วันที่ออก" },
+              { key: "subtotal_thb",  label: "มูลค่าสุทธิ" },
+              { key: "vat_thb",       label: "VAT" },
+              { key: "total_thb",     label: "รวมทั้งสิ้น" },
+              { key: "status",        label: "สถานะ" },
+            ]}
+          />
           <PrintReportButton />
         </div>
       </div>

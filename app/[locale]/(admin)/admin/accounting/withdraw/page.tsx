@@ -3,6 +3,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportAccWithdrawAll } from "@/actions/admin/export/acc-withdraw";
 
 /**
  * Admin > "ถอนเงิน โอนโดยตรง" — a FAITHFUL 1:1 TRANSCRIPTION of
@@ -354,6 +356,33 @@ export default async function AdminAccountingWithdrawPage({
     }
   }
 
+  // ── CSV export (owner directive 2026-06-07: accounting reconciliation) ──
+  // Columns mirror the on-screen 9-column ledger header order. "⬇ CSV หน้านี้"
+  // exports the displayed page; "⬇ CSV ทั้งหมด" re-runs the same filtered query
+  // for the WHOLE date range (capped + audited) via the co-located action.
+  const csvCols: CsvCol[] = [
+    { key: "date",            label: "วันที่ทำรายการ" },
+    { key: "dateslip",        label: "วันที่โอนคืน" },
+    { key: "id",              label: "เลขออเดอร์" },
+    { key: "status",          label: "สถานะรายการ" },
+    { key: "amount",          label: "ยอดเงินที่ถอน" },
+    { key: "amount_refunded", label: "เงินที่โอนคืน" },
+    { key: "service_fee",     label: "ค่าบริการ" },
+    { key: "userid",          label: "รหัสสมาชิก" },
+    { key: "customer",        label: "ชื่อ-นามสกุล" },
+  ];
+  const csvRows: CsvRow[] = pageRows.map((row) => ({
+    date: row.date ?? "",
+    dateslip: row.dateslip ?? "",
+    id: row.id,
+    status: statusName(row.status),
+    amount: numberFormat2(row.amount),
+    amount_refunded: numberFormat2(row.amount),
+    service_fee: numberFormat2(0),
+    userid: row.userid,
+    customer: `${row.username} ${row.userlastname}`.trim(),
+  }));
+
   return (
     <div className="pcs-legacy">
       {/* Legacy admin chrome + page-specific CSS — both served as
@@ -482,6 +511,20 @@ export default async function AdminAccountingWithdrawPage({
                               >
                                 คำอธิบายระบบ
                               </span>
+                            </div>
+                            {/* CSV export (owner directive 2026-06-07) — page +
+                                whole-range. Drift-free server action reuses the
+                                same filtered query (audited) for "ทั้งหมด". */}
+                            <div className="mt-2 flex justify-end">
+                              <CsvButton
+                                rows={csvRows}
+                                cols={csvCols}
+                                filename={`ถอนเงินโอนโดยตรง-${startDate}_${endDate}.csv`}
+                                fetchAll={async () => {
+                                  "use server";
+                                  return exportAccWithdrawAll({ startDate, endDate });
+                                }}
+                              />
                             </div>
                           </div>
                         </div>

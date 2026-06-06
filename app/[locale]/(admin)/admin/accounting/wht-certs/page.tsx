@@ -3,6 +3,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
 import { getWhtCertQueue } from "@/actions/admin/wht-cert";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportWhtCertsAll } from "@/actions/admin/export/acc-wht-certs";
 import { WhtCertRowActions } from "./wht-cert-row-actions";
 
 /**
@@ -68,6 +70,31 @@ export default async function AdminWhtCertsPage({
     status === "all"      ? [...queue.pending, ...queue.received, ...queue.waived] :
     queue.pending;
 
+  // CSV export — mirror the on-screen table columns (money/rate as the same
+  // formatted strings, dates sliced, codes as-is).
+  const csvCols: CsvCol[] = [
+    { key: "userid",      label: "รหัสลูกค้า" },
+    { key: "invoice",     label: "ใบกำกับ" },
+    { key: "wht_class",   label: "ประเภท WHT" },
+    { key: "base_thb",    label: "ฐาน (บาท)" },
+    { key: "rate_pct",    label: "อัตรา (%)" },
+    { key: "wht_thb",     label: "WHT (บาท)" },
+    { key: "cert_status", label: "สถานะ" },
+    { key: "cert_number", label: "cert#" },
+    { key: "created_at",  label: "ลงทะเบียน" },
+  ];
+  const csvRows: CsvRow[] = visible.map((e) => ({
+    userid:      e.userid,
+    invoice:     e.invoiceSerial ?? (e.invoiceId ? `TI-${e.invoiceId}` : "—"),
+    wht_class:   CLASS_LABEL[e.whtClass] ?? e.whtClass,
+    base_thb:    e.whtBaseThb.toFixed(2),
+    rate_pct:    e.whtRatePct.toFixed(2),
+    wht_thb:     e.whtAmountThb.toFixed(2),
+    cert_status: STATUS_LABEL[e.certStatus] ?? e.certStatus,
+    cert_number: e.certNumber ?? "",
+    created_at:  e.createdAt ? e.createdAt.slice(0, 10) : "",
+  }));
+
   return (
     <>
       <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting/wht-certs" />
@@ -131,8 +158,19 @@ export default async function AdminWhtCertsPage({
           </section>
         )}
 
-        {/* Status filter chips + customer clear */}
+        {/* Status filter chips + customer clear + CSV export */}
         <nav className="flex flex-wrap gap-2 items-center">
+          <div className="ml-auto order-last sm:order-none">
+            <CsvButton
+              rows={csvRows}
+              cols={csvCols}
+              filename="wht-certs-50ทวิ.csv"
+              fetchAll={async () => {
+                "use server";
+                return exportWhtCertsAll({ status, userid });
+              }}
+            />
+          </div>
           {(["pending", "received", "waived", "all"] as const).map((s) => {
             const count =
               s === "pending"  ? queue.pending.length :

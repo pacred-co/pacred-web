@@ -3,6 +3,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { exportAccForwarderAll } from "@/actions/admin/export/acc-forwarder";
 
 /**
  * Admin > "รายงานฝากนำเข้า" — a FAITHFUL 1:1 TRANSCRIPTION of the
@@ -581,6 +583,74 @@ export default async function AdminAccountingForwarderPage({
   const offset   = (page - 1) * DEFAULT_PAGE_SIZE;
   const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
+  // CSV export rows — mirror the on-screen ledger columns for the page's
+  // currently-displayed rows. The "ทั้งหมด" button (fetchAll) re-runs the
+  // exact same filtered query unpaginated + writes the admin_export_log audit
+  // (exportAccForwarderAll). Money values are the already-formatted strings so
+  // the spreadsheet matches the rendered cells exactly.
+  const csvRows: CsvRow[] = pageRows.map((r): CsvRow => {
+    const fCostTotalPrice =
+      r.fcosttotalprice +
+      r.ftransportprice +
+      r.fshippingservice +
+      r.pricecrate +
+      r.priceother +
+      r.fpriceupdate +
+      r.ftransportpricechnthb;
+    const fTotalPriceNotDis =
+      r.ftotalprice +
+      r.ftransportprice +
+      r.fpriceupdate +
+      r.fshippingservice +
+      r.pricecrate +
+      r.ftransportpricechnthb +
+      r.priceother;
+    const fTotalPrice = fTotalPriceNotDis - r.fdiscount;
+    const isCompany = r.fusercompany === "1";
+    const walletPayUser = isCompany ? fTotalPrice - fTotalPrice * 0.01 : fTotalPrice;
+    const corpNumber =
+      r.corporatenumber && r.corporatenumber !== "" ? r.corporatenumber : "";
+    return {
+      pay_date: r.date ? String(r.date).slice(0, 10) : "",
+      create_date: r.fdate ? String(r.fdate).slice(0, 10) : "",
+      order_id: r.fid,
+      tracking: r.ftrackingchn ?? "",
+      cabinet: r.fcabinetnumber ?? "",
+      cost: numberFormat2(fCostTotalPrice),
+      real_price: numberFormat2(fTotalPriceNotDis),
+      discount: numberFormat2(r.fdiscount),
+      goods_value: numberFormat2(fTotalPrice),
+      customer_pay: numberFormat2(walletPayUser),
+      wht: isCompany ? numberFormat2(fTotalPrice * 0.01) : "-",
+      service_fee: numberFormat2(walletPayUser - fCostTotalPrice),
+      member_code: r.userid,
+      tax_id: corpNumber || "-",
+      name: corpNumber
+        ? r.corporatename ?? ""
+        : `${r.username} ${r.userlastname}`.trim(),
+      receipt_no: r.rid ?? "",
+    };
+  });
+
+  const csvCols = [
+    { key: "pay_date", label: "วันที่ชำระเงิน" },
+    { key: "create_date", label: "วันที่สร้าง" },
+    { key: "order_id", label: "ออเดอร์" },
+    { key: "tracking", label: "แทรคกิ้ง" },
+    { key: "cabinet", label: "เลขตู้" },
+    { key: "cost", label: "ต้นทุน" },
+    { key: "real_price", label: "ราคาจริง" },
+    { key: "discount", label: "ส่วนลด" },
+    { key: "goods_value", label: "มูลค่าสินค้า" },
+    { key: "customer_pay", label: "ลค จ่าย" },
+    { key: "wht", label: "หัก ณ ที่จ่าย" },
+    { key: "service_fee", label: "ค่าบริการ" },
+    { key: "member_code", label: "รหัสสมาชิก" },
+    { key: "tax_id", label: "เลขผู้เสียภาษี" },
+    { key: "name", label: "ชื่อ-นามสกุล/ชื่อบริษัท" },
+    { key: "receipt_no", label: "เลขใบเสร็จ" },
+  ];
+
   // Display-only banner copy (acc-forwarder.php L141-154 — always
   // emits "ผลลัพธ์การค้นหา ตั้งแต่วันที่ : <start> - <end>" + the
   // user-type label, because the legacy unconditionally writes
@@ -729,7 +799,12 @@ export default async function AdminAccountingForwarderPage({
                             </form>
                           </div>
 
-                          {/* "คำอธิบายระบบ" pill — acc-forwarder.php L158-162 */}
+                          {/* "คำอธิบายระบบ" pill — acc-forwarder.php L158-162 —
+                              plus the Pacred CSV export (owner directive
+                              2026-06-07: accounting exports this reconciliation
+                              list to spreadsheet). The legacy DataTables export
+                              buttons were deliberately not transcribed; this is
+                              the Pacred equivalent (page rows + audited "ทั้งหมด"). */}
                           <div className="content-header-right col-md-4 col-12">
                             <div className="text-right">
                               <span
@@ -739,6 +814,26 @@ export default async function AdminAccountingForwarderPage({
                               >
                                 คำอธิบายระบบ
                               </span>
+                            </div>
+                            <div className="d-flex justify-content-end mt-1">
+                              <CsvButton
+                                rows={csvRows}
+                                cols={csvCols}
+                                filename={`acc-forwarder-${startDate}_${endDate}${
+                                  userType !== "all" ? `-type${userType}` : ""
+                                }-page${page}.csv`}
+                                fetchAll={async () => {
+                                  "use server";
+                                  // Export the FULL filtered รายงานฝากนำเข้า list
+                                  // (all rows, capped) — audited via
+                                  // admin_export_log (name + tax-ID are PII).
+                                  return exportAccForwarderAll({
+                                    startDate,
+                                    endDate,
+                                    userType,
+                                  });
+                                }}
+                              />
                             </div>
                           </div>
                         </div>

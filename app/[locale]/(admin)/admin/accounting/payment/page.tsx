@@ -3,6 +3,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { exportAccPaymentAll } from "@/actions/admin/export/acc-payment";
 
 /**
  * Admin > "รายงานฝากโอนหยวน/ชำระเงิน" — a FAITHFUL 1:1 TRANSCRIPTION
@@ -541,9 +543,56 @@ export default async function AdminAccountingPaymentPage({
                             </form>
                           </div>
 
-                          {/* "คำอธิบายระบบ" pill — acc-payment.php L143-147 */}
+                          {/* "คำอธิบายระบบ" pill — acc-payment.php L143-147 +
+                              CSV export (owner directive 2026-06-07 —
+                              accounting wants this reconciliation ledger in a
+                              spreadsheet). The full export re-runs the same
+                              date-range query unpaginated + is audited. */}
                           <div className="content-header-right col-md-4 col-12">
-                            <div className="text-right">
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                              <CsvButton
+                                rows={pageRows.map((row): CsvRow => {
+                                  const sumUser = row.payyuan * row.payrate;
+                                  const sumCost = row.payyuan * row.payratecost;
+                                  return {
+                                    paid_date: row.date ?? "",
+                                    created_date: row.paydate ?? "",
+                                    order_no: row.reforder,
+                                    status: payStatusName(row.paystatus),
+                                    yuan: numberFormat2(row.payyuan),
+                                    rate_cost: numberFormat2(row.payratecost),
+                                    rate_customer: numberFormat2(row.payrate),
+                                    charge_customer: numberFormat2(sumUser),
+                                    cost_pcs: numberFormat2(sumCost),
+                                    service_fee: numberFormat2(sumUser - sumCost),
+                                    member_code: row.userid,
+                                    customer_name:
+                                      `${row.username} ${row.userlastname}`.trim(),
+                                  };
+                                })}
+                                fetchAll={async () => {
+                                  "use server";
+                                  // Export the FULL date-filtered ledger (all
+                                  // pages) — audited via admin_export_log
+                                  // (customer names · owner directive).
+                                  return exportAccPaymentAll({ startDate, endDate });
+                                }}
+                                cols={[
+                                  { key: "paid_date",       label: "วันที่ชำระเงิน" },
+                                  { key: "created_date",    label: "วันที่สร้างรายการ" },
+                                  { key: "order_no",        label: "เลขออเดอร์" },
+                                  { key: "status",          label: "สถานะรายการ" },
+                                  { key: "yuan",            label: "จำนวนหยวน" },
+                                  { key: "rate_cost",       label: "เรทต้นทุน" },
+                                  { key: "rate_customer",   label: "เรทลูกค้า" },
+                                  { key: "charge_customer", label: "เรียกเก็บเงิน ลูกค้า (บาท)" },
+                                  { key: "cost_pcs",        label: "ต้นทุน PCS (บาท)" },
+                                  { key: "service_fee",     label: "ค่าบริการ" },
+                                  { key: "member_code",     label: "รหัสสมาชิก" },
+                                  { key: "customer_name",   label: "ชื่อ-นามสกุล" },
+                                ]}
+                                filename={`รายงานฝากโอนหยวน-${startDate}-ถึง-${endDate}.csv`}
+                              />
                               <span
                                 className="btn btn-sm bg-color-select box-shadow-2 cursor-pointer"
                                 data-toggle="modal"

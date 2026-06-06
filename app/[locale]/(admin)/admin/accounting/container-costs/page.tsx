@@ -2,6 +2,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportContainerCostsAll } from "@/actions/admin/export/acc-container-costs";
 import { ContainerCostForm } from "./container-cost-form";
 import { ContainerCostRowControls } from "./container-cost-row-controls";
 
@@ -78,14 +80,69 @@ export default async function AdminContainerCostsPage({
   };
   const rows = (rowsRaw ?? []) as Row[];
 
+  // CSV export — columns mirror the on-screen rate-card table (money as
+  // fixed-2 strings, dates sliced to YYYY-MM-DD, codes/labels as-is).
+  const csvCols: CsvCol[] = [
+    { key: "carrier_name", label: "carrier" },
+    { key: "container_type", label: "ประเภทตู้" },
+    { key: "source", label: "source" },
+    { key: "transport_mode", label: "mode" },
+    { key: "origin", label: "ต้นทาง" },
+    { key: "destination", label: "ปลายทาง" },
+    { key: "rate_per_cbm_thb", label: "ต่อ CBM (บาท)" },
+    { key: "rate_per_kg_thb", label: "ต่อ kg (บาท)" },
+    { key: "minimum_charge_thb", label: "ขั้นต่ำ (บาท)" },
+    { key: "fuel_surcharge_pct", label: "fuel %" },
+    { key: "effective_from", label: "ใช้ตั้งแต่" },
+    { key: "effective_to", label: "ใช้ถึง" },
+    { key: "status", label: "สถานะ" },
+    { key: "note", label: "หมายเหตุ" },
+    { key: "created_at", label: "สร้างเมื่อ" },
+  ];
+  const csvRows: CsvRow[] = rows.map((r) => {
+    const archived = r.effective_to != null && r.effective_to < today;
+    return {
+      carrier_name: r.carrier_name,
+      container_type: r.container_type,
+      source: r.source,
+      transport_mode: TRANSPORT_LABEL[r.transport_mode] ?? r.transport_mode,
+      origin: r.origin,
+      destination: r.destination,
+      rate_per_cbm_thb: r.rate_per_cbm_thb != null ? Number(r.rate_per_cbm_thb).toFixed(2) : "",
+      rate_per_kg_thb: r.rate_per_kg_thb != null ? Number(r.rate_per_kg_thb).toFixed(2) : "",
+      minimum_charge_thb: r.minimum_charge_thb != null ? Number(r.minimum_charge_thb).toFixed(2) : "",
+      fuel_surcharge_pct: r.fuel_surcharge_pct != null ? Number(r.fuel_surcharge_pct).toFixed(2) : "",
+      effective_from: r.effective_from ? r.effective_from.slice(0, 10) : "",
+      effective_to: r.effective_to ? r.effective_to.slice(0, 10) : "",
+      status: archived ? "ปิดแล้ว" : "กำลังใช้",
+      note: r.note ?? "",
+      created_at: r.created_at ? r.created_at.slice(0, 10) : "",
+    };
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ACCOUNTING</p>
-        <h1 className="mt-1 text-2xl font-bold">Carrier rate cards (container_costs)</h1>
-        <p className="mt-1 text-sm text-muted">
-          U2-2: ราคาที่ carrier เก็บกับ Pacred ต่อตู้/ต่อ route — ใช้เป็น cost basis คำนวณ margin
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ACCOUNTING</p>
+          <h1 className="mt-1 text-2xl font-bold">Carrier rate cards (container_costs)</h1>
+          <p className="mt-1 text-sm text-muted">
+            U2-2: ราคาที่ carrier เก็บกับ Pacred ต่อตู้/ต่อ route — ใช้เป็น cost basis คำนวณ margin
+          </p>
+        </div>
+        <CsvButton
+          rows={csvRows}
+          cols={csvCols}
+          filename="container-costs.csv"
+          fetchAll={async () => {
+            "use server";
+            return exportContainerCostsAll({
+              carrier: sp.carrier,
+              mode: sp.mode,
+              active: activeFilter,
+            });
+          }}
+        />
       </div>
 
       {/* Filters */}

@@ -21,8 +21,19 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { getPendingSalesPayoutsTb } from "@/actions/admin/sales-payouts-tb";
+import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { exportSalesPayoutsAll } from "@/actions/admin/export/sales-payouts";
 
 export const dynamic = "force-dynamic";
+
+// CSV columns mirror the on-screen table (money pre-formatted, date localised).
+const CSV_COLS: CsvCol[] = [
+  { key: "date", label: "วันที่ทำรายการ" },
+  { key: "userIDMain", label: "รหัสตัวแทนขาย" },
+  { key: "adminCreate", label: "ผู้ทำรายการ" },
+  { key: "amount", label: "จำนวนเงิน" },
+  { key: "status", label: "สถานะ" },
+];
 
 export default async function AdminSalesPayoutsPage() {
   // W-1 (gap-admin H-1): page-level role gate. Exposes sales-rep bank
@@ -33,16 +44,36 @@ export default async function AdminSalesPayoutsPage() {
   const res = await getPendingSalesPayoutsTb();
   const rows = res.ok ? (res.data ?? []) : [];
 
+  // Map the displayed rows to flat CSV rows (same keys as CSV_COLS).
+  const csvRows: CsvRow[] = rows.map((r) => ({
+    date: r.date ? new Date(r.date).toLocaleString("th-TH") : "",
+    userIDMain: r.userIDMain ?? "",
+    adminCreate: r.adminCreate ?? "",
+    amount: Number(r.amount).toFixed(2),
+    status: "รอดำเนินการ",
+  }));
+
   return (
     <>
       <PageTopMenubar items={DISBURSEMENT_MENUBAR} activeHref="/admin/sales-payouts" />
       <main className="p-6 lg:p-8 space-y-5">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
-          <h1 className="mt-1 text-2xl font-bold">อนุมัติเงินลูกค้าตัวแทน (Sales Payouts)</h1>
-          <p className="mt-1 text-xs text-muted">
-            คำขอเบิกส่วนแบ่งจากลูกค้าตัวแทน ที่รอจ่ายเงิน (สถานะ รอดำเนินการ) — กดรายการเพื่อดูบัญชีรับโอน + แนบสลิปจ่ายเงิน
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
+            <h1 className="mt-1 text-2xl font-bold">อนุมัติเงินลูกค้าตัวแทน (Sales Payouts)</h1>
+            <p className="mt-1 text-xs text-muted">
+              คำขอเบิกส่วนแบ่งจากลูกค้าตัวแทน ที่รอจ่ายเงิน (สถานะ รอดำเนินการ) — กดรายการเพื่อดูบัญชีรับโอน + แนบสลิปจ่ายเงิน
+            </p>
+          </div>
+          <CsvButton
+            rows={csvRows}
+            cols={CSV_COLS}
+            filename="sales-payouts.csv"
+            fetchAll={async () => {
+              "use server";
+              return exportSalesPayoutsAll();
+            }}
+          />
         </div>
 
         {!res.ok && (

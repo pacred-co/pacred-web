@@ -39,7 +39,25 @@ import {
   type ReceiptTab,
   type ReceiptTabCounts,
 } from "@/actions/admin/accounting-receipts";
+import { exportReceiptsAll } from "@/actions/admin/export/acc-receipts";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { Plus, Printer, Search } from "lucide-react";
+
+// CSV columns — mirror the on-screen table (money as the formatted 2dp string,
+// dates sliced, codes as-is). Keys match the page-row mapping + exportReceiptsAll.
+const CSV_COLS: CsvCol[] = [
+  { key: "rid", label: "เลขที่เอกสาร" },
+  { key: "refid", label: "อ้างอิง" },
+  { key: "customer", label: "ลูกค้า" },
+  { key: "userid", label: "รหัสลูกค้า" },
+  { key: "corporate", label: "ประเภท" },
+  { key: "rdate", label: "วันที่" },
+  { key: "total_before_wht", label: "มูลค่ารวม (ก่อน WHT)" },
+  { key: "wht", label: "WHT หัก" },
+  { key: "ramount", label: "รับสุทธิ" },
+  { key: "status", label: "สถานะ" },
+  { key: "item_count", label: "จำนวนรายการ" },
+];
 
 export const dynamic = "force-dynamic";
 
@@ -164,6 +182,22 @@ export default async function ReceiptsListPage({
       pageSize,
     });
 
+  // CSV — the currently-displayed page rows mapped to flat CsvRow objects.
+  // Keys match CSV_COLS + the exportReceiptsAll value-mapping (drift-free).
+  const csvRows: CsvRow[] = rows.map((r) => ({
+    rid: r.rid,
+    refid: r.refid ?? "",
+    customer: r.customerLabel,
+    userid: r.userid,
+    corporate: r.isCorporate ? "นิติบุคคล" : "ทั่วไป",
+    rdate: r.rdate ? r.rdate.slice(0, 10) : "",
+    total_before_wht: r.totalBeforeWithholding.toFixed(2),
+    wht: r.whtAmount.toFixed(2),
+    ramount: r.ramount.toFixed(2),
+    status: rstatusCfg(r.rstatus).label,
+    item_count: r.itemCount,
+  }));
+
   // Pagination math.
   const pageCount = Math.max(1, Math.ceil(totalRowCount / usedPageSize));
   const pageStart = totalRowCount === 0 ? 0 : (page - 1) * usedPageSize + 1;
@@ -197,6 +231,22 @@ export default async function ReceiptsListPage({
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {/* CSV export — page rows + drift-free "ทั้งหมด" (all filtered,
+                audited via admin_export_log). Reuses the EXACT page filters. */}
+            <CsvButton
+              rows={csvRows}
+              cols={CSV_COLS}
+              filename="ใบเสร็จรับเงิน.csv"
+              fetchAll={async () => {
+                "use server";
+                return exportReceiptsAll({
+                  tab,
+                  dateFrom,
+                  dateTo,
+                  search: sp.q ?? "",
+                });
+              }}
+            />
             {/* "พิมพ์รายงาน" — outline secondary (PEAK). Reuses the closing
                 report as the canonical month-end summary printable view. */}
             <Link

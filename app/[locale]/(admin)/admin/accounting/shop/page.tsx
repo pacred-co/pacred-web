@@ -3,6 +3,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { exportAccShopAll } from "@/actions/admin/export/acc-shop";
 
 /**
  * Admin > "รายงานฝากสั่งซื้อสินค้า" — a FAITHFUL 1:1 TRANSCRIPTION
@@ -507,6 +509,47 @@ export default async function AdminAccountingShopPage({
   const offset   = (page - 1) * DEFAULT_PAGE_SIZE;
   const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
+  // ── CSV export (owner directive 2026-06-07 — accounting wants the
+  //    reconciliation lists in a spreadsheet) ───────────────────────────────
+  // Columns mirror the 11 on-screen <thead> columns 1:1 (same order, same Thai
+  // labels, money pre-formatted via numberFormat2 like the cells). `csvCols`
+  // keys MUST match the keys the page-row mapper + the exportAccShopAll action
+  // emit. The "⬇ CSV หน้านี้" button uses these displayed pageRows; the
+  // "⬇ CSV ทั้งหมด" button calls the drift-free server action over the SAME
+  // resolved [startDate, endDate] filter, unpaginated + audited.
+  const csvCols = [
+    { key: "pay_date", label: "วันที่ชำระเงิน" },
+    { key: "create_date", label: "วันที่สร้าง" },
+    { key: "order_no", label: "เลขออเดอร์" },
+    { key: "status", label: "สถานะสินค้า" },
+    { key: "pay_user", label: "ลูกค้าจ่ายมา (บาท)" },
+    { key: "return_wallet", label: "คืนเงินลูกค้า (บาท)" },
+    { key: "price_sell", label: "ราคาขาย (บาท)" },
+    { key: "cost", label: "ต้นทุน (บาท)" },
+    { key: "service_fee", label: "ค่าบริการ (บาท)" },
+    { key: "member_code", label: "รหัสสมาชิก" },
+    { key: "customer_name", label: "ชื่อ-นามสกุล" },
+  ];
+  const csvRows: CsvRow[] = pageRows.map((row) => {
+    const priceUser = (row.htotalpricechn + row.hshippingchn) * row.hrate;
+    const pricePCS = row.hratecost * row.hcostall;
+    const returnWallet = refundByHno.get(row.hno) ?? 0;
+    const profit = row.hstatus === "6" ? 0 : priceUser - pricePCS;
+    return {
+      pay_date: row.date ?? "",
+      create_date: row.hdate ?? "",
+      order_no: row.reforder,
+      status: hStatusBadge(row.hstatus).label,
+      pay_user: numberFormat2(row.amount),
+      return_wallet: numberFormat2(returnWallet),
+      price_sell: numberFormat2(priceUser),
+      cost: numberFormat2(pricePCS),
+      service_fee: numberFormat2(profit),
+      member_code: row.userid,
+      customer_name: `${row.username} ${row.userlastname}`.trim(),
+    };
+  });
+
   // Display-only banner copy (acc-shop.php L146-148 — always shows
   // "ผลลัพธ์การค้นหา ตั้งแต่วันที่ : <start> - <end>", because the legacy
   // unconditionally writes `$_GET['date'] = $startDate." - ".$endDate`
@@ -658,9 +701,23 @@ export default async function AdminAccountingShopPage({
                             </form>
                           </div>
 
-                          {/* "คำอธิบายระบบ" pill — acc-shop.php L152-156 */}
+                          {/* "คำอธิบายระบบ" pill — acc-shop.php L152-156
+                              + CSV export (owner directive 2026-06-07 —
+                              accounting wants this reconciliation list in a
+                              spreadsheet). The page export uses the displayed
+                              page rows; the "ทั้งหมด" export re-runs the SAME
+                              [startDate, endDate] filter unpaginated + audited. */}
                           <div className="content-header-right col-md-4 col-12">
-                            <div className="text-right">
+                            <div className="d-flex justify-content-end align-items-center flex-wrap gap-2">
+                              <CsvButton
+                                rows={csvRows}
+                                cols={csvCols}
+                                filename={`รายงานฝากสั่งซื้อ-${startDate}-ถึง-${endDate}.csv`}
+                                fetchAll={async () => {
+                                  "use server";
+                                  return exportAccShopAll({ startDate, endDate });
+                                }}
+                              />
                               <span
                                 className="btn btn-sm bg-color-select box-shadow-2 cursor-pointer"
                                 data-toggle="modal"
