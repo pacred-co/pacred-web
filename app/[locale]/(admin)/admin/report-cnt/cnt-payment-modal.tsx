@@ -21,6 +21,7 @@
 import { useEffect, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { adminCreateCntPayment } from "@/actions/admin/cnt-payment";
+import { StyledFileInput } from "@/components/ui/styled-file-input";
 
 export type SelectedSummary = {
   fcabinetnumber: string;
@@ -213,13 +214,18 @@ export function CntPaymentModal({ open, onClose, selected }: Props) {
                   className="mt-1 w-full rounded-md border border-border px-2 py-1.5 text-sm disabled:bg-surface-alt/50"
                 />
               </label>
-              <label className="block">
-                <span className="text-xs text-muted">ไฟล์สลิป (PDF · ไม่เกิน 10MB) — ไม่บังคับ</span>
-                <input
-                  name="cntFile" type="file" accept="application/pdf" disabled={pending}
-                  className="mt-1 w-full text-xs"
-                />
-              </label>
+              <div className="block">
+                <span className="text-xs text-muted">ไฟล์สลิป — ไม่บังคับ</span>
+                <div className="mt-1">
+                  <StyledFileInput
+                    name="cntFile"
+                    accept="application/pdf"
+                    disabled={pending}
+                    label="แนบสลิปการโอน (คลิกเพื่อเลือกไฟล์ PDF)"
+                    hint="PDF · ไม่เกิน 10MB · ไม่บังคับ"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 

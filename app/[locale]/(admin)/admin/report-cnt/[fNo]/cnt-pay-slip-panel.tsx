@@ -20,6 +20,7 @@ import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Receipt } from "lucide-react";
 import { adminCreateCntPaymentSingle } from "@/actions/admin/cnt-payment";
+import { StyledFileInput } from "@/components/ui/styled-file-input";
 
 export function CntPaySlipPanel({
   fCabinetNumber,
@@ -99,16 +100,18 @@ export function CntPaySlipPanel({
           className="mt-1 w-full rounded-md border border-border px-2 py-1.5 text-sm"
         />
       </label>
-      <label className="block">
-        <span className="text-xs text-muted">รูปสลิปการโอนเงิน (PNG/JPEG)</span>
-        <input
-          name="cntImagesSlip"
-          type="file"
-          accept="image/png,image/jpeg"
-          required
-          className="mt-1 w-full text-sm"
-        />
-      </label>
+      <div className="block">
+        <span className="text-xs text-muted">รูปสลิปการโอนเงิน</span>
+        <div className="mt-1">
+          <StyledFileInput
+            name="cntImagesSlip"
+            accept="image/png,image/jpeg"
+            required
+            label="แนบสลิปการโอน (คลิกเพื่อเลือกรูป)"
+            hint="รองรับไฟล์ PNG หรือ JPEG"
+          />
+        </div>
+      </div>
 
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">{error}</div>

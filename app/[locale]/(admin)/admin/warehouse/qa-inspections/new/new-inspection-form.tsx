@@ -22,6 +22,7 @@ import {
   adminUploadQaPhoto,
 } from "@/actions/admin/qa-inspections";
 import type { QaVerdict } from "@/lib/validators/qa-inspection-rebuilt";
+import { StyledFileInput } from "@/components/ui/styled-file-input";
 
 const VERDICTS: QaVerdict[] = ["pass", "fail", "hold", "fake_product"];
 const MAX_PHOTOS = 20;
@@ -155,18 +156,19 @@ export function NewInspectionForm({
         <label htmlFor="qa-photos" className="block text-xs font-semibold mb-1">
           {t("form.photosLabel")}
         </label>
-        <input
+        <StyledFileInput
           id="qa-photos"
-          type="file"
           accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
           multiple
           onChange={onFilePick}
-          className="block w-full text-sm"
+          label={t("form.photosLabel")}
+          hint={t("form.photosHelp", { max: MAX_PHOTOS })}
+          selectedLabel={
+            files.length > 0
+              ? `${files.length} ${t("form.photosSelected")}`
+              : undefined
+          }
         />
-        <p className="mt-1 text-[10px] text-muted">
-          {t("form.photosHelp", { max: MAX_PHOTOS })}
-          {files.length > 0 && ` · ${files.length} ${t("form.photosSelected")}`}
-        </p>
       </div>
 
       <div>

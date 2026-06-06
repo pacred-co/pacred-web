@@ -19,6 +19,7 @@
  */
 
 import { useState, useTransition } from "react";
+import { StyledFileInput } from "@/components/ui/styled-file-input";
 import {
   getPayUserContext,
   adminPayOrdersOnBehalf,
@@ -404,11 +405,12 @@ export function PayUserClient() {
                     </div>
                     <div>
                       <label className="block text-xs text-gray-600 mb-1">สลิปการโอน (รูปภาพ/PDF)</label>
-                      <input
-                        type="file"
+                      <StyledFileInput
                         accept="image/*,application/pdf"
+                        label="แนบสลิปการโอน (คลิกเพื่อเลือกรูป/PDF)"
+                        hint="รองรับรูปภาพหรือไฟล์ PDF"
+                        selectedLabel={orderSlip ? `แนบแล้ว: ${orderSlip.name}` : undefined}
                         onChange={(e) => setOrderSlip(e.target.files?.[0] ?? null)}
-                        className="w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary-600 file:px-3 file:py-1.5 file:text-white"
                       />
                     </div>
                   </div>
@@ -487,11 +489,12 @@ export function PayUserClient() {
                   </p>
                   <div>
                     <label className="block text-xs text-gray-600 mb-1">สลิปการโอน (รูปภาพ/PDF)</label>
-                    <input
-                      type="file"
+                    <StyledFileInput
                       accept="image/*,application/pdf"
+                      label="แนบสลิปการโอน (คลิกเพื่อเลือกรูป/PDF)"
+                      hint="รองรับรูปภาพหรือไฟล์ PDF"
+                      selectedLabel={fwdSlip ? `แนบแล้ว: ${fwdSlip.name}` : undefined}
                       onChange={(e) => setFwdSlip(e.target.files?.[0] ?? null)}
-                      className="w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary-600 file:px-3 file:py-1.5 file:text-white"
                     />
                   </div>
                   <div className="flex justify-end">

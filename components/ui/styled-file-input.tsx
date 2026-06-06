@@ -15,6 +15,8 @@ type Props = {
   accept?: string;
   required?: boolean;
   disabled?: boolean;
+  /** Allow selecting multiple files (native multi-select). */
+  multiple?: boolean;
   /** Label text shown on the button when no file is selected. */
   label?: string;
   /** Small hint text below the button (hidden once a file is selected). */
@@ -45,6 +47,7 @@ export const StyledFileInput = forwardRef<HTMLInputElement, Props>(
       accept,
       required,
       disabled,
+      multiple,
       label = "เลือกไฟล์",
       hint,
       selectedLabel,
@@ -69,9 +72,15 @@ export const StyledFileInput = forwardRef<HTMLInputElement, Props>(
           accept={accept}
           required={required}
           disabled={disabled}
+          multiple={multiple}
           className="sr-only"
           onChange={(e) => {
-            setFileName(e.target.files?.[0]?.name ?? null);
+            const picked = e.target.files;
+            setFileName(
+              picked && picked.length > 1
+                ? `${picked.length} ไฟล์`
+                : (picked?.[0]?.name ?? null),
+            );
             onChange?.(e);
           }}
         />

@@ -17,6 +17,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { StyledFileInput } from "@/components/ui/styled-file-input";
 import {
   uploadYuanRefundSlip,
   adminMarkYuanPaymentRefunded,
@@ -143,28 +144,24 @@ export function YuanRefundModal({ open, onClose, yuanPayment }: Props) {
           </div>
 
           {/* Slip upload */}
-          <label className="block space-y-1.5">
+          <div className="block space-y-1.5">
             <span className="text-xs font-medium">
               สลิปการโอนคืน <span className="text-red-600">*</span>
             </span>
-            <input
+            <StyledFileInput
               ref={fileRef}
-              type="file"
               accept="image/jpeg,image/png,application/pdf"
+              required
               disabled={pending}
+              label="แนบสลิปการโอนคืน (คลิกเพื่อเลือกรูป)"
+              hint={`PDF / JPG / PNG ≤ 10 MB — เก็บใน slips/yuan-refunds/${yuanPayment.id.slice(0, 8)}…`}
+              selectedLabel={fileLabel ?? undefined}
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 setFileLabel(f ? `${f.name} (${Math.round(f.size / 1024)} KB)` : null);
               }}
-              className="block w-full text-xs file:rounded-lg file:border-0 file:bg-primary-600 file:px-3 file:py-1.5 file:text-white file:font-bold file:hover:bg-primary-700 file:cursor-pointer"
             />
-            <span className="block text-[11px] text-muted">
-              PDF / JPG / PNG ≤ 10 MB — เก็บใน slips/yuan-refunds/{yuanPayment.id.slice(0, 8)}…
-            </span>
-            {fileLabel && (
-              <span className="block text-[11px] text-primary-700">📎 {fileLabel}</span>
-            )}
-          </label>
+          </div>
 
           {/* Optional note */}
           <label className="block space-y-1.5">

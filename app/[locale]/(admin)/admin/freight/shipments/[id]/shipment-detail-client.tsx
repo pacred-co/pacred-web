@@ -31,6 +31,7 @@ import {
 } from "@/lib/validators/freight-payment";
 // U2-3 — reuse the cargo WHT panel for freight invoices (extended for "freight_invoice" parent).
 import { WhtPanel, type WhtPanelEntry } from "@/app/[locale]/(admin)/admin/tax-invoices/[id]/wht-panel";
+import { StyledFileInput } from "@/components/ui/styled-file-input";
 
 export type PartyData = {
   id:       string;
@@ -918,15 +919,16 @@ function RecordPaymentForm({ invoiceId, outstandingThb }: { invoiceId: string; o
           </label>
         )}
         {method === "bank_transfer" && (
-          <label className="text-xs space-y-1 sm:col-span-2">
-            <span className="font-medium text-muted">สลิปโอนเงิน (ถ้ามี — PDF/รูป ≤10MB)</span>
-            <input
-              type="file"
+          <div className="text-xs space-y-1 sm:col-span-2">
+            <span className="font-medium text-muted">สลิปโอนเงิน (ถ้ามี)</span>
+            <StyledFileInput
               accept=".pdf,image/*"
+              label="แนบสลิปการโอน (คลิกเพื่อเลือกไฟล์)"
+              hint="PDF หรือรูปภาพ ≤10MB"
+              selectedLabel={slip ? `แนบแล้ว: ${slip.name}` : undefined}
               onChange={(e) => setSlip(e.target.files?.[0] ?? null)}
-              className="w-full rounded border border-border bg-white px-2 py-1.5 text-xs"
             />
-          </label>
+          </div>
         )}
         <label className="text-xs space-y-1 sm:col-span-2">
           <span className="font-medium text-muted">หมายเหตุ</span>

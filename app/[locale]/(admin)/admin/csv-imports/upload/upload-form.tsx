@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { uploadCsv } from "@/actions/admin/csv-imports";
 
 export function UploadCsvForm({ disabled = false }: { disabled?: boolean }) {
@@ -65,17 +66,14 @@ export function UploadCsvForm({ disabled = false }: { disabled?: boolean }) {
         <span className="text-sm font-medium text-foreground">
           ไฟล์ CSV<span className="ml-0.5 text-red-600">*</span>
         </span>
-        <input
+        <StyledFileInput
           name="file"
-          type="file"
           accept=".csv,text/csv,application/vnd.ms-excel"
           required
           disabled={disabled}
-          className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary-500 file:px-4 file:py-2 file:text-white hover:file:bg-primary-600"
+          label="เลือกไฟล์ CSV (คลิกเพื่อเลือก)"
+          hint="ขนาดสูงสุด 5 MB. UTF-8 encoding แนะนำสำหรับภาษาไทย"
         />
-        <span className="block text-xs text-muted">
-          ขนาดสูงสุด 5 MB. UTF-8 encoding แนะนำสำหรับภาษาไทย
-        </span>
       </label>
 
       {error && (

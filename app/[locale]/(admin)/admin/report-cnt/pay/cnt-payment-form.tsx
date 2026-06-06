@@ -17,6 +17,7 @@
 import { useState, useTransition, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { adminCreateCntPayment } from "@/actions/admin/cnt-payment";
+import { StyledFileInput } from "@/components/ui/styled-file-input";
 
 type UnpaidContainer = {
   fcabinetnumber: string;
@@ -155,10 +156,17 @@ export function CntPaymentForm({ unpaidContainers }: { unpaidContainers: UnpaidC
             <span className="text-xs text-muted">ยอดเงินที่จ่าย (บาท)</span>
             <input name="cntAmount" type="number" step="0.01" min="0" required className="mt-1 w-full rounded-md border border-border px-2 py-1.5 text-sm" />
           </label>
-          <label className="block">
-            <span className="text-xs text-muted">ไฟล์สลิป (PDF · ไม่เกิน 10MB)</span>
-            <input name="cntFile" type="file" accept="application/pdf" className="mt-1 w-full text-sm" />
-          </label>
+          <div className="block">
+            <span className="text-xs text-muted">ไฟล์สลิป</span>
+            <div className="mt-1">
+              <StyledFileInput
+                name="cntFile"
+                accept="application/pdf"
+                label="แนบสลิปการโอน (คลิกเพื่อเลือกไฟล์ PDF)"
+                hint="PDF · ไม่เกิน 10MB"
+              />
+            </div>
+          </div>
 
           {error && (
             <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">{error}</div>

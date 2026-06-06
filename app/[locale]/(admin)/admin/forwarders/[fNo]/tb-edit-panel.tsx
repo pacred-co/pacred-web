@@ -32,6 +32,7 @@ import {
   adminUpdateForwarderTaxDocMode,
 } from "@/actions/admin/forwarders-field-edits";
 import { confirm } from "@/components/ui/confirm";
+import { StyledFileInput } from "@/components/ui/styled-file-input";
 import {
   TAX_DOC_MODES,
   TAX_DOC_MODE_META,
@@ -448,13 +449,13 @@ export function TbForwarderEditPanel(p: Props) {
         <label htmlFor="te_cover" className="block text-xs font-medium text-muted">
           เปลี่ยนรูปปกสินค้า (fCover)
         </label>
-        <input
+        <StyledFileInput
           id="te_cover"
           ref={coverInputRef}
-          type="file"
           accept="image/png,image/jpeg"
           disabled={pending}
-          className="w-full text-xs file:mr-2 file:rounded-md file:border-0 file:bg-primary-50 file:px-3 file:py-1.5 file:text-primary-700 file:text-xs disabled:opacity-60"
+          label="เลือกรูปปก (คลิกเพื่อเลือกรูป)"
+          hint="ไฟล์รูป PNG หรือ JPEG"
         />
         <button
           type="button"
