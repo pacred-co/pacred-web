@@ -236,6 +236,28 @@ nav.nav-footer-pcs { display: none !important; }
   display: block;
 }
 
+/* ── 2. Anti-FOUC: the dashboard promo carousel "บวม → ย่อ" flash ─────────
+   `.single-item-member` is turned into a Slick carousel by CLIENT JS
+   (components/legacy/pcs-carousel.tsx) only AFTER jQuery + slick.js load + the
+   poll fires. Until Slick adds `.slick-initialized`, ALL slide children render
+   STACKED at full height → the dashboard renders tall ("บวม") on every load,
+   then collapses to one slide ("ย่อ") once Slick runs.
+   Fix: before init, show ONLY the first slide and clip the box to the single-
+   slide height — so the un-initialised carousel already matches the final
+   layout (no flash). These rules stop applying the instant Slick adds
+   `.slick-initialized`, so Slick's own track/arrows/dots are untouched.
+   This sheet is in the blocking <link> bundle → applied on first paint. */
+.single-item-member:not(.slick-initialized) {
+  max-height: 320px;
+  overflow: hidden;
+}
+.single-item-member:not(.slick-initialized) > * {
+  display: none !important;
+}
+.single-item-member:not(.slick-initialized) > *:first-child {
+  display: block !important;
+}
+
 /* ── 3. .bander-index side-banner images (the 2 stacked banners next to the carousel) ── */
 .pcs-legacy-body .bander-index .col-md-4 .img-fluid {
   width: 100%;
