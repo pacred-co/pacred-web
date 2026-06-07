@@ -1130,3 +1130,35 @@ The helper can be defined in the same file (module scope · just outside the com
 - [`app/[locale]/(admin)/admin/reports/credit-pending/page.tsx`](../../app/[locale]/(admin)/admin/reports/credit-pending/page.tsx) — earliest pattern usage
 - [`app/[locale]/(admin)/admin/customers/recently-active/page.tsx`](../../app/[locale]/(admin)/admin/customers/recently-active/page.tsx) — same pattern, different domain
 - [`app/[locale]/(admin)/admin/drivers/page.tsx`](../../app/[locale]/(admin)/admin/drivers/page.tsx) — where Agent J first hit it (2026-05-30)
+
+---
+
+## 2026-06-07 — jQuery-initialised widgets FOUC: "บวม → ย่อ" on every load (Slick carousel)
+
+**Symptom:** the dashboard "puffed up" (tall) then shrank to normal on EVERY
+load. CLS measured 0 (the flash is pre-settle / a fast collapse, not always a
+recorded layout-shift).
+
+**Root cause:** the promo banner is a **Slick carousel** (`.single-item-member`)
+initialised by CLIENT jQuery (`components/legacy/pcs-carousel.tsx`) only after
+jQuery + slick.js load + a poll fires. Until Slick adds `.slick-initialized`,
+**all slide children render stacked at full height** (บวม); init then collapses
+them to one slide (ย่อ). Any jQuery/legacy widget that renders real content
+before its client-JS init has this flash (DataTables, owl, select2 …). Bootstrap
+modals do NOT (they're `display:none` until opened); a count-up `tam-counter` is
+intentional, not this bug.
+
+**Fix (standard Slick anti-FOUC) in a BLOCKING stylesheet** (so it applies on
+first paint — `legacy-overrides.css` is in the `<link>` bundle):
+```css
+.single-item-member:not(.slick-initialized) { max-height: 320px; overflow: hidden; }
+.single-item-member:not(.slick-initialized) > *           { display: none !important; }
+.single-item-member:not(.slick-initialized) > *:first-child{ display: block !important; }
+```
+Before init: only the first slide shows, box clipped to single-slide height = the
+final layout → no flash. The `:not(.slick-initialized)` guard makes the rules
+evaporate the instant Slick initialises, so its track/arrows/dots are untouched.
+
+**Verify:** force the pre-init state in Chrome (`$(el).slick('unslick')`) and
+assert `visibleChildCount === 1` + height ≈ initialised height; then a fresh load
+should show CLS ≈ 0.

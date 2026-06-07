@@ -59,3 +59,37 @@ a missing translation — it's a **structural mismatch** (double-nest, or
 JSON for `"X": {\n    "X": {` after any messages-file merge. Verify the un-nest
 with a JSON round-trip (`JSON.parse` → `JSON.stringify(_, null, 2)`) so the diff
 is purely the structural change, byte-stable otherwise.
+
+---
+
+## 2026-06-07 — `audit:i18n` checks PARITY, not KEY-EXISTENCE → raw keys leak to the UI
+
+**Symptom (owner screenshot):** the admin sidebar rendered the literal
+`pcsAdminNav.wallet.title` / `pcsAdminNav.payment.title` instead of Thai labels.
+
+**Root cause:** an i18n sweep wired components to next-intl (`t("key")` /
+`labelKey`) but **never added the entries to `messages/*.json`**. next-intl
+renders the raw key path when a key is missing. `pnpm audit:i18n` only checks
+**TH↔EN parity** (both files have the SAME keys) — it does NOT check that every
+`t("key")` CALL resolves to a defined key. So a key missing from BOTH files
+passes parity and the bug ships. Found **61 missing keys** this way:
+`pcsAdminNav` 15 · `shopOrderPayModal` 14 · `customerWhtUpload` 24 ·
+`freightQuoteWizard` 7 · `notifications` 1. (shopOrderPayModal +
+customerWhtUpload were ALSO double-nested — the un-nest pass missed them; same
+trap as the entry above.)
+
+**Recover the right text from git, don't invent it:** `git log -p --follow --
+<component>` shows the i18n commit's diff (`-"ชำระเงิน"  +{t("confirmPayment")}`)
+= the exact original Thai per key. EN translated faithfully.
+
+**The durable fix = a key-existence guard.** New `scripts/i18n-key-audit.mjs`
+(wired into `audit:all` → `verify`): scans every component for static
+`t("literal")` calls (resolving each translation-fn var → its
+`useTranslations("ns")` namespace) + the admin sidebar `labelKey`s, and asserts
+each resolves in `messages/th.json`. Skips dynamic/template keys
+(`t(\`x.${v}\`)`, `t(variable)`) — those can't be checked statically. Reports 0
+now; fails the gate if anyone adds a `t()` without the key again.
+
+**Lesson:** parity-pass ≠ keys-exist. Any mass i18n sweep MUST be followed by a
+key-existence check, not just parity. The class-fix (a CI guard) beats fixing
+the two visible instances.

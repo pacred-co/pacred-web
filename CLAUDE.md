@@ -3,6 +3,20 @@
 
 ---
 
+# 📤 2026-06-07 — เดฟ: member polish + CSV-export ทั้ง platform + i18n leak-kill+guard + dashboard FOUC + full team-merge · read FIRST
+
+**main = `dave-pacred` = `92f5f9ba`+ · pushed dave-pacred (→ main this session per owner "จบงานได้เลย") · `pnpm verify` + `pnpm build` EXIT 0 (REAL · every save-point) · migrations 0143–0147 ALL applied prod (verified live) · localhost :3000.** Owner-driven long run (many "ต่อเลย/ลุยเลย/ทำให้จบทีเดียว"). Everyone's work integrated; nothing lost. SHIPPED (each gated + pushed dave-pacred):
+
+1. **🔀 Full team-merge** — ภูม (Poom-pacred: 13 commits CSV/report-cnt/avatar + docs) + ปอน (InwPond007: 6 commits **i18n EN sweep** + un-nest 198 namespaces). Conflicts (10 files = ปอน `t()` vs เดฟ bloat-className) **resolved keeping BOTH** (i18n content + compact className). Reviewed ภูม's merge → fixed **2 real bugs**: CSV **formula-injection** (HIGH · `=cmd` in customer name runs in Excel) + **avatar filename-vs-URL** broke /sales. Both branches now 0-behind dave-pacred.
+2. **📤 CSV export — ครบทุก admin list (~72 surfaces)** — page "⬇ CSV หน้านี้" + "⬇ CSV ทั้งหมด" (drift-free export-all = page's exact filtered query unpaginated, cap 10k) + **migration 0147 `admin_export_log`** PII-export audit (applied prod). Coverage: 14 (ภูม) + 10 accounting + 11 QA + 7 freight/misc + 30 remaining. Shared `components/admin/csv-button.tsx` (formula-injection-safe + UTF-8 BOM) + `actions/admin/export/<dataset>.ts` per surface + `actions/admin/export-log.ts`. Only 3 non-lists skipped (dashboard · ad-hoc quote-tool · cargothai sync snapshot).
+3. **🎨 Member content polish** — 66 pages compacted to the `/service-import/estimate` scale (owner's "กล่องไม่ยืด อยู่ในหน้าเดียว"): killed `text-4xl/5xl` · `p-8/10/12` · `shadow-lg/xl/2xl/custom` · `animate-pulse` · `rounded-3xl`. + **styled file-upload buttons** (`components/ui/styled-file-input.tsx`) replacing raw `<input type=file>` (member + 9 admin).
+4. **🌐 i18n raw-key leak KILLED + GUARDED** (owner screenshot: sidebar showed `pcsAdminNav.wallet.title`) — ปอน's sweep wired `t()`/labelKey but never added entries → next-intl rendered the raw key (audit:i18n checks PARITY only, not key-existence). Fixed **61 keys**: pcsAdminNav 15 + shopOrderPayModal 14 + customerWhtUpload 24 (last 2 were DOUBLE-NESTED — un-nest pass missed them) + freightQuoteWizard 7 + notifications 1. NEW guard **`scripts/i18n-key-audit.mjs`** (wired into `audit:all`→`verify`) → 0 leaks + can't regress.
+5. **🎠 Dashboard FOUC "บวม → ย่อ" FIXED** — the promo Slick carousel rendered all slides STACKED until client jQuery init collapsed them, every load. Standard Slick anti-FOUC in blocking `legacy-overrides.css` (`:not(.slick-initialized)` → show 1st slide only). Verified: pre-init 1 slide · CLS=0. Swept rest: no other jQuery-FOUC (slick=dashboard only · modals hidden · tam-counter intentional).
+
+**🟢 STATE:** dave-pacred green · migrations all on prod · CSV/i18n/polish/FOUC done · this session pushed to **main** (owner "จบงานได้เลย"). **🔴 carryover (owner/external · unchanged):** Vercel env (TAMIT-2026 · Sentry DSN · FB tokens · **Supabase refresh-token-reuse-interval** = the random-logout durable fix) · employee_code numbers · staff photos · ใบขน VAT · freight cost-side. Learnings updated: `member-sidebar-contact-and-i18n-traps.md` · `nextjs-16-quirks.md` (Slick FOUC) · `parallel-agent-sprints.md` (workflow worktree-confusion + {schema} fragility).
+
+---
+
 # 🔧 2026-06-06 PM — เดฟ: 2 RED bugs + staff/login/warehouse + incidents→0 + กอต-PR038 + 💰 wallet-rework DESIGNED · read FIRST
 
 **main = `dave-pacred` = `b46e8bd4`+ (this ADR doc) · all pushed to dave-pacred + main (+ Poom-pacred/InwPond007/podeng made equal) · `pnpm verify` + `pnpm build` EXIT 0 (REAL) · tree clean · localhost :3000 live (admin Tadsakorn-super tab).** Owner live-driven, big batch. SHIPPED (each gated + pushed):

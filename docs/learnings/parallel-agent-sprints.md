@@ -231,3 +231,34 @@ The cherry-picks may conflict if `dave-pacred` also touched those files — reso
 - Commits `c8e06e92` + `fb7939f1` — the cherry-picks (ปอน's cart Tailwind rebuild)
 - `.claude/skills/branch-integrate-loop/SKILL.md` — the skill that codified this
 - AGENTS.md §13 — "Worktree base is stale" (related: same root cause, different surface)
+
+---
+
+## 2026-06-07 — Workflow fan-out traps: worktree split-brain + `{schema}` fragility
+
+Ran many `Workflow` fan-outs (10–32 agents) to add CSV export to ~70 admin
+surfaces + reconstruct i18n keys. Two recurring failure modes:
+
+1. **Worktree split-brain.** The session shell's cwd is a `.claude/worktrees/*`
+   checkout, NOT the main `/Users/dev/pacred-web`. Some spawned agents resolved
+   RELATIVE paths (or a bare `cd`) against that worktree → their new files landed
+   in the WRONG checkout. One batch wrote 3 export actions + 2 page edits into the
+   worktree while a sibling page-edit (importing them) landed in main → broken
+   import in main. **Fix:** in every fan-out prompt, make it a hard rule — EVERY
+   Read/Edit/Write path ABSOLUTE starting with `/Users/dev/pacred-web/`, and
+   `cd /Users/dev/pacred-web` for Bash. After the workflow, RECONCILE: `git
+   status` in main is the source of truth; copy any misplaced files out of the
+   worktree. After the rule was added, 11- and 7- and 32-agent batches all landed
+   clean.
+
+2. **`agent({schema})` is fragile at scale.** Whole batches returned `null`
+   ("subagent completed without calling StructuredOutput after 2 nudges") — the
+   agents did the work but didn't emit the structured tool call; one 11-agent
+   batch even returned 0 tokens (transient spawn glitch). **Fix:** for
+   file-EDITING fan-outs, drop the schema — have agents reply one plain line and
+   treat **git status + the gate (typecheck/build) as the source of truth**, not
+   the agent reports. Re-running the same batch without schema succeeded. (Keep
+   schema only for pure read/return DATA workflows like the review pass.)
+
+**General rule:** an agent's report says what it INTENDED; verify the working
+tree + gate before trusting it. trust-but-verify, every fan-out.
