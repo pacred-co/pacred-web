@@ -21,6 +21,8 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportJuristicCheckAll } from "@/actions/admin/export/juristic-check";
 import { JuristicActions } from "./juristic-actions";
 
 // requireAdmin reads auth cookies → force-dynamic (AGENTS.md §11).
@@ -127,12 +129,48 @@ export default async function AdminJuristicCheckPage({
     {},
   );
 
+  // CSV — columns mirror the <thead> 1:1 (the docs/actions cell is non-data UI,
+  // so it is replaced by the customer contact columns the page shows in-cell).
+  const csvCols: CsvCol[] = [
+    { key: "userid", label: "ลูกค้า" },
+    { key: "customer", label: "ชื่อลูกค้า" },
+    { key: "tel", label: "เบอร์โทร" },
+    { key: "email", label: "อีเมล" },
+    { key: "corporatenumber", label: "เลขผู้เสียภาษี" },
+    { key: "corporatename", label: "ชื่อบริษัท" },
+    { key: "corporateaddress", label: "ที่อยู่บริษัท" },
+    { key: "status", label: "สถานะ" },
+    { key: "cpdatecreate", label: "วันที่ส่ง" },
+  ];
+  const csvRows: CsvRow[] = rows.map(({ corp: c, user: u }) => ({
+    userid: c.userid ?? "",
+    customer: u ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() : "",
+    tel: u?.userTel ?? "",
+    email: u?.userEmail ?? "",
+    corporatenumber: c.corporatenumber ?? "",
+    corporatename: c.corporatename ?? "",
+    corporateaddress: c.corporateaddress ?? "",
+    status: STATUS_LABEL[c.corporatestatus ?? "1"] ?? (c.corporatestatus ?? ""),
+    cpdatecreate: c.cpdatecreate ? c.cpdatecreate.slice(0, 10) : "",
+  }));
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ลูกค้านิติบุคคล</p>
-        <h1 className="mt-1 text-2xl font-bold">🏢 ตรวจสอบลูกค้านิติบุคคล</h1>
-        <p className="mt-1 text-sm text-muted">ตรวจหนังสือรับรอง + ภ.พ.20 ของลูกค้านิติบุคคล แล้วยืนยัน / ปฏิเสธสถานะ</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ลูกค้านิติบุคคล</p>
+          <h1 className="mt-1 text-2xl font-bold">🏢 ตรวจสอบลูกค้านิติบุคคล</h1>
+          <p className="mt-1 text-sm text-muted">ตรวจหนังสือรับรอง + ภ.พ.20 ของลูกค้านิติบุคคล แล้วยืนยัน / ปฏิเสธสถานะ</p>
+        </div>
+        <CsvButton
+          rows={csvRows}
+          cols={csvCols}
+          filename="juristic-check.csv"
+          fetchAll={async () => {
+            "use server";
+            return exportJuristicCheckAll({ statusFilter });
+          }}
+        />
       </div>
 
       <div className="flex flex-wrap gap-2">

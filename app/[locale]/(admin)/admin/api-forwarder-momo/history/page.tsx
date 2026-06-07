@@ -23,6 +23,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { BarChart3, ArrowLeft, User } from "lucide-react";
+import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { exportMomoHistoryAll } from "@/actions/admin/export/momo-history";
 
 export const dynamic = "force-dynamic";
 
@@ -177,6 +179,32 @@ export default async function MomoHistoryPage({
 
   const history = await loadHistory(fromIso, toIso);
 
+  // CSV — mirror the on-screen <thead> 1:1 (money/numbers as already-formatted strings).
+  const csvCols: CsvCol[] = [
+    { key: "rank", label: "#" },
+    { key: "momoCode", label: "MOMO code" },
+    { key: "pacredId", label: "Pacred userID" },
+    { key: "customerName", label: "ชื่อลูกค้า" },
+    { key: "customerTel", label: "เบอร์" },
+    { key: "cbm", label: "CBM" },
+    { key: "kgs", label: "น้ำหนัก (kg)" },
+    { key: "qty", label: "ชิ้น" },
+    { key: "tracking", label: "tracking" },
+    { key: "firstSeen", label: "ครั้งแรกที่ส่ง" },
+  ];
+  const csvRows: CsvRow[] = history.perUser.map((u, idx) => ({
+    rank: idx + 1,
+    momoCode: u.userCode,
+    pacredId: u.guessedPr,
+    customerName: u.customerName,
+    customerTel: u.customerTel,
+    cbm: u.totalCbm.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    kgs: u.totalKgs.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    qty: u.totalQty.toLocaleString("en-US"),
+    tracking: u.totalRows.toLocaleString("en-US"),
+    firstSeen: u.firstSeen.slice(0, 10),
+  }));
+
   return (
     <main className="p-4 lg:p-8 space-y-5">
       {/* Breadcrumb */}
@@ -269,11 +297,22 @@ export default async function MomoHistoryPage({
 
       {/* Per-customer table */}
       <section className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-        <header className="border-b border-gray-200 bg-surface-alt/40 px-4 py-2.5 flex items-center gap-2">
+        <header className="border-b border-gray-200 bg-surface-alt/40 px-4 py-2.5 flex items-center gap-2 flex-wrap">
           <User className="h-4 w-4 text-primary-600" />
           <h2 className="text-sm font-bold">
             ลูกค้า {history.perUser.length} ราย · เรียงตาม CBM
           </h2>
+          <div className="ml-auto">
+            <CsvButton
+              rows={csvRows}
+              cols={csvCols}
+              filename={`momo-history-${fromDate}-${toDate}.csv`}
+              fetchAll={async () => {
+                "use server";
+                return exportMomoHistoryAll({ fromIso, toIso });
+              }}
+            />
+          </div>
         </header>
         {history.perUser.length === 0 ? (
           <p className="p-6 text-center text-sm text-muted">

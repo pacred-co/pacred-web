@@ -1,6 +1,8 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getTranThList } from "@/actions/admin/forwarder-tran-th";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportTranThAll } from "@/actions/admin/export/tran-th";
 
 /**
  * /admin/forwarders/tran-th — TH-transport batch list (legacy
@@ -53,6 +55,20 @@ export default async function AdminTranThListPage({
     .map(([id, a]) => ({ id, ...a }))
     .sort((a, b) => b.batches - a.batches)
     .slice(0, 10);
+
+  // ── CSV export (batches list — mirrors the <thead> 1:1) ──
+  const csvCols: CsvCol[] = [
+    { key: "id", label: "#" },
+    { key: "date", label: "วันที่สร้าง" },
+    { key: "adminidcreate", label: "ผู้สร้าง" },
+    { key: "itemCount", label: "#forwarder ในชุด" },
+  ];
+  const csvRows: CsvRow[] = result.rows.map((b) => ({
+    id: b.id,
+    date: fmtDateLong(b.date),
+    adminidcreate: b.adminidcreate ?? "",
+    itemCount: b.itemCount,
+  }));
 
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
@@ -150,8 +166,17 @@ export default async function AdminTranThListPage({
 
       {/* Batches list */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
-        <div className="px-5 py-3 border-b border-border">
+        <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-3 flex-wrap">
           <h2 className="font-bold text-sm">📋 รายการ batch ({result.rows.length.toLocaleString("th-TH")})</h2>
+          <CsvButton
+            rows={csvRows}
+            cols={csvCols}
+            filename="ใบจัดส่งในไทย.csv"
+            fetchAll={async () => {
+              "use server";
+              return exportTranThAll({ dateFrom, dateTo, adminID });
+            }}
+          />
         </div>
         {result.rows.length === 0 ? (
           <p className="p-12 text-center text-sm text-muted">

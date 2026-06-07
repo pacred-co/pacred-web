@@ -28,6 +28,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
+import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { exportForwarderActionAll } from "@/actions/admin/export/forwarder-action";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { Link } from "@/i18n/navigation";
@@ -175,16 +177,49 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
 
     const { data: shopRows, error: shopError, count: totalShopNotes } = await shopQ;
 
+    const shopCsvCols: CsvCol[] = [
+      { key: "id", label: "ID" },
+      { key: "hdate", label: "วันที่สร้าง" },
+      { key: "hno", label: "เลขที่ออเดอร์" },
+      { key: "userid", label: "รหัสสมาชิก" },
+      { key: "htitle", label: "สินค้า" },
+      { key: "htotalpricechn", label: "ราคารวม (¥)" },
+      { key: "hstatus", label: "สถานะ" },
+      { key: "hnote", label: "หมายเหตุ" },
+    ];
+    const shopCsvRows: CsvRow[] = (shopRows ?? []).map((r) => ({
+      id: r.id as number,
+      hdate: r.hdate ? String(r.hdate).slice(0, 10) : "",
+      hno: (r.hno as string) ?? "",
+      userid: (r.userid as string) ?? "",
+      htitle: `${(r.htitle as string) ?? ""}${r.hcount ? ` (${r.hcount as number})` : ""}`.trim(),
+      htotalpricechn: Number(r.htotalpricechn ?? 0).toFixed(2),
+      hstatus: (r.hstatus as string) ?? "",
+      hnote: (r.hnote as string) ?? "",
+    }));
+    const shopQForExport = fStatusQ;
+
     return (
       <>
         <TopMenuReport activeHref={`/admin/forwarder-action?action=${action}`} />
         <main className="p-4 lg:p-6 space-y-4">
-          <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · AUDIT</p>
-            <h1 className="mt-1 text-2xl font-bold">{label}</h1>
-            <p className="mt-1 text-xs text-muted">
-              Legacy condition: <code className="rounded bg-surface-alt px-1 py-0.5">{ACTION_CONDITION[action]}</code>
-            </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · AUDIT</p>
+              <h1 className="mt-1 text-2xl font-bold">{label}</h1>
+              <p className="mt-1 text-xs text-muted">
+                Legacy condition: <code className="rounded bg-surface-alt px-1 py-0.5">{ACTION_CONDITION[action]}</code>
+              </p>
+            </div>
+            <CsvButton
+              rows={shopCsvRows}
+              cols={shopCsvCols}
+              filename={`forwarder-action-NoteShop${shopQForExport ? `-q${shopQForExport}` : ""}.csv`}
+              fetchAll={async () => {
+                "use server";
+                return exportForwarderActionAll({ action: "NoteShop", q: shopQForExport });
+              }}
+            />
           </div>
 
           {/* Status tab strip (?q=1..6) */}
@@ -330,21 +365,65 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
     "cover",
   );
 
+  const isShipQueue = action === "NotShipFree" || action === "NotShipFreeError";
+  const fwdCsvCols: CsvCol[] = [
+    { key: "id", label: "ID" },
+    { key: "fdate", label: "วันที่" },
+    { key: "fcabinetnumber", label: "เบอร์ตู้" },
+    { key: "ftrackingchn", label: "tracking จีน" },
+    { key: "fstatus", label: "สถานะ" },
+    ...(isShipQueue
+      ? [
+          { key: "faddresszipcode", label: "ZIP" },
+          { key: "fshipby", label: "ShipBy" },
+        ]
+      : []),
+    { key: "fnote", label: "หมายเหตุ" },
+    { key: "ftotalprice", label: "ราคา" },
+  ];
+  const fwdCsvRows: CsvRow[] = (rows ?? []).map((r) => {
+    const row: CsvRow = {
+      id: r.id as number,
+      fdate: r.fdate ? String(r.fdate).slice(0, 10) : "",
+      fcabinetnumber: (r.fcabinetnumber as string) ?? "",
+      ftrackingchn: (r.ftrackingchn as string) ?? "",
+      fstatus: (r.fstatus as string) ?? "",
+    };
+    if (isShipQueue) {
+      row.faddresszipcode = (r.faddresszipcode as string) ?? "";
+      row.fshipby = (r.fshipby as string) ?? "";
+    }
+    row.fnote = (r.fnote as string) ?? "";
+    row.ftotalprice = Number(r.ftotalprice ?? 0).toFixed(2);
+    return row;
+  });
+
   return (
     <>
       <TopMenuReport activeHref={`/admin/forwarder-action?action=${action}`} />
       <main className="p-4 lg:p-6 space-y-4">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · AUDIT</p>
-          <h1 className="mt-1 text-2xl font-bold">{label}</h1>
-          <p className="mt-1 text-xs text-muted">
-            Legacy condition: <code className="rounded bg-surface-alt px-1 py-0.5">{ACTION_CONDITION[action] ?? "TBD"}</code>
-          </p>
-          {(action === "NotShipFree" || action === "NotShipFreeError") && (
-            <p className="mt-1 text-[11px] text-muted">
-              Free-shipping ZIP list: {FREE_SHIPPING_ZIPS.length} codes (BKK + นนทบุรี + ปทุมธานี + นครปฐม + สมุทรปราการ + สมุทรสาคร)
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · AUDIT</p>
+            <h1 className="mt-1 text-2xl font-bold">{label}</h1>
+            <p className="mt-1 text-xs text-muted">
+              Legacy condition: <code className="rounded bg-surface-alt px-1 py-0.5">{ACTION_CONDITION[action] ?? "TBD"}</code>
             </p>
-          )}
+            {isShipQueue && (
+              <p className="mt-1 text-[11px] text-muted">
+                Free-shipping ZIP list: {FREE_SHIPPING_ZIPS.length} codes (BKK + นนทบุรี + ปทุมธานี + นครปฐม + สมุทรปราการ + สมุทรสาคร)
+              </p>
+            )}
+          </div>
+          <CsvButton
+            rows={fwdCsvRows}
+            cols={fwdCsvCols}
+            filename={`forwarder-action-${action}${fStatusQ ? `-q${fStatusQ}` : ""}.csv`}
+            fetchAll={async () => {
+              "use server";
+              return exportForwarderActionAll({ action, q: fStatusQ });
+            }}
+          />
         </div>
 
         {error && (

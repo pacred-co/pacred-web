@@ -44,6 +44,8 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportAdminsAll } from "@/actions/admin/export/admins";
 
 export const dynamic = "force-dynamic";
 
@@ -422,6 +424,65 @@ export default async function AdminTablePage({
     return `/admin/admins?${params.toString()}`;
   };
 
+  // ── CSV export — columns mirror the <thead> 1:1 (minus the actions col) ──────
+  const csvCols: CsvCol[] = [
+    { key: "granted_at",     label: "วันที่เพิ่ม" },
+    { key: "id_code",        label: "รหัส" },
+    { key: "employee_code",  label: "รหัสพนักงาน" },
+    { key: "name",           label: "ชื่อ - นามสกุล" },
+    { key: "nickname",       label: "ชื่อเล่น" },
+    { key: "role",           label: "Role" },
+    { key: "company",        label: "บริษัท" },
+    { key: "type",           label: "ประเภท" },
+    { key: "dept_section",   label: "แผนก / ตำแหน่ง" },
+    { key: "personal_email", label: "อีเมลส่วนตัว" },
+    { key: "personal_phone", label: "เบอร์ส่วนตัว" },
+    { key: "work_email",     label: "อีเมลบริษัท" },
+    { key: "work_phone",     label: "โทรบริษัท" },
+    { key: "status",         label: "สถานะ" },
+  ];
+
+  const csvRows: CsvRow[] = rows.map((row) => {
+    const p = row.profile;
+    const x = row.extras;
+    const fullName = [p?.first_name, p?.last_name].filter(Boolean).join(" ") || "(ยังไม่มีชื่อ)";
+    const nickname = x?.nickname ?? x?.display_name ?? null;
+    const memberCode = p?.member_code ?? "—";
+    const legacyAdminId = x?.legacy_admin_id;
+    const emailUser =
+      p?.email && p.email.endsWith("@pacred.co.th") ? p.email.split("@")[0] : null;
+    const idCodeDisplay = legacyAdminId ?? emailUser ?? memberCode;
+    const deptSection = [x?.department, x?.section].filter(Boolean).join(" / ");
+    const personalEmail = p?.email;
+    const personalPhone = p?.phone ?? x?.direct_phone;
+    const isEnded = !!x?.ended_at;
+    const isSuspended = !!x?.suspended_at;
+    const isInactive = !row.is_active;
+    const statusLabel = isEnded
+      ? "ลาออกแล้ว"
+      : isSuspended
+        ? "พักงานชั่วคราว"
+        : isInactive
+          ? "ปิดสิทธิ์"
+          : "ทำงานอยู่";
+    return {
+      granted_at: row.granted_at ? row.granted_at.slice(0, 16).replace("T", " ") : "-",
+      id_code: idCodeDisplay,
+      employee_code: p?.employee_code ?? "—",
+      name: fullName,
+      nickname: nickname ?? "-",
+      role: nameRole(row.role).label,
+      company: nameCompany(x?.company)?.label ?? "",
+      type: nameEmployeeType(x?.employee_type)?.label ?? "",
+      dept_section: deptSection || "-",
+      personal_email: personalEmail ?? "-",
+      personal_phone: personalPhone ?? "-",
+      work_email: x?.work_email ?? "-",
+      work_phone: x?.work_phone ?? "-",
+      status: statusLabel,
+    };
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       {/* Page header */}
@@ -433,14 +494,30 @@ export default async function AdminTablePage({
             {rows.length.toLocaleString("th-TH")} รายการ (จาก {sAll.toLocaleString("th-TH")} ทั้งหมด)
           </p>
         </div>
-        {canMutate && (
-          <Link
-            href="/admin/admins/new"
-            className="rounded-lg border border-green-500 bg-green-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-600"
-          >
-            + เพิ่มพนักงานใหม่
-          </Link>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <CsvButton
+            rows={csvRows}
+            cols={csvCols}
+            filename="admins.csv"
+            fetchAll={async () => {
+              "use server";
+              return exportAdminsAll({
+                s: sp.s,
+                c: sp.c,
+                type: sp.type,
+                position: sp.position,
+              });
+            }}
+          />
+          {canMutate && (
+            <Link
+              href="/admin/admins/new"
+              className="rounded-lg border border-green-500 bg-green-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-600"
+            >
+              + เพิ่มพนักงานใหม่
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Wave 22 status banner — proactive transparency per AGENTS §0a. */}

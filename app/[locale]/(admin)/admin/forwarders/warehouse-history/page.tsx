@@ -3,6 +3,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
+import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { exportWarehouseHistoryAll } from "@/actions/admin/export/warehouse-history";
 import {
   WarehouseHistoryRelinkButton,
   WarehouseHistoryDeleteButton,
@@ -517,6 +519,113 @@ export default async function AdminForwardersWarehouseHistoryPage({
 
   const totalRows = orphanRaw.length + matchedRows.length;
 
+  // ── CSV export — on-screen rows flattened (orphan + matched), cols
+  //    mirror the <thead> 1:1 (multi-line cells split into flat columns).
+  //    The "ทั้งหมด" button re-runs the exact filtered query unpaginated
+  //    via exportWarehouseHistoryAll (drift-free).
+  const csvCols: CsvCol[] = [
+    { key: "section", label: "ส่วน" },
+    { key: "f_id", label: "ID" },
+    { key: "scan_date", label: "วันที่บันทึก" },
+    { key: "scan_time", label: "เวลา" },
+    { key: "keysearch", label: "ข้อมูลสแกน" },
+    { key: "userid", label: "รหัสลูกค้า" },
+    { key: "coid", label: "VIP" },
+    { key: "box", label: "กล่อง (ยิง/รวม)" },
+    { key: "detail", label: "รายละเอียด" },
+    { key: "products_type", label: "ประเภท" },
+    { key: "amount_due", label: "ยอดค้างชำระ" },
+    { key: "weight", label: "น้ำหนัก" },
+    { key: "volume", label: "ปริมาตร" },
+    { key: "tracking_chn", label: "เลขพัสดุ (จีน)" },
+    { key: "cabinet", label: "เลขตู้" },
+    { key: "transport_type", label: "ขนส่ง" },
+    { key: "warehouse_china", label: "โกดังจีน" },
+    { key: "container_close", label: "ปิดตู้" },
+    { key: "status", label: "สถานะ" },
+    { key: "arrive_china", label: "วันที่ถึงจีน" },
+    { key: "scanned_by", label: "อัปเดต (admin)" },
+  ];
+
+  const orphanCsvRows: CsvRow[] = orphanRaw.map((row) => {
+    const { date: scanDate, time: scanTime } = splitDateTime(row.fi2date);
+    return {
+      section: "รอเชื่อม (orphan)",
+      f_id: "",
+      scan_date: scanDate,
+      scan_time: scanTime,
+      keysearch: row.keysearch,
+      userid: "",
+      coid: "",
+      box: `${row.fi2amount}/0`,
+      detail: "ไม่พบรายการ กรุณาเลือกเชื่อมรายการ",
+      products_type: "",
+      amount_due: "",
+      weight: "",
+      volume: "",
+      tracking_chn: "",
+      cabinet: "",
+      transport_type: "",
+      warehouse_china: "",
+      container_close: "",
+      status: "",
+      arrive_china: "",
+      scanned_by: row.adminid,
+    };
+  });
+
+  const matchedCsvRows: CsvRow[] = matchedRows.map((row) => {
+    const { date: scanDate, time: scanTime } = splitDateTime(row.fi2date);
+    const sumPrice =
+      (Number(row.f_ftotalprice ?? 0) +
+        Number(row.f_ftransportprice ?? 0) +
+        Number(row.f_fpriceupdate ?? 0) +
+        Number(row.f_fshippingservice ?? 0)) -
+      Number(row.f_fdiscount ?? 0);
+    const volumeTotal =
+      row.f_fvolume && row.f_famount
+        ? Number(row.f_fvolume) * Number(row.f_famount)
+        : null;
+    return {
+      section: "เชื่อมแล้ว (matched)",
+      f_id: row.f_id ?? "",
+      scan_date: scanDate,
+      scan_time: scanTime,
+      keysearch: row.keysearch,
+      userid: row.f_userid ?? "",
+      coid: !row.u_coid || row.u_coid === "PCS" ? "" : row.u_coid,
+      box: `${row.fi2amount}/${row.f_famount ?? 0}`,
+      detail: row.f_fdetail ?? "",
+      products_type: nameProductsType(row.f_fproductstype),
+      amount_due: priceWaiting(sumPrice),
+      weight:
+        row.f_fweight != null && Number(row.f_fweight) > 0 ? `${row.f_fweight} Kg` : "",
+      volume:
+        volumeTotal != null && Number(volumeTotal) > 0 ? `${volumeTotal} CBM` : "",
+      tracking_chn: row.f_ftrackingchn ?? "",
+      cabinet: row.f_fcabinetnumber ?? "",
+      transport_type:
+        row.f_ftransporttype === "1" ? "ทางรถ" : row.f_ftransporttype === "2" ? "ทางเรือ" : "",
+      warehouse_china:
+        row.f_fwarehousechina === "1" ? "กวางโจว" : row.f_fwarehousechina === "2" ? "อี้อู" : "",
+      container_close: formatDDMMYYYY(row.f_fdatecontainerclose),
+      status:
+        {
+          "1": "รอสินค้าเข้าโกดังจีน",
+          "2": "ถึงโกดังจีนแล้ว",
+          "3": "กำลังส่งมาไทย",
+          "4": "ถึงไทยแล้ว",
+          "5": "รอชำระเงิน",
+          "6": "เตรียมส่ง",
+          "7": "ส่งแล้ว",
+        }[row.f_fstatus ?? ""] ?? "",
+      arrive_china: row.f_fdatestatus2?.slice(0, 10) ?? "",
+      scanned_by: row.adminid,
+    };
+  });
+
+  const csvRows: CsvRow[] = [...orphanCsvRows, ...matchedCsvRows];
+
   return (
     <>
       {/* Singleton relink-modal host — listens for openRelinkModal()
@@ -548,12 +657,23 @@ export default async function AdminForwardersWarehouseHistoryPage({
               barcode-d-import.php (the warehouse intake scanner workstation).
               Same target used by /admin/barcode/page.tsx + driver/page.tsx
               redirects. */}
-          <Link
-            href="/admin/barcode/driver/import"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500 bg-emerald-500 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-600 transition-colors"
-          >
-            + สแกนรายการเพิ่ม
-          </Link>
+          <div className="flex items-center gap-2 flex-wrap">
+            <CsvButton
+              rows={csvRows}
+              cols={csvCols}
+              filename="ประวัติเข้าโกดังไทย.csv"
+              fetchAll={async () => {
+                "use server";
+                return exportWarehouseHistoryAll({ mode, startDate, endDate });
+              }}
+            />
+            <Link
+              href="/admin/barcode/driver/import"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500 bg-emerald-500 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-600 transition-colors"
+            >
+              + สแกนรายการเพิ่ม
+            </Link>
+          </div>
         </div>
 
         {/* Filter form — 3 modes preserved (default-week / range / all).

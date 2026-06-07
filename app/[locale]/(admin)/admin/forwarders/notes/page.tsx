@@ -32,8 +32,25 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { LEGACY_FORWARDER_STATUS, legacyForwarderStatusThai, toLegacyForwarderCode } from "@/lib/legacy-status-map";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportForwarderNotesAll } from "@/actions/admin/export/forwarder-notes";
 
 export const dynamic = "force-dynamic";
+
+// CSV columns mirror the on-screen <thead> 1:1 (multi-line cells flattened).
+const CSV_COLS: CsvCol[] = [
+  { key: "updated", label: "วันอัปเดต / สั่ง" },
+  { key: "fno", label: "เลขนำเข้า" },
+  { key: "userid", label: "รหัสลูกค้า" },
+  { key: "customer", label: "ลูกค้า" },
+  { key: "tel", label: "เบอร์โทร" },
+  { key: "status", label: "สถานะ" },
+  { key: "total", label: "ยอด (บาท)" },
+  { key: "tracking_chn", label: "Tracking จีน" },
+  { key: "tracking_th", label: "Tracking ไทย" },
+  { key: "note_admin", label: "หมายเหตุ (แอดมิน)" },
+  { key: "note_user", label: "หมายเหตุ (ลูกค้า)" },
+];
 
 type RawForwarder = {
   id: number;
@@ -119,6 +136,30 @@ export default async function ForwarderNotesPage({
     }
   }
 
+  // CSV rows for the currently-displayed page (cols mirror the <thead>; the
+  // export-all action re-runs the EXACT same filtered query unpaginated).
+  const csvRows: CsvRow[] = pageRows.map((r) => {
+    const u = userMap[r.userid];
+    const customerName = u ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() : "";
+    const updated = r.fdateadminstatus ?? r.fdate;
+    return {
+      updated: updated ? String(updated).slice(0, 10) : "",
+      fno: r.fidorco ?? `#${r.id}`,
+      userid: r.userid ?? "",
+      customer: customerName,
+      tel: u?.userTel ?? "",
+      status: legacyForwarderStatusThai(r.fstatus),
+      total:
+        r.ftotalprice != null
+          ? Number(r.ftotalprice).toLocaleString("th-TH", { minimumFractionDigits: 2 })
+          : "",
+      tracking_chn: r.ftrackingchn ?? "",
+      tracking_th: r.ftrackingth ?? "",
+      note_admin: (r.fnote ?? "").trim(),
+      note_user: (r.fnoteuser ?? "").trim(),
+    };
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       {/* Breadcrumb */}
@@ -131,12 +172,23 @@ export default async function ForwarderNotesPage({
       </nav>
 
       {/* Header */}
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ฝากนำเข้า</p>
-        <h1 className="mt-1 text-2xl font-bold">หมายเหตุนำเข้า</h1>
-        <p className="mt-1 text-sm text-muted">
-          รายการฝากนำเข้าที่มีหมายเหตุ · {rows.length} รายการ · เรียงตามวันอัปเดตล่าสุด · จำกัด 500 รายการ
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ฝากนำเข้า</p>
+          <h1 className="mt-1 text-2xl font-bold">หมายเหตุนำเข้า</h1>
+          <p className="mt-1 text-sm text-muted">
+            รายการฝากนำเข้าที่มีหมายเหตุ · {rows.length} รายการ · เรียงตามวันอัปเดตล่าสุด · จำกัด 500 รายการ
+          </p>
+        </div>
+        <CsvButton
+          rows={csvRows}
+          cols={CSV_COLS}
+          filename="หมายเหตุนำเข้า.csv"
+          fetchAll={async () => {
+            "use server";
+            return exportForwarderNotesAll({ legacyStatusCode, statusKey: sp.status });
+          }}
+        />
       </div>
 
       {/* Filter chips — all statuses from LEGACY_FORWARDER_STATUS map */}

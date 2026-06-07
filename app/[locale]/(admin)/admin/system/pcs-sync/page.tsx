@@ -2,6 +2,21 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Database, RefreshCw, AlertCircle, CheckCircle2, Clock } from "lucide-react";
 import { PcsSyncActionPanel } from "./action-panel";
+import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { exportPcsSyncAll } from "@/actions/admin/export/pcs-sync";
+
+// Run-history CSV columns — mirror the run-history <thead> 1:1.
+const LOG_CSV_COLS: CsvCol[] = [
+  { key: "ran_at", label: "เวลา" },
+  { key: "since", label: "since" },
+  { key: "until", label: "until" },
+  { key: "rows_seen", label: "เห็น" },
+  { key: "rows_upserted", label: "เขียน" },
+  { key: "rows_skipped_newer", label: "ข้าม" },
+  { key: "rows_failed", label: "fail" },
+  { key: "duration_ms", label: "ms" },
+  { key: "error", label: "error" },
+];
 
 /**
  * /admin/system/pcs-sync — PCS↔Pacred sync dashboard.
@@ -92,6 +107,21 @@ export default async function PcsSyncDashboardPage() {
   }
   const logs = (logsRaw ?? []) as unknown as LogRow[];
 
+  // CSV rows for the on-screen run-history table (the 50 most-recent runs).
+  // Timestamps sliced to "YYYY-MM-DD HH:MM:SS"; mirrors LOG_CSV_COLS / <thead>.
+  const fmtCsvTs = (iso: string | null) => (iso ? iso.replace("T", " ").slice(0, 19) : "");
+  const logCsvRows: CsvRow[] = logs.map((l) => ({
+    ran_at: fmtCsvTs(l.ran_at),
+    since: fmtCsvTs(l.since),
+    until: fmtCsvTs(l.until),
+    rows_seen: l.rows_seen,
+    rows_upserted: l.rows_upserted,
+    rows_skipped_newer: l.rows_skipped_newer,
+    rows_failed: l.rows_failed,
+    duration_ms: l.duration_ms ?? "",
+    error: l.error ?? "",
+  }));
+
   // ── Derived status badge ──
   const lastRunAgeMin = ageMinutes(state.last_run_at);
   const isStale       = lastRunAgeMin !== null && lastRunAgeMin > 30; // cron is */10
@@ -172,7 +202,18 @@ export default async function PcsSyncDashboardPage() {
             <RefreshCw className="w-4 h-4 text-muted" />
             <h2 className="text-sm font-semibold text-foreground">ประวัติการรัน (50 รอบล่าสุด)</h2>
           </div>
-          <span className="text-[11px] text-muted">{logs.length} รอบ</span>
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] text-muted">{logs.length} รอบ</span>
+            <CsvButton
+              rows={logCsvRows}
+              cols={LOG_CSV_COLS}
+              filename="pcs-sync-history.csv"
+              fetchAll={async () => {
+                "use server";
+                return exportPcsSyncAll();
+              }}
+            />
+          </div>
         </header>
         <div className="overflow-x-auto scrollbar-x-visible">
           <table className="w-full text-[12px] min-w-[920px]">

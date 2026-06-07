@@ -24,6 +24,8 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { ReportShell } from "@/components/admin/reports/report-shell";
 import { getForwarderSlaReport } from "@/actions/admin/reports-sla";
+import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { exportSlaStuckAll } from "@/actions/admin/export/report-sla-cycle-time";
 import {
   resolveDateRange, intTh, decTh, type ReportData,
 } from "@/lib/admin/reports/types";
@@ -89,8 +91,35 @@ export default async function ForwarderSlaCycleTimePage({
     })),
   };
 
+  // ── CSV export-all (stuck-orders board) — the UI caps the stuck table at 300
+  //    rows; this button re-runs the EXACT filtered query unpaginated + audits.
+  const stuckCsvCols: CsvCol[] = data.columns.map((c) => ({ key: c.key, label: c.label }));
+  const stuckCsvRows: CsvRow[] = data.rows.map((r) => ({
+    fNo: r.fNo,
+    stageLabel: r.stageLabel,
+    daysStuck: r.daysStuck,
+    customer: r.customer,
+  }));
+  const stuckCsvFilename = `report-sla-cycle-time_${range.from}_${range.to}.csv`;
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
+      {res.ok && (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <span className="mr-auto text-xs text-muted">
+            Export ออเดอร์ค้าง (CSV) — “ทั้งหมด” = ครบทุกแถวตามช่วงเวลา (ไม่จำกัดเฉพาะ 300 แถวที่แสดง)
+          </span>
+          <CsvButton
+            rows={stuckCsvRows}
+            cols={stuckCsvCols}
+            filename={stuckCsvFilename}
+            fetchAll={async () => {
+              "use server";
+              return exportSlaStuckAll({ range, stuckThresholdDays: report.stuckThresholdDays });
+            }}
+          />
+        </div>
+      )}
       <ReportShell
         title="SLA / เวลาต่อสเตจ (ฝากนำเข้า)"
         subtitle={

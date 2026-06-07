@@ -2,6 +2,19 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { ChevronRight, Home, Table2 } from "lucide-react";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportHrOrgTableAll } from "@/actions/admin/export/hr-org-table";
+
+const CSV_COLS: CsvCol[] = [
+  { key: "branch", label: "Branch" },
+  { key: "section", label: "Section" },
+  { key: "position", label: "Position" },
+  { key: "slug", label: "Slug" },
+  { key: "employee", label: "Employee" },
+  { key: "internship", label: "Internship" },
+  { key: "partner", label: "Partner" },
+  { key: "holders", label: "ผู้นั่งตำแหน่งปัจจุบัน" },
+];
 
 type Branch  = { id: string; slug: string; name: string; color_tone: string; sort_order: number };
 type Section = { id: string; branch_id: string; slug: string; name: string; sort_order: number };
@@ -70,6 +83,34 @@ export default async function OrgTablePage() {
     { quotaE: 0, filledE: 0, quotaI: 0, filledI: 0, quotaP: 0, filledP: 0 },
   );
 
+  // On-screen rows → flat CSV rows (one per position · mirrors <thead> 1:1).
+  const csvRows: CsvRow[] = positions.map((p) => {
+    const sec = sectionById.get(p.section_id);
+    const br = sec ? branchById.get(sec.branch_id) : undefined;
+    const fills = assignmentsByPosition.get(p.id) ?? [];
+    const e = fills.filter((a) => a.kind === "employee").length;
+    const i = fills.filter((a) => a.kind === "internship").length;
+    const pa = fills.filter((a) => a.kind === "partner").length;
+    const holders =
+      fills.length === 0
+        ? "— ยังไม่มีคน —"
+        : fills
+            .map((a) =>
+              `${a.profile?.member_code ?? "—"} ${`${a.profile?.first_name ?? ""} ${a.profile?.last_name ?? ""}`.trim()} (${a.kind})`.trim(),
+            )
+            .join(" · ");
+    return {
+      branch: br?.name ?? "—",
+      section: sec?.name ?? "—",
+      position: p.name,
+      slug: p.slug,
+      employee: `${e} / ${p.quota_employee}`,
+      internship: `${i} / ${p.quota_internship}`,
+      partner: `${pa} / ${p.quota_partner}`,
+      holders,
+    };
+  });
+
   return (
     <main className="p-4 lg:p-6 space-y-5">
       {/* Breadcrumb */}
@@ -98,7 +139,16 @@ export default async function OrgTablePage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <CsvButton
+              rows={csvRows}
+              cols={CSV_COLS}
+              filename="pacred-org-table.csv"
+              fetchAll={async () => {
+                "use server";
+                return exportHrOrgTableAll();
+              }}
+            />
             <Link
               href="/admin/hr/org-chart"
               className="rounded-lg border border-border px-3 py-2 text-xs sm:text-sm font-medium hover:bg-surface-alt"

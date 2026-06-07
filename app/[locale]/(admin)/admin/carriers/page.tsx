@@ -3,6 +3,8 @@ import { CarrierForm } from "./carrier-form";
 import { CarrierRowActions } from "./row-actions";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportCarriersAll } from "@/actions/admin/export/carriers";
 
 export const dynamic = "force-dynamic";
 
@@ -61,18 +63,53 @@ export default async function AdminCarriersPage({
   const offset = (page - 1) * DEFAULT_PAGE_SIZE;
   const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
+  // CSV — columns mirror the table <thead> 1:1 (+ note + audit dates).
+  const csvCols: CsvCol[] = [
+    { key: "sort_order",            label: "Sort" },
+    { key: "code",                  label: "Code" },
+    { key: "name_th",               label: "ชื่อ TH" },
+    { key: "name_en",               label: "ชื่อ EN" },
+    { key: "tracking_url_template", label: "Tracking URL" },
+    { key: "status",                label: "สถานะ" },
+    { key: "note",                  label: "หมายเหตุ" },
+    { key: "created_at",            label: "สร้างเมื่อ" },
+    { key: "updated_at",            label: "แก้ไขเมื่อ" },
+  ];
+  const csvRows: CsvRow[] = pageRows.map((r) => ({
+    sort_order:            r.sort_order,
+    code:                  r.code,
+    name_th:               r.name_th,
+    name_en:               r.name_en,
+    tracking_url_template: r.tracking_url_template ?? "",
+    status:                r.is_active ? "active" : "inactive",
+    note:                  r.note ?? "",
+    created_at:            (r.created_at ?? "").slice(0, 10),
+    updated_at:            (r.updated_at ?? "").slice(0, 10),
+  }));
+
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-5xl">
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ปฏิบัติการ</p>
-        <h1 className="mt-1 text-2xl font-bold">จัดการขนส่ง (Carriers)</h1>
-        <p className="mt-1 text-sm text-muted">
-          เพิ่ม/แก้ไขผู้ให้บริการขนส่ง (SPX/J&amp;T/Flash/EMS/Lalamove ฯลฯ).
-          Code เปลี่ยนภายหลังไม่ได้ — ถ้าตั้งผิดให้สร้างใหม่ + soft-delete อันเก่า.
-        </p>
-        <p className="mt-1 text-xs text-muted">
-          {activeCount} active · {inactiveCount} inactive · รวม {rows.length} รายการ
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ปฏิบัติการ</p>
+          <h1 className="mt-1 text-2xl font-bold">จัดการขนส่ง (Carriers)</h1>
+          <p className="mt-1 text-sm text-muted">
+            เพิ่ม/แก้ไขผู้ให้บริการขนส่ง (SPX/J&amp;T/Flash/EMS/Lalamove ฯลฯ).
+            Code เปลี่ยนภายหลังไม่ได้ — ถ้าตั้งผิดให้สร้างใหม่ + soft-delete อันเก่า.
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            {activeCount} active · {inactiveCount} inactive · รวม {rows.length} รายการ
+          </p>
+        </div>
+        <CsvButton
+          rows={csvRows}
+          cols={csvCols}
+          filename="carriers.csv"
+          fetchAll={async () => {
+            "use server";
+            return exportCarriersAll();
+          }}
+        />
       </div>
 
       {/* List */}

@@ -7,6 +7,8 @@ import {
   lastNYyyymm, currentYyyymm,
 } from "@/lib/validators/accounting-period";
 import { OpenPeriodButton } from "./open-period-button";
+import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { exportAccPeriodsAll } from "@/actions/admin/export/acc-periods";
 
 /**
  * V-E9 — /admin/accounting/periods list.
@@ -125,6 +127,43 @@ export default async function AdminAccountingPeriodsPage() {
 
   const now = currentYyyymm();
 
+  // CSV columns mirror the <thead> 1:1 (+ explicit money/count splits so each
+  // multi-line table cell becomes flat columns).
+  const csvCols: CsvCol[] = [
+    { key: "period_label",  label: "งวด" },
+    { key: "period_yyyymm", label: "รหัสงวด" },
+    { key: "status",        label: "สถานะ" },
+    { key: "tax_count",     label: "tax_invoices (จำนวน)" },
+    { key: "tax_sum",       label: "tax_invoices (ยอด)" },
+    { key: "freight_count", label: "freight_invoices (จำนวน)" },
+    { key: "freight_sum",   label: "freight_invoices (ยอด)" },
+    { key: "pay_count",     label: "payments (จำนวน)" },
+    { key: "pay_sum",       label: "payments (ยอด)" },
+    { key: "closed_at",     label: "ปิดเมื่อ" },
+    { key: "closed_by",     label: "ปิดโดย" },
+  ];
+
+  const csvRows: CsvRow[] = window.map((yyyymm) => {
+    const p = periodMap.get(yyyymm);
+    const ev = eventMap.get(yyyymm);
+    const taxRow = ev?.get("tax_invoices");
+    const freightRow = ev?.get("freight_invoices");
+    const payRow = ev?.get("freight_invoice_payments");
+    return {
+      period_label: formatYyyymm(yyyymm) + (yyyymm === now ? " (เดือนปัจจุบัน)" : ""),
+      period_yyyymm: yyyymm,
+      status: p ? ACCOUNTING_PERIOD_STATUS_LABEL[p.status] : "ยังไม่เปิดงวด",
+      tax_count: taxRow ? `${taxRow.row_count} ใบ` : "—",
+      tax_sum: taxRow ? thb(taxRow.sum_thb) : "—",
+      freight_count: freightRow ? `${freightRow.row_count} ใบ` : "—",
+      freight_sum: freightRow ? thb(freightRow.sum_thb) : "—",
+      pay_count: payRow ? `${payRow.row_count} ครั้ง` : "—",
+      pay_sum: payRow ? thb(payRow.sum_thb) : "—",
+      closed_at: p?.closed_at ? p.closed_at.slice(0, 10) : "—",
+      closed_by: p?.closed_at ? profileName(p.closed_by_profile) : "—",
+    } satisfies CsvRow;
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
       <header className="flex items-start justify-between gap-3 flex-wrap">
@@ -136,12 +175,23 @@ export default async function AdminAccountingPeriodsPage() {
             ปิดแล้วจะไม่สามารถแก้ไข tax_invoices / freight_invoices / freight_invoice_payments / wallet_transactions ในงวดนั้น
           </p>
         </div>
-        <Link
-          href="/admin/accounting"
-          className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt"
-        >
-          ← Accounting hub
-        </Link>
+        <div className="flex items-center gap-2 flex-wrap">
+          <CsvButton
+            rows={csvRows}
+            cols={csvCols}
+            filename={`งวดบัญชี-${now}.csv`}
+            fetchAll={async () => {
+              "use server";
+              return exportAccPeriodsAll({ months: 24 });
+            }}
+          />
+          <Link
+            href="/admin/accounting"
+            className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt"
+          >
+            ← Accounting hub
+          </Link>
+        </div>
       </header>
 
       {/* Legend */}

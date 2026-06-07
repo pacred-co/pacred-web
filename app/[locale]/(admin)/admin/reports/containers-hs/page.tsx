@@ -2,6 +2,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { exportContainersHsAll } from "@/actions/admin/export/report-containers-hs";
 
 // Aggregate report — sums qty/weight/value/duty per HS code across
 // all containers (or a date-filtered subset). Mirror of legacy
@@ -122,14 +124,52 @@ export default async function ContainerHsReportPage({
   const offset = (page - 1) * DEFAULT_PAGE_SIZE;
   const pageRows = aggregates.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
+  // CSV export — cols mirror the <thead> 1:1; page rows = displayed aggregates.
+  const csvCols: CsvCol[] = [
+    { key: "hs_code",     label: "HS code" },
+    { key: "description", label: "รายละเอียด" },
+    { key: "containers",  label: "containers" },
+    { key: "lines",       label: "แถว" },
+    { key: "qty",         label: "qty" },
+    { key: "weight_kg",   label: "น้ำหนัก (kg)" },
+    { key: "value_thb",   label: "มูลค่า (THB)" },
+    { key: "duty_thb",    label: "อากรประมาณ" },
+    { key: "pct",         label: "% ต่อรวม" },
+  ];
+  const csvRows: CsvRow[] = pageRows.map((a) => {
+    const pct = grandValue > 0 ? (a.value_thb / grandValue) * 100 : 0;
+    return {
+      hs_code:     a.hs_code,
+      description: a.description,
+      containers:  a.containers.size,
+      lines:       a.lines,
+      qty:         a.qty.toLocaleString("th-TH"),
+      weight_kg:   a.weight_kg.toLocaleString("th-TH", { minimumFractionDigits: 2 }),
+      value_thb:   thb(a.value_thb),
+      duty_thb:    thb(a.duty_thb),
+      pct:         pct.toFixed(1) + "%",
+    };
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · REPORT</p>
-        <h1 className="mt-1 text-2xl font-bold">รายงาน HS code — สะสมจากทุก container</h1>
-        <p className="mt-1 text-sm text-muted">
-          กลุ่มตาม HS code · เรียงตามมูลค่ารวมจากมากสุด · กรองตามวันที่ container ถูกสร้าง
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · REPORT</p>
+          <h1 className="mt-1 text-2xl font-bold">รายงาน HS code — สะสมจากทุก container</h1>
+          <p className="mt-1 text-sm text-muted">
+            กลุ่มตาม HS code · เรียงตามมูลค่ารวมจากมากสุด · กรองตามวันที่ container ถูกสร้าง
+          </p>
+        </div>
+        <CsvButton
+          rows={csvRows}
+          cols={csvCols}
+          filename="report-containers-hs.csv"
+          fetchAll={async () => {
+            "use server";
+            return exportContainersHsAll({ dateFrom, dateTo });
+          }}
+        />
       </div>
 
       {/* Date filter */}

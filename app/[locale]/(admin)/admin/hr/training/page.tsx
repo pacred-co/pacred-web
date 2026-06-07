@@ -7,6 +7,8 @@ import {
 import {
   CourseFormButton, CourseRowActions, EnrollmentRowActions, AddEnrollmentInline,
 } from "./training-actions";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportHrTrainingAll } from "@/actions/admin/export/hr-training";
 
 type Profile = { id: string; member_code: string | null; first_name: string | null; last_name: string | null; avatar_url: string | null };
 type Course = {
@@ -88,6 +90,42 @@ export default async function AdminHRTrainingPage() {
   const totalCompleted  = enrolls.filter((e) => e.status === "completed").length;
   const totalInProgress = enrolls.filter((e) => e.status === "enrolled" || e.status === "in_progress").length;
 
+  // CSV: flatten enrollments → one row per learner (course context + learner).
+  // Columns mirror the per-course <thead> + the course attributes the cards show.
+  const csvCols: CsvCol[] = [
+    { key: "course",         label: "หลักสูตร" },
+    { key: "category",       label: "หมวด" },
+    { key: "mandatory",      label: "บังคับเรียน" },
+    { key: "duration_hours", label: "ชั่วโมง" },
+    { key: "instructor",     label: "ผู้สอน" },
+    { key: "member_code",    label: "รหัสพนักงาน" },
+    { key: "employee",       label: "พนักงาน" },
+    { key: "enrolled_at",    label: "วันลงทะเบียน" },
+    { key: "status",         label: "สถานะ" },
+    { key: "score",          label: "คะแนน" },
+    { key: "completed_at",   label: "เรียนจบเมื่อ" },
+  ];
+  const courseById = new Map(courses.map((c) => [c.id, c]));
+  const csvRows: CsvRow[] = enrolls.map((e) => {
+    const c = courseById.get(e.course_id);
+    const p = e.profile_one;
+    const fullName = `${p?.first_name ?? ""} ${p?.last_name ?? ""}`.trim() || "—";
+    const cat = CAT_LABEL[c?.category ?? ""] ?? CAT_LABEL.general;
+    return {
+      course: c?.title ?? "—",
+      category: cat.label,
+      mandatory: c?.is_mandatory ? "บังคับเรียน" : "",
+      duration_hours: c?.duration_hours ?? "",
+      instructor: c?.instructor ?? "",
+      member_code: p?.member_code ?? "—",
+      employee: fullName,
+      enrolled_at: e.enrolled_at ? e.enrolled_at.slice(0, 10) : "",
+      status: STATUS_LABEL[e.status]?.label ?? e.status,
+      score: e.score != null ? `${e.score}` : "—",
+      completed_at: e.completed_at ? e.completed_at.slice(0, 10) : "",
+    };
+  });
+
   return (
     <main className="p-4 lg:p-6 space-y-5">
       <nav className="flex items-center gap-1.5 text-xs text-muted">
@@ -117,6 +155,15 @@ export default async function AdminHRTrainingPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <CsvButton
+              rows={csvRows}
+              cols={csvCols}
+              filename="hr-training.csv"
+              fetchAll={async () => {
+                "use server";
+                return exportHrTrainingAll();
+              }}
+            />
             <CourseFormButton buttonLabel="เพิ่มหลักสูตร" />
             <Link
               href="/admin/hr"

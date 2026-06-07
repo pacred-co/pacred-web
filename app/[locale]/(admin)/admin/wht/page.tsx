@@ -3,6 +3,8 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { exportWhtAll } from "@/actions/admin/export/wht";
 
 /**
  * /admin/wht — Withholding-tax certificate chase queue.
@@ -135,17 +137,64 @@ export default async function AdminWhtChasePage({
   const cntWaived   = counts[2].count ?? 0;
   const cntAll      = cntPending + cntReceived + cntWaived;
 
+  // CSV columns — mirror the <thead> 1:1 (multi-line cells flattened to columns).
+  const csvCols: CsvCol[] = [
+    { key: "customer",     label: "ลูกค้า" },
+    { key: "member_code",  label: "รหัสลูกค้า" },
+    { key: "job",          label: "งาน" },
+    { key: "gross",        label: "Gross" },
+    { key: "wht_rate",     label: "% หัก" },
+    { key: "wht_amount",   label: "WHT" },
+    { key: "net_expected", label: "Net รับจริง" },
+    { key: "status",       label: "สถานะ" },
+    { key: "cert_number",  label: "เลขที่ใบ 50 ทวิ" },
+    { key: "age",          label: "อายุ" },
+  ];
+
+  // Map on-screen rows → flat CsvRow[] (same formatting the table renders).
+  const csvRows: CsvRow[] = rows.map((r) => {
+    const customerLabel =
+      r.profile?.company_name?.trim() ||
+      [r.profile?.first_name, r.profile?.last_name].filter(Boolean).join(" ").trim() ||
+      "—";
+    const jobCode = r.order_h_no || r.forwarder_f_no || "—";
+    const aged = r.cert_status === "pending" ? `${ageDays(r.created_at)}d` : "—";
+    return {
+      customer: customerLabel,
+      member_code: r.profile?.member_code ?? "",
+      job: jobCode,
+      gross: thb(r.gross_invoice_thb),
+      wht_rate: `${Number(r.wht_rate_pct).toFixed(2)}%`,
+      wht_amount: thb(r.wht_amount_thb),
+      net_expected: thb(r.net_expected_thb),
+      status: STATUS_LABEL[r.cert_status] ?? r.cert_status,
+      cert_number: r.cert_status === "received" ? r.cert_number ?? "" : "",
+      age: aged,
+    };
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · ACCOUNTING</p>
-        <h1 className="mt-1 text-2xl font-bold">ใบ 50 ทวิ — ตามใบหักภาษี ณ ที่จ่าย</h1>
-        <p className="mt-1 text-sm text-muted">
-          คิวรายการที่ลูกค้านิติบุคคลหักภาษี ณ ที่จ่ายแล้ว — ต้องส่ง <strong>ใบ 50 ทวิ</strong>{" "}
-          กลับมาให้ Pacred เพื่อใช้เป็นเครดิตภาษี. <strong>ใบเสร็จออกไม่ได้</strong>{" "}
-          จนกว่าใบ 50 ทวิ จะเข้าระบบ (gate ที่ <code>issueTaxInvoice</code> +{" "}
-          <code>adminCreateFreightInvoice</code>).
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · ACCOUNTING</p>
+          <h1 className="mt-1 text-2xl font-bold">ใบ 50 ทวิ — ตามใบหักภาษี ณ ที่จ่าย</h1>
+          <p className="mt-1 text-sm text-muted">
+            คิวรายการที่ลูกค้านิติบุคคลหักภาษี ณ ที่จ่ายแล้ว — ต้องส่ง <strong>ใบ 50 ทวิ</strong>{" "}
+            กลับมาให้ Pacred เพื่อใช้เป็นเครดิตภาษี. <strong>ใบเสร็จออกไม่ได้</strong>{" "}
+            จนกว่าใบ 50 ทวิ จะเข้าระบบ (gate ที่ <code>issueTaxInvoice</code> +{" "}
+            <code>adminCreateFreightInvoice</code>).
+          </p>
+        </div>
+        <CsvButton
+          rows={csvRows}
+          cols={csvCols}
+          filename={`wht-${status}.csv`}
+          fetchAll={async () => {
+            "use server";
+            return exportWhtAll({ status });
+          }}
+        />
       </header>
 
       {/* Filter chips — show count beside each so the queue size is visible at a glance. */}

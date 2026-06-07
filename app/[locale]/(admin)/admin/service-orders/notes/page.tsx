@@ -29,6 +29,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { LEGACY_ORDER_STATUS, legacyOrderStatusThai, type LegacyOrderCode } from "@/lib/legacy-status-map";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportServiceOrderNotesAll } from "@/actions/admin/export/service-order-notes";
 
 export const dynamic = "force-dynamic";
 
@@ -130,6 +132,41 @@ export default async function ServiceOrderNotesPage({
     }
   }
 
+  // CSV columns mirror the <thead> 1:1 (multi-line note cell flattened into two
+  // columns — staff note / customer note).
+  const csvCols: CsvCol[] = [
+    { key: "updated", label: "วันอัปเดต/สั่ง" },
+    { key: "hno", label: "เลขออเดอร์" },
+    { key: "userid", label: "รหัสลูกค้า" },
+    { key: "customer", label: "ลูกค้า" },
+    { key: "tel", label: "เบอร์โทร" },
+    { key: "status", label: "สถานะ" },
+    { key: "total", label: "ยอด (บาท)" },
+    { key: "staff_note", label: "หมายเหตุ (พนักงาน)" },
+    { key: "user_note", label: "หมายเหตุ (ลูกค้า)" },
+  ];
+  const csvRows: CsvRow[] = rows.map((r) => {
+    const updated = r.hdateupdate ?? r.hnotedate ?? r.hdate;
+    const user = usersByUserId.get(r.userid);
+    const customerName = user
+      ? `${user.userName ?? ""} ${user.userLastName ?? ""}`.trim()
+      : "";
+    return {
+      updated: updated ? String(updated).slice(0, 10) : "",
+      hno: r.hno,
+      userid: r.userid || "",
+      customer: customerName,
+      tel: user?.userTel ?? "",
+      status: legacyOrderStatusThai(r.hstatus) || "",
+      total:
+        r.htotalpriceuser != null
+          ? Number(r.htotalpriceuser).toLocaleString("th-TH", { minimumFractionDigits: 2 })
+          : "",
+      staff_note: (r.hnote ?? "").trim(),
+      user_note: (r.hnoteuser ?? "").trim(),
+    };
+  });
+
   return (
     <div className="pcs-legacy">
       <link rel="stylesheet" href="/legacy/pcs/admin/admin-base.css" />
@@ -145,12 +182,23 @@ export default async function ServiceOrderNotesPage({
           <span className="font-semibold">หมายเหตุฝากสั่ง</span>
         </div>
 
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ฝากสั่งสินค้า</p>
-          <h1 className="mt-1 text-2xl font-bold">หมายเหตุฝากสั่ง</h1>
-          <p className="mt-1 text-sm text-muted">
-            รายการฝากสั่งที่มีหมายเหตุ · {rows.length} รายการ · เรียงตามวันอัปเดตล่าสุด · จำกัด 500 รายการ
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold tracking-widest text-primary-600">ฝากสั่งสินค้า</p>
+            <h1 className="mt-1 text-2xl font-bold">หมายเหตุฝากสั่ง</h1>
+            <p className="mt-1 text-sm text-muted">
+              รายการฝากสั่งที่มีหมายเหตุ · {rows.length} รายการ · เรียงตามวันอัปเดตล่าสุด · จำกัด 500 รายการ
+            </p>
+          </div>
+          <CsvButton
+            rows={csvRows}
+            cols={csvCols}
+            filename="หมายเหตุฝากสั่ง.csv"
+            fetchAll={async () => {
+              "use server";
+              return exportServiceOrderNotesAll({ status: statusFilter });
+            }}
+          />
         </div>
 
         {/* Filter chips — รวม + filter by legacy hstatus code */}

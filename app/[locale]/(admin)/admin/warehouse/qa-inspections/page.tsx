@@ -16,6 +16,8 @@ import { Link } from "@/i18n/navigation";
 import { getTranslations } from "next-intl/server";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { adminListQaInspections } from "@/actions/admin/qa-inspections";
+import { exportQaInspectionsAll } from "@/actions/admin/export/qa-inspections";
+import { CsvButton, type CsvCol } from "@/components/admin/csv-button";
 import type { QaVerdict } from "@/lib/validators/qa-inspection-rebuilt";
 
 export const dynamic = "force-dynamic";
@@ -82,6 +84,28 @@ export default async function QaInspectionsListPage({
   // the per-verdict counts of the loaded set for hover feedback.
   for (const r of rows) counts[r.verdict] = (counts[r.verdict] ?? 0) + 1;
 
+  // CSV export — columns mirror the table <thead> 1:1.
+  const csvCols: CsvCol[] = [
+    { key: "inspected_at", label: t("col.inspectedAt") },
+    { key: "forwarder_id", label: t("col.fNo") },
+    { key: "cabinet",      label: t("col.cabinet") },
+    { key: "member",       label: t("col.member") },
+    { key: "tracking",     label: t("col.tracking") },
+    { key: "verdict",      label: t("col.verdict") },
+    { key: "blacklist",    label: t("col.blacklist") },
+    { key: "photos",       label: t("col.photos") },
+  ];
+  const csvRows = rows.map((r) => ({
+    inspected_at: r.inspected_at.slice(0, 16).replace("T", " "),
+    forwarder_id: r.forwarder_id,
+    cabinet:      r.fwd_fcabinetnumber ?? "-",
+    member:       r.fwd_userid ?? "-",
+    tracking:     r.fwd_ftrackingchn ?? "-",
+    verdict:      t(`verdict.${r.verdict}`),
+    blacklist:    r.blacklist_shop ? t("blacklistTag") : "-",
+    photos:       r.photo_urls.length,
+  }));
+
   return (
     <main className="p-4 lg:p-6 space-y-5 max-w-6xl">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -90,12 +114,23 @@ export default async function QaInspectionsListPage({
           <h1 className="mt-1 text-2xl font-bold">{t("title")}</h1>
           <p className="text-sm text-muted">{t("subtitle")}</p>
         </div>
-        <Link
-          href="/admin/warehouse/qa-inspections/new"
-          className="rounded-lg bg-primary-600 text-white px-3 py-2 text-sm font-medium shadow-sm hover:bg-primary-700"
-        >
-          + {t("newCta")}
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <CsvButton
+            rows={csvRows}
+            cols={csvCols}
+            filename="qa-inspections.csv"
+            fetchAll={async () => {
+              "use server";
+              return exportQaInspectionsAll({ verdict: validVerdict, q: sp.q });
+            }}
+          />
+          <Link
+            href="/admin/warehouse/qa-inspections/new"
+            className="rounded-lg bg-primary-600 text-white px-3 py-2 text-sm font-medium shadow-sm hover:bg-primary-700"
+          >
+            + {t("newCta")}
+          </Link>
+        </div>
       </div>
 
       {/* Verdict filter strip */}

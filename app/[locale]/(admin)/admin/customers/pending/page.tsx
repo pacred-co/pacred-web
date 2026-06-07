@@ -20,6 +20,8 @@ import { Link } from "@/i18n/navigation";
 import { Clock } from "lucide-react";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportCustomersPendingAll } from "@/actions/admin/export/customers-pending";
 import { TbCustomerBulkBar, TbCustomerRowCheckbox, TbCustomerRejectButton } from "./tb-bulk-bar";
 
 export const dynamic = "force-dynamic";
@@ -68,6 +70,25 @@ export default async function AdminCustomersPendingPage({
   const rows = ((customers ?? []) as Row[]);
   const total = count ?? 0;
 
+  // CSV export — columns mirror the <thead> 1:1 (รหัสสมาชิก / ชื่อ-บริษัท /
+  // เบอร์โทร / อีเมล / ประเภท / วันที่สมัคร). The "จัดการ" column is action-only.
+  const csvCols: CsvCol[] = [
+    { key: "userID", label: "รหัสสมาชิก" },
+    { key: "name", label: "ชื่อ / บริษัท" },
+    { key: "tel", label: "เบอร์โทร" },
+    { key: "email", label: "อีเมล" },
+    { key: "type", label: "ประเภท" },
+    { key: "registered", label: "วันที่สมัคร" },
+  ];
+  const csvRows: CsvRow[] = rows.map((c) => ({
+    userID: c.userID,
+    name: `${c.userName ?? ""} ${c.userLastName ?? ""}`.trim() || "—",
+    tel: c.userTel ?? "—",
+    email: c.userEmail || "—",
+    type: c.userCompany === "1" ? "นิติบุคคล" : "บุคคล",
+    registered: c.userRegistered ? c.userRegistered.slice(0, 10) : "—",
+  }));
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -85,9 +106,20 @@ export default async function AdminCustomersPendingPage({
             </p>
           </div>
         </div>
-        <span className="rounded-full border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-3 py-1 text-sm font-semibold text-amber-700 dark:text-amber-400">
-          {total} รายการ
-        </span>
+        <div className="flex items-center gap-3">
+          <CsvButton
+            rows={csvRows}
+            cols={csvCols}
+            filename="customers-pending.csv"
+            fetchAll={async () => {
+              "use server";
+              return exportCustomersPendingAll();
+            }}
+          />
+          <span className="rounded-full border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-3 py-1 text-sm font-semibold text-amber-700 dark:text-amber-400">
+            {total} รายการ
+          </span>
+        </div>
       </div>
 
       {/* Wave 8 Group A — sticky bulk-approve bar */}

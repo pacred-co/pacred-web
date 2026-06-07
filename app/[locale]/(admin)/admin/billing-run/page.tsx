@@ -31,6 +31,27 @@ import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CntListTable, type CntListRow } from "../report-cnt/cnt-list-table";
+import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { exportBillingRunAll } from "@/actions/admin/export/billing-run";
+
+// CSV columns — mirror the list <thead> 1:1.
+const CSV_COLS: CsvCol[] = [
+  { key: "doc_no", label: "เลขที่เอกสาร" },
+  { key: "buyer_name", label: "ลูกค้า" },
+  { key: "userid", label: "รหัสลูกค้า" },
+  { key: "item_count", label: "จำนวนรายการ" },
+  { key: "total_thb", label: "ยอดรวม (฿)" },
+  { key: "date_issued", label: "วันที่ออก" },
+  { key: "date_due", label: "ครบกำหนด" },
+  { key: "status", label: "สถานะ" },
+];
+
+function csvStatusName(status: "issued" | "paid" | "cancelled", isOverdue: boolean): string {
+  if (status === "paid") return "รับชำระแล้ว";
+  if (status === "cancelled") return "ยกเลิก";
+  if (isOverdue) return "เกินเวลา";
+  return "รอรับชำระ";
+}
 
 export const dynamic = "force-dynamic";
 
@@ -303,6 +324,18 @@ export default async function BillingRunListPage({
     .filter((r) => r.status === "issued")
     .reduce((s, r) => s + r.total_thb, 0);
 
+  // CSV rows — on-screen list mapped to flat cells (mirrors the <thead>).
+  const csvRows: CsvRow[] = rows.map((r) => ({
+    doc_no: r.doc_no,
+    buyer_name: r.buyer_name || "",
+    userid: r.userid || "",
+    item_count: r.item_count,
+    total_thb: thbFmt(r.total_thb),
+    date_issued: (r.date_issued ?? "").slice(0, 10),
+    date_due: (r.date_due ?? "").slice(0, 10),
+    status: csvStatusName(r.status, r.is_overdue),
+  }));
+
   return (
     <main className="space-y-5">
       <title>ใบวางบิล | PR Admin</title>
@@ -319,9 +352,25 @@ export default async function BillingRunListPage({
               ออกใบเรียกเก็บค่าฝากนำเข้าให้ลูกค้าเครดิตเทอม · ดูประวัติ · ปรับสถานะรับชำระ
             </p>
           </div>
-          <Link href="/admin/billing-run/add" className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
-            + สร้างใบวางบิลใหม่
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <CsvButton
+              rows={csvRows}
+              cols={CSV_COLS}
+              filename={`billing-run-${tab}.csv`}
+              fetchAll={async () => {
+                "use server";
+                return exportBillingRunAll({
+                  dateFrom,
+                  dateTo,
+                  status: statusFilter,
+                  userid: sp.userid?.trim() || undefined,
+                });
+              }}
+            />
+            <Link href="/admin/billing-run/add" className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+              + สร้างใบวางบิลใหม่
+            </Link>
+          </div>
         </header>
 
         {/* Tab strip (PEAK pattern) */}

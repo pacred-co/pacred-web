@@ -5,6 +5,8 @@ import { PartnerRowActions } from "./row-actions";
 import { PARTNER_TYPE_LABELS_TH } from "./types";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportPartnersAll } from "@/actions/admin/export/partners";
 
 /**
  * /admin/partners — manage the external partner directory (CLAUDE.md §PM-6 #3).
@@ -70,9 +72,40 @@ export default async function AdminPartnersPage({
   const offset = (page - 1) * DEFAULT_PAGE_SIZE;
   const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
+  // CSV export — columns mirror the on-screen table (multi-line cells flattened).
+  const csvCols: CsvCol[] = [
+    { key: "sort",          label: "Sort" },
+    { key: "code",          label: "Code" },
+    { key: "name",          label: "ชื่อ" },
+    { key: "name_en",       label: "ชื่อ (EN)" },
+    { key: "partner_type",  label: "ประเภท" },
+    { key: "contact_name",  label: "ผู้ติดต่อ" },
+    { key: "contact_phone", label: "เบอร์ติดต่อ" },
+    { key: "contact_email", label: "อีเมล" },
+    { key: "note",          label: "หมายเหตุ" },
+    { key: "status",        label: "สถานะ" },
+    { key: "created_at",    label: "สร้างเมื่อ" },
+    { key: "updated_at",    label: "แก้ไขล่าสุด" },
+  ];
+  const csvRows: CsvRow[] = pageRows.map((r) => ({
+    sort:          r.sort,
+    code:          r.code,
+    name:          r.name,
+    name_en:       r.name_en ?? "",
+    partner_type:  PARTNER_TYPE_LABELS_TH[r.partner_type] ?? r.partner_type,
+    contact_name:  r.contact_name ?? "",
+    contact_phone: r.contact_phone ?? "",
+    contact_email: r.contact_email ?? "",
+    note:          r.note ?? "",
+    status:        r.is_active ? "active" : "inactive",
+    created_at:    (r.created_at ?? "").slice(0, 10),
+    updated_at:    (r.updated_at ?? "").slice(0, 10),
+  }));
+
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-5xl">
-      <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
         <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · เครื่องมือ</p>
         <h1 className="mt-1 text-2xl font-bold">พาร์ทเนอร์ (Partners)</h1>
         <p className="mt-1 text-sm text-muted">
@@ -84,6 +117,16 @@ export default async function AdminPartnersPage({
         <p className="mt-1 text-xs text-muted">
           {activeCount} active · {inactiveCount} inactive · รวม {rows.length} รายการ
         </p>
+        </div>
+        <CsvButton
+          rows={csvRows}
+          cols={csvCols}
+          filename="พาร์ทเนอร์.csv"
+          fetchAll={async () => {
+            "use server";
+            return exportPartnersAll();
+          }}
+        />
       </div>
 
       {/* List */}

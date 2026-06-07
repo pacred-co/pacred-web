@@ -3,7 +3,23 @@ import { Link } from "@/i18n/navigation";
 import { sweepStaleImportingRows } from "@/lib/admin/csv-import-sweep";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportCsvImportsAll } from "@/actions/admin/export/csv-imports";
 import { CsvImportRowActions } from "./row-actions";
+
+const CSV_COLS: CsvCol[] = [
+  { key: "created_at", label: "วันที่" },
+  { key: "imported_at", label: "วันที่เสร็จ" },
+  { key: "filename", label: "ไฟล์" },
+  { key: "target_table", label: "ตารางเป้าหมาย" },
+  { key: "uploader_code", label: "รหัสผู้อัปโหลด" },
+  { key: "uploader_name", label: "ผู้อัปโหลด" },
+  { key: "row_count", label: "แถว" },
+  { key: "imported_count", label: "นำเข้า" },
+  { key: "size_kb", label: "ขนาด (KB)" },
+  { key: "status", label: "สถานะ" },
+  { key: "error_message", label: "ข้อผิดพลาด" },
+];
 
 const STATUS_BADGE: Record<string, string> = {
   uploaded:  "bg-amber-50 text-amber-700 border-amber-200",
@@ -67,6 +83,23 @@ export default async function AdminCsvImportsPage({
     uploader: normSingle(r.uploader),
   }));
 
+  // CSV rows for the current (paginated) view — mirrors the <thead>/columns 1:1.
+  const csvRows: CsvRow[] = rows.map((r) => ({
+    created_at: (r.created_at ?? "").slice(0, 10),
+    imported_at: r.imported_at ? r.imported_at.slice(0, 10) : "",
+    filename: r.filename ?? "",
+    target_table: r.target_table ?? "",
+    uploader_code: r.uploader?.member_code ?? "",
+    uploader_name: r.uploader
+      ? `${r.uploader.first_name ?? ""} ${r.uploader.last_name ?? ""}`.trim()
+      : "",
+    row_count: r.row_count ?? 0,
+    imported_count: r.imported_count ?? 0,
+    size_kb: r.size_bytes != null ? (r.size_bytes / 1024).toFixed(1) : "",
+    status: STATUS_LABEL[r.status] ?? r.status,
+    error_message: r.error_message ?? "",
+  }));
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -78,12 +111,23 @@ export default async function AdminCsvImportsPage({
             รองรับ <span className="font-mono">forwarders</span> เท่านั้นในเฟสนี้.
           </p>
         </div>
-        <Link
-          href="/admin/csv-imports/upload"
-          className="rounded-lg bg-primary-500 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600"
-        >
-          + อัปโหลด CSV ใหม่
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <CsvButton
+            rows={csvRows}
+            cols={CSV_COLS}
+            filename="csv-imports.csv"
+            fetchAll={async () => {
+              "use server";
+              return exportCsvImportsAll();
+            }}
+          />
+          <Link
+            href="/admin/csv-imports/upload"
+            className="rounded-lg bg-primary-500 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600"
+          >
+            + อัปโหลด CSV ใหม่
+          </Link>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">

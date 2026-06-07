@@ -6,6 +6,8 @@ import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { ShopPayoutActions } from "./actions-cell";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportShopPayoutsAll } from "@/actions/admin/export/shop-payouts";
 
 /**
  * Admin shop-wallet payout queue — Sprint-3 P2.3.
@@ -81,16 +83,60 @@ export default async function AdminShopPayoutsPage({
     return { ...r, profile };
   });
 
+  // CSV columns mirror the <thead> (multi-line cells flattened to dedicated cols).
+  const csvCols: CsvCol[] = [
+    { key: "created_at",      label: "วันที่ขอ" },
+    { key: "member_code",     label: "รหัสลูกค้า" },
+    { key: "customer",        label: "ลูกค้า" },
+    { key: "phone",           label: "เบอร์โทร" },
+    { key: "amount",          label: "ยอด" },
+    { key: "bank_name",       label: "ธนาคาร" },
+    { key: "account_name",    label: "ชื่อบัญชี" },
+    { key: "account_number",  label: "เลขบัญชี" },
+    { key: "note",            label: "หมายเหตุ" },
+    { key: "status",          label: "สถานะ" },
+    { key: "rejected_reason", label: "เหตุผลปฏิเสธ" },
+    { key: "reviewed_at",     label: "วันที่ตรวจ" },
+  ];
+  const csvRows: CsvRow[] = rows.map((r) => {
+    const isWithdraw = r.kind === "withdraw";
+    return {
+      created_at: r.created_at ? r.created_at.slice(0, 10) : "",
+      member_code: r.profile?.member_code ?? "",
+      customer: `${r.profile?.first_name ?? ""} ${r.profile?.last_name ?? ""}`.trim(),
+      phone: r.profile?.phone ?? "",
+      amount: "฿" + Math.abs(Number(r.amount)).toLocaleString("th-TH", { minimumFractionDigits: 2 }),
+      bank_name: isWithdraw ? (r.bank_name ?? "") : "— (transfer)",
+      account_name: isWithdraw ? (r.account_name ?? "") : "",
+      account_number: isWithdraw ? (r.account_number ?? "") : "",
+      note: r.note ?? "",
+      status: STATUS_LABEL[r.status] ?? r.status,
+      rejected_reason: r.rejected_reason ?? "",
+      reviewed_at: r.reviewed_at ? r.reviewed_at.slice(0, 10) : "",
+    };
+  });
+
   return (
     <>
       <PageTopMenubar items={DISBURSEMENT_MENUBAR} activeHref="/admin/shop-payouts" />
       <main className="p-6 lg:p-8 space-y-5">
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
-        <h1 className="mt-1 text-2xl font-bold">เบิกกระเป๋าร้าน (shop wallet)</h1>
-        <p className="mt-1 text-sm text-muted">
-          คำขอถอนเงิน/โอนออกจากกระเป๋าร้านของลูกค้า (affiliate / partner). อนุมัติแล้วเงินถึงโอนจริง — โอนสำเร็จกด &ldquo;โอนแล้ว&rdquo; ระบบจะหักยอดของลูกค้าโดยอัตโนมัติ
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
+          <h1 className="mt-1 text-2xl font-bold">เบิกกระเป๋าร้าน (shop wallet)</h1>
+          <p className="mt-1 text-sm text-muted">
+            คำขอถอนเงิน/โอนออกจากกระเป๋าร้านของลูกค้า (affiliate / partner). อนุมัติแล้วเงินถึงโอนจริง — โอนสำเร็จกด &ldquo;โอนแล้ว&rdquo; ระบบจะหักยอดของลูกค้าโดยอัตโนมัติ
+          </p>
+        </div>
+        <CsvButton
+          rows={csvRows}
+          cols={csvCols}
+          filename="shop-payouts.csv"
+          fetchAll={async () => {
+            "use server";
+            return exportShopPayoutsAll({ status: sp.status });
+          }}
+        />
       </div>
 
       <FilterBar currentStatus={sp.status} />

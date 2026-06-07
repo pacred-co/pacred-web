@@ -32,6 +32,8 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { exportRatesCustomHsAll } from "@/actions/admin/export/rates-custom-hs";
 import { HsRateEditForm, type HsCellInitial } from "./edit-form";
 
 export const dynamic = "force-dynamic";
@@ -191,6 +193,28 @@ export default async function CustomHsRatesPage({
   // (kg/cbm latest-per-cell collapse moved into buildHsCellMatrix, which
   // also produces the shape the edit form needs.)
 
+  // CSV export — mirrors the history <thead> 1:1 (rate-override update history).
+  const csvCols: CsvCol[] = [
+    { key: "userid", label: "รหัสลูกค้า" },
+    { key: "name", label: "ชื่อ" },
+    { key: "tel", label: "เบอร์" },
+    { key: "coID", label: "กลุ่ม" },
+    { key: "date", label: "อัปเดตล่าสุด" },
+    { key: "adminid", label: "แอดมิน" },
+  ];
+  const csvRows: CsvRow[] = history.map((h) => {
+    const u = userMap.get(h.userid);
+    const name = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || "—";
+    return {
+      userid: h.userid,
+      name,
+      tel: u?.userTel ?? "—",
+      coID: u?.coID ?? "—",
+      date: h.date ? new Date(h.date).toLocaleString("th-TH") : "—",
+      adminid: h.adminid ?? "—",
+    };
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
@@ -219,13 +243,24 @@ export default async function CustomHsRatesPage({
 
       {/* History list */}
       <section>
-        <h2 className="text-sm font-bold text-muted uppercase tracking-wider mb-2">
-          ประวัติการอัปเดต ({totalHistoryCount ?? history.length} รายการ
-          {totalHistoryCount && totalHistoryCount > history.length
-            ? ` · แสดง ${history.length} ล่าสุด`
-            : ""}
-          · ใหม่ → เก่า)
-        </h2>
+        <div className="flex items-end justify-between gap-2 flex-wrap mb-2">
+          <h2 className="text-sm font-bold text-muted uppercase tracking-wider">
+            ประวัติการอัปเดต ({totalHistoryCount ?? history.length} รายการ
+            {totalHistoryCount && totalHistoryCount > history.length
+              ? ` · แสดง ${history.length} ล่าสุด`
+              : ""}
+            · ใหม่ → เก่า)
+          </h2>
+          <CsvButton
+            rows={csvRows}
+            cols={csvCols}
+            filename="rate-override-history.csv"
+            fetchAll={async () => {
+              "use server";
+              return exportRatesCustomHsAll({ q: sp.q });
+            }}
+          />
+        </div>
         <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
           {history.length === 0 ? (
             <p className="p-8 text-center text-sm text-muted">ไม่พบรายการ</p>

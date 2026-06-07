@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportHrAll } from "@/actions/admin/export/hr";
 
 export default async function AdminHRPage() {
   await requireAdmin();
@@ -59,12 +61,55 @@ export default async function AdminHRPage() {
     (byDept.get(dept) ?? byDept.set(dept, []).get(dept)!).push(r);
   }
 
+  // ── CSV export — flatten the on-screen roster (mirrors the dept tables) ──
+  const csvCols: CsvCol[] = [
+    { key: "department", label: "ฝ่าย" },
+    { key: "member_code", label: "รหัสสมาชิก" },
+    { key: "full_name", label: "ชื่อ-นามสกุล" },
+    { key: "phone", label: "โทรศัพท์" },
+    { key: "email", label: "อีเมล" },
+    { key: "display_name", label: "บัตรเซลล์" },
+    { key: "direct_phone", label: "เบอร์ตรง" },
+    { key: "section", label: "ส่วนงาน" },
+    { key: "role", label: "Role" },
+    { key: "granted_at", label: "วันที่เริ่ม" },
+  ];
+  const csvRows: CsvRow[] = Array.from(byDept.entries()).flatMap(([dept, rows]) =>
+    rows.map((r) => {
+      const p = Array.isArray(r.profile) ? r.profile[0] : r.profile;
+      const c = r.contact;
+      return {
+        department: dept,
+        member_code: p?.member_code ?? "",
+        full_name: `${p?.first_name ?? ""} ${p?.last_name ?? ""}`.trim(),
+        phone: p?.phone ?? "",
+        email: p?.email ?? "",
+        display_name: c?.display_name ?? "",
+        direct_phone: c?.direct_phone ?? "",
+        section: c?.section ?? "",
+        role: r.role,
+        granted_at: r.granted_at ? r.granted_at.slice(0, 10) : "",
+      } satisfies CsvRow;
+    }),
+  );
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · CARGO &amp; FREIGHT</p>
-        <h1 className="mt-1 text-2xl font-bold">👥 ฝ่ายทรัพยากรบุคคล</h1>
-        <p className="mt-1 text-sm text-muted">ข้อมูลพนักงาน admin ทั้งหมดในระบบ จัดกลุ่มตามฝ่าย</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · CARGO &amp; FREIGHT</p>
+          <h1 className="mt-1 text-2xl font-bold">👥 ฝ่ายทรัพยากรบุคคล</h1>
+          <p className="mt-1 text-sm text-muted">ข้อมูลพนักงาน admin ทั้งหมดในระบบ จัดกลุ่มตามฝ่าย</p>
+        </div>
+        <CsvButton
+          rows={csvRows}
+          cols={csvCols}
+          filename="hr-roster.csv"
+          fetchAll={async () => {
+            "use server";
+            return exportHrAll();
+          }}
+        />
       </div>
 
       {/* HR sub-modules quick links — Phase 1 ships org chart, others coming */}

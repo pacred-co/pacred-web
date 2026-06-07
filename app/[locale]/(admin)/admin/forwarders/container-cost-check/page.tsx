@@ -27,6 +27,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
 import { fetchContainerCostSheet } from "@/lib/integrations/google-sheets/container-cost-sheet-adapter";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportContainerCostCheckAll } from "@/actions/admin/export/container-cost-check";
 import { FileSpreadsheet, ExternalLink, AlertTriangle, RefreshCw } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -152,6 +154,22 @@ export default async function ContainerCostCheckPage() {
 
   const foundCount = cabinets.filter((c) => c.inPcs).length;
 
+  // ── CSV export — columns mirror the worklist <thead> 1:1 ──
+  const csvCols: CsvCol[] = [
+    { key: "index", label: "ลำดับ" },
+    { key: "cabinetNumber", label: "ชื่อตู้จาก Sheet" },
+    { key: "dataStatus", label: "สถานะข้อมูล" },
+    { key: "checkStatus", label: "สถานะการเช็ค Sheet" },
+    { key: "parcelCount", label: "จำนวนรายการใน Sheet" },
+  ];
+  const csvRows: CsvRow[] = cabinets.map((c, idx) => ({
+    index: idx + 1,
+    cabinetNumber: c.cabinetNumber,
+    dataStatus: c.inPcs ? "พบข้อมูล" : "ไม่พบข้อมูล",
+    checkStatus: c.checked ? "เช็คแล้ว" : "—",
+    parcelCount: c.parcelCount,
+  }));
+
   return (
     <>
       <TopMenuReport activeHref="/admin/report-cnt" />
@@ -183,15 +201,26 @@ export default async function ContainerCostCheckPage() {
                 แล้วอัปเดตต้นทุนตามชีส.
               </p>
             </div>
-            <a
-              href={SHEET_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white dark:bg-surface px-3 py-1.5 text-sm font-medium hover:bg-surface-alt"
-            >
-              <ExternalLink className="h-4 w-4" />
-              ไปยังไฟล์ Google Sheet
-            </a>
+            <div className="flex flex-wrap items-center gap-2">
+              <CsvButton
+                rows={csvRows}
+                cols={csvCols}
+                filename="เช็คต้นทุนตู้-Sheet.csv"
+                fetchAll={async () => {
+                  "use server";
+                  return exportContainerCostCheckAll();
+                }}
+              />
+              <a
+                href={SHEET_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white dark:bg-surface px-3 py-1.5 text-sm font-medium hover:bg-surface-alt"
+              >
+                <ExternalLink className="h-4 w-4" />
+                ไปยังไฟล์ Google Sheet
+              </a>
+            </div>
           </div>
 
           {/* Sync status strip */}

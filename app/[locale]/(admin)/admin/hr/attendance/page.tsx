@@ -5,6 +5,8 @@ import {
   ChevronRight, Home, Clock, Calendar, FileText, CalendarDays, Trash2 as Trash2Icon,
 } from "lucide-react";
 import { AddHolidayButton, DeleteHolidayButton } from "./attendance-actions";
+import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { exportHrAttendanceAll } from "@/actions/admin/export/hr-attendance";
 
 /**
  * D1 faithful port of time-attendance-system.php (default + add-holiday modes) —
@@ -68,6 +70,22 @@ export default async function AdminHRAttendancePage() {
   }
   const years = Array.from(byYear.keys()).sort((a, b) => b - a);
 
+  // CSV export — mirrors the on-screen <thead> 1:1 (excludes the action column).
+  const csvCols: CsvCol[] = [
+    { key: "holidayname", label: "ชื่อวันหยุด" },
+    { key: "holidaydate", label: "วันหยุด" },
+    { key: "holidayyear", label: "ปีของวันหยุด" },
+    { key: "note", label: "โน๊ตช่วยจำ" },
+    { key: "adminidcreate", label: "ผู้สร้าง" },
+  ];
+  const csvRows: CsvRow[] = holidays.map((h) => ({
+    holidayname: h.holidayname,
+    holidaydate: h.holidaydate ? h.holidaydate.slice(0, 10) : "",
+    holidayyear: thYear(h.holidaydate),
+    note: h.note ?? "",
+    adminidcreate: h.adminidcreate ?? "",
+  }));
+
   return (
     <main className="p-4 lg:p-6 space-y-5">
       <nav className="flex items-center gap-1.5 text-xs text-muted">
@@ -97,6 +115,15 @@ export default async function AdminHRAttendancePage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <CsvButton
+              rows={csvRows}
+              cols={csvCols}
+              filename="วันหยุดประจำปี.csv"
+              fetchAll={async () => {
+                "use server";
+                return exportHrAttendanceAll();
+              }}
+            />
             <AddHolidayButton />
             <Link
               href="/admin/hr/attendance/leaves"

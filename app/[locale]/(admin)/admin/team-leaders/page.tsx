@@ -3,6 +3,8 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { AddTeamLeaderForm } from "./add-form";
 import { TeamLeaderRowActions } from "./row-actions";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportTeamLeadersAll } from "@/actions/admin/export/team-leaders";
 
 export default async function AdminTeamLeadersPage() {
   // W-1 (gap-admin H-1): page-level role gate. Manages team leaders +
@@ -29,6 +31,26 @@ export default async function AdminTeamLeadersPage() {
     profile_row: Array.isArray(r.profile) ? r.profile[0] ?? null : r.profile,
   }));
 
+  // CSV — columns mirror the <thead> 1:1 (หัวหน้า split into code/name/phone cols).
+  const csvCols: CsvCol[] = [
+    { key: "team_code", label: "ทีม" },
+    { key: "member_code", label: "รหัสสมาชิก" },
+    { key: "name", label: "หัวหน้า" },
+    { key: "phone", label: "เบอร์โทร" },
+    { key: "commission_pct", label: "ค่าคอม %" },
+    { key: "status", label: "สถานะ" },
+    { key: "created_at", label: "สร้างเมื่อ" },
+  ];
+  const csvRows: CsvRow[] = rows.map((r) => ({
+    team_code: r.team_code ?? "",
+    member_code: r.profile_row?.member_code ?? "",
+    name: `${r.profile_row?.first_name ?? ""} ${r.profile_row?.last_name ?? ""}`.trim(),
+    phone: r.profile_row?.phone ?? "",
+    commission_pct: `${(r.commission_pct * 100).toFixed(2)}%`,
+    status: r.is_active ? "ใช้งาน" : "ปิดใช้งาน",
+    created_at: (r.created_at ?? "").slice(0, 10),
+  }));
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -37,12 +59,23 @@ export default async function AdminTeamLeadersPage() {
           <h1 className="mt-1 text-2xl font-bold">ทีมขาย — Team Leaders</h1>
           <p className="mt-1 text-sm text-muted">หัวหน้าทีมที่ได้รับค่าคอมจากออเดอร์ของลูกค้าในกลุ่ม customer_group ตน</p>
         </div>
-        <Link
-          href="/admin/forwarder-sales"
-          className="rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100"
-        >
-          📊 รายงานค่าคอมฝากนำเข้า →
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <CsvButton
+            rows={csvRows}
+            cols={csvCols}
+            filename="team-leaders.csv"
+            fetchAll={async () => {
+              "use server";
+              return exportTeamLeadersAll();
+            }}
+          />
+          <Link
+            href="/admin/forwarder-sales"
+            className="rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100"
+          >
+            📊 รายงานค่าคอมฝากนำเข้า →
+          </Link>
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-[1fr_320px] gap-6">

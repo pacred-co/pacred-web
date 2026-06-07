@@ -10,6 +10,8 @@ import {
   type QuoteBasis,
   type QuoteCarrierLine,
 } from "@/actions/admin/quote-comparison";
+import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { exportAccQuoteCompareAll } from "@/actions/admin/export/acc-quote-compare";
 
 /**
  * /admin/accounting/quote-compare — Sales forward-looking pricing tool.
@@ -49,6 +51,26 @@ function thb(n: number): string {
   return n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// CSV columns mirror the per-carrier comparison <thead> 1:1.
+const QUOTE_COMPARE_COLS: CsvCol[] = [
+  { key: "carrier",       label: "Carrier" },
+  { key: "cost_rate",     label: "Cost rate" },
+  { key: "cost_subtotal", label: "ต้นทุน Pacred" },
+  { key: "sale_subtotal", label: "ขายลูกค้า" },
+  { key: "margin",        label: "กำไร" },
+  { key: "margin_pct",    label: "%" },
+  { key: "status",        label: "สถานะ" },
+];
+
+// Plain-text status labels for CSV (BUCKET_LABEL has emoji — strip for CSV).
+const BUCKET_CSV_LABEL: Record<QuoteCarrierLine["bucket"], string> = {
+  "negative": "ขาดทุน",
+  "low":      "ต่ำ (0-5k)",
+  "mid":      "กลาง (5-10k)",
+  "good":     "ดี (10-15k)",
+  "over_cap": "เกิน cap",
+};
+
 function parseQuery(sp: Awaited<ReturnType<typeof asAwaited>>) {
   const wh   = (sp.warehouse === "2" ? "2" : "1") as QuoteWarehouse;
   const tt   = (sp.transport === "2" ? "2" : "1") as QuoteTransport;
@@ -83,6 +105,14 @@ export default async function AdminQuoteComparePage({
   // Only run the report when we have at least one real dimension.
   const hasDims = (input.basis === "kg" ? input.weightKg > 0 : input.volumeCbm > 0);
   const report = hasDims ? await getQuoteComparison(input) : null;
+
+  // Active-first then margin-desc — the SAME order the table <tbody> + the CSV use.
+  const sortedCarriers = report
+    ? [...report.carriers].sort((a, b) => {
+        if (a.hasRate !== b.hasRate) return a.hasRate ? -1 : 1;
+        return b.margin - a.margin;
+      })
+    : [];
 
   return (
     <>
@@ -206,9 +236,28 @@ export default async function AdminQuoteComparePage({
 
             {/* Per-carrier comparison */}
             <section className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
-              <div className="px-5 py-3 border-b border-border">
-                <h2 className="font-bold text-sm">เทียบ 9 partner carriers</h2>
-                <p className="text-xs text-muted mt-0.5">เรียงตามกำไรสูง → ต่ำ · 🚨 = เกิน cap (&gt;15k) · 🔴 = ขาดทุน</p>
+              <div className="px-5 py-3 border-b border-border flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="font-bold text-sm">เทียบ 9 partner carriers</h2>
+                  <p className="text-xs text-muted mt-0.5">เรียงตามกำไรสูง → ต่ำ · 🚨 = เกิน cap (&gt;15k) · 🔴 = ขาดทุน</p>
+                </div>
+                <CsvButton
+                  rows={sortedCarriers.map((c): CsvRow => ({
+                    carrier:       c.carrierLabel + (c.hasRate ? "" : " (no rate)"),
+                    cost_rate:     c.costRate > 0 ? thb(c.costRate) : "—",
+                    cost_subtotal: c.hasRate ? thb(c.costSubtotal) : "—",
+                    sale_subtotal: thb(report.saleSubtotal),
+                    margin:        c.hasRate ? thb(c.margin) : "—",
+                    margin_pct:    c.hasRate ? `${c.marginPct.toFixed(1)}%` : "—",
+                    status:        c.hasRate ? BUCKET_CSV_LABEL[c.bucket] : "—",
+                  }))}
+                  cols={QUOTE_COMPARE_COLS}
+                  filename={`quote-compare-${input.warehouse}-${input.transport}-pt${input.productType}-${input.basis}.csv`}
+                  fetchAll={async () => {
+                    "use server";
+                    return exportAccQuoteCompareAll(input);
+                  }}
+                />
               </div>
               <div className="overflow-x-auto scrollbar-x-visible">
                 <table className="w-full min-w-[800px] text-sm">
@@ -224,12 +273,7 @@ export default async function AdminQuoteComparePage({
                     </tr>
                   </thead>
                   <tbody>
-                    {[...report.carriers]
-                      .sort((a, b) => {
-                        // active first, then by margin desc
-                        if (a.hasRate !== b.hasRate) return a.hasRate ? -1 : 1;
-                        return b.margin - a.margin;
-                      })
+                    {sortedCarriers
                       .map((c) => (
                         <tr key={c.carrierKey || "ctt"} className={`border-t border-border ${c.hasRate ? "hover:bg-surface-alt/30" : "opacity-50"}`}>
                           <td className="px-3 py-2 font-medium">
