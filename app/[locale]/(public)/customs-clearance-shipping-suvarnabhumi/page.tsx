@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import React from "react";
 import Image from "next/image";
 import { getTranslations } from "next-intl/server";
 import {
@@ -65,12 +66,12 @@ type Step = { num: string; icon: string; title: string; desc: string };
 // PNG icons from /images/hero-section/icon-draf/ — rendered white via
 // `brightness-0 invert` filter to fit the red gradient pill (per ปอน
 // 2026-05-18, wants brand-PNGs instead of lucide outlines).
-const STEPS: Step[] = [
-  { num: "01", icon: "/images/hero-section/icon-draf/checklistred.png",    title: "ส่งเอกสารพื้นฐาน",       desc: "แค่ Invoice กับ Packing List ก็เริ่มได้ มี AWB / B/L แนบมาด้วยจะยิ่งไว" },
-  { num: "02", icon: "/images/hero-section/icon-draf/pcs-call-center.png", title: "ทักผ่าน LINE / Email / โทร", desc: "Forward เมลจาก DHL/FedEx มาก็ได้ หรือถ่ายรูปใบส่งของส่งทีมก็ได้" },
-  { num: "03", icon: "/images/hero-section/icon-draf/pcs-payment.png",     title: "ประเมินราคา",            desc: "เคาะค่าบริการ + วางแผนเคลียร์ให้ฟัง ไม่มีค่าใช้จ่ายแอบซ่อน" },
-  { num: "04", icon: "/images/hero-section/icon-draf/customclearance.png", title: "เริ่มเคลียร์",            desc: "ทีมเดินเรื่องที่ด่านครบทุกขั้น คุณรอที่ออฟฟิศได้สบายใจ" },
-  { num: "05", icon: "/images/hero-section/icon-draf/transfast.png",       title: "ปลดสินค้า + จัดส่งต่อ",   desc: "นัดส่งถึงประตูทั่วไทย หรือมารับเองที่ด่านก็ได้ตามสะดวก" },
+const STEP_ICONS = [
+  "/images/hero-section/icon-draf/checklistred.png",
+  "/images/hero-section/icon-draf/pcs-call-center.png",
+  "/images/hero-section/icon-draf/pcs-payment.png",
+  "/images/hero-section/icon-draf/customclearance.png",
+  "/images/hero-section/icon-draf/transfast.png",
 ];
 
 // Tag groups — each group renders as a sub-section of chips under the
@@ -238,9 +239,18 @@ export default async function CustomsClearancePage({
   const { locale } = await params;
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const t = await getTranslations({ locale, namespace: NS });
+  const tp = await getTranslations({ locale, namespace: "customsClearancePage" });
   const homeLabel = typedLocale === "th" ? "หน้าหลัก" : "Home";
   const svcLabel  = typedLocale === "th" ? "บริการ" : "Services";
   const here      = "customs-clearance-shipping-suvarnabhumi";
+
+  const STEPS: Step[] = [
+    { num: "01", icon: STEP_ICONS[0], title: tp("step1Title"), desc: tp("step1Desc") },
+    { num: "02", icon: STEP_ICONS[1], title: tp("step2Title"), desc: tp("step2Desc") },
+    { num: "03", icon: STEP_ICONS[2], title: tp("step3Title"), desc: tp("step3Desc") },
+    { num: "04", icon: STEP_ICONS[3], title: tp("step4Title"), desc: tp("step4Desc") },
+    { num: "05", icon: STEP_ICONS[4], title: tp("step5Title"), desc: tp("step5Desc") },
+  ];
 
   return (
     <>
@@ -286,7 +296,7 @@ export default async function CustomsClearancePage({
                 className="inline-flex items-center gap-1.5 text-muted hover:text-primary-600 transition-colors"
               >
                 <Home className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={2.2} />
-                <span>หน้าแรก</span>
+                <span>{tp("breadcrumbHome")}</span>
               </Link>
             </li>
             <li aria-hidden className="text-gray-300 dark:text-border">
@@ -304,8 +314,8 @@ export default async function CustomsClearancePage({
             {/* One flowing line — no forced breaks; สุวรรณภูมิ-คลองเตยแหลมฉบัง
                 rendered a bit smaller so it sits inline cleanly. */}
             <h1 className="text-[20px] md:text-[40px] leading-[1.25] md:leading-[1.2] font-black tracking-[-0.025em] text-[#111827] dark:text-white">
-              บริการ <span className="text-primary-600">Shipping</span> เคลียร์สินค้า(<span className="text-primary-600 text-[28px] md:text-[56px]">ติดด่าน</span>){" "}
-              <span className="text-[0.7em] font-bold">สุวรรณภูมิ คลองเตย แหลมฉบัง</span>{" "}
+              {tp("h1Before")} <span className="text-primary-600">Shipping</span> {tp("h1ClearanceOpen")}<span className="text-primary-600 text-[28px] md:text-[56px]">{tp("h1Stuck")}</span>{tp("h1ClearanceClose")}{" "}
+              <span className="text-[0.7em] font-bold">{tp("h1Locations")}</span>{" "}
               <span className="text-primary-600">Pacred Shipping</span>
             </h1>
 
@@ -333,10 +343,10 @@ export default async function CustomsClearancePage({
                 href={LINE_URL}
                 cta="line_consult"
                 surface="customs_scope_banner"
-                aria-label="ทักไลน์ Pacred Shipping ปรึกษาเคลียร์ของฟรี"
+                aria-label={tp("scopeBannerAriaLabel")}
                 className="absolute inset-0 z-10"
               >
-                <span className="sr-only">ทักไลน์ Pacred Shipping</span>
+                <span className="sr-only">{tp("scopeBannerSrOnly")}</span>
               </TrackedExternalLink>
 
               <div className="relative pointer-events-none px-4 md:px-6 py-4 md:py-5">
@@ -350,11 +360,11 @@ export default async function CustomsClearancePage({
                     className="w-6 h-6 md:w-9 md:h-9 shrink-0 mt-0.5 object-contain"
                   />
                   <span className="inline">
-                    บริการชิปปิ้งเคลียร์ของ
+                    {tp("scopeBannerServiceBefore")}
                     <span className="text-yellow-300 text-[22px] sm:text-[26px] md:text-[36px] [text-shadow:0_2px_8px_rgba(0,0,0,0.55)]">
-                      ติดด่าน
+                      {tp("scopeBannerStuck")}
                     </span>{" "}
-                    ศุลกากร ครบทุกด่าน{" "}
+                    {tp("scopeBannerServiceAfter")}{" "}
                     {/* Transport icons — inline so they flow with the title text */}
                     <span className="inline-flex items-center gap-0.5 align-middle whitespace-nowrap">
                       <Image src="/images/iconwhite/plane.png" alt="" width={28} height={28} aria-hidden className="w-5 h-5 md:w-7 md:h-7 object-contain" />
@@ -365,7 +375,7 @@ export default async function CustomsClearancePage({
                 </h3>
                 {/* Desktop-only subtitle — full list, indented to align with "บริการ" (icon w-9 36px + gap-2 8px) · mobile omitted to keep banner compact */}
                 <p className="hidden md:block mt-2 pl-[44px] text-[13px] font-medium text-white/70 leading-snug tracking-tight whitespace-nowrap">
-                  สุวรรณภูมิ · ดอนเมือง · ไปรษณีย์หลักสี่ · คลองเตย · แหลมฉบัง · ลาดกระบัง (ICD) · ด่านชายแดน
+                  {tp("scopeBannerSubtitle")}
                 </p>
               </div>
             </div>
@@ -377,13 +387,13 @@ export default async function CustomsClearancePage({
             <div className="mt-4 md:mt-5 rounded-2xl md:rounded-3xl border border-primary-200 dark:border-primary-800/60 bg-gradient-to-br from-primary-50/60 via-white to-primary-50/30 dark:from-primary-900/15 dark:via-surface dark:to-primary-900/10 p-4 md:p-6 shadow-[0_8px_22px_rgba(179,0,0,0.06)]">
               <ul className="flex flex-col gap-y-3 md:gap-y-3.5 text-[14px] md:text-[16px] leading-[1.55] text-foreground/95">
                 {[
-                  { icon: "/images/hero-section/icon-draf/billingicon.png",     text: "ลงทะเบียนกรมศุล จับคู่ YY ตัวแทนนำเข้า ออกของ – ส่งออก ภายใน 1 ชั่วโมง" },
-                  { icon: "/images/hero-section/icon-draf/pcs-forwarder.png",   text: "ดูแลเอกสารครบ: ใบขน, ใบเสร็จภาษี, เอกสารใบอนุญาตนำเข้าต่างๆ" },
-                  { icon: "/images/hero-section/icon-draf/customclearance.png", text: "แก้ปัญหาสินค้าติดด่าน ภาษีไม่ลงตัว, เอกสารไม่ครบ, HS CODE พิกัดไม่ตรง, สินค้าไม่มีใบอนุญาต ติด DHL FEDEX TNT UPS" },
-                  { icon: "/images/hero-section/icon-draf/transfast.png",       text: "รองรับขนส่งทุกรูปแบบไม่ว่าจะเป็น รถ เรือ แอร์" },
-                  { icon: "/images/hero-section/icon-draf/pcs-sales.png",       text: "ให้คำปรึกษาฟรีโดยผู้เชี่ยวชาญด้านศุลกากรกว่า 14 ปี" },
-                  { icon: "/images/hero-section/icon-draf/people.png",          text: "ได้รับใบอนุญาตตัวแทนออกของ (Shipping License) และ สมาคมชิปปิ้ง อย่างถูกต้อง" },
-                  { icon: "/images/hero-section/icon-draf/checklistred.png",    text: "การันตีราคาถูก โปร่งใส ไม่มีบวกแอบ" },
+                  { icon: "/images/hero-section/icon-draf/billingicon.png",     text: tp("heroBullet1") },
+                  { icon: "/images/hero-section/icon-draf/pcs-forwarder.png",   text: tp("heroBullet2") },
+                  { icon: "/images/hero-section/icon-draf/customclearance.png", text: tp("heroBullet3") },
+                  { icon: "/images/hero-section/icon-draf/transfast.png",       text: tp("heroBullet4") },
+                  { icon: "/images/hero-section/icon-draf/pcs-sales.png",       text: tp("heroBullet5") },
+                  { icon: "/images/hero-section/icon-draf/people.png",          text: tp("heroBullet6") },
+                  { icon: "/images/hero-section/icon-draf/checklistred.png",    text: tp("heroBullet7") },
                 ].map((item) => (
                   <li key={item.text} className="flex items-start gap-3">
                     <Image src={item.icon} alt="" width={32} height={32} aria-hidden className="w-6 h-6 md:w-8 md:h-8 shrink-0 mt-0.5 object-contain" />
@@ -403,10 +413,10 @@ export default async function CustomsClearancePage({
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
-              Shipping Clearance — เคลียร์ของติดด่าน
+              {tp("modeEyebrow")}
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              บริการ <span className="text-primary-600">เคลียร์ของติดด่าน</span> Air · Sea · By Truck ทุก Port ราคาชัดเจน<span className="md:hidden"> ไม่บวกแอบ</span>
+              {tp("modeH2Before")} <span className="text-primary-600">{tp("modeH2Highlight")}</span> {tp("modeH2After")}<span className="md:hidden"> {tp("modeH2Mobile")}</span>
             </h2>
           </div>
 
@@ -421,13 +431,13 @@ export default async function CustomsClearancePage({
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <ListChecks className="w-3.5 h-3.5" strokeWidth={2.6} />
-              5 STEPS · ติดต่อง่าย เคลียร์ของจบใน 1 ชม.
+              {tp("stepsEyebrow")}
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              เคลียร์ของง่าย ๆ — <span className="text-primary-600">ครบจบใน 5 ขั้นตอน</span>
+              {tp("stepsH2Before")} — <span className="text-primary-600">{tp("stepsH2Highlight")}</span>
             </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
-              ทักมาก่อนได้เลย — ปรึกษาฟรี ไม่ต้องเดาเอง ไม่ต้องวิ่งยื่นเอกสารหลายรอบ ทีมจัดให้จบในคุยเดียว
+              {tp("stepsSubtitle")}
             </p>
 
             <div className="mt-6 md:mt-8 flex overflow-x-auto gap-3 -mx-4 px-4 pb-3 snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-2 lg:grid-cols-5 md:gap-4 md:overflow-visible md:mx-0 md:px-0 md:pb-0 md:snap-none">
@@ -496,7 +506,7 @@ export default async function CustomsClearancePage({
               href={LINE_URL}
               cta="line_consult"
               surface="customs_addline_banner"
-              aria-label="สินค้าติดด่าน? ทักไลน์ Pacred Shipping ปรึกษาฟรี รู้ผลใน 1 ชม."
+              aria-label={tp("lineBannerAriaLabel")}
               className="group block relative max-w-[1100px] mx-auto no-underline"
             >
               <div
@@ -521,36 +531,36 @@ export default async function CustomsClearancePage({
                 <div className="relative grid grid-cols-[1fr_auto] items-center gap-3 md:gap-6 pl-4 md:pl-8 pr-2 md:pr-4 min-h-[130px] md:min-h-[170px]">
                   <div className="min-w-0 py-3 md:py-3">
                     <p className="hidden md:block text-[44px] font-black text-white leading-[1.05] tracking-tight whitespace-nowrap [text-shadow:0_2px_6px_rgba(1,58,20,0.45)]">
-                      สินค้าติดด่าน? ทักไลน์ปรึกษาฟรี รู้ผลใน 1 ชม.
+                      {tp("lineBannerHeadline")}
                       <ArrowRight className="inline-block ml-2 w-7 h-7 align-[-0.15em] transition-transform group-hover:translate-x-1.5" strokeWidth={2.8} />
                     </p>
                     <p className="hidden md:block mt-1.5 text-[15px] font-semibold text-white/90 leading-snug tracking-tight whitespace-nowrap [text-shadow:0_1px_3px_rgba(1,58,20,0.4)]">
-                      รับเคลียร์ทุกเรื่อง ทั้งภาษีนำเข้า ของติดด่าน พิธีการศุลกากร เริ่มเพียง 2,800 บาท
+                      {tp("lineBannerSubtitle")}
                     </p>
                     <p className="hidden md:flex mt-1.5 text-[18px] font-bold text-white/95 items-center gap-3 [text-shadow:0_1px_3px_rgba(1,58,20,0.45)]">
                       <Phone className="w-5 h-5 shrink-0" strokeWidth={2.6} />
                       <span>062-603-0456</span>
                       <span className="text-white/60">·</span>
                       <MessageCircle className="w-5 h-5 shrink-0" strokeWidth={2.6} />
-                      <span>ทักไลน์ <span className="font-black">@pacred</span></span>
+                      <span>{tp("lineBannerLineHandle")} <span className="font-black">@pacred</span></span>
                     </p>
 
                     <p className="md:hidden text-[32px] font-black text-white leading-[1.0] tracking-tight [text-shadow:0_2px_6px_rgba(1,58,20,0.45)]">
-                      สินค้าติดด่าน?
+                      {tp("lineBannerMobileTitle")}
                     </p>
                     <p className="md:hidden mt-1.5 text-[14.5px] font-extrabold text-white leading-snug tracking-tight [text-shadow:0_1px_4px_rgba(1,58,20,0.45)]">
-                      ทักไลน์ปรึกษาฟรี รู้ผลใน 1 ชม.
+                      {tp("lineBannerMobileSubtitle")}
                       <ArrowRight className="inline-block ml-1 w-4 h-4 align-[-0.15em] transition-transform group-hover:translate-x-1.5" strokeWidth={2.8} />
                     </p>
                     <p className="md:hidden mt-1 text-[11px] font-medium text-white/85 leading-snug tracking-tight [text-shadow:0_1px_3px_rgba(1,58,20,0.4)]">
-                      พิธีการกรมศุลกากร เริ่มต้น 2,800บาท
+                      {tp("lineBannerMobileCaption")}
                     </p>
                   </div>
 
                   <div className="relative w-[110px] md:w-[180px] h-[130px] md:h-[170px] self-stretch shrink-0">
                     <Image
                       src="/images/visit/visit01.png"
-                      alt="ทีมงาน Pacred Shipping พร้อมตอบใน 5 นาที"
+                      alt={tp("lineBannerTeamAlt")}
                       fill
                       sizes="(max-width: 768px) 110px, 180px"
                       className="object-contain object-bottom drop-shadow-[0_4px_10px_rgba(1,58,20,0.35)]"
@@ -559,7 +569,7 @@ export default async function CustomsClearancePage({
 
                   <div className="pointer-events-none absolute top-1 md:top-2 right-2 md:right-4 z-20 flex flex-col items-center -rotate-[6deg] transition-transform duration-300 group-hover:-rotate-[10deg] group-hover:scale-105">
                     <span className="text-white text-[10.5px] md:text-[14px] font-black tracking-tight [text-shadow:0_1px_3px_rgba(1,58,20,0.55)] whitespace-nowrap">
-                      คลิ๊กเลย!
+                      {tp("clickBadge")}
                     </span>
                     <MousePointerClick className="mt-0.5 w-3.5 h-3.5 md:w-[18px] md:h-[18px] text-white drop-shadow-[0_1px_2px_rgba(1,58,20,0.5)]" strokeWidth={2.6} />
                   </div>
@@ -580,13 +590,13 @@ export default async function CustomsClearancePage({
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <Award className="w-3.5 h-3.5" strokeWidth={2.6} />
-              WHY CLEAR WITH PACRED · 15+ YEARS
+              {tp("whyEyebrow")}
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              ทำไม <span className="text-primary-600">เคลียร์ของต้องเลือก Pacred Shipping</span>
+              {tp("whyH2Before")} <span className="text-primary-600">{tp("whyH2Highlight")}</span>
             </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
-              บริการครบจบที่เดียว ราคาบอกตรง คุยง่าย — ทีมหน้าด่านตัวจริงที่อยู่กับลูกค้ามากว่า 15 ปี รู้จักทุกด่านในไทย
+              {tp("whySubtitle")}
             </p>
 
             <div className="mt-6 md:mt-8 flex flex-col gap-6 md:gap-8 items-stretch">
@@ -595,9 +605,9 @@ export default async function CustomsClearancePage({
               {/* Why Pacred — compact emoji-bullet list per ปอน 2026-05-16 (stacked under collage per ปอน 2026-05-18) */}
               <div>
                 <h3 className="text-[22px] md:text-[30px] font-black text-[#111827] dark:text-white leading-[1.25] mb-3 md:mb-4 tracking-tight">
-                  เคลียร์ของต้อง <span className="text-primary-600">Pacred Shipping</span>
+                  {tp("whyH3Before")} <span className="text-primary-600">Pacred Shipping</span>
                   <span className="block mt-1.5 md:mt-2 text-[17px] md:text-[20px] font-bold text-foreground/85 leading-snug">
-                    เคลียร์ได้ <span className="text-primary-600">เร็ว · ราคาชัด · ติดต่อง่าย 100%</span>
+                    {tp("whyH3Sub1")} <span className="text-primary-600">{tp("whyH3Sub2")}</span>
                   </span>
                 </h3>
                 {/* Themed frame — same primary-tinted card as the hero
@@ -605,14 +615,14 @@ export default async function CustomsClearancePage({
                 <div className="rounded-2xl md:rounded-3xl border border-primary-200 dark:border-primary-800/60 bg-gradient-to-br from-primary-50/60 via-white to-primary-50/30 dark:from-primary-900/15 dark:via-surface dark:to-primary-900/10 p-4 md:p-6 shadow-[0_8px_22px_rgba(179,0,0,0.06)]">
                   <ul className="flex flex-col gap-y-2.5 md:gap-y-3 text-[13px] md:text-[15px] leading-[1.55] text-foreground/90">
                     {[
-                      { icon: "/images/hero-section/icon-draf/ptrack.png",          title: "เคลียร์ด่วน ภายใน 1 ชั่วโมง",  desc: "ของได้ออกจากด่านในวันเดียว ไม่ต้องนอนค้างให้เสียค่าฝากเก็บเพิ่ม" },
-                      { icon: "/images/hero-section/icon-draf/ongkorn.png",         title: "ราคาโปร่งใส ไม่มีบวกแอบ",   desc: "ภาษี ค่าพิธีการ ค่ารถ — รวบในใบเดียวอ่านเข้าใจง่าย ไม่มีค่าใช้จ่ายงอกทีหลัง" },
-                      { icon: "/images/hero-section/icon-draf/people.png",          title: "ทีมหน้างานจริง ทุกด่าน",      desc: "มีคนประจำที่สุวรรณภูมิ คลองเตย แหลมฉบัง ICD มุกดาหาร นครพนม และอรัญฯ" },
-                      { icon: "/images/hero-section/icon-draf/customclearance.png", title: "แก้ปัญหาที่คนอื่นทำไม่ได้",   desc: "ของติดด่าน, HS Code ผิด, ภาษีเกินจริง หรือใบอนุญาต อย./มอก. ยังไม่ครบ เราเข้าไปคุยให้" },
-                      { icon: "/images/hero-section/icon-draf/checklistred.png",    title: "มีใบอนุญาตจริง ไม่ใช่นายหน้า", desc: "Shipping License, ทะเบียนกรมศุล, DBD และ ภพ.20 ครบทุกใบ ตรวจสอบได้" },
-                      { icon: "/images/hero-section/icon-draf/pcs-sales.png",       title: "ประสบการณ์ 15+ ปี",            desc: "ผ่านสินค้าเกือบทุกประเภท ทุก Term และทุก Port ในไทย" },
-                      { icon: "/images/hero-section/icon-draf/pcs-forwarder.png",   title: "รองรับสินค้าควบคุม",            desc: "ยา เครื่องสำอาง อิเล็กทรอนิกส์ เครื่องจักร และเคมีภัณฑ์ เอาอยู่หมด" },
-                      { icon: "/images/hero-section/icon-draf/pcs-address.png",     title: "Tracking real-time",            desc: "อัปเดตสถานะทุกขั้นตอน ทักทีมได้ตลอด 24 ชม. ไม่ต้องลุ้น" },
+                      { icon: "/images/hero-section/icon-draf/ptrack.png",          title: tp("whyBullet1Title"),  desc: tp("whyBullet1Desc") },
+                      { icon: "/images/hero-section/icon-draf/ongkorn.png",         title: tp("whyBullet2Title"),  desc: tp("whyBullet2Desc") },
+                      { icon: "/images/hero-section/icon-draf/people.png",          title: tp("whyBullet3Title"),  desc: tp("whyBullet3Desc") },
+                      { icon: "/images/hero-section/icon-draf/customclearance.png", title: tp("whyBullet4Title"),  desc: tp("whyBullet4Desc") },
+                      { icon: "/images/hero-section/icon-draf/checklistred.png",    title: tp("whyBullet5Title"),  desc: tp("whyBullet5Desc") },
+                      { icon: "/images/hero-section/icon-draf/pcs-sales.png",       title: tp("whyBullet6Title"),  desc: tp("whyBullet6Desc") },
+                      { icon: "/images/hero-section/icon-draf/pcs-forwarder.png",   title: tp("whyBullet7Title"),  desc: tp("whyBullet7Desc") },
+                      { icon: "/images/hero-section/icon-draf/pcs-address.png",     title: tp("whyBullet8Title"),  desc: tp("whyBullet8Desc") },
                     ].map((item) => (
                       <li key={item.title} className="flex items-start gap-2.5 md:gap-3">
                         <Image src={item.icon} alt="" width={28} height={28} aria-hidden className="w-6 h-6 md:w-7 md:h-7 shrink-0 mt-0.5 object-contain" />
@@ -637,7 +647,7 @@ export default async function CustomsClearancePage({
               href={LINE_URL}
               cta="line_consult"
               surface="customs_addline_banner_2"
-              aria-label="สินค้าติดด่าน? ทักไลน์ Pacred Shipping ปรึกษาฟรี รู้ผลใน 1 ชม."
+              aria-label={tp("lineBannerAriaLabel")}
               className="group block relative max-w-[1100px] mx-auto no-underline"
             >
               <div
@@ -662,36 +672,36 @@ export default async function CustomsClearancePage({
                 <div className="relative grid grid-cols-[1fr_auto] items-center gap-3 md:gap-6 pl-4 md:pl-8 pr-2 md:pr-4 min-h-[130px] md:min-h-[170px]">
                   <div className="min-w-0 py-3 md:py-3">
                     <p className="hidden md:block text-[44px] font-black text-white leading-[1.05] tracking-tight whitespace-nowrap [text-shadow:0_2px_6px_rgba(1,58,20,0.45)]">
-                      สินค้าติดด่าน? ทักไลน์ปรึกษาฟรี รู้ผลใน 1 ชม.
+                      {tp("lineBannerHeadline")}
                       <ArrowRight className="inline-block ml-2 w-7 h-7 align-[-0.15em] transition-transform group-hover:translate-x-1.5" strokeWidth={2.8} />
                     </p>
                     <p className="hidden md:block mt-1.5 text-[15px] font-semibold text-white/90 leading-snug tracking-tight whitespace-nowrap [text-shadow:0_1px_3px_rgba(1,58,20,0.4)]">
-                      รับเคลียร์ทุกเรื่อง ทั้งภาษีนำเข้า ของติดด่าน พิธีการศุลกากร เริ่มเพียง 2,800 บาท
+                      {tp("lineBannerSubtitle")}
                     </p>
                     <p className="hidden md:flex mt-1.5 text-[18px] font-bold text-white/95 items-center gap-3 [text-shadow:0_1px_3px_rgba(1,58,20,0.45)]">
                       <Phone className="w-5 h-5 shrink-0" strokeWidth={2.6} />
                       <span>062-603-0456</span>
                       <span className="text-white/60">·</span>
                       <MessageCircle className="w-5 h-5 shrink-0" strokeWidth={2.6} />
-                      <span>ทักไลน์ <span className="font-black">@pacred</span></span>
+                      <span>{tp("lineBannerLineHandle")} <span className="font-black">@pacred</span></span>
                     </p>
 
                     <p className="md:hidden text-[32px] font-black text-white leading-[1.0] tracking-tight [text-shadow:0_2px_6px_rgba(1,58,20,0.45)]">
-                      สินค้าติดด่าน?
+                      {tp("lineBannerMobileTitle")}
                     </p>
                     <p className="md:hidden mt-1.5 text-[14.5px] font-extrabold text-white leading-snug tracking-tight [text-shadow:0_1px_4px_rgba(1,58,20,0.45)]">
-                      ทักไลน์ปรึกษาฟรี รู้ผลใน 1 ชม.
+                      {tp("lineBannerMobileSubtitle")}
                       <ArrowRight className="inline-block ml-1 w-4 h-4 align-[-0.15em] transition-transform group-hover:translate-x-1.5" strokeWidth={2.8} />
                     </p>
                     <p className="md:hidden mt-1 text-[11px] font-medium text-white/85 leading-snug tracking-tight [text-shadow:0_1px_3px_rgba(1,58,20,0.4)]">
-                      พิธีการกรมศุลกากร เริ่มต้น 2,800บาท
+                      {tp("lineBannerMobileCaption")}
                     </p>
                   </div>
 
                   <div className="relative w-[110px] md:w-[180px] h-[130px] md:h-[170px] self-stretch shrink-0">
                     <Image
                       src="/images/visit/visit01.png"
-                      alt="ทีมงาน Pacred Shipping พร้อมตอบใน 5 นาที"
+                      alt={tp("lineBannerTeamAlt")}
                       fill
                       sizes="(max-width: 768px) 110px, 180px"
                       className="object-contain object-bottom drop-shadow-[0_4px_10px_rgba(1,58,20,0.35)]"
@@ -700,7 +710,7 @@ export default async function CustomsClearancePage({
 
                   <div className="pointer-events-none absolute top-1 md:top-2 right-2 md:right-4 z-20 flex flex-col items-center -rotate-[6deg] transition-transform duration-300 group-hover:-rotate-[10deg] group-hover:scale-105">
                     <span className="text-white text-[10.5px] md:text-[14px] font-black tracking-tight [text-shadow:0_1px_3px_rgba(1,58,20,0.55)] whitespace-nowrap">
-                      คลิ๊กเลย!
+                      {tp("clickBadge")}
                     </span>
                     <MousePointerClick className="mt-0.5 w-3.5 h-3.5 md:w-[18px] md:h-[18px] text-white drop-shadow-[0_1px_2px_rgba(1,58,20,0.5)]" strokeWidth={2.6} />
                   </div>
@@ -764,10 +774,10 @@ export default async function CustomsClearancePage({
                   href={LINE_URL}
                   cta="line_consult"
                   surface="customs_guarantee_banner"
-                  aria-label="ทักไลน์ Pacred Shipping ปรึกษาเคลียร์ของฟรี"
+                  aria-label={tp("scopeBannerAriaLabel")}
                   className="absolute inset-0 z-10"
                 >
-                  <span className="sr-only">ทักไลน์ Pacred Shipping</span>
+                  <span className="sr-only">{tp("scopeBannerSrOnly")}</span>
                 </TrackedExternalLink>
 
                 <div className="relative pointer-events-none grid grid-cols-[1fr_auto] items-center gap-3 md:gap-6 pl-4 md:pl-8 pr-2 md:pr-4 min-h-[150px] md:min-h-[180px]">
@@ -777,12 +787,12 @@ export default async function CustomsClearancePage({
                         ("เคลียร์ไวกับ" dropped to free horizontal space for bigger text) */}
                     <p className="hidden md:flex flex-wrap lg:flex-nowrap items-center gap-x-3 gap-y-2 tracking-tight lg:whitespace-nowrap">
                       <span className="inline-flex items-baseline gap-x-2 text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.45)]">
-                        <span className="text-[48px] font-black leading-none whitespace-nowrap">ของติดด่าน?</span>
-                        <span className="text-[18px] font-bold">แค่</span>
+                        <span className="text-[48px] font-black leading-none whitespace-nowrap">{tp("guaranteeStuck")}</span>
+                        <span className="text-[18px] font-bold">{tp("guaranteeOnly")}</span>
                       </span>
                       <span className="inline-flex items-baseline gap-x-2 text-yellow-300 [text-shadow:0_3px_8px_rgba(0,0,0,0.55)]">
                         <span className="text-[72px] font-black leading-none whitespace-nowrap">2,800</span>
-                        <span className="text-[18px] font-bold">บาท</span>
+                        <span className="text-[18px] font-bold">{tp("guaranteeBaht")}</span>
                       </span>
                       <span className="inline-flex items-center gap-2 whitespace-nowrap text-white">
                         <span className="inline-block px-4 py-0.5 rounded-full bg-white text-primary-600 text-[26px] font-black tracking-tight shadow-[0_4px_12px_rgba(0,0,0,0.25)]">
@@ -797,12 +807,12 @@ export default async function CustomsClearancePage({
                         L2: 2,800 (48px focal) + บาท (14px) + arrow (clickable affordance) */}
                     <div className="md:hidden flex flex-col gap-1">
                       <p className="flex items-baseline gap-1.5 text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.45)]">
-                        <span className="text-[26px] font-black leading-none tracking-tight whitespace-nowrap">ของติดด่าน?</span>
-                        <span className="text-[14px] font-bold">แค่</span>
+                        <span className="text-[26px] font-black leading-none tracking-tight whitespace-nowrap">{tp("guaranteeStuck")}</span>
+                        <span className="text-[14px] font-bold">{tp("guaranteeOnly")}</span>
                       </p>
                       <p className="flex items-baseline gap-1.5 text-yellow-300 [text-shadow:0_3px_8px_rgba(0,0,0,0.55)]">
                         <span className="text-[48px] font-black leading-none tracking-tight whitespace-nowrap">2,800</span>
-                        <span className="text-[14px] font-bold">บาท</span>
+                        <span className="text-[14px] font-bold">{tp("guaranteeBaht")}</span>
                         <ArrowRight className="self-center shrink-0 ml-1 w-6 h-6 text-white transition-transform group-hover:translate-x-1" strokeWidth={2.8} />
                       </p>
                     </div>
@@ -842,7 +852,7 @@ export default async function CustomsClearancePage({
                   <div className="relative w-[150px] md:w-[180px] h-[150px] md:h-[180px] shrink-0 md:mr-6">
                     <Image
                       src="/images/visit/Visit04.png"
-                      alt="ทีมงาน Pacred Shipping"
+                      alt={tp("guaranteeTeamAlt")}
                       fill
                       sizes="(max-width: 768px) 150px, 180px"
                       className="object-contain object-bottom drop-shadow-[0_4px_10px_rgba(0,0,0,0.30)]"
@@ -863,7 +873,7 @@ export default async function CustomsClearancePage({
                   {/* คลิ๊กเลย! corner badge */}
                   <div className="pointer-events-none absolute top-1 md:top-2 right-1 md:right-3 z-20 flex flex-col items-center -rotate-[6deg] transition-transform duration-300 group-hover:-rotate-[10deg] group-hover:scale-105">
                     <span className="text-white text-[11px] md:text-[15px] font-black tracking-tight [text-shadow:0_1px_3px_rgba(0,0,0,0.55)] whitespace-nowrap">
-                      คลิ๊กเลย!
+                      {tp("clickBadge")}
                     </span>
                     <MousePointerClick className="mt-0.5 w-4 h-4 md:w-5 md:h-5 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" strokeWidth={2.6} />
                   </div>
@@ -875,12 +885,12 @@ export default async function CustomsClearancePage({
             <div className="mt-3 md:mt-4 grid grid-cols-2 gap-2 md:gap-4">
               <Link
                 href="/register"
-                aria-label="สมัครสมาชิกฟรี — คลิ๊กเลย"
+                aria-label={tp("ctaRegisterAlt")}
                 className="group relative block overflow-hidden rounded-2xl hover:-translate-y-0.5 transition-transform duration-300"
               >
                 <Image
                   src="/images/cta/samak05.png"
-                  alt="สมัครสมาชิกฟรี — คลิ๊กเลย"
+                  alt={tp("ctaRegisterAlt")}
                   width={534}
                   height={200}
                   sizes="(max-width: 768px) 45vw, 540px"
@@ -893,12 +903,12 @@ export default async function CustomsClearancePage({
                 href={LINE_URL}
                 cta="line_consult"
                 surface="customs_guarantee_cta"
-                aria-label="ปรึกษานำเข้าฟรี ทางไลน์ — คลิ๊กเลย"
+                aria-label={tp("ctaLineAlt")}
                 className="group relative block overflow-hidden rounded-2xl hover:-translate-y-0.5 transition-transform duration-300"
               >
                 <Image
                   src="/images/cta/pruksa05.png"
-                  alt="ปรึกษานำเข้าฟรี ทางไลน์ — คลิ๊กเลย"
+                  alt={tp("ctaLineAlt")}
                   width={534}
                   height={200}
                   sizes="(max-width: 768px) 45vw, 540px"
@@ -918,28 +928,28 @@ export default async function CustomsClearancePage({
             {/* ── Services intro ── */}
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <Briefcase className="w-3.5 h-3.5" strokeWidth={2.6} />
-              CLEARANCE EXPERTS · บริการเคลียร์ครบวงจร
+              {tp("servicesEyebrow")}
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              เปิดประสบการณ์ <span className="text-primary-600">เคลียร์ของและภาษีนำเข้า</span> กับ Pacred Shipping
+              {tp("servicesH2Before")} <span className="text-primary-600">{tp("servicesH2Highlight")}</span> {tp("servicesH2After")}
             </h2>
             <p className="mt-2 md:mt-3 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[920px]">
-              Pacred Shipping ดูแลเรื่องนำเข้า–ส่งออกครบในที่เดียว — ทั้ง <strong className="text-primary-600 font-black">เคลียร์ภาษีนำเข้า</strong> ของติดด่าน และพิธีการศุลกากร ขนทางอากาศหรือทางเรือก็ได้ บอกราคาตรง คุยง่าย ด้วยทีมที่อยู่หน้าด่านจริงมา <strong className="text-primary-600 font-black">15 ปี</strong>
+              {tp("servicesIntro1")} <strong className="text-primary-600 font-black">{tp("servicesIntroHighlight1")}</strong> {tp("servicesIntro2")} <strong className="text-primary-600 font-black">15 {tp("servicesIntroYears")}</strong>
             </p>
 
             {/* Service bullets — CheckCircle2 + bolded keyword */}
             <ul className="mt-6 md:mt-8 flex flex-col gap-y-3 md:gap-y-3.5">
-              {[
-                <>ดูแล <strong className="font-black text-foreground">ภาษีศุลกากรพร้อมภาษีสนามบินทั้งสุวรรณภูมิและดอนเมือง</strong> ในใบเดียว</>,
-                <>รับเคสติดด่านทุกที่ — <strong className="font-black text-foreground">สนามบิน ท่าเรือคลองเตย ท่าเรือกรุงเทพ</strong> ลามไปท่าอื่นทั่วประเทศ</>,
-                <>จองพื้นที่ขนส่งให้ — <strong className="font-black text-foreground">Booking Flights, Air Freight, Sea Freight, Customs Clearance</strong> ครบใน flow เดียว</>,
-                <>รับงานจากทุกขนส่งหลัก เช่น <strong className="font-black text-foreground">DHL, FedEx, UPS, TNT, Air Cargo</strong> และอื่นๆ ที่ลูกค้าใช้</>,
-                <>วิ่งเรื่องเมื่อสินค้าโดนติดที่หน่วยงานราชการ เช่น <strong className="font-black text-foreground">มอก., สมอ., กสทช., กรมเกษตร, กรมประมง</strong></>,
-                <><strong className="font-black text-foreground">หน้าด่านจริง 15+ ปี</strong> ถนัด <strong className="font-black text-foreground">กฎหมายศุลกากร พิกัดอัตรา การใช้สิทธิภาษี และการขอคืนภาษี</strong></>,
-                <>เคลียร์ได้ <strong className="font-black text-foreground">ทุกประเภทสินค้า ไม่มีขั้นต่ำ</strong> ขอแค่ถูกกฎหมายเท่านั้น</>,
-                <>คุยตรงกับ <strong className="font-black text-foreground">เจ้าหน้าที่กรมศุลฯ</strong> ลดขั้นตอนรอผ่านคนกลาง</>,
-                <>อยากเพิ่ม <strong className="font-black text-foreground">ประกันสินค้า</strong>? ทำให้ได้ทุกประเภท บอกทีมตอนปรึกษาได้เลย</>,
-              ].map((node, idx) => (
+              {([
+                <>{tp("svcBullet1Pre")} <strong className="font-black text-foreground">{tp("svcBullet1Bold")}</strong> {tp("svcBullet1Post")}</>,
+                <>{tp("svcBullet2Pre")} <strong className="font-black text-foreground">{tp("svcBullet2Bold")}</strong> {tp("svcBullet2Post")}</>,
+                <>{tp("svcBullet3Pre")} <strong className="font-black text-foreground">{tp("svcBullet3Bold")}</strong> {tp("svcBullet3Post")}</>,
+                <>{tp("svcBullet4Pre")} <strong className="font-black text-foreground">{tp("svcBullet4Bold")}</strong> {tp("svcBullet4Post")}</>,
+                <>{tp("svcBullet5Pre")} <strong className="font-black text-foreground">{tp("svcBullet5Bold")}</strong></>,
+                <><strong className="font-black text-foreground">{tp("svcBullet6Bold1")}</strong> {tp("svcBullet6Mid")} <strong className="font-black text-foreground">{tp("svcBullet6Bold2")}</strong></>,
+                <>{tp("svcBullet7Pre")} <strong className="font-black text-foreground">{tp("svcBullet7Bold")}</strong> {tp("svcBullet7Post")}</>,
+                <>{tp("svcBullet8Pre")} <strong className="font-black text-foreground">{tp("svcBullet8Bold")}</strong> {tp("svcBullet8Post")}</>,
+                <>{tp("svcBullet9Pre")} <strong className="font-black text-foreground">{tp("svcBullet9Bold")}</strong>{tp("svcBullet9Post")}</>,
+              ] as React.ReactNode[]).map((node, idx) => (
                 <li key={idx} className="flex items-start gap-2.5 md:gap-3">
                   <CheckCircle2 className="w-5 h-5 md:w-6 md:h-6 text-primary-600 shrink-0 mt-[3px] md:mt-[4px]" strokeWidth={2.6} />
                   <span className="text-[15px] md:text-[18px] leading-[1.55] text-foreground/95">
@@ -952,28 +962,28 @@ export default async function CustomsClearancePage({
             {/* ── Problems we solve ── */}
             <div className="mt-8 md:mt-12 inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <ShieldAlert className="w-3.5 h-3.5" strokeWidth={2.6} />
-              CLEARANCE PROBLEMS · ปัญหาเคลียร์ของที่เรารับดูแล
+              {tp("problemsEyebrow")}
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              ปัญหา <span className="text-primary-600">เคลียร์ของติดด่าน</span> ที่เรารับจัดการให้
+              {tp("problemsH2Before")} <span className="text-primary-600">{tp("problemsH2Highlight")}</span> {tp("problemsH2After")}
             </h2>
             <p className="mt-2 md:mt-3 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[920px]">
-              ทุกเคสที่ลูกค้าเจอ — ของติดด่าน ภาษีค้าง พิธีการพัง — ทีม Pacred Shipping ลงไปแก้ที่ต้นเรื่อง ไม่ใช่แค่รับมาแล้วส่งต่อให้คนอื่นทำ
+              {tp("problemsSubtitle")}
             </p>
 
             <ul className="mt-6 md:mt-8 flex flex-col gap-y-2.5 md:gap-y-3">
-              {[
-                <><strong className="font-black text-foreground">พิกัดอัตราศุลกากร</strong> — สินค้าถูกตีพิกัดผิด ทำให้จ่ายภาษีแพงกว่าที่ควร เรารับเข้าไปคุย</>,
-                <><strong className="font-black text-foreground">ใบอนุญาตนำเข้า</strong> — เคสที่ต้องขอ มอก., สมอ., กสทช. หรือใบอื่นที่ยังไม่ครบมือ</>,
-                <><strong className="font-black text-foreground">เอกสารผิด / เอกสารไม่ครบ</strong> — แก้ Invoice, Packing List, B/L หรือใบใดก็ตามที่ทำให้สินค้าติด</>,
-                <>ใช้สิทธิ์ <strong className="font-black text-foreground">ฟอร์มภาษีพิเศษ</strong> เช่น Form E, Form D, Form AI ฯลฯ ช่วยลดต้นทุนภาษีนำเข้า</>,
-                <><strong className="font-black text-foreground">ราคาสินค้าโดนตีสูงเกินจริง</strong> หรือเอกสารราคาไม่ตรงกัน เราคุยกับเจ้าหน้าที่ให้</>,
-                <>นำเข้า <strong className="font-black text-foreground">สัตว์เลี้ยง</strong> — แมว สุนัข พร้อมขอใบอนุญาตจากกรมปศุสัตว์ให้</>,
-                <>นำเข้า <strong className="font-black text-foreground">อาหาร ผลไม้ ของสด</strong> — ผ่านด่านอาหาร–กักกันพืช พร้อมเอกสารครบชุด</>,
-                <>นำเข้า <strong className="font-black text-foreground">เสื้อผ้า เครื่องแต่งกาย</strong> — ทั้งล็อตขายและของใช้ส่วนตัวที่สั่งมาเอง</>,
-                <>นำเข้า <strong className="font-black text-foreground">เครื่องประดับ ของใช้ส่วนตัว</strong> — ประเมินมูลค่าและทำพิธีการให้เรียบร้อย ไม่มีปัญหาตามมา</>,
-                <>เคลียร์ของลงคลังสุวรรณภูมิ — <strong className="font-black text-foreground">DHL, FedEx, UPS, TNT, BFS</strong> และคลังอื่นที่ลูกค้าฝากไว้</>,
-              ].map((node, idx) => (
+              {([
+                <><strong className="font-black text-foreground">{tp("probBullet1Bold")}</strong> — {tp("probBullet1Desc")}</>,
+                <><strong className="font-black text-foreground">{tp("probBullet2Bold")}</strong> — {tp("probBullet2Desc")}</>,
+                <><strong className="font-black text-foreground">{tp("probBullet3Bold")}</strong> — {tp("probBullet3Desc")}</>,
+                <>{tp("probBullet4Pre")} <strong className="font-black text-foreground">{tp("probBullet4Bold")}</strong> {tp("probBullet4Post")}</>,
+                <><strong className="font-black text-foreground">{tp("probBullet5Bold")}</strong> {tp("probBullet5Desc")}</>,
+                <>{tp("probBullet6Pre")} <strong className="font-black text-foreground">{tp("probBullet6Bold")}</strong> — {tp("probBullet6Desc")}</>,
+                <>{tp("probBullet7Pre")} <strong className="font-black text-foreground">{tp("probBullet7Bold")}</strong> — {tp("probBullet7Desc")}</>,
+                <>{tp("probBullet8Pre")} <strong className="font-black text-foreground">{tp("probBullet8Bold")}</strong> — {tp("probBullet8Desc")}</>,
+                <>{tp("probBullet9Pre")} <strong className="font-black text-foreground">{tp("probBullet9Bold")}</strong> — {tp("probBullet9Desc")}</>,
+                <>{tp("probBullet10Pre")} <strong className="font-black text-foreground">{tp("probBullet10Bold")}</strong> {tp("probBullet10Post")}</>,
+              ] as React.ReactNode[]).map((node, idx) => (
                 <li key={idx} className="flex items-start gap-2.5 md:gap-3">
                   <span aria-hidden className="w-2 h-2 md:w-2.5 md:h-2.5 bg-primary-600 mt-[8px] md:mt-[11px] shrink-0 rounded-[2px]" />
                   <span className="text-[15px] md:text-[18px] leading-[1.55] text-foreground/95">
@@ -991,7 +1001,7 @@ export default async function CustomsClearancePage({
             <div className="hidden md:block relative w-screen left-1/2 -translate-x-1/2 mt-12 group">
               <Image
                 src="/images/bannerdesktop/bannerbottom02.png"
-                alt="Pacred Shipping — บริการครบ ราคาชัด คุยกับทีมง่าย ปรึกษาฟรีตลอด 24 ชม."
+                alt={tp("bottomBannerAlt")}
                 width={3840}
                 height={800}
                 sizes="100vw"
@@ -1007,9 +1017,9 @@ export default async function CustomsClearancePage({
                 cta="line_banner"
                 surface="customs_clearance_bottom_banner"
                 className="absolute inset-0 z-0"
-                aria-label="ทักไลน์ Pacred Shipping"
+                aria-label={tp("lineBannerSrOnly")}
               >
-                <span className="sr-only">ทักไลน์ Pacred Shipping</span>
+                <span className="sr-only">{tp("lineBannerSrOnly")}</span>
               </TrackedExternalLink>
 
               {/* Text overlay (z-10) — pointer-events:none lets clicks through
@@ -1018,17 +1028,17 @@ export default async function CustomsClearancePage({
               <div className="absolute inset-y-0 left-0 right-[45%] z-10 pointer-events-none flex flex-col justify-center px-[6%] lg:px-[8%] xl:px-[10%] py-2 lg:py-3">
                 <div className="inline-flex items-center gap-1.5 mb-1 lg:mb-1.5 text-yellow-300 text-[11px] lg:text-[13px] xl:text-[15px] font-black tracking-[0.08em] uppercase drop-shadow-[0_1px_4px_rgba(0,0,0,0.55)]">
                   <ShieldCheck className="w-3.5 h-3.5 lg:w-4 lg:h-4 xl:w-5 xl:h-5" strokeWidth={2.6} />
-                  CLEARANCE GUARANTEE · มั่นใจเคลียร์ได้ 100%
+                  {tp("clearanceGuaranteeLabel")}
                 </div>
                 <h3 className="text-[20px] lg:text-[30px] xl:text-[40px] font-black text-white leading-[1.05] tracking-[-0.025em] drop-shadow-[0_3px_12px_rgba(0,0,0,0.6)]">
-                  มั่นใจ เคลียร์ เร็ว ไว ไม่มีคำว่าทำไม่ได้
+                  {tp("closingH3Line1")}
                   <br />
-                  เลือก <span className="text-yellow-300">Pacred Shipping</span>
+                  {tp("closingH3Choose")} <span className="text-yellow-300">Pacred Shipping</span>
                 </h3>
                 <p className="mt-1 lg:mt-1.5 text-[11.5px] lg:text-[13px] xl:text-[15px] leading-[1.4] font-medium text-white/95 drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]">
-                  อยู่ข้างคุณทุกขั้นตอน —{" "}
-                  <strong className="text-yellow-200 font-black">บริการครบ ราคาชัด</strong>
-                  {" "}ปรึกษาฟรี 24 ชม.
+                  {tp("closingP1Pre")}{" "}
+                  <strong className="text-yellow-200 font-black">{tp("closingP1Bold")}</strong>
+                  {" "}{tp("closingP1Post")}
                 </p>
 
                 {/* CTA row — QR card + 2 phone tel: badges. Shifted slightly
@@ -1044,17 +1054,17 @@ export default async function CustomsClearancePage({
                   >
                     <Image
                       src="/images/qr-line-oa.png"
-                      alt="สแกน QR เพื่อทักไลน์ Pacred Shipping"
+                      alt={tp("qrAlt")}
                       width={140}
                       height={140}
                       className="w-[60px] lg:w-[74px] xl:w-[88px] h-auto block rounded-sm"
                     />
                     <div className="leading-tight">
                       <p className="text-[9px] lg:text-[10.5px] xl:text-[11.5px] font-bold text-primary-600 tracking-[0.05em] uppercase">
-                        สแกน QR
+                        {tp("qrScanLabel")}
                       </p>
                       <p className="text-[12.5px] lg:text-[15px] xl:text-[17px] font-black text-primary-700 leading-tight">
-                        ทักไลน์ฟรี →
+                        {tp("qrLineFree")}
                       </p>
                     </div>
                   </TrackedExternalLink>
@@ -1089,7 +1099,7 @@ export default async function CustomsClearancePage({
             <div className="md:hidden relative w-screen left-1/2 -translate-x-1/2 mt-8 group aspect-[6/5] overflow-hidden">
               <Image
                 src="/images/bannermobile/pacredbannermobile01.png"
-                alt="Pacred Shipping — บริการครบ ราคาชัด คุยกับทีมง่าย ปรึกษาฟรีตลอด 24 ชม."
+                alt={tp("bottomBannerAlt")}
                 fill
                 sizes="100vw"
                 className="object-cover object-top"
@@ -1103,9 +1113,9 @@ export default async function CustomsClearancePage({
                 cta="line_banner_mobile"
                 surface="customs_clearance_bottom_banner_mobile"
                 className="absolute inset-0 z-0"
-                aria-label="ทักไลน์ Pacred Shipping"
+                aria-label={tp("lineBannerSrOnly")}
               >
-                <span className="sr-only">ทักไลน์ Pacred Shipping</span>
+                <span className="sr-only">{tp("lineBannerSrOnly")}</span>
               </TrackedExternalLink>
 
               {/* Single top-down overlay: text → QR square → 2 phones, all
@@ -1116,17 +1126,17 @@ export default async function CustomsClearancePage({
                 <div>
                   <div className="inline-flex items-center gap-1.5 mb-1.5 text-yellow-300 text-[11px] font-black tracking-[0.10em] uppercase drop-shadow-[0_1px_3px_rgba(0,0,0,0.65)]">
                     <ShieldCheck className="w-3.5 h-3.5" strokeWidth={2.6} />
-                    CLEARANCE GUARANTEE · มั่นใจเคลียร์ได้ 100%
+                    {tp("clearanceGuaranteeLabel")}
                   </div>
                   <h3 className="text-[24px] font-black text-white leading-[1.1] tracking-[-0.02em] drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
-                    มั่นใจ เคลียร์ เร็ว ไว ไม่มีคำว่าทำไม่ได้
+                    {tp("closingH3Line1")}
                     <br />
-                    เลือก <span className="text-yellow-300">Pacred Shipping</span>
+                    {tp("closingH3Choose")} <span className="text-yellow-300">Pacred Shipping</span>
                   </h3>
                   <p className="mt-2 text-[13.5px] leading-[1.45] font-medium text-white/95 drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]">
-                    อยู่ข้างคุณทุกขั้นตอน —{" "}
-                    <strong className="text-yellow-200 font-black">บริการครบ ราคาชัด คุยกับทีมง่าย</strong>
-                    {" "}ปรึกษาฟรี 24 ชม.
+                    {tp("closingP1Pre")}{" "}
+                    <strong className="text-yellow-200 font-black">{tp("closingP1BoldMobile")}</strong>
+                    {" "}{tp("closingP1Post")}
                   </p>
                 </div>
 
@@ -1136,11 +1146,11 @@ export default async function CustomsClearancePage({
                   cta="line_qr_banner_mobile"
                   surface="customs_clearance_bottom_banner_mobile_qr"
                   className="inline-block bg-white rounded-xl p-1.5 shadow-[0_8px_22px_rgba(0,0,0,0.32)] pointer-events-auto"
-                  aria-label="สแกน QR เพื่อทักไลน์ Pacred Shipping"
+                  aria-label={tp("qrAlt")}
                 >
                   <Image
                     src="/images/qr-line-oa.png"
-                    alt="สแกน QR เพื่อทักไลน์ Pacred Shipping"
+                    alt={tp("qrAlt")}
                     width={140}
                     height={140}
                     className="w-[80px] h-auto block rounded-sm"
@@ -1177,13 +1187,13 @@ export default async function CustomsClearancePage({
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <Tag className="w-3.5 h-3.5" strokeWidth={2.6} />
-              RELATED TAGS · หัวข้อที่เกี่ยวข้องกับการเคลียร์
+              {tp("tagsEyebrow")}
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              บริการ <span className="text-primary-600">เคลียร์ของติดด่าน</span> ครอบคลุมทุก Port
+              {tp("tagsH2Before")} <span className="text-primary-600">{tp("tagsH2Highlight")}</span> {tp("tagsH2After")}
             </h2>
             <p className="mt-2 md:mt-3 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[920px]">
-              กดแท็กดูบทความเจาะลึก หรืออ่านเรื่องอื่นได้ที่หน้า <Link href="/knowledge" className="text-primary-600 hover:text-primary-700 font-bold underline-offset-4 hover:underline">สาระน่ารู้</Link>
+              {tp("tagsSubtitleBefore")} <Link href="/knowledge" className="text-primary-600 hover:text-primary-700 font-bold underline-offset-4 hover:underline">{tp("tagsKnowledgeLinkText")}</Link>
             </p>
 
             {/* Tabs + content panel — Trip.com style (per ปอน 2026-05-17) */}

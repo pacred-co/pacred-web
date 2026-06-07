@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import {
   ArrowLeft,
@@ -54,8 +55,9 @@ export async function generateMetadata({
   params: Promise<{ locale: string; slug: string }>;
 }): Promise<Metadata> {
   const { locale, slug } = await params;
+  const t = await getTranslations("newsArticlePage");
   const news = getPacredNewsBySlug(slug);
-  if (!news) return { title: "ไม่พบประกาศ" };
+  if (!news) return { title: t("notFoundTitle") };
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const canonical = `${typedLocale === "th" ? "" : `/${typedLocale}`}/news/${slug}`;
   const imageUrl = `${SITE_URL}${news.image}`;
@@ -93,6 +95,7 @@ export default async function NewsArticlePage({
   params: Promise<{ locale: string; slug: string }>;
 }) {
   const { locale, slug } = await params;
+  const t = await getTranslations("newsArticlePage");
   const news = getPacredNewsBySlug(slug);
   if (!news) notFound();
 
@@ -132,11 +135,11 @@ export default async function NewsArticlePage({
             {/* Breadcrumb */}
             <nav className="mx-auto w-full max-w-[920px] flex items-center gap-1 text-[11.5px] md:text-[12.5px] text-muted mb-4 md:mb-5 flex-wrap">
               <Link href="/" className="hover:text-primary-600 transition-colors font-bold">
-                หน้าหลัก
+                {t("breadcrumbHome")}
               </Link>
               <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
               <Link href="/news" className="hover:text-primary-600 transition-colors font-bold">
-                ข่าวสาร Pacred
+                {t("breadcrumbNews")}
               </Link>
               <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
               <span className="font-bold text-[#111827] dark:text-white line-clamp-1">
@@ -174,7 +177,7 @@ export default async function NewsArticlePage({
                   Pacred Shipping
                 </span>
                 <span className="text-muted/50">·</span>
-                <span>อ่าน 2 นาที</span>
+                <span>{t("readingTime")}</span>
                 <span className="text-muted/50">·</span>
                 {/* Offset newsIds into 1000+ so they don't collide with knowledge ids in localStorage */}
                 <ArticleStats articleId={1000 + news.id} />
@@ -216,17 +219,17 @@ export default async function NewsArticlePage({
                   <div>
                     <div className="flex items-center gap-2 mb-1 text-primary-600 text-[12px] md:text-[13px] font-black tracking-[0.08em] uppercase">
                       <Newspaper className="w-3.5 h-3.5" strokeWidth={2.6} />
-                      ข่าวสารอื่น
+                      {t("relatedSectionLabel")}
                     </div>
                     <h2 className="text-[20px] md:text-[26px] font-black tracking-[-0.03em] text-[#111827] dark:text-white">
-                      ประกาศ Pacred อื่นๆ
+                      {t("relatedSectionHeading")}
                     </h2>
                   </div>
                   <Link
                     href="/news"
                     className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full bg-white dark:bg-surface text-[#111827] dark:text-white border border-border text-[12px] font-black hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all duration-300"
                   >
-                    ดูทั้งหมด
+                    {t("viewAll")}
                     <ArrowRight className="w-3.5 h-3.5" strokeWidth={3} />
                   </Link>
                 </div>
@@ -263,7 +266,7 @@ export default async function NewsArticlePage({
                           {r.title}
                         </h3>
                         <div className="mt-auto pt-1.5 flex items-center gap-1 text-primary-600 text-[10.5px] md:text-[11.5px] font-black opacity-80 group-hover:opacity-100 transition-opacity">
-                          อ่านข่าวด่วน
+                          {t("readNewsCard")}
                           <ArrowRight className="w-3 h-3 transition-transform duration-300 group-hover:translate-x-1" strokeWidth={3} />
                         </div>
                       </div>
@@ -280,7 +283,7 @@ export default async function NewsArticlePage({
                 className="inline-flex items-center gap-1.5 text-[12.5px] md:text-[14px] font-black text-primary-600 hover:text-primary-700 transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" strokeWidth={2.6} />
-                กลับไปยังข่าวสาร Pacred ทั้งหมด
+                {t("backToAllNews")}
               </Link>
             </div>
           </div>

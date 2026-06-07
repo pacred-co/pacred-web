@@ -11,6 +11,7 @@ import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbSchema } from "@/components/seo/schemas";
 import { buildPageMetadata } from "@/components/seo/page-meta";
 import { SITE_URL } from "@/components/seo/site";
+import { getTranslations } from "next-intl/server";
 
 const PATH = "/knowledge";
 
@@ -41,7 +42,13 @@ export default async function KnowledgeListingPage({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
+  const t = await getTranslations("knowledgeIndex");
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
+  const CATEGORY_LABELS: Record<string, string> = {
+    นำเข้า: t("categoryImport"),
+    เคลียร์: t("categoryCustoms"),
+    ส่งออก: t("categoryExport"),
+  };
   const itemList = {
     "@context": "https://schema.org",
     "@type": "ItemList",
@@ -80,11 +87,14 @@ export default async function KnowledgeListingPage({
                 KNOWLEDGE BASE
               </div>
               <h1 className="text-[28px] md:text-[42px] leading-[1.15] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
-                สาระน่ารู้{" "}
-                <span className="text-primary-600">นำเข้า–ส่งออก</span> ฉบับมือโปร
+                {t.rich("heading", {
+                  highlight: (chunks) => (
+                    <span className="text-primary-600">{chunks}</span>
+                  ),
+                })}
               </h1>
               <p className="mt-3 text-[14px] md:text-[16px] leading-[1.6] text-muted max-w-[760px] md:mx-0 mx-auto">
-                รวมบทความ CIF · FTA · Incoterms · เคลียร์สินค้าติดด่าน — เขียนจากประสบการณ์ทีม Pacred Shipping
+                {t("subheading")}
               </p>
 
               {/* Tab switcher — knowledge ↔ news */}
@@ -102,7 +112,7 @@ export default async function KnowledgeListingPage({
                       className="inline-flex items-center gap-1.5 h-8 md:h-9 px-3 md:px-3.5 rounded-full bg-white dark:bg-surface border border-border text-[12px] md:text-[13px] font-black text-[#111827] dark:text-white"
                     >
                       <span className={`w-1.5 h-1.5 rounded-full ${c.color}`} />
-                      {c.label}
+                      {CATEGORY_LABELS[c.id] ?? c.label}
                       <span className="text-muted font-bold">· {count}</span>
                     </span>
                   );

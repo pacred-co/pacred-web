@@ -5,6 +5,7 @@ import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbSchema } from "@/components/seo/schemas";
 import { buildPageMetadata } from "@/components/seo/page-meta";
 import { CONTACT, SOCIAL } from "@/components/seo/site";
+import { getTranslations } from "next-intl/server";
 
 const PATH = "/how-to-use";
 
@@ -35,6 +36,7 @@ export default async function Page({
 }) {
   const { locale } = await params;
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
+  const t = await getTranslations("howToUsePage");
 
   return (
     <>
@@ -49,194 +51,194 @@ export default async function Page({
       />
       <StubPage
         eyebrow="HOW TO USE"
-        title={typedLocale === "th" ? "วิธีการ" : "How to"}
-        highlight={typedLocale === "th" ? "ใช้บริการ" : "use Pacred"}
-        description={
-          typedLocale === "th"
-            ? "เลือกบริการที่ตรงกับสิ่งที่คุณจะทำ แล้วทำตามขั้นตอนได้เลย — ไม่ต้องเป็นคนรู้ระบบนำเข้ามาก่อน"
-            : "Pick the service you need below and follow the step-by-step guide — no prior shipping experience required."
-        }
-        breadcrumb={[{ label: typedLocale === "th" ? "วิธีการใช้บริการ" : "How to use" }]}
+        title={t("heroTitle")}
+        highlight={t("heroHighlight")}
+        description={t("heroDescription")}
+        breadcrumb={[{ label: t("breadcrumbLabel") }]}
         banner="import-export"
       >
         <div className="mx-auto w-full max-w-[1100px] space-y-10">
           {/* TOC */}
           <nav className="rounded-2xl border border-border bg-surface-alt/40 p-5 grid sm:grid-cols-2 md:grid-cols-4 gap-3">
-            <TocLink href="#fwd"     icon="📦" label="ลูกค้านำเข้า"   sub="ส่งของจากจีนมาไทย" />
-            <TocLink href="#shop"    icon="🛒" label="ลูกค้าฝากสั่ง"   sub="ให้เราซื้อสินค้าจีนให้" />
-            <TocLink href="#yuan"    icon="💱" label="ลูกค้าฝากโอน"   sub="โอนหยวนชำระร้านจีน" />
-            <TocLink href="#contact" icon="💬" label="ติดต่อทีม"       sub="LINE / โทร / อีเมล" />
+            <TocLink href="#fwd"     icon="📦" label={t("tocFwdLabel")}   sub={t("tocFwdSub")} />
+            <TocLink href="#shop"    icon="🛒" label={t("tocShopLabel")}   sub={t("tocShopSub")} />
+            <TocLink href="#yuan"    icon="💱" label={t("tocYuanLabel")}   sub={t("tocYuanSub")} />
+            <TocLink href="#contact" icon="💬" label={t("tocContactLabel")}       sub={t("tocContactSub")} />
           </nav>
 
           {/* ─── 1. ลูกค้านำเข้า ───────────────────────────── */}
-          <Section id="fwd" emoji="📦" title="สำหรับลูกค้านำเข้า (ฝากนำเข้าสินค้าจากจีน)">
+          <Section id="fwd" emoji="📦" title={t("fwdSectionTitle")}>
             <p className="text-sm text-foreground">
-              ใช้ตอน <strong>คุณซื้อสินค้าจากจีนเองแล้ว</strong> — ของอยู่ที่โกดังจีน
-              ของเรา (กวางโจว / อี้อู) — แค่ต้องการให้ Pacred ขนกลับไทย + ออกของให้
+              {t.rich("fwdIntro", { strong: (c) => <strong>{c}</strong> })}
             </p>
             <Steps>
-              <Step n={1} title="เปิดบริการ /service-import">
-                เข้าหน้า <Code href="/service-import">/service-import</Code> แล้วกดปุ่ม
-                <Pill>+ เปิดรายการใหม่</Pill>
+              <Step n={1} title={t("fwdStep1Title")}>
+                {t.rich("fwdStep1Body", {
+                  code: (c) => <Code href="/service-import">{c}</Code>,
+                  pill: (c) => <Pill>{c}</Pill>,
+                })}
               </Step>
-              <Step n={2} title="กรอกขนาด/น้ำหนัก + เลือกการขนส่ง">
-                เลือก <strong>โกดังต้นทาง</strong> (กวางโจว/อี้อู) +
-                <strong> ประเภทขนส่ง</strong> (รถ / เรือ / อากาศ) +
-                <strong> ประเภทสินค้า</strong> (ทั่วไป / มอก. / FDA / พิเศษ) — ระบบจะ
-                คำนวณราคาให้ทันที (ตามน้ำหนัก vs ปริมาตร — เลือก Auto = ใช้ค่าที่สูงกว่า)
+              <Step n={2} title={t("fwdStep2Title")}>
+                {t.rich("fwdStep2Body", { strong: (c) => <strong>{c}</strong> })}
               </Step>
-              <Step n={3} title="เพิ่มที่อยู่จัดส่งในไทย + อัพโหลดรูปกล่อง">
-                กรอกชื่อ-เบอร์-ที่อยู่ผู้รับในไทย + แนบรูปกล่อง/สลิป (เพื่อให้
-                ทีมจีนระบุได้ว่ารอบนี้ของคุณ) แล้วกด <Pill>ส่งคำขอนำเข้า</Pill>
+              <Step n={3} title={t("fwdStep3Title")}>
+                {t.rich("fwdStep3Body", { pill: (c) => <Pill>{c}</Pill> })}
               </Step>
-              <Step n={4} title="ชำระเงินจาก wallet หรือเติมเงินก่อน">
-                หลังเปิดรายการ จะได้เลขที่ F-no — ในหน้านั้นกด
-                <Pill>ชำระจาก wallet ทันที</Pill> ถ้ามียอดพอ — ถ้าไม่พอกด
-                <Code href="/wallet/deposit">เติมเงิน</Code> ก่อน แล้วกลับมาชำระ
+              <Step n={4} title={t("fwdStep4Title")}>
+                {t.rich("fwdStep4Body", {
+                  pill: (c) => <Pill>{c}</Pill>,
+                  code: (c) => <Code href="/wallet/deposit">{c}</Code>,
+                })}
               </Step>
-              <Step n={5} title="รอสถานะ + ยืนยันรับสินค้า">
-                ติดตามสถานะที่หน้า F-no ของคุณ: ออกจากจีน → ขนส่งกลางทาง → เข้าโกดังไทย → กำลังจัดส่ง → ส่งสำเร็จ
-                {" — "}เมื่อ <strong>ของถึงและตรวจครบ</strong> กดปุ่ม
-                <Pill>📥 ยืนยันรับสินค้าครบถ้วน</Pill> เพื่อปิดออเดอร์
+              <Step n={5} title={t("fwdStep5Title")}>
+                {t.rich("fwdStep5Body", {
+                  strong: (c) => <strong>{c}</strong>,
+                  pill: (c) => <Pill>{c}</Pill>,
+                })}
               </Step>
             </Steps>
-            <Tip>
-              ลูกค้านิติบุคคล: หลังออเดอร์ <strong>ชำระแล้ว</strong> ในหน้า F-no
-              กด <Pill>🖨 ดูใบแจ้งหนี้</Pill> → เลื่อนล่างสุดจะเจอปุ่ม
-              <Pill>📄 ขอใบกำกับภาษี</Pill>
+            <Tip label={t("tipLabel")}>
+              {t.rich("fwdTip", {
+                strong: (c) => <strong>{c}</strong>,
+                pill: (c) => <Pill>{c}</Pill>,
+              })}
             </Tip>
           </Section>
 
           {/* ─── 2. ลูกค้าฝากสั่ง ──────────────────────────── */}
-          <Section id="shop" emoji="🛒" title="สำหรับลูกค้าฝากสั่ง (ให้เราซื้อสินค้าจีนให้)">
+          <Section id="shop" emoji="🛒" title={t("shopSectionTitle")}>
             <p className="text-sm text-foreground">
-              ใช้ตอน <strong>คุณเจอสินค้าจีน (1688 / Taobao / Tmall ฯลฯ) แต่ซื้อเองไม่ได้</strong> — Pacred
-              จะซื้อให้ + รวบรวมที่โกดังจีน + ขนกลับไทยให้ครบ
+              {t.rich("shopIntro", { strong: (c) => <strong>{c}</strong> })}
             </p>
             <Steps>
-              <Step n={1} title="เพิ่มสินค้าเข้ารถเข็น">
-                เข้า <Code href="/service-order/add">/service-order/add</Code> →
-                วาง URL สินค้า (1688 / Taobao / Tmall) หรือเพิ่มเอง → ระบุ <strong>สี / ขนาด /
-                จำนวน</strong> → กด <Pill>เพิ่มสินค้า</Pill>
+              <Step n={1} title={t("shopStep1Title")}>
+                {t.rich("shopStep1Body", {
+                  code: (c) => <Code href="/service-order/add">{c}</Code>,
+                  strong: (c) => <strong>{c}</strong>,
+                  pill: (c) => <Pill>{c}</Pill>,
+                })}
               </Step>
-              <Step n={2} title="เปิดรถเข็นแล้วเปิดออเดอร์">
-                เมื่อมีของในรถเข็นครบ เข้า <Code href="/service-order/cart">/service-order/cart</Code> →
-                เลือกที่อยู่จัดส่งในไทย + โกดังต้นทาง + ประเภทขนส่ง → กด
-                <Pill>เปิดออเดอร์</Pill> ระบบจะให้เลข H-no + คำนวณยอด THB
+              <Step n={2} title={t("shopStep2Title")}>
+                {t.rich("shopStep2Body", {
+                  code: (c) => <Code href="/service-order/cart">{c}</Code>,
+                  pill: (c) => <Pill>{c}</Pill>,
+                })}
               </Step>
-              <Step n={3} title="ชำระภายใน 24 ชั่วโมง">
-                ต้องชำระภายใน 24 ชม. มิฉะนั้นออเดอร์จะถูกยกเลิกอัตโนมัติ — กดปุ่ม
-                <Pill>ชำระจาก wallet</Pill> หรือเติมเงินก่อน
+              <Step n={3} title={t("shopStep3Title")}>
+                {t.rich("shopStep3Body", { pill: (c) => <Pill>{c}</Pill> })}
               </Step>
-              <Step n={4} title="ระบบทำตามขั้นตอน — ลูกค้าแค่ติดตาม">
-                หลังชำระ → สั่งสินค้าแล้ว → รอจัดส่งจีน → เข้าโกดังจีน → ออกจากจีน → ส่งสำเร็จ
-                {" — "}ดูสถานะที่ <Code href="/service-order">/service-order</Code>
+              <Step n={4} title={t("shopStep4Title")}>
+                {t.rich("shopStep4Body", {
+                  code: (c) => <Code href="/service-order">{c}</Code>,
+                })}
               </Step>
-              <Step n={5} title="ของถึง → ยืนยันรับ → ขอใบกำกับภาษี (ถ้านิติบุคคล)">
-                เมื่อสถานะ &ldquo;สำเร็จ&rdquo; และของถึงครบแล้ว กดปุ่ม
-                <Pill>📥 ยืนยันรับสินค้าครบถ้วน</Pill> ในหน้า H-no
-                {" — "}สำหรับนิติบุคคล กด <Pill>📄 ดาวน์โหลดใบเสร็จ PDF</Pill> → ขอใบกำกับภาษีที่ท้ายหน้า
+              <Step n={5} title={t("shopStep5Title")}>
+                {t.rich("shopStep5Body", {
+                  pill: (c) => <Pill>{c}</Pill>,
+                })}
               </Step>
             </Steps>
-            <Tip>
-              ของหายระหว่างทาง? กดเข้า H-no → ดูใต้สถานะ —
-              ถ้ามีรายการ <strong>คืนเงิน (refund)</strong> ระบบจะแสดงเอง
-              หรือไปขอที่ <Code href="/refunds">/refunds</Code>
+            <Tip label={t("tipLabel")}>
+              {t.rich("shopTip", {
+                strong: (c) => <strong>{c}</strong>,
+                code: (c) => <Code href="/refunds">{c}</Code>,
+              })}
             </Tip>
           </Section>
 
           {/* ─── 3. ลูกค้าฝากโอน ──────────────────────────── */}
-          <Section id="yuan" emoji="💱" title="สำหรับลูกค้าฝากโอน (โอนหยวนชำระร้านจีนเอง)">
+          <Section id="yuan" emoji="💱" title={t("yuanSectionTitle")}>
             <p className="text-sm text-foreground">
-              ใช้ตอน <strong>คุณดีลกับร้านจีนเองแล้ว</strong> ต้องการให้ Pacred โอนหยวนผ่าน
-              Alipay / WeChat / ธนาคารจีน (ไม่ต้องผ่านระบบฝากสั่ง)
+              {t.rich("yuanIntro", { strong: (c) => <strong>{c}</strong> })}
             </p>
             <Steps>
-              <Step n={1} title="ดูเรท + เปิดรายการฝากชำระ">
-                เข้า <Code href="/service-payment">/service-payment</Code> — เรท CNY→THB
-                ปัจจุบันโชว์ด้านบน → กด <Pill>+ เพิ่มรายการฝากชำระ</Pill>
+              <Step n={1} title={t("yuanStep1Title")}>
+                {t.rich("yuanStep1Body", {
+                  code: (c) => <Code href="/service-payment">{c}</Code>,
+                  pill: (c) => <Pill>{c}</Pill>,
+                })}
               </Step>
-              <Step n={2} title="กรอกช่องทาง + ผู้รับ + จำนวน">
-                เลือก <strong>Alipay / WeChat / Bank</strong> → ใส่บัญชีปลายทาง + ชื่อผู้รับ + ข้อความ
-                {" — "}ใส่ <strong>ยอดหยวน</strong> ระบบจะคูณเรทเป็น THB ที่ต้องตัดให้
+              <Step n={2} title={t("yuanStep2Title")}>
+                {t.rich("yuanStep2Body", {
+                  strong: (c) => <strong>{c}</strong>,
+                })}
               </Step>
-              <Step n={3} title="ชำระจาก wallet หรือแนบสลิปโอนเข้า Pacred">
-                ถ้ามียอดใน wallet พอ → ติ๊ก <Pill>💳 ตัดจากกระเป๋า</Pill> เสร็จเลย —
-                ถ้าไม่มี ก็โอนเข้าบัญชี Pacred แล้วแนบสลิป + แนบรูปบัตร ปชช.
-                (ป้องกัน fraud) แล้วส่งให้ทีม
+              <Step n={3} title={t("yuanStep3Title")}>
+                {t.rich("yuanStep3Body", { pill: (c) => <Pill>{c}</Pill> })}
               </Step>
-              <Step n={4} title="รอทีมโอน + ยืนยันสำเร็จ">
-                ทีมจะตรวจ → กำลังโอน → สำเร็จ — สถานะอัปเดทอัตโนมัติในหน้ารายการ +
-                แจ้งเตือนใน <Code href="/notifications">/notifications</Code>
+              <Step n={4} title={t("yuanStep4Title")}>
+                {t.rich("yuanStep4Body", {
+                  code: (c) => <Code href="/notifications">{c}</Code>,
+                })}
               </Step>
-              <Step n={5} title="ขอใบกำกับภาษี (นิติบุคคล)">
-                หลังสถานะ <strong>&ldquo;สำเร็จ&rdquo;</strong> กดเข้ารายละเอียดรายการ →
-                เลื่อนล่างเจอปุ่ม <Pill>📄 ขอใบกำกับภาษี</Pill> — เฉพาะนิติบุคคลที่มีเลข
-                ผู้เสียภาษี 13 หลักในโปรไฟล์
+              <Step n={5} title={t("yuanStep5Title")}>
+                {t.rich("yuanStep5Body", {
+                  strong: (c) => <strong>{c}</strong>,
+                  pill: (c) => <Pill>{c}</Pill>,
+                })}
               </Step>
             </Steps>
           </Section>
 
           {/* ─── 4. ติดต่อทีม ─────────────────────────────── */}
-          <Section id="contact" emoji="💬" title="ติดต่อทีม Pacred">
+          <Section id="contact" emoji="💬" title={t("contactSectionTitle")}>
             <p className="text-sm text-foreground">
-              อะไรไม่แน่ใจ ไม่ต้องเดา — ทักทีมงานได้เลยทุกช่องทาง ตอบเร็วในเวลาทำการ
-              (จันทร์–เสาร์ 9:00–18:00)
+              {t("contactIntro")}
             </p>
             <div className="grid sm:grid-cols-2 gap-3">
               <ContactCard
                 icon="💬"
-                title="LINE Official (ตอบเร็วที่สุด)"
+                title={t("contactLineTitle")}
                 primary={SOCIAL.line}
                 href={SOCIAL.line}
-                hint="ทักผ่าน LINE @pacred เลย — ทีมตอบในนาที"
+                hint={t("contactLineHint")}
               />
               <ContactCard
                 icon="📞"
-                title="โทรเข้าบริษัท"
+                title={t("contactPhoneCompanyTitle")}
                 primary={CONTACT.phoneCompanyDisplay}
                 href={`tel:${CONTACT.phoneCompany}`}
-                hint="สายตรงสำนักงาน — ใช้เมื่อเรื่องด่วน"
+                hint={t("contactPhoneCompanyHint")}
               />
               <ContactCard
                 icon="📱"
-                title="ฝ่ายขาย (Sales)"
+                title={t("contactSalesTitle")}
                 primary={CONTACT.phoneDisplay}
                 href={`tel:${CONTACT.phone}`}
-                hint="สอบถามบริการใหม่ / ขอใบเสนอราคา"
+                hint={t("contactSalesHint")}
               />
               <ContactCard
                 icon="🛎"
                 title="Customer Service"
                 primary={CONTACT.phoneCsDisplay}
                 href={`tel:${CONTACT.phoneCs}`}
-                hint="ติดตามออเดอร์ / สอบถามสถานะของ"
+                hint={t("contactCsHint")}
               />
               <ContactCard
                 icon="✉️"
-                title="อีเมลฝ่ายขาย"
+                title={t("contactEmailSalesTitle")}
                 primary={CONTACT.emailSales}
                 href={`mailto:${CONTACT.emailSales}`}
-                hint="ส่งเอกสาร / ใบเสนอราคาทางการ"
+                hint={t("contactEmailSalesHint")}
               />
               <ContactCard
                 icon="🧾"
-                title="อีเมลฝ่ายบัญชี"
+                title={t("contactEmailAccTitle")}
                 primary={CONTACT.emailAcc}
                 href={`mailto:${CONTACT.emailAcc}`}
-                hint="ใบกำกับภาษี / หัก ณ ที่จ่าย / ใบเสร็จ"
+                hint={t("contactEmailAccHint")}
               />
             </div>
 
             <div className="rounded-xl bg-surface-alt/60 p-4 text-sm">
-              <p className="font-bold mb-1">ลิงก์ที่ใช้บ่อย</p>
+              <p className="font-bold mb-1">{t("quickLinksHeading")}</p>
               <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-1 list-disc list-inside text-foreground">
-                <li><Link href="/dashboard" className="text-primary-600 hover:underline">หน้าแดชบอร์ด</Link> — ภาพรวมยอด/ออเดอร์ของคุณ</li>
-                <li><Link href="/profile" className="text-primary-600 hover:underline">โปรไฟล์</Link> — ใส่เลขผู้เสียภาษีก่อนขอใบกำกับ</li>
-                <li><Link href="/wallet/history" className="text-primary-600 hover:underline">รายการเดินบัญชี</Link> — ดูทุกการตัด/เติม</li>
-                <li><Link href="/notifications" className="text-primary-600 hover:underline">การแจ้งเตือน</Link> — ทุกอัพเดทจากระบบ</li>
-                <li><Link href="/addresses" className="text-primary-600 hover:underline">ที่อยู่จัดส่ง</Link> — บันทึกล่วงหน้าใช้ซ้ำได้</li>
-                <li><Link href="/refunds" className="text-primary-600 hover:underline">ขอเงินคืน</Link> — สำหรับเคสคืนเงินเฉพาะ</li>
+                <li><Link href="/dashboard" className="text-primary-600 hover:underline">{t("quickLinkDashboard")}</Link> {t("quickLinkDashboardDesc")}</li>
+                <li><Link href="/profile" className="text-primary-600 hover:underline">{t("quickLinkProfile")}</Link> {t("quickLinkProfileDesc")}</li>
+                <li><Link href="/wallet/history" className="text-primary-600 hover:underline">{t("quickLinkWalletHistory")}</Link> {t("quickLinkWalletHistoryDesc")}</li>
+                <li><Link href="/notifications" className="text-primary-600 hover:underline">{t("quickLinkNotifications")}</Link> {t("quickLinkNotificationsDesc")}</li>
+                <li><Link href="/addresses" className="text-primary-600 hover:underline">{t("quickLinkAddresses")}</Link> {t("quickLinkAddressesDesc")}</li>
+                <li><Link href="/refunds" className="text-primary-600 hover:underline">{t("quickLinkRefunds")}</Link> {t("quickLinkRefundsDesc")}</li>
               </ul>
             </div>
           </Section>
@@ -305,10 +307,10 @@ function Code({ href, children }: { href: string; children: React.ReactNode }) {
   );
 }
 
-function Tip({ children }: { children: React.ReactNode }) {
+function Tip({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border-l-4 border-amber-400 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm">
-      <p className="font-bold text-amber-900 dark:text-amber-200">💡 เคล็ดลับ</p>
+      <p className="font-bold text-amber-900 dark:text-amber-200">💡 {label}</p>
       <p className="mt-1 text-amber-800 dark:text-amber-200">{children}</p>
     </div>
   );

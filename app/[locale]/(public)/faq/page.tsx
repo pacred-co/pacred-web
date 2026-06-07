@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Link } from "@/i18n/navigation";
 import { ChevronRight } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { Footer } from "@/components/sections/footer";
@@ -237,18 +238,17 @@ export default async function FAQPage({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
+  const t = await getTranslations("faqPage");
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const groups = typedLocale === "en" ? FAQ_GROUPS_EN : FAQ_GROUPS_TH;
   const flatItems = groups.flatMap((g) => g.items.map((it) => ({ question: it.q, answer: it.a })));
 
-  const homeLabel = typedLocale === "th" ? "หน้าหลัก" : "Home";
-  const faqLabel  = typedLocale === "th" ? "คำถามที่พบบ่อย" : "FAQ";
-  const heading   = typedLocale === "th"
-    ? <>คำถามที่<span className="text-primary-600">พบบ่อย</span></>
-    : <>Frequently asked <span className="text-primary-600">questions</span></>;
-  const subheading = typedLocale === "th"
-    ? "รวมคำถามที่ลูกค้าถามมากที่สุดเกี่ยวกับนำเข้า ส่งออก เคลียร์ด่าน ฝากสั่ง ฝากโอน — ถ้าไม่เจอ ทักทีมเราใน LINE ตอบไวภายใน 5 นาที"
-    : "The questions customers ask most about import, export, customs clearance, shop-order and Yuan transfer. Can't find yours? LINE us — we reply within 5 minutes.";
+  const homeLabel = t("breadcrumbHome");
+  const faqLabel  = t("breadcrumbFaq");
+  const heading = t.rich("heading", {
+    highlight: (chunks) => <span className="text-primary-600">{chunks}</span>,
+  });
+  const subheading = t("subheading");
 
   return (
     <>

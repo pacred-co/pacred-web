@@ -74,143 +74,62 @@ type Channel = {
   accent: string;
 };
 
-const CHANNELS: Channel[] = [
-  {
-    id: "alipay",
-    icon: CreditCard,
-    badge: "ALIPAY · 支付宝",
-    title: "ฝากโอน Alipay",
-    desc: "ชำระร้านค้า Alipay ทุกรหัส QR/Account · ใช้กับ Taobao/Tmall/1688 ได้ครบ",
-    for: "สั่ง Taobao/Tmall · Alipay QR หน้าร้าน",
-    accent: "from-blue-500 to-blue-700",
-  },
-  {
-    id: "wechat",
-    icon: MessageCircle,
-    badge: "WECHAT PAY · 微信支付",
-    title: "ฝากโอน WeChat Pay",
-    desc: "ส่งเงินเข้าบัญชี WeChat · ชำระร้านค้าผ่าน QR · ใช้ติดต่อโรงงาน 1688/Pinduoduo ได้",
-    for: "ติดต่อโรงงาน · WeChat QR · ค่ามัดจำ",
-    accent: "from-emerald-500 to-green-700",
-  },
-  {
-    id: "bank",
-    icon: Building2,
-    badge: "CHINA BANK · 中国银行",
-    title: "โอนบัญชีจีน",
-    desc: "ICBC · CCB · BOC · ABC · ธนาคารทั่วประเทศจีน · เหมาะค่าโรงงาน/ค่ามัดจำก้อนใหญ่",
-    for: "ค่าโรงงาน · LC · ค่าตู้ FCL/LCL",
-    accent: "from-red-500 to-rose-700",
-  },
-  {
-    id: "card",
-    icon: Banknote,
-    badge: "UNIONPAY · 银联",
-    title: "บัตร UnionPay",
-    desc: "ชาร์จเงินเข้าบัตรเดบิตจีน UnionPay · ใช้กดเงินสด/รูดซื้อของในจีน",
-    for: "ไปจีน · ค่าใช้จ่ายในจีน",
-    accent: "from-orange-500 to-amber-700",
-  },
+const CHANNEL_BASES = [
+  { id: "alipay" as const, icon: CreditCard, badge: "ALIPAY · 支付宝", accent: "from-blue-500 to-blue-700" },
+  { id: "wechat" as const, icon: MessageCircle, badge: "WECHAT PAY · 微信支付", accent: "from-emerald-500 to-green-700" },
+  { id: "bank" as const, icon: Building2, badge: "CHINA BANK · 中国银行", accent: "from-red-500 to-rose-700" },
+  { id: "card" as const, icon: Banknote, badge: "UNIONPAY · 银联", accent: "from-orange-500 to-amber-700" },
 ];
 
-const SERVICE_SCOPE = [
-  "โอนหยวนเข้า Alipay (支付宝) ทุกบัญชี/ทุก QR — ใช้กับ Taobao/Tmall ได้",
-  "โอนหยวนเข้า WeChat Pay (微信支付) — เหมาะติดต่อโรงงานบน WeChat",
-  "โอนบัญชีธนาคารจีน — ICBC · CCB · BOC · ABC · CMB · ครบทุกธนาคาร",
-  "ชำระค่าสั่ง 1688 / Taobao / Tmall / JD / Pinduoduo ในนามคุณ",
-  "เรท CNY-THB อ้างอิงเรทกลางวันนั้น — แจ้งเรทก่อนโอนเสมอ",
-  "โอนไว 1-2 ชั่วโมงทำการ · ค่าธรรมเนียมโปร่งใส",
-  "ไม่ต้องเปิดบัญชีจีน · ไม่ต้องมี Alipay/WeChat ของตัวเอง",
-  "ใบเสร็จ + ใบกำกับภาษีครบ ใช้ลดหย่อน ภพ.30 ได้",
-];
+const SERVICE_SCOPE_KEYS = [
+  "scopeAlipay",
+  "scopeWechat",
+  "scopeBank",
+  "scopePlatforms",
+  "scopeRate",
+  "scopeSpeed",
+  "scopeNoAccount",
+  "scopeReceipt",
+] as const;
 
-const USE_CASES = [
-  { icon: HandCoins, title: "ค่าสินค้าจีน", desc: "ชำระค่าสั่ง 1688 / Taobao / Tmall — ทีมโอนให้โรงงาน" },
-  { icon: ReceiptText, title: "ค่ามัดจำโรงงาน", desc: "Down payment OEM/ODM · โอนตามใบเสนอราคา" },
-  { icon: Building2, title: "ค่าโรงงาน Big Lot", desc: "ค่าตู้ FCL/LCL ครบทุก Term · LC · TT" },
-  { icon: TrendingUp, title: "ลงทุนหุ้น/สินค้า", desc: "ชำระค่าออเดอร์-ลงทุนระหว่างประเทศ" },
-  { icon: Send, title: "โอนให้ครอบครัว", desc: "ส่งเงินให้ญาติ/นักเรียนในจีน — ปลอดภัย ติดตามได้" },
-  { icon: CreditCard, title: "ใช้บัตร UnionPay", desc: "ชาร์จยอดเข้าบัตรจีน · กดเงินสด-รูดซื้อในจีน" },
-];
+const USE_CASE_BASES = [
+  { icon: HandCoins, titleKey: "ucGoodsTitle", descKey: "ucGoodsDesc" },
+  { icon: ReceiptText, titleKey: "ucDepositTitle", descKey: "ucDepositDesc" },
+  { icon: Building2, titleKey: "ucFactoryTitle", descKey: "ucFactoryDesc" },
+  { icon: TrendingUp, titleKey: "ucInvestTitle", descKey: "ucInvestDesc" },
+  { icon: Send, titleKey: "ucFamilyTitle", descKey: "ucFamilyDesc" },
+  { icon: CreditCard, titleKey: "ucUnionPayTitle", descKey: "ucUnionPayDesc" },
+] as const;
 
-const HOW = [
-  {
-    num: "01",
-    icon: MessageCircle,
-    title: "แจ้งจำนวน + บัญชีปลายทาง",
-    desc: "บอกยอด CNY ที่ต้องการ + Alipay/WeChat/Bank account ปลายทาง",
-  },
-  {
-    num: "02",
-    icon: TrendingUp,
-    title: "Lock เรทแลกเปลี่ยน",
-    desc: "ทีมแจ้งเรท CNY-THB ปัจจุบัน · Lock ก่อนโอน · ไม่กระทบจากผันผวน",
-  },
-  {
-    num: "03",
-    icon: Wallet,
-    title: "ลูกค้าโอนบาทมา",
-    desc: "โอน THB เข้าบัญชี Pacred — รับ slip กลับทันที",
-  },
-  {
-    num: "04",
-    icon: Send,
-    title: "Pacred โอนหยวนปลายทาง",
-    desc: "ทีมโอนหยวนเข้าปลายทางภายใน 1-2 ชม. · ส่งหลักฐานให้",
-  },
-  {
-    num: "05",
-    icon: FileCheck2,
-    title: "ใบเสร็จ + ใบกำกับภาษี",
-    desc: "ออกใบเสร็จ + ใบกำกับภาษีให้ครบ · ใช้ลดหย่อน ภพ.30",
-  },
-];
+const HOW_BASES = [
+  { num: "01", icon: MessageCircle, titleKey: "howStep1Title", descKey: "howStep1Desc" },
+  { num: "02", icon: TrendingUp, titleKey: "howStep2Title", descKey: "howStep2Desc" },
+  { num: "03", icon: Wallet, titleKey: "howStep3Title", descKey: "howStep3Desc" },
+  { num: "04", icon: Send, titleKey: "howStep4Title", descKey: "howStep4Desc" },
+  { num: "05", icon: FileCheck2, titleKey: "howStep5Title", descKey: "howStep5Desc" },
+] as const;
 
-const WHY = [
-  { icon: Timer, title: "ไว 1-2 ชั่วโมง", desc: "โอนถึงบัญชีปลายทางในชั่วโมง · ไม่ต้องรอวันทำการ" },
-  { icon: TrendingUp, title: "เรทดี โปร่งใส", desc: "อ้างอิงเรทกลางวันนั้น · ค่าธรรมเนียมต่ำ" },
-  { icon: ShieldCheck, title: "ปลอดภัย ติดตามได้", desc: "Pacred บริษัทจดทะเบียน · มีหลักฐานทุกการโอน" },
-  { icon: Wallet, title: "ไม่มีขั้นต่ำสูง", desc: "เริ่ม 100 หยวน ก็โอนได้ · ไม่มีลิมิตสูงสุด" },
-  { icon: Globe2, title: "ครอบคลุมทุกช่องทาง", desc: "Alipay · WeChat · Bank · UnionPay ครบใน Pacred" },
-  { icon: ReceiptText, title: "ใบกำกับภาษีครบ", desc: "VAT 7% · ใช้ลดหย่อน ภพ.30 ได้" },
-  { icon: Users, title: "ทีมประจำคุณ", desc: "ผู้ดูแลเฉพาะรายลูกค้า · คุยตรง ตอบไว" },
-  { icon: Award, title: "ประสบการณ์ 15+ ปี", desc: "โอนให้ลูกค้า 10,600+ ราย · ไม่มีพลาด" },
-];
+const WHY_BASES = [
+  { icon: Timer, titleKey: "whyFastTitle", descKey: "whyFastDesc" },
+  { icon: TrendingUp, titleKey: "whyRateTitle", descKey: "whyRateDesc" },
+  { icon: ShieldCheck, titleKey: "whySafeTitle", descKey: "whySafeDesc" },
+  { icon: Wallet, titleKey: "whyMinTitle", descKey: "whyMinDesc" },
+  { icon: Globe2, titleKey: "whyChannelTitle", descKey: "whyChannelDesc" },
+  { icon: ReceiptText, titleKey: "whyTaxTitle", descKey: "whyTaxDesc" },
+  { icon: Users, titleKey: "whyTeamTitle", descKey: "whyTeamDesc" },
+  { icon: Award, titleKey: "whyExpTitle", descKey: "whyExpDesc" },
+] as const;
 
-const FAQ_ITEMS = [
-  {
-    q: "ฝากโอนหยวน Pacred เรทดีกว่ายังไง?",
-    a: "Pacred อ้างอิงเรทกลาง CNY-THB ของวันนั้น + ค่าบริการโอนต่ำ · ลูกค้าเห็นเรทก่อนยืนยัน ไม่มีค่าบริการแฝง · ดูเรทล่าสุดได้ที่หน้าหลัก หรือทักไลน์ทีม เราจะแจ้งเรทล่าสุด + ค่าธรรมเนียม + ยอด THB ที่ต้องโอนทั้งหมด",
-  },
-  {
-    q: "โอนช่องทางไหนได้บ้าง?",
-    a: "Pacred โอนได้ครบทุกช่องทาง — Alipay (支付宝) · WeChat Pay (微信支付) · บัญชีธนาคารจีน (ICBC, CCB, BOC, ABC, CMB ฯลฯ) · UnionPay debit card · ใช้กับ 1688 · Taobao · Tmall · JD · Pinduoduo · ค่าโรงงาน OEM · ค่ามัดจำ · LC ได้ครบ",
-  },
-  {
-    q: "ใช้เวลากี่ชั่วโมง?",
-    a: "Alipay/WeChat ภายใน 1-2 ชั่วโมงทำการ · บัญชีธนาคารจีน 2-4 ชั่วโมง · UnionPay 4-6 ชั่วโมง · ถ้าโอนนอกเวลาทำการ (หลัง 17:00 หรือเสาร์-อาทิตย์) จะเริ่มดำเนินการในเช้าวันทำการถัดไป",
-  },
-  {
-    q: "โอนขั้นต่ำเท่าไร? สูงสุดเท่าไร?",
-    a: "ขั้นต่ำเริ่ม 100 หยวน · ไม่มีลิมิตสูงสุด · สำหรับยอดสูงเกิน 50,000 หยวน อาจต้องเตรียมเอกสารเพิ่ม (Invoice/PO/หลักฐานการค้า) ทีมแจ้งล่วงหน้าก่อนยืนยัน",
-  },
-  {
-    q: "มีใบเสร็จ + ใบกำกับภาษีให้ไหม?",
-    a: "มี — Pacred เป็นบริษัทจดทะเบียน VAT 7% · ออกใบเสร็จ + ใบกำกับภาษีให้ทุก order ใช้ลดหย่อน ภพ.30 ได้ · ขอใบกำกับในนามบุคคล/นิติบุคคลก็ได้ แจ้งทีมตอนยืนยัน",
-  },
-  {
-    q: "Pacred รู้รหัส Alipay/WeChat ของผมไหม?",
-    a: "ไม่ — Pacred โอนจากบัญชี Alipay/WeChat ของ Pacred ไปบัญชีปลายทางที่คุณบอก ลูกค้าไม่ต้องส่ง password · ไม่ต้องล็อกอินบัญชีให้ใคร · ไม่ต้องเปิดบัญชี Alipay/WeChat ของตัวเอง · ปลอดภัย 100%",
-  },
-  {
-    q: "โอนแล้วได้ slip/หลักฐานยังไง?",
-    a: "หลังโอนเสร็จ ทีมส่งหลักฐานการโอน (screenshot/ใบสรุป) ให้ทันที · แสดงยอด CNY · เวลาโอน · บัญชีปลายทาง · หมายเลข transaction · ลูกค้าใช้หลักฐานนี้ยืนยันกับโรงงานหรือร้านค้าได้ทันที",
-  },
-  {
-    q: "ถ้าโอนผิดบัญชีทำยังไง?",
-    a: "Pacred ตรวจสอบบัญชีปลายทางก่อนกดโอนเสมอ · ถ้าโอนผิดเพราะลูกค้าให้ข้อมูลผิด ทีมช่วยติดต่อบัญชีปลายทางเพื่อขอคืน (ไม่การันตี 100%) · แนะนำให้ confirm บัญชีผ่าน Alipay/WeChat QR ก่อนยืนยันโอน",
-  },
-];
+const FAQ_ITEM_KEYS = [
+  { qKey: "faqQ1", aKey: "faqA1" },
+  { qKey: "faqQ2", aKey: "faqA2" },
+  { qKey: "faqQ3", aKey: "faqA3" },
+  { qKey: "faqQ4", aKey: "faqA4" },
+  { qKey: "faqQ5", aKey: "faqA5" },
+  { qKey: "faqQ6", aKey: "faqA6" },
+  { qKey: "faqQ7", aKey: "faqA7" },
+  { qKey: "faqQ8", aKey: "faqA8" },
+] as const;
 
 export default async function YuanTransferPage({
   params,
@@ -220,9 +139,43 @@ export default async function YuanTransferPage({
   const { locale } = await params;
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const t = await getTranslations({ locale, namespace: NS });
-  const homeLabel = typedLocale === "th" ? "หน้าหลัก" : "Home";
-  const svcLabel = typedLocale === "th" ? "บริการ" : "Services";
-  const here = typedLocale === "th" ? "ฝากโอนหยวน" : "Yuan transfer";
+  const tp = await getTranslations({ locale, namespace: "svcYuanTransfer" });
+  const homeLabel = tp("breadcrumbHome");
+  const svcLabel = tp("breadcrumbServices");
+  const here = tp("breadcrumbHere");
+
+  const CHANNELS: Channel[] = CHANNEL_BASES.map((c) => ({
+    ...c,
+    title: tp(`channel_${c.id}_title`),
+    desc: tp(`channel_${c.id}_desc`),
+    for: tp(`channel_${c.id}_for`),
+  }));
+
+  const SERVICE_SCOPE = SERVICE_SCOPE_KEYS.map((key) => tp(key));
+
+  const USE_CASES = USE_CASE_BASES.map((u) => ({
+    icon: u.icon,
+    title: tp(u.titleKey),
+    desc: tp(u.descKey),
+  }));
+
+  const HOW = HOW_BASES.map((s) => ({
+    num: s.num,
+    icon: s.icon,
+    title: tp(s.titleKey),
+    desc: tp(s.descKey),
+  }));
+
+  const WHY = WHY_BASES.map((w) => ({
+    icon: w.icon,
+    title: tp(w.titleKey),
+    desc: tp(w.descKey),
+  }));
+
+  const FAQ_ITEMS = FAQ_ITEM_KEYS.map((fk) => ({
+    q: tp(fk.qKey),
+    a: tp(fk.aKey),
+  }));
 
   return (
     <>
@@ -233,7 +186,7 @@ export default async function YuanTransferPage({
             description: t("description"),
             slug: PATH,
             locale: typedLocale,
-            serviceType: typedLocale === "th" ? "ฝากโอนหยวน" : "Yuan transfer",
+            serviceType: here,
           }),
           breadcrumbSchema(
             [
@@ -287,14 +240,14 @@ export default async function YuanTransferPage({
           <div className="relative mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-2 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <HandCoins className="w-3.5 h-3.5" strokeWidth={2.6} />
-              YUAN TRANSFER · ฝากโอนหยวน
+              YUAN TRANSFER · {tp("heroBadge")}
             </div>
             <h1 className="text-[22px] md:text-[44px] leading-[1.2] font-black tracking-[-0.025em] text-[#111827] dark:text-white max-w-[980px]">
-              <span className="text-primary-600">ฝากโอนหยวน</span> ชำระค่าสินค้าจีน
-              <span className="md:block md:mt-1"> Alipay · WeChat Pay · บัญชีจีน — ไว 1-2 ชม.</span>
+              <span className="text-primary-600">{tp("heroH1Highlight")}</span> {tp("heroH1Main")}
+              <span className="md:block md:mt-1"> {tp("heroH1Sub")}</span>
             </h1>
             <p className="mt-2 md:mt-3 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[920px]">
-              บริการฝากโอนหยวนเข้า Alipay (支付宝) · WeChat Pay (微信支付) · บัญชีธนาคารจีน — เรท CNY-THB ดี · โอนไว 1-2 ชม. · รองรับ 1688/Taobao/Tmall/ค่าโรงงาน — <span className="text-primary-600/80 font-bold">ไม่ต้องเปิดบัญชีจีน · ใบกำกับภาษีครบ</span>
+              {tp("heroDesc")} <span className="text-primary-600/80 font-bold">{tp("heroDescHighlight")}</span>
             </p>
 
             <TrustStatsStrip className="mt-3 md:mt-4" />
@@ -303,10 +256,10 @@ export default async function YuanTransferPage({
             <div className="mt-4 md:mt-5 grid grid-cols-2 gap-2 md:gap-3 max-w-[560px]">
               <Link
                 href="/register"
-                aria-label="ใช้บริการฝากโอนหยวน — สมัครสมาชิกฟรี"
+                aria-label={tp("ctaRegisterAriaLabel")}
                 className="inline-flex items-center justify-center gap-2 h-12 md:h-14 rounded-xl bg-primary-600 text-white font-black text-[14px] md:text-[16px] hover:bg-primary-700 hover:-translate-y-0.5 transition-all shadow-[0_8px_20px_rgba(179,0,0,0.30)]"
               >
-                ใช้บริการ
+                {tp("ctaRegister")}
                 <ArrowRight className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.8} />
               </Link>
               <TrackedExternalLink
@@ -314,11 +267,11 @@ export default async function YuanTransferPage({
                 cta="line_consult"
                 surface={SURFACE}
                 ctaProps={{ position: "hero_cta" }}
-                aria-label="ปรึกษาฝากโอนหยวนฟรี ทางไลน์"
+                aria-label={tp("ctaLineAriaLabel")}
                 className="inline-flex items-center justify-center gap-2 h-12 md:h-14 rounded-xl bg-[#06C755] text-white font-black text-[14px] md:text-[16px] hover:bg-[#05B04C] hover:-translate-y-0.5 transition-all shadow-[0_8px_20px_rgba(6,199,85,0.35)]"
               >
                 <MessageCircle className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.6} />
-                ปรึกษาฟรี
+                {tp("ctaLine")}
               </TrackedExternalLink>
             </div>
 
@@ -326,7 +279,7 @@ export default async function YuanTransferPage({
             <div className="mt-5 md:mt-7 rounded-2xl md:rounded-3xl border border-primary-200 dark:border-primary-800/60 bg-gradient-to-br from-primary-50/60 via-white to-primary-50/30 dark:from-primary-900/15 dark:via-surface dark:to-primary-900/10 p-4 md:p-6 shadow-[0_8px_22px_rgba(179,0,0,0.06)]">
               <h3 className="flex items-start gap-2 text-[15px] md:text-[20px] font-black text-primary-700 dark:text-primary-300 tracking-tight leading-snug">
                 <HandCoins className="w-5 h-5 md:w-6 md:h-6 shrink-0 mt-0.5" strokeWidth={2.6} />
-                <span>ฝากโอนหยวนครบทุกช่องทาง — เรทดี · โอนไว · มีใบกำกับ</span>
+                <span>{tp("heroCardTitle")}</span>
               </h3>
               <p className="mt-2 text-[12.5px] md:text-[14px] font-bold text-foreground/85 leading-relaxed">
                 Alipay · WeChat Pay · ICBC · CCB · BOC · ABC · CMB · UnionPay
@@ -349,7 +302,7 @@ export default async function YuanTransferPage({
                   className="inline-flex items-center justify-center gap-2 h-12 rounded-xl border border-primary-200 bg-primary-50 text-primary-700 font-black text-[14px] md:text-[15px] hover:bg-primary-100 hover:border-primary-300 transition-colors dark:bg-primary-900/30 dark:border-primary-800 dark:text-primary-200"
                 >
                   <Phone className="w-4 h-4" strokeWidth={2.6} />
-                  โทร {CONTACT.phoneDisplay}
+                  {tp("ctaPhone", { phone: CONTACT.phoneDisplay })}
                 </TrackedPhoneLink>
                 <TrackedExternalLink
                   href={LINE_OA.shortUrl}
@@ -359,7 +312,7 @@ export default async function YuanTransferPage({
                   className="inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-[#06C755] text-white font-black text-[14px] md:text-[15px] hover:bg-[#05B04C] transition-colors shadow-[0_6px_18px_rgba(6,199,85,0.35)]"
                 >
                   <MessageCircle className="w-4 h-4" strokeWidth={2.6} />
-                  แอด LINE Pacred
+                  {tp("ctaAddLine")}
                 </TrackedExternalLink>
               </div>
             </div>
@@ -371,13 +324,13 @@ export default async function YuanTransferPage({
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <Globe2 className="w-3.5 h-3.5" strokeWidth={2.6} />
-              4 CHANNELS · ครบทุกช่องทางจ่ายเงินจีน
+              4 CHANNELS · {tp("channelsBadge")}
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              โอนเข้า <span className="text-primary-600">Alipay · WeChat · Bank · Card</span>
+              {tp("channelsH2")} <span className="text-primary-600">Alipay · WeChat · Bank · Card</span>
             </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
-              เลือกช่องทางตามที่ปลายทางต้องการ — ทีมจัดให้ครบ
+              {tp("channelsDesc")}
             </p>
 
             <div className="mt-6 md:mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
@@ -411,7 +364,7 @@ export default async function YuanTransferPage({
                       </p>
                       <div className="pt-1 border-t border-border">
                         <div className="text-[9.5px] md:text-[10px] font-bold text-muted tracking-[0.10em] uppercase mb-1">
-                          เหมาะสำหรับ
+                          {tp("suitableFor")}
                         </div>
                         <p className="text-[12px] md:text-[12.5px] font-bold text-foreground/85 leading-snug">
                           {c.for}
@@ -433,10 +386,10 @@ export default async function YuanTransferPage({
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <Sparkles className="w-3.5 h-3.5" strokeWidth={2.6} />
-              USE CASES · ใช้กับอะไรได้บ้าง
+              USE CASES · {tp("useCasesBadge")}
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              ฝากโอนหยวน — <span className="text-primary-600">ใช้ได้ทุกเคส</span>
+              {tp("useCasesH2")} — <span className="text-primary-600">{tp("useCasesH2Highlight")}</span>
             </h2>
 
             <div className="mt-6 md:mt-8 grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
@@ -468,13 +421,13 @@ export default async function YuanTransferPage({
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <ScanLine className="w-3.5 h-3.5" strokeWidth={2.6} />
-              5 STEPS · ขั้นตอนการโอน
+              5 STEPS · {tp("howBadge")}
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              ฝากโอนหยวน — <span className="text-primary-600">เร็ว ครบจบใน 5 ขั้น</span>
+              {tp("howH2")} — <span className="text-primary-600">{tp("howH2Highlight")}</span>
             </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
-              บอกยอด · บอกบัญชีปลายทาง · โอนบาทมา · Pacred โอนหยวนต่อให้ภายในชั่วโมง
+              {tp("howDesc")}
             </p>
 
             <div className="mt-6 md:mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
@@ -514,10 +467,10 @@ export default async function YuanTransferPage({
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <Sparkles className="w-3.5 h-3.5" strokeWidth={2.6} />
-              WHY PACRED · ทำไมต้องเรา
+              WHY PACRED · {tp("whyBadge")}
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              ทำไมเลือก <span className="text-primary-600">Pacred Yuan Transfer</span>
+              {tp("whyH2")} <span className="text-primary-600">Pacred Yuan Transfer</span>
             </h2>
 
             <div className="mt-6 md:mt-8 grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
@@ -549,10 +502,10 @@ export default async function YuanTransferPage({
           <div className="mx-auto w-full max-w-[920px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <CircleDollarSign className="w-3.5 h-3.5" strokeWidth={2.6} />
-              FAQ · คำถามที่พบบ่อย
+              FAQ · {tp("faqBadge")}
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              คำถามเกี่ยวกับ <span className="text-primary-600">การฝากโอนหยวน</span>
+              {tp("faqH2")} <span className="text-primary-600">{tp("faqH2Highlight")}</span>
             </h2>
 
             <div className="mt-6 md:mt-8">
@@ -560,7 +513,7 @@ export default async function YuanTransferPage({
                 groups={[
                   {
                     id: "yuan-transfer",
-                    label: "ฝากโอนหยวน · พื้นฐาน",
+                    label: tp("faqGroupLabel"),
                     items: FAQ_ITEMS,
                   },
                 ]}
@@ -577,7 +530,7 @@ export default async function YuanTransferPage({
               cta="line_consult"
               surface={SURFACE}
               ctaProps={{ position: "final_cta" }}
-              aria-label="ปรึกษาฝากโอนหยวนฟรี — ทักไลน์ Pacred Shipping"
+              aria-label={tp("finalCtaAriaLabel")}
               className="group block relative max-w-[1100px] mx-auto no-underline"
             >
               <div
@@ -605,15 +558,15 @@ export default async function YuanTransferPage({
                       TRANSFER GUARANTEE
                     </div>
                     <p className="text-[24px] md:text-[40px] font-black text-white leading-[1.05] tracking-tight [text-shadow:0_2px_6px_rgba(0,0,0,0.45)]">
-                      จะโอนหยวน? <span className="text-yellow-300">ทักไลน์เช็คเรท</span> ฟรี
+                      {tp("finalCtaHeadline")} <span className="text-yellow-300">{tp("finalCtaHighlight")}</span> {tp("finalCtaFree")}
                     </p>
                     <p className="hidden md:block mt-2 text-[14px] font-semibold text-white/90 leading-snug">
-                      Alipay · WeChat · Bank · UnionPay · เรทดี · โอนไว 1-2 ชม. · ใบกำกับครบ
+                      {tp("finalCtaSubline")}
                     </p>
                   </div>
                   <span className="inline-flex items-center justify-center gap-2 px-5 md:px-7 py-3 md:py-4 rounded-xl bg-white text-primary-700 font-black text-[15px] md:text-[18px] shadow-[0_8px_20px_rgba(0,0,0,0.25)] group-hover:scale-105 transition-transform whitespace-nowrap">
                     <MessageCircle className="w-5 h-5" strokeWidth={2.6} />
-                    ทักไลน์เลย
+                    {tp("finalCtaButton")}
                     <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" strokeWidth={2.6} />
                   </span>
                 </div>
