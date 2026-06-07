@@ -812,7 +812,8 @@
     "empty": "No notifications yet.",
     "markAllRead": "Mark all as read",
     "unreadCount": "{count} unread",
-    "viewDetails": "View details"
+    "viewDetails": "View details",
+    "emptyHint": "Notifications will appear here when your orders are updated — import/shop-order status changes, top-up/withdrawal approvals, or promotions from Pacred"
   },
   "dashboard": {
     "kicker": "DASHBOARD",
@@ -3094,6 +3095,33 @@
     "statusInlineLabel": "Status"
   },
   "pcsAdminNav": {
+    "wallet": {
+      "title": "Wallet"
+    },
+    "payment": {
+      "title": "Yuan Payments",
+      "list": "All Payments",
+      "add": "Add Payment"
+    },
+    "freightExportOps": {
+      "placeholder": "Export Operations (All)",
+      "csPlaceholder": "Export CS",
+      "docPlaceholder": "Export Documents",
+      "clearancePlaceholder": "Export Clearance"
+    },
+    "freightImportOps": {
+      "placeholder": "Import Operations (All)",
+      "csPlaceholder": "Import CS",
+      "docPlaceholder": "Import Documents",
+      "clearancePlaceholder": "Import Clearance"
+    },
+    "freightClearance": {
+      "bothPlaceholder": "Customs Clearance (Import & Export)"
+    },
+    "freightMessenger": {
+      "exportPlaceholder": "Messenger (Export)",
+      "importPlaceholder": "Messenger (Import)"
+    },
     "backToCustomer": "← Back to customer site",
     "showAll": "Show all menus (super)",
     "showRole": "Show my role menu only",
@@ -4492,23 +4520,6 @@
     "dueDate": "Due date"
   },
   "shopOrderPayModal": {
-    "shopOrderPayModal": {
-      "qrError": "Could not generate QR — transfer to the account number and attach the slip",
-      "uploadFailed": "Failed to upload slip",
-      "attachSlipFirst": "Please attach the slip before confirming",
-      "payScanQr": "Pay — scan QR + attach slip",
-      "modalTitle": "Pay shop order #{hNo}",
-      "close": "Close",
-      "slipSentTitle": "Slip sent",
-      "slipSentSubtitle": "Our team is reviewing the slip — the order will update to \"Paid\" after review",
-      "ok": "OK",
-      "amountDue": "Amount due",
-      "slipAttached": "Attached: {name}",
-      "attachSlip": "Attach transfer slip (image/PDF)",
-      "transferDateTime": "Transfer date/time (if any)",
-      "confirmPayment": "Confirm payment",
-      "payFromWallet": "Or pay from wallet (฿{balance})"
-    },
     "walletUse": "Use wallet credit",
     "walletHave": "Have ฿{amount}",
     "walletMax": "Use max",
@@ -4517,7 +4528,21 @@
     "remainingToPay": "Left to pay ฿{remaining}",
     "payFullFromWallet": "Pay fully from wallet (฿{amount})",
     "scanToPay": "Scan to pay ฿{amount}",
-    "confirmPaymentSplit": "Confirm payment (wallet ฿{applied} + slip ฿{remaining})"
+    "confirmPaymentSplit": "Confirm payment (wallet ฿{applied} + slip ฿{remaining})",
+    "qrError": "Could not generate QR — transfer to the account number and attach the slip",
+    "uploadFailed": "Failed to upload slip",
+    "attachSlipFirst": "Please attach the slip before confirming",
+    "payScanQr": "Pay — scan QR + attach slip",
+    "modalTitle": "Pay shop order #{hNo}",
+    "close": "Close",
+    "slipSentTitle": "Slip sent",
+    "slipSentSubtitle": "Our team is reviewing the slip — the order will update to \"Paid\" after review",
+    "ok": "OK",
+    "amountDue": "Amount due",
+    "slipAttached": "Attached: {name}",
+    "attachSlip": "Attach transfer slip (image/PDF)",
+    "transferDateTime": "Transfer date/time (if any)",
+    "confirmPayment": "Confirm payment"
   },
   "serviceImportPage": {
     "corporatePendingTitle": "Awaiting staff approval of your juristic-entity status within 24 hours.",
@@ -5386,33 +5411,31 @@
     "errNoMemberCode": "Your account has no customer code yet — please contact our team"
   },
   "customerWhtUpload": {
-    "customerWhtUpload": {
-      "errChooseFile": "Please choose your 50 Tawi certificate file (PDF / JPG / PNG)",
-      "ctaHeading": "Already have your withholding tax certificate (50 Tawi)?",
-      "ctaBody": "Upload it now — Pacred will issue your tax invoice right after verification",
-      "ctaButton": "Upload file",
-      "formHeading": "Upload 50 Tawi certificate",
-      "close": "Close",
-      "fileLabel": "Certificate file",
-      "fileHint": "Supports PDF / JPG / PNG (up to 10 MB)",
-      "certNoLabel": "50 Tawi certificate number (if any)",
-      "certNoPlaceholder": "e.g. 2026/12345",
-      "uploading": "Uploading...",
-      "submitCert": "Submit certificate",
-      "footerNote": "Pacred will verify your certificate and issue your tax invoice within 1-2 business days",
-      "errUploadFailed": "Upload failed: {code}",
-      "errUpdateFailed": "Save failed: {code}",
-      "errInvalidInput": "Invalid input",
-      "errNotSignedIn": "Please log in first",
-      "errNoFile": "Please choose a file",
-      "errFileTooLarge": "File exceeds 10 MB",
-      "errInvalidMimeType": "File must be PDF / JPG / PNG only",
-      "errNotFoundOrUnauthorised": "Your WHT entry was not found",
-      "errNotOwner": "This entry is not yours",
-      "errAlreadyReceived": "Pacred already received the certificate — no need to upload again",
-      "errAlreadyWaived": "This entry has already been waived"
-    },
-    "fileButton": "Choose file"
+    "fileButton": "Choose file",
+    "errUploadFailed": "Upload failed: {code}",
+    "errUpdateFailed": "Save failed: {code}",
+    "errInvalidInput": "Invalid input",
+    "errNotSignedIn": "Please log in first",
+    "errNoFile": "Please choose a file",
+    "errFileTooLarge": "File exceeds 10 MB",
+    "errInvalidMimeType": "File must be PDF / JPG / PNG only",
+    "errNotFoundOrUnauthorised": "Your WHT record was not found",
+    "errNotOwner": "This record is not yours",
+    "errAlreadyReceived": "Pacred has already received the certificate — no need to re-upload",
+    "errAlreadyWaived": "This record has already been waived",
+    "errChooseFile": "Please choose your 50 ทวิ certificate file (PDF / JPG / PNG)",
+    "ctaHeading": "Already have your withholding tax certificate (50 ทวิ)?",
+    "ctaBody": "Upload it now — Pacred will issue your tax invoice right after verification",
+    "ctaButton": "Upload file",
+    "formHeading": "Upload 50 ทวิ certificate",
+    "close": "Close",
+    "fileLabel": "Certificate file",
+    "fileHint": "Supports PDF / JPG / PNG (max 10 MB)",
+    "certNoLabel": "50 ทวิ certificate no. (if any)",
+    "certNoPlaceholder": "e.g. 2026/12345",
+    "uploading": "Uploading...",
+    "submitCert": "Submit certificate",
+    "footerNote": "Pacred will verify your certificate and issue your tax invoice within 1-2 business days"
   },
   "costReconfirm": {
     "customerWhtUpload": {
@@ -6025,6 +6048,17 @@
       "refLabel": "Reference number",
       "callNow": "Call now {phone}",
       "lineChat": "Chat on LINE"
+    },
+    "error": {
+      "missingContact": "Please enter your name and contact phone number",
+      "rateLimit": "Too many requests. Please try again in a moment",
+      "submitFailed": "Submission failed. Please try again or call us"
+    },
+    "nav": {
+      "back": "Back",
+      "next": "Next",
+      "submitting": "Submitting…",
+      "submit": "📋 Submit quote request"
     }
   },
   "serviceOrderPrint": {

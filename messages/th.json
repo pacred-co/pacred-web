@@ -812,7 +812,8 @@
     "empty": "ยังไม่มีการแจ้งเตือน",
     "markAllRead": "อ่านทั้งหมดแล้ว",
     "unreadCount": "ยังไม่ได้อ่าน {count} ฉบับ",
-    "viewDetails": "ดูรายละเอียด"
+    "viewDetails": "ดูรายละเอียด",
+    "emptyHint": "แจ้งเตือนจะปรากฏที่นี่เมื่อมีการอัพเดทออเดอร์ของคุณ — เปลี่ยนสถานะ ฝากนำเข้า/ฝากสั่ง, อนุมัติยอดเติม-ถอน, หรือข่าวสารโปรโมชั่นจาก Pacred"
   },
   "dashboard": {
     "kicker": "DASHBOARD",
@@ -3094,6 +3095,33 @@
     "statusInlineLabel": "สถานะ"
   },
   "pcsAdminNav": {
+    "wallet": {
+      "title": "กระเป๋าเงิน"
+    },
+    "payment": {
+      "title": "ฝากชำระ/โอนหยวน",
+      "list": "รายการทั้งหมด",
+      "add": "เพิ่มรายการ"
+    },
+    "freightExportOps": {
+      "placeholder": "งานส่งออก (ทั้งหมด)",
+      "csPlaceholder": "งานส่งออก (CS)",
+      "docPlaceholder": "งานส่งออก (เอกสาร)",
+      "clearancePlaceholder": "งานส่งออก (เคลียร์ศุลกากร)"
+    },
+    "freightImportOps": {
+      "placeholder": "งานนำเข้า (ทั้งหมด)",
+      "csPlaceholder": "งานนำเข้า (CS)",
+      "docPlaceholder": "งานนำเข้า (เอกสาร)",
+      "clearancePlaceholder": "งานนำเข้า (เคลียร์ศุลกากร)"
+    },
+    "freightClearance": {
+      "bothPlaceholder": "เคลียร์ศุลกากร (นำเข้า-ส่งออก)"
+    },
+    "freightMessenger": {
+      "exportPlaceholder": "แมสเซ็นเจอร์ (ส่งออก)",
+      "importPlaceholder": "แมสเซ็นเจอร์ (นำเข้า)"
+    },
     "backToCustomer": "← กลับฝั่งลูกค้า",
     "showAll": "แสดงเมนูทั้งหมด (super)",
     "showRole": "แสดงเฉพาะเมนูของฉัน",
@@ -4492,23 +4520,6 @@
     "dueDate": "วันที่ครบกำหนด"
   },
   "shopOrderPayModal": {
-    "shopOrderPayModal": {
-      "qrError": "ไม่สามารถสร้าง QR ได้ — โอนตามเลขบัญชีแล้วแนบสลิปได้เลย",
-      "uploadFailed": "อัปโหลดสลิปไม่สำเร็จ",
-      "attachSlipFirst": "กรุณาแนบสลิปก่อนยืนยัน",
-      "payScanQr": "ชำระเงิน — สแกน QR + แนบสลิป",
-      "modalTitle": "ชำระเงินฝากสั่งซื้อ #{hNo}",
-      "close": "ปิด",
-      "slipSentTitle": "ส่งสลิปเรียบร้อย",
-      "slipSentSubtitle": "ทีมงานกำลังตรวจสอบสลิป — ออเดอร์จะอัปเดตเป็น \"ชำระแล้ว\" หลังตรวจสอบ",
-      "ok": "ตกลง",
-      "amountDue": "ยอดที่ต้องชำระ",
-      "slipAttached": "แนบแล้ว: {name}",
-      "attachSlip": "แนบสลิปการโอน (รูป/PDF)",
-      "transferDateTime": "วันเวลาที่โอน (ถ้ามี)",
-      "confirmPayment": "ยืนยันการชำระเงิน",
-      "payFromWallet": "หรือชำระจากกระเป๋าเงิน (฿{balance})"
-    },
     "walletUse": "ใช้ยอดในกระเป๋า",
     "walletHave": "มี ฿{amount}",
     "walletMax": "ใช้สูงสุด",
@@ -4517,7 +4528,21 @@
     "remainingToPay": "เหลือจ่าย ฿{remaining}",
     "payFullFromWallet": "ชำระจากกระเป๋าเต็มจำนวน (฿{amount})",
     "scanToPay": "สแกนจ่าย ฿{amount}",
-    "confirmPaymentSplit": "ยืนยันการชำระเงิน (หัก wallet ฿{applied} + สลิป ฿{remaining})"
+    "confirmPaymentSplit": "ยืนยันการชำระเงิน (หัก wallet ฿{applied} + สลิป ฿{remaining})",
+    "qrError": "ไม่สามารถสร้าง QR ได้ — โอนตามเลขบัญชีแล้วแนบสลิปได้เลย",
+    "uploadFailed": "อัปโหลดสลิปไม่สำเร็จ",
+    "attachSlipFirst": "กรุณาแนบสลิปก่อนยืนยัน",
+    "payScanQr": "ชำระเงิน — สแกน QR + แนบสลิป",
+    "modalTitle": "ชำระเงินฝากสั่งซื้อ #{hNo}",
+    "close": "ปิด",
+    "slipSentTitle": "ส่งสลิปเรียบร้อย",
+    "slipSentSubtitle": "ทีมงานกำลังตรวจสอบสลิป — ออเดอร์จะอัปเดตเป็น \"ชำระแล้ว\" หลังตรวจสอบ",
+    "ok": "ตกลง",
+    "amountDue": "ยอดที่ต้องชำระ",
+    "slipAttached": "แนบแล้ว: {name}",
+    "attachSlip": "แนบสลิปการโอน (รูป/PDF)",
+    "transferDateTime": "วันเวลาที่โอน (ถ้ามี)",
+    "confirmPayment": "ยืนยันการชำระเงิน"
   },
   "serviceImportPage": {
     "corporatePendingTitle": "รอเจ้าหน้าที่ดำเนิน อนุมัติการเป็นนิติบุคคล ภายใน 24 ชม.",
@@ -5386,33 +5411,31 @@
     "errNoMemberCode": "บัญชียังไม่มีรหัสลูกค้า — กรุณาติดต่อทีมงาน"
   },
   "customerWhtUpload": {
-    "customerWhtUpload": {
-      "errChooseFile": "กรุณาเลือกไฟล์ใบ 50 ทวิ (PDF / JPG / PNG)",
-      "ctaHeading": "มีหนังสือรับรองหัก ณ ที่จ่าย (50 ทวิ) แล้ว?",
-      "ctaBody": "อัพโหลดได้เลย — Pacred จะออกใบกำกับภาษีให้คุณทันทีหลัง verify",
-      "ctaButton": "อัพโหลดไฟล์",
-      "formHeading": "อัพโหลดใบ 50 ทวิ",
-      "close": "ปิด",
-      "fileLabel": "ไฟล์ใบรับรอง",
-      "fileHint": "รองรับ PDF / JPG / PNG (ไม่เกิน 10 MB)",
-      "certNoLabel": "เลขที่ใบ 50 ทวิ (ถ้ามี)",
-      "certNoPlaceholder": "เช่น 2026/12345",
-      "uploading": "กำลังอัพโหลด...",
-      "submitCert": "ส่งใบรับรอง",
-      "footerNote": "Pacred จะตรวจสอบใบรับรองและออกใบกำกับภาษีให้คุณภายใน 1-2 วันทำการ",
-      "errUploadFailed": "อัพโหลดล้มเหลว: {code}",
-      "errUpdateFailed": "บันทึกล้มเหลว: {code}",
-      "errInvalidInput": "ข้อมูลไม่ถูกต้อง",
-      "errNotSignedIn": "กรุณา login ก่อน",
-      "errNoFile": "กรุณาเลือกไฟล์",
-      "errFileTooLarge": "ไฟล์ใหญ่เกิน 10 MB",
-      "errInvalidMimeType": "ไฟล์ต้องเป็น PDF / JPG / PNG เท่านั้น",
-      "errNotFoundOrUnauthorised": "ไม่พบรายการ WHT ของคุณ",
-      "errNotOwner": "รายการนี้ไม่ใช่ของคุณ",
-      "errAlreadyReceived": "Pacred รับใบรับรองแล้ว — ไม่ต้องอัพโหลดซ้ำ",
-      "errAlreadyWaived": "รายการนี้ได้รับการยกเว้นแล้ว"
-    },
-    "fileButton": "เลือกไฟล์ใบรับรอง"
+    "fileButton": "เลือกไฟล์ใบรับรอง",
+    "errUploadFailed": "อัพโหลดล้มเหลว: {code}",
+    "errUpdateFailed": "บันทึกล้มเหลว: {code}",
+    "errInvalidInput": "ข้อมูลไม่ถูกต้อง",
+    "errNotSignedIn": "กรุณา login ก่อน",
+    "errNoFile": "กรุณาเลือกไฟล์",
+    "errFileTooLarge": "ไฟล์ใหญ่เกิน 10 MB",
+    "errInvalidMimeType": "ไฟล์ต้องเป็น PDF / JPG / PNG เท่านั้น",
+    "errNotFoundOrUnauthorised": "ไม่พบรายการ WHT ของคุณ",
+    "errNotOwner": "รายการนี้ไม่ใช่ของคุณ",
+    "errAlreadyReceived": "Pacred รับใบรับรองแล้ว — ไม่ต้องอัพโหลดซ้ำ",
+    "errAlreadyWaived": "รายการนี้ได้รับการยกเว้นแล้ว",
+    "errChooseFile": "กรุณาเลือกไฟล์ใบ 50 ทวิ (PDF / JPG / PNG)",
+    "ctaHeading": "มีหนังสือรับรองหัก ณ ที่จ่าย (50 ทวิ) แล้ว?",
+    "ctaBody": "อัพโหลดได้เลย — Pacred จะออกใบกำกับภาษีให้คุณทันทีหลัง verify",
+    "ctaButton": "อัพโหลดไฟล์",
+    "formHeading": "อัพโหลดใบ 50 ทวิ",
+    "close": "ปิด",
+    "fileLabel": "ไฟล์ใบรับรอง",
+    "fileHint": "รองรับ PDF / JPG / PNG (ไม่เกิน 10 MB)",
+    "certNoLabel": "เลขที่ใบ 50 ทวิ (ถ้ามี)",
+    "certNoPlaceholder": "เช่น 2026/12345",
+    "uploading": "กำลังอัพโหลด...",
+    "submitCert": "ส่งใบรับรอง",
+    "footerNote": "Pacred จะตรวจสอบใบรับรองและออกใบกำกับภาษีให้คุณภายใน 1-2 วันทำการ"
   },
   "costReconfirm": {
     "customerWhtUpload": {
@@ -6025,6 +6048,17 @@
       "refLabel": "เลขอ้างอิง",
       "callNow": "โทรด่วน {phone}",
       "lineChat": "ทักไลน์"
+    },
+    "error": {
+      "missingContact": "กรุณากรอกชื่อและเบอร์โทรติดต่อ",
+      "rateLimit": "ส่งคำขอบ่อยเกินไป กรุณาลองใหม่ในอีกสักครู่",
+      "submitFailed": "ส่งไม่สำเร็จ กรุณาลองใหม่หรือโทรหาเรา"
+    },
+    "nav": {
+      "back": "ย้อนกลับ",
+      "next": "ถัดไป",
+      "submitting": "กำลังส่ง…",
+      "submit": "📋 ส่งใบเสนอราคา"
     }
   },
   "serviceOrderPrint": {
