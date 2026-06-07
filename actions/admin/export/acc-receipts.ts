@@ -32,6 +32,15 @@ import type { ReceiptTab } from "@/actions/admin/accounting-receipts";
 // If a filtered slice ever exceeds this, the export flags `truncated`.
 const EXPORT_CAP = 10000;
 
+// The "recent" (ล่าสุด) tab is NOT a filtered set — it's a last-N landing
+// snapshot (getReceiptList recent branch: order rdatecreate desc, NO date/
+// status filter, default pageSize 10). So an "export all" on recent must NOT
+// dump the whole tb_receipt table; it caps to the same recent slice so the
+// export == the on-screen view. (The page also omits the "ทั้งหมด" button on
+// recent — see receipts/page.tsx — so this is primarily a defensive guard for
+// a direct/programmatic call.) Mirrors getReceiptList's 10-row recent default.
+const RECENT_LIMIT = 10;
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // Tab → rstatus filter value (or null for any) — mirrors accounting-receipts.ts.
@@ -129,7 +138,10 @@ export async function exportReceiptsAll(
     q = q.or(`rid.ilike.%${term}%,userid.ilike.%${term}%,recompname.ilike.%${term}%`);
   }
 
-  q = q.range(0, EXPORT_CAP - 1);
+  // "recent" caps to RECENT_LIMIT (the last-N snapshot — matches the page's
+  // recent view, no whole-table dump); every other tab is a real filtered set
+  // and exports up to EXPORT_CAP. (Drift-free vs getReceiptList either way.)
+  q = q.range(0, (tab === "recent" ? RECENT_LIMIT : EXPORT_CAP) - 1);
 
   type RawReceipt = {
     id: number;

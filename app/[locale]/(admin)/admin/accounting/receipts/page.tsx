@@ -232,20 +232,30 @@ export default async function ReceiptsListPage({
           </div>
           <div className="flex items-center gap-2">
             {/* CSV export — page rows + drift-free "ทั้งหมด" (all filtered,
-                audited via admin_export_log). Reuses the EXACT page filters. */}
+                audited via admin_export_log). Reuses the EXACT page filters.
+                EXCEPT the "recent" (ล่าสุด) landing tab: it's a last-N snapshot
+                with NO date/status filter, so an "export all" there has no
+                meaningful filtered set to match (it would dump the whole
+                tb_receipt table — drift from the ~10 rows shown). On recent we
+                therefore omit fetchAll → only "⬇ CSV (N แถว)" for the visible
+                rows. To export every receipt, use the "ทั้งหมด" tab. */}
             <CsvButton
               rows={csvRows}
               cols={CSV_COLS}
               filename="ใบเสร็จรับเงิน.csv"
-              fetchAll={async () => {
-                "use server";
-                return exportReceiptsAll({
-                  tab,
-                  dateFrom,
-                  dateTo,
-                  search: sp.q ?? "",
-                });
-              }}
+              fetchAll={
+                tab === "recent"
+                  ? undefined
+                  : async () => {
+                      "use server";
+                      return exportReceiptsAll({
+                        tab,
+                        dateFrom,
+                        dateTo,
+                        search: sp.q ?? "",
+                      });
+                    }
+              }
             />
             {/* "พิมพ์รายงาน" — outline secondary (PEAK). Reuses the closing
                 report as the canonical month-end summary printable view. */}
