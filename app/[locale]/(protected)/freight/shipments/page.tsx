@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Package, ChevronRight, Home } from "lucide-react";
@@ -66,6 +67,7 @@ export default async function CustomerFreightShipmentsPage({
   searchParams: Promise<{ q?: string; status?: string; page?: string }>;
 }) {
   const sp = await searchParams;
+  const t = await getTranslations("customerFreight");
   const sb = await createClient();
 
   const status = (FREIGHT_SHIPMENT_STATUSES as readonly string[]).includes(sp.status ?? "")
@@ -137,12 +139,12 @@ export default async function CustomerFreightShipmentsPage({
         {/* Breadcrumb */}
         <nav className="flex items-center gap-1.5 text-xs text-muted flex-wrap">
           <Link href="/dashboard" className="hover:text-primary-600 inline-flex items-center gap-1">
-            <Home className="w-3.5 h-3.5" /> หน้าแรก
+            <Home className="w-3.5 h-3.5" /> {t("breadcrumbHome")}
           </Link>
           <ChevronRight className="w-3 h-3" />
           <Link href="/freight" className="hover:text-primary-600">Freight</Link>
           <ChevronRight className="w-3 h-3" />
-          <span className="text-foreground font-medium">งานขนส่ง</span>
+          <span className="text-foreground font-medium">{t("breadcrumbShipments")}</span>
         </nav>
 
         {/* Header */}
@@ -152,9 +154,9 @@ export default async function CustomerFreightShipmentsPage({
               <Package className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-foreground">งานขนส่ง (Freight Jobs)</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-foreground">{t("shipmentsTitle")}</h1>
               <p className="text-xs text-muted mt-0.5">
-                ติดตามสถานะงาน · ดู Commercial Invoice / Packing List / Form E / D/O ของแต่ละงาน
+                {t("shipmentsSubtitle")}
               </p>
             </div>
           </div>
@@ -165,14 +167,14 @@ export default async function CustomerFreightShipmentsPage({
             <input
               name="q"
               defaultValue={q}
-              placeholder="ค้นหา: Job No / Container / B/L"
+              placeholder={t("searchPlaceholder")}
               className="flex-1 rounded-lg border border-border bg-white px-3 py-2 text-sm"
             />
             <button
               type="submit"
               className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700"
             >
-              ค้นหา
+              {t("searchButton")}
             </button>
           </form>
 
@@ -184,7 +186,7 @@ export default async function CustomerFreightShipmentsPage({
                 status === null ? "bg-primary-600 text-white" : "bg-surface-alt text-foreground hover:bg-surface-alt/80"
               }`}
             >
-              ทั้งหมด <span className="ml-1 text-[10px]">({totalAll})</span>
+              {t("filterAll")} <span className="ml-1 text-[10px]">({totalAll})</span>
             </Link>
             {FREIGHT_SHIPMENT_STATUSES.map((s) => {
               const href = q
@@ -210,21 +212,21 @@ export default async function CustomerFreightShipmentsPage({
         <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
           {shipments.length === 0 ? (
             <p className="p-6 text-center text-sm text-muted">
-              ไม่มีงานขนส่ง
-              {status && ` สถานะ "${FREIGHT_SHIPMENT_STATUS_LABEL[status]}"`}
-              {q && ` ตรงกับ "${q}"`}
+              {t("emptyShipments")}
+              {status && t("emptyStatusFilter", { status: FREIGHT_SHIPMENT_STATUS_LABEL[status] })}
+              {q && t("emptyQueryFilter", { query: q })}
             </p>
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-3 py-2">Job No</th>
-                  <th className="px-3 py-2">ขนส่ง</th>
+                  <th className="px-3 py-2">{t("colTransport")}</th>
                   <th className="px-3 py-2">Container / B/L</th>
-                  <th className="px-3 py-2">เส้นทาง</th>
-                  <th className="px-3 py-2">สถานะงาน</th>
-                  <th className="px-3 py-2">การชำระ</th>
-                  <th className="px-3 py-2">สร้าง</th>
+                  <th className="px-3 py-2">{t("colRoute")}</th>
+                  <th className="px-3 py-2">{t("colJobStatus")}</th>
+                  <th className="px-3 py-2">{t("colPayment")}</th>
+                  <th className="px-3 py-2">{t("colCreated")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -262,7 +264,7 @@ export default async function CustomerFreightShipmentsPage({
                             {FREIGHT_INVOICE_PAYMENT_STATUS_LABEL[pay]}
                           </span>
                         ) : (
-                          <span className="text-[10px] text-muted">ยังไม่มี invoice</span>
+                          <span className="text-[10px] text-muted">{t("noInvoiceYet")}</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-xs text-muted">

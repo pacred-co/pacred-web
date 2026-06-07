@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Play, ArrowRight } from "lucide-react";
 
 type Video = {
@@ -60,6 +61,7 @@ function onThumbError(e: React.SyntheticEvent<HTMLImageElement>, id: string) {
 
 export function CustomsVideoClips() {
   const [active, setActive] = useState<string | null>(null);
+  const t = useTranslations("customsVideoClips");
 
   return (
     <section className="relative pt-1.5 md:pt-3 pb-1 md:pb-2">
@@ -69,10 +71,10 @@ export function CustomsVideoClips() {
           <div>
             <div className="flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
-              คลิปล่าสุด
+              {t("eyebrow")}
             </div>
             <h2 className="text-[22px] md:text-[30px] leading-[1.2] font-black tracking-[-0.03em] text-[#111827] dark:text-white">
-              รู้ลึก รู้จริง ชิปปิ้งเคลียร์ภาษี นำเข้า-ส่งออก{" "}
+              {t("title")}{" "}
               <span className="text-primary-600">Pacred Shipping</span>
             </h2>
           </div>
@@ -82,7 +84,7 @@ export function CustomsVideoClips() {
             rel="noopener noreferrer"
             className="hidden sm:inline-flex shrink-0 items-center gap-1.5 h-9 md:h-10 px-3.5 md:px-4 rounded-full bg-white text-[#111827] border border-border text-[12px] md:text-[13px] font-black hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all duration-300"
           >
-            ดูทั้งหมด
+            {t("viewAll")}
             <ArrowRight className="w-3.5 h-3.5" strokeWidth={3} />
           </a>
         </div>
@@ -114,7 +116,7 @@ export function CustomsVideoClips() {
           rel="noopener noreferrer"
           className="sm:hidden mx-auto inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-white text-[#111827] border border-border text-[12px] font-black hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all duration-300"
         >
-          ดูทั้งหมด
+          {t("viewAll")}
           <ArrowRight className="w-3.5 h-3.5" strokeWidth={3} />
         </a>
       </div>
@@ -123,12 +125,14 @@ export function CustomsVideoClips() {
 }
 
 function VideoCardBig({ video, isActive, onPlay }: { video: Video; isActive: boolean; onPlay: () => void }) {
+  const t = useTranslations("customsVideoClips");
+  const title = t(`${video.id}.title`);
   if (isActive) {
     return (
       <div className="relative md:w-[70%] aspect-video md:aspect-auto md:min-h-[420px] rounded-xl overflow-hidden bg-black shadow-[0_14px_32px_rgba(15,23,42,0.18)]">
         <iframe
           src={embed(video.id)}
-          title={video.title}
+          title={title}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
           className="absolute inset-0 w-full h-full"
@@ -155,7 +159,7 @@ function VideoCardBig({ video, isActive, onPlay }: { video: Video; isActive: boo
       <img
         src={thumbHd(video.id)}
         onError={(e) => onThumbError(e, video.id)}
-        alt={video.title}
+        alt={title}
         className="relative h-full w-full object-contain transition-transform duration-500 group-hover:scale-[1.03]"
       />
 
@@ -169,16 +173,16 @@ function VideoCardBig({ video, isActive, onPlay }: { video: Video; isActive: boo
 
       {video.badge && (
         <div className="absolute top-4 left-4 inline-flex items-center px-3 py-1 rounded-md bg-primary-600 text-white text-[11px] md:text-[12px] font-black tracking-wide shadow-[0_4px_10px_rgba(0,0,0,0.25)]">
-          {video.badge}
+          {t(`${video.id}.badge`)}
         </div>
       )}
 
       <div className="absolute left-4 right-4 bottom-4 z-10">
         <h3 className="text-white text-[18px] md:text-[24px] font-black leading-tight tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
-          {video.title}
+          {title}
         </h3>
         <p className="mt-1 text-white/90 text-[12px] md:text-[14px] font-bold drop-shadow-[0_1px_4px_rgba(0,0,0,0.6)]">
-          {video.sub}
+          {t(`${video.id}.sub`)}
         </p>
       </div>
     </button>
@@ -186,12 +190,14 @@ function VideoCardBig({ video, isActive, onPlay }: { video: Video; isActive: boo
 }
 
 function VideoCardSide({ video, isActive, onPlay }: { video: Video; isActive: boolean; onPlay: () => void }) {
+  const t = useTranslations("customsVideoClips");
+  const title = t(`${video.id}.title`);
   if (isActive) {
     return (
       <div className="relative aspect-video rounded-xl overflow-hidden bg-black shadow-[0_8px_20px_rgba(15,23,42,0.12)]">
         <iframe
           src={embed(video.id)}
-          title={video.title}
+          title={title}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
           className="absolute inset-0 w-full h-full"
@@ -210,7 +216,7 @@ function VideoCardSide({ video, isActive, onPlay }: { video: Video; isActive: bo
       <img
         src={thumbHd(video.id)}
         onError={(e) => onThumbError(e, video.id)}
-        alt={video.title}
+        alt={title}
         className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
       />
 
@@ -224,13 +230,13 @@ function VideoCardSide({ video, isActive, onPlay }: { video: Video; isActive: bo
 
       {video.badge && (
         <div className="absolute top-2 left-2 inline-flex items-center px-2 py-0.5 rounded-md bg-primary-600 text-white text-[9.5px] md:text-[10px] font-black tracking-wide shadow-[0_2px_6px_rgba(0,0,0,0.25)]">
-          {video.badge}
+          {t(`${video.id}.badge`)}
         </div>
       )}
 
       <div className="absolute left-2.5 right-2.5 bottom-2 z-10">
         <h3 className="text-white text-[11px] md:text-[12px] font-black leading-[1.25] line-clamp-2 drop-shadow-[0_1px_4px_rgba(0,0,0,0.6)]">
-          {video.title}
+          {title}
         </h3>
       </div>
     </button>

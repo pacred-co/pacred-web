@@ -16,7 +16,10 @@ import {
   Sparkles,
   Lock,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
+
+type Translator = ReturnType<typeof useTranslations<"lclPriceCards">>;
 
 const LINE_URL = "/line";
 const HOTLINE = "062-603-0456";
@@ -24,7 +27,6 @@ const HOTLINE = "062-603-0456";
 // Thai destination receiving warehouse (Bangkok pickup point). Hardcoded Thai —
 // consistent with the rest of the LCL page sections (lcl-hero / lcl-services-problems
 // / lcl-why-pacred are all hardcoded Thai).
-const DEST_WAREHOUSE = "โกดังเพชรเกษม 118";
 const TERMS_SUPPORTED = "DDP เอาเอกสาร · EXW · FOB";
 
 type RateMode = "road" | "sea" | "air";
@@ -108,13 +110,13 @@ function CardCover({
 }
 
 // Shared CTA footer (primary ขอราคา + LINE secondary).
-function CardFooter({ isFeatured, surface, id, ctaLabel, soon = false }: { isFeatured: boolean; surface: string; id: string; ctaLabel: string; soon?: boolean }) {
+function CardFooter({ isFeatured, surface, id, ctaLabel, soon = false, t }: { isFeatured: boolean; surface: string; id: string; ctaLabel: string; soon?: boolean; t: Translator }) {
   if (soon) {
     return (
       <div className="relative z-10 px-3.5 md:px-4 py-2.5 md:py-3 border-t border-border bg-surface/60 dark:bg-background/60">
         <span className="inline-flex w-full items-center justify-center gap-1.5 h-11 rounded-lg font-black text-[13px] md:text-[13.5px] bg-surface-alt dark:bg-background/60 text-muted border border-dashed border-border cursor-not-allowed">
           <Lock className="w-3.5 h-3.5" strokeWidth={2.6} />
-          เปิดให้บริการเร็วๆนี้
+          {t("comingSoon")}
         </span>
       </div>
     );
@@ -149,7 +151,7 @@ function CardFooter({ isFeatured, surface, id, ctaLabel, soon = false }: { isFea
         ].join(" ")}
       >
         <Phone className="w-3.5 h-3.5" strokeWidth={2.6} />
-        {HOTLINE} · ปรึกษา LINE
+        {t("hotlineLine", { phone: HOTLINE })}
       </a>
     </div>
   );
@@ -205,12 +207,9 @@ const WAREHOUSE_CARDS: WarehouseCard[] = [
 ];
 
 // Extra terms revealed on hover (desktop) / tap (mobile) over the "Term : EXW" line.
-const TERM_NOTES = [
-  "ออกใบกำกับ/ใบขน เสีย VAT 7% เท่านั้น",
-  "โอนค่าชำระสินค้าผ่านบริษัท",
-];
+const TERM_NOTES = ["termNote1", "termNote2"];
 
-function TermInfo({ feat }: { feat: boolean }) {
+function TermInfo({ feat, t }: { feat: boolean; t: Translator }) {
   return (
     <div className="mt-auto">
       <div className={`text-[10.5px] font-bold leading-snug ${feat ? "text-white/75" : "text-muted"}`}>
@@ -220,7 +219,7 @@ function TermInfo({ feat }: { feat: boolean }) {
         {TERM_NOTES.map((note) => (
           <li key={note} className={`flex items-start gap-1.5 text-[10.5px] font-semibold leading-snug ${feat ? "text-white" : "text-foreground"}`}>
             <span aria-hidden className={`mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full ${feat ? "bg-yellow-300" : "bg-primary-500"}`} />
-            <span>{note}</span>
+            <span>{t(note)}</span>
           </li>
         ))}
       </ul>
@@ -228,8 +227,8 @@ function TermInfo({ feat }: { feat: boolean }) {
   );
 }
 
-function WarehouseCardView({ card, isFeatured, isRecommended, onHover }: {
-  card: WarehouseCard; isFeatured: boolean; isRecommended: boolean; onHover: () => void;
+function WarehouseCardView({ card, isFeatured, isRecommended, onHover, t }: {
+  card: WarehouseCard; isFeatured: boolean; isRecommended: boolean; onHover: () => void; t: Translator;
 }) {
   const soon = !!card.comingSoon;
   const feat = isFeatured && !soon;
@@ -245,7 +244,7 @@ function WarehouseCardView({ card, isFeatured, isRecommended, onHover }: {
         <div className="absolute top-3 right-3 z-20">
           <span className="relative inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-yellow-300 text-primary-800 text-[10px] md:text-[11px] font-black tracking-[0.10em] uppercase shadow-[0_4px_12px_rgba(255,213,0,0.45)]">
             <Sparkles className="w-3 h-3" strokeWidth={2.8} />
-            แนะนำ
+            {t("recommendedBadge")}
             <span aria-hidden className="absolute inset-0 rounded-full bg-yellow-300 animate-ping opacity-60" />
           </span>
         </div>
@@ -256,9 +255,9 @@ function WarehouseCardView({ card, isFeatured, isRecommended, onHover }: {
       )}
 
       <CardCover
-        image={card.image} imageAlt={card.originName} accent={card.accent}
-        badge={soon ? "เร็วๆนี้" : "WAREHOUSE RATE"} badgeIcon={soon ? Lock : Warehouse}
-        title={card.originName} sub={soon ? "เปิดให้บริการเร็วๆนี้" : `${card.city} → ${DEST_WAREHOUSE}`}
+        image={card.image} imageAlt={t(`warehouseOrigin_${card.id}`)} accent={card.accent}
+        badge={soon ? t("badgeSoon") : "WAREHOUSE RATE"} badgeIcon={soon ? Lock : Warehouse}
+        title={t(`warehouseOrigin_${card.id}`)} sub={soon ? t("comingSoon") : t("warehouseRouteSub", { city: t(`warehouseCity_${card.id}`), dest: t("destWarehouse") })}
         h="h-32 md:h-40" isFeatured={feat} soon={soon}
       />
 
@@ -280,7 +279,7 @@ function WarehouseCardView({ card, isFeatured, isRecommended, onHover }: {
                   <Icon className="w-[18px] h-[18px]" strokeWidth={2.4} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className={`text-[13px] font-black leading-none ${feat ? "text-white" : "text-foreground"}`}>{r.label}</div>
+                  <div className={`text-[13px] font-black leading-none ${feat ? "text-white" : "text-foreground"}`}>{t(`mode_${r.mode}`)}</div>
                   <div className={`text-[10px] font-bold uppercase tracking-[0.06em] mt-1 ${feat ? "text-white/65" : "text-muted"}`}>{r.code}</div>
                 </div>
                 <div className="shrink-0 flex items-baseline justify-end gap-1 text-right">
@@ -288,7 +287,7 @@ function WarehouseCardView({ card, isFeatured, isRecommended, onHover }: {
                     "text-[14px] md:text-[18px] font-black leading-none tabular-nums",
                     quote ? (feat ? "text-white/80" : "text-muted") : (feat ? "text-yellow-300" : "text-primary-600"),
                   ].join(" ")}>
-                    {r.price}
+                    {r.price === "สอบถาม" ? t("priceInquire") : r.price}
                     {r.unit && <span className={`text-[8px] font-bold ${feat ? "text-white/65" : "text-muted"}`}>{r.unit}</span>}
                   </span>
                   {r.kgRate && (
@@ -301,26 +300,27 @@ function WarehouseCardView({ card, isFeatured, isRecommended, onHover }: {
         </div>
 
         {/* Term + info tooltip (hover desktop · tap mobile) */}
-        <TermInfo feat={feat} />
+        <TermInfo feat={feat} t={t} />
       </div>
 
-      <CardFooter isFeatured={feat} surface="lcl_warehouse_rate" id={card.id} ctaLabel="ขอใบเสนอราคา ฟรี!" soon={soon} />
+      <CardFooter isFeatured={feat} surface="lcl_warehouse_rate" id={card.id} ctaLabel={t("ctaQuoteFree")} soon={soon} t={t} />
     </article>
   );
 }
 
 export function WarehouseRateGroup() {
+  const t = useTranslations("lclPriceCards");
   const recommendedIdx = Math.max(0, WAREHOUSE_CARDS.findIndex((c) => c.recommended));
   const { scrollRef, activeIdx, setActiveIdx } = useActiveCard(recommendedIdx);
   return (
-    <section aria-label="ส่งสินค้าเข้าโกดังจีน">
+    <section aria-label={t("warehouseSectionAria")}>
       <header className="mb-3 md:mb-4">
         <div className="flex items-center gap-2 mb-1.5 text-primary-600 text-[11px] md:text-[12.5px] font-black tracking-[0.10em] uppercase">
           <span className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-primary-600 shrink-0" />
-          WAREHOUSE · ชื่อชิปปิ้ง
+          {t("warehouseEyebrow")}
         </div>
         <h3 className="text-[19px] md:text-[26px] leading-[1.18] font-black tracking-[-0.03em] text-[#111827] dark:text-white">
-          นำเข้าสินค้าส่งของเข้าโกดัง Cargo
+          {t("warehouseHeading")}
         </h3>
       </header>
       <div ref={scrollRef}
@@ -330,6 +330,7 @@ export function WarehouseRateGroup() {
             key={card.id} card={card}
             isFeatured={i === activeIdx && !card.comingSoon} isRecommended={!!card.recommended}
             onHover={() => { if (typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches) setActiveIdx(i); }}
+            t={t}
           />
         ))}
       </div>
@@ -405,8 +406,8 @@ const ROUTE_CARDS: RouteCard[] = [
   },
 ];
 
-function RouteCardView({ card, isFeatured, isRecommended, onHover }: {
-  card: RouteCard; isFeatured: boolean; isRecommended: boolean; onHover: () => void;
+function RouteCardView({ card, isFeatured, isRecommended, onHover, t }: {
+  card: RouteCard; isFeatured: boolean; isRecommended: boolean; onHover: () => void; t: Translator;
 }) {
   const Icon = MODE_ICON[card.id];
   return (
@@ -421,7 +422,7 @@ function RouteCardView({ card, isFeatured, isRecommended, onHover }: {
         <div className="absolute top-3 right-3 z-20">
           <span className="relative inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-yellow-300 text-primary-800 text-[10px] md:text-[11px] font-black tracking-[0.10em] uppercase shadow-[0_4px_12px_rgba(255,213,0,0.45)]">
             <Sparkles className="w-3 h-3" strokeWidth={2.8} />
-            แนะนำ
+            {t("recommendedBadge")}
             <span aria-hidden className="absolute inset-0 rounded-full bg-yellow-300 animate-ping opacity-60" />
           </span>
         </div>
@@ -432,9 +433,9 @@ function RouteCardView({ card, isFeatured, isRecommended, onHover }: {
       )}
 
       <CardCover
-        image={card.image} imageAlt={card.imageAlt} accent={card.accent}
+        image={card.image} imageAlt={t(`routeImageAlt_${card.id}`)} accent={card.accent}
         badge={card.badge} badgeIcon={Icon}
-        title={card.title} sub={card.sub}
+        title={t(`routeTitle_${card.id}`)} sub={t(`routeSub_${card.id}`)}
         h="h-32 md:h-40" isFeatured={isFeatured} subNowrap={card.id === "sea"}
       />
 
@@ -445,25 +446,25 @@ function RouteCardView({ card, isFeatured, isRecommended, onHover }: {
           isFeatured ? "bg-white/12 border-white/20 backdrop-blur-sm" : "bg-primary-50/60 border-primary-100 dark:bg-primary-900/20 dark:border-primary-800",
         ].join(" ")}>
           <div className={`text-[10px] md:text-[10.5px] font-bold tracking-[0.08em] uppercase leading-none ${isFeatured ? "text-yellow-200/90" : "text-primary-700/80 dark:text-primary-300/80"}`}>
-            ค่าบริการ · เริ่มต้น
+            {t("priceLabel")}
           </div>
           <div className="mt-1 flex items-baseline gap-1.5">
             <span className={`text-[22px] md:text-[26px] font-black leading-none tracking-tight ${isFeatured ? "text-yellow-300 drop-shadow-[0_2px_8px_rgba(0,0,0,0.25)]" : "text-primary-600 dark:text-primary-300"}`}>
-              {card.priceText}
+              {t(`routePriceText_${card.id}`)}
             </span>
             <span className={[
               "ml-auto inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-black shrink-0",
               isFeatured ? "bg-white/15 text-white border border-white/20" : "bg-blue-50 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300",
             ].join(" ")}>
               <FileText className="w-3 h-3" strokeWidth={2.6} />
-              ใบขนสินค้า
+              {t("customsDocBadge")}
             </span>
           </div>
         </div>
 
         {/* 3 stat mini-cards */}
         <div className="grid grid-cols-3 gap-1.5 md:gap-2">
-          {card.stats.map((s) => {
+          {card.stats.map((s, i) => {
             const SIcon = s.icon;
             return (
               <div key={s.label} className={[
@@ -471,8 +472,8 @@ function RouteCardView({ card, isFeatured, isRecommended, onHover }: {
                 isFeatured ? "bg-white/10 border border-white/15" : "bg-surface/60 dark:bg-background/60 border border-border",
               ].join(" ")}>
                 <SIcon className={`w-3.5 h-3.5 mx-auto mb-0.5 ${isFeatured ? "text-yellow-300" : "text-primary-600"}`} strokeWidth={2.6} />
-                <div className={`text-[10px] font-bold tracking-tight uppercase ${isFeatured ? "text-white/70" : "text-muted"}`}>{s.label}</div>
-                <div className={`text-[11.5px] md:text-[12px] font-black leading-tight ${isFeatured ? "text-white" : "text-foreground"}`}>{s.value}</div>
+                <div className={`text-[10px] font-bold tracking-tight uppercase ${isFeatured ? "text-white/70" : "text-muted"}`}>{t(`statLabel${i}`)}</div>
+                <div className={`text-[11.5px] md:text-[12px] font-black leading-tight ${isFeatured ? "text-white" : "text-foreground"}`}>{t(`routeStatValue_${card.id}_${i}`)}</div>
               </div>
             );
           })}
@@ -480,10 +481,10 @@ function RouteCardView({ card, isFeatured, isRecommended, onHover }: {
 
         {/* Services */}
         <ul className={`flex flex-col gap-1 text-[11.5px] md:text-[12px] leading-snug ${isFeatured ? "text-white/95" : "text-foreground/90"}`}>
-          {card.services.map((s) => (
+          {card.services.map((s, i) => (
             <li key={s} className="flex items-start gap-1.5">
               <span className={`mt-1 inline-block w-1.5 h-1.5 rounded-full shrink-0 ${isFeatured ? "bg-yellow-300" : "bg-primary-600"}`} />
-              <span>{s}</span>
+              <span>{t(`routeService_${card.id}_${i}`)}</span>
             </li>
           ))}
         </ul>
@@ -491,12 +492,12 @@ function RouteCardView({ card, isFeatured, isRecommended, onHover }: {
         {/* Partners */}
         <div className="mt-auto pt-1">
           <div className={`text-[10px] font-bold tracking-[0.10em] uppercase mb-1.5 ${isFeatured ? "text-white/65" : "text-foreground/55"}`}>
-            พาร์ทเนอร์
+            {t("partnersLabel")}
           </div>
           <div className="grid grid-cols-4 gap-1.5 items-center">
             {card.carriers.map((carrier) => (
               <a key={carrier.name} href={carrier.url} target="_blank" rel="noopener noreferrer"
-                aria-label={`เปิดเว็บไซต์ ${carrier.name}`} title={carrier.name}
+                aria-label={t("partnerOpenSiteAria", { name: carrier.name })} title={carrier.name}
                 className={[
                   "relative h-7 md:h-8 rounded-md flex items-center justify-center transition-all hover:scale-110",
                   isFeatured ? "bg-white/95 hover:bg-white" : "bg-white border border-border/50 hover:border-primary-300 hover:shadow-md",
@@ -508,23 +509,24 @@ function RouteCardView({ card, isFeatured, isRecommended, onHover }: {
         </div>
       </div>
 
-      <CardFooter isFeatured={isFeatured} surface="lcl_route_import" id={card.id} ctaLabel={`ขอราคา ${card.title} ฟรี`} />
+      <CardFooter isFeatured={isFeatured} surface="lcl_route_import" id={card.id} ctaLabel={t(`routeCtaQuote_${card.id}`)} t={t} />
     </article>
   );
 }
 
 export function RouteImportGroup() {
+  const t = useTranslations("lclPriceCards");
   const recommendedIdx = Math.max(0, ROUTE_CARDS.findIndex((c) => c.recommended));
   const { scrollRef, activeIdx, setActiveIdx } = useActiveCard(recommendedIdx);
   return (
-    <section aria-label="นำเข้าในชื่อลูกค้า พร้อมใบขนสินค้า">
+    <section aria-label={t("routeSectionAria")}>
       <header className="mb-3 md:mb-4">
         <div className="flex items-center gap-2 mb-1.5 text-primary-600 text-[11px] md:text-[12.5px] font-black tracking-[0.10em] uppercase">
           <span className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-primary-600 shrink-0" />
-          CUSTOMS · ชื่อลูกค้า
+          {t("routeEyebrow")}
         </div>
         <h3 className="text-[19px] md:text-[26px] leading-[1.18] font-black tracking-[-0.03em] text-[#111827] dark:text-white">
-          นำเข้าสินค้า Freight Forwarder
+          {t("routeHeading")}
         </h3>
       </header>
       <div ref={scrollRef}
@@ -534,6 +536,7 @@ export function RouteImportGroup() {
             key={card.id} card={card}
             isFeatured={i === activeIdx} isRecommended={!!card.recommended}
             onHover={() => { if (typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches) setActiveIdx(i); }}
+            t={t}
           />
         ))}
       </div>

@@ -13,6 +13,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Loader2, CheckCircle } from "lucide-react";
 import { customerAcceptQuote } from "@/actions/freight";
 import { confirm } from "@/components/ui/confirm";
@@ -23,25 +24,24 @@ interface Props {
   total: number;
 }
 
-const ERR_LABELS: Record<string, string> = {
-  auth_required:        "กรุณาเข้าสู่ระบบใหม่",
-  forbidden_not_owner:  "ใบเสนอราคานี้ไม่ใช่ของคุณ",
-  not_found:            "ไม่พบใบเสนอราคา",
-  expired:              "ใบเสนอราคาหมดอายุแล้ว — กรุณาขอใบใหม่",
-  invalid_quote_id:     "รหัสใบเสนอราคาไม่ถูกต้อง",
-};
+const ERR_KEYS = new Set([
+  "auth_required",
+  "forbidden_not_owner",
+  "not_found",
+  "expired",
+  "invalid_quote_id",
+]);
 
 export function AcceptQuoteButton({ quoteId, quoteNo, total }: Props) {
   const router = useRouter();
+  const t = useTranslations("acceptQuoteButton");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   async function fire() {
     setError(null);
     const ok = await confirm(
-      `ยืนยันตอบรับใบเสนอราคา ${quoteNo}?\n\n` +
-      `ราคา ฿${total.toLocaleString("th-TH")}\n\n` +
-      `เมื่อตอบรับแล้ว ทีม Pacred จะเริ่มขั้นตอนต่อไป (เปิดงานขนส่ง) ทันที`
+      t("confirmPrompt", { quoteNo, price: total.toLocaleString("th-TH") })
     );
     if (!ok) return;
 
@@ -50,9 +50,9 @@ export function AcceptQuoteButton({ quoteId, quoteNo, total }: Props) {
       if (!res.ok) {
         if (res.error.startsWith("bad_status:")) {
           const actual = res.error.split(":")[1];
-          setError(`สถานะเปลี่ยนไปแล้ว (ตอนนี้คือ ${actual}) — refresh หน้าเพื่อดูสถานะปัจจุบัน`);
+          setError(t("badStatus", { status: actual }));
         } else {
-          setError(ERR_LABELS[res.error] ?? `เกิดข้อผิดพลาด: ${res.error}`);
+          setError(ERR_KEYS.has(res.error) ? t(`err_${res.error}`) : t("genericError", { error: res.error }));
         }
         return;
       }
@@ -73,7 +73,7 @@ export function AcceptQuoteButton({ quoteId, quoteNo, total }: Props) {
         ) : (
           <CheckCircle className="w-4 h-4" />
         )}
-        {pending ? "กำลังบันทึก…" : "✓ ตอบรับใบเสนอราคา"}
+        {pending ? t("saving") : t("acceptButton")}
       </button>
       {error && (
         <p className="text-xs text-red-700 dark:text-red-300">

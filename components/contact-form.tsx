@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { submitContactMessage } from "@/actions/contact";
 import HCaptchaInvisible, { type HCaptchaHandle } from "@/components/hcaptcha-invisible";
@@ -18,13 +19,14 @@ import { trackGenerateLead } from "@/lib/analytics";
  * `execute()` returns null, and the server-side `verifyHcaptcha` is also
  * a no-op in dev — so the form works locally without any captcha setup.
  */
-const ERROR_MESSAGES: Record<string, string> = {
-  rate_limit:     "ส่งข้อความบ่อยเกินไป กรุณารออีกสักครู่แล้วลองใหม่",
-  captcha_failed: "ระบบตรวจสอบความปลอดภัยไม่ผ่าน กรุณาลองใหม่",
-  insert_failed:  "บันทึกข้อความไม่สำเร็จ กรุณาลองใหม่",
+const ERROR_KEYS: Record<string, string> = {
+  rate_limit:     "errRateLimit",
+  captcha_failed: "errCaptchaFailed",
+  insert_failed:  "errInsertFailed",
 };
 
 export function ContactForm() {
+  const t = useTranslations("contactForm");
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
   const [contact, setContact] = useState("");
@@ -49,7 +51,8 @@ export function ContactForm() {
         captchaToken: captchaToken ?? null,
       });
       if (!res.ok) {
-        setError(ERROR_MESSAGES[res.error] ?? res.error);
+        const key = ERROR_KEYS[res.error];
+        setError(key ? t(key) : res.error);
         // Reset the widget so a retry obtains a fresh token
         captchaRef.current?.reset();
         return;
@@ -66,16 +69,16 @@ export function ContactForm() {
   if (done) {
     return (
       <div className="rounded-lg border border-green-200 bg-green-50 p-6 text-center">
-        <p className="text-lg font-bold text-green-800">✅ ส่งข้อความเรียบร้อย</p>
+        <p className="text-lg font-bold text-green-800">✅ {t("successTitle")}</p>
         <p className="mt-2 text-sm text-green-700">
-          ทีมงาน Pacred จะติดต่อกลับโดยเร็วที่สุด
+          {t("successBody")}
         </p>
         <button
           type="button"
           onClick={() => setDone(false)}
           className="mt-4 text-xs font-semibold text-primary-600 hover:text-primary-700 underline"
         >
-          ส่งข้อความใหม่
+          {t("sendAnother")}
         </button>
       </div>
     );
@@ -84,7 +87,7 @@ export function ContactForm() {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="ชื่อ" required>
+        <Field label={t("labelName")} required>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -93,29 +96,29 @@ export function ContactForm() {
             maxLength={200}
           />
         </Field>
-        <Field label="อีเมล / เบอร์โทร" required>
+        <Field label={t("labelContact")} required>
           <input
             value={contact}
             onChange={(e) => setContact(e.target.value)}
             className={inputCls}
             required
             maxLength={200}
-            placeholder="you@example.com หรือ 0812345678"
+            placeholder={t("contactPlaceholder")}
           />
         </Field>
       </div>
 
-      <Field label="หัวข้อ">
+      <Field label={t("labelSubject")}>
         <input
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
           className={inputCls}
           maxLength={200}
-          placeholder="เรื่องที่ต้องการสอบถาม"
+          placeholder={t("subjectPlaceholder")}
         />
       </Field>
 
-      <Field label="ข้อความ" required>
+      <Field label={t("labelMessage")} required>
         <textarea
           value={message}
           onChange={(e) => setMessage(e.target.value)}
@@ -123,7 +126,7 @@ export function ContactForm() {
           required
           minLength={5}
           maxLength={4000}
-          placeholder="รายละเอียดที่ต้องการให้เราช่วย..."
+          placeholder={t("messagePlaceholder")}
         />
       </Field>
 
@@ -136,7 +139,7 @@ export function ContactForm() {
       <HCaptchaInvisible ref={captchaRef} />
 
       <Button type="submit" disabled={pending} fullWidth size="lg">
-        {pending ? "กำลังส่ง..." : "ส่งข้อความ"}
+        {pending ? t("submitting") : t("submit")}
       </Button>
     </form>
   );

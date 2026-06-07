@@ -1,4 +1,5 @@
 import { Link } from "@/i18n/navigation";
+import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { Home, ChevronRight, Warehouse, Info, ExternalLink } from "lucide-react";
 import { WarehouseCard, type WarehouseDef } from "./warehouse-card";
@@ -12,6 +13,8 @@ const PLACEHOLDER_CODE = "PR_____";
 export default async function WarehouseAddressesPage() {
   const session = await getCurrentUserWithProfile();
   const memberCode = session?.profile?.member_code ?? PLACEHOLDER_CODE;
+
+  const t = await getTranslations("warehouseAddressesPage");
 
   const warehouses: WarehouseDef[] = [
     {
@@ -50,12 +53,12 @@ export default async function WarehouseAddressesPage() {
         {/* Breadcrumb */}
         <nav className="flex items-center gap-1.5 text-xs text-muted">
           <Link href="/dashboard" className="hover:text-primary-600 inline-flex items-center gap-1">
-            <Home className="w-3.5 h-3.5" /> หน้าแรก
+            <Home className="w-3.5 h-3.5" /> {t("breadcrumbHome")}
           </Link>
           <ChevronRight className="w-3 h-3" />
-          <Link href="/service-import" className="hover:text-primary-600">รายการฝากนำเข้า</Link>
+          <Link href="/service-import" className="hover:text-primary-600">{t("breadcrumbImports")}</Link>
           <ChevronRight className="w-3 h-3" />
-          <span className="text-foreground font-medium">ที่อยู่โกดังจีน</span>
+          <span className="text-foreground font-medium">{t("breadcrumbCurrent")}</span>
         </nav>
 
         {/* Page header */}
@@ -65,9 +68,9 @@ export default async function WarehouseAddressesPage() {
               <Warehouse className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-foreground">ที่อยู่โกดังจีน</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-foreground">{t("headerTitle")}</h1>
               <p className="text-xs text-muted mt-0.5">
-                ใช้ที่อยู่นี้แจ้งให้ร้านค้าจีนส่งสินค้ามาที่โกดัง Pacred — ทีมจีนจะรับและจัดส่งกลับไทยให้
+                {t("headerSubtitle")}
               </p>
             </div>
           </div>
@@ -77,16 +80,16 @@ export default async function WarehouseAddressesPage() {
         <div className="rounded-2xl border-2 border-primary-500/30 bg-gradient-to-br from-primary-500/10 to-primary-500/0 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-medium text-muted uppercase tracking-wide">รหัสสมาชิกของคุณ</p>
+              <p className="text-xs font-medium text-muted uppercase tracking-wide">{t("memberCodeLabel")}</p>
               <p className="mt-1 text-3xl font-bold font-mono text-primary-600">{memberCode}</p>
-              <p className="mt-1 text-xs text-muted">รหัสนี้ถูกใส่ในที่อยู่ด้านล่างให้แล้ว — ก็อปไปแจ้งร้านค้าจีนได้เลย</p>
+              <p className="mt-1 text-xs text-muted">{t("memberCodeHint")}</p>
             </div>
             {memberCode === PLACEHOLDER_CODE && (
               <Link
                 href="/complete-profile"
                 className="rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-bold hover:bg-primary-600"
               >
-                กรอกข้อมูลให้ครบเพื่อรับรหัส →
+                {t("completeProfileCta")}
               </Link>
             )}
           </div>
@@ -96,12 +99,12 @@ export default async function WarehouseAddressesPage() {
         <div className="rounded-2xl border border-blue-200 bg-blue-50/50 dark:bg-blue-900/10 p-4 flex gap-3">
           <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
           <div className="text-sm space-y-1">
-            <p className="font-bold text-blue-900 dark:text-blue-200">วิธีใช้</p>
+            <p className="font-bold text-blue-900 dark:text-blue-200">{t("howToTitle")}</p>
             <ol className="list-decimal list-inside text-blue-900/80 dark:text-blue-200/80 space-y-0.5 text-xs">
-              <li>เลือกโกดังที่ต้องการให้สินค้าไปรับ (อี้อู หรือ กวางโจว)</li>
-              <li>ก็อปข้อมูลที่อยู่ — รหัส <span className="font-mono font-bold">{memberCode}</span> ถูกใส่ให้แล้ว</li>
-              <li>ส่งให้ร้านค้าจีน — เลือก <span className="font-mono">EK</span> = ทางรถ หรือ <span className="font-mono">SEA</span> = ทางเรือ</li>
-              <li>เมื่อสินค้าถึงโกดัง Pacred จะอัพเดทใน <Link href="/service-import" className="underline">รายการฝากนำเข้า</Link></li>
+              <li>{t("howToStep1")}</li>
+              <li>{t.rich("howToStep2", { code: () => <span className="font-mono font-bold">{memberCode}</span> })}</li>
+              <li>{t.rich("howToStep3", { ek: (chunks) => <span className="font-mono">{chunks}</span>, sea: (chunks) => <span className="font-mono">{chunks}</span> })}</li>
+              <li>{t.rich("howToStep4", { link: (chunks) => <Link href="/service-import" className="underline">{chunks}</Link> })}</li>
             </ol>
           </div>
         </div>
@@ -115,13 +118,13 @@ export default async function WarehouseAddressesPage() {
 
         {/* Marketing footer */}
         <div className="rounded-2xl border border-border bg-surface-alt/40 p-4 text-xs text-muted flex flex-wrap items-center justify-between gap-2">
-          <span>ดูรายละเอียดเพิ่มเติมและรูปโกดัง:</span>
+          <span>{t("footerMore")}</span>
           <div className="flex gap-3">
             <Link href="/warehouses/yiwu" className="inline-flex items-center gap-1 text-primary-600 hover:underline">
-              โกดังอี้อู <ExternalLink className="w-3 h-3" />
+              {t("footerYiwu")} <ExternalLink className="w-3 h-3" />
             </Link>
             <Link href="/warehouses/guangzhou" className="inline-flex items-center gap-1 text-primary-600 hover:underline">
-              โกดังกวางโจว <ExternalLink className="w-3 h-3" />
+              {t("footerGuangzhou")} <ExternalLink className="w-3 h-3" />
             </Link>
           </div>
         </div>

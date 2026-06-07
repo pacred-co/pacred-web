@@ -7,6 +7,7 @@ import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbSchema } from "@/components/seo/schemas";
 import { CONTACT, LINE_OA } from "@/components/seo/site";
 import { FreightQuoteWizard } from "@/components/freight-quote/FreightQuoteWizard";
+import { getTranslations } from "next-intl/server";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,7 @@ export default async function Page({
   const { locale } = await params;
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const th = typedLocale === "th";
+  const t = await getTranslations("freightQuotePage");
 
   return (
     <>
@@ -69,33 +71,23 @@ export default async function Page({
           className="mx-auto max-w-[1000px] px-4 pt-4 md:pt-6 flex items-center gap-1.5 text-[12px] md:text-[13px] text-muted"
         >
           <Link href="/" className="inline-flex items-center gap-1 hover:text-primary-600 transition-colors">
-            <Home className="w-3.5 h-3.5" /> {th ? "หน้าหลัก" : "Home"}
+            <Home className="w-3.5 h-3.5" /> {t("breadcrumbHome")}
           </Link>
           <ChevronRight className="w-3.5 h-3.5 opacity-60" />
-          <span className="text-foreground font-semibold">{th ? "ขอราคา Freight" : "Freight Quote"}</span>
+          <span className="text-foreground font-semibold">{t("breadcrumbCurrent")}</span>
         </nav>
 
         {/* Hero */}
         <header className="mx-auto max-w-[1000px] px-4 pt-5 md:pt-8 pb-2 text-center">
           <div className="inline-flex items-center gap-2 mb-3 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
             <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0 animate-pulse" />
-            {th ? "ขอใบเสนอราคาขนส่งระหว่างประเทศ" : "International freight quote"}
+            {t("heroBadge")}
           </div>
           <h1 className="text-[26px] md:text-[42px] font-black tracking-tight leading-[1.1] text-foreground">
-            {th ? (
-              <>
-                ขอราคา <span className="text-primary-600">Freight</span> นำเข้า-ส่งออก
-              </>
-            ) : (
-              <>
-                Get a <span className="text-primary-600">Freight</span> quote
-              </>
-            )}
+            {t("h1Before")} <span className="text-primary-600">Freight</span> {t("h1After")}
           </h1>
           <p className="mt-3 max-w-[620px] mx-auto text-[13px] md:text-[16px] font-semibold text-foreground/80 leading-relaxed">
-            {th
-              ? "เลือกบริการ กรอกข้อมูลสินค้า รับราคาประมาณการทันที — FCL/LCL ทางเรือ · ทางอากาศ · รถข้ามแดน · เคลียร์ศุลกากร ใบขนชื่อคุณ ครบทุกเทอม"
-              : "Pick a service, enter your shipment, get an instant estimate — SEA FCL/LCL, AIR, cross-border truck, and Thai customs clearance, every Incoterm."}
+            {t("heroDescription")}
           </p>
 
           {/* Quick channels */}
@@ -104,7 +96,7 @@ export default async function Page({
               href={`tel:${CONTACT.phone}`}
               className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-primary-600 text-white font-bold text-[13px] hover:bg-primary-700 transition-colors shadow-[0_6px_18px_rgba(179,0,0,0.25)]"
             >
-              <Phone className="w-4 h-4" strokeWidth={2.6} /> {th ? "โทรด่วน" : "Call"} {CONTACT.phoneDisplay}
+              <Phone className="w-4 h-4" strokeWidth={2.6} /> {t("callButton")} {CONTACT.phoneDisplay}
             </a>
             <a
               href={LINE_OA.addFriendUrl}
@@ -112,7 +104,7 @@ export default async function Page({
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-[#06C755] text-white font-bold text-[13px] hover:bg-[#05B04C] transition-colors"
             >
-              <MessageCircle className="w-4 h-4" strokeWidth={2.6} /> {th ? "ปรึกษาทาง LINE" : "Chat on LINE"}
+              <MessageCircle className="w-4 h-4" strokeWidth={2.6} /> {t("lineButton")}
             </a>
           </div>
         </header>
@@ -127,9 +119,7 @@ export default async function Page({
         {/* Trust footnote */}
         <div className="mx-auto max-w-[760px] px-4 pb-12 text-center text-[11.5px] md:text-[12.5px] text-muted leading-relaxed flex items-center justify-center gap-1.5">
           <Truck className="w-4 h-4 shrink-0 text-primary-600/70" />
-          {th
-            ? "ราคาที่แสดงเป็นการประมาณการเบื้องต้น — ราคาจริงขึ้นกับน้ำหนัก เส้นทาง ฤดูกาล และเงื่อนไขศุลกากร ทีมเซลส์จะยืนยันราคาอีกครั้ง"
-            : "Shown prices are rough estimates — the final rate depends on weight, route, season, and customs. Our sales team confirms."}
+          {t("trustNote")}
         </div>
       </main>
 

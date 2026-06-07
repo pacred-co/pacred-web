@@ -214,14 +214,14 @@ export function CartManager({ cart: initialCart, yuanRate, serviceFee, defaultAd
               <MapPin className="w-5 h-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-foreground">ที่อยู่ในการจัดส่งในไทย 🇹🇭</p>
+              <p className="text-sm font-bold text-foreground">{t("shipToThailand")} 🇹🇭</p>
               <p className="text-xs text-muted truncate mt-0.5">
-                {fullAddressText || "ยังไม่ได้กรอกที่อยู่ — คลิกเพื่อเพิ่ม"}
-                {shipPhone && <span className="ml-2">โทร. {shipPhone}</span>}
+                {fullAddressText || t("addressEmptyHint")}
+                {shipPhone && <span className="ml-2">{t("phoneShort")} {shipPhone}</span>}
               </p>
             </div>
           </div>
-          <span className="rounded-full border border-border bg-surface-alt px-3 py-1 text-xs text-muted shrink-0">เปลี่ยน/แก้ไข</span>
+          <span className="rounded-full border border-border bg-surface-alt px-3 py-1 text-xs text-muted shrink-0">{t("changeEdit")}</span>
         </summary>
         <div className="px-5 pb-5 pt-2 space-y-3 border-t border-border">
           <div className="grid grid-cols-2 gap-2">
@@ -243,7 +243,7 @@ export function CartManager({ cart: initialCart, yuanRate, serviceFee, defaultAd
           </div>
           <textarea rows={2} value={shipNote ?? ""} onChange={(e) => setShipNote(e.target.value)} className={inputCls} placeholder={t("addressNote")} />
           <p className="text-[11px] text-red-600">
-            หมายเหตุ: หากพื้นที่นอกเขตขนส่งของ Pacred ทางบริษัทจะเก็บเงินปลายทางเท่านั้น
+            {t("outOfZoneNote")}
           </p>
         </div>
       </details>
@@ -258,7 +258,7 @@ export function CartManager({ cart: initialCart, yuanRate, serviceFee, defaultAd
           />
           <span>{t("selectAll", { selected: selected.size, total: cart.length })}</span>
         </label>
-        <span className="text-xs text-muted">{cart.length} / 151 ชิ้น</span>
+        <span className="text-xs text-muted">{t("itemCountOfMax", { count: cart.length })}</span>
       </div>
 
       {/* CART ITEMS */}
@@ -292,7 +292,7 @@ export function CartManager({ cart: initialCart, yuanRate, serviceFee, defaultAd
                     {PROVIDER_LABEL[provider as keyof typeof PROVIDER_LABEL] ?? provider}
                   </span>
                   <span className="font-semibold text-foreground">🏪 {shopName}</span>
-                  <span className="text-xs text-muted">({group.length} ชิ้น)</span>
+                  <span className="text-xs text-muted">({t("pieceCount", { count: group.length })})</span>
                 </label>
                 <span className="font-mono text-xs font-bold">¥{groupSubtotalCny.toFixed(2)}</span>
               </div>
@@ -323,7 +323,7 @@ export function CartManager({ cart: initialCart, yuanRate, serviceFee, defaultAd
                         </p>
                         {c.url && (
                           <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary-500 hover:underline truncate block">
-                            🔗 ดูที่ต้นทาง
+                            🔗 {t("viewSource")}
                           </a>
                         )}
                         <div className="mt-2 flex items-center gap-3">
@@ -349,7 +349,7 @@ export function CartManager({ cart: initialCart, yuanRate, serviceFee, defaultAd
                             disabled={pending}
                             title={t("remove")}
                           >
-                            <Trash2 className="w-3 h-3" /> ลบ
+                            <Trash2 className="w-3 h-3" /> {t("remove")}
                           </button>
                         </div>
                       </div>
@@ -366,69 +366,69 @@ export function CartManager({ cart: initialCart, yuanRate, serviceFee, defaultAd
       <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
         <h3 className="font-bold text-foreground flex items-center gap-2">
           <MapPin className="w-5 h-5 text-primary-600" />
-          การขนส่งจากจีนมาไทย 🇨🇳 → 🇹🇭
+          {t("transportChinaToThailand")} 🇨🇳 → 🇹🇭
         </h3>
 
         <div className="mt-4 grid md:grid-cols-2 gap-5">
           {/* Transport type */}
           <div>
-            <p className="text-sm font-medium mb-2">รูปแบบการขนส่งจีน-ไทย</p>
+            <p className="text-sm font-medium mb-2">{t("transportModeLabel")}</p>
             <div className="grid grid-cols-3 gap-2">
               <IconRadio
                 checked={transport === "truck"} onClick={() => setTransport("truck")}
                 icon={<Truck className="w-7 h-7" />}
-                title="ทางรถ (EK)" subtitle="5-7 วัน"
+                title={t("transportTruck")} subtitle={t("transportTruckEta")}
               />
               <IconRadio
                 checked={transport === "ship"} onClick={() => setTransport("ship")}
                 icon={<Ship className="w-7 h-7" />}
-                title="ทางเรือ (SEA)" subtitle="12-16 วัน"
+                title={t("transportShip")} subtitle={t("transportShipEta")}
               />
               <IconRadio
                 checked={transport === "air"} onClick={() => setTransport("air")}
                 icon={<Plane className="w-7 h-7" />}
-                title="ทางอากาศ" subtitle="3-5 วัน"
+                title={t("transportAir")} subtitle={t("transportAirEta")}
               />
             </div>
             <div className="mt-3">
-              <label className="text-xs text-muted block mb-1">โกดังต้นทาง</label>
+              <label className="text-xs text-muted block mb-1">{t("warehouseChina")}</label>
               <select value={warehouse} onChange={(e) => setWarehouse(e.target.value as "guangzhou" | "yiwu")} className={inputCls}>
-                <option value="guangzhou">กวางโจว</option>
-                <option value="yiwu">อี้อู</option>
+                <option value="guangzhou">{t("warehouseGuangzhou")}</option>
+                <option value="yiwu">{t("warehouseYiwu")}</option>
               </select>
             </div>
           </div>
 
           {/* Crate option */}
           <div>
-            <p className="text-sm font-medium mb-2">การตีลังไม้สินค้า</p>
+            <p className="text-sm font-medium mb-2">{t("crateLabel")}</p>
             <div className="grid grid-cols-2 gap-2">
               <IconRadio
                 checked={!crate} onClick={() => setCrate(false)}
                 icon={<Package2 className="w-7 h-7" />}
-                title="ไม่ตีลังไม้" subtitle="มาตรฐาน"
+                title={t("crateNo")} subtitle={t("crateNoSub")}
               />
               <IconRadio
                 checked={crate} onClick={() => setCrate(true)}
                 icon={<Box className="w-7 h-7" />}
-                title="ตีลังไม้" subtitle="มีค่าบริการ"
+                title={t("crateYes")} subtitle={t("crateYesSub")}
               />
             </div>
             <div className="mt-3">
-              <label className="text-xs text-muted block mb-1">การชำระค่าขนส่ง</label>
+              <label className="text-xs text-muted block mb-1">{t("freightPayLabel")}</label>
               <select value={payMethod} onChange={(e) => setPayMethod(e.target.value as "origin" | "destination")} className={inputCls}>
-                <option value="origin">เก็บต้นทาง</option>
-                <option value="destination">เก็บปลายทาง</option>
+                <option value="origin">{t("freightPayOrigin")}</option>
+                <option value="destination">{t("freightPayDestination")}</option>
               </select>
             </div>
             <p className="mt-2 text-[11px] text-red-600">
-              **หากต้องการตีลังไม้สินค้าบางร้าน ให้เลือกสั่งออเดอร์แยกรายการกัน
+              {t("crateSplitNote")}
             </p>
           </div>
         </div>
 
         <div className="mt-4">
-          <label className="text-xs text-muted block mb-1">หมายเหตุถึง Pacred</label>
+          <label className="text-xs text-muted block mb-1">{t("noteToPacred")}</label>
           <textarea rows={2} value={noteUser} onChange={(e) => setNoteUser(e.target.value)} className={inputCls} placeholder={t("noteUser")} />
         </div>
       </div>
@@ -437,40 +437,40 @@ export function CartManager({ cart: initialCart, yuanRate, serviceFee, defaultAd
       <div className="grid md:grid-cols-[1fr_400px] gap-4">
         <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
           <h3 className="font-bold text-foreground flex items-center gap-2">
-            🎁 โปรโมชันสำหรับคุณ
+            🎁 {t("promoTitle")}
           </h3>
           <div className="mt-3 rounded-xl border-2 border-dashed border-primary-200 bg-primary-50/30 p-4 text-center">
             <p className="text-xl">🚚</p>
-            <p className="font-bold text-sm mt-2">Pacred เหมาๆ — จัดส่งฟรีทั่วกรุงเทพฯ/ปริมณฑล</p>
-            <p className="text-xs text-muted mt-1">โปรโมชันจะใช้อัตโนมัติเมื่อยอดถึงเกณฑ์</p>
+            <p className="font-bold text-sm mt-2">{t("promoFreeShip")}</p>
+            <p className="text-xs text-muted mt-1">{t("promoAutoApply")}</p>
           </div>
           <p className="mt-3 text-[11px] text-red-600 text-right">
-            *หากสินค้ามีขนาดเล็ก แนะนำเลือกขนส่งเป็น Flash Express (เริ่มต้น 30 บ.)
+            {t("flashExpressNote")}
           </p>
         </div>
 
         <div className="rounded-2xl border-2 border-primary-200 bg-gradient-to-br from-primary-50 to-white p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-foreground flex items-center gap-2">
-              🧾 สรุปรายการสั่งซื้อ
+              🧾 {t("orderSummary")}
             </h3>
-            <span className="text-xs text-muted">เลือก <b className="text-primary-600">{selected.size}</b> รายการ</span>
+            <span className="text-xs text-muted">{t.rich("selectedCount", { count: selected.size, b: (chunks) => <b className="text-primary-600">{chunks}</b> })}</span>
           </div>
           <div className="mt-3 space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-muted">รวม</span>
+              <span className="text-muted">{t("subtotalLabel")}</span>
               <span className="font-mono">¥{subtotalCny.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-xs">
-              <span className="text-muted">เรทแลกเปลี่ยน</span>
+              <span className="text-muted">{t("exchangeRateLabel")}</span>
               <span className="font-mono text-primary-700 font-bold">฿{yuanRate.toFixed(2)}/¥</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted">ค่าบริการ Pacred</span>
+              <span className="text-muted">{t("serviceFee")}</span>
               <span className="font-mono">฿{serviceFee.toFixed(2)}</span>
             </div>
             <div className="rounded-lg bg-white border border-primary-200 p-3 mt-2">
-              <p className="text-[11px] text-muted">ราคารวมสุทธิ</p>
+              <p className="text-[11px] text-muted">{t("netTotalLabel")}</p>
               <p className="font-mono font-bold text-2xl text-red-600 mt-1 text-right">
                 ฿{totalThb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </p>
@@ -481,7 +481,7 @@ export function CartManager({ cart: initialCart, yuanRate, serviceFee, defaultAd
             disabled={pending || selected.size === 0}
             className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary-500 to-primary-700 text-white font-bold text-sm px-4 py-2.5 shadow-sm hover:shadow-md transition-all disabled:opacity-50"
           >
-            {pending ? "กำลังบันทึก..." : "สั่งซื้อสินค้า"}
+            {pending ? t("saving") : t("placeOrderCta")}
           </button>
         </div>
       </div>

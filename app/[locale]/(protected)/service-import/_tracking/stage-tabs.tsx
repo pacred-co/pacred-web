@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 
 /**
  * 3-stage tabs (Origin / Transit / Destination) + matching panels — the
@@ -25,12 +26,13 @@ export function StageTabs({
   destPanel: ReactNode;
 }) {
   const [stage, setStage] = useState<Stage>(initial);
+  const t = useTranslations("serviceImportStageTabs");
 
   const tabs: { key: Stage; num: number; label: string; activeBg: string; activeText: string; restText: string }[] = [
     {
       key: "origin",
       num: 1,
-      label: "ต้นทาง (ร้านค้า → โกดังจีน)",
+      label: t("origin"),
       activeBg: "bg-emerald-600",
       activeText: "text-white",
       restText: "text-emerald-700",
@@ -38,7 +40,7 @@ export function StageTabs({
     {
       key: "transit",
       num: 2,
-      label: "ระหว่างทางขนส่ง (ตู้)",
+      label: t("transit"),
       activeBg: "bg-sky-600",
       activeText: "text-white",
       restText: "text-sky-700",
@@ -46,7 +48,7 @@ export function StageTabs({
     {
       key: "dest",
       num: 3,
-      label: "ปลายทาง (โกดังไทย → บ้านลูกค้า)",
+      label: t("dest"),
       activeBg: "bg-orange-500",
       activeText: "text-white",
       restText: "text-orange-600",

@@ -18,6 +18,7 @@
  */
 
 import { useMemo, useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import {
   User, Building2, Package, Rocket, FileText, ShoppingBag, Unlock,
   Ship, Plane, Truck, Anchor, MapPin, Boxes, Layers, Zap,
@@ -70,25 +71,45 @@ const ADDONS: { name: string; icon: typeof Truck; sub: string; price: number }[]
   { name: "ล่ามจีน",      icon: Languages,   sub: "ประสานงานซัพพลายเออร์จีนแทนคุณ",   price: 800 },
 ];
 
+// Stable display-only slug for each addon's Thai `name` value (the `name` stays
+// the identity/key used in state + payload + lookups; this only maps to an i18n key).
+const ADDON_KEYS: Record<string, string> = {
+  "หัวลาก": "tractor",
+  "แรงงาน": "labor",
+  "ประกันสินค้า": "insurance",
+  "จัดเก็บสินค้า": "storage",
+  "แพคกิ้ง": "packing",
+  "ล้างตู้/อบควัน": "fumigation",
+  "ล่ามจีน": "interpreter",
+};
+
 const ORIGIN_CITIES = ["อี้อู (Yiwu)", "กว่างโจว (Guangzhou)", "เซินเจิ้น (Shenzhen)", "เซี่ยงไฮ้ (Shanghai)", "หนิงโป (Ningbo)", "อื่นๆ"];
 const PODS = ["กรุงเทพ / สุวรรณภูมิ", "แหลมฉบัง (LCB)", "มุกดาหาร", "อื่นๆ / ทั่วไทย"];
 
+// Display-only slug for each POD value (the value stays the submitted/compared identity).
+const POD_KEYS: Record<string, string> = {
+  "กรุงเทพ / สุวรรณภูมิ": "bangkok",
+  "แหลมฉบัง (LCB)": "laemChabang",
+  "มุกดาหาร": "mukdahan",
+  "อื่นๆ / ทั่วไทย": "other",
+};
+
 // Docs required by context (service + customer type + incoterm).
-function docsFor(s: State): { name: string; req: boolean }[] {
+function docsFor(s: State, t: Translator): { name: string; req: boolean }[] {
   const out: { name: string; req: boolean }[] = [
     { name: "Invoice", req: true },
     { name: "Packing List", req: true },
   ];
   if (s.customerType === "company") {
-    out.push({ name: "ภพ.20", req: true }, { name: "หนังสือรับรองบริษัท", req: true }, { name: "บัตรกรรมการ", req: true });
+    out.push({ name: "ภพ.20", req: true }, { name: t("doc.companyCert"), req: true }, { name: t("doc.directorId"), req: true });
   } else {
-    out.push({ name: "บัตรประชาชน / Passport", req: true });
+    out.push({ name: t("doc.idCard"), req: true });
   }
   if (s.transport === "sea") out.push({ name: "Bill of Lading (B/L)", req: true });
   if (s.transport === "air") out.push({ name: "Air Waybill (AWB)", req: true });
-  if (s.incoterm === "EXW" || s.incoterm === "FOB") out.push({ name: "ใบรับรองแหล่งกำเนิด (Form E/C/O)", req: false });
+  if (s.incoterm === "EXW" || s.incoterm === "FOB") out.push({ name: t("doc.originCert"), req: false });
   if (s.incoterm === "CIF") out.push({ name: "Insurance Certificate", req: false });
-  if (s.service === "clearance") out.push({ name: "หนังสือมอบอำนาจ", req: true }, { name: "ใบอนุญาตนำเข้า (ถ้ามี)", req: false });
+  if (s.service === "clearance") out.push({ name: t("doc.powerOfAttorney"), req: true }, { name: t("doc.importLicense"), req: false });
   // dedup by name
   const seen = new Set<string>();
   return out.filter((d) => (seen.has(d.name) ? false : (seen.add(d.name), true)));
@@ -117,10 +138,12 @@ type State = {
   note: string;
 };
 
-const STEP_TITLES = ["ประเภทงาน", "ขนส่ง & เทอม", "รายละเอียดสินค้า", "บริการเสริม & เอกสาร", "ใบเสนอราคา"];
+const STEP_KEYS = ["jobType", "transportTerm", "productDetail", "addonsDocs", "quote"] as const;
 
 // ── rough estimate (doc 02 §2.5 hints) ──────────────────────────────────────
-function estimate(s: State): { lines: { k: string; v: number }[]; total: number } {
+type Translator = (key: string, values?: Record<string, string | number>) => string;
+
+function estimate(s: State, t: Translator): { lines: { k: string; v: number }[]; total: number } {
   const lines: { k: string; v: number }[] = [];
   const cbm = parseFloat(s.cbm) || 0;
   const wt = parseFloat(s.weightKg) || 0;
@@ -128,25 +151,25 @@ function estimate(s: State): { lines: { k: string; v: number }[]; total: number 
   let baseLabel = "";
 
   if (s.service === "customs" || s.service === "clearance") {
-    base = 3500; baseLabel = "ค่าบริการพิธีการ";
+    base = 3500; baseLabel = t("estimate.lineCustomsService");
   } else if (s.transport === "sea") {
     if (s.loadType === "FCL") {
       const flat: Record<string, number> = { "20GP": 55000, "40GP": 75000, "40HC": 80000, "45HC": 95000 };
       base = (flat[s.containerSize ?? "20GP"] ?? 55000) * Math.max(1, s.containerQty);
-      baseLabel = "ค่าขนส่ง (เหมาตู้)";
+      baseLabel = t("estimate.lineFcl");
     } else {
       // LCL เรือ ฿2,000/CBM (DDP/ฝากสั่ง = ฿3,500/CBM bundled)
       const rate = s.incoterm === "DDP" || s.service === "nondoc" ? 3500 : 2000;
-      base = cbm * rate; baseLabel = "ค่าขนส่ง (แชร์ตู้เรือ)";
+      base = cbm * rate; baseLabel = t("estimate.lineLcl");
     }
   } else if (s.transport === "truck") {
     // รถ ฿5,500/CBM
-    base = cbm ? cbm * 5500 : 8000; baseLabel = "ค่าขนส่งทางรถ";
+    base = cbm ? cbm * 5500 : 8000; baseLabel = t("estimate.lineTruck");
   } else if (s.transport === "air") {
     // AIR volumetric = CBM × 167; chargeable = max(actual, volumetric); ~฿120/kg
     const volW = cbm * 167;
     const chargeable = Math.max(wt, volW);
-    base = chargeable * 120; baseLabel = "ค่าขนส่งทางอากาศ";
+    base = chargeable * 120; baseLabel = t("estimate.lineAir");
   }
 
   if (base > 0) {
@@ -154,14 +177,14 @@ function estimate(s: State): { lines: { k: string; v: number }[]; total: number 
     lines.push({ k: baseLabel, v: Math.round(base) });
     // +฿1,500 customs +฿500 docs (skip for pure remit/no transport)
     if (s.service !== "nondoc" || s.transport) {
-      lines.push({ k: "ค่าพิธีการศุลกากร", v: 1500 });
-      lines.push({ k: "ค่าเอกสาร", v: 500 });
+      lines.push({ k: t("estimate.lineCustomsClearance"), v: 1500 });
+      lines.push({ k: t("estimate.lineDocs"), v: 500 });
     }
   }
 
   for (const name of s.addons) {
     const a = ADDONS.find((x) => x.name === name);
-    if (a && a.price > 0) lines.push({ k: `บริการเสริม: ${name}`, v: a.price });
+    if (a && a.price > 0) lines.push({ k: t("estimate.lineAddon", { name: ADDON_KEYS[name] ? t(`addon.${ADDON_KEYS[name]}.name`) : name }), v: a.price });
   }
 
   const total = lines.reduce((sum, l) => sum + l.v, 0);
@@ -216,6 +239,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
   phone: string; phoneDisplay: string; lineUrl: string;
 }) {
+  const t = useTranslations("freightQuoteWizard");
   const [step, setStep] = useState(1);
   const [pending, startTransition] = useTransition();
   const [submitted, setSubmitted] = useState<{ ref: string } | null>(null);
@@ -240,8 +264,8 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
   });
 
   const set = (patch: Partial<State>) => setS((prev) => ({ ...prev, ...patch }));
-  const { lines, total } = useMemo(() => estimate(s), [s]);
-  const docs = useMemo(() => docsFor(s), [s]);
+  const { lines, total } = useMemo(() => estimate(s, t), [s, t]);
+  const docs = useMemo(() => docsFor(s, t), [s, t]);
   const volW = useMemo(() => (parseFloat(s.cbm) || 0) * 167, [s.cbm]);
 
   const canSubmit = s.contactName.trim().length > 0 && s.contactPhone.trim().length >= 6;
@@ -256,7 +280,7 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
   }
 
   function doSubmit() {
-    if (!canSubmit) { setError("กรุณากรอกชื่อและเบอร์โทรติดต่อ"); return; }
+    if (!canSubmit) { setError(t("error.missingContact")); return; }
     setError(null);
     const payload: FreightRfqInput = {
       customerType: s.customerType,
@@ -283,7 +307,7 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
     startTransition(async () => {
       const res = await submitFreightQuote(payload);
       if (res.ok) setSubmitted({ ref: res.ref });
-      else setError(res.error === "rate_limit" ? "ส่งคำขอบ่อยเกินไป กรุณาลองใหม่ในอีกสักครู่" : "ส่งไม่สำเร็จ กรุณาลองใหม่หรือโทรหาเรา");
+      else setError(res.error === "rate_limit" ? t("error.rateLimit") : t("error.submitFailed"));
     });
   }
 
@@ -295,20 +319,20 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary-50 dark:bg-primary-900/30 mb-4">
             <PartyPopper className="w-8 h-8 text-primary-600" strokeWidth={2} />
           </div>
-          <h2 className="text-[22px] md:text-[26px] font-black text-foreground">ส่งคำขอราคาแล้ว!</h2>
+          <h2 className="text-[22px] md:text-[26px] font-black text-foreground">{t("success.title")}</h2>
           <p className="mt-2 text-[13.5px] md:text-[15px] text-foreground/75 leading-relaxed">
-            ทีมงาน Pacred ได้รับข้อมูลของคุณเรียบร้อย<br />ทีมเซลส์จะติดต่อกลับโดยเร็วที่สุด (จ-ศ 8:00-18:00)
+            {t("success.line1")}<br />{t("success.line2")}
           </p>
           <div className="mt-5 inline-flex items-center gap-2 rounded-xl border border-dashed border-primary-300 bg-primary-50/60 dark:bg-primary-900/15 px-5 py-2.5">
-            <span className="text-[12px] text-muted font-semibold">เลขอ้างอิง</span>
+            <span className="text-[12px] text-muted font-semibold">{t("success.refLabel")}</span>
             <span className="text-[18px] font-black tracking-wider text-primary-600">{submitted.ref}</span>
           </div>
           <div className="mt-6 flex flex-col sm:flex-row gap-2.5 justify-center">
             <a href={`tel:${phone}`} className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-primary-600 text-white font-bold text-[14px] hover:bg-primary-700 transition-colors">
-              <Phone className="w-4 h-4" /> โทรด่วน {phoneDisplay}
+              <Phone className="w-4 h-4" /> {t("success.callNow", { phone: phoneDisplay })}
             </a>
             <a href={lineUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-[#06C755] text-white font-bold text-[14px] hover:bg-[#05B04C] transition-colors">
-              <MessageCircle className="w-4 h-4" /> ทักไลน์
+              <MessageCircle className="w-4 h-4" /> {t("success.lineChat")}
             </a>
           </div>
         </div>
@@ -321,12 +345,12 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
       {/* progress */}
       <div className="flex items-center justify-center mb-6 overflow-x-auto pb-1 scrollbar-x-visible">
         <div className="inline-flex items-center gap-1 rounded-full border border-primary-100 dark:border-border bg-white dark:bg-surface px-2 py-1.5">
-          {STEP_TITLES.map((t, i) => {
+          {STEP_KEYS.map((stepKey, i) => {
             const n = i + 1;
             const active = n === step;
             const done = n < step;
             return (
-              <span key={t} className="flex items-center">
+              <span key={stepKey} className="flex items-center">
                 <button
                   type="button"
                   onClick={() => goto(n)}
@@ -339,7 +363,7 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
                   }`}>
                     {done ? <CheckCircle2 className="w-3.5 h-3.5" /> : n}
                   </span>
-                  <span className="hidden sm:inline">{t}</span>
+                  <span className="hidden sm:inline">{t(`step.${stepKey}`)}</span>
                 </button>
                 {n < 5 && <span className="w-3 md:w-5 h-px bg-gray-200 dark:bg-border mx-0.5" />}
               </span>
@@ -351,16 +375,16 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
       {/* ── STEP 1 ── */}
       {step === 1 && (
         <>
-          <SecCard title="ประเภทลูกค้า">
+          <SecCard title={t("sec.customerType")}>
             <div className="grid grid-cols-2 gap-3">
-              <ChoiceBtn selected={s.customerType === "person"} onClick={() => set({ customerType: "person" })} icon={User} label="บุคคลธรรมดา" sub="บัตรประชาชน / Passport" />
-              <ChoiceBtn selected={s.customerType === "company"} onClick={() => set({ customerType: "company" })} icon={Building2} label="นิติบุคคล / บริษัท" sub="ภพ.20 · รองรับ VAT & หัก ณ ที่จ่าย" />
+              <ChoiceBtn selected={s.customerType === "person"} onClick={() => set({ customerType: "person" })} icon={User} label={t("customerType.person.label")} sub={t("customerType.person.sub")} />
+              <ChoiceBtn selected={s.customerType === "company"} onClick={() => set({ customerType: "company" })} icon={Building2} label={t("customerType.company.label")} sub={t("customerType.company.sub")} />
             </div>
           </SecCard>
-          <SecCard title="ประเภทบริการ">
+          <SecCard title={t("sec.serviceType")}>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {SERVICES.map((sv) => (
-                <ChoiceBtn key={sv.val} selected={s.service === sv.val} onClick={() => set({ service: sv.val })} icon={sv.icon} label={sv.label} sub={sv.sub} />
+                <ChoiceBtn key={sv.val} selected={s.service === sv.val} onClick={() => set({ service: sv.val })} icon={sv.icon} label={t(`service.${sv.val}.label`)} sub={t(`service.${sv.val}.sub`)} />
               ))}
             </div>
           </SecCard>
@@ -370,14 +394,14 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
       {/* ── STEP 2 ── */}
       {step === 2 && (
         <>
-          <SecCard title="รูปแบบการขนส่ง">
+          <SecCard title={t("sec.transport")}>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {TRANSPORTS.map((tr) => (
-                <ChoiceBtn key={tr.val} selected={s.transport === tr.val} onClick={() => set({ transport: tr.val })} icon={tr.icon} label={tr.label} sub={tr.sub} />
+                <ChoiceBtn key={tr.val} selected={s.transport === tr.val} onClick={() => set({ transport: tr.val })} icon={tr.icon} label={t(`transport.${tr.val}.label`)} sub={t(`transport.${tr.val}.sub`)} />
               ))}
             </div>
           </SecCard>
-          <SecCard title="เลือก Incoterm">
+          <SecCard title={t("sec.incoterm")}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {INCOTERMS.map((it) => {
                 const sel = s.incoterm === it.val;
@@ -392,23 +416,23 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
                   >
                     <div className="flex items-center justify-between">
                       <span className={`text-[18px] font-black tracking-wide ${sel ? "text-primary-600" : "text-foreground"}`}>{it.val}</span>
-                      {it.tag && <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">{it.tag}</span>}
+                      {it.tag && <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">{t(`incoterm.${it.val}.tag`)}</span>}
                     </div>
                     <div className="text-[11.5px] text-muted font-semibold mt-0.5">{it.name}</div>
-                    <div className="text-[11.5px] text-foreground/65 leading-snug mt-1">{it.desc}</div>
+                    <div className="text-[11.5px] text-foreground/65 leading-snug mt-1">{t(`incoterm.${it.val}.desc`)}</div>
                   </button>
                 );
               })}
             </div>
           </SecCard>
-          <SecCard title="ปลายทาง / ท่าเรือ-สนามบิน">
+          <SecCard title={t("sec.destination")}>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-3">
               {PODS.map((p) => (
-                <ChoiceBtn key={p} selected={s.destination === p} onClick={() => set({ destination: p })} icon={p.includes("แหลม") ? Anchor : MapPin} label={p} />
+                <ChoiceBtn key={p} selected={s.destination === p} onClick={() => set({ destination: p })} icon={p.includes("แหลม") ? Anchor : MapPin} label={t(`pod.${POD_KEYS[p]}`)} />
               ))}
             </div>
-            <Field label="หรือระบุปลายทางเอง">
-              <input className={inputCls} placeholder="เช่น คลังสินค้า บางนา กม.18" value={PODS.includes(s.destination) ? "" : s.destination} onChange={(e) => set({ destination: e.target.value })} />
+            <Field label={t("field.customDestination")}>
+              <input className={inputCls} placeholder={t("placeholder.customDestination")} value={PODS.includes(s.destination) ? "" : s.destination} onChange={(e) => set({ destination: e.target.value })} />
             </Field>
           </SecCard>
         </>
@@ -418,23 +442,23 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
       {step === 3 && (
         <>
           {(s.transport === "sea" || !s.transport) && (
-            <SecCard title="รูปแบบการบรรจุ">
+            <SecCard title={t("sec.loadType")}>
               <div className="grid grid-cols-2 gap-3">
-                <ChoiceBtn selected={s.loadType === "FCL"} onClick={() => set({ loadType: "FCL" })} icon={Package} label="เต็มตู้ (FCL)" sub="เช่า/ปิดตู้ทั้งตู้" />
-                <ChoiceBtn selected={s.loadType === "LCL"} onClick={() => set({ loadType: "LCL" })} icon={Layers} label="ไม่เต็มตู้ (LCL)" sub="แชร์ตู้ คิดตาม CBM" />
+                <ChoiceBtn selected={s.loadType === "FCL"} onClick={() => set({ loadType: "FCL" })} icon={Package} label={t("loadType.fcl.label")} sub={t("loadType.fcl.sub")} />
+                <ChoiceBtn selected={s.loadType === "LCL"} onClick={() => set({ loadType: "LCL" })} icon={Layers} label={t("loadType.lcl.label")} sub={t("loadType.lcl.sub")} />
               </div>
             </SecCard>
           )}
 
           {s.transport === "sea" && s.loadType === "FCL" && (
-            <SecCard title="ขนาดตู้คอนเทนเนอร์">
+            <SecCard title={t("sec.containerSize")}>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-3">
                 {CONTAINER_SIZES.map((c) => (
-                  <ChoiceBtn key={c.val} selected={s.containerSize === c.val} onClick={() => set({ containerSize: c.val })} icon={Package} label={c.label} sub={c.sub} />
+                  <ChoiceBtn key={c.val} selected={s.containerSize === c.val} onClick={() => set({ containerSize: c.val })} icon={Package} label={c.label} sub={t(`containerSize.${c.val}.sub`)} />
                 ))}
               </div>
               <div className="flex items-end gap-3 flex-wrap">
-                <Field label="จำนวนตู้">
+                <Field label={t("field.containerQty")}>
                   <div className="flex items-center gap-2">
                     <button type="button" onClick={() => set({ containerQty: Math.max(1, s.containerQty - 1) })} className="w-9 h-9 rounded-lg border border-gray-200 dark:border-border text-foreground text-lg font-bold hover:border-primary-400">−</button>
                     <span className="w-9 text-center text-[16px] font-black">{s.containerQty}</span>
@@ -446,36 +470,36 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
           )}
 
           {((s.transport === "sea" && s.loadType === "LCL") || s.transport === "truck") && (
-            <SecCard title="ข้อมูลสินค้า (แชร์ตู้ / รถ)">
+            <SecCard title={t("sec.cargoInfoLclTruck")}>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <Field label="ปริมาตร CBM"><input type="number" inputMode="decimal" className={inputCls} placeholder="เช่น 2.5" value={s.cbm} onChange={(e) => set({ cbm: e.target.value })} /></Field>
-                <Field label="น้ำหนักรวม (กก.)"><input type="number" inputMode="decimal" className={inputCls} placeholder="เช่น 500" value={s.weightKg} onChange={(e) => set({ weightKg: e.target.value })} /></Field>
-                <Field label="ชนิดสินค้า"><input className={inputCls} placeholder="เช่น กระเบื้อง" value={s.product} onChange={(e) => set({ product: e.target.value })} /></Field>
+                <Field label={t("field.cbm")}><input type="number" inputMode="decimal" className={inputCls} placeholder={t("placeholder.cbm")} value={s.cbm} onChange={(e) => set({ cbm: e.target.value })} /></Field>
+                <Field label={t("field.totalWeight")}><input type="number" inputMode="decimal" className={inputCls} placeholder={t("placeholder.totalWeight")} value={s.weightKg} onChange={(e) => set({ weightKg: e.target.value })} /></Field>
+                <Field label={t("field.productType")}><input className={inputCls} placeholder={t("placeholder.productType")} value={s.product} onChange={(e) => set({ product: e.target.value })} /></Field>
               </div>
             </SecCard>
           )}
 
           {s.transport === "air" && (
-            <SecCard title="ข้อมูลสินค้าทางอากาศ">
+            <SecCard title={t("sec.cargoInfoAir")}>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <Field label="น้ำหนักจริง (กก.)"><input type="number" inputMode="decimal" className={inputCls} placeholder="เช่น 80" value={s.weightKg} onChange={(e) => set({ weightKg: e.target.value })} /></Field>
-                <Field label="CBM"><input type="number" inputMode="decimal" className={inputCls} placeholder="เช่น 0.5" value={s.cbm} onChange={(e) => set({ cbm: e.target.value })} /></Field>
-                <Field label="น้ำหนักปริมาตร (CBM×167)"><input className={`${inputCls} bg-gray-50 dark:bg-white/5`} readOnly value={volW ? volW.toFixed(1) : ""} placeholder="คำนวณอัตโนมัติ" /></Field>
+                <Field label={t("field.actualWeight")}><input type="number" inputMode="decimal" className={inputCls} placeholder={t("placeholder.actualWeight")} value={s.weightKg} onChange={(e) => set({ weightKg: e.target.value })} /></Field>
+                <Field label={t("field.cbmShort")}><input type="number" inputMode="decimal" className={inputCls} placeholder={t("placeholder.cbmAir")} value={s.cbm} onChange={(e) => set({ cbm: e.target.value })} /></Field>
+                <Field label={t("field.volumetricWeight")}><input className={`${inputCls} bg-gray-50 dark:bg-white/5`} readOnly value={volW ? volW.toFixed(1) : ""} placeholder={t("placeholder.autoCalc")} /></Field>
               </div>
-              <p className="mt-2 text-[11px] text-muted flex items-center gap-1.5"><Zap className="w-3.5 h-3.5 text-primary-600/70" />คิดราคาจากน้ำหนักที่มากกว่า ระหว่างน้ำหนักจริงกับน้ำหนักปริมาตร</p>
+              <p className="mt-2 text-[11px] text-muted flex items-center gap-1.5"><Zap className="w-3.5 h-3.5 text-primary-600/70" />{t("air.chargeableNote")}</p>
             </SecCard>
           )}
 
-          <SecCard title="ต้นทาง & มูลค่าสินค้า">
+          <SecCard title={t("sec.originValue")}>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <Field label="เมืองต้นทาง (จีน)">
+              <Field label={t("field.originCity")}>
                 <select className={inputCls} value={s.origin} onChange={(e) => set({ origin: e.target.value })}>
-                  <option value="">— เลือก —</option>
+                  <option value="">{t("option.selectPlaceholder")}</option>
                   {ORIGIN_CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </Field>
-              <Field label="ชนิดสินค้า (Commodity)"><input className={inputCls} placeholder="เช่น อะไหล่, ผ้าผืน" value={s.product} onChange={(e) => set({ product: e.target.value })} /></Field>
-              <Field label="มูลค่าสินค้า (USD) ประมาณ"><input type="number" inputMode="decimal" className={inputCls} placeholder="เช่น 5000" value={s.goodsValueUsd} onChange={(e) => set({ goodsValueUsd: e.target.value })} /></Field>
+              <Field label={t("field.commodity")}><input className={inputCls} placeholder={t("placeholder.commodity")} value={s.product} onChange={(e) => set({ product: e.target.value })} /></Field>
+              <Field label={t("field.goodsValueUsd")}><input type="number" inputMode="decimal" className={inputCls} placeholder={t("placeholder.goodsValueUsd")} value={s.goodsValueUsd} onChange={(e) => set({ goodsValueUsd: e.target.value })} /></Field>
             </div>
           </SecCard>
         </>
@@ -484,7 +508,7 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
       {/* ── STEP 4 ── */}
       {step === 4 && (
         <>
-          <SecCard title="บริการเสริม (เลือกได้หลายรายการ)">
+          <SecCard title={t("sec.addons")}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {ADDONS.map((a) => {
                 const on = s.addons.includes(a.name);
@@ -502,10 +526,10 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
                     </span>
                     <span className="flex-1">
                       <span className="flex items-center gap-2">
-                        <span className="text-[13px] font-bold text-foreground/90">{a.name}</span>
+                        <span className="text-[13px] font-bold text-foreground/90">{t(`addon.${ADDON_KEYS[a.name]}.name`)}</span>
                         {a.price > 0 && <span className="text-[11px] font-bold text-primary-600">+฿{a.price.toLocaleString()}</span>}
                       </span>
-                      <span className="block text-[11px] text-muted leading-snug mt-0.5">{a.sub}</span>
+                      <span className="block text-[11px] text-muted leading-snug mt-0.5">{t(`addon.${ADDON_KEYS[a.name]}.sub`)}</span>
                     </span>
                     {on && <CheckCircle2 className="w-5 h-5 text-primary-600 shrink-0" />}
                   </button>
@@ -514,7 +538,7 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
             </div>
           </SecCard>
 
-          <SecCard title="เอกสารที่ต้องใช้ (ตามบริบทงาน)">
+          <SecCard title={t("sec.docs")}>
             <div className="flex flex-wrap gap-2">
               {docs.map((d) => (
                 <span key={d.name} className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] font-semibold ${
@@ -523,17 +547,17 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
                   <FileCheck2 className={`w-3.5 h-3.5 ${d.req ? "text-primary-600" : "text-muted"}`} />
                   {d.name}
                   <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${d.req ? "bg-primary-600 text-white" : "bg-gray-100 text-muted dark:bg-white/10"}`}>
-                    {d.req ? "จำเป็น" : "ไม่บังคับ"}
+                    {d.req ? t("doc.required") : t("doc.optional")}
                   </span>
                 </span>
               ))}
             </div>
             <p className="mt-3 text-[11px] text-muted leading-relaxed">
-              เอกสารแนบได้ภายหลังเมื่อทีมเซลส์ติดต่อกลับ — รอบนี้กรอกข้อมูลขอราคาก่อนได้เลย
+              {t("doc.attachLaterNote")}
             </p>
             {(s.incoterm === "EXW" || s.incoterm === "FOB") && (
               <div className="mt-3 rounded-xl border border-primary-200 bg-primary-50/60 dark:bg-primary-900/15 dark:border-border p-3 text-[11.5px] text-foreground/80 leading-relaxed">
-                ⚠️ เทอม <b>{s.incoterm}</b> ต้องลงทะเบียนในนามผู้ซื้อทั้งฝั่งจีนและไทย และมีใบขนสินค้าชื่อลูกค้า — เราดำเนินการให้ครบ 100%
+                {t.rich("doc.incotermWarning", { incoterm: s.incoterm, b: (chunks) => <b>{chunks}</b> })}
               </div>
             )}
           </SecCard>
@@ -543,7 +567,7 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
       {/* ── STEP 5 ── */}
       {step === 5 && (
         <>
-          <SecCard title="ใบเสนอราคาเบื้องต้น (ประมาณการ)">
+          <SecCard title={t("sec.quoteEstimate")}>
             {lines.length > 0 ? (
               <div className="rounded-xl border border-primary-200 dark:border-border bg-primary-50/30 dark:bg-primary-900/10 p-4">
                 {lines.map((l, i) => (
@@ -553,17 +577,17 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
                   </div>
                 ))}
                 <div className="flex items-center justify-between border-t border-primary-200 dark:border-border mt-2.5 pt-2.5">
-                  <span className="font-black text-foreground">รวมโดยประมาณ</span>
+                  <span className="font-black text-foreground">{t("quote.approxTotal")}</span>
                   <span className="text-[22px] font-black text-primary-600">฿{total.toLocaleString()}</span>
                 </div>
-                <p className="mt-2 text-[10.5px] text-muted leading-relaxed">* ราคาประมาณการเบื้องต้น ขึ้นกับน้ำหนักจริง เส้นทาง ฤดูกาล และเงื่อนไขศุลกากร — ทีมเซลส์จะยืนยันราคาอีกครั้ง</p>
+                <p className="mt-2 text-[10.5px] text-muted leading-relaxed">{t("quote.disclaimer")}</p>
               </div>
             ) : (
-              <p className="text-[13px] text-muted">กรอกข้อมูลสินค้าในขั้นก่อนหน้าเพื่อดูราคาประมาณการ หรือกรอกข้อมูลติดต่อด้านล่างเพื่อให้ทีมเซลส์ตีราคาให้</p>
+              <p className="text-[13px] text-muted">{t("quote.empty")}</p>
             )}
           </SecCard>
 
-          <SecCard title="ข้อมูลติดต่อ">
+          <SecCard title={t("sec.contact")}>
             <div className="flex flex-wrap gap-2 mb-4">
               {([
                 { val: "form" as const, label: "📋 กรอกฟอร์มรับใบเสนอราคา" },
@@ -578,18 +602,18 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
                     s.contactPref === c.val ? "border-primary-600 bg-primary-50 text-primary-700 dark:bg-primary-900/25 dark:text-primary-200" : "border-gray-200 dark:border-border text-muted hover:border-primary-300"
                   }`}
                 >
-                  {c.label}
+                  {t(`contactPref.${c.val}`)}
                 </button>
               ))}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="ชื่อ-นามสกุล / บริษัท *"><input className={inputCls} placeholder="ชื่อของคุณ" value={s.contactName} onChange={(e) => set({ contactName: e.target.value })} /></Field>
-              <Field label="เบอร์โทรศัพท์ *"><input type="tel" inputMode="tel" className={inputCls} placeholder="081-xxx-xxxx" value={s.contactPhone} onChange={(e) => set({ contactPhone: e.target.value })} /></Field>
+              <Field label={t("field.contactName")}><input className={inputCls} placeholder={t("placeholder.contactName")} value={s.contactName} onChange={(e) => set({ contactName: e.target.value })} /></Field>
+              <Field label={t("field.contactPhone")}><input type="tel" inputMode="tel" className={inputCls} placeholder="081-xxx-xxxx" value={s.contactPhone} onChange={(e) => set({ contactPhone: e.target.value })} /></Field>
               <Field label="LINE ID"><input className={inputCls} placeholder="@lineid" value={s.contactLine} onChange={(e) => set({ contactLine: e.target.value })} /></Field>
-              <Field label="อีเมล"><input type="email" inputMode="email" className={inputCls} placeholder="example@email.com" value={s.contactEmail} onChange={(e) => set({ contactEmail: e.target.value })} /></Field>
+              <Field label={t("field.contactEmail")}><input type="email" inputMode="email" className={inputCls} placeholder="example@email.com" value={s.contactEmail} onChange={(e) => set({ contactEmail: e.target.value })} /></Field>
               <label className="flex flex-col gap-1.5 sm:col-span-2">
-                <span className="text-[12px] md:text-[12.5px] font-bold text-foreground/75">หมายเหตุ / ข้อมูลเพิ่มเติม</span>
-                <textarea className={`${inputCls} h-auto py-2.5 min-h-[72px]`} placeholder="รายละเอียดอื่นๆ ที่อยากให้เราทราบ" value={s.note} onChange={(e) => set({ note: e.target.value })} />
+                <span className="text-[12px] md:text-[12.5px] font-bold text-foreground/75">{t("field.note")}</span>
+                <textarea className={`${inputCls} h-auto py-2.5 min-h-[72px]`} placeholder={t("placeholder.note")} value={s.note} onChange={(e) => set({ note: e.target.value })} />
               </label>
             </div>
           </SecCard>
@@ -605,7 +629,7 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
           onClick={() => goto(step - 1)}
           className={`inline-flex items-center gap-1.5 h-12 px-5 rounded-xl border border-gray-200 dark:border-border text-foreground/70 font-bold text-[14px] hover:border-primary-300 transition-colors ${step === 1 ? "invisible" : ""}`}
         >
-          <ArrowLeft className="w-4 h-4" /> ย้อนกลับ
+          <ArrowLeft className="w-4 h-4" /> {t("nav.back")}
         </button>
 
         {step < 5 ? (
@@ -614,7 +638,7 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
             onClick={() => goto(step + 1)}
             className="inline-flex items-center gap-2 h-12 px-7 rounded-xl bg-primary-600 text-white font-black text-[15px] hover:bg-primary-700 transition-colors shadow-[0_8px_22px_rgba(179,0,0,0.28)]"
           >
-            ถัดไป <ArrowRight className="w-4 h-4" strokeWidth={2.6} />
+            {t("nav.next")} <ArrowRight className="w-4 h-4" strokeWidth={2.6} />
           </button>
         ) : (
           <button
@@ -623,7 +647,7 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
             disabled={pending}
             className="inline-flex items-center gap-2 h-12 px-7 rounded-xl bg-primary-600 text-white font-black text-[15px] hover:bg-primary-700 transition-colors shadow-[0_8px_22px_rgba(179,0,0,0.28)] disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {pending ? <><Loader2 className="w-4 h-4 animate-spin" /> กำลังส่ง…</> : <>📋 ส่งใบเสนอราคา <ArrowRight className="w-4 h-4" strokeWidth={2.6} /></>}
+            {pending ? <><Loader2 className="w-4 h-4 animate-spin" /> {t("nav.submitting")}</> : <>{t("nav.submit")} <ArrowRight className="w-4 h-4" strokeWidth={2.6} /></>}
           </button>
         )}
       </div>

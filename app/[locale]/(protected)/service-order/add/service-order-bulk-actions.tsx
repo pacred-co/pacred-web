@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { cancelServiceOrder, payServiceOrderFromWallet } from "@/actions/service-order";
 import { confirm } from "@/components/ui/confirm";
 
@@ -96,6 +97,7 @@ export function BulkActionsProvider({
  */
 export function RowCheckbox({ hNo, selectable }: { hNo: string; selectable: boolean }) {
   const { selected, toggle } = useSelectCtx();
+  const t = useTranslations("serviceOrder");
   if (!selectable) return null;
   return (
     <input
@@ -103,7 +105,7 @@ export function RowCheckbox({ hNo, selectable }: { hNo: string; selectable: bool
       className="dt-checkboxes h-5 w-5 accent-red-600 align-middle"
       checked={selected.has(hNo)}
       onChange={() => toggle(hNo)}
-      aria-label={`เลือกออเดอร์ ${hNo}`}
+      aria-label={t("selectOrderAria", { hNo })}
     />
   );
 }
@@ -116,12 +118,13 @@ export function RowCheckbox({ hNo, selectable }: { hNo: string; selectable: bool
  * keyboard-accessible.
  */
 export function RowCancelButton({ hNo }: { hNo: string }) {
+  const t = useTranslations("serviceOrder");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
   async function onClick() {
     if (pending) return;
-    if (!(await confirm(`ต้องการยกเลิกออเดอร์ ${hNo} นี้?`))) return;
+    if (!(await confirm(t("cancelOrderConfirm", { hNo })))) return;
     setErr(null);
     startTransition(async () => {
       const res = await cancelServiceOrder(hNo);
@@ -141,7 +144,7 @@ export function RowCancelButton({ hNo }: { hNo: string }) {
         className="block w-full rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-xs font-bold px-3 py-1.5 text-center min-h-[40px] transition-colors"
         style={{ cursor: pending ? "wait" : "pointer" }}
       >
-        {pending ? "กำลังยกเลิก..." : "ยกเลิกออเดอร์"}
+        {pending ? t("cancelling") : t("cancelOrder")}
       </button>
       {err && (
         <div className="rounded-md bg-red-600 text-white text-xs px-2 py-1 mt-1" role="alert">
@@ -165,6 +168,7 @@ export function RowCancelButton({ hNo }: { hNo: string }) {
  * close to the render.
  */
 export function BulkCancelButton({ cancellableHNos }: { cancellableHNos: string[] }) {
+  const t = useTranslations("serviceOrder");
   const { selected } = useSelectCtx();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -178,22 +182,26 @@ export function BulkCancelButton({ cancellableHNos }: { cancellableHNos: string[
   async function onClick() {
     if (pending) return;
     if (targets.length === 0) {
-      setBanner({ kind: "err", text: "กรุณาเลือกออเดอร์ที่ต้องการยกเลิก" });
+      setBanner({ kind: "err", text: t("selectOrdersToCancel") });
       return;
     }
-    if (!(await confirm(`ต้องการยกเลิกออเดอร์ที่เลือกทั้ง ${targets.length} รายการ?`))) return;
+    if (!(await confirm(t("bulkCancelConfirm", { count: targets.length })))) return;
     setBanner(null);
     startTransition(async () => {
       const results = await Promise.all(targets.map((h) => cancelServiceOrder(h)));
       const failed = results.filter((r) => !r.ok).length;
       if (failed === 0) {
-        setBanner({ kind: "ok", text: `ยกเลิกออเดอร์สำเร็จ ${targets.length} รายการ` });
+        setBanner({ kind: "ok", text: t("bulkCancelSuccess", { count: targets.length }) });
         router.refresh();
         setTimeout(() => setBanner(null), 4000);
       } else {
         setBanner({
           kind: "err",
-          text: `ยกเลิกออเดอร์สำเร็จ ${targets.length - failed} / ${targets.length} (ล้มเหลว ${failed})`,
+          text: t("bulkCancelPartial", {
+            ok: targets.length - failed,
+            total: targets.length,
+            failed,
+          }),
         });
       }
     });
@@ -208,7 +216,7 @@ export function BulkCancelButton({ cancellableHNos }: { cancellableHNos: string[
         onClick={onClick}
         disabled={pending}
       >
-        {pending ? "กำลังยกเลิก..." : "ยกเลิกออเดอร์รายการที่เลือก"}
+        {pending ? t("cancelling") : t("bulkCancelButton")}
       </button>
       {banner && (
         <div
@@ -245,6 +253,7 @@ export function BulkPayBar({
 }: {
   walletBalance: number;
 }) {
+  const t = useTranslations("serviceOrder");
   const { selected, toggle, totals, payableHNos } = useSelectCtx();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -276,21 +285,25 @@ export function BulkPayBar({
   async function onPay() {
     if (pending) return;
     if (countPay === 0) {
-      setBanner({ kind: "err", text: "กรุณาเลือกออเดอร์ที่ต้องการชำระเงิน" });
+      setBanner({ kind: "err", text: t("selectOrdersToPay") });
       return;
     }
     if (walletBalance < priceAll) {
       const short = priceAll - walletBalance;
       setBanner({
         kind: "err",
-        text:
-          `ยอดเงินในกระเป๋าไม่พอ — มี ฿${walletBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ` +
-          `ต้องการ ฿${priceAll.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ` +
-          `(ขาดอีก ฿${short.toLocaleString("th-TH", { minimumFractionDigits: 2 })}) — กรุณาเติมเงินก่อน`,
+        text: t("walletInsufficient", {
+          have: walletBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 }),
+          need: priceAll.toLocaleString("th-TH", { minimumFractionDigits: 2 }),
+          short: short.toLocaleString("th-TH", { minimumFractionDigits: 2 }),
+        }),
       });
       return;
     }
-    if (!(await confirm(`ยืนยันชำระเงิน ${countPay} รายการ รวม ฿${priceAll.toLocaleString("th-TH", { minimumFractionDigits: 2 })} จาก wallet?`))) {
+    if (!(await confirm(t("bulkPayConfirm", {
+      count: countPay,
+      total: priceAll.toLocaleString("th-TH", { minimumFractionDigits: 2 }),
+    })))) {
       return;
     }
     setBanner(null);
@@ -300,14 +313,18 @@ export function BulkPayBar({
       );
       const failed = results.filter((r) => !r.ok);
       if (failed.length === 0) {
-        setBanner({ kind: "ok", text: `ชำระเงินสำเร็จ ${results.length} รายการ` });
+        setBanner({ kind: "ok", text: t("bulkPaySuccess", { count: results.length }) });
         router.refresh();
         setTimeout(() => setBanner(null), 4000);
       } else {
         const firstErr = failed[0].ok ? "" : ` — ${failed[0].error}`;
         setBanner({
           kind: "err",
-          text: `ชำระสำเร็จ ${results.length - failed.length} / ${results.length} (ล้มเหลว ${failed.length})${firstErr}`,
+          text: t("bulkPayPartial", {
+            ok: results.length - failed.length,
+            total: results.length,
+            failed: failed.length,
+          }) + firstErr,
         });
       }
     });
@@ -330,25 +347,25 @@ export function BulkPayBar({
               className="dt-checkboxes check-all c6 h-5 w-5 accent-red-600"
               checked={allChecked}
               onChange={toggleAll}
-              aria-label="เลือกทั้งหมด"
+              aria-label={t("selectAllAria")}
             />
-            เลือกทั้งหมด
+            {t("selectAllAria")}
           </label>
           <div className="flex-1 min-w-0 text-sm">
             <div className="text-xs text-muted">
-              จำนวนรายการ :{" "}
+              {t("itemCountLabel")} :{" "}
               <span className="countPay font-medium text-foreground">
                 {String(countPay).padStart(2, "0")}
               </span>
             </div>
             <b className="block">
-              ยอดชำระรวม :{" "}
+              {t("totalPayableLabel")} :{" "}
               <span className="text-danger price-all">
                 {priceAll > 0
                   ? priceAll.toLocaleString("th-TH", { minimumFractionDigits: 2 })
                   : "00000"}
               </span>{" "}
-              บ.
+              {t("bahtUnit")}
             </b>
           </div>
           <button
@@ -358,7 +375,7 @@ export function BulkPayBar({
             onClick={onPay}
             disabled={pending}
           >
-            {pending ? "กำลังชำระ..." : "ชำระเงิน"}
+            {pending ? t("paying") : t("payButton")}
           </button>
         </div>
         {banner && (

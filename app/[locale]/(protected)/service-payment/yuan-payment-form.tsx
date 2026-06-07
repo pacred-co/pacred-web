@@ -22,6 +22,7 @@ type Props = {
 
 export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerName }: Props) {
   const t = useTranslations("payment");
+  const tp = useTranslations("yuanPaymentExtra");
   const router = useRouter();
   const [channel, setChannel] = useState<"alipay" | "wechat" | "bank">("alipay");
   const [recipientDetail, setRecipientDetail] = useState("");
@@ -270,7 +271,7 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
               <StyledFileInput
                 accept="image/*,application/pdf"
                 onChange={onSlipFile}
-                label="แนบสลิปการโอน (รูป/PDF)"
+                label={tp("slipAttachLabel")}
                 selectedLabel={slipPath ? t("slipUploaded") : undefined}
               />
             </div>
@@ -279,7 +280,7 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
               <StyledFileInput
                 accept="image/*,application/pdf"
                 onChange={onIdDocFile}
-                label="แนบสำเนาบัตร (รูป/PDF)"
+                label={tp("idCardAttachLabel")}
                 hint={t("idDocHint")}
                 selectedLabel={idDocPath ? t("idDocUploaded") : undefined}
               />

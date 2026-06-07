@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { ChevronRight, ExternalLink } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
@@ -65,6 +66,7 @@ function addressFull(a: AddressRow): string {
 }
 
 export default async function ServiceImportAddPage() {
+  const t = await getTranslations("serviceImportAdd");
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
   const { profile } = data;
@@ -121,20 +123,20 @@ export default async function ServiceImportAddPage() {
         className="mb-4 flex flex-wrap items-center gap-1 text-[13px] text-muted"
       >
         <Link href="/dashboard" className="hover:text-foreground">
-          หน้าแรก
+          {t("breadcrumbHome")}
         </Link>
         <ChevronRight className="h-3.5 w-3.5" />
         <Link href="/service-import" className="hover:text-foreground">
-          รายการฝากนำเข้าสินค้า
+          {t("breadcrumbList")}
         </Link>
         <ChevronRight className="h-3.5 w-3.5" />
-        <span className="font-medium text-foreground">เพิ่มรายการนำเข้า</span>
+        <span className="font-medium text-foreground">{t("breadcrumbAdd")}</span>
       </nav>
 
       {/* Header */}
       <div className="mb-4">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">
-          สร้างออเดอร์ฝากนำเข้าสินค้า
+          {t("pageTitle")}
         </h1>
         <div className="mt-3 flex flex-wrap gap-2">
           <a
@@ -143,7 +145,7 @@ export default async function ServiceImportAddPage() {
             rel="noreferrer"
             className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-3 py-1.5 text-[13px] font-medium text-primary-700 transition hover:bg-primary-100"
           >
-            ที่อยู่โกดังจีน
+            {t("chinaWarehouseAddress")}
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
           <a
@@ -152,7 +154,7 @@ export default async function ServiceImportAddPage() {
             rel="noreferrer"
             className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-[13px] font-medium text-amber-700 transition hover:bg-amber-100"
           >
-            เช็คเรทนำเข้า
+            {t("checkImportRate")}
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
         </div>

@@ -9,6 +9,7 @@ import {
   ArrowRight,
   ChevronRight,
 } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { Footer } from "@/components/sections/footer";
@@ -86,6 +87,8 @@ export default async function ArticlePage({
   const article = getArticleBySlug(slug);
   if (!article) notFound();
 
+  const t = await getTranslations("knowledgeArticlePage");
+
   const content = await fs.readFile(
     path.join(process.cwd(), "public", "images", "knowledge", `${article.id}.txt`),
     "utf-8",
@@ -124,11 +127,11 @@ export default async function ArticlePage({
             {/* Breadcrumb */}
             <nav className="mx-auto w-full max-w-[920px] flex items-center gap-1 text-[11.5px] md:text-[12.5px] text-muted mb-4 md:mb-5">
               <Link href="/" className="hover:text-primary-600 transition-colors font-bold">
-                หน้าหลัก
+                {t("breadcrumbHome")}
               </Link>
               <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
               <Link href="/knowledge" className="hover:text-primary-600 transition-colors font-bold">
-                สาระน่ารู้
+                {t("breadcrumbKnowledge")}
               </Link>
               <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
               <span className="font-bold text-[#111827] dark:text-white line-clamp-1">
@@ -160,7 +163,7 @@ export default async function ArticlePage({
                   Pacred Shipping
                 </span>
                 <span className="text-muted/50">·</span>
-                <span>อ่าน 5 นาที</span>
+                <span>{t("readingTime")}</span>
                 <span className="text-muted/50">·</span>
                 <ArticleStats articleId={article.id} />
                 <span className="text-muted/50">·</span>
@@ -207,14 +210,14 @@ export default async function ArticlePage({
                       Related
                     </div>
                     <h2 className="text-[20px] md:text-[26px] font-black tracking-[-0.03em] text-[#111827] dark:text-white">
-                      บทความที่เกี่ยวข้อง
+                      {t("relatedArticles")}
                     </h2>
                   </div>
                   <Link
                     href="/knowledge"
                     className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full bg-white dark:bg-surface text-[#111827] dark:text-white border border-border text-[12px] font-black hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all duration-300"
                   >
-                    ดูทั้งหมด
+                    {t("viewAll")}
                     <ArrowRight className="w-3.5 h-3.5" strokeWidth={3} />
                   </Link>
                 </div>
@@ -254,7 +257,7 @@ export default async function ArticlePage({
                           {r.excerpt}
                         </p>
                         <div className="mt-auto pt-1.5 md:pt-2 flex items-center gap-1 text-primary-600 text-[10.5px] md:text-[12px] font-black opacity-80 group-hover:opacity-100 transition-opacity">
-                          อ่านบทความ
+                          {t("readArticle")}
                           <ArrowRight className="w-3 h-3 md:w-3.5 md:h-3.5 transition-transform duration-300 group-hover:translate-x-1" strokeWidth={3} />
                         </div>
                       </div>
@@ -271,7 +274,7 @@ export default async function ArticlePage({
                 className="inline-flex items-center gap-1.5 h-10 md:h-11 px-4 md:px-5 rounded-xl bg-white dark:bg-surface text-[#111827] dark:text-white border border-border text-[13px] md:text-[14px] font-black hover:border-primary-400 hover:text-primary-700 hover:bg-primary-50/40 transition-all duration-300"
               >
                 <ArrowLeft className="w-4 h-4" strokeWidth={3} />
-                กลับสู่หน้าสาระน่ารู้ทั้งหมด
+                {t("backToKnowledge")}
               </Link>
             </div>
 

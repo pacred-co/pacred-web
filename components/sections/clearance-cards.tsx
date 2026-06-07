@@ -3,22 +3,20 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { LINE_OA } from "@/components/seo/site";
 
 const LINE_URL = LINE_OA.addFriendUrl;
 const ICON_SRC = "/images/hero-section/icon-draf/customclearance.png";
 
-const SECTION_TITLE = "บริการชิปปิ้งเคลียร์ของ เคลียร์สินค้าติดด่าน และพิธีการศุลกากร";
-const SECTION_DESC  = "รวมบริการชิปปิ้งเคลียร์ของ เคลียร์สินค้านำเข้า เคลียร์สินค้าส่งออก เคลียร์เอกสารศุลกากร มอก. ทั่วไป แบบครบจบในที่เดียว";
-
 type Card = {
   id: string;
   image: string;
-  alt: string;
-  tags: string[];
-  title: string;
-  price: string;
-  note: string;
+  altKey: string;
+  tagKeys: string[];
+  titleKey: string;
+  priceKey: string;
+  noteKey: string;
   link: string;
 };
 
@@ -26,66 +24,67 @@ const CARDS: Card[] = [
   {
     id: "suvarnabhumi",
     image: "/images/cardclearance/suwanboys.png",
-    alt:   "เคลียร์ด่านสุวรรณภูมิ เคลียร์สินค้าติดด่าน ทางแอร์ พิธีการศุลกากร",
-    tags:  ["LCL", "ทางแอร์", "พิธีการศุลกากร"],
-    title: "สุวรรณภูมิ",
-    price: "เริ่มต้น 2,800 บาท",
-    note:  "เคลียร์ด่านสินค้าแอร์ สินค้าทั่วไป มอก.",
+    altKey:   "altSuvarnabhumi",
+    tagKeys:  ["tagLcl", "tagAir", "tagCustoms"],
+    titleKey: "titleSuvarnabhumi",
+    priceKey: "price2800",
+    noteKey:  "noteSuvarnabhumi",
     link:  LINE_URL,
   },
   {
     id: "laem-chabang",
     image: "/images/cardclearance/laemport.png",
-    alt:   "เคลียร์ด่านแหลมฉบัง เคลียร์สินค้าติดด่าน ทางเรือ พิธีการศุลกากร",
-    tags:  ["FCL", "CIF", "ทางเรือ"],
-    title: "แหลมฉบัง",
-    price: "เริ่มต้น 3,500 บาท",
-    note:  "เคลียร์ด่าน Port ตรวจปล่อยสินค้าและเอกสาร",
+    altKey:   "altLaemChabang",
+    tagKeys:  ["tagFcl", "tagCif", "tagSea"],
+    titleKey: "titleLaemChabang",
+    priceKey: "price3500",
+    noteKey:  "noteLaemChabang",
     link:  LINE_URL,
   },
   {
     id: "khlong-toei",
     image: "/images/cardclearance/klongtoey.png",
-    alt:   "เคลียร์ด่านคลองเตย เคลียร์สินค้าติดด่าน ทางเรือ พิธีการศุลกากร",
-    tags:  ["FCL", "CIF", "ทางเรือ"],
-    title: "คลองเตย",
-    price: "เริ่มต้น 3,500 บาท",
-    note:  "เคลียร์ด่าน Port คลองเตย เอกสารนำเข้า",
+    altKey:   "altKhlongToei",
+    tagKeys:  ["tagFcl", "tagCif", "tagSea"],
+    titleKey: "titleKhlongToei",
+    priceKey: "price3500",
+    noteKey:  "noteKhlongToei",
     link:  LINE_URL,
   },
   {
     id: "don-mueang",
     image: "/images/cardclearance/donmueng.png",
-    alt:   "เคลียร์ด่านดอนเมือง เคลียร์สินค้าติดด่าน ทางแอร์ พิธีการศุลกากร",
-    tags:  ["LCL", "ทางแอร์", "พิธีการศุลกากร"],
-    title: "ดอนเมือง",
-    price: "เริ่มต้น 2,800 บาท",
-    note:  "เคลียร์ด่านสนามบินดอนเมือง งานด่วนและเอกสารเร่ง",
+    altKey:   "altDonMueang",
+    tagKeys:  ["tagLcl", "tagAir", "tagCustoms"],
+    titleKey: "titleDonMueang",
+    priceKey: "price2800",
+    noteKey:  "noteDonMueang",
     link:  LINE_URL,
   },
   {
     id: "lak-si-post",
     image: "/images/cardclearance/praisaneelaksee.png",
-    alt:   "เคลียร์ด่านไปรษณีย์หลักสี่ เคลียร์พัสดุติดด่าน พิธีการศุลกากร",
-    tags:  ["LCL", "ทางแอร์", "พิธีการศุลกากร"],
-    title: "ไปรษณีย์หลักสี่",
-    price: "เริ่มต้น 3,500 บาท",
-    note:  "เคลียร์พัสดุ ติดด่านไปรษณีย์ เอกสารครบจบ",
+    altKey:   "altLakSiPost",
+    tagKeys:  ["tagLcl", "tagAir", "tagCustoms"],
+    titleKey: "titleLakSiPost",
+    priceKey: "price3500",
+    noteKey:  "noteLakSiPost",
     link:  LINE_URL,
   },
   {
     id: "mukdahan",
     image: "/images/cardclearance/mukdahanport.png",
-    alt:   "เคลียร์ด่านมุกดาหาร เคลียร์สินค้าติดด่าน ทางรถ พิธีการศุลกากร",
-    tags:  ["FCL", "CIF", "ทางรถ"],
-    title: "มุกดาหาร",
-    price: "เริ่มต้น 3,500 บาท",
-    note:  "เคลียร์ด่านชายแดน รถนำเข้า",
+    altKey:   "altMukdahan",
+    tagKeys:  ["tagFcl", "tagCif", "tagTruck"],
+    titleKey: "titleMukdahan",
+    priceKey: "price3500",
+    noteKey:  "noteMukdahan",
     link:  LINE_URL,
   },
 ];
 
 export function ClearanceCards() {
+  const t = useTranslations("clearanceCards");
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(false);
@@ -194,10 +193,10 @@ export function ClearanceCards() {
             }}
           />
           <h2 className="m-0 mb-1.5 md:mb-2 text-[22px] md:text-[clamp(28px,3vw,40px)] leading-[1.22] md:leading-[1.18] font-black tracking-[-0.04em] text-[#111827] dark:text-foreground">
-            {SECTION_TITLE}
+            {t("sectionTitle")}
           </h2>
           <p className="m-0 text-[12.5px] md:text-[15px] leading-[1.45] md:leading-[1.55] font-bold text-[#6b7280] md:text-[#4b5563] md:whitespace-nowrap md:overflow-hidden md:text-ellipsis line-clamp-2 md:line-clamp-none">
-            {SECTION_DESC}
+            {t("sectionDesc")}
           </p>
         </div>
 
@@ -206,7 +205,7 @@ export function ClearanceCards() {
           {/* Prev button */}
           <button
             type="button"
-            aria-label="เลื่อนไปซ้าย"
+            aria-label={t("scrollLeft")}
             onClick={goPrev}
             suppressHydrationWarning
             className={[
@@ -247,7 +246,7 @@ export function ClearanceCards() {
                 <div className="relative w-full aspect-[1.18/1] md:aspect-[16/9] overflow-hidden bg-[#f3f4f6]">
                   <Image
                     src={card.image}
-                    alt={card.alt}
+                    alt={t(card.altKey)}
                     fill
                     sizes="(max-width: 767px) 50vw, 285px"
                     className="object-cover transition-transform duration-[550ms] ease-out group-hover:scale-[1.055]"
@@ -280,7 +279,7 @@ export function ClearanceCards() {
                     />
                     <Image
                       src={ICON_SRC}
-                      alt={`${card.title} icon`}
+                      alt={`${t(card.titleKey)} icon`}
                       width={42}
                       height={42}
                       className="relative z-[2] w-full h-full object-contain transition-transform duration-[350ms] group-hover:scale-[1.08]"
@@ -290,12 +289,12 @@ export function ClearanceCards() {
 
                   {/* Tags */}
                   <div className="absolute left-1.5 md:left-2.5 right-1.5 md:right-2.5 bottom-1.5 md:bottom-2.5 flex gap-1 md:gap-1.5 flex-nowrap overflow-hidden z-[3]">
-                    {card.tags.map((tag) => (
+                    {card.tagKeys.map((tagKey) => (
                       <span
-                        key={tag}
+                        key={tagKey}
                         className="flex-none px-1.5 py-1 md:px-2 md:py-[7px] rounded-full bg-white/95 text-[#b91c1c] border border-white/80 text-[8.5px] md:text-[11px] leading-none font-black shadow-[0_4px_12px_rgba(0,0,0,0.08)]"
                       >
-                        {tag}
+                        {t(tagKey)}
                       </span>
                     ))}
                   </div>
@@ -304,13 +303,13 @@ export function ClearanceCards() {
                 {/* Info */}
                 <div className="p-[9px] pb-2.5 md:p-[15px] md:pb-4">
                   <h3 className="m-0 mb-1.5 md:mb-2 text-[12.5px] md:text-[17px] leading-[1.2] font-black tracking-[-0.03em] text-[#111827] whitespace-nowrap overflow-hidden text-ellipsis transition-colors duration-200 group-hover:text-[#dc2626]">
-                    {card.title}
+                    {t(card.titleKey)}
                   </h3>
                   <p className="m-0 mb-1 md:mb-2 text-[13px] md:text-[18px] leading-[1.1] font-black text-[#dc2626] whitespace-nowrap overflow-hidden text-ellipsis">
-                    {card.price}
+                    {t(card.priceKey)}
                   </p>
                   <p className="m-0 text-[10.5px] md:text-[13px] leading-[1.28] md:leading-[1.35] font-bold text-[#4b5563] line-clamp-2">
-                    {card.note}
+                    {t(card.noteKey)}
                   </p>
                 </div>
               </a>
@@ -320,7 +319,7 @@ export function ClearanceCards() {
           {/* Next button */}
           <button
             type="button"
-            aria-label="เลื่อนไปขวา"
+            aria-label={t("scrollRight")}
             onClick={goNext}
             suppressHydrationWarning
             className={[

@@ -16,6 +16,7 @@
  */
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { ArrowRight, Loader2, MessageCircle, Receipt } from "lucide-react";
 import type {
   BookingOptionState,
@@ -173,6 +174,7 @@ export function QuotationPanel({
   errorMessage,
   bare = false,
 }: QuotationPanelProps) {
+  const t = useTranslations("booking");
   const [submitting, setSubmitting] = useState(false);
 
   const breakdown = useMemo(
@@ -200,7 +202,7 @@ export function QuotationPanel({
       <div className="flex items-center gap-2 text-[11px] md:text-[12px] font-black text-primary-700/80 dark:text-primary-300/80 tracking-[0.10em] uppercase leading-none">
         <Receipt className="w-3.5 h-3.5" strokeWidth={2.6} />
         {/* i18n-key: booking.estimate.header */}
-        ราคาประมาณการ
+        {t("panel.title")}
       </div>
 
       {/* Itemised rows — base + each active option. */}
@@ -229,7 +231,7 @@ export function QuotationPanel({
       <div className="mt-4 pt-4 border-t border-dashed border-border flex items-baseline justify-between gap-3">
         <span className="text-[13px] md:text-[14px] font-black text-foreground">
           {/* i18n-key: booking.estimate.total */}
-          รวมประมาณการ
+          {t("panel.totalLabel")}
         </span>
         <span className="text-[24px] md:text-[28px] font-black text-primary-600 dark:text-primary-300 tabular-nums leading-none">
           ฿{fmt(breakdown.total)}
@@ -239,7 +241,7 @@ export function QuotationPanel({
       {/* Disclaimer — the estimate-honesty footer (§4.7). */}
       <p className="mt-2 text-[11px] md:text-[11.5px] text-muted leading-[1.5]">
         {/* i18n-key: booking.estimate.disclaimer */}
-        * ราคาเริ่มต้น — ทีมขายยืนยันราคาจริงหลังตรวจสินค้า
+        {t("panel.disclaimer")}
       </p>
 
       {/* Error inline */}
@@ -263,7 +265,7 @@ export function QuotationPanel({
           ) : (
             <>
               {/* i18n-key: booking.cta.bookNow */}
-              จองเลย
+              {t("panel.bookNow")}
               <ArrowRight className="w-4 h-4" strokeWidth={2.6} />
             </>
           )}
@@ -277,7 +279,7 @@ export function QuotationPanel({
         >
           <MessageCircle className="w-3.5 h-3.5" strokeWidth={2.6} />
           {/* i18n-key: booking.cta.consultLine */}
-          ปรึกษาทีม / ทักไลน์
+          {t("panel.consult")}
         </a>
       </div>
     </div>

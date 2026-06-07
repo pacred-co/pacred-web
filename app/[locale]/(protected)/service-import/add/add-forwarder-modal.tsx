@@ -20,6 +20,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "next-intl";
 import { Plus, X } from "lucide-react";
 import { ServiceImportAddForm } from "./service-import-add-form";
 import {
@@ -38,6 +39,7 @@ export function AddForwarderModal({
    *  bigger than the status chips). */
   compact?: boolean;
 }) {
+  const t = useTranslations("serviceImportAdd");
   const [open, setOpen] = useState(false);
 
   // Lock body scroll + wire Escape-to-close while the dialog is open.
@@ -73,7 +75,7 @@ export function AddForwarderModal({
             <Plus className="h-4 w-4" strokeWidth={3} />
           </span>
         )}
-        <span>เพิ่มรายการนำเข้า</span>
+        <span>{t("addButton")}</span>
       </button>
 
       {open &&
@@ -82,7 +84,7 @@ export function AddForwarderModal({
             {/* Backdrop */}
             <button
               type="button"
-              aria-label="ปิด"
+              aria-label={t("close")}
               onClick={() => setOpen(false)}
               className="absolute inset-0 bg-black/50"
             />
@@ -99,12 +101,12 @@ export function AddForwarderModal({
                   id="add-forwarder-title"
                   className="text-base font-bold text-foreground sm:text-lg"
                 >
-                  สร้างออเดอร์ฝากนำเข้าสินค้า
+                  {t("pageTitle")}
                 </h2>
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  aria-label="ปิด"
+                  aria-label={t("close")}
                   className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted transition hover:bg-surface hover:text-foreground"
                 >
                   <X className="h-5 w-5" />

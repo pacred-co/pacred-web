@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { LINE_OA, CONTACT } from "@/components/seo/site";
@@ -83,6 +84,7 @@ export default async function CustomerFreightQuoteDetailPage({
   params: Promise<{ quote_no: string }>;
 }) {
   const { quote_no } = await params;
+  const t = await getTranslations("freightQuoteDetail");
   const sb = await createClient();
 
   const { data: header, error: headerErr } = await sb
@@ -123,7 +125,7 @@ export default async function CustomerFreightQuoteDetailPage({
         {/* Breadcrumb */}
         <nav className="flex items-center gap-1.5 text-xs text-muted flex-wrap">
           <Link href="/dashboard" className="hover:text-primary-600 inline-flex items-center gap-1">
-            <Home className="w-3.5 h-3.5" /> หน้าแรก
+            <Home className="w-3.5 h-3.5" /> {t("breadcrumbHome")}
           </Link>
           <ChevronRight className="w-3 h-3" />
           <Link href="/freight" className="hover:text-primary-600">Freight</Link>
@@ -140,12 +142,12 @@ export default async function CustomerFreightQuoteDetailPage({
               </div>
               <div>
                 <h1 className="text-xl sm:text-2xl font-bold text-foreground">
-                  ใบเสนอราคา <span className="font-mono">{header.quote_no}</span>
+                  {t("title")} <span className="font-mono">{header.quote_no}</span>
                 </h1>
                 <p className="text-xs text-muted mt-1">
-                  สร้าง {new Date(header.created_at).toLocaleDateString("th-TH")}
-                  {header.sent_at && <> · ส่ง {new Date(header.sent_at).toLocaleDateString("th-TH")}</>}
-                  {header.accepted_at && <> · ตอบรับ {new Date(header.accepted_at).toLocaleDateString("th-TH")}</>}
+                  {t("created", { date: new Date(header.created_at).toLocaleDateString("th-TH") })}
+                  {header.sent_at && <> · {t("sent", { date: new Date(header.sent_at).toLocaleDateString("th-TH") })}</>}
+                  {header.accepted_at && <> · {t("accepted", { date: new Date(header.accepted_at).toLocaleDateString("th-TH") })}</>}
                 </p>
               </div>
             </div>
@@ -155,10 +157,10 @@ export default async function CustomerFreightQuoteDetailPage({
           </div>
           {header.valid_until && (
             <p className="mt-3 text-xs">
-              <span className="text-muted">ใช้ได้ถึง:</span>{" "}
+              <span className="text-muted">{t("validUntil")}</span>{" "}
               <span className={`font-medium ${isExpired ? "text-red-600" : "text-foreground"}`}>
                 {new Date(header.valid_until).toLocaleDateString("th-TH")}
-                {isExpired && " (หมดอายุแล้ว)"}
+                {isExpired && ` ${t("expiredSuffix")}`}
               </span>
             </p>
           )}
@@ -167,18 +169,18 @@ export default async function CustomerFreightQuoteDetailPage({
         {/* Rejected reason banner */}
         {isRejected && header.rejected_reason && (
           <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            <strong>ปฏิเสธ:</strong> {header.rejected_reason}
+            <strong>{t("rejectedLabel")}</strong> {header.rejected_reason}
           </div>
         )}
 
         {/* Buyer + Logistics blocks */}
         <div className="grid md:grid-cols-2 gap-5">
           <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-1">
-            <h2 className="font-bold text-sm mb-2">ผู้ซื้อ</h2>
+            <h2 className="font-bold text-sm mb-2">{t("buyer")}</h2>
             <p className="font-medium">{header.buyer_name_snapshot}</p>
             {header.buyer_tax_id_snapshot && (
               <p className="text-xs">
-                เลขผู้เสียภาษี: <span className="font-mono">{header.buyer_tax_id_snapshot}</span>
+                {t("taxId")} <span className="font-mono">{header.buyer_tax_id_snapshot}</span>
               </p>
             )}
             {header.buyer_contact_snapshot && (
@@ -186,33 +188,33 @@ export default async function CustomerFreightQuoteDetailPage({
             )}
           </section>
           <section className="rounded-2xl border border-border bg-surface-alt/30 p-5 space-y-1 text-xs">
-            <h2 className="font-bold text-sm mb-2">โลจิสติกส์</h2>
-            <p>ขนส่ง: {TRANSPORT_MODE_LABEL[header.transport_mode]}</p>
-            {header.port_loading   && <p>ต้นทาง: {header.port_loading}</p>}
-            {header.port_discharge && <p>ปลายทาง: {header.port_discharge}</p>}
-            {header.place_delivery && <p>ส่งมอบ: {header.place_delivery}</p>}
+            <h2 className="font-bold text-sm mb-2">{t("logistics")}</h2>
+            <p>{t("transport")} {TRANSPORT_MODE_LABEL[header.transport_mode]}</p>
+            {header.port_loading   && <p>{t("origin")} {header.port_loading}</p>}
+            {header.port_discharge && <p>{t("destination")} {header.port_discharge}</p>}
+            {header.place_delivery && <p>{t("delivery")} {header.place_delivery}</p>}
             {header.incoterm       && <p>Incoterm: <span className="font-mono">{header.incoterm}</span></p>}
-            <p>สกุลเงิน: {header.currency}</p>
+            <p>{t("currency")} {header.currency}</p>
           </section>
         </div>
 
         {/* Line items */}
         <section className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
           <div className="px-5 py-3 border-b border-border">
-            <h2 className="font-bold text-sm">รายการ ({items.length})</h2>
+            <h2 className="font-bold text-sm">{t("itemsHeading", { count: items.length })}</h2>
           </div>
           {items.length === 0 ? (
-            <p className="p-5 text-center text-sm text-muted">ไม่มีรายการ</p>
+            <p className="p-5 text-center text-sm text-muted">{t("noItems")}</p>
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-3 py-2 w-10">#</th>
-                  <th className="px-3 py-2">รายละเอียด</th>
-                  <th className="px-3 py-2 text-right w-20">จำนวน</th>
-                  <th className="px-3 py-2 w-16">หน่วย</th>
-                  <th className="px-3 py-2 text-right w-28">ราคา/หน่วย</th>
-                  <th className="px-3 py-2 text-right w-28">รวม</th>
+                  <th className="px-3 py-2">{t("colDescription")}</th>
+                  <th className="px-3 py-2 text-right w-20">{t("colQuantity")}</th>
+                  <th className="px-3 py-2 w-16">{t("colUnit")}</th>
+                  <th className="px-3 py-2 text-right w-28">{t("colUnitPrice")}</th>
+                  <th className="px-3 py-2 text-right w-28">{t("colTotal")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -239,15 +241,15 @@ export default async function CustomerFreightQuoteDetailPage({
           <table className="w-full text-sm">
             <tbody>
               <tr>
-                <td className="py-1 text-muted">มูลค่าก่อน VAT</td>
+                <td className="py-1 text-muted">{t("subtotal")}</td>
                 <td className="py-1 text-right font-mono">{thb(Number(header.subtotal))}</td>
               </tr>
               <tr>
-                <td className="py-1 text-muted">VAT {Number(header.vat_pct)}%</td>
+                <td className="py-1 text-muted">{t("vat", { pct: Number(header.vat_pct) })}</td>
                 <td className="py-1 text-right font-mono">{thb(Number(header.vat_amount))}</td>
               </tr>
               <tr className="border-t-2 border-black text-base font-bold">
-                <td className="py-2">รวมทั้งสิ้น</td>
+                <td className="py-2">{t("grandTotal")}</td>
                 <td className="py-2 text-right font-mono text-primary-700">{thb(Number(header.total))}</td>
               </tr>
             </tbody>
@@ -257,7 +259,7 @@ export default async function CustomerFreightQuoteDetailPage({
         {/* Notes */}
         {header.notes && (
           <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
-            <h2 className="font-bold text-sm mb-1">หมายเหตุ</h2>
+            <h2 className="font-bold text-sm mb-1">{t("notes")}</h2>
             <p className="text-xs whitespace-pre-line text-muted">{header.notes}</p>
           </section>
         )}
@@ -266,9 +268,9 @@ export default async function CustomerFreightQuoteDetailPage({
         {isSent && !isExpired && (
           <div className="rounded-2xl border-2 border-green-300 bg-green-50 dark:bg-green-900/10 p-5 space-y-3">
             <div>
-              <p className="text-sm font-bold text-green-900 dark:text-green-100">ต้องการตอบรับใบเสนอราคานี้?</p>
+              <p className="text-sm font-bold text-green-900 dark:text-green-100">{t("ctaHeading")}</p>
               <p className="text-xs text-green-800 dark:text-green-200 mt-1">
-                กดปุ่ม &quot;ตอบรับใบเสนอราคา&quot; เพื่อยืนยัน — ทีม Pacred จะเริ่มขั้นตอนต่อไปทันที (เปิดงานขนส่ง)
+                {t("ctaDescription")}
               </p>
             </div>
             <AcceptQuoteButton
@@ -277,7 +279,7 @@ export default async function CustomerFreightQuoteDetailPage({
               total={Number(header.total)}
             />
             <div className="pt-2 border-t border-green-200">
-              <p className="text-[11px] text-green-700 dark:text-green-300 mb-2">หรือถ้ายังไม่แน่ใจ ปรึกษาทีมก่อน:</p>
+              <p className="text-[11px] text-green-700 dark:text-green-300 mb-2">{t("ctaConsult")}</p>
               <div className="flex flex-wrap gap-2">
                 <a
                   href={LINE_OA.addFriendUrl}
@@ -285,7 +287,7 @@ export default async function CustomerFreightQuoteDetailPage({
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 rounded-lg border border-green-300 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
                 >
-                  <MessageCircle className="w-3 h-3" /> ทักไลน์
+                  <MessageCircle className="w-3 h-3" /> {t("chatLine")}
                 </a>
                 <a
                   href={`tel:${CONTACT.phoneCompanyDisplay}`}
@@ -299,14 +301,14 @@ export default async function CustomerFreightQuoteDetailPage({
         )}
         {isAccepted && (
           <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
-            ✅ ตอบรับใบเสนอราคาแล้ว — ระบบจะสร้างงานขนส่ง (job) ให้ตามขั้นตอน
+            {t("acceptedBanner")}
           </div>
         )}
         {isExpired && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            ⚠️ ใบเสนอราคาหมดอายุแล้ว —{" "}
+            {t("expiredBanner")}{" "}
             <a href={LINE_OA.addFriendUrl} target="_blank" rel="noopener noreferrer" className="underline font-medium">
-              ติดต่อทีมเพื่อขอใบใหม่
+              {t("expiredContactLink")}
             </a>
           </div>
         )}

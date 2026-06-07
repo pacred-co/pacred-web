@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
 import { redactId } from "@/lib/logger";
 import {
@@ -46,6 +47,7 @@ export async function MyIncidentsPanel({
   userId: string;
   showEmpty?: boolean;
 }) {
+  const t = await getTranslations("myIssuesPage");
   const supabase = await createClient();
 
   // actor_ref is stored as redactId(uid). Filter on that — RLS already
@@ -65,9 +67,9 @@ export async function MyIncidentsPanel({
     if (!showEmpty) return null;
     return (
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
-        <h2 className="text-base font-bold">ปัญหาที่ฉันแจ้ง</h2>
+        <h2 className="text-base font-bold">{t("title")}</h2>
         <p className="mt-2 text-sm text-muted">
-          ยังไม่มีปัญหาที่ระบบบันทึกจากการใช้งานของคุณ — ดีมาก 🎉
+          {t("panelEmptyBody")}
         </p>
       </section>
     );
@@ -76,9 +78,9 @@ export async function MyIncidentsPanel({
   return (
     <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
       <div>
-        <h2 className="text-base font-bold">ปัญหาที่ฉันแจ้ง</h2>
+        <h2 className="text-base font-bold">{t("title")}</h2>
         <p className="mt-0.5 text-xs text-muted">
-          ระบบบันทึกข้อผิดพลาดให้อัตโนมัติ — ไม่ต้องกดส่ง. ดูสถานะการแก้ไขได้ที่นี่
+          {t("panelSubtitle")}
         </p>
       </div>
 
@@ -95,13 +97,13 @@ export async function MyIncidentsPanel({
                 <span
                   className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${INCIDENT_STATUS_BADGE[status] ?? ""}`}
                 >
-                  {INCIDENT_USER_STATUS_LABEL[status] ?? "ส่งเรื่องแล้ว"}
+                  {INCIDENT_USER_STATUS_LABEL[status] ?? t("statusFallback")}
                 </span>
               </div>
               <p className="text-[11px] text-muted">
                 {r.route && <span className="font-mono">{r.route}</span>}
                 {r.route && " · "}
-                แจ้งเมื่อ{" "}
+                {t("reportedAt")}{" "}
                 {new Date(r.first_seen).toLocaleDateString("th-TH", { dateStyle: "medium" })}
               </p>
             </li>
@@ -110,7 +112,7 @@ export async function MyIncidentsPanel({
       </ul>
 
       <p className="text-[11px] text-muted">
-        เมื่อทีมงานแก้ไขเสร็จ สถานะจะเปลี่ยนเป็น &quot;แก้ไขแล้ว&quot; — ขอบคุณที่ช่วยให้ระบบดีขึ้น
+        {t("resolvedThanks")}
       </p>
     </section>
   );

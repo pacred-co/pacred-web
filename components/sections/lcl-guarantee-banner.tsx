@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { ArrowRight, MousePointerClick } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
@@ -19,7 +20,8 @@ const PARTNERS = [
  * strip + visit photo, followed by the 2 CTA image banners (สมัคร + ปรึกษา).
  * Self-contained; whole banner is clickable → LINE.
  */
-export function LclGuaranteeBanner() {
+export async function LclGuaranteeBanner() {
+  const t = await getTranslations("lclGuaranteeBanner");
   return (
     <section className="relative pt-2 md:pt-4 pb-2 md:pb-4">
       <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
@@ -47,10 +49,10 @@ export function LclGuaranteeBanner() {
               href={LINE_URL}
               cta="line_consult"
               surface="lcl_guarantee_banner"
-              aria-label="ทักไลน์ Pacred Shipping ปรึกษานำเข้า LCL ฟรี"
+              aria-label={t("bannerAria")}
               className="absolute inset-0 z-10"
             >
-              <span className="sr-only">ทักไลน์ Pacred Shipping</span>
+              <span className="sr-only">{t("bannerSrOnly")}</span>
             </TrackedExternalLink>
 
             <div className="relative pointer-events-none grid grid-cols-[1fr_auto] items-center gap-3 md:gap-6 pl-4 md:pl-8 pr-2 md:pr-4 min-h-[150px] md:min-h-[180px]">
@@ -58,7 +60,7 @@ export function LclGuaranteeBanner() {
                 {/* Desktop headline — LCL เริ่ม · $150/CBM · Pacred Shipping pill + arrow */}
                 <p className="hidden md:flex flex-wrap lg:flex-nowrap items-center gap-x-3 gap-y-2 tracking-tight lg:whitespace-nowrap">
                   <span className="inline-flex items-baseline gap-x-2 text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.45)]">
-                    <span className="text-[48px] font-black leading-none whitespace-nowrap">LCL เริ่ม</span>
+                    <span className="text-[48px] font-black leading-none whitespace-nowrap">{t("lclStart")}</span>
                   </span>
                   <span className="inline-flex items-baseline gap-x-2 text-yellow-300 [text-shadow:0_3px_8px_rgba(0,0,0,0.55)]">
                     <span className="text-[72px] font-black leading-none whitespace-nowrap">$150</span>
@@ -75,7 +77,7 @@ export function LclGuaranteeBanner() {
                 {/* Mobile headline — minimal 2-row */}
                 <div className="md:hidden flex flex-col gap-1">
                   <p className="flex items-baseline gap-1.5 text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.45)]">
-                    <span className="text-[26px] font-black leading-none tracking-tight whitespace-nowrap">LCL เริ่มแค่</span>
+                    <span className="text-[26px] font-black leading-none tracking-tight whitespace-nowrap">{t("lclStartMobile")}</span>
                   </p>
                   <p className="flex items-baseline gap-1.5 text-yellow-300 [text-shadow:0_3px_8px_rgba(0,0,0,0.55)]">
                     <span className="text-[48px] font-black leading-none tracking-tight whitespace-nowrap">$150</span>
@@ -111,7 +113,7 @@ export function LclGuaranteeBanner() {
               <div className="relative w-[150px] md:w-[180px] h-[150px] md:h-[180px] shrink-0 md:mr-6">
                 <Image
                   src="/images/visit/Visit04.png"
-                  alt="ทีมงาน Pacred Shipping"
+                  alt={t("photoAlt")}
                   fill
                   sizes="(max-width: 768px) 150px, 180px"
                   className="object-contain object-bottom drop-shadow-[0_4px_10px_rgba(0,0,0,0.30)]"
@@ -132,7 +134,7 @@ export function LclGuaranteeBanner() {
               {/* คลิ๊กเลย! corner badge */}
               <div className="pointer-events-none absolute top-1 md:top-2 right-1 md:right-3 z-20 flex flex-col items-center -rotate-[6deg] transition-transform duration-300 group-hover:-rotate-[10deg] group-hover:scale-105">
                 <span className="text-white text-[11px] md:text-[15px] font-black tracking-tight [text-shadow:0_1px_3px_rgba(0,0,0,0.55)] whitespace-nowrap">
-                  คลิ๊กเลย!
+                  {t("clickBadge")}
                 </span>
                 <MousePointerClick className="mt-0.5 w-4 h-4 md:w-5 md:h-5 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" strokeWidth={2.6} />
               </div>
@@ -144,12 +146,12 @@ export function LclGuaranteeBanner() {
         <div className="mt-3 md:mt-4 grid grid-cols-2 gap-2 md:gap-4">
           <Link
             href="/register"
-            aria-label="สมัครสมาชิกฟรี — คลิ๊กเลย"
+            aria-label={t("ctaRegister")}
             className="group relative block overflow-hidden rounded-2xl hover:-translate-y-0.5 transition-transform duration-300"
           >
             <Image
               src="/images/cta/samak05.png"
-              alt="สมัครสมาชิกฟรี — คลิ๊กเลย"
+              alt={t("ctaRegister")}
               width={534}
               height={200}
               sizes="(max-width: 768px) 45vw, 540px"
@@ -162,12 +164,12 @@ export function LclGuaranteeBanner() {
             href={LINE_URL}
             cta="line_consult"
             surface="lcl_guarantee_cta"
-            aria-label="ปรึกษานำเข้าฟรี ทางไลน์ — คลิ๊กเลย"
+            aria-label={t("ctaConsult")}
             className="group relative block overflow-hidden rounded-2xl hover:-translate-y-0.5 transition-transform duration-300"
           >
             <Image
               src="/images/cta/pruksa05.png"
-              alt="ปรึกษานำเข้าฟรี ทางไลน์ — คลิ๊กเลย"
+              alt={t("ctaConsult")}
               width={534}
               height={200}
               sizes="(max-width: 768px) 45vw, 540px"

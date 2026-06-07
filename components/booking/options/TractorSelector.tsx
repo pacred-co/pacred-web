@@ -9,6 +9,7 @@
  * unit_amount (BK-1 reads the rate table).
  */
 
+import { useTranslations } from "next-intl";
 import { Truck } from "lucide-react";
 import type { BookingTractorClass } from "@/types/booking";
 
@@ -32,12 +33,13 @@ interface TractorSelectorProps {
 }
 
 export function TractorSelector({ value, onChange }: TractorSelectorProps) {
+  const t = useTranslations("booking");
   return (
     <fieldset className="rounded-2xl border border-border bg-white dark:bg-surface p-4 md:p-5">
       <legend className="px-2 inline-flex items-center gap-2 text-[13px] md:text-[14px] font-black text-[#111827] dark:text-white">
         <Truck className="w-4 h-4 text-primary-600" strokeWidth={2.6} />
         {/* i18n-key: booking.selector.tractor.title */}
-        หัวลาก / รถบรรทุก
+        {t("selectors.tractor.label")}
       </legend>
       <p className="mt-1 text-[12px] md:text-[12.5px] leading-[1.55] text-muted font-medium">
         {/* i18n-key: booking.selector.tractor.help */}
@@ -77,7 +79,7 @@ export function TractorSelector({ value, onChange }: TractorSelectorProps) {
                 {selected && <span className="w-2.5 h-2.5 rounded-full bg-primary-600" />}
               </span>
               <span className="text-[13px] md:text-[13.5px] font-bold text-foreground">
-                {opt.labelTh}
+                {t(`selectors.tractor.options.${opt.value}`)}
               </span>
             </label>
           );

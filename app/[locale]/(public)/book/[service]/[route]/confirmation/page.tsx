@@ -1,5 +1,5 @@
 import { redirect, Link } from "@/i18n/navigation";
-import { getLocale } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { CheckCircle2, MessageCircle, Phone } from "lucide-react";
 import { Footer } from "@/components/sections/footer";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -59,6 +59,7 @@ export default async function BookingConfirmationPage({
   const { service: serviceParam } = await params;
   const sp = await searchParams;
   const locale = await getLocale();
+  const t = await getTranslations("booking");
 
   const bookingNo =
     typeof sp.no === "string" && sp.no.length > 0 ? sp.no : null;
@@ -140,17 +141,19 @@ export default async function BookingConfirmationPage({
           </div>
           {/* i18n-key: booking.confirmation.title */}
           <h1 className="mt-4 text-2xl font-bold text-foreground sm:text-3xl">
-            {greetingName ? `ขอบคุณ ${greetingName} — ` : ""}ได้รับการจองแล้ว
+            {greetingName
+              ? t("confirmation.titleWithName", { name: greetingName })
+              : t("confirmation.titlePlain")}
           </h1>
           {/* i18n-key: booking.confirmation.subtitle */}
           <p className="mt-2 text-sm text-muted">
-            ทีมขายจะติดต่อกลับเร็วๆ นี้เพื่อยืนยันราคาจริงและรายละเอียดงาน
+            {t("confirmation.subtitle")}
           </p>
 
           <div className="mt-5 inline-block rounded-2xl border border-border bg-white dark:bg-surface px-5 py-3 text-left shadow-sm">
             {/* i18n-key: booking.confirmation.referenceLabel */}
             <p className="text-[11px] uppercase tracking-widest text-muted">
-              เลขที่การจอง
+              {t("confirmation.referenceLabel")}
             </p>
             <p className="mt-0.5 text-xl font-bold tracking-wide text-primary-600 font-mono">
               {booking.booking_no}
@@ -163,24 +166,24 @@ export default async function BookingConfirmationPage({
           <h2 className="text-base font-bold text-foreground">{serviceTitle}</h2>
           <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
             {booking.route_slug && (
-              <Row label="เส้นทาง" value={booking.route_slug} mono />
+              <Row label={t("confirmation.field.route")} value={booking.route_slug} mono />
             )}
             {booking.transport_mode && (
-              <Row label="ประเภทขนส่ง" value={booking.transport_mode} />
+              <Row label={t("confirmation.field.transportMode")} value={booking.transport_mode} />
             )}
-            <Row label="การจัดการเอกสาร" value={docModeLabel(booking.doc_mode)} />
+            <Row label={t("confirmation.field.docHandling")} value={docModeLabel(booking.doc_mode, t)} />
             {booking.contact_phone && (
-              <Row label="เบอร์ติดต่อกลับ" value={booking.contact_phone} mono />
+              <Row label={t("confirmation.field.contactPhone")} value={booking.contact_phone} mono />
             )}
             {booking.pickup_address && (
-              <Row label="จุดรับสินค้า" value={booking.pickup_address} />
+              <Row label={t("confirmation.field.pickup")} value={booking.pickup_address} />
             )}
             {booking.dropoff_address && (
-              <Row label="จุดส่งสินค้า" value={booking.dropoff_address} />
+              <Row label={t("confirmation.field.dropoff")} value={booking.dropoff_address} />
             )}
             {booking.submitted_at && (
               <Row
-                label="วันที่จอง"
+                label={t("confirmation.field.bookedDate")}
                 value={new Date(booking.submitted_at).toLocaleString("th-TH", {
                   dateStyle: "medium",
                   timeStyle: "short",
@@ -194,7 +197,7 @@ export default async function BookingConfirmationPage({
         <section className="mt-5 rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
           {/* i18n-key: booking.confirmation.estimate.title */}
           <p className="text-xs font-semibold tracking-widest text-primary-600">
-            ราคาประมาณการ
+            {t("confirmation.estimate.title")}
           </p>
 
           {breakdown.length > 0 ? (
@@ -242,7 +245,7 @@ export default async function BookingConfirmationPage({
           )}
 
           <div className="mt-3 border-t border-border pt-3 flex items-baseline justify-between">
-            <p className="text-sm font-semibold text-foreground">รวมประมาณการ</p>
+            <p className="text-sm font-semibold text-foreground">{t("confirmation.estimate.total")}</p>
             <p className="text-xl font-bold text-primary-600 tabular-nums">
               ฿{Number(booking.estimate_total ?? 0).toLocaleString("th-TH")}
             </p>
@@ -250,7 +253,7 @@ export default async function BookingConfirmationPage({
 
           {/* i18n-key: booking.confirmation.estimate.disclaimer */}
           <p className="mt-2 text-[11px] leading-snug text-muted">
-            * ราคาเริ่มต้น — ทีมขายจะยืนยันราคาจริงหลังตรวจสินค้าและรายละเอียดงาน
+            {t("confirmation.estimate.disclaimer")}
           </p>
         </section>
 
@@ -258,10 +261,10 @@ export default async function BookingConfirmationPage({
         <section className="mt-5 rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
           {/* i18n-key: booking.confirmation.contact.title */}
           <h3 className="text-sm font-bold text-foreground">
-            ติดต่อทีมขาย Pacred
+            {t("confirmation.contact.title")}
           </h3>
           <p className="mt-1 text-xs text-muted">
-            หากต้องการสอบถามเพิ่มเติม สามารถทักทีมขายได้ทันที
+            {t("confirmation.contact.subtitle")}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <a
@@ -271,14 +274,14 @@ export default async function BookingConfirmationPage({
               className="flex items-center gap-2 rounded-2xl bg-[#06C755] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#05b54c]"
             >
               <MessageCircle className="h-4 w-4" />
-              ทักไลน์ {LINE_OA.premiumId}
+              {t("confirmation.contact.line", { id: LINE_OA.premiumId })}
             </a>
             <a
               href={`tel:${CONTACT.phone}`}
               className="flex items-center gap-2 rounded-2xl border-[1.5px] border-border bg-white dark:bg-surface px-4 py-2.5 text-sm font-semibold text-foreground transition hover:border-primary-300 hover:text-primary-600"
             >
               <Phone className="h-4 w-4" />
-              โทร {CONTACT.phoneDisplay}
+              {t("confirmation.contact.phone", { phone: CONTACT.phoneDisplay })}
             </a>
           </div>
         </section>
@@ -289,13 +292,13 @@ export default async function BookingConfirmationPage({
             href="/bookings"
             className="text-sm font-semibold text-primary-600 hover:text-primary-700 hover:underline"
           >
-            → ดูการจองทั้งหมดของฉัน
+            {t("confirmation.viewAllMine")}
           </Link>
           <Link
             href="/"
             className="text-sm text-muted hover:text-foreground"
           >
-            กลับหน้าแรก
+            {t("confirmation.backHome")}
           </Link>
         </div>
       </main>
@@ -304,15 +307,18 @@ export default async function BookingConfirmationPage({
   );
 }
 
-function docModeLabel(mode: string): string {
+function docModeLabel(
+  mode: string,
+  t: Awaited<ReturnType<typeof getTranslations<"booking">>>,
+): string {
   // i18n-key: booking.confirmation.docMode.{none|tax_invoice|customs_declaration}
   switch (mode) {
     case "tax_invoice":
-      return "ออกใบกำกับภาษี";
+      return t("confirmation.docMode.tax_invoice");
     case "customs_declaration":
-      return "ออกใบขนสินค้า";
+      return t("confirmation.docMode.customs_declaration");
     default:
-      return "ไม่รับเอกสาร";
+      return t("confirmation.docMode.none");
   }
 }
 

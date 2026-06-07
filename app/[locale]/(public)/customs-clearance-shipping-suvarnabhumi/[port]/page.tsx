@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import {
   Home,
   ChevronRight,
@@ -120,8 +121,9 @@ export default async function CustomsPortDetailPage({
 
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const template = TEMPLATES[port.template];
-  const homeLabel = typedLocale === "th" ? "หน้าแรก" : "Home";
-  const customsLabel = typedLocale === "th" ? "เคลียร์ศุลกากร" : "Customs";
+  const t = await getTranslations("customsClearancePort");
+  const homeLabel = t("breadcrumbHome");
+  const customsLabel = t("breadcrumbCustoms");
 
   return (
     <>
@@ -194,10 +196,10 @@ export default async function CustomsPortDetailPage({
                   {port.modeBadge}
                 </div>
                 <h1 className="text-[24px] md:text-[40px] leading-[1.15] font-black tracking-[-0.025em] text-[#111827] dark:text-white">
-                  เคลียร์ศุลกากร · <span className="text-primary-600">{port.name}</span>
+                  {t("h1Prefix")} · <span className="text-primary-600">{port.name}</span>
                 </h1>
                 <h2 className="mt-2 md:mt-3 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted">
-                  {port.sub} · ค่าพิธีการเริ่มต้น <span className="text-primary-600 font-bold">{port.customsServiceFee} บาท</span> + ค่าใช้จ่ายอื่นตามจริง
+                  {port.sub} · {t("h2FeePrefix")} <span className="text-primary-600 font-bold">{port.customsServiceFee} {t("baht")}</span> {t("h2FeeSuffix")}
                 </h2>
 
                 {/* Full pricing breakdown — moved right under the title
@@ -208,13 +210,13 @@ export default async function CustomsPortDetailPage({
                 <div className="mt-6 md:mt-8">
                   <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
                     <Sparkles className="w-3.5 h-3.5" strokeWidth={2.6} />
-                    FULL PRICING · ค่าใช้จ่ายทุกหัว
+                    {t("pricingBadge")}
                   </div>
                   <h3 className="text-[20px] md:text-[26px] leading-[1.18] font-black tracking-[-0.025em] text-[#111827] dark:text-white">
-                    รายละเอียดค่าใช้จ่ายเต็ม
+                    {t("pricingH3")}
                   </h3>
                   <p className="mt-2 text-[12.5px] md:text-[14px] leading-[1.6] font-medium text-muted">
-                    ราคาเบื้องต้น — ทีม Pacred Shipping ออก Quote ตามสินค้าจริงก่อนยืนยันทุกครั้ง ไม่มีค่าใช้จ่ายแอบ
+                    {t("pricingDisclaimer")}
                   </p>
 
                   <div className="mt-5 md:mt-6 space-y-4 md:space-y-5">
@@ -272,7 +274,7 @@ export default async function CustomsPortDetailPage({
                         data-cta="quote-summary"
                         className="inline-flex items-center justify-center gap-2 h-12 px-5 md:px-6 rounded-xl bg-primary-600 text-white font-black text-[13.5px] md:text-[14.5px] hover:bg-primary-700 transition-colors shadow-[0_6px_18px_rgba(220,38,38,0.30)]"
                       >
-                        ขอใบเสนอราคา ฟรี
+                        {t("ctaFreeQuote")}
                         <ArrowRight className="w-4 h-4" strokeWidth={2.6} />
                       </a>
                     </div>
@@ -390,18 +392,18 @@ export default async function CustomsPortDetailPage({
                 {/* Quote box */}
                 <div className="rounded-2xl md:rounded-3xl border border-primary-100 dark:border-primary-900/50 bg-white dark:bg-surface p-4 md:p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
                   <div className="text-[10.5px] md:text-[11px] font-bold text-primary-700/80 dark:text-primary-300/80 tracking-[0.10em] uppercase leading-none">
-                    ค่าพิธีการศุลกากร · เริ่มต้น
+                    {t("quoteBoxLabel")}
                   </div>
                   <div className="mt-1.5 flex items-baseline gap-1.5 flex-wrap">
                     <span className="text-[36px] md:text-[44px] font-black text-primary-600 dark:text-primary-300 leading-none tracking-tight">
                       {port.customsServiceFee}
                     </span>
                     <span className="text-[15px] md:text-[18px] font-black text-primary-700 dark:text-primary-300">
-                      บาท
+                      {t("baht")}
                     </span>
                   </div>
                   <p className="mt-1.5 text-[11.5px] md:text-[12.5px] text-muted font-medium leading-[1.5]">
-                    + ค่าใช้จ่ายอื่นตามจริง — สรุปรวม{" "}
+                    {t("quoteBoxSubNote")}{" "}
                     <span className="text-primary-700 dark:text-primary-300 font-bold">
                       {port.summaryPrice}
                     </span>
@@ -415,7 +417,7 @@ export default async function CustomsPortDetailPage({
                       data-cta="quote-aside"
                       className="inline-flex w-full items-center justify-center gap-2 h-11 rounded-xl bg-primary-600 text-white font-black text-[13px] md:text-[13.5px] hover:bg-primary-700 transition-colors shadow-[0_6px_18px_rgba(220,38,38,0.30)]"
                     >
-                      ขอใบเสนอราคา ฟรี · ตอบไว 5 นาที
+                      {t("ctaFreeQuoteFast")}
                       <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.6} />
                     </a>
                   </div>
@@ -437,7 +439,7 @@ export default async function CustomsPortDetailPage({
             <div className="hidden md:block relative w-screen left-1/2 -translate-x-1/2 mt-12 group">
               <Image
                 src="/images/bannerdesktop/bannerbottom02.png"
-                alt="Pacred Shipping — บริการครบ ราคาชัด คุยกับทีมง่าย ปรึกษาฟรีตลอด 24 ชม."
+                alt={t("bannerDesktopAlt")}
                 width={3840}
                 height={800}
                 sizes="100vw"
@@ -453,9 +455,9 @@ export default async function CustomsPortDetailPage({
                 cta="line_banner"
                 surface="customs_clearance_detail_bottom_banner"
                 className="absolute inset-0 z-0"
-                aria-label="ทักไลน์ Pacred Shipping"
+                aria-label={t("lineAriaLabel")}
               >
-                <span className="sr-only">ทักไลน์ Pacred Shipping</span>
+                <span className="sr-only">{t("lineAriaLabel")}</span>
               </TrackedExternalLink>
 
               {/* Text overlay (z-10) — pointer-events:none lets clicks through
@@ -464,17 +466,17 @@ export default async function CustomsPortDetailPage({
               <div className="absolute inset-y-0 left-0 right-[45%] z-10 pointer-events-none flex flex-col justify-center px-[6%] lg:px-[8%] xl:px-[10%] py-2 lg:py-3">
                 <div className="inline-flex items-center gap-1.5 mb-1 lg:mb-1.5 text-yellow-300 text-[11px] lg:text-[13px] xl:text-[15px] font-black tracking-[0.08em] uppercase drop-shadow-[0_1px_4px_rgba(0,0,0,0.55)]">
                   <ShieldCheck className="w-3.5 h-3.5 lg:w-4 lg:h-4 xl:w-5 xl:h-5" strokeWidth={2.6} />
-                  CLEARANCE GUARANTEE · มั่นใจเคลียร์ได้ 100%
+                  {t("guaranteeBadge")}
                 </div>
                 <h3 className="text-[20px] lg:text-[30px] xl:text-[40px] font-black text-white leading-[1.05] tracking-[-0.025em] drop-shadow-[0_3px_12px_rgba(0,0,0,0.6)]">
-                  มั่นใจ เคลียร์ เร็ว ไว ไม่มีคำว่าทำไม่ได้
+                  {t("guaranteeH3Line1")}
                   <br />
-                  เลือก <span className="text-yellow-300">Pacred Shipping</span>
+                  {t("guaranteeH3Line2Prefix")} <span className="text-yellow-300">Pacred Shipping</span>
                 </h3>
                 <p className="mt-1 lg:mt-1.5 text-[11.5px] lg:text-[13px] xl:text-[15px] leading-[1.4] font-medium text-white/95 drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]">
-                  อยู่ข้างคุณทุกขั้นตอน —{" "}
-                  <strong className="text-yellow-200 font-black">บริการครบ ราคาชัด</strong>
-                  {" "}ปรึกษาฟรี 24 ชม.
+                  {t("guaranteeParaPrefix")}{" "}
+                  <strong className="text-yellow-200 font-black">{t("guaranteeParaStrong")}</strong>
+                  {" "}{t("guaranteeParaSuffix")}
                 </p>
 
                 {/* CTA row — QR card + 2 phone tel: badges. */}
@@ -487,17 +489,17 @@ export default async function CustomsPortDetailPage({
                   >
                     <Image
                       src="/images/qr-line-oa.png"
-                      alt="สแกน QR เพื่อทักไลน์ Pacred Shipping"
+                      alt={t("qrAlt")}
                       width={140}
                       height={140}
                       className="w-[60px] lg:w-[74px] xl:w-[88px] h-auto block rounded-sm"
                     />
                     <div className="leading-tight">
                       <p className="text-[9px] lg:text-[10.5px] xl:text-[11.5px] font-bold text-primary-600 tracking-[0.05em] uppercase">
-                        สแกน QR
+                        {t("qrScanLabel")}
                       </p>
                       <p className="text-[12.5px] lg:text-[15px] xl:text-[17px] font-black text-primary-700 leading-tight">
-                        ทักไลน์ฟรี →
+                        {t("qrLineCtaArrow")}
                       </p>
                     </div>
                   </TrackedExternalLink>
@@ -526,7 +528,7 @@ export default async function CustomsPortDetailPage({
             <div className="md:hidden relative w-screen left-1/2 -translate-x-1/2 mt-8 group aspect-[6/5] overflow-hidden">
               <Image
                 src="/images/bannermobile/pacredbannermobile01.png"
-                alt="Pacred Shipping — บริการครบ ราคาชัด คุยกับทีมง่าย ปรึกษาฟรีตลอด 24 ชม."
+                alt={t("bannerMobileAlt")}
                 fill
                 sizes="100vw"
                 className="object-cover object-top"
@@ -539,26 +541,26 @@ export default async function CustomsPortDetailPage({
                 cta="line_banner_mobile"
                 surface="customs_clearance_detail_bottom_banner_mobile"
                 className="absolute inset-0 z-0"
-                aria-label="ทักไลน์ Pacred Shipping"
+                aria-label={t("lineAriaLabel")}
               >
-                <span className="sr-only">ทักไลน์ Pacred Shipping</span>
+                <span className="sr-only">{t("lineAriaLabel")}</span>
               </TrackedExternalLink>
 
               <div className="absolute inset-0 z-10 pointer-events-none px-4 pt-3.5 pb-6 bg-gradient-to-r from-black/55 via-black/20 to-transparent flex flex-col items-start gap-2.5">
                 <div>
                   <div className="inline-flex items-center gap-1.5 mb-1.5 text-yellow-300 text-[11px] font-black tracking-[0.10em] uppercase drop-shadow-[0_1px_3px_rgba(0,0,0,0.65)]">
                     <ShieldCheck className="w-3.5 h-3.5" strokeWidth={2.6} />
-                    CLEARANCE GUARANTEE · มั่นใจเคลียร์ได้ 100%
+                    {t("guaranteeBadge")}
                   </div>
                   <h3 className="text-[24px] font-black text-white leading-[1.1] tracking-[-0.02em] drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
-                    มั่นใจ เคลียร์ เร็ว ไว ไม่มีคำว่าทำไม่ได้
+                    {t("guaranteeH3Line1")}
                     <br />
-                    เลือก <span className="text-yellow-300">Pacred Shipping</span>
+                    {t("guaranteeH3Line2Prefix")} <span className="text-yellow-300">Pacred Shipping</span>
                   </h3>
                   <p className="mt-2 text-[13.5px] leading-[1.45] font-medium text-white/95 drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]">
-                    อยู่ข้างคุณทุกขั้นตอน —{" "}
-                    <strong className="text-yellow-200 font-black">บริการครบ ราคาชัด คุยกับทีมง่าย</strong>
-                    {" "}ปรึกษาฟรี 24 ชม.
+                    {t("guaranteeParaPrefix")}{" "}
+                    <strong className="text-yellow-200 font-black">{t("guaranteeParaStrongMobile")}</strong>
+                    {" "}{t("guaranteeParaSuffix")}
                   </p>
                 </div>
 
@@ -567,11 +569,11 @@ export default async function CustomsPortDetailPage({
                   cta="line_qr_banner_mobile"
                   surface="customs_clearance_detail_bottom_banner_mobile_qr"
                   className="inline-block bg-white rounded-xl p-1.5 shadow-[0_8px_22px_rgba(0,0,0,0.32)] pointer-events-auto"
-                  aria-label="สแกน QR เพื่อทักไลน์ Pacred Shipping"
+                  aria-label={t("qrAlt")}
                 >
                   <Image
                     src="/images/qr-line-oa.png"
-                    alt="สแกน QR เพื่อทักไลน์ Pacred Shipping"
+                    alt={t("qrAlt")}
                     width={140}
                     height={140}
                     className="w-[80px] h-auto block rounded-sm"

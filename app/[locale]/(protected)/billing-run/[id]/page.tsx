@@ -12,6 +12,7 @@
  */
 
 import { notFound, redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -128,13 +129,14 @@ export default async function CustomerBillingRunDetailPage({
   }
 
   const isOverdue = hdrRaw.status === "issued" && hdrRaw.date_due < isoToday();
+  const t = await getTranslations("billingRunDetail");
 
   return (
     <main className="p-4 md:p-6 lg:p-5 space-y-4">
-      <title>{`ใบวางบิล ${hdrRaw.doc_no} | Pacred`}</title>
+      <title>{`${t("docTitle", { docNo: hdrRaw.doc_no })} | Pacred`}</title>
 
       <Link href="/billing-run" className="text-xs text-muted hover:text-foreground underline-offset-2 hover:underline inline-block">
-        ← กลับหน้ารายการ
+        {t("backToList")}
       </Link>
 
       {/* Status banner */}
@@ -142,8 +144,8 @@ export default async function CustomerBillingRunDetailPage({
         <section className="rounded-2xl border-2 border-red-300 bg-red-50 p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="font-bold text-red-800">⚠️ เลยกำหนดชำระแล้ว</p>
-              <p className="text-xs text-red-700 mt-0.5">ครบกำหนด {hdrRaw.date_due} · กรุณาชำระโดยเร็ว</p>
+              <p className="font-bold text-red-800">{t("bannerOverdueTitle")}</p>
+              <p className="text-xs text-red-700 mt-0.5">{t("bannerOverdueDue", { date: hdrRaw.date_due })}</p>
             </div>
           </div>
         </section>
@@ -151,17 +153,17 @@ export default async function CustomerBillingRunDetailPage({
 
       {hdrRaw.status === "issued" && !isOverdue && (
         <section className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-4">
-          <p className="font-bold text-amber-800">รอชำระเงิน</p>
-          <p className="text-xs text-amber-700 mt-0.5">ครบกำหนด {hdrRaw.date_due}</p>
+          <p className="font-bold text-amber-800">{t("bannerAwaitingTitle")}</p>
+          <p className="text-xs text-amber-700 mt-0.5">{t("bannerAwaitingDue", { date: hdrRaw.date_due })}</p>
         </section>
       )}
 
       {hdrRaw.status === "paid" && (
         <section className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-4">
-          <p className="font-bold text-emerald-800">✓ ชำระเรียบร้อยแล้ว</p>
+          <p className="font-bold text-emerald-800">{t("bannerPaidTitle")}</p>
           {hdrRaw.paid_at && (
             <p className="text-xs text-emerald-700 mt-0.5">
-              ชำระเมื่อ {hdrRaw.paid_at.slice(0, 10)} · {hdrRaw.payment_method}
+              {t("bannerPaidAt", { date: hdrRaw.paid_at.slice(0, 10), method: hdrRaw.payment_method ?? "" })}
               {hdrRaw.payment_reference && ` (${hdrRaw.payment_reference})`}
             </p>
           )}
@@ -170,7 +172,7 @@ export default async function CustomerBillingRunDetailPage({
 
       {hdrRaw.status === "cancelled" && (
         <section className="rounded-2xl border border-stone-300 bg-stone-50 p-4">
-          <p className="font-bold text-stone-700">✕ ใบวางบิลนี้ถูกยกเลิก</p>
+          <p className="font-bold text-stone-700">{t("bannerCancelledTitle")}</p>
         </section>
       )}
 
@@ -178,22 +180,22 @@ export default async function CustomerBillingRunDetailPage({
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 md:p-5 shadow-sm">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <div className="text-xs text-muted">เลขที่เอกสาร</div>
+            <div className="text-xs text-muted">{t("docNoLabel")}</div>
             <div className="text-2xl font-bold font-mono">{hdrRaw.doc_no}</div>
           </div>
           <div className="text-right">
-            <div className="text-xs text-muted">ยอดเงิน</div>
+            <div className="text-xs text-muted">{t("amountLabel")}</div>
             <div className="text-2xl font-bold text-amber-700">฿{thbFmt(Number(hdrRaw.total_thb))}</div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 text-sm">
           <div>
-            <div className="text-xs text-muted">วันที่ออก</div>
+            <div className="text-xs text-muted">{t("dateIssuedLabel")}</div>
             <div>{hdrRaw.date_issued}</div>
           </div>
           <div>
-            <div className="text-xs text-muted">ครบกำหนดชำระ</div>
+            <div className="text-xs text-muted">{t("dateDueLabel")}</div>
             <div className={isOverdue ? "text-red-600 font-medium" : ""}>{hdrRaw.date_due}</div>
           </div>
         </div>
@@ -202,18 +204,18 @@ export default async function CustomerBillingRunDetailPage({
       {/* Line items */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
         <div className="p-3 md:p-4 border-b border-border">
-          <h3 className="font-bold text-sm">รายการฝากนำเข้า ({items.length} รายการ)</h3>
+          <h3 className="font-bold text-sm">{t("itemsHeading", { count: items.length })}</h3>
         </div>
         <div className="overflow-x-auto scrollbar-x-visible">
           <table className="w-full text-sm">
             <thead className="bg-surface-alt/60 text-xs text-muted">
               <tr>
-                <th className="px-3 py-2 text-left">เลขที่ออเดอร์</th>
-                <th className="px-3 py-2 text-left">รหัสพัสดุ</th>
-                <th className="px-3 py-2 text-right">กล่อง</th>
-                <th className="px-3 py-2 text-right">น้ำหนัก</th>
-                <th className="px-3 py-2 text-right">CBM</th>
-                <th className="px-3 py-2 text-right">ค่าขนส่ง (฿)</th>
+                <th className="px-3 py-2 text-left">{t("colOrderNo")}</th>
+                <th className="px-3 py-2 text-left">{t("colTrackingCode")}</th>
+                <th className="px-3 py-2 text-right">{t("colBoxes")}</th>
+                <th className="px-3 py-2 text-right">{t("colWeight")}</th>
+                <th className="px-3 py-2 text-right">{t("colCbm")}</th>
+                <th className="px-3 py-2 text-right">{t("colShippingCost")}</th>
               </tr>
             </thead>
             <tbody>
@@ -237,16 +239,16 @@ export default async function CustomerBillingRunDetailPage({
 
       {/* Total breakdown */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 md:p-5 shadow-sm">
-        <h3 className="font-bold text-sm mb-3">สรุปยอดเงิน</h3>
+        <h3 className="font-bold text-sm mb-3">{t("summaryHeading")}</h3>
         <div className="space-y-1.5 text-sm">
-          <div className="flex justify-between"><span className="text-muted">ค่าขนส่งรายการ</span><span>฿{thbFmt(Number(hdrRaw.subtotal_thb))}</span></div>
-          {Number(hdrRaw.delivery_chn_thb) > 0 && <div className="flex justify-between"><span className="text-muted">+ ค่าขนส่งจีน</span><span>฿{thbFmt(Number(hdrRaw.delivery_chn_thb))}</span></div>}
-          {Number(hdrRaw.delivery_th_thb) > 0 && <div className="flex justify-between"><span className="text-muted">+ ค่าขนส่งไทย</span><span>฿{thbFmt(Number(hdrRaw.delivery_th_thb))}</span></div>}
-          {Number(hdrRaw.other_thb) > 0 && <div className="flex justify-between"><span className="text-muted">+ อื่นๆ</span><span>฿{thbFmt(Number(hdrRaw.other_thb))}</span></div>}
-          {Number(hdrRaw.discount_thb) > 0 && <div className="flex justify-between text-red-600"><span>− ส่วนลด</span><span>−฿{thbFmt(Number(hdrRaw.discount_thb))}</span></div>}
+          <div className="flex justify-between"><span className="text-muted">{t("summaryItems")}</span><span>฿{thbFmt(Number(hdrRaw.subtotal_thb))}</span></div>
+          {Number(hdrRaw.delivery_chn_thb) > 0 && <div className="flex justify-between"><span className="text-muted">{t("summaryDeliveryChn")}</span><span>฿{thbFmt(Number(hdrRaw.delivery_chn_thb))}</span></div>}
+          {Number(hdrRaw.delivery_th_thb) > 0 && <div className="flex justify-between"><span className="text-muted">{t("summaryDeliveryTh")}</span><span>฿{thbFmt(Number(hdrRaw.delivery_th_thb))}</span></div>}
+          {Number(hdrRaw.other_thb) > 0 && <div className="flex justify-between"><span className="text-muted">{t("summaryOther")}</span><span>฿{thbFmt(Number(hdrRaw.other_thb))}</span></div>}
+          {Number(hdrRaw.discount_thb) > 0 && <div className="flex justify-between text-red-600"><span>{t("summaryDiscount")}</span><span>−฿{thbFmt(Number(hdrRaw.discount_thb))}</span></div>}
           <hr className="border-border my-2" />
           <div className="flex justify-between font-bold text-base">
-            <span>รวมทั้งสิ้น</span>
+            <span>{t("summaryGrandTotal")}</span>
             <span className="text-amber-700">฿{thbFmt(Number(hdrRaw.total_thb))}</span>
           </div>
         </div>
@@ -255,7 +257,7 @@ export default async function CustomerBillingRunDetailPage({
       {/* Note */}
       {hdrRaw.note_for_customer && (
         <section className="rounded-2xl border border-amber-200 bg-amber-50/40 p-4">
-          <h3 className="font-bold text-sm mb-2 text-amber-800">หมายเหตุจากบริษัท</h3>
+          <h3 className="font-bold text-sm mb-2 text-amber-800">{t("noteHeading")}</h3>
           <p className="text-sm whitespace-pre-wrap">{hdrRaw.note_for_customer}</p>
         </section>
       )}

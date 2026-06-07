@@ -13,6 +13,7 @@
  */
 
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -34,13 +35,14 @@ export default async function CustomerBillingRunPage() {
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
   const { profile } = data;
+  const t = await getTranslations("billingRun");
 
   if (!profile.member_code) {
     // legacy "userid" linkage = profile.member_code (PR123); without it nothing matches
     return (
       <main className="p-4 md:p-6 space-y-4">
-        <h1 className="text-xl font-bold">ใบวางบิลของฉัน</h1>
-        <p className="text-sm text-muted">ยังไม่มีรหัสสมาชิก · กรุณาเสร็จสิ้นการลงทะเบียน</p>
+        <h1 className="text-xl font-bold">{t("pageTitle")}</h1>
+        <p className="text-sm text-muted">{t("noMemberCode")}</p>
       </main>
     );
   }
@@ -81,23 +83,23 @@ export default async function CustomerBillingRunPage() {
 
   return (
     <main className="p-4 md:p-6 lg:p-5 space-y-5">
-      <title>ใบวางบิลของฉัน | Pacred</title>
+      <title>{`${t("pageTitle")} | Pacred`}</title>
 
       <header className="space-y-1">
-        <h1 className="text-xl md:text-2xl font-bold">ใบวางบิลของฉัน</h1>
-        <p className="text-xs text-muted">ใบเรียกเก็บเงินจากบริษัทแพคเรด (ประเทศไทย) จำกัด · ชำระภายในวันที่ครบกำหนด</p>
+        <h1 className="text-xl md:text-2xl font-bold">{t("pageTitle")}</h1>
+        <p className="text-xs text-muted">{t("pageSubtitle")}</p>
       </header>
 
       {totalUnpaid > 0 && (
         <section className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-xs text-amber-700 font-medium">ยอดค้างชำระทั้งหมด</div>
+              <div className="text-xs text-amber-700 font-medium">{t("totalUnpaid")}</div>
               <div className="text-2xl md:text-xl font-bold text-amber-800">฿{thbFmt(totalUnpaid)}</div>
             </div>
             <div className="text-xs text-amber-700 text-right">
-              <div>{issued.length} ใบรอชำระ</div>
-              {overdue.length > 0 && <div className="text-red-700 font-medium mt-0.5">{overdue.length} ใบเลยกำหนด ⚠️</div>}
+              <div>{t("countAwaiting", { count: issued.length })}</div>
+              {overdue.length > 0 && <div className="text-red-700 font-medium mt-0.5">{t("countOverdue", { count: overdue.length })}</div>}
             </div>
           </div>
         </section>
@@ -105,26 +107,26 @@ export default async function CustomerBillingRunPage() {
 
       {rows.length === 0 && (
         <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 text-center shadow-sm">
-          <p className="text-sm text-muted">ยังไม่มีใบวางบิล</p>
+          <p className="text-sm text-muted">{t("noInvoices")}</p>
         </section>
       )}
 
       {overdue.length > 0 && (
         <InvoiceSection
-          title="⚠️ เลยกำหนดชำระ"
-          subtitle="กรุณาชำระโดยเร็วเพื่อหลีกเลี่ยงการระงับบริการ"
+          title={t("sectionOverdue")}
+          subtitle={t("sectionOverdueSubtitle")}
           rows={overdue}
           tone="red"
         />
       )}
       {issued.length > 0 && (
-        <InvoiceSection title="รอชำระเงิน" rows={issued} tone="amber" />
+        <InvoiceSection title={t("sectionAwaiting")} rows={issued} tone="amber" />
       )}
       {paid.length > 0 && (
-        <InvoiceSection title="ชำระแล้ว" rows={paid} tone="emerald" />
+        <InvoiceSection title={t("sectionPaid")} rows={paid} tone="emerald" />
       )}
       {cancelled.length > 0 && (
-        <InvoiceSection title="ยกเลิก" rows={cancelled} tone="stone" />
+        <InvoiceSection title={t("sectionCancelled")} rows={cancelled} tone="stone" />
       )}
     </main>
   );
@@ -142,12 +144,13 @@ type SectionRow = {
   is_overdue: boolean;
 };
 
-function InvoiceSection({ title, subtitle, rows, tone }: {
+async function InvoiceSection({ title, subtitle, rows, tone }: {
   title: string;
   subtitle?: string;
   rows: SectionRow[];
   tone: SectionTone;
 }) {
+  const t = await getTranslations("billingRun");
   const toneCls: Record<SectionTone, string> = {
     red:     "border-red-200 bg-red-50/30",
     amber:   "border-amber-200 bg-amber-50/30",
@@ -163,7 +166,7 @@ function InvoiceSection({ title, subtitle, rows, tone }: {
   return (
     <section className={`rounded-2xl border ${toneCls[tone]} p-3 md:p-4`}>
       <div className="mb-3">
-        <h2 className={`font-bold text-sm ${titleCls[tone]}`}>{title} ({rows.length})</h2>
+        <h2 className={`font-bold text-sm ${titleCls[tone]}`}>{t("sectionHeading", { title, count: rows.length })}</h2>
         {subtitle && <p className="text-xs text-muted mt-0.5">{subtitle}</p>}
       </div>
       <div className="space-y-2">
@@ -176,14 +179,14 @@ function InvoiceSection({ title, subtitle, rows, tone }: {
             <div className="flex-1 min-w-0">
               <div className="font-mono text-sm font-medium truncate">{r.doc_no}</div>
               <div className="text-xs text-muted mt-0.5">
-                ออก {r.date_issued} · ครบกำหนด {r.date_due}
-                {r.is_overdue && <span className="text-red-600 ml-2">· เลยกำหนดแล้ว</span>}
-                {r.status === "paid" && r.paid_at && <span className="text-emerald-700 ml-2">· ชำระเมื่อ {r.paid_at.slice(0, 10)}</span>}
+                {t("rowIssuedDue", { issued: r.date_issued, due: r.date_due })}
+                {r.is_overdue && <span className="text-red-600 ml-2">{t("rowOverdue")}</span>}
+                {r.status === "paid" && r.paid_at && <span className="text-emerald-700 ml-2">{t("rowPaidAt", { date: r.paid_at.slice(0, 10) })}</span>}
               </div>
             </div>
             <div className="text-right">
               <div className="text-base font-bold">฿{thbFmt(r.total_thb)}</div>
-              <div className="text-xs text-primary-600 hover:underline">ดูรายละเอียด →</div>
+              <div className="text-xs text-primary-600 hover:underline">{t("viewDetail")}</div>
             </div>
           </Link>
         ))}

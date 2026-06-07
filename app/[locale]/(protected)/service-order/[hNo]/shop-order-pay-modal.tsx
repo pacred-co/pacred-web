@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { QrCode, UploadCloud, CheckCircle2, Loader2, X, Wallet } from "lucide-react";
 import { getForwarderPaymentQr } from "@/actions/forwarder";
@@ -34,6 +35,7 @@ export function ShopOrderPayButton({
   totalThb: number;
   walletBalance: number | null;
 }) {
+  const t = useTranslations("shopOrderPayModal");
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [qr, setQr] = useState<{ dataUrl: string; promptPayId: string } | null>(null);
@@ -67,7 +69,7 @@ export function ShopOrderPayButton({
         setQr({ dataUrl: r.data.dataUrl, promptPayId: r.data.promptPayId });
         setQrFor(remaining);
         setQrErr(null);
-      } else setQrErr("ไม่สามารถสร้าง QR ได้ — โอนตามเลขบัญชีแล้วแนบสลิปได้เลย");
+      } else setQrErr(t("qrError"));
     })();
     return () => {
       alive = false;
@@ -87,7 +89,7 @@ export function ShopOrderPayButton({
       setSlipPath(r.data.path);
       setSlipName(file.name);
     } else {
-      setErr(r.ok ? "อัปโหลดสลิปไม่สำเร็จ" : r.error);
+      setErr(r.ok ? t("uploadFailed") : r.error);
       setSlipPath(null);
       setSlipName("");
     }
@@ -95,7 +97,7 @@ export function ShopOrderPayButton({
 
   async function onSubmit() {
     if (!slipPath) {
-      setErr("กรุณาแนบสลิปก่อนยืนยัน");
+      setErr(t("attachSlipFirst"));
       return;
     }
     setErr(null);
@@ -135,7 +137,7 @@ export function ShopOrderPayButton({
         className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-3 text-[15px] font-semibold text-white shadow-sm transition hover:bg-primary-700"
       >
         <QrCode className="h-5 w-5" />
-        ชำระเงิน — สแกน QR + แนบสลิป
+        {t("payScanQr")}
       </button>
 
       {open && (
@@ -143,9 +145,9 @@ export function ShopOrderPayButton({
           <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white dark:bg-gray-900 p-5 shadow-lg">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">
-                ชำระเงินฝากสั่งซื้อ #{hNo}
+                {t("modalTitle", { hNo })}
               </h2>
-              <button type="button" onClick={() => setOpen(false)} aria-label="ปิด" className="rounded-full p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
+              <button type="button" onClick={() => setOpen(false)} aria-label={t("close")} className="rounded-full p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -153,16 +155,16 @@ export function ShopOrderPayButton({
             {done ? (
               <div className="flex flex-col items-center py-6 text-center">
                 <CheckCircle2 className="h-14 w-14 text-green-600" />
-                <p className="mt-3 text-[16px] font-bold text-gray-900 dark:text-white">ส่งสลิปเรียบร้อย 🎉</p>
-                <p className="mt-1.5 text-[14px] text-gray-500">ทีมงานกำลังตรวจสอบสลิป — ออเดอร์จะอัปเดตเป็น &quot;ชำระแล้ว&quot; หลังตรวจสอบ</p>
+                <p className="mt-3 text-[16px] font-bold text-gray-900 dark:text-white">{t("slipSentTitle")} 🎉</p>
+                <p className="mt-1.5 text-[14px] text-gray-500">{t("slipSentSubtitle")}</p>
                 <button type="button" onClick={() => setOpen(false)} className="mt-5 w-full rounded-2xl bg-primary-600 px-4 py-3 text-[15px] font-semibold text-white">
-                  ตกลง
+                  {t("ok")}
                 </button>
               </div>
             ) : (
               <>
                 <div className="rounded-2xl bg-gray-50 dark:bg-gray-800 px-4 py-3 text-center">
-                  <p className="text-[13px] text-gray-500">ยอดที่ต้องชำระ</p>
+                  <p className="text-[13px] text-gray-500">{t("amountDue")}</p>
                   <p className="text-[24px] font-bold text-primary-700 dark:text-primary-400">฿{fmt(totalThb)}</p>
                 </div>
 
@@ -171,9 +173,9 @@ export function ShopOrderPayButton({
                   <div className="mt-3 rounded-2xl border border-gray-200 dark:border-gray-700 px-4 py-3">
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-1.5 text-[14px] font-medium text-gray-700 dark:text-gray-200">
-                        <Wallet className="h-4 w-4 text-primary-600" /> ใช้ยอดในกระเป๋า
+                        <Wallet className="h-4 w-4 text-primary-600" /> {t("walletUse")}
                       </span>
-                      <span className="text-[13px] text-gray-500">มี ฿{fmt(wallet)}</span>
+                      <span className="text-[13px] text-gray-500">{t("walletHave", { amount: fmt(wallet) })}</span>
                     </div>
                     <div className="mt-2 flex items-center gap-2">
                       <input
@@ -187,14 +189,14 @@ export function ShopOrderPayButton({
                         className="w-32 rounded-xl border border-gray-200 dark:border-gray-700 bg-transparent px-3 py-2 text-[15px]"
                       />
                       <button type="button" onClick={() => setWalletApplied(round2(Math.min(wallet, totalThb)))} className="rounded-lg bg-gray-100 dark:bg-gray-800 px-3 py-2 text-[12.5px] font-medium text-gray-600 dark:text-gray-300">
-                        ใช้สูงสุด
+                        {t("walletMax")}
                       </button>
                       {applied > 0 && (
-                        <button type="button" onClick={() => setWalletApplied(0)} className="text-[12.5px] text-gray-400 hover:text-gray-600">ล้าง</button>
+                        <button type="button" onClick={() => setWalletApplied(0)} className="text-[12.5px] text-gray-400 hover:text-gray-600">{t("walletClear")}</button>
                       )}
                     </div>
                     <p className="mt-2 text-[13px] text-gray-500">
-                      หักจากกระเป๋า ฿{fmt(applied)} · <span className="font-semibold text-primary-700 dark:text-primary-400">เหลือจ่าย ฿{fmt(remaining)}</span>
+                      {t("walletDeducted", { applied: fmt(applied) })} · <span className="font-semibold text-primary-700 dark:text-primary-400">{t("remainingToPay", { remaining: fmt(remaining) })}</span>
                     </p>
                   </div>
                 )}
@@ -208,13 +210,13 @@ export function ShopOrderPayButton({
                     className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-primary-600 px-4 py-[14px] text-[15px] font-semibold text-white disabled:opacity-50"
                   >
                     {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Wallet className="h-5 w-5" />}
-                    ชำระจากกระเป๋าเต็มจำนวน (฿{fmt(totalThb)})
+                    {t("payFullFromWallet", { amount: fmt(totalThb) })}
                   </button>
                 ) : (
                   <>
                     {/* PromptPay QR for the remaining */}
                     <div className="mt-4 flex flex-col items-center">
-                      <p className="mb-1 text-[13px] text-gray-500">สแกนจ่าย ฿{fmt(remaining)}</p>
+                      <p className="mb-1 text-[13px] text-gray-500">{t("scanToPay", { amount: fmt(remaining) })}</p>
                       {qr ? (
                         <>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -237,13 +239,13 @@ export function ShopOrderPayButton({
                         className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-700 px-4 py-3 text-[14px] font-medium text-gray-600 dark:text-gray-300 hover:border-primary-400"
                       >
                         {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <UploadCloud className="h-5 w-5" />}
-                        {slipPath ? `แนบแล้ว: ${slipName}` : "แนบสลิปการโอน (รูป/PDF)"}
+                        {slipPath ? t("slipAttached", { name: slipName }) : t("attachSlip")}
                       </button>
                       <input ref={fileRef} type="file" accept="image/*,application/pdf" onChange={onSlipChange} className="hidden" />
                     </div>
 
                     <div className="mt-3">
-                      <label className="text-[13px] text-gray-500">วันเวลาที่โอน (ถ้ามี)</label>
+                      <label className="text-[13px] text-gray-500">{t("transferDateTime")}</label>
                       <input
                         type="datetime-local"
                         value={slipDate}
@@ -261,7 +263,7 @@ export function ShopOrderPayButton({
                       className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-primary-600 px-4 py-[14px] text-[15px] font-semibold text-white disabled:opacity-50"
                     >
                       {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
-                      ยืนยันการชำระเงิน{applied > 0 ? ` (หัก wallet ฿${fmt(applied)} + สลิป ฿${fmt(remaining)})` : ""}
+                      {applied > 0 ? t("confirmPaymentSplit", { applied: fmt(applied), remaining: fmt(remaining) }) : t("confirmPayment")}
                     </button>
                   </>
                 )}

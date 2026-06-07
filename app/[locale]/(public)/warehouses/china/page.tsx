@@ -9,6 +9,7 @@ import { ImportExportBanner } from "@/components/sections/import-export-banner";
 import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbSchema } from "@/components/seo/schemas";
 import { buildPageMetadata } from "@/components/seo/page-meta";
+import { getTranslations } from "next-intl/server";
 
 const PATH = "/warehouses/china";
 
@@ -49,6 +50,7 @@ export default async function ChinaWarehousesPage({
 }) {
   const { locale } = await params;
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
+  const t = await getTranslations("warehousesChina");
   return (
     <>
       <JsonLd
@@ -70,10 +72,10 @@ export default async function ChinaWarehousesPage({
             {/* Breadcrumb */}
             <nav className="flex items-center gap-1 text-[11.5px] md:text-[12.5px] text-muted mb-4 md:mb-5 flex-wrap">
               <Link href="/" className="hover:text-primary-600 transition-colors font-bold">
-                หน้าหลัก
+                {t("breadcrumbHome")}
               </Link>
               <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-              <span className="font-bold text-[#111827] dark:text-white">ที่อยู่โกดังจีน</span>
+              <span className="font-bold text-[#111827] dark:text-white">{t("breadcrumbCurrent")}</span>
             </nav>
 
             {/* Header */}
@@ -83,11 +85,10 @@ export default async function ChinaWarehousesPage({
                 WAREHOUSE · CHINA
               </div>
               <h1 className="text-[24px] md:text-[40px] leading-[1.18] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
-                ที่อยู่โกดัง<span className="text-primary-600"> จีน 🇨🇳</span>
+                {t("pageTitleMain")}<span className="text-primary-600"> {t("pageTitleHighlight")} 🇨🇳</span>
               </h1>
               <p className="mt-2 md:mt-3 text-[13px] md:text-[15.5px] leading-[1.6] font-medium text-muted max-w-[820px]">
-                Pacred Shipping มีโกดังรับสินค้าในประเทศจีน 2 แห่ง — รองรับสินค้าจากซัพพลายเออร์ทุกแพลตฟอร์ม
-                พร้อมบริการรวมสินค้า ตรวจสอบสินค้า และจัดส่งกลับไทยครบวงจร
+                {t("pageDescription")}
               </p>
             </div>
 
@@ -103,7 +104,7 @@ export default async function ChinaWarehousesPage({
                   <div className="relative aspect-[16/10] overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-surface-alt dark:to-background">
                     <Image
                       src={w.image}
-                      alt={`โกดัง${w.city}`}
+                      alt={t("warehouseAlt", { city: typedLocale === "en" ? w.cityEn : w.city })}
                       fill
                       sizes="(max-width: 768px) 100vw, 540px"
                       className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
@@ -119,23 +120,23 @@ export default async function ChinaWarehousesPage({
                   <div className="p-4 md:p-5">
                     <div className="flex items-center gap-1.5 text-[11px] md:text-[12px] font-bold text-muted mb-1">
                       <MapPin className="h-3.5 w-3.5 text-primary-600" strokeWidth={2.6} />
-                      {w.province}
+                      {t(`${w.slug}Province` as "guangzhouProvince" | "yiwuProvince")}
                     </div>
                     <h2 className="text-[18px] md:text-[22px] font-black tracking-[-0.02em] text-[#111827] dark:text-white group-hover:text-primary-700 dark:group-hover:text-primary-300 transition-colors">
-                      โกดัง{w.city}
+                      {t("warehouseCardTitle", { city: typedLocale === "en" ? w.cityEn : w.city })}
                     </h2>
                     <p className="mt-1.5 text-[12.5px] md:text-[13.5px] leading-[1.55] text-muted">
-                      {w.description}
+                      {t(`${w.slug}Description` as "guangzhouDescription" | "yiwuDescription")}
                     </p>
 
                     {/* Tags */}
                     <div className="mt-3 flex flex-wrap gap-1.5">
-                      {w.tags.map((t) => (
+                      {w.tags.map((tag) => (
                         <span
-                          key={t}
+                          key={tag}
                           className="px-2 py-0.5 rounded-md bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-300 text-[10.5px] md:text-[11px] font-black"
                         >
-                          {t}
+                          {tag === "โรงงานจีน" ? t("chineseFactoryTag") : tag}
                         </span>
                       ))}
                     </div>
@@ -143,11 +144,11 @@ export default async function ChinaWarehousesPage({
                     {/* CTA */}
                     <div className="mt-4 pt-3 border-t border-dashed border-border flex items-center justify-between">
                       <span className="text-[12px] md:text-[12.5px] font-black text-primary-600 inline-flex items-center gap-1">
-                        ดูที่อยู่ + Shipping Mark
+                        {t("viewAddressCta")}
                         <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" strokeWidth={3} />
                       </span>
                       <span className="text-[10.5px] md:text-[11px] font-bold text-muted">
-                        เปิดทุกวัน
+                        {t("openEveryDay")}
                       </span>
                     </div>
                   </div>
@@ -162,17 +163,17 @@ export default async function ChinaWarehousesPage({
               </span>
               <div className="flex-1">
                 <div className="text-[13px] md:text-[14px] font-black text-[#111827] dark:text-white">
-                  กำลังหาที่อยู่โกดังในไทย?
+                  {t("thaiWarehouseHintTitle")}
                 </div>
                 <p className="text-[11.5px] md:text-[12.5px] text-muted mt-0.5">
-                  ดูที่อยู่โกดังในไทยและขั้นตอนรับสินค้าได้ที่หน้าโกดังไทย
+                  {t("thaiWarehouseHintDesc")}
                 </p>
               </div>
               <Link
                 href="/warehouses/thailand"
                 className="shrink-0 inline-flex items-center gap-1 h-9 px-3.5 rounded-full bg-white dark:bg-surface text-[#111827] dark:text-white border border-border text-[11.5px] md:text-[12px] font-black hover:border-primary-400 hover:text-primary-700 transition-colors"
               >
-                ดูโกดังไทย
+                {t("viewThaiWarehouse")}
                 <ArrowRight className="h-3 w-3" strokeWidth={3} />
               </Link>
             </div>

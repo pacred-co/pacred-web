@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import {
   Truck,
@@ -112,7 +113,7 @@ const ZONES: Zone[] = [
 const TOTAL_AREAS = ZONES.reduce((s, z) => s + z.areas.length, 0);
 
 export function DeliveryZones({ locale = "th" }: { locale?: "th" | "en" }) {
-  const en = locale === "en";
+  const t = useTranslations("deliveryZones");
   const [q, setQ] = useState("");
   const query = q.trim();
 
@@ -133,10 +134,10 @@ export function DeliveryZones({ locale = "th" }: { locale?: "th" | "en" }) {
   const matchCount = filtered.reduce((s, z) => s + z.areas.length, 0);
 
   const features = [
-    { Icon: Truck, label: en ? "Flat 100฿" : "เหมา 100 บาท", sub: en ? "metro rate" : "กทม–ปริมณฑล" },
-    { Icon: PackageCheck, label: en ? "Any weight" : "ไม่จำกัดน้ำหนัก", sub: en ? "no weight cap" : "หนักแค่ไหนก็ส่ง" },
-    { Icon: MapPin, label: `${TOTAL_AREAS} ${en ? "areas" : "พื้นที่"}`, sub: en ? "BKK + 4 provinces" : "กทม + 4 จังหวัด" },
-    { Icon: Home, label: en ? "To your door" : "ส่งถึงบ้าน", sub: en ? "fast delivery" : "รวดเร็ว ทันใจ" },
+    { Icon: Truck, label: t("featureFlatLabel"), sub: t("featureFlatSub") },
+    { Icon: PackageCheck, label: t("featureWeightLabel"), sub: t("featureWeightSub") },
+    { Icon: MapPin, label: `${TOTAL_AREAS} ${t("featureAreasUnit")}`, sub: t("featureAreasSub") },
+    { Icon: Home, label: t("featureDoorLabel"), sub: t("featureDoorSub") },
   ];
 
   return (
@@ -146,19 +147,15 @@ export function DeliveryZones({ locale = "th" }: { locale?: "th" | "en" }) {
         <div className="relative z-10 max-w-[640px]">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-[12px] font-bold backdrop-blur-sm">
             <Truck className="h-4 w-4" />
-            {en ? "FLAT-RATE DELIVERY" : "โปรส่งเหมาๆ"}
+            {t("badgeLabel")}
           </span>
           <h2 className="mt-3 text-[24px] md:text-[34px] font-black leading-[1.15] tracking-tight">
-            {en ? (
-              <>Flat <span className="text-yellow-300">100 baht</span>, any weight</>
-            ) : (
-              <>ส่งเหมาๆ <span className="text-yellow-300">100 บาท</span> ไม่จำกัดCBM</>
-            )}
+            {t.rich("heroPriceHeadline", {
+              highlight: (chunks) => <span className="text-yellow-300">{chunks}</span>,
+            })}
           </h2>
           <p className="mt-2 text-[13.5px] md:text-[15.5px] leading-[1.6] text-white/90">
-            {en
-              ? "Pacred delivers across Bangkok and the surrounding provinces — straight to the customer's door, fast and on time."
-              : "Pacred จัดส่งทั่วกรุงเทพฯ และปริมณฑล — ของถึงมือลูกค้า รวดเร็ว ไว ไม่มีคำว่าทำไม่ได้"}
+            {t("heroDescription")}
           </p>
         </div>
         <Truck
@@ -188,14 +185,10 @@ export function DeliveryZones({ locale = "th" }: { locale?: "th" | "en" }) {
       {/* Section intro + filter */}
       <div>
         <h2 className="text-[18px] md:text-[22px] font-black tracking-tight text-foreground">
-          {en
-            ? "Pacred delivery coverage — Bangkok & surrounding provinces"
-            : "พื้นที่จัดส่ง Pacred ทั่วกรุงเทพฯ และปริมณฑล"}
+          {t("sectionTitle")}
         </h2>
         <p className="mt-1 text-[13px] md:text-[14px] text-muted">
-          {en
-            ? "Find your district or postal code below."
-            : "ค้นหาเขต / อำเภอ หรือรหัสไปรษณีย์ของคุณได้เลย"}
+          {t("sectionSubtitle")}
         </p>
 
         <div className="relative mt-4 max-w-[460px]">
@@ -205,14 +198,14 @@ export function DeliveryZones({ locale = "th" }: { locale?: "th" | "en" }) {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             inputMode="search"
-            placeholder={en ? "Search district or postal code…" : "ค้นหาเขต / อำเภอ / รหัสไปรษณีย์…"}
+            placeholder={t("searchPlaceholder")}
             className="h-12 w-full rounded-full border border-border bg-white dark:bg-surface pl-12 pr-11 text-[16px] text-foreground placeholder:text-muted outline-none transition focus:border-primary-400 focus:shadow-[0_0_0_3px_rgba(179,0,0,0.08)]"
           />
           {q && (
             <button
               type="button"
               onClick={() => setQ("")}
-              aria-label={en ? "Clear" : "ล้าง"}
+              aria-label={t("clearAriaLabel")}
               className="absolute right-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-muted hover:bg-surface-alt hover:text-foreground"
             >
               <X className="h-4 w-4" />
@@ -221,7 +214,7 @@ export function DeliveryZones({ locale = "th" }: { locale?: "th" | "en" }) {
         </div>
         {query && (
           <p className="mt-2 text-[12.5px] text-muted">
-            {en ? `Found ${matchCount} area(s)` : `พบ ${matchCount} พื้นที่`}
+            {t("searchResultCount", { count: matchCount })}
           </p>
         )}
       </div>
@@ -244,7 +237,7 @@ export function DeliveryZones({ locale = "th" }: { locale?: "th" | "en" }) {
                     {z.province}
                   </h3>
                   <span className="text-[12px] font-medium text-muted">
-                    {z.areas.length} {z.id === 1 ? (en ? "districts" : "เขต") : (en ? "districts" : "อำเภอ")}
+                    {z.areas.length} {z.id === 1 ? t("unitDistrict") : t("unitAmphoe")}
                   </span>
                 </div>
               </header>
@@ -271,12 +264,10 @@ export function DeliveryZones({ locale = "th" }: { locale?: "th" | "en" }) {
         <div className="rounded-2xl border border-dashed border-border bg-surface-alt/30 p-8 text-center">
           <MapPin className="mx-auto h-8 w-8 text-muted" />
           <p className="mt-2 text-[14px] font-semibold text-foreground">
-            {en ? "No area matched your search" : "ไม่พบพื้นที่ที่ค้นหา"}
+            {t("noResultsTitle")}
           </p>
           <p className="mt-1 text-[12.5px] text-muted">
-            {en
-              ? "Other areas are charged by distance — contact our team."
-              : "พื้นที่อื่นๆ คิดค่าจัดส่งตามระยะทาง — สอบถามทีมงานได้เลย"}
+            {t("noResultsSub")}
           </p>
         </div>
       )}
@@ -285,14 +276,12 @@ export function DeliveryZones({ locale = "th" }: { locale?: "th" | "en" }) {
       <p className="flex items-start gap-2 text-[12px] md:text-[12.5px] leading-[1.6] text-muted/80">
         <Info className="mt-[3px] h-3.5 w-3.5 shrink-0 text-muted/50" />
         <span>
-          <span className="font-medium text-muted">{en ? "Areas outside the list" : "พื้นที่นอกเหนือจากรายการนี้"}</span>{" "}
-          {en
-            ? "are delivered nationwide and charged by distance/route. "
-            : "Pacred จัดส่งทั่วประเทศ คิดค่าจัดส่งตามระยะทาง/เส้นทาง "}
+          <span className="font-medium text-muted">{t("footerNoteLabel")}</span>{" "}
+          {t("footerNoteBody")}
           <Link href="/contact" className="text-primary-600/80 underline underline-offset-2 hover:text-primary-700">
-            {en ? "Contact the Pacred team" : "สอบถามทีมงาน Pacred"}
+            {t("footerNoteLink")}
           </Link>{" "}
-          {en ? "for a quote." : "เพื่อเช็กค่าส่งได้เลย"}
+          {t("footerNoteSuffix")}
         </span>
       </p>
     </div>

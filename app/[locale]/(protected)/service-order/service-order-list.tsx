@@ -7,7 +7,6 @@ import { Link } from "@/i18n/navigation";
 import type { ServiceOrderSummary } from "@/actions/service-order";
 import { cancelServiceOrder } from "@/actions/service-order";
 import { confirm } from "@/components/ui/confirm";
-import { legacyOrderStatusThai } from "@/lib/legacy-status-map";
 import { Eye, Package, Printer, FileText, XCircle, Wallet } from "lucide-react";
 
 // D1 Phase-B Wave 2: rows carry the legacy tb_header_order.hstatus code
@@ -19,6 +18,18 @@ const STATUS_BADGE: Record<string, string> = {
   "4": "bg-indigo-100 text-indigo-700",  // รอร้านจีนจัดส่ง
   "5": "bg-emerald-100 text-emerald-700", // สำเร็จ
   "6": "bg-red-100 text-red-700",        // ยกเลิก
+};
+
+// Legacy hstatus code ('1'-'6') → i18n status key under `serviceOrder.status.*`.
+// The code is the canonical tb_header_order.hstatus value; only the display
+// label is resolved via next-intl.
+const STATUS_KEY: Record<string, string> = {
+  "1": "pending",
+  "2": "awaiting_payment",
+  "3": "ordered",
+  "4": "awaiting_chn_dispatch",
+  "5": "completed",
+  "6": "cancelled",
 };
 
 // Legacy shops.php gates the per-row actions on hStatus:
@@ -164,7 +175,7 @@ export function ServiceOrderList({
                     </td>
                     <td className="px-4 py-3 text-xs text-muted whitespace-nowrap align-top">
                       <div>{created.toLocaleDateString("th-TH")}</div>
-                      <div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div>
+                      <div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} {tp("timeSuffix")}</div>
                     </td>
                     <td className="px-4 py-3 align-top">
                       {o.h_no ? (
@@ -194,7 +205,7 @@ export function ServiceOrderList({
                           </p>
                           <p className="text-[11px] text-muted mt-1">
                             {tp("itemCount", { count: o.item_count })}
-                            {o.warehouse_china && <> · {o.warehouse_china === "yiwu" ? "อี้อู" : "กวางโจว"}</>}
+                            {o.warehouse_china && <> · {o.warehouse_china === "yiwu" ? tp("warehouseYiwu") : tp("warehouseGuangzhou")}</>}
                             {o.ship_by && <> · {o.ship_by}</>}
                           </p>
                         </div>
@@ -202,7 +213,7 @@ export function ServiceOrderList({
                     </td>
                     <td className="px-4 py-3 align-top">
                       <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${STATUS_BADGE[o.status] ?? "bg-gray-100 text-gray-700"}`}>
-                        {legacyOrderStatusThai(o.status)}
+                        {STATUS_KEY[o.status] ? t(`status.${STATUS_KEY[o.status]}`) : o.status}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right font-mono align-top">

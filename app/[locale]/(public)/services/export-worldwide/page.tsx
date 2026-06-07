@@ -179,6 +179,7 @@ export default async function ExportWorldwidePage({
   const { locale } = await params;
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const t = await getTranslations({ locale, namespace: NS });
+  const tp = await getTranslations({ locale, namespace: "svcExportWorldwide" });
   const homeLabel = typedLocale === "th" ? "หน้าหลัก" : "Home";
   const svcLabel = typedLocale === "th" ? "บริการ" : "Services";
   const here = typedLocale === "th" ? "ส่งออกสินค้าทั่วโลก" : "Export worldwide";
@@ -247,24 +248,24 @@ export default async function ExportWorldwidePage({
           <div className="relative mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-2 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <Globe2 className="w-3.5 h-3.5" strokeWidth={2.6} />
-              EXPORT WORLDWIDE · ส่งออกทั่วโลก
+              EXPORT WORLDWIDE · {tp("heroEyebrow")}
             </div>
             <h1 className="text-[22px] md:text-[44px] leading-[1.2] font-black tracking-[-0.025em] text-[#111827] dark:text-white max-w-[980px]">
-              <span className="text-primary-600">ส่งออกสินค้าไทย</span> ไปทั่วโลก
-              <span className="md:block md:mt-1"> Air · Sea · Express ครบทุก Incoterm</span>
+              <span className="text-primary-600">{tp("heroH1Highlight")}</span> {tp("heroH1Rest")}
+              <span className="md:block md:mt-1"> {tp("heroH1Sub")}</span>
             </h1>
             <p className="mt-2 md:mt-3 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[920px]">
-              บริการส่งออกจากไทยไปทั่วโลก — Air Freight · Sea Freight FCL/LCL · Express courier · เอกสารส่งออกครบ (Form A/D/E · CO · Phytosanitary · Fumigation) · เคลียร์พิธีการศุลกากรขาออก — <span className="text-primary-600/80 font-bold">Express เริ่ม 300฿/kg · DDP ถึงประตูปลายทาง</span>
+              {tp("heroDesc")} <span className="text-primary-600/80 font-bold">{tp("heroDescHighlight")}</span>
             </p>
 
             {/* 2 primary CTAs */}
             <div className="mt-4 md:mt-5 grid grid-cols-2 gap-2 md:gap-3 max-w-[560px]">
               <Link
                 href="/register"
-                aria-label="ใช้บริการส่งออก — สมัครสมาชิกฟรี"
+                aria-label={tp("ctaUseServiceAriaLabel")}
                 className="inline-flex items-center justify-center gap-2 h-12 md:h-14 rounded-xl bg-primary-600 text-white font-black text-[14px] md:text-[16px] hover:bg-primary-700 hover:-translate-y-0.5 transition-all shadow-[0_8px_20px_rgba(179,0,0,0.30)]"
               >
-                ใช้บริการ
+                {tp("ctaUseService")}
                 <ArrowRight className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.8} />
               </Link>
               <TrackedExternalLink
@@ -272,11 +273,11 @@ export default async function ExportWorldwidePage({
                 cta="line_consult"
                 surface={SURFACE}
                 ctaProps={{ position: "hero_cta" }}
-                aria-label="ปรึกษาส่งออกฟรี ทางไลน์"
+                aria-label={tp("ctaConsultAriaLabel")}
                 className="inline-flex items-center justify-center gap-2 h-12 md:h-14 rounded-xl bg-[#06C755] text-white font-black text-[14px] md:text-[16px] hover:bg-[#05B04C] hover:-translate-y-0.5 transition-all shadow-[0_8px_20px_rgba(6,199,85,0.35)]"
               >
                 <MessageCircle className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.6} />
-                ปรึกษาฟรี
+                {tp("ctaConsult")}
               </TrackedExternalLink>
             </div>
 
@@ -284,16 +285,16 @@ export default async function ExportWorldwidePage({
             <div className="mt-5 md:mt-7 rounded-2xl md:rounded-3xl border border-primary-200 dark:border-primary-800/60 bg-gradient-to-br from-primary-50/60 via-white to-primary-50/30 dark:from-primary-900/15 dark:via-surface dark:to-primary-900/10 p-4 md:p-6 shadow-[0_8px_22px_rgba(179,0,0,0.06)]">
               <h3 className="flex items-start gap-2 text-[15px] md:text-[20px] font-black text-primary-700 dark:text-primary-300 tracking-tight leading-snug">
                 <Globe2 className="w-5 h-5 md:w-6 md:h-6 shrink-0 mt-0.5" strokeWidth={2.6} />
-                <span>ส่งออกครบวงจร — Pickup ไทย เคลียร์ขาออก จัดส่งปลายทาง</span>
+                <span>{tp("scopeCardTitle")}</span>
               </h3>
               <p className="mt-2 text-[12.5px] md:text-[14px] font-bold text-foreground/85 leading-relaxed">
                 Air Freight · Sea Freight FCL/LCL · Express Courier · DDP/DAP/CIF/CFR/FOB/EXW
               </p>
               <ul className="mt-4 md:mt-5 grid md:grid-cols-2 gap-x-5 md:gap-x-6 gap-y-2 md:gap-y-2.5 text-[13px] md:text-[15px] leading-snug text-foreground/95">
-                {SCOPE.map((item) => (
+                {SCOPE.map((item, idx) => (
                   <li key={item} className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 md:w-[18px] md:h-[18px] mt-0.5 shrink-0 text-primary-600" strokeWidth={2.6} />
-                    <span>{item}</span>
+                    <span>{tp(`scope${idx}` as Parameters<typeof tp>[0])}</span>
                   </li>
                 ))}
               </ul>
@@ -307,7 +308,7 @@ export default async function ExportWorldwidePage({
                   className="inline-flex items-center justify-center gap-2 h-12 rounded-xl border border-primary-200 bg-primary-50 text-primary-700 font-black text-[14px] md:text-[15px] hover:bg-primary-100 hover:border-primary-300 transition-colors dark:bg-primary-900/30 dark:border-primary-800 dark:text-primary-200"
                 >
                   <Phone className="w-4 h-4" strokeWidth={2.6} />
-                  โทร {CONTACT.phoneDisplay}
+                  {tp("callPrefix")} {CONTACT.phoneDisplay}
                 </TrackedPhoneLink>
                 <TrackedExternalLink
                   href={LINE_OA.shortUrl}
@@ -317,7 +318,7 @@ export default async function ExportWorldwidePage({
                   className="inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-[#06C755] text-white font-black text-[14px] md:text-[15px] hover:bg-[#05B04C] transition-colors shadow-[0_6px_18px_rgba(6,199,85,0.35)]"
                 >
                   <MessageCircle className="w-4 h-4" strokeWidth={2.6} />
-                  แอด LINE Pacred
+                  {tp("addLine")}
                 </TrackedExternalLink>
               </div>
             </div>
@@ -329,13 +330,13 @@ export default async function ExportWorldwidePage({
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <Plane className="w-3.5 h-3.5" strokeWidth={2.6} />
-              3 MODES · เลือกได้ตามไทม์ไลน์
+              3 MODES · {tp("modesEyebrow")}
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              ส่งออก <span className="text-primary-600">Air · Sea · Express</span> ราคาชัด
+              {tp("modesH2")} <span className="text-primary-600">Air · Sea · Express</span> {tp("modesH2Suffix")}
             </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
-              เลือกช่องทางที่เหมาะกับสินค้า + ไทม์ไลน์ของลูกค้า — ทีม Pacred จัดให้จบในใบเดียว
+              {tp("modesDesc")}
             </p>
 
             <div className="mt-6 md:mt-8 grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-4">
@@ -355,13 +356,13 @@ export default async function ExportWorldwidePage({
                       {m.badge}
                     </div>
                     <h3 className="relative mt-3 text-[18px] md:text-[20px] font-black text-[#111827] dark:text-white tracking-tight">
-                      {m.title}
+                      {tp(`mode_${m.id}_title` as Parameters<typeof tp>[0])}
                     </h3>
                     <p className="relative mt-1 text-[13px] md:text-[14px] font-black text-primary-600">
-                      {m.price}
+                      {tp(`mode_${m.id}_price` as Parameters<typeof tp>[0])}
                     </p>
                     <p className="relative mt-1.5 text-[12.5px] md:text-[13.5px] leading-[1.6] text-muted font-medium">
-                      {m.desc}
+                      {tp(`mode_${m.id}_desc` as Parameters<typeof tp>[0])}
                     </p>
                   </div>
                 );
@@ -375,20 +376,20 @@ export default async function ExportWorldwidePage({
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <MapPin className="w-3.5 h-3.5" strokeWidth={2.6} />
-              200+ ประเทศปลายทาง
+              {tp("regionsEyebrow")}
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              ส่งออกได้ <span className="text-primary-600">ทุกทวีป ทุกตลาด</span>
+              {tp("regionsH2")} <span className="text-primary-600">{tp("regionsH2Highlight")}</span>
             </h2>
 
             <div className="mt-6 md:mt-8 grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4">
-              {REGIONS.map((r) => (
+              {REGIONS.map((r, idx) => (
                 <div
                   key={r.name}
                   className="rounded-xl border border-border bg-white dark:bg-surface p-3 md:p-4 hover:border-primary-300 dark:hover:border-primary-800 transition-colors"
                 >
                   <div className="text-[14px] md:text-[16px] font-black text-[#111827] dark:text-white tracking-tight">
-                    {r.name}
+                    {tp(`region${idx}Name` as Parameters<typeof tp>[0])}
                   </div>
                   <p className="mt-1 text-[11.5px] md:text-[12.5px] text-muted font-medium leading-snug">
                     {r.sub}
@@ -404,13 +405,13 @@ export default async function ExportWorldwidePage({
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <Anchor className="w-3.5 h-3.5" strokeWidth={2.6} />
-              INCOTERMS · ครบทุก Term
+              INCOTERMS · {tp("incotermsEyebrow")}
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              ใช้ได้ <span className="text-primary-600">ทุก Incoterm</span> ตั้งแต่ EXW ถึง DDP
+              {tp("incotermsH2")} <span className="text-primary-600">{tp("incotermsH2Highlight")}</span> {tp("incotermsH2Suffix")}
             </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
-              ทีม Pacred แนะนำ Term ที่ลดความเสี่ยง + เหมาะกับข้อตกลงกับลูกค้าปลายทาง
+              {tp("incotermsDesc")}
             </p>
 
             <div className="mt-6 md:mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
@@ -428,7 +429,7 @@ export default async function ExportWorldwidePage({
                     </span>
                   </div>
                   <p className="mt-1.5 text-[12px] md:text-[13px] text-muted font-medium leading-snug">
-                    {term.desc}
+                    {tp(`term_${term.code}_desc` as Parameters<typeof tp>[0])}
                   </p>
                 </div>
               ))}
@@ -444,13 +445,13 @@ export default async function ExportWorldwidePage({
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <ScanLine className="w-3.5 h-3.5" strokeWidth={2.6} />
-              5 STEPS · ขั้นตอนส่งออก
+              5 STEPS · {tp("stepsEyebrow")}
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              ส่งออกง่าย ๆ — <span className="text-primary-600">ครบจบใน 5 ขั้นตอน</span>
+              {tp("stepsH2")} <span className="text-primary-600">{tp("stepsH2Highlight")}</span>
             </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
-              ทักมาก่อนได้เลย — ปรึกษาฟรี ไม่ต้องเดาเอง ทีมจัดให้จบในคุยเดียว
+              {tp("stepsDesc")}
             </p>
 
             <div className="mt-6 md:mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
@@ -470,10 +471,10 @@ export default async function ExportWorldwidePage({
                       </span>
                     </div>
                     <h3 className="text-[14px] md:text-[15.5px] font-black text-[#111827] dark:text-white leading-snug tracking-tight">
-                      {s.title}
+                      {tp(`step_${s.num}_title` as Parameters<typeof tp>[0])}
                     </h3>
                     <p className="mt-1 text-[12px] md:text-[12.5px] leading-[1.55] text-muted">
-                      {s.desc}
+                      {tp(`step_${s.num}_desc` as Parameters<typeof tp>[0])}
                     </p>
                   </div>
                 );
@@ -493,11 +494,11 @@ export default async function ExportWorldwidePage({
               WHY EXPORT WITH PACRED · 15+ YEARS
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              ทำไมต้องเลือก <span className="text-primary-600">Pacred Export</span>
+              {tp("whyH2")} <span className="text-primary-600">Pacred Export</span>
             </h2>
 
             <div className="mt-6 md:mt-8 grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
-              {WHY.map((w) => {
+              {WHY.map((w, idx) => {
                 const Icon = w.icon;
                 return (
                   <div
@@ -508,10 +509,10 @@ export default async function ExportWorldwidePage({
                       <Icon className="w-4.5 h-4.5 md:w-5 md:h-5" strokeWidth={2.4} />
                     </div>
                     <div className="text-[13px] md:text-[15px] font-black text-[#111827] dark:text-white tracking-tight leading-tight">
-                      {w.title}
+                      {tp(`why_${idx}_title` as Parameters<typeof tp>[0])}
                     </div>
                     <p className="mt-1 text-[11.5px] md:text-[12.5px] leading-[1.55] text-muted font-medium">
-                      {w.desc}
+                      {tp(`why_${idx}_desc` as Parameters<typeof tp>[0])}
                     </p>
                   </div>
                 );
@@ -525,10 +526,10 @@ export default async function ExportWorldwidePage({
           <div className="mx-auto w-full max-w-[920px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <HandCoins className="w-3.5 h-3.5" strokeWidth={2.6} />
-              FAQ · คำถามที่พบบ่อย
+              FAQ · {tp("faqEyebrow")}
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              คำถามเกี่ยวกับ <span className="text-primary-600">การส่งออก</span>
+              {tp("faqH2")} <span className="text-primary-600">{tp("faqH2Highlight")}</span>
             </h2>
 
             <div className="mt-6 md:mt-8">
@@ -536,8 +537,11 @@ export default async function ExportWorldwidePage({
                 groups={[
                   {
                     id: "export-worldwide",
-                    label: "ส่งออก · พื้นฐาน",
-                    items: FAQ_ITEMS,
+                    label: tp("faqGroupLabel"),
+                    items: FAQ_ITEMS.map((item, idx) => ({
+                      q: tp(`faq${idx}Q` as Parameters<typeof tp>[0]),
+                      a: tp(`faq${idx}A` as Parameters<typeof tp>[0]),
+                    })),
                   },
                 ]}
               />
@@ -553,7 +557,7 @@ export default async function ExportWorldwidePage({
               cta="line_consult"
               surface={SURFACE}
               ctaProps={{ position: "final_cta" }}
-              aria-label="ปรึกษาส่งออกฟรี — ทักไลน์ Pacred Shipping"
+              aria-label={tp("finalCtaAriaLabel")}
               className="group block relative max-w-[1100px] mx-auto no-underline"
             >
               <div
@@ -581,15 +585,15 @@ export default async function ExportWorldwidePage({
                       EXPORT GUARANTEE
                     </div>
                     <p className="text-[24px] md:text-[40px] font-black text-white leading-[1.05] tracking-tight [text-shadow:0_2px_6px_rgba(0,0,0,0.45)]">
-                      ส่งออกทั่วโลก? <span className="text-yellow-300">ปรึกษาฟรี</span> ทักไลน์ Pacred
+                      {tp("finalCtaHeadline")} <span className="text-yellow-300">{tp("finalCtaHighlight")}</span> {tp("finalCtaHeadlineSuffix")}
                     </p>
                     <p className="hidden md:block mt-2 text-[14px] font-semibold text-white/90 leading-snug">
-                      Air · Sea · Express · DDP ครบทุก Term · 200+ ประเทศปลายทาง · ตอบใน 5 นาที
+                      {tp("finalCtaSub")}
                     </p>
                   </div>
                   <span className="inline-flex items-center justify-center gap-2 px-5 md:px-7 py-3 md:py-4 rounded-xl bg-white text-primary-700 font-black text-[15px] md:text-[18px] shadow-[0_8px_20px_rgba(0,0,0,0.25)] group-hover:scale-105 transition-transform whitespace-nowrap">
                     <MessageCircle className="w-5 h-5" strokeWidth={2.6} />
-                    ทักไลน์เลย
+                    {tp("finalCtaButton")}
                     <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" strokeWidth={2.6} />
                   </span>
                 </div>

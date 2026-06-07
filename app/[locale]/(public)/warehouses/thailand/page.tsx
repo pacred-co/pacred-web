@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { Link } from "@/i18n/navigation";
+import { getTranslations } from "next-intl/server";
 import {
   ChevronRight,
   MapPin,
@@ -35,28 +36,7 @@ export async function generateMetadata({
 const ADDRESS_TH = "48/3 หมู่ 12 ตำบลอ้อมน้อย อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74130";
 const ADDRESS_EN_QUERY = "48/3+Moo+12+Om+Noi+Krathum+Baen+Samut+Sakhon+74130";
 
-const HIGHLIGHTS = [
-  {
-    icon: Boxes,
-    title: "พื้นที่จัดเก็บกว่า 5,000 ตร.ม.",
-    desc: "รองรับสินค้าจากตู้ FCL / LCL หลายตู้พร้อมกัน",
-  },
-  {
-    icon: ShieldCheck,
-    title: "กล้องวงจรปิด 24 ชม.",
-    desc: "ระบบรักษาความปลอดภัยตลอด — สินค้าเข้า–ออก track ได้ทุกชิ้น",
-  },
-  {
-    icon: Truck,
-    title: "กระจายต่อทั่วประเทศ",
-    desc: "ส่งต่อภายในกรุงเทพฯ ปริมณฑล และต่างจังหวัด พร้อมตัวเลือกรถ EXP / รถร่วม",
-  },
-  {
-    icon: Clock,
-    title: "เปิดจันทร์-เสาร์ 8:30-17:30น.",
-    desc: "พร้อมรับ–ส่งสินค้า จันทร์-เสาร์ (หยุดอาทิตย์ และเทศกาลใหญ่)",
-  },
-];
+const HIGHLIGHT_ICONS = [Boxes, ShieldCheck, Truck, Clock];
 
 const PHOTOS: { src: string }[] = [
   { src: "/images/warehousethai118/1.png" },
@@ -74,7 +54,32 @@ export default async function Page({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
+  const t = await getTranslations("warehousesThailand");
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
+
+  const HIGHLIGHTS = [
+    {
+      icon: HIGHLIGHT_ICONS[0],
+      title: t("highlight1Title"),
+      desc: t("highlight1Desc"),
+    },
+    {
+      icon: HIGHLIGHT_ICONS[1],
+      title: t("highlight2Title"),
+      desc: t("highlight2Desc"),
+    },
+    {
+      icon: HIGHLIGHT_ICONS[2],
+      title: t("highlight3Title"),
+      desc: t("highlight3Desc"),
+    },
+    {
+      icon: HIGHLIGHT_ICONS[3],
+      title: t("highlight4Title"),
+      desc: t("highlight4Desc"),
+    },
+  ];
+
   return (
     <>
       <JsonLd
@@ -95,14 +100,14 @@ export default async function Page({
             {/* Breadcrumb */}
             <nav className="flex items-center gap-1 text-[11.5px] md:text-[12.5px] text-muted mb-4 md:mb-5 flex-wrap">
               <Link href="/" className="hover:text-primary-600 transition-colors font-bold">
-                หน้าหลัก
+                {t("breadcrumbHome")}
               </Link>
               <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
               <Link href="/about" className="hover:text-primary-600 transition-colors font-bold">
-                เกี่ยวกับ Pacred
+                {t("breadcrumbAbout")}
               </Link>
               <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-              <span className="font-bold text-[#111827] dark:text-white">ที่อยู่โกดังไทย</span>
+              <span className="font-bold text-[#111827] dark:text-white">{t("breadcrumbCurrent")}</span>
             </nav>
 
             {/* Header */}
@@ -112,11 +117,10 @@ export default async function Page({
                 WAREHOUSE · THAILAND HUB
               </div>
               <h1 className="text-[24px] md:text-[44px] leading-[1.15] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
-                ที่อยู่โกดัง<span className="text-primary-600"> ไทย 🇹🇭</span>
+                {t("h1Part1")}<span className="text-primary-600"> {t("h1Part2")} 🇹🇭</span>
               </h1>
               <p className="mt-2 md:mt-3 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[820px]">
-                ฮับใหญ่ปลายทางของ Pacred Shipping — รับสินค้าจากโกดังจีน (กวางโจว / อี้อู)
-                แล้วกระจายต่อทั่วประเทศไทย ครอบคลุมกรุงเทพฯ ปริมณฑล และต่างจังหวัด
+                {t("heroParagraph")}
               </p>
             </div>
 
@@ -134,7 +138,7 @@ export default async function Page({
                       THAILAND HUB · MAIN
                     </div>
                     <h2 className="text-[17px] md:text-[22px] font-black text-[#111827] dark:text-white leading-snug mt-0.5">
-                      โกดังไทย · อ้อมน้อย
+                      {t("warehouseCardTitle")}
                     </h2>
                     <div className="mt-3 flex items-start gap-2 text-[12.5px] md:text-[14px] leading-[1.7] text-muted">
                       <MapPin className="w-4 h-4 text-primary-600 mt-0.5 shrink-0" strokeWidth={2.5} />
@@ -149,7 +153,7 @@ export default async function Page({
                         className="inline-flex items-center gap-1.5 h-9 md:h-10 px-3.5 md:px-4 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[12px] md:text-[12.5px] font-black hover:shadow-[0_8px_18px_rgba(179,0,0,0.30)] transition-shadow"
                       >
                         <Navigation className="w-3.5 h-3.5" strokeWidth={2.6} />
-                        เปิดใน Google Maps
+                        {t("openMaps")}
                       </a>
                       <a
                         href="tel:0661310253"
@@ -167,18 +171,18 @@ export default async function Page({
                   <div className="flex items-start gap-2">
                     <Clock className="w-4 h-4 text-primary-600 mt-0.5 shrink-0" strokeWidth={2.5} />
                     <div>
-                      <div className="text-[10.5px] md:text-[11px] font-bold text-muted uppercase tracking-wider">เวลาเปิด</div>
+                      <div className="text-[10.5px] md:text-[11px] font-bold text-muted uppercase tracking-wider">{t("hoursLabel")}</div>
                       <div className="text-[12.5px] md:text-[13.5px] font-black text-[#111827] dark:text-white mt-0.5">
-                        จันทร์-เสาร์ เวลา 8:30-17:30น.
+                        {t("hoursValue")}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <Boxes className="w-4 h-4 text-primary-600 mt-0.5 shrink-0" strokeWidth={2.5} />
                     <div>
-                      <div className="text-[10.5px] md:text-[11px] font-bold text-muted uppercase tracking-wider">ประเภท</div>
+                      <div className="text-[10.5px] md:text-[11px] font-bold text-muted uppercase tracking-wider">{t("typeLabel")}</div>
                       <div className="text-[12.5px] md:text-[13.5px] font-black text-[#111827] dark:text-white mt-0.5">
-                        Hub กระจายสินค้า
+                        {t("typeValue")}
                       </div>
                     </div>
                   </div>
@@ -191,7 +195,7 @@ export default async function Page({
                   src={`https://www.google.com/maps?q=${ADDRESS_EN_QUERY}&hl=th&z=15&output=embed`}
                   loading="lazy"
                   referrerPolicy="no-referrer-when-downgrade"
-                  title="แผนที่โกดังไทย Pacred"
+                  title={t("mapTitle")}
                   className="absolute inset-0 w-full h-full border-0"
                 />
                 <div className="pointer-events-none absolute top-3 left-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/95 dark:bg-surface/95 backdrop-blur-sm shadow-md border border-border">
@@ -210,8 +214,8 @@ export default async function Page({
                 INSIDE THE WAREHOUSE
               </div>
               <h3 className="text-[18px] md:text-[26px] leading-[1.18] font-black tracking-[-0.03em] text-[#111827] dark:text-white">
-                บรรยากาศ
-                <span className="text-primary-600"> โกดังจริง</span>
+                {t("galleryH3Part1")}
+                <span className="text-primary-600"> {t("galleryH3Part2")}</span>
               </h3>
 
               {/* Horizontal-scroll gallery — mobile 2 rows, desktop 1 row.
@@ -225,7 +229,7 @@ export default async function Page({
                   >
                     <Image
                       src={photo.src}
-                      alt={`บรรยากาศโกดังไทย Pacred ${i + 1}`}
+                      alt={t("photoAlt", { index: i + 1 })}
                       fill
                       sizes="(max-width: 768px) 170px, 280px"
                       className="object-cover transition-transform duration-500 group-hover:scale-[1.06]"
@@ -245,8 +249,8 @@ export default async function Page({
                 WHY THAILAND HUB
               </div>
               <h3 className="text-[18px] md:text-[26px] leading-[1.18] font-black tracking-[-0.03em] text-[#111827] dark:text-white">
-                ทำไมโกดังไทยของเรา
-                <span className="text-primary-600"> ถึงเหมาะกับธุรกิจคุณ</span>
+                {t("highlightsH3Part1")}
+                <span className="text-primary-600"> {t("highlightsH3Part2")}</span>
               </h3>
 
               <div className="mt-4 md:mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
@@ -276,17 +280,17 @@ export default async function Page({
               </span>
               <div className="flex-1">
                 <div className="text-[13.5px] md:text-[15px] font-black text-[#111827] dark:text-white">
-                  อยากดูที่อยู่โกดังต้นทางที่จีน?
+                  {t("ctaHeading")}
                 </div>
                 <p className="text-[12px] md:text-[13px] text-muted mt-0.5 leading-[1.55]">
-                  Pacred มีโกดังต้นทาง 2 แห่งในจีน — กวางโจว (Guangzhou) และ อี้อู (Yiwu)
+                  {t("ctaDesc")}
                 </p>
               </div>
               <Link
                 href="/warehouses/china"
                 className="shrink-0 inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[12px] md:text-[13px] font-black hover:shadow-[0_8px_18px_rgba(179,0,0,0.30)] transition-shadow"
               >
-                ดูโกดังจีน
+                {t("ctaButton")}
                 <ArrowRight className="h-3.5 w-3.5" strokeWidth={3} />
               </Link>
             </div>

@@ -34,6 +34,7 @@
  */
 
 import { useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import {
   searchProductByUrl,
@@ -50,6 +51,7 @@ type LinkPasteSearchProps = {
 };
 
 export function LinkPasteSearch({ rsDefault }: LinkPasteSearchProps) {
+  const t = useTranslations("serviceOrder");
   const [url, setUrl] = useState("");
   const [result, setResult] = useState<ProductSearchResult | null>(null);
   const [searching, startSearch] = useTransition();
@@ -110,10 +112,9 @@ export function LinkPasteSearch({ rsDefault }: LinkPasteSearchProps) {
           isCartFull
             ? {
                 kind: "cart_full",
-                message:
-                  "ตะกร้าเต็มแล้ว (สูงสุด 151 รายการ) กรุณาชำระเงิน หรือลบรายการก่อน",
+                message: t("cartFullMessage"),
               }
-            : { kind: "add_failed", message: r.error || "เพิ่มไม่สำเร็จ" },
+            : { kind: "add_failed", message: r.error || t("addFailed") },
         );
       }
     });
@@ -140,7 +141,7 @@ export function LinkPasteSearch({ rsDefault }: LinkPasteSearchProps) {
           <path d="m21 21-4.3-4.3" />
         </svg>
         <h3 className="text-base sm:text-lg font-semibold text-gray-900 leading-tight">
-          วางลิ้งสินค้า 1688 / Taobao / Tmall เพื่อค้นหา
+          {t("pasteLinkTitle")}
         </h3>
       </div>
 
@@ -150,10 +151,10 @@ export function LinkPasteSearch({ rsDefault }: LinkPasteSearchProps) {
           name="paste-url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://detail.1688.com/offer/... หรือ https://item.taobao.com/..."
+          placeholder={t("pasteUrlPlaceholder")}
           required
           disabled={searching}
-          aria-label="วางลิ้งสินค้า"
+          aria-label={t("pasteUrlAria")}
           className="flex-1 min-w-0 h-[44px] px-4 text-[16px] rounded-lg border border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-100 outline-none transition disabled:bg-gray-50 disabled:text-gray-500"
         />
         <button
@@ -161,7 +162,7 @@ export function LinkPasteSearch({ rsDefault }: LinkPasteSearchProps) {
           disabled={searching || !url.trim()}
           className="h-[44px] px-6 text-[16px] font-semibold rounded-lg bg-red-600 hover:bg-red-700 text-white shadow-sm transition disabled:bg-gray-300 disabled:cursor-not-allowed"
         >
-          {searching ? "กำลังค้นหา..." : "ค้นหา"}
+          {searching ? t("searching") : t("search")}
         </button>
       </form>
 
@@ -180,14 +181,14 @@ export function LinkPasteSearch({ rsDefault }: LinkPasteSearchProps) {
         >
           {flash.kind === "added" && (
             <span>
-              เพิ่มลงตะกร้าแล้ว:{" "}
+              {t("addedToCartFlash")}:{" "}
               <span className="font-semibold">{truncate(flash.title, 60)}</span>{" "}
               ·{" "}
               <Link
                 href="/cart"
                 className="underline underline-offset-2 hover:text-green-900"
               >
-                ไปที่ตะกร้า
+                {t("goToCart")}
               </Link>
             </span>
           )}
@@ -202,18 +203,19 @@ export function LinkPasteSearch({ rsDefault }: LinkPasteSearchProps) {
             <span className="text-xl leading-none" aria-hidden="true">!</span>
             <div className="flex-1">
               <p className="font-medium text-gray-900 mb-1">
-                {result.message ??
-                  "ระบบค้นหาไม่พร้อม กรุณากรอกรายการสินค้าด้วยตนเอง"}
+                {result.message ?? t("searchUnavailable")}
               </p>
               <p className="text-[14px] text-gray-600">
-                หรือไปที่{" "}
-                <Link
-                  href="/cart"
-                  className="text-red-600 underline underline-offset-2 hover:text-red-700"
-                >
-                  หน้าตะกร้า
-                </Link>{" "}
-                เพื่อเริ่มสั่งซื้อด้วยตนเอง
+                {t.rich("orGoToCartManual", {
+                  cartLink: (chunks) => (
+                    <Link
+                      href="/cart"
+                      className="text-red-600 underline underline-offset-2 hover:text-red-700"
+                    >
+                      {chunks}
+                    </Link>
+                  ),
+                })}
               </p>
             </div>
           </div>
@@ -258,6 +260,7 @@ function ProductResultCard({
   adding: boolean;
   onAdd: () => void;
 }) {
+  const t = useTranslations("serviceOrder");
   const unitCny = product.promoPriceCny ?? product.priceCny;
   const totalCny = unitCny * qty;
   const totalThb = totalCny * rsDefault;
@@ -286,7 +289,7 @@ function ProductResultCard({
               />
             ) : (
               <div className="text-gray-400 text-[14px] p-4 text-center">
-                ไม่มีรูปสินค้า
+                {t("noProductImage")}
               </div>
             )}
           </div>
@@ -310,7 +313,7 @@ function ProductResultCard({
 
           {product.shopName && (
             <p className="text-[14px] text-gray-600 mb-2">
-              ร้านค้า:{" "}
+              {t("shopName")}:{" "}
               <span className="font-medium text-gray-800">{product.shopName}</span>
             </p>
           )}
@@ -322,14 +325,14 @@ function ProductResultCard({
               rel="noopener noreferrer"
               className="text-blue-600 hover:text-blue-700 underline underline-offset-2 break-all"
             >
-              ดูสินค้าต้นทาง
+              {t("viewSourceProduct")}
             </a>
           </p>
 
           {/* Price */}
           <div className="mb-3 p-3 bg-white border border-gray-200 rounded-md">
             <div className="flex items-baseline gap-2 flex-wrap">
-              <span className="text-[14px] text-gray-600">ราคา/ชิ้น:</span>
+              <span className="text-[14px] text-gray-600">{t("pricePerPiece")}:</span>
               <span className="text-[18px] font-bold text-red-600">
                 ¥{numberFormat2(unitCny)}
               </span>
@@ -340,7 +343,10 @@ function ProductResultCard({
                   </span>
                 )}
               <span className="text-[14px] text-gray-500">
-                ≈ ฿{numberFormat2(unitCny * rsDefault)} (เรท {rsDefault.toFixed(2)}฿/¥)
+                {t("approxThbWithRate", {
+                  amount: numberFormat2(unitCny * rsDefault),
+                  rate: rsDefault.toFixed(2),
+                })}
               </span>
             </div>
           </div>
@@ -352,14 +358,14 @@ function ProductResultCard({
                 htmlFor="paste-qty"
                 className="block text-[14px] font-medium text-gray-700 mb-1"
               >
-                จำนวน
+                {t("amount")}
               </label>
               <div className="flex items-stretch border border-gray-300 rounded-lg overflow-hidden bg-white">
                 <button
                   type="button"
                   onClick={() => setQty(Math.max(1, qty - 1))}
                   disabled={adding || qty <= 1}
-                  aria-label="ลดจำนวน"
+                  aria-label={t("decreaseQty")}
                   className="w-[44px] h-[44px] text-[20px] font-bold text-gray-700 hover:bg-gray-100 disabled:text-gray-300 disabled:cursor-not-allowed transition"
                 >
                   -
@@ -383,7 +389,7 @@ function ProductResultCard({
                   type="button"
                   onClick={() => setQty(Math.min(9999, qty + 1))}
                   disabled={adding}
-                  aria-label="เพิ่มจำนวน"
+                  aria-label={t("increaseQty")}
                   className="w-[44px] h-[44px] text-[20px] font-bold text-gray-700 hover:bg-gray-100 disabled:text-gray-300 disabled:cursor-not-allowed transition"
                 >
                   +
@@ -395,14 +401,14 @@ function ProductResultCard({
                 htmlFor="paste-note"
                 className="block text-[14px] font-medium text-gray-700 mb-1"
               >
-                หมายเหตุ <span className="text-gray-400">(สี / ขนาด / รุ่น)</span>
+                {t("details")} <span className="text-gray-400">{t("noteHint")}</span>
               </label>
               <input
                 id="paste-note"
                 type="text"
                 value={addNote}
                 onChange={(e) => setAddNote(e.target.value)}
-                placeholder="เช่น สีดำ ขนาด M"
+                placeholder={t("notePlaceholder")}
                 maxLength={200}
                 disabled={adding}
                 className="w-full h-[44px] px-3 text-[16px] rounded-lg border border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-100 outline-none transition disabled:bg-gray-50"
@@ -412,12 +418,12 @@ function ProductResultCard({
 
           <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-3 border-t border-gray-200">
             <div className="text-[14px] text-gray-700">
-              รวม:{" "}
+              {t("totalLabel")}:{" "}
               <span className="font-bold text-red-600 text-[16px]">
                 ¥{numberFormat2(totalCny)}
               </span>{" "}
               <span className="text-gray-500">
-                (≈ ฿{numberFormat2(totalThb)})
+                {t("approxThb", { amount: numberFormat2(totalThb) })}
               </span>
             </div>
             <button
@@ -442,7 +448,7 @@ function ProductResultCard({
                 <circle cx="19" cy="21" r="1" />
                 <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
               </svg>
-              {adding ? "กำลังเพิ่ม..." : "เพิ่มในตะกร้า"}
+              {adding ? t("adding") : t("addToCartCta")}
             </button>
           </div>
         </div>

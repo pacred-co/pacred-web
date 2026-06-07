@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { Package, ChevronDown } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { calculateForwarderTotal } from "@/actions/forwarder";
 import {
   ForwarderRowView,
@@ -72,6 +73,7 @@ function ContainerGroup({
   summary: ContainerSummary;
   children: ReactNode;
 }) {
+  const t = useTranslations("forwarderInteractivity");
   const [open, setOpen] = useState(true); // default expanded
   const fmt = (n: number, d = 2) =>
     n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -90,20 +92,20 @@ function ContainerGroup({
           <span className="text-sm md:text-base font-bold text-foreground">
             {cabinet ? (
               <>
-                ตู้ <span className="font-mono">{cabinet}</span>
+                {t("container")} <span className="font-mono">{cabinet}</span>
               </>
             ) : (
-              "ยังไม่เข้าตู้"
+              t("noContainer")
             )}
           </span>
           <span className="inline-flex shrink-0 items-center justify-center rounded-full bg-white px-2 py-0.5 text-[11px] md:text-xs font-bold text-muted dark:bg-background">
             {count}
           </span>
           <span className="text-[11px] md:text-[13px] font-normal text-muted">
-            · {summary.boxes} กล่อง · {fmt(summary.weight, 1)} kg · {fmt(summary.volume)} CBM
+            · {summary.boxes} {t("boxes")} · {fmt(summary.weight, 1)} kg · {fmt(summary.volume)} CBM
             {summary.total > 0 && (
               <>
-                {" · รวม "}
+                {` · ${t("sum")} `}
                 <span className="font-bold text-red-600">฿{fmt(summary.total)}</span>
               </>
             )}
@@ -200,6 +202,7 @@ export function ForwarderInteractivity({
   // columnCount kept in the prop type for binary compat with page.tsx;
   // the card list doesn't need it.
 }: ForwarderInteractivityProps) {
+  const t = useTranslations("forwarderInteractivity");
   // Pre-compute per-row total + eligibility once.
   const enrichedRows = useMemo(() => {
     return rowsData.map((row) => {
@@ -327,7 +330,7 @@ export function ForwarderInteractivity({
               className="mx-auto mb-4 h-28 w-28 object-contain opacity-70 md:h-36 md:w-36"
             />
             <h3 className="text-sm font-bold text-foreground md:text-[15px]">
-              ไม่พบรายการ
+              {t("noItems")}
             </h3>
           </div>
         ) : (
@@ -360,9 +363,9 @@ export function ForwarderInteractivity({
       {showPayStrip && (
         <div className="my-3 rounded-2xl bg-red-600 text-white text-center px-4 py-3 shadow-sm animate__animated animate__infinite animate__headShake">
           <div className="text-xs md:text-sm leading-snug">
-            คุณมีรายการรอชำระเงินที่ใช้ Pacred เหมาๆ มากกว่า 1 รายการ
+            {t("payStripLine1")}
             <br />
-            การรวมบิลจ่ายจะช่วยให้คุณได้รับส่วนลด
+            {t("payStripLine2")}
           </div>
         </div>
       )}
@@ -397,20 +400,20 @@ export function ForwarderInteractivity({
                 checked={allChecked}
                 onChange={(e) => toggleAll(e.target.checked)}
               />
-              <span className="text-[10.5px] md:text-xs text-muted whitespace-nowrap">ทั้งหมด</span>
+              <span className="text-[10.5px] md:text-xs text-muted whitespace-nowrap">{t("selectAll")}</span>
             </label>
 
             {/* Total — stacked on mobile, inline on desktop */}
             <div className="flex-1 min-w-0 leading-tight">
               <div className="text-[10px] md:text-xs text-muted">
-                จำนวน <span className="countPay font-bold text-foreground notranslate">{selectedIds.size}</span> รายการ
+                {t("countPrefix")} <span className="countPay font-bold text-foreground notranslate">{selectedIds.size}</span> {t("countSuffix")}
               </div>
               <div className="font-bold text-foreground text-xs md:text-sm">
-                รวม{" "}
+                {t("sum")}{" "}
                 <span className="notranslate price-all text-red-600 text-base md:text-lg">
                   {displayTotal}
                 </span>{" "}
-                <span className="text-[10px] md:text-xs text-muted font-normal">บ.</span>
+                <span className="text-[10px] md:text-xs text-muted font-normal">{t("bahtAbbr")}</span>
               </div>
             </div>
 
@@ -426,7 +429,7 @@ export function ForwarderInteractivity({
                   : "bg-red-600 text-white hover:bg-red-700 active:scale-[0.98] shadow-sm animate__animated animate__infinite animate__headShake"
               }`}
             >
-              ชำระเงิน
+              {t("pay")}
             </button>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { requireAuth } from "@/lib/auth/require-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
@@ -249,6 +250,7 @@ export default async function ServiceOrderPrintPage({
 }) {
   // printShop.php L6-11 — a logged-out visitor is redirected to /login.
   const { profile } = await requireAuth();
+  const t = await getTranslations("serviceOrderPrint");
   const sp = await searchParams;
 
   // printShop.php L12: `if(isset($_GET['id']) && isset($_GET['print']))`
@@ -418,7 +420,7 @@ export default async function ServiceOrderPrintPage({
     // printShop.php L84-94 — the document title + heading colour.
     // The legacy ALSO runs the UPDATE hPrintBill/hPrintBill2 here —
     // DEFERRED (a render is a pure read; see the file header FLAG).
-    const nameBill = isReceipt ? "ใบเสร็จรับเงิน" : "ใบแจ้งหนี้";
+    const nameBill = isReceipt ? t("docReceipt") : t("docInvoice");
     const classText = isReceipt ? "h-title" : "h-title-danger";
 
     // ── tb_order — provider → shop → items (printShop.php L252-348) ──
@@ -554,11 +556,11 @@ export default async function ServiceOrderPrintPage({
                     alt="Pacred"
                   />
                   <div style={{ fontSize: 14, lineHeight: 1.55, marginTop: 4, color: "#333" }}>
-                    <div style={{ fontSize: 16, fontWeight: 700 }}>บริษัท แพคเรด (ประเทศไทย) จำกัด</div>
-                    <div>28/40 หมู่บ้าน สิริ อเวนิว เพชรเกษม 81 ถนนมาเจริญ</div>
-                    <div>แขวงหนองแขม เขตหนองแขม กรุงเทพมหานคร 10160</div>
-                    <div>โทร 02-421-3325 · sales@pacred.co</div>
-                    <div>เลขประจำตัวผู้เสียภาษี : 0105564077716</div>
+                    <div style={{ fontSize: 16, fontWeight: 700 }}>{t("companyName")}</div>
+                    <div>{t("companyAddr1")}</div>
+                    <div>{t("companyAddr2")}</div>
+                    <div>{t("companyContact")}</div>
+                    <div>{t("companyTaxId")}</div>
                   </div>
                 </th>
                 <th
@@ -572,7 +574,7 @@ export default async function ServiceOrderPrintPage({
                     {doc.nameBill}
                   </h1>
                   <div className="h-title2 ">
-                    เลขที่ฝากสั่งซื้อ
+                    {t("orderNoLabel")}
                     <br /> #{doc.dataTitleEntry}
                   </div>
                 </th>
@@ -589,27 +591,27 @@ export default async function ServiceOrderPrintPage({
                 >
                   <div className="">
                     <div className="h-sub">
-                      <b>ชื่อลูกค้า : </b>
+                      <b>{t("customerName")} : </b>
                       {doc.fName}
                       {doc.header.userfullname}
                     </div>
                     {/* printShop.php L213-215 — tax number, juristic only */}
                     {doc.header.usercompany === "1" ? (
                       <div className="h-sub">
-                        <b>เลขประจำตัวผู้เสียภาษี : </b>
+                        <b>{t("taxId")} : </b>
                         {doc.corporateNumber}
                       </div>
                     ) : null}
                     <div className="h-sub">
-                      <b>รหัสสมาชิก : </b>
+                      <b>{t("memberCode")} : </b>
                       {doc.header.userid}
                     </div>
                     <div className="h-sub">
-                      <b>ที่อยู่ : </b>
+                      <b>{t("address")} : </b>
                       {doc.header.fulladdress}
                     </div>
                     <div className="h-sub">
-                      <b>อีเมล : </b>
+                      <b>{t("email")} : </b>
                       {doc.header.useremail}
                     </div>
                   </div>
@@ -621,11 +623,11 @@ export default async function ServiceOrderPrintPage({
                 >
                   <div className="">
                     <div className="h-sub">
-                      <b>เลขที่ : </b>
+                      <b>{t("docNo")} : </b>
                       {doc.header.hno}
                     </div>
                     <div className="h-sub">
-                      <b>วันที่สั่ง : </b>
+                      <b>{t("orderDate")} : </b>
                       {doc.dateCreate}
                     </div>
                     {/* printShop.php L226-231 — print=1 shows the
@@ -634,17 +636,17 @@ export default async function ServiceOrderPrintPage({
                     {doc.isReceipt ? (
                       <>
                         <div className="h-sub">
-                          <b>วันที่ชำระเงิน : </b>
+                          <b>{t("paymentDate")} : </b>
                           {doc.datePay}
                         </div>
                         <div className="h-sub">
-                          <b>ชำระโดย : </b>
-                          โอนผ่านธนาคาร
+                          <b>{t("paidBy")} : </b>
+                          {t("paidByBankTransfer")}
                         </div>
                       </>
                     ) : (
                       <div className="h-sub">
-                        <b>วันที่ครบกำหนดชำระ : </b>
+                        <b>{t("dueDate")} : </b>
                         {doc.datePayExp}
                       </div>
                     )}
@@ -676,38 +678,38 @@ export default async function ServiceOrderPrintPage({
                     borderBottom: "20px solid #000",
                   }}
                 >
-                  ลำดับ
+                  {t("colNo")}
                 </th>
                 <th
                   className="text-center p-05"
                   style={{ width: "90mm", background: "#cbcbcb" }}
                   colSpan={2}
                 >
-                  ข้อมูลสินค้า{" "}
+                  {t("colProduct")}{" "}
                 </th>
                 <th
                   className="text-center p-05"
                   style={{ width: "15mm", background: "#cbcbcb" }}
                 >
-                  จำนวน
+                  {t("colQty")}
                 </th>
                 <th
                   className="text-center p-05"
                   style={{ width: "25mm", background: "#cbcbcb" }}
                 >
-                  ราคาต่อชิ้น
+                  {t("colUnitPrice")}
                 </th>
                 <th
                   className="text-center p-05"
                   style={{ width: "20mm", background: "#cbcbcb" }}
                 >
-                  ค่าขนส่งจีน
+                  {t("colShippingChn")}
                 </th>
                 <th
                   className="text-center p-05"
                   style={{ width: "20mm", background: "#cbcbcb" }}
                 >
-                  ราคารวม
+                  {t("colTotal")}
                 </th>
               </tr>
             </thead>
@@ -719,7 +721,7 @@ export default async function ServiceOrderPrintPage({
                 per provider with the running cumulative $priceShopAll.
                 `ShopItemRows` reproduces that 1:1. */}
             <tbody>
-              <ShopItemRows doc={doc} />
+              <ShopItemRows doc={doc} t={t} />
             </tbody>
             <tfoot></tfoot>
           </table>
@@ -741,7 +743,13 @@ export default async function ServiceOrderPrintPage({
  * L348) — so they REPEAT once per provider, each printing the
  * running total at that point. Reproduced 1:1 here.
  */
-function ShopItemRows({ doc }: { doc: PrintDoc }) {
+function ShopItemRows({
+  doc,
+  t,
+}: {
+  doc: PrintDoc;
+  t: Awaited<ReturnType<typeof getTranslations>>;
+}) {
   // printShop.php L300-303 — $noRow increments per item row across
   // the WHOLE order; the zebra uses (($noRow++)%2)!=0 → 'bg-g'.
   let noRow = 0;
@@ -783,7 +791,7 @@ function ShopItemRows({ doc }: { doc: PrintDoc }) {
                   <span> unclosed in the raw output; JSX closes it. */}
               <div>
                 <span style={{ fontSize: "14px" }} lang="zh">
-                  ชื่อร้าน : {shop.cNameShop}
+                  {t("shopName")} : {shop.cNameShop}
                 </span>
               </div>
               <div className="row">
@@ -794,13 +802,13 @@ function ShopItemRows({ doc }: { doc: PrintDoc }) {
                   {!hasComma ? (
                     <span className="text-danger">
                       {" "}
-                      เลขออเดอร์ร้านจีน : {shop.cShippingNumber}
+                      {t("chineseOrderNo")} : {shop.cShippingNumber}
                     </span>
                   ) : (
                     cShippingNumberNew.split(",").map((num, i) => (
                       <div key={i} className="text-center text-danger">
                         {" "}
-                        เลขออเดอร์ร้านจีน : {num}
+                        {t("chineseOrderNo")} : {num}
                       </div>
                     ))
                   )}
@@ -881,7 +889,7 @@ function ShopItemRows({ doc }: { doc: PrintDoc }) {
           {convert(totalRaw)}
         </th>
         <th colSpan={3} className="text-right p-1">
-          ราคารวมทั้งหมด
+          {t("grandTotal")}
         </th>
         <th colSpan={1} className="p-1">
           {numberFormat(totalRaw)}
@@ -904,7 +912,7 @@ function ShopItemRows({ doc }: { doc: PrintDoc }) {
       out.push(
         <tr key={`thanks-${provider.cProvider}`} className="p-1">
           <th colSpan={7} className="text-center p-1">
-            <span>ขอบคุณที่เลือกใช้ Pacred</span>
+            <span>{t("thankYou")}</span>
             <br />
             {/* 2026-06-05 (ภูม flag) — Pacred stamp (was legacy PCS stamp.png). */}
             {/* eslint-disable-next-line @next/next/no-img-element */}

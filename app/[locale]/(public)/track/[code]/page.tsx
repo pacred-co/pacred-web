@@ -1,4 +1,5 @@
 import { Check, MapPin, Clock, PackageSearch, AlertCircle } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { LINE_OA, CONTACT } from "@/components/seo/site";
 import { getPublicTrackStatus } from "@/actions/track";
 import { TrackForm } from "../track-form";
@@ -19,22 +20,29 @@ export const metadata = {
   description: "ติดตามสถานะการนำเข้าสินค้าจากจีนแบบเรียลไทม์",
 };
 
-function HelpFooter() {
+async function HelpFooter() {
+  const t = await getTranslations("publicTrackStatus");
   return (
     <div className="mt-6 rounded-xl border border-border bg-surface-alt/30 px-4 py-4 text-center text-sm text-muted">
-      มีคำถามเรื่องพัสดุ?{" "}
-      <a
-        href={LINE_OA.addFriendUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="font-semibold text-primary-600 hover:underline"
-      >
-        ทักแชทไลน์ {LINE_OA.premiumId}
-      </a>{" "}
-      หรือโทร{" "}
-      <a href={`tel:${CONTACT.phoneCompany}`} className="font-semibold text-primary-600 hover:underline">
-        {CONTACT.phoneCompanyDisplay}
-      </a>
+      {t.rich("codeHelpFooter", {
+        lineId: LINE_OA.premiumId,
+        phone: CONTACT.phoneCompanyDisplay,
+        chat: (chunks) => (
+          <a
+            href={LINE_OA.addFriendUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-primary-600 hover:underline"
+          >
+            {chunks}
+          </a>
+        ),
+        call: (chunks) => (
+          <a href={`tel:${CONTACT.phoneCompany}`} className="font-semibold text-primary-600 hover:underline">
+            {chunks}
+          </a>
+        ),
+      })}
     </div>
   );
 }
@@ -47,6 +55,7 @@ export default async function TrackCodePage({
   const { code: rawCode } = await params;
   const code = decodeURIComponent(rawCode ?? "");
   const result = await getPublicTrackStatus(code);
+  const t = await getTranslations("publicTrackStatus");
 
   // ── Not found / error → friendly state (never leak, never 500) ──
   if (!result.found) {
@@ -56,11 +65,14 @@ export default async function TrackCodePage({
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-500">
             <AlertCircle className="h-7 w-7" />
           </div>
-          <h1 className="mt-4 text-xl font-bold text-foreground">ไม่พบเลขพัสดุนี้</h1>
+          <h1 className="mt-4 text-xl font-bold text-foreground">{t("notFoundTitle")}</h1>
           <p className="mx-auto mt-2 max-w-sm text-[15px] leading-relaxed text-muted">
-            ลองตรวจสอบเลข{" "}
-            <span className="font-mono font-semibold text-foreground">{code}</span>{" "}
-            อีกครั้ง หรือเลขอาจยังไม่เข้าระบบ (โดยปกติใช้เวลา 1–2 วันหลังร้านค้าจีนส่งของเข้าโกดัง)
+            {t.rich("notFoundBody", {
+              code,
+              codeTag: (chunks) => (
+                <span className="font-mono font-semibold text-foreground">{chunks}</span>
+              ),
+            })}
           </p>
           <div className="mt-5">
             <TrackForm initial={code} />
@@ -81,7 +93,7 @@ export default async function TrackCodePage({
           <div className="min-w-0">
             <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
               <PackageSearch className="h-4 w-4" />
-              เลขพัสดุ
+              {t("trackingNumberLabel")}
             </p>
             <p className="mt-1 break-all font-mono text-base font-bold text-foreground">
               {tracking}
@@ -97,7 +109,10 @@ export default async function TrackCodePage({
             <div className="flex items-center gap-2.5 rounded-xl border border-border bg-surface-alt/30 px-3.5 py-2.5">
               <MapPin className="h-4 w-4 shrink-0 text-muted" />
               <span className="text-sm text-foreground">
-                โกดังต้นทาง: <span className="font-semibold">{warehouse}</span>
+                {t.rich("originWarehouse", {
+                  warehouse,
+                  value: (chunks) => <span className="font-semibold">{chunks}</span>,
+                })}
               </span>
             </div>
           )}
@@ -149,7 +164,7 @@ export default async function TrackCodePage({
                   {s.label}
                   {s.current && (
                     <span className="ml-2 inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 align-middle text-[11px] font-bold text-red-700">
-                      สถานะปัจจุบัน
+                      {t("currentStatusBadge")}
                     </span>
                   )}
                 </p>
@@ -164,7 +179,7 @@ export default async function TrackCodePage({
 
       {/* Search another code */}
       <div className="mt-5 rounded-2xl border border-border bg-white p-4 shadow-sm dark:bg-surface sm:p-5">
-        <p className="mb-2 text-sm font-semibold text-foreground">ค้นหาเลขพัสดุอื่น</p>
+        <p className="mb-2 text-sm font-semibold text-foreground">{t("searchAnother")}</p>
         <TrackForm />
       </div>
 

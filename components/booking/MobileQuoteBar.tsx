@@ -12,6 +12,7 @@
  */
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { ArrowRight, ChevronUp, Loader2, Receipt } from "lucide-react";
 import type {
   BookingOptionState,
@@ -41,6 +42,7 @@ export function MobileQuoteBar({
   rates,
   onSubmit,
 }: MobileQuoteBarProps) {
+  const t = useTranslations("booking");
   const [expanded, setExpanded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -76,7 +78,7 @@ export function MobileQuoteBar({
           <div className="max-h-[60vh] overflow-y-auto px-4 pt-4 pb-3 border-b border-border">
             <div className="flex items-center gap-2 text-[11px] font-black text-primary-700/80 dark:text-primary-300/80 tracking-[0.10em] uppercase leading-none">
               <Receipt className="w-3.5 h-3.5" strokeWidth={2.6} />
-              ราคาประมาณการ
+              {t("panel.title")}
             </div>
             <ul className="mt-3 space-y-2">
               {breakdown.rows.map((row) => (
@@ -101,7 +103,7 @@ export function MobileQuoteBar({
               ))}
             </ul>
             <p className="mt-3 text-[11px] text-muted leading-[1.5]">
-              * ราคาเริ่มต้น — ทีมขายยืนยันราคาจริงหลังตรวจสินค้า
+              {t("panel.disclaimer")}
             </p>
           </div>
         )}
@@ -116,7 +118,7 @@ export function MobileQuoteBar({
           >
             <span className="block text-[10.5px] font-bold text-muted tracking-[0.10em] uppercase">
               {/* i18n-key: booking.mobile.totalLabel */}
-              รวมประมาณการ
+              {t("panel.totalLabel")}
             </span>
             <span className="mt-0.5 flex items-baseline gap-1.5">
               <span className="text-[20px] font-black text-primary-600 dark:text-primary-300 tabular-nums leading-none">
@@ -141,7 +143,7 @@ export function MobileQuoteBar({
             ) : (
               <>
                 {/* i18n-key: booking.cta.bookNow */}
-                จองเลย
+                {t("panel.bookNow")}
                 <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.6} />
               </>
             )}

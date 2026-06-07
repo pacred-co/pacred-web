@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { LINE_OA, CONTACT } from "@/components/seo/site";
@@ -129,6 +130,7 @@ export default async function CustomerFreightShipmentDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const t = await getTranslations("customerFreight");
   const sb = await createClient();
 
   // Header.
@@ -233,12 +235,12 @@ export default async function CustomerFreightShipmentDetailPage({
         {/* Breadcrumb */}
         <nav className="flex items-center gap-1.5 text-xs text-muted flex-wrap">
           <Link href="/dashboard" className="hover:text-primary-600 inline-flex items-center gap-1">
-            <Home className="w-3.5 h-3.5" /> หน้าแรก
+            <Home className="w-3.5 h-3.5" /> {t("breadcrumbHome")}
           </Link>
           <ChevronRight className="w-3 h-3" />
           <Link href="/freight" className="hover:text-primary-600">Freight</Link>
           <ChevronRight className="w-3 h-3" />
-          <Link href="/freight/shipments" className="hover:text-primary-600">งานขนส่ง</Link>
+          <Link href="/freight/shipments" className="hover:text-primary-600">{t("breadcrumbShipments")}</Link>
           <ChevronRight className="w-3 h-3" />
           <span className="text-foreground font-medium font-mono">{header.job_no ?? "—"}</span>
         </nav>
@@ -252,11 +254,11 @@ export default async function CustomerFreightShipmentDetailPage({
               </div>
               <div>
                 <h1 className="text-xl sm:text-2xl font-bold text-foreground">
-                  งาน <span className="font-mono">{header.job_no ?? "—"}</span>
+                  {t("jobLabel")} <span className="font-mono">{header.job_no ?? "—"}</span>
                 </h1>
                 <p className="text-xs text-muted mt-1">
                   {FREIGHT_TRANSPORT_MODE_LABEL[header.transport_mode]} ·{" "}
-                  สร้าง {new Date(header.created_at).toLocaleDateString("th-TH")}
+                  {t("createdOn", { date: new Date(header.created_at).toLocaleDateString("th-TH") })}
                 </p>
               </div>
             </div>
@@ -269,21 +271,21 @@ export default async function CustomerFreightShipmentDetailPage({
         {/* Cancelled reason */}
         {header.status === "cancelled" && header.cancelled_reason && (
           <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            <strong>ยกเลิก:</strong> {header.cancelled_reason}
+            <strong>{t("cancelledLabel")}</strong> {header.cancelled_reason}
           </div>
         )}
 
         {/* Logistics block */}
         <section className="rounded-2xl border border-border bg-surface-alt/30 p-5 space-y-1 text-xs">
-          <h2 className="font-bold text-sm mb-2">โลจิสติกส์</h2>
+          <h2 className="font-bold text-sm mb-2">{t("logisticsHeading")}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-1">
             {header.container_code       && <p>Container: <span className="font-mono">{header.container_code}</span></p>}
             {header.carrier_container_no && <p>Carrier no: <span className="font-mono">{header.carrier_container_no}</span></p>}
             {header.bl_no                && <p>B/L: <span className="font-mono">{header.bl_no}</span></p>}
             {header.vessel_voyage        && <p>Vessel: {header.vessel_voyage}</p>}
-            {header.port_loading         && <p>ต้นทาง: {header.port_loading}</p>}
-            {header.port_discharge       && <p>ปลายทาง: {header.port_discharge}</p>}
-            {header.place_delivery       && <p>ส่งมอบ: {header.place_delivery}</p>}
+            {header.port_loading         && <p>{t("portLoading")}: {header.port_loading}</p>}
+            {header.port_discharge       && <p>{t("portDischarge")}: {header.port_discharge}</p>}
+            {header.place_delivery       && <p>{t("placeDelivery")}: {header.place_delivery}</p>}
             {header.incoterm             && <p>Incoterm: <span className="font-mono">{header.incoterm}</span></p>}
             {header.payment_term         && <p>Payment: {header.payment_term}</p>}
             <p>Origin: {header.origin_country}</p>
@@ -292,34 +294,34 @@ export default async function CustomerFreightShipmentDetailPage({
 
         {/* Parties */}
         <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
-          <h2 className="font-bold text-sm mb-3">📦 ผู้ส่ง + ผู้รับ</h2>
+          <h2 className="font-bold text-sm mb-3">📦 {t("partiesHeading")}</h2>
           <div className="grid md:grid-cols-2 gap-4">
             <div className="rounded-lg border border-border bg-surface-alt/30 p-4 space-y-1">
-              <p className="text-xs font-bold uppercase text-muted">Shipper (ผู้ส่ง — จีน)</p>
+              <p className="text-xs font-bold uppercase text-muted">{t("shipperLabel")}</p>
               {shipper ? (
                 <>
                   <p className="font-medium">{shipper.name}</p>
                   <p className="text-xs whitespace-pre-line text-muted">{shipper.address}</p>
                 </>
               ) : (
-                <p className="text-xs text-muted italic">ยังไม่มีข้อมูล</p>
+                <p className="text-xs text-muted italic">{t("noData")}</p>
               )}
             </div>
             <div className="rounded-lg border border-border bg-surface-alt/30 p-4 space-y-1">
-              <p className="text-xs font-bold uppercase text-muted">Consignee (ผู้รับ — ไทย)</p>
+              <p className="text-xs font-bold uppercase text-muted">{t("consigneeLabel")}</p>
               {consignee ? (
                 <>
                   <p className="font-medium">{consignee.name}</p>
                   <p className="text-xs whitespace-pre-line text-muted">{consignee.address}</p>
                   {consignee.tax_id && (
                     <p className="text-xs">
-                      เลขผู้เสียภาษี: <span className="font-mono">{consignee.tax_id}</span>
+                      {t("taxId")}: <span className="font-mono">{consignee.tax_id}</span>
                     </p>
                   )}
-                  {consignee.branch && <p className="text-xs">สาขา: {consignee.branch}</p>}
+                  {consignee.branch && <p className="text-xs">{t("branch")}: {consignee.branch}</p>}
                 </>
               ) : (
-                <p className="text-xs text-muted italic">ยังไม่มีข้อมูล</p>
+                <p className="text-xs text-muted italic">{t("noData")}</p>
               )}
             </div>
           </div>
@@ -327,23 +329,23 @@ export default async function CustomerFreightShipmentDetailPage({
 
         {/* Value-block summary (customer view — simplified, no USD/rate detail) */}
         <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
-          <h2 className="font-bold text-sm mb-3">📊 มูลค่างาน (THB)</h2>
+          <h2 className="font-bold text-sm mb-3">📊 {t("valueHeading")}</h2>
           <table className="w-full text-sm">
             <tbody>
               <tr>
-                <td className="py-1 text-muted">มูลค่าสินค้า (Commercial)</td>
+                <td className="py-1 text-muted">{t("commercialValue")}</td>
                 <td className="py-1 text-right font-mono">{thb(header.commercial_value_thb)}</td>
               </tr>
               <tr>
-                <td className="py-1 text-muted">อากร (Duty)</td>
+                <td className="py-1 text-muted">{t("duty")}</td>
                 <td className="py-1 text-right font-mono">{thb(header.duty_thb)}</td>
               </tr>
               <tr>
-                <td className="py-1 text-muted">VAT 7%</td>
+                <td className="py-1 text-muted">{t("vat7")}</td>
                 <td className="py-1 text-right font-mono">{thb(header.vat_thb)}</td>
               </tr>
               <tr className="border-t-2 border-black text-base font-bold">
-                <td className="py-2">รวม (Landed cost)</td>
+                <td className="py-2">{t("landedCost")}</td>
                 <td className="py-2 text-right font-mono text-primary-700">{thb(valueBlockTotal)}</td>
               </tr>
             </tbody>
@@ -375,17 +377,17 @@ export default async function CustomerFreightShipmentDetailPage({
 
           {!activeInvoice ? (
             <p className="p-5 text-center text-sm text-muted">
-              ยังไม่มี Commercial Invoice — ทีมจะออกให้เมื่อพร้อมจัดส่งเอกสาร
+              {t("noInvoice")}
             </p>
           ) : activeInvoice.status === "draft" ? (
             <p className="p-6 text-center text-sm text-amber-700">
-              ⏳ Invoice อยู่ในขั้น draft — ทีมกำลังจัดทำ จะแจ้งให้ทราบเมื่อพร้อม
+              {t("invoiceDraft")}
             </p>
           ) : (
             <>
               {/* PDF download buttons (CI / PL / Form E / D/O) */}
               <div className="p-5 border-b border-border bg-surface-alt/20">
-                <p className="text-xs text-muted mb-2">📥 ดาวน์โหลดเอกสาร PDF</p>
+                <p className="text-xs text-muted mb-2">📥 {t("downloadPdf")}</p>
                 <div className="flex flex-wrap gap-2">
                   <a
                     href={`/api/freight-invoice/${activeInvoice.id}`}
@@ -424,7 +426,7 @@ export default async function CustomerFreightShipmentDetailPage({
 
               {activeInvoice.cancellation_reason && (
                 <div className="px-5 py-3 border-b border-red-200 bg-red-50 text-xs text-red-800">
-                  <strong>ยกเลิก:</strong> {activeInvoice.cancellation_reason}
+                  <strong>{t("cancelledLabel")}</strong> {activeInvoice.cancellation_reason}
                 </div>
               )}
 
@@ -433,28 +435,28 @@ export default async function CustomerFreightShipmentDetailPage({
                 <>
                   <div className="px-5 py-3 border-b border-border flex items-center justify-between flex-wrap gap-2">
                     <p className="text-sm font-bold inline-flex items-center gap-2">
-                      💰 การชำระเงิน
+                      💰 {t("paymentHeading")}
                       <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] ${PAYMENT_STATUS_BADGE[paymentStatus]}`}>
                         {FREIGHT_INVOICE_PAYMENT_STATUS_LABEL[paymentStatus]}
                       </span>
                     </p>
                     {activeInvoice.fully_paid_at && (
                       <p className="text-[10px] text-muted">
-                        ชำระครบเมื่อ {new Date(activeInvoice.fully_paid_at).toLocaleDateString("th-TH")}
+                        {t("fullyPaidOn", { date: new Date(activeInvoice.fully_paid_at).toLocaleDateString("th-TH") })}
                       </p>
                     )}
                   </div>
                   <div className="grid grid-cols-3 gap-px bg-border text-center text-xs">
                     <div className="bg-white dark:bg-surface px-3 py-3">
-                      <p className="text-muted">ยอดรวม</p>
+                      <p className="text-muted">{t("totalAmount")}</p>
                       <p className="mt-1 font-mono font-bold">{thb(totalThb)}</p>
                     </div>
                     <div className="bg-white dark:bg-surface px-3 py-3">
-                      <p className="text-muted">ชำระแล้ว</p>
+                      <p className="text-muted">{t("paidAmount")}</p>
                       <p className="mt-1 font-mono font-bold text-green-700">{thb(paidThb)}</p>
                     </div>
                     <div className="bg-white dark:bg-surface px-3 py-3">
-                      <p className="text-muted">คงค้าง</p>
+                      <p className="text-muted">{t("outstandingAmount")}</p>
                       <p className={`mt-1 font-mono font-bold ${outstandingThb > 0 ? "text-amber-700" : "text-muted"}`}>
                         {thb(outstandingThb)}
                       </p>
@@ -462,7 +464,7 @@ export default async function CustomerFreightShipmentDetailPage({
                   </div>
                   {outstandingThb > 0 && (
                     <div className="px-5 py-3 border-t border-border text-xs text-muted">
-                      💬 ติดต่อทีมเพื่อชำระเงิน — LINE @pacred หรือ {CONTACT.phoneCompanyDisplay}
+                      💬 {t("contactToPay", { phone: CONTACT.phoneCompanyDisplay })}
                     </div>
                   )}
                 </>
@@ -475,30 +477,30 @@ export default async function CustomerFreightShipmentDetailPage({
         {whtEntry && (
           <section className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-5 space-y-2">
             <h2 className="font-bold text-sm text-amber-900">
-              📋 หัก ณ ที่จ่าย (สำหรับลูกค้านิติบุคคล)
+              📋 {t("whtHeading")}
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-1 text-sm text-amber-900">
-              <p>ยอด Gross: <span className="font-mono">{thb(Number(whtEntry.gross_invoice_thb))}</span></p>
-              <p>อัตราหัก: <span className="font-mono">{Number(whtEntry.wht_rate_pct)}%</span></p>
-              <p>หัก ณ ที่จ่าย: <span className="font-mono">−{thb(Number(whtEntry.wht_amount_thb))}</span></p>
+              <p>{t("whtGross")}: <span className="font-mono">{thb(Number(whtEntry.gross_invoice_thb))}</span></p>
+              <p>{t("whtRate")}: <span className="font-mono">{Number(whtEntry.wht_rate_pct)}%</span></p>
+              <p>{t("whtAmount")}: <span className="font-mono">−{thb(Number(whtEntry.wht_amount_thb))}</span></p>
               <p>
-                <strong>โอนสุทธิ (Net): </strong>
+                <strong>{t("whtNet")}: </strong>
                 <span className="font-mono font-bold">{thb(Number(whtEntry.net_expected_thb))}</span>
               </p>
             </div>
             {whtEntry.cert_status === "pending" && (
               <>
                 <p className="text-xs text-amber-800 mt-1">
-                  ⚠️ กรุณาส่งหนังสือรับรองหัก ณ ที่จ่าย (50 ทวิ) ให้ Pacred — มิเช่นนั้นจะออกใบกำกับภาษีให้ไม่ได้
+                  ⚠️ {t("whtPending")}
                 </p>
                 <CustomerWhtUploadPanel whtEntryId={whtEntry.id} />
               </>
             )}
             {whtEntry.cert_status === "received" && (
-              <p className="text-xs text-green-700">✅ ได้รับใบ 50 ทวิ ครบแล้ว — สามารถออกใบกำกับภาษีได้</p>
+              <p className="text-xs text-green-700">✅ {t("whtReceived")}</p>
             )}
             {whtEntry.cert_status === "waived" && (
-              <p className="text-xs text-gray-700">ℹ️ ใบ 50 ทวิ ได้รับการยกเว้น (Pacred รับเป็นค่าใช้จ่าย)</p>
+              <p className="text-xs text-gray-700">ℹ️ {t("whtWaived")}</p>
             )}
           </section>
         )}
@@ -506,14 +508,14 @@ export default async function CustomerFreightShipmentDetailPage({
         {/* Notes (admin notes if any) */}
         {header.notes && (
           <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
-            <h2 className="font-bold text-sm mb-1">หมายเหตุ</h2>
+            <h2 className="font-bold text-sm mb-1">{t("notesHeading")}</h2>
             <p className="text-xs whitespace-pre-line text-muted">{header.notes}</p>
           </section>
         )}
 
         {/* Contact CTA */}
         <div className="rounded-2xl border border-border bg-surface-alt/30 p-4 text-sm">
-          <p className="text-foreground">มีคำถามเกี่ยวกับงานนี้?</p>
+          <p className="text-foreground">{t("questionsAboutJob")}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             <a
               href={LINE_OA.addFriendUrl}
@@ -521,7 +523,7 @@ export default async function CustomerFreightShipmentDetailPage({
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 rounded-lg bg-green-600 text-white px-4 py-2 text-xs font-bold hover:bg-green-700"
             >
-              <MessageCircle className="w-4 h-4" /> ติดต่อทีม Pacred
+              <MessageCircle className="w-4 h-4" /> {t("contactTeam")}
             </a>
             <a
               href={`tel:${CONTACT.phoneCompanyDisplay}`}

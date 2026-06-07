@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import {
   Ship,
   Container,
@@ -60,106 +61,7 @@ type ServiceCard = {
   status?: "live" | "soon";
 };
 
-const SERVICES: ServiceCard[] = [
-  {
-    icon: Container,
-    title: "นำเข้าจีน — FCL เหมาตู้",
-    sub: "20' · 40' · 40HQ · ครบทุก Term",
-    href: "/services/import-china-fcl",
-    group: "cargo",
-    status: "live",
-  },
-  {
-    icon: Boxes,
-    title: "นำเข้าจีน — LCL รวมตู้",
-    sub: "เริ่มไม่กี่กล่อง · จ่ายตาม CBM/KG",
-    href: "/services/import-china-lcl",
-    group: "cargo",
-    status: "live",
-  },
-  {
-    icon: Truck,
-    title: "นำเข้าจีน — ครบทุกช่องทาง",
-    sub: "Cargo รถ/เรือ/แอร์ · Door-to-Door",
-    href: "/services/import-china",
-    group: "cargo",
-    status: "live",
-  },
-  {
-    icon: ShoppingBag,
-    title: "ฝากสั่งซื้อสินค้าจีน",
-    sub: "1688 · Taobao · Tmall · Alibaba",
-    href: "/services/china-shopping",
-    group: "shopping",
-    status: "live",
-  },
-  {
-    icon: HandCoins,
-    title: "ฝากโอนหยวน · Alipay",
-    sub: "เรทดี · ไม่ต้องเปิดบัญชีจีน",
-    href: "/payment/alipay",
-    group: "shopping",
-    status: "live",
-  },
-  {
-    icon: Stamp,
-    title: "เคลียร์ศุลกากร · สินค้าติดด่าน",
-    sub: "สุวรรณภูมิ · คลองเตย · แหลมฉบัง",
-    href: "/customs-clearance-shipping-suvarnabhumi",
-    group: "customs",
-    status: "live",
-  },
-  {
-    icon: Globe2,
-    title: "ส่งออกสินค้าทั่วโลก",
-    sub: "Air · Sea · Express · ทุก Incoterm",
-    href: "/services/export-worldwide",
-    group: "freight",
-    status: "live",
-  },
-  {
-    icon: FileCheck2,
-    title: "ออกใบกำกับภาษี",
-    sub: "ภพ.20 · เอกสารครบนิติบุคคล",
-    href: "/services",
-    group: "freight",
-    status: "soon",
-  },
-  {
-    icon: HandshakeIcon,
-    title: "จับคู่ตัวแทนออกของ (YY)",
-    sub: "ลงทะเบียนกรมศุล · 30 นาที",
-    href: "/services",
-    group: "freight",
-    status: "soon",
-  },
-  {
-    icon: RefreshCcw,
-    title: "ขอคืนภาษี (Tax Refund)",
-    sub: "เพิ่มกำไรสินค้าที่มีสิทธิ์",
-    href: "/services",
-    group: "freight",
-    status: "soon",
-  },
-  {
-    icon: PawPrint,
-    title: "บริการฟูมิเกชัน",
-    sub: "Fumigation Certificate · ISPM-15",
-    href: "/services",
-    group: "freight",
-    status: "soon",
-  },
-  {
-    icon: Warehouse,
-    title: "ขนส่งภายในประเทศ + แมสเซ็นเจอร์",
-    sub: "Door-to-Door · ทั่วประเทศ",
-    href: "/services",
-    group: "cargo",
-    status: "soon",
-  },
-];
-
-function ServiceCard({ card }: { card: ServiceCard }) {
+function ServiceCard({ card, soonLabel }: { card: ServiceCard; soonLabel: string }) {
   const Icon = card.icon;
   const isLive = card.status === "live";
   const cardClass = [
@@ -181,7 +83,7 @@ function ServiceCard({ card }: { card: ServiceCard }) {
           </h3>
           {!isLive && (
             <span className="inline-flex items-center px-1.5 h-[18px] rounded-md bg-amber-100 text-amber-800 text-[9.5px] font-black tracking-wide dark:bg-amber-900/40 dark:text-amber-200">
-              เร็วๆ นี้
+              {soonLabel}
             </span>
           )}
         </div>
@@ -212,33 +114,6 @@ function ServiceCard({ card }: { card: ServiceCard }) {
   );
 }
 
-const GROUPS = [
-  {
-    id: "cargo",
-    label: "Cargo จีน-ไทย",
-    desc: "นำเข้าสินค้าจากจีน · 1688 · Taobao · เคลียร์ภาษีครบ · ทุกช่องทาง",
-    accent: "from-primary-500 to-primary-700",
-  },
-  {
-    id: "customs",
-    label: "เคลียร์ศุลกากร",
-    desc: "สินค้าติดด่าน · เคลียร์ Air/Sea/Truck · ทุก Port ทุกด่าน",
-    accent: "from-rose-500 to-rose-700",
-  },
-  {
-    id: "shopping",
-    label: "ฝากซื้อ · ฝากโอน",
-    desc: "ทีมล่ามจีนปิดดีลให้ · ฝากโอนหยวนเรทดี",
-    accent: "from-amber-500 to-orange-600",
-  },
-  {
-    id: "freight",
-    label: "Freight · ส่งออก",
-    desc: "ส่งออกทั่วโลก · ใบกำกับภาษี · ฟูมิเกชัน · ใบขนสินค้า",
-    accent: "from-blue-500 to-indigo-700",
-  },
-] as const;
-
 export default async function ServicesIndexPage({
   params,
 }: {
@@ -246,8 +121,136 @@ export default async function ServicesIndexPage({
 }) {
   const { locale } = await params;
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
-  const homeLabel = typedLocale === "th" ? "หน้าหลัก" : "Home";
-  const here = typedLocale === "th" ? "บริการ" : "Services";
+  const t = await getTranslations("servicesIndex");
+
+  const SERVICES: ServiceCard[] = [
+    {
+      icon: Container,
+      title: t("svcFclTitle"),
+      sub: t("svcFclSub"),
+      href: "/services/import-china-fcl",
+      group: "cargo",
+      status: "live",
+    },
+    {
+      icon: Boxes,
+      title: t("svcLclTitle"),
+      sub: t("svcLclSub"),
+      href: "/services/import-china-lcl",
+      group: "cargo",
+      status: "live",
+    },
+    {
+      icon: Truck,
+      title: t("svcAllModeTitle"),
+      sub: t("svcAllModeSub"),
+      href: "/services/import-china",
+      group: "cargo",
+      status: "live",
+    },
+    {
+      icon: ShoppingBag,
+      title: t("svcShoppingTitle"),
+      sub: t("svcShoppingSub"),
+      href: "/services/china-shopping",
+      group: "shopping",
+      status: "live",
+    },
+    {
+      icon: HandCoins,
+      title: t("svcYuanTitle"),
+      sub: t("svcYuanSub"),
+      href: "/payment/alipay",
+      group: "shopping",
+      status: "live",
+    },
+    {
+      icon: Stamp,
+      title: t("svcCustomsTitle"),
+      sub: t("svcCustomsSub"),
+      href: "/customs-clearance-shipping-suvarnabhumi",
+      group: "customs",
+      status: "live",
+    },
+    {
+      icon: Globe2,
+      title: t("svcExportTitle"),
+      sub: t("svcExportSub"),
+      href: "/services/export-worldwide",
+      group: "freight",
+      status: "live",
+    },
+    {
+      icon: FileCheck2,
+      title: t("svcTaxInvoiceTitle"),
+      sub: t("svcTaxInvoiceSub"),
+      href: "/services",
+      group: "freight",
+      status: "soon",
+    },
+    {
+      icon: HandshakeIcon,
+      title: t("svcBrokerTitle"),
+      sub: t("svcBrokerSub"),
+      href: "/services",
+      group: "freight",
+      status: "soon",
+    },
+    {
+      icon: RefreshCcw,
+      title: t("svcTaxRefundTitle"),
+      sub: t("svcTaxRefundSub"),
+      href: "/services",
+      group: "freight",
+      status: "soon",
+    },
+    {
+      icon: PawPrint,
+      title: t("svcFumigationTitle"),
+      sub: t("svcFumigationSub"),
+      href: "/services",
+      group: "freight",
+      status: "soon",
+    },
+    {
+      icon: Warehouse,
+      title: t("svcDomesticTitle"),
+      sub: t("svcDomesticSub"),
+      href: "/services",
+      group: "cargo",
+      status: "soon",
+    },
+  ];
+
+  const GROUPS = [
+    {
+      id: "cargo",
+      label: t("groupCargoLabel"),
+      desc: t("groupCargoDesc"),
+      accent: "from-primary-500 to-primary-700",
+    },
+    {
+      id: "customs",
+      label: t("groupCustomsLabel"),
+      desc: t("groupCustomsDesc"),
+      accent: "from-rose-500 to-rose-700",
+    },
+    {
+      id: "shopping",
+      label: t("groupShoppingLabel"),
+      desc: t("groupShoppingDesc"),
+      accent: "from-amber-500 to-orange-600",
+    },
+    {
+      id: "freight",
+      label: t("groupFreightLabel"),
+      desc: t("groupFreightDesc"),
+      accent: "from-blue-500 to-indigo-700",
+    },
+  ] as const;
+
+  const homeLabel = t("breadcrumbHome");
+  const here = t("breadcrumbServices");
 
   return (
     <>
@@ -291,13 +294,13 @@ export default async function ServicesIndexPage({
           <div className="relative mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-2 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <Sparkles className="w-3.5 h-3.5" strokeWidth={2.6} />
-              OUR SERVICES · บริการของเรา
+              {t("heroEyebrow")}
             </div>
             <h1 className="text-[24px] md:text-[44px] leading-[1.2] font-black tracking-[-0.025em] text-[#111827] dark:text-white max-w-[980px]">
-              <span className="text-primary-600">ครบทุกบริการ</span> นำเข้า · ส่งออก · ชิปปิ้ง · เคลียร์ศุลกากร
+              <span className="text-primary-600">{t("heroTitleHighlight")}</span>{t("heroTitleRest")}
             </h1>
             <h2 className="mt-2 md:mt-3 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[920px]">
-              Pacred Shipping ดูแลครบในที่เดียว — Cargo · Freight · เคลียร์พิธีการ · ฝากซื้อ-ฝากโอน · ใบกำกับภาษี · ฟูมิเกชัน — <span className="text-primary-600/80 font-bold">ครบวงจรในผู้ให้บริการเดียว</span>
+              {t("heroSubtitleMain")}<span className="text-primary-600/80 font-bold">{t("heroSubtitleHighlight")}</span>
             </h2>
 
             {/* LINE attention banner */}
@@ -306,7 +309,7 @@ export default async function ServicesIndexPage({
               cta="line_cta"
               surface={SURFACE}
               ctaProps={{ position: "hero_banner" }}
-              aria-label="ทักไลน์ Pacred — ปรึกษาบริการฟรี"
+              aria-label={t("lineBannerAriaLabel")}
               className="group block mt-4 md:mt-6 relative pt-3 md:pt-4 pr-4 md:pr-8 max-w-[1100px] no-underline"
             >
               <span className="absolute top-0 left-3 md:left-5 z-20 inline-flex items-center gap-1.5 bg-slate-900 dark:bg-black text-white text-[11.5px] md:text-[13px] font-bold px-3 md:px-4 py-1.5 md:py-2 rounded-xl shadow-[0_6px_18px_rgba(0,0,0,0.45)] tracking-tight transition-transform duration-300 group-hover:-translate-y-0.5">
@@ -314,7 +317,7 @@ export default async function ServicesIndexPage({
                   <span className="absolute inline-flex w-full h-full rounded-full bg-red-500 opacity-75 animate-ping" />
                   <span className="relative inline-flex w-2 h-2 rounded-full bg-red-500" />
                 </span>
-                ไม่แน่ใจเลือกบริการไหน?
+                {t("lineBannerBadge")}
               </span>
               <div
                 className="relative rounded-2xl text-white shadow-[0_12px_32px_rgba(120,0,0,0.35)] transition-all duration-300 group-hover:shadow-[0_18px_44px_rgba(160,0,0,0.5)] group-hover:-translate-y-0.5"
@@ -338,15 +341,15 @@ export default async function ServicesIndexPage({
                   </div>
                   <div className="min-w-0">
                     <p className="text-[12px] md:text-[28px] font-bold text-white leading-snug">
-                      ปรึกษาฟรี · แจ้งความต้องการ · ทีมเลือกบริการให้
+                      {t("lineBannerHeadline")}
                     </p>
                     <p className="hidden md:block mt-1.5 text-[13px] text-white/75 leading-snug">
-                      ทุกบริการในผู้ให้บริการเดียว · ทีมประจำคุณตั้งแต่ต้นจนจบ
+                      {t("lineBannerSub")}
                     </p>
                     <p className="mt-1.5 md:mt-2 inline-flex items-center gap-1 text-[10px] md:text-[12px] font-bold tracking-wide">
                       <MessageCircle className="w-3 h-3 md:w-3.5 md:h-3.5 text-yellow-300" strokeWidth={2.6} />
-                      <span className="text-yellow-300">ทักไลน์</span>
-                      <span className="text-white/85">ตอบไว 5 นาที</span>
+                      <span className="text-yellow-300">{t("lineBannerCtaLine")}</span>
+                      <span className="text-white/85">{t("lineBannerCtaReply")}</span>
                       <ArrowRight className="w-3 h-3 md:w-3.5 md:h-3.5 text-yellow-300 transition-transform group-hover:translate-x-1" strokeWidth={2.6} />
                     </p>
                   </div>
@@ -364,7 +367,7 @@ export default async function ServicesIndexPage({
                 className="inline-flex items-center justify-center gap-2 h-12 rounded-xl border border-primary-200 bg-primary-50 text-primary-700 font-black text-[14px] md:text-[15px] hover:bg-primary-100 hover:border-primary-300 transition-colors dark:bg-primary-900/30 dark:border-primary-800 dark:text-primary-200"
               >
                 <Phone className="w-4 h-4" strokeWidth={2.6} />
-                โทร {CONTACT.phoneDisplay}
+                {t("phoneBtn", { phone: CONTACT.phoneDisplay })}
               </TrackedPhoneLink>
               <TrackedExternalLink
                 href={LINE_OA.shortUrl}
@@ -374,7 +377,7 @@ export default async function ServicesIndexPage({
                 className="inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-[#06C755] text-white font-black text-[14px] md:text-[15px] hover:bg-[#05B04C] transition-colors shadow-[0_6px_18px_rgba(6,199,85,0.35)]"
               >
                 <MessageCircle className="w-4 h-4" strokeWidth={2.6} />
-                แอด LINE Pacred
+                {t("lineBtn")}
               </TrackedExternalLink>
             </div>
           </div>
@@ -405,7 +408,7 @@ export default async function ServicesIndexPage({
 
                 <div className="mt-6 md:mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                   {cards.map((card) => (
-                    <ServiceCard key={card.title} card={card} />
+                    <ServiceCard key={card.title} card={card} soonLabel={t("soonBadge")} />
                   ))}
                 </div>
               </div>
@@ -421,10 +424,10 @@ export default async function ServicesIndexPage({
                 <Headset className="w-6 h-6 md:w-7 md:h-7" strokeWidth={2.4} />
               </div>
               <h2 className="text-[22px] md:text-[30px] font-black text-[#111827] dark:text-white tracking-tight leading-tight">
-                ไม่แน่ใจเลือก<span className="text-primary-600">บริการไหน</span>?
+                {t("helpChooseTitlePre")}<span className="text-primary-600">{t("helpChooseTitleHighlight")}</span>{t("helpChooseTitlePost")}
               </h2>
               <p className="mt-2 text-[13px] md:text-[15px] text-muted font-medium max-w-[640px] mx-auto leading-[1.65]">
-                ทักไลน์/โทรหาทีม — เล่าความต้องการให้ฟัง ทีม Pacred แนะนำบริการ + Quote + เส้นทางที่เหมาะกับธุรกิจคุณภายใน 5 นาที
+                {t("helpChooseDesc")}
               </p>
               <div className="mt-5 md:mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-[480px] mx-auto">
                 <TrackedExternalLink
@@ -435,7 +438,7 @@ export default async function ServicesIndexPage({
                   className="inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-[#06C755] text-white font-black text-[14px] md:text-[15px] hover:bg-[#05B04C] transition-colors shadow-[0_6px_18px_rgba(6,199,85,0.35)]"
                 >
                   <MessageCircle className="w-4 h-4" strokeWidth={2.6} />
-                  แอด LINE Pacred
+                  {t("lineBtn")}
                 </TrackedExternalLink>
                 <TrackedPhoneLink
                   phone={CONTACT.phone}
@@ -445,7 +448,7 @@ export default async function ServicesIndexPage({
                   className="inline-flex items-center justify-center gap-2 h-12 rounded-xl border border-primary-200 bg-white text-primary-700 font-black text-[14px] md:text-[15px] hover:bg-primary-50 hover:border-primary-300 transition-colors dark:bg-surface dark:border-primary-800 dark:text-primary-200"
                 >
                   <Phone className="w-4 h-4" strokeWidth={2.6} />
-                  โทร {CONTACT.phoneDisplay}
+                  {t("phoneBtn", { phone: CONTACT.phoneDisplay })}
                 </TrackedPhoneLink>
               </div>
             </div>

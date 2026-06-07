@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
@@ -75,26 +76,26 @@ export const dynamic = "force-dynamic";
 
 // ── Status badge palette — Pacred-themed Tailwind tints (replaces the
 // legacy Bootstrap badge-* classes). Each entry maps a `hstatus` value
-// to a label + Tailwind chip styles.
+// to Tailwind chip styles; the display label is resolved via i18n.
 const SHOP_STATUS: Record<
   string,
-  { label: string; cls: string; dot: string }
+  { cls: string; dot: string }
 > = {
-  "1": { label: "รอดำเนินการ",     cls: "bg-amber-100 text-amber-700 border-amber-200",    dot: "bg-amber-500"   },
-  "2": { label: "รอชำระเงิน",      cls: "bg-rose-100 text-rose-700 border-rose-200",       dot: "bg-rose-500"    },
-  "3": { label: "สั่งสินค้า",      cls: "bg-sky-100 text-sky-700 border-sky-200",          dot: "bg-sky-500"     },
-  "4": { label: "รอร้านจีนจัดส่ง",  cls: "bg-blue-100 text-blue-700 border-blue-200",       dot: "bg-blue-500"    },
-  "5": { label: "สำเร็จ",          cls: "bg-emerald-100 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
-  "6": { label: "ยกเลิกออเดอร์",   cls: "bg-neutral-200 text-neutral-600 border-neutral-300", dot: "bg-neutral-500" },
+  "1": { cls: "bg-amber-100 text-amber-700 border-amber-200",    dot: "bg-amber-500"   },
+  "2": { cls: "bg-rose-100 text-rose-700 border-rose-200",       dot: "bg-rose-500"    },
+  "3": { cls: "bg-sky-100 text-sky-700 border-sky-200",          dot: "bg-sky-500"     },
+  "4": { cls: "bg-blue-100 text-blue-700 border-blue-200",       dot: "bg-blue-500"    },
+  "5": { cls: "bg-emerald-100 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
+  "6": { cls: "bg-neutral-200 text-neutral-600 border-neutral-300", dot: "bg-neutral-500" },
 };
 
-function StatusBadge({ hStatus }: { hStatus: string }) {
+function StatusBadge({ hStatus, label }: { hStatus: string; label: string }) {
   const s = SHOP_STATUS[hStatus];
   if (!s) return null;
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] font-bold border ${s.cls}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-      {s.label}
+      {label}
     </span>
   );
 }
@@ -145,16 +146,16 @@ type HeaderOrderRow = {
   hnote: string | null;
 };
 
-// 7-tab definition for the status filter strip.
-type Tab = { key: string; label: string; activeCls: string };
+// 7-tab definition for the status filter strip. Display labels resolved via i18n.
+type Tab = { key: string; activeCls: string };
 const TABS: readonly Tab[] = [
-  { key: "",  label: "ทั้งหมด",        activeCls: "bg-primary-600 text-white border-primary-600" },
-  { key: "1", label: "รอดำเนินการ",     activeCls: "bg-amber-500 text-white border-amber-500"     },
-  { key: "2", label: "รอชำระเงิน",      activeCls: "bg-rose-600 text-white border-rose-600"       },
-  { key: "3", label: "สั่งสินค้า",      activeCls: "bg-sky-600 text-white border-sky-600"         },
-  { key: "4", label: "รอร้านจีนจัดส่ง",  activeCls: "bg-blue-600 text-white border-blue-600"       },
-  { key: "5", label: "สำเร็จ",          activeCls: "bg-emerald-600 text-white border-emerald-600" },
-  { key: "6", label: "ยกเลิกออเดอร์",   activeCls: "bg-neutral-600 text-white border-neutral-600" },
+  { key: "",  activeCls: "bg-primary-600 text-white border-primary-600" },
+  { key: "1", activeCls: "bg-amber-500 text-white border-amber-500"     },
+  { key: "2", activeCls: "bg-rose-600 text-white border-rose-600"       },
+  { key: "3", activeCls: "bg-sky-600 text-white border-sky-600"         },
+  { key: "4", activeCls: "bg-blue-600 text-white border-blue-600"       },
+  { key: "5", activeCls: "bg-emerald-600 text-white border-emerald-600" },
+  { key: "6", activeCls: "bg-neutral-600 text-white border-neutral-600" },
 ] as const;
 
 export default async function ServiceOrderPage({
@@ -165,6 +166,8 @@ export default async function ServiceOrderPage({
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
   const { profile } = data;
+
+  const tp = await getTranslations("pcsOrder");
 
   const admin = createAdminClient();
   const userID = profile.member_code ?? "";
@@ -283,17 +286,20 @@ export default async function ServiceOrderPage({
     }
   }
 
+  // Status display labels (codes 1-6) shared by the badge + the filter tabs.
+  const statusLabel = (code: string): string => tp(`status${code}`);
+
   return (
     <>
-      <title>รายการฝากสั่งซื้อสินค้า | Pacred</title>
+      <title>{`${tp("pageTitle")} | Pacred`}</title>
 
       <div className="pcs-content-pad w-full px-3 md:px-6 pt-4 pb-24 md:py-6">
 
         {/* ── Breadcrumb (above header row) ── */}
         <div className="flex items-center gap-2 text-[11px] text-muted mb-2">
-          <Link href="/dashboard" className="hover:text-foreground transition-colors">หน้าแรก</Link>
+          <Link href="/dashboard" className="hover:text-foreground transition-colors">{tp("breadcrumbHome")}</Link>
           <span>/</span>
-          <span className="text-foreground font-medium">รายการฝากสั่งซื้อสินค้า</span>
+          <span className="text-foreground font-medium">{tp("pageTitle")}</span>
         </div>
 
         {/* ── Header row — title (icon + text) + add CTA aligned on same line ── */}
@@ -302,14 +308,14 @@ export default async function ServiceOrderPage({
             <span className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white flex items-center justify-center shadow-md shadow-primary-600/25 shrink-0">
               <ShoppingBag className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2} />
             </span>
-            รายการฝากสั่งซื้อสินค้า
+            {tp("pageTitle")}
           </p>
           <Link
             href="/cart/add"
             className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[12.5px] md:text-[14px] font-bold px-3.5 md:px-4 py-2 md:py-2.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
           >
             <Plus className="w-4 h-4" strokeWidth={2.5} />
-            สั่งสินค้าเพิ่ม
+            {tp("addMore")}
           </Link>
         </div>
 
@@ -317,10 +323,10 @@ export default async function ServiceOrderPage({
           /* shops.php L1090 — juristic-pending gate. */
           <div className="rounded-2xl bg-gradient-to-br from-primary-600 to-primary-700 text-white px-6 py-8 text-center shadow-md max-w-[670px] mx-auto mt-10">
             <p className="text-[16px] md:text-[18px] font-bold leading-relaxed">
-              รอเจ้าหน้าที่ดำเนิน อนุมัติการเป็นนิติบุคคล ภายใน 24 ชม.
+              {tp("juristicPending")}
             </p>
             <p className="text-[13px] mt-2 opacity-90">
-              (ยกเว้นวันอาทิตย์และวันหยุดนักขัตฤกษ์)
+              {tp("juristicPendingNote")}
             </p>
           </div>
         ) : (
@@ -329,7 +335,7 @@ export default async function ServiceOrderPage({
             <div className="mb-4">
               <p className="text-[12px] font-semibold uppercase tracking-wider text-muted mb-2 flex items-center gap-1.5" role="heading" aria-level={2}>
                 <span className="w-1.5 h-1.5 rounded-full bg-primary-600" />
-                สถานะรายการ
+                {tp("statusSection")}
               </p>
               <div className="flex flex-wrap gap-2">
                 {TABS.map((tab) => {
@@ -346,7 +352,7 @@ export default async function ServiceOrderPage({
                           : "bg-white text-foreground border-border hover:border-primary-300 hover:text-primary-600"
                       }`}
                     >
-                      {tab.label}
+                      {tab.key === "" ? tp("tabAll") : statusLabel(tab.key)}
                       {count > 0 && (
                         <span
                           className={`inline-flex items-center justify-center min-w-[18px] h-[16px] px-1 rounded-full text-[9.5px] font-black ${
@@ -365,10 +371,10 @@ export default async function ServiceOrderPage({
             {/* ── List body ── */}
             {countAll === 0 ? (
               /* shops.php L1034-1047 — empty everything */
-              <EmptyState title="คุณยังไม่มีรายการฝากสั่งซื้อ" showCta />
+              <EmptyState title={tp("emptyAll")} showCta />
             ) : rows.length === 0 ? (
               /* shops.php L1022-1029 — filter result empty */
-              <EmptyState title="คุณยังไม่มีข้อมูลฝากสั่งซื้อ" showCta={false} />
+              <EmptyState title={tp("emptyFilter")} showCta={false} />
             ) : (
               <>
                 {/* Order cards — responsive (card-stack on mobile, row-grid on desktop) */}
@@ -380,6 +386,23 @@ export default async function ServiceOrderPage({
                       promoId={promoMap.get(row.hno)}
                       productUrl={urlMap.get(row.hno)}
                       isAnchor={!!hNoAnchor && hNoAnchor === row.hno}
+                      statusLabel={statusLabel(row.hstatus)}
+                      moreItems={
+                        Number(row.hcount ?? 0) > 1
+                          ? tp("moreItems", { n: Math.round(Number(row.hcount) - 1) })
+                          : ""
+                      }
+                      labels={{
+                        pay: tp("pay"),
+                        viewDetail: tp("viewDetail"),
+                        printReceipt: tp("printReceipt"),
+                        printInvoice: tp("printInvoice"),
+                        priceLabel: tp("priceLabel"),
+                        bahtUnit: tp("bahtUnit"),
+                        payBefore: tp("payBefore"),
+                        timeSuffix: tp("timeSuffix"),
+                        noteLabel: tp("noteLabel"),
+                      }}
                     />
                   ))}
                 </div>
@@ -414,12 +437,30 @@ function OrderCard({
   promoId,
   productUrl,
   isAnchor,
+  statusLabel,
+  moreItems,
+  labels,
 }: {
   row: HeaderOrderRow;
   promoId: number | undefined;
   /** Representative product URL — shown next to the title on desktop. */
   productUrl: string | undefined;
   isAnchor: boolean;
+  /** Pre-resolved i18n display label for the order's status badge. */
+  statusLabel: string;
+  /** Pre-resolved "and N more items" suffix (empty when count <= 1). */
+  moreItems: string;
+  labels: {
+    pay: string;
+    viewDetail: string;
+    printReceipt: string;
+    printInvoice: string;
+    priceLabel: string;
+    bahtUnit: string;
+    payBefore: string;
+    timeSuffix: string;
+    noteLabel: string;
+  };
 }) {
   const pricePayNum =
     (Number(row.htotalpricechn ?? 0) + Number(row.hshippingchn ?? 0)) *
@@ -442,9 +483,7 @@ function OrderCard({
     hCover = "/legacy/pcs/shops/default.png";
   }
 
-  const itemTitle =
-    (row.htitle ?? "") +
-    (Number(row.hcount ?? 0) > 1 ? ` และอีก ${Math.round(Number(row.hcount) - 1)} รายการ` : "");
+  const itemTitle = (row.htitle ?? "") + moreItems;
 
   return (
     <article
@@ -475,7 +514,7 @@ function OrderCard({
               {row.hno}
             </Link>
             <ProBadge promoId={promoId} />
-            <StatusBadge hStatus={row.hstatus} />
+            <StatusBadge hStatus={row.hstatus} label={statusLabel} />
           </div>
           {/* Mobile: product name only (2-line clamp). */}
           <Link
@@ -514,18 +553,18 @@ function OrderCard({
               {fmtRelative(row.hdate)}
             </span>
             <span className="font-mono text-[12px]">
-              ราคา <span className="text-primary-600 font-black">{pricePay}</span> บาท
+              {labels.priceLabel} <span className="text-primary-600 font-black">{pricePay}</span> {labels.bahtUnit}
             </span>
           </div>
           {row.hstatus === "2" && (
             <p className="mt-1 text-[11.5px] text-rose-700">
-              ⚠ กรุณาชำระเงินก่อน{" "}
-              <span className="font-bold">{fmtDMYHMS(row.hdatepayment)}</span> น.
+              {labels.payBefore}{" "}
+              <span className="font-bold">{fmtDMYHMS(row.hdatepayment)}</span> {labels.timeSuffix}
             </p>
           )}
           {row.hnoteuser === "2" && row.hnote && (
             <div className="mt-1 text-[11.5px] bg-rose-50 text-rose-700 border border-rose-100 rounded-md px-2 py-1">
-              หมายเหตุ : {row.hnote}
+              {labels.noteLabel} {row.hnote}
             </div>
           )}
         </div>
@@ -540,7 +579,7 @@ function OrderCard({
               className="inline-flex items-center gap-1 rounded-full bg-sky-600 text-white text-[11.5px] font-bold px-2.5 py-1 shadow-md shadow-sky-600/25 hover:bg-sky-700 transition-colors"
             >
               <CheckCircle2 className="w-3 h-3" strokeWidth={2.2} />
-              ชำระเงิน
+              {labels.pay}
             </Link>
           )}
           {/* แค่ 3 อัน — รายละเอียด + ใบเสร็จ + ใบแจ้งหนี้. ทั้ง 3 โชว์เสมอ;
@@ -550,7 +589,7 @@ function OrderCard({
             enabled
             href={`/service-order/${row.hno}`}
             Icon={Eye}
-            label="ดูรายละเอียด"
+            label={labels.viewDetail}
             enabledCls="bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
           />
           <OrderActionLink
@@ -558,7 +597,7 @@ function OrderCard({
             href={`/service-order/print?print=1&id=${row.hno}`}
             target="_blank"
             Icon={Receipt}
-            label="พิมพ์ใบเสร็จ"
+            label={labels.printReceipt}
             enabledCls="bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100"
           />
           <OrderActionLink
@@ -566,7 +605,7 @@ function OrderCard({
             href={`/service-order/print?print=2&id=${row.hno}`}
             target="_blank"
             Icon={FileText}
-            label="พิมพ์ใบแจ้งหนี้"
+            label={labels.printInvoice}
             enabledCls="bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100"
           />
         </div>
@@ -576,7 +615,8 @@ function OrderCard({
 }
 
 /* ─────────────────────────── EMPTY STATE ─────────────────────────── */
-function EmptyState({ title, showCta }: { title: string; showCta: boolean }) {
+async function EmptyState({ title, showCta }: { title: string; showCta: boolean }) {
+  const tp = await getTranslations("pcsOrder");
   return (
     <div className="rounded-2xl bg-white border border-border p-5 md:p-6 text-center shadow-sm">
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -592,7 +632,7 @@ function EmptyState({ title, showCta }: { title: string; showCta: boolean }) {
           className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[13px] font-bold px-4 py-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
         >
           <Plus className="w-4 h-4" strokeWidth={2.5} />
-          สั่งสินค้าเพิ่ม
+          {tp("addMore")}
         </Link>
       )}
     </div>
@@ -600,21 +640,22 @@ function EmptyState({ title, showCta }: { title: string; showCta: boolean }) {
 }
 
 /* ─────────────────────────── PAYMENT BOTTOM BAR ─────────────────────────── */
-function PaymentBar({ count }: { count: number }) {
+async function PaymentBar({ count }: { count: number }) {
+  const tp = await getTranslations("pcsOrder");
   return (
     <div className="fixed bottom-24 md:bottom-6 left-3 right-20 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-[640px] z-40">
       <div className="rounded-2xl bg-gradient-to-br from-primary-600 to-primary-700 text-white px-4 py-3 shadow-lg flex items-center gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] opacity-90">มีรายการรอชำระ</p>
+          <p className="text-[11px] opacity-90">{tp("payBarTitle")}</p>
           <p className="text-[15px] font-bold">
-            {count} ออเดอร์
+            {tp("orderCount", { count })}
           </p>
         </div>
         <Link
           href="/service-order?q=2"
           className="shrink-0 inline-flex items-center gap-1 rounded-full bg-white text-primary-700 text-[12.5px] font-bold px-3.5 py-1.5 shadow-md hover:bg-primary-50 transition-colors"
         >
-          ดูรายการ
+          {tp("viewList")}
         </Link>
       </div>
     </div>

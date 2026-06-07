@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
@@ -137,6 +138,8 @@ export default async function ServiceImportReceiptsPage({
   if (!data?.profile) redirect("/complete-profile");
   const { profile } = data;
 
+  const t = await getTranslations("serviceImportReceiptsPage");
+
   const admin = createAdminClient();
   // $userID — the customer's member code ("PR<n>" === legacy
   // tb_*.userid).
@@ -226,7 +229,7 @@ export default async function ServiceImportReceiptsPage({
           <div className="border-b border-border px-3 py-3 md:px-5 md:py-4">
             <h1 className="flex items-center gap-2 text-base md:text-xl font-bold text-foreground">
               <i className="la la-print text-xl md:text-2xl text-primary-600" aria-hidden></i>
-              <span>ประวัติใบเสร็จรายการฝากนำเข้าสินค้า</span>
+              <span>{t("title")}</span>
             </h1>
 
             {/* Date-range filter. `name="date"` + the `shawCalRanges` hook
@@ -237,7 +240,7 @@ export default async function ServiceImportReceiptsPage({
                 className="block text-xs font-medium text-muted mb-1"
                 htmlFor="date"
               >
-                วันที่ชำระเงิน
+                {t("paymentDateLabel")}
               </label>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <input
@@ -250,13 +253,13 @@ export default async function ServiceImportReceiptsPage({
                   className="inline-flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-full border border-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-600 hover:bg-emerald-50 active:scale-[0.98] transition-all whitespace-nowrap"
                   type="submit"
                 >
-                  <i className="fas fa-search" aria-hidden></i> ค้นหาข้อมูล
+                  <i className="fas fa-search" aria-hidden></i> {t("searchButton")}
                 </button>
               </div>
               {/* receipt-f-hs.php L91-93 — search-result caption */}
               {hasDateParam ? (
                 <p className="mt-2 text-xs text-red-600">
-                  ผลลัพธ์การค้นหา {startDate} - {endDate}{" "}
+                  {t("searchResult", { startDate, endDate })}{" "}
                 </p>
               ) : null}
             </form>
@@ -282,7 +285,7 @@ export default async function ServiceImportReceiptsPage({
                 <div className="flex flex-col items-center gap-2 py-8 text-center">
                   <i className="la la-print text-2xl text-muted/40" aria-hidden></i>
                   <p className="text-sm text-muted">
-                    ไม่พบใบเสร็จในช่วงวันที่ที่เลือก
+                    {t("emptyState")}
                   </p>
                 </div>
               ) : (
@@ -299,7 +302,7 @@ export default async function ServiceImportReceiptsPage({
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <span className="text-[11px] text-muted">
-                                เลขที่ใบเสร็จ
+                                {t("colReceiptNo")}
                               </span>
                               <Link
                                 href={`${PRINT_ROUTE}?id=${row.rid}`}
@@ -318,7 +321,7 @@ export default async function ServiceImportReceiptsPage({
                               links → /service-import/[fNo]. */}
                           <div className="mt-2 text-xs text-foreground">
                             <span className="text-[11px] text-muted">
-                              เลขที่ฝากนำเข้า:{" "}
+                              {t("colImportNoMobile")}{" "}
                             </span>
                             {fIds.map((fid) => (
                               <span key={fid}>
@@ -344,7 +347,7 @@ export default async function ServiceImportReceiptsPage({
                               target="_blank"
                               className="inline-flex items-center rounded-full border border-amber-400 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100"
                             >
-                              พิมพ์ใบเสร็จ
+                              {t("printReceipt")}
                             </Link>
                           </div>
                         </div>
@@ -363,11 +366,11 @@ export default async function ServiceImportReceiptsPage({
                       <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                         <tr>
                           <th className="px-4 py-3 text-center font-medium">ID</th>
-                          <th className="px-4 py-3 font-medium">วันที่สร้าง</th>
-                          <th className="px-4 py-3 font-medium">เลขที่ใบเสร็จ</th>
-                          <th className="px-4 py-3 font-medium">เลขที่ฝากนำเข้า</th>
-                          <th className="px-4 py-3 text-right font-medium">จำนวนเงิน</th>
-                          <th className="px-4 py-3 text-center font-medium">พิมพ์ใบเสร็จ</th>
+                          <th className="px-4 py-3 font-medium">{t("colCreatedDate")}</th>
+                          <th className="px-4 py-3 font-medium">{t("colReceiptNo")}</th>
+                          <th className="px-4 py-3 font-medium">{t("colImportNo")}</th>
+                          <th className="px-4 py-3 text-right font-medium">{t("colAmount")}</th>
+                          <th className="px-4 py-3 text-center font-medium">{t("printReceipt")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -427,7 +430,7 @@ export default async function ServiceImportReceiptsPage({
                                   target="_blank"
                                   className="inline-flex items-center rounded-full border border-amber-400 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100"
                                 >
-                                  พิมพ์ใบเสร็จ
+                                  {t("printReceipt")}
                                 </Link>
                               </td>
                             </tr>
@@ -457,7 +460,7 @@ export default async function ServiceImportReceiptsPage({
             name="type"
             value="1"
           >
-            <i className="fas fa-box-open" aria-hidden></i> พิมพ์ใบเสร็จ
+            <i className="fas fa-box-open" aria-hidden></i> {t("printReceipt")}
           </button>
         </div>
       ) : null}

@@ -11,6 +11,7 @@
  */
 
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import {
   Home,
   ChevronRight,
@@ -91,10 +92,11 @@ export default async function BookHubPage({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
+  const t = await getTranslations("bookIndexPage");
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const services = listBookableServices();
-  const homeLabel = typedLocale === "th" ? "หน้าแรก" : "Home";
-  const hereLabel = typedLocale === "th" ? "จองบริการ" : "Book";
+  const homeLabel = t("breadcrumbHome");
+  const hereLabel = t("breadcrumbHere");
 
   return (
     <>
@@ -138,13 +140,13 @@ export default async function BookHubPage({
           <div className="mx-auto w-full max-w-[1180px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-2 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <Sparkles className="w-3.5 h-3.5" strokeWidth={2.6} />
-              จองออนไลน์ · BOOKING
+              {t("heroBadge")}
             </div>
             <h1 className="text-[24px] md:text-[40px] leading-[1.15] font-black tracking-[-0.025em] text-[#111827] dark:text-white max-w-[920px]">
-              เลือกบริการที่ต้องการจอง — <span className="text-primary-600">เห็นราคาประมาณการสด</span>
+              {t("heroHeading")} — <span className="text-primary-600">{t("heroHeadingHighlight")}</span>
             </h1>
             <h2 className="mt-2 md:mt-3 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[820px]">
-              เลือกตัวเลือกของคุณ · ดูใบเสนอราคาคร่าวๆ ก่อนกดจอง · ทีมขายติดต่อกลับเพื่อยืนยันราคาจริงหลังตรวจสินค้า
+              {t("heroSubheading")}
             </h2>
           </div>
         </section>

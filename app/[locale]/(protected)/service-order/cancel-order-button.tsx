@@ -10,6 +10,7 @@
 
 import { useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { XCircle } from "lucide-react";
 import { cancelServiceOrder } from "@/actions/service-order";
 
@@ -21,6 +22,7 @@ export function CancelOrderButton({
   /** When the order status doesn't allow cancel — render greyed + non-clickable. */
   disabled?: boolean;
 }) {
+  const t = useTranslations("serviceOrder");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -34,20 +36,20 @@ export function CancelOrderButton({
         className="inline-flex items-center gap-1 rounded-full bg-neutral-100 text-neutral-400 border border-neutral-200 text-[11.5px] font-bold px-2.5 py-1 cursor-not-allowed"
       >
         <XCircle className="w-3 h-3" strokeWidth={2.2} />
-        ยกเลิก
+        {t("cancel")}
       </span>
     );
   }
 
   function onCancel() {
-    if (!confirm(`ยืนยันยกเลิกออเดอร์ ${hNo}?`)) return;
+    if (!confirm(t("cancelConfirm", { hNo }))) return;
     setError(null);
     startTransition(async () => {
       const res = await cancelServiceOrder(hNo);
       if (res.ok) {
         router.refresh();
       } else {
-        setError(res.error ?? "ยกเลิกไม่สำเร็จ");
+        setError(res.error ?? t("cancelFailed"));
       }
     });
   }
@@ -61,7 +63,7 @@ export function CancelOrderButton({
         className="inline-flex items-center gap-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[11.5px] font-bold px-2.5 py-1 hover:bg-rose-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <XCircle className="w-3 h-3" strokeWidth={2.2} />
-        {pending ? "กำลังยกเลิก…" : "ยกเลิก"}
+        {pending ? t("cancelling") : t("cancel")}
       </button>
       {error && <span className="text-[10.5px] text-rose-700 max-w-[160px] text-right">{error}</span>}
     </div>

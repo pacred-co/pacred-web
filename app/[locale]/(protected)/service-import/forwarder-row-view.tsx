@@ -34,6 +34,7 @@
  */
 
 import { useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { calPriceForwarderSumCompany } from "@/lib/forwarder/calc-company-total";
 import { cancelOwnForwarder } from "@/actions/forwarder";
@@ -64,6 +65,7 @@ export function StatusForwarderAll2({
   fStatus: string | null;
   fStatusDriver: number;
 }) {
+  const t = useTranslations("forwarderRowView");
   // Status 6 has two sub-states: 6 = "เตรียมส่ง" by default, 6.1 = "กำลังจัดส่ง"
   // when the row is in the out-for-delivery (tb_forwarder_driver_item) set.
   let key: string = fStatus ?? "";
@@ -72,7 +74,7 @@ export function StatusForwarderAll2({
   if (!chip) return null;
   return (
     <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${chip.cls}`}>
-      {chip.label}
+      {t(`status.${key}`)}
     </span>
   );
 }
@@ -283,13 +285,14 @@ export type ForwarderRow = {
 //  refresh repaints. Tap target is ≥44px tall on mobile (h-9 + py).
 // ────────────────────────────────────────────────────────────────────
 function CancelForwarderButton({ id }: { id: number }) {
+  const t = useTranslations("forwarderRowView");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   async function handleCancel() {
     // Legacy used a plain confirm() gate before the AJAX delete; match it.
-    if (!(await confirm(`ยืนยันยกเลิกรายการนำเข้า #${id} ?\nรายการที่ยกเลิกแล้วจะถูกลบถาวร`))) {
+    if (!(await confirm(t("cancelConfirm", { id })))) {
       return;
     }
     setErrorMsg(null);
@@ -300,10 +303,10 @@ function CancelForwarderButton({ id }: { id: number }) {
       } else {
         setErrorMsg(
           res.error === "not_cancellable"
-            ? "ไม่สามารถยกเลิกได้ (รายการถูกดำเนินการแล้ว)"
+            ? t("cancelErrorNotCancellable")
             : res.error === "not_found"
-              ? "ไม่พบรายการ"
-              : "เกิดข้อผิดพลาด กรุณาลองใหม่",
+              ? t("cancelErrorNotFound")
+              : t("cancelErrorGeneric"),
         );
       }
     });
@@ -317,7 +320,7 @@ function CancelForwarderButton({ id }: { id: number }) {
         disabled={pending}
         className="inline-flex items-center rounded-full bg-red-600 text-white px-3 py-2 min-h-[36px] text-xs font-bold hover:bg-red-700 active:scale-[0.98] transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
       >
-        {pending ? "กำลังยกเลิก…" : "ยกเลิกรายการ"}
+        {pending ? t("cancelling") : t("cancelButton")}
       </button>
       {errorMsg && (
         <span className="text-[10px] text-red-600 max-w-[160px] text-right leading-tight">
@@ -363,6 +366,7 @@ export function ForwarderRowView({
    *  "เลขที่ตู้" line (the cabinet is already in the group header). */
   grouped?: boolean;
 }) {
+  const t = useTranslations("forwarderRowView");
   // L672 — fTrackingCHN2 overrides fTrackingCHN when present.
   const trackingChn =
     row.ftrackingchn2 && row.ftrackingchn2 !== ""
@@ -489,14 +493,14 @@ export function ForwarderRowView({
               )}
               {!grouped && row.fcabinetnumber && (
                 <span>
-                  ตู้{" "}
+                  {t("cabinet")}{" "}
                   <span className="font-mono text-foreground">{row.fcabinetnumber}</span>
                   {containerCloseValid && <> · {dmy(row.fdatecontainerclose)}</>}
                 </span>
               )}
               {fDateToThaiValid && (
                 <span>
-                  ถึงไทย ~{" "}
+                  {t("arriveThai")} ~{" "}
                   <span className="font-medium text-sky-600">
                     {toThaiShow}–{toThaiShow2}
                   </span>
@@ -514,13 +518,13 @@ export function ForwarderRowView({
           {row.adminidcreator !== "" &&
             (!row.reforder || row.reforder === "") && (
               <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[10px] font-semibold border border-amber-200">
-                ฝากนำเข้าโดย: admin
+                {t("importedByAdmin")}
               </span>
             )}
           {row.reforder && row.reforder !== "" && (
             <a href={`/service-order/${row.reforder}/`}>
               <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-700 px-2 py-0.5 text-[10px] font-semibold border border-sky-200 hover:bg-sky-200">
-                มาจากฝากสั่ง: {row.reforder}
+                {t("fromShopOrder")}: {row.reforder}
               </span>
             </a>
           )}
@@ -530,7 +534,7 @@ export function ForwarderRowView({
       {/* Red note */}
       {row.fnoteuser === "2" && row.fnote && row.fnote !== "" && (
         <div className="mx-3 mb-2 px-2.5 py-1.5 bg-red-600 text-white text-xs rounded-md">
-          ** หมายเหตุ: {row.fnote}
+          {t("note")}: {row.fnote}
         </div>
       )}
 
@@ -542,7 +546,7 @@ export function ForwarderRowView({
           <div className="text-[11px] md:text-[13px] text-muted">
             {nameTransportType(row.ftransporttype)}
             {row.famount > 0 && (
-              <span className="ml-1">· {row.famount} กล่อง</span>
+              <span className="ml-1">· {row.famount} {t("boxes")}</span>
             )}
             {row.fweight > 0 && (
               <span className="ml-1">· {row.fweight} kg</span>
@@ -554,9 +558,9 @@ export function ForwarderRowView({
           {/* Net price — only when > 0 */}
           {totalPriceNet > 0 && (
             <div className="leading-none">
-              <span className="text-[10px] md:text-xs text-muted uppercase tracking-wide">รวม</span>{" "}
+              <span className="text-[10px] md:text-xs text-muted uppercase tracking-wide">{t("total")}</span>{" "}
               <span className="text-base md:text-xl font-bold text-red-600 notranslate">
-                {numberFormat2(totalPriceNet)} บ.
+                {numberFormat2(totalPriceNet)} {t("baht")}
               </span>
             </div>
           )}
@@ -574,7 +578,7 @@ export function ForwarderRowView({
             href={`/service-import/${row.id}`}
             className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-300 px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm font-bold hover:bg-emerald-100 active:scale-[0.98] transition-all"
           >
-            ดูรายละเอียด
+            {t("viewDetails")}
           </a>
           {/* Pay — only when status=5 or credit=1 */}
           {(row.fstatus === "5" || row.fcredit === "1") && (
@@ -582,7 +586,7 @@ export function ForwarderRowView({
               href={`/service-import/${row.id}?pay=true`}
               className="inline-flex items-center gap-1 rounded-full bg-red-600 text-white px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm font-bold hover:bg-red-700 active:scale-[0.98] transition-all shadow-sm"
             >
-              ✓ ชำระเงิน
+              ✓ {t("pay")}
             </a>
           )}
         </div>
@@ -592,13 +596,13 @@ export function ForwarderRowView({
       {q === "c" && (
         <div className="border-t border-red-200 bg-red-50 px-3 py-2 grid grid-cols-2 gap-3">
           <div>
-            <div className="text-[10px] uppercase tracking-wide text-muted">วันที่ให้เครดิต</div>
+            <div className="text-[10px] uppercase tracking-wide text-muted">{t("creditDate")}</div>
             <div className="text-xs font-medium text-foreground notranslate">
               {row.fdatestatus5 ? dmy(row.fdatestatus5) : "—"}
             </div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-wide text-muted">วันที่ครบกำหนด</div>
+            <div className="text-[10px] uppercase tracking-wide text-muted">{t("dueDate")}</div>
             <div className="text-xs font-medium text-foreground notranslate">
               {row.fcreditdate ? dmy(row.fcreditdate) : "—"}
             </div>

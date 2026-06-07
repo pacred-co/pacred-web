@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -115,6 +116,8 @@ export default async function ServiceImportPage({
 }) {
   const sp = await searchParams;
   const q = sp.q ?? "";
+
+  const t = await getTranslations("serviceImportPage");
 
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
@@ -360,7 +363,15 @@ export default async function ServiceImportPage({
   let mainAddress: { addressid: number; full: string } | null = null;
   const otherAddresses: { addressid: number; full: string }[] = [];
   const fmtAddr = (a: Record<string, unknown>) =>
-    `${a.addressname ?? ""} ${a.addresslastname ?? ""} ${a.addressno ?? ""} ตำบล/แขวง ${a.addresssubdistrict ?? ""} อำเภอ/เขต ${a.addressdistrict ?? ""} จังหวัด ${a.addressprovince ?? ""} ${a.addresszipcode ?? ""}`;
+    t("addressFormat", {
+      name: String(a.addressname ?? ""),
+      lastname: String(a.addresslastname ?? ""),
+      no: String(a.addressno ?? ""),
+      subdistrict: String(a.addresssubdistrict ?? ""),
+      district: String(a.addressdistrict ?? ""),
+      province: String(a.addressprovince ?? ""),
+      zipcode: String(a.addresszipcode ?? ""),
+    });
   if (mainAddrLink?.addressid != null) {
     const { data: mainAddrRow, error: mainAddrRowErr } = await admin
       .from("tb_address")
@@ -432,15 +443,15 @@ export default async function ServiceImportPage({
   //
   // Status-chip badge colors map the legacy `badge-*` palette to Tailwind.
   const statusChips: { href: string; label: string; count: number; chipColor: string }[] = [
-    { href: "/service-import",       label: "ทั้งหมด",         count: arrStatusSum,                    chipColor: "bg-slate-100 text-slate-700"   },
-    { href: "/service-import?q=1",   label: "รอเข้าโกดัง",     count: arrStatus[1],                    chipColor: "bg-amber-100 text-amber-700"   },
-    { href: "/service-import?q=2",   label: "ถึงโกดังจีนแล้ว", count: arrStatus[2],                    chipColor: "bg-sky-100 text-sky-700"       },
-    { href: "/service-import?q=3",   label: "กำลังส่งมาไทย",   count: arrStatus[3],                    chipColor: "bg-pink-100 text-pink-700"     },
-    { href: "/service-import?q=4",   label: "ถึงไทยแล้ว",      count: arrStatus[4],                    chipColor: "bg-amber-200 text-amber-900"   },
-    { href: "/service-import?q=5",   label: "รอชำระเงิน",       count: arrStatus[5],                    chipColor: "bg-red-100 text-red-700"       },
-    { href: "/service-import?q=6",   label: "เตรียมส่ง",        count: arrStatus[6] - statusDriverItem, chipColor: "bg-indigo-100 text-indigo-700" },
-    { href: "/service-import?q=6.1", label: "กำลังจัดส่ง",      count: statusDriverItem,                chipColor: "bg-cyan-100 text-cyan-700"     },
-    { href: "/service-import?q=7",   label: "ส่งแล้ว",          count: arrStatus[7],                    chipColor: "bg-emerald-100 text-emerald-700" },
+    { href: "/service-import",       label: t("statusAll"),         count: arrStatusSum,                    chipColor: "bg-slate-100 text-slate-700"   },
+    { href: "/service-import?q=1",   label: t("statusWaitWarehouse"),     count: arrStatus[1],                    chipColor: "bg-amber-100 text-amber-700"   },
+    { href: "/service-import?q=2",   label: t("statusArrivedChina"), count: arrStatus[2],                    chipColor: "bg-sky-100 text-sky-700"       },
+    { href: "/service-import?q=3",   label: t("statusShippingToThai"),   count: arrStatus[3],                    chipColor: "bg-pink-100 text-pink-700"     },
+    { href: "/service-import?q=4",   label: t("statusArrivedThai"),      count: arrStatus[4],                    chipColor: "bg-amber-200 text-amber-900"   },
+    { href: "/service-import?q=5",   label: t("statusWaitPayment"),       count: arrStatus[5],                    chipColor: "bg-red-100 text-red-700"       },
+    { href: "/service-import?q=6",   label: t("statusPreparing"),        count: arrStatus[6] - statusDriverItem, chipColor: "bg-indigo-100 text-indigo-700" },
+    { href: "/service-import?q=6.1", label: t("statusDelivering"),      count: statusDriverItem,                chipColor: "bg-cyan-100 text-cyan-700"     },
+    { href: "/service-import?q=7",   label: t("statusDelivered"),          count: arrStatus[7],                    chipColor: "bg-emerald-100 text-emerald-700" },
   ];
 
   return (
@@ -462,10 +473,10 @@ export default async function ServiceImportPage({
           // Corporate-pending banner — forwarder.php L874
           <div className="mx-auto max-w-[670px] mt-16 md:mt-24 text-center">
             <h2 className="rounded-2xl bg-red-600 text-white px-4 py-6 text-base md:text-lg font-bold leading-relaxed shadow-md">
-              รอเจ้าหน้าที่ดำเนิน อนุมัติการเป็นนิติบุคคล ภายใน 24 ชม.
+              {t("corporatePendingTitle")}
               <br />
               <span className="text-sm font-normal opacity-90">
-                (ยกเว้นวันอาทิตย์และวันหยุดนักขัตฤกษ์)
+                {t("corporatePendingNote")}
               </span>
             </h2>
           </div>
@@ -480,14 +491,14 @@ export default async function ServiceImportPage({
                   className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-sm md:text-base font-bold text-red-600 border-b-2 border-red-600 whitespace-nowrap"
                 >
                   <span aria-hidden className="ft-box" />
-                  รายการฝากนำเข้าสินค้าแบบเต็ม
+                  {t("tabFullList")}
                 </Link>
                 <Link
                   href="/service-import/table"
                   className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-sm md:text-base font-medium text-muted hover:text-foreground border-b-2 border-transparent hover:border-border whitespace-nowrap transition-colors"
                 >
                   <span aria-hidden className="fas fa-table" />
-                  รายการฝากนำเข้าสินค้าแบบตาราง
+                  {t("tabTableList")}
                 </Link>
               </div>
 
@@ -496,7 +507,7 @@ export default async function ServiceImportPage({
             {/* ── Status filter chips + content ── */}
             <div className="px-3 py-3 md:px-4 md:py-4">
               <h4 className="text-sm md:text-base font-bold text-foreground mb-2.5">
-                สถานะรายการ
+                {t("statusListHeading")}
               </h4>
               <div className="flex flex-wrap gap-2">
                 {/* Add-forwarder CTA — compact pill sitting in the status row
@@ -542,7 +553,7 @@ export default async function ServiceImportPage({
                         : "bg-surface-alt/60 hover:bg-surface-alt text-foreground border-border"
                     }`}
                   >
-                    <span>เครดิตสินค้า</span>
+                    <span>{t("creditProduct")}</span>
                     {(fCreditCount ?? 0) > 0 && (
                       <span
                         className={`inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${
@@ -609,7 +620,7 @@ export default async function ServiceImportPage({
           >
             <div className="modal-header">
               <span className="text-white font-1_7rem">
-                คุณได้รับสิทธิ์ร่วมโปรโมชัน Pacred เหมา ๆ{" "}
+                {t("maoMaoEligible")}{" "}
               </span>
               <button
                 type="button"
@@ -645,7 +656,7 @@ export default async function ServiceImportPage({
                   className="btn btn-main round btn-min-width animate__animated animate__infinite animate__headShake cursor-pointer"
                   id="btn-getMaoMao"
                 >
-                  รับโปรโมชัน เหมา ๆ
+                  {t("maoMaoGet")}
                 </span>
               </div>
             </div>

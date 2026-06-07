@@ -24,6 +24,7 @@
  */
 
 import { useRef, useState, type RefObject, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 
 // ──────────────────────────────────────────────────────────────
 // PacredDialog — the standard modal shell
@@ -47,6 +48,7 @@ export function PacredDialog({
   children: ReactNode;
   onClose?: () => void;
 }) {
+  const t = useTranslations("pacredDialog");
   function handleDialogClick(e: React.MouseEvent<HTMLDialogElement>) {
     // Native <dialog> backdrop emits a click with target === dialog.
     if (e.target === dialogRef.current) {
@@ -69,7 +71,7 @@ export function PacredDialog({
         <h2 className="text-base font-semibold text-gray-900">{title}</h2>
         <button
           type="button"
-          aria-label="ปิด"
+          aria-label={t("close")}
           onClick={() => {
             dialogRef.current?.close();
             onClose?.();
@@ -96,8 +98,8 @@ export function PacredDialog({
 export function DialogFooter({
   onCancel,
   pending,
-  submitLabel = "บันทึก",
-  pendingLabel = "กำลังบันทึก...",
+  submitLabel,
+  pendingLabel,
   destructive = false,
 }: {
   onCancel: () => void;
@@ -107,6 +109,9 @@ export function DialogFooter({
   /** Red submit button for delete/destructive flows. */
   destructive?: boolean;
 }) {
+  const t = useTranslations("pacredDialog");
+  const resolvedSubmitLabel = submitLabel ?? t("save");
+  const resolvedPendingLabel = pendingLabel ?? t("saving");
   const submitClass = destructive
     ? "rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300"
     : "rounded-md bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300";
@@ -118,14 +123,14 @@ export function DialogFooter({
         onClick={onCancel}
         className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
       >
-        ยกเลิก
+        {t("cancel")}
       </button>
       <button
         type="submit"
         disabled={pending}
         className={submitClass}
       >
-        {pending ? pendingLabel : submitLabel}
+        {pending ? resolvedPendingLabel : resolvedSubmitLabel}
       </button>
     </div>
   );
@@ -151,6 +156,7 @@ type ConfirmState = {
 } | null;
 
 export function useConfirmDialogs() {
+  const t = useTranslations("pacredDialog");
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [state, setState] = useState<ConfirmState>(null);
 
@@ -188,7 +194,7 @@ export function useConfirmDialogs() {
               onClick={() => close(false)}
               className="rounded-md border border-gray-300 px-4 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
-              ยกเลิก
+              {t("cancel")}
             </button>
           )}
           <button
@@ -200,7 +206,7 @@ export function useConfirmDialogs() {
                 : "rounded-md bg-primary-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-primary-700"
             }
           >
-            {state?.kind === "confirm" ? "ยืนยัน" : "ตกลง"}
+            {state?.kind === "confirm" ? t("confirm") : t("ok")}
           </button>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { type ReactNode } from "react";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { calPriceForwarderSumCompany } from "@/lib/forwarder/calc-company-total";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
@@ -106,6 +107,7 @@ export default async function TrackingPage({
   mode: Mode;
   searchParams?: Promise<{ step?: string; q?: string; stage?: string }>;
 }) {
+  const t = await getTranslations("serviceImportTracking");
   const meta = MODE_META[mode];
   const sp = (await searchParams) ?? {};
   // ?step=1..7 → chip filter (status code). Empty = no chip-filter.
@@ -293,9 +295,9 @@ export default async function TrackingPage({
           <div className="flex items-center gap-2">
             <span className={`inline-flex items-center gap-1.5 rounded-full ${meta.chip} px-3 py-1 text-sm font-semibold`}>
               <meta.icon className="h-4 w-4" />
-              {meta.label}
+              {t(`modeLabel.${mode}`)}
             </span>
-            <span className="text-xs text-muted">เลขตู้ขึ้นต้นด้วย <span className="font-mono font-bold">{meta.prefix}</span></span>
+            <span className="text-xs text-muted">{t("cabinetPrefix")} <span className="font-mono font-bold">{meta.prefix}</span></span>
           </div>
           <ModeSwitcher current={mode} />
         </div>
@@ -312,8 +314,8 @@ export default async function TrackingPage({
         >
           <div>
             <label className="flex items-center gap-1.5 text-[15px] font-bold text-foreground mb-2">
-              ค้นหา Track / เลขตู้
-              <span className="w-4 h-4 grid place-items-center rounded-full border border-border text-muted text-[10px] font-bold" title="ค้นหาจาก: CN Track · เลขตู้ · เลขพัสดุ TH · เลข order (#)">?</span>
+              {t("searchLabel")}
+              <span className="w-4 h-4 grid place-items-center rounded-full border border-border text-muted text-[10px] font-bold" title={t("searchHint")}>?</span>
             </label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted" />
@@ -321,29 +323,29 @@ export default async function TrackingPage({
                 type="text"
                 name="q"
                 defaultValue={q}
-                placeholder="กรอก Track / เลขตู้ / เลขพัสดุ"
+                placeholder={t("searchPlaceholder")}
                 className="w-full h-[52px] rounded-xl border border-border bg-white dark:bg-surface pl-11 pr-4 text-[15px] text-foreground outline-none focus:border-red-300 focus:shadow-[0_0_0_3px_#fef2f2] transition-all"
               />
             </div>
           </div>
           <div>
-            <label className="flex items-center gap-1.5 text-[15px] font-bold text-foreground mb-2">ตัวกรองเพิ่มเติม</label>
+            <label className="flex items-center gap-1.5 text-[15px] font-bold text-foreground mb-2">{t("moreFilters")}</label>
             <select
               name="stage"
               defaultValue={stageFilter}
               className="w-full h-[52px] rounded-xl border border-border bg-white dark:bg-surface px-4 text-[15px] text-foreground outline-none"
             >
-              <option value="">ทั้งหมด</option>
-              <option value="origin">ต้นทาง</option>
-              <option value="transit">ระหว่างทางขนส่ง</option>
-              <option value="dest">ปลายทาง</option>
+              <option value="">{t("stageOption.all")}</option>
+              <option value="origin">{t("stageOption.origin")}</option>
+              <option value="transit">{t("stageOption.transit")}</option>
+              <option value="dest">{t("stageOption.dest")}</option>
             </select>
           </div>
           <button
             type="submit"
             className="h-[52px] px-6 rounded-xl bg-gradient-to-b from-red-600 to-red-700 text-white text-base font-extrabold shadow-md shadow-red-600/20 hover:from-red-700 hover:to-red-800 active:scale-[0.98] transition-all"
           >
-            ค้นหารายการ
+            {t("searchButton")}
           </button>
         </form>
 
@@ -366,21 +368,21 @@ export default async function TrackingPage({
         {(stepFilter || q || stageFilter) && (
           <div className="mt-3 flex items-center justify-between mx-2 md:mx-4 px-4 py-2 rounded-xl bg-surface-alt/60 border border-border text-sm flex-wrap gap-2">
             <span className="text-foreground flex items-center flex-wrap gap-x-3 gap-y-1">
-              <span className="text-muted">กำลังกรอง:</span>
+              <span className="text-muted">{t("filtering")}</span>
               {stepFilter && (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-border px-2.5 py-0.5">
-                  <span className="font-bold">{statusLabel(stepFilter)}</span>
+                  <span className="font-bold">{statusLabel(t, stepFilter)}</span>
                   <span className="text-muted">({countByStatus[stepFilter] ?? 0})</span>
                 </span>
               )}
               {stageFilter && (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-border px-2.5 py-0.5">
-                  <span className="font-bold">{STAGE_LABEL[stageFilter] ?? stageFilter}</span>
+                  <span className="font-bold">{stageLabel(t, stageFilter)}</span>
                 </span>
               )}
               {q && (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-border px-2.5 py-0.5">
-                  <span className="text-muted">ค้นหา:</span>
+                  <span className="text-muted">{t("searchTag")}</span>
                   <span className="font-bold">&ldquo;{q}&rdquo;</span>
                 </span>
               )}
@@ -389,7 +391,7 @@ export default async function TrackingPage({
               href={`/service-import/${mode}`}
               className="text-red-600 font-semibold hover:underline"
             >
-              ล้างตัวกรอง ✕
+              {t("clearFilter")} ✕
             </Link>
           </div>
         )}
@@ -401,16 +403,16 @@ export default async function TrackingPage({
               <Box className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p className="text-sm">
                 {q ? (
-                  <>ไม่พบรายการที่ตรงกับ <span className="font-semibold">&ldquo;{q}&rdquo;</span></>
+                  <>{t("emptyNoMatch")} <span className="font-semibold">&ldquo;{q}&rdquo;</span></>
                 ) : stepFilter ? (
-                  <>ยังไม่มีรายการในสถานะ <span className="font-semibold">{statusLabel(stepFilter)}</span></>
+                  <>{t("emptyNoStatus")} <span className="font-semibold">{statusLabel(t, stepFilter)}</span></>
                 ) : stageFilter ? (
-                  <>ยังไม่มีรายการในช่วง <span className="font-semibold">{STAGE_LABEL[stageFilter] ?? stageFilter}</span></>
+                  <>{t("emptyNoStage")} <span className="font-semibold">{stageLabel(t, stageFilter)}</span></>
                 ) : (
-                  <>ยังไม่มีตู้สำหรับโหมด {meta.label} (เลขตู้ขึ้นต้นด้วย <span className="font-mono font-bold">{meta.prefix}</span>)</>
+                  <>{t("emptyNoContainer", { mode: t(`modeLabel.${mode}`) })} <span className="font-mono font-bold">{meta.prefix}</span>)</>
                 )}
               </p>
-              <Link href="/service-import/add" className="inline-block mt-3 text-red-600 font-semibold hover:underline">+ เพิ่มรายการนำเข้า</Link>
+              <Link href="/service-import/add" className="inline-block mt-3 text-red-600 font-semibold hover:underline">{t("addImportItem")}</Link>
             </div>
           ) : (
             containers.map((c) => <ContainerView key={c.code} container={c} userCompany={fUserCompany} />)
@@ -420,7 +422,7 @@ export default async function TrackingPage({
         {/* Total summary — visible when there are >1 containers */}
         {containers.length > 1 && (
           <div className="mx-2 md:mx-4 mt-1 text-sm text-muted text-right">
-            รวม {containers.length} ตู้ · {countAll} รายการ (ไม่กรอง)
+            {t("totalSummary", { containers: containers.length, items: countAll })}
           </div>
         )}
       </main>
@@ -430,11 +432,12 @@ export default async function TrackingPage({
 
 /* ── Mode switcher chips ───────────────────────────────────────────── */
 
-function ModeSwitcher({ current }: { current: Mode }) {
-  const items: { mode: Mode; label: string; icon: typeof Truck }[] = [
-    { mode: "truck", label: "รถ", icon: Truck },
-    { mode: "sea", label: "เรือ", icon: Ship },
-    { mode: "air", label: "แอร์", icon: Plane },
+async function ModeSwitcher({ current }: { current: Mode }) {
+  const t = await getTranslations("serviceImportTracking");
+  const items: { mode: Mode; icon: typeof Truck }[] = [
+    { mode: "truck", icon: Truck },
+    { mode: "sea", icon: Ship },
+    { mode: "air", icon: Plane },
   ];
   return (
     <div className="inline-flex items-center rounded-full bg-surface-alt p-1 text-sm">
@@ -449,7 +452,7 @@ function ModeSwitcher({ current }: { current: Mode }) {
             }`}
           >
             <it.icon className="h-3.5 w-3.5" />
-            {it.label}
+            {t(`modeShort.${it.mode}`)}
           </Link>
         );
       })}
@@ -476,24 +479,23 @@ function ModeSwitcher({ current }: { current: Mode }) {
 // (Status "6.1" = "กำลังจัดส่ง" — driven by tb_forwarder_driver_item;
 //  added in a v2 when we re-wire the legacy out-for-delivery filter.)
 
-const STATUS_LABEL: Record<string, string> = {
-  "1": "รอเข้าโกดังจีน",
-  "2": "ถึงโกดังจีนแล้ว",
-  "3": "กำลังส่งมาไทย",
-  "4": "ถึงไทยแล้ว",
-  "5": "รอชำระเงิน",
-  "6": "เตรียมจัดส่ง",
-  "7": "ส่งแล้ว",
-};
-function statusLabel(s: string): string {
-  return STATUS_LABEL[s] ?? `สถานะ ${s}`;
+/** Translator function shape from next-intl (server `getTranslations` or
+ *  client `useTranslations`) for the `serviceImportTracking` namespace. */
+type TFn = (key: string, values?: Record<string, string | number>) => string;
+
+function statusLabel(t: TFn, s: string): string {
+  if (s === "1" || s === "2" || s === "3" || s === "4" || s === "5" || s === "6" || s === "7") {
+    return t(`status.${s}`);
+  }
+  return t("statusFallback", { s });
 }
 
-const STAGE_LABEL: Record<string, string> = {
-  origin: "ต้นทาง (ร้านค้า → โกดังจีน)",
-  transit: "ระหว่างทางขนส่ง (ตู้)",
-  dest: "ปลายทาง (โกดังไทย → บ้านลูกค้า)",
-};
+function stageLabel(t: TFn, key: string): string {
+  if (key === "origin" || key === "transit" || key === "dest") {
+    return t(`stageLabel.${key}`);
+  }
+  return key;
+}
 
 /** Per-status chip tone — mirrors the stage colour so a container's status
  *  breakdown chips line up visually with the stage tabs above them. */
@@ -578,7 +580,7 @@ function StepChip({
   );
 }
 
-function OriginPanel({
+async function OriginPanel({
   mode,
   stepFilter,
   counts,
@@ -587,6 +589,7 @@ function OriginPanel({
   stepFilter: string;
   counts: Record<string, number>;
 }) {
+  const t = await getTranslations("serviceImportTracking");
   return (
     <div className={`mx-2 mb-4 md:mx-4 rounded-2xl border ${PANEL_FRAME.emerald} p-5 md:p-6 shadow-sm`}>
       <div className="grid grid-cols-2 gap-6 md:gap-12">
@@ -595,8 +598,8 @@ function OriginPanel({
           status="1"
           tone="emerald"
           icon={<Home className="h-5 w-5" />}
-          title="รอเข้าโกดังจีน"
-          desc="ร้านค้าส่งสินค้า / รอรับเข้าโกดัง"
+          title={t("status.1")}
+          desc={t("originDesc.1")}
           active={stepFilter === "1"}
           count={counts["1"] ?? 0}
         />
@@ -605,8 +608,8 @@ function OriginPanel({
           status="2"
           tone="emerald"
           icon={<Check className="h-5 w-5" />}
-          title="ถึงโกดังจีนแล้ว"
-          desc="สินค้าเข้าโกดังจีนเรียบร้อย"
+          title={t("status.2")}
+          desc={t("originDesc.2")}
           active={stepFilter === "2"}
           count={counts["2"] ?? 0}
         />
@@ -674,7 +677,7 @@ function TransitSubChip({
   );
 }
 
-function TransitPanel({
+async function TransitPanel({
   mode,
   stepFilter,
   counts,
@@ -685,6 +688,7 @@ function TransitPanel({
   counts: Record<string, number>;
   focus: Container | null;
 }) {
+  const t = await getTranslations("serviceImportTracking");
   const closeDate = focus?.containerClose ? dmy(focus.containerClose) : undefined;
   const etaDate = focus?.toThai ? dmy(focus.toThai) : undefined;
   const transitCount = counts["3"] ?? 0;
@@ -694,7 +698,7 @@ function TransitPanel({
     <div className={`mx-2 mb-4 md:mx-4 rounded-2xl border ${PANEL_FRAME.sky} p-5 md:p-6 shadow-sm`}>
       {/* 7-step clickable stepper — all sub-stages share fstatus=3 filter */}
       <div className="grid grid-cols-1 md:grid-cols-7 gap-5 md:gap-2">
-        <TransitSubChip mode={mode} active={active} count={transitCount} icon={<Box className="h-5 w-5" />}      title="RE (ปิดตู้/คืนตู้)" date={closeDate} />
+        <TransitSubChip mode={mode} active={active} count={transitCount} icon={<Box className="h-5 w-5" />}      title={t("transitRe")} date={closeDate} />
         <TransitSubChip mode={mode} active={active} count={transitCount} icon={<Ship className="h-5 w-5" />}     title="ETD" />
         <TransitSubChip mode={mode} active={active} count={transitCount} icon={<Anchor className="h-5 w-5" />}   title="TRANSHIP / DIRECT" />
         <TransitSubChip mode={mode} active={active} count={transitCount} icon={<Anchor className="h-5 w-5" />}   title="TRANSIT" />
@@ -709,7 +713,7 @@ function TransitPanel({
   );
 }
 
-function DestPanel({
+async function DestPanel({
   mode,
   stepFilter,
   counts,
@@ -718,34 +722,35 @@ function DestPanel({
   stepFilter: string;
   counts: Record<string, number>;
 }) {
+  const t = await getTranslations("serviceImportTracking");
   return (
     <div className={`mx-2 mb-4 md:mx-4 rounded-2xl border ${PANEL_FRAME.orange} p-5 md:p-6 shadow-sm`}>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-5 md:gap-4">
         <StepChip
           mode={mode} status="4" tone="orange"
           icon={<Check className="h-5 w-5" />}
-          title="ถึงไทยแล้ว"
+          title={t("status.4")}
           active={stepFilter === "4"}
           count={counts["4"] ?? 0}
         />
         <StepChip
           mode={mode} status="5" tone="orange"
           icon={<FileText className="h-5 w-5" />}
-          title="รอชำระเงิน"
+          title={t("status.5")}
           active={stepFilter === "5"}
           count={counts["5"] ?? 0}
         />
         <StepChip
           mode={mode} status="6" tone="orange"
           icon={<Box className="h-5 w-5" />}
-          title="เตรียมจัดส่ง"
+          title={t("status.6")}
           active={stepFilter === "6"}
           count={counts["6"] ?? 0}
         />
         <StepChip
           mode={mode} status="7" tone="orange"
           icon={<PackageCheck className="h-5 w-5" />}
-          title="ส่งแล้ว"
+          title={t("status.7")}
           active={stepFilter === "7"}
           count={counts["7"] ?? 0}
         />
@@ -756,23 +761,24 @@ function DestPanel({
 
 /* ── Container card (the collapsible block under the tabs) ────────── */
 
-function ContainerView({
+async function ContainerView({
   container,
   userCompany,
 }: {
   container: Container;
   userCompany: string | null;
 }) {
+  const t = await getTranslations("serviceImportTracking");
   // Transport-type label from real DB column `ftransporttype` on the first
   // row (matches the mode-level filter that grouped this container). Avoid
   // hardcoded ports — legacy schema has no port-of-loading / port-of-
   // discharge columns, so we don't fabricate Shekou / Laem Chabang etc.
   const transportType = container.rows[0]?.ftransporttype ?? "";
   const transportLabel =
-    transportType === "1" ? "ขนส่งทางรถ" :
-    transportType === "2" ? "ขนส่งทางเรือ" :
-    transportType === "3" ? "ขนส่งทางอากาศ" :
-    "รอตรวจสอบ";
+    transportType === "1" ? t("modeLabel.truck") :
+    transportType === "2" ? t("modeLabel.sea") :
+    transportType === "3" ? t("modeLabel.air") :
+    t("transportPending");
 
   // T/T (Transit Time) per container — count days from container-close to
   // ETA. Per ปอน 2026-05-28: only count when the container has actually
@@ -808,7 +814,7 @@ function ContainerView({
             <h2 className="text-lg md:text-xl font-extrabold leading-tight mb-1 truncate">
               {container.code}
               <span className="inline-flex ml-2 align-middle bg-sky-100 text-sky-700 rounded-full px-2 py-0.5 text-[11px] font-bold">
-                {container.rows.length} รายการ
+                {t("itemCount", { n: container.rows.length })}
               </span>
             </h2>
             <p className="text-xs md:text-sm text-muted">
@@ -821,7 +827,7 @@ function ContainerView({
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {statusEntries.map(([s, n]) => (
                   <span key={s} className={`inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 border ${STATUS_CHIP_TONE[s] ?? "bg-surface-alt text-foreground border-border"}`}>
-                    {statusLabel(s)}
+                    {statusLabel(t, s)}
                     <span className="bg-white/70 rounded-full px-1 text-[10px] font-bold">{n}</span>
                   </span>
                 ))}
@@ -829,25 +835,25 @@ function ContainerView({
             )}
           </div>
           <div className="min-w-0">
-            <div className="text-sm md:text-base font-extrabold">จีน → ไทย</div>
+            <div className="text-sm md:text-base font-extrabold">{t("chinaToThai")}</div>
             <p className="text-xs md:text-sm text-muted">{transportLabel}</p>
             {/* T/T pill — counted only when the container has arrived. */}
             {ttDays !== null && (
               <p className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded-full px-2 py-0.5">
-                T/T (Transit Time): <span className="text-sm">{ttDays} วัน</span>
+                T/T (Transit Time): <span className="text-sm">{t("days", { n: ttDays })}</span>
               </p>
             )}
           </div>
-          <Metric label="จำนวนรวม" value={`${container.qty} ชิ้น`} />
-          <Metric label="น้ำหนักรวม" value={`${numberFormat2(container.weight)} kg`} />
-          <Metric label="CBM รวม" value={`${numberFormat2(container.cbm)} CBM`} />
-          <Metric label="ยอดรวม" value={`${numberFormat2(container.total)} บ.`} totalTone />
+          <Metric label={t("metricQty")} value={t("unitPieces", { n: container.qty })} />
+          <Metric label={t("metricWeight")} value={`${numberFormat2(container.weight)} kg`} />
+          <Metric label={t("metricCbm")} value={`${numberFormat2(container.cbm)} CBM`} />
+          <Metric label={t("metricTotal")} value={t("unitBaht", { v: numberFormat2(container.total) })} totalTone />
         </div>
       }
       items={
         <div className="bg-surface-alt/40 border border-border rounded-2xl p-3 md:p-4">
           <p className="text-sm font-semibold text-muted mb-3 px-1">
-            รายการสินค้าในตู้คอนเทนเนอร์นี้ ({container.rows.length} รายการ)
+            {t("itemsInContainer", { n: container.rows.length })}
           </p>
           <div className="space-y-2">
             {container.rows.map((row) => (
@@ -879,13 +885,14 @@ function Metric({
   );
 }
 
-function ContainerItemRow({
+async function ContainerItemRow({
   row,
   userCompany,
 }: {
   row: ForwarderRow;
   userCompany: string | null;
 }) {
+  const t = await getTranslations("serviceImportTracking");
   const net = calPriceForwarderSumCompany(
     userCompany,
     row.fpriceupdate,
@@ -916,37 +923,37 @@ function ContainerItemRow({
         <h3 className="text-base md:text-lg font-extrabold leading-tight mb-1 truncate">
           #{row.id}
           <span className="inline-flex ml-2 align-middle bg-amber-100 text-amber-700 rounded-full px-2 py-0.5 text-[10px] font-bold">
-            สถานะ {row.fstatus ?? "—"}
+            {t("statusFallback", { s: row.fstatus ?? "—" })}
           </span>
         </h3>
         <p className="text-xs md:text-sm text-muted truncate">
           CN Track: <span className="font-mono">{trackingChn ?? "—"}</span>
         </p>
         <p className="text-xs md:text-sm text-muted truncate">
-          เลขที่ตู้: <span className="font-mono">{row.fcabinetnumber ?? "—"}</span>
+          {t("cabinetNo")} <span className="font-mono">{row.fcabinetnumber ?? "—"}</span>
         </p>
       </div>
-      <ItemCell label="วันที่รับเข้าโกดังจีน" value={row.fdatecontainerclose ? dmy(row.fdatecontainerclose) : (row.fdate ? dmy(row.fdate) : "—")} />
-      <ItemCell label="จำนวน" value={`${row.famount || 0} กล่อง`} />
-      <ItemCell label="น้ำหนัก" value={`${numberFormat2(row.fweight || 0)} kg`} />
+      <ItemCell label={t("itemDateInWarehouse")} value={row.fdatecontainerclose ? dmy(row.fdatecontainerclose) : (row.fdate ? dmy(row.fdate) : "—")} />
+      <ItemCell label={t("itemQty")} value={t("unitBoxes", { n: row.famount || 0 })} />
+      <ItemCell label={t("itemWeight")} value={`${numberFormat2(row.fweight || 0)} kg`} />
       <ItemCell label="CBM" value={numberFormat2(row.fvolume || 0)} />
       <div>
-        <div className="text-xs text-muted">ยอดเงิน</div>
-        <div className="text-base md:text-lg font-extrabold text-red-600 notranslate">{numberFormat2(net)} บ.</div>
+        <div className="text-xs text-muted">{t("itemAmount")}</div>
+        <div className="text-base md:text-lg font-extrabold text-red-600 notranslate">{t("unitBaht", { v: numberFormat2(net) })}</div>
       </div>
       <div className="flex justify-end gap-2 md:col-auto col-span-full">
         <Link
           href={`/service-import/${row.id}`}
           className="inline-flex items-center h-9 px-3 rounded-lg border border-border bg-white text-sm font-bold hover:bg-surface-alt transition-colors"
         >
-          ดูรายละเอียด
+          {t("viewDetails")}
         </Link>
         {(row.fstatus === "5" || row.fcredit === "1") && (
           <Link
             href={`/service-import/${row.id}?pay=true`}
             className="inline-flex items-center gap-1 h-9 px-3 rounded-lg bg-red-600 text-white text-sm font-bold hover:bg-red-700 active:scale-[0.98] transition-all shadow-sm"
           >
-            ชำระเงิน <ChevronRight className="h-3.5 w-3.5" />
+            {t("pay")} <ChevronRight className="h-3.5 w-3.5" />
           </Link>
         )}
       </div>

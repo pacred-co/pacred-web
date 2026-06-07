@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { LINE_OA } from "@/components/seo/site";
@@ -87,6 +88,7 @@ function thb(n: number): string {
 }
 
 export default async function CustomerFreightHubPage() {
+  const t = await getTranslations("customerFreight");
   const sb = await createClient();
 
   // Recent quotes (RLS already filters to status in sent/accepted/rejected/expired
@@ -142,7 +144,7 @@ export default async function CustomerFreightHubPage() {
         {/* Breadcrumb */}
         <nav className="flex items-center gap-1.5 text-xs text-muted">
           <Link href="/dashboard" className="hover:text-primary-600 inline-flex items-center gap-1">
-            <Home className="w-3.5 h-3.5" /> หน้าแรก
+            <Home className="w-3.5 h-3.5" /> {t("breadcrumbHome")}
           </Link>
           <ChevronRight className="w-3 h-3" />
           <span className="text-foreground font-medium">Freight</span>
@@ -156,9 +158,9 @@ export default async function CustomerFreightHubPage() {
                 <Ship className="h-6 w-6" />
               </div>
               <div>
-                <h1 className="text-xl sm:text-2xl font-bold text-foreground">Freight (FCL/LCL · นำเข้า-ส่งออก)</h1>
+                <h1 className="text-xl sm:text-2xl font-bold text-foreground">{t("hubTitle")}</h1>
                 <p className="text-xs text-muted mt-0.5">
-                  ใบเสนอราคา + งานขนส่ง + เอกสาร (CI / Packing List / Form E / D/O) ของคุณ
+                  {t("hubSubtitle")}
                 </p>
               </div>
             </div>
@@ -168,7 +170,7 @@ export default async function CustomerFreightHubPage() {
               rel="noopener noreferrer"
               className="rounded-lg bg-green-500 text-white px-3 py-2 text-xs sm:text-sm font-bold hover:bg-green-600 inline-flex items-center gap-1.5 shadow-sm"
             >
-              <MessageCircle className="w-4 h-4" /> ขอใบเสนอราคาใหม่
+              <MessageCircle className="w-4 h-4" /> {t("requestNewQuote")}
             </a>
           </div>
         </div>
@@ -177,25 +179,25 @@ export default async function CustomerFreightHubPage() {
         <section className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
           <div className="px-5 py-3 border-b border-border flex items-center justify-between flex-wrap gap-2">
             <h2 className="font-bold text-sm inline-flex items-center gap-2">
-              <FileText className="w-4 h-4 text-primary-600" /> ใบเสนอราคาล่าสุด ({quotes.length})
+              <FileText className="w-4 h-4 text-primary-600" /> {t("recentQuotes", { count: quotes.length })}
             </h2>
           </div>
           {quotes.length === 0 ? (
             <p className="p-5 text-center text-sm text-muted">
-              ยังไม่มีใบเสนอราคา —{" "}
+              {t("noQuotes")}{" "}
               <a href={LINE_OA.addFriendUrl} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline">
-                ติดต่อทีมเพื่อขอใบเสนอราคา
+                {t("contactForQuote")}
               </a>
             </p>
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
-                  <th className="px-3 py-2">เลขที่</th>
-                  <th className="px-3 py-2">ขนส่ง</th>
-                  <th className="px-3 py-2 text-right">ยอดรวม</th>
-                  <th className="px-3 py-2">สถานะ</th>
-                  <th className="px-3 py-2">หมดอายุ</th>
+                  <th className="px-3 py-2">{t("colQuoteNo")}</th>
+                  <th className="px-3 py-2">{t("colTransport")}</th>
+                  <th className="px-3 py-2 text-right">{t("colTotal")}</th>
+                  <th className="px-3 py-2">{t("colStatus")}</th>
+                  <th className="px-3 py-2">{t("colExpiry")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -230,29 +232,29 @@ export default async function CustomerFreightHubPage() {
         <section className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
           <div className="px-5 py-3 border-b border-border flex items-center justify-between flex-wrap gap-2">
             <h2 className="font-bold text-sm inline-flex items-center gap-2">
-              <Package className="w-4 h-4 text-primary-600" /> งานขนส่งล่าสุด ({shipments.length})
+              <Package className="w-4 h-4 text-primary-600" /> {t("recentShipments", { count: shipments.length })}
             </h2>
             <Link
               href="/freight/shipments"
               className="text-xs text-primary-500 hover:underline"
             >
-              ดูทั้งหมด →
+              {t("viewAll")} →
             </Link>
           </div>
           {shipments.length === 0 ? (
             <p className="p-5 text-center text-sm text-muted">
-              ยังไม่มีงานขนส่ง — ใบเสนอราคาที่ตอบรับแล้วจะกลายเป็นงานขนส่งให้อัตโนมัติ
+              {t("noShipments")}
             </p>
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-3 py-2">Job No</th>
-                  <th className="px-3 py-2">ขนส่ง</th>
+                  <th className="px-3 py-2">{t("colTransport")}</th>
                   <th className="px-3 py-2">Container / B/L</th>
-                  <th className="px-3 py-2">สถานะงาน</th>
-                  <th className="px-3 py-2">การชำระ</th>
-                  <th className="px-3 py-2">สร้าง</th>
+                  <th className="px-3 py-2">{t("colJobStatus")}</th>
+                  <th className="px-3 py-2">{t("colPayment")}</th>
+                  <th className="px-3 py-2">{t("colCreated")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -285,7 +287,7 @@ export default async function CustomerFreightHubPage() {
                             {FREIGHT_INVOICE_PAYMENT_STATUS_LABEL[pay]}
                           </span>
                         ) : (
-                          <span className="text-[10px] text-muted">ยังไม่มี invoice</span>
+                          <span className="text-[10px] text-muted">{t("noInvoiceYet")}</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-xs text-muted">
@@ -301,9 +303,9 @@ export default async function CustomerFreightHubPage() {
 
         {/* Contact CTA */}
         <div className="rounded-2xl border border-green-200 bg-green-50 dark:bg-green-900/10 p-5">
-          <p className="text-sm font-medium text-green-900">ต้องการใบเสนอราคาใหม่ หรือสอบถามเพิ่มเติม?</p>
+          <p className="text-sm font-medium text-green-900">{t("ctaTitle")}</p>
           <p className="text-xs text-green-800 mt-1">
-            ทีม Pacred ตอบไวทาง LINE OA — ส่งรายละเอียดสินค้า/ปริมาณ/ต้นทาง-ปลายทางมาได้เลย
+            {t("ctaSubtitle")}
           </p>
           <a
             href={LINE_OA.addFriendUrl}
@@ -311,7 +313,7 @@ export default async function CustomerFreightHubPage() {
             rel="noopener noreferrer"
             className="mt-3 inline-flex items-center gap-2 rounded-lg bg-green-600 text-white px-4 py-2 text-sm font-bold hover:bg-green-700"
           >
-            <MessageCircle className="w-4 h-4" /> ติดต่อทีม Pacred
+            <MessageCircle className="w-4 h-4" /> {t("contactTeam")}
           </a>
         </div>
       </main>

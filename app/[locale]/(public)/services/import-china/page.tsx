@@ -73,161 +73,65 @@ export async function generateMetadata({
 const LINE_URL = "/line";
 const PHONE_DISPLAY = CONTACT.phoneDisplay;
 
-const SERVICE_SCOPE = [
-  "รับสินค้าหน้าโรงงานจีน — กวางโจว · เซินเจิ้น · อี้อู · เซี่ยงไฮ้ · หางโจว",
-  "ตรวจ-นับ-แพ็ค-ห่อกันกระแทกที่โกดังจีน ก่อนส่งออก",
-  "ขนส่งจีน-ไทย ทาง รถ/เรือ/อากาศ — เลือกตามงบ + ไทม์ไลน์",
-  "เคลียร์พิธีการศุลกากรขาเข้า + ชำระภาษี + อากร ครบจบ",
-  "ใช้สิทธิ Form E — ลดภาษีนำเข้าผ่าน FTA ASEAN-China",
-  "ออกใบกำกับภาษี (ภพ.20) · ใบเสร็จครบทุกรายการ",
-  "Door-to-Door — จัดส่งถึงโรงงาน/หน้าร้าน/บ้าน ทั่วประเทศ",
-  "ทีมล่ามจีนปิดดีลกับโรงงาน-ซัพพลายเออร์ในนามคุณ",
-];
-
 const WHY = [
-  {
-    icon: Languages,
-    title: "ทีมล่ามจีนของเรา",
-    desc: "ปิดดีลกับโรงงาน · ต่อรอง · ตรวจสเปก · ไม่ต้องคุยจีนเอง",
-  },
-  {
-    icon: ShieldCheck,
-    title: "ตรวจสินค้าก่อนส่ง",
-    desc: "นับชิ้น · ถ่ายรูป · ทดสอบเปิดเครื่อง — แจ้งก่อนของออกจากจีน",
-  },
-  {
-    icon: Wallet,
-    title: "ราคาชัดเจน ไม่มีบวกแอบ",
-    desc: "แจ้ง Total Landed Cost ครบ — ค่าขนส่ง + ภาษี + เคลียร์ในใบเดียว",
-  },
-  {
-    icon: Zap,
-    title: "ขนส่งเร็ว ลด lead time",
-    desc: "FCL 15-20 วัน · LCL 15-25 วัน · เลือก mode ที่เหมาะกับ order",
-  },
-  {
-    icon: BadgePercent,
-    title: "ใช้สิทธิ Form E ทุกครั้ง",
-    desc: "ลดภาษีนำเข้าผ่าน FTA จีน-ไทย — ประหยัดได้สูงสุด",
-  },
-  {
-    icon: Receipt,
-    title: "ออกใบกำกับภาษีครบ",
-    desc: "ภพ.20 · ใบเสร็จ · เอกสารใช้ลดหย่อนนิติบุคคล",
-  },
-  {
-    icon: Users,
-    title: "ทีมประจำคุณคนเดียว",
-    desc: "ผู้ดูแลเฉพาะรายลูกค้า — ไม่ต้องเล่าใหม่ทุกครั้ง",
-  },
-  {
-    icon: Award,
-    title: "ประสบการณ์ 15+ ปี",
-    desc: "เคสจริง — สินค้าควบคุม, เครื่องสำอาง, อะไหล่, เครื่องจักร, ผ้า",
-  },
+  { icon: Languages },
+  { icon: ShieldCheck },
+  { icon: Wallet },
+  { icon: Zap },
+  { icon: BadgePercent },
+  { icon: Receipt },
+  { icon: Users },
+  { icon: Award },
 ];
 
 const STEPS = [
-  {
-    num: "01",
-    icon: MessageCircle,
-    title: "ทักไลน์/โทรปรึกษา",
-    desc: "แจ้งประเภทสินค้า + ปลายทาง + ปริมาณ — ทีมประเมินขนส่ง + ภาษีให้ก่อน",
-  },
-  {
-    num: "02",
-    icon: ShoppingBag,
-    title: "ส่ง Invoice + ลิงก์โรงงาน",
-    desc: "ส่งให้ทีม — หรือใช้บริการล่ามจีนปิดดีลกับโรงงานในนามคุณ",
-  },
-  {
-    num: "03",
-    icon: Warehouse,
-    title: "รับของที่โกดังจีน",
-    desc: "ตรวจ-นับ-แพ็ค-ถ่ายรูป — แจ้งสถานะให้ทุกขั้น ก่อนส่งออก",
-  },
-  {
-    num: "04",
-    icon: Ship,
-    title: "ขนส่งจีน-ไทย",
-    desc: "เลือกได้ — FCL เหมาตู้ หรือ LCL รวมตู้ ตามปริมาณ + งบ",
-  },
-  {
-    num: "05",
-    icon: Stamp,
-    title: "เคลียร์ + จัดส่ง",
-    desc: "เคลียร์ภาษี + ออกใบขน + ปลดสินค้า + ส่งถึงประตูคุณทั่วประเทศ",
-  },
+  { num: "01", icon: MessageCircle },
+  { num: "02", icon: ShoppingBag },
+  { num: "03", icon: Warehouse },
+  { num: "04", icon: Ship },
+  { num: "05", icon: Stamp },
 ];
 
 const DOCS_NEEDED = [
-  { icon: FileCheck2, label: "Invoice", sub: "ใบส่งของจากซัพพลายเออร์จีน" },
-  { icon: PackageSearch, label: "Packing List", sub: "รายการบรรจุ · น้ำหนัก · CBM" },
-  { icon: FileBadge, label: "ใบอนุญาต (ถ้ามี)", sub: "อย./มอก./สมอ./กสทช." },
-  { icon: ScanLine, label: "ลิงก์สินค้า 1688/Taobao", sub: "URL สินค้า · spec · ภาพ" },
+  { icon: FileCheck2, labelKey: "docsLabel0" },
+  { icon: PackageSearch, labelKey: "docsLabel1" },
+  { icon: FileBadge, labelKey: "docsLabel2" },
+  { icon: ScanLine, labelKey: "docsLabel3" },
 ];
 
 const TERMS_QUICK = [
   {
     code: "DDP",
     name: "Delivered Duty Paid",
-    desc: "ผู้ขายส่งของถึงปลายทางพร้อมเสียภาษี — ลูกค้ารับของอย่างเดียว",
     icon: Globe2,
     popular: true,
   },
   {
     code: "FOB",
     name: "Free On Board",
-    desc: "ผู้ขายส่งถึง Port ต้นทาง · ผู้ซื้อจ่ายขนส่ง+ภาษี+เคลียร์ปลายทาง",
     icon: Container,
   },
   {
     code: "EXW",
     name: "Ex Works",
-    desc: "ผู้ซื้อรับของหน้าโรงงาน · จ่ายทุกอย่างจนถึงปลายทาง",
     icon: Warehouse,
   },
   {
     code: "CIF",
     name: "Cost · Insurance · Freight",
-    desc: "ผู้ขายจ่ายขนส่ง+ประกันถึง Port ปลายทาง · ผู้ซื้อเคลียร์+ภาษี",
     icon: Ship,
   },
 ];
 
-const FAQ_ITEMS = [
-  {
-    q: "นำเข้าจากจีน ควรเลือก FCL หรือ LCL?",
-    a: "ดูที่ปริมาณสินค้า — ถ้ามากกว่า 15 CBM แนะนำ FCL (เหมาตู้) เพราะคุ้มกว่า · ถ้าน้อยกว่า 15 CBM ใช้ LCL (รวมตู้) จ่ายตาม CBM/KG ที่ใช้จริง · FCL ลด lead time + ต้นทุนต่อหน่วยต่ำสุด · LCL เหมาะกับเริ่มต้นและทดลองตลาด",
-  },
-  {
-    q: "นำเข้าจากจีน Pacred ใช้เวลากี่วัน?",
-    a: "ขึ้นกับ mode ที่เลือก — FCL ทางเรือ 15-20 วัน · LCL ทางเรือ 15-25 วัน · ทางอากาศ (Air Freight) 3-5 วัน · ทางรถข้ามแดน 5-7 วัน เวลาที่บอกนับจากของเข้าโกดังจีน ถึงปลายทางในไทย",
-  },
-  {
-    q: "ราคาขนส่งจากจีนคิดยังไง?",
-    a: "FCL คิดเป็นต่อตู้ 20'/40'/40HQ — flat rate ไม่ว่าจะใส่เต็มหรือไม่ · LCL คิดตาม CBM (ปริมาตร) หรือ KG (น้ำหนัก) ที่สูงกว่า ทีมแจ้ง Total Landed Cost ครบ (ค่าขนส่ง + ภาษีนำเข้า + VAT + เคลียร์) ในใบเดียวก่อนยืนยัน",
-  },
-  {
-    q: "ต้องเสียภาษีนำเข้าเท่าไร?",
-    a: "อัตราภาษีขึ้นกับพิกัด HS Code ของสินค้านั้นๆ — อยู่ในช่วง 0-30% ของมูลค่าสินค้า + ขนส่ง (CIF) ส่วนใหญ่ใช้สิทธิ Form E ภายใต้ FTA ASEAN-China ลดได้สูงสุด 0% สำหรับสินค้าหลายรายการ และ VAT 7% เก็บเพิ่มหลังบวกภาษีนำเข้า",
-  },
-  {
-    q: "Form E คืออะไร · ขอใช้สิทธิยังไง?",
-    a: "Form E (Certificate of Origin Form E) คือเอกสารยืนยันว่าสินค้าผลิตในจีน — ใช้ลดภาษีนำเข้าผ่านความตกลง FTA ASEAN-China ทีม Pacred ขอ Form E จากซัพพลายเออร์จีนให้ + ตรวจความถูกต้องก่อนใช้สิทธิ — ไม่เสียค่าใช้จ่ายเพิ่ม",
-  },
-  {
-    q: "นำเข้าจากจีนต้องใช้เอกสารอะไรบ้าง?",
-    a: "เอกสารพื้นฐาน — Invoice + Packing List (จากซัพพลายเออร์จีน) · ส่วนเอกสารต่อ Pacred ขอให้ — B/L หรือ AWB · Form E · ใบขนสินค้า · ใบอนุญาตเฉพาะสินค้าควบคุม (อย./มอก./สมอ./กสทช.) ถ้าเข้าข่าย",
-  },
-  {
-    q: "ไม่รู้จีน · ไม่ได้คุยซัพพลายเออร์เอง?",
-    a: "ใช้บริการ ฝากสั่งซื้อสินค้าจากจีน (China Shopping) — ทีมล่ามจีน Pacred ปิดดีลกับโรงงาน ตรวจสเปก ตรวจคุณภาพ ในนามคุณ — แค่ส่งลิงก์สินค้า (1688/Taobao/Tmall/Alibaba) มาให้",
-  },
-  {
-    q: "สินค้าควบคุม เช่น เครื่องสำอาง อาหารเสริม เข้าได้มั้ย?",
-    a: "ได้ — แต่ต้องมีใบอนุญาต อย. ก่อนนำเข้า ทีม Pacred ช่วยจัดทำเอกสาร · ประสานกับ อย./มอก./สมอ./กสทช./กรมเกษตร · ตรวจ HS Code · เตรียมข้อมูลสำหรับยื่นขอใบอนุญาต ใช้เวลาเตรียมประมาณ 7-30 วัน ขึ้นอยู่กับประเภทสินค้า",
-  },
+const FAQ_ITEMS_RAW = [
+  { q: "นำเข้าจากจีน ควรเลือก FCL หรือ LCL?", a: "ดูที่ปริมาณสินค้า — ถ้ามากกว่า 15 CBM แนะนำ FCL (เหมาตู้) เพราะคุ้มกว่า · ถ้าน้อยกว่า 15 CBM ใช้ LCL (รวมตู้) จ่ายตาม CBM/KG ที่ใช้จริง · FCL ลด lead time + ต้นทุนต่อหน่วยต่ำสุด · LCL เหมาะกับเริ่มต้นและทดลองตลาด" },
+  { q: "นำเข้าจากจีน Pacred ใช้เวลากี่วัน?", a: "ขึ้นกับ mode ที่เลือก — FCL ทางเรือ 15-20 วัน · LCL ทางเรือ 15-25 วัน · ทางอากาศ (Air Freight) 3-5 วัน · ทางรถข้ามแดน 5-7 วัน เวลาที่บอกนับจากของเข้าโกดังจีน ถึงปลายทางในไทย" },
+  { q: "ราคาขนส่งจากจีนคิดยังไง?", a: "FCL คิดเป็นต่อตู้ 20'/40'/40HQ — flat rate ไม่ว่าจะใส่เต็มหรือไม่ · LCL คิดตาม CBM (ปริมาตร) หรือ KG (น้ำหนัก) ที่สูงกว่า ทีมแจ้ง Total Landed Cost ครบ (ค่าขนส่ง + ภาษีนำเข้า + VAT + เคลียร์) ในใบเดียวก่อนยืนยัน" },
+  { q: "ต้องเสียภาษีนำเข้าเท่าไร?", a: "อัตราภาษีขึ้นกับพิกัด HS Code ของสินค้านั้นๆ — อยู่ในช่วง 0-30% ของมูลค่าสินค้า + ขนส่ง (CIF) ส่วนใหญ่ใช้สิทธิ Form E ภายใต้ FTA ASEAN-China ลดได้สูงสุด 0% สำหรับสินค้าหลายรายการ และ VAT 7% เก็บเพิ่มหลังบวกภาษีนำเข้า" },
+  { q: "Form E คืออะไร · ขอใช้สิทธิยังไง?", a: "Form E (Certificate of Origin Form E) คือเอกสารยืนยันว่าสินค้าผลิตในจีน — ใช้ลดภาษีนำเข้าผ่านความตกลง FTA ASEAN-China ทีม Pacred ขอ Form E จากซัพพลายเออร์จีนให้ + ตรวจความถูกต้องก่อนใช้สิทธิ — ไม่เสียค่าใช้จ่ายเพิ่ม" },
+  { q: "นำเข้าจากจีนต้องใช้เอกสารอะไรบ้าง?", a: "เอกสารพื้นฐาน — Invoice + Packing List (จากซัพพลายเออร์จีน) · ส่วนเอกสารต่อ Pacred ขอให้ — B/L หรือ AWB · Form E · ใบขนสินค้า · ใบอนุญาตเฉพาะสินค้าควบคุม (อย./มอก./สมอ./กสทช.) ถ้าเข้าข่าย" },
+  { q: "ไม่รู้จีน · ไม่ได้คุยซัพพลายเออร์เอง?", a: "ใช้บริการ ฝากสั่งซื้อสินค้าจากจีน (China Shopping) — ทีมล่ามจีน Pacred ปิดดีลกับโรงงาน ตรวจสเปก ตรวจคุณภาพ ในนามคุณ — แค่ส่งลิงก์สินค้า (1688/Taobao/Tmall/Alibaba) มาให้" },
+  { q: "สินค้าควบคุม เช่น เครื่องสำอาง อาหารเสริม เข้าได้มั้ย?", a: "ได้ — แต่ต้องมีใบอนุญาต อย. ก่อนนำเข้า ทีม Pacred ช่วยจัดทำเอกสาร · ประสานกับ อย./มอก./สมอ./กสทช./กรมเกษตร · ตรวจ HS Code · เตรียมข้อมูลสำหรับยื่นขอใบอนุญาต ใช้เวลาเตรียมประมาณ 7-30 วัน ขึ้นอยู่กับประเภทสินค้า" },
 ];
 
 export default async function ImportChinaPage({
@@ -238,9 +142,15 @@ export default async function ImportChinaPage({
   const { locale } = await params;
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const t = await getTranslations({ locale, namespace: NS });
-  const homeLabel = typedLocale === "th" ? "หน้าหลัก" : "Home";
-  const svcLabel = typedLocale === "th" ? "บริการ" : "Services";
-  const here = typedLocale === "th" ? "นำเข้าสินค้าจากจีน" : "Import from China";
+  const tp = await getTranslations({ locale, namespace: "svcImportChina" });
+  const homeLabel = tp("homeLabel");
+  const svcLabel = tp("svcLabel");
+  const here = tp("pageTitle");
+
+  const FAQ_ITEMS = FAQ_ITEMS_RAW.map((item, i) => ({
+    q: tp(`faqQ${i}` as Parameters<typeof tp>[0]),
+    a: tp(`faqA${i}` as Parameters<typeof tp>[0]),
+  }));
 
   return (
     <>
@@ -312,15 +222,15 @@ export default async function ImportChinaPage({
           <div className="relative mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-2 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
-              IMPORT FROM CHINA · นำเข้าสินค้าจากจีน
+              {tp("heroEyebrow")}
             </div>
             <h1 className="text-[22px] md:text-[44px] leading-[1.2] font-black tracking-[-0.025em] text-[#111827] dark:text-white max-w-[980px]">
-              <span className="text-primary-600">นำเข้าสินค้าจากจีน</span> ครบวงจร FCL · LCL
-              <span className="hidden md:inline"> ทุก Term ทุก Port</span>
+              <span className="text-primary-600">{tp("h1Accent")}</span> {tp("h1Main")}
+              <span className="hidden md:inline"> {tp("h1Suffix")}</span>
             </h1>
 
             <h2 className="mt-2 md:mt-3 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[920px]">
-              บริการนำเข้าสินค้าจากจีนแบบมืออาชีพ — รับสินค้าหน้าโรงงาน · ขนส่งจีน-ไทย FCL/LCL · เคลียร์ภาษีศุลกากร · ใช้สิทธิ Form E · Door-to-Door ทั่วประเทศ — <span className="text-primary-600/80 font-bold">FCL เริ่ม $500/ตู้ · LCL เริ่ม $150/CBM · ทีมล่ามจีนปิดดีลในนามคุณ</span>
+              {tp("h2Desc")} <span className="text-primary-600/80 font-bold">{tp("h2Cta")}</span>
             </h2>
 
             <TrustStatsStrip className="mt-3 md:mt-4" />
@@ -328,11 +238,11 @@ export default async function ImportChinaPage({
             {/* Freight quote-funnel CTA — opens the FCL/LCL/air/customs RFQ wizard */}
             <Link
               href="/freight-quote"
-              aria-label="ขอราคา freight นำเข้า FCL/LCL"
+              aria-label={tp("freightCtaAriaLabel")}
               data-cta="freight_quote_hero"
               className="mt-4 md:mt-6 inline-flex items-center justify-center gap-2 h-12 px-5 rounded-xl border-2 border-primary-600 text-primary-700 dark:text-primary-300 font-black text-[14px] md:text-[15px] hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors max-w-[640px] w-full"
             >
-              ขอราคา Freight — FCL · LCL · แอร์ · เคลียร์ศุลกากร
+              {tp("freightCtaBtn")}
               <ArrowRight className="w-4 h-4" strokeWidth={2.6} />
             </Link>
 
@@ -340,11 +250,11 @@ export default async function ImportChinaPage({
             <div className="mt-3 md:mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-[640px]">
               <Link
                 href="/register"
-                aria-label="ใช้บริการนำเข้าจีน — สมัครฟรี"
+                aria-label={tp("registerAriaLabel")}
                 data-cta="register_hero"
                 className="inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-primary-600 text-white font-black text-[14px] md:text-[15px] hover:bg-primary-700 transition-colors shadow-[0_8px_22px_rgba(179,0,0,0.30)]"
               >
-                ใช้บริการ — สมัครฟรี
+                {tp("registerBtn")}
                 <ArrowRight className="w-4 h-4" strokeWidth={2.6} />
               </Link>
               <TrackedExternalLink
@@ -355,7 +265,7 @@ export default async function ImportChinaPage({
                 className="inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-[#06C755] text-white font-black text-[14px] md:text-[15px] hover:bg-[#05B04C] transition-colors shadow-[0_6px_18px_rgba(6,199,85,0.35)]"
               >
                 <MessageCircle className="w-4 h-4" strokeWidth={2.6} />
-                ปรึกษาฟรี · ทักไลน์
+                {tp("lineBtn")}
               </TrackedExternalLink>
             </div>
 
@@ -363,19 +273,19 @@ export default async function ImportChinaPage({
             <div className="mt-5 md:mt-7 rounded-2xl border border-primary-100 dark:border-border bg-white dark:bg-surface p-4 md:p-6 shadow-[0_8px_24px_rgba(0,0,0,0.06)] max-w-[1100px]">
               <h3 className="flex items-start gap-2 text-[15px] md:text-[20px] font-black text-primary-700 dark:text-primary-300 tracking-tight leading-snug">
                 <span className="shrink-0">🇨🇳</span>
-                <span>บริการนำเข้าจากจีนครบวงจร — รับของจีน เคลียร์ไทย ส่งถึงประตู</span>
+                <span>{tp("scopeCardTitle")}</span>
               </h3>
               <p className="mt-2 md:mt-3 text-[12.5px] md:text-[15px] font-bold text-foreground/85 leading-relaxed">
-                กวางโจว · เซินเจิ้น · อี้อู · เซี่ยงไฮ้ · หางโจว · เทียนจิน · ชิงเต่า
+                {tp("scopeCities")}
               </p>
               <ul className="mt-4 md:mt-5 grid md:grid-cols-2 gap-x-5 md:gap-x-6 gap-y-2 md:gap-y-2.5 text-[12.5px] md:text-[14px] leading-snug text-foreground/85">
-                {SERVICE_SCOPE.map((item) => (
-                  <li key={item} className="flex items-start gap-2">
+                {([0, 1, 2, 3, 4, 5, 6, 7] as const).map((i) => (
+                  <li key={i} className="flex items-start gap-2">
                     <CheckCircle2
                       className="w-4 h-4 md:w-[18px] md:h-[18px] mt-0.5 shrink-0 text-primary-600"
                       strokeWidth={2.6}
                     />
-                    <span>{item}</span>
+                    <span>{tp(`scopeItem${i}` as Parameters<typeof tp>[0])}</span>
                   </li>
                 ))}
               </ul>
@@ -390,7 +300,7 @@ export default async function ImportChinaPage({
                   className="inline-flex items-center justify-center gap-2 h-12 rounded-xl border border-primary-200 bg-primary-50 text-primary-700 font-black text-[14px] md:text-[15px] hover:bg-primary-100 hover:border-primary-300 transition-colors dark:bg-primary-900/30 dark:border-primary-800 dark:text-primary-200"
                 >
                   <Phone className="w-4 h-4" strokeWidth={2.6} />
-                  โทร {PHONE_DISPLAY}
+                  {tp("phoneBtn", { phone: PHONE_DISPLAY })}
                 </TrackedPhoneLink>
                 <TrackedExternalLink
                   href={LINE_OA.shortUrl}
@@ -400,7 +310,7 @@ export default async function ImportChinaPage({
                   className="inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-[#06C755] text-white font-black text-[14px] md:text-[15px] hover:bg-[#05B04C] transition-colors shadow-[0_6px_18px_rgba(6,199,85,0.35)]"
                 >
                   <MessageCircle className="w-4 h-4" strokeWidth={2.6} />
-                  แอด LINE Pacred
+                  {tp("lineCardBtn")}
                 </TrackedExternalLink>
               </div>
             </div>
@@ -415,13 +325,13 @@ export default async function ImportChinaPage({
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <Layers className="w-3.5 h-3.5" strokeWidth={2.6} />
-              เลือก MODE · FCL vs LCL
+              {tp("modeEyebrow")}
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              เลือกแบบ <span className="text-primary-600">FCL เหมาตู้</span> หรือ <span className="text-primary-600">LCL รวมตู้</span>
+              {tp("modeH2Pre")} <span className="text-primary-600">{tp("modeH2FclAccent")}</span> {tp("modeH2Or")} <span className="text-primary-600">{tp("modeH2LclAccent")}</span>
             </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
-              ปริมาณมาก = FCL เหมาตู้คุ้มที่สุด · เริ่มต้นไม่กี่กล่อง = LCL จ่ายตาม CBM ที่ใช้
+              {tp("modeDesc")}
             </p>
 
             {/* 2-card grid — desktop: FCL spans 3, LCL spans 2 (glossy 3D button style from OurService) */}
@@ -429,7 +339,7 @@ export default async function ImportChinaPage({
               {/* ── FCL — spotlight (bigger, left, gradient red) ── */}
               <Link
                 href="/services/import-china-fcl"
-                aria-label="ดูรายละเอียดบริการ FCL — Full Container Load จีน-ไทย"
+                aria-label={tp("fclAriaLabel")}
                 data-cta="mode-fcl"
                 className={[
                   "group relative overflow-hidden isolate bg-white col-span-1 md:col-span-3",
@@ -469,30 +379,26 @@ export default async function ImportChinaPage({
                   <div>
                     <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-yellow-300 text-primary-800 text-[10.5px] md:text-[12px] font-black tracking-[0.10em] shadow-[0_4px_12px_rgba(0,0,0,0.25)]">
                       <Container className="w-3.5 h-3.5" strokeWidth={2.8} />
-                      ยอดนิยม · FCL
+                      {tp("fclBadge")}
                     </div>
                     <h3 className="mt-3 md:mt-4 text-[26px] md:text-[42px] font-black text-white leading-[1.05] tracking-[-0.025em] drop-shadow-[0_3px_10px_rgba(0,0,0,0.5)]">
-                      FCL <span className="text-yellow-300">เหมาตู้</span>
+                      FCL <span className="text-yellow-300">{tp("fclH3Accent")}</span>
                     </h3>
                     <p className="mt-1 md:mt-2 text-[14px] md:text-[18px] font-extrabold text-white/95 leading-snug drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)]">
-                      20{"'"} · 40{"'"} · 40HQ · Door-to-Door ทุก Term
+                      {tp("fclSub")}
                     </p>
                     <ul className="mt-3 md:mt-4 hidden md:flex flex-col gap-1.5 text-[13.5px] font-bold text-white/95 drop-shadow-[0_1px_4px_rgba(0,0,0,0.4)]">
-                      {[
-                        "ต้นทุนต่อหน่วยต่ำสุด — Order ใหญ่คุ้มสุด",
-                        "ลำเลียงตู้ตรง · ไม่ต้องรอรวมตู้",
-                        "Cross-dock 20'/40'/40HQ · Reefer (อาหารแช่เย็น) ก็ได้",
-                      ].map((b) => (
-                        <li key={b} className="flex items-start gap-2">
+                      {([0, 1, 2] as const).map((i) => (
+                        <li key={i} className="flex items-start gap-2">
                           <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-yellow-300" strokeWidth={2.8} />
-                          <span>{b}</span>
+                          <span>{tp(`fclBullet${i}` as Parameters<typeof tp>[0])}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
 
                   <div className="mt-3 inline-flex items-center gap-2 self-start px-4 py-2.5 rounded-xl bg-white text-primary-700 font-black text-[13px] md:text-[15px] shadow-[0_6px_16px_rgba(0,0,0,0.25)] group-hover:translate-x-1 transition-transform">
-                    ดูรายละเอียด FCL
+                    {tp("fclBtn")}
                     <ArrowRight className="w-4 h-4" strokeWidth={2.8} />
                   </div>
                 </div>
@@ -501,7 +407,7 @@ export default async function ImportChinaPage({
               {/* ── LCL — smaller, right, secondary ── */}
               <Link
                 href="/services/import-china-lcl"
-                aria-label="ดูรายละเอียดบริการ LCL — Less Container Load จีน-ไทย"
+                aria-label={tp("lclAriaLabel")}
                 data-cta="mode-lcl"
                 className={[
                   "group relative overflow-hidden isolate bg-white col-span-1 md:col-span-2",
@@ -536,29 +442,26 @@ export default async function ImportChinaPage({
                   <div>
                     <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/95 text-emerald-800 text-[10.5px] md:text-[12px] font-black tracking-[0.10em] shadow-[0_4px_12px_rgba(0,0,0,0.20)]">
                       <Boxes className="w-3.5 h-3.5" strokeWidth={2.8} />
-                      เริ่มต้น · LCL
+                      {tp("lclBadge")}
                     </div>
                     <h3 className="mt-3 md:mt-4 text-[22px] md:text-[34px] font-black text-white leading-[1.05] tracking-[-0.025em] drop-shadow-[0_3px_10px_rgba(0,0,0,0.5)]">
-                      LCL <span className="text-yellow-300">รวมตู้</span>
+                      LCL <span className="text-yellow-300">{tp("lclH3Accent")}</span>
                     </h3>
                     <p className="mt-1 md:mt-2 text-[13px] md:text-[16px] font-extrabold text-white/95 leading-snug drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)]">
-                      จ่ายตาม CBM/KG · เริ่มไม่กี่กล่อง
+                      {tp("lclSub")}
                     </p>
                     <ul className="mt-3 md:mt-4 hidden md:flex flex-col gap-1.5 text-[12.5px] font-bold text-white/95 drop-shadow-[0_1px_4px_rgba(0,0,0,0.4)]">
-                      {[
-                        "ไม่ต้องเหมาตู้ — Order เล็กก็เริ่มได้",
-                        "พักของฟรี 14 วันที่โกดังจีน",
-                      ].map((b) => (
-                        <li key={b} className="flex items-start gap-2">
+                      {([0, 1] as const).map((i) => (
+                        <li key={i} className="flex items-start gap-2">
                           <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-yellow-300" strokeWidth={2.8} />
-                          <span>{b}</span>
+                          <span>{tp(`lclBullet${i}` as Parameters<typeof tp>[0])}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
 
                   <div className="mt-3 inline-flex items-center gap-2 self-start px-3.5 py-2.5 rounded-xl bg-white text-emerald-800 font-black text-[12.5px] md:text-[14px] shadow-[0_6px_16px_rgba(0,0,0,0.25)] group-hover:translate-x-1 transition-transform">
-                    ดูรายละเอียด LCL
+                    {tp("lclBtn")}
                     <ArrowRight className="w-4 h-4" strokeWidth={2.8} />
                   </div>
                 </div>
@@ -575,31 +478,31 @@ export default async function ImportChinaPage({
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <Sparkles className="w-3.5 h-3.5" strokeWidth={2.6} />
-              WHY PACRED · ทำไมต้องเรา
+              {tp("whyEyebrow")}
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              ทำไม <span className="text-primary-600">ผู้นำเข้ามือใหม่</span> เลือก Pacred
+              {tp("whyH2Pre")} <span className="text-primary-600">{tp("whyH2Accent")}</span> {tp("whyH2Post")}
             </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
-              เร็ว ไว ไม่มีคำว่าทำไม่ได้ — เริ่มจาก 0 ก็ปิดดีลโรงงานจีนได้ไม่ต้องคุยจีนเอง
+              {tp("whyDesc")}
             </p>
 
             <div className="mt-6 md:mt-8 grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-              {WHY.map((w) => {
+              {WHY.map((w, i) => {
                 const Icon = w.icon;
                 return (
                   <div
-                    key={w.title}
+                    key={i}
                     className="rounded-xl md:rounded-2xl border border-border bg-white dark:bg-surface p-4 md:p-5 hover:border-primary-300 dark:hover:border-primary-800 hover:shadow-[0_12px_28px_rgba(179,0,0,0.10)] hover:-translate-y-0.5 transition-all duration-300"
                   >
                     <div className="inline-flex items-center justify-center w-9 h-9 md:w-10 md:h-10 rounded-xl bg-primary-50 text-primary-600 mb-2.5 dark:bg-primary-900/30 dark:text-primary-300">
                       <Icon className="w-4.5 h-4.5 md:w-5 md:h-5" strokeWidth={2.4} />
                     </div>
                     <div className="text-[13px] md:text-[15px] font-black text-[#111827] dark:text-white tracking-tight leading-tight">
-                      {w.title}
+                      {tp(`whyTitle${i}` as Parameters<typeof tp>[0])}
                     </div>
                     <p className="mt-1 text-[11.5px] md:text-[12.5px] leading-[1.55] text-muted font-medium">
-                      {w.desc}
+                      {tp(`whyDesc${i}` as Parameters<typeof tp>[0])}
                     </p>
                   </div>
                 );
@@ -613,14 +516,14 @@ export default async function ImportChinaPage({
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <Calculator className="w-3.5 h-3.5" strokeWidth={2.6} />
-              5 STEPS · 5 ขั้น จบ
+              {tp("processEyebrow")}
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              ขั้นตอน <span className="text-primary-600">นำเข้าจากจีน</span> ง่ายๆ ใน 5 ขั้น
+              {tp("processH2Pre")} <span className="text-primary-600">{tp("processH2Accent")}</span> {tp("processH2Post")}
             </h2>
 
             <div className="mt-6 md:mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
-              {STEPS.map((s) => {
+              {STEPS.map((s, i) => {
                 const Icon = s.icon;
                 return (
                   <div
@@ -634,10 +537,10 @@ export default async function ImportChinaPage({
                       <Icon className="w-4.5 h-4.5 md:w-5 md:h-5" strokeWidth={2.4} />
                     </div>
                     <div className="relative text-[13px] md:text-[15px] font-black text-[#111827] dark:text-white tracking-tight">
-                      {s.title}
+                      {tp(`stepTitle${i}` as Parameters<typeof tp>[0])}
                     </div>
                     <p className="relative mt-1 text-[11.5px] md:text-[12.5px] leading-[1.55] text-muted font-medium">
-                      {s.desc}
+                      {tp(`stepDesc${i}` as Parameters<typeof tp>[0])}
                     </p>
                   </div>
                 );
@@ -653,21 +556,21 @@ export default async function ImportChinaPage({
             <div>
               <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
                 <FileCheck2 className="w-3.5 h-3.5" strokeWidth={2.6} />
-                DOCS · เอกสาร
+                {tp("docsEyebrow")}
               </div>
               <h2 className="text-[20px] md:text-[28px] leading-[1.18] font-black tracking-[-0.025em] text-[#111827] dark:text-white">
-                เอกสารที่ต้องเตรียม
+                {tp("docsH2")}
               </h2>
               <p className="mt-2 text-[12.5px] md:text-[14px] text-muted font-medium">
-                ไม่มีเอกสารครบ? ไม่เป็นไร — Pacred ช่วยขอจากซัพพลายเออร์จีนให้
+                {tp("docsDesc")}
               </p>
 
               <ul className="mt-4 space-y-2.5">
-                {DOCS_NEEDED.map((d) => {
+                {DOCS_NEEDED.map((d, i) => {
                   const Icon = d.icon;
                   return (
                     <li
-                      key={d.label}
+                      key={d.labelKey}
                       className="flex items-center gap-3 rounded-xl border border-border bg-white dark:bg-surface p-3"
                     >
                       <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-primary-50 text-primary-600 shrink-0 dark:bg-primary-900/30 dark:text-primary-300">
@@ -675,10 +578,10 @@ export default async function ImportChinaPage({
                       </span>
                       <div>
                         <div className="text-[13px] md:text-[14px] font-black text-[#111827] dark:text-white">
-                          {d.label}
+                          {tp(d.labelKey as Parameters<typeof tp>[0])}
                         </div>
                         <div className="text-[11.5px] md:text-[12.5px] text-muted font-medium leading-snug">
-                          {d.sub}
+                          {tp(`docsSub${i}` as Parameters<typeof tp>[0])}
                         </div>
                       </div>
                     </li>
@@ -691,17 +594,17 @@ export default async function ImportChinaPage({
             <div>
               <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
                 <Globe2 className="w-3.5 h-3.5" strokeWidth={2.6} />
-                INCOTERMS · เทอมขนส่ง
+                {tp("termsEyebrow")}
               </div>
               <h2 className="text-[20px] md:text-[28px] leading-[1.18] font-black tracking-[-0.025em] text-[#111827] dark:text-white">
-                Term ไหนเหมาะกับคุณ?
+                {tp("termsH2")}
               </h2>
               <p className="mt-2 text-[12.5px] md:text-[14px] text-muted font-medium">
-                DDP คือทางเลือกที่ลูกค้ามือใหม่ใช้บ่อยที่สุด — ลูกค้ารับของอย่างเดียว
+                {tp("termsDesc")}
               </p>
 
               <ul className="mt-4 space-y-2.5">
-                {TERMS_QUICK.map((term) => {
+                {TERMS_QUICK.map((term, i) => {
                   const Icon = term.icon;
                   return (
                     <li
@@ -722,7 +625,7 @@ export default async function ImportChinaPage({
                           </span>
                           {term.popular && (
                             <span className="inline-flex items-center px-1.5 h-[18px] rounded-md bg-primary-600 text-white text-[9.5px] font-black tracking-wide">
-                              ยอดนิยม
+                              {tp("termPopularBadge")}
                             </span>
                           )}
                           <span className="text-[10.5px] md:text-[11.5px] text-muted font-bold">
@@ -730,7 +633,7 @@ export default async function ImportChinaPage({
                           </span>
                         </div>
                         <div className="mt-0.5 text-[11.5px] md:text-[12.5px] text-muted font-medium leading-snug">
-                          {term.desc}
+                          {tp(`termDesc${i}` as Parameters<typeof tp>[0])}
                         </div>
                       </div>
                     </li>
@@ -749,13 +652,13 @@ export default async function ImportChinaPage({
           <div className="mx-auto w-full max-w-[920px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <HandCoins className="w-3.5 h-3.5" strokeWidth={2.6} />
-              FAQ · คำถามที่พบบ่อย
+              {tp("faqEyebrow")}
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              คำถามที่ <span className="text-primary-600">มือใหม่</span> ถามบ่อย
+              {tp("faqH2Pre")} <span className="text-primary-600">{tp("faqH2Accent")}</span> {tp("faqH2Post")}
             </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted">
-              ไม่เจอคำตอบ? ทักไลน์ Pacred — ทีมตอบไว 5 นาที
+              {tp("faqDesc")}
             </p>
 
             <div className="mt-6 md:mt-8">
@@ -763,7 +666,7 @@ export default async function ImportChinaPage({
                 groups={[
                   {
                     id: "import-china",
-                    label: "นำเข้าจากจีน · พื้นฐาน",
+                    label: tp("faqGroupLabel"),
                     items: FAQ_ITEMS,
                   },
                 ]}
@@ -795,23 +698,23 @@ export default async function ImportChinaPage({
 
               <div className="relative">
                 <p className="text-yellow-300 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase mb-2">
-                  พร้อมเริ่มนำเข้าจากจีน?
+                  {tp("ctaEyebrow")}
                 </p>
                 <h3 className="text-[24px] md:text-[40px] font-black leading-[1.1] tracking-tight drop-shadow-[0_3px_10px_rgba(0,0,0,0.45)]">
-                  เร็ว ไว ไม่มีคำว่าทำไม่ได้ — ทีม Pacred พร้อมดูแลคุณ
+                  {tp("ctaH3")}
                 </h3>
                 <p className="mt-2 md:mt-3 text-[14px] md:text-[16px] font-bold text-white/95 leading-snug drop-shadow-[0_1px_3px_rgba(0,0,0,0.4)]">
-                  สมัครฟรี ไม่มีเงื่อนไข — หรือทักไลน์ปรึกษาก่อนได้ ตอบไวใน 5 นาที
+                  {tp("ctaDesc")}
                 </p>
 
                 <div className="mt-5 md:mt-6 flex flex-col sm:flex-row gap-3 max-w-[640px]">
                   <Link
                     href="/register"
-                    aria-label="ใช้บริการนำเข้าจีน — สมัครฟรี"
+                    aria-label={tp("ctaRegisterAriaLabel")}
                     data-cta="register_footer"
                     className="inline-flex items-center justify-center gap-2 h-12 md:h-14 px-6 rounded-xl bg-white text-primary-700 font-black text-[14px] md:text-[16px] hover:bg-yellow-50 transition-colors shadow-[0_8px_22px_rgba(0,0,0,0.25)]"
                   >
-                    ใช้บริการ — สมัครฟรี
+                    {tp("ctaRegisterBtn")}
                     <ArrowRight className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.8} />
                   </Link>
                   <TrackedExternalLink
@@ -822,7 +725,7 @@ export default async function ImportChinaPage({
                     className="inline-flex items-center justify-center gap-2 h-12 md:h-14 px-6 rounded-xl bg-[#06C755] text-white font-black text-[14px] md:text-[16px] hover:bg-[#05B04C] transition-colors shadow-[0_6px_18px_rgba(0,0,0,0.25)]"
                   >
                     <MessageCircle className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.6} />
-                    ปรึกษาฟรี · ทักไลน์
+                    {tp("ctaLineBtn")}
                   </TrackedExternalLink>
                 </div>
               </div>

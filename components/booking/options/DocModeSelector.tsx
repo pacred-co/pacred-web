@@ -10,6 +10,7 @@
  * docs team + the customs desk; `none` does not — §6.3).
  */
 
+import { useTranslations } from "next-intl";
 import { FileCheck2 } from "lucide-react";
 import type { BookingDocMode } from "@/types/booking";
 
@@ -45,12 +46,13 @@ interface DocModeSelectorProps {
 }
 
 export function DocModeSelector({ value, onChange }: DocModeSelectorProps) {
+  const t = useTranslations("booking");
   return (
     <fieldset className="rounded-2xl border border-border bg-white dark:bg-surface p-4 md:p-5">
       <legend className="px-2 inline-flex items-center gap-2 text-[13px] md:text-[14px] font-black text-[#111827] dark:text-white">
         <FileCheck2 className="w-4 h-4 text-primary-600" strokeWidth={2.6} />
         {/* i18n-key: booking.selector.doc_mode.title */}
-        การจัดการเอกสาร
+        {t("selectors.docMode.label")}
       </legend>
       <p className="mt-1 text-[12px] md:text-[12.5px] leading-[1.55] text-muted font-medium">
         {/* i18n-key: booking.selector.doc_mode.help */}
@@ -89,7 +91,7 @@ export function DocModeSelector({ value, onChange }: DocModeSelectorProps) {
               </span>
               <span className="flex-1 min-w-0">
                 <span className="block text-[13px] md:text-[13.5px] font-bold text-foreground leading-snug">
-                  {opt.labelTh}
+                  {t(`selectors.docMode.options.${opt.value}`)}
                 </span>
                 <span className="mt-0.5 block text-[11.5px] md:text-[12px] text-muted font-medium leading-snug">
                   {opt.helpTh}

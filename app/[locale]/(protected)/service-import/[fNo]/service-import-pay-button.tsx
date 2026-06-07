@@ -14,6 +14,7 @@
  */
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { ForwarderPayModal } from "../forwarder-pay-modal";
 import type { ForwarderRow } from "../forwarder-row-view";
 
@@ -23,6 +24,7 @@ type Props = {
 };
 
 export function ServiceImportPayButton({ row, isJuristic }: Props) {
+  const t = useTranslations("serviceImportPayButton");
   const [open, setOpen] = useState(false);
 
   return (
@@ -35,7 +37,7 @@ export function ServiceImportPayButton({ row, isJuristic }: Props) {
         }}
       >
         <span className="inline-flex w-full md:w-auto items-center justify-center gap-1.5 rounded-full bg-red-600 px-6 py-2.5 text-sm font-bold text-white shadow-sm shadow-red-600/25 hover:bg-red-700 active:scale-[0.98] transition-all">
-          <i className="mdi mdi-check-circle-outline"></i> ชำระเงิน
+          <i className="mdi mdi-check-circle-outline"></i> {t("pay")}
         </span>
       </a>
       <ForwarderPayModal

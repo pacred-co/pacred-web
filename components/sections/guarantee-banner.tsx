@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { ArrowRight, MousePointerClick } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
 const LINE_URL = "/line";
@@ -11,7 +12,8 @@ const PARTNERS = [
   { name: "UPS",   logo: "/images/partners/upspartner.png",   url: "https://www.ups.com/th/en/Home.page" },
 ];
 
-export function GuaranteeBanner() {
+export async function GuaranteeBanner() {
+  const t = await getTranslations("guaranteeBanner");
   return (
     <section className="py-3 md:py-5">
       <div className="mx-auto w-full max-w-[1140px] px-[10px]">
@@ -41,10 +43,10 @@ export function GuaranteeBanner() {
               href={LINE_URL}
               cta="line_consult"
               surface="home_guarantee_banner"
-              aria-label="ทักไลน์ Pacred Shipping ปรึกษาเคลียร์ของฟรี"
+              aria-label={t("bannerAria")}
               className="absolute inset-0 z-10"
             >
-              <span className="sr-only">ทักไลน์ Pacred Shipping</span>
+              <span className="sr-only">{t("bannerSrOnly")}</span>
             </TrackedExternalLink>
 
             <div className="relative pointer-events-none grid grid-cols-[1fr_auto] items-center gap-3 md:gap-6 pl-4 md:pl-8 pr-2 md:pr-4 min-h-[150px] md:min-h-[180px]">
@@ -55,12 +57,12 @@ export function GuaranteeBanner() {
                 {/* Desktop headline */}
                 <p className="hidden md:flex flex-wrap lg:flex-nowrap items-center gap-x-3 gap-y-2 tracking-tight lg:whitespace-nowrap">
                   <span className="inline-flex items-baseline gap-x-2 text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.45)]">
-                    <span className="text-[48px] font-black leading-none whitespace-nowrap">ของติดด่าน?</span>
-                    <span className="text-[18px] font-bold">แค่</span>
+                    <span className="text-[48px] font-black leading-none whitespace-nowrap">{t("headline")}</span>
+                    <span className="text-[18px] font-bold">{t("only")}</span>
                   </span>
                   <span className="inline-flex items-baseline gap-x-2 text-yellow-300 [text-shadow:0_3px_8px_rgba(0,0,0,0.55)]">
                     <span className="text-[72px] font-black leading-none whitespace-nowrap">2,800</span>
-                    <span className="text-[18px] font-bold">บาท</span>
+                    <span className="text-[18px] font-bold">{t("baht")}</span>
                   </span>
                   <span className="inline-flex items-center gap-2 whitespace-nowrap text-white">
                     <span className="inline-block px-4 py-0.5 rounded-full bg-white text-primary-600 text-[26px] font-black tracking-tight shadow-[0_4px_12px_rgba(0,0,0,0.25)]">
@@ -73,12 +75,12 @@ export function GuaranteeBanner() {
                 {/* Mobile headline */}
                 <div className="md:hidden flex flex-col gap-1">
                   <p className="flex items-baseline gap-1.5 text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.45)]">
-                    <span className="text-[26px] font-black leading-none tracking-tight whitespace-nowrap">ของติดด่าน?</span>
-                    <span className="text-[14px] font-bold">แค่</span>
+                    <span className="text-[26px] font-black leading-none tracking-tight whitespace-nowrap">{t("headline")}</span>
+                    <span className="text-[14px] font-bold">{t("only")}</span>
                   </p>
                   <p className="flex items-baseline gap-1.5 text-yellow-300 [text-shadow:0_3px_8px_rgba(0,0,0,0.55)]">
                     <span className="text-[48px] font-black leading-none tracking-tight whitespace-nowrap">2,800</span>
-                    <span className="text-[14px] font-bold">บาท</span>
+                    <span className="text-[14px] font-bold">{t("baht")}</span>
                     <ArrowRight className="self-center shrink-0 ml-1 w-6 h-6 text-white transition-transform group-hover:translate-x-1" strokeWidth={2.8} />
                   </p>
                 </div>
@@ -110,7 +112,7 @@ export function GuaranteeBanner() {
               <div className="relative w-[150px] md:w-[180px] h-[150px] md:h-[180px] shrink-0 md:mr-6">
                 <Image
                   src="/images/visit/Visit04.png"
-                  alt="ทีมงาน Pacred Shipping"
+                  alt={t("photoAlt")}
                   fill
                   sizes="(max-width: 768px) 150px, 180px"
                   className="object-contain object-bottom drop-shadow-[0_4px_10px_rgba(0,0,0,0.30)]"
@@ -131,7 +133,7 @@ export function GuaranteeBanner() {
               {/* คลิ๊กเลย! badge */}
               <div className="pointer-events-none absolute top-1 md:top-2 right-1 md:right-3 z-20 flex flex-col items-center -rotate-[6deg] transition-transform duration-300 group-hover:-rotate-[10deg] group-hover:scale-105">
                 <span className="text-white text-[11px] md:text-[15px] font-black tracking-tight [text-shadow:0_1px_3px_rgba(0,0,0,0.55)] whitespace-nowrap">
-                  คลิ๊กเลย!
+                  {t("clickBadge")}
                 </span>
                 <MousePointerClick className="mt-0.5 w-4 h-4 md:w-5 md:h-5 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" strokeWidth={2.6} />
               </div>

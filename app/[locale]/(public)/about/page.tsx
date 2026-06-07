@@ -23,6 +23,7 @@ import { ImportExportBanner } from "@/components/sections/import-export-banner";
 import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbSchema } from "@/components/seo/schemas";
 import { buildPageMetadata } from "@/components/seo/page-meta";
+import { getTranslations } from "next-intl/server";
 
 const PATH = "/about";
 
@@ -35,12 +36,8 @@ export async function generateMetadata({
   return buildPageMetadata({ locale, path: PATH, namespace: "seo.about" });
 }
 
-const STATS = [
-  { icon: Award, value: "14+", suffix: "ปี", label: "ประสบการณ์" },
-  { icon: Boxes, value: "50,000+", suffix: "ตู้", label: "ตู้ที่ดูแล" },
-  { icon: Clock, value: "1", suffix: "ชม.", label: "รู้ผลประเมิน" },
-  { icon: ShieldCheck, value: "100%", suffix: "", label: "ถูกต้องตามกฎหมาย" },
-];
+const STAT_ICONS = [Award, Boxes, Clock, ShieldCheck];
+const STAT_VALUES = ["14+", "50,000+", "1", "100%"];
 
 export default async function AboutPage({
   params,
@@ -49,6 +46,15 @@ export default async function AboutPage({
 }) {
   const { locale } = await params;
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
+  const t = await getTranslations("aboutPage");
+
+  const STATS = [
+    { icon: STAT_ICONS[0], value: STAT_VALUES[0], suffix: t("statSuffixYears"), label: t("statLabelExperience") },
+    { icon: STAT_ICONS[1], value: STAT_VALUES[1], suffix: t("statSuffixContainers"), label: t("statLabelContainers") },
+    { icon: STAT_ICONS[2], value: STAT_VALUES[2], suffix: t("statSuffixHours"), label: t("statLabelAssessment") },
+    { icon: STAT_ICONS[3], value: STAT_VALUES[3], suffix: "", label: t("statLabelLegal") },
+  ];
+
   return (
     <>
       <JsonLd
@@ -71,10 +77,10 @@ export default async function AboutPage({
             {/* Breadcrumb */}
             <nav className="flex items-center gap-1 text-[11.5px] md:text-[12.5px] text-muted mb-4 md:mb-5 flex-wrap">
               <Link href="/" className="hover:text-primary-600 transition-colors font-bold">
-                หน้าหลัก
+                {t("breadcrumbHome")}
               </Link>
               <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-              <span className="font-bold text-[#111827] dark:text-white">เกี่ยวกับ Pacred</span>
+              <span className="font-bold text-[#111827] dark:text-white">{t("breadcrumbAbout")}</span>
             </nav>
 
             <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-5 md:gap-8 items-stretch">
@@ -86,13 +92,11 @@ export default async function AboutPage({
                   ABOUT US
                 </div>
                 <h1 className="text-[26px] md:text-[44px] leading-[1.15] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
-                  เกี่ยวกับ
+                  {t("heroHeading")}
                   <span className="text-primary-600"> Pacred Shipping</span>
                 </h1>
                 <p className="mt-2 md:mt-3 text-[13.5px] md:text-[16px] leading-[1.65] font-medium text-muted">
-                  ผู้เชี่ยวชาญด้านนำเข้า–ส่งออก เคลียร์พิธีการศุลกากรครบวงจร
-                  มากกว่า 14 ปี — ดูแลตั้งแต่ต้นน้ำถึงปลายน้ำ
-                  จบในที่เดียว ด้วยทีมงานมืออาชีพและล่ามจีนช่วยปิดดีลโรงงาน
+                  {t("heroDescription")}
                 </p>
 
                 {/* Stats grid */}
@@ -125,7 +129,7 @@ export default async function AboutPage({
               <div className="relative aspect-[4/3] lg:aspect-auto lg:min-h-[420px] overflow-hidden rounded-2xl md:rounded-3xl border border-border shadow-[0_14px_34px_rgba(15,23,42,0.10)]">
                 <Image
                   src="/images/companyofficethai.png"
-                  alt="ออฟฟิศ Pacred Shipping"
+                  alt={t("officeImageAlt")}
                   fill
                   sizes="(max-width: 1024px) 100vw, 620px"
                   quality={95}
@@ -163,11 +167,11 @@ export default async function AboutPage({
               OFFICE · HEADQUARTERS
             </div>
             <h2 className="text-[22px] md:text-[36px] leading-[1.18] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
-              สำนักงานใหญ่
+              {t("officeHeading")}
               <span className="text-primary-600"> Pacred Shipping</span>
             </h2>
             <p className="mt-1.5 text-[13px] md:text-[15px] leading-[1.65] font-medium text-muted max-w-[760px]">
-              แวะมาคุยกับทีมงานได้ที่ออฟฟิศ — เปิดทำการจันทร์–เสาร์ เวลา 8:30–17:30 น.
+              {t("officeDescription")}
             </p>
 
             <div className="mt-5 md:mt-8 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] gap-4 md:gap-6 items-stretch">
@@ -186,13 +190,14 @@ export default async function AboutPage({
                         HEADQUARTERS
                       </div>
                       <h3 className="text-[16px] md:text-[19px] font-black text-[#111827] dark:text-white leading-snug mt-0.5">
-                        ออฟฟิศ Pacred · เพชรเกษม 81
+                        {t("officeCardHeading")}
                       </h3>
                       <div className="mt-2 flex items-start gap-2 text-[12.5px] md:text-[13.5px] leading-[1.7] text-muted">
                         <MapPin className="w-3.5 h-3.5 md:w-4 md:h-4 text-primary-600 mt-0.5 shrink-0" strokeWidth={2.5} />
                         <p>
-                          28/40 หมู่บ้าน สิริ เอเวนิว เพชรเกษม 81 ถนนมาเจริญ<br />
-                          แขวงหนองแขม เขตหนองแขม กรุงเทพมหานคร 10160
+                          {t.rich("officeAddress", {
+                            br: () => <br />,
+                          })}
                         </p>
                       </div>
                       <div className="mt-3 md:mt-4 flex flex-wrap items-center gap-2">
@@ -203,7 +208,7 @@ export default async function AboutPage({
                           className="inline-flex items-center gap-1.5 h-8 md:h-9 px-3 md:px-3.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[11.5px] md:text-[12px] font-black hover:shadow-[0_8px_18px_rgba(179,0,0,0.30)] transition-shadow"
                         >
                           <Navigation className="w-3.5 h-3.5" strokeWidth={2.6} />
-                          เปิดใน Google Maps
+                          {t("openInGoogleMaps")}
                         </a>
                         <a
                           href="tel:0661310253"
@@ -219,8 +224,8 @@ export default async function AboutPage({
                   {/* Hours strip */}
                   <div className="mt-4 pt-3 border-t border-dashed border-border flex items-center gap-2 text-[11.5px] md:text-[12.5px]">
                     <Clock className="w-3.5 h-3.5 text-primary-600 shrink-0" strokeWidth={2.6} />
-                    <span className="font-bold text-[#111827] dark:text-white">เวลาทำการ:</span>
-                    <span className="text-muted">จันทร์–เสาร์ · 08:30–17:30 น.</span>
+                    <span className="font-bold text-[#111827] dark:text-white">{t("businessHoursLabel")}</span>
+                    <span className="text-muted">{t("businessHoursValue")}</span>
                   </div>
                 </div>
 
@@ -233,7 +238,7 @@ export default async function AboutPage({
                     >
                       <Image
                         src={`/images/officethai/${n}.png`}
-                        alt={`บรรยากาศออฟฟิศ Pacred ${n}`}
+                        alt={t("officePhotoAlt", { n })}
                         fill
                         sizes="(max-width: 1024px) 50vw, 300px"
                         className="object-cover transition-transform duration-500 group-hover:scale-[1.06]"
@@ -252,7 +257,7 @@ export default async function AboutPage({
                   src="https://www.google.com/maps?q=Siri+Avenue+Petchkasem+81+Nong+Khaem+Bangkok+10160&hl=th&z=16&output=embed"
                   loading="lazy"
                   referrerPolicy="no-referrer-when-downgrade"
-                  title="แผนที่ออฟฟิศ Pacred"
+                  title={t("mapIframeTitle")}
                   className="absolute inset-0 w-full h-full border-0"
                 />
                 {/* Floating pin badge */}
@@ -273,14 +278,14 @@ export default async function AboutPage({
 
             <div className="flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.08em] uppercase">
               <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
-              OUR WAREHOUSES · จีน → ไทย
+              {t("warehousesBadge")}
             </div>
             <h2 className="text-[22px] md:text-[36px] leading-[1.18] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
-              เครือข่ายโกดัง
-              <span className="text-primary-600"> ของเรา</span>
+              {t("warehousesHeading")}
+              <span className="text-primary-600"> {t("warehousesHeadingAccent")}</span>
             </h2>
             <p className="mt-1.5 text-[13px] md:text-[15px] leading-[1.65] font-medium text-muted max-w-[760px]">
-              รับสินค้าจากต้นทาง 2 มณฑลในจีน — กระจายปลายทางครอบคลุมทั่วประเทศไทย
+              {t("warehousesDescription")}
             </p>
 
             <div className="mt-5 md:mt-8 grid grid-cols-1 md:grid-cols-3 gap-3.5 md:gap-5">
@@ -293,7 +298,7 @@ export default async function AboutPage({
                 <div className="relative aspect-[16/10] overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-surface-alt dark:to-background">
                   <Image
                     src="/images/warehousethai118/1.png"
-                    alt="โกดังไทย Pacred — สมุทรสาคร"
+                    alt={t("thaiWarehouseImageAlt")}
                     fill
                     sizes="(max-width: 768px) 100vw, 380px"
                     className="object-cover transition-transform duration-500 group-hover:scale-[1.05]"
@@ -309,17 +314,17 @@ export default async function AboutPage({
                 <div className="p-4 md:p-5">
                   <div className="flex items-center gap-1.5 text-[10.5px] md:text-[11px] font-bold text-muted mb-1 uppercase tracking-wider">
                     <MapPin className="w-3 h-3 text-primary-600" strokeWidth={2.6} />
-                    สมุทรสาคร · กระทุ่มแบน
+                    {t("thaiWarehouseLocation")}
                   </div>
                   <h3 className="text-[17px] md:text-[20px] font-black tracking-[-0.02em] text-[#111827] dark:text-white group-hover:text-primary-700 dark:group-hover:text-primary-300 transition-colors">
-                    โกดังไทย · อ้อมน้อย
+                    {t("thaiWarehouseName")}
                   </h3>
                   <p className="mt-1 text-[12px] md:text-[13px] leading-[1.55] text-muted">
-                    ฮับใหญ่ปลายทาง รับสินค้าจากจีน → กระจายต่อทั่วประเทศ
+                    {t("thaiWarehouseDesc")}
                   </p>
                   <div className="mt-3 pt-2.5 border-t border-dashed border-border flex items-center justify-between">
                     <span className="text-[11.5px] md:text-[12px] font-black text-primary-600 inline-flex items-center gap-1">
-                      ดูที่อยู่ + ภาพโกดัง
+                      {t("thaiWarehouseLink")}
                       <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-1" strokeWidth={3} />
                     </span>
                   </div>
@@ -334,7 +339,7 @@ export default async function AboutPage({
                 <div className="relative aspect-[16/10] overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-surface-alt dark:to-background">
                   <Image
                     src="/images/gwanzhou.png"
-                    alt="โกดังกวางโจว Pacred"
+                    alt={t("guangzhouImageAlt")}
                     fill
                     sizes="(max-width: 768px) 100vw, 380px"
                     className="object-cover transition-transform duration-500 group-hover:scale-[1.05]"
@@ -347,17 +352,17 @@ export default async function AboutPage({
                 <div className="p-4 md:p-5">
                   <div className="flex items-center gap-1.5 text-[10.5px] md:text-[11px] font-bold text-muted mb-1 uppercase tracking-wider">
                     <MapPin className="w-3 h-3 text-primary-600" strokeWidth={2.6} />
-                    มณฑลกวางตุ้ง
+                    {t("guangzhouLocation")}
                   </div>
                   <h3 className="text-[17px] md:text-[20px] font-black tracking-[-0.02em] text-[#111827] dark:text-white group-hover:text-primary-700 dark:group-hover:text-primary-300 transition-colors">
-                    โกดังกวางโจว
+                    {t("guangzhouName")}
                   </h3>
                   <p className="mt-1 text-[12px] md:text-[13px] leading-[1.55] text-muted">
-                    แหล่งแฟชั่นใหญ่ใต้สุดของจีน — เสื้อผ้า รองเท้า กระเป๋า เครื่องสำอาง
+                    {t("guangzhouDesc")}
                   </p>
                   <div className="mt-3 pt-2.5 border-t border-dashed border-border flex items-center justify-between">
                     <span className="text-[11.5px] md:text-[12px] font-black text-primary-600 inline-flex items-center gap-1">
-                      ดูที่อยู่ + Shipping Mark
+                      {t("warehouseShippingMarkLink")}
                       <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-1" strokeWidth={3} />
                     </span>
                   </div>
@@ -372,7 +377,7 @@ export default async function AboutPage({
                 <div className="relative aspect-[16/10] overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-surface-alt dark:to-background">
                   <Image
                     src="/images/pacredyiwu.png"
-                    alt="โกดังอี้อู Pacred"
+                    alt={t("yiwuImageAlt")}
                     fill
                     sizes="(max-width: 768px) 100vw, 380px"
                     className="object-cover transition-transform duration-500 group-hover:scale-[1.05]"
@@ -385,17 +390,17 @@ export default async function AboutPage({
                 <div className="p-4 md:p-5">
                   <div className="flex items-center gap-1.5 text-[10.5px] md:text-[11px] font-bold text-muted mb-1 uppercase tracking-wider">
                     <MapPin className="w-3 h-3 text-primary-600" strokeWidth={2.6} />
-                    มณฑลเจ้อเจียง
+                    {t("yiwuLocation")}
                   </div>
                   <h3 className="text-[17px] md:text-[20px] font-black tracking-[-0.02em] text-[#111827] dark:text-white group-hover:text-primary-700 dark:group-hover:text-primary-300 transition-colors">
-                    โกดังอี้อู
+                    {t("yiwuName")}
                   </h3>
                   <p className="mt-1 text-[12px] md:text-[13px] leading-[1.55] text-muted">
-                    ตลาดส่งจิปาถะใหญ่สุดในจีน — ของชำร่วย ของขวัญ ของเล่น
+                    {t("yiwuDesc")}
                   </p>
                   <div className="mt-3 pt-2.5 border-t border-dashed border-border flex items-center justify-between">
                     <span className="text-[11.5px] md:text-[12px] font-black text-primary-600 inline-flex items-center gap-1">
-                      ดูที่อยู่ + Shipping Mark
+                      {t("warehouseShippingMarkLink")}
                       <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-1" strokeWidth={3} />
                     </span>
                   </div>
@@ -410,7 +415,7 @@ export default async function AboutPage({
                 className="inline-flex items-center gap-1.5 h-10 px-5 rounded-full bg-white dark:bg-surface text-[#111827] dark:text-white border border-border text-[12.5px] md:text-[13px] font-black hover:border-primary-400 hover:text-primary-700 hover:-translate-y-0.5 transition-all"
               >
                 <Warehouse className="w-4 h-4" strokeWidth={2.5} />
-                ดูเครือข่ายโกดังทั้งหมด
+                {t("viewAllWarehouses")}
                 <ArrowRight className="w-3.5 h-3.5" strokeWidth={3} />
               </Link>
             </div>

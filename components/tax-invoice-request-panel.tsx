@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,6 +51,7 @@ type Props = {
 };
 
 export function TaxInvoiceRequestPanel({ orderType, orderId, defaults, existing, eligible, deferred }: Props) {
+  const t = useTranslations("taxInvoiceRequest");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -76,13 +78,14 @@ export function TaxInvoiceRequestPanel({ orderType, orderId, defaults, existing,
       });
       if (res.ok && res.data) {
         if (res.data.already_exists) {
-          setMsg("ออเดอร์นี้มีคำขอใบกำกับภาษีอยู่แล้ว — รีโหลดเพื่อดูสถานะ");
+          setMsg(t("msgAlreadyExists"));
         } else {
-          setMsg("ส่งคำขอใบกำกับภาษีเรียบร้อย — รออนุมัติจากทีมงาน");
+          setMsg(t("msgRequestSent"));
         }
         router.refresh();
       } else if (!res.ok) {
-        setErr(translateError(res.error));
+        const key = errorKey(res.error);
+        setErr(key ? t(key) : res.error);
       }
     });
   }
@@ -92,10 +95,11 @@ export function TaxInvoiceRequestPanel({ orderType, orderId, defaults, existing,
   if (deferred) {
     return (
       <section className="no-print rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">
-        <h3 className="font-bold mb-1">ขอใบกำกับภาษี</h3>
+        <h3 className="font-bold mb-1">{t("heading")}</h3>
         <p className="text-xs text-amber-800">
-          ใบกำกับภาษีสำหรับ{orderType === "yuan_payment" ? "ฝากโอน" : "ฝากสั่งซื้อ"} กำลังพัฒนา —
-          กรุณาแจ้งทีมงาน (LINE @pacred) เพื่อขอใบกำกับภาษีสำหรับรายการนี้
+          {t("deferredBody", {
+            service: orderType === "yuan_payment" ? t("serviceYuan") : t("serviceShop"),
+          })}
         </p>
       </section>
     );
@@ -110,13 +114,15 @@ export function TaxInvoiceRequestPanel({ orderType, orderId, defaults, existing,
   if (!eligible) {
     return (
       <section className="no-print rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">
-        <h3 className="font-bold mb-1">ขอใบกำกับภาษี</h3>
+        <h3 className="font-bold mb-1">{t("heading")}</h3>
         <p className="text-xs text-amber-800">
-          ต้องเป็นนิติบุคคล หรือมีเลขประจำตัวผู้เสียภาษี 13 หลัก ในโปรไฟล์
-          ก่อนจึงจะขอใบกำกับภาษีได้ — กรุณาอัพเดทข้อมูลที่{" "}
-          <Link href="/profile" className="underline text-amber-900">
-            หน้าโปรไฟล์
-          </Link>
+          {t.rich("notEligibleBody", {
+            profileLink: (chunks) => (
+              <Link href="/profile" className="underline text-amber-900">
+                {chunks}
+              </Link>
+            ),
+          })}
         </p>
       </section>
     );
@@ -128,13 +134,13 @@ export function TaxInvoiceRequestPanel({ orderType, orderId, defaults, existing,
       <section className="no-print rounded-lg border border-primary-200 bg-primary-50/50 dark:bg-primary-950/20 p-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <h3 className="font-bold text-sm">ต้องการใบกำกับภาษี?</h3>
+            <h3 className="font-bold text-sm">{t("ctaHeading")}</h3>
             <p className="text-xs text-muted">
-              สำหรับนิติบุคคลและบุคคลที่มีเลขประจำตัวผู้เสียภาษี 13 หลัก
+              {t("ctaSubtitle")}
             </p>
           </div>
           <Button size="sm" onClick={() => setOpen(true)}>
-            📄 ขอใบกำกับภาษี
+            📄 {t("ctaButton")}
           </Button>
         </div>
       </section>
@@ -145,14 +151,14 @@ export function TaxInvoiceRequestPanel({ orderType, orderId, defaults, existing,
   return (
     <section className="no-print rounded-lg border border-primary-200 bg-primary-50/50 dark:bg-primary-950/20 p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="font-bold text-sm">ขอใบกำกับภาษี</h3>
+        <h3 className="font-bold text-sm">{t("heading")}</h3>
         <button
           type="button"
           onClick={() => { setOpen(false); setMsg(null); setErr(null); }}
           className="text-xs text-muted hover:underline"
           disabled={pending}
         >
-          ปิด
+          {t("close")}
         </button>
       </div>
 
@@ -165,17 +171,16 @@ export function TaxInvoiceRequestPanel({ orderType, orderId, defaults, existing,
 
       <form onSubmit={onSubmit} className="space-y-3">
         <p className="text-xs text-muted">
-          ตรวจสอบข้อมูลผู้ซื้อให้ตรงกับเอกสารจดทะเบียนกรมพัฒฯ ก่อนส่งคำขอ —
-          ข้อมูลจะถูกล็อคไว้ในใบกำกับภาษี (เปลี่ยนภายหลังไม่ได้ ตามกฎกรมสรรพากร มาตรา 86)
+          {t("formInfo")}
         </p>
 
         <label className="block space-y-1">
-          <span className="text-xs font-medium">ชื่อผู้ซื้อ / ชื่อบริษัท <span className="text-red-500">*</span></span>
+          <span className="text-xs font-medium">{t("labelBuyerName")} <span className="text-red-500">*</span></span>
           <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} required disabled={pending} />
         </label>
 
         <label className="block space-y-1">
-          <span className="text-xs font-medium">ที่อยู่ <span className="text-red-500">*</span></span>
+          <span className="text-xs font-medium">{t("labelAddress")} <span className="text-red-500">*</span></span>
           <textarea
             rows={3}
             value={address}
@@ -188,7 +193,7 @@ export function TaxInvoiceRequestPanel({ orderType, orderId, defaults, existing,
 
         <div className="grid sm:grid-cols-2 gap-3">
           <label className="block space-y-1">
-            <span className="text-xs font-medium">เลขประจำตัวผู้เสียภาษี (13 หลัก) <span className="text-red-500">*</span></span>
+            <span className="text-xs font-medium">{t("labelTaxId")} <span className="text-red-500">*</span></span>
             <input
               value={taxId}
               onChange={(e) => setTaxId(e.target.value.replace(/\D/g, "").slice(0, 13))}
@@ -201,19 +206,19 @@ export function TaxInvoiceRequestPanel({ orderType, orderId, defaults, existing,
             />
           </label>
           <label className="block space-y-1">
-            <span className="text-xs font-medium">สาขา</span>
+            <span className="text-xs font-medium">{t("labelBranch")}</span>
             <input
               value={branch}
               onChange={(e) => setBranch(e.target.value)}
               className={inputCls}
-              placeholder="สำนักงานใหญ่"
+              placeholder={t("branchPlaceholder")}
               disabled={pending}
             />
           </label>
         </div>
 
         <Button type="submit" disabled={pending}>
-          {pending ? "กำลังส่ง..." : "📤 ส่งคำขอ"}
+          {pending ? t("submitting") : `📤 ${t("submit")}`}
         </Button>
       </form>
     </section>
@@ -221,26 +226,27 @@ export function TaxInvoiceRequestPanel({ orderType, orderId, defaults, existing,
 }
 
 function ExistingInvoiceCard({ existing }: { existing: CustomerTaxInvoiceSummary }) {
+  const t = useTranslations("taxInvoiceRequest");
   const isIssued    = existing.status === "issued";
   const isPending   = existing.status === "pending";
   const isCancelled = existing.status === "cancelled";
 
   return (
     <section className="no-print rounded-lg border border-border bg-surface-alt p-4 space-y-2">
-      <h3 className="font-bold text-sm">ใบกำกับภาษีของออเดอร์นี้</h3>
+      <h3 className="font-bold text-sm">{t("existingHeading")}</h3>
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="text-xs space-y-0.5">
           {existing.serial_no && (
             <p className="font-mono">{existing.serial_no}</p>
           )}
           <p>
-            ผู้ซื้อ: <span className="font-medium">{existing.buyer_name}</span>
-            <span className="ml-2 text-muted">เลข {existing.buyer_tax_id}</span>
+            {t("buyerLabel")} <span className="font-medium">{existing.buyer_name}</span>
+            <span className="ml-2 text-muted">{t("taxIdLabel")} {existing.buyer_tax_id}</span>
           </p>
           <p className="text-muted">
-            ส่งคำขอเมื่อ: {new Date(existing.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+            {t("requestedAtLabel")} {new Date(existing.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
             {existing.issued_at && (
-              <span className="ml-2">· ออกแล้วเมื่อ {new Date(existing.issued_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}</span>
+              <span className="ml-2">· {t("issuedAtLabel")} {new Date(existing.issued_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}</span>
             )}
           </p>
         </div>
@@ -254,7 +260,7 @@ function ExistingInvoiceCard({ existing }: { existing: CustomerTaxInvoiceSummary
                   : "bg-gray-50 text-gray-600 border-gray-200"
             }`}
           >
-            {isIssued ? "ออกแล้ว" : isPending ? "รออนุมัติ" : "ยกเลิก"}
+            {isIssued ? t("statusIssued") : isPending ? t("statusPending") : t("statusCancelled")}
           </span>
           {isIssued && (
             <a
@@ -263,31 +269,31 @@ function ExistingInvoiceCard({ existing }: { existing: CustomerTaxInvoiceSummary
               rel="noopener noreferrer"
               className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-700"
             >
-              ดาวน์โหลด PDF
+              {t("downloadPdf")}
             </a>
           )}
         </div>
       </div>
       {isCancelled && (
         <p className="text-xs text-muted">
-          ใบกำกับภาษีนี้ถูกยกเลิก — ติดต่อทีมงานเพื่อขอใบใหม่หากต้องการ
+          {t("cancelledNote")}
         </p>
       )}
     </section>
   );
 }
 
-function translateError(code: string): string {
+function errorKey(code: string): string | null {
   switch (code) {
-    case "not_signed_in":      return "กรุณาเข้าสู่ระบบใหม่";
-    case "order_not_found":    return "ไม่พบออเดอร์";
-    case "not_your_order":     return "ออเดอร์นี้ไม่ใช่ของคุณ";
-    case "order_cancelled":    return "ออเดอร์ยกเลิกแล้ว — ขอใบกำกับภาษีไม่ได้";
-    case "order_not_paid_yet": return "ออเดอร์ยังไม่ได้ชำระ — ขอใบกำกับภาษีหลังชำระเงิน";
-    case "order_has_no_total": return "ออเดอร์ไม่มียอดเงิน — ขอใบกำกับภาษีไม่ได้";
+    case "not_signed_in":      return "errNotSignedIn";
+    case "order_not_found":    return "errOrderNotFound";
+    case "not_your_order":     return "errNotYourOrder";
+    case "order_cancelled":    return "errOrderCancelled";
+    case "order_not_paid_yet": return "errOrderNotPaidYet";
+    case "order_has_no_total": return "errOrderHasNoTotal";
     // ADR-0027 — shop/yuan tax-invoice deferred (no World-B cross-type store yet).
-    case "not_yet_supported":  return "ใบกำกับภาษีสำหรับบริการนี้กำลังพัฒนา — กรุณาแจ้งทีมงาน (LINE @pacred)";
-    case "no_member_code":     return "บัญชียังไม่มีรหัสลูกค้า — กรุณาติดต่อทีมงาน";
-    default:                   return code;
+    case "not_yet_supported":  return "errNotYetSupported";
+    case "no_member_code":     return "errNoMemberCode";
+    default:                   return null;
   }
 }

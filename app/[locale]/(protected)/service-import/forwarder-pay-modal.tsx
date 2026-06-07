@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Upload } from "lucide-react";
 import {
   getForwarderPaymentQr,
@@ -81,13 +82,14 @@ export type ForwarderPayModalProps = {
 
 // Single price-row line — used inside the per-row breakdown.
 function PriceLine({ label, value, danger = false }: { label: string; value: string; danger?: boolean }) {
+  const t = useTranslations("forwarderPayModal");
   return (
     <div className="grid grid-cols-[1fr_auto] items-baseline gap-3 py-1">
       <div className={`text-sm font-semibold text-right ${danger ? "text-red-600" : "text-muted"}`}>
         {label}
       </div>
       <div className={`text-sm font-semibold text-right tabular-nums ${danger ? "text-red-600" : "text-foreground"}`}>
-        {value} <span className="text-xs text-muted">บาท</span>
+        {value} <span className="text-xs text-muted">{t("baht")}</span>
       </div>
     </div>
   );
@@ -100,6 +102,7 @@ export function ForwarderPayModal({
   onClose,
 }: ForwarderPayModalProps) {
   const router = useRouter();
+  const t = useTranslations("forwarderPayModal");
 
   // ── bill arithmetic — getListPayForwarder.php L96-247 ──
   const bill = useMemo(() => {
@@ -140,8 +143,8 @@ export function ForwarderPayModal({
         const code = res.ok ? null : res.error;
         setQrError(
           code === "promptpay_not_configured"
-            ? "ยังไม่ได้ตั้งค่าพร้อมเพย์ของบริษัท กรุณาติดต่อแอดมินเพื่อชำระเงิน"
-            : "ไม่สามารถสร้าง QR ได้ กรุณาติดต่อแอดมิน",
+            ? t("qrErrorNotConfigured")
+            : t("qrErrorGeneric"),
         );
       }
     });
@@ -172,18 +175,18 @@ export function ForwarderPayModal({
       setSlipPath(res.data.path);
     } else {
       setSlipPath(null);
-      setError(res.ok ? "อัปโหลดสลิปไม่สำเร็จ" : res.error);
+      setError(res.ok ? t("slipUploadFailed") : res.error);
     }
   }
 
   async function onConfirm() {
     if (rows.length === 0) return;
     if (!slipPath) {
-      setError("กรุณาแนบหลักฐานการโอน (สลิปรายการ)");
+      setError(t("errorSlipRequired"));
       return;
     }
     const ok = await confirm(
-      "กรุณาตรวจสอบยอดเงินและสลิปก่อนยืนยันการชำระเงิน",
+      t("confirmBeforePay"),
     );
     if (!ok) return;
     startTransition(async () => {
@@ -240,12 +243,12 @@ export function ForwarderPayModal({
           {/* Header */}
           <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border bg-surface-alt/40">
             <h4 id="list-payment2-title" className="text-base md:text-lg font-bold text-foreground">
-              ชำระเงินออเดอร์ฝากนำเข้าสินค้า
+              {t("title")}
             </h4>
             <button
               type="button"
               onClick={onClose}
-              aria-label="ปิด"
+              aria-label={t("close")}
               className="shrink-0 inline-flex w-8 h-8 items-center justify-center rounded-full text-muted hover:bg-surface-alt hover:text-foreground transition-colors text-xl leading-none"
             >
               ×
@@ -261,11 +264,10 @@ export function ForwarderPayModal({
                   ✓
                 </div>
                 <h4 className="text-lg font-bold text-emerald-700">
-                  ส่งหลักฐานการชำระเงินเรียบร้อยแล้ว
+                  {t("successTitle")}
                 </h4>
                 <p className="text-sm text-muted">
-                  ระบบได้บันทึกรายการชำระเงิน {rows.length} รายการ
-                  รอเจ้าหน้าที่ตรวจสอบสลิปและยืนยัน
+                  {t("successDesc", { count: rows.length })}
                 </p>
                 <div className="pt-2">
                   <button
@@ -273,14 +275,14 @@ export function ForwarderPayModal({
                     onClick={onClose}
                     className="inline-flex items-center justify-center rounded-full bg-red-600 text-white px-5 py-2 text-sm font-bold hover:bg-red-700 active:scale-[0.98] transition-all"
                   >
-                    ปิด
+                    {t("close")}
                   </button>
                 </div>
               </div>
             ) : rows.length === 0 ? (
               <div className="py-8 text-center">
                 <h4 className="text-lg font-bold text-red-600">
-                  ไม่พบรายการที่ต้องชำระเงินกรุณาตรวจสอบ
+                  {t("emptyTitle")}
                 </h4>
               </div>
             ) : (
@@ -292,11 +294,11 @@ export function ForwarderPayModal({
                 <div className="rounded-xl bg-gradient-to-br from-red-600 to-red-700 text-white px-4 py-3 shadow-md shadow-red-600/25">
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="text-xs md:text-sm font-bold">
-                      ยอดเงินที่ต้องชำระจริง
+                      {t("payAmountLabel")}
                     </span>
                     <span className="text-2xl md:text-3xl font-black tabular-nums totalPriceAll">
                       {numberFormat2(bill.payAmount)}{" "}
-                      <span className="text-sm font-normal opacity-90">บาท</span>
+                      <span className="text-sm font-normal opacity-90">{t("baht")}</span>
                     </span>
                   </div>
                 </div>
@@ -319,19 +321,19 @@ export function ForwarderPayModal({
                       />
                     ) : (
                       <div className="flex h-full items-center justify-center text-sm text-muted px-4 text-center">
-                        {qrError ?? "กำลังสร้าง QR..."}
+                        {qrError ?? t("qrGenerating")}
                       </div>
                     )}
                   </div>
                   <div className="mt-2 text-base font-bold text-red-600">
-                    ยอดเงิน:{" "}
+                    {t("amountLabel")}{" "}
                     <span id="amount-show" className="tabular-nums">
-                      {numberFormat2(bill.payAmount)} บาท
+                      {numberFormat2(bill.payAmount)} {t("baht")}
                     </span>
                   </div>
                   {promptPayId && (
                     <div className="mt-2 flex items-center justify-center gap-2 flex-wrap">
-                      <span className="text-sm text-muted">พร้อมเพย์</span>
+                      <span className="text-sm text-muted">{t("promptPay")}</span>
                       <span id="text-pp" className="font-mono text-lg font-bold text-foreground tabular-nums">
                         {formatPromptPayId(promptPayId)}
                       </span>
@@ -340,7 +342,7 @@ export function ForwarderPayModal({
                         onClick={() => copyText(promptPayId)}
                         className="inline-flex items-center rounded-full bg-surface-alt hover:bg-border text-foreground text-xs font-bold px-2.5 py-1 transition-colors"
                       >
-                        📋 คัดลอก
+                        📋 {t("copy")}
                       </button>
                     </div>
                   )}
@@ -349,7 +351,7 @@ export function ForwarderPayModal({
                 {/* Header — "มี N รายการ" */}
                 <div className="flex items-center justify-between">
                   <h5 className="text-sm md:text-base font-bold text-red-600">
-                    มี {rows.length} รายการที่ต้องชำระเงิน
+                    {t("itemsToPay", { count: rows.length })}
                   </h5>
                 </div>
 
@@ -379,11 +381,11 @@ export function ForwarderPayModal({
                       >
                         {row.fcredit === "1" && (
                           <div className="text-center text-[11px] font-bold text-red-700 mb-1">
-                            ชำระรายการเครดิต
+                            {t("creditItem")}
                           </div>
                         )}
                         <div className="text-center text-sm font-semibold mb-2">
-                          เลขออเดอร์:{" "}
+                          {t("orderNo")}{" "}
                           <span className="text-red-600">#{row.id}</span>{" "}
                           <span className="text-muted">·</span>{" "}
                           <span className="text-muted text-xs">Track:</span>{" "}
@@ -393,36 +395,36 @@ export function ForwarderPayModal({
                         </div>
                         <hr className="border-t border-dashed border-border mb-1" />
                         <div className="space-y-0">
-                          <PriceLine label="ราคานำเข้าจีน-ไทย" value={numberFormat2(row.ftotalprice)} />
+                          <PriceLine label={t("lineImportPrice")} value={numberFormat2(row.ftotalprice)} />
                           {row.pricecrate > 0 && (
-                            <PriceLine label="ค่าตีลัง" value={numberFormat2(row.pricecrate)} />
+                            <PriceLine label={t("lineCrate")} value={numberFormat2(row.pricecrate)} />
                           )}
                           {row.ftransportpricechnthb > 0 && (
-                            <PriceLine label="ค่าขนส่งในจีน" value={numberFormat2(row.ftransportpricechnthb)} />
+                            <PriceLine label={t("lineTransportChina")} value={numberFormat2(row.ftransportpricechnthb)} />
                           )}
                           {row.fpriceupdate > 0 && (
-                            <PriceLine label="เพิ่ม/ลด" value={numberFormat2(row.fpriceupdate)} />
+                            <PriceLine label={t("lineAdjust")} value={numberFormat2(row.fpriceupdate)} />
                           )}
                           {row.fshippingservice > 0 && (
-                            <PriceLine label="ค่าบริการขนส่ง" value={numberFormat2(row.fshippingservice)} />
+                            <PriceLine label={t("lineShippingService")} value={numberFormat2(row.fshippingservice)} />
                           )}
                           {row.ftransportprice > 0 && (
-                            <PriceLine label="ค่าจัดส่งในไทย" value={numberFormat2(row.ftransportprice)} />
+                            <PriceLine label={t("lineTransportThailand")} value={numberFormat2(row.ftransportprice)} />
                           )}
                           {row.priceother > 0 && (
-                            <PriceLine label="ค่าอื่นๆ" value={numberFormat2(row.priceother)} />
+                            <PriceLine label={t("lineOther")} value={numberFormat2(row.priceother)} />
                           )}
                           {row.fdiscount > 0 && (
-                            <PriceLine label="ส่วนลด" value={numberFormat2(row.fdiscount)} />
+                            <PriceLine label={t("lineDiscount")} value={numberFormat2(row.fdiscount)} />
                           )}
                           <div className="border-t border-border mt-1 pt-1.5">
                             <div className="grid grid-cols-[1fr_auto] items-baseline gap-3">
                               <div className="text-sm font-bold text-right text-foreground">
-                                ราคารวม:
+                                {t("rowTotal")}
                               </div>
                               <div className="text-base font-black text-right tabular-nums text-red-600">
                                 {numberFormat2(rowTotal)}{" "}
-                                <span className="text-xs text-muted font-normal">บาท</span>
+                                <span className="text-xs text-muted font-normal">{t("baht")}</span>
                               </div>
                             </div>
                           </div>
@@ -435,16 +437,16 @@ export function ForwarderPayModal({
                 {/* Bill summary */}
                 <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5">
                   <h5 className="text-sm font-bold text-amber-900 mb-2">
-                    สรุปรายการทั้งหมด
+                    {t("summaryTitle")}
                   </h5>
                   {bill.sumPricePCSF > 0 && (
                     <PriceLine
-                      label="รวมบิล Pacred เหมาๆ"
+                      label={t("summaryPcsfFlat")}
                       value={numberFormat2(bill.sumPricePCSF)}
                     />
                   )}
                   <PriceLine
-                    label="ยอดรวม"
+                    label={t("summaryGrandTotal")}
                     value={numberFormat2(bill.totalPriceAll)}
                   />
                   {bill.totalNiTi > 0 && (
@@ -465,12 +467,12 @@ export function ForwarderPayModal({
                 <div className="rounded-xl border border-border bg-white dark:bg-surface px-4 py-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-black text-foreground">
-                      แนบสลิปการโอนเพื่อยืนยัน
+                      {t("attachSlipTitle")}
                     </span>
                     <span className="text-red-600 font-black">*</span>
                     {!slipPath && !slipUploading && (
                       <span className="ml-auto inline-flex items-center rounded-full bg-red-100 text-red-700 text-[10.5px] font-bold px-2 py-0.5">
-                        ต้องแนบสลิป
+                        {t("slipRequiredBadge")}
                       </span>
                     )}
                   </div>
@@ -500,7 +502,7 @@ export function ForwarderPayModal({
                       <>
                         <span className="text-3xl">⏳</span>
                         <span className="text-sm font-bold text-amber-700">
-                          กำลังอัปโหลดสลิป...
+                          {t("slipUploading")}
                         </span>
                       </>
                     ) : slipPath ? (
@@ -509,10 +511,10 @@ export function ForwarderPayModal({
                           ✓
                         </span>
                         <span className="text-sm font-black text-emerald-700">
-                          แนบสลิปเรียบร้อยแล้ว
+                          {t("slipAttached")}
                         </span>
                         <span className="text-xs font-medium text-muted">
-                          แตะอีกครั้งเพื่อเปลี่ยนรูปสลิป
+                          {t("slipTapToChange")}
                         </span>
                       </>
                     ) : (
@@ -521,10 +523,10 @@ export function ForwarderPayModal({
                           <Upload className="h-6 w-6" strokeWidth={2.2} />
                         </span>
                         <span className="text-sm font-black text-red-700">
-                          แตะที่นี่เพื่อแนบสลิปการโอน
+                          {t("slipTapToAttach")}
                         </span>
                         <span className="text-xs font-medium text-muted">
-                          ถ่ายรูปหรือเลือกรูปสลิป (รองรับ jpg, png)
+                          {t("slipHint")}
                         </span>
                       </>
                     )}
@@ -536,8 +538,8 @@ export function ForwarderPayModal({
                       htmlFor="slipDate"
                       className="block text-xs font-bold text-muted mb-1"
                     >
-                      วันเวลาที่โอน{" "}
-                      <span className="font-normal">(ไม่บังคับ)</span>
+                      {t("transferDateTime")}{" "}
+                      <span className="font-normal">{t("optional")}</span>
                     </label>
                     <input
                       id="slipDate"
@@ -560,7 +562,7 @@ export function ForwarderPayModal({
                 onClick={onClose}
                 className="inline-flex items-center justify-center rounded-full border border-border bg-white dark:bg-surface text-foreground px-4 py-2 text-sm font-bold hover:bg-surface-alt active:scale-[0.98] transition-all"
               >
-                ยกเลิก
+                {t("cancel")}
               </button>
               <button
                 type="button"
@@ -572,7 +574,7 @@ export function ForwarderPayModal({
                     : "bg-red-600 text-white hover:bg-red-700 active:scale-[0.98] shadow-md shadow-red-600/25"
                 }`}
               >
-                {pending ? "กำลังบันทึก..." : "ยืนยัน"}
+                {pending ? t("saving") : t("confirm")}
               </button>
             </footer>
           )}
