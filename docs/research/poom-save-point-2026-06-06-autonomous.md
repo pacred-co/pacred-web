@@ -1,7 +1,31 @@
 # 🌅 2026-06-06 — ภูม autonomous run · B-batch + cleanup + avatar mirror + incidents + CSV-batch · save-point
 
-**Branch:** `Poom-pacred = dae51da8` · pushed · synced 0/0
-**Resume:** `git fetch origin && git pull origin Poom-pacred`
+**Branch:** `Poom-pacred = 64f0ab5b` · pushed · synced 0/0
+**Resume:** `git fetch origin && git pull origin Poom-pacred && cat docs/research/poom-save-point-2026-06-06-autonomous.md`
+
+---
+
+## ☀️ ตื่นมาแล้วเปิด — 3 ทางเลือกพรุ่งนี้
+
+ปิดวันด้วย 10 commits + 14 CSV surfaces (ดูตาราง "ที่ Ship วันนี้" ด้านล่าง). ทุกอย่าง push แล้ว · `pnpm typecheck EXIT 0`. ลุยต่อตาม mood:
+
+### 🔥 ทาง 1 — verify P0 ที่ต้องใช้ customer session (~45 นาที · ภูม login เอง)
+
+ผมโค้ดต่อให้ไม่ได้เพราะต้อง customer login (admin slot ผมใช้อยู่):
+
+- **Wallet rework ADR-0028 edge cases** — เดฟ verify P22309 แล้ว · ต้อง verify status 4/6/cancelled อื่น. Login customer test → สั่ง shop-order → จ่าย QR+slip → ดู `tb_wallet_hs` ลื่นมั้ย (~30 min)
+- **Shop-order ลูกค้าแก้ที่อยู่/วิธีรับ** — เดฟ ship `89c7d789` แต่ยังไม่ click-test · login customer test → เปิด order status 1-4 → กดเปลี่ยน carrier + ที่อยู่ → ดู `tb_header_order` บันทึกถูกมั้ย (~15 min)
+
+### 🟡 ทาง 2 — ฟีเจอร์ใหม่ที่ผมโค้ดต่อได้ (~2 ชั่วโมง · money-critical)
+
+**Slip top-up at checkout** — ลูกค้า checkout แล้ว wallet ไม่พอ ต้องเติมเงินก่อน แล้วกลับมาจ่ายอีกที. ทำให้ "upload slip ส่วนต่าง ที่ checkout เลย" → admin verify → settle. ผมจะดีไซน์ flow money + before/after ledger ให้ ภูม approve ก่อนลงโค้ดเสมอ. ไฟล์หลัก = `actions/wallet.ts` + `actions/forwarder.ts` + new checkout slip island
+
+### 🟢 ทาง 3 — ของอื่นๆ ตามที่ ภูม มีในใจ
+
+- bug ที่ ภูม รู้แต่ยังไม่ได้บอก
+- legacy fidelity audit หน้าใดหน้าหนึ่ง (skill `legacy-fidelity-check`)
+- polish UI / mobile 360 verify
+- หรือ pickup จาก CLAUDE.md "🔴 PENDING" ที่ไม่ใช่ owner-blocked
 
 ---
 
