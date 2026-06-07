@@ -128,8 +128,6 @@ export function BookingHero({ activeTab, seaMode, forceDefault = false, customTi
               <span className={`${isDefault ? "hidden " : ""}whitespace-nowrap`}>{chunks}</span>
             ),
             mbr: () => <br aria-hidden className={isDefault ? "hidden" : undefined} />,
-            // amp = literal "&" — needed because & in ICU strings breaks the parser
-            amp: () => "& ",
           })}
         </h1>
         {rawSub.trim() !== "" && (
