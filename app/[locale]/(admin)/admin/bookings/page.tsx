@@ -6,6 +6,8 @@ import { getServiceConfig } from "@/lib/booking/service-config";
 import { BOOKING_STATUSES, type BookingStatus } from "@/lib/validators/booking";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { exportBookingsAll } from "@/actions/admin/export/bookings";
 
 /**
  * BK-1 — /admin/bookings list page.
@@ -122,6 +124,38 @@ export default async function AdminBookingsListPage({
   }
   const totalAll = Object.values(counts).reduce((s, n) => s + n, 0);
 
+  // ── CSV export (mirrors the <thead> 1:1; phone/source flattened out of the
+  //    Contact/Booking-No sub-lines). Drift-free with exportBookingsAll. ──────
+  const csvCols: CsvCol[] = [
+    { key: "booking_no", label: t("colBookingNo") },
+    { key: "status",     label: t("colStatus") },
+    { key: "service",    label: t("colService") },
+    { key: "estimate",   label: t("colEstimate") },
+    { key: "contact",    label: t("colContact") },
+    { key: "phone",      label: "เบอร์โทร" },
+    { key: "source",     label: "ช่องทาง" },
+    { key: "submitted",  label: t("colSubmitted") },
+    { key: "created",    label: t("colCreated") },
+  ];
+  const csvRows: CsvRow[] = rows.map((r) => {
+    const svc = getServiceConfig(r.service_slug);
+    const svcLabel = svc ? (locale === "en" ? svc.titleEn : svc.titleTh) : r.service_slug;
+    const serviceText = [svcLabel, r.route_slug ? `/${r.route_slug}` : null, r.transport_mode]
+      .filter(Boolean)
+      .join(" ");
+    return {
+      booking_no: r.booking_no ?? `(draft) ${r.id.slice(0, 8)}`,
+      status:     tStatus(r.status),
+      service:    serviceText,
+      estimate:   thb(Number(r.estimate_total)),
+      contact:    r.contact_name || "",
+      phone:      r.contact_phone || "",
+      source:     r.source_channel || "",
+      submitted:  r.submitted_at ? String(r.submitted_at).slice(0, 10) : "",
+      created:    String(r.created_at).slice(0, 10),
+    };
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-7xl">
       <header className="flex items-start justify-between gap-3 flex-wrap">
@@ -130,6 +164,15 @@ export default async function AdminBookingsListPage({
           <h1 className="mt-1 text-2xl font-bold">{t("listTitle")} (BK-1)</h1>
           <p className="text-xs text-muted mt-1">{t("subtitle")}</p>
         </div>
+        <CsvButton
+          rows={csvRows}
+          cols={csvCols}
+          filename={`bookings-${isAll ? "all" : (status ?? "submitted")}.csv`}
+          fetchAll={async () => {
+            "use server";
+            return exportBookingsAll({ status });
+          }}
+        />
       </header>
 
       {/* Status filter chips */}

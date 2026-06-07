@@ -2,7 +2,24 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportContactMessagesAll } from "@/actions/admin/export/contact-messages";
 import { ContactMessageActions } from "./actions-cell";
+
+// CSV columns mirror the <thead> 1:1 (with the joined sender profile fields
+// split out for the export).
+const CSV_COLS: CsvCol[] = [
+  { key: "created_at", label: "วันที่" },
+  { key: "name", label: "ผู้ส่ง" },
+  { key: "member_code", label: "รหัสสมาชิก" },
+  { key: "sender_profile", label: "ชื่อโปรไฟล์" },
+  { key: "contact", label: "ติดต่อ" },
+  { key: "subject", label: "หัวข้อ" },
+  { key: "message", label: "ข้อความ" },
+  { key: "status", label: "สถานะ" },
+  { key: "source_url", label: "ที่มา (URL)" },
+  { key: "ip", label: "IP" },
+];
 
 const STATUS_BADGE: Record<string, string> = {
   new:     "bg-blue-50 text-blue-700 border-blue-200",
@@ -58,6 +75,24 @@ export default async function AdminContactMessagesPage({
     profile: Array.isArray(r.profile) ? r.profile[0] ?? null : r.profile,
   }));
 
+  // CSV rows for the visible page (mirrors the table columns; profile split out).
+  const csvRows: CsvRow[] = rows.map((r) => ({
+    created_at: (r.created_at ?? "").slice(0, 10),
+    name: r.name ?? "",
+    member_code: r.profile?.member_code ?? "",
+    sender_profile: r.profile
+      ? `${r.profile.first_name ?? ""} ${r.profile.last_name ?? ""}`.trim()
+      : r.profile_id === null
+        ? "guest"
+        : "",
+    contact: r.contact ?? "",
+    subject: r.subject ?? "",
+    message: r.message ?? "",
+    status: STATUS_LABEL[r.status] ?? r.status,
+    source_url: r.source_url ?? "",
+    ip: r.ip ?? "",
+  }));
+
   // Counts per status (separate query for the chip badges)
   const { data: counts, error: countsErr } = await admin
     .from("contact_messages")
@@ -92,12 +127,23 @@ export default async function AdminContactMessagesPage({
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
-        <h1 className="mt-1 text-2xl font-bold">ข้อความติดต่อจากเว็บไซต์</h1>
-        <p className="mt-1 text-sm text-muted">
-          ฟอร์มติดต่อจากหน้า /contact — รับเรื่อง ตอบกลับ ปิดเคส
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
+          <h1 className="mt-1 text-2xl font-bold">ข้อความติดต่อจากเว็บไซต์</h1>
+          <p className="mt-1 text-sm text-muted">
+            ฟอร์มติดต่อจากหน้า /contact — รับเรื่อง ตอบกลับ ปิดเคส
+          </p>
+        </div>
+        <CsvButton
+          rows={csvRows}
+          cols={CSV_COLS}
+          filename="contact-messages.csv"
+          fetchAll={async () => {
+            "use server";
+            return exportContactMessagesAll({ status: sp.status });
+          }}
+        />
       </div>
 
       <div className="flex flex-wrap gap-2">

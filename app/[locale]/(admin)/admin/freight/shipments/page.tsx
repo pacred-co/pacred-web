@@ -3,6 +3,8 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportFreightShipmentsAll } from "@/actions/admin/export/freight-shipments";
 import {
   FREIGHT_SHIPMENT_STATUSES, FREIGHT_SHIPMENT_STATUS_LABEL,
   FREIGHT_TRANSPORT_MODE_LABEL,
@@ -106,6 +108,42 @@ export default async function AdminFreightShipmentsListPage({
     counts[r.status] = (counts[r.status] ?? 0) + 1;
   }
 
+  // CSV export — cols mirror the table <thead> 1:1 (Container/B/L split into its
+  // own combined cell; customer name + member_code from the joined profile).
+  const csvCols: CsvCol[] = [
+    { key: "job_no", label: "Job no." },
+    { key: "member_code", label: "รหัสลูกค้า" },
+    { key: "customer", label: "ลูกค้า" },
+    { key: "transport_mode", label: "ขนส่ง" },
+    { key: "container_bl", label: "Container / B/L" },
+    { key: "commercial_value_thb", label: "มูลค่า (THB)" },
+    { key: "status", label: "สถานะ" },
+    { key: "created_at", label: "สร้าง" },
+  ];
+  const csvRows: CsvRow[] = rows.map((r) => {
+    const customer =
+      r.profile?.company_name ??
+      `${r.profile?.first_name ?? ""} ${r.profile?.last_name ?? ""}`.trim() ??
+      "";
+    const containerBl = [
+      r.container_code,
+      r.carrier_container_no,
+      r.bl_no ? `B/L: ${r.bl_no}` : null,
+    ]
+      .filter(Boolean)
+      .join(" / ");
+    return {
+      job_no: r.job_no ?? "",
+      member_code: r.profile?.member_code ?? "",
+      customer: customer || "",
+      transport_mode: FREIGHT_TRANSPORT_MODE_LABEL[r.transport_mode] ?? r.transport_mode,
+      container_bl: containerBl || "",
+      commercial_value_thb: thb(r.commercial_value_thb),
+      status: FREIGHT_SHIPMENT_STATUS_LABEL[r.status] ?? r.status,
+      created_at: (r.created_at ?? "").slice(0, 10),
+    };
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
       <header className="flex items-start justify-between gap-3 flex-wrap">
@@ -116,12 +154,23 @@ export default async function AdminFreightShipmentsListPage({
             workflow: draft → ยืนยัน → ขนส่ง → ผ่านศุลฯ → ส่งมอบ · มาจาก quotation (V-E6) หรือสร้างตรง
           </p>
         </div>
-        <Link
-          href="/admin/freight/shipments/new"
-          className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700"
-        >
-          ➕ สร้างงานใหม่
-        </Link>
+        <div className="flex items-center gap-2 flex-wrap">
+          <CsvButton
+            rows={csvRows}
+            cols={csvCols}
+            filename="freight-shipments.csv"
+            fetchAll={async () => {
+              "use server";
+              return exportFreightShipmentsAll({ status, q });
+            }}
+          />
+          <Link
+            href="/admin/freight/shipments/new"
+            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700"
+          >
+            ➕ สร้างงานใหม่
+          </Link>
+        </div>
       </header>
 
       {/* Status filter chips */}

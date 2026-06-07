@@ -3,6 +3,8 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportFreightDeclarationsAll } from "@/actions/admin/export/freight-declarations";
 import {
   CUSTOMS_DECLARATION_STATUSES,
   CUSTOMS_DECLARATION_STATUS_LABEL,
@@ -180,6 +182,38 @@ export default async function AdminCustomsDeclarationsListPage({
   }
   const allRows = [...rows, ...extraJobMatches];
 
+  // CSV — columns mirror the <thead> 1:1 (Thai labels).
+  const csvCols: CsvCol[] = [
+    { key: "declaration_no", label: "เลขที่" },
+    { key: "declaration_type", label: "ประเภท" },
+    { key: "job_no", label: "งาน" },
+    { key: "customer", label: "ลูกค้า" },
+    { key: "customs_office", label: "ด่าน" },
+    { key: "customs_control_no", label: "Control no ศุลฯ" },
+    { key: "declared_value", label: "สำแดง" },
+    { key: "duty_vat", label: "อากร + VAT" },
+    { key: "status", label: "สถานะ" },
+    { key: "submitted_at", label: "วันที่ยื่น" },
+  ];
+  const csvRows: CsvRow[] = allRows.map((r) => {
+    const totalTax = Number(r.total_duty_thb ?? 0) + Number(r.total_vat_thb ?? 0);
+    const customer =
+      r.shipment?.profile?.company_name ??
+      `${r.shipment?.profile?.first_name ?? ""} ${r.shipment?.profile?.last_name ?? ""}`.trim();
+    return {
+      declaration_no: r.declaration_no ?? "(ร่าง)",
+      declaration_type: CUSTOMS_DECLARATION_TYPE_LABEL[r.declaration_type],
+      job_no: r.shipment?.job_no ?? "—",
+      customer: customer || "—",
+      customs_office: r.customs_office ?? "—",
+      customs_control_no: r.customs_control_no ?? "—",
+      declared_value: thb(r.total_declared_value_thb),
+      duty_vat: thb(totalTax),
+      status: CUSTOMS_DECLARATION_STATUS_LABEL[r.status],
+      submitted_at: r.submitted_at ? r.submitted_at.slice(0, 10) : "—",
+    };
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
       <header className="flex items-start justify-between gap-3 flex-wrap">
@@ -190,6 +224,15 @@ export default async function AdminCustomsDeclarationsListPage({
             workflow: ร่าง → ยื่นที่ด่านศุลฯ → ตรวจรับ → ตรวจปล่อย · ภายในของ Pacred ไม่ใช่ NetBay
           </p>
         </div>
+        <CsvButton
+          rows={csvRows}
+          cols={csvCols}
+          filename="freight-declarations.csv"
+          fetchAll={async () => {
+            "use server";
+            return exportFreightDeclarationsAll({ status, q });
+          }}
+        />
       </header>
 
       {/* Status filter chips */}

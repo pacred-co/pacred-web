@@ -24,6 +24,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { exportDriversAll } from "@/actions/admin/export/drivers";
 import { Plus, Truck, AlertCircle, CheckCircle2, XCircle, Clock } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -192,6 +194,40 @@ export default async function AdminDriversPage({
     .eq("fstatus", "6");
   if (readyErr) console.error("/admin/drivers: ready count failed", readyErr);
 
+  // ── CSV export — columns mirror the <thead> 1:1, multi-line cells split out ──
+  const csvCols: CsvCol[] = [
+    { key: "id",          label: "เลขที่" },
+    { key: "fddate",      label: "วันที่" },
+    { key: "endtime",     label: "ส่งก่อน" },
+    { key: "fdname",      label: "ชื่อรายการ" },
+    { key: "driver_id",   label: "รหัสคนขับ" },
+    { key: "driver_name", label: "ชื่อคนขับ" },
+    { key: "creator",     label: "ผู้สร้าง" },
+    { key: "item_count",  label: "แทรคกิ้ง" },
+    { key: "box_sum",     label: "กล่อง" },
+    { key: "stop_count",  label: "จุดส่ง" },
+    { key: "done_count",  label: "ส่งแล้ว" },
+    { key: "status",      label: "สถานะ" },
+  ];
+  const csvRows: CsvRow[] = rows.map((r) => {
+    const agg     = itemAgg.get(r.id) ?? { itemCount: 0, boxSum: 0, doneCount: 0 };
+    const driver  = r.fdadminid ? driverDirectory.get(r.fdadminid) : null;
+    return {
+      id:          r.id,
+      fddate:      r.fddate ? r.fddate.slice(0, 10) : "",
+      endtime:     r.endtime ? r.endtime.slice(0, 16).replace("T", " ") : "",
+      fdname:      r.fdname ?? `รอบ #${r.id}`,
+      driver_id:   r.fdadminid ?? "",
+      driver_name: driver?.name ?? "",
+      creator:     r.fdadmincreator ?? "",
+      item_count:  agg.itemCount,
+      box_sum:     agg.boxSum,
+      stop_count:  r.fdamount ?? 0,
+      done_count:  agg.doneCount,
+      status:      STATUS_LABEL[(r.fdstatus ?? "1") as FdStatus] ?? "ไม่ระบุ",
+    };
+  });
+
   return (
     <main className="p-4 sm:p-6 lg:p-8 space-y-5">
       {/* Header */}
@@ -207,18 +243,29 @@ export default async function AdminDriversPage({
           </p>
         </div>
 
-        <Link
-          href="/admin/drivers/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-600 min-h-[44px]"
-        >
-          <Plus className="h-4 w-4" />
-          สร้างรายการขนส่ง
-          {(readyCount ?? 0) > 0 && (
-            <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">
-              {readyCount} รอมอบ
-            </span>
-          )}
-        </Link>
+        <div className="flex items-center gap-2 flex-wrap">
+          <CsvButton
+            rows={csvRows}
+            cols={csvCols}
+            filename={`drivers-${range}${status ? `-status${status}` : ""}.csv`}
+            fetchAll={async () => {
+              "use server";
+              return exportDriversAll({ status, range });
+            }}
+          />
+          <Link
+            href="/admin/drivers/new"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-600 min-h-[44px]"
+          >
+            <Plus className="h-4 w-4" />
+            สร้างรายการขนส่ง
+            {(readyCount ?? 0) > 0 && (
+              <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">
+                {readyCount} รอมอบ
+              </span>
+            )}
+          </Link>
+        </div>
       </div>
 
       {/* Filter chips */}

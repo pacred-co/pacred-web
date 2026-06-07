@@ -4,6 +4,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { nowMs } from "@/lib/datetime-helpers";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvCol } from "@/components/admin/csv-button";
+import { exportBroadcastsAll } from "@/actions/admin/export/broadcasts";
 
 /**
  * /admin/broadcasts — Pop-up ประกาศ list (faithful — legacy `pcs-admin/popup.php`
@@ -74,6 +76,30 @@ export default async function AdminBroadcastsListPage({
   const offset = (page - 1) * DEFAULT_PAGE_SIZE;
   const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
+  // CSV columns mirror the <thead> 1:1.
+  const csvCols: CsvCol[] = [
+    { key: "id", label: "รหัส" },
+    { key: "title", label: "ชื่อเรื่องประกาศ" },
+    { key: "datestart", label: "วันที่เริ่มแสดงผล" },
+    { key: "dateexp", label: "วันที่สิ้นสุด" },
+    { key: "status", label: "สถานะ" },
+    { key: "adminid", label: "ผู้ทำรายการ" },
+  ];
+  const csvRows = pageRows.map((r) => {
+    const start = r.datestart ? new Date(r.datestart).getTime() : -Infinity;
+    const end = r.dateexp ? new Date(r.dateexp).getTime() : Infinity;
+    const active = start <= now && now <= end;
+    const expired = now > end;
+    return {
+      id: r.id,
+      title: r.title ?? "",
+      datestart: fmt(r.datestart),
+      dateexp: fmt(r.dateexp),
+      status: active ? "กำลังแสดง" : expired ? "หมดอายุ" : "รอแสดง",
+      adminid: r.adminid ?? "—",
+    };
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
       <header className="flex items-start justify-between gap-3 flex-wrap">
@@ -85,12 +111,23 @@ export default async function AdminBroadcastsListPage({
             (<span className="text-green-700 font-medium">{activeCount}</span> รายการกำลังแสดงตอนนี้)
           </p>
         </div>
-        <Link
-          href="/admin/broadcasts/new"
-          className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700"
-        >
-          ➕ เพิ่ม Pop-up ใหม่
-        </Link>
+        <div className="flex items-center gap-2 flex-wrap">
+          <CsvButton
+            rows={csvRows}
+            cols={csvCols}
+            filename="broadcasts.csv"
+            fetchAll={async () => {
+              "use server";
+              return exportBroadcastsAll();
+            }}
+          />
+          <Link
+            href="/admin/broadcasts/new"
+            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700"
+          >
+            ➕ เพิ่ม Pop-up ใหม่
+          </Link>
+        </div>
       </header>
 
       <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">

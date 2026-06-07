@@ -4,6 +4,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { QUOTE_STATUSES, QUOTE_STATUS_LABEL, TRANSPORT_MODE_LABEL, type QuoteStatus, type TransportMode } from "@/lib/validators/freight-quote";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportFreightQuotesAll } from "@/actions/admin/export/freight-quotes";
 
 /**
  * V-E6 — /admin/freight/quotes list page.
@@ -92,6 +94,29 @@ export default async function AdminFreightQuotesListPage({
     counts[r.status] = (counts[r.status] ?? 0) + 1;
   }
 
+  // CSV export — columns mirror the table <thead> 1:1 (ลูกค้า split into
+  // name + tax-id columns; money pre-formatted; dates sliced to YYYY-MM-DD).
+  const csvCols: CsvCol[] = [
+    { key: "quote_no",       label: "เลขที่" },
+    { key: "customer",       label: "ลูกค้า" },
+    { key: "tax_id",         label: "เลขผู้เสียภาษี" },
+    { key: "transport_mode", label: "ขนส่ง" },
+    { key: "total",          label: "ยอดรวม" },
+    { key: "status",         label: "สถานะ" },
+    { key: "created_at",     label: "สร้าง" },
+    { key: "valid_until",    label: "หมดอายุ" },
+  ];
+  const csvRows: CsvRow[] = quotes.map((qrow) => ({
+    quote_no:       qrow.quote_no,
+    customer:       qrow.buyer_name_snapshot ?? "",
+    tax_id:         qrow.buyer_tax_id_snapshot ?? "",
+    transport_mode: TRANSPORT_MODE_LABEL[qrow.transport_mode] ?? qrow.transport_mode,
+    total:          thb(Number(qrow.total)),
+    status:         QUOTE_STATUS_LABEL[qrow.status] ?? qrow.status,
+    created_at:     qrow.created_at ? qrow.created_at.slice(0, 10) : "",
+    valid_until:    qrow.valid_until ? qrow.valid_until.slice(0, 10) : "",
+  }));
+
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
       <header className="flex items-start justify-between gap-3 flex-wrap">
@@ -102,12 +127,23 @@ export default async function AdminFreightQuotesListPage({
             workflow: draft → รออนุมัติ → อนุมัติ → ส่ง → ลูกค้ายืนยัน · approve/reject = super only
           </p>
         </div>
-        <Link
-          href="/admin/freight/quotes/new"
-          className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700"
-        >
-          ➕ สร้างใบใหม่
-        </Link>
+        <div className="flex items-center gap-2">
+          <CsvButton
+            rows={csvRows}
+            cols={csvCols}
+            filename="freight-quotes.csv"
+            fetchAll={async () => {
+              "use server";
+              return exportFreightQuotesAll({ status, q });
+            }}
+          />
+          <Link
+            href="/admin/freight/quotes/new"
+            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700"
+          >
+            ➕ สร้างใบใหม่
+          </Link>
+        </div>
       </header>
 
       {/* Status filter chips */}
