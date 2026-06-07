@@ -26,6 +26,22 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { exportQaPayFwdOver2dAll } from "@/actions/admin/export/qa-pay-fwd-over-2d";
+
+const CSV_COLS: CsvCol[] = [
+  { key: "fno", label: "เลขที่ F" },
+  { key: "userid", label: "รหัสลูกค้า" },
+  { key: "customer", label: "ลูกค้า" },
+  { key: "tel", label: "เบอร์" },
+  { key: "fdate", label: "วันที่สร้าง" },
+  { key: "age_days", label: "รออายุ (วัน)" },
+  { key: "cabinet", label: "เบอร์ตู้" },
+  { key: "tracking", label: "tracking" },
+  { key: "weight", label: "น้ำหนัก (กก.)" },
+  { key: "volume", label: "ปริมาตร (ลบ.ม.)" },
+  { key: "total", label: "ยอด (THB)" },
+];
 
 export const dynamic = "force-dynamic";
 
@@ -102,6 +118,36 @@ export default async function AdminQaPayFwdOver2dPage({
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
   }
 
+  // On-screen rows → CSV (mirrors the <thead> + the export-all action columns).
+  const csvRows: CsvRow[] = rows.map((r) => {
+    const u = r.userid ? userMap.get(r.userid) : undefined;
+    const customerName = u
+      ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || (r.userid ?? "")
+      : (r.userid ?? "");
+    const tracking = [
+      r.ftrackingchn ? `จ: ${r.ftrackingchn}` : "",
+      r.ftrackingth ? `ท: ${r.ftrackingth}` : "",
+    ]
+      .filter(Boolean)
+      .join(" / ");
+    return {
+      fno: r.fidorco ?? `#${r.id}`,
+      userid: r.userid ?? "",
+      customer: customerName,
+      tel: u?.userTel ?? "",
+      fdate: r.fdate ? r.fdate.slice(0, 10) : "",
+      age_days: daysSince(r.fdate),
+      cabinet: r.fcabinetnumber ?? "",
+      tracking,
+      weight: r.fweight ? Number(r.fweight).toFixed(2) : "",
+      volume: r.fvolume ? Number(r.fvolume).toFixed(3) : "",
+      total: Number(r.ftotalprice ?? 0).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
+    };
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
@@ -120,6 +166,17 @@ export default async function AdminQaPayFwdOver2dPage({
           <Link href="/admin/qa" className="text-xs text-primary-600 hover:underline">
             ← กลับหน้า QA
           </Link>
+          <div className="ml-auto">
+            <CsvButton
+              rows={csvRows}
+              cols={CSV_COLS}
+              filename="qa-รอชำระค่านำเข้าเกิน2วัน.csv"
+              fetchAll={async () => {
+                "use server";
+                return exportQaPayFwdOver2dAll();
+              }}
+            />
+          </div>
         </div>
         <p className="text-xs text-muted mt-1">
           tb_forwarder · fstatus = &apos;5&apos; (รอชำระเงิน) AND fdate &lt; NOW() − 2 วัน · เรียงเก่าสุดก่อน

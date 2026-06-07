@@ -18,8 +18,27 @@ import { Link } from "@/i18n/navigation";
 import { nowMs, cutoffIsoDaysAgo } from "@/lib/datetime-helpers";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportQaPrepareOverdueAll } from "@/actions/admin/export/qa-prepare-overdue";
 
 export const dynamic = "force-dynamic";
+
+const CSV_COLS: CsvCol[] = [
+  { key: "id", label: "ID" },
+  { key: "arrived", label: "ถึงไทยเมื่อ" },
+  { key: "days_waiting", label: "ค้างมา (วัน)" },
+  { key: "userid", label: "รหัสลูกค้า" },
+  { key: "customer", label: "ลูกค้า" },
+  { key: "phone", label: "เบอร์โทร" },
+  { key: "tracking_th", label: "tracking ไทย" },
+  { key: "cabinet", label: "เบอร์ตู้" },
+  { key: "warehouse", label: "จาก" },
+  { key: "transport", label: "ขนส่ง" },
+  { key: "weight", label: "น้ำหนัก" },
+  { key: "volume", label: "cbm" },
+  { key: "price", label: "ราคา" },
+  { key: "note", label: "หมายเหตุ" },
+];
 
 type FwdRow = {
   id: number;
@@ -107,6 +126,36 @@ export default async function PrepareOverduePage({
 
   const now = nowMs();
 
+  // On-screen rows → flat CsvRow[] (mirrors the <thead> + the export action).
+  const csvRows: CsvRow[] = rows.map((r) => {
+    const u = r.userid ? userMap.get(r.userid) : undefined;
+    const customerName = u
+      ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || (r.userid ?? "")
+      : r.userid ?? "";
+    const daysWaiting = r.fdatestatus4
+      ? Math.floor((now - new Date(r.fdatestatus4).getTime()) / (24 * 60 * 60 * 1000))
+      : 0;
+    return {
+      id: r.id,
+      arrived: r.fdatestatus4 ? String(r.fdatestatus4).slice(0, 10) : "",
+      days_waiting: daysWaiting,
+      userid: r.userid ?? "",
+      customer: customerName,
+      phone: u?.userTel ?? "",
+      tracking_th: r.ftrackingth ?? "",
+      cabinet: r.fcabinetnumber ?? "",
+      warehouse: WAREHOUSE_LABEL[r.fwarehousechina ?? ""] ?? r.fwarehousechina ?? "",
+      transport: TRANSPORT_LABEL[r.ftransporttype ?? ""] ?? "",
+      weight: r.fweight != null ? `${Number(r.fweight).toFixed(1)} kg` : "",
+      volume: r.fvolume != null ? `${Number(r.fvolume).toFixed(3)} cbm` : "",
+      price: Number(r.ftotalprice ?? 0).toLocaleString("th-TH", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
+      note: r.fnote ?? "",
+    };
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
@@ -119,6 +168,17 @@ export default async function PrepareOverduePage({
           <Link href="/admin/qa" className="text-xs text-primary-600 hover:underline">
             ← กลับ QA hub
           </Link>
+          <div className="ml-auto">
+            <CsvButton
+              rows={csvRows}
+              cols={CSV_COLS}
+              filename="qa-prepare-overdue.csv"
+              fetchAll={async () => {
+                "use server";
+                return exportQaPrepareOverdueAll();
+              }}
+            />
+          </div>
         </div>
         <p className="mt-1 text-xs text-muted">
           tb_forwarder · fstatus=&apos;4&apos; (ถึงไทยแล้ว) AND fdatestatus4 &lt; NOW() − 3 วัน

@@ -29,6 +29,8 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { exportQaPayShopOver1dAll } from "@/actions/admin/export/qa-pay-shop-over-1d";
 
 export const dynamic = "force-dynamic";
 
@@ -108,6 +110,40 @@ export default async function AdminQaPayShopOver1dPage({
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
   }
 
+  // CSV columns mirror the <thead> labels (Thai). "จัดการ" (drill-in link) is omitted.
+  const csvCols: CsvCol[] = [
+    { key: "hno", label: "เลขที่ออเดอร์" },
+    { key: "userid", label: "รหัสลูกค้า" },
+    { key: "customer", label: "ลูกค้า" },
+    { key: "tel", label: "เบอร์โทร" },
+    { key: "hdate", label: "วันที่สร้าง" },
+    { key: "age_days", label: "รออายุ (วัน)" },
+    { key: "htitle", label: "สินค้า" },
+    { key: "hcount", label: "จำนวน" },
+    { key: "total_cny", label: "ราคารวม (¥)" },
+    { key: "total_thb", label: "ราคารวม (THB)" },
+  ];
+
+  // Map the on-screen (paginated) rows → flat CsvRow[] for "⬇ CSV หน้านี้".
+  const csvRows: CsvRow[] = rows.map((r) => {
+    const u = r.userid ? userMap.get(r.userid) : undefined;
+    const customerName = u
+      ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || (r.userid ?? "")
+      : (r.userid ?? "");
+    return {
+      hno: r.hno ?? "",
+      userid: r.userid ?? "",
+      customer: customerName,
+      tel: u?.userTel ?? "",
+      hdate: r.hdate ? r.hdate.slice(0, 10) : "",
+      age_days: daysSince(r.hdate),
+      htitle: r.htitle ?? "",
+      hcount: r.hcount ?? 0,
+      total_cny: Number(r.htotalpricechn ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      total_thb: Number(r.htotalpriceuser ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    };
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
@@ -126,6 +162,17 @@ export default async function AdminQaPayShopOver1dPage({
           <Link href="/admin/qa" className="text-xs text-primary-600 hover:underline">
             ← กลับหน้า QA
           </Link>
+          <div className="ml-auto">
+            <CsvButton
+              rows={csvRows}
+              cols={csvCols}
+              filename="qa-pay-shop-over-1d.csv"
+              fetchAll={async () => {
+                "use server";
+                return exportQaPayShopOver1dAll();
+              }}
+            />
+          </div>
         </div>
         <p className="text-xs text-muted mt-1">
           tb_header_order · hstatus = &apos;2&apos; (รอชำระเงิน) AND hdate &lt; NOW() − 1 วัน · เรียงเก่าสุดก่อน

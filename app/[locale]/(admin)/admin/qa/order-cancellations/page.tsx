@@ -40,6 +40,8 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { exportQaOrderCancellationsAll } from "@/actions/admin/export/qa-order-cancellations";
 
 export const dynamic = "force-dynamic";
 
@@ -149,6 +151,48 @@ export default async function AdminQaOrderCancellationsPage({
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
   }
 
+  // ── CSV export (columns mirror the <thead> 1:1) ──────────────────
+  const csvCols: CsvCol[] = [
+    { key: "hno", label: "เลขที่ออเดอร์" },
+    { key: "userid", label: "รหัสลูกค้า" },
+    { key: "customer", label: "ลูกค้า" },
+    { key: "tel", label: "เบอร์โทร" },
+    { key: "hdate", label: "วันที่สร้าง" },
+    { key: "hdateupdate", label: "วันที่ยกเลิก" },
+    { key: "age_days", label: "นานแล้ว (วัน)" },
+    { key: "title", label: "สินค้า" },
+    { key: "count", label: "จำนวน" },
+    { key: "total_chn", label: "ราคารวม (¥)" },
+    { key: "total_thb", label: "ราคารวม (THB)" },
+    { key: "rate", label: "เรท" },
+    { key: "money_status", label: "สถานะเงิน" },
+    { key: "note", label: "หมายเหตุ" },
+  ];
+  const csvRows: CsvRow[] = rows.map((r) => {
+    const u = r.userid ? userMap.get(r.userid) : undefined;
+    const customerName = u
+      ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || (r.userid ?? "")
+      : (r.userid ?? "");
+    const hasPayment = r.hshoppay === "1";
+    const hasNote = r.hnote != null && r.hnote.trim() !== "";
+    return {
+      hno: r.hno ?? "",
+      userid: r.userid ?? "",
+      customer: customerName,
+      tel: u?.userTel ?? "",
+      hdate: r.hdate ? r.hdate.slice(0, 10) : "",
+      hdateupdate: r.hdateupdate ? r.hdateupdate.slice(0, 10) : "",
+      age_days: daysSince(r.hdateupdate),
+      title: r.htitle ?? "",
+      count: r.hcount ?? "",
+      total_chn: Number(r.htotalpricechn ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      total_thb: Number(r.htotalpriceuser ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      rate: r.hrate != null ? Number(r.hrate).toFixed(2) : "",
+      money_status: hasPayment ? "จ่ายแล้ว · รอคืน" : "ยังไม่จ่าย",
+      note: hasNote ? (r.hnote ?? "") : "",
+    };
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
@@ -167,6 +211,17 @@ export default async function AdminQaOrderCancellationsPage({
           <Link href="/admin/qa" className="text-xs text-primary-600 hover:underline">
             ← กลับ QA hub
           </Link>
+          <div className="ml-auto">
+            <CsvButton
+              rows={csvRows}
+              cols={csvCols}
+              filename="qa-order-cancellations.csv"
+              fetchAll={async () => {
+                "use server";
+                return exportQaOrderCancellationsAll();
+              }}
+            />
+          </div>
         </div>
         <p className="mt-1 text-xs text-muted">
           tb_header_order · hstatus = &apos;6&apos; (ยกเลิก) AND

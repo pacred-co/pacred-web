@@ -29,6 +29,8 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { exportQaChnShopOver2dAll } from "@/actions/admin/export/qa-chn-shop-over-2d";
 
 export const dynamic = "force-dynamic";
 
@@ -107,6 +109,44 @@ export default async function AdminQaChnShopOver2dPage({
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
   }
 
+  // CSV columns mirror the <thead> labels 1:1.
+  const csvCols: CsvCol[] = [
+    { key: "hno", label: "เลขที่ออเดอร์" },
+    { key: "userid", label: "รหัสลูกค้า" },
+    { key: "customer", label: "ลูกค้า" },
+    { key: "tel", label: "เบอร์โทร" },
+    { key: "order_date", label: "วันที่สั่ง (จีน)" },
+    { key: "wait_days", label: "รอ (วัน)" },
+    { key: "title", label: "สินค้า" },
+    { key: "count", label: "จำนวน" },
+    { key: "transport", label: "โหมดขนส่ง" },
+    { key: "total_chn", label: "ราคารวม (¥)" },
+    { key: "note", label: "หมายเหตุ" },
+  ];
+
+  const csvRows: CsvRow[] = rows.map((r) => {
+    const u = r.userid ? userMap.get(r.userid) : undefined;
+    const customerName = u
+      ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || (r.userid ?? "")
+      : r.userid ?? "";
+    const effectiveStart = r.hdate3 ?? r.hdate;
+    return {
+      hno: r.hno ?? "",
+      userid: r.userid ?? "",
+      customer: customerName,
+      tel: u?.userTel ?? "",
+      order_date: effectiveStart ? effectiveStart.slice(0, 10) : "",
+      wait_days: daysSince(effectiveStart),
+      title: r.htitle ?? "",
+      count: r.hcount ?? "",
+      transport: r.htransporttype ?? "",
+      total_chn: Number(r.htotalpricechn ?? 0).toLocaleString("th-TH", {
+        minimumFractionDigits: 2,
+      }),
+      note: r.hnote ?? "",
+    };
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
@@ -125,6 +165,17 @@ export default async function AdminQaChnShopOver2dPage({
           <Link href="/admin/qa" className="text-xs text-primary-600 hover:underline">
             ← กลับหน้า QA
           </Link>
+          <div className="ml-auto">
+            <CsvButton
+              rows={csvRows}
+              cols={csvCols}
+              filename="qa-chn-shop-over-2d.csv"
+              fetchAll={async () => {
+                "use server";
+                return exportQaChnShopOver2dAll();
+              }}
+            />
+          </div>
         </div>
         <p className="text-xs text-muted mt-1">
           tb_header_order · hstatus = &apos;3&apos; (สั่งสินค้าแล้ว) AND COALESCE(hdate3, hdate) &lt; NOW() − 2 วัน · เรียงเก่าสุดก่อน

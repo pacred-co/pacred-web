@@ -25,6 +25,8 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { exportQaCreditOverdueAll } from "@/actions/admin/export/qa-credit-overdue";
 
 export const dynamic = "force-dynamic";
 
@@ -122,9 +124,42 @@ export default async function AdminQaCreditOverduePage({
   const offset = (page - 1) * DEFAULT_PAGE_SIZE;
   const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
+  // CSV: flatten the displayed page rows → flat {key:value}; cols mirror <thead>.
+  const csvRows: CsvRow[] = pageRows.map((r) => {
+    const u = r.userid ? userMap.get(r.userid) : undefined;
+    const customerName = u
+      ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || (r.userid ?? "")
+      : (r.userid ?? "");
+    return {
+      fidorco: r.fidorco ?? `#${r.id}`,
+      userid: r.userid ?? "",
+      customer: customerName,
+      tel: u?.userTel ?? "",
+      fdate: r.fdate ? r.fdate.slice(0, 10) : "",
+      fcreditdate: r.fcreditdate ? r.fcreditdate.slice(0, 10) : "",
+      lateDays: daysSince(r.fcreditdate),
+      fcabinetnumber: r.fcabinetnumber || "",
+      status: STATUS_LABEL[r.fstatus ?? ""] ?? r.fstatus ?? "",
+      ftotalprice: Number(r.ftotalprice ?? 0).toFixed(2),
+    };
+  });
+  const csvCols = [
+    { key: "fidorco", label: "เลขที่ F" },
+    { key: "userid", label: "รหัสลูกค้า" },
+    { key: "customer", label: "ลูกค้า" },
+    { key: "tel", label: "เบอร์โทร" },
+    { key: "fdate", label: "วันที่สร้าง" },
+    { key: "fcreditdate", label: "ครบกำหนด" },
+    { key: "lateDays", label: "เลทไป (วัน)" },
+    { key: "fcabinetnumber", label: "เบอร์ตู้" },
+    { key: "status", label: "สถานะ" },
+    { key: "ftotalprice", label: "ยอด (THB)" },
+  ];
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      <div>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
         <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · QA · SLA-BREACH</p>
         <div className="mt-1 flex items-center gap-3 flex-wrap">
           <h1 className="text-2xl font-bold">เครดิตเกินกำหนด</h1>
@@ -149,6 +184,16 @@ export default async function AdminQaCreditOverduePage({
         <p className="text-xs text-muted mt-1">
           tb_forwarder · fcredit = &apos;1&apos; AND fcreditdate &lt; NOW() · เรียงเก่าสุดก่อน
         </p>
+        </div>
+        <CsvButton
+          rows={csvRows}
+          cols={csvCols}
+          filename={`qa-credit-overdue-${new Date().toISOString().slice(0, 10)}.csv`}
+          fetchAll={async () => {
+            "use server";
+            return exportQaCreditOverdueAll();
+          }}
+        />
       </div>
 
       {error && (

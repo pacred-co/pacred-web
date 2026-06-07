@@ -21,8 +21,27 @@ import { Link } from "@/i18n/navigation";
 import { nowMs, cutoffIsoDaysAgo } from "@/lib/datetime-helpers";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { exportQaTransitOverdueAll } from "@/actions/admin/export/qa-transit-overdue";
 
 export const dynamic = "force-dynamic";
+
+// CSV columns — Thai labels mirror the <thead> of the table.
+const CSV_COLS: CsvCol[] = [
+  { key: "id", label: "ID" },
+  { key: "transit_start", label: "เริ่ม transit" },
+  { key: "days_in_transit", label: "รอมา (วัน)" },
+  { key: "userid", label: "รหัสลูกค้า" },
+  { key: "customer", label: "ลูกค้า" },
+  { key: "tel", label: "เบอร์" },
+  { key: "warehouse", label: "จาก" },
+  { key: "transport", label: "ขนส่ง" },
+  { key: "tracking", label: "tracking" },
+  { key: "cabinet", label: "เบอร์ตู้" },
+  { key: "weight", label: "น้ำหนัก" },
+  { key: "volume", label: "ปริมาตร (cbm)" },
+  { key: "note", label: "หมายเหตุ" },
+];
 
 type FwdRow = {
   id: number;
@@ -138,10 +157,48 @@ export default async function TransitOverduePage({
 
   const now = nowMs();
 
+  // CSV rows for the visible (paginated) window — same columns as <thead>.
+  const csvRows: CsvRow[] = pageRows.map((r) => {
+    const u = r.userid ? userMap.get(r.userid) : undefined;
+    const customerName = u
+      ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || (r.userid ?? "")
+      : r.userid ?? "";
+    const transitStart = r.fdatestatus3 ?? r.fdate;
+    const daysInTransit = transitStart
+      ? Math.floor((now - new Date(transitStart).getTime()) / (24 * 60 * 60 * 1000))
+      : 0;
+    return {
+      id: r.id,
+      transit_start: transitStart ? String(transitStart).slice(0, 10) : "",
+      days_in_transit: daysInTransit,
+      userid: r.userid ?? "",
+      customer: customerName,
+      tel: u?.userTel ?? "",
+      warehouse: WAREHOUSE_LABEL[r.fwarehousechina ?? ""] ?? r.fwarehousechina ?? "",
+      transport: TRANSPORT_LABEL[r.ftransporttype ?? ""] ?? "",
+      tracking: r.ftrackingth || r.ftrackingchn || "",
+      cabinet: r.fcabinetnumber ?? "",
+      weight: r.fweight ? `${Number(r.fweight).toFixed(1)} kg` : "",
+      volume: r.fvolume ? `${Number(r.fvolume).toFixed(3)} cbm` : "",
+      note: r.fnote ?? "",
+    };
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · QA · SLA</p>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · QA · SLA</p>
+          <CsvButton
+            rows={csvRows}
+            cols={CSV_COLS}
+            filename="qa-transit-overdue.csv"
+            fetchAll={async () => {
+              "use server";
+              return exportQaTransitOverdueAll();
+            }}
+          />
+        </div>
         <div className="mt-1 flex items-center gap-3 flex-wrap">
           <h1 className="text-2xl font-bold">กำลังมาไทยเกินกำหนด</h1>
           <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700">

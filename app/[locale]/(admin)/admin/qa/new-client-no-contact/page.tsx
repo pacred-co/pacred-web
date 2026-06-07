@@ -19,6 +19,8 @@ import { Link } from "@/i18n/navigation";
 import { nowMs, cutoffIsoDaysAgo } from "@/lib/datetime-helpers";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { exportQaNewClientNoContactAll } from "@/actions/admin/export/qa-new-client-no-contact";
 
 export const dynamic = "force-dynamic";
 
@@ -84,6 +86,38 @@ export default async function NewClientNoContactPage({
 
   const now = nowMs();
 
+  // CSV columns mirror the <thead> labels 1:1 (skip the empty action column).
+  const csvCols = [
+    { key: "userID", label: "รหัส" },
+    { key: "userRegistered", label: "สมัครเมื่อ" },
+    { key: "daysSinceReg", label: "นานแล้ว" },
+    { key: "fullName", label: "ชื่อ-สกุล" },
+    { key: "userTel", label: "เบอร์" },
+    { key: "userEmail", label: "อีเมล" },
+    { key: "customerType", label: "ประเภท" },
+    { key: "lastLogin", label: "login ครั้งล่าสุด" },
+    { key: "adminIDSale", label: "เซลส์ดูแล" },
+  ];
+
+  // On-screen (paginated) rows → flat CsvRow[] (same mapping as the table).
+  const csvRows: CsvRow[] = rows.map((u) => {
+    const fullName = `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—";
+    const daysSinceReg = u.userRegistered
+      ? Math.floor((now - new Date(u.userRegistered).getTime()) / (24 * 60 * 60 * 1000))
+      : 0;
+    return {
+      userID: u.userID,
+      userRegistered: u.userRegistered ? String(u.userRegistered).slice(0, 10) : "—",
+      daysSinceReg: `${daysSinceReg} วัน`,
+      fullName,
+      userTel: u.userTel || "—",
+      userEmail: u.userEmail || "—",
+      customerType: u.userCompany === "1" ? "นิติบุคคล" : "บุคคล",
+      lastLogin: u.userLastLogin ? String(u.userLastLogin).slice(0, 10) : "ไม่เคย login",
+      adminIDSale: u.adminIDSale || "—",
+    };
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
@@ -96,6 +130,17 @@ export default async function NewClientNoContactPage({
           <Link href="/admin/qa" className="text-xs text-primary-600 hover:underline">
             ← กลับ QA hub
           </Link>
+          <div className="ml-auto">
+            <CsvButton
+              rows={csvRows}
+              cols={csvCols}
+              filename="qa-new-client-no-contact.csv"
+              fetchAll={async () => {
+                "use server";
+                return exportQaNewClientNoContactAll();
+              }}
+            />
+          </div>
         </div>
         <p className="mt-1 text-xs text-muted">
           tb_users · useractive=&apos;1&apos; AND userregistered &gt; NOW() − 30 วัน AND

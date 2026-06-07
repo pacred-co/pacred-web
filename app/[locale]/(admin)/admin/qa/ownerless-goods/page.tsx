@@ -18,8 +18,25 @@ import { Link } from "@/i18n/navigation";
 import { nowMs } from "@/lib/datetime-helpers";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { exportQaOwnerlessGoodsAll } from "@/actions/admin/export/qa-ownerless-goods";
 
 export const dynamic = "force-dynamic";
+
+const CSV_COLS = [
+  { key: "id", label: "ID" },
+  { key: "fdate", label: "วันที่สร้าง" },
+  { key: "fdatestatus4", label: "ถึงไทย" },
+  { key: "days_since_arrival", label: "นานแล้ว (วัน)" },
+  { key: "ftrackingchn", label: "tracking จีน" },
+  { key: "ftrackingth", label: "tracking ไทย" },
+  { key: "fcabinetnumber", label: "เบอร์ตู้" },
+  { key: "warehouse", label: "จาก" },
+  { key: "transport", label: "ขนส่ง" },
+  { key: "fweight", label: "น้ำหนัก (kg)" },
+  { key: "fvolume", label: "ปริมาตร (cbm)" },
+  { key: "fnote", label: "หมายเหตุ" },
+];
 
 type FwdRow = {
   id: number;
@@ -121,23 +138,57 @@ export default async function OwnerlessGoodsPage({
 
   const now = nowMs();
 
+  // On-screen (paginated) rows → flat CsvRow[] for the "CSV หน้านี้" button.
+  // Mirrors the <thead> labels / <tbody> cell derivation 1:1.
+  const csvRows: CsvRow[] = pageRows.map((r) => {
+    const arrivedAt = r.fdatestatus4;
+    const daysSinceArrival = arrivedAt
+      ? Math.floor((now - new Date(arrivedAt).getTime()) / (24 * 60 * 60 * 1000))
+      : null;
+    return {
+      id: r.id,
+      fdate: r.fdate ? String(r.fdate).slice(0, 10) : "",
+      fdatestatus4: arrivedAt ? String(arrivedAt).slice(0, 10) : "",
+      days_since_arrival: daysSinceArrival !== null ? `${daysSinceArrival}` : "",
+      ftrackingchn: r.ftrackingchn || "",
+      ftrackingth: r.ftrackingth || "",
+      fcabinetnumber: r.fcabinetnumber || "",
+      warehouse: WAREHOUSE_LABEL[r.fwarehousechina ?? ""] ?? r.fwarehousechina ?? "",
+      transport: TRANSPORT_LABEL[r.ftransporttype ?? ""] ?? "",
+      fweight: r.fweight ? Number(r.fweight).toFixed(1) : "",
+      fvolume: r.fvolume ? Number(r.fvolume).toFixed(3) : "",
+      fnote: r.fnote || "",
+    };
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · QA · SLA</p>
-        <div className="mt-1 flex items-center gap-3 flex-wrap">
-          <h1 className="text-2xl font-bold">สินค้าไม่มีเจ้าของ</h1>
-          <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700">
-            {breachCount || rows.length} รายการ
-          </span>
-          <Link href="/admin/qa" className="text-xs text-primary-600 hover:underline">
-            ← กลับ QA hub
-          </Link>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · QA · SLA</p>
+          <div className="mt-1 flex items-center gap-3 flex-wrap">
+            <h1 className="text-2xl font-bold">สินค้าไม่มีเจ้าของ</h1>
+            <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700">
+              {breachCount || rows.length} รายการ
+            </span>
+            <Link href="/admin/qa" className="text-xs text-primary-600 hover:underline">
+              ← กลับ QA hub
+            </Link>
+          </div>
+          <p className="mt-1 text-xs text-muted">
+            tb_forwarder · fstatus=&apos;4&apos; (ถึงไทยแล้ว) AND (userid IS NULL หรือ userid = &apos;&apos;) ·
+            เรียงเก่าสุดก่อน · จำกัด 200 แถว
+          </p>
         </div>
-        <p className="mt-1 text-xs text-muted">
-          tb_forwarder · fstatus=&apos;4&apos; (ถึงไทยแล้ว) AND (userid IS NULL หรือ userid = &apos;&apos;) ·
-          เรียงเก่าสุดก่อน · จำกัด 200 แถว
-        </p>
+        <CsvButton
+          rows={csvRows}
+          cols={CSV_COLS}
+          filename="ownerless-goods.csv"
+          fetchAll={async () => {
+            "use server";
+            return exportQaOwnerlessGoodsAll();
+          }}
+        />
       </div>
 
       {error && (

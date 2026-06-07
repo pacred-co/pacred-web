@@ -20,6 +20,8 @@ import { Link } from "@/i18n/navigation";
 import { nowMs, cutoffIsoDaysAgo } from "@/lib/datetime-helpers";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { exportQaChnWhOver2dAll } from "@/actions/admin/export/qa-chn-wh-over-2d";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +58,23 @@ const TRANSPORT_LABEL: Record<string, string> = {
   "2": "เรือ",
   "3": "แอร์",
 };
+
+// CSV columns — Thai labels mirror the <thead> 1:1 (plus userid for export use).
+const CSV_COLS: CsvCol[] = [
+  { key: "id", label: "ID" },
+  { key: "fdate", label: "วันที่สร้าง" },
+  { key: "days_waiting", label: "รอมา (วัน)" },
+  { key: "userid", label: "รหัสลูกค้า" },
+  { key: "customer", label: "ลูกค้า" },
+  { key: "tel", label: "เบอร์โทร" },
+  { key: "warehouse", label: "โกดังจีน" },
+  { key: "transport", label: "ขนส่ง" },
+  { key: "tracking_chn", label: "tracking จีน" },
+  { key: "cabinet", label: "เบอร์ตู้" },
+  { key: "weight", label: "น้ำหนัก" },
+  { key: "volume", label: "cbm" },
+  { key: "note", label: "หมายเหตุ" },
+];
 
 export default async function ChnWhOver2dPage({
   searchParams,
@@ -107,6 +126,33 @@ export default async function ChnWhOver2dPage({
 
   const now = nowMs();
 
+  // On-screen rows → flat CsvRow[] for the "CSV หน้านี้" button (same mapping
+  // as the export-all action so the two CSVs are column-identical).
+  const csvRows: CsvRow[] = rows.map((r) => {
+    const u = r.userid ? userMap.get(r.userid) : undefined;
+    const customerName = u
+      ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || (r.userid ?? "")
+      : r.userid ?? "";
+    const daysWaiting = r.fdate
+      ? Math.floor((now - new Date(r.fdate).getTime()) / (24 * 60 * 60 * 1000))
+      : 0;
+    return {
+      id: r.id,
+      fdate: r.fdate ? String(r.fdate).slice(0, 10) : "",
+      days_waiting: daysWaiting,
+      userid: r.userid ?? "",
+      customer: customerName,
+      tel: u?.userTel ?? "",
+      warehouse: WAREHOUSE_LABEL[r.fwarehousechina ?? ""] ?? r.fwarehousechina ?? "",
+      transport: TRANSPORT_LABEL[r.ftransporttype ?? ""] ?? "",
+      tracking_chn: r.ftrackingchn ?? "",
+      cabinet: r.fcabinetnumber ?? "",
+      weight: r.fweight ? `${Number(r.fweight).toFixed(1)} kg` : "",
+      volume: r.fvolume ? `${Number(r.fvolume).toFixed(3)} cbm` : "",
+      note: r.fnote ?? "",
+    } satisfies CsvRow;
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
@@ -122,6 +168,17 @@ export default async function ChnWhOver2dPage({
           >
             ← กลับ QA hub
           </Link>
+          <div className="ml-auto">
+            <CsvButton
+              rows={csvRows}
+              cols={CSV_COLS}
+              filename="qa-รอเข้าโกดังจีนเกิน2วัน.csv"
+              fetchAll={async () => {
+                "use server";
+                return exportQaChnWhOver2dAll();
+              }}
+            />
+          </div>
         </div>
         <p className="mt-1 text-xs text-muted">
           tb_forwarder · fstatus=&apos;1&apos; (รอเข้าโกดังจีน) AND fdate &lt; NOW() − 2 วัน ·

@@ -26,6 +26,22 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { exportQaOrderOver10MinAll } from "@/actions/admin/export/qa-order-over-10min";
+
+const CSV_COLS = [
+  { key: "hno", label: "เลขที่ออเดอร์" },
+  { key: "userid", label: "รหัสลูกค้า" },
+  { key: "customer", label: "ลูกค้า" },
+  { key: "tel", label: "เบอร์โทร" },
+  { key: "hdate", label: "วันที่สร้าง" },
+  { key: "age", label: "รอ" },
+  { key: "htitle", label: "สินค้า" },
+  { key: "hcount", label: "จำนวน" },
+  { key: "htransporttype", label: "โหมดขนส่ง" },
+  { key: "htotalpricechn", label: "ราคารวม (¥)" },
+  { key: "hnoteuser", label: "หมายเหตุลูกค้า" },
+];
 
 export const dynamic = "force-dynamic";
 
@@ -101,6 +117,37 @@ export default async function AdminQaOrderOver10MinPage({
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
   }
 
+  // Map the on-screen (paginated) rows → flat CsvRow[] mirroring the <thead>.
+  const csvRows: CsvRow[] = rows.map((r) => {
+    const u = r.userid ? userMap.get(r.userid) : undefined;
+    const customerName = u
+      ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || (r.userid ?? "")
+      : r.userid ?? "";
+    const ageMin = minutesSince(r.hdate);
+    const ageLabel =
+      ageMin >= 60 * 24
+        ? `${Math.floor(ageMin / (60 * 24))} วัน`
+        : ageMin >= 60
+          ? `${Math.floor(ageMin / 60)} ชม.`
+          : `${ageMin} นาที`;
+    return {
+      hno: r.hno ?? "",
+      userid: r.userid ?? "",
+      customer: customerName,
+      tel: u?.userTel ?? "",
+      hdate: (r.hdate ?? "").slice(0, 10),
+      age: ageLabel,
+      htitle: r.htitle ?? "",
+      hcount: r.hcount ?? "",
+      htransporttype: r.htransporttype ?? "",
+      htotalpricechn: Number(r.htotalpricechn ?? 0).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
+      hnoteuser: r.hnoteuser ?? "",
+    };
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
@@ -119,6 +166,17 @@ export default async function AdminQaOrderOver10MinPage({
           <Link href="/admin/qa" className="text-xs text-primary-600 hover:underline">
             ← กลับหน้า QA
           </Link>
+          <div className="ml-auto">
+            <CsvButton
+              rows={csvRows}
+              cols={CSV_COLS}
+              filename="qa-สั่งซื้อรอเกิน10นาที.csv"
+              fetchAll={async () => {
+                "use server";
+                return exportQaOrderOver10MinAll();
+              }}
+            />
+          </div>
         </div>
         <p className="text-xs text-muted mt-1">
           tb_header_order · hstatus = &apos;1&apos; (รอดำเนินการ) AND hdate &lt; NOW() − 10 นาที · เรียงเก่าสุดก่อน
