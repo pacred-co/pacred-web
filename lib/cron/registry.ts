@@ -103,6 +103,23 @@ export const CRON_REGISTRY: readonly CronEntry[] = [
     description:   "ดึง row ใหม่จาก Google Sheet ของคลัง CTT → tb_forwarder + แจ้งทีม ops (DRY-RUN จนกว่า ก๊อต wire credentials)",
     scheduleLabel: "ทุก 1 ชม.",
   },
+  // 2026-06-09 (§0d health-page accuracy) — register the MOMO isolated-sync
+  // cron. Was scheduled in vercel.json (*/5) but missing from the registry,
+  // so the cron-health page surfaced it as an "orphan" with logs but no
+  // label/description. Pulls MOMO import-tracks + closed containers into the
+  // isolated momo_* tables (7-day window) + propagates matched rows to
+  // tb_forwarder (cabinet/arrived-in-TH/status). Auto-commit to tb_forwarder
+  // is GATED behind MOMO_CRON_AUTOCOMMIT (default OFF — pull-only).
+  // Route: app/api/cron/momo-sync/route.ts (its header comment says */10,
+  // but vercel.json is the source of truth → */5 every 5 minutes).
+  // @see lib/integrations/momo-isolated/sync.ts — runMomoSync orchestrator
+  {
+    path:          "/api/cron/momo-sync",
+    schedule:      "*/5 * * * *",
+    label:         "Sync MOMO (isolated)",
+    description:   "ดึง import-tracks + ตู้ที่ปิดจาก MOMO เข้าตาราง momo_* (window 7 วัน) + propagate ไป tb_forwarder (ตู้/ถึงไทย/สถานะ) · auto-commit ปิดไว้ (gated ด้วย MOMO_CRON_AUTOCOMMIT)",
+    scheduleLabel: "ทุก 5 นาที",
+  },
   // 2026-06-02 — PCS↔Pacred sync. Pulls recent tb_forwarder edits from the
   // PHP endpoint on the PCS server (pacred-sync.php) and merges them into
   // our tb_forwarder per the conflict policy in
@@ -127,6 +144,35 @@ export const CRON_REGISTRY: readonly CronEntry[] = [
     label:         "Sync ต้นทุนตู้ (Sheet แสง)",
     description:   "ดึงชีตต้นทุนตู้ของแสง → cache (worklist + diff อ่านเร็ว) · ไม่เขียน tb_forwarder (ปรับต้นทุนยังเป็น action ที่ต้องยืนยัน)",
     scheduleLabel: "ทุก 20 นาที",
+  },
+  // 2026-06-09 (§0d health-page accuracy) — register the margin-flag cron.
+  // Scheduled in vercel.json (10 17 * * *) but missing from the registry →
+  // showed as "orphan" on the cron-health page. CEO over-cap auto-flag:
+  // scans yesterday's delivered tb_forwarder (fstatus='7'), computes margin
+  // (sale − cost − discount), and pings the staff LINE group with OVER-CAP
+  // (> ฿15k) + LOSS (< 0) lists + a deep-link to /admin/accounting/margin-monitor.
+  // READ-ONLY · MARGIN_FLAG_QUIET=true skips notify on clean days.
+  // Route: app/api/cron/margin-flag/route.ts.
+  {
+    path:          "/api/cron/margin-flag",
+    schedule:      "10 17 * * *",
+    label:         "Flag กำไรเกิน cap (CEO)",
+    description:   "สแกนตู้ที่ส่งสำเร็จเมื่อวาน (tb_forwarder fstatus='7') หากำไรเกิน ฿15k/ตู้ หรือขาดทุน → แจ้งทีมผ่าน LINE + ลิงก์ Margin Monitor (อ่านอย่างเดียว)",
+    scheduleLabel: "ทุกวัน 00:10 ICT (17:10 UTC ก่อนหน้า)",
+  },
+  // 2026-06-09 (§0d health-page accuracy) — register the billing-run-overdue
+  // cron. Scheduled in vercel.json (0 9 * * *) but missing from the registry →
+  // showed as "orphan". Daily overdue check for ใบวางบิล: for every
+  // tb_forwarder_invoice WHERE status='issued' AND date_due < today (capped
+  // at 200/run), sends the customer a LINE/email reminder via sendNotification.
+  // No "last reminder" flag (R-2 scope) → re-sends daily until paid/cancelled.
+  // Route: app/api/cron/billing-run-overdue/route.ts.
+  {
+    path:          "/api/cron/billing-run-overdue",
+    schedule:      "0 9 * * *",
+    label:         "เตือนใบวางบิลเลยกำหนด",
+    description:   "ไล่ใบวางบิล (tb_forwarder_invoice) status='issued' ที่ date_due < วันนี้ (สูงสุด 200/รอบ) → ส่งเตือนลูกค้าผ่าน LINE/อีเมล · ส่งซ้ำทุกวันจนกว่าจะชำระ/ยกเลิก",
+    scheduleLabel: "ทุกวัน 16:00 ICT (09:00 UTC)",
   },
   // 2026-06-09 — READ-ONLY wallet integrity scan. Detects wallets whose
   // stored tb_wallet.wallettotal is impossible (negative) or inconsistent
