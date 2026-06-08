@@ -78,18 +78,23 @@ import { LinkPasteSearch } from "./link-paste-search";
  *   - paymentOrder  (L246-438) → actions/orders.ts::payServiceOrders
  *   - orderCancelAll(L440-460) → actions/orders.ts::cancelServiceOrders
  *
- * ── UNWIRED INTERACTIONS (flagged, not invented) ─────────────
- * The legacy page is heavily jQuery + DataTables driven:
- *   - DataTables init (sort / responsive / row-checkboxes)  L1189+
- *   - per-row "ยกเลิกออเดอร์" → AJAX cancelOrder.php         L1117-1151
- *   - "ชำระเงิน" multi-select pay → AJAX getListPay.php      L1255-1267
- *   - "ยกเลิกออเดอร์รายการที่เลือก" → AJAX getList.php       L1269-1281
- *   - the b-pay bottom bar live total → AJAX calPrice.php    L1327-1338
- *   - SweetAlert post-action toasts                          L1369-1466
- * The visible markup is transcribed 1:1 (classes kept so the CSS is
- * identical at rest). The jQuery/AJAX behaviour is NOT reproduced —
- * TODO(server-action): wire each AJAX endpoint to the matching Server
- * Action above + a thin "use client" shim for the row-checkbox state.
+ * ── INTERACTIONS (wired via "use client" shims) ──────────────
+ * The legacy page is heavily jQuery + DataTables driven; the equivalent
+ * behaviour is now wired through React client shims rather than jQuery:
+ *   - per-row "ยกเลิกออเดอร์"  (legacy AJAX cancelOrder.php L1117-1151)
+ *       → <RowCancelButton>     (service-order-bulk-actions.tsx)
+ *   - "ชำระเงิน" multi-select pay (legacy AJAX getListPay.php L1255-1267)
+ *       → <BulkPayBar>          (service-order-bulk-actions.tsx)
+ *   - "ยกเลิกออเดอร์รายการที่เลือก" (legacy AJAX getList.php L1269-1281)
+ *       → <BulkCancelButton> + <RowCheckbox> (service-order-bulk-actions.tsx)
+ *   - the b-pay bottom bar live total (legacy AJAX calPrice.php L1327-1338)
+ *       → <BulkPayBar> wallet-balance prop + selection total
+ *   - the link-paste product search (legacy shops.php paste box)
+ *       → <LinkPasteSearch>     (link-paste-search.tsx)
+ * Row-checkbox / selection state lives in <BulkActionsProvider>. The
+ * visible markup is still transcribed 1:1 (classes kept so the CSS is
+ * identical at rest). Confirm-before-mutate toasts replace the legacy
+ * SweetAlert payloads (L1369-1466).
  */
 
 export const dynamic = "force-dynamic";
