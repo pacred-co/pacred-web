@@ -6066,6 +6066,9 @@
     },
     "quote": {
       "approxTotal": "Approximate total",
+      "calculating": "Calculating your estimate…",
+      "subtotal": "Subtotal (before VAT)",
+      "vat": "VAT {pct}%",
       "disclaimer": "* Rough preliminary estimate, depending on actual weight, route, season and customs conditions — the sales team will confirm the price again",
       "empty": "Fill in the cargo details in the previous step to see an estimate, or enter your contact info below to have the sales team quote for you"
     },
