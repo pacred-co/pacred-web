@@ -222,7 +222,10 @@ async function tryRenderTbForwarder(
       "fnote, fdetail, fcover, fcredit, reforder, " +
       "adminid, adminidcreator, adminidupdate, paymethod, paydeposit, crate, fpallet, fbilltoname, " +
       // 2026-06-05 PM (ภูม flag · breakdown table on detail page too).
-      "fusercompany",
+      "fusercompany, " +
+      // B4 · backlog #259 (migration 0150 · 2026-06-08) — cabinet lock flag
+      // so the read-only detail can show "🔒 ล็อกแล้ว" badge next to cabinet.
+      "fcabinet_locked",
     )
     .limit(1);
   tbq = isId ? tbq.eq("id", asNumber) : tbq.eq("fidorco", fNo);
@@ -265,6 +268,7 @@ async function tryRenderTbForwarder(
     crate: string | null; fpallet: number | null;
     fbilltoname: string | null;
     fusercompany: string | null;
+    fcabinet_locked: boolean | null;
   };
 
   const { data: userRow, error: userRowErr } = await admin
@@ -532,7 +536,11 @@ async function tryRenderTbForwarder(
                 }
               />
               <LegacyKV
-                label="หมายเลขตู้"
+                label={
+                  r.fcabinet_locked === true
+                    ? "หมายเลขตู้ 🔒 (ล็อกแล้ว · MOMO sync ไม่เขียนทับ)"
+                    : "หมายเลขตู้"
+                }
                 value={r.fcabinetnumber ?? "—"}
                 href={r.fcabinetnumber ? `/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}` : undefined}
                 mono

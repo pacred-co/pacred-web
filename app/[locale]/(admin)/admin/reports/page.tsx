@@ -135,6 +135,10 @@ const REPORTS_MENUBAR: MenubarItem[] = [
   // this.) Wired here so staff reach it in ≤2 clicks.
   { label: "ตัวแทน/คอมมิชชั่น", href: "/admin/reports/agent-payouts" },
   { label: "คนขับ", href: "/admin/driver-runs" },
+  // Phase 4a (2026-06-08 · ops-workflow audit §32): customer delivery
+  // feedback rollup — rating + comment + photo submitted from
+  // /service-import/[fNo] after fstatus=7. ≤2 clicks from sidebar.
+  { label: "📝 Feedback การจัดส่ง", href: "/admin/reports/delivery-feedback" },
 ];
 
 // Profile (Pacred-native — used only by the sales/payouts tab which keeps
@@ -774,6 +778,23 @@ export default async function AdminReportsPage({
     (vg6UserSalesHistoryRaw.data ?? []).map((r) => (r as { userid: string }).userid),
   ).size;
 
+  // Phase 4a (2026-06-08): delivery_feedback count for the QuickCard.
+  // Isolated try/catch — if migration 0149 isn't applied yet the hub
+  // still renders with 0 in the new card instead of 500-ing.
+  let deliveryFeedbackCnt = 0;
+  try {
+    const r = await admin
+      .from("delivery_feedback")
+      .select("id", { count: "exact", head: true });
+    if (r.error) {
+      console.error(`[reports deliveryFeedbackCnt] failed`, { code: r.error.code, message: r.error.message });
+    } else {
+      deliveryFeedbackCnt = r.count ?? 0;
+    }
+  } catch (e) {
+    console.error(`[reports deliveryFeedbackCnt] threw`, e);
+  }
+
   // ── render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -807,6 +828,10 @@ export default async function AdminReportsPage({
           <QuickCard href="/admin/reports/sales-by-rep"            label="ยอดต่อ sales rep"     count={vg6SalesByRepCnt}                 note="เซลล์ที่มีลูกค้า" />
           <QuickCard href="/admin/reports/hs-code-revenue"         label="HS-code revenue"      count={vg6HsCodeRevenueCnt}              note="HS codes · 90 วัน" />
           <QuickCard href="/admin/reports/user-sales-history"      label="ประวัติยอด/ลูกค้า"   count={vg6UserSalesHistoryCnt}           note="ลูกค้าซื้อใน 30 วัน" />
+          {/* Phase 4a (2026-06-08 · ops-workflow audit §32): customer
+              delivery feedback. Card sits in V-G6 because it's an analytical
+              read-only signal, not an action queue. */}
+          <QuickCard href="/admin/reports/delivery-feedback"       label="📝 Feedback การจัดส่ง" count={deliveryFeedbackCnt}              note="ลูกค้ารีวิวหลังส่ง" />
         </div>
       </section>
 

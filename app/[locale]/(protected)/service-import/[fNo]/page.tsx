@@ -8,6 +8,10 @@ import { legacyMemberUrl } from "@/lib/legacy-image";
 import { ServiceImportEditShipByForm } from "./service-import-edit-ship-by-form";
 import { ServiceImportEditAddressForm } from "./service-import-edit-address-form";
 import { ServiceImportPayButton } from "./service-import-pay-button";
+import {
+  DeliveryFeedbackCard,
+  type DeliveryFeedbackExisting,
+} from "./delivery-feedback-card";
 import type { ForwarderRow } from "../forwarder-row-view";
 
 /**
@@ -670,6 +674,36 @@ export default async function ServiceImportDetailPage({
   if (driverRowErr) {
     // Soft-fail — driver status is decorative for legacy display.
     console.error(`[service-import/[fNo] tb_forwarder_driver_item secondary lookup] fid=${idNum}`, { code: driverRowErr.code, message: driverRowErr.message });
+  }
+
+  // ── delivery_feedback — Phase 4a (ops-workflow audit 2026-06-05 §32).
+  // Only meaningful when the row is delivered (fstatus='7'). We fetch
+  // eagerly so the page can decide between editor / summary in one render.
+  let existingFeedback: DeliveryFeedbackExisting | null = null;
+  if ((row.fstatus ?? "") === "7") {
+    const { data: fb, error: fbErr } = await admin
+      .from("delivery_feedback")
+      .select("rating, comment, photo_path, created_at, updated_at")
+      .eq("fid", idNum)
+      .maybeSingle<{
+        rating: number | null;
+        comment: string | null;
+        photo_path: string | null;
+        created_at: string;
+        updated_at: string;
+      }>();
+    if (fbErr) {
+      // Soft-fail — feedback is supplementary; render the empty form on read failure.
+      console.error(`[service-import/[fNo] delivery_feedback lookup] fid=${idNum}`, { code: fbErr.code, message: fbErr.message });
+    } else if (fb) {
+      existingFeedback = {
+        rating: fb.rating,
+        comment: fb.comment,
+        photoPath: fb.photo_path,
+        createdAt: fb.created_at,
+        updatedAt: fb.updated_at,
+      };
+    }
   }
 
   // Normalised row aliases.
@@ -1422,6 +1456,16 @@ export default async function ServiceImportDetailPage({
                               </table>
                             </div>
                           </>
+                        )}
+
+                        {/* ── Delivery feedback (Phase 4a · ops-workflow audit 2026-06-05 §32)
+                            — only when fstatus=7 (delivered). Customer can leave
+                            rating + comment + photo (all optional · ≥ 1 required). ── */}
+                        {fStatusValue === "7" && (
+                          <DeliveryFeedbackCard
+                            fid={row.id}
+                            existing={existingFeedback}
+                          />
                         )}
 
                         {/* ── Footer back button ── forwarder.php L2231-2240 ── */}

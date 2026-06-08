@@ -9,9 +9,11 @@
  *   • (V-E7.1) customer download on the freight portal once it ships
  *
  * Auth & visibility:
- *   - Row visibility gated by freight_invoices RLS (migration 0051):
+ *   - Row visibility gated by freight_invoices RLS (migration 0051 + 0148):
  *       customer → own rows (profile_id = auth.uid())
- *       admin    → all rows when is_admin(['super','ops','accounting'])
+ *       admin    → all rows when is_admin(['super','ops','accounting',
+ *                  'freight_export_doc','freight_import_doc',
+ *                  'freight_clearance_both'])  (Doc roles added by 0148, 2026-06-08)
  *   - We DO NOT use the admin client for the row lookup — RLS makes the
  *     access decision. SELECT returns null → unauthorised OR not found →
  *     either way a 404.

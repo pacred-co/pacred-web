@@ -9,7 +9,9 @@
  * Auth & visibility:
  *   - Row visibility gated by freight_invoices RLS:
  *       customer  → own rows (profile_id = auth.uid())
- *       admin     → all rows when is_admin(['super','ops','accounting'])
+ *       admin     → all rows when is_admin(['super','ops','accounting',
+ *                  'freight_export_doc','freight_import_doc',
+ *                  'freight_clearance_both'])  (migration 0148, 2026-06-08)
  *   - SELECT via user-scoped client; if null → 404 (unauth or missing).
  *
  * Status handling:

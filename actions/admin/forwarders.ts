@@ -414,6 +414,14 @@ const bulkTbSchema = z.object({
   cabinet_number: z.string().trim().max(300).optional(),
   tracking_th:    z.string().trim().max(50).optional(),
   fnote:          z.string().trim().max(2000).optional(),
+  // B4 · backlog #259 (migration 0150 · 2026-06-08): per-row lock flag
+  // that tells MOMO/partner sync to SKIP fcabinetnumber on this row.
+  // Defensive belt — when admin manually corrects a cabinet that MOMO
+  // got wrong (e.g. 2026-05-29 routing-batch incident), checking this
+  // box prevents the next cron from overwriting the fix. Undefined =
+  // don't touch (existing rows keep their flag); explicit true/false
+  // = write the new value.
+  cabinet_locked: z.boolean().optional(),
 });
 
 // `fdatestatusN` map — only stamp a column for statuses that have one
@@ -436,7 +444,7 @@ export async function adminBulkUpdateForwarderTbStatus(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
-  const { fids, fstatus, cabinet_number, tracking_th, fnote } = parsed.data;
+  const { fids, fstatus, cabinet_number, tracking_th, fnote, cabinet_locked } = parsed.data;
 
   return withAdmin<{ updated: number }>(
     // Wave 26 G5 (2026-05-28 ดึก): page-level union widened from ["ops","super"]
@@ -450,10 +458,11 @@ export async function adminBulkUpdateForwarderTbStatus(
     const admin = createAdminClient();
 
     // Snapshot before — for audit log + change detection + the cabinet-close
-    // date back-fill (Wave 24 #192 · 2026-05-27 ดึก · see comment below).
+    // date back-fill (Wave 24 #192 · 2026-05-27 ดึก · see comment below) +
+    // the cabinet-lock audit (B4 · backlog #259 · 2026-06-08).
     const { data: before, error: readErr } = await admin
       .from("tb_forwarder")
-      .select("id, fstatus, userid, fidorco, fcabinetnumber, fdatecontainerclose")
+      .select("id, fstatus, userid, fidorco, fcabinetnumber, fdatecontainerclose, fcabinet_locked")
       .in("id", fids);
     if (readErr) return { ok: false, error: readErr.message };
     if (!before || before.length === 0) return { ok: false, error: "not_found" };
@@ -465,6 +474,7 @@ export async function adminBulkUpdateForwarderTbStatus(
       fidorco: string | null;
       fcabinetnumber: string | null;
       fdatecontainerclose: string | null;
+      fcabinet_locked: boolean | null;
     }>;
 
     // 2026-06-05 (ภูม flag — "ถ้าใส่เลขตู้ ก็เปลี่ยนสถานะให้เลยงี้ได้มั้ย"):
@@ -576,6 +586,12 @@ export async function adminBulkUpdateForwarderTbStatus(
       ...(cabinet_number !== undefined ? { fcabinetnumber: cabinet_number } : {}),
       ...(tracking_th    !== undefined ? { ftrackingth: tracking_th || "-" } : {}),
       ...(fnote          !== undefined ? { fnote: fnote || null }            : {}),
+      // B4 · backlog #259 (migration 0150 · 2026-06-08): only persist the
+      // lock flag when the caller explicitly passed it. The role gate is the
+      // SAME as for cabinet_number (already checked above by withAdmin +
+      // canAnyRoleFlipFstatus) — anyone allowed to touch the cabinet is
+      // allowed to lock/unlock it.
+      ...(cabinet_locked !== undefined ? { fcabinet_locked: cabinet_locked } : {}),
     };
 
     // Path A — no back-fill rows: single bulk update covers everything.
@@ -610,6 +626,21 @@ export async function adminBulkUpdateForwarderTbStatus(
       }
     }
 
+    // B4 · backlog #259 (2026-06-08): capture the lock-flag changes so staff
+    // can audit "who locked/unlocked which cabinet · when · why" — important
+    // because the lock changes what the next MOMO cron will do for the row.
+    const lockChanges =
+      cabinet_locked === undefined
+        ? undefined
+        : beforeRows
+            .filter((r) => (r.fcabinet_locked === true) !== cabinet_locked)
+            .map((r) => ({
+              id: r.id,
+              from: r.fcabinet_locked === true,
+              to:   cabinet_locked,
+              cabinet_at_lock: r.fcabinetnumber ?? null,
+            }));
+
     await logAdminAction(adminId, "forwarder.bulk_update_tb", "tb_forwarder", "bulk", {
       fids,
       before_statuses: beforeRows.map((r) => ({ id: r.id, fstatus: r.fstatus })),
@@ -617,7 +648,9 @@ export async function adminBulkUpdateForwarderTbStatus(
         fstatus:           derivedFstatus,
         submitted_fstatus: fstatus !== derivedFstatus ? fstatus : undefined,
         auto_advanced:     fstatus !== derivedFstatus ? true : undefined,
+        cabinet_locked:    cabinet_locked,
       },
+      ...(lockChanges && lockChanges.length > 0 ? { cabinet_lock_changes: lockChanges } : {}),
     });
 
     // G8 (2026-05-28 ดึก): append one tb_log_forwarder_status row per
