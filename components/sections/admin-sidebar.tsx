@@ -380,10 +380,19 @@ function SidebarHeader({
             <Settings className="w-4 h-4" />
             <span>{t("account.settings")}</span>
           </Link>
-          <Link href="/logout" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-foreground/70 hover:bg-primary-50 hover:text-primary-700 transition-colors">
-            <ArrowRightLeft className="w-4 h-4" />
-            <span>{t("account.logout")}</span>
-          </Link>
+          {/* Logout = POST to /auth/signout (clears the Supabase session +
+              impersonation cookie, redirects home). The old `<Link href="/logout">`
+              404'd — there is no /logout route; signout is a POST route, same as
+              the customer navbar (2026-06-08 fix). */}
+          <form action="/auth/signout" method="post" className="block">
+            <button
+              type="submit"
+              className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-[13px] text-foreground/70 hover:bg-primary-50 hover:text-primary-700 transition-colors"
+            >
+              <ArrowRightLeft className="w-4 h-4" />
+              <span>{t("account.logout")}</span>
+            </button>
+          </form>
         </div>
       )}
     </div>

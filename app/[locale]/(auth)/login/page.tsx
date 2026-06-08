@@ -15,6 +15,14 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_credentials: "อีเมล/เบอร์/รหัสไม่ถูกต้อง",
   user_not_found: "ไม่พบผู้ใช้นี้ในระบบ",
   oauth_failed: "เข้าสู่ระบบผ่านโซเชียลล้มเหลว ลองใหม่อีกครั้ง",
+  // The `signIn` server-action call can THROW (not return !ok) on a transient
+  // server-action failure — most often deployment skew ("An unexpected response
+  // was received from the server", thrown by Next's server-action-reducer when
+  // a stale action id hits a fresh deploy) or a network blip. Without a catch
+  // this surfaced as an uncaught error + a logged incident + a stuck form
+  // (2026-06-08, incident IO-1). Catch it → friendly retry message; a retry
+  // picks up the fresh action id.
+  connection_error: "เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
 };
 
 const INPUT_BASE =
@@ -60,7 +68,16 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const res = await signIn({ identifier, password });
+      let res;
+      try {
+        res = await signIn({ identifier, password });
+      } catch (err) {
+        // Transient server-action failure (deploy skew / network) — show a
+        // friendly retry instead of an uncaught error + a logged incident.
+        console.error("[login] signIn threw:", err);
+        setError(ERROR_MESSAGES.connection_error);
+        return;
+      }
       if (res.ok) {
         const method: LoginMethod = identifier.includes("@")
           ? "email"
@@ -87,7 +104,14 @@ export default function LoginPage() {
   function handleOAuth(provider: "google" | "facebook") {
     setError(null);
     startTransition(async () => {
-      const res = await signInWithOAuth(provider);
+      let res;
+      try {
+        res = await signInWithOAuth(provider);
+      } catch (err) {
+        console.error("[login] signInWithOAuth threw:", err);
+        setError(ERROR_MESSAGES.connection_error);
+        return;
+      }
       if (res.ok && res.data) {
         // Fire telemetry before navigating away (GTM unload handlers flush on beforeunload best-effort)
         trackLogin(provider === "google" ? "oauth_google" : "oauth_facebook");
