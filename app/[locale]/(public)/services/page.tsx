@@ -15,6 +15,8 @@ import {
   HandshakeIcon,
   Headset,
   PawPrint,
+  Tags,
+  Receipt,
   MessageCircle,
   Phone,
   Home,
@@ -56,7 +58,8 @@ type ServiceCard = {
   icon: typeof Ship;
   title: string;
   sub: string;
-  href: string;
+  /** Only navigable "live" cards carry an href; "soon" cards are non-navigating. */
+  href?: string;
   group: "cargo" | "freight" | "shopping" | "customs";
   status?: "live" | "soon";
 };
@@ -100,7 +103,7 @@ function ServiceCard({ card, soonLabel }: { card: ServiceCard; soonLabel: string
     </>
   );
 
-  if (isLive) {
+  if (isLive && card.href) {
     return (
       <Link href={card.href} data-cta={`service-${card.href}`} className={cardClass}>
         {body}
@@ -176,15 +179,13 @@ export default async function ServicesIndexPage({
       icon: Globe2,
       title: t("svcExportTitle"),
       sub: t("svcExportSub"),
-      href: "/services/export-worldwide",
       group: "freight",
-      status: "live",
+      status: "soon",
     },
     {
       icon: FileCheck2,
       title: t("svcTaxInvoiceTitle"),
       sub: t("svcTaxInvoiceSub"),
-      href: "/services",
       group: "freight",
       status: "soon",
     },
@@ -192,7 +193,6 @@ export default async function ServicesIndexPage({
       icon: HandshakeIcon,
       title: t("svcBrokerTitle"),
       sub: t("svcBrokerSub"),
-      href: "/services",
       group: "freight",
       status: "soon",
     },
@@ -200,7 +200,6 @@ export default async function ServicesIndexPage({
       icon: RefreshCcw,
       title: t("svcTaxRefundTitle"),
       sub: t("svcTaxRefundSub"),
-      href: "/services",
       group: "freight",
       status: "soon",
     },
@@ -208,15 +207,27 @@ export default async function ServicesIndexPage({
       icon: PawPrint,
       title: t("svcFumigationTitle"),
       sub: t("svcFumigationSub"),
-      href: "/services",
       group: "freight",
+      status: "soon",
+    },
+    {
+      icon: Tags,
+      title: t("svcConsignmentTitle"),
+      sub: t("svcConsignmentSub"),
+      group: "shopping",
+      status: "soon",
+    },
+    {
+      icon: Receipt,
+      title: t("svcBillPaymentTitle"),
+      sub: t("svcBillPaymentSub"),
+      group: "shopping",
       status: "soon",
     },
     {
       icon: Warehouse,
       title: t("svcDomesticTitle"),
       sub: t("svcDomesticSub"),
-      href: "/services",
       group: "cargo",
       status: "soon",
     },
