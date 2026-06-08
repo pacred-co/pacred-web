@@ -362,7 +362,14 @@ async function tryRenderTbForwarder(
       ? { label: `ฝากนำเข้า : ${r.adminidcreator}`, cls: "bg-amber-50 text-amber-700 border-amber-200" }
       : { label: "ฝากนำเข้าจาก : users", cls: "bg-gray-50 text-gray-600 border-gray-200" };
 
-  const slugForLink = r.fidorco ?? String(r.id);
+  // 2026-06-08 ภูม flag (URL 404 bug · 21,694 rows on prod = 45%):
+  // tb_forwarder.fidorco often contains literal `/` (e.g. "MODPK301890160035-1/2"
+  // · "รถ 790A/116" · per-shipment split markers). Using fidorco verbatim in
+  // the URL turns the path into 2 segments and the dynamic [fNo] route 404s.
+  // r.id is numeric · safe in URLs · the detail + edit pages already accept
+  // BOTH numeric id AND fidorco (see edit/page.tsx L175-176 · this/L264-265).
+  // We keep fidorco for DISPLAY but route on the numeric id.
+  const slugForLink = String(r.id);
 
   return (
     <main className="p-4 lg:p-6 space-y-4">
