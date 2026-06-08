@@ -175,7 +175,11 @@ export default async function AdminForwarderEditPage({
 }: {
   params: Promise<{ fNo: string }>;
 }) {
-  await requireAdmin(["ops", "accounting", "super"]);
+  // 2026-06-08 (ภูม warehouse-handoff readiness): added "warehouse". Note
+  // `super` is redundant in the explicit list (require-admin.ts:142 always
+  // lets super through) — keeping it for paper-trail visibility. Warehouse
+  // staff need this to update cabinet number + status on rows they scan in.
+  await requireAdmin(["ops", "accounting", "super", "warehouse"]);
 
   const { fNo } = await params;
   const admin = createAdminClient();
