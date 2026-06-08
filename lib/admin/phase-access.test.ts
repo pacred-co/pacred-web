@@ -72,6 +72,8 @@ const stillBlockedForWarehouse = [
   "/admin/carriers",
   "/admin/juristic-check",
   "/admin/warehouse/bulletin",             // explicitly super-only QA bulletin
+  // /admin/drivers + /admin/driver-runs un-blocked round 2 — moved out of
+  // this list (page-level requireAdmin enforces the real RBAC).
 ];
 for (const route of stillBlockedForWarehouse) {
   check(
@@ -141,15 +143,23 @@ check(
   isPhase2PlusRoute("/en/admin/refunds"),
 );
 
-// ── §6. Phase-1 carve-out under a Phase-2 prefix ──────────────────────
-console.log("\n§6. PHASE_1_CARVEOUTS shields driver mobile UI");
+// ── §6. Driver-mobile UI + driver-runs reachability ──────────────────
+// 2026-06-08 round 2: /admin/drivers + /admin/driver-runs un-blocked from
+// the Phase gate (page-level requireAdmin handles role policy: drivers/
+// warehouse can navigate freely; the assign-driver tool still rejects
+// non-ops at the page itself).
+console.log("\n§6. Driver mobile UI + runs reachability (round 2)");
 check(
-  `driver can access /admin/drivers/work despite /admin/drivers being Phase 2+`,
+  `driver can access /admin/drivers/work`,
   canAccessRoute("/admin/drivers/work", "driver" as AdminRole),
 );
 check(
-  `driver cannot access /admin/drivers (the parent, still Phase 2+)`,
-  !canAccessRoute("/admin/drivers", "driver" as AdminRole),
+  `driver can access /admin/driver-runs (Phase gate now permits)`,
+  canAccessRoute("/admin/driver-runs", "driver" as AdminRole),
+);
+check(
+  `driver can navigate to /admin/drivers (Phase gate now permits — page-level requireAdmin rejects later)`,
+  canAccessRoute("/admin/drivers", "driver" as AdminRole),
 );
 
 // ── Result ────────────────────────────────────────────────────────────

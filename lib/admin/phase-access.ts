@@ -59,8 +59,18 @@ export const PHASE_2_PLUS_ROUTES = [
   "/admin/commissions",                  // interpreter / sales commissions
   "/admin/customers/pending",            // customer approval queue (QA-like)
   "/admin/customers/transfer-rep",       // sales-rep transfer (QA)
-  "/admin/driver-runs",                  // driver-runs (sales-only side)
-  "/admin/drivers",                      // assign driver (driver-runs)
+  // 2026-06-08 (ภูม warehouse-handoff readiness ROUND 2): un-blocked
+  // `/admin/driver-runs` and `/admin/drivers` — same stale-sync pattern as
+  // /admin/barcode round 1. sidebar-menu.ts:1095-1096 + 1029 expose both
+  // to driver / warehouse roles without phase tags; the network gate was
+  // bouncing them. Page-level requireAdmin() on driver-runs accepts any
+  // admin (filters by profile_id), and /admin/drivers requires ["ops",
+  // "super"] which still rejects warehouse/driver at the action level —
+  // so removing the Phase gate is safe.
+  // NB: driver-runs ALSO has a dead-read trap (reads rebuilt 0-row
+  // `forwarder_driver` instead of live `tb_forwarder_driver_item`) — that
+  // is tracked separately and is NOT made worse by un-blocking the gate;
+  // staff would just see an empty page instead of a silent redirect.
   "/admin/forwarder-sales",              // freight withdrawal (commissions)
   "/admin/freight/declarations",         // customs declarations (service #8 not live)
   "/admin/incidents",                    // incident triage (QA-like)

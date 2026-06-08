@@ -349,7 +349,16 @@ export async function adminUpdateForwarderDimensions(
   const d = parsed.data;
 
   return withAdmin<AdminUpdateForwarderDimensionsData>(
-    ["ops", "accounting", "super"],
+    // 2026-06-08 (ภูม warehouse-handoff round 2): added "warehouse".
+    // The /admin/forwarders/[fNo]/edit page accepts warehouse role
+    // (round 2 fix), but the SAVE action here was still ops/accounting
+    // only — so warehouse staff could open the edit form (kg / cbm /
+    // box-count / status pills) but every "บันทึก" press → ok:false
+    // unauthorized. They'd see the form, type, click save, get an
+    // unhelpful error. Now they can update box dimensions + status
+    // (the legacy `update.php` was implicitly any-staff-with-the-
+    // adminID-cookie; this matches that intent in V3 roles).
+    ["ops", "accounting", "super", "warehouse"],
     async ({ adminId }) => {
       const admin         = createAdminClient();
       const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
