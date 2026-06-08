@@ -33,7 +33,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { ShoppingCart, Plus, Minus, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Link } from "@/i18n/navigation";
-import { addCartItem } from "@/actions/cart";
+import { addCartItem, addCartItemsBulk } from "@/actions/cart";
 
 // Mirrors PROVIDERS in lib/validators/cart.ts L7 (only these 5 are
 // accepted by the cart Zod schema).
@@ -119,6 +119,10 @@ export function UrlPasteAddToCart({
   // axis-value label. Mirrors the admin pattern at
   // app/[locale]/(admin)/admin/service-orders/cart/add/link-paste-search.tsx L151.
   const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
+  // 2026-06-08 ภูม flag (รูปที่ 3 in the chat · 1688 wholesale style):
+  // qty per skuMap entry · keyed by idx · default 0. When product has ≥ 2
+  // SKUs, render a row per SKU with qty stepper; submit calls addCartItemsBulk.
+  const [qtyBySku, setQtyBySku] = useState<Record<number, number>>({});
   // Manual price override — only relevant when no SKU is selected AND
   // TAMIT didn't return base/promo. Pre-filled with TAMIT's value
   // when present.
@@ -168,6 +172,25 @@ export function UrlPasteAddToCart({
   // Lets the button switch from "หยิบใส่รถเข็น" → "เลือกตัวเลือกก่อน".
   const axesIncomplete = !!skuAxes && skuAxes.length > 0
     && skuAxes.some((ax) => !selectedVariants[ax.name]);
+
+  // ── Multi-pick mode (1688 wholesale qty grid · ภูม flag 2026-06-08) ──
+  // Auto-detect: when product carries ≥ 2 SKUs, render a row per SKU
+  // (image · label · price · stock · qty input). Submit batches all qty>0
+  // rows into addCartItemsBulk (1 INSERT) — mirrors 1688's "数量" column.
+  const isMultiPickMode = !!skuMap && skuMap.length >= 2;
+  const totalSelectedQty = useMemo(
+    () => Object.values(qtyBySku).reduce((s, q) => s + (q > 0 ? q : 0), 0),
+    [qtyBySku],
+  );
+  const selectedSkuCount = useMemo(
+    () => Object.values(qtyBySku).filter((q) => q > 0).length,
+    [qtyBySku],
+  );
+  const multiPickTotalYuan = useMemo(() => {
+    if (!isMultiPickMode || !skuMap) return 0;
+    return skuMap.reduce((sum, sku, idx) => sum + sku.price_cny * (qtyBySku[idx] ?? 0), 0);
+  }, [isMultiPickMode, skuMap, qtyBySku]);
+  const multiPickPreviewThb = isMultiPickMode ? (multiPickTotalYuan * rsDefault).toFixed(2) : "—";
 
   // Render fallback only when TAMIT failed COMPLETELY — no image AND
   // no usable title AND no SKU data. If we got ANY of: the product
@@ -240,6 +263,73 @@ export function UrlPasteAddToCart({
   }
 
   function onSubmit() {
+    // ── Multi-pick branch (1688 wholesale qty grid · ภูม flag 2026-06-08) ──
+    if (isMultiPickMode && skuMap) {
+      const rows: Parameters<typeof addCartItemsBulk>[0] = [];
+      for (let i = 0; i < skuMap.length; i++) {
+        const q = qtyBySku[i] ?? 0;
+        if (q <= 0) continue;
+        if (q < minClamp || q > maxClamp) {
+          setError(t("priceNotEnteredError"));
+          return;
+        }
+        const sku = skuMap[i];
+        // Materialise sku.prop_path into a selectedVariants-shaped map so
+        // composeFromAxes-style label extraction (color/size auto-pick) works.
+        const propAsSelected = sku.prop_path;
+        let cc = "", cs = "";
+        const other: string[] = [];
+        for (const ax of skuAxes ?? []) {
+          const v = propAsSelected[ax.name];
+          if (!v) continue;
+          if (!cc && COLOR_AXIS_RE.test(ax.name))      cc = v;
+          else if (!cs && SIZE_AXIS_RE.test(ax.name))  cs = v;
+          else                                          other.push(`${ax.name}: ${v}`);
+        }
+        const skuImg = sku.image
+          || (skuAxes ?? []).flatMap((ax) => {
+            const lbl = propAsSelected[ax.name];
+            const found = ax.values.find((v) => v.label === lbl);
+            return found?.image ? [found.image] : [];
+          })[0]
+          || mainImage
+          || undefined;
+        const detailsParts = [details.trim(), other.join(" · ")].filter(Boolean);
+        rows.push({
+          provider,
+          shop_name:  shopName || "pacred",
+          url:        url || undefined,
+          title:      title || undefined,
+          image_path: skuImg,
+          color:      cc || undefined,
+          size:       cs || undefined,
+          price_cny:  sku.price_cny,
+          amount:     q,
+          details:    detailsParts.length > 0 ? detailsParts.join(" · ") : undefined,
+        });
+      }
+      if (rows.length === 0) {
+        setError("กรอกจำนวนอย่างน้อย 1 ตัวเลือก");
+        return;
+      }
+      setError(null); setSuccess(false);
+      startTransition(async () => {
+        const res = await addCartItemsBulk(rows);
+        if (res.ok) {
+          setSuccess(true);
+          setQtyBySku({}); setDetails("");
+          setTimeout(() => setSuccess(false), 4000);
+        } else {
+          const msg =
+            res.error === "cart cap reached (151 items)"
+              ? t("cartFullMessage")
+              : t("addFailed");
+          setError(msg);
+        }
+      });
+      return;
+    }
+    // ── Single-pick branch (existing flow) ──────────────────────────────
     if (axesIncomplete) {
       setError(t("selectAllOptionsFirst"));
       return;
@@ -307,7 +397,105 @@ export function UrlPasteAddToCart({
           one updates state, looks up the matched SKU in skuMap, and
           re-computes effectivePriceCny. Image thumbs render on chips
           that are themselves images (rare — Taobao colour swatches). */}
-      {skuAxes && skuAxes.length > 0 && (
+      {/* 2026-06-08 ภูม flag (รูปที่ 3 in chat) — 1688 wholesale qty grid:
+          When product has ≥ 2 SKUs, render a row per SKU with qty stepper
+          (mirrors 1688's "数量" column). Submit batches all qty>0 rows. */}
+      {isMultiPickMode && skuMap && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 space-y-2">
+          <p className="text-sm font-semibold text-emerald-900">
+            เลือกตัวเลือกสินค้า + จำนวน{" "}
+            <span className="text-xs font-normal text-emerald-700">
+              ({skuMap.length} ตัวเลือก · เลือกได้หลายอันพร้อมกัน)
+            </span>
+          </p>
+          <div className="overflow-x-auto rounded-lg border border-emerald-200 bg-white">
+            <table className="w-full text-sm">
+              <thead className="bg-emerald-100/60 text-xs text-emerald-900">
+                <tr>
+                  <th className="px-2 py-2 text-left">ตัวเลือก</th>
+                  <th className="px-2 py-2 text-right whitespace-nowrap">¥ ราคา</th>
+                  <th className="px-2 py-2 text-right whitespace-nowrap">คงเหลือ</th>
+                  <th className="px-2 py-2 text-center w-40">จำนวน</th>
+                </tr>
+              </thead>
+              <tbody>
+                {skuMap.map((sku, idx) => {
+                  const q = qtyBySku[idx] ?? 0;
+                  const skuImage = sku.image
+                    || (skuAxes ?? []).flatMap((ax) => {
+                      const lbl = sku.prop_path[ax.name];
+                      const found = ax.values.find((v) => v.label === lbl);
+                      return found?.image ? [found.image] : [];
+                    })[0];
+                  const label = Object.values(sku.prop_path).join(" · ") || "—";
+                  const outOfStock = sku.stock <= 0;
+                  return (
+                    <tr key={sku.sku_id || idx} className={`border-t border-emerald-100 align-middle ${q > 0 ? "bg-emerald-50/60" : ""}`}>
+                      <td className="px-2 py-2 min-w-0">
+                        <div className="flex items-center gap-2">
+                          {skuImage && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={skuImage} alt="" className="h-10 w-10 rounded border border-border/50 object-contain bg-white flex-shrink-0" />
+                          )}
+                          <span className="truncate text-sm" title={label}>{label}</span>
+                        </div>
+                      </td>
+                      <td className="px-2 py-2 text-right font-mono whitespace-nowrap">¥{sku.price_cny.toFixed(2)}</td>
+                      <td className="px-2 py-2 text-right font-mono whitespace-nowrap text-muted text-xs">
+                        {outOfStock ? <span className="text-red-600">หมด</span> : sku.stock.toLocaleString()}
+                      </td>
+                      <td className="px-2 py-2">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setQtyBySku((prev) => ({ ...prev, [idx]: Math.max(0, (prev[idx] ?? 0) - 1) }))}
+                            disabled={pending || q <= 0}
+                            className="rounded-md border border-border bg-white w-9 h-9 text-base hover:bg-surface-alt disabled:opacity-40 leading-none"
+                            aria-label="ลด"
+                          >−</button>
+                          <input
+                            type="number"
+                            min={0}
+                            max={Math.max(maxClamp, sku.stock)}
+                            value={q}
+                            onChange={(e) => {
+                              const n = Number(e.target.value) || 0;
+                              setQtyBySku((prev) => ({ ...prev, [idx]: Math.max(0, Math.min(99999, Math.floor(n))) }));
+                              setError(null);
+                            }}
+                            disabled={pending || outOfStock}
+                            className="text-center font-mono w-14 h-9 rounded-md border border-border bg-white text-base py-0 focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setQtyBySku((prev) => ({ ...prev, [idx]: Math.min(99999, (prev[idx] ?? 0) + 1) }))}
+                            disabled={pending || outOfStock}
+                            className="rounded-md border border-border bg-white w-9 h-9 text-base hover:bg-surface-alt disabled:opacity-40 leading-none"
+                            aria-label="เพิ่ม"
+                          >+</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              {selectedSkuCount > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-emerald-300 bg-emerald-100/60 font-semibold">
+                    <td className="px-2 py-2 text-right" colSpan={2}>
+                      รวม {selectedSkuCount} ตัวเลือก · {totalSelectedQty.toLocaleString()} ชิ้น
+                    </td>
+                    <td className="px-2 py-2 text-right font-mono whitespace-nowrap text-rose-700">¥{multiPickTotalYuan.toFixed(2)}</td>
+                    <td className="px-2 py-2 text-center text-xs text-muted">≈ ฿{multiPickPreviewThb}</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </div>
+      )}
+
+      {!isMultiPickMode && skuAxes && skuAxes.length > 0 && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 space-y-3">
           <p className="text-sm font-semibold text-emerald-900">
             {t("selectProductOptions")}{" "}
@@ -408,33 +596,38 @@ export function UrlPasteAddToCart({
         </label>
       ) : null}
 
-      {/* Color / size / details — legacy customer cart parity */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        <label className="block">
-          <span className="text-sm text-muted block mb-1">{t("colorLabel")}</span>
-          <input
-            type="text"
-            value={color}
-            onChange={(e) => setColor(e.target.value)}
-            placeholder={t("colorPlaceholder")}
-            maxLength={200}
-            className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm text-muted block mb-1">{t("sizeLabel")}</span>
-          <input
-            type="text"
-            value={size}
-            onChange={(e) => setSize(e.target.value)}
-            placeholder={t("sizePlaceholder")}
-            maxLength={200}
-            className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-          />
-        </label>
-      </div>
+      {/* Color / size — single-pick only (multi-pick auto-derives from SKU axes) */}
+      {!isMultiPickMode && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <label className="block">
+            <span className="text-sm text-muted block mb-1">{t("colorLabel")}</span>
+            <input
+              type="text"
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              placeholder={t("colorPlaceholder")}
+              maxLength={200}
+              className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm text-muted block mb-1">{t("sizeLabel")}</span>
+            <input
+              type="text"
+              value={size}
+              onChange={(e) => setSize(e.target.value)}
+              placeholder={t("sizePlaceholder")}
+              maxLength={200}
+              className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+            />
+          </label>
+        </div>
+      )}
       <label className="block">
-        <span className="text-sm text-muted block mb-1">{t("detailsLabel")}</span>
+        <span className="text-sm text-muted block mb-1">
+          {t("detailsLabel")}
+          {isMultiPickMode && <span className="text-xs text-muted ml-1">(ใช้ร่วมกันทุกตัวเลือก)</span>}
+        </span>
         <textarea
           value={details}
           onChange={(e) => setDetails(e.target.value)}
@@ -445,7 +638,8 @@ export function UrlPasteAddToCart({
         />
       </label>
 
-      {/* qty stepper + total */}
+      {/* qty stepper + total · hidden in multi-pick mode (qty per SKU in grid above) */}
+      {!isMultiPickMode && (
       <div className="rounded-xl border border-border bg-surface-alt/50 dark:bg-surface-alt/30 p-3 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <span className="text-base font-semibold text-foreground">{t("quantity")}</span>
@@ -496,6 +690,7 @@ export function UrlPasteAddToCart({
           </span>
         </div>
       </div>
+      )}
 
       {/* Status flash */}
       {error && (
@@ -517,7 +712,10 @@ export function UrlPasteAddToCart({
       <button
         type="button"
         onClick={onSubmit}
-        disabled={pending || !isReady}
+        disabled={
+          pending
+          || (isMultiPickMode ? totalSelectedQty === 0 || !title.trim() : !isReady)
+        }
         className="w-full md:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-red-600 hover:bg-red-700 text-white text-base font-semibold px-6 py-3 min-h-[44px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <ShoppingCart className="h-5 w-5" />
@@ -525,11 +723,15 @@ export function UrlPasteAddToCart({
           ? t("addingToCart")
           : !title.trim()
             ? t("noProductName")
-            : axesIncomplete
-              ? t("selectAllOptionsFirst")
-              : effectivePriceCny <= 0
-                ? t("enterPriceAbove")
-                : t("addToCart")}
+            : isMultiPickMode
+              ? totalSelectedQty === 0
+                ? "เลือกตัวเลือก + จำนวนก่อน"
+                : `${t("addToCart")} (${selectedSkuCount} ตัวเลือก · ${totalSelectedQty.toLocaleString()} ชิ้น)`
+              : axesIncomplete
+                ? t("selectAllOptionsFirst")
+                : effectivePriceCny <= 0
+                  ? t("enterPriceAbove")
+                  : t("addToCart")}
       </button>
     </div>
   );

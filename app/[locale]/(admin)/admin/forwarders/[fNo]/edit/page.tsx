@@ -343,7 +343,12 @@ export default async function AdminForwarderEditPage({
       : { label: "ฝากนำเข้าจาก : users", cls: "bg-gray-50 text-gray-600 border-gray-200" };
 
   const customerName = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || r.userid;
-  const slugForLink = r.fidorco ?? String(r.id);
+  // 2026-06-08 ภูม flag (URL 404 bug · 21,694 rows on prod = 45%):
+  // tb_forwarder.fidorco often contains literal `/` (e.g. "MODPK301890160035-1/2"
+  // · "รถ 790A/116"). Using fidorco verbatim in the URL turns the path into
+  // 2 segments and the dynamic [fNo] route 404s. Use numeric id (the detail
+  // + edit pages accept both id and fidorco for lookup).
+  const slugForLink = String(r.id);
 
   const currentStatusInt = parseInt(r.fstatus, 10);
 
