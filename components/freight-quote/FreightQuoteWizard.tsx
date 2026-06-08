@@ -17,7 +17,7 @@
  * Thai labels. NOT a copy of the prototype's markup.
  */
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import {
   User, Building2, Package, Rocket, FileText, ShoppingBag, Unlock,
@@ -25,7 +25,11 @@ import {
   ShieldCheck, Warehouse, Wrench, Languages, FileCheck2, HandCoins,
   CheckCircle2, ArrowRight, ArrowLeft, Phone, MessageCircle, Loader2, PartyPopper,
 } from "lucide-react";
-import { submitFreightQuote } from "@/actions/freight-quote";
+import {
+  submitFreightQuote,
+  getPublicFreightEstimate,
+  type PublicFreightEstimateResult,
+} from "@/actions/freight-quote";
 import type {
   FreightRfqInput, CustomerType, RfqService, RfqTransport, RfqIncoterm,
   RfqLoadType, RfqContainerSize, RfqContactPref,
@@ -140,55 +144,28 @@ type State = {
 
 const STEP_KEYS = ["jobType", "transportTerm", "productDetail", "addonsDocs", "quote"] as const;
 
-// ── rough estimate (doc 02 §2.5 hints) ──────────────────────────────────────
+// ── estimate ─────────────────────────────────────────────────────────────────
+// The FREIGHT/customs/transport prices come from the server engine
+// (composeFreightQuote, via getPublicFreightEstimate) — the SAME engine staff
+// quotes are built from, so the customer sees numbers that match the real
+// quotation (was: a hardcoded client-side approximation that diverged).
+//
+// Add-on lines are a separate Pacred upsell menu (not modelled by the freight
+// rate card) → still composed client-side from the ADDONS price list below.
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
-function estimate(s: State, t: Translator): { lines: { k: string; v: number }[]; total: number } {
+function addonLines(s: State, t: Translator): { k: string; v: number }[] {
   const lines: { k: string; v: number }[] = [];
-  const cbm = parseFloat(s.cbm) || 0;
-  const wt = parseFloat(s.weightKg) || 0;
-  let base = 0;
-  let baseLabel = "";
-
-  if (s.service === "customs" || s.service === "clearance") {
-    base = 3500; baseLabel = t("estimate.lineCustomsService");
-  } else if (s.transport === "sea") {
-    if (s.loadType === "FCL") {
-      const flat: Record<string, number> = { "20GP": 55000, "40GP": 75000, "40HC": 80000, "45HC": 95000 };
-      base = (flat[s.containerSize ?? "20GP"] ?? 55000) * Math.max(1, s.containerQty);
-      baseLabel = t("estimate.lineFcl");
-    } else {
-      // LCL เรือ ฿2,000/CBM (DDP/ฝากสั่ง = ฿3,500/CBM bundled)
-      const rate = s.incoterm === "DDP" || s.service === "nondoc" ? 3500 : 2000;
-      base = cbm * rate; baseLabel = t("estimate.lineLcl");
-    }
-  } else if (s.transport === "truck") {
-    // รถ ฿5,500/CBM
-    base = cbm ? cbm * 5500 : 8000; baseLabel = t("estimate.lineTruck");
-  } else if (s.transport === "air") {
-    // AIR volumetric = CBM × 167; chargeable = max(actual, volumetric); ~฿120/kg
-    const volW = cbm * 167;
-    const chargeable = Math.max(wt, volW);
-    base = chargeable * 120; baseLabel = t("estimate.lineAir");
-  }
-
-  if (base > 0) {
-    if (base < 3500) base = 3500;
-    lines.push({ k: baseLabel, v: Math.round(base) });
-    // +฿1,500 customs +฿500 docs (skip for pure remit/no transport)
-    if (s.service !== "nondoc" || s.transport) {
-      lines.push({ k: t("estimate.lineCustomsClearance"), v: 1500 });
-      lines.push({ k: t("estimate.lineDocs"), v: 500 });
-    }
-  }
-
   for (const name of s.addons) {
     const a = ADDONS.find((x) => x.name === name);
-    if (a && a.price > 0) lines.push({ k: t("estimate.lineAddon", { name: ADDON_KEYS[name] ? t(`addon.${ADDON_KEYS[name]}.name`) : name }), v: a.price });
+    if (a && a.price > 0) {
+      lines.push({
+        k: t("estimate.lineAddon", { name: ADDON_KEYS[name] ? t(`addon.${ADDON_KEYS[name]}.name`) : name }),
+        v: a.price,
+      });
+    }
   }
-
-  const total = lines.reduce((sum, l) => sum + l.v, 0);
-  return { lines, total };
+  return lines;
 }
 
 // ── small UI helpers ────────────────────────────────────────────────────────
@@ -264,7 +241,62 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
   });
 
   const set = (patch: Partial<State>) => setS((prev) => ({ ...prev, ...patch }));
-  const { lines, total } = useMemo(() => estimate(s, t), [s, t]);
+
+  // Server-engine estimate (the freight/customs/transport prices). Fetched from
+  // getPublicFreightEstimate — the verified rate engine, customer-safe (no
+  // cost/margin/commission leaked). null until first fetch resolves.
+  const [engineEst, setEngineEst] = useState<PublicFreightEstimateResult | null>(null);
+  const [estLoading, setEstLoading] = useState(false);
+
+  // Add-on lines stay client-side (separate upsell menu, not in the rate card).
+  const addons = useMemo(() => addonLines(s, t), [s, t]);
+
+  // The engine quote driver inputs — re-fetch only when these change.
+  const estDeps = useMemo(
+    () => JSON.stringify({
+      service: s.service, transport: s.transport, incoterm: s.incoterm,
+      loadType: s.loadType, containerSize: s.containerSize, containerQty: s.containerQty,
+      cbm: s.cbm, weightKg: s.weightKg,
+    }),
+    [s.service, s.transport, s.incoterm, s.loadType, s.containerSize, s.containerQty, s.cbm, s.weightKg],
+  );
+
+  // Fetch a fresh engine estimate when inputs change (debounced; stale-guarded).
+  // setState is done inside the timeout callback (async) — never synchronously
+  // in the effect body (that triggers cascading renders).
+  const estReq = useRef(0);
+  useEffect(() => {
+    const reqId = ++estReq.current;
+    const handle = setTimeout(() => {
+      setEstLoading(true);
+      getPublicFreightEstimate({
+        service: s.service,
+        transport: s.transport,
+        incoterm: s.incoterm,
+        loadType: s.loadType,
+        containerSize: s.containerSize,
+        containerQty: s.containerQty,
+        cbm: s.cbm ? parseFloat(s.cbm) : undefined,
+        weightKg: s.weightKg ? parseFloat(s.weightKg) : undefined,
+      })
+        .then((res) => { if (reqId === estReq.current) setEngineEst(res); })
+        .catch(() => { if (reqId === estReq.current) setEngineEst(null); })
+        .finally(() => { if (reqId === estReq.current) setEstLoading(false); });
+    }, 250);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estDeps]);
+
+  // Combined customer-facing breakdown: engine freight lines + VAT + add-ons.
+  const freightLines = engineEst?.precise ? engineEst.lines : [];
+  const subtotal = engineEst?.precise ? engineEst.subtotalThb : 0;
+  const vatThb = engineEst?.precise ? engineEst.vatThb : 0;
+  const addonsTotal = addons.reduce((sum, l) => sum + l.v, 0);
+  // The headline customer total: engine total (incl. VAT) + add-ons.
+  const total = (engineEst?.precise ? engineEst.totalThb : 0) + addonsTotal;
+  // Has any pricing to show? (engine priced it, OR the customer picked add-ons).
+  const hasEstimate = (engineEst?.precise ?? false) || addons.length > 0;
+
   const docs = useMemo(() => docsFor(s, t), [s, t]);
   const volW = useMemo(() => (parseFloat(s.cbm) || 0) * 167, [s.cbm]);
 
@@ -568,10 +600,34 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
       {step === 5 && (
         <>
           <SecCard title={t("sec.quoteEstimate")}>
-            {lines.length > 0 ? (
+            {estLoading && !engineEst ? (
+              <p className="flex items-center gap-2 text-[13px] text-muted">
+                <Loader2 className="w-4 h-4 animate-spin" /> {t("quote.calculating")}
+              </p>
+            ) : hasEstimate ? (
               <div className="rounded-xl border border-primary-200 dark:border-border bg-primary-50/30 dark:bg-primary-900/10 p-4">
-                {lines.map((l, i) => (
-                  <div key={i} className="flex items-center justify-between text-[13px] py-1">
+                {/* Engine-priced freight / customs / transport lines (sell prices) */}
+                {freightLines.map((l, i) => (
+                  <div key={`f-${i}`} className="flex items-center justify-between text-[13px] py-1">
+                    <span className="text-foreground/75">{l.label}</span>
+                    <span className="font-semibold text-foreground/85">฿{l.amountThb.toLocaleString()}</span>
+                  </div>
+                ))}
+                {engineEst?.precise && freightLines.length > 0 && (
+                  <>
+                    <div className="flex items-center justify-between text-[12px] py-1 text-muted">
+                      <span>{t("quote.subtotal")}</span>
+                      <span>฿{subtotal.toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[12px] py-1 text-muted">
+                      <span>{t("quote.vat", { pct: engineEst.vatPct })}</span>
+                      <span>฿{vatThb.toLocaleString()}</span>
+                    </div>
+                  </>
+                )}
+                {/* Add-on upsell lines (client-side menu) */}
+                {addons.map((l, i) => (
+                  <div key={`a-${i}`} className="flex items-center justify-between text-[13px] py-1">
                     <span className="text-foreground/75">{l.k}</span>
                     <span className="font-semibold text-foreground/85">฿{l.v.toLocaleString()}</span>
                   </div>
@@ -583,7 +639,13 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
                 <p className="mt-2 text-[10.5px] text-muted leading-relaxed">{t("quote.disclaimer")}</p>
               </div>
             ) : (
-              <p className="text-[13px] text-muted">{t("quote.empty")}</p>
+              <div className="rounded-xl border border-dashed border-primary-200 dark:border-border bg-primary-50/30 dark:bg-primary-900/10 p-4">
+                <p className="text-[13px] text-foreground/80 leading-relaxed">
+                  {engineEst && !engineEst.precise && engineEst.reason
+                    ? engineEst.reason
+                    : t("quote.empty")}
+                </p>
+              </div>
             )}
           </SecCard>
 
