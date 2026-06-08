@@ -128,6 +128,18 @@ export const CRON_REGISTRY: readonly CronEntry[] = [
     description:   "ดึงชีตต้นทุนตู้ของแสง → cache (worklist + diff อ่านเร็ว) · ไม่เขียน tb_forwarder (ปรับต้นทุนยังเป็น action ที่ต้องยืนยัน)",
     scheduleLabel: "ทุก 20 นาที",
   },
+  // 2026-06-09 — READ-ONLY wallet integrity scan. Detects wallets whose
+  // stored tb_wallet.wallettotal is impossible (negative) or inconsistent
+  // with its own pending-debit overhang (overdraft), via the REUSED
+  // sumAvailableBalance derivation. ALERTS only (one deduped incident +
+  // structured console) — NEVER mutates tb_wallet / tb_wallet_hs.
+  {
+    path:          "/api/cron/wallet-reconcile",
+    schedule:      "0 18 * * *",
+    label:         "ตรวจสอบยอดกระเป๋าเงิน (read-only)",
+    description:   "สแกน tb_wallet หายอดติดลบ / pending-debit เกินยอดจริง → แจ้งเตือน incident (ไม่แก้เงินอัตโนมัติ · อ่านอย่างเดียว)",
+    scheduleLabel: "ทุกวัน 01:00 ICT",
+  },
 ] as const;
 
 /** Look up a registry entry by path; returns null if unknown (means
