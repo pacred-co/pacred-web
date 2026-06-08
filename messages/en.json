@@ -5889,6 +5889,13 @@
     "cardSubHighlight": "pay as you use · clear pricing · 100% Door-to-Door"
   },
   "freightQuoteWizard": {
+    "service": {
+      "import":    { "label": "Import",                   "sub": "Bring goods into Thailand, full customs" },
+      "export":    { "label": "Export",                   "sub": "Export from Thailand, all ports worldwide" },
+      "customs":   { "label": "Customs declaration",      "sub": "Customs clearance only" },
+      "nondoc":    { "label": "Proxy buy / no documents", "sub": "NON full-container, no company needed" },
+      "clearance": { "label": "Clear held goods",         "sub": "Permits TISI / FDA / NBTC" }
+    },
     "sec": {
       "customerType": "Customer type",
       "serviceType": "Service type",

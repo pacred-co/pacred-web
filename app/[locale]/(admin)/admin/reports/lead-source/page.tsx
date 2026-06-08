@@ -51,7 +51,10 @@ export default async function LeadSourceReportPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
-  await requireAdmin(["super", "accounting"]);
+  // Match the reports-hub gate (ops/accounting/sales_admin · super implicit) —
+  // the hub renders this link to all three, so the page must accept all three
+  // or office roles get a dead 403 click (audit D1, 2026-06-09).
+  await requireAdmin(["ops", "accounting", "sales_admin"]);
 
   const sp = await searchParams;
   const range: DateRange = resolveDateRange(sp);

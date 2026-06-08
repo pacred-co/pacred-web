@@ -5889,6 +5889,13 @@
     "cardSubHighlight": "จ่ายตามที่ใช้ · ราคาชัด · Door-to-Door 100%"
   },
   "freightQuoteWizard": {
+    "service": {
+      "import":    { "label": "นำเข้า (Import)",       "sub": "นำสินค้าเข้าไทย ครบพิธีการ" },
+      "export":    { "label": "ส่งออก (Export)",        "sub": "ส่งออกจากไทย ทุกท่าทั่วโลก" },
+      "customs":   { "label": "ออกใบขนสินค้า",          "sub": "ทำพิธีการศุลกากรอย่างเดียว" },
+      "nondoc":    { "label": "ฝากสั่ง / ไม่รับเอกสาร", "sub": "เหมาตู้ NON ไม่ต้องมีบริษัท" },
+      "clearance": { "label": "เคลียร์สินค้าติดด่าน",    "sub": "ติดใบอนุญาต มอก/อย/กสทช" }
+    },
     "sec": {
       "customerType": "ประเภทลูกค้า",
       "serviceType": "ประเภทบริการ",

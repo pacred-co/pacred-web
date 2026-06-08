@@ -96,9 +96,13 @@ function previewPerUnitThb(f: FormState): number {
 export function FreightRatesClient({
   rows,
   canWrite,
+  loadFailed = false,
 }: {
   rows: FreightRateRow[];
   canWrite: boolean;
+  /** True when the rate list query errored — show a "load failed" banner so an
+   *  empty table isn't mistaken for "no rates yet" (and re-created as a dup). */
+  loadFailed?: boolean;
 }) {
   const router = useRouter();
   const { confirm, alert, dialogs } = useConfirmDialogs();
@@ -195,6 +199,12 @@ export function FreightRatesClient({
 
   return (
     <div className="space-y-3">
+      {loadFailed && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          ⚠ โหลดรายการต้นทุนไม่สำเร็จ (เกิดข้อผิดพลาดชั่วคราว) — ตารางอาจไม่ครบ.
+          กรุณารีเฟรชก่อนเพิ่มรายการใหม่ เพื่อเลี่ยงการสร้างต้นทุนซ้ำ.
+        </div>
+      )}
       <div className="flex items-center px-1">
         <span className="text-xs text-muted">{rows.length} รายการต้นทุน</span>
         {canWrite && (

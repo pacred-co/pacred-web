@@ -32,8 +32,13 @@ export async function lookupChinaFreightCostThb(
     .select("cost_usd, unit, fx_thb_per_usd")
     .eq("transport_mode", mode)
     .eq("active", true)
-    .order("pol", { ascending: true })          // '' (default route) sorts first
+    // effective_from FIRST → the most-recently-effective rate for this mode wins
+    // (deterministic). pol is NOT a matcher here — the engine doesn't pass the
+    // shipment route yet, so route/carrier columns are informational until
+    // per-route matching ships (the CRUD route fields carry that hint). The old
+    // `pol ASC` primary made the '' default row always beat a newer specific row.
     .order("effective_from", { ascending: false })
+    .order("pol", { ascending: true })
     .limit(1)
     .maybeSingle<FreightRateRow>();
   if (error) {

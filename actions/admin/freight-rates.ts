@@ -65,10 +65,12 @@ export type FreightRateRow = {
 
 /**
  * List all freight cost rates (newest first). Read-gated super/ops/accounting.
- * Returns [] on a read error (logged) so the page renders an empty table rather
- * than throwing — the page is a maintenance surface, not a money path.
+ * Returns `{ rows, loadFailed }` — on a DB error `loadFailed` is true (and rows
+ * empty) so the page can show a "load failed" banner instead of a false "no
+ * rates yet" empty state (audit A3: a silent empty invites a duplicate active
+ * cost row on a transient timeout, since tb_freight_rate has no unique key).
  */
-export async function getFreightRates(): Promise<FreightRateRow[]> {
+export async function getFreightRates(): Promise<{ rows: FreightRateRow[]; loadFailed: boolean }> {
   return withAdmin([...ROLES_READ], async () => {
     const admin = createAdminClient();
     const { data, error } = await admin
@@ -82,7 +84,7 @@ export async function getFreightRates(): Promise<FreightRateRow[]> {
       .order("created_at", { ascending: false });
     if (error) {
       console.error(`[freight-rates list] failed`, { code: error.code, message: error.message });
-      return { ok: true as const, data: [] as FreightRateRow[] };
+      return { ok: true as const, data: { rows: [] as FreightRateRow[], loadFailed: true } };
     }
     const rows: FreightRateRow[] = (data ?? []).map((r) => ({
       id: String(r.id),
@@ -99,8 +101,10 @@ export async function getFreightRates(): Promise<FreightRateRow[]> {
       note: String(r.note ?? ""),
       updated_at: String(r.updated_at ?? ""),
     }));
-    return { ok: true as const, data: rows };
-  }).then((res) => (res.ok ? (res.data ?? []) : []));
+    return { ok: true as const, data: { rows, loadFailed: false } };
+  }).then((res) =>
+    res.ok && res.data ? res.data : { rows: [] as FreightRateRow[], loadFailed: true },
+  );
 }
 
 // ────────────────────────────────────────────────────────────

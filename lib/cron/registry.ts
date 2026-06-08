@@ -33,7 +33,7 @@ export const CRON_REGISTRY: readonly CronEntry[] = [
     path:          "/api/cron/auto-cancel-orders",
     schedule:      "*/15 * * * *",
     label:         "ยกเลิก order หมดอายุ",
-    description:   "ยกเลิก service_orders ที่ status=awaiting_payment + payment_due_at < now",
+    description:   "ยกเลิก tb_header_order ที่ hstatus='2' (รอชำระเงิน) + hdatepayment < now (reuse autoExpireOverdueShopOrder · live legacy table)",
     scheduleLabel: "ทุก 15 นาที",
   },
   {

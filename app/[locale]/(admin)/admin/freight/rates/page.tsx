@@ -27,7 +27,7 @@ export default async function AdminFreightRatesPage() {
   // Write-capable = super OR ops (mirror the table write RLS). accounting = read-only.
   const canWrite = roles.includes("super") || roles.includes("ops");
 
-  const rows = await getFreightRates();
+  const { rows, loadFailed } = await getFreightRates();
 
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
@@ -36,12 +36,12 @@ export default async function AdminFreightRatesPage() {
         <h1 className="mt-1 text-2xl font-bold">ต้นทุนเฟรทจีน (Cost Rates)</h1>
         <p className="text-xs text-muted max-w-3xl">
           ต้นทุนค่าขนส่งฝั่งจีน (USD ต่อหน่วย × เรท FX) ที่ใช้คำนวณกำไรสุทธิจริงของใบเสนอราคา
-          Freight — แทนการแสดงเพียง “กำไรขั้นต้น”. ระบบจะเลือกแถวที่ตรงกับโหมดขนส่ง +
-          เส้นทางเริ่มต้น (POL ว่าง = ทุกเส้นทาง) + วันที่มีผลล่าสุด + ที่เปิดใช้งานอยู่.
+          Freight — แทนการแสดงเพียง “กำไรขั้นต้น”. ระบบเลือกแถวที่เปิดใช้งาน + วันที่มีผลล่าสุด
+          ของแต่ละโหมดขนส่ง; ช่อง POL/POD/ผู้ขนส่ง เป็นข้อมูลอ้างอิง (ยังไม่ใช้จับคู่ราคารายเส้นทาง — จะเพิ่มภายหลัง).
         </p>
       </header>
 
-      <FreightRatesClient rows={rows} canWrite={canWrite} />
+      <FreightRatesClient rows={rows} canWrite={canWrite} loadFailed={loadFailed} />
     </main>
   );
 }
