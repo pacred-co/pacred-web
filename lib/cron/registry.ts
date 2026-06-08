@@ -140,6 +140,20 @@ export const CRON_REGISTRY: readonly CronEntry[] = [
     description:   "สแกน tb_wallet หายอดติดลบ / pending-debit เกินยอดจริง → แจ้งเตือน incident (ไม่แก้เงินอัตโนมัติ · อ่านอย่างเดียว)",
     scheduleLabel: "ทุกวัน 01:00 ICT",
   },
+  // 2026-06-09 (Phase-B closeout) — daily container bulletin. Groups in-flight
+  // tb_forwarder (fstatus<7) by fcabinetnumber → per-cabinet summary (count /
+  // status breakdown / arriving / ready-to-ship) → concise Thai message →
+  // staff LINE group via notifyStaffGroup (best-effort; no-ops if LINE
+  // unconfigured). READ-ONLY on tb_forwarder · no money path. Faithful
+  // re-build of the tombstoned U2-1 bulletin (now reads the legacy tb_forwarder
+  // spine instead of the retired warehouse "spine" tables).
+  {
+    path:          "/api/cron/container-bulletin",
+    schedule:      "0 0 * * *",
+    label:         "บุลเลตินตู้ประจำวัน",
+    description:   "สรุปตู้ที่อยู่ระหว่างขนส่ง (จัดกลุ่มตาม fCabinetNumber) → จำนวน/สถานะ/ถึงไทย/พร้อมส่ง → แจ้งทีมงานผ่าน LINE",
+    scheduleLabel: "ทุกวัน 07:00 ICT (00:00 UTC)",
+  },
 ] as const;
 
 /** Look up a registry entry by path; returns null if unknown (means
