@@ -92,7 +92,10 @@ export default async function AdminTaxInvoiceDetailPage({
 }) {
   // W-1 (gap-admin H-1): same gate as the list page — tax-invoice
   // detail (RD Code 86 + buyer tax ID) is accounting-only.
-  await requireAdmin(["accounting"]);
+  // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles also issue
+  // tax invoices as part of documentation workflow
+  // (`docs/research/ops-workflow-audit-2026-06-05.md` §28).
+  await requireAdmin(["accounting", "freight_export_doc", "freight_import_doc"]);
 
   const { id } = await params;
   const admin = createAdminClient();

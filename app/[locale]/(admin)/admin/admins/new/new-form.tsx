@@ -125,6 +125,11 @@ export function AdminCreateNewForm({
   const [error, setError]     = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Set<string>>(new Set());
+  // Cross-system phone-dedupe (เดฟ 2026-06-08): when the typed phone already
+  // belongs to an existing customer, adminCreateNew refuses → we surface the
+  // existing code + a confirm checkbox to deliberately proceed.
+  const [phoneDupCode, setPhoneDupCode] = useState<string | null>(null);
+  const [allowExistingPhone, setAllowExistingPhone] = useState<boolean>(false);
 
   function clearFieldError(key: string) {
     setFieldErrors((prev) => {
@@ -210,9 +215,22 @@ export function AdminCreateNewForm({
         legacy_admin_id:    legacyAdminId.trim() || undefined,
         admin_note:         adminNote.trim() || undefined,
         contract_end_date:  contractEndDate || undefined,
+        allow_existing_phone: allowExistingPhone,
       });
 
       if (!result.ok) {
+        // Cross-system phone duplicate — show the existing customer code and a
+        // confirm checkbox instead of a raw error (the operator may genuinely
+        // be promoting an existing customer to staff).
+        if (result.error?.startsWith("phone_exists_customer:")) {
+          const code = result.error.split(":")[1] ?? "";
+          setPhoneDupCode(code);
+          setError(
+            `เบอร์นี้มีรหัสลูกค้าอยู่แล้ว: ${code} — ปกติแล้วบุคคลคนเดียวควรมีรหัสเดียว. ` +
+            `ถ้าตั้งใจจะตั้งลูกค้าคนนี้เป็นพนักงาน ให้ติ๊กยืนยันด้านล่างแล้วบันทึกอีกครั้ง.`,
+          );
+          return;
+        }
         setError(result.error);
         return;
       }
@@ -244,6 +262,17 @@ export function AdminCreateNewForm({
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
           ⚠ {error}
+          {phoneDupCode && (
+            <label className="mt-3 flex items-center gap-2 font-medium text-red-900">
+              <input
+                type="checkbox"
+                checked={allowExistingPhone}
+                onChange={(e) => setAllowExistingPhone(e.target.checked)}
+                className="h-4 w-4 accent-red-600"
+              />
+              ยืนยันสร้างพนักงานใหม่ทั้งที่เบอร์นี้มีรหัสลูกค้า {phoneDupCode} อยู่แล้ว
+            </label>
+          )}
         </div>
       )}
       {success && (

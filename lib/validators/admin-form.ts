@@ -179,6 +179,14 @@ export const AdminCreateSchema = z
     legacy_admin_id:    optionalText(64),
     admin_note:         optionalText(2000),
     contract_end_date:  optionalDate,
+
+    // Cross-system dedupe override (เดฟ 2026-06-08 · the PR112/PR10584 root-cause
+    // fix). `adminCreateNew` refuses by default when `phone` already belongs to
+    // an existing tb_users customer — that's how a person ended up with TWO
+    // member_codes (admin profile + legacy customer). When the operator truly
+    // intends to make an existing customer into staff, they re-submit with this
+    // flag set (the form shows the existing code + a confirm checkbox first).
+    allow_existing_phone: z.boolean().optional().default(false),
   })
   .strict();
 export type AdminCreateInput = z.infer<typeof AdminCreateSchema>;

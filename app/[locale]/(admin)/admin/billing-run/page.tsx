@@ -246,7 +246,10 @@ export default async function BillingRunListPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const { roles } = await requireAdmin(["super", "accounting", "ops"]);
+  // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles can view +
+  // create billing-run invoices (doc issuance); mark-paid + cancel stay
+  // accounting-only (`docs/research/ops-workflow-audit-2026-06-05.md` §28).
+  const { roles } = await requireAdmin(["super", "accounting", "ops", "freight_export_doc", "freight_import_doc"]);
   const sp = await searchParams;
 
   // 2026-06-03 ภูม flag: pre-load cabinet list (last 30d · เข้าโกดังไทยแล้ว)

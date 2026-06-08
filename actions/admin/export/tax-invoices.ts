@@ -97,7 +97,8 @@ export async function exportTaxInvoicesAll(
   filter: TaxInvoicesExportFilter,
 ): Promise<{ rows: TaxInvoiceExportRow[]; truncated: boolean }> {
   // RBAC — same role gate as the page (PII: buyer tax IDs · RD Code 86).
-  await requireAdmin(["accounting"]);
+  // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles export tax docs.
+  await requireAdmin(["accounting", "freight_export_doc", "freight_import_doc"]);
 
   const admin = createAdminClient();
 

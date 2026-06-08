@@ -44,15 +44,18 @@ function numberFormat2(n: number): string {
   });
 }
 
-// Human-readable PromptPay id grouping.
-function formatPromptPayId(id: string): string {
+// Company bank account (Kasikornbank — บจก. แพคเรด (ประเทศไทย)).
+// The QR is now the STATIC company QR served by lib/promptpay.ts; the value
+// returned as `promptPayId` is this bank account number (no dynamic/amount QR).
+const BANK_ACCOUNT_NO = "225-2-91144-0";
+
+// Kasikorn 10-digit account grouping: XXX-X-XXXXX-X.
+function formatBankAccount(id: string): string {
   const d = id.replace(/\D/g, "");
-  if (d.length === 13) {
-    return `${d[0]}-${d.slice(1, 5)}-${d.slice(5, 10)}-${d.slice(10, 12)}-${d[12]}`;
-  }
   if (d.length === 10) {
-    return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
+    return `${d.slice(0, 3)}-${d[3]}-${d.slice(4, 9)}-${d[9]}`;
   }
+  // Already-formatted (e.g. "225-2-91144-0") or unknown shape — show as-is.
   return id;
 }
 
@@ -417,21 +420,34 @@ export function ForwarderPayModal({
                       {numberFormat2(bill.payAmount)} {t("baht")}
                     </span>
                   </div>
-                  {promptPayId && (
-                    <div className="mt-2 flex items-center justify-center gap-2 flex-wrap">
-                      <span className="text-sm text-muted">{t("promptPay")}</span>
+
+                  {/* Bank-account block — the QR is the STATIC company QR;
+                      customers scan it then TYPE the amount themselves and
+                      attach a slip (staff verify). The account number is also
+                      shown for manual transfer (owner 2026-06-08). */}
+                  <div className="mt-3 rounded-lg bg-surface-alt/60 border border-border px-3 py-3 text-left space-y-1">
+                    <div className="text-xs font-bold text-muted">{t("bankBlockTitle")}</div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm text-muted">{t("accountNoLabel")}</span>
                       <span id="text-pp" className="font-mono text-lg font-bold text-foreground tabular-nums">
-                        {formatPromptPayId(promptPayId)}
+                        {promptPayId ? formatBankAccount(promptPayId) : BANK_ACCOUNT_NO}
                       </span>
                       <button
                         type="button"
-                        onClick={() => copyText(promptPayId)}
+                        onClick={() => copyText(promptPayId ?? BANK_ACCOUNT_NO)}
                         className="inline-flex items-center rounded-full bg-surface-alt hover:bg-border text-foreground text-xs font-bold px-2.5 py-1 transition-colors"
                       >
                         📋 {t("copy")}
                       </button>
                     </div>
-                  )}
+                    <div className="text-sm font-semibold text-foreground">{t("accountName")}</div>
+                    <div className="text-sm text-muted">{t("bankName")}</div>
+                  </div>
+
+                  {/* One-line instruction — scan, type amount, attach slip */}
+                  <p className="mt-2 text-xs leading-relaxed text-muted">
+                    {t("scanInstruction")}
+                  </p>
                 </div>
 
                 {/* Slip upload — the FINAL required step, pinned to the bottom

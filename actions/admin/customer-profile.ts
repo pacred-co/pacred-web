@@ -37,6 +37,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { bustCustomerChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -329,6 +330,11 @@ export async function adminUpdateUserSaleRep(
       after: adminID,
     });
     revalidatePath(`/admin/customers/${userid}`);
+    // 2026-06-08 follow-up (Lane 1 batch · ภูม): bust the customer-chrome
+    // `unstable_cache` (60s TTL) so the "ผู้ดูแล" sidebar card on the customer's
+    // portal refreshes the moment the sales-rep is reassigned (mirrors the CS
+    // bust at L394). Without this, the sidebar shows the OLD rep for up to 60s.
+    bustCustomerChrome();
     return { ok: true };
   });
 }
@@ -400,6 +406,13 @@ export async function adminUpdateUserCsRep(
       after: adminID,
     });
     revalidatePath(`/admin/customers/${userid}`);
+    // 2026-06-05: bust the unstable_cache wrapping loadPcsChromeData (tag set in
+    // lib/legacy/pcs-chrome.ts:478-482) so the customer's sidebar "ผู้ดูแล" card
+    // refreshes immediately instead of waiting up to 60s for the TTL to lapse.
+    // Mirror of the spec for FEATURE 1 — the assigned CS appears live next time
+    // the customer (or this admin in customer-view mode) lands on a protected
+    // page. (Uses the shared helper that wraps the Next-16 2-arg revalidateTag.)
+    bustCustomerChrome();
     return { ok: true };
   });
 }

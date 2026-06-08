@@ -18,7 +18,9 @@ import {
  *
  * Status filter chips + search by declaration_no / job_no / control_no.
  *
- * Roles: super + accounting.
+ * Roles: super + accounting + freight_export_doc + freight_import_doc (Phase 2
+ * ops-workflow audit unlock 2026-06-05 — Doc users own customs-declaration
+ * issuance per `docs/research/ops-workflow-audit-2026-06-05.md` §28).
  */
 
 export const dynamic = "force-dynamic";
@@ -66,7 +68,7 @@ export default async function AdminCustomsDeclarationsListPage({
 }: {
   searchParams: Promise<{ status?: string; q?: string; page?: string }>;
 }) {
-  await requireAdmin(["super", "accounting"]);
+  await requireAdmin(["super", "accounting", "freight_export_doc", "freight_import_doc"]);
   const sp = await searchParams;
   const status = (CUSTOMS_DECLARATION_STATUSES as readonly string[]).includes(sp.status ?? "")
     ? (sp.status as CustomsDeclarationStatus)

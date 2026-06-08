@@ -71,7 +71,8 @@ export async function exportBillingRunAll(
   filter: BillingRunExportFilter,
 ): Promise<{ rows: CsvRow[]; truncated: boolean }> {
   // Same RBAC gate as the page.
-  await requireAdmin(["super", "accounting", "ops"]);
+  // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles export billing-run.
+  await requireAdmin(["super", "accounting", "ops", "freight_export_doc", "freight_import_doc"]);
 
   // Re-run the page's EXACT filtered query, unpaginated (limit raised to the cap).
   const res = await getInvoiceList({

@@ -190,7 +190,9 @@ export async function listEligibleCustomers(): Promise<
   AdminActionResult<{ rows: EligibleCustomerRow[] }>
 > {
   return withAdmin<{ rows: EligibleCustomerRow[] }>(
-    ["super", "accounting", "ops"],
+    // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles browse eligible
+    // customers to create billing-run docs (`docs/research/ops-workflow-audit-2026-06-05.md` §28).
+    ["super", "accounting", "ops", "freight_export_doc", "freight_import_doc"],
     async () => {
       const admin = createAdminClient();
 
@@ -322,7 +324,9 @@ export async function listEligibleForwarders(
     return { ok: false, error: "invalid_userid" };
   }
   return withAdmin<{ rows: EligibleForwarderRow[] }>(
-    ["super", "accounting", "ops"],
+    // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles browse eligible
+    // forwarder rows to add to a billing-run doc.
+    ["super", "accounting", "ops", "freight_export_doc", "freight_import_doc"],
     async () => {
       const admin = createAdminClient();
 
@@ -419,7 +423,9 @@ export async function getInvoiceList(
   filters: BillingRunListFilters = {},
 ): Promise<AdminActionResult<{ rows: BillingRunInvoiceRow[]; totalCount: number }>> {
   return withAdmin<{ rows: BillingRunInvoiceRow[]; totalCount: number }>(
-    ["super", "accounting", "ops"],
+    // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles browse the
+    // billing-run list.
+    ["super", "accounting", "ops", "freight_export_doc", "freight_import_doc"],
     async () => {
       const admin = createAdminClient();
       const limit = Math.min(filters.limit ?? 500, 2000);
@@ -518,7 +524,9 @@ export async function getInvoiceDetail(
     return { ok: false, error: "invalid_invoice_id" };
   }
   return withAdmin<BillingRunInvoiceDetail>(
-    ["super", "accounting", "ops"],
+    // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles read the
+    // billing-run detail to print/verify.
+    ["super", "accounting", "ops", "freight_export_doc", "freight_import_doc"],
     async () => {
       const admin = createAdminClient();
 
@@ -685,7 +693,9 @@ export async function createBillingRunInvoice(
   const v = parsed.data;
 
   return withAdmin<{ invoiceId: number; docNo: string }>(
-    ["super", "accounting", "ops"],
+    // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles create the
+    // billing-run doc (mark-paid + cancel stay accounting-only).
+    ["super", "accounting", "ops", "freight_export_doc", "freight_import_doc"],
     async ({ adminId }) => {
       const admin = createAdminClient();
 
@@ -1102,7 +1112,9 @@ export async function sendBillingRunNotification(
   const v = parsed.data;
 
   return withAdmin<{ invoiceId: number; sent: boolean; channel: string }>(
-    ["super", "accounting", "ops"],
+    // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles send the
+    // billing-run reminder to the customer.
+    ["super", "accounting", "ops", "freight_export_doc", "freight_import_doc"],
     async ({ adminId }) => {
       const admin = createAdminClient();
 

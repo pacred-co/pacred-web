@@ -155,7 +155,9 @@ export default async function ReceiptsListPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  await requireAdmin(["super", "accounting"]);
+  // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles reference
+  // receipts after payment (`docs/research/ops-workflow-audit-2026-06-05.md` §28).
+  await requireAdmin(["super", "accounting", "freight_export_doc", "freight_import_doc"]);
 
   const sp = await searchParams;
 

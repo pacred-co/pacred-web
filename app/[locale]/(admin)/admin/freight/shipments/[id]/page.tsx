@@ -106,7 +106,10 @@ export default async function AdminFreightShipmentDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { roles } = await requireAdmin(["super", "ops", "sales_admin", "accounting"]);
+  // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles open a shipment
+  // to read the cabinet context + click "create declaration"
+  // (`docs/research/ops-workflow-audit-2026-06-05.md` §28).
+  const { roles } = await requireAdmin(["super", "ops", "sales_admin", "accounting", "freight_export_doc", "freight_import_doc"]);
   const { id } = await params;
   const admin = createAdminClient();
 

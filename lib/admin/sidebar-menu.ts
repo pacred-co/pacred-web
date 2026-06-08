@@ -1284,16 +1284,34 @@ const menuFreightExportCs: MenuSection[] = [
   extensionSection([blockExtIncidents]),
 ];
 
-/** Doc role #20 — Shipping Doc Export (lines 648-658). Doc shows `[Export
- *  Shipping Document Operations]` placeholder.
- *  TODO: needs menu enumeration · ask พี่เดฟ. */
+/** Doc role #20 — Shipping Doc Export (lines 648-658).
+ *
+ * Phase 2 ops-workflow audit unlock (2026-06-05 · `docs/research/ops-workflow-audit-2026-06-05.md` §28):
+ * The Doc role's tools were already BUILT (customs-declaration CRUD + PDF · tax-invoice ·
+ * receipts · billing-run · freight-invoice PDFs) but locked behind super/accounting.
+ * Wired here as a Doc-specific sidebar so a `freight_export_doc` user can reach
+ * the doc-issuance workspace in ≤3 clicks (AGENTS.md §0d reachability rule).
+ *
+ * Customer search leaf is intentional — Doc needs to look up a customer to
+ * locate which freight shipment / cabinet a declaration belongs to.
+ */
 const menuFreightExportDoc: MenuSection[] = [
   { header: "", items: [itemDashboard] },
   {
     header: "Freight - Export",
     items: [
-      // TODO: needs menu enumeration · doc says [Export Shipping Document Operations]
-      { labelKey: "freightExportOps.docPlaceholder", href: "/admin/forwarders?segment=freight-export&role=doc", icon: "FileText" },
+      // Primary workspace — customs declarations (V-E11 · ใบขนสินค้า).
+      { labelKey: "accFreight.declarations", href: "/admin/freight/declarations", icon: "ClipboardCheck" },
+      // Freight shipments — Doc pivots from a shipment to create its declaration.
+      { labelKey: "freightExportOps.placeholder", href: "/admin/freight/shipments", icon: "Truck" },
+      // Customer lookup — find the shipment owner / cabinet context.
+      { labelKey: "userCargo.searchTop", href: "/admin/customers?focus=search", icon: "Search" },
+      // Tax documents — issuance is part of Doc workflow.
+      { labelKey: "extension.taxInvoices", href: "/admin/tax-invoices", icon: "FileText" },
+      // Receipts (ใบเสร็จ) explorer — Doc references after payment.
+      { labelKey: "accounting.forwarderInvoice", href: "/admin/accounting/receipts", icon: "Receipt" },
+      // Billing run (ใบวางบิล) — Doc creates the bill doc; mark-paid stays accounting-only.
+      { labelKey: "forwarder.billingRun", href: "/admin/billing-run", icon: "Banknote" },
     ],
   },
   learningSection,
@@ -1384,16 +1402,30 @@ const menuFreightImportCs: MenuSection[] = [
   extensionSection([blockExtIncidents]),
 ];
 
-/** Doc role #26 — Shipping Doc Import (lines 734-744). Doc shows `[Import
- *  Shipping Document Operations]` placeholder.
- *  TODO: needs menu enumeration · ask พี่เดฟ. */
+/** Doc role #26 — Shipping Doc Import (lines 734-744).
+ *
+ * Phase 2 ops-workflow audit unlock (2026-06-05 · `docs/research/ops-workflow-audit-2026-06-05.md` §28).
+ * Mirror of `menuFreightExportDoc` — same tools, import-side framing. The
+ * underlying admin surfaces are shared (customs declarations · tax-invoice ·
+ * receipts · billing-run) — both Doc roles see the same canonical lists.
+ */
 const menuFreightImportDoc: MenuSection[] = [
   { header: "", items: [itemDashboard] },
   {
     header: "Freight - Import",
     items: [
-      // TODO: needs menu enumeration · doc says [Import Shipping Document Operations]
-      { labelKey: "freightImportOps.docPlaceholder", href: "/admin/forwarders?segment=freight-import&role=doc", icon: "FileText" },
+      // Primary workspace — customs declarations (V-E11 · ใบขนสินค้า).
+      { labelKey: "accFreight.declarations", href: "/admin/freight/declarations", icon: "ClipboardCheck" },
+      // Freight shipments — Doc pivots from a shipment to create its declaration.
+      { labelKey: "freightImportOps.placeholder", href: "/admin/freight/shipments", icon: "Truck" },
+      // Customer lookup — find the shipment owner / cabinet context.
+      { labelKey: "userCargo.searchTop", href: "/admin/customers?focus=search", icon: "Search" },
+      // Tax documents — issuance is part of Doc workflow.
+      { labelKey: "extension.taxInvoices", href: "/admin/tax-invoices", icon: "FileText" },
+      // Receipts (ใบเสร็จ) explorer — Doc references after payment.
+      { labelKey: "accounting.forwarderInvoice", href: "/admin/accounting/receipts", icon: "Receipt" },
+      // Billing run (ใบวางบิล) — Doc creates the bill doc; mark-paid stays accounting-only.
+      { labelKey: "forwarder.billingRun", href: "/admin/billing-run", icon: "Banknote" },
     ],
   },
   learningSection,

@@ -47,7 +47,11 @@ import {
   roundThb,
 } from "@/lib/validators/customs-declaration";
 
-const ROLES = ["super", "accounting"] as const;
+// Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles own customs
+// declaration issuance (`docs/research/ops-workflow-audit-2026-06-05.md` §28).
+// All declaration actions (create/update/submit/accept/release/cancel) are
+// Doc-workflow operations; none of them write to wallet/payment.
+const ROLES = ["super", "accounting", "freight_export_doc", "freight_import_doc"] as const;
 
 // ────────────────────────────────────────────────────────────
 // Helpers

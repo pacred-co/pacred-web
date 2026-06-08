@@ -3,7 +3,7 @@ import { Link } from "@/i18n/navigation";
 import { getWallet, listWalletTransactions, type WalletTransaction } from "@/actions/wallet";
 import { getMyCredit } from "@/actions/credit";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
-import { Wallet as WalletIcon, Plus, History, Banknote, CreditCard, ArrowDownToLine, ChevronRight, Home } from "lucide-react";
+import { Wallet as WalletIcon, History, Banknote, CreditCard, ArrowDownToLine, ChevronRight, Home } from "lucide-react";
 import { CreditLinePanel } from "../credit-panel";
 import { CancelPendingButton } from "./cancel-pending-button";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
@@ -99,12 +99,9 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
             <div className="h-full w-full rounded-full bg-white/80" />
           </div>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-            <Link
-              href="/wallet/deposit"
-              className="inline-flex items-center gap-1.5 rounded-full bg-white text-amber-700 px-5 py-2 text-sm font-bold hover:bg-white/95 shadow-sm"
-            >
-              <Plus className="w-4 h-4" /> {t("topUpWallet")}
-            </Link>
+            {/* Top-up ("เติมเงิน" → /wallet/deposit) CTA hidden — owner
+                2026-06-07: top-up is cancelled (route kept, button removed).
+                Withdraw stays. */}
             <Link
               href="/wallet/withdraw"
               className="inline-flex items-center gap-1.5 rounded-full border-2 border-white/40 text-white px-4 py-1.5 text-xs font-bold hover:bg-white/15"
@@ -190,14 +187,8 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
                   ? t("emptyPaymentHint")
                   : t("emptyAllHint")}
               </p>
-              {(activeTab === "deposit" || activeTab === "all") && (
-                <Link
-                  href="/wallet/deposit"
-                  className="mt-2 inline-flex rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-bold hover:bg-primary-600 shadow-sm"
-                >
-                  {t("topUpShort")}
-                </Link>
-              )}
+              {/* Empty-state top-up CTA hidden — owner 2026-06-07: top-up
+                  cancelled (route kept, button removed). */}
             </div>
           ) : (
             <div className="overflow-x-auto">

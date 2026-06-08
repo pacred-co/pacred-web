@@ -66,13 +66,14 @@ const PRIMARY_SERVICES: readonly LaunchpadItem[] = [
   { icon: `${ICON_BASE}/export.png`,           labelKey: "tileExport",     href: "#", comingSoon: true },
 ];
 
-// ROW 2 — utility / account actions: address, wallet, topup, history.
+// ROW 2 — utility / account actions: address, wallet, history.
 // ออกจากระบบ moves to row 3 as a single end-of-session cell (rendered as a
 // <button> after this list because logout is a Server Action, not a link).
+// The "เติมเงิน" (top-up → /wallet/deposit) tile is hidden — owner 2026-06-07:
+// top-up is cancelled. The /wallet/deposit route is kept; only the tile drops.
 const SECONDARY_ACTIONS: readonly LaunchpadItem[] = [
   { icon: `${ICON_BASE}/pcs-address.png`,                labelKey: "tileShipAddress", href: "/service-import/warehouse-addresses" },
   { icon: `${ICON_BASE}/pcs-wallet.png`,                 labelKey: "tileWallet", href: "/wallet"                 },
-  { icon: `${ICON_BASE}/pcs-wallet-add.png`,             labelKey: "tileTopup",        href: "/wallet/deposit"         },
   { icon: "/images/hero-section/icon/billingpacred.png", labelKey: "tileReceiptHistory",  href: "/service-import/pending" },
 ];
 
@@ -250,11 +251,9 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
           <span className="shrink-0 text-[13px] font-bold text-orange-500/90">{t("baht")}</span>
         </div>
 
-        {/* Right button — same pill style as "ติดต่อเซลล์" so both cards have
-            matching CTAs. */}
-        <span className="relative shrink-0 inline-flex items-center gap-1 rounded-full bg-orange-500 text-white text-[12px] font-bold px-3.5 py-2 shadow-md shadow-orange-500/25">
-          {t("topupShort")}
-        </span>
+        {/* Top-up ("เติมเงิน") CTA pill hidden — owner 2026-06-07: top-up is
+            cancelled. The card now just links to /wallet to view balance +
+            history (cashback used as a discount at checkout). */}
       </Link>
 
       {/* ── 4. Section header — matches homepage OurServices style:
@@ -264,12 +263,11 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
         {t("ourServices")}
       </div>
 
-      {/* ── 5. 9-tile launchpad — 4-col × 3-row (8 active links + 1 disabled
-              coming-soon tile + 1 logout button = 9 cells; row 3 ends with
-              just ออกจากระบบ + 3 empty cells). Layout intent (ปอน 2026-05-27):
+      {/* ── 5. launchpad — 4-col grid (7 active links + 1 disabled coming-soon
+              tile + 1 logout button). Layout intent (ปอน 2026-05-27):
                 Row 1 (services + roadmap): ฝากสั่งซื้อ · ฝากโอนชำระ · นำเข้า · ส่งออก[COMING SOON]
-                Row 2 (utility actions):    ที่อยู่จัดส่ง · กระเป๋าพักเงิน · เติมเงิน · ประวัติใบเสร็จ
-                Row 3 (end-of-session):     ออกจากระบบ · — · — · —
+                Row 2 (utility actions):    ที่อยู่จัดส่ง · กระเป๋าพักเงิน · ประวัติใบเสร็จ
+                (the "เติมเงิน" top-up tile was removed — owner 2026-06-07, top-up cancelled)
               ส่งออก sits next to นำเข้า — natural import↔export pair — but
               wears the disabled grayscale + COMING SOON badge because the
               export module isn't built yet. Active state on links = subtle
