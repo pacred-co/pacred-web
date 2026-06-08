@@ -3035,6 +3035,7 @@
     "itemCount": "{count} item(s)",
     "viewDetail": "View details",
     "pay": "Pay",
+    "selectToPay": "Select to pay",
     "payOneHint": "Select one order at a time to pay",
     "cancelOrder": "Cancel order",
     "cancelOneConfirm": "Cancel order {hNo}?",

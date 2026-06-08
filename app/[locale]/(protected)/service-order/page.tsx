@@ -2,6 +2,13 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
+import { getWalletAvailableBalance } from "@/lib/wallet/balance";
+import {
+  BulkActionsProvider,
+  BulkPayBar,
+  RowCheckbox,
+} from "./add/service-order-bulk-actions";
 import { Link } from "@/i18n/navigation";
 import { legacyMemberUrl } from "@/lib/legacy-image";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
@@ -286,6 +293,23 @@ export default async function ServiceOrderPage({
     }
   }
 
+  // ── Multi-select bulk-pay (wired islands shared with /add) ──
+  // Per-row totals + the payable set + wallet balance feed <BulkPayBar>.
+  // payServiceOrderFromWallet re-verifies ownership/balance/idempotency per
+  // row server-side, so these numbers are display-only (not the boundary).
+  const totalsMap = new Map<string, number>(
+    rows.map((r) => [
+      r.hno,
+      (Number(r.htotalpricechn ?? 0) + Number(r.hshippingchn ?? 0)) *
+        Number(r.hrate ?? 0) +
+        Number(r.hshippingservice ?? 0),
+    ]),
+  );
+  const payableHNos = rows.filter((r) => r.hstatus === "2").map((r) => r.hno);
+  const supabaseRLS = await createClient();
+  const walletBalance =
+    (await getWalletAvailableBalance(supabaseRLS, data.user.id)) ?? 0;
+
   // Status display labels (codes 1-6) shared by the badge + the filter tabs.
   const statusLabel = (code: string): string => tp(`status${code}`);
 
@@ -330,7 +354,7 @@ export default async function ServiceOrderPage({
             </p>
           </div>
         ) : (
-          <>
+          <BulkActionsProvider payableHNos={payableHNos} totals={totalsMap}>
             {/* ── Status tabs — horizontal scrollable pills ── */}
             <div className="mb-4">
               <p className="text-[12px] font-semibold uppercase tracking-wider text-muted mb-2 flex items-center gap-1.5" role="heading" aria-level={2}>
@@ -394,6 +418,7 @@ export default async function ServiceOrderPage({
                       }
                       labels={{
                         pay: tp("pay"),
+                        selectToPay: tp("selectToPay"),
                         viewDetail: tp("viewDetail"),
                         printReceipt: tp("printReceipt"),
                         printInvoice: tp("printInvoice"),
@@ -417,14 +442,15 @@ export default async function ServiceOrderPage({
               </>
             )}
 
-            {/* shops.php L1059-1081 — b-pay fixed bottom bar (multi-select pay,
-                shown when there are unpaid orders on q=2 or q="" tabs).
-                The select-all checkbox + "ชำระเงิน" button are UI placeholders
-                until the matching Server Action wires up — same as legacy. */}
+            {/* shops.php L1059-1081 — b-pay fixed bottom bar. Multi-select
+                pay-from-wallet, shown when there are unpaid orders on q=2 / q=""
+                tabs. Wired to actions/service-order.ts via the shared
+                <BulkPayBar> island (replaces the former static placeholder);
+                payServiceOrderFromWallet re-verifies each row server-side. */}
             {countShops2 > 0 && (q === "" || q === "2") && (
-              <PaymentBar count={countShops2} />
+              <BulkPayBar walletBalance={walletBalance} />
             )}
-          </>
+          </BulkActionsProvider>
         )}
       </div>
     </>
@@ -452,6 +478,7 @@ function OrderCard({
   moreItems: string;
   labels: {
     pay: string;
+    selectToPay: string;
     viewDetail: string;
     printReceipt: string;
     printInvoice: string;
@@ -571,6 +598,13 @@ function OrderCard({
 
         {/* Action buttons — right column on desktop, full row beneath on mobile */}
         <div className="col-span-2 md:col-span-1 flex flex-wrap md:flex-col items-end justify-end gap-1.5">
+          {/* เลือกชำระแบบหลายรายการ — ติ๊กเพื่อรวมจ่ายจากแถบล่าง (<BulkPayBar>). */}
+          {row.hstatus === "2" && (
+            <label className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-bold text-sky-700 cursor-pointer">
+              <RowCheckbox hNo={row.hno} selectable />
+              {labels.selectToPay}
+            </label>
+          )}
           {/* ชำระเงิน — เด่น, โชว์เฉพาะออเดอร์รอชำระเงิน (status 2) → จ่ายจาก
               wallet ที่หน้ารายละเอียด (?pay=true). */}
           {row.hstatus === "2" && (
@@ -635,29 +669,6 @@ async function EmptyState({ title, showCta }: { title: string; showCta: boolean 
           {tp("addMore")}
         </Link>
       )}
-    </div>
-  );
-}
-
-/* ─────────────────────────── PAYMENT BOTTOM BAR ─────────────────────────── */
-async function PaymentBar({ count }: { count: number }) {
-  const tp = await getTranslations("pcsOrder");
-  return (
-    <div className="fixed bottom-24 md:bottom-6 left-3 right-20 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-[640px] z-40">
-      <div className="rounded-2xl bg-gradient-to-br from-primary-600 to-primary-700 text-white px-4 py-3 shadow-lg flex items-center gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] opacity-90">{tp("payBarTitle")}</p>
-          <p className="text-[15px] font-bold">
-            {tp("orderCount", { count })}
-          </p>
-        </div>
-        <Link
-          href="/service-order?q=2"
-          className="shrink-0 inline-flex items-center gap-1 rounded-full bg-white text-primary-700 text-[12.5px] font-bold px-3.5 py-1.5 shadow-md hover:bg-primary-50 transition-colors"
-        >
-          {tp("viewList")}
-        </Link>
-      </div>
     </div>
   );
 }

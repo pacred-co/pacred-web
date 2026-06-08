@@ -3035,6 +3035,7 @@
     "itemCount": "{count} ชิ้น",
     "viewDetail": "ดูรายละเอียด",
     "pay": "ชำระเงิน",
+    "selectToPay": "เลือกชำระ",
     "payOneHint": "เลือกออเดอร์ทีละรายการเพื่อชำระเงิน",
     "cancelOrder": "ยกเลิกออเดอร์",
     "cancelOneConfirm": "ต้องการยกเลิกออเดอร์ {hNo} นี้?",
