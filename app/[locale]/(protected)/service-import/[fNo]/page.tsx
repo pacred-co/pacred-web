@@ -5,6 +5,7 @@ import { calPriceForwarderSumCompany } from "@/lib/forwarder/calc-company-total"
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { legacyMemberUrl } from "@/lib/legacy-image";
+import { code128SvgDataUrl } from "@/lib/barcode";
 import { ServiceImportEditShipByForm } from "./service-import-edit-ship-by-form";
 import { ServiceImportEditAddressForm } from "./service-import-edit-address-form";
 import { ServiceImportPayButton } from "./service-import-pay-button";
@@ -98,8 +99,9 @@ import type { ForwarderRow } from "../forwarder-row-view";
  *     eCashBack / ePass / eAddress / sUpdate) need client JS not present
  *     here — kept silent (no popup).
  *  4. forwarder.php L1762 `include/barcode.php` is a server-side PNG
- *     barcode generator that doesn't exist in Pacred — rendered as the
- *     same absolute legacy URL (faithful display, no extra port work).
+ *     Code128 generator on pcscargo.co.th — replaced by a LOCAL inline
+ *     Code128 SVG (lib/barcode.ts via bwip-js): same symbology + value,
+ *     no runtime call to the legacy server (no brand leak / dependency).
  *  5. The "ชำระเงิน" button (L2140) calls `payForwarder()` (AJAX to
  *     `include/pages/index/getListPayForwarder.php`) — wired via the
  *     <ServiceImportPayButton> Client Component, which opens the
@@ -466,6 +468,16 @@ export default async function ServiceImportDetailPage({
     console.error(`[service-import/[fNo] tb_promotion lookup] fid=${idNum}`, { code: promoErr.code, message: promoErr.message });
   }
   const promoIdStr = promoRow ? String(promoRow.promoid) : null;
+
+  // ── forwarder.php L1762 / detail.php L81 — tracking barcode ──
+  // Legacy rendered <img src="…/include/barcode.php?text={fTrackingCHN}…"> when
+  // fTrackingCHN matched /^[a-zA-Z0-9-]+$/i — a live call to the pcscargo.co.th
+  // PHP Code128 generator (brand leak + runtime dependency on the legacy
+  // server). Rendered LOCALLY now as an inline Code128 SVG (same symbology +
+  // same value), no external request. null when there's no encodable tracking.
+  const trackingBarcode = row.ftrackingchn
+    ? code128SvgDataUrl(String(row.ftrackingchn))
+    : null;
 
   // ── forwarder.php L976-997 / L1953-2011 — address <select> options ──
   // Used by the inline "แก้ไข ที่อยู่จัดส่ง" form (update_fAddress POST).
@@ -885,28 +897,22 @@ export default async function ServiceImportDetailPage({
                   {t("trackingNumberLabel")} {row.ftrackingchn}
                 </p>
               )}
-              {row.ftrackingchn &&
-                /^[a-zA-Z0-9-]+$/i.test(row.ftrackingchn) && (
-                  <div>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      className="barcode-forwader"
-                      alt=""
-                      // TODO(barcode): legacy used the live PHP
-                      // generator `member/include/barcode.php?text=...`
-                      // on pcscargo.co.th — that's a live legacy
-                      // server call (brand leak + dependency).
-                      // Replace with a local barcode lib (e.g.
-                      // bwip-js or jsbarcode) routed through a
-                      // Pacred /api/barcode endpoint. Until then,
-                      // hide the image — the tracking number text
-                      // is rendered alongside so this is purely a
-                      // visual aid.
-                      src={undefined}
-                      style={{ display: "none" }}
-                    />
-                  </div>
-                )}
+              {trackingBarcode && (
+                <div className="mt-1">
+                  {/* forwarder.php L1762 / detail.php L81 — the tracking
+                      Code128 barcode. Legacy rendered the live
+                      pcscargo.co.th/include/barcode.php PNG; now rendered
+                      LOCALLY as an inline Code128 SVG (see lib/barcode.ts) —
+                      same symbology + same value, no external request, no
+                      brand leak. The tracking number text is shown above. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    className="barcode-forwader h-12 w-auto max-w-full"
+                    alt={String(row.ftrackingchn)}
+                    src={trackingBarcode}
+                  />
+                </div>
+              )}
             </div>
             <div className="md:text-right shrink-0">
               {FID_driver2 === 1 ? (
