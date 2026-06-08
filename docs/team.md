@@ -3,59 +3,68 @@
 > **CANONICAL** — single source of truth for roles, branches, and merge policy.
 > ทุกไฟล์ MD ที่กล่าวถึง team/role/branch ต้อง link มาที่นี่ ห้าม duplicate
 
-Last updated: 2026-05-24 (post strategy-reset — `faithful-port` deleted · V3 unlocked · ก๊อต takes admin 1:1 lane · 6 active branches)
+Last updated: 2026-06-09 — team & branch model clarified (4 contributors · current branch mapping · the owner is not a code contributor).
 
 ---
 
-## 1. Roles & Responsibilities (updated 2026-05-24)
+## 0. The team — four contributors + the owner
 
-| คน | บทบาท | Primary branch | สโคปงาน | สิทธิ์ main |
+Pacred's codebase is built by **four** contributors. The owner sets direction and reviews the output; he does not commit code.
+
+| | Role | Branch |
+|---|---|---|
+| **เดฟ** (dave) | Project Lead & Integrator — owns the integration branch, merges everyone's work, gates the release to production. Executes the build on the owner's behalf. | `dave-pacred` |
+| **ภูม** (Poom) | Backend · Admin back-office · Accounting / PEAK | `Poom-pacred` |
+| **ปอน** (podeng) | Frontend · Customer-portal UI · SEO / Marketing | `InwPond007` |
+| **ก๊อต** (got) | Senior Advisor & Production Watcher — reviews `main` production alongside เดฟ and takes on delegated tasks (partner APIs, infra, releases). | `main` review + assigned |
+
+**Owner — founder & CEO.** Sets the product direction, reviews output, and makes the business calls. He is **not** a code contributor; เดฟ is his working counterpart on the codebase, and the single live integration branch is `dave-pacred`.
+
+> **Naming note for sync hand-offs.** Because เดฟ works on the owner's behalf, pull/sync hand-offs between contributors can blur who is being addressed. For the record: the only code contributors are the four above, and `dave-pacred` is the one integration branch — don't treat any other name as a separate committer.
+
+---
+
+## 1. Roles & scope
+
+| คน | บทบาท | Branch | สโคปงาน | สิทธิ์ main |
 |---|---|---|---|---|
-| **ก๊อต** (got) | Senior Advisor / Production Watcher / **Admin 1:1 lead (NEW)** | `main` (review + own commits for admin 1:1) | code review · ADRs · partner integrations · **drives 1:1 transcription of 187 `pcs-admin/*.php` files (was ภูม pre-reset)** · cuts main releases · backup merger | ✅ Push to main |
-| **เดฟ** (dave) | **Project Lead / Integrator / Customer-backend 1:1** | `dave-pacred` | drive 1:1 customer-portal port (`(protected)/*` · server actions on `tb_*`) · integrate ปอน's `podeng` · wire missing customer integrations (TAMIT · LINE Notify) · merge to main with ก๊อต gating | ✅ Push to main |
-| **ปอน** (podeng) | Frontend / Customer-portal UI / SEO | `podeng` | **100% หน้าบ้าน** — landing pages · public site · customer-portal UI fidelity · brand-asset swap · i18n · Lighthouse | ❌ Push to `podeng` only (เดฟ merges into dave-pacred) |
-| **ภูม** (Poom) | Backend / **V3 backend continuation (UNLOCKED 2026-05-24)** | `Poom-pacred` | DPX ERP enhancements · wave-17+ admin features · advanced workflows · merges to main *after* 1:1 ships | ❌ Push to `Poom-pacred` only (merges via เดฟ post-1:1) |
+| **เดฟ** | Project Lead / Integrator | `dave-pacred` | integrate all branches · customer-backend + cross-cutting work · gate + release to `main` | ✅ release gate (on owner's go) |
+| **ภูม** | Backend / Admin / Accounting | `Poom-pacred` | admin back-office · accounting (PEAK) · advanced backend & workflows | ❌ own branch only → เดฟ integrates |
+| **ปอน** | Frontend / UI / SEO | `InwPond007` | landing · public site · customer-portal UI · brand assets · i18n · SEO | ❌ own branch only → เดฟ integrates |
+| **ก๊อต** | Senior Advisor / Production Watcher | `main` review + assigned | review · ADRs · partner integrations · infra · delegated tasks | ✅ release gate with เดฟ |
 
-### Phase mapping (post-2026-05-24 reset)
-- **1:1 Port Phase (current):** เดฟ (customer-portal) + ก๊อต (admin back-office) + ปอน (frontend) port the legacy PCS Cargo system 1:1 onto Next.js. Ships to main FIRST.
-- **V3 Phase (parallel, UNLOCKED 2026-05-24):** ภูม continues DPX ERP enhancements on `Poom-pacred`. Merges into main *after* 1:1 ships stable.
-- **Phase C (deferred):** Tier 0/1/2/3 capability roadmap (booking-flow detail · customer-intel · disbursement systems · platform-observability expansion) — sequenced after V3 stable.
+### Scope boundaries
+- ✋ **ปอน** focuses the customer-visible frontend; coordinate with เดฟ before touching `actions/`, `lib/`, `supabase/migrations/`, `app/api/`.
+- ✋ **ภูม** focuses backend/admin/accounting; if touching `(protected)/*` (customer portal), coordinate with เดฟ first.
+- ✋ **ก๊อต ↔ เดฟ** coordinate on admin/infra/partner routes so production work doesn't collide.
+- ✋ **Lead-only files** (เดฟ / ก๊อต): `CLAUDE.md`, `AGENTS.md`, `docs/team.md`, `docs/conventions.md`, `docs/env.md`, `package.json`, `.github/`, `next.config.ts`, `eslint.config.mjs`, `proxy.ts`, `vercel.json`.
 
-### Scope boundaries (updated 2026-05-24)
-- ✋ **ปอน ไม่แก้:** `actions/`, `lib/`, `app/[locale]/(auth|protected|admin)/`, `supabase/migrations/`, `app/api/`
-- ✋ **เดฟ vs ก๊อต admin coordination:** ก๊อต claims `pcs-admin/*.php` 1:1 transcription routes; เดฟ doesn't touch admin unless coordinating
-- ✋ **ภูม vs ก๊อต admin coordination:** ภูม's V3 admin work avoids routes ก๊อต has marked for 1:1 fidelity port — coordinate via เดฟ before touching same route
-- ✋ **ภูม customer-side:** ภูม V3 work focuses backend/admin; if touching `(protected)/*` (customer portal), coordinate with เดฟ first
-- ✋ **All:** `CLAUDE.md`, `docs/team.md`, `docs/conventions.md`, `docs/env.md`, `docs/PORT_PLAN.md`, `package.json`, `.github/`, `next.config.ts`, `eslint.config.mjs`, `proxy.ts`, `vercel.json` (lead-only — เดฟ/ก๊อต)
-
-ถ้าจำเป็นต้องข้ามขอบเขต — ขออนุญาตเดฟ/ก๊อตก่อน
+ถ้าจำเป็นต้องข้ามขอบเขต — ประสานกับเดฟก่อน
 
 ---
 
-## 2. Branch policy (updated 2026-05-24)
+## 2. Branch policy (updated 2026-06-09)
 
 | Branch | Owner | Purpose | Status |
 |---|---|---|---|
-| `main` | ก๊อต gate | Production. Vercel auto-deploy. | 🟢 live |
-| `podeng` | ปอน | Frontend & customer-portal UI; **the brand SOT (theme/images/icons)** — merges to dave-pacred via เดฟ | 🟢 active |
-| `dave-pacred` | เดฟ | 1:1 customer-backend + integration; merges to main | 🟢 active |
-| `Poom-pacred` | ภูม | **V3 backend primary lane (UNLOCKED)** — merges to main after 1:1 | 🟢 active |
-| `Poom` | ภูม | V3 backend secondary lane (UNLOCKED — was frozen pre-2026-05-24) | 🟢 active |
-| `dave` | (เดฟ future) | **V3 full-site lane** — activates AFTER `dave-pacred` ships to main; then combo with Poom-pacred + podeng | 💤 dormant |
-| `claude/*` (local) | (auto worktrees) | Internal Claude Code session worktrees — don't push, never bound to remote | local-only |
+| `main` | release gate (เดฟ + ก๊อต) | Production. Vercel auto-deploys. Advances only on the owner's go. | 🟢 live |
+| `dave-pacred` | เดฟ | **The single integration branch.** Everyone's work is merged here; gated, then released to `main`. | 🟢 active |
+| `Poom-pacred` | ภูม | Backend / admin / accounting lane → integrated into `dave-pacred` by เดฟ | 🟢 active |
+| `InwPond007` | ปอน | Frontend / customer-portal UI / SEO lane → integrated into `dave-pacred` by เดฟ | 🟢 active |
+| `claude/*` (local) | (auto worktrees) | Internal Claude Code session worktrees — never bound to a remote, don't push | local-only |
 
-**Deleted 2026-05-24:** `faithful-port` (no longer integration target) · `hotfix/auth-unblock` (cherry-picked) · all stale `claude/*` remotes (work merged or stale).
+**Integration model.** `dave-pacred` is the trunk. ภูม pushes `Poom-pacred`, ปอน pushes `InwPond007`; เดฟ merges both into `dave-pacred`, runs the gate, and (on the owner's go) promotes `dave-pacred → main`. After a promote, เดฟ may fast-forward the teammate branches back to `dave-pacred` so everyone shares the same base.
 
-**Branding rule (owner directive 2026-05-24):** all theme/images/icons across the codebase follow **ปอน's `podeng` style** (Tailwind + Pacred red `#B30000` + Prompt font + lucide outline icons). Customer code prefix stays **`PR…`** (e.g. `PR201`). The 1:1 transcription copies the legacy workflow + markup + SQL — visual treatment is rebrand to podeng.
+> **Push default (current standing rule).** Hold work at `dave-pacred`. Do **not** push to `main` unless the owner explicitly says so, and do **not** push into teammate branches (`Poom-pacred` / `InwPond007`) routinely — distribute only when there's something they genuinely need to pull. End-of-session distribution to all branches happens only when the owner asks to "close the session".
 
-**Customer data state:** Customer images + storage already in **Supabase S3 production** (ภูม uploaded `pcsracgo/public/member` files). Database = production project `yzljakczhwrpbxflnmco`. Internal table-naming conflict (rebuilt-era vs legacy `tb_*`) is OUR cleanup task — not a legacy migration gap.
+**Customer data state.** Customer images + storage are in Supabase S3 production; the database is the production project. The legacy `tb_*` schema is canonical; the rebuilt-era twin tables are mostly empty and being retired.
 
 **กฎทอง:**
-1. ปอน + ภูม commit/push **เฉพาะ branch ตัวเอง** (`podeng` / `Poom`) — ห้าม push เข้า main หรือ dave
-2. เมื่อ feature/phase เสร็จ → push ขึ้น branch ตัวเอง → แจ้งเดฟ/ก๊อตให้ review
-3. เดฟ/ก๊อต merge งานทุกคนเข้า dave ก่อน → verify lint + build → push เข้า main
+1. ภูม + ปอน commit/push **เฉพาะ branch ตัวเอง** (`Poom-pacred` / `InwPond007`) — ห้าม push เข้า `main` หรือ `dave-pacred` โดยตรง
+2. เมื่อ feature/phase เสร็จ → push branch ตัวเอง → แจ้งเดฟให้ integrate
+3. เดฟ merge งานทุกคนเข้า `dave-pacred` → verify (lint + typecheck + build) → release เข้า `main` ตามที่เจ้าของสั่ง
 4. ห้าม `--force` push ทุก branch ยกเว้น branch ของตัวเองและรู้ว่าทำอะไรอยู่
-5. ห้าม `git reset --hard` หรือลบ commit เพื่อนคนอื่น
+5. ห้าม `git reset --hard` หรือลบ commit ของคนอื่น
 
 ---
 
@@ -63,15 +72,13 @@ Last updated: 2026-05-24 (post strategy-reset — `faithful-port` deleted · V3 
 
 > **Pacred branch flow:**
 > ```
-> ปอน (podeng) ──┐
->                ├──► เดฟ pulls + merges into ► dave (consolidation/staging)
-> ภูม  (Poom)  ──┘                                │
->                                                 ▼
->                                       ก๊อต reviews + merges ► main (production)
->                                                 ▲
->                                                 └── เดฟ bypass (urgent only)
+> ปอน (InwPond007) ──┐
+>                    ├──► เดฟ integrates into ► dave-pacred (the trunk)
+> ภูม  (Poom-pacred)─┘                              │
+>                                                   ▼  (on owner's go)
+>                                          เดฟ + ก๊อต release ► main (production)
 > ```
-> **Key:** น้อง pull from `dave` (NOT `main`). `dave` = staging. `main` = production. ก๊อต = production gatekeeper.
+> **Key:** teammates pull from `dave-pacred` (NOT `main`). `dave-pacred` = the integration trunk; `main` = production, advanced only on the owner's go.
 
 ### ⚠️ 3.0. PUSH FREQUENCY RULE (cost discipline — ก๊อต flag 2026-05-15)
 

@@ -3,6 +3,20 @@
 
 ---
 
+# 🧾 2026-06-09 PM — เดฟ: CARGO ใบกำกับภาษี form delivered + platform build-plan + team-model clarified · SESSION CLOSE · read FIRST
+
+> **All on `dave-pacred` (+ this close-out pushed to all branches once, then dave-pacred-only going forward).** Built the **CARGO tax-invoice (ใบกำกับภาษี) Excel form** from the AXELRA template + olddata-dev chats — adds the missing **Pricing (cost) section** (file `/Users/dev/Downloads/PACRED-ใบกำกับภาษี-form-v2-pricing.xlsx`, script `scripts/tax-invoice-form-build.py`, 0 formula errors, functional-tested).
+>
+> **⭐ The insight PCS+ไอแต้ม missed (now the spec):** CARGO import = a Freight-LCL job where Pacred issues a **ใบขนรวม under the shipping-co name** → customer sees only the tax invoice. **THREE distinct prices, three roles** — never conflate: **SELLING** (CS → invoice + VAT 7%) · **COST** (Pricing → PEAK stock + profit) · **มูลค่าสำแดง/DECLARED** (Docs → ใบขน, defaults to cost but engineered-down, audited). 4-role flow CS→Pricing→Docs(NETBAY/Form-E)→Account(PEAK). Learning: [`docs/learnings/pacred-cargo-tax-invoice-flow.md`](docs/learnings/pacred-cargo-tax-invoice-flow.md).
+>
+> **🏗 Platform build-plan (grounded by a 4-agent audit · [`docs/research/tax-invoice-platform-build-plan-2026-06-09.md`](docs/research/tax-invoice-platform-build-plan-2026-06-09.md)):** the SELLING+VAT+WHT+issuance layer is **already built** (`tax-doc-mode.ts` · `tb_forwarder_tax_invoice` LIVE / `tb_shop_tax_invoice` DORMANT · `customs_declarations` freight-only · PEAK CSV). The whole gap = platform captures ONE price (selling); **no COST field, no DECLARED field, no `pricing` role.** Build = the upstream cost/declared/Pricing layer (do NOT rebuild). **P1 = doc-mode toggle at ฝากนำเข้า order entry (no schema · the recommended next slice)** → P2 cost (mig 0158 + `pricing` role) → P3 declared/Docs → P4 4-role workspace+PEAK → P5 NETBAY. **NEXT-FREE migration = 0158** (ledger stale); ADR-0027 stale.
+>
+> **👥 Team model clarified + corrected in docs** (`docs/team.md` §0): **4 contributors only** — เดฟ=`dave-pacred` (lead/integrator, on the owner's behalf) · ภูม=`Poom-pacred` · ปอน=`InwPond007` · ก๊อต=`main` review + delegated. The **owner (CEO) sets direction but does not commit code**. Fixed stale branch names across team.md / CLAUDE.md TL;DR / AGENTS.md §13 (resync → `dave-pacred`) / `branch-integrate-loop` skill.
+>
+> **🔧 Push policy going forward (owner directive):** finish a big wave → push **only `dave-pacred`**. Do **NOT** push `main` unless the owner says so, and **do NOT push teammate branches** routinely (they already have the updates). This close-out is the one-time all-branch distribution.
+
+---
+
 # 🌊 2026-06-09 — เดฟ: 5-wave autonomous code sprint + nav-fix + phone-dedupe + self-audit harden · ALL on main · read FIRST
 
 > **main = dave-pacred = Poom-pacred = InwPond007 = `423d17cb`** (all synced) · `pnpm verify` + `pnpm build` EXIT 0 every save-point · migration **0157** applied prod (NEXT FREE = **0158**). Owner: "เอางาน code ล้วนมาแยกร่าง เคลียเป็น phase เล็ก→ใหญ่ run long" → ran 5 worktree-agent waves (3 agents/wave · serial-merge + gate + push-per-wave · every wave merged clean). Then "เก็บงานให้ดีก่อนไปต่อ" → self-audit + fixed the gaps.
@@ -734,19 +748,20 @@ app/[locale]/(protected)/         # หลังบ้าน (ลูกค้า
 > ⚠️ **CANONICAL doc moved to [`docs/team.md`](docs/team.md)** — full role/branch/merge policy + daily workflow + safety rules
 > ห้าม duplicate รายละเอียดที่นี่ — อ่านที่ `docs/team.md` ครั้งเดียว ที่เดียว
 
-**TL;DR:**
+**TL;DR — four contributors; the owner sets direction but does not commit code:**
 
-| คน | บทบาท | Branch | Push to main |
+| คน | บทบาท | Branch | Release to main |
 |---|---|---|---|
-| **ก๊อต** | Senior Advisor | (review only) | ✅ |
-| **เดฟ** | Project Lead | `dave` | ✅ |
-| **ปอน** | Frontend & SEO | `podeng` | ❌ (own branch) |
-| **ภูม** | Backend & Cargo Port | `Poom` | ❌ (own branch) |
+| **เดฟ** (dave) | Project Lead / Integrator (works on the owner's behalf) | `dave-pacred` (the integration trunk) | ✅ release gate, on owner's go |
+| **ภูม** (Poom) | Backend / Admin / Accounting | `Poom-pacred` | ❌ own branch → เดฟ integrates |
+| **ปอน** (podeng) | Frontend / UI / SEO | `InwPond007` | ❌ own branch → เดฟ integrates |
+| **ก๊อต** (got) | Senior Advisor / Production Watcher | `main` review + assigned | ✅ release gate with เดฟ |
+
+`dave-pacred` is the one integration branch; ภูม + ปอน push their own branch and เดฟ merges both in, gates, and (on the owner's go) promotes to `main`. The owner is the CEO — not a code contributor; เดฟ is his counterpart on the codebase. Full model in [`docs/team.md`](docs/team.md) §0.
 
 **Daily sync (every morning):**
 ```bash
-git checkout main && git pull origin main
-git checkout <my-branch> && git merge main && git push origin <my-branch>
+git fetch origin && git merge origin/dave-pacred   # everyone bases on dave-pacred (the trunk)
 ```
 
 **Conflict / safety:** อย่าใช้ `--force` / `reset --hard` ถ้าไม่แน่ใจ — full safety rules ใน [`docs/team.md`](docs/team.md) §5
