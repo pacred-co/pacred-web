@@ -48,6 +48,7 @@ import {
   getContainerCostSheetParcels,
   type SheetParcel,
 } from "@/lib/integrations/google-sheets/container-cost-sheet-adapter";
+import { getContainerCompleteness } from "@/lib/warehouse/container-completeness";
 
 export const dynamic = "force-dynamic";
 
@@ -440,6 +441,12 @@ export default async function AdminReportCntDetailPage({
   // The legacy MX/Sang disabled banner is gone.
   const canEditCost = showMoney && !cabinetIsPaid;
 
+  // ── Phase 3 (ops-workflow audit §30) — per-container completeness ──
+  // Sums famount (expected) vs fi2amount (scanned) for the cabinet's
+  // forwarders. Drives the green/amber banner at the top of the detail
+  // page so warehouse staff can see "ของยิงเข้าโกดังครบมั้ย" at a glance.
+  const completeness = await getContainerCompleteness(admin, fCabinetNumber);
+
   // ── LANE A — fetch แสง's Google Sheet parcels for the cost-update diff ──
   // Only when on the cost-update tab + money-tier. Cache-first (kept fresh
   // by /api/cron/sync-container-cost-sheet), live fallback. Degrades to a
@@ -462,6 +469,34 @@ export default async function AdminReportCntDetailPage({
       <TopMenuReport activeHref="/admin/report-cnt" />
       <main className="p-4 lg:p-6 space-y-4 pb-32">
         <Breadcrumb fCabinetNumber={fCabinetNumber} />
+
+        {/* Phase 3 (ops-workflow audit §30) — completeness banner.
+            Green if every forwarder has scanned ≥ famount; amber otherwise
+            with concrete gap counts so warehouse can act. */}
+        {completeness.forwardersTotal > 0 && (
+          completeness.isComplete ? (
+            <div className="rounded-2xl border border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 p-4 text-sm text-emerald-800 dark:text-emerald-200">
+              <p className="font-semibold flex items-center gap-2">
+                <span className="text-lg">✅</span>
+                <span>
+                  ยิงครบทุกรายการ ({completeness.forwardersComplete}/{completeness.forwardersTotal} รายการ
+                  · ยิง {completeness.scanned.toLocaleString()}/{completeness.expected.toLocaleString()} กล่อง · {completeness.pct}%)
+                </span>
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20 p-4 text-sm text-amber-800 dark:text-amber-200">
+              <p className="font-semibold flex items-center gap-2">
+                <span className="text-lg">⚠️</span>
+                <span>
+                  ยังขาด {completeness.forwardersTotal - completeness.forwardersComplete} รายการ (ยิงครบ {completeness.forwardersComplete}/{completeness.forwardersTotal} รายการ
+                  · ยิง {completeness.scanned.toLocaleString()}/{completeness.expected.toLocaleString()} กล่อง
+                  · ขาด {Math.max(0, completeness.expected - completeness.scanned).toLocaleString()} กล่อง · {completeness.pct}%)
+                </span>
+              </p>
+            </div>
+          )
+        )}
 
         {/* Header summary card */}
         <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 lg:p-6">

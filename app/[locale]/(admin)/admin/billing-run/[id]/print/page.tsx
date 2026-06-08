@@ -36,7 +36,9 @@ export default async function BillingRunPrintPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireAdmin(["super", "accounting", "ops"]);
+  // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles print billing
+  // docs (`docs/research/ops-workflow-audit-2026-06-05.md` §28).
+  await requireAdmin(["super", "accounting", "ops", "freight_export_doc", "freight_import_doc"]);
   const { id } = await params;
   const invoiceId = Number(id);
   if (!Number.isInteger(invoiceId) || invoiceId <= 0) notFound();

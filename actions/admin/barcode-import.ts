@@ -41,6 +41,8 @@ import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
 import { logger } from "@/lib/logger";
 import { getAdminRoles } from "@/lib/auth/require-admin";
 import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
+import { getContainerCompleteness } from "@/lib/warehouse/container-completeness";
+import { notifyStaffGroup } from "@/lib/notifications/staff-group";
 
 // ────────────────────────────────────────────────────────────
 // Schemas
@@ -448,6 +450,36 @@ export async function adminBarcodeImportScan(
             fpallet: fPallet,
           })
           .eq("id", row.id);
+      }
+
+      // ── 3b. Phase 3 (ops-workflow audit §30) — staff-notify on the
+      // container-completeness EDGE: if this scan completed the LAST
+      // missing row in the cabinet, fire a LINE staff-group push. Only
+      // fires on the edge transition (statusFlipped is true here AND the
+      // post-flip rollup is now complete), so no spam on subsequent scans
+      // within an already-complete container.
+      if (row && row.fcabinetnumber && statusFlipped) {
+        try {
+          const rollup = await getContainerCompleteness(admin, row.fcabinetnumber);
+          if (rollup.isComplete && rollup.forwardersTotal > 0) {
+            // Best-effort — staff notify never blocks the warehouse UX.
+            await notifyStaffGroup(
+              `🎉 ตู้ ${row.fcabinetnumber} ยิงเข้าโกดังครบทุกรายการแล้ว · ${rollup.pct}% (${rollup.scanned.toLocaleString()}/${rollup.expected.toLocaleString()} กล่อง · ${rollup.forwardersComplete}/${rollup.forwardersTotal} รายการ)`,
+              {
+                title: `ตู้ ${row.fcabinetnumber} ยิงครบแล้ว`,
+                url: `/admin/report-cnt/${encodeURIComponent(row.fcabinetnumber)}`,
+                urlLabel: "ดูรายละเอียดตู้",
+              },
+            );
+          }
+        } catch (e) {
+          // Never throw — a failed notify must not fail the scan.
+          logger.warn(
+            "barcode_import.scan",
+            "container-completeness edge notify failed",
+            { fid: row.id, fcabinetnumber: row.fcabinetnumber, error: String(e) },
+          );
+        }
       }
 
       // ── 4. Build response card

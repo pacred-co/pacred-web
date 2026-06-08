@@ -45,6 +45,10 @@ import { TopMenuReport } from "@/components/admin/top-menu-report";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportReportCntAll } from "@/actions/admin/export/report-cnt";
 import { CntListTable, type CntListRow } from "./cnt-list-table";
+import {
+  getContainerCompletenessBatch,
+  type ContainerCompleteness,
+} from "@/lib/warehouse/container-completeness";
 
 export const dynamic = "force-dynamic";
 
@@ -294,6 +298,19 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
   if (actionPay === "1") grouped = grouped.filter((g) => !g.isPaid);
   if (actionPay === "2") grouped = grouped.filter((g) =>  g.isPaid);
 
+  // Phase 3 (ops-workflow audit §30) — per-container completeness for the
+  // "ยิงครบ" badge. ONE round-trip via getContainerCompletenessBatch — sums
+  // famount (expected) and fi2amount (scanned) for the visible cabinets so
+  // the column shows e.g. "45/52" and the cell tints red when short.
+  // Owner headline ask: "ของยิงเข้าโกดังครบยัง" without manual counting.
+  const completenessByCab: Record<string, ContainerCompleteness> =
+    grouped.length > 0
+      ? await getContainerCompletenessBatch(
+          admin,
+          grouped.map((g) => g.fcabinetnumber),
+        )
+      : {};
+
   // Wave 17 ux-fix: totals computation moved to <CntListTable> client
   // component (alongside rendering) — keeps the server query minimal.
 
@@ -470,6 +487,7 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
             isWaiting={isWaiting}
             warehouseLabel={WAREHOUSE_LABEL}
             transportLabel={TRANSPORT_LABEL}
+            completenessByCab={completenessByCab}
           />
         )}
         {/* Wave 17 fix (2026-05-25 ค่ำ): the fixed-bottom action buttons

@@ -106,7 +106,9 @@ export default async function AdminCustomsDeclarationsPage({
 }: {
   searchParams: Promise<{ date_from?: string; date_to?: string; status?: string; q?: string }>;
 }) {
-  await requireAdmin(["super", "accounting"]);
+  // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles own customs
+  // declaration issuance (`docs/research/ops-workflow-audit-2026-06-05.md` §28).
+  await requireAdmin(["super", "accounting", "freight_export_doc", "freight_import_doc"]);
   const sp = await searchParams;
   const defaults = defaultDateRange();
   const dateFrom = sp.date_from && /^\d{4}-\d{2}-\d{2}$/.test(sp.date_from) ? sp.date_from : defaults.from;

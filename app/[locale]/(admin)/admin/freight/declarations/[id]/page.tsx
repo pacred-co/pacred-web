@@ -79,7 +79,9 @@ export default async function AdminCustomsDeclarationDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireAdmin(["super", "accounting"]);
+  // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles own customs
+  // declaration issuance (`docs/research/ops-workflow-audit-2026-06-05.md` §28).
+  await requireAdmin(["super", "accounting", "freight_export_doc", "freight_import_doc"]);
   const { id } = await params;
   const admin = createAdminClient();
 
