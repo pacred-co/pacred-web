@@ -201,17 +201,48 @@ nav.nav-footer-pcs { display: none !important; }
     padding-right: 88px;
     transition: padding 0.3s ease-out;
   }
-  body.pcs-legacy-body:not(.pcs-sidebar-collapsed) .pcs-content-pad {
+  body.pcs-legacy-body:not(.pcs-sidebar-collapsed):not(.pcs-sidebar-peek) .pcs-content-pad {
+    padding-left: 280px;
+  }
+  /* `pcs-sidebar-peek` (auto-collapse on the wide table view): the content
+     reclaims the sidebar's width but keeps a 28px left gutter so the 16px hover
+     rail never sits ON TOP of the table's first column — content + rail relate
+     instead of overlapping (ปอน 2026-06-08 "ทำให้สัมพันธ์กับ side left bar"). */
+  body.pcs-legacy-body.pcs-sidebar-peek .pcs-content-pad {
+    padding-left: 28px;
+  }
+  /* …and when the rail is HOVERED OUT, the content shifts right to make room for
+     the full 260px menu — it RESPONDS to the sidebar's size instead of being
+     overlaid (ปอน 2026-06-08 "หน้าไม่ตอบรับ ขนาดกัน"). `:has()` lets the content
+     react to the sibling sidebar's :hover; the `.pcs-content-pad` padding
+     transition (above) animates the shift smoothly. */
+  body.pcs-legacy-body.pcs-sidebar-peek:has(#pcs-left-menu.main-menu:hover) .pcs-content-pad {
     padding-left: 280px;
   }
 
   /* Collapsed state — toggled by <PcsSidebarToggle> (ปอน 2026-05-24).
      Sidebar slides off-screen so content can reclaim the space. */
   #pcs-left-menu.main-menu {
-    transition: transform 0.3s ease-out;
+    transition: transform 0.3s ease-out, box-shadow 0.3s ease-out;
   }
   body.pcs-sidebar-collapsed.vertical-layout > #pcs-left-menu.main-menu {
     transform: translateX(-100%);
+  }
+
+  /* Auto-collapse WITH hover-peek — used on the wide table view
+     (/service-import/table, via <CollapseSidebar>). The sidebar tucks to the
+     left edge leaving a thin hover rail; moving the mouse over it slides the
+     full menu out as an overlay, and it tucks back on mouse-leave
+     (ปอน 2026-06-08 "หุบไว้ แต่เอาเมาส์ชี้ๆ แล้วออกมาได้"). Content stays
+     full-width (the padding rule above). */
+  body.pcs-sidebar-peek.vertical-layout > #pcs-left-menu.main-menu {
+    transform: translateX(calc(-100% + 16px));
+    box-shadow: 2px 0 6px rgba(0, 0, 0, 0.08);
+  }
+  body.pcs-sidebar-peek.vertical-layout > #pcs-left-menu.main-menu:hover {
+    transform: translateX(0);
+    box-shadow: 6px 0 28px rgba(0, 0, 0, 0.18);
+    z-index: 1050;
   }
 }
 /* Mobile: hide the sidebar entirely (legacy theme would slide it in via
