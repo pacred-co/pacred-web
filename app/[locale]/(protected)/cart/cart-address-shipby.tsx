@@ -275,7 +275,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
           <div className="mt-3 pt-3 border-t border-border">
             {selectedID === "PCS" ? (
               <a
-                href={warehouseMapUrl || "https://goo.gl/maps/MJd56S6saebaDBQr7"}
+                href={warehouseMapUrl || "https://www.google.com/maps/place/13%C2%B042'40.5%22N+100%C2%B019'26.6%22E/@13.7112396,100.3237324,211m/data=!3m1!1e3!4m4!3m3!8m2!3d13.71125!4d100.3240556?entry=ttu&g_ep=EgoyMDI2MDYwMS4wIKXMDSoASAFQAw%3D%3D"}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-primary-600 hover:underline"

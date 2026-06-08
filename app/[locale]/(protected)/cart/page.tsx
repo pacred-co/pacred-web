@@ -66,10 +66,11 @@ const CART_CAPACITY = 151;
 // (ADDRESSES.warehouseTh — สมุทรสาคร). Legacy PCS hardcoded a Bangkok address;
 // under D1 the actual Pacred warehouse is in Samut Sakhon (the canonical SOT).
 const PCS_WAREHOUSE_ADDRESS = `รับเองที่โกดัง Pacred · ${ADDRESSES.warehouseTh.full}`;
-// Map URL pending — when พี่ป๊อปส่ง Google Maps pin for the Samut Sakhon
-// warehouse, drop it here (replaces the legacy PCS map link). Empty string
-// hides the "ดูแผนที่" CTA via the && short-circuit in the template.
-const PCS_WAREHOUSE_MAP_URL = "";
+// Precise Samut Sakhon warehouse Google Maps pin (ปอน 2026-06-08 — the pending
+// owner pin arrived: "แก้ google map โกดัง 118 ให้หมด"). Now the "ดูแผนที่" CTA
+// shows and points at the exact warehouse location.
+const PCS_WAREHOUSE_MAP_URL =
+  "https://www.google.com/maps/place/13%C2%B042'40.5%22N+100%C2%B019'26.6%22E/@13.7112396,100.3237324,211m/data=!3m1!1e3!4m4!3m3!8m2!3d13.71125!4d100.3240556?entry=ttu&g_ep=EgoyMDI2MDYwMS4wIKXMDSoASAFQAw%3D%3D";
 
 type CartRow = {
   id: number;
