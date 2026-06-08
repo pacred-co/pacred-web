@@ -3336,7 +3336,8 @@
       "receipt": "Tax invoices",
       "wht": "Withholding tax",
       "overview": "Reports overview",
-      "declarations": "Customs declarations"
+      "declarations": "Customs declarations",
+      "costRates": "China freight cost rates"
     },
     "settingsCargo": {
       "title": "Cargo system settings",

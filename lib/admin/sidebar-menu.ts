@@ -309,6 +309,21 @@ const itemFreightLeads: MenuItem = {
   icon: "Inbox",
 };
 
+/** 2026-06-09 (เดฟ · freight net-margin unlock) — the China-side freight COST
+ *  table maintenance (/admin/freight/rates → migration 0145 `tb_freight_rate`).
+ *  The rate engine (lib/freight/rate-engine.ts + lib/freight/rate-lookup.ts)
+ *  reads this admin-maintained cost so EXW/CFR quotes show TRUE net margin
+ *  instead of only "กำไรขั้นต้น" (gross). The table was empty on prod because
+ *  there was no write-path — this leaf + actions/admin/freight-rates.ts is it.
+ *  Single leaf · super/ops write · accounting read (the page + actions gate
+ *  RBAC themselves; the table RLS mirrors super/ops write, super/ops/accounting
+ *  read). */
+const itemFreightCostRates: MenuItem = {
+  labelKey: "accFreight.costRates",
+  href: "/admin/freight/rates",
+  icon: "HandCoins",
+};
+
 /** legacy pcs-admin menu L162-167 — "อัปเดตฝากนำเข้า" (top-level group)
  *  Combines BOTH Wave 17 P1 streams into the single legacy parent:
  *   - P1-1+2 — MOMO + CargoCenter (manualUpdate sub-page only · Phase B
@@ -783,6 +798,8 @@ const menuSuper: MenuSection[] = [
       blockForwarderImport,
       // 2026-06-08 (เดฟ · freight revenue unlock) — inbound Freight RFQ inbox.
       itemFreightLeads,
+      // 2026-06-09 (เดฟ · freight net-margin unlock) — China freight cost rates.
+      itemFreightCostRates,
       blockApiForwarderUpdate,
       // 2026-05-21 ภูม flagged — /admin/drivers had no direct super sidebar
       // entry · only reachable via the /admin/forwarders top-menubar
@@ -932,6 +949,8 @@ const menuOps: MenuSection[] = [
       blockForwarderImport,
       // 2026-06-08 (เดฟ · freight revenue unlock) — inbound Freight RFQ inbox.
       itemFreightLeads,
+      // 2026-06-09 (เดฟ · freight net-margin unlock) — China freight cost rates.
+      itemFreightCostRates,
       blockApiForwarderUpdate,
       blockPayment,
       // Phase 2 — driver-runs sales-only side not yet live.
@@ -952,7 +971,17 @@ const menuAccounting: MenuSection[] = [
     // Section merged 2026-05-20 ค่ำ (see menuSuper comment). Second
     // batch (same date) consolidated wallet + report to single leaves.
     header: "Cargo & Freight",
-    items: [blockWithdrawalList, itemWalletAll, blockPayment, itemReportsAll, blockAccounting],
+    items: [
+      blockWithdrawalList,
+      itemWalletAll,
+      blockPayment,
+      itemReportsAll,
+      blockAccounting,
+      // 2026-06-09 (เดฟ · freight net-margin unlock) — accounting has read access
+      // to the China freight cost rates (RLS: super/ops/accounting read · the page
+      // disables write controls for non-super/ops roles).
+      itemFreightCostRates,
+    ],
   },
   { header: "Settings", items: [blockSettingsCargo] },
   learningSection,
