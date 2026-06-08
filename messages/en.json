@@ -4110,6 +4110,8 @@
     "docModeNone": "No documents"
   },
   "searchPage": {
+    "cartFullMessage": "Cart is full (max 151 items) — please check out or remove some items first",
+    "addFailed": "Failed to add to cart. Please try again.",
     "searchPlaceholder": "Search products or paste a 1688/Taobao link — instant Thai translation",
     "searchAriaLabel": "Search",
     "searchLabel": "Search",
