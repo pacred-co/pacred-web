@@ -3,6 +3,20 @@
 
 ---
 
+# 🔭 2026-06-08 — เดฟ: full-scope gap analysis (cargo+freight) + customer reachability sweep + 2 builds · read FIRST
+
+**branch `claude/beautiful-swartz-7cde53` off `dave-pacred`/`main` (`5f344b8f` · all branches 0/0 in-sync · nothing to integrate). 2 commits this session, gate-green, **NOT pushed** (customer-facing nav unverified-when-authed — owner skipped test-login). `pnpm verify`+`typecheck` EXIT 0. localhost :3000 live.** Owner gave the complete `olddata dev` data (cargo+freight · 3.8GB) + "ทำหมด" (do all: ใบกำกับ ฝากสั่ง/ฝากโอน + acquisition/CRM + reachability + freight + cargo-chat). Ran a **5-agent customer reachability audit** + a **4-agent full-scope gap analysis**. **🟢 Headline: platform ~90% built — gaps are last-mile wiring, not from-scratch.** Full file-level roadmap per stream + gates → **[`docs/research/full-scope-gap-2026-06-08.md`](docs/research/full-scope-gap-2026-06-08.md)** (read FIRST for what's next).
+
+**SHIPPED (committed local, NOT pushed):**
+1. **`9b80e07e` customer reachability (§0d):** audit = surface link-clean + legacy-complete (0 404 / 0 missing legacy fn / 0 §0e dead-write / 0 money bug). All orphans traced to the DEAD `components/sections/protected-sidebar.tsx` (live customer nav = `components/legacy/pcs-left-menu.tsx` — wire new customer features THERE). Wired 5 orphans + th/en i18n: `/service-import/receipts`+`/shipments` (import accordion) · `/refunds` (cash-wallet) · `/pay` (top-level) · `/my-issues` (user-pill).
+2. **`c6ce6e73` sales→CS handoff (CEO §5):** `logLeadCall('closed')` → auto-assign CS (`pickLeastLoadedCsRep`→`tb_users.adminIDCS`, only if none) + เคลียร์/แอร์ bypass checkbox. Best-effort (never fails the call log).
+
+**🟡 STAGED (spec'd in the gap doc · NOT built):** freight **RFQ leads-inbox** (`/admin/freight/leads` — THE missing link: public `freight_quote` leads land in DB+LINE but sales can't see/triage/convert; admin `/admin/freight/quotes` reads a DIFFERENT table `freight_quotes` · highest-value freight delta · ~1 day) · **ใบกำกับ ฝากสั่ง/ฝากโอน** (🔴 money/tax-critical — shop pref is a §0e dead-write, yuan has no selector; needs migration 0148 + accounting sign-off on ใบขน VAT base + a TEST-order money-loop test → WON'T auto-ship untested) · CRM depth (tag system · activity timeline · lead-kanban) · cargo small fixes (tracking-freshness · Lalamove field · จองรถ LINE block · missing-item report). **Next free migration = 0148.**
+
+**🔴 NEEDS OWNER:** (a) **push the 2 commits** to dave-pacred→main? (auto-deploys prod · reachability nav is customer-facing + NOT authed-verified) OR give a **test customer login** (member_code+pw) so I §0c-verify authed flows + the tax-invoice money-loop · (b) **accounting sign-off** on ใบขน VAT base · (c) carryover: Supabase refresh-token-reuse-interval · Vercel env (TAMIT-2026·Sentry client DSN·FB — เดฟ HAS `VERCEL_TOKEN` now, can set on request) · staff photos · employee_code. **⚠️ CLAUDE.md >2000 lines — archive overdue (§12).**
+
+---
+
 # 📤 2026-06-07 — เดฟ: member polish + CSV-export ทั้ง platform + i18n leak-kill+guard + dashboard FOUC + full team-merge · read FIRST
 
 **main = `dave-pacred` = `92f5f9ba`+ · pushed dave-pacred (→ main this session per owner "จบงานได้เลย") · `pnpm verify` + `pnpm build` EXIT 0 (REAL · every save-point) · migrations 0143–0147 ALL applied prod (verified live) · localhost :3000.** Owner-driven long run (many "ต่อเลย/ลุยเลย/ทำให้จบทีเดียว"). Everyone's work integrated; nothing lost. SHIPPED (each gated + pushed dave-pacred):
