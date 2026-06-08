@@ -214,20 +214,29 @@ export function ShopOrderPayButton({
                   </button>
                 ) : (
                   <>
-                    {/* PromptPay QR for the remaining */}
+                    {/* Static company QR — customer scans + types the amount
+                        themselves (owner 2026-06-08; no dynamic PromptPay). */}
                     <div className="mt-4 flex flex-col items-center">
                       <p className="mb-1 text-[13px] text-gray-500">{t("scanToPay", { amount: fmt(remaining) })}</p>
                       {qr ? (
                         <>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={qr.dataUrl} alt="PromptPay QR" className="h-48 w-48 rounded-xl border border-gray-200" />
-                          <p className="mt-2 text-[13px] text-gray-500">PromptPay: <span className="font-semibold text-gray-700 dark:text-gray-200">{qr.promptPayId}</span></p>
+                          <img src={qr.dataUrl} alt="QR ชำระเงิน" className="h-48 w-48 rounded-xl border border-gray-200" />
+                          <p className="mt-2 text-[13px] text-gray-500">บัญชี: <span className="font-semibold text-gray-700 dark:text-gray-200">{qr.promptPayId}</span></p>
                         </>
                       ) : qrErr ? (
                         <p className="text-[13px] text-amber-600">{qrErr}</p>
                       ) : (
                         <Loader2 className="h-8 w-8 animate-spin text-gray-300" />
                       )}
+                      {/* Bank-account block + type-amount instruction */}
+                      <div className="mt-3 w-full rounded-2xl bg-gray-50 dark:bg-gray-800 px-4 py-3 text-center">
+                        <p className="text-[14px] font-semibold text-gray-800 dark:text-gray-100">บัญชี: 225-2-91144-0</p>
+                        <p className="mt-0.5 text-[13px] text-gray-600 dark:text-gray-300">บจก. แพคเรด (ประเทศไทย) · ธนาคารกสิกรไทย</p>
+                      </div>
+                      <p className="mt-2 text-[12.5px] leading-relaxed text-gray-500 text-center">
+                        สแกน QR แล้วกรอกจำนวนเงินที่ต้องชำระเอง → โอนแล้วแนบสลิป (ทีมงานตรวจสอบ)
+                      </p>
                     </div>
 
                     {/* Slip upload */}

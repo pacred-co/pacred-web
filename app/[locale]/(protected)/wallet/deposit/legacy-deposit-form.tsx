@@ -217,12 +217,11 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
           {kind === "credit" ? (
             <>
               <div className="mt-2 text-sm text-foreground">
-                {t("accountNo")} : <span>225-2-91144-0</span>
+                {t("accountNo")} : <span className="font-mono">225-2-91144-0</span> · บจก. แพคเรด (ประเทศไทย) · ธนาคารกสิกรไทย
               </div>
-              <div className="text-sm text-foreground">
-                {t("promptpayLabel")} :{" "}
-                <span id="pp-id-show2">0-1055-64077-71-6</span>
-              </div>
+              {/* 2026-06-08: removed the stale legacy PromptPay number
+                  "0-1055-64077-71-6" (wrong destination) — payment is the static
+                  company QR + the bank account above; no PromptPay number shown. */}
             </>
           ) : null}
           <h5 className="mt-2 text-sm font-semibold text-foreground">

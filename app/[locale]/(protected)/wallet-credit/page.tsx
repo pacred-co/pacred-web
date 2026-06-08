@@ -6,7 +6,6 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getMyCredit } from "@/actions/credit";
 import { BANK } from "@/components/seo/site";
-import { LegacyDepositForm } from "../wallet/deposit/legacy-deposit-form";
 
 /**
  * Customer "กระเป๋าสตางค์เครดิต" (credit wallet) screen — a FAITHFUL 1:1
@@ -341,6 +340,32 @@ export default async function WalletCreditPage() {
           </div>
         </div>
 
+        {/* ── วิธีชำระเงินเครดิต — โอนเข้าบัญชีบริษัท + กรอกจำนวนเอง + แนบสลิป ──
+            Owner directive 2026-06: NO dynamic/amount-encoded PromptPay, NO
+            wallet top-up. ลูกค้าสแกน QR (รูป QR บริษัทแบบคงที่) แล้วกรอก
+            จำนวนเงินที่ต้องชำระเอง → โอนแล้วแนบสลิปให้ทีมงานตรวจสอบ. */}
+        <div className="mx-auto mt-4 max-w-[640px]">
+          <section className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm dark:bg-surface">
+            <div className="flex items-center gap-1.5 border-b border-border px-4 py-3 text-sm font-bold text-foreground md:px-5">
+              <CircleDollarSign className="h-4 w-4 text-red-600" />
+              ชำระเงินเครดิต
+            </div>
+            <div className="space-y-3 px-4 py-4 md:px-5">
+              {/* บัญชีรับโอน (เลขนี้คือบัญชีธนาคารบริษัท) */}
+              <div className="rounded-xl border border-border bg-muted/5 p-3 text-sm">
+                <p className="font-semibold text-foreground">บัญชี: {BANK.accountNumber}</p>
+                <p className="mt-0.5 text-foreground">บจก. แพคเรด (ประเทศไทย)</p>
+                <p className="mt-0.5 text-muted">{BANK.name}</p>
+              </div>
+              {/* คำสั่งการชำระเงิน — สแกน QR + กรอกจำนวนเอง + แนบสลิป */}
+              <p className="text-sm leading-relaxed text-muted">
+                สแกน QR แล้วกรอกจำนวนเงินที่ต้องชำระเอง → โอนแล้วแนบสลิป
+                (ทีมงานตรวจสอบ)
+              </p>
+            </div>
+          </section>
+        </div>
+
         {/* ── Single-tab history panel — wallet-credit.php L125-157 ── */}
         <div className="mx-auto mt-4 max-w-[640px]">
           <section className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm dark:bg-surface">
@@ -370,109 +395,15 @@ export default async function WalletCreditPage() {
         </div>
       </div>
 
-      {/* ── Deposit modal — wallet-credit.php L163-222 ──
-          STILL Bootstrap-4 markup: opened by jQuery `.modal('show')`
-          (vendor bundle from the (protected) layout) and the
-          <LegacyDepositForm> client island handles the dropify uploader +
-          submit. id="wallet-add" + data-dismiss + #text1/#text2 +
-          data-toggle/data-placement preserved verbatim.
-          The addData POST handler (wallet-credit.php L4-51) is wired via
-          the <LegacyDepositForm kind="credit"/> Client Component →
-          actions/wallet.ts::submitLegacyWalletDeposit (INSERT tb_wallet_hs
-          with wusercredit='1' + slip upload to `slips` bucket + in-app
-          notify). */}
-      <div
-        id="wallet-add"
-        className="modal fade in"
-        tabIndex={-1}
-        role="dialog"
-        aria-hidden="true"
-      >
-                <div className="modal-dialog">
-                  <div className="modal-content ">
-                    <div className="modal-header header-from">
-                      <h4 className="modal-title">
-                        {t("depositModalTitle")}
-                      </h4>
-                      <button
-                        type="button"
-                        className="close"
-                        data-dismiss="modal"
-                        aria-hidden="true"
-                      >
-                        <svg
-                          viewBox="0 0 24 24"
-                          width="24"
-                          height="24"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          fill="none"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="css-i6dzq1"
-                        >
-                          <line x1="18" y1="6" x2="6" y2="18"></line>
-                          <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
-                      </button>
-                    </div>
-                    <div className="modal-body header-from">
-                      <div className="row border-bottom-2">
-                        <div className="col-12">
-                          <div className="box-blank-kbank">
-                            <div className="row">
-                              <div className="col-12 col-md-9">
-                                <h2 className="text-white">
-                                  {BANK.name}
-                                </h2>
-                                <div className="text-center">
-                                  {t("accountNumberLabelInline")}{" "}
-                                  <span className="font-2rem mr-0-3" id="text2">
-                                    {BANK.accountNumber}
-                                  </span>
-                                  <button
-                                    data-toggle="tooltip"
-                                    data-placement="top"
-                                    title={t("copyTextTooltip")}
-                                    type="button"
-                                    className="btn btn-sm2 btn-rounded btn-secondary"
-                                  >
-                                    {t("copy")}
-                                  </button>
-                                  <br />
-                                  {t("promptpayLabel")}{" "}
-                                  <span id="text1">0-1055-64077-71-6 </span>
-                                  <button
-                                    data-toggle="tooltip"
-                                    data-placement="top"
-                                    title={t("copyTextTooltip")}
-                                    type="button"
-                                    className="btn btn-sm2 btn-rounded btn-secondary"
-                                  >
-                                    {t("copy")}
-                                  </button>
-                                  <h5 className="text-white">
-                                    {t("companyLegalName")}
-                                  </h5>
-                                </div>
-                              </div>
-                              <div className="col-0 wallet-logo col-md-3 text-right">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  className="img-fluid logo-blank"
-                                  src="/legacy/pcs/assets/images/theme/logo-kbank.png"
-                                  alt=""
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <LegacyDepositForm kind="credit" />
-                    </div>
-                  </div>
-                </div>
-              </div>
+      {/* ── Deposit / top-up modal REMOVED (owner directive 2026-06) ──
+          Wallet top-up is cancelled platform-wide — no "เติมเงิน" affordance
+          on the customer surface. Credit is paid by transferring to the
+          company bank account (shown in the "ชำระเงินเครดิต" block above) +
+          attaching a slip for staff to verify; there is NO dynamic /
+          amount-encoded PromptPay and NO #wallet-add deposit modal anymore.
+          The legacy <LegacyDepositForm kind="credit"/> island + the
+          0-1055-64077-71-6 PromptPay number it displayed are intentionally
+          dropped. */}
       {/* END: Content — wallet-credit.php L227 */}
     </div>
   );
