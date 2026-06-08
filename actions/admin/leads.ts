@@ -32,6 +32,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, type AdminActionResult } from "./common";
 import { logAdminExport } from "./export-log";
 import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
+import { pickLeastLoadedCsRep } from "@/lib/admin/assign-cs-rep";
 import {
   LEAD_CALL_STATUSES,
   type LeadCallStatus,
@@ -309,7 +310,7 @@ export async function exportLeadsAll(
  */
 export async function logLeadCall(
   input: LogLeadCallInput,
-): Promise<AdminActionResult<{ id: string }>> {
+): Promise<AdminActionResult<{ id: string; csAssigned?: string | null }>> {
   const userid = (input?.userid ?? "").trim();
   const status = input?.status;
   if (!userid) return { ok: false, error: "missing_userid" };
@@ -337,8 +338,42 @@ export async function logLeadCall(
       return { ok: false, error: `insert_failed: ${insErr?.message ?? "no_row"}` };
     }
 
+    // Sales→CS handoff (CEO §5: "ปิดการขายแล้ว cs ทำงานต่อ"). Closing a lead hands
+    // it to a CS who then follows the order status — UNLESS it's a เคลียร์/แอร์ job
+    // (bypassCs · "ทะลุ cs ได้เลย"). Only assign when the customer has no CS yet
+    // (never overwrite an existing owner). Best-effort: a handoff failure must NOT
+    // fail the already-recorded call log.
+    let csAssigned: string | null = null;
+    if (status === "closed" && !input.bypassCs) {
+      try {
+        const { data: cust, error: custErr } = await admin
+          .from("tb_users")
+          .select("adminIDCS")
+          .eq("userID", userid)
+          .maybeSingle<{ adminIDCS: string | null }>();
+        if (custErr) {
+          console.error(`[leads CS-handoff] tb_users read failed`, { code: custErr.code, message: custErr.message });
+        } else if (!((cust?.adminIDCS ?? "").trim())) {
+          const cs = await pickLeastLoadedCsRep(admin);
+          const { error: updErr } = await admin
+            .from("tb_users")
+            .update({ adminIDCS: cs })
+            .eq("userID", userid);
+          if (updErr) {
+            console.error(`[leads CS-handoff] adminIDCS assign failed`, { code: updErr.code, message: updErr.message });
+          } else {
+            csAssigned = cs;
+          }
+        } else {
+          csAssigned = (cust!.adminIDCS ?? "").trim(); // already owned — surface it
+        }
+      } catch (e) {
+        console.error(`[leads CS-handoff] unexpected`, e);
+      }
+    }
+
     revalidatePath("/admin/leads");
-    return { ok: true, data: { id: inserted.id } };
+    return { ok: true, data: { id: inserted.id, csAssigned } };
   });
 }
 
