@@ -24,8 +24,13 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 export default async function BulkSearchPage() {
   // W-1 (gap-admin H-1): page-level role gate, consistent with the
   // forwarders list. The bulk-search action is withAdmin-gated, but
-  // gate the page too so the chrome is not shown to driver/warehouse.
-  await requireAdmin(["ops", "accounting"]);
+  // gate the page too so the chrome is not shown to non-relevant roles.
+  // 2026-06-08 (ภูม warehouse-handoff readiness): added "warehouse" —
+  // the prior comment ("not shown to driver/warehouse") was a stale
+  // design decision; menuWarehouse:1024 forwarder.searchMulti now
+  // explicitly exposes this tool to warehouse role (paste tracking list
+  // → find forwarder rows is the daily intake-search workflow).
+  await requireAdmin(["ops", "accounting", "warehouse"]);
 
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-5xl">

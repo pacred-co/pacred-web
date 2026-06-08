@@ -49,7 +49,10 @@ export const dynamic = "force-dynamic";
  * directive after he reviewed.
  */
 export default async function AdminForwarderDetail({ params }: { params: Promise<{ fNo: string }> }) {
-  await requireAdmin(["ops", "accounting"]);
+  // 2026-06-08 (ภูม warehouse-handoff readiness): added "warehouse" — list
+  // page `/admin/forwarders` now accepts warehouse role (per sidebar-menu's
+  // menuWarehouse), so the detail page MUST too or every row-click 404s.
+  await requireAdmin(["ops", "accounting", "warehouse"]);
 
   const { fNo } = await params;
   const admin = createAdminClient();

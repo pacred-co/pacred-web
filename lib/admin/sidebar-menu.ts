@@ -1109,9 +1109,19 @@ const menuDriver: MenuSection[] = [
       // fail buttons. Self-row enforcement built into requireAdmin path so
       // a driver only sees their own batch.
       { labelKey: "driver.work",      href: "/admin/drivers/work",            icon: "Smartphone", badge: "driverItems" },
-      // Phase 1 — operational driver items (CF-1 fix · ZZ 2026-05-20 ค่ำ).
-      { labelKey: "driver.toDeliver", href: "/admin/driver-runs",             icon: "Truck", badge: "driverItems" },
-      { labelKey: "driver.history",   href: "/admin/driver-runs?tab=history", icon: "Truck"                       },
+      // 2026-06-08 (ภูม warehouse-handoff round 2): removed the two
+      // `driver.toDeliver` + `driver.history` leaves that pointed at
+      // `/admin/driver-runs`. That page still reads the rebuilt-empty
+      // `forwarder_driver` table (0 rows on prod) instead of the live
+      // `tb_forwarder_driver_item` (29,782 rows), so drivers would land
+      // there and see "no work" forever. `/admin/drivers/work` already
+      // implements the same workflow correctly (filters by member_code
+      // → tb_forwarder_driver.fdadminid → tb_forwarder_driver_item) and
+      // includes a "done" tab covering history. Keeping the broken URL
+      // accessible (Phase gate also un-blocked round 2) for the sales/
+      // accounting disbursement view via menuSales — they read its
+      // disbursement menubar — but drivers no longer have a leaf that
+      // sends them there.
       // 2026-05-30 (Wave 29 #5 · Agent A) — flat barcode-intake shortcut.
       // The driver role scans intake daily (legacy `barcode-d-import.php`).
       // Replaces the prior `driver.barcode` leaf which pointed at the orphan
