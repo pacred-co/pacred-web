@@ -669,6 +669,17 @@ const blockExtKpi: MenuItem = {
 const blockExtCockpit: MenuItem = {
   labelKey: "extension.cockpit", href: "/admin/reports/cockpit", icon: "Gauge", phase: 2,
 };
+// 2026-06-09 (เดฟ · marketing/CRM North-Star) — lead-source attribution
+// dashboard (แหล่งที่มาของลูกค้า · which acquisition channel drives leads →
+// orders → revenue, all from LIVE tb_users.userregisterwith/userrecom ⨝
+// tb_forwarder). The data was captured but no page surfaced it → marketing
+// was blind. Lives in the Extension drawer next to the exec cockpit (same
+// exec/marketing-analytics family). phase: 2 → super sees it in the sidebar;
+// finance roles also reach it via the reports-hub "BI / ผู้บริหาร" menubar.
+// The page gates RBAC to super/accounting itself.
+const blockExtLeadSource: MenuItem = {
+  labelKey: "extension.leadSource", href: "/admin/reports/lead-source", icon: "Megaphone", phase: 2,
+};
 const blockExtContactMessages: MenuItem = {
   labelKey: "extension.contactMessages", href: "/admin/contact-messages",
   icon: "MessageSquare", badge: "contactMessages", phase: 2,
@@ -817,6 +828,7 @@ const menuSuper: MenuSection[] = [
   extensionSection([
     blockExtKpi,
     blockExtCockpit,
+    blockExtLeadSource,
     blockExtWorkboard,
     blockExtInbox,
     blockExtLeads,
@@ -888,6 +900,7 @@ const menuManager: MenuSection[] = [
   extensionSection([
     blockExtKpi,
     blockExtCockpit,
+    blockExtLeadSource,
     blockExtWorkboard,
     blockExtInbox,
     blockExtLeads,
@@ -958,7 +971,7 @@ const menuAccounting: MenuSection[] = [
   learningSection,
   // 2026-06-01 (เดฟ · Wave C BI) — accounting gets the exec cockpit (finance
   // headline: MTD revenue/profit · AR · wallet liability). phase:2 in-sidebar.
-  extensionSection([blockExtCockpit, blockExtJuristic, blockExtIncidents]),
+  extensionSection([blockExtCockpit, blockExtLeadSource, blockExtJuristic, blockExtIncidents]),
 ];
 
 /**
