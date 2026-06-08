@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Phone, Sparkles, Headset, Award, MessageCircle, ChevronLeft, ChevronRight, Truck } from "lucide-react";
+import { Phone, Sparkles, Award, MessageCircle, ChevronLeft, ChevronRight, Truck } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { trackCtaClick } from "@/lib/analytics";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
@@ -79,17 +79,9 @@ const SALES: SalesPerson[] = [
     badgeIcon: Truck,
     altKey: "altWin",
   },
-  {
-    id: "ploy",
-    name: "พลอย",
-    roleKey: "roleCs",
-    taglineKey: "taglinePloy",
-    phone: "062-603-4456",
-    image: "/images/Character_Icon/ploy01.png",
-    badge: "Customer Service",
-    badgeIcon: Headset,
-    altKey: "altPloy",
-  },
+  // CS พลอย card removed from the on-site display (ปอน 2026-06-08 — "เอา cs ploy
+  // ออกจากหน้าเซลล์"). The i18n keys (taglinePloy/altPloy/roleCs) + the central
+  // CONTACT.phoneCs / sidebar CS fallback stay; only the rendered card is gone.
 ];
 
 // Mobile order classes — must be literal Tailwind strings (the JIT can't see template-built names).
