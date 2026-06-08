@@ -73,10 +73,11 @@ function OrderActionLink({
  * Replaces the legacy 1:1 PCS Cargo Bootstrap-4 transcription with a clean
  * Tailwind/Pacred-branded layout. All data queries against the ported
  * legacy `tb_*` schema and the Thai labels are preserved verbatim. The
- * unwired jQuery interactions (DataTables sort/responsive/checkboxes,
- * AJAX cancel/pay endpoints) are NOT reproduced — same as the previous
- * version. The "bulk cancel" + "ชำระเงิน multi-select" buttons render as
- * static UI placeholders pending the matching Server Actions.
+ * multi-select pay-from-wallet (`<BulkPayBar>` + per-row `<RowCheckbox>`) is
+ * WIRED via the shared islands in ./add/service-order-bulk-actions.tsx →
+ * actions/service-order.ts::payServiceOrderFromWallet (2026-06-09 nav-fix —
+ * was a static placeholder). Per-order cancel + single pay run via the detail
+ * page (`/service-order/{hNo}` · ?pay=true + CancelButton).
  *
  * Data — every `shops.php` mysqli query (transcribed in the previous
  * iteration) is preserved 1:1. RLS-locked tables read through the admin
