@@ -12,6 +12,7 @@ import {
   DeliveryFeedbackCard,
   type DeliveryFeedbackExisting,
 } from "./delivery-feedback-card";
+import { MissingItemReportCard } from "./missing-item-report-card";
 import type { ForwarderRow } from "../forwarder-row-view";
 
 /**
@@ -377,7 +378,7 @@ export default async function ServiceImportDetailPage({
       "pricecrate, ftransportpricechnthb, priceother, crate, ffreeshipping, " +
       "paymethod, faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
       "faddressdistrict, faddressprovince, faddresszipcode, faddresstel, faddresstel2, " +
-      "fdatestatus7, reforder, fusercompany, userid, " +
+      "fdatestatus7, reforder, fusercompany, userid, courier_tracking_url, " +
       "fpriceupdate, customrate, customratekg, customratecbm",
     )
     .eq("id", idNum)
@@ -434,6 +435,7 @@ export default async function ServiceImportDetailPage({
       reforder: string | null;
       fusercompany: string | null;
       userid: string | null;
+      courier_tracking_url: string | null;
       customrate: string | null;
       customratekg: number | string;
       customratecbm: number | string;
@@ -1116,6 +1118,22 @@ export default async function ServiceImportDetailPage({
                               <b className="font-semibold">{t("trackingThLabel")} : </b>
                               {row.ftrackingth}
                             </p>
+                            {/* External-courier (Lalamove / Grab / รถเหมา)
+                                last-mile tracking link — set by ops on the
+                                dispatch page (2026-06-08 gap analysis #2). */}
+                            {row.courier_tracking_url && (
+                              <p className="text-sm">
+                                <a
+                                  href={row.courier_tracking_url}
+                                  target="_blank"
+                                  rel="noreferrer noopener"
+                                  className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 border border-indigo-200 px-3 py-1 text-sm font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"
+                                >
+                                  <i className="fas fa-truck" aria-hidden></i>
+                                  {t("courierTrackingLink")}
+                                </a>
+                              </p>
+                            )}
                             {multiBillSiblings.length > 0 && (
                               <div className="rounded-lg bg-red-50 border border-red-200 p-2.5">
                                 <p className="text-sm font-semibold text-red-700">
@@ -1466,6 +1484,13 @@ export default async function ServiceImportDetailPage({
                             fid={row.id}
                             existing={existingFeedback}
                           />
+                        )}
+
+                        {/* ── Missing/damaged item report (2026-06-08 gap #4)
+                            — only when delivered. Opens a cs_followup ops
+                            ticket on the work-board. ── */}
+                        {fStatusValue === "7" && (
+                          <MissingItemReportCard fid={row.id} />
                         )}
 
                         {/* ── Footer back button ── forwarder.php L2231-2240 ── */}

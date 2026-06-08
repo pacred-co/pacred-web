@@ -4755,6 +4755,7 @@
     "payMethodLabel": "การเก็บเงินค่าขนส่งในไทย",
     "deliveryAddressLabel": "ที่อยู่จัดส่งสินค้า",
     "trackingThLabel": "เลขพัสดุในไทย",
+    "courierTrackingLink": "ติดตามพัสดุ (ขนส่งภายนอก)",
     "multiBillWarning": "รายการนี้ถูกคิดค่าขนส่งในไทยรวมกับรายการดังต่อไปนี้",
     "siblingItemLabel": "รายการเลขที่",
     "siblingTrackingLabel": "เลขเทรคกิ้ง",
@@ -4851,6 +4852,9 @@
       "air": "แอร์"
     },
     "cabinetPrefix": "เลขตู้ขึ้นต้นด้วย",
+    "freshnessLabel": "ข้อมูลอัปเดตล่าสุด:",
+    "freshnessEvery5Min": "อัปเดตทุก 5 นาที",
+    "freshnessHint": "ระบบดึงสถานะจากโกดังอัตโนมัติทุก 5 นาที",
     "searchLabel": "ค้นหา Track / เลขตู้",
     "searchHint": "ค้นหาจาก: CN Track · เลขตู้ · เลขพัสดุ TH · เลข order (#)",
     "searchPlaceholder": "กรอก Track / เลขตู้ / เลขพัสดุ",

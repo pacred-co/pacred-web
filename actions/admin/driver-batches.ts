@@ -382,3 +382,81 @@ export async function deleteDriverBatch(
     return { ok: true };
   });
 }
+
+// ────────────────────────────────────────────────────────────
+// SET external-courier tracking URL (Lalamove / Grab / 3rd-party)
+// ────────────────────────────────────────────────────────────
+//
+// 2026-06-08 gap analysis #2 — AIR-import external-courier dispatch.
+// Ops pastes the courier's own tracking URL onto a forwarder row; the
+// customer then sees a "ติดตามพัสดุ (ขนส่งภายนอก)" link on the
+// /service-import/[fNo] detail page. Writes tb_forwarder.courier_tracking_url
+// (migration 0156). Empty/whitespace input clears the link.
+
+const setCourierUrlSchema = z.object({
+  // The tb_forwarder.id whose last-mile link we're setting.
+  forwarderId: z.number().int().positive(),
+  // The courier tracking URL — must be http(s) when present; "" clears it.
+  url: z
+    .string()
+    .trim()
+    .max(2000, "ลิงก์ยาวเกินไป")
+    .refine(
+      (v) => v === "" || /^https?:\/\/.+/i.test(v),
+      "ต้องเป็นลิงก์ http(s) ที่ถูกต้อง",
+    ),
+});
+export type SetCourierUrlInput = z.infer<typeof setCourierUrlSchema>;
+
+/**
+ * Set (or clear) a forwarder row's external-courier tracking URL.
+ * Allowed for ops/super only (same gate as the dispatch flow).
+ */
+export async function setForwarderCourierUrl(
+  input: SetCourierUrlInput,
+): Promise<AdminActionResult> {
+  const parsed = setCourierUrlSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { forwarderId, url } = parsed.data;
+  const value = url === "" ? null : url;
+
+  return withAdmin(["ops", "super"], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    // Verify the forwarder exists (clear error vs a silent no-op update).
+    const { data: fwd, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id")
+      .eq("id", forwarderId)
+      .maybeSingle<{ id: number }>();
+    if (fwdErr) {
+      console.error("setForwarderCourierUrl: forwarder lookup failed", fwdErr, { forwarderId });
+      return { ok: false, error: fwdErr.message };
+    }
+    if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้านี้" };
+
+    const { error: updErr } = await admin
+      .from("tb_forwarder")
+      .update({ courier_tracking_url: value })
+      .eq("id", forwarderId);
+    if (updErr) {
+      console.error("setForwarderCourierUrl: update failed", updErr, { forwarderId });
+      return { ok: false, error: updErr.message };
+    }
+
+    await logAdminAction(
+      adminId,
+      "tb_forwarder.set_courier_url",
+      "tb_forwarder",
+      String(forwarderId),
+      { url: value },
+    );
+
+    // The customer detail page reads this row.
+    revalidatePath(`/service-import/${forwarderId}`);
+    revalidatePath("/admin/drivers");
+    return { ok: true };
+  });
+}
