@@ -62,9 +62,12 @@ async function loadStaticQrDataUrl(): Promise<string> {
     const buf = await readFile(join(process.cwd(), "public", "images", "payment", "pacred-qr.png"));
     cachedQrDataUrl = `data:image/png;base64,${buf.toString("base64")}`;
   } catch {
-    // Image not placed yet — degrade to "" so the UI shows the bank account
-    // text only (no broken-image). Owner drops the file → next boot serves it.
-    cachedQrDataUrl = "";
+    // Image not placed yet — return the PUBLIC PATH (not "") so: (a) no empty
+    // `<img src="">` page-re-download bug (CLAUDE_TECHNICAL.md), (b) the QR
+    // appears the instant the owner drops the file (Next serves /public
+    // statically — no restart). Until then the path 404s (small placeholder)
+    // and the bank-account text beside it carries the payment info.
+    cachedQrDataUrl = STATIC_PAYMENT_QR_PATH;
   }
   return cachedQrDataUrl;
 }
