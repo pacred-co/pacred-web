@@ -170,50 +170,47 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
         </div>
       </section>
 
-      {/* ── 2. Sales rep card — PROMOTED to primary (เดฟ 2026-05-27 — ปอน:
-              "สลับเซลล์ขึ้นไปแทน"). The sales rep is the most-used contact
-              point for the customer, so it gets the prominent "overlapping
-              the hero" slot. `-mt-16 z-10` lifts the card ~54px up onto the
-              red banner's lower half; the sky-tinted lift shadow tells the
-              eye it floats above the red. Card stays compact + clean per
-              earlier "ขาวๆ ไม่ต้องโปร่ง" rule. */}
-      <section className="relative z-10 -mt-12 overflow-hidden rounded-2xl bg-white border border-border shadow-sm px-3 py-2.5 flex items-center gap-3">
+      {/* ── 2. Sales rep card — PRIMARY slot (overlapping the hero). Colour
+              switched sky → Pacred RED + sized up to match the legacy PCS card
+              feel (ปอน 2026-06-08 — "สี แดง/ส้ม ตามแบรนด์ + ใหญ่ขึ้นแบบ legacy").
+              Order unchanged (เซลล์บน, กระเป๋าเงินล่าง — เดิม). */}
+      <section className="relative z-10 -mt-16 overflow-hidden rounded-2xl bg-white border border-border shadow-sm px-4 py-3.5 flex items-center gap-3">
         <span
           aria-hidden
-          className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-gradient-to-b from-sky-500 to-sky-700"
+          className="absolute left-0 top-2 bottom-2 w-1.5 rounded-r-full bg-gradient-to-b from-primary-500 to-primary-700"
         />
 
         <div className="relative shrink-0">
-          <div className="relative w-14 h-14 overflow-hidden rounded-full border-2 border-sky-500/40 bg-white">
+          <div className="relative w-16 h-16 overflow-hidden rounded-full border-2 border-primary-500/40 bg-white">
             <Image
               src={salesRep.picture}
               alt={salesRep.nickname}
               fill
-              sizes="56px"
+              sizes="64px"
               className="object-cover"
               unoptimized
             />
           </div>
-          <span aria-hidden className="absolute bottom-0 right-0 flex h-3.5 w-3.5">
+          <span aria-hidden className="absolute bottom-0 right-0 flex h-4 w-4">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex h-3.5 w-3.5 rounded-full bg-emerald-500 border-2 border-white" />
+            <span className="relative inline-flex h-4 w-4 rounded-full bg-emerald-500 border-2 border-white" />
           </span>
         </div>
 
         <div className="relative min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <p className="text-[10.5px] font-semibold uppercase tracking-wider text-sky-700">
+            <p className="text-[12px] font-semibold uppercase tracking-wider text-primary-700">
               {t("salesRepLabel")}
             </p>
-            <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[9px] font-bold px-1.5 py-0.5 border border-emerald-100">
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold px-1.5 py-0.5 border border-emerald-100">
               <span className="w-1 h-1 rounded-full bg-emerald-500" />
               ONLINE
             </span>
           </div>
-          <p className="text-[14px] font-bold text-foreground truncate leading-tight">
+          <p className="text-[16px] font-bold text-foreground truncate leading-tight">
             {t("salesRepName", { name: salesRep.nickname })}
           </p>
-          <p className="mt-0.5 text-[11.5px] text-muted font-mono">
+          <p className="mt-0.5 text-[12.5px] text-muted font-mono whitespace-nowrap">
             {t("phoneLabel")} : <span className="text-foreground">{salesRep.tel}</span>
           </p>
         </div>
@@ -221,43 +218,41 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
         <a
           href={`tel:${salesRep.tel.replace(/[^+0-9]/g, "")}`}
           aria-label={t("callSalesAria", { name: salesRep.nickname })}
-          className="relative shrink-0 inline-flex items-center gap-1 rounded-full bg-sky-600 text-white text-[11px] font-bold px-3 py-1.5 shadow-md shadow-sky-600/25 active:scale-95 transition-transform"
+          className="relative shrink-0 inline-flex items-center gap-1 rounded-full bg-primary-600 text-white text-[11.5px] font-bold px-3 py-2 shadow-md shadow-primary-600/25 active:scale-95 transition-transform"
         >
-          <Phone className="w-3 h-3" fill="currentColor" />
+          <Phone className="w-3.5 h-3.5" fill="currentColor" />
           {t("contactSales")}
         </a>
       </section>
 
-      {/* ── 3. Wallet balance card — DEMOTED to secondary (เดฟ 2026-05-27 —
-              ปอน: "ทำให้กระเป๋าเล็กลงนิดนึงให้เป็นรองเซลล์"). Slimmer padding,
-              smaller balance digit, and no "วงเงินคงเหลือ" subtitle so the
-              card reads as a compact one-liner under the prominent sales
-              card above. Label also renamed from "กระเป๋าเครดิต" → "กระเป๋าเงิน"
-              per ปอน. */}
+      {/* ── 3. Wallet balance card — secondary slot under the rep. Colour
+              switched emerald → ORANGE + balance digit sized up to the legacy
+              feel (ปอน 2026-06-08 — "สี แดง/ส้ม ตามแบรนด์ + ใหญ่ขึ้นแบบ legacy").
+              Kept the single-row, no-icon layout (owner 2026-06-04). */}
       <Link
         href="/wallet"
-        className="relative overflow-hidden rounded-2xl bg-white border border-border shadow-sm px-3 py-2.5 flex items-center gap-3 active:scale-[0.99] transition-transform"
+        className="relative overflow-hidden rounded-2xl bg-white border border-border shadow-sm px-4 py-3.5 flex items-center gap-3 active:scale-[0.99] transition-transform"
       >
         <span
           aria-hidden
-          className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-gradient-to-b from-emerald-500 to-emerald-700"
+          className="absolute left-0 top-2 bottom-2 w-1.5 rounded-r-full bg-gradient-to-b from-orange-400 to-orange-600"
         />
 
         {/* Single row — no icon, label + balance inline (owner 2026-06-04:
             "ไม่ต้องมีไอคอนกระเป๋าพักเงิน และทำให้ทุกอย่างเป็นแถวเดียวกัน"). */}
         <div className="relative min-w-0 flex-1 flex items-baseline gap-1.5 pl-1.5">
-          <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wider text-emerald-700">
+          <span className="shrink-0 text-[12.5px] font-semibold uppercase tracking-wider text-orange-700">
             {t("walletLabel")}
           </span>
-          <span className="truncate text-[18px] font-black tracking-tight text-emerald-600">
+          <span className="truncate text-[22px] font-black tracking-tight text-orange-600">
             {walletText}
           </span>
-          <span className="shrink-0 text-[11px] font-bold text-emerald-500/80">{t("baht")}</span>
+          <span className="shrink-0 text-[13px] font-bold text-orange-500/90">{t("baht")}</span>
         </div>
 
         {/* Right button — same pill style as "ติดต่อเซลล์" so both cards have
             matching CTAs. */}
-        <span className="relative shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-600 text-white text-[11px] font-bold px-3 py-1.5 shadow-md shadow-emerald-600/25">
+        <span className="relative shrink-0 inline-flex items-center gap-1 rounded-full bg-orange-500 text-white text-[12px] font-bold px-3.5 py-2 shadow-md shadow-orange-500/25">
           {t("topupShort")}
         </span>
       </Link>

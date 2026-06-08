@@ -45,7 +45,7 @@ export const SALES_CARDS_DATA: SalesCardData[] = [
   { personKey: 'pee',  name: 'พี',   phone: '061-779-9299', image: '/images/Character_Icon/pee01.png',  link: LINE_OA.shortUrl },
   { personKey: 'toey', name: 'เตย',  phone: '099-253-1415', image: '/images/Character_Icon/Toey01.png', link: LINE_OA.shortUrl },
   { personKey: 'win',  name: 'วิน',  phone: '062-603-0456', image: '/images/Character_Icon/win01.png',  link: LINE_OA.shortUrl },
-  { personKey: 'ploy', name: 'พลอย', phone: '062-603-4456', image: '/images/Character_Icon/ploy01.png', link: LINE_OA.shortUrl },
+  // CS พลอย removed from on-site rep cards (ปอน 2026-06-08).
 ];
 
 // Sections describe shape — `headingKey` and `chips[].labelKey` are i18n paths into `bookingCalc.data.*`.

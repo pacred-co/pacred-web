@@ -15,7 +15,7 @@ const SALES = [
   { name: "เมย์", sloganKey: "sloganMay", phone: "066-125-3006", image: "/images/Character_Icon/may.png",    useContain: false, altKey: "altMay",  buttonKey: "buttonMay"  },
   { name: "แนท",  sloganKey: "sloganNat", phone: "066-131-0253", image: "/images/pacred-logo-red.png",      useContain: true,  altKey: "altNat",  buttonKey: "buttonNat"  },
   { name: "วิน",  sloganKey: "sloganWin", phone: "062-603-0456", image: "/images/Character_Icon/win01.png", useContain: false, altKey: "altWin",  buttonKey: "buttonWin"  },
-  { name: "พลอย", sloganKey: "sloganPloy", phone: "062-603-4456", image: "/images/Character_Icon/ploy01.png", useContain: false, altKey: "altPloy", buttonKey: "buttonPloy" },
+  // CS พลอย removed from on-site rep cards (ปอน 2026-06-08).
 ];
 
 const FEATURES = ["featureOrigin", "featureTrack", "featureSwitch"];

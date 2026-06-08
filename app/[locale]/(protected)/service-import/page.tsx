@@ -594,6 +594,7 @@ export default async function ServiceImportPage({
                 }
                 columnCount={q === "c" ? 10 : 8}
                 maoPromos={maoPromos}
+                openFirstOnly
               />
             </div>
           </section>

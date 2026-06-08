@@ -8,6 +8,8 @@ import { legacyMemberUrl } from "@/lib/legacy-image";
 import { ServiceImportAddForm } from "../add/service-import-add-form";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { CollapseSidebar } from "./collapse-sidebar";
 
 /**
  * Import-forwarder list — TABLE VIEW. A FAITHFUL 1:1 TRANSCRIPTION of
@@ -419,6 +421,66 @@ export default async function ForwarderTablePage({
     rowNet.set(row.id, net);
   }
 
+  // ── CSV export rows (ปอน 2026-06-08: "port ออกมาเป็นไฟล์ แบบเขา") ──
+  // The legacy DataTables CSV button exported every row of the filtered set.
+  // We have the full filtered `rows` here (only `pageRows` is sliced for
+  // display), so the CSV covers ALL rows — columns mirror the on-screen table.
+  const CSV_COLS = [
+    { key: "tracking",       label: t("colTrackingChn") },
+    { key: "purchaseOrder",  label: t("colPurchaseOrder") },
+    { key: "lotSeq",         label: t("colLotSeq") },
+    { key: "detail",         label: t("colDetail") },
+    { key: "boxes",          label: t("colBoxes") },
+    { key: "weight",         label: t("colWeight") },
+    { key: "width",          label: t("colWidth") },
+    { key: "height",         label: t("colHeight") },
+    { key: "length",         label: t("colLength") },
+    { key: "volume",         label: t("colVolume") },
+    { key: "type",           label: t("colType") },
+    { key: "crate",          label: t("colCratePrice") },
+    { key: "chinaTransport", label: t("colChinaTransport") },
+    { key: "other",          label: t("colOther") },
+    { key: "thaiTransport",  label: t("colThaiTransport") },
+    { key: "enterChina",     label: t("colEnterChinaWarehouse") },
+    { key: "leaveChina",     label: t("colLeaveChinaWarehouse") },
+    { key: "arriveThai",     label: t("colArriveThaiWarehouse") },
+    { key: "price",          label: t("colPrice") },
+    { key: "status",         label: t("colStatus") },
+  ];
+  const csvStatusText = (fStatus: string, fid: number): string => {
+    let key = fStatus;
+    if (fStatus === "6" && arrFIDDriver.has(fid)) key = "6.1";
+    const chip = TABLE_STATUS_CHIP[key];
+    return chip ? t(chip.labelKey) : "";
+  };
+  const csvRows: CsvRow[] = rows.map((row) => {
+    const net = rowNet.get(row.id) ?? 0;
+    const paid = Number(row.fstatus) > 4;
+    return {
+      tracking:       row.ftrackingchn2 || row.ftrackingchn || `#${row.id}`,
+      purchaseOrder:  row.reforder ?? "",
+      lotSeq:         (row.ftransporttype === "1" ? t("transportTruckColon") : t("transportSeaColon"))
+                        + (row.fcabinetnumber ?? "").replace(/รถ /g, "").replace(/大/g, "") + "/" + row.id,
+      detail:         row.fdetail ?? "",
+      boxes:          (row.famount ?? 0) > 0 ? row.famount! : "",
+      weight:         (row.fweight ?? 0) > 0 ? numberFormat(row.fweight!, 2) : "",
+      width:          (row.fwidth ?? 0) > 0 ? numberFormat(row.fwidth!, 2) : "",
+      height:         (row.fheight ?? 0) > 0 ? numberFormat(row.fheight!, 2) : "",
+      length:         (row.flength ?? 0) > 0 ? numberFormat(row.flength!, 2) : "",
+      volume:         (row.fvolume ?? 0) > 0 ? numberFormat(row.fvolume!, 3) : "",
+      type:           nameProductsType2(row.fproductstype, t),
+      crate:          paid ? numberFormat(row.pricecrate ?? 0, 2) : "",
+      chinaTransport: paid ? numberFormat(row.ftransportpricechnthb ?? 0, 2) : "",
+      other:          paid ? numberFormat(row.priceother ?? 0, 2) : "",
+      thaiTransport:  paid ? numberFormat(row.ftransportprice ?? 0, 2) : "",
+      enterChina:     fmtDate(row.fdatestatus2),
+      leaveChina:     fmtDate(row.fdatestatus3),
+      arriveThai:     fmtDate(row.fdatestatus4),
+      price:          numberFormat(net, 2),
+      status:         csvStatusText(row.fstatus ?? "", row.id),
+    };
+  });
+
   // PERF (2026-06-03): paginate the DISPLAYED rows (50/page). The status-tab
   // counts (arrStatus / countAll / statusDriverItem) are derived from a
   // SEPARATE status-only query so they stay full-set-correct; the q=6/q=6.1
@@ -506,6 +568,11 @@ export default async function ForwarderTablePage({
 
   return (
     <div className="pcs-legacy">
+      {/* Collapse the desktop sidebar on this wide table view so the full
+          table reclaims its width (ปอน 2026-06-08). Scoped to this route.
+          `hasPayBar` also lifts the LINE bubble above the pay-bar when there
+          are unpaid items (กัน LINE ทับปุ่มชำระเงิน). */}
+      <CollapseSidebar hasPayBar={arrStatus[5] > 0} />
       {/* Legacy PCS stylesheets — static public/ assets, loaded via plain
           <link>s so they bypass the app's Tailwind/PostCSS pipeline.
           service-import.css = the shared BS4 + theme chrome base (still
@@ -666,6 +733,18 @@ export default async function ForwarderTablePage({
               })}
             </ul>
 
+            {/* Download toolbar — CSV export of the FULL filtered set, like the
+                legacy DataTables export (ปอน 2026-06-08: "port ออกมาเป็นไฟล์
+                แบบเขา"). Exports every row matching the current ค้นหา/สถานะ
+                filter, not just the page. */}
+            <div className="mt-3 flex items-center gap-2">
+              <CsvButton
+                rows={csvRows}
+                cols={CSV_COLS}
+                filename={`รายการฝากนำเข้า-${memberCode}.csv`}
+              />
+            </div>
+
             {/* the `btn-pay-pc` anchor — kept for legacy positioning hooks */}
             {arrStatus[5] > 0 && (
               <div className="pt-1 text-center md:text-left">
@@ -684,95 +763,15 @@ export default async function ForwarderTablePage({
               attaches to `#myTable`, live pay-recalc JS reads/writes
               `.countPay` + `.price-all`. */}
           <form id="frm-example2" className="flex min-h-0 flex-1 flex-col">
-              <div className="table-responsive2 min-h-0 flex-1 overflow-auto">
-                {/* ── Mobile: easy-read cards (md:hidden) — same `rows` as the
-                    desktop table, one card per forwarder, tap → detail.
-                    ปอน 2026-05-30 "มือถือ ทำให้ดูง่ายๆ". ── */}
-                <div className="space-y-2.5 p-2 md:hidden">
-                  {rows.length === 0 ? (
-                    <p className="py-8 text-center text-sm text-muted">{t("noItems")}</p>
-                  ) : (
-                    pageRows.map((row) => {
-                      const fStatusDriver = arrFIDDriver.has(row.id) ? 1 : 0;
-                      const cover = resolveCover(row.fcover);
-                      const net = rowNet.get(row.id) ?? 0;
-                      const isAnchor = anchorID && anchorID === String(row.id);
-                      return (
-                        <div
-                          key={row.id}
-                          className={`rounded-xl border p-3 shadow-sm ${
-                            isAnchor ? "border-red-300 bg-red-50" : "border-border bg-white dark:bg-surface"
-                          }`}
-                          {...(isAnchor ? { id: `F${row.id}` } : {})}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <Link
-                              href={`/service-import/${row.id}`}
-                              className="min-w-0 break-all font-mono text-sm font-semibold text-red-600 hover:underline"
-                            >
-                              {row.ftrackingchn2 || row.ftrackingchn || `#${row.id}`}
-                            </Link>
-                            <span className="shrink-0">
-                              {statusForwarderAll4(row.fstatus ?? "", fStatusDriver, t)}
-                            </span>
-                          </div>
-                          <div className="mt-2 flex items-center gap-2.5">
-                            <a href={cover} className="image-popup-vertical-fit el-link shrink-0">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={cover}
-                                alt=""
-                                className="h-11 w-11 rounded-lg border border-border object-cover"
-                              />
-                            </a>
-                            <div className="min-w-0">
-                              <p className="truncate text-xs text-foreground">
-                                {countText(row.fdetail, 40) || "—"}
-                              </p>
-                              <p className="mt-0.5 text-[11px] text-muted">
-                                {row.ftransporttype === "1" ? t("transportTruck") : t("transportSea")}
-                                {row.fcabinetnumber
-                                  ? ` · ${t("lotLabel")} ${countText(row.fcabinetnumber.replace(/รถ /g, "").replace(/大/g, ""), 16)}`
-                                  : ""}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="mt-2.5 grid grid-cols-4 gap-1 border-t border-dashed border-border pt-2 text-center">
-                            <div>
-                              <div className="text-[10px] text-muted">{t("colBoxes")}</div>
-                              <div className="text-sm font-semibold tabular-nums">
-                                {(row.famount ?? 0) > 0 ? row.famount : "-"}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-[10px] text-muted">{t("colWeight")}</div>
-                              <div className="text-sm font-semibold tabular-nums">
-                                {(row.fweight ?? 0) > 0 ? numberFormat(row.fweight!, 2) : "-"}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-[10px] text-muted">{t("colVolume")}</div>
-                              <div className="text-sm font-semibold tabular-nums">
-                                {(row.fvolume ?? 0) > 0 ? numberFormat(row.fvolume!, 3) : "-"}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-[10px] text-muted">{t("colPrice")}</div>
-                              <div className="text-sm font-bold tabular-nums text-red-600">
-                                {numberFormat(net, 2)}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-
-                {/* ── Desktop: full table. Wrapper isolates Tailwind hidden/block
-                    from the legacy `.dataTable` display cascade (forwarder-table.css
-                    loads after Tailwind). ── */}
-                <div className="hidden md:block">
+              <div className="table-responsive2 scrollbar-clean min-h-0 flex-1 overflow-auto">
+                {/* ── ONE responsive table for desktop AND mobile (ปอน
+                    2026-06-08: "อยากได้แบบตาราง ทั้งคอมและมือถือ อิงจาก legacy").
+                    Replaces the old md:hidden card list — the "แบบตาราง" view is
+                    now a real table on every screen. Wide columns collapse on
+                    smaller widths via `sm:`/`xl:table-cell`, so mobile shows the
+                    legacy core set (tracking · ลัง · หนัก · คิว · ราคา · สถานะ);
+                    the container scrolls-x if a row still overflows. ── */}
+                <div className="min-w-full">
                 <table
                   id="myTable"
                   className="dataTable w-full text-xs md:text-sm border-collapse"
@@ -848,6 +847,13 @@ export default async function ForwarderTablePage({
                                         <td className="t19 text-right px-2 py-1.5 border-b border-border text-xs font-bold text-white tabular-nums font-mono"></td>
                                         <td className="t18 px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
                                       </tr>
+                                      {pageRows.length === 0 && (
+                                        <tr>
+                                          <td colSpan={20} className="px-3 py-10 text-center text-sm text-muted">
+                                            {t("noItems")}
+                                          </td>
+                                        </tr>
+                                      )}
                                       {pageRows.map((row) => {
                                         const fStatusDriver = arrFIDDriver.has(row.id) ? 1 : 0;
                                         const cover = resolveCover(row.fcover);
@@ -1020,7 +1026,7 @@ export default async function ForwarderTablePage({
                `check-all c6` + `countPay` + `price-all` classes that
                the legacy DataTables JS reads/writes. */}
       {arrStatus[5] > 0 && (
-        <div className="fixed left-2 right-20 md:left-0 md:right-0 z-[44] bottom-24 md:bottom-0 bg-white/95 dark:bg-surface/95 backdrop-blur-md border border-border md:border-0 md:border-t rounded-2xl md:rounded-none shadow-lg overflow-hidden">
+        <div className="fixed left-2 right-2 md:left-0 md:right-0 z-[55] bottom-[92px] md:bottom-0 bg-white/95 dark:bg-surface/95 backdrop-blur-md border border-border md:border-0 md:border-t rounded-2xl md:rounded-none shadow-lg overflow-hidden">
           <div className="flex items-center gap-2 md:gap-3 px-3 py-2 md:px-6 md:py-3 md:pl-[280px] md:pr-[88px]">
             <label className="flex items-center gap-1.5 shrink-0 cursor-pointer">
               <input

@@ -179,6 +179,46 @@ body {
   background: #64748b;                     /* slate-500 */
 }
 
+/* Clean thin scrollbar — slim, rounded thumb, NO arrow buttons (ปอน
+   2026-06-08: "ไม่เอา scroll bar แบบนี้" — the chunky native arrow scrollbar
+   on the wide table view). Styles BOTH axes; apply to any overflow-auto
+   container that should show a tidy scrollbar instead of the OS default. */
+.scrollbar-clean {
+  scrollbar-width: thin;                  /* Firefox */
+  scrollbar-color: #cbd5e1 transparent;   /* slate-300 thumb */
+}
+.scrollbar-clean::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scrollbar-clean::-webkit-scrollbar-button {
+  display: none;                          /* kill the ▲▼ arrow buttons */
+  width: 0;
+  height: 0;
+}
+.scrollbar-clean::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-clean::-webkit-scrollbar-thumb {
+  background: #cbd5e1;                     /* slate-300 */
+  border-radius: 9999px;
+}
+.scrollbar-clean::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;                     /* slate-400 */
+}
+.scrollbar-clean::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.dark .scrollbar-clean {
+  scrollbar-color: #475569 transparent;   /* slate-600 thumb on dark */
+}
+.dark .scrollbar-clean::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+.dark .scrollbar-clean::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
 /* Google Translate browser-extension widget suppression. We ship our own
    i18n (next-intl th/en) and set `translate="no"` + meta notranslate on
    <html>, but if a user manually picks "Translate" in Chrome anyway, the

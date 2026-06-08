@@ -18,7 +18,10 @@ import {
 import { ForwarderPayModal } from "./forwarder-pay-modal";
 
 // ── Container grouping (ตู้ครอบ) — cluster rows under their cabinet number;
-//    each group is collapsible and OPEN by default ("default โชว์ไว้เลย"). ──
+//    each group is collapsible. Initial open state is per-caller via the
+//    `defaultContainerOpen` prop: /service-import opens them by default
+//    (owner "default โชว์ไว้เลย"); /payment-due collapses them by default
+//    (ปอน 2026-06-08 "ไม่ต้องกางค้างไว้ หุบไว้เป็น default"). ──
 const NO_CABINET = "__no_cabinet__";
 
 function groupByContainer<T extends { fcabinetnumber: string | null }>(
@@ -67,14 +70,16 @@ function ContainerGroup({
   count,
   summary,
   children,
+  defaultOpen = true,
 }: {
   cabinet: string | null;
   count: number;
   summary: ContainerSummary;
   children: ReactNode;
+  defaultOpen?: boolean;
 }) {
   const t = useTranslations("forwarderInteractivity");
-  const [open, setOpen] = useState(true); // default expanded
+  const [open, setOpen] = useState(defaultOpen); // initial state from caller
   const fmt = (n: number, d = 2) =>
     n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
   return (
@@ -177,6 +182,13 @@ export type ForwarderInteractivityProps = {
    *  via the backward-compat fallback). The legacy `showMaoStrip` condition
    *  still gates whether the strips render at all. */
   maoPromos: MaoPromoCard[];
+  /** Container accordions' initial open state. Defaults to true —
+   *  /payment-due passes false to collapse all by default (ปอน 2026-06-08). */
+  defaultContainerOpen?: boolean;
+  /** When true, ONLY the first container is open and the rest start collapsed
+   *  (ปอน 2026-06-08: /service-import "default หุบไว้ กางไว้แค่อันแรก"). Takes
+   *  precedence over `defaultContainerOpen`. Each group stays toggleable. */
+  openFirstOnly?: boolean;
 }
 
 /** One resolved promo card — see lib/promo/banners.ts. All fields
@@ -197,6 +209,8 @@ export function ForwarderInteractivity({
   isJuristic,
   showPayBar,
   showPayStrip,
+  defaultContainerOpen = true,
+  openFirstOnly = false,
   // showMaoStrip + maoPromos kept in the prop type (page.tsx still passes them)
   // but no longer destructured — the "โปรเหมาๆ" strip was removed.
   // columnCount kept in the prop type for binary compat with page.tsx;
@@ -334,12 +348,13 @@ export function ForwarderInteractivity({
             </h3>
           </div>
         ) : (
-          groupByContainer(enrichedRows).map(([cab, rows]) => (
+          groupByContainer(enrichedRows).map(([cab, rows], i) => (
             <ContainerGroup
               key={cab}
               cabinet={cab === NO_CABINET ? null : cab}
               count={rows.length}
               summary={summarizeContainer(rows)}
+              defaultOpen={openFirstOnly ? i === 0 : defaultContainerOpen}
             >
               {rows.map((row) => (
                 <ForwarderRowView

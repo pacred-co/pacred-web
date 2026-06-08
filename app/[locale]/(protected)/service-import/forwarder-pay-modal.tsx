@@ -80,21 +80,6 @@ export type ForwarderPayModalProps = {
   onClose: () => void;
 };
 
-// Single price-row line — used inside the per-row breakdown.
-function PriceLine({ label, value, danger = false }: { label: string; value: string; danger?: boolean }) {
-  const t = useTranslations("forwarderPayModal");
-  return (
-    <div className="grid grid-cols-[1fr_auto] items-baseline gap-3 py-1">
-      <div className={`text-sm font-semibold text-right ${danger ? "text-red-600" : "text-muted"}`}>
-        {label}
-      </div>
-      <div className={`text-sm font-semibold text-right tabular-nums ${danger ? "text-red-600" : "text-foreground"}`}>
-        {value} <span className="text-xs text-muted">{t("baht")}</span>
-      </div>
-    </div>
-  );
-}
-
 export function ForwarderPayModal({
   rows,
   isJuristic,
@@ -155,7 +140,6 @@ export function ForwarderPayModal({
 
   // ── slip upload ──
   const [slipPath, setSlipPath] = useState<string | null>(null);
-  const [slipDate, setSlipDate] = useState("");
   const [slipUploading, setSlipUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -193,7 +177,6 @@ export function ForwarderPayModal({
       const res = await submitForwarderPayment({
         ids: rows.map((r) => r.id),
         slipPath,
-        slipDate: slipDate || undefined,
       });
       if (res.ok) {
         setDone(true);
@@ -287,23 +270,126 @@ export function ForwarderPayModal({
               </div>
             ) : (
               <>
-                {/* QR + amount pinned to the TOP so the customer can scan
-                    immediately (owner 2026-06-04: "เอา qrcode ขึ้นบนสุด ทุกหน้า").
-                    Shared modal — applies on /service-import + /payment-due. */}
-                {/* Pay block — ยอดที่ต้องชำระจริง */}
-                <div className="rounded-xl bg-gradient-to-br from-red-600 to-red-700 text-white px-4 py-3 shadow-md shadow-red-600/25">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-xs md:text-sm font-bold">
-                      {t("payAmountLabel")}
-                    </span>
-                    <span className="text-2xl md:text-3xl font-black tabular-nums totalPriceAll">
-                      {numberFormat2(bill.payAmount)}{" "}
-                      <span className="text-sm font-normal opacity-90">{t("baht")}</span>
-                    </span>
+                {/* Layout (ปอน 2026-06-08): items header → invoice table → red
+                    grand-total bar → QR (moved down to sit under the total) →
+                    slip upload. Shared modal — /service-import + /payment-due. */}
+
+                {/* Header — "มี N รายการ" */}
+                <div className="flex items-center justify-between">
+                  <h5 className="text-sm md:text-base font-bold text-red-600">
+                    {t("itemsToPay", { count: rows.length })}
+                  </h5>
+                </div>
+
+                {/* Error message */}
+                {error && (
+                  <div className="rounded-lg bg-red-600 text-white px-3 py-2 text-sm">
+                    {error}
+                  </div>
+                )}
+
+                {/* Itemized invoice table — one compact row per order
+                    (ออเดอร์/Track · ส่วนลด · ราคาบริการ), reads like a bill
+                    (ปอน 2026-06-08: "อยากได้เป็นแถวๆ อ่านง่ายๆ เหมือนตาราง
+                    แบบใบแจ้งหนี้"). Was a tall per-order price-breakdown stack;
+                    now each order is a single line and the prices sum down to
+                    the grand total below. */}
+                <div className="overflow-hidden rounded-xl border border-border">
+                  {/* Column header */}
+                  <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 md:gap-3 bg-surface-alt/60 px-3 py-2 text-[10.5px] font-bold uppercase tracking-wide text-muted">
+                    <span>{t("colOrderTrack")}</span>
+                    <span className="text-right">{t("lineDiscount")}</span>
+                    <span className="text-right">{t("colServicePrice")}</span>
+                  </div>
+                  {rows.map((row) => {
+                    const rowTotal = perRowTotal(row);
+                    const trackingChn =
+                      row.ftrackingchn2 && row.ftrackingchn2 !== ""
+                        ? row.ftrackingchn2
+                        : row.ftrackingchn;
+                    return (
+                      <div
+                        key={row.id}
+                        className={`grid grid-cols-[1fr_auto_auto] items-center gap-2 md:gap-3 border-t border-border px-3 py-2 ${
+                          row.fcredit === "1" ? "bg-red-50/50" : ""
+                        }`}
+                      >
+                        {/* Order no. + tracking */}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[13px] font-bold text-red-600 notranslate">
+                              #{row.id}
+                            </span>
+                            {row.fcredit === "1" && (
+                              <span className="inline-flex shrink-0 items-center rounded-full bg-red-100 text-red-700 text-[9px] font-bold px-1.5 py-0.5">
+                                {t("creditItem")}
+                              </span>
+                            )}
+                          </div>
+                          <div className="truncate font-mono text-[10.5px] text-muted">
+                            {trackingChn}
+                          </div>
+                        </div>
+                        {/* Discount */}
+                        <div className="whitespace-nowrap text-right text-[12px] tabular-nums text-muted">
+                          {row.fdiscount > 0 ? `-${numberFormat2(row.fdiscount)}` : "—"}
+                        </div>
+                        {/* Service price — per-order net (sums to grand total) */}
+                        <div className="whitespace-nowrap text-right text-[13px] font-black tabular-nums text-red-600">
+                          {numberFormat2(rowTotal)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Summary bar — RED invoice summary (ปอน 2026-06-08): สรุปยอด →
+                    ยอดรวมค่าใช้จ่าย · ภาษีหัก ณ ที่จ่าย (อัตรา) · ยอดชำระสุทธิ, with
+                    dotted leaders for the formal-invoice read. WHT is the legacy
+                    1% juristic rule (getListPayForwarder.php) — shows "1%" when
+                    withheld, otherwise "ไม่หัก". Any PCSF flat fee is already
+                    rolled into totalPriceAll (ยอดรวมค่าใช้จ่าย). */}
+                <div className="rounded-xl bg-gradient-to-br from-red-600 to-red-700 text-white px-4 py-3.5 shadow-md shadow-red-600/25">
+                  <h5 className="mb-2.5 text-sm font-black">{t("summaryHeading")}</h5>
+                  <div className="space-y-2">
+                    {/* ยอดรวมค่าใช้จ่าย */}
+                    <div className="flex items-baseline gap-2 text-[13px]">
+                      <span className="shrink-0 opacity-90">{t("summaryCharges")}</span>
+                      <span aria-hidden className="flex-1 self-center border-b border-dotted border-white/30" />
+                      <span className="shrink-0 tabular-nums font-semibold">
+                        {numberFormat2(bill.totalPriceAll)}{" "}
+                        <span className="text-[11px] font-normal opacity-90">{t("baht")}</span>
+                      </span>
+                    </div>
+                    {/* ภาษีหัก ณ ที่จ่าย */}
+                    <div className="flex items-baseline gap-2 text-[13px]">
+                      <span className="shrink-0 opacity-90">
+                        {t("summaryWhtLabel")}{" "}
+                        <span className="inline-flex items-center rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] font-bold align-middle">
+                          {bill.totalNiTi > 0 ? "1%" : t("summaryWhtNone")}
+                        </span>
+                      </span>
+                      <span aria-hidden className="flex-1 self-center border-b border-dotted border-white/30" />
+                      <span className="shrink-0 tabular-nums font-semibold">
+                        {bill.totalNiTi > 0 ? `-${numberFormat2(bill.totalNiTi)}` : numberFormat2(0)}{" "}
+                        <span className="text-[11px] font-normal opacity-90">{t("baht")}</span>
+                      </span>
+                    </div>
+                    {/* ยอดชำระสุทธิ */}
+                    <div className="flex items-baseline gap-2 border-t border-white/25 pt-2.5">
+                      <span className="shrink-0 text-sm font-bold">{t("summaryNetPay")}</span>
+                      <span aria-hidden className="flex-1" />
+                      <span className="shrink-0 text-2xl md:text-3xl font-black tabular-nums totalPriceAll">
+                        {numberFormat2(bill.payAmount)}{" "}
+                        <span className="text-sm font-normal opacity-90">{t("baht")}</span>
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                {/* QR + PromptPay */}
+                {/* QR + PromptPay — moved BELOW the red total bar so the flow
+                    reads items → total → scan-to-pay → attach slip (ปอน
+                    2026-06-08: "เอาก้อน QR ย้ายลงมาต่อแถบแดง"). */}
                 <div className="rounded-xl bg-white border border-border px-4 py-4 text-center">
                   <div
                     id="qrcode"
@@ -345,116 +431,6 @@ export function ForwarderPayModal({
                         📋 {t("copy")}
                       </button>
                     </div>
-                  )}
-                </div>
-
-                {/* Header — "มี N รายการ" */}
-                <div className="flex items-center justify-between">
-                  <h5 className="text-sm md:text-base font-bold text-red-600">
-                    {t("itemsToPay", { count: rows.length })}
-                  </h5>
-                </div>
-
-                {/* Error message */}
-                {error && (
-                  <div className="rounded-lg bg-red-600 text-white px-3 py-2 text-sm">
-                    {error}
-                  </div>
-                )}
-
-                {/* Per-row itemized cards */}
-                <div className="space-y-2.5">
-                  {rows.map((row) => {
-                    const rowTotal = perRowTotal(row);
-                    const trackingChn =
-                      row.ftrackingchn2 && row.ftrackingchn2 !== ""
-                        ? row.ftrackingchn2
-                        : row.ftrackingchn;
-                    return (
-                      <div
-                        key={row.id}
-                        className={`rounded-xl border ${
-                          row.fcredit === "1"
-                            ? "border-red-300 bg-red-50/60"
-                            : "border-border bg-white dark:bg-surface"
-                        } px-3 py-2.5`}
-                      >
-                        {row.fcredit === "1" && (
-                          <div className="text-center text-[11px] font-bold text-red-700 mb-1">
-                            {t("creditItem")}
-                          </div>
-                        )}
-                        <div className="text-center text-sm font-semibold mb-2">
-                          {t("orderNo")}{" "}
-                          <span className="text-red-600">#{row.id}</span>{" "}
-                          <span className="text-muted">·</span>{" "}
-                          <span className="text-muted text-xs">Track:</span>{" "}
-                          <span className="font-mono text-red-600">
-                            {trackingChn}
-                          </span>
-                        </div>
-                        <hr className="border-t border-dashed border-border mb-1" />
-                        <div className="space-y-0">
-                          <PriceLine label={t("lineImportPrice")} value={numberFormat2(row.ftotalprice)} />
-                          {row.pricecrate > 0 && (
-                            <PriceLine label={t("lineCrate")} value={numberFormat2(row.pricecrate)} />
-                          )}
-                          {row.ftransportpricechnthb > 0 && (
-                            <PriceLine label={t("lineTransportChina")} value={numberFormat2(row.ftransportpricechnthb)} />
-                          )}
-                          {row.fpriceupdate > 0 && (
-                            <PriceLine label={t("lineAdjust")} value={numberFormat2(row.fpriceupdate)} />
-                          )}
-                          {row.fshippingservice > 0 && (
-                            <PriceLine label={t("lineShippingService")} value={numberFormat2(row.fshippingservice)} />
-                          )}
-                          {row.ftransportprice > 0 && (
-                            <PriceLine label={t("lineTransportThailand")} value={numberFormat2(row.ftransportprice)} />
-                          )}
-                          {row.priceother > 0 && (
-                            <PriceLine label={t("lineOther")} value={numberFormat2(row.priceother)} />
-                          )}
-                          {row.fdiscount > 0 && (
-                            <PriceLine label={t("lineDiscount")} value={numberFormat2(row.fdiscount)} />
-                          )}
-                          <div className="border-t border-border mt-1 pt-1.5">
-                            <div className="grid grid-cols-[1fr_auto] items-baseline gap-3">
-                              <div className="text-sm font-bold text-right text-foreground">
-                                {t("rowTotal")}
-                              </div>
-                              <div className="text-base font-black text-right tabular-nums text-red-600">
-                                {numberFormat2(rowTotal)}{" "}
-                                <span className="text-xs text-muted font-normal">{t("baht")}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Bill summary */}
-                <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5">
-                  <h5 className="text-sm font-bold text-amber-900 mb-2">
-                    {t("summaryTitle")}
-                  </h5>
-                  {bill.sumPricePCSF > 0 && (
-                    <PriceLine
-                      label={t("summaryPcsfFlat")}
-                      value={numberFormat2(bill.sumPricePCSF)}
-                    />
-                  )}
-                  <PriceLine
-                    label={t("summaryGrandTotal")}
-                    value={numberFormat2(bill.totalPriceAll)}
-                  />
-                  {bill.totalNiTi > 0 && (
-                    <PriceLine
-                      label="LESS WITHHOLDING TAX 1%"
-                      value={numberFormat2(bill.totalNiTi)}
-                      danger
-                    />
                   )}
                 </div>
 
@@ -531,24 +507,6 @@ export function ForwarderPayModal({
                       </>
                     )}
                   </label>
-
-                  {/* Transfer datetime — optional, sits under the dropzone */}
-                  <div>
-                    <label
-                      htmlFor="slipDate"
-                      className="block text-xs font-bold text-muted mb-1"
-                    >
-                      {t("transferDateTime")}{" "}
-                      <span className="font-normal">{t("optional")}</span>
-                    </label>
-                    <input
-                      id="slipDate"
-                      type="datetime-local"
-                      value={slipDate}
-                      onChange={(e) => setSlipDate(e.target.value)}
-                      className="block w-full rounded-lg border border-border bg-white dark:bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-300"
-                    />
-                  </div>
                 </div>
               </>
             )}
