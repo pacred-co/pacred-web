@@ -19,7 +19,7 @@
  */
 import { createClient } from "@supabase/supabase-js";
 
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+const URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SVC = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL || !SVC) {
   console.error("FATAL: NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY required");
