@@ -479,6 +479,11 @@ const blockSettingsCargo: MenuItem = {
         // orphan (no inbound link · URL-only). Page gates super/ops/accounting/
         // sales_admin — placed under super's Settings→tools toolbox.
         { labelKey: "settingsCargo.globalSearch", href: "/admin/search",                icon: "Search" },
+        // 2026-06-09 (goldmine activation) — China product-category / search-demand
+        // lookup over tb_api_china_hs (~77k rows: keyword + 1688/taobao/tmall links
+        // + resolved category names). Was a pure dead table — nothing read it.
+        // READ-ONLY reference tool. Page gates super/ops/sales_admin/sales.
+        { labelKey: "settingsCargo.chinaCategory", href: "/admin/tools/china-category", icon: "Boxes" },
         { labelKey: "settingsCargo.orgEmail",    href: "/admin/organization-email",    icon: "MessageCircle" },
         { labelKey: "settingsCargo.orgChannels", href: "/admin/organization-channels", icon: "Smartphone" },
         // 2026-06-04 (reachability audit §0d) — org_contacts CRUD (V-G5 · feeds
