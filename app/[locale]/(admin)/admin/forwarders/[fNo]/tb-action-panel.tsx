@@ -46,6 +46,11 @@ type Props = {
   currentCabinet: string;            // "" if unset
   currentTrackingTh: string;         // "-" if legacy unset
   currentNote: string;               // "" if unset
+  // B4 · backlog #259 (migration 0150 · 2026-06-08): per-row lock flag —
+  // when true, MOMO/partner sync skips fcabinetnumber on this row so admin's
+  // manual cabinet correction stays. Defaults to false on the 47k+ existing
+  // rows + every freshly-created row (DB column default).
+  currentCabinetLocked: boolean;
 };
 
 const INPUT_CLS =
@@ -57,6 +62,10 @@ export function TbForwarderActionPanel(p: Props) {
   const [cabinet,  setCabinet]   = useState<string>(p.currentCabinet);
   const [tracking, setTracking]  = useState<string>(p.currentTrackingTh === "-" ? "" : p.currentTrackingTh);
   const [note,     setNote]      = useState<string>(p.currentNote);
+  // B4 · backlog #259 (2026-06-08): cabinet-lock checkbox state. Mirrors
+  // the row's fcabinet_locked column. When ticked, MOMO sync's next tick
+  // will skip fcabinetnumber on this row.
+  const [cabinetLocked, setCabinetLocked] = useState<boolean>(p.currentCabinetLocked);
   const [pending,  startTransition] = useTransition();
   const [error,    setError]     = useState<string | null>(null);
   const [success,  setSuccess]   = useState<string | null>(null);
@@ -66,7 +75,8 @@ export function TbForwarderActionPanel(p: Props) {
       status !== p.currentStatus ||
       cabinet.trim() !== p.currentCabinet.trim() ||
       tracking.trim() !== (p.currentTrackingTh === "-" ? "" : p.currentTrackingTh).trim() ||
-      note.trim() !== p.currentNote.trim()
+      note.trim() !== p.currentNote.trim() ||
+      cabinetLocked !== p.currentCabinetLocked
     );
   }
 
@@ -113,6 +123,14 @@ export function TbForwarderActionPanel(p: Props) {
       lines.push(`Tracking TH: "${trackBefore || '—'}" → "${trk || '—'}"`);
     if (nt !== p.currentNote.trim())
       lines.push(`หมายเหตุ: "${p.currentNote.slice(0, 30) || '—'}..." → "${nt.slice(0, 30) || '—'}..."`);
+    // B4 · backlog #259 (2026-06-08): surface the lock change in the
+    // confirm dialog so staff explicitly acknowledges what they're doing.
+    if (cabinetLocked !== p.currentCabinetLocked)
+      lines.push(
+        cabinetLocked
+          ? `🔒 ล็อกเลขตู้: ปิด → เปิด · MOMO sync จะไม่เขียนทับ`
+          : `🔓 ปลดล็อกเลขตู้: เปิด → ปิด · MOMO sync จะกลับมาเขียนได้ตามปกติ`,
+      );
 
     if (!(await confirm(`บันทึก #${p.fNo} ?\n\n${lines.join('\n')}`))) return;
 
@@ -126,6 +144,7 @@ export function TbForwarderActionPanel(p: Props) {
         ...(cab !== p.currentCabinet.trim()       ? { cabinet_number: cab } : {}),
         ...(trk !== trackBefore.trim()             ? { tracking_th: trk }    : {}),
         ...(nt  !== p.currentNote.trim()           ? { fnote: nt }            : {}),
+        ...(cabinetLocked !== p.currentCabinetLocked ? { cabinet_locked: cabinetLocked } : {}),
       });
       if (!result.ok) {
         setError(result.error ?? "บันทึกไม่สำเร็จ");
@@ -185,6 +204,11 @@ export function TbForwarderActionPanel(p: Props) {
       <div>
         <label htmlFor="tap_cabinet" className="block text-xs font-medium text-muted mb-1">
           เลขตู้ (GZE / GZS)
+          {cabinetLocked && (
+            <span className="ml-2 inline-flex items-center gap-0.5 rounded bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[10px] font-semibold">
+              🔒 ล็อกแล้ว
+            </span>
+          )}
         </label>
         <input
           id="tap_cabinet"
@@ -196,6 +220,28 @@ export function TbForwarderActionPanel(p: Props) {
           placeholder="GZE-2026-001 (เว้นว่าง = ยังไม่ผูกตู้)"
           className={`${INPUT_CLS} font-mono`}
         />
+        {/* B4 · backlog #259 (2026-06-08): cabinet-lock checkbox — staff's
+            defensive belt vs MOMO/partner sync overwriting a manual fix
+            (the 2026-05-29 routing-batch incident). Ticking this checkbox
+            sets tb_forwarder.fcabinet_locked=true so the next MOMO cron
+            tick will SKIP fcabinetnumber on this row. Other propagation
+            (fstatus, fdatetothai) still runs — only cabinet is frozen. */}
+        <label className="mt-2 flex items-start gap-2 cursor-pointer text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 hover:bg-amber-100">
+          <input
+            type="checkbox"
+            checked={cabinetLocked}
+            onChange={(e) => setCabinetLocked(e.target.checked)}
+            disabled={pending}
+            className="mt-0.5 accent-amber-600 cursor-pointer"
+          />
+          <span>
+            <strong>🔒 ล็อกเลขตู้นี้</strong> · กัน MOMO/partner sync เขียนทับ
+            <span className="block text-[10px] text-amber-700 mt-0.5">
+              เปิดเมื่อ admin แก้เลขตู้แล้วต้องการให้ partner cron ไม่ทับ
+              (ใช้กรณี MOMO ส่งเลข routing batch มาผิด · เช่นเคส 2026-05-29)
+            </span>
+          </span>
+        </label>
       </div>
 
       <div>
@@ -250,7 +296,7 @@ export function TbForwarderActionPanel(p: Props) {
       </button>
 
       <p className="text-[10px] text-muted text-center leading-relaxed">
-        บันทึกแล้วจะอัพเดต fstatus + fcabinetnumber + ftrackingth + fnote ของ
+        บันทึกแล้วจะอัพเดต fstatus + fcabinetnumber + ftrackingth + fnote + fcabinet_locked ของ
         <code className="mx-1 rounded bg-surface-alt px-1 font-mono">tb_forwarder #{p.fNo}</code>
         พร้อม stamp fdatestatusN · adminidupdate · audit log อัตโนมัติ
       </p>

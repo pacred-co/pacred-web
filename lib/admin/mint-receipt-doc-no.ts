@@ -243,3 +243,64 @@ export async function mintForwarderInvoiceDocNo(
 
   return `FRI${yyMm}-${nextSuffix}`;
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// SHOP/YUAN TAX-INVOICE DOC NO (TIV) — migration 0152 (2026-06-08)
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Mint the next `serial_no` for `tb_shop_tax_invoice` (ใบกำกับภาษี/ใบขน on the
+ * ฝากสั่งซื้อ + ฝากโอน lanes).
+ *
+ * Format: `TIV{yyMM}-{NNNNN}` — e.g. `TIV2606-00001`. Counter is monthly,
+ * SHARED across shop + yuan (one RD-running tax-invoice sequence for the two
+ * lanes; forwarder runs its own FRC/FRG sequence via mintReceiptDocNo). The
+ * `service_type` + `is_juristic` columns on the row distinguish the customer
+ * class — the SERIAL itself is a single continuous tax-document number, which
+ * is what an RD ใบกำกับภาษี register wants (no per-class bifurcation).
+ *
+ * `tb_shop_tax_invoice.serial_no` IS a partial-unique index (where serial_no
+ * is not null), so a concurrent double-mint would 23505 on insert. The caller
+ * (lib/admin/shop-tax-invoice.ts / yuan-tax-invoice.ts) is idempotent on the
+ * source order anyway (one invoice per hno / payment_id), so the realistic
+ * collision surface is two DIFFERENT orders minting in the same month at the
+ * exact same instant — rare; the issuer logs + leaves serial_no null on the
+ * (unlikely) clash rather than failing the invoice.
+ *
+ * @throws Never — on lookup error returns `TIV{yyMM}-00001`; the caller decides
+ *         whether to retry. See AGENTS.md §0c.
+ */
+export async function mintTaxInvoiceDocNo(
+  admin: SupabaseClient,
+  opts: { issueDate: Date },
+): Promise<string> {
+  const yyMm = yyMmTokenForDate(opts.issueDate);
+  const matchPattern = `TIV${yyMm}-%`;
+
+  const { data, error } = await admin
+    .from("tb_shop_tax_invoice")
+    .select("serial_no")
+    .ilike("serial_no", matchPattern)
+    .order("serial_no", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ serial_no: string | null }>();
+
+  if (error) {
+    console.error(`[mintTaxInvoiceDocNo] tb_shop_tax_invoice lookup failed`, {
+      code: error.code,
+      message: error.message,
+      yyMm,
+    });
+  }
+
+  if (!data?.serial_no) {
+    return `TIV${yyMm}-00001`;
+  }
+
+  const lastSuffix = data.serial_no.slice(-5);
+  const lastSeq = Number.parseInt(lastSuffix, 10);
+  const nextSeq = (Number.isFinite(lastSeq) ? lastSeq : 0) + 1;
+  const nextSuffix = String(nextSeq).padStart(5, "0");
+
+  return `TIV${yyMm}-${nextSuffix}`;
+}

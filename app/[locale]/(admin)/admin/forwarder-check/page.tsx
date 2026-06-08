@@ -139,7 +139,11 @@ export default async function AdminForwarderCheckPage({
   // Legacy gate (forwarder-check.php — implicit via header.php auth check
   // + the buttons only fire when adminID is set). V3 role union closest
   // to "operations + accounting" = super · ops · accounting.
-  const { roles } = await requireAdmin(["super", "ops", "accounting"]);
+  // 2026-06-08 (ภูม warehouse-handoff round 2): added "warehouse" — the
+  // per-container completeness queue + Lane B5 alert (Wave 0 owner
+  // directive) BOTH route to this page. Warehouse staff hit the page
+  // when a cabinet finishes and they need to flip forwarders fstatus.
+  const { roles } = await requireAdmin(["super", "ops", "accounting", "warehouse"]);
 
   const sp = await searchParams;
 

@@ -8,6 +8,11 @@ import { legacyMemberUrl } from "@/lib/legacy-image";
 import { ServiceImportEditShipByForm } from "./service-import-edit-ship-by-form";
 import { ServiceImportEditAddressForm } from "./service-import-edit-address-form";
 import { ServiceImportPayButton } from "./service-import-pay-button";
+import {
+  DeliveryFeedbackCard,
+  type DeliveryFeedbackExisting,
+} from "./delivery-feedback-card";
+import { MissingItemReportCard } from "./missing-item-report-card";
 import type { ForwarderRow } from "../forwarder-row-view";
 
 /**
@@ -373,7 +378,7 @@ export default async function ServiceImportDetailPage({
       "pricecrate, ftransportpricechnthb, priceother, crate, ffreeshipping, " +
       "paymethod, faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
       "faddressdistrict, faddressprovince, faddresszipcode, faddresstel, faddresstel2, " +
-      "fdatestatus7, reforder, fusercompany, userid, " +
+      "fdatestatus7, reforder, fusercompany, userid, courier_tracking_url, " +
       "fpriceupdate, customrate, customratekg, customratecbm",
     )
     .eq("id", idNum)
@@ -430,6 +435,7 @@ export default async function ServiceImportDetailPage({
       reforder: string | null;
       fusercompany: string | null;
       userid: string | null;
+      courier_tracking_url: string | null;
       customrate: string | null;
       customratekg: number | string;
       customratecbm: number | string;
@@ -670,6 +676,36 @@ export default async function ServiceImportDetailPage({
   if (driverRowErr) {
     // Soft-fail — driver status is decorative for legacy display.
     console.error(`[service-import/[fNo] tb_forwarder_driver_item secondary lookup] fid=${idNum}`, { code: driverRowErr.code, message: driverRowErr.message });
+  }
+
+  // ── delivery_feedback — Phase 4a (ops-workflow audit 2026-06-05 §32).
+  // Only meaningful when the row is delivered (fstatus='7'). We fetch
+  // eagerly so the page can decide between editor / summary in one render.
+  let existingFeedback: DeliveryFeedbackExisting | null = null;
+  if ((row.fstatus ?? "") === "7") {
+    const { data: fb, error: fbErr } = await admin
+      .from("delivery_feedback")
+      .select("rating, comment, photo_path, created_at, updated_at")
+      .eq("fid", idNum)
+      .maybeSingle<{
+        rating: number | null;
+        comment: string | null;
+        photo_path: string | null;
+        created_at: string;
+        updated_at: string;
+      }>();
+    if (fbErr) {
+      // Soft-fail — feedback is supplementary; render the empty form on read failure.
+      console.error(`[service-import/[fNo] delivery_feedback lookup] fid=${idNum}`, { code: fbErr.code, message: fbErr.message });
+    } else if (fb) {
+      existingFeedback = {
+        rating: fb.rating,
+        comment: fb.comment,
+        photoPath: fb.photo_path,
+        createdAt: fb.created_at,
+        updatedAt: fb.updated_at,
+      };
+    }
   }
 
   // Normalised row aliases.
@@ -1082,6 +1118,22 @@ export default async function ServiceImportDetailPage({
                               <b className="font-semibold">{t("trackingThLabel")} : </b>
                               {row.ftrackingth}
                             </p>
+                            {/* External-courier (Lalamove / Grab / รถเหมา)
+                                last-mile tracking link — set by ops on the
+                                dispatch page (2026-06-08 gap analysis #2). */}
+                            {row.courier_tracking_url && (
+                              <p className="text-sm">
+                                <a
+                                  href={row.courier_tracking_url}
+                                  target="_blank"
+                                  rel="noreferrer noopener"
+                                  className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 border border-indigo-200 px-3 py-1 text-sm font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"
+                                >
+                                  <i className="fas fa-truck" aria-hidden></i>
+                                  {t("courierTrackingLink")}
+                                </a>
+                              </p>
+                            )}
                             {multiBillSiblings.length > 0 && (
                               <div className="rounded-lg bg-red-50 border border-red-200 p-2.5">
                                 <p className="text-sm font-semibold text-red-700">
@@ -1422,6 +1474,23 @@ export default async function ServiceImportDetailPage({
                               </table>
                             </div>
                           </>
+                        )}
+
+                        {/* ── Delivery feedback (Phase 4a · ops-workflow audit 2026-06-05 §32)
+                            — only when fstatus=7 (delivered). Customer can leave
+                            rating + comment + photo (all optional · ≥ 1 required). ── */}
+                        {fStatusValue === "7" && (
+                          <DeliveryFeedbackCard
+                            fid={row.id}
+                            existing={existingFeedback}
+                          />
+                        )}
+
+                        {/* ── Missing/damaged item report (2026-06-08 gap #4)
+                            — only when delivered. Opens a cs_followup ops
+                            ticket on the work-board. ── */}
+                        {fStatusValue === "7" && (
+                          <MissingItemReportCard fid={row.id} />
                         )}
 
                         {/* ── Footer back button ── forwarder.php L2231-2240 ── */}

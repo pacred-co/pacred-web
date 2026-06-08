@@ -49,7 +49,10 @@ export const dynamic = "force-dynamic";
  * directive after he reviewed.
  */
 export default async function AdminForwarderDetail({ params }: { params: Promise<{ fNo: string }> }) {
-  await requireAdmin(["ops", "accounting"]);
+  // 2026-06-08 (ภูม warehouse-handoff readiness): added "warehouse" — list
+  // page `/admin/forwarders` now accepts warehouse role (per sidebar-menu's
+  // menuWarehouse), so the detail page MUST too or every row-click 404s.
+  await requireAdmin(["ops", "accounting", "warehouse"]);
 
   const { fNo } = await params;
   const admin = createAdminClient();
@@ -222,7 +225,10 @@ async function tryRenderTbForwarder(
       "fnote, fdetail, fcover, fcredit, reforder, " +
       "adminid, adminidcreator, adminidupdate, paymethod, paydeposit, crate, fpallet, fbilltoname, " +
       // 2026-06-05 PM (ภูม flag · breakdown table on detail page too).
-      "fusercompany",
+      "fusercompany, " +
+      // B4 · backlog #259 (migration 0150 · 2026-06-08) — cabinet lock flag
+      // so the read-only detail can show "🔒 ล็อกแล้ว" badge next to cabinet.
+      "fcabinet_locked",
     )
     .limit(1);
   tbq = isId ? tbq.eq("id", asNumber) : tbq.eq("fidorco", fNo);
@@ -265,6 +271,7 @@ async function tryRenderTbForwarder(
     crate: string | null; fpallet: number | null;
     fbilltoname: string | null;
     fusercompany: string | null;
+    fcabinet_locked: boolean | null;
   };
 
   const { data: userRow, error: userRowErr } = await admin
@@ -358,7 +365,14 @@ async function tryRenderTbForwarder(
       ? { label: `ฝากนำเข้า : ${r.adminidcreator}`, cls: "bg-amber-50 text-amber-700 border-amber-200" }
       : { label: "ฝากนำเข้าจาก : users", cls: "bg-gray-50 text-gray-600 border-gray-200" };
 
-  const slugForLink = r.fidorco ?? String(r.id);
+  // 2026-06-08 ภูม flag (URL 404 bug · 21,694 rows on prod = 45%):
+  // tb_forwarder.fidorco often contains literal `/` (e.g. "MODPK301890160035-1/2"
+  // · "รถ 790A/116" · per-shipment split markers). Using fidorco verbatim in
+  // the URL turns the path into 2 segments and the dynamic [fNo] route 404s.
+  // r.id is numeric · safe in URLs · the detail + edit pages already accept
+  // BOTH numeric id AND fidorco (see edit/page.tsx L175-176 · this/L264-265).
+  // We keep fidorco for DISPLAY but route on the numeric id.
+  const slugForLink = String(r.id);
 
   return (
     <main className="p-4 lg:p-6 space-y-4">
@@ -532,7 +546,11 @@ async function tryRenderTbForwarder(
                 }
               />
               <LegacyKV
-                label="หมายเลขตู้"
+                label={
+                  r.fcabinet_locked === true
+                    ? "หมายเลขตู้ 🔒 (ล็อกแล้ว · MOMO sync ไม่เขียนทับ)"
+                    : "หมายเลขตู้"
+                }
                 value={r.fcabinetnumber ?? "—"}
                 href={r.fcabinetnumber ? `/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}` : undefined}
                 mono

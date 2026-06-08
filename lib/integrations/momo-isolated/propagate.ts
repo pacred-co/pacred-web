@@ -23,6 +23,9 @@ import "server-only";
  *                       MOMO routing batch (m.containerNo) itself — those
  *                       are MOMO-internal IDs that link to nothing in
  *                       Pacred + confuse staff/customers.
+ *                       B4 · backlog #259 (migration 0150 · 2026-06-08):
+ *                       ALSO skips the write when fcabinet_locked=true —
+ *                       admin's defensive belt vs partner-API misroutes.
  *   2. fdatetothai    ← today, only if MOMO indicates arrival + tb_forwarder
  *                       has no fdatetothai yet
  *   3. fstatus        ← derived from MOMO shipmentStatus, only if STRICTLY
@@ -131,6 +134,10 @@ export type PropagationResult = {
   /** Of `matched`: how many WOULD have advanced fstatus but the gate was
    *  off. Lets ภูม preview impact before flipping the env. */
   statusAdvanceSkippedByGate: number;
+  /** B4 · backlog #259 (migration 0150 · 2026-06-08): how many rows would
+   *  have had a cabinet write but we skipped because fcabinet_locked=true.
+   *  Surfaced so staff can audit that the lock is doing its job. */
+  cabinetLocked:        number;
   /** Per-row errors. Best-effort: a row error doesn't fail the whole batch. */
   errors:               Array<{ trackingNo: string; message: string }>;
 };
@@ -145,6 +152,7 @@ function emptyResult(): PropagationResult {
     arrivedWrites: 0,
     statusAdvanceWrites: 0,
     statusAdvanceSkippedByGate: 0,
+    cabinetLocked: 0,
     errors: [],
   };
 }
@@ -169,9 +177,12 @@ export async function propagateMomoToForwarders(
   const trackings = Array.from(
     new Set(candidates.map((r) => r.trackingNo!).filter(Boolean)),
   );
+  // B4 · backlog #259 (migration 0150 · 2026-06-08): include fcabinet_locked
+  // in the SELECT so the cabinet-write guard below can skip rows that admin
+  // has manually locked against partner-sync overwrites.
   const { data: matchedRows, error: lookupErr } = await admin
     .from("tb_forwarder")
-    .select("id, ftrackingchn, fstatus, fcabinetnumber, fdatetothai")
+    .select("id, ftrackingchn, fstatus, fcabinetnumber, fdatetothai, fcabinet_locked")
     .in("ftrackingchn", trackings);
   if (lookupErr) {
     console.error("[propagateMomoToForwarders] tb_forwarder lookup failed", {
@@ -191,6 +202,7 @@ export async function propagateMomoToForwarders(
     fstatus:         string | null;
     fcabinetnumber:  string | null;
     fdatetothai:     string | null;
+    fcabinet_locked: boolean | null;
   };
   const forwardersByTracking = new Map<string, ForwarderHit[]>();
   for (const row of (matchedRows ?? []) as unknown as ForwarderHit[]) {
@@ -259,12 +271,30 @@ export async function propagateMomoToForwarders(
       //    If real cabinet is NOT known yet (container not closed by MOMO
       //    yet), leave fcabinetnumber alone — NULL is better than a routing
       //    batch ID that goes nowhere.
+      //
+      // B4 · backlog #259 (migration 0150 · 2026-06-08): if admin set
+      // fcabinet_locked=true on this row, NEVER overwrite the cabinet —
+      // the manual value is authoritative. We still let fdatetothai +
+      // fstatus propagate (those are not the lock's concern). Log the
+      // skip + count it so staff can audit lock impact.
       const current = f.fcabinetnumber?.trim() ?? "";
       const isEmpty = current === "";
       const isStaleRouting = isMomoRoutingBatch(current);
       if (realCabinet && realCabinet !== current && (isEmpty || isStaleRouting)) {
-        updates.fcabinetnumber = realCabinet;
-        result.cabinetWrites += 1;
+        if (f.fcabinet_locked === true) {
+          // Locked — skip the cabinet write. Other column writes below
+          // still apply because the lock is cabinet-only.
+          console.info(
+            `[propagateMomoToForwarders] cabinet-write SKIPPED (locked) ` +
+            `fid=${f.id} tracking=${tracking} ` +
+            `current=${JSON.stringify(current || null)} ` +
+            `wouldHaveWritten=${JSON.stringify(realCabinet)}`,
+          );
+          result.cabinetLocked += 1;
+        } else {
+          updates.fcabinetnumber = realCabinet;
+          result.cabinetWrites += 1;
+        }
       }
 
       // 2. fdatetothai — only when MOMO signals arrival + tb_forwarder has

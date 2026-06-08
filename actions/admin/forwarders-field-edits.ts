@@ -3,6 +3,20 @@
 /**
  * Admin > forwarder detail "แก้ไขที่อยู่ / การขนส่ง" — faithful port of the
  * small per-field update handlers in legacy `pcs-admin/forwarder.php`
+ *
+ * RBAC NOTE (2026-06-08 · ภูม warehouse-handoff round 3 · audit B5):
+ *   All 13 inline-edit actions in this file gate to ["ops", "accounting",
+ *   "super", "warehouse"]. "warehouse" added round 3 because round 1+2
+ *   opened the /admin/forwarders/[fNo] + /edit pages to warehouse role
+ *   but the per-field SAVE buttons (address re-pick · transport type ·
+ *   ship-by · cover image · userid reassign · amount-count · cost-adjust)
+ *   would have silently returned `{ok:false, error:"unauthorized"}` —
+ *   green toast → no DB write → "เซฟไม่ได้พี่!". Today all 17 admins on
+ *   prod are role='super' so this is defense-in-depth; the moment ภูม
+ *   provisions an admins row with role='warehouse', it becomes the actual
+ *   save path. Legacy `forwarder.php` was implicitly any-staff-with-cookie
+ *   so this matches faithful intent.
+ *
  * (the detail-page editor) onto the legacy `tb_forwarder` table.
  *
  * Theme A cont · 2026-05-31 (เดฟ · ภูม offline · forwarder lane).
@@ -96,7 +110,7 @@ export async function adminPickForwarderAddress(
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   const d = parsed.data;
 
-  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+  return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
     const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
 
@@ -185,7 +199,7 @@ export async function adminUpdateForwarderTransportType(
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   const d = parsed.data;
 
-  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+  return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
     const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
 
@@ -245,7 +259,7 @@ export async function adminReassignForwarderOwner(
   const d = parsed.data;
   const newUserId = d.newUserId.toUpperCase();
 
-  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+  return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
     const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
 
@@ -307,7 +321,7 @@ export async function adminUpdateForwarderCover(
   if (!Number.isInteger(fId) || fId <= 0) return { ok: false, error: "fId ไม่ถูกต้อง" };
   if (!(file instanceof File) || file.size === 0) return { ok: false, error: "กรุณาเลือกไฟล์รูป" };
 
-  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+  return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
     const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
 
@@ -385,7 +399,7 @@ export async function adminUpdateForwarderShipBy(
   // sentinel, never a real carrier the admin should set.
   if (fShipBy === "F") return { ok: false, error: "รหัสผู้ขนส่งไม่ถูกต้อง (F สงวนไว้)" };
 
-  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+  return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
     const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
 
@@ -474,7 +488,7 @@ export async function adminUpdateForwarderCostAdjust(
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   const d = parsed.data;
 
-  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+  return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
     const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
 
@@ -532,7 +546,7 @@ export async function adminUpdateForwarderAmountCount(
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   const d = parsed.data;
 
-  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+  return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
     const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
 
@@ -589,7 +603,7 @@ export async function adminUpdateForwarderCrate(
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   const d = parsed.data;
 
-  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+  return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
     const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
 
@@ -644,7 +658,7 @@ export async function adminUpdateForwarderPayMethod(
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   const d = parsed.data;
 
-  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+  return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
     const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
 
@@ -860,7 +874,7 @@ export async function adminUpdateForwarderTaxDocMode(
   const d = parsed.data;
   const newPref = prefFromMode(d.mode); // 'tax_invoice' | 'customs' | 'receipt'
 
-  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+  return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
     const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
 
@@ -916,7 +930,7 @@ export async function adminUpdateForwarderPallet(
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   const d = parsed.data;
 
-  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+  return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
     const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
 
@@ -970,7 +984,7 @@ export async function adminUpdateForwarderTrackingChn(
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   const d = parsed.data;
 
-  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+  return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
     const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
 
@@ -1033,7 +1047,7 @@ export async function adminUpdateForwarderDateToThai(
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   const d = parsed.data;
 
-  return withAdmin(["ops", "accounting", "super"], async ({ adminId }) => {
+  return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
     const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
 

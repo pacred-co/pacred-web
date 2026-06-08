@@ -313,7 +313,13 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
   // W-1 (gap-admin H-1): page-level role gate. Lists every customer's
   // import orders + prices via createAdminClient (RLS-bypass) — ops
   // (runs the orders) + accounting (bills them).
-  const { roles } = await requireAdmin(["ops", "accounting"]);
+  // 2026-06-08 (ภูม warehouse-handoff readiness): added "warehouse" — the
+  // legacy `pcs-admin/forwarder.php` list IS the warehouse role's daily
+  // landing page (sidebar-menu.ts:1023-1027 menuWarehouse exposes it as the
+  // forwarder.search + forwarder.listAll leaves). Without "warehouse" here
+  // the page 404'd via requireAdmin's notFound() on any non-super warehouse
+  // login — sidebar showed the link, click landed on 404.
+  const { roles } = await requireAdmin(["ops", "accounting", "warehouse"]);
 
   const sp = await searchParams;
 

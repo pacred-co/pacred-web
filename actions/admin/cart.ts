@@ -44,6 +44,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
@@ -166,6 +167,93 @@ export async function adminAddItemToCart(
     // cart variant (the page reads ?userID=… so both URLs share the cache).
     revalidatePath("/admin/service-orders/cart");
     return { ok: true, data: { id: row.id } };
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+// 1b. adminAddItemsToCartBulk — multi-SKU one-shot add
+// ════════════════════════════════════════════════════════════
+// 2026-06-08 ภูม flag (1688 wholesale style · รูปที่ 3 in the chat):
+// 1688's multi-variant qty grid lets buyers pick N SKUs + qty each in
+// one submit. The Pacred single-pick flow forced staff/customers to
+// repeat the search + add cycle N times for products like 红枣 with
+// 3 spec rows (250克 + 25年新枣 1斤 + 2斤). Now: the link-paste UI
+// renders a row per skuMap entry when there are ≥ 2 SKUs, the user
+// types qty per SKU, submit calls this action with the array.
+//
+// Single atomic INSERT — either all rows land or the batch fails (no
+// half-cart). Cap-gates the whole batch against the legacy 151 ceiling.
+
+const adminAddItemsToCartBulkSchema = z.object({
+  userid: z.string().trim().min(1, "ระบุ userid").max(20),
+  items:  z.array(z.object({
+    cdetails:  z.string().max(500).default(""),
+    curl:      z.string().trim().max(2000),
+    ctitle:    z.string().trim().max(500),
+    cnameshop: z.string().trim().max(120),
+    cprovider: z.string().max(20),
+    cimages:   z.string().max(2000).default(""),
+    cprice:    z.number().nonnegative(),
+    camount:   z.number().int().positive().max(99999),
+    ccolor:    z.string().max(120).default(""),
+    csize:     z.string().max(120).default(""),
+  })).min(1, "ต้องมีอย่างน้อย 1 รายการ").max(50, "เกิน 50 รายการ"),
+});
+
+export async function adminAddItemsToCartBulk(
+  input: z.infer<typeof adminAddItemsToCartBulkSchema>,
+): Promise<AdminActionResult<{ count: number }>> {
+  const parsed = adminAddItemsToCartBulkSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { userid, items } = parsed.data;
+
+  return withAdmin<{ count: number }>([...CART_ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    // Cap-gate the whole batch: existing count + new rows must stay ≤ 151
+    // (legacy cart.php L17/L76). Refuse the batch rather than partial-insert.
+    const { count: cartCount, error: countErr } = await admin
+      .from("tb_cart")
+      .select("id", { count: "exact", head: true })
+      .eq("userid", userid);
+    if (countErr) {
+      console.error(`[tb_cart cap count] failed`, { code: countErr.code, message: countErr.message });
+    }
+    if ((cartCount ?? 0) + items.length > 151) {
+      return { ok: false, error: "cart cap reached (151 items)" };
+    }
+
+    const payload = items.map((it) => ({
+      cdetails:  it.cdetails,
+      curl:      it.curl,
+      ctitle:    it.ctitle,
+      cnameshop: it.cnameshop,
+      cprovider: it.cprovider,
+      cimages:   it.cimages,
+      cprice:    it.cprice,
+      camount:   it.camount,
+      ccolor:    it.ccolor,
+      csize:     it.csize,
+      userid,
+    }));
+
+    const { error, count: insertedCount } = await admin
+      .from("tb_cart")
+      .insert(payload, { count: "exact" });
+
+    if (error) return { ok: false, error: error.message };
+
+    await logAdminAction(adminId, "admin_cart.add_items_bulk", "tb_cart", userid, {
+      userid,
+      items_count: items.length,
+      inserted: insertedCount,
+      sample_titles: items.slice(0, 3).map((it) => it.ctitle),
+    });
+
+    revalidatePath("/admin/service-orders/cart");
+    return { ok: true, data: { count: insertedCount ?? items.length } };
   });
 }
 

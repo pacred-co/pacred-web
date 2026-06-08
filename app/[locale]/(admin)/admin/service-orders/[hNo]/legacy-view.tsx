@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
+import { autoExpireOverdueShopOrder } from "@/lib/service-order/auto-expire";
 import type { EditorItem } from "./items-editor";
 import { OrderNoteForm, OrderDangerZone } from "./order-actions";
 
@@ -145,6 +146,16 @@ export async function renderLegacyServiceOrderView(hno: string) {
   if (!rowRaw) return null;
   const r = rowRaw as unknown as HRow;
 
+  // legacy fidelity gap fixed 2026-06-08 · ภูม B5 lane
+  // Auto-expire overdue (legacy detail.php L73-79): a status-2 order past its
+  // hdatepayment deadline flips to 6 the moment ANY admin opens the page —
+  // detail OR /edit. /edit already calls this (edit/page.tsx:152); detail did
+  // not, so an overdue row stayed visually at status=2 if staff opened detail
+  // first. Idempotent + recoverable (re-quote 6 → 2 via /edit).
+  const autoExpired = await autoExpireOverdueShopOrder({
+    id: r.id, hstatus: r.hstatus, hdatepayment: r.hdatepayment,
+  });
+
   const { data: userRaw, error: userErr } = await admin
     .from("tb_users")
     .select("userID,userName,userLastName,userTel,userEmail,userImage,adminIDSale")
@@ -200,7 +211,9 @@ export async function renderLegacyServiceOrderView(hno: string) {
   }
   const corporateName = corp?.corporatename ?? null;
 
-  const status = r.hstatus ?? "1";
+  // legacy fidelity gap fixed 2026-06-08 · ภูม B5 lane — reflect the
+  // auto-expire flip in the rendered status (matches /edit/page.tsx:287).
+  const status = autoExpired ? "6" : (r.hstatus ?? "1");
   const customerName = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || "—";
   const userAvatar = await resolveLegacyUrl(u?.userImage, "profile").catch(() => null);
   const addr = [r.haddressno, r.haddresssubdistrict ? `ต.${r.haddresssubdistrict}` : "", r.haddressdistrict ? `อ.${r.haddressdistrict}` : "", r.haddressprovince ? `จ.${r.haddressprovince}` : "", r.haddresszipcode]

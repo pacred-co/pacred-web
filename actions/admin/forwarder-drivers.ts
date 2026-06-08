@@ -6,6 +6,38 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
 
+/**
+ * @deprecated 2026-06-08 — Lane B3 of the ops-workflow audit (ภูม session).
+ *
+ * THIS FILE IS A §0e DEAD-WRITE TRAP. All 4 exported functions write/read
+ * the REBUILT `forwarder_driver` table which has **0 rows on prod** (the
+ * twin · never used). The LIVE driver-assignment path lives in:
+ *   - `actions/admin/driver-batches.ts` (admin manage)
+ *   - `actions/admin/driver-work.ts`    (driver mobile work-list)
+ *   - which write to legacy `tb_forwarder_driver` + `tb_forwarder_driver_item`
+ *
+ * Why this file still exists (instead of being renamed `.tombstone.ts`):
+ * the 4 functions are still IMPORTED by 4 UI files (which themselves render
+ * inside dead chains · empty rebuilt parent tables · never reach prod):
+ *   - searchDriversByQuery               → driver-combobox.tsx → driver-assign-form.tsx
+ *                                         → forwarders/[fNo]/page.tsx (rebuilt `forwarders` branch · 0 rows)
+ *   - adminAssignDriverToForwarder       → same chain
+ *   - adminUpdateDriverAssignmentStatus  → drivers/actions-cell.tsx (NO importers)
+ *   - driverUpdateOwnAssignmentStatus    → driver-runs/action-buttons.tsx → driver-runs/page.tsx
+ *                                         (reads rebuilt `forwarder_driver` · always empty · buttons never render)
+ *
+ * To physically tombstone this file: unwind the 4 UI chains FIRST (delete
+ * the orphan components · drop the sidebar entries `driver.toDeliver` +
+ * `driver.history` from lib/admin/sidebar-menu.ts · retarget or retire
+ * `app/api/cron/expire-driver-assignments/route.ts` which also writes
+ * the dead twin every hour · ภูม decision #3 in the gap doc). Then rename
+ * this file `.tombstone.ts`.
+ *
+ * Tracker: docs/audit/driver-assignment-gap-2026-05-30.md (closure log).
+ * Prod probe (2026-06-08): rebuilt `forwarder_driver` = 0 rows · rebuilt
+ * `forwarders` = 0 rows · live `tb_forwarder_driver*` = populated.
+ */
+
 // ────────────────────────────────────────────────────────────
 // Phase C QoL #2 — fuzzy driver search.
 // ────────────────────────────────────────────────────────────

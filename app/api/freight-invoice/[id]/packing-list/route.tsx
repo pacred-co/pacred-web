@@ -6,7 +6,8 @@
  * V-E1.1 — companion to `/api/freight-invoice/[id]` (Commercial Invoice).
  * Same data source (freight_invoices + parties + lines), different view.
  *
- * Auth + visibility + cache headers all mirror the CI route.
+ * Auth + visibility + cache headers all mirror the CI route (incl. migration
+ * 0148 broadening RLS to admit freight_*_doc roles for SELECT).
  */
 
 import { NextResponse } from "next/server";

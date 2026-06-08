@@ -59,8 +59,18 @@ export const PHASE_2_PLUS_ROUTES = [
   "/admin/commissions",                  // interpreter / sales commissions
   "/admin/customers/pending",            // customer approval queue (QA-like)
   "/admin/customers/transfer-rep",       // sales-rep transfer (QA)
-  "/admin/driver-runs",                  // driver-runs (sales-only side)
-  "/admin/drivers",                      // assign driver (driver-runs)
+  // 2026-06-08 (ภูม warehouse-handoff readiness ROUND 2): un-blocked
+  // `/admin/driver-runs` and `/admin/drivers` — same stale-sync pattern as
+  // /admin/barcode round 1. sidebar-menu.ts:1095-1096 + 1029 expose both
+  // to driver / warehouse roles without phase tags; the network gate was
+  // bouncing them. Page-level requireAdmin() on driver-runs accepts any
+  // admin (filters by profile_id), and /admin/drivers requires ["ops",
+  // "super"] which still rejects warehouse/driver at the action level —
+  // so removing the Phase gate is safe.
+  // NB: driver-runs ALSO has a dead-read trap (reads rebuilt 0-row
+  // `forwarder_driver` instead of live `tb_forwarder_driver_item`) — that
+  // is tracked separately and is NOT made worse by un-blocking the gate;
+  // staff would just see an empty page instead of a silent redirect.
   "/admin/forwarder-sales",              // freight withdrawal (commissions)
   "/admin/freight/declarations",         // customs declarations (service #8 not live)
   "/admin/incidents",                    // incident triage (QA-like)
@@ -73,7 +83,16 @@ export const PHASE_2_PLUS_ROUTES = [
   "/admin/sales-payouts",                // sales bonus payouts
   "/admin/team-leaders",                 // team-leader bonus tool
   "/admin/warehouse/bulletin",           // warehouse bulletin (QA)
-  "/admin/warehouse/qa-inspections",     // warehouse QA inspections
+  // 2026-06-08 (ภูม flag · warehouse hand-off readiness): un-block
+  // `/admin/warehouse/qa-inspections` — `lib/admin/sidebar-menu.ts:1057-1061`
+  // explicitly removed its phase tag with the comment "un-phase-gated for the
+  // warehouse role because PCS_Cargo_Guidebook_TH.md L441-454 lists
+  // pre-shipment QA as a daily warehouse duty". Keeping the block here meant
+  // warehouse staff saw the sidebar item, clicked it, and got bounced to
+  // /admin (the dashboard) — stale sync between sidebar + this gate. The
+  // action-level role gate inside the QA module is still enforced, so a
+  // non-warehouse non-super clicking it gets a "no permission" inside the
+  // page rather than a silent redirect.
   "/admin/withdrawal/freight-th",        // freight-th stub (placeholder per brief)
   "/admin/learning",                     // Learning hub (all topics)
 
@@ -83,7 +102,17 @@ export const PHASE_2_PLUS_ROUTES = [
   "/admin/reports/system",               // system observability reports
 
   // Phase 4 — way later
-  "/admin/barcode",                      // barcode toolbox (warehouse-only future)
+  // 2026-06-08 (ภูม flag · warehouse hand-off readiness): un-block
+  // `/admin/barcode` — the comment said "warehouse-only future" because
+  // barcode was a stub in Wave 0-25. It is now the warehouse DAILY-DRIVER
+  // tool (Wave 26-29 + Wave 30 LIVE on prod, MOMO sync writes tb_forwarder
+  // every 5 min on Vercel cron). `actions/admin/barcode-import.ts:378`
+  // declares its action gate `["super", "ops", "warehouse"]`; the sidebar
+  // promotes `barcode.recordIntake` to a top-level flat link for warehouse
+  // role (sidebar-menu.ts:200, 1054). With the block here, warehouse staff
+  // clicked the link and got bounced to /admin — they could not do their
+  // job. The action-level role gate still rejects sales/accounting roles
+  // who URL-type into a scan page.
   "/admin/carriers",                     // Thai transport / carriers audit
   "/admin/juristic-check",               // juristic check Extension tool
 ] as const;

@@ -9,7 +9,8 @@
  * different view: a Thai business letter from the consignee to the
  * shipping-line agent (e.g. CULINES) requesting telex release.
  *
- * Auth + RLS + cache-headers all mirror the CI route.
+ * Auth + RLS + cache-headers all mirror the CI route (incl. migration 0148
+ * broadening RLS to admit freight_*_doc roles for SELECT).
  *
  * Data note: `place_delivery` and `carrier_container_no` are NOT snapshotted
  * on freight_invoices — they're physical logistics facts that live on the

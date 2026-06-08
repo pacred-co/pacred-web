@@ -37,7 +37,7 @@ import {
   type AdminProductSearchOk,
   type AdminSkuAxis,
 } from "@/actions/admin/product-search";
-import { adminAddItemToCart } from "@/actions/admin/cart";
+import { adminAddItemToCart, adminAddItemsToCartBulk } from "@/actions/admin/cart";
 import { ADMIN_CART_PROVIDERS } from "@/lib/validators/admin-cart";
 
 type Props = {
@@ -151,6 +151,12 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
   const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
   // Gallery state — which image index is currently displayed as the main hero.
   const [activeImageIdx, setActiveImageIdx] = useState(0);
+  // 2026-06-08 ภูม flag · 1688 wholesale multi-pick (รูปที่ 3 in chat):
+  // qty per skuMap entry · keyed by idx · default 0. When product has ≥ 2
+  // SKUs, we render a row per SKU with stock + qty stepper (mirrors 1688's
+  // multi-variant qty grid); submit calls adminAddItemsToCartBulk with all
+  // qty > 0 entries. When ≤ 1 SKU, we fall back to single-pick UI.
+  const [qtyBySku, setQtyBySku] = useState<Record<number, number>>({});
 
   // Async state
   const [searching, startSearch] = useTransition();
@@ -196,6 +202,31 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
 
   const previewThb = product ? (effectivePrice * rsDefault).toFixed(2) : "—";
 
+  // ── Multi-pick mode (1688 wholesale qty grid) ───────────────────────
+  // Auto-detect: when the product carries ≥ 2 concrete SKUs, render the
+  // 1688-style "row per SKU + qty input" grid instead of the single-pick
+  // chip picker. Submit calls adminAddItemsToCartBulk with all qty>0
+  // rows in one atomic batch.
+  const isMultiPickMode = !!product?.skuMap && product.skuMap.length >= 2;
+  const totalSelectedQty = useMemo(
+    () => Object.values(qtyBySku).reduce((s, q) => s + (q > 0 ? q : 0), 0),
+    [qtyBySku],
+  );
+  const selectedSkuCount = useMemo(
+    () => Object.values(qtyBySku).filter((q) => q > 0).length,
+    [qtyBySku],
+  );
+  const multiPickTotalYuan = useMemo(() => {
+    if (!isMultiPickMode || !product?.skuMap) return 0;
+    return product.skuMap.reduce((sum, sku, idx) => {
+      const q = qtyBySku[idx] ?? 0;
+      return sum + sku.priceCny * q;
+    }, 0);
+  }, [isMultiPickMode, product, qtyBySku]);
+  const multiPickPreviewThb = isMultiPickMode
+    ? (multiPickTotalYuan * rsDefault).toFixed(2)
+    : "—";
+
   function onSearch(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const u = url.trim();
@@ -237,6 +268,56 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
       setFlash({ kind: "add_failed", message: "กรอกรหัสสมาชิก (เจ้าของรถเข็น) ก่อน" });
       return;
     }
+    // ── Multi-pick branch (1688 wholesale qty grid) ────────────────────
+    if (isMultiPickMode) {
+      const skuMap = product.skuMap!;
+      const items: Parameters<typeof adminAddItemsToCartBulk>[0]["items"] = [];
+      for (let i = 0; i < skuMap.length; i++) {
+        const q = qtyBySku[i] ?? 0;
+        if (q <= 0) continue;
+        const sku = skuMap[i];
+        // Materialise the propPath as `selectedVariants` so composeVariantStrings
+        // picks the right axis label for ccolor/csize/cdetails. Then add the
+        // admin note (shared across all rows) as a prefix.
+        const { ccolor, csize, cdetails } = composeVariantStrings(
+          product.skuAxes,
+          sku.propPath,
+          product.title,
+          note,
+        );
+        items.push({
+          curl:      product.sourceUrl,
+          cdetails,
+          ctitle:    product.title,
+          cnameshop: product.shopName || "pcs",
+          cprovider: mapProvider(product.provider),
+          // Prefer the per-SKU image · fall back to axis-value image · then hero.
+          cimages:   sku.image || findAxisValueImage(product.skuAxes, sku.propPath) || heroImage || product.imageUrl || "",
+          cprice:    sku.priceCny,
+          camount:   q,
+          ccolor,
+          csize,
+        });
+      }
+      if (items.length === 0) {
+        setFlash({ kind: "add_failed", message: "กรอกจำนวนอย่างน้อย 1 ตัวเลือก" });
+        return;
+      }
+      setFlash(null);
+      startAdd(async () => {
+        const r = await adminAddItemsToCartBulk({ userid: owner, items });
+        if (r.ok) {
+          setFlash({ kind: "added", title: `${product.title} (${items.length} รายการ · ${items.reduce((s, it) => s + it.camount, 0)} ชิ้น)`, id: 0 });
+          setQtyBySku({});
+          setNote("");
+          setActiveImageIdx(0);
+        } else {
+          setFlash({ kind: "add_failed", message: r.error || "เพิ่มสินค้าไม่สำเร็จ" });
+        }
+      });
+      return;
+    }
+    // ── Single-pick branch (existing chip picker) ──────────────────────
     if (axesIncomplete) {
       const missing = product.skuAxes!
         .filter((ax) => !selectedVariants[ax.name])
@@ -425,8 +506,100 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
             </div>
           </div>
 
-          {/* ── Variant pickers ───────────────────────────────────────── */}
-          {product.skuAxes && product.skuAxes.length > 0 && (
+          {/* ── Multi-pick grid (1688 wholesale qty grid) ─────────────── */}
+          {/* 2026-06-08 ภูม flag (รูปที่ 3 in the chat): when product has ≥ 2
+              concrete SKUs (typical 1688 wholesale), render a row-per-SKU qty
+              grid mirroring 1688's "数量" column · staff/customers type qty
+              per SKU; submit batches all qty>0 rows in 1 INSERT. */}
+          {isMultiPickMode && product.skuMap && (
+            <div className="space-y-2 border-t border-emerald-200 pt-3">
+              <p className="text-xs font-medium text-muted">
+                เลือกตัวเลือกสินค้า + จำนวน <span className="text-[10px]">({product.skuMap.length} ตัวเลือก · เลือกได้หลายอันพร้อมกัน)</span>
+              </p>
+              <div className="overflow-x-auto scrollbar-x-visible rounded-lg border border-emerald-200 bg-white">
+                <table className="w-full text-xs">
+                  <thead className="bg-emerald-50/60 text-[10px] uppercase tracking-wide text-emerald-800">
+                    <tr>
+                      <th className="px-2 py-2 text-left">ตัวเลือก</th>
+                      <th className="px-2 py-2 text-right whitespace-nowrap">ราคา ¥</th>
+                      <th className="px-2 py-2 text-right whitespace-nowrap">คงเหลือ</th>
+                      <th className="px-2 py-2 text-center w-44">จำนวน</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {product.skuMap.map((sku, idx) => {
+                      const q = qtyBySku[idx] ?? 0;
+                      const skuImage = sku.image || findAxisValueImage(product.skuAxes, sku.propPath);
+                      const label = Object.entries(sku.propPath).map(([, v]) => v).join(" · ") || "—";
+                      const outOfStock = sku.stock <= 0;
+                      return (
+                        <tr key={sku.skuId || idx} className={`border-t border-emerald-100 align-middle ${q > 0 ? "bg-emerald-50/50" : ""}`}>
+                          <td className="px-2 py-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {skuImage && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={skuImage} alt="" className="h-9 w-9 rounded border border-border/50 object-contain bg-white flex-shrink-0" />
+                              )}
+                              <span className="truncate" title={label}>{label}</span>
+                            </div>
+                          </td>
+                          <td className="px-2 py-2 text-right font-mono whitespace-nowrap">¥{sku.priceCny.toFixed(2)}</td>
+                          <td className="px-2 py-2 text-right font-mono whitespace-nowrap text-muted">
+                            {outOfStock ? <span className="text-red-600">หมด</span> : sku.stock.toLocaleString()}
+                          </td>
+                          <td className="px-2 py-2">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setQtyBySku((prev) => ({ ...prev, [idx]: Math.max(0, (prev[idx] ?? 0) - 1) }))}
+                                disabled={adding || q <= 0}
+                                className="rounded-md border border-border bg-white w-7 h-7 text-sm hover:bg-surface-alt disabled:opacity-40 leading-none"
+                                aria-label="ลด"
+                              >−</button>
+                              <input
+                                type="number"
+                                min={0}
+                                max={Math.max(sku.stock, 9999)}
+                                value={q}
+                                onChange={(e) => {
+                                  const n = Number(e.target.value) || 0;
+                                  setQtyBySku((prev) => ({ ...prev, [idx]: Math.max(0, Math.min(99999, Math.floor(n))) }));
+                                  setFlash(null);
+                                }}
+                                disabled={adding || outOfStock}
+                                className={`${INPUT_CLS} text-center font-mono w-16 h-7 py-0`}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setQtyBySku((prev) => ({ ...prev, [idx]: Math.min(99999, (prev[idx] ?? 0) + 1) }))}
+                                disabled={adding || outOfStock}
+                                className="rounded-md border border-border bg-white w-7 h-7 text-sm hover:bg-surface-alt disabled:opacity-40 leading-none"
+                                aria-label="เพิ่ม"
+                              >+</button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  {selectedSkuCount > 0 && (
+                    <tfoot>
+                      <tr className="border-t-2 border-emerald-300 bg-emerald-50 font-medium">
+                        <td className="px-2 py-2 text-right" colSpan={2}>
+                          รวม {selectedSkuCount} ตัวเลือก · {totalSelectedQty.toLocaleString()} ชิ้น
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono whitespace-nowrap text-rose-700">¥{multiPickTotalYuan.toFixed(2)}</td>
+                        <td className="px-2 py-2 text-center text-[11px] text-muted">≈ ฿{multiPickPreviewThb}</td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── Variant pickers (single-pick · skuMap ≤ 1 or no SKU data) ── */}
+          {!isMultiPickMode && product.skuAxes && product.skuAxes.length > 0 && (
             <div className="space-y-3 border-t border-emerald-200 pt-3">
               <p className="text-xs font-medium text-muted">
                 เลือกตัวเลือกสินค้า {axesIncomplete && <span className="text-red-600">(จำเป็น)</span>}
@@ -490,43 +663,46 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
           )}
 
           {/* ── Qty + free-text note + Add button ─────────────────────── */}
-          <div className="grid sm:grid-cols-3 gap-3 pt-1 border-t border-emerald-200">
-            <div>
-              <label htmlFor="lps_qty" className="block text-xs font-medium text-muted mb-1.5">
-                จำนวน
-              </label>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => setQty((q) => Math.max(1, q - 1))}
-                  disabled={adding || qty <= 1}
-                  className="rounded-lg border border-border bg-white px-3 py-2 text-sm hover:bg-surface-alt disabled:opacity-50"
-                >
-                  −
-                </button>
-                <input
-                  id="lps_qty"
-                  type="number"
-                  min={1}
-                  max={9999}
-                  value={qty}
-                  onChange={(e) => setQty(Math.max(1, Math.min(9999, Number(e.target.value) || 1)))}
-                  disabled={adding}
-                  className={`${INPUT_CLS} text-center font-mono w-20`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setQty((q) => Math.min(9999, q + 1))}
-                  disabled={adding || qty >= 9999}
-                  className="rounded-lg border border-border bg-white px-3 py-2 text-sm hover:bg-surface-alt disabled:opacity-50"
-                >
-                  +
-                </button>
+          <div className={`grid gap-3 pt-1 border-t border-emerald-200 ${isMultiPickMode ? "" : "sm:grid-cols-3"}`}>
+            {/* Qty stepper hidden in multi-pick mode (qty per SKU lives in the grid above) */}
+            {!isMultiPickMode && (
+              <div>
+                <label htmlFor="lps_qty" className="block text-xs font-medium text-muted mb-1.5">
+                  จำนวน
+                </label>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setQty((q) => Math.max(1, q - 1))}
+                    disabled={adding || qty <= 1}
+                    className="rounded-lg border border-border bg-white px-3 py-2 text-sm hover:bg-surface-alt disabled:opacity-50"
+                  >
+                    −
+                  </button>
+                  <input
+                    id="lps_qty"
+                    type="number"
+                    min={1}
+                    max={9999}
+                    value={qty}
+                    onChange={(e) => setQty(Math.max(1, Math.min(9999, Number(e.target.value) || 1)))}
+                    disabled={adding}
+                    className={`${INPUT_CLS} text-center font-mono w-20`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setQty((q) => Math.min(9999, q + 1))}
+                    disabled={adding || qty >= 9999}
+                    className="rounded-lg border border-border bg-white px-3 py-2 text-sm hover:bg-surface-alt disabled:opacity-50"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className="sm:col-span-2">
+            )}
+            <div className={isMultiPickMode ? "" : "sm:col-span-2"}>
               <label htmlFor="lps_note" className="block text-xs font-medium text-muted mb-1.5">
-                หมายเหตุเพิ่มเติม (ถ้ามี)
+                หมายเหตุเพิ่มเติม (ถ้ามี · ใช้ร่วมกันทุกตัวเลือก)
               </label>
               <input
                 id="lps_note"
@@ -537,9 +713,11 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
                 maxLength={500}
                 className={INPUT_CLS}
                 placeholder={
-                  product.skuAxes && product.skuAxes.length > 0
-                    ? "เช่น สเป็คเพิ่ม / หมายเหตุพิเศษ (สี/ขนาดเลือกข้างบนแล้ว)"
-                    : "เช่น สีดำ ไซส์ M (เว้นว่างได้)"
+                  isMultiPickMode
+                    ? "เช่น สเป็คพิเศษ / หมายเหตุที่ใช้กับทุกตัวเลือกที่เลือก"
+                    : product.skuAxes && product.skuAxes.length > 0
+                      ? "เช่น สเป็คเพิ่ม / หมายเหตุพิเศษ (สี/ขนาดเลือกข้างบนแล้ว)"
+                      : "เช่น สีดำ ไซส์ M (เว้นว่างได้)"
                 }
               />
             </div>
@@ -550,10 +728,14 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
             <button
               type="button"
               onClick={onAddToCart}
-              disabled={adding}
+              disabled={adding || (isMultiPickMode && totalSelectedQty === 0)}
               className="rounded-lg bg-primary-600 text-white px-5 py-2.5 text-sm font-semibold hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {adding ? "กำลังเพิ่ม..." : `+ เพิ่มในรถเข็น (× ${qty})`}
+              {adding
+                ? "กำลังเพิ่ม..."
+                : isMultiPickMode
+                  ? `+ เพิ่มในรถเข็น (${selectedSkuCount} ตัวเลือก · ${totalSelectedQty.toLocaleString()} ชิ้น)`
+                  : `+ เพิ่มในรถเข็น (× ${qty})`}
             </button>
           </div>
         </div>

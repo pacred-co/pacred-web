@@ -6,6 +6,7 @@ import { PrintButton } from "@/components/print-button";
 import { TaxInvoiceRequestPanel } from "@/components/tax-invoice-request-panel";
 import { CONTACT, ADDRESSES } from "@/components/seo/site";
 import { CustomerWhtUploadPanel } from "@/components/customer-wht-upload-panel";
+import { isShopYuanTaxInvoiceEnabled } from "@/lib/tax/shop-yuan-flag";
 
 /**
  * Print-ready service-order (ฝากสั่งซื้อ — China-shop) receipt view.
@@ -48,6 +49,10 @@ export default async function ShopOrderReceiptPage({
   // instead of request form.
   const taxInv = await getMyTaxInvoiceForOrder("service_order", hNo);
   const existingInvoice = taxInv.ok ? taxInv.data : null;
+
+  // 0152 LIVE-GATE — shop ใบกำกับ/ใบขน is LIVE only when the flag is ON;
+  // otherwise the panel keeps the "coming soon" (deferred) banner.
+  const shopYuanTaxLive = await isShopYuanTaxInvoiceEnabled();
 
   // Eligible if profile has a tax_id (juristic) OR juristic with corporate.tax_id.
   // Service-order receipt only carries the snapshot fields — derive both paths.
@@ -333,8 +338,8 @@ export default async function ShopOrderReceiptPage({
             }}
             existing={existingInvoice}
             eligible={isEligible}
-            /* ADR-0027 — shop ใบกำกับภาษี deferred (no World-B cross-type store yet). */
-            deferred
+            /* 0152 — shop ใบกำกับ/ใบขน is LIVE when the flag is on; deferred when off. */
+            deferred={!shopYuanTaxLive}
           />
         )}
 

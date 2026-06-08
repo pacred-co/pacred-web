@@ -3,12 +3,15 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { getLeadQueue, getLeadStats, exportLeadsAll } from "@/actions/admin/leads";
+import { getTagsBulk } from "@/actions/admin/customer-tags";
 import {
   LEAD_CALL_STATUSES,
   type LeadCallStatus,
   type LeadSegment,
 } from "@/actions/admin/leads-types";
+import { TagChips } from "@/components/admin/tag-chips";
 import { CallStatusBadge, LeadCallAction } from "./lead-call-action";
+import { LeadKanban } from "./lead-kanban";
 
 // Reads PII (customer phones) via createAdminClient (RLS-bypass) on every
 // request — must be dynamic + cannot be statically rendered.
@@ -60,7 +63,7 @@ function isStatusFilter(v: unknown): v is LeadCallStatus {
 export default async function AdminLeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ segment?: string; status?: string; q?: string; page?: string }>;
+  searchParams: Promise<{ segment?: string; status?: string; q?: string; page?: string; view?: string }>;
 }) {
   // The staff who actually call: super + sales + CS/ops.
   await requireAdmin(["super", "sales_admin", "sales", "ops"]);
@@ -71,6 +74,8 @@ export default async function AdminLeadsPage({
   const statusFilter: LeadCallStatus | "all" = isStatusFilter(sp.status) ? sp.status : "all";
   const q = typeof sp.q === "string" ? sp.q : "";
   const page = Math.max(1, Number(sp.page ?? "1") || 1);
+  // CRM depth (2026-06-08) — list (default) vs pipeline-kanban view.
+  const view: "list" | "board" = sp.view === "board" ? "board" : "list";
 
   const [statsRes, queueRes] = await Promise.all([
     getLeadStats(),
@@ -82,12 +87,17 @@ export default async function AdminLeadsPage({
   const hasMore = queueRes.ok ? Boolean(queueRes.data?.hasMore) : false;
   const queueErr = queueRes.ok ? null : queueRes.error;
 
+  // Bulk-load tags for the visible rows (one query) → chips in both views.
+  const tagsRes = await getTagsBulk(rows.map((r) => r.userid));
+  const tagsByUser = tagsRes.ok ? (tagsRes.data ?? {}) : {};
+
   // Preserve filters across the search form + pagination links.
   const carry = (over: Record<string, string | number>) => {
     const params = new URLSearchParams();
     params.set("segment", segment);
     if (statusFilter !== "all") params.set("status", statusFilter);
     if (q) params.set("q", q);
+    if (view !== "list") params.set("view", view);
     for (const [k, v] of Object.entries(over)) params.set(k, String(v));
     return `/admin/leads?${params.toString()}`;
   };
@@ -130,14 +140,14 @@ export default async function AdminLeadsPage({
           </div>
         </div>
 
-        {/* Segment tabs */}
-        <div className="flex flex-wrap gap-2">
+        {/* Segment tabs + list/board view toggle */}
+        <div className="flex flex-wrap items-center gap-2">
           {SEGMENTS.map((s) => {
             const active = s.key === segment;
             return (
               <Link
                 key={s.key}
-                href={`/admin/leads?segment=${s.key}`}
+                href={carry({ segment: s.key, page: 1 })}
                 className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
                   active
                     ? "border-primary-300 bg-primary-50 text-primary-700"
@@ -149,6 +159,25 @@ export default async function AdminLeadsPage({
               </Link>
             );
           })}
+          {/* View mode toggle (CRM depth · 2026-06-08) */}
+          <div className="ml-auto inline-flex rounded-xl border border-border overflow-hidden">
+            <Link
+              href={carry({ view: "list", page: 1 })}
+              className={`px-3 py-2 text-sm font-medium ${
+                view === "list" ? "bg-primary-50 text-primary-700" : "bg-white dark:bg-surface hover:bg-surface-alt"
+              }`}
+            >
+              รายการ
+            </Link>
+            <Link
+              href={carry({ view: "board", page: 1 })}
+              className={`px-3 py-2 text-sm font-medium border-l border-border ${
+                view === "board" ? "bg-primary-50 text-primary-700" : "bg-white dark:bg-surface hover:bg-surface-alt"
+              }`}
+            >
+              บอร์ด (Pipeline)
+            </Link>
+          </div>
         </div>
 
         {/* Search + active filters + CSV export — sales hands the cold list to
@@ -224,15 +253,19 @@ export default async function AdminLeadsPage({
           <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-12 text-center text-sm text-muted">
             ไม่พบลูกค้าที่ต้องโทรตาม
           </div>
+        ) : view === "board" ? (
+          // CRM depth (2026-06-08) — pipeline kanban view of this page's rows.
+          <LeadKanban rows={rows} tagsByUser={tagsByUser} />
         ) : (
           <div className="overflow-x-auto scrollbar-x-visible rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full min-w-[900px] text-sm">
               <thead className="bg-surface-alt text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-3 py-2.5">เบอร์โทร</th>
                   <th className="px-3 py-2.5">ชื่อ</th>
                   <th className="px-3 py-2.5">รหัส</th>
                   <th className="px-3 py-2.5 text-right">นำเข้า</th>
+                  <th className="px-3 py-2.5">แท็ก</th>
                   <th className="px-3 py-2.5">เซลล์ผู้ดูแล</th>
                   <th className="px-3 py-2.5">โทรล่าสุด</th>
                   <th className="px-3 py-2.5">สถานะ</th>
@@ -259,6 +292,9 @@ export default async function AdminLeadsPage({
                       </Link>
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{r.orderCount.toLocaleString("th-TH")}</td>
+                    <td className="px-3 py-2.5 min-w-[180px]">
+                      <TagChips userid={r.userid} initialTags={tagsByUser[r.userid] ?? []} compact />
+                    </td>
                     <td className="px-3 py-2.5 text-xs">{r.rep || <span className="text-muted">—</span>}</td>
                     <td className="px-3 py-2.5 text-xs whitespace-nowrap">{fmtDate(r.lastCall)}</td>
                     <td className="px-3 py-2.5"><CallStatusBadge status={r.callStatus} /></td>
@@ -271,8 +307,8 @@ export default async function AdminLeadsPage({
           </div>
         )}
 
-        {/* Pagination */}
-        {(page > 1 || hasMore) && (
+        {/* Pagination (list view only — the board shows the current page's rows) */}
+        {view === "list" && (page > 1 || hasMore) && (
           <div className="flex items-center justify-between">
             {page > 1 ? (
               <Link href={carry({ page: page - 1 })} className="rounded-lg border border-border px-3 py-2 text-sm hover:bg-surface-alt">

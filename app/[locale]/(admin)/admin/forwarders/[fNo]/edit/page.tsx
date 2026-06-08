@@ -165,6 +165,9 @@ type RawForwarderRow = {
   // 2026-06-05 (ภูม flag · freight-breakdown table) — juristic flag
   // for WHT 1% display per legacy detail.php L374.
   fusercompany:      string | null;
+  // B4 · backlog #259 (migration 0150 · 2026-06-08) — per-row cabinet
+  // lock flag. true = MOMO/partner sync skips fcabinetnumber on this row.
+  fcabinet_locked:   boolean | null;
 };
 
 export default async function AdminForwarderEditPage({
@@ -172,7 +175,11 @@ export default async function AdminForwarderEditPage({
 }: {
   params: Promise<{ fNo: string }>;
 }) {
-  await requireAdmin(["ops", "accounting", "super"]);
+  // 2026-06-08 (ภูม warehouse-handoff readiness): added "warehouse". Note
+  // `super` is redundant in the explicit list (require-admin.ts:142 always
+  // lets super through) — keeping it for paper-trail visibility. Warehouse
+  // staff need this to update cabinet number + status on rows they scan in.
+  await requireAdmin(["ops", "accounting", "super", "warehouse"]);
 
   const { fNo } = await params;
   const admin = createAdminClient();
@@ -198,7 +205,10 @@ export default async function AdminForwarderEditPage({
       // 2026-06-05 (ภูม flag · faithful-port edit-form wiring) — legacy
       // update.php override columns.
       "customrate, customratekg, customratecbm, " +
-      "ftransportprice, ftransportpricechnthb, fshippingservice, fusercompany",
+      "ftransportprice, ftransportpricechnthb, fshippingservice, fusercompany, " +
+      // B4 · backlog #259 (migration 0150 · 2026-06-08) — cabinet-lock flag
+      // for the TbForwarderActionPanel checkbox.
+      "fcabinet_locked",
     )
     .limit(1);
   q = isId ? q.eq("id", asNumber) : q.eq("fidorco", fNo);
@@ -337,7 +347,12 @@ export default async function AdminForwarderEditPage({
       : { label: "ฝากนำเข้าจาก : users", cls: "bg-gray-50 text-gray-600 border-gray-200" };
 
   const customerName = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || r.userid;
-  const slugForLink = r.fidorco ?? String(r.id);
+  // 2026-06-08 ภูม flag (URL 404 bug · 21,694 rows on prod = 45%):
+  // tb_forwarder.fidorco often contains literal `/` (e.g. "MODPK301890160035-1/2"
+  // · "รถ 790A/116"). Using fidorco verbatim in the URL turns the path into
+  // 2 segments and the dynamic [fNo] route 404s. Use numeric id (the detail
+  // + edit pages accept both id and fidorco for lookup).
+  const slugForLink = String(r.id);
 
   const currentStatusInt = parseInt(r.fstatus, 10);
 
@@ -820,6 +835,7 @@ export default async function AdminForwarderEditPage({
             currentCabinet={r.fcabinetnumber ?? ""}
             currentTrackingTh={r.ftrackingth ?? ""}
             currentNote={r.fnote ?? ""}
+            currentCabinetLocked={r.fcabinet_locked === true}
           />
         </div>
       </section>

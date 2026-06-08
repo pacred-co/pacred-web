@@ -21,7 +21,10 @@ import { SyncForm } from "./sync-form";
 export const dynamic = "force-dynamic";
 
 export default async function AdminCargoThaiPage() {
-  await requireAdmin(["ops", "accounting"]);
+  // 2026-06-08 (ภูม warehouse-handoff round 2): added "warehouse" — page
+  // surfaced via blockApiForwarderUpdate inside menuWarehouse:1041 so the
+  // warehouse role sees the "อัปเดต CargoThai" link, clicks → would 404.
+  await requireAdmin(["ops", "accounting", "warehouse"]);
 
   const admin = createAdminClient();
 

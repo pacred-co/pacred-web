@@ -29,6 +29,7 @@ import { getYuanPayment } from "@/actions/payment";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { getMyTaxInvoiceForOrder } from "@/actions/tax-invoices";
 import { TaxInvoiceRequestPanel } from "@/components/tax-invoice-request-panel";
+import { isShopYuanTaxInvoiceEnabled } from "@/lib/tax/shop-yuan-flag";
 
 export const dynamic = "force-dynamic";
 
@@ -99,6 +100,10 @@ export default async function YuanPaymentDetailPage({
   const existingInvoice = taxInv.ok ? taxInv.data : null;
   const profile = profileRow.data;
   const corp    = corporateRow.data;
+
+  // 0152 LIVE-GATE — yuan ใบกำกับ/ใบขน is LIVE only when the flag is ON;
+  // otherwise the panel keeps the "coming soon" (deferred) banner.
+  const shopYuanTaxLive = await isShopYuanTaxInvoiceEnabled();
 
   const buyerTaxId   = (corp?.tax_id ?? profile?.tax_id ?? "").replace(/\D/g, "");
   const isEligible   = buyerTaxId.length === 13 && yp.status === "completed";
@@ -179,8 +184,8 @@ export default async function YuanPaymentDetailPage({
             }}
             existing={existingInvoice}
             eligible={isEligible}
-            /* ADR-0027 — yuan ใบกำกับภาษี deferred (no World-B cross-type store yet). */
-            deferred
+            /* 0152 — yuan ใบกำกับ/ใบขน is LIVE when the flag is on; deferred when off. */
+            deferred={!shopYuanTaxLive}
           />
         ) : (
           <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">

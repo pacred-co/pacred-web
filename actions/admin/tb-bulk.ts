@@ -29,6 +29,9 @@ import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
 import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
+import { issueYuanTaxInvoice } from "@/lib/admin/yuan-tax-invoice";
+import { isShopYuanTaxInvoiceEnabled } from "@/lib/tax/shop-yuan-flag";
+import { modeFromPref } from "@/lib/tax/tax-doc-mode";
 import { spendCashbackAtCheckout } from "./wallet-hs";
 import { cashbackRefId, parseCashbackNoteTag } from "@/lib/cashback/note-tag";
 
@@ -402,7 +405,7 @@ export async function adminBulkApproveYuanPaymentsTb(
 
       const { data: rows, error: readErr } = await admin
         .from("tb_payment")
-        .select("id, userid, payyuan, paystatus")
+        .select("id, userid, payyuan, paystatus, tax_doc_pref")
         .in("id", ids)
         .eq("paystatus", "1");
       if (readErr) return { ok: false, error: readErr.message };
@@ -411,16 +414,50 @@ export async function adminBulkApproveYuanPaymentsTb(
       }
 
       const nowIso = new Date().toISOString();
+      const approvedRows = rows as unknown as Array<{
+        id: number; userid: string | null; tax_doc_pref: string | null;
+      }>;
 
       // Bulk UPDATE in one call (no per-row balance work needed).
       const { error: updErr } = await admin
         .from("tb_payment")
         .update({ paystatus: "2", adminid: legacyAdminId, paydateadmin: nowIso })
-        .in("id", rows.map((r) => (r as { id: number }).id))
+        .in("id", approvedRows.map((r) => r.id))
         .eq("paystatus", "1");
 
       if (updErr) {
         return { ok: false, error: updErr.message };
+      }
+
+      // ── TAX-DOCUMENT BRIDGE for ฝากโอน (bulk yuan-approve · migration 0152) ──
+      //   Same contract as adminUpdateYuanPayment's single-row hook: for each
+      //   just-approved (paystatus now '2') yuan row whose customer chose a VAT
+      //   document (tb_payment.tax_doc_pref · 0140), issue a ใบกำกับ/ใบขน into
+      //   the tb_*-native store (0152). 🔴 GATED behind tax_invoice.shop_yuan_enabled
+      //   (default OFF → no document). BEST-EFFORT · idempotent on payment id ·
+      //   the "ฝากโอนกับเราเท่านั้น" completed-gate is enforced in the issuer.
+      try {
+        if (await isShopYuanTaxInvoiceEnabled()) {
+          for (const r of approvedRows) {
+            const docMode = modeFromPref(r.tax_doc_pref);
+            if (docMode === "none") continue;
+            const taxRes = await issueYuanTaxInvoice(admin, {
+              paymentId: r.id,
+              userid:    r.userid ?? undefined,
+              issuedBy:  "system-auto",
+              mode:      docMode,
+            });
+            if (!taxRes.ok && !taxRes.alreadyIssued) {
+              logger.warn("tb-bulk", "bulk yuan tax-invoice bridge failed (non-fatal · approval stands)", {
+                payment_id: r.id, userid: r.userid, mode: docMode, error: taxRes.error,
+              });
+            }
+          }
+        }
+      } catch (e) {
+        logger.warn("tb-bulk", "bulk yuan tax-invoice bridge threw (non-fatal)", {
+          error: e instanceof Error ? e.message : String(e),
+        });
       }
 
       const processed = rows.length;

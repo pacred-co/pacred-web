@@ -64,6 +64,9 @@ import { uploadToBucket } from "@/lib/storage/upload";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { cashbackRefId, parseCashbackNoteTag } from "@/lib/cashback/note-tag";
 import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
+import { issueShopTaxInvoice } from "@/lib/admin/shop-tax-invoice";
+import { isShopYuanTaxInvoiceEnabled } from "@/lib/tax/shop-yuan-flag";
+import { modeFromPref } from "@/lib/tax/tax-doc-mode";
 import { logger } from "@/lib/logger";
 
 // ────────────────────────────────────────────────────────────
@@ -1372,6 +1375,63 @@ export async function adminApproveWalletDeposit(
       // No wallet credit on linked-slip approve (legacy L621-633 explicit
       // comment: "ไม่เติมเพิ่ม"). The topup amount was already counted via
       // the type='7' sibling debits.
+
+      // ──────────────────────────────────────────
+      // (v) TAX-DOCUMENT BRIDGE for ฝากสั่งซื้อ (shop payment-land · 0152).
+      //
+      //   When a shop-order slip is approved here, the order is paid → if the
+      //   customer chose a VAT document at /cart (tb_header_order.tax_doc_pref =
+      //   'tax_invoice' ใบกำกับ / 'customs' ใบขน · migration 0127) we issue one
+      //   into the tb_*-native store (migration 0152) via issueShopTaxInvoice.
+      //
+      //   🔴 GATED behind the default-OFF flag tax_invoice.shop_yuan_enabled —
+      //   when the flag is off (default) NO tax document is minted (the feature
+      //   ships DORMANT · deploying changes nothing until the owner flips it).
+      //
+      //   BEST-EFFORT — a tax-doc failure NEVER undoes the wallet/parent legs
+      //   (the money already moved · the tax document is a follow-on). Idempotent
+      //   on hno inside the issuer (no double-mint). 'receipt'/NULL (ไม่รับเอกสาร)
+      //   rows are skipped.
+      // ──────────────────────────────────────────
+      try {
+        const shopHnos = links
+          .filter((l) => classifyHnoParent(l.hno) === "shop_order")
+          .map((l) => l.hno);
+        if (shopHnos.length > 0 && (await isShopYuanTaxInvoiceEnabled())) {
+          for (const shopHno of shopHnos) {
+            // Read this order's chosen tax-doc mode.
+            const { data: hoTax, error: hoTaxErr } = await admin
+              .from("tb_header_order")
+              .select("tax_doc_pref")
+              .eq("hno", shopHno)
+              .eq("userid", userid)
+              .maybeSingle<{ tax_doc_pref: string | null }>();
+            if (hoTaxErr) {
+              logger.warn("wallet-hs", "shop tax-doc pref read failed (non-fatal)", {
+                wallet_hs_id: id, userid, hno: shopHno, error: hoTaxErr.message,
+              });
+              continue;
+            }
+            const docMode = modeFromPref(hoTax?.tax_doc_pref);
+            if (docMode === "none") continue; // ไม่รับเอกสาร → no VAT document
+            const taxRes = await issueShopTaxInvoice(admin, {
+              userid,
+              hno: shopHno,
+              issuedBy: "system-auto",
+              mode: docMode,
+            });
+            if (!taxRes.ok && !taxRes.alreadyIssued) {
+              logger.warn("wallet-hs", "shop tax-invoice bridge failed (non-fatal · payment stands)", {
+                wallet_hs_id: id, userid, hno: shopHno, mode: docMode, error: taxRes.error,
+              });
+            }
+          }
+        }
+      } catch (e) {
+        logger.warn("wallet-hs", "shop tax-invoice bridge threw (non-fatal)", {
+          wallet_hs_id: id, userid, error: e instanceof Error ? e.message : String(e),
+        });
+      }
 
       await logAdminAction(adminId, "tb_wallet_hs.approve_deposit", "tb_wallet_hs", String(id), {
         userid,
