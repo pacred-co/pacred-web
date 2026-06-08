@@ -266,6 +266,18 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
 
         {!paidViaWallet && (
           <>
+            {/* Bank-account block — owner 2026-06-08: customers transfer to the
+                company account, type the amount, attach slip (staff verify). No
+                dynamic/amount-encoded PromptPay. */}
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-1">
+              <p className="text-sm font-bold text-foreground">โอนเข้าบัญชีบริษัท</p>
+              <p className="text-sm text-foreground">
+                บัญชี: <b className="font-mono">225-2-91144-0</b> · บจก. แพคเรด (ประเทศไทย) · ธนาคารกสิกรไทย
+              </p>
+              <p className="text-xs text-muted">
+                โอนยอด <b>฿{thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</b> เข้าบัญชีด้านบน แล้วแนบสลิป (ทีมงานตรวจสอบ)
+              </p>
+            </div>
             <div className="space-y-1">
               <span className="text-sm font-medium">{t("slipUploadLabel")}<span className="text-red-600 ml-0.5">*</span></span>
               <StyledFileInput

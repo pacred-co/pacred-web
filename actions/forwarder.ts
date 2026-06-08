@@ -11,7 +11,7 @@ import { sendNotification } from "@/lib/notifications";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { validateStoredFile } from "@/lib/file-validation";
-import { buildPromptPayPayload, buildPromptPayQrDataUrl, PromptPayConfigError } from "@/lib/promptpay";
+import { buildPromptPayQrDataUrl } from "@/lib/promptpay";
 import { appendCashbackNoteTag } from "@/lib/cashback/note-tag";
 
 type ActionResult<T = void> =
@@ -238,20 +238,13 @@ export async function getForwarderPaymentQr(
   if (!Number.isFinite(amountThb) || amountThb <= 0) {
     return { ok: false, error: "promptpay_invalid_amount" };
   }
-  // PROMPTPAY_ID — Pacred's own PromptPay collection id (env-driven,
-  // shared with /wallet/deposit). NOT the legacy PCS Cargo id.
-  const promptPayId = process.env.PROMPTPAY_ID;
-  if (!promptPayId) {
-    return { ok: false, error: "promptpay_not_configured" };
-  }
-  try {
-    const payload = buildPromptPayPayload(amountThb);
-    const dataUrl = await buildPromptPayQrDataUrl(amountThb);
-    return { ok: true, data: { dataUrl, payload, promptPayId } };
-  } catch (err) {
-    if (err instanceof PromptPayConfigError) return { ok: false, error: err.code };
-    return { ok: false, error: "qr_failed" };
-  }
+  // 2026-06-08 (owner): NO dynamic PromptPay. Serve the STATIC company K-Shop QR
+  // (lib/promptpay.ts) bound to the corporate bank account (site.ts BANK). The
+  // customer scans, types the amount, transfers, attaches slip; staff verify.
+  // `promptPayId` now carries the bank ACCOUNT NUMBER so the modal shows the
+  // real destination ("บัญชี 225-2-91144-0 · บจก. แพคเรด"); `payload` is unused.
+  const dataUrl = await buildPromptPayQrDataUrl(amountThb);
+  return { ok: true, data: { dataUrl, payload: "", promptPayId: BANK.accountNumber } };
 }
 
 // ────────────────────────────────────────────────────────────

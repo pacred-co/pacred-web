@@ -298,6 +298,10 @@ export default async function WalletPage() {
             {/* gold accent bar — legacy progress band (purely decorative) */}
             <div className="mt-4 h-1.5 w-full bg-gradient-to-r from-[#ff7216] to-[#ffb07c]" />
 
+            {/* Wallet TOP-UP ("เติมเงิน") button hidden — owner 2026-06-07:
+                top-up is cancelled. The /wallet/deposit route is kept (still
+                used elsewhere) but the CTA is removed; the wallet only shows
+                balance + history now (cashback used as a discount at checkout).
             <div className="px-5 py-4 text-center md:px-6">
               <Link
                 href="/wallet/deposit"
@@ -309,6 +313,8 @@ export default async function WalletPage() {
                 {t("topUpWallet")}
               </Link>
             </div>
+            */}
+            <div className="px-5 pb-4" />
           </section>
 
                         {/* ── 4-tab wallet-history panel — wallet.php L132-227 ──
@@ -548,7 +554,24 @@ export default async function WalletPage() {
                             ></div>
                             <h5 className="text-center">{t("companyLegalName")}</h5>
                             <div id="amount-show" style={{ textAlign: "center" }}></div>
-                            <div className="text-right">
+                            {/* Bank account block — owner 2026-06-07: customers
+                                scan the static company QR + type the amount
+                                themselves + attach a slip (staff verify). The QR
+                                no longer encodes an amount, so the bank account
+                                number is shown explicitly beside it. */}
+                            <div className="mx-auto mt-2 max-w-xs rounded-lg border border-border bg-surface-alt/40 p-3 text-left">
+                              <p className="text-sm font-bold text-foreground">
+                                บัญชี: 225-2-91144-0
+                              </p>
+                              <p className="text-xs text-muted">
+                                บจก. แพคเรด (ประเทศไทย) · ธนาคารกสิกรไทย
+                              </p>
+                              <p className="mt-2 text-[11px] leading-snug text-muted">
+                                สแกน QR แล้วกรอกจำนวนเงินที่ต้องชำระเอง → โอนแล้วแนบสลิป
+                                (ทีมงานตรวจสอบ)
+                              </p>
+                            </div>
+                            <div className="mt-2 text-right">
                               <a href="/wallet/deposit" target="_blank">
                                 {t("howToTopUp")}
                               </a>
