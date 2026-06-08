@@ -3,6 +3,25 @@
 
 ---
 
+# 🌊 2026-06-09 — เดฟ: 5-wave autonomous code sprint + nav-fix + phone-dedupe + self-audit harden · ALL on main · read FIRST
+
+> **main = dave-pacred = Poom-pacred = InwPond007 = `423d17cb`** (all synced) · `pnpm verify` + `pnpm build` EXIT 0 every save-point · migration **0157** applied prod (NEXT FREE = **0158**). Owner: "เอางาน code ล้วนมาแยกร่าง เคลียเป็น phase เล็ก→ใหญ่ run long" → ran 5 worktree-agent waves (3 agents/wave · serial-merge + gate + push-per-wave · every wave merged clean). Then "เก็บงานให้ดีก่อนไปต่อ" → self-audit + fixed the gaps.
+
+**Shipped (each gated + pushed main):**
+1. **PR112/PR10584 dup-merge** (retire empty dup `userStatus='0'`) + **root-cause phone-dedupe guard** in `adminCreateNew` (refuse phone already in tb_users · `allow_existing_phone` override) + detection tool `scripts/find-cross-system-phone-dups.mjs` (37 dups = review backlog) · learning [`duplicate-identity-cross-system.md`].
+2. **W1:** services-catalogue UI fixes (ส่งออก→soon · soon-cards non-nav · +consignment/bill-payment) · auto-cancel cron repoint `service_orders`(0-row)→`tb_header_order` (reuse `autoExpireOverdueShopOrder`) · public freight wizard → `composeFreightQuote` (customer-safe SELL-only).
+3. **W2:** **admin CRUD `/admin/freight/rates`** → `tb_freight_rate` (0145 · confirm-gated · unblocks net-margin) · wallet-reconcile cron (read-only drift/overdraft) · `/admin/reports/lead-source` attribution dashboard.
+4. **W3:** `/admin/tools/china-category` lookup (77k rows · **0157** GIN) · freight cost-loop verified complete (consumer already wired).
+5. **W4:** daily container-bulletin cron (Phase-B's last un-built item) · **local Code128 barcode** (`lib/barcode.ts` bwip-js · drop external `pcscargo.co.th/barcode.php` · §3-safe) · 98 test assertions (freight money-safety).
+6. **W5:** 30 assertions on forwarder NET-total + WHT · −966 LOC orphan cleanup.
+7. **nav-split fix:** primary `/service-order` page now has the REAL `<BulkPayBar>` multi-select pay-from-wallet (was a Potemkin placeholder linking `?q=2`) — reuses the proven `/add` islands + `payServiceOrderFromWallet`; ปอน's design kept. (`/add` redirect deferred — it has paste-search + cart/search nav.)
+8. **Self-audit harden** (`423d17cb`): 4-auditor sweep (§0c/§0d/§0e/§0f/i18n/money) → **all money + customer-safety CLEAN**; fixed 1 🔴 (freight-wizard raw-i18n-key leak — `freightQuoteWizard.service.*` was missing both locales · the gate misses template-literal keys) + 4 🟠 (freight rate-lookup ordering · getFreightRates loadFailed banner · stale cron desc · lead-source RBAC↔hub mismatch).
+
+**🟠 Flagged (not done):** 3c `/service-order/add` dedup redirect (spawn_task · needs cart/search flow-trace) · the 37 phone-dup review backlog.
+**🔴 NEXT TIER = owner-blocked** (run-long stopped here — building blind = wrong): FX yuan-rate source (price-sensitive) · slip-OCR · PEAK 2-way · CargoThai producer · the 8 TBD catalogue services (product specs) · freight P&L ledger (needs rate data). Plus the 2026-06-08 owner items below (flip `shop_yuan_enabled`, juristic-signup confirm, prod-data confirm, env).
+
+---
+
 # 🏁 2026-06-08 SESSION CLOSE — เดฟ: URGENT juristic fix + full team-merge + freight inbox + cargo/CRM/ใบกำกับ builds → ALL on main · ย้ายคอมกลับบ้าน · read FIRST
 
 > **🏁 SESSION CLOSE (เดฟ · machine-move home).** Resume on the home machine: `git fetch origin && git pull origin main` — **everything today is on main = dave-pacred = Poom-pacred = InwPond007 (synced at close)**. `pnpm verify` + prod build (direct-node) EXIT 0 at every save-point. **9 migrations applied prod (0148–0156 · NEXT FREE = 0157).**

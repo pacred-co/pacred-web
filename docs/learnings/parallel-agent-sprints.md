@@ -262,3 +262,42 @@ surfaces + reconstruct i18n keys. Two recurring failure modes:
 
 **General rule:** an agent's report says what it INTENDED; verify the working
 tree + gate before trusting it. trust-but-verify, every fan-out.
+
+---
+
+## [2026-06-09] The wave pattern at scale + the template-literal i18n gate-gap
+
+**Wave-based worktree-agent sprints work flawlessly when the integrator owns the merge.**
+A 7-wave autonomous run (5 build waves + nav-fix + a self-audit) shipped to prod
+with zero lost work and zero broken merges using this exact loop, repeated per wave:
+
+1. Spawn **3 worktree-isolation agents** (Agent tool, `isolation: "worktree"`) on
+   DISJOINT files, each: resync to `dave-pacred` → build ONE feature → self-gate
+   (`pnpm typecheck` + `lint`, NOT full build — too slow per agent) → **commit in
+   its worktree** → report `BRANCH:`/`COMMIT:`.
+2. Integrator (you) merges each agent's worktree branch into the main checkout
+   **serially** (`git merge worktree-agent-<id> --no-edit`), runs the FULL gate
+   ONCE (`pnpm verify` + `pnpm build`), pushes the wave as one save-point, FFs the
+   teammate branches, then `git worktree remove --force` + `git branch -D` cleanup.
+3. i18n JSON + `lib/admin/sidebar-menu.ts` auto-merged cleanly every time even when
+   two agents both added a key/leaf (different insertion points). When they DON'T,
+   resolve keep-BOTH (the package.json-test-list pattern).
+
+Agents are good at **scope honesty** when told to be: of 15 wave-agents, 3 returned
+"already done / NEEDS-MORE / REPORT-ONLY" instead of force-building (e.g. the
+freight cost-lookup was already wired; `tb_api_china_hs` had a different schema
+than the prompt assumed → built against the real columns). Always give the escape
+hatch ("if scope is bigger/different, report — don't force a half-build").
+
+**The gate gap that a self-audit caught (do NOT rely on the i18n audits alone):**
+A `t(\`service.${val}.label\`)` template-literal key on the public freight wizard
+rendered the RAW key path in prod because `freightQuoteWizard.service` was missing
+from BOTH locales. **Neither i18n gate caught it:** `audit:i18n` only checks th↔en
+PARITY (both equally empty = "parity OK"), and `i18n-key-audit.mjs` **skips
+template-literal keys by design** (can't statically resolve `${val}`). So a whole
+dynamic-key namespace can be absent and the gate stays green. **Rules:** (a) any
+`t(\`ns.${x}.key\`)` dynamic key MUST be manually verified against the message files
+(or add a next-intl `getMessageFallback` so a miss is visible, not silent); (b) run
+a periodic self-audit (§0c/§0d/§0e/§0f/i18n/money) over a session's shipped work
+BEFORE moving on — it found this 🔴 + 4 🟠 that all passed `pnpm verify`. The audit
+also re-confirmed the money/customer-safety surfaces, which is the higher-value half.
