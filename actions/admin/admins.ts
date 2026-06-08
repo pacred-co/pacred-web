@@ -6,6 +6,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
+import { findLegacyUserIdByPhone } from "@/lib/auth/legacy-bridge-tb-users";
+import { normalizePhone } from "@/lib/utils/phone";
 import {
   AdminCreateSchema,
   AdminUpdateSchema,
@@ -771,6 +773,22 @@ export async function adminCreateNew(
     ["super"],
     async ({ adminId }) => {
       const admin = createAdminClient();
+
+      // ── 0. Cross-system phone dedupe (เดฟ 2026-06-08 · root-cause fix for
+      //       the PR112/PR10584 duplicate-identity bug) ──────────────
+      // The customer-create paths (register · adminCreateCustomer) already
+      // refuse when a phone belongs to an existing tb_users customer; the
+      // admin-create path did NOT — so provisioning an admin for a person who
+      // was already a (often migrated/cold) legacy customer minted a SECOND
+      // member_code. We surface the existing code and refuse unless the operator
+      // explicitly confirms (allow_existing_phone) that they intend to make this
+      // existing customer into staff.
+      if (d.phone && !d.allow_existing_phone) {
+        const existing = await findLegacyUserIdByPhone(admin, normalizePhone(d.phone));
+        if (existing) {
+          return { ok: false, error: `phone_exists_customer:${existing}` };
+        }
+      }
 
       // ── 1. Provision Supabase auth.user ────────────────────────
       const { data: authData, error: authErr } = await admin.auth.admin.createUser({
