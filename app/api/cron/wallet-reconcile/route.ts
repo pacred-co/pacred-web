@@ -1,7 +1,11 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { instrumentCron } from "@/lib/cron/instrument";
 import { captureIncident } from "@/lib/observability/incident-store";
-import { sumAvailableBalance } from "@/lib/wallet/balance";
+import {
+  detectWalletAnomaly,
+  compareOffendersWorstFirst,
+  type Offender,
+} from "@/lib/wallet/reconcile-anomaly";
 import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
@@ -66,9 +70,9 @@ export const dynamic = "force-dynamic";
  * Per AGENTS.md §0c — every Supabase query destructures `error`.
  */
 
-// |drift| below this (THB) is float noise, not a real anomaly. wallettotal
-// + amount are numeric(10,2); 0.01 is one satang.
-const EPSILON = 0.01;
+// The anomaly predicate (stored<0 / spendable<0) + its 1-satang EPSILON
+// + the worst-first comparator live in lib/wallet/reconcile-anomaly.ts so
+// they are unit-tested; this handler only does the I/O around them.
 
 // Per-run wallet cap. ~9k rows fit comfortably; the cap bounds memory + the
 // PostgREST page size and is reported (never silent) when the base exceeds it.
@@ -82,15 +86,6 @@ const TOP_N = 15;
 
 type WalletRow = { userid: string; wallettotal: number | string | null };
 type HsRow = { userid: string; amount: number | string; status: string | null; type: string | null };
-
-type Offender = {
-  userid: string;
-  stored: number;
-  /** Spendable = stored − Σ open pending-debits (reused sumAvailableBalance). */
-  spendable: number;
-  /** Which invariant(s) the wallet violated. */
-  reasons: string[];
-};
 
 export async function GET(request: Request) {
   return instrumentCron({
@@ -178,32 +173,22 @@ export async function GET(request: Request) {
       }
 
       // ── 3) Detect anomalies — UNAMBIGUOUS invariants only ──────────────
+      // The predicate (rounding · EPSILON · the two invariants · the reused
+      // sumAvailableBalance derivation) lives in detectWalletAnomaly, which
+      // is unit-tested in lib/wallet/reconcile-anomaly.test.ts.
       const offenders: Offender[] = [];
       for (const w of wallets) {
-        const stored = Number(w.wallettotal ?? 0);
-        const storedRounded = Math.round((Number.isFinite(stored) ? stored : 0) * 100) / 100;
         const pending = pendingByUser.get(w.userid) ?? [];
-        // REUSE the authoritative spendable derivation. Same reducer the
-        // checkout overdraw-guard uses — sign rules are NOT re-implemented.
-        const spendable = sumAvailableBalance(storedRounded, pending);
-
-        const reasons: string[] = [];
-        if (storedRounded < -EPSILON) reasons.push("stored_negative");
-        if (spendable < -EPSILON) reasons.push("pending_overdraft");
-
+        const { stored, spendable, reasons } = detectWalletAnomaly(w.wallettotal, pending);
         if (reasons.length > 0) {
-          offenders.push({ userid: w.userid, stored: storedRounded, spendable, reasons });
+          offenders.push({ userid: w.userid, stored, spendable, reasons });
         }
       }
 
       const drifted = offenders.length;
 
       // Worst first — most negative stored balance, then most negative spendable.
-      offenders.sort((a, b) => {
-        const aw = Math.min(a.stored, a.spendable);
-        const bw = Math.min(b.stored, b.spendable);
-        return aw - bw;
-      });
+      offenders.sort(compareOffendersWorstFirst);
       const top = offenders.slice(0, TOP_N);
 
       // ── 4) Alert (only when something is wrong) ────────────────────────

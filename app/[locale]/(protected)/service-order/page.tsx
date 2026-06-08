@@ -5,6 +5,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 import {
+  computeShopOrderPayableThb,
+  isShopOrderPayable,
+} from "@/lib/payment/shop-order-total";
+import {
   BulkActionsProvider,
   BulkPayBar,
   RowCheckbox,
@@ -298,14 +302,9 @@ export default async function ServiceOrderPage({
   // payServiceOrderFromWallet re-verifies ownership/balance/idempotency per
   // row server-side, so these numbers are display-only (not the boundary).
   const totalsMap = new Map<string, number>(
-    rows.map((r) => [
-      r.hno,
-      (Number(r.htotalpricechn ?? 0) + Number(r.hshippingchn ?? 0)) *
-        Number(r.hrate ?? 0) +
-        Number(r.hshippingservice ?? 0),
-    ]),
+    rows.map((r) => [r.hno, computeShopOrderPayableThb(r)]),
   );
-  const payableHNos = rows.filter((r) => r.hstatus === "2").map((r) => r.hno);
+  const payableHNos = rows.filter((r) => isShopOrderPayable(r.hstatus)).map((r) => r.hno);
   const supabaseRLS = await createClient();
   const walletBalance =
     (await getWalletAvailableBalance(supabaseRLS, data.user.id)) ?? 0;
@@ -489,10 +488,7 @@ function OrderCard({
     noteLabel: string;
   };
 }) {
-  const pricePayNum =
-    (Number(row.htotalpricechn ?? 0) + Number(row.hshippingchn ?? 0)) *
-      Number(row.hrate ?? 0) +
-    Number(row.hshippingservice ?? 0);
+  const pricePayNum = computeShopOrderPayableThb(row);
   const pricePay = numberFormat2(pricePayNum);
 
   // hCover URL resolution (preserved from legacy shops.php L969-978).
