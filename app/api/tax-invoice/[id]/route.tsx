@@ -8,7 +8,9 @@
  * Auth & visibility:
  *   - Row visibility is gated by tax_invoices RLS:
  *       customer → own rows (profile_id = auth.uid())
- *       admin    → all rows when is_admin(['super','accounting'])
+ *       admin    → all rows when is_admin(['super','accounting',
+ *                  'freight_export_doc','freight_import_doc',
+ *                  'freight_clearance_both'])  (migration 0148, 2026-06-08)
  *   - We DO NOT use the admin client for the row lookup — RLS does the
  *     access decision. If the SELECT returns null, caller is unauthorised
  *     OR the row doesn't exist. Either way → 404.

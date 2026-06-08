@@ -16,7 +16,8 @@
  * issuing authority (boxes 4 + 12 stay blank). The component header
  * banner makes that explicit.
  *
- * Auth + visibility + cache headers all mirror the CI route.
+ * Auth + visibility + cache headers all mirror the CI route (incl. migration
+ * 0148 broadening RLS to admit freight_*_doc roles for SELECT).
  */
 
 import { NextResponse } from "next/server";

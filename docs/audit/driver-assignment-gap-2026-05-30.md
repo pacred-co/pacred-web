@@ -193,3 +193,36 @@ The 5 P0 items are mutually dependent (you can't list batches without rewriting 
 ---
 
 **End of audit.** P0 (5 items) ships in this commit. P1+P2 deferred to follow-up waves with ภูม decisions above.
+
+---
+
+## 🪦 2026-06-08 — §0e dead-write closure log (Lane B3)
+
+**Status:** `actions/admin/forwarder-drivers.ts` ANNOTATED with `@deprecated` JSDoc header (NOT yet physically renamed — requires UI chain unwind first).
+
+### Per-function classification
+
+| # | Function | Reads/Writes | Caller chain | Verdict |
+|---|---|---|---|---|
+| 1 | `searchDriversByQuery` | reads `admins`+`profiles` (search · not write) | `forwarders/[fNo]/driver-combobox.tsx` → `driver-assign-form.tsx` → `forwarders/[fNo]/page.tsx:220` rebuilt `forwarders` branch | 🟡 orphan-via-chain (rebuilt parent = 0 rows on prod → branch never reaches prod render) |
+| 2 | `adminAssignDriverToForwarder` | writes rebuilt `forwarder_driver` (0 rows on prod) | same chain | 🟡 orphan-via-chain |
+| 3 | `adminUpdateDriverAssignmentStatus` | writes rebuilt `forwarder_driver` | `drivers/actions-cell.tsx` (`DriverAssignmentActions` · NO importers anywhere) | ✅ pure orphan |
+| 4 | `driverUpdateOwnAssignmentStatus` | writes rebuilt `forwarder_driver` | `driver-runs/action-buttons.tsx` → `driver-runs/page.tsx` (sidebar-linked, BUT page reads rebuilt `forwarder_driver` → always empty → buttons never render) | 🟡 orphan-via-empty-page |
+
+### Prod probe (2026-06-08 against `lozntlidlqqzzcaathnm`)
+- Rebuilt `forwarder_driver` = **0 rows** ✅ confirms dead twin
+- Rebuilt `forwarders` = **0 rows** ✅ confirms rebuilt branch never reaches prod render path
+- Legacy `tb_forwarder_driver` + `tb_forwarder_driver_item` = populated (LIVE driver path via `actions/admin/driver-batches.ts` + `actions/admin/driver-work.ts`)
+
+### Why annotated (not physically tombstoned yet)
+4 UI files still import these functions. Renaming to `.tombstone.ts` would break TypeScript build. Sequenced unwind required:
+1. `lib/admin/sidebar-menu.ts` — drop `driver.toDeliver` + `driver.history` entries
+2. Retire `/admin/driver-runs` page (always empty)
+3. Delete `/admin/drivers/actions-cell.tsx` (pure orphan)
+4. Delete `forwarders/[fNo]/driver-combobox.tsx` + `driver-assign-form.tsx` (rebuilt-branch only)
+5. Retarget OR retire `app/api/cron/expire-driver-assignments/route.ts` (ภูม decision #3 above)
+6. Then physically rename `actions/admin/forwarder-drivers.ts` → `.tombstone.ts`
+7. Final cleanup commit
+
+### Adjacent dead-write flagged (NOT touched this lane)
+`app/api/cron/expire-driver-assignments/route.ts` runs hourly + writes `UPDATE forwarder_driver SET status='3' WHERE …` against the dead twin → silent no-op. Tracked as ภูม decision #3 in this doc — needs Owner/ภูม retarget/retire call.
