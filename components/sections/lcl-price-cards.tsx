@@ -180,7 +180,7 @@ const WAREHOUSE_CARDS: WarehouseCard[] = [
     image: "/images/main/importcard/wiwu.png", accent: "from-amber-400/30 to-orange-700/40",
     rates: [
       { mode: "road", label: "ทางรถ",  code: "LCL · TRUCK", price: "฿5,300", unit: "/CBM", kgRate: "฿18/kg" },
-      { mode: "sea",  label: "ทางเรือ", code: "LCL · SEA",   price: "฿3,300", unit: "/CBM", kgRate: "฿11/kg" },
+      { mode: "sea",  label: "ทางเรือ", code: "LCL · SEA",   price: "฿2,900", unit: "/CBM", kgRate: "฿11/kg" },
       { mode: "air",  label: "ทางแอร์", code: "LCL · AIR",   price: "สอบถาม", unit: "/kg" },
     ],
   },

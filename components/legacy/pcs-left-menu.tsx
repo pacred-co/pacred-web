@@ -224,6 +224,13 @@ export async function PcsLeftMenu({ data }: { data: PcsChromeData }) {
           <SubLink href="/service-import/add">{t("addImport")}</SubLink>
           <SubLink href="/service-import/estimate">{t("estimateImport")}</SubLink>
           <SubLink href="/service-import?q=7">{t("importHistory")}</SubLink>
+          {/* 2026-06-08 (เดฟ · §0d reachability) — wire 2 orphans that were
+              reachable only by URL: ประวัติใบเสร็จนำเข้า (legacy left-menu.php
+              L74 receipt-f-hs · was missing from the sidebar) + ติดตามสถานะตู้
+              (the T-P2 cargo-tracking list /shipments · was only in the dead
+              ProtectedSidebar). Both routes exist + read live data. */}
+          <SubLink href="/service-import/receipts">{t("importReceiptHistory")}</SubLink>
+          <SubLink href="/shipments">{t("shipmentTracking")}</SubLink>
           {/* 2026-06-05 (ภูม REVERT) — /billing-run ไม่ใส่ใน sidebar เพราะ
               admin notify ลูกค้าผ่าน SMS+LINE อยู่แล้ว + tab "รอชำระ"
               (`?q=5` ด้านบน) cover ช่องทาง pay ทั้งหมด. ใส่เพิ่ม = clutter ·
@@ -275,6 +282,20 @@ export async function PcsLeftMenu({ data }: { data: PcsChromeData }) {
           <MenuBadge n={data.countPaymentDue} />
         </Link>
 
+        {/* สแกนจ่าย QR — generic static-QR pay screen (owner 2026-06-08, /pay).
+            Wired per §0d (was orphan — owner built it but no entry existed). */}
+        <Link
+          href="/pay"
+          className="nav-item flex items-center gap-3 px-4 py-3 text-sm font-medium text-foreground hover:bg-gray-50 active:bg-gray-100"
+        >
+          <img
+            src="/images/home/iconfloating/pcs-payment.png"
+            alt=""
+            className="pcs-icon h-6 w-6"
+          />
+          <span>{t("scanPay")}</span>
+        </Link>
+
         {/* กระเป๋าสตางค์เงินสด */}
         <PcsLeftMenuAccordion
           icon="/images/home/iconfloating/pcs-wallet.png"
@@ -283,6 +304,9 @@ export async function PcsLeftMenu({ data }: { data: PcsChromeData }) {
           <SubLink href="/wallet">{t("accountStatement")}</SubLink>
           <SubLink href="/wallet/withdraw">{t("withdraw")}</SubLink>
           <SubLink href="/wallet/deposit">{t("deposit")}</SubLink>
+          {/* สถานะการคืนเงิน (/refunds) — wired per §0d (was orphan in the
+              dead ProtectedSidebar). Reads live tb_* refund status. */}
+          <SubLink href="/refunds">{t("refundStatus")}</SubLink>
         </PcsLeftMenuAccordion>
 
         {/* กระเป๋าสตางค์เครดิต (creditUser only) */}

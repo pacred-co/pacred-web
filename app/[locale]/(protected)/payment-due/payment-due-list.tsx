@@ -165,6 +165,7 @@ export function PaymentDueList({ items }: { items: PaymentDueItem[] }) {
         showMaoStrip={false}
         columnCount={8}
         maoPromos={[]}
+        defaultContainerOpen={false}
       />
     ) : null;
 

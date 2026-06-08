@@ -971,13 +971,15 @@ export default async function ServiceImportDetailPage({
             </div>
           </div>
 
-          {/* ── 7/8-step process tracker ── forwarder.php L1826-1906 ──
-              Rebuilt as a horizontal Tailwind stepper. Step icon images +
-              the per-step data-toggle="tab" / aria-controls hooks kept. On
-              mobile it scrolls horizontally (no squash at 360px). */}
-          <div className="mt-4 -mx-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {/* ── 8-step process tracker ── forwarder.php L1826-1906 ──
+              4-col grid → 2 rows of 4 on mobile, single row of 8 on desktop
+              (ปอน 2026-06-08: "เรียงตามในภาพ" — เลิก horizontal-scroll ที่พังบน
+              มือถือ ให้ wrap เป็นตาราง 4×2). Connector lines dropped (don't
+              grid-wrap cleanly); each step = icon+label coloured by state.
+              Legacy tab hooks (role / aria-controls / data-toggle) preserved. */}
+          <div className="mt-4">
             <ul
-              className="flex min-w-[640px] md:min-w-0"
+              className="grid grid-cols-4 gap-x-1 gap-y-4 md:grid-cols-8"
               role="tablist"
             >
               {STEPS.map((step, i) => {
@@ -992,15 +994,21 @@ export default async function ServiceImportDetailPage({
                   <li
                     key={step.ctrl}
                     role="presentation"
-                    className={`relative flex-1 flex flex-col items-center text-center px-1 ${state}`}
+                    className={`relative flex flex-col items-center text-center px-0.5 ${state}`}
                   >
-                    {/* connector line (behind the icon) */}
-                    {i > 0 && (
+                    {/* connector rail (behind the icon) — drawn to the LEFT of
+                        every step except the FIRST of each grid row, so it joins
+                        steps WITHIN a row but never wraps across rows. Mobile is
+                        4-col → steps 1 & 5 (i=0,4) start a row → no rail; on
+                        desktop (8-col single row) step 5 (i=4) is mid-row so its
+                        rail re-appears via `md:block`. Red once the step is
+                        reached, grey otherwise (ปอน 2026-06-08 — "ทำเส้นแดงๆ"). */}
+                    {i !== 0 && (
                       <span
                         aria-hidden
                         className={`absolute top-5 right-1/2 left-[-50%] h-0.5 ${
-                          done || active ? "bg-red-500" : "bg-border"
-                        }`}
+                          i === 4 ? "hidden md:block" : ""
+                        } ${done || active ? "bg-red-500" : "bg-border"}`}
                       />
                     )}
                     <span

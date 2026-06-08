@@ -22,7 +22,7 @@ const SALES_DATA: SalesCardLocal[] = [
   { personKey: "may",  name: "เมย์", phone: "066-125-3006", image: "/images/Character_Icon/may.png",    useContain: false },
   { personKey: "nat",  name: "แนท",  phone: "066-131-0253", image: "/images/pacred-logo-red.png",      useContain: true  },
   { personKey: "win",  name: "วิน",  phone: "062-603-0456", image: "/images/Character_Icon/win01.png",  useContain: false },
-  { personKey: "ploy", name: "พลอย", phone: "062-603-4456", image: "/images/Character_Icon/ploy01.png", useContain: false },
+  // CS พลอย removed from on-site rep cards (ปอน 2026-06-08).
 ];
 
 export function PurchaseBanner() {

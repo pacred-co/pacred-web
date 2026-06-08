@@ -1001,15 +1001,15 @@ function JuristicForm({
 
           <UploadField
             label={<>เอกสารรับรองบริษัท (pdf/images) <Req /></>}
-            emoji="☁️" file={docCompany} onChange={setDocCompany}
+            emoji="☁️" file={docCompany} onChange={setDocCompany} onError={setError}
           />
           <UploadField
             label="ใบทะเบียนภาษีมูลค่าเพิ่ม ภ.พ.20 (pdf/images)"
-            emoji="📄" file={docVAT} onChange={setDocVAT}
+            emoji="📄" file={docVAT} onChange={setDocVAT} onError={setError}
           />
           <UploadField
             label={<>บัตรประชาชนกรรมการ (pdf/images) <Req /></>}
-            emoji="🪪" file={docID} onChange={setDocID}
+            emoji="🪪" file={docID} onChange={setDocID} onError={setError}
           />
 
           <AgreeRow checked={agreed} onChange={setAgreed} />
@@ -1235,11 +1235,87 @@ function AgreeRow({ checked, onChange }: { checked: boolean; onChange: (v: boole
   );
 }
 
+/* ── Client-side doc prep — the juristic step-3 fix (2026-06-08 · เดฟ) ──────────
+ * ROOT CAUSE of "An unexpected response was received from the server" on
+ * juristic signup: a doc file larger than the Server Action `bodySizeLimit`
+ * (12mb · next.config.ts) is rejected at the PLATFORM layer BEFORE
+ * `uploadJuristicDoc`'s own 10MB check can return a clean error — phone photos
+ * of a หนังสือรับรอง / บัตรประชาชน routinely exceed it, and `UploadField` had no
+ * client-side size guard. Fix: downscale + recompress big images in the browser
+ * so the upload body stays well under the limit (the common case — customer
+ * succeeds), and size-guard everything (PDFs can't be recompressed client-side)
+ * so a too-large file shows a clear "ไฟล์ใหญ่เกิน 10 MB" instead of the cryptic
+ * platform error. The proven Server-Action upload path is untouched. */
+const MAX_DOC_BYTES = 10 * 1024 * 1024; // mirror actions/auth.ts MAX_SIZE
+const DOC_COMPRESS_OVER = 3 * 1024 * 1024; // recompress images above ~3 MB
+const DOC_MAX_EDGE = 2400; // long-edge cap — keeps document text legible
+const DOC_JPEG_QUALITY = 0.82;
+
+async function compressDocImage(file: File): Promise<File> {
+  // EXIF-correct decode so phone photos aren't rotated for the reviewer.
+  const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+  const scale = Math.min(1, DOC_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+  const w = Math.max(1, Math.round(bitmap.width * scale));
+  const h = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) { bitmap.close(); throw new Error("no-2d-context"); }
+  ctx.fillStyle = "#ffffff"; // flatten transparency so a PNG→JPEG isn't black
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  bitmap.close();
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob((b) => resolve(b), "image/jpeg", DOC_JPEG_QUALITY),
+  );
+  if (!blob) throw new Error("toBlob-null");
+  return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+}
+
+/** Validate + (for big images) compress a picked doc. Never throws; returns a
+ *  ready-to-upload File or a user-facing error code (mapped via ERR). */
+async function prepareDocFile(file: File): Promise<{ file?: File; error?: string }> {
+  const isImage = file.type.startsWith("image/");
+  if (!isImage && file.type !== "application/pdf") return { error: "invalid_mime" };
+  let out = file;
+  if (isImage && file.size > DOC_COMPRESS_OVER) {
+    try {
+      const small = await compressDocImage(file);
+      if (small.size < file.size) out = small;
+    } catch {
+      // HEIC-on-Chrome / decode failure → keep the original; the size guard
+      // below still protects against the >12mb platform-reject path.
+    }
+  }
+  if (out.size > MAX_DOC_BYTES) return { error: "file_too_large" };
+  return { file: out };
+}
+
 function UploadField({
-  label, emoji, file, onChange,
+  label, emoji, file, onChange, onError,
 }: {
-  label: React.ReactNode; emoji: string; file: File | null; onChange: (f: File | null) => void;
+  label: React.ReactNode; emoji: string; file: File | null;
+  onChange: (f: File | null) => void; onError: (msg: string) => void;
 }) {
+  const [preparing, setPreparing] = useState(false);
+
+  async function onPick(picked: File | null) {
+    if (!picked) { onChange(null); return; }
+    setPreparing(true);
+    try {
+      const res = await prepareDocFile(picked);
+      if (res.error) {
+        onError(ERR[res.error] ?? res.error);
+        onChange(null);
+        return;
+      }
+      onChange(res.file ?? null);
+    } finally {
+      setPreparing(false);
+    }
+  }
+
   return (
     <div>
       <label className="mb-1 block text-[12px] font-semibold text-foreground">{label}</label>
@@ -1251,10 +1327,12 @@ function UploadField({
         }`}
       >
         <span className="mb-1 block text-[24px] opacity-40">{emoji}</span>
-        <div className="text-[12.5px] text-muted">ลากหรือวางไฟล์ที่นี่ หรือคลิกเพื่อเลือก</div>
-        {file && <div className="mt-1 text-[12px] font-semibold text-primary-600">✅ {file.name}</div>}
+        <div className="text-[12.5px] text-muted">
+          {preparing ? "⏳ กำลังเตรียมไฟล์..." : "ลากหรือวางไฟล์ที่นี่ หรือคลิกเพื่อเลือก"}
+        </div>
+        {file && !preparing && <div className="mt-1 text-[12px] font-semibold text-primary-600">✅ {file.name}</div>}
         <input type="file" accept=".pdf,image/*"
-          onChange={(e) => onChange(e.target.files?.[0] ?? null)}
+          onChange={(e) => onPick(e.target.files?.[0] ?? null)}
           className="absolute inset-0 cursor-pointer opacity-0" />
       </label>
     </div>

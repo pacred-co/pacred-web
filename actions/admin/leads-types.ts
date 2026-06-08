@@ -79,4 +79,10 @@ export type LogLeadCallInput = {
   userid: string;
   status: LeadCallStatus;
   note?: string;
+  /**
+   * When closing a deal (status='closed'): skip the auto sales→CS handoff
+   * because this is a เคลียร์/แอร์ job ("ทะลุ cs ได้เลย" — CEO §5). Ignored for
+   * every non-closed status.
+   */
+  bypassCs?: boolean;
 };

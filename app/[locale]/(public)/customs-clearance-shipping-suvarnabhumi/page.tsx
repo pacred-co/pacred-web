@@ -580,7 +580,7 @@ export default async function CustomsClearancePage({
         </section>
 
         {/* ─── Sales contact (reused from home, with พลอย as the featured customs expert) ─── */}
-        <ContactSales featuredName="พลอย" hideAssuranceStrip compact />
+        <ContactSales hideAssuranceStrip compact />
 
         {/* ─── Reviews (reused from home, default to clearance filter) per ปอน 2026-05-16 ─── */}
         <Reviews defaultFilter="clearance" />
@@ -735,7 +735,7 @@ export default async function CustomsClearancePage({
         </section>
 
         {/* ─── Sales contact #2 — duplicate after Knowledge per ปอน 2026-05-16 */}
-        <ContactSales featuredName="พลอย" hideAssuranceStrip compact />
+        <ContactSales hideAssuranceStrip compact />
 
         {/* ─── Pacred guarantee banner — per ปอน 2026-05-17 v3
              • SLIM style เหมือน Add-LINE banner สีเขียวข้างบน — แต่ Pacred red theme

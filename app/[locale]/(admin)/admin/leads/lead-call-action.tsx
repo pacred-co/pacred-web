@@ -53,18 +53,32 @@ export function LeadCallAction({ userid }: { userid: string }) {
   const [note, setNote] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [doneMsg, setDoneMsg] = useState("บันทึกแล้ว");
+  // เคลียร์/แอร์ deals "ทะลุ cs ได้เลย" — when closing, skip the auto CS handoff.
+  const [bypassCs, setBypassCs] = useState(false);
 
   function log(status: LeadCallStatus) {
     setErr(null);
     startTransition(async () => {
-      const res = await logLeadCall({ userid, status, note: note.trim() || undefined });
+      const res = await logLeadCall({
+        userid,
+        status,
+        note: note.trim() || undefined,
+        bypassCs: status === "closed" ? bypassCs : undefined,
+      });
       if (res.ok) {
+        setDoneMsg(
+          res.data?.csAssigned
+            ? `ปิดการขาย · มอบ CS ${res.data.csAssigned}`
+            : "บันทึกแล้ว",
+        );
         setDone(true);
         setOpen(false);
         setNote("");
+        setBypassCs(false);
         router.refresh();
         // brief confirmation flash
-        setTimeout(() => setDone(false), 1500);
+        setTimeout(() => setDone(false), 2000);
       } else {
         setErr(res.error ?? "เกิดข้อผิดพลาด");
       }
@@ -79,7 +93,7 @@ export function LeadCallAction({ userid }: { userid: string }) {
           onClick={() => setOpen(true)}
           className="rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-medium text-primary-700 hover:bg-primary-100 min-h-[44px] sm:min-h-0 sm:py-1"
         >
-          {done ? "✓ บันทึกแล้ว" : "📞 บันทึกผลโทร"}
+          {done ? `✓ ${doneMsg}` : "📞 บันทึกผลโทร"}
         </button>
       ) : (
         <div className="space-y-1.5 rounded-lg border border-border bg-white dark:bg-surface p-2 min-w-[180px]">
@@ -102,6 +116,14 @@ export function LeadCallAction({ userid }: { userid: string }) {
             placeholder="โน้ต (ถ้ามี)"
             className="w-full rounded-md border border-border px-2 py-1.5 text-xs"
           />
+          <label className="flex items-center gap-1.5 text-[10px] text-muted">
+            <input
+              type="checkbox"
+              checked={bypassCs}
+              onChange={(e) => setBypassCs(e.target.checked)}
+            />
+            ปิดการขาย: งานเคลียร์/แอร์ (ข้าม CS)
+          </label>
           {err && <div className="text-[10px] text-red-700">{err}</div>}
           <button
             type="button"
