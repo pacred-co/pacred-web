@@ -8,6 +8,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
 import { resolveProfileIdForLegacyUserid } from "@/lib/auth/tb-users-resolver";
+import { issueYuanTaxInvoice } from "@/lib/admin/yuan-tax-invoice";
+import { isShopYuanTaxInvoiceEnabled } from "@/lib/tax/shop-yuan-flag";
+import { modeFromPref } from "@/lib/tax/tax-doc-mode";
+import { logger } from "@/lib/logger";
 import {
   YUAN_STATUSES,
   YUAN_STATUS_LABEL,
@@ -88,7 +92,7 @@ export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput)
     // ── Read the existing tb_payment row.
     const { data: existing, error: existingErr } = await admin
       .from("tb_payment")
-      .select("id, userid, paystatus, payyuan, paythb, paydeposit")
+      .select("id, userid, paystatus, payyuan, paythb, paydeposit, tax_doc_pref")
       .eq("id", d.id)
       .maybeSingle<{
         id: number;
@@ -97,6 +101,7 @@ export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput)
         payyuan: number;
         paythb: number;
         paydeposit: string | null;
+        tax_doc_pref: string | null;
       }>();
     if (existingErr) {
       console.error(`[tb_payment mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
@@ -267,6 +272,42 @@ export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput)
           link_href:      `/service-payment`,
           reference_type: "yuan_payment",
           reference_id:   String(existing.id),
+        });
+      }
+    }
+
+    // ── TAX-DOCUMENT BRIDGE for ฝากโอน (yuan-approve · migration 0152) ──
+    //
+    //   When this transition COMPLETES the transfer (Pacred-status 'completed'
+    //   → paystatus='2') and the customer chose a VAT document at order time
+    //   (tb_payment.tax_doc_pref · migration 0140), issue a ใบกำกับ/ใบขน into
+    //   the tb_*-native store (migration 0152). The "ฝากโอนกับเราเท่านั้น" gate
+    //   is enforced inside issueYuanTaxInvoice (requires paystatus='2').
+    //
+    //   🔴 GATED behind the default-OFF flag tax_invoice.shop_yuan_enabled — off
+    //   (default) = NO document minted (feature ships DORMANT). BEST-EFFORT —
+    //   a tax-doc failure never undoes the status flip (idempotent on payment id).
+    if (statusChanged && d.status === "completed") {
+      try {
+        if (await isShopYuanTaxInvoiceEnabled()) {
+          const docMode = modeFromPref(existing.tax_doc_pref);
+          if (docMode !== "none") {
+            const taxRes = await issueYuanTaxInvoice(admin, {
+              paymentId: existing.id,
+              userid:    existing.userid,
+              issuedBy:  "system-auto",
+              mode:      docMode,
+            });
+            if (!taxRes.ok && !taxRes.alreadyIssued) {
+              logger.warn("yuan-payments", "yuan tax-invoice bridge failed (non-fatal · approval stands)", {
+                payment_id: existing.id, userid: existing.userid, mode: docMode, error: taxRes.error,
+              });
+            }
+          }
+        }
+      } catch (e) {
+        logger.warn("yuan-payments", "yuan tax-invoice bridge threw (non-fatal)", {
+          payment_id: existing.id, userid: existing.userid, error: e instanceof Error ? e.message : String(e),
         });
       }
     }

@@ -9,6 +9,9 @@ import {
 } from "@/lib/validators/tax-invoice";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { issueForwarderTaxInvoice } from "@/lib/admin/forwarder-tax-invoice";
+import { issueShopTaxInvoice } from "@/lib/admin/shop-tax-invoice";
+import { issueYuanTaxInvoice } from "@/lib/admin/yuan-tax-invoice";
+import { isShopYuanTaxInvoiceEnabled } from "@/lib/tax/shop-yuan-flag";
 import { modeFromPref } from "@/lib/tax/tax-doc-mode";
 
 /**
@@ -86,11 +89,22 @@ export async function requestTaxInvoice(
   }
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  // ── Shop + yuan: DEFERRED (ADR-0027). World-B has no cross-type table yet;
-  //    the rebuilt twins are dead for real customers → don't read them, just
-  //    surface a friendly "coming soon" the panel renders as a banner. ──
-  if (d.order_type !== "forwarder") {
-    return { ok: false, error: "not_yet_supported" };
+  // ── Shop + yuan (migration 0152) — LIVE only when the flag is ON. ──
+  //    🔴 Flag tax_invoice.shop_yuan_enabled (default OFF) gates the whole shop/
+  //    yuan customer-request path. When OFF we keep the legacy "coming soon"
+  //    behaviour (not_yet_supported → panel renders the deferred banner) so
+  //    deploying changes nothing. Forwarder is always live (its own store · 0129).
+  if (d.order_type === "service_order") {
+    if (!(await isShopYuanTaxInvoiceEnabled())) {
+      return { ok: false, error: "not_yet_supported" };
+    }
+    return requestShopTaxInvoice(user.id, d.order_id);
+  }
+  if (d.order_type === "yuan_payment") {
+    if (!(await isShopYuanTaxInvoiceEnabled())) {
+      return { ok: false, error: "not_yet_supported" };
+    }
+    return requestYuanTaxInvoice(user.id, d.order_id);
   }
 
   // ── FORWARDER → World-B (tb_forwarder + issueForwarderTaxInvoice) ──
@@ -180,6 +194,134 @@ export async function requestTaxInvoice(
 }
 
 // ────────────────────────────────────────────────────────────
+// SHOP (ฝากสั่งซื้อ · tb_header_order) customer request → migration 0152.
+// (Not exported — internal helper called by requestTaxInvoice when the flag is
+//  ON. A "use server" file may only EXPORT async fns; non-exported is fine.)
+// ────────────────────────────────────────────────────────────
+async function requestShopTaxInvoice(
+  authUserId: string,
+  orderId: string,
+): Promise<ActionResult<RequestResult>> {
+  const memberCode = await resolveMemberCode(authUserId);
+  if (!memberCode) return { ok: false, error: "no_member_code" };
+
+  // The hno is a text key (e.g. ONS260601-0001). Trust it as-is (ownership
+  // gate below) but reject empties.
+  const hno = orderId.trim();
+  if (!hno) return { ok: false, error: "order_not_found" };
+
+  const admin = createAdminClient();
+
+  // 1. Read the shop order + ownership gate + paid gate + tax-doc mode.
+  const { data: ho, error: hoErr } = await admin
+    .from("tb_header_order")
+    .select("hno, userid, hstatus, tax_doc_pref")
+    .eq("hno", hno)
+    .maybeSingle<{ hno: string; userid: string | null; hstatus: string | null; tax_doc_pref: string | null }>();
+  if (hoErr && hoErr.code !== "PGRST116") {
+    console.error(`[tax-invoice: tb_header_order lookup] failed`, {
+      code: hoErr.code, message: hoErr.message, hno, memberCode,
+    });
+    return { ok: false, error: `db_error:${hoErr.code ?? "unknown"}` };
+  }
+  if (!ho)                              return { ok: false, error: "order_not_found" };
+  if ((ho.userid ?? "") !== memberCode) return { ok: false, error: "not_your_order" };
+
+  // Billable gate — shop hstatus: 1=รอดำเนินการ 2=รอชำระเงิน 3=สั่งสินค้า
+  // 4=รอร้านจีนจัดส่ง 5=สำเร็จ 6=ยกเลิก. A tax doc needs the order paid (past '2').
+  const hStatus = (ho.hstatus ?? "").trim();
+  if (hStatus === "6" || hStatus === "")    return { ok: false, error: "order_not_found" };
+  if (hStatus === "1" || hStatus === "2")   return { ok: false, error: "order_not_paid_yet" };
+
+  // 2. Idempotency.
+  const existing = await readShopInvoiceByHno(admin, hno, memberCode);
+  if (existing) {
+    return { ok: true, data: { id: String(existing.id), status: existing.status, already_exists: true } };
+  }
+
+  // 3. Issue. Mode from the order's stored choice; if it was 'receipt'/NULL but
+  //    the customer now actively requests a doc → standard ใบกำกับภาษี.
+  const storedMode = modeFromPref(ho.tax_doc_pref);
+  const issueMode = storedMode === "none" ? "tax_invoice" : storedMode;
+  const issued = await issueShopTaxInvoice(admin, {
+    userid:   memberCode,
+    hno,
+    issuedBy: "customer-request",
+    mode:     issueMode,
+  });
+  if (!issued.ok) {
+    if (issued.alreadyIssued) {
+      const raced = await readShopInvoiceByHno(admin, hno, memberCode);
+      if (raced) return { ok: true, data: { id: String(raced.id), status: raced.status, already_exists: true } };
+    }
+    return { ok: false, error: issued.error };
+  }
+
+  revalidatePath(`/service-order/${hno}/receipt`);
+  return { ok: true, data: { id: String(issued.data.invoiceId), status: "issued", already_exists: false } };
+}
+
+// ────────────────────────────────────────────────────────────
+// YUAN (ฝากโอน · tb_payment) customer request → migration 0152.
+// ────────────────────────────────────────────────────────────
+async function requestYuanTaxInvoice(
+  authUserId: string,
+  orderId: string,
+): Promise<ActionResult<RequestResult>> {
+  const memberCode = await resolveMemberCode(authUserId);
+  if (!memberCode) return { ok: false, error: "no_member_code" };
+
+  const idClean = orderId.replace(/[^\d]/g, "");
+  const paymentId = Number(idClean);
+  if (!Number.isFinite(paymentId) || paymentId <= 0) return { ok: false, error: "order_not_found" };
+
+  const admin = createAdminClient();
+
+  // 1. Read the payment + ownership + completed gate + tax-doc mode.
+  const { data: pay, error: payErr } = await admin
+    .from("tb_payment")
+    .select("id, userid, paystatus, tax_doc_pref")
+    .eq("id", paymentId)
+    .maybeSingle<{ id: number; userid: string | null; paystatus: string | null; tax_doc_pref: string | null }>();
+  if (payErr && payErr.code !== "PGRST116") {
+    console.error(`[tax-invoice: tb_payment lookup] failed`, {
+      code: payErr.code, message: payErr.message, paymentId, memberCode,
+    });
+    return { ok: false, error: `db_error:${payErr.code ?? "unknown"}` };
+  }
+  if (!pay)                              return { ok: false, error: "order_not_found" };
+  if ((pay.userid ?? "") !== memberCode) return { ok: false, error: "not_your_order" };
+  // "ฝากโอนกับเราเท่านั้น" — only a COMPLETED (paystatus='2') transfer qualifies.
+  if ((pay.paystatus ?? "").trim() !== "2") return { ok: false, error: "order_not_paid_yet" };
+
+  // 2. Idempotency.
+  const existing = await readYuanInvoiceByPaymentId(admin, paymentId, memberCode);
+  if (existing) {
+    return { ok: true, data: { id: String(existing.id), status: existing.status, already_exists: true } };
+  }
+
+  // 3. Issue.
+  const storedMode = modeFromPref(pay.tax_doc_pref);
+  const issueMode = storedMode === "none" ? "tax_invoice" : storedMode;
+  const issued = await issueYuanTaxInvoice(admin, {
+    userid:    memberCode,
+    paymentId,
+    issuedBy:  "customer-request",
+    mode:      issueMode,
+  });
+  if (!issued.ok) {
+    if (issued.alreadyIssued) {
+      const raced = await readYuanInvoiceByPaymentId(admin, paymentId, memberCode);
+      if (raced) return { ok: true, data: { id: String(raced.id), status: raced.status, already_exists: true } };
+    }
+    return { ok: false, error: issued.error };
+  }
+
+  revalidatePath(`/service-payment/${paymentId}`);
+  return { ok: true, data: { id: String(issued.data.invoiceId), status: "issued", already_exists: false } };
+}
+
+// ────────────────────────────────────────────────────────────
 // READ — customer fetches their existing invoice (for showing
 // "already requested — status: issued" on the invoice page)
 // ────────────────────────────────────────────────────────────
@@ -245,6 +387,69 @@ async function readForwarderInvoiceByFid(
   return inv;
 }
 
+// Shop + yuan store (migration 0152) — same row shape as forwarder.
+type ShopInvoiceRow = ForwarderInvoiceRow;
+
+// Read the shop ใบกำกับ covering `hno` (owned by member_code) from tb_shop_tax_invoice.
+async function readShopInvoiceByHno(
+  admin: ReturnType<typeof createAdminClient>,
+  hno: string,
+  memberCode: string,
+): Promise<ShopInvoiceRow | null> {
+  const { data: inv, error: invErr } = await admin
+    .from("tb_shop_tax_invoice")
+    .select("id, serial_no, status, issued_at, net_payable, buyer_name, buyer_tax_id, pdf_storage_path, created_at, userid")
+    .eq("service_type", "shop")
+    .eq("hno", hno)
+    .maybeSingle<ShopInvoiceRow & { userid: string | null }>();
+  if (invErr && invErr.code !== "PGRST116") {
+    console.error(`[tax-invoice: tb_shop_tax_invoice (shop) lookup] failed`, {
+      code: invErr.code, message: invErr.message, hno,
+    });
+    return null;
+  }
+  if (!inv) return null;
+  if ((inv.userid ?? "") !== memberCode) return null;
+  return inv;
+}
+
+// Read the yuan ใบกำกับ covering `payment_id` (owned by member_code).
+async function readYuanInvoiceByPaymentId(
+  admin: ReturnType<typeof createAdminClient>,
+  paymentId: number,
+  memberCode: string,
+): Promise<ShopInvoiceRow | null> {
+  const { data: inv, error: invErr } = await admin
+    .from("tb_shop_tax_invoice")
+    .select("id, serial_no, status, issued_at, net_payable, buyer_name, buyer_tax_id, pdf_storage_path, created_at, userid")
+    .eq("service_type", "yuan")
+    .eq("payment_id", paymentId)
+    .maybeSingle<ShopInvoiceRow & { userid: string | null }>();
+  if (invErr && invErr.code !== "PGRST116") {
+    console.error(`[tax-invoice: tb_shop_tax_invoice (yuan) lookup] failed`, {
+      code: invErr.code, message: invErr.message, paymentId,
+    });
+    return null;
+  }
+  if (!inv) return null;
+  if ((inv.userid ?? "") !== memberCode) return null;
+  return inv;
+}
+
+function toSummary(inv: ForwarderInvoiceRow): CustomerTaxInvoiceSummary {
+  return {
+    id:               String(inv.id),
+    status:           inv.status,
+    serial_no:        inv.serial_no,
+    issued_at:        inv.issued_at,
+    total_thb:        Number(inv.net_payable ?? 0),
+    buyer_name:       inv.buyer_name ?? "",
+    buyer_tax_id:     inv.buyer_tax_id ?? "",
+    pdf_storage_path: inv.pdf_storage_path,
+    created_at:       inv.created_at,
+  };
+}
+
 export async function getMyTaxInvoiceForOrder(
   orderType: "forwarder" | "service_order" | "yuan_payment",
   orderId:   string,
@@ -256,32 +461,35 @@ export async function getMyTaxInvoiceForOrder(
   }
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  // Shop + yuan: no World-B store yet (ADR-0027) → nothing to show.
-  if (orderType !== "forwarder") return { ok: true, data: null };
-
   const memberCode = await resolveMemberCode(user.id);
   if (!memberCode) return { ok: true, data: null };
 
-  const idClean = orderId.replace(/[^a-z\d]/gi, "");
-  const fid = Number(idClean);
-  if (!Number.isFinite(fid) || fid <= 0) return { ok: true, data: null };
-
   const admin = createAdminClient();
-  const inv = await readForwarderInvoiceByFid(admin, fid, memberCode);
-  if (!inv) return { ok: true, data: null };
 
-  return {
-    ok: true,
-    data: {
-      id:               String(inv.id),
-      status:           inv.status,
-      serial_no:        inv.serial_no,
-      issued_at:        inv.issued_at,
-      total_thb:        Number(inv.net_payable ?? 0),
-      buyer_name:       inv.buyer_name ?? "",
-      buyer_tax_id:     inv.buyer_tax_id ?? "",
-      pdf_storage_path: inv.pdf_storage_path,
-      created_at:       inv.created_at,
-    },
-  };
+  if (orderType === "forwarder") {
+    const idClean = orderId.replace(/[^a-z\d]/gi, "");
+    const fid = Number(idClean);
+    if (!Number.isFinite(fid) || fid <= 0) return { ok: true, data: null };
+    const inv = await readForwarderInvoiceByFid(admin, fid, memberCode);
+    return { ok: true, data: inv ? toSummary(inv) : null };
+  }
+
+  // Shop + yuan (migration 0152) — only surface when the flag is ON. When OFF
+  // we return null so the panel renders the deferred banner (no behaviour
+  // change on a dormant deploy).
+  if (!(await isShopYuanTaxInvoiceEnabled())) return { ok: true, data: null };
+
+  if (orderType === "service_order") {
+    const hno = orderId.trim();
+    if (!hno) return { ok: true, data: null };
+    const inv = await readShopInvoiceByHno(admin, hno, memberCode);
+    return { ok: true, data: inv ? toSummary(inv) : null };
+  }
+
+  // yuan_payment
+  const idClean = orderId.replace(/[^\d]/g, "");
+  const paymentId = Number(idClean);
+  if (!Number.isFinite(paymentId) || paymentId <= 0) return { ok: true, data: null };
+  const inv = await readYuanInvoiceByPaymentId(admin, paymentId, memberCode);
+  return { ok: true, data: inv ? toSummary(inv) : null };
 }
