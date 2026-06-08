@@ -254,7 +254,10 @@ export default async function ProtectedLayout({
           mobile bottom nav since the legacy `.nav-footer-pcs` is hidden in
           legacy-overrides.css §0). Auto-hides itself on /admin /login /register
           /forgot-password via its own isHidden check, so adding it here is safe. */}
-      <FloatingTabs payDueCount={chrome.countPaymentDue} avatarUrl={profile?.avatar_url ?? null} />
+      {/* `hideLineBubble` — the standalone green LINE bubble is dropped in the
+          customer back-office; it stays on the public site / home page (ปอน
+          2026-06-08 "เข้าหลังบ้านลูกค้าให้ปุ่มนี้หาย แต่หน้าแรก/ท่องเว็บให้มี"). */}
+      <FloatingTabs payDueCount={chrome.countPaymentDue} avatarUrl={profile?.avatar_url ?? null} hideLineBubble />
 
       {/* 7. Legacy JS bundle — rendered last so the full chrome DOM exists
             when it runs. jQuery → Popper → Bootstrap-4 (vendors.min.js) → the

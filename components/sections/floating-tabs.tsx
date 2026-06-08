@@ -42,11 +42,18 @@ function TabCountBadge({ n }: { n: number }) {
 export function FloatingTabs({
   payDueCount = 0,
   avatarUrl = null,
+  hideLineBubble = false,
 }: {
   payDueCount?: number;
   /** Logged-in member's avatar — shown round (Facebook-style) on the เมนู tab
    *  instead of the hamburger icon. Null on public pages → falls back to Menu. */
   avatarUrl?: string | null;
+  /** Hide the standalone floating green LINE bubble. The customer back-office
+   *  (the (protected) member portal) passes this so the bubble only appears on
+   *  the public site / home page (ปอน 2026-06-08 "เข้าหลังบ้านลูกค้าให้ปุ่มนี้
+   *  หาย แต่หน้าแรก/ท่องเว็บให้มีไว้"). The แชท tab in the rail/bottom-nav
+   *  stays — only the separate bubble is gated. */
+  hideLineBubble?: boolean;
 }) {
   const t = useTranslations("floatingTabs");
   const [active, setActive] = useState<number | null>(null);
@@ -329,22 +336,26 @@ export function FloatingTabs({
              steal the "ชำระเงิน" tap (BUG #2), while still floating above
              page content + the bottom-nav border.
           ·  The "สอบถามเพิ่มเติม" pill is desktop-only (`md:block`) — on
-             phones it was extra clutter beside the rail + nav + bubble. */}
-      <div className="pacred-line-bubble fixed bottom-[84px] right-3 md:bottom-6 md:right-6 z-[48] flex items-center gap-2 md:gap-3">
-        <span className="hidden md:block rounded-full bg-white dark:bg-surface shadow-md px-4 py-2 text-sm font-medium text-foreground border border-border">
-          {t("askMore")}
-        </span>
-        <TrackedExternalLink
-          href="/line"
-          cta="line_consult"
-          surface="floating_tabs"
-          suppressHydrationWarning
-          className="w-[48px] h-[48px] md:w-[70px] md:h-[70px] rounded-full bg-[#06C755] shadow-lg flex items-center justify-center hover:bg-[#05a548] transition-colors shrink-0 text-white"
-          aria-label={t("chatAria")}
-        >
-          <LineIcon className="h-6 w-6 md:h-9 md:w-9" />
-        </TrackedExternalLink>
-      </div>
+             phones it was extra clutter beside the rail + nav + bubble.
+          ·  Gated off in the customer back-office via `hideLineBubble`
+             (shown only on the public site / home page). */}
+      {!hideLineBubble && (
+        <div className="pacred-line-bubble fixed bottom-[84px] right-3 md:bottom-6 md:right-6 z-[48] flex items-center gap-2 md:gap-3">
+          <span className="hidden md:block rounded-full bg-white dark:bg-surface shadow-md px-4 py-2 text-sm font-medium text-foreground border border-border">
+            {t("askMore")}
+          </span>
+          <TrackedExternalLink
+            href="/line"
+            cta="line_consult"
+            surface="floating_tabs"
+            suppressHydrationWarning
+            className="w-[48px] h-[48px] md:w-[70px] md:h-[70px] rounded-full bg-[#06C755] shadow-lg flex items-center justify-center hover:bg-[#05a548] transition-colors shrink-0 text-white"
+            aria-label={t("chatAria")}
+          >
+            <LineIcon className="h-6 w-6 md:h-9 md:w-9" />
+          </TrackedExternalLink>
+        </div>
+      )}
     </>
   );
 }
