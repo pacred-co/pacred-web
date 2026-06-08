@@ -307,6 +307,9 @@ export async function PcsLeftMenu({ data }: { data: PcsChromeData }) {
           {/* สถานะการคืนเงิน (/refunds) — wired per §0d (was orphan in the
               dead ProtectedSidebar). Reads live tb_* refund status. */}
           <SubLink href="/refunds">{t("refundStatus")}</SubLink>
+          {/* กระเป๋าร้านค้า/affiliate payouts (/wallet-shop) — wired per §0d
+              (was orphan). Reads live affiliate-shop-wallet (transfer/withdraw). */}
+          <SubLink href="/wallet-shop">{t("shopWallet")}</SubLink>
         </PcsLeftMenuAccordion>
 
         {/* กระเป๋าสตางค์เครดิต (creditUser only) */}
