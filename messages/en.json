@@ -3331,6 +3331,7 @@
       "ledger": "Account ledger",
       "income": "Income",
       "quotation": "Quotations",
+      "leads": "Freight RFQ leads",
       "invoice": "Invoices",
       "receipt": "Tax invoices",
       "wht": "Withholding tax",

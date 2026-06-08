@@ -149,9 +149,12 @@ export async function submitFreightQuote(
       d.contactPref === "call" ? "⚡ ลูกค้าขอให้โทรกลับด่วน" : null,
     ].filter(Boolean) as string[];
 
-    // No /admin RFQ page yet → title-only Flex card (no deep-link button).
-    // When the leads inbox ships, pass { url: `/admin/freight/leads/${ref}` }.
-    await notifyStaffGroup(lines.join("\n"), { title: "ขอราคา Freight ใหม่ 📦" });
+    // 2026-06-08 — the RFQ leads inbox shipped (/admin/freight/leads). Deep-link
+    // staff straight to the lead so they can triage/convert in one tap.
+    await notifyStaffGroup(lines.join("\n"), {
+      title: "ขอราคา Freight ใหม่ 📦",
+      url: `/admin/freight/leads/${ref}`,
+    });
   } catch {
     /* swallow — lead is saved; sales sees it on next dashboard load */
   }

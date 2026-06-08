@@ -297,6 +297,18 @@ const blockForwarderImport: MenuItem = {
   badge: "forwarderArrived",
 };
 
+/** 2026-06-08 (เดฟ · freight revenue unlock) — the inbound Freight RFQ
+ *  leads-inbox (/admin/freight/leads). The public /freight-quote wizard writes
+ *  RFQ leads to the singular `freight_quote` table; this is the staff surface
+ *  that views/triages/converts them (was orphaned — only a CRM head-count proxy
+ *  read them). Single leaf · sales-funnel ownership (super/ops/sales_admin +
+ *  freight sales). Phase 1 — the page + actions gate RBAC themselves. */
+const itemFreightLeads: MenuItem = {
+  labelKey: "accFreight.leads",
+  href: "/admin/freight/leads",
+  icon: "Inbox",
+};
+
 /** legacy pcs-admin menu L162-167 — "อัปเดตฝากนำเข้า" (top-level group)
  *  Combines BOTH Wave 17 P1 streams into the single legacy parent:
  *   - P1-1+2 — MOMO + CargoCenter (manualUpdate sub-page only · Phase B
@@ -769,6 +781,8 @@ const menuSuper: MenuSection[] = [
       itemWalletAll,
       itemPurchasingAll,
       blockForwarderImport,
+      // 2026-06-08 (เดฟ · freight revenue unlock) — inbound Freight RFQ inbox.
+      itemFreightLeads,
       blockApiForwarderUpdate,
       // 2026-05-21 ภูม flagged — /admin/drivers had no direct super sidebar
       // entry · only reachable via the /admin/forwarders top-menubar
@@ -852,6 +866,8 @@ const menuManager: MenuSection[] = [
       itemWalletAll,
       itemPurchasingAll,
       blockForwarderImport,
+      // 2026-06-08 (เดฟ · freight revenue unlock) — inbound Freight RFQ inbox.
+      itemFreightLeads,
       blockApiForwarderUpdate,
       { labelKey: "forwarder.assignDriver", href: "/admin/drivers", icon: "Truck", badge: "driverItems" },
       { labelKey: "forwarder.driverWork", href: "/admin/drivers/work", icon: "Smartphone" },
@@ -914,6 +930,8 @@ const menuOps: MenuSection[] = [
       itemWalletAll,
       itemPurchasingAll,
       blockForwarderImport,
+      // 2026-06-08 (เดฟ · freight revenue unlock) — inbound Freight RFQ inbox.
+      itemFreightLeads,
       blockApiForwarderUpdate,
       blockPayment,
       // Phase 2 — driver-runs sales-only side not yet live.
@@ -1225,6 +1243,9 @@ const menuFreightSalesManager: MenuSection[] = [
   {
     header: "Freight",
     items: [
+      // 2026-06-08 (เดฟ · freight revenue unlock) — inbound RFQ leads inbox is
+      // the freight sales team's primary acquisition surface.
+      itemFreightLeads,
       { labelKey: "manageCustomers.freightAll", href: "/admin/customers?segment=freight", icon: "Users" },
       { labelKey: "accFreight.title",           href: "/admin/accounting/freight",        icon: "Landmark" },
       { ...itemReportsAll, labelKey: "report.titleSales" },
@@ -1242,6 +1263,8 @@ const menuFreightSales: MenuSection[] = [
   {
     header: "Freight",
     items: [
+      // 2026-06-08 (เดฟ · freight revenue unlock) — inbound RFQ leads inbox.
+      itemFreightLeads,
       { labelKey: "manageCustomers.freightAll", href: "/admin/customers?segment=freight", icon: "Users" },
     ],
   },
