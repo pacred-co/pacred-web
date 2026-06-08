@@ -33,7 +33,9 @@ export default async function ForwarderInvoiceListRedirect({
 }) {
   // Keep the auth gate so direct visits hit the same accounting permission
   // surface (avoids a "redirect to login" loop when an unauth user lands here).
-  await requireAdmin(["super", "accounting"]);
+  // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles access the
+  // receipts redirect target (`docs/research/ops-workflow-audit-2026-06-05.md` §28).
+  await requireAdmin(["super", "accounting", "freight_export_doc", "freight_import_doc"]);
 
   const sp = await searchParams;
 

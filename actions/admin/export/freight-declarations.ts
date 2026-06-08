@@ -122,8 +122,8 @@ function normalise(raw: unknown[]): Row[] {
 export async function exportFreightDeclarationsAll(
   filter: FreightDeclarationsExportFilter,
 ): Promise<{ rows: CsvRow[]; truncated: boolean }> {
-  // RBAC matches the page.
-  await requireAdmin(["super", "accounting"]);
+  // RBAC matches the page — Phase 2 ops-workflow audit unlock 2026-06-05.
+  await requireAdmin(["super", "accounting", "freight_export_doc", "freight_import_doc"]);
 
   const status =
     filter.status && (CUSTOMS_DECLARATION_STATUSES as readonly string[]).includes(filter.status)

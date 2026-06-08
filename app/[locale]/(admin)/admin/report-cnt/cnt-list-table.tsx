@@ -28,6 +28,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { CntPaymentModal, type SelectedSummary } from "./cnt-payment-modal";
 import { fstatusBadge, listRowTint } from "@/lib/admin/forwarder-status";
+import type { ContainerCompleteness } from "@/lib/warehouse/container-completeness";
 
 // ─────────────────────────────────────────────────────────────────────
 // Row shape (mirrors `Grouped` in page.tsx — kept independent so
@@ -55,6 +56,13 @@ type Props = {
   isWaiting: boolean;
   warehouseLabel: Record<string, string>;
   transportLabel: Record<string, string>;
+  /**
+   * Phase 3 (ops-workflow audit §30) — per-container completeness from
+   * tb_forwarder (famount expected) vs tb_forwarder_import2 (fi2amount
+   * scanned). Map keyed by `fcabinetnumber`; missing entries treated as
+   * 0/0 (vacuously complete). Drives the "ยิงครบ" column.
+   */
+  completenessByCab?: Record<string, ContainerCompleteness>;
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -75,7 +83,8 @@ type SortKey =
   | "priceSum"
   | "profitSum"
   | "fstatus"
-  | "isPaid";
+  | "isPaid"
+  | "completenessPct"; // Phase 3 — ยิงครบ ratio
 
 type SortDir = "asc" | "desc";
 
@@ -165,6 +174,7 @@ export function CntListTable({
   isWaiting,
   warehouseLabel,
   transportLabel,
+  completenessByCab,
 }: Props) {
   // Checkboxes available on BOTH tabs (waiting + succeed) for money-tier
   // roles, hidden per-row for already-paid containers. Matches legacy
@@ -177,15 +187,27 @@ export function CntListTable({
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   // Annotate rows with computed diff-days (so sort + summary stay in sync)
+  // + per-container completeness (Phase 3 — ยิงครบ column).
   const rowsWithDiff = useMemo(
     () =>
       rows.map((r) => {
         const diffDay = isWaiting
           ? diffDateNow(r.fdatecontainerclose)
           : diffDateCNT(r.fdatecontainerclose, r.fdatestatus4);
-        return { ...r, diffDay, profitSum: r.priceSum - r.costSum };
+        const c = completenessByCab?.[r.fcabinetnumber];
+        return {
+          ...r,
+          diffDay,
+          profitSum: r.priceSum - r.costSum,
+          completenessExpected: c?.expected ?? 0,
+          completenessScanned: c?.scanned ?? 0,
+          completenessForwardersTotal: c?.forwardersTotal ?? 0,
+          completenessForwardersComplete: c?.forwardersComplete ?? 0,
+          completenessPct: c?.pct ?? 100,
+          completenessIsComplete: c?.isComplete ?? true,
+        };
       }),
-    [rows, isWaiting],
+    [rows, isWaiting, completenessByCab],
   );
 
   // Sort rows by current sortKey/sortDir
@@ -314,6 +336,7 @@ export function CntListTable({
               <SortableTH sortKeyValue="trackCount"          align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>จำนวนแทรคกิ้ง</SortableTH>
               <SortableTH sortKeyValue="volumeSum"           align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>ปริมาตร</SortableTH>
               <SortableTH sortKeyValue="weightSum"           align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>น้ำหนัก</SortableTH>
+              <SortableTH sortKeyValue="completenessPct"     align="center" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>ยิงครบ</SortableTH>
               {showMoney && <SortableTH sortKeyValue="costSum"   align="right" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>ต้นทุนตู้</SortableTH>}
               {showMoney && <SortableTH sortKeyValue="priceSum"  align="right" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>ราคาขาย</SortableTH>}
               {showMoney && <SortableTH sortKeyValue="profitSum" align="right" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>กำไร</SortableTH>}
@@ -333,6 +356,7 @@ export function CntListTable({
               <td className="px-2 py-2 text-right">{totals.trackCount.toLocaleString()}</td>
               <td className="px-2 py-2 text-right">{totals.volumeSum.toFixed(2)}</td>
               <td className="px-2 py-2 text-right">{totals.weightSum.toFixed(2)}</td>
+              <td className="px-2 py-2"></td>
               {showMoney && <td className="px-2 py-2 text-right">{totals.costSum.toFixed(2)}</td>}
               {showMoney && <td className="px-2 py-2 text-right">{totals.priceSum.toFixed(2)}</td>}
               {showMoney && <td className="px-2 py-2 text-right">{totals.profitSum.toFixed(2)}</td>}
@@ -386,6 +410,25 @@ export function CntListTable({
                   <td className="px-2 py-2 text-right">{r.trackCount.toLocaleString()}</td>
                   <td className="px-2 py-2 text-right">{r.volumeSum.toFixed(2)}</td>
                   <td className="px-2 py-2 text-right">{r.weightSum.toFixed(2)}</td>
+                  <td className="px-2 py-2 text-center">
+                    {r.completenessForwardersTotal === 0 ? (
+                      <span className="text-[10px] text-muted">-</span>
+                    ) : r.completenessIsComplete ? (
+                      <span
+                        className="inline-block rounded-full bg-emerald-500 text-emerald-50 border border-emerald-700 px-2 py-0.5 text-[10px] font-medium"
+                        title={`ครบทุกรายการ — ${r.completenessForwardersComplete}/${r.completenessForwardersTotal} รายการ · ยิง ${r.completenessScanned}/${r.completenessExpected} กล่อง`}
+                      >
+                        {r.completenessForwardersComplete}/{r.completenessForwardersTotal}
+                      </span>
+                    ) : (
+                      <span
+                        className="inline-block rounded-full bg-red-500 text-red-50 border border-red-700 px-2 py-0.5 text-[10px] font-medium"
+                        title={`ของยังขาด ${r.completenessForwardersTotal - r.completenessForwardersComplete} รายการ — ยิง ${r.completenessForwardersComplete}/${r.completenessForwardersTotal} รายการ · ${r.completenessScanned}/${r.completenessExpected} กล่อง · ${r.completenessPct}%`}
+                      >
+                        {r.completenessForwardersComplete}/{r.completenessForwardersTotal}
+                      </span>
+                    )}
+                  </td>
                   {showMoney && <td className="px-2 py-2 text-right">{r.costSum.toFixed(2)}</td>}
                   {showMoney && <td className="px-2 py-2 text-right">{r.priceSum.toFixed(2)}</td>}
                   {showMoney && <td className="px-2 py-2 text-right">{r.profitSum.toFixed(2)}</td>}

@@ -59,7 +59,10 @@ export default async function AdminFreightShipmentsListPage({
 }: {
   searchParams: Promise<{ status?: string; q?: string; page?: string }>;
 }) {
-  await requireAdmin(["super", "ops", "sales_admin", "accounting"]);
+  // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles browse shipments
+  // to pivot into customs declaration creation
+  // (`docs/research/ops-workflow-audit-2026-06-05.md` §28).
+  await requireAdmin(["super", "ops", "sales_admin", "accounting", "freight_export_doc", "freight_import_doc"]);
   const sp = await searchParams;
   const status = (FREIGHT_SHIPMENT_STATUSES as readonly string[]).includes(sp.status ?? "")
     ? (sp.status as FreightShipmentStatus)

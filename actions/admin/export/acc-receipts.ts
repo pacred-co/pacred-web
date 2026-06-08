@@ -102,7 +102,8 @@ export async function exportReceiptsAll(
   filter: ReceiptsExportFilter,
 ): Promise<{ rows: ReceiptExportRow[]; truncated: boolean }> {
   // RBAC — same roles the page + getReceiptList gate on.
-  await requireAdmin(["super", "accounting"]);
+  // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles export receipts.
+  await requireAdmin(["super", "accounting", "freight_export_doc", "freight_import_doc"]);
 
   const admin = createAdminClient();
 

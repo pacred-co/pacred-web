@@ -67,7 +67,9 @@ export async function issueTaxInvoice(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
 
-  return withAdmin(["super", "accounting"], async ({ adminId }) => {
+  // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles issue tax docs
+  // as part of documentation workflow (no wallet/payment writes).
+  return withAdmin(["super", "accounting", "freight_export_doc", "freight_import_doc"], async ({ adminId }) => {
     const admin = createAdminClient();
 
     // ── 1. Read header ──
@@ -304,7 +306,9 @@ export async function cancelTaxInvoice(
   }
   const d = parsed.data;
 
-  return withAdmin(["super", "accounting"], async ({ adminId }) => {
+  // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles issue tax docs
+  // as part of documentation workflow (no wallet/payment writes).
+  return withAdmin(["super", "accounting", "freight_export_doc", "freight_import_doc"], async ({ adminId }) => {
     const admin = createAdminClient();
 
     const { data: header, error: headErr } = await admin
@@ -468,7 +472,9 @@ export async function issueCreditNote(
   }
   const d = parsed.data;
 
-  return withAdmin(["super", "accounting"], async ({ adminId }) => {
+  // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles issue tax docs
+  // as part of documentation workflow (no wallet/payment writes).
+  return withAdmin(["super", "accounting", "freight_export_doc", "freight_import_doc"], async ({ adminId }) => {
     const admin = createAdminClient();
 
     // ── 1. Read the original (cancelled) tax_invoice ──

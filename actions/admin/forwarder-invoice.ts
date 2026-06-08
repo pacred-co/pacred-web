@@ -223,7 +223,10 @@ export async function adminIssueForwarderInvoice(
   const fids = Array.from(new Set(rawFids)); // dedup
 
   return withAdmin<{ receiptId: number; rid: string; rAmount: number; totalBeforeWithholding: number }>(
-    ["super", "accounting"],
+    // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles issue/manage
+    // receipts (tb_receipt/_item only · no wallet/payment writes) per
+    // `docs/research/ops-workflow-audit-2026-06-05.md` §28.
+    ["super", "accounting", "freight_export_doc", "freight_import_doc"],
     async ({ adminId }) => {
       const admin = createAdminClient();
 
@@ -495,7 +498,10 @@ export async function adminCancelForwarderInvoice(
   const { receiptId, reason } = parsed.data;
 
   return withAdmin<{ receiptId: number }>(
-    ["super", "accounting"],
+    // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles issue/manage
+    // receipts (tb_receipt/_item only · no wallet/payment writes) per
+    // `docs/research/ops-workflow-audit-2026-06-05.md` §28.
+    ["super", "accounting", "freight_export_doc", "freight_import_doc"],
     async ({ adminId }) => {
       const admin = createAdminClient();
 
@@ -554,7 +560,10 @@ export async function adminMarkReceiptPrinted(
   const { receiptId } = parsed.data;
 
   return withAdmin<{ receiptId: number }>(
-    ["super", "accounting"],
+    // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles issue/manage
+    // receipts (tb_receipt/_item only · no wallet/payment writes) per
+    // `docs/research/ops-workflow-audit-2026-06-05.md` §28.
+    ["super", "accounting", "freight_export_doc", "freight_import_doc"],
     async ({ adminId }) => {
       const admin = createAdminClient();
       const nowIso = new Date().toISOString();
@@ -744,7 +753,10 @@ export async function adminBackfillReceiptItems(
   const { receiptId } = parsed.data;
 
   return withAdmin<AdminBackfillReceiptItemsData>(
-    ["super", "accounting"],
+    // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles issue/manage
+    // receipts (tb_receipt/_item only · no wallet/payment writes) per
+    // `docs/research/ops-workflow-audit-2026-06-05.md` §28.
+    ["super", "accounting", "freight_export_doc", "freight_import_doc"],
     async ({ adminId }) => {
       const admin = createAdminClient();
 
@@ -1110,7 +1122,10 @@ export async function adminLinkReceiptItems(
   const fids = Array.from(new Set(rawFids));
 
   return withAdmin<{ receiptId: number; rid: string; itemsInserted: number }>(
-    ["super", "accounting"],
+    // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles issue/manage
+    // receipts (tb_receipt/_item only · no wallet/payment writes) per
+    // `docs/research/ops-workflow-audit-2026-06-05.md` §28.
+    ["super", "accounting", "freight_export_doc", "freight_import_doc"],
     async ({ adminId }) => {
       const admin = createAdminClient();
 

@@ -24,7 +24,10 @@ import { BillingRunAddClient } from "./billing-run-add-client";
 export const dynamic = "force-dynamic";
 
 export default async function BillingRunAddPage() {
-  await requireAdmin(["super", "accounting", "ops"]);
+  // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles create the
+  // billing doc (mark-paid stays accounting-only).
+  // `docs/research/ops-workflow-audit-2026-06-05.md` §28.
+  await requireAdmin(["super", "accounting", "ops", "freight_export_doc", "freight_import_doc"]);
 
   const res = await listEligibleCustomers();
   const customers = res.ok ? res.data!.rows : [];
