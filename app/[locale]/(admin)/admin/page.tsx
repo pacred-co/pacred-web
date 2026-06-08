@@ -77,6 +77,20 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
       const locale = await getLocale();
       redirect({ href: "/admin/drivers/work", locale });
     }
+    // 2026-06-08 (ภูม warehouse-handoff round 4 · pre-handoff browser smoke):
+    // Same pattern as driver-only. Warehouse staff (เบียร์/แหวน/มาร์ค)
+    // login via the legacy bridge → bridge auto-provisions admins row
+    // role='warehouse' → user lands on /admin → requireAdmin below
+    // rejects warehouse → notFound() → first-screen 404 for every staff.
+    // Caught with a real end-to-end test login (admin_test_warehouse)
+    // pre-handoff. Bounce to /admin/forwarders/warehouse-history —
+    // the warehouse role's actual landing (intake history + "+ สแกน
+    // รายการเพิ่ม" link straight into the daily barcode flow).
+    const isWarehouseOnly = allRoles.every((r) => r === "warehouse");
+    if (isWarehouseOnly) {
+      const locale = await getLocale();
+      redirect({ href: "/admin/forwarders/warehouse-history", locale });
+    }
   }
 
   // W-1 (gap-admin H-2): page-level role gate. The (admin) layout only
