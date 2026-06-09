@@ -271,3 +271,7 @@ something WRITES it. Also caught: the reader ordered `pol ASC` so the `''` defau
 always beat a newer specific route (`effective_from DESC` is the deterministic fix).
 When you ship a lookup against a table, verify the table has a populate path AND that
 the ORDER BY picks the row you intend.
+
+### [2026-06-09] Audit "column conflict" claim — verify the TABLE, not just the column name (S5 false positive)
+
+An audit flagged a "dead-write conflict": W10 writes `tb_forwarder_item.productbagid` (parcel→sack link) while "the CargoThai/MOMO sync writes `productbagid=''` to the SAME column" → claimed a re-sync silently un-packs W10 sacks. **It was a false positive.** Verifying the actual writes: the sync writes `productbagid=''` to **`tb_tmp_forwarder_item_cargothai`** (a STAGING table), NOT the real `tb_forwarder_item`; a repo-wide grep confirmed the ONLY writer of the real `tb_forwarder_item.productbagid` is W10. Legacy `tb_*` schemas reuse the same column names across the real table + its `tb_tmp_*_cargothai` / `*_momo` staging twins, so a grep for the column name alone (or an agent skimming) reads a conflict that isn't there. **Rule: a "two writers, same column" claim must confirm both writes target the SAME table** (`grep "from(\"<table>\")"` per writer, and check whether a reconcile copies the staging column into the real one) before adding a guard — otherwise you harden a non-existent bug + complicate a working sync. Cross-link: the "verify an audit's FRAMING before a risky fix" rule above.
