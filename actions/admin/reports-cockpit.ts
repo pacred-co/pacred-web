@@ -201,7 +201,7 @@ export async function getCockpitReport(): Promise<Result<CockpitReport>> {
         const revenue = Number(r.ftotalprice ?? 0);
         const cost = Number(r.fcosttotalprice ?? 0);
         const pre = Number(r.fprofittotal ?? 0);
-        const profit = pre !== 0 ? pre : ftotal - Number(r.fdiscount ?? 0) - cost;
+        const profit = pre !== 0 ? pre : revenue - Number(r.fdiscount ?? 0) - cost;
         mtdRevenue += revenue;
         mtdProfit += profit;
         mtdOrders += 1;
