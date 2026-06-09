@@ -370,132 +370,117 @@ export function fmtBaht(n: number): string {
 }
 
 /**
- * Peak-style additions (2026-06-09 · ภูม flag).
+ * Peak-style v2 (2026-06-09 · ภูม flag round 2).
  *
- * Peak Account (peakaccount.com) receipt format adapted for Pacred. Kept as
- * a separate StyleSheet so the existing `styles` (tax-invoice.tsx) is
- * untouched. Apply to FreightReceipt + any future Peak-format doc.
+ * v1 used boxes/cards everywhere → looked เละ. Peak is borderless — every
+ * section is just a row separated by a single 1px gray divider. No card
+ * chrome around issuer/customer/totals/payment. Only the meta box (top-right
+ * 3-row card) and the items table itself have borders.
  *
- * Visual rhythm (matches Peak's screenshot):
- *   - 36pt page padding (same)
- *   - Compact 1.1mm row spacing in totals stack
- *   - Two-column info cards row (issuer | customer) 50/50
- *   - Right-aligned key:value meta box (60pt wide)
- *   - Orange-tinted notes block (accent)
- *   - Bottom row: QR (left, ~26mm square) + 4 small signatures (right)
+ * Peak palette (sampled from the screenshot):
+ *   - body white background, no shadows
+ *   - section dividers = 1px solid #e5e7eb (COLORS.border)
+ *   - orange accent only for the brand wordmark + meta-box tint
+ *   - body text #111827, secondary #6b7280, danger #DC2626 (totals only)
+ *
+ * Typography:
+ *   - body 9pt
+ *   - section labels 10pt bold
+ *   - amount numbers 11pt bold
  */
 export const peakStyles = StyleSheet.create({
-  // Top header: brand left + doc badge right
-  peakHeader: {
+  // ── Top band: brand wordmark left · copy badge right ────────────────
+  peakTopBand: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderDk,
-    borderBottomStyle: "solid",
-    marginBottom: 10,
+    marginBottom: 8,
   },
-  peakBrandBlock: {
-    flexDirection: "column",
-    maxWidth: "60%",
-  },
-  peakBrandName: {
-    fontSize: 16,
+  peakBrandWord: {
+    fontSize: 24,
     fontWeight: "bold",
-    color: COLORS.primary,
+    color: COLORS.accentText, // Pacred orange wordmark
+    letterSpacing: 0.5,
   },
-  peakBrandLegal: {
+  peakCopyLabel: {
     fontSize: 9,
-    color: COLORS.foreground,
-    marginTop: 1,
-  },
-  peakBrandLegalEn: {
-    fontSize: 8,
     color: COLORS.muted,
   },
-  peakDocMeta: {
-    alignItems: "flex-end",
-  },
-  peakDocTitle: {
-    fontSize: 16,
+  peakDocTitleRight: {
+    fontSize: 14,
     fontWeight: "bold",
     color: COLORS.foreground,
+    marginTop: 2,
+    textAlign: "right",
   },
-  peakDocTitleEn: {
+  peakDocTitleEnRight: {
     fontSize: 7,
     color: COLORS.muted,
     letterSpacing: 1.2,
-    marginTop: -1,
+    textAlign: "right",
   },
-  peakCopyBadge: {
+
+  // ── Section divider (full-width 1px line) ────────────────────────────
+  peakDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    borderBottomStyle: "solid",
+    marginVertical: 6,
+  },
+
+  // ── Section row (issuer block, customer block — borderless stacked) ─
+  peakSectionRow: {
+    flexDirection: "row",
+    marginBottom: 4,
+  },
+  peakSectionMain: {
+    flex: 3,
+    paddingRight: 8,
+  },
+  peakSectionSide: {
+    flex: 2,
+    alignItems: "flex-end",
+  },
+  peakRoleLabel: {
     fontSize: 8,
+    color: COLORS.muted,
+    marginBottom: 1,
+  },
+  peakRoleName: {
+    fontSize: 10.5,
+    fontWeight: "bold",
     color: COLORS.foreground,
-    borderWidth: 1,
+    marginBottom: 2,
+  },
+  peakContactLine: {
+    fontSize: 8.5,
+    color: COLORS.foreground,
+    lineHeight: 1.4,
+  },
+  peakContactInline: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 1,
+  },
+  peakContactItem: {
+    fontSize: 8,
+    color: COLORS.muted,
+    marginRight: 10,
+  },
+
+  // ── Right-aligned meta card (เลขที่ · วันที่ · อ้างอิง) — keeps a border ─
+  peakMetaCard: {
+    borderWidth: 0.5,
     borderColor: COLORS.borderDk,
     borderStyle: "solid",
     borderRadius: 2,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    marginTop: 4,
-  },
-
-  // Two-column info cards (issuer | customer)
-  peakInfoRow: {
-    flexDirection: "row",
-    marginBottom: 6,
-  },
-  peakInfoCard: {
-    flex: 1,
-    padding: 7,
-    borderWidth: 1,
-    borderColor: COLORS.borderDk,
-    borderStyle: "solid",
-    borderRadius: 3,
-    marginRight: 5,
-  },
-  peakInfoCardLast: {
-    marginRight: 0,
-  },
-  peakInfoLabel: {
-    fontSize: 7,
-    color: COLORS.muted,
-    letterSpacing: 0.6,
-    marginBottom: 2,
-    textTransform: "uppercase",
-  },
-  peakInfoName: {
-    fontSize: 10,
-    fontWeight: "bold",
-    color: COLORS.foreground,
-    marginBottom: 1,
-  },
-  peakInfoLine: {
-    fontSize: 8.5,
-    color: COLORS.foreground,
-    lineHeight: 1.35,
-  },
-  peakInfoLineMuted: {
-    fontSize: 8.5,
-    color: COLORS.muted,
-    lineHeight: 1.35,
-  },
-
-  // Right-aligned key:value meta box (เลขที่ · วันที่ · ผู้ขาย · เครดิต)
-  peakMetaWrap: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    marginBottom: 8,
-  },
-  peakMetaBox: {
-    borderWidth: 1,
-    borderColor: COLORS.borderDk,
-    borderStyle: "solid",
-    borderRadius: 3,
-    width: 200,
+    width: 180,
+    backgroundColor: COLORS.surfaceAlt,
   },
   peakMetaRow: {
     flexDirection: "row",
+    paddingHorizontal: 6,
+    paddingVertical: 3,
     borderBottomWidth: 0.5,
     borderBottomColor: COLORS.border,
     borderBottomStyle: "solid",
@@ -504,44 +489,40 @@ export const peakStyles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   peakMetaLabel: {
-    width: 75,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    fontSize: 8.5,
+    width: 60,
+    fontSize: 8,
     color: COLORS.muted,
-    textAlign: "right",
-    borderRightWidth: 0.5,
-    borderRightColor: COLORS.border,
-    borderRightStyle: "solid",
   },
   peakMetaValue: {
     flex: 1,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
     fontSize: 8.5,
     color: COLORS.foreground,
+    textAlign: "right",
   },
 
-  // Table (Pacred items table — KEEP semantics; Peak-tuned spacing)
+  // ── Items table (Pacred 7-col — only the table itself has thin borders) ─
   peakTable: {
-    borderWidth: 1,
-    borderColor: COLORS.borderDk,
-    borderStyle: "solid",
-    marginBottom: 8,
+    marginVertical: 4,
+    borderTopWidth: 0.5,
+    borderTopColor: COLORS.borderDk,
+    borderTopStyle: "solid",
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.borderDk,
+    borderBottomStyle: "solid",
   },
   peakTableHead: {
     flexDirection: "row",
-    backgroundColor: COLORS.surfaceTotal,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderDk,
+    backgroundColor: COLORS.surfaceAlt,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.border,
     borderBottomStyle: "solid",
-    paddingVertical: 5,
-    paddingHorizontal: 5,
   },
   peakTableHeadCell: {
-    fontSize: 8.5,
+    fontSize: 8,
     fontWeight: "bold",
-    color: COLORS.foreground,
+    color: COLORS.muted,
   },
   peakTableRow: {
     flexDirection: "row",
@@ -549,7 +530,7 @@ export const peakStyles = StyleSheet.create({
     borderBottomColor: COLORS.border,
     borderBottomStyle: "solid",
     paddingVertical: 4,
-    paddingHorizontal: 5,
+    paddingHorizontal: 4,
   },
   peakTableRowLast: {
     borderBottomWidth: 0,
@@ -565,67 +546,35 @@ export const peakStyles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // Bottom row: notes (left) + totals (right)
-  peakBottomRow: {
+  // ── Section heading (📋/💳/📝/✍ inline icon + bold label) ──────────────
+  peakSectionHead: {
     flexDirection: "row",
-    marginBottom: 8,
-  },
-  peakNotesBlock: {
-    flex: 7,
-    marginRight: 8,
-    padding: 7,
-    borderWidth: 1,
-    borderColor: COLORS.accentBorder,
-    borderStyle: "solid",
-    borderRadius: 3,
-    backgroundColor: COLORS.accent,
-  },
-  peakNotesLabel: {
-    fontSize: 7,
-    color: COLORS.accentText,
-    fontWeight: "bold",
-    letterSpacing: 0.6,
+    alignItems: "center",
+    marginTop: 4,
     marginBottom: 3,
-    textTransform: "uppercase",
   },
-  peakNotesText: {
-    fontSize: 8.5,
+  peakSectionHeadLabel: {
+    fontSize: 10,
+    fontWeight: "bold",
     color: COLORS.foreground,
-    lineHeight: 1.4,
   },
-  peakTotalsBlock: {
-    flex: 5,
-    borderWidth: 1,
-    borderColor: COLORS.borderDk,
-    borderStyle: "solid",
-    borderRadius: 3,
+
+  // ── Totals: RIGHT-aligned text rows (NO box, NO border) ───────────────
+  peakTotalsWrap: {
+    alignItems: "flex-end",
+    marginBottom: 4,
   },
   peakTotalsRow: {
     flexDirection: "row",
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderBottomWidth: 0.5,
-    borderBottomColor: COLORS.border,
-    borderBottomStyle: "solid",
-  },
-  peakTotalsRowLast: {
-    backgroundColor: COLORS.surfaceTotal,
-    borderTopWidth: 1.5,
-    borderTopColor: COLORS.borderDk,
-    borderTopStyle: "solid",
-    borderBottomWidth: 0,
-    paddingVertical: 5,
+    paddingVertical: 1.5,
+    minWidth: 220,
+    justifyContent: "flex-end",
   },
   peakTotalsLabel: {
-    flex: 1,
     fontSize: 9,
     color: COLORS.muted,
     textAlign: "right",
-  },
-  peakTotalsLabelBold: {
-    fontSize: 10,
-    color: COLORS.foreground,
-    fontWeight: "bold",
+    marginRight: 14,
   },
   peakTotalsValue: {
     width: 80,
@@ -633,107 +582,130 @@ export const peakStyles = StyleSheet.create({
     color: COLORS.foreground,
     textAlign: "right",
   },
-  peakTotalsValueBold: {
+  peakTotalsGrandRow: {
+    flexDirection: "row",
+    paddingTop: 4,
+    paddingBottom: 4,
+    marginTop: 2,
+    minWidth: 260,
+    justifyContent: "flex-end",
+    borderTopWidth: 0.5,
+    borderTopColor: COLORS.borderDk,
+    borderTopStyle: "solid",
+  },
+  peakTotalsGrandLabel: {
     fontSize: 11,
-    color: COLORS.primary,
     fontWeight: "bold",
+    color: COLORS.foreground,
+    textAlign: "right",
+    marginRight: 14,
+  },
+  peakTotalsGrandValue: {
+    width: 80,
+    fontSize: 11,
+    fontWeight: "bold",
+    color: COLORS.foreground,
+    textAlign: "right",
+  },
+  peakAmountInWords: {
+    fontSize: 8,
+    color: COLORS.muted,
+    marginTop: 2,
+  },
+  peakTotalsAccent: {
+    color: "#DC2626",
   },
 
-  // Compact "ชำระโดย" strip
-  peakPayStrip: {
+  // ── Payment section: left ชำระโดย inline · right bank stacked ─────────
+  peakPaymentRow: {
     flexDirection: "row",
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: COLORS.borderDk,
-    borderStyle: "solid",
-    borderRadius: 3,
-    marginBottom: 8,
+    marginVertical: 3,
   },
-  peakPayLabel: {
-    fontSize: 7,
-    color: COLORS.muted,
-    letterSpacing: 0.6,
-    marginRight: 6,
-    textTransform: "uppercase",
+  peakPaymentLeft: {
+    flex: 1,
+    paddingRight: 10,
+    borderRightWidth: 0.5,
+    borderRightColor: COLORS.border,
+    borderRightStyle: "solid",
   },
-  peakPayItem: {
+  peakPaymentRight: {
+    flex: 1,
+    paddingLeft: 10,
+  },
+  peakPaymentLine: {
     fontSize: 8.5,
     color: COLORS.foreground,
-    marginRight: 10,
+    lineHeight: 1.5,
+  },
+  peakPaymentLineMuted: {
+    fontSize: 8,
+    color: COLORS.muted,
+    lineHeight: 1.5,
   },
 
-  // Bottom: QR + 4 signature mini-boxes
-  peakBottomFooter: {
+  // ── Signature mini-boxes (~80pt wide each, single thin line at bottom) ─
+  peakSigRow: {
     flexDirection: "row",
+    marginTop: 6,
   },
-  peakQrBox: {
-    width: 110,
-    padding: 6,
-    borderWidth: 1,
-    borderColor: COLORS.borderDk,
-    borderStyle: "solid",
-    borderRadius: 3,
-    marginRight: 6,
+  peakQrSmall: {
+    width: 60,
     alignItems: "center",
+    marginRight: 6,
   },
-  peakQrLabel: {
-    fontSize: 7,
-    color: COLORS.muted,
-    letterSpacing: 0.6,
-    marginBottom: 3,
-    textTransform: "uppercase",
-  },
-  peakQrPlaceholder: {
-    width: 74,
-    height: 74,
-    backgroundColor: COLORS.surfaceTotal,
+  peakQrSmallBox: {
+    width: 50,
+    height: 50,
+    backgroundColor: COLORS.surfaceAlt,
     borderWidth: 0.5,
     borderColor: COLORS.borderDk,
     borderStyle: "solid",
     alignItems: "center",
     justifyContent: "center",
   },
-  peakQrPlaceholderText: {
-    fontSize: 7,
+  peakQrSmallText: {
+    fontSize: 6,
     color: COLORS.mutedLt,
     textAlign: "center",
     lineHeight: 1.2,
   },
-  peakQrCaption: {
-    fontSize: 7,
+  peakQrSmallLabel: {
+    fontSize: 6.5,
     color: COLORS.muted,
-    marginTop: 3,
-  },
-  peakSigGroup: {
-    flex: 1,
-    flexDirection: "row",
+    marginTop: 1,
+    textAlign: "center",
   },
   peakSigBox: {
     flex: 1,
-    padding: 5,
-    borderWidth: 1,
-    borderColor: COLORS.borderDk,
-    borderStyle: "solid",
-    borderRadius: 3,
+    paddingHorizontal: 4,
+    paddingTop: 2,
     marginRight: 4,
     alignItems: "center",
   },
   peakSigBoxLast: {
     marginRight: 0,
   },
-  peakSigLabel: {
-    fontSize: 7,
-    color: COLORS.muted,
+  peakSigContent: {
+    height: 30,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  peakSigLine: {
+    width: "100%",
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.foreground,
+    borderBottomStyle: "solid",
     marginBottom: 2,
   },
-  peakSigName: {
-    fontSize: 8,
+  peakSigRoleLabel: {
+    fontSize: 7.5,
     color: COLORS.foreground,
-    marginTop: "auto",
+    textAlign: "center",
   },
-  peakSigDate: {
-    fontSize: 7,
+  peakSigDateLabel: {
+    fontSize: 6.5,
     color: COLORS.muted,
+    textAlign: "center",
+    marginTop: 1,
   },
 });
