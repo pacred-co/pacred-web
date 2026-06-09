@@ -35,6 +35,11 @@ import {
   DETAIL_LEGEND,
   CNTSTATUS_CFG,
 } from "@/lib/admin/forwarder-status";
+import {
+  isRowEligibleForAddCheck,
+  FSTATUS_LABEL,
+  REPORT_CNT_ADD_CHECK_MIN_FSTATUS,
+} from "@/lib/admin/report-cnt-add-check-gate";
 
 // ─────────────────────────────────────────────────────────────────────
 // Row shape
@@ -221,11 +226,20 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
     });
   }
 
+  // Eligible-only set for the "select all" header checkbox — never tick a
+  // row the gate would reject (avoid the staff "ticked + submit + bounced"
+  // ping-pong). Mirrors the server-side STATUS GATE in
+  // adminReportCntAddCheck (lib/admin/report-cnt-add-check-gate.ts).
+  const eligibleFilteredIds = useMemo(
+    () => filtered.filter((r) => isRowEligibleForAddCheck(r.fstatus)).map((r) => r.id),
+    [filtered],
+  );
+
   function toggleAll() {
-    if (selected.size === filtered.length) {
+    if (selected.size === eligibleFilteredIds.length && eligibleFilteredIds.length > 0) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(filtered.map((r) => r.id)));
+      setSelected(new Set(eligibleFilteredIds));
     }
   }
 
@@ -308,8 +322,17 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                 <th className="px-2 py-2 text-center w-8">
                   <input
                     type="checkbox"
-                    checked={selected.size > 0 && selected.size === filtered.length}
+                    checked={
+                      eligibleFilteredIds.length > 0 &&
+                      selected.size === eligibleFilteredIds.length
+                    }
                     onChange={toggleAll}
+                    disabled={eligibleFilteredIds.length === 0}
+                    title={
+                      eligibleFilteredIds.length === 0
+                        ? `ไม่มีรายการที่ถึงโกดังไทยแล้ว (ขั้นต่ำ "${FSTATUS_LABEL[REPORT_CNT_ADD_CHECK_MIN_FSTATUS]}")`
+                        : `เลือกทั้งหมด ${eligibleFilteredIds.length} รายการที่ถึงโกดังไทยแล้ว`
+                    }
                     aria-label="เลือกทั้งหมด"
                   />
                 </th>
@@ -421,14 +444,26 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                 >
                   {canBulkCheck && !cabinetIsPaid && (
                     <td className="px-2 py-2 text-center">
-                      {!r.inCheckQueue && (
-                        <input
-                          type="checkbox"
-                          checked={selected.has(r.id)}
-                          onChange={() => toggleRow(r.id)}
-                          aria-label={`เลือก ${r.id}`}
-                        />
-                      )}
+                      {!r.inCheckQueue && (() => {
+                        const eligible = isRowEligibleForAddCheck(r.fstatus);
+                        const currentLabel =
+                          FSTATUS_LABEL[r.fstatus] ??
+                          (r.fstatus ? r.fstatus : "(ว่าง)");
+                        return (
+                          <input
+                            type="checkbox"
+                            checked={selected.has(r.id)}
+                            onChange={() => toggleRow(r.id)}
+                            disabled={!eligible}
+                            title={
+                              eligible
+                                ? `เลือก ${r.fidorco ?? `#${r.id}`}`
+                                : `รอของถึงโกดังก่อน · สถานะปัจจุบัน: ${currentLabel}`
+                            }
+                            aria-label={`เลือก ${r.id}`}
+                          />
+                        );
+                      })()}
                     </td>
                   )}
                   <td className="px-2 py-2 font-mono" title={r.inCheckQueue ? `เพิ่มแล้วโดย ${r.checkAdminId} เวลา: ${r.checkDate}` : undefined}>
@@ -568,6 +603,19 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                         </span>
                       );
                     })()}
+                    {/* 2026-06-09 status-gate (ภูม) — when bulk-check is active,
+                        flag rows whose fstatus is below the QA-eligibility floor
+                        so staff can SEE why the checkbox is disabled. */}
+                    {canBulkCheck && !cabinetIsPaid && !r.inCheckQueue && !isRowEligibleForAddCheck(r.fstatus) && (
+                      <div className="mt-1">
+                        <span
+                          className="inline-block rounded-full bg-slate-200 text-slate-700 border border-slate-400 text-[9px] px-1.5 py-0.5"
+                          title={`รอของถึงโกดังก่อน · ตรวจสอบได้เมื่อสถานะถึง "${FSTATUS_LABEL[REPORT_CNT_ADD_CHECK_MIN_FSTATUS]}"`}
+                        >
+                          ยังถึงไม่ได้
+                        </span>
+                      </div>
+                    )}
                     {r.fcredit && r.fcredit !== "" && (
                       <div className="mt-1">
                         {/* ภูม #5 2026-05-29: same path-fix as tracking link above. */}
