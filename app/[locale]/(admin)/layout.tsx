@@ -38,13 +38,23 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // viewport because flex children default to `min-width:auto` (content-based).
   // With wide intrinsic content (4-col stat cards + 14-tab strip), main grew
   // > viewport-256px → stat cards + tabs clipped on the right at <1920px screens.
-  // Fix: add `min-w-0` so flex child can shrink, + `overflow-x-hidden` so any
+  // Fix: add `min-w-0` so flex child can shrink, + `overflow-x-clip` so any
   // wider child clips cleanly instead of expanding main. Inner overflow-x-auto
   // wrappers (tab strips, tables) now activate horizontal scroll correctly.
+  //
+  // 2026-06-09 (ภูม flag "top menu sticky ไม่ทำงาน"): MUST be `overflow-x-clip`
+  // (NOT `overflow-x-hidden`). Per CLAUDE.md conventions §styling:
+  // "Overflow: use `overflow-x: clip` on root (not `hidden`) — `hidden`
+  // breaks `sticky`." Any overflow value other than `visible` or `clip`
+  // creates a scrolling context, and `position: sticky` children in that
+  // wrapper resolve their containing block to THIS wrapper instead of the
+  // window — which then never scrolls (height = min-h-screen = viewport),
+  // so sticky never activates. `overflow-x: clip` clips without forming
+  // a scroll context, which is what we want here.
   return (
     <div className="min-h-screen flex text-foreground">
       <AdminSidebar roles={roles} counts={counts} adminLabel={adminLabel} adminAvatar={profile?.avatar_url ?? null} />
-      <div className="flex-1 lg:ml-64 min-h-screen min-w-0 overflow-x-hidden">
+      <div className="flex-1 lg:ml-64 min-h-screen min-w-0 overflow-x-clip">
         {children}
       </div>
     </div>

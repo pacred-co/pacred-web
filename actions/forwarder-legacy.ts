@@ -143,12 +143,22 @@ export async function createLegacyForwarder(
   }
 
   // forwarder.php L24-53 — fShipBy + pro + payMethod resolution
+  //
+  // 2026-06-09 BUG FIX (pricing-flagged): order of these 2 ifs swapped.
+  // Old order set PCS then overwrote with PCSF when pro="f", so a customer
+  // who picked self-pickup PCS AND toggled Flash promo would have fShipBy
+  // = "PCSF" but addressID still = "PCS" → the else-branch SELECT below
+  // tried `.eq("addressid", "PCS")` and DB threw
+  // `invalid input syntax for type bigint: "PCS"`.
+  // Self-pickup wins over Flash promo (you can't Flash-ship something the
+  // customer is picking up at our warehouse) — matches actions/cart.ts
+  // L332-337 belt-and-braces.
   let fShipBy: string | null = d.hShipBy ?? null;
-  if (d.addressID === "PCS") {
-    fShipBy = "PCS";
-  }
   if (d.pro === "f") {
     fShipBy = "PCSF";
+  }
+  if (d.addressID === "PCS") {
+    fShipBy = "PCS"; // PCS self-pickup wins over Flash promo
   }
   // forwarder.php L49-53 — paymethod derived from fShipBy
   const inOrigin = fShipBy === "PCS" || fShipBy === "PCSF" || fShipBy === "PCSE"

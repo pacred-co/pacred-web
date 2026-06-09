@@ -498,11 +498,12 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
         </div>
       )}
 
-      {/* Wave 18-B — Date-range filter (default last 30 days · matches
-          legacy forwarder.php L318-323 "ผลลัพธ์การค้นหาย้อนหลัง 30 วัน").
-          The `?all=1` escape hatch mirrors legacy's "ค้นหาข้อมูลทั้งหมด"
-          button. Same pattern as `/admin/yuan-payments` (Wave 15 P0-2). */}
-      <form className="flex gap-2 flex-wrap items-end" action="/admin/forwarders">
+      {/* 2026-06-09 (ภูม flag) — Wave 18-B duplicate date-range form REMOVED.
+          ForwardersSearchBar above already owns date_from/date_to + ค้นหา;
+          this form duplicated those fields. Escape hatches "กลับ 30 วัน" /
+          "ค้นหาข้อมูลทั้งหมด" are preserved as compact links inside the chip
+          immediately below — same behavior, no double UI. */}
+      <form className="hidden" action="/admin/forwarders">
         {/* Preserve all other filter state across submit */}
         {sp.status    ? <input type="hidden" name="status"    value={sp.status} /> : null}
         {sp.q         ? <input type="hidden" name="q"         value={sp.q} /> : null}
