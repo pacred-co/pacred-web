@@ -3,6 +3,21 @@
 
 ---
 
+# 🧾 2026-06-09 EVE — เดฟ: tax-invoice platform P1+P2 SHIPPED + ภูม chase integrated → ALL ON MAIN · read FIRST
+
+> **main = dave-pacred = Poom-pacred = InwPond007 = `8a5d6c1f`** (all synced 0/0 · pushed to main per owner "ขึ้น main เลย" · Vercel deploying prod) · `pnpm verify` + prod build (direct-node) EXIT 0 every save-point · **5 migrations applied prod today (0157 hs-idx · 0158 cargo_3number · 0159 driver-completed-at · 0160 heartbeat-lock) · NEXT FREE = 0161.**
+>
+> **Shipped this session (tax-invoice platform · plan = [`docs/research/tax-invoice-platform-build-plan-2026-06-09.md`](docs/research/tax-invoice-platform-build-plan-2026-06-09.md)):**
+> 1. **P1 — doc-mode toggle @ ฝากนำเข้า order entry** (`7a9217fa`) — mounted `<CartTaxDocPref>` on `/service-import/add` (ใบกำกับ/ใบขน/ไม่รับเอกสาร) → persists `tb_forwarder.tax_doc_*` (mig 0127 · cart.ts shape · no schema · no new i18n). SELECTION only, no money at create.
+> 2. **P2 — COST/Pricing capture + the `pricing` AdminRole** (`6aa7db85` backend + `beb7e188` UI) — **mig 0158** (tb_order + tb_forwarder_item += `cost_unit_*`/`cost_rate_cny`/`declared_value_thb`/`hs_code` + widen `admins.role` CHECK +`pricing`) · `actions/admin/cargo-cost.ts` (`setForwarderItemCost`/`setShopOrderItemCost` · super/accounting/pricing · logAdminAction) · inline green "ต้นทุน (Pricing · ใบขน)" cost editors on the forwarder `[fNo]` + shop `[hNo]` detail pages (`cargo-cost-line-editor.tsx` · confirm-before-mutate · read-only summary for other roles). **🔒 ISOLATED from the money path** (no selling/quote/status/comms) · **NO header rollup** (`fcosttotalprice` stays cost-sheet-authoritative — landmine avoided · PEAK rollup = P4).
+> 3. **ภูม Poom-pacred chase integrated** (14 commits · `db0611d1` merge) — shop-order heartbeat-lock + bulk-actions + multi-axis search + refund-history + inline edits + driver-runs completed-at + ctt-cron live-flag + momo-autocommit safety. **🔢 migration collision resolved** (ภูม's 0158→**0159** · 0159→**0160** vs เดฟ's applied 0158) · RBAC integrity verified (all 24 roles present, `comm` diff empty) · ภูม's renamed migrations applied+verified prod · fixed his ctt-cron-activation.md broken md-links.
+>
+> **🔴 OWNER ACTION ITEMS (carryover — still pending):** (1) **flip `tax_invoice.shop_yuan_enabled`** (ใบกำกับ ฝากสั่ง/ฝากโอน ships DORMANT) after money-loop TEST + accounting ใบขน-VAT sign-off. (2) confirm urgent juristic-signup fix (real นิติบุคคล signup + big photo). (3) **enable the Pricing role:** assign `pricing` to a staffer at `/admin/admins/[id]/edit` so they reach the cost editors. (4) carryover: Supabase refresh-token · Vercel env (TAMIT/Sentry/FB) · staff photos · employee_code.
+>
+> **⚠️ NOT authed-click-tested:** P1 (doc-mode persist) + P2 (cost-line save → DB) gated green + reviewed but not browser-tested on an authed session (no test login). **➡️ NEXT = P3** (ใบขน Docs · declared-value→customs_declarations · `freight_import_doc` role · mig 0161+0162 · ⚠️ มูลค่าสำแดง = owner/accountant policy-sensitive per ADR-0016 · NETBAY = P5 blocker) — best started fresh-context. ⚠️ **CLAUDE.md >2000 lines — archive overdue (§12).**
+
+---
+
 # 🧾 2026-06-09 PM — เดฟ: CARGO ใบกำกับภาษี form delivered + platform build-plan + team-model clarified · SESSION CLOSE · read FIRST
 
 > **All on `dave-pacred` (+ this close-out pushed to all branches once, then dave-pacred-only going forward).** Built the **CARGO tax-invoice (ใบกำกับภาษี) Excel form** from the AXELRA template + olddata-dev chats — adds the missing **Pricing (cost) section** (file `/Users/dev/Downloads/PACRED-ใบกำกับภาษี-form-v2-pricing.xlsx`, script `scripts/tax-invoice-form-build.py`, 0 formula errors, functional-tested).
