@@ -5,7 +5,9 @@
 
 ---
 
-## 🔢 NEXT FREE NUMBER = **0157**
+## 🔢 NEXT FREE NUMBER = **0159**
+
+> ✅ **2026-06-09 (เดฟ): 0157** = `tb_api_china_hs_search_idx` (HS-search index · from the 5-wave code sprint · applied prod) · **0158** = `cargo_3number_lines` (P2 tax-invoice platform — per-line COST + DECLARED columns on `tb_order` + `tb_forwarder_item` + widen `admins.role` CHECK to add the `pricing` role · additive + idempotent). ✅ **0158 APPLIED + verified prod 2026-06-09** (dry-run → `--apply` via `scripts/apply-migration-dryrun.mjs` · 81ms COMMIT · all 8 cost/declared columns + `'pricing'` in `admins_role_check` confirmed live). **NEXT FREE = 0159.**
 
 > ✅ **2026-06-08 (เดฟ · round 3 build batch): 0151 (freight_quote triage) · 0152 (shop_yuan_tax_invoice + `tax_invoice.shop_yuan_enabled` flag = DEFAULT OFF / dormant) · 0154 (customer_tag) · 0155 (customer_note) · 0156 (tb_forwarder.courier_tracking_url) — ALL APPLIED TO PROD** (dry-run → `--apply` via `scripts/apply-migration-dryrun.mjs` + `apply-migration-generic.mjs`). 0153 NOT used (shop+yuan share 0152's store via `service_type`). ⚠️ **0152 ships DORMANT** — the ใบกำกับ/ใบขน issuance for ฝากสั่ง/ฝากโอน stays OFF until the owner flips `tax_invoice.shop_yuan_enabled` after (1) a money-loop browser test on a TEST order + (2) accounting sign-off on the ใบขน VAT base (`lib/tax/tax-doc-mode.ts` L187).
 
