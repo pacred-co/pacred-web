@@ -264,19 +264,16 @@ function ReceiptPage({
         {/* ── headerFormatOne: logo LEFT · (label) + title RIGHT ─────────── */}
         <div id="headerFormatOne" style={{ marginBottom: "4mm" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            {/* LEFT: merchant logo */}
-            <div id="merchantLogo" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            {/* LEFT: merchant logo — single wordmark image, Peak-sized (ภูม flag round 7) */}
+            <div id="merchantLogo" style={{ display: "flex", alignItems: "center" }}>
               <Image
                 src="/images/pacred-logo-red.png"
                 alt={SITE_LEGAL_NAME}
-                width={48}
-                height={48}
+                width={300}
+                height={90}
                 unoptimized
-                style={{ width: "11mm", height: "auto" }}
+                style={{ width: "auto", height: "22mm", display: "block" }}
               />
-              <span style={{ fontSize: "22px", fontWeight: "bold", color: "#C2410C", letterSpacing: "0.5px" }}>
-                Pacred
-              </span>
             </div>
 
             {/* RIGHT: (ต้นฉบับ) label ABOVE title */}
@@ -1046,22 +1043,51 @@ export default async function ForwarderInvoicePrintPage({
       */}
       <style>{`
         @media print {
-          @page { size: A4 portrait; margin: 1.5cm; }
-          body { background: white !important; }
-          .no-print { display: none !important; }
-          #paperTransaction {
-            box-shadow: none !important;
-            border: none !important;
+          /* 2026-06-09 ภูม flag round 6: receipt content stopped halfway
+             down page 1 with the bottom ~150mm blank. Round-5 had
+             min-height:auto on .receipt-page that overrode the inline
+             minHeight:277mm — so the page collapsed to content height
+             and the flex:1 spacer (between table and summary) had no room
+             to grow. Solution: drop that override + give .receipt-page an
+             explicit print height = the A4 printable area minus the @page
+             safe margin (297mm − 2*8mm = 281mm). The flex:1 spacer then
+             pushes the summary/payment/cert block to the bottom of the
+             page as designed.
+
+             @page margin = 8mm (printer-safe edge, single layer — no
+             padding stacking with .subpage's internal 10mm/12mm gutter).
+             Chrome's datetime/URL/page-# header/footer is dialog-only
+             ("Headers and footers: off"). Sidebar is print:hidden via the
+             admin layout. */
+          @page { size: A4 portrait; margin: 8mm; }
+          html, body {
+            background: white !important;
             margin: 0 !important;
-            page-break-after: always;
+            padding: 0 !important;
           }
-          #paperTransaction:last-child { page-break-after: auto; }
+          .no-print, .no-print * { display: none !important; }
           .receipt-page {
             box-shadow: none !important;
             border: none !important;
             margin: 0 !important;
             padding: 0 !important;
-            max-width: 100% !important;
+            max-width: none !important;
+            width: 100% !important;
+            /* A4 portrait inner area = 297mm − 2×8mm @page margin = 281mm.
+               Use both height and min-height so the flex:1 spacer has a
+               concrete target to grow into. */
+            height: 281mm !important;
+            min-height: 281mm !important;
+            page-break-after: always;
+            page-break-inside: avoid;
+          }
+          .receipt-page:last-child { page-break-after: auto; }
+          /* Inner subpage takes the full receipt-page height and zeros its
+             own padding (the @page margin is the safe edge). */
+          .receipt-page .subpage {
+            padding: 0 !important;
+            height: 100% !important;
+            min-height: 100% !important;
           }
         }
         @media screen {
@@ -1126,6 +1152,9 @@ export default async function ForwarderInvoicePrintPage({
             <div className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
               <b>ตัวอย่างก่อนพิมพ์</b> — ใบเสร็จจะออกมา <b>2 หน้า</b> (ต้นฉบับ + สำเนา) เมื่อกดพิมพ์ ·
               กดปุ่ม &ldquo;พิมพ์ใบเสร็จ&rdquo; ด้านบนเพื่อบันทึกสถานะ <code>statusPrint=1</code> และเปิดหน้าต่างพิมพ์
+              <br />
+              <b className="mt-1 inline-block">หน้าต่างพิมพ์ Chrome:</b> ตั้ง <b>&ldquo;More settings → Headers and footers: ปิด&rdquo;</b> +
+              <b>&ldquo;Margins: None&rdquo;</b> เพื่อตัดวันที่/URL/เลขหน้าของ browser ออกจากเอกสาร
             </div>
 
             {/* 2026-05-31 sitting-H-fix #4 (ภูม): data-gap banner.

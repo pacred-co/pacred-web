@@ -53,8 +53,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // a scroll context, which is what we want here.
   return (
     <div className="min-h-screen flex text-foreground">
-      <AdminSidebar roles={roles} counts={counts} adminLabel={adminLabel} adminAvatar={profile?.avatar_url ?? null} />
-      <div className="flex-1 lg:ml-64 min-h-screen min-w-0 overflow-x-clip">
+      {/* 2026-06-09 ภูม flag round 4 (receipt-print artefacts): hide the
+          sidebar on print so receipts/invoices/tax-invoices don't show admin
+          chrome bleeding into the page. Side-effect-free for screen rendering. */}
+      <div className="print:hidden">
+        <AdminSidebar roles={roles} counts={counts} adminLabel={adminLabel} adminAvatar={profile?.avatar_url ?? null} />
+      </div>
+      <div className="flex-1 lg:ml-64 min-h-screen min-w-0 overflow-x-clip print:ml-0">
         {children}
       </div>
     </div>
