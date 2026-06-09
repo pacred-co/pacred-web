@@ -1563,6 +1563,25 @@ const menuInterpreter: MenuSection[] = [
   extensionSection([blockExtIncidents]),
 ];
 
+/**
+ * `pricing` — Cargo Pricing (P2 · tax-invoice platform · 2026-06-09). Captures
+ * the COST number (PEAK stock-in basis) on import-forwarder + shop-order lines.
+ * Reaches the two cargo cost surfaces; the dedicated Pricing workspace + job
+ * board lands in P4.
+ */
+const menuPricing: MenuSection[] = [
+  { header: "", items: [itemDashboard] },
+  {
+    header: "Cargo & Freight",
+    items: [
+      { labelKey: "forwarderImport.title", href: "/admin/forwarders",    icon: "Package" },
+      { labelKey: "purchasing.title",      href: "/admin/service-orders", icon: "ShoppingCart" },
+    ],
+  },
+  learningSection,
+  extensionSection([blockExtIncidents]),
+];
+
 const ROLE_MENUS: Record<AdminRole, MenuSection[]> = {
   super:       menuSuper,
   // 2026-05-28 ดึก — Wave 26 · `manager` role added by migration 0118.
@@ -1580,6 +1599,8 @@ const ROLE_MENUS: Record<AdminRole, MenuSection[]> = {
   warehouse:   menuWarehouse,
   driver:      menuDriver,
   interpreter: menuInterpreter,
+  // 2026-06-09 — P2 · `pricing` role (tax-invoice platform · COST capture).
+  pricing:     menuPricing,
   // Freight roles (#16-28) — STUB menus per Agent ZZ 2026-05-20 ค่ำ.
   // Each is a faithful placeholder of the legacy doc's section header +
   // the few items the doc concretely names. Deeper item trees are TODO
@@ -1624,6 +1645,7 @@ const ROLE_PRECEDENCE: AdminRole[] = [
   // Approval-rights inheritance: super → manager → accounting → qa → ops.
   "manager",
   "accounting",
+  "pricing",                     // Cargo Pricing — COST capture (ranks below accounting)
   "qa",                          // QA outranks ops (audit reach)
   "ops",
   "sales_admin",                 // Cargo Sales Manager (#29) — has approval

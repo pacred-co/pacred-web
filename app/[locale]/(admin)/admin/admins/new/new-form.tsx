@@ -49,6 +49,7 @@ const ROLE_LABELS: Record<AdminRoleEnum, string> = {
   warehouse:                 "Warehouse staff",
   driver:                    "Driver / รถส่งของ",
   interpreter:               "Interpreter / ล่ามจีน",
+  pricing:                   "Cargo Pricing (ต้นทุน / PEAK stock-in)",
   freight_sales_manager:     "Freight Sales Manager (#16)",
   freight_sales:             "Freight Sales (#17)",
   freight_export_manager:    "Freight Export Manager (#18)",

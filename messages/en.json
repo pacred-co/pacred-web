@@ -3137,6 +3137,7 @@
       "warehouse": "Warehouse",
       "driver": "Driver",
       "interpreter": "Interpreter",
+      "pricing": "Cargo Pricing",
       "freightSalesManager": "Freight Sales Manager",
       "freightSales": "Freight Sales Staff",
       "freightExportManager": "Export Manager",

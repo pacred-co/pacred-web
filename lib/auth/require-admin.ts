@@ -76,6 +76,7 @@ export type AdminRole =
   | "warehouse"
   | "driver"
   | "interpreter"
+  | "pricing"                   // Cargo Pricing — captures COST (PEAK stock-in · 3-number tax-invoice model · mig 0158)
   // ── CompanyType 2: Freight (doc roles #16-28) ────────────────────
   | "freight_sales_manager"     // #16
   | "freight_sales"             // #17

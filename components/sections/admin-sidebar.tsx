@@ -159,6 +159,7 @@ const ROLE_LABEL_KEY: Record<AdminRole, string> = {
   warehouse:   "role.warehouse",
   driver:      "role.driver",
   interpreter: "role.interpreter",
+  pricing:     "role.pricing",
   freight_sales_manager:    "role.freightSalesManager",
   freight_sales:            "role.freightSales",
   freight_export_manager:   "role.freightExportManager",

@@ -37,9 +37,9 @@ import { z } from "zod";
 // ─── enums ──────────────────────────────────────────────────────────────
 
 /**
- * AdminRole — the 22-value enum from `lib/auth/require-admin.ts` (kept
+ * AdminRole — the 24-value enum from `lib/auth/require-admin.ts` (kept
  * in sync; do not narrow without updating the require-admin source).
- * The form UI exposes ALL 22 so a super-admin can grant any role.
+ * The form UI exposes ALL 24 so a super-admin can grant any role.
  */
 export const ADMIN_ROLES = [
   "super",
@@ -53,6 +53,8 @@ export const ADMIN_ROLES = [
   "warehouse",
   "driver",
   "interpreter",
+  // 2026-06-09 — P2 (tax-invoice platform) · `pricing` role from migration 0158.
+  "pricing",
   "freight_sales_manager",
   "freight_sales",
   "freight_export_manager",
