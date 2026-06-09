@@ -14,7 +14,9 @@
 
 ## 🔴 OWNER / DAVE / GOT ACTION ITEMS
 
-### #1 Update `SUPABASE_DB_PASSWORD` in Vercel (พี่เดฟ หรือ พี่ก๊อต ทำ)
+### #1 ~~Update `SUPABASE_DB_PASSWORD` in Vercel~~ — ⚠️ CORRECTED · DO NOT ACTION (owner-confirmed 2026-06-09)
+
+> ✅ **WRONG PREMISE — เดฟ corrected (owner-confirmed 2026-06-09):** `yzljakczhwrpbxflnmco` = **PRODUCTION** · `lozntlidlqqzzcaathnm` = **ภูม's DEV project** (NOT prod). ภูม mistook the dev project for prod. **DO NOT switch the prod Vercel `SUPABASE_DB_PASSWORD` to the dev password** — that would point prod direct-DB calls (migrations/cron/scripts) at the dev project's credentials and break prod. The **prod (`yzljakczhwrpbxflnmco`) password is unchanged + working** — เดฟ ran 9 migrations (0158–0166) against prod with it this session (all COMMITTED + verified). No Vercel change needed. The original text below is kept for trail — **disregard the prod/password switch**.
 
 **Issue:** Password DB ใน Vercel ปัจจุบันอาจเป็นรหัสเก่า (`<old-pw-redacted>` ของ project Supabase เก่า `yzljakczhwrpbxflnmco`) · ถ้าไม่อัพเดต บาง direct-DB call จาก server-side scripts / migrations / cron จะ fail (REST API ผ่าน anon/service-role key ไม่กระทบ).
 
@@ -26,7 +28,7 @@
 SUPABASE_DB_PASSWORD=<new value — ask ภูม / secure channel · scrubbed from git for security>
 ```
 > 🔐 เดฟ scrubbed the literal password from this doc 2026-06-09 (committing a prod DB password to git = security risk; it's in `.env.local` which is gitignored). ⚠️ **Owner: rotate this DB password** — it was committed to `Poom-pacred` git history before this scrub.
-> ⚠️ **CRITICAL — prod Supabase project mismatch (needs owner confirm):** this doc names prod as `lozntlidlqqzzcaathnm`, but the session `.env.local` + CLAUDE.md + the migration ledger + ALL of เดฟ's migrations (0158–0166) target `yzljakczhwrpbxflnmco`. **Which project does Vercel prod actually point at?** If Vercel `NEXT_PUBLIC_SUPABASE_URL` = `yzljakczhwrpbxflnmco`, the deep-source build is correct + safe to deploy. If it = `lozntlidlqqzzcaathnm`, เดฟ's migrations must be re-applied there before main deploy. **Confirm before pushing to main.**
+> ✅ **RESOLVED (owner-confirmed 2026-06-09):** prod = `yzljakczhwrpbxflnmco` · `lozntlidlqqzzcaathnm` = ภูม's DEV project. เดฟ's migrations (0158–0166) are on PROD + verified — deep-source build safe to deploy. Every "prod = lozntl" claim in this section (above + below) is a dev↔prod confusion — **disregard**.
 
 ✅ ทดสอบ connect prod DB (`lozntlidlqqzzcaathnm` · port 5432 · user `postgres`) ผ่านทันที 2026-06-09 PM.
 
