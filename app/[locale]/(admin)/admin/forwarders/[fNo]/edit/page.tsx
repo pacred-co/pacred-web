@@ -786,7 +786,17 @@ export default async function AdminForwarderEditPage({
               - ➕ ค่าบริการ / ค่าใช้จ่ายเพิ่ม / ส่วนลด
               - 🧮 ตรวจสอบราคา (live calc preview — mirror calPrice.php L210-269)
             Writes via adminUpdateForwarderDimensions which now covers all
-            10 new columns (Zod schema L93-152 of forwarders-edit.ts). */}
+            10 new columns (Zod schema L93-152 of forwarders-edit.ts).
+
+            2026-06-09 (ภูม flag #2): GATED at fstatus>=4 ("ถึงไทยแล้ว"). Goods
+            in-transit (fstatus 1/2/3) have no real TH-side dimensions/weight
+            to enter — showing the form before arrival invited mis-entry that
+            staff then had to undo. Same gate convention as /admin/report-cnt
+            "เพิ่มในรายการตรวจสอบ" (per lib/admin/forwarder-status.ts:
+            4=ถึงไทย, 5=รอชำระ, 6=เตรียมส่ง, 7=ส่งแล้ว — all eligible).
+            Status-pill on the page top already signals state to staff —
+            below-floor we hide entirely (no chip clutter). */}
+      {(r.fstatus ?? "") >= "4" ? (
       <section className="rounded-2xl border-2 border-indigo-300 bg-indigo-50/30 dark:bg-indigo-950/20 shadow-md overflow-hidden">
         <header className="bg-indigo-500 text-white px-4 py-2.5 flex items-center gap-2">
           <span className="text-base">📝</span>
@@ -819,6 +829,7 @@ export default async function AdminForwarderEditPage({
           />
         </div>
       </section>
+      ) : null}
 
       {/* ── 5. PRIMARY ACTION — always-open, eye-catching ── */}
       <section className="rounded-2xl border-2 border-primary-300 bg-primary-50/30 dark:bg-primary-950/20 shadow-md overflow-hidden">

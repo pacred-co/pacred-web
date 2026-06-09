@@ -103,7 +103,8 @@ export async function GET(request: Request) {
       // that don't commit stay at /review for admin to handle.
       const autoCommitEnabled = process.env.MOMO_CRON_AUTOCOMMIT === "true";
       let commit: Awaited<ReturnType<typeof autoCommitEligibleMomoRows>> = {
-        scanned: 0, attempted: 0, succeeded: 0, failed: 0, skipped: 0, perRow: [],
+        scanned: 0, attempted: 0, succeeded: 0, failed: 0, skipped: 0,
+        rejectionRate: 0, alerted: false, perRow: [],
       };
       if (autoCommitEnabled) {
         try {
@@ -135,6 +136,10 @@ export async function GET(request: Request) {
           auto_commit_succeeded: commit.succeeded,
           auto_commit_failed:   commit.failed,
           auto_commit_skipped:  commit.skipped,
+          // Wave 30.7 — safety-net health metric. > 0.5 triggers a LINE
+          // staff ping (see lib/admin/auto-commit-momo-safety.ts).
+          auto_commit_rejection_rate: commit.rejectionRate,
+          auto_commit_alerted:  commit.alerted,
           // Wave 30.6 #230 — match-by-tracking propagation summary so ภูม can
           // see at a glance whether MOMO → tb_forwarder writes are landing.
           propagation_scanned:     sync.propagation?.scanned ?? 0,
@@ -173,12 +178,14 @@ export async function GET(request: Request) {
               : null,
           },
           autoCommit: {
-            enabled:   autoCommitEnabled,
-            scanned:   commit.scanned,
-            attempted: commit.attempted,
-            succeeded: commit.succeeded,
-            failed:    commit.failed,
-            skipped:   commit.skipped,
+            enabled:       autoCommitEnabled,
+            scanned:       commit.scanned,
+            attempted:     commit.attempted,
+            succeeded:     commit.succeeded,
+            failed:        commit.failed,
+            skipped:       commit.skipped,
+            rejectionRate: commit.rejectionRate,
+            alerted:       commit.alerted,
             // Don't dump perRow into the response payload — it can be
             // hundreds of rows. The cron-invocations table has its own
             // result_summary jsonb; perRow stays in-memory only.
