@@ -60,6 +60,20 @@ export const INCOTERM_SCOPE: Record<Incoterm, ScopeCategory[]> = {
   DDP: ["freight", "origin", "thai_customs", "thai_transport", "import_tax"],
 };
 
+/**
+ * SF-1 — does this incoterm's scope make US incur (and bill) the China-side
+ * freight/origin cost? CFR/CPT/CIP/EXW/FCA/DAP/DPU/DDP include "freight" and/or
+ * "origin" → true. CIF/FOB/FAS are Thai-customs-only (the seller already paid the
+ * China freight) → false; folding the looked-up China cost for those would
+ * understate the NET margin. The compose action gates `lookupChinaFreightCostThb`
+ * on this predicate. Pure (no IO) so it can be unit-tested + reused.
+ */
+export function incursChinaFreightCost(incoterm: Incoterm): boolean {
+  return (INCOTERM_SCOPE[incoterm] ?? []).some(
+    (s) => s === "freight" || s === "origin",
+  );
+}
+
 /** A fixed THB line item (Thai customs / transport). `cost=0` = pass-through
  *  "ค่าบริการ/วางบิลตามใบเสร็จ". `sell` may vary by delivery-truck size. */
 export type FixedLine = {

@@ -23,6 +23,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getBusinessConfig } from "@/lib/business-config";
+import { cargoLineCostThb } from "@/lib/payment/cargo-cost-line";
 
 // ────────────────────────────────────────────────────────────────────────
 // Public types
@@ -396,11 +397,9 @@ async function loadTaxDocRollup(
     if (ordErr) console.error("[peak-export taxdoc orders] failed", { code: ordErr.code, message: ordErr.message });
     for (const o of (orders ?? []) as Array<{ hno: string; orderqty: number | string | null; cost_unit_cny: number | string | null; cost_rate_cny: number | string | null; declared_value_thb: number | string | null }>) {
       const cur = shopLineSums.get(o.hno) ?? { lineCost: 0, declared: 0 };
-      const qty = Math.max(0, num(o.orderqty));
-      const rate = num(o.cost_rate_cny);
-      const cost = num(o.cost_unit_cny);
-      // ¥ cost without a cost-rate = incomplete → 0, never silent rate=1 (audit S1).
-      cur.lineCost += cost > 0 && rate > 0 ? cost * (qty > 0 ? qty : 1) * rate : 0;
+      // ¥ cost without a cost-rate = incomplete → 0, never silent rate=1 (audit S1 ·
+      // shared formula in lib/payment/cargo-cost-line, also used by the taxdoc workspace).
+      cur.lineCost += cargoLineCostThb({ costCny: o.cost_unit_cny, rateCny: o.cost_rate_cny, qty: o.orderqty });
       cur.declared += num(o.declared_value_thb);
       shopLineSums.set(o.hno, cur);
     }

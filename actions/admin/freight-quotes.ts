@@ -40,7 +40,7 @@ import {
 } from "@/lib/validators/freight-quote";
 import { composeFreightQuote } from "@/lib/freight/rate-engine";
 import { lookupChinaFreightCostThb } from "@/lib/freight/rate-lookup";
-import { INCOTERM_SCOPE } from "@/lib/freight/rate-model";
+import { incursChinaFreightCost } from "@/lib/freight/rate-model";
 import { getBusinessConfig } from "@/lib/business-config";
 
 const ROLES_CREATE  = ["super", "ops", "sales_admin", "accounting"] as const;
@@ -306,9 +306,7 @@ export async function adminComposeQuoteFromRateCard(
     // includes freight/origin (CFR/CPT/CIP/EXW/…). For CIF/FOB the seller already
     // paid the China freight — we neither sell nor incur it, so folding the looked-up
     // cost would understate the NET margin. Skip the lookup → cost stays null.
-    const incursChinaFreight = (INCOTERM_SCOPE[d.incoterm] ?? []).some(
-      (s) => s === "freight" || s === "origin",
-    );
+    const incursChinaFreight = incursChinaFreightCost(d.incoterm);
     const chinaFreightCostThb = incursChinaFreight
       ? await lookupChinaFreightCostThb(d.mode, { cbm: d.cbm, kgm: d.kgm, containers: d.containers })
       : null;

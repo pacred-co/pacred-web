@@ -34,6 +34,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { AdminRole } from "@/lib/auth/require-admin";
+import { cargoLineCostThb } from "@/lib/payment/cargo-cost-line";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import {
   TAXDOC_STAGES, TAXDOC_STAGE_COL as STAGE_COL,
@@ -167,15 +168,14 @@ async function readShopNumbers(
   }
   const list = (items ?? []) as Array<{ orderqty: number | string | null; cost_unit_cny: number | string | null; cost_rate_cny: number | string | null; declared_value_thb: number | string | null }>;
 
-  const lineCostThb = list.reduce((s, it) => {
-    const qty = Math.max(0, n(it.orderqty));
-    const rate = n(it.cost_rate_cny);
-    const cost = n(it.cost_unit_cny);
-    // ¥→THB needs the cost-side rate. If Pricing entered a ¥ cost but left the
-    // rate blank, the line is INCOMPLETE → contribute 0 (don't silently use
-    // rate=1, which would land a ¥ figure as THB ~4.9× understated). audit S1.
-    return s + (cost > 0 && rate > 0 ? cost * (qty > 0 ? qty : 1) * rate : 0);
-  }, 0);
+  // ¥→THB needs the cost-side rate. If Pricing entered a ¥ cost but left the
+  // rate blank, the line is INCOMPLETE → contributes 0 (never silent rate=1,
+  // which would land a ¥ figure as THB ~4.9× understated). audit S1 · the
+  // formula lives in lib/payment/cargo-cost-line so peak-export shares it.
+  const lineCostThb = list.reduce(
+    (s, it) => s + cargoLineCostThb({ costCny: it.cost_unit_cny, rateCny: it.cost_rate_cny, qty: it.orderqty }),
+    0,
+  );
   const declaredSum = list.reduce((s, it) => s + n(it.declared_value_thb), 0);
 
   // Cost-side fallback: htotalpricechn is the goods cost in THB-equivalent.

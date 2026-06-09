@@ -34,14 +34,10 @@ import {
   type Incoterm,
   type QuoteUnit,
 } from "@/lib/validators/freight-quote";
+import { LEAD_STATUSES, isLeadConvertible, type LeadStatus } from "@/lib/freight/lead-status";
 
 // Triage roles — sales funnel ownership.
 const ROLES_TRIAGE = ["super", "ops", "sales_admin"] as const;
-
-// Allowed lead statuses (mirror migration 0134's freight_quote_status CHECK).
-// Kept as a module const (a "use server" file may only EXPORT async functions).
-const LEAD_STATUSES = ["new", "contacted", "quoted", "won", "lost", "spam"] as const;
-type LeadStatus = (typeof LEAD_STATUSES)[number];
 
 const PAGE_SIZE = 50;
 
@@ -329,7 +325,7 @@ export async function convertLeadToQuote(
     // inserts a duplicate orphan draft quotation. The confirm dialog +
     // useTransition narrow the double-submit window but don't close it (status
     // 'quoted' doesn't disable the button; back-nav re-arms it). Refuse here.
-    if (lead.status === "quoted") return { ok: false, error: "already_converted" };
+    if (!isLeadConvertible(lead.status)) return { ok: false, error: "already_converted" };
 
     const transportMode = leadToTransportMode(lead.transport, lead.load_type);
     const incoterm = leadIncoterm(lead.incoterm);
