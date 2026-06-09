@@ -13,8 +13,14 @@ export const COLORS = {
   primaryDk:  "#7A0000",   // darker variant
   foreground: "#111827",   // gray-900
   muted:      "#6B7280",   // gray-500
+  mutedLt:    "#9CA3AF",   // gray-400
   border:     "#E5E7EB",   // gray-200
+  borderDk:   "#D1D5DB",   // gray-300
   surfaceAlt: "#F9FAFB",   // gray-50
+  surfaceTotal: "#F3F4F6", // gray-100 — totals row highlight
+  accent:     "#FFF7ED",   // orange-50 — Peak notes block tint
+  accentBorder: "#FED7AA", // orange-200
+  accentText: "#C2410C",   // orange-700
 } as const;
 
 export const styles = StyleSheet.create({
@@ -362,3 +368,372 @@ export function fmtBaht(n: number): string {
     maximumFractionDigits: 2,
   });
 }
+
+/**
+ * Peak-style additions (2026-06-09 · ภูม flag).
+ *
+ * Peak Account (peakaccount.com) receipt format adapted for Pacred. Kept as
+ * a separate StyleSheet so the existing `styles` (tax-invoice.tsx) is
+ * untouched. Apply to FreightReceipt + any future Peak-format doc.
+ *
+ * Visual rhythm (matches Peak's screenshot):
+ *   - 36pt page padding (same)
+ *   - Compact 1.1mm row spacing in totals stack
+ *   - Two-column info cards row (issuer | customer) 50/50
+ *   - Right-aligned key:value meta box (60pt wide)
+ *   - Orange-tinted notes block (accent)
+ *   - Bottom row: QR (left, ~26mm square) + 4 small signatures (right)
+ */
+export const peakStyles = StyleSheet.create({
+  // Top header: brand left + doc badge right
+  peakHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderDk,
+    borderBottomStyle: "solid",
+    marginBottom: 10,
+  },
+  peakBrandBlock: {
+    flexDirection: "column",
+    maxWidth: "60%",
+  },
+  peakBrandName: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: COLORS.primary,
+  },
+  peakBrandLegal: {
+    fontSize: 9,
+    color: COLORS.foreground,
+    marginTop: 1,
+  },
+  peakBrandLegalEn: {
+    fontSize: 8,
+    color: COLORS.muted,
+  },
+  peakDocMeta: {
+    alignItems: "flex-end",
+  },
+  peakDocTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: COLORS.foreground,
+  },
+  peakDocTitleEn: {
+    fontSize: 7,
+    color: COLORS.muted,
+    letterSpacing: 1.2,
+    marginTop: -1,
+  },
+  peakCopyBadge: {
+    fontSize: 8,
+    color: COLORS.foreground,
+    borderWidth: 1,
+    borderColor: COLORS.borderDk,
+    borderStyle: "solid",
+    borderRadius: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    marginTop: 4,
+  },
+
+  // Two-column info cards (issuer | customer)
+  peakInfoRow: {
+    flexDirection: "row",
+    marginBottom: 6,
+  },
+  peakInfoCard: {
+    flex: 1,
+    padding: 7,
+    borderWidth: 1,
+    borderColor: COLORS.borderDk,
+    borderStyle: "solid",
+    borderRadius: 3,
+    marginRight: 5,
+  },
+  peakInfoCardLast: {
+    marginRight: 0,
+  },
+  peakInfoLabel: {
+    fontSize: 7,
+    color: COLORS.muted,
+    letterSpacing: 0.6,
+    marginBottom: 2,
+    textTransform: "uppercase",
+  },
+  peakInfoName: {
+    fontSize: 10,
+    fontWeight: "bold",
+    color: COLORS.foreground,
+    marginBottom: 1,
+  },
+  peakInfoLine: {
+    fontSize: 8.5,
+    color: COLORS.foreground,
+    lineHeight: 1.35,
+  },
+  peakInfoLineMuted: {
+    fontSize: 8.5,
+    color: COLORS.muted,
+    lineHeight: 1.35,
+  },
+
+  // Right-aligned key:value meta box (เลขที่ · วันที่ · ผู้ขาย · เครดิต)
+  peakMetaWrap: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginBottom: 8,
+  },
+  peakMetaBox: {
+    borderWidth: 1,
+    borderColor: COLORS.borderDk,
+    borderStyle: "solid",
+    borderRadius: 3,
+    width: 200,
+  },
+  peakMetaRow: {
+    flexDirection: "row",
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.border,
+    borderBottomStyle: "solid",
+  },
+  peakMetaRowLast: {
+    borderBottomWidth: 0,
+  },
+  peakMetaLabel: {
+    width: 75,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    fontSize: 8.5,
+    color: COLORS.muted,
+    textAlign: "right",
+    borderRightWidth: 0.5,
+    borderRightColor: COLORS.border,
+    borderRightStyle: "solid",
+  },
+  peakMetaValue: {
+    flex: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    fontSize: 8.5,
+    color: COLORS.foreground,
+  },
+
+  // Table (Pacred items table — KEEP semantics; Peak-tuned spacing)
+  peakTable: {
+    borderWidth: 1,
+    borderColor: COLORS.borderDk,
+    borderStyle: "solid",
+    marginBottom: 8,
+  },
+  peakTableHead: {
+    flexDirection: "row",
+    backgroundColor: COLORS.surfaceTotal,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderDk,
+    borderBottomStyle: "solid",
+    paddingVertical: 5,
+    paddingHorizontal: 5,
+  },
+  peakTableHeadCell: {
+    fontSize: 8.5,
+    fontWeight: "bold",
+    color: COLORS.foreground,
+  },
+  peakTableRow: {
+    flexDirection: "row",
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.border,
+    borderBottomStyle: "solid",
+    paddingVertical: 4,
+    paddingHorizontal: 5,
+  },
+  peakTableRowLast: {
+    borderBottomWidth: 0,
+  },
+  peakTableCell: {
+    fontSize: 8.5,
+    color: COLORS.foreground,
+  },
+  peakTableCellRight: {
+    textAlign: "right",
+  },
+  peakTableCellCenter: {
+    textAlign: "center",
+  },
+
+  // Bottom row: notes (left) + totals (right)
+  peakBottomRow: {
+    flexDirection: "row",
+    marginBottom: 8,
+  },
+  peakNotesBlock: {
+    flex: 7,
+    marginRight: 8,
+    padding: 7,
+    borderWidth: 1,
+    borderColor: COLORS.accentBorder,
+    borderStyle: "solid",
+    borderRadius: 3,
+    backgroundColor: COLORS.accent,
+  },
+  peakNotesLabel: {
+    fontSize: 7,
+    color: COLORS.accentText,
+    fontWeight: "bold",
+    letterSpacing: 0.6,
+    marginBottom: 3,
+    textTransform: "uppercase",
+  },
+  peakNotesText: {
+    fontSize: 8.5,
+    color: COLORS.foreground,
+    lineHeight: 1.4,
+  },
+  peakTotalsBlock: {
+    flex: 5,
+    borderWidth: 1,
+    borderColor: COLORS.borderDk,
+    borderStyle: "solid",
+    borderRadius: 3,
+  },
+  peakTotalsRow: {
+    flexDirection: "row",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.border,
+    borderBottomStyle: "solid",
+  },
+  peakTotalsRowLast: {
+    backgroundColor: COLORS.surfaceTotal,
+    borderTopWidth: 1.5,
+    borderTopColor: COLORS.borderDk,
+    borderTopStyle: "solid",
+    borderBottomWidth: 0,
+    paddingVertical: 5,
+  },
+  peakTotalsLabel: {
+    flex: 1,
+    fontSize: 9,
+    color: COLORS.muted,
+    textAlign: "right",
+  },
+  peakTotalsLabelBold: {
+    fontSize: 10,
+    color: COLORS.foreground,
+    fontWeight: "bold",
+  },
+  peakTotalsValue: {
+    width: 80,
+    fontSize: 9,
+    color: COLORS.foreground,
+    textAlign: "right",
+  },
+  peakTotalsValueBold: {
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: "bold",
+  },
+
+  // Compact "ชำระโดย" strip
+  peakPayStrip: {
+    flexDirection: "row",
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: COLORS.borderDk,
+    borderStyle: "solid",
+    borderRadius: 3,
+    marginBottom: 8,
+  },
+  peakPayLabel: {
+    fontSize: 7,
+    color: COLORS.muted,
+    letterSpacing: 0.6,
+    marginRight: 6,
+    textTransform: "uppercase",
+  },
+  peakPayItem: {
+    fontSize: 8.5,
+    color: COLORS.foreground,
+    marginRight: 10,
+  },
+
+  // Bottom: QR + 4 signature mini-boxes
+  peakBottomFooter: {
+    flexDirection: "row",
+  },
+  peakQrBox: {
+    width: 110,
+    padding: 6,
+    borderWidth: 1,
+    borderColor: COLORS.borderDk,
+    borderStyle: "solid",
+    borderRadius: 3,
+    marginRight: 6,
+    alignItems: "center",
+  },
+  peakQrLabel: {
+    fontSize: 7,
+    color: COLORS.muted,
+    letterSpacing: 0.6,
+    marginBottom: 3,
+    textTransform: "uppercase",
+  },
+  peakQrPlaceholder: {
+    width: 74,
+    height: 74,
+    backgroundColor: COLORS.surfaceTotal,
+    borderWidth: 0.5,
+    borderColor: COLORS.borderDk,
+    borderStyle: "solid",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  peakQrPlaceholderText: {
+    fontSize: 7,
+    color: COLORS.mutedLt,
+    textAlign: "center",
+    lineHeight: 1.2,
+  },
+  peakQrCaption: {
+    fontSize: 7,
+    color: COLORS.muted,
+    marginTop: 3,
+  },
+  peakSigGroup: {
+    flex: 1,
+    flexDirection: "row",
+  },
+  peakSigBox: {
+    flex: 1,
+    padding: 5,
+    borderWidth: 1,
+    borderColor: COLORS.borderDk,
+    borderStyle: "solid",
+    borderRadius: 3,
+    marginRight: 4,
+    alignItems: "center",
+  },
+  peakSigBoxLast: {
+    marginRight: 0,
+  },
+  peakSigLabel: {
+    fontSize: 7,
+    color: COLORS.muted,
+    marginBottom: 2,
+  },
+  peakSigName: {
+    fontSize: 8,
+    color: COLORS.foreground,
+    marginTop: "auto",
+  },
+  peakSigDate: {
+    fontSize: 7,
+    color: COLORS.muted,
+  },
+});
