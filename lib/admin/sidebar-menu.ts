@@ -339,6 +339,18 @@ const itemCargoDeclarations: MenuItem = {
   icon: "ClipboardList",
 };
 
+/** 2026-06-09 (W4 · freight ops cockpit) — the AX-JOB unified
+ *  PRICING→SALES→DOC→ACC Kanban board (/admin/freight/operations). A
+ *  read-mostly layer over the existing freight spine (freight_shipments);
+ *  manages per-stage status + section assignment + checklist + an operator
+ *  P&L snapshot. The page + actions gate RBAC themselves (super + freight
+ *  section roles + ops/accounting/sales_admin/pricing). NO money mutation. */
+const itemFreightOperations: MenuItem = {
+  labelKey: "freightOps.title",
+  href: "/admin/freight/operations",
+  icon: "Kanban",
+};
+
 /** legacy pcs-admin menu L162-167 — "อัปเดตฝากนำเข้า" (top-level group)
  *  Combines BOTH Wave 17 P1 streams into the single legacy parent:
  *   - P1-1+2 — MOMO + CargoCenter (manualUpdate sub-page only · Phase B
@@ -829,6 +841,8 @@ const menuSuper: MenuSection[] = [
       blockForwarderImport,
       // 2026-06-08 (เดฟ · freight revenue unlock) — inbound Freight RFQ inbox.
       itemFreightLeads,
+      // 2026-06-09 (W4 · freight ops cockpit) — AX-JOB PRICING→SALES→DOC→ACC board.
+      itemFreightOperations,
       // 2026-06-09 (เดฟ · freight net-margin unlock) — China freight cost rates.
       itemFreightCostRates,
       // 2026-06-09 (เดฟ · tax-invoice P3) — CARGO ใบขนรวม (consolidated customs decl).
@@ -919,6 +933,8 @@ const menuManager: MenuSection[] = [
       blockForwarderImport,
       // 2026-06-08 (เดฟ · freight revenue unlock) — inbound Freight RFQ inbox.
       itemFreightLeads,
+      // 2026-06-09 (W4 · freight ops cockpit) — AX-JOB PRICING→SALES→DOC→ACC board.
+      itemFreightOperations,
       blockApiForwarderUpdate,
       { labelKey: "forwarder.assignDriver", href: "/admin/drivers", icon: "Truck", badge: "driverItems" },
       { labelKey: "forwarder.driverWork", href: "/admin/drivers/work", icon: "Smartphone" },
@@ -984,6 +1000,8 @@ const menuOps: MenuSection[] = [
       blockForwarderImport,
       // 2026-06-08 (เดฟ · freight revenue unlock) — inbound Freight RFQ inbox.
       itemFreightLeads,
+      // 2026-06-09 (W4 · freight ops cockpit) — AX-JOB PRICING→SALES→DOC→ACC board.
+      itemFreightOperations,
       // 2026-06-09 (เดฟ · freight net-margin unlock) — China freight cost rates.
       itemFreightCostRates,
       blockApiForwarderUpdate,
@@ -1019,6 +1037,9 @@ const menuAccounting: MenuSection[] = [
       // 2026-06-09 (เดฟ · tax-invoice P3) — CARGO ใบขนรวม (accounting reviews the
       // declared/duty/VAT before PEAK + ใบกำกับ issuance).
       itemCargoDeclarations,
+      // 2026-06-09 (W4 · freight ops cockpit) — accounting owns the ACC stage
+      // (P&L close) on the AX-JOB board.
+      itemFreightOperations,
     ],
   },
   { header: "Settings", items: [blockSettingsCargo] },
@@ -1323,6 +1344,7 @@ const menuFreightSalesManager: MenuSection[] = [
       // 2026-06-08 (เดฟ · freight revenue unlock) — inbound RFQ leads inbox is
       // the freight sales team's primary acquisition surface.
       itemFreightLeads,
+      itemFreightOperations,
       { labelKey: "manageCustomers.freightAll", href: "/admin/customers?segment=freight", icon: "Users" },
       { labelKey: "accFreight.title",           href: "/admin/accounting/freight",        icon: "Landmark" },
       { ...itemReportsAll, labelKey: "report.titleSales" },
@@ -1342,6 +1364,7 @@ const menuFreightSales: MenuSection[] = [
     items: [
       // 2026-06-08 (เดฟ · freight revenue unlock) — inbound RFQ leads inbox.
       itemFreightLeads,
+      itemFreightOperations,
       { labelKey: "manageCustomers.freightAll", href: "/admin/customers?segment=freight", icon: "Users" },
     ],
   },
@@ -1358,6 +1381,7 @@ const menuFreightExportManager: MenuSection[] = [
   {
     header: "Freight - Export",
     items: [
+      itemFreightOperations,
       // TODO: needs menu enumeration · doc says [Full Export Operations Access]
       { labelKey: "freightExportOps.placeholder", href: "/admin/forwarders?segment=freight-export", icon: "Truck" },
       { labelKey: "manageCustomers.freightAll", href: "/admin/customers?segment=freight", icon: "Users" },
@@ -1376,6 +1400,7 @@ const menuFreightExportCs: MenuSection[] = [
   {
     header: "Freight - Export",
     items: [
+      itemFreightOperations,
       // TODO: needs menu enumeration · doc says [Export CS Operations]
       { labelKey: "freightExportOps.csPlaceholder", href: "/admin/forwarders?segment=freight-export&role=cs", icon: "Truck" },
     ],
@@ -1400,6 +1425,8 @@ const menuFreightExportDoc: MenuSection[] = [
   {
     header: "Freight - Export",
     items: [
+      // W4 — the ops cockpit (DOC is a core stage owner).
+      itemFreightOperations,
       // Primary workspace — customs declarations (V-E11 · ใบขนสินค้า).
       { labelKey: "accFreight.declarations", href: "/admin/freight/declarations", icon: "ClipboardCheck" },
       // Freight shipments — Doc pivots from a shipment to create its declaration.
@@ -1443,6 +1470,7 @@ const menuFreightClearanceBoth: MenuSection[] = [
   {
     header: "Freight",
     items: [
+      itemFreightOperations,
       // TODO: needs menu enumeration · doc says [Both Import & Export Clearance Access]
       { labelKey: "freightClearance.bothPlaceholder", href: "/admin/forwarders?segment=freight", icon: "ClipboardCheck" },
     ],
@@ -1476,6 +1504,7 @@ const menuFreightImportManager: MenuSection[] = [
   {
     header: "Freight - Import",
     items: [
+      itemFreightOperations,
       // TODO: needs menu enumeration · doc says [Full Import Operations Access]
       { labelKey: "freightImportOps.placeholder", href: "/admin/forwarders?segment=freight-import", icon: "Truck" },
       { labelKey: "manageCustomers.freightAll", href: "/admin/customers?segment=freight", icon: "Users" },
@@ -1494,6 +1523,7 @@ const menuFreightImportCs: MenuSection[] = [
   {
     header: "Freight - Import",
     items: [
+      itemFreightOperations,
       // TODO: needs menu enumeration · doc says [Import CS Operations]
       { labelKey: "freightImportOps.csPlaceholder", href: "/admin/forwarders?segment=freight-import&role=cs", icon: "Truck" },
     ],
@@ -1514,6 +1544,8 @@ const menuFreightImportDoc: MenuSection[] = [
   {
     header: "Freight - Import",
     items: [
+      // W4 — the ops cockpit (DOC is a core stage owner).
+      itemFreightOperations,
       // Primary workspace — customs declarations (V-E11 · ใบขนสินค้า).
       { labelKey: "accFreight.declarations", href: "/admin/freight/declarations", icon: "ClipboardCheck" },
       // 2026-06-09 (เดฟ · tax-invoice P3) — CARGO ใบขนรวม (the Docs role owns

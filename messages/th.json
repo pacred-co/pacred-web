@@ -3347,6 +3347,9 @@
       "costRates": "ต้นทุนเฟรทจีน (Cost Rates)",
       "cargoDeclarations": "ใบขนรวม (CARGO)"
     },
+    "freightOps": {
+      "title": "Freight Operations (AX JOB)"
+    },
     "settingsCargo": {
       "title": "ตั้งค่าระบบ Cargo",
       "general": "ทั่วไป",
