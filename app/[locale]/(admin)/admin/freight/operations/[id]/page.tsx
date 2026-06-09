@@ -83,6 +83,9 @@ export default async function FreightOperationDetailPage({
   adminOptions.sort((a, b) => a.name.localeCompare(b.name, "th"));
 
   const isSuper = roles.includes("super");
+  // P&L (cost/profit) is super/accounting only — matches the p-and-l page gate;
+  // gating the cockpit link avoids a dead 403 click for CS/doc roles. audit SF-3.
+  const canViewPnl = isSuper || roles.includes("accounting");
 
   return (
     <main className="p-4 sm:p-6 lg:p-8 max-w-5xl space-y-5">
@@ -93,6 +96,7 @@ export default async function FreightOperationDetailPage({
         detail={detail}
         adminOptions={adminOptions}
         canManage
+        canViewPnl={canViewPnl}
         isSuper={isSuper}
       />
     </main>

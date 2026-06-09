@@ -324,6 +324,13 @@ export async function convertLeadToQuote(
     }
     if (!lead) return { ok: false, error: "not_found" };
 
+    // Idempotency guard (audit BK-1) — a lead already converted (status='quoted')
+    // must NOT be converted again: re-converting reserves a fresh serial AND
+    // inserts a duplicate orphan draft quotation. The confirm dialog +
+    // useTransition narrow the double-submit window but don't close it (status
+    // 'quoted' doesn't disable the button; back-nav re-arms it). Refuse here.
+    if (lead.status === "quoted") return { ok: false, error: "already_converted" };
+
     const transportMode = leadToTransportMode(lead.transport, lead.load_type);
     const incoterm = leadIncoterm(lead.incoterm);
 

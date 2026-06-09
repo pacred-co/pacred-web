@@ -218,7 +218,9 @@ export async function createCargoDeclaration(
 
     revalidatePath("/admin/freight/declarations");
     revalidatePath("/admin/accounting/cargo-declarations");
-    revalidatePath(`/admin/freight/declarations/${inserted.id}`);
+    // the cargo create button navigates to the ACCOUNTING detail route — revalidate
+    // that one (the freight detail route notFound()s cargo rows). audit SF-6.
+    revalidatePath(`/admin/accounting/cargo-declarations/${inserted.id}`);
     revalidatePath(`/admin/forwarders/${forwarderId}`);
     return { ok: true, data: { id: inserted.id } };
   });
@@ -317,7 +319,7 @@ export async function setCargoDeclarationLine(
       hs_code:            d.hsCode,
     });
 
-    revalidatePath(`/admin/freight/declarations/${line.declaration_id}`);
+    revalidatePath(`/admin/accounting/cargo-declarations/${line.declaration_id}`);
     return { ok: true };
   });
 }

@@ -193,8 +193,12 @@ export async function getCockpitReport(): Promise<Result<CockpitReport>> {
       const rows = (mtdData ?? []) as MtdRow[];
       capped = rows.length >= LIMIT;
       for (const r of rows) {
-        const ftotal = Number(r.ftotalprice ?? 0);
-        const revenue = ftotal + Number(r.ftransportprice ?? 0) + Number(r.fpriceupdate ?? 0);
+        // revenue = ftotalprice ONLY — align with the canonical profit report
+        // (actions/admin/reports-profit.ts rowProfit) so the cockpit margin %
+        // reconciles with the "ดูรายงานกำไรเต็มรูปแบบ" report it links to. Adding
+        // ftransportprice/fpriceupdate here made the cockpit margin systematically
+        // lower than the report → BI-trust mismatch. (audit SF-4)
+        const revenue = Number(r.ftotalprice ?? 0);
         const cost = Number(r.fcosttotalprice ?? 0);
         const pre = Number(r.fprofittotal ?? 0);
         const profit = pre !== 0 ? pre : ftotal - Number(r.fdiscount ?? 0) - cost;

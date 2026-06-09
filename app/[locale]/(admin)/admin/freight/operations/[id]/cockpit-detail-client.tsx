@@ -89,11 +89,14 @@ export function CockpitDetailClient({
   detail,
   adminOptions,
   canManage,
+  canViewPnl,
   isSuper,
 }: {
   detail: CockpitDetail;
   adminOptions: AdminOption[];
   canManage: boolean;
+  /** super/accounting only — gates the P&L link (the p-and-l page rejects other roles). audit SF-3 */
+  canViewPnl: boolean;
   isSuper: boolean;
 }) {
   const router = useRouter();
@@ -106,9 +109,16 @@ export function CockpitDetailClient({
   function run(fn: () => Promise<ActionResult>) {
     setErr(null);
     startTransition(async () => {
-      const res = await fn();
-      if (res.ok) router.refresh();
-      else setErr(res.error ?? "ทำรายการไม่สำเร็จ");
+      try {
+        const res = await fn();
+        if (res.ok) router.refresh();
+        else setErr(res.error ?? "ทำรายการไม่สำเร็จ");
+      } catch {
+        // A role-denied server action (requireAdmin) THROWS rather than returning
+        // {ok:false}; without this catch the rejection is unhandled. Show a friendly
+        // permission/error toast instead of a silent crash. (audit SF-2)
+        setErr("ไม่มีสิทธิ์ทำรายการนี้ หรือเกิดข้อผิดพลาดชั่วคราว");
+      }
     });
   }
 
@@ -172,12 +182,14 @@ export function CockpitDetailClient({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Link
-              href={`/admin/freight/shipments/${shipmentId}/p-and-l`}
-              className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-surface-alt"
-            >
-              📈 P&amp;L
-            </Link>
+            {canViewPnl && (
+              <Link
+                href={`/admin/freight/shipments/${shipmentId}/p-and-l`}
+                className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-surface-alt"
+              >
+                📈 P&amp;L
+              </Link>
+            )}
             <Link
               href={`/admin/freight/shipments/${shipmentId}`}
               className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-surface-alt"

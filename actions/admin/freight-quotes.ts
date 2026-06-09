@@ -40,6 +40,7 @@ import {
 } from "@/lib/validators/freight-quote";
 import { composeFreightQuote } from "@/lib/freight/rate-engine";
 import { lookupChinaFreightCostThb } from "@/lib/freight/rate-lookup";
+import { INCOTERM_SCOPE } from "@/lib/freight/rate-model";
 import { getBusinessConfig } from "@/lib/business-config";
 
 const ROLES_CREATE  = ["super", "ops", "sales_admin", "accounting"] as const;
@@ -301,12 +302,19 @@ export async function adminComposeQuoteFromRateCard(
 
     // 0145 — look up the admin-maintained China freight cost (FX-converted) so the
     // quote's profit is a TRUE NET margin. null (no rate seeded) → gross fallback.
-    const chinaFreightCostThb = await lookupChinaFreightCostThb(d.mode, {
-      cbm: d.cbm, kgm: d.kgm, containers: d.containers,
-    });
-    // W5 — when the China-side scope is billed but no cost rate matched, profit is
+    // SF-1: ONLY fold the China freight cost when this incoterm's scope actually
+    // includes freight/origin (CFR/CPT/CIP/EXW/…). For CIF/FOB the seller already
+    // paid the China freight — we neither sell nor incur it, so folding the looked-up
+    // cost would understate the NET margin. Skip the lookup → cost stays null.
+    const incursChinaFreight = (INCOTERM_SCOPE[d.incoterm] ?? []).some(
+      (s) => s === "freight" || s === "origin",
+    );
+    const chinaFreightCostThb = incursChinaFreight
+      ? await lookupChinaFreightCostThb(d.mode, { cbm: d.cbm, kgm: d.kgm, containers: d.containers })
+      : null;
+    // W5 — when the China-side scope IS billed but no cost rate matched, profit is
     // GROSS only → flag it so the UI shows a "ก่อนหักต้นทุนเฟรทจีน" yellow banner.
-    const chinaCostLookupError = chinaFreightCostThb == null;
+    const chinaCostLookupError = incursChinaFreight && chinaFreightCostThb == null;
 
     // Price from the real rate cards (pure, no IO) + the looked-up China cost.
     const quote = composeFreightQuote({
