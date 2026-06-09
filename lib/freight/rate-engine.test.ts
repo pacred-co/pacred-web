@@ -68,6 +68,21 @@ assertEq("CIF LCL margin cap = 15,000 (1 container default)", cifLcl4.marginCapT
 assertTrue("CIF LCL profit under cap → no flag", !cifLcl4.marginExceedsCap);
 assertTrue("EXW high-CBM profit over cap → flagged", composeFreightQuote({ mode: "sea_lcl", incoterm: "EXW", cbm: 10, tier: "retail" }).marginExceedsCap);
 
+// N-2: the per-container cap is config-overridable (business_config threads it in).
+const cfgCap = composeFreightQuote({ mode: "sea_fcl", incoterm: "CIF", containers: 2, marginCapPerContainerThb: 20000 });
+assertEq("config cap 20k × 2 containers = 40,000", cfgCap.marginCapThb, 40000);
+const cfgCapDefault = composeFreightQuote({ mode: "sea_fcl", incoterm: "CIF", containers: 2 });
+assertEq("omitted cap → constant 15k × 2 = 30,000 (legacy unchanged)", cfgCapDefault.marginCapThb, 30000);
+assertEq("cap override 0 → ignored, falls back to 15k default", composeFreightQuote({ mode: "sea_lcl", incoterm: "CIF", marginCapPerContainerThb: 0 }).marginCapThb, 15000);
+// A configured cap actually MOVES the advisory flag (1 container → cap = capPerContainer).
+// Boundary test, independent of the quote's profit magnitude.
+const probe = composeFreightQuote({ mode: "sea_lcl", incoterm: "CIF", cbm: 2, tier: "retail" });
+const underCap = composeFreightQuote({ mode: "sea_lcl", incoterm: "CIF", cbm: 2, tier: "retail", marginCapPerContainerThb: Math.max(1, probe.profit - 1) });
+const overCap  = composeFreightQuote({ mode: "sea_lcl", incoterm: "CIF", cbm: 2, tier: "retail", marginCapPerContainerThb: probe.profit + 1 });
+assertTrue("config cap just below profit → flagged", underCap.marginExceedsCap);
+assertTrue("config cap just above profit → not flagged", !overCap.marginExceedsCap);
+assertEq("config cap is advisory only — profit identical regardless of cap", underCap.profit, overCap.profit);
+
 // ── (g) commission split 1%/5%/5% − 3% WHT ──
 section("(g) commission");
 // CIF LCL: customsSell = 13,511 − 5,000 transport = 8,511 → 5% = 425.55

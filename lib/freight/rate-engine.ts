@@ -46,6 +46,17 @@ export type FreightQuoteSpec = {
    * (the 26 existing engine tests pass nothing → identical results).
    */
   chinaFreightCostThb?: number;
+  /**
+   * Policy margin cap PER CONTAINER in ฿ (CEO §4 "≤15k฿/ตู้"). The advisory
+   * `marginCapThb` = this × `containers`, and `marginExceedsCap` is computed
+   * against it. Omit it → falls back to the `FREIGHT_MARGIN_CAP_PER_CONTAINER`
+   * constant (15k), so callers that pass nothing get identical legacy behaviour
+   * (the existing engine tests pass nothing). The admin compose actions thread
+   * the accountant-configurable `business_config.freight.margin_cap_thb` here so
+   * a configured cap is actually respected by the advisory flag — ADVISORY ONLY,
+   * never gates money/commission.
+   */
+  marginCapPerContainerThb?: number;
 };
 
 export type FreightLineResult = {
@@ -174,14 +185,23 @@ export function composeFreightQuote(spec: FreightQuoteSpec): FreightQuoteResult 
   const vat = round2((subtotalSell * FREIGHT_VAT_PCT) / 100);
   const total = round2(subtotalSell + vat);
 
-  // ── CEO §4 margin guard — ≤ 15,000 ฿ per container ──
-  const marginCapThb = FREIGHT_MARGIN_CAP_PER_CONTAINER * containers;
+  // ── CEO §4 margin guard — ≤ 15,000 ฿ per container (config-overridable) ──
+  // N-2: respect business_config.freight.margin_cap_thb when the compose action
+  // threads it in; default to the constant so legacy callers are unchanged.
+  const capPerContainer =
+    spec.marginCapPerContainerThb != null && spec.marginCapPerContainerThb > 0
+      ? spec.marginCapPerContainerThb
+      : FREIGHT_MARGIN_CAP_PER_CONTAINER;
+  const marginCapThb = capPerContainer * containers;
   const marginExceedsCap = profit > marginCapThb;
 
-  // The China-side carrier/origin cost is a monthly, FX-dependent matrix (not
-  // modelled here yet) — if we bill any freight/origin line at cost 0, `profit`
-  // is gross, not net. (Air freight carries a representative cost > 0, so an
-  // air-only freight scope won't trip this.)
+  // N-1: `chinaCostPending` flags GROSS-not-NET profit. The China-side
+  // carrier/origin cost is a monthly, FX-dependent matrix supplied via
+  // `spec.chinaFreightCostThb` (migration 0145 · looked up + FX-converted by the
+  // compose action). When the caller OMITS that cost AND any freight/origin line
+  // is billed at unitCost 0, `profit` is gross (not net) → flag it. (Air freight
+  // carries a representative cost > 0, so an air-only freight scope won't trip
+  // this even without the looked-up cost.)
   const chinaCostPending =
     spec.chinaFreightCostThb == null &&
     lines.some(

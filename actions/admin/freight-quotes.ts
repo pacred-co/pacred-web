@@ -40,7 +40,7 @@ import {
 } from "@/lib/validators/freight-quote";
 import { composeFreightQuote } from "@/lib/freight/rate-engine";
 import { lookupChinaFreightCostThb } from "@/lib/freight/rate-lookup";
-import { incursChinaFreightCost } from "@/lib/freight/rate-model";
+import { incursChinaFreightCost, FREIGHT_MARGIN_CAP_PER_CONTAINER } from "@/lib/freight/rate-model";
 import { getBusinessConfig } from "@/lib/business-config";
 
 const ROLES_CREATE  = ["super", "ops", "sales_admin", "accounting"] as const;
@@ -314,6 +314,13 @@ export async function adminComposeQuoteFromRateCard(
     // GROSS only → flag it so the UI shows a "ก่อนหักต้นทุนเฟรทจีน" yellow banner.
     const chinaCostLookupError = incursChinaFreight && chinaFreightCostThb == null;
 
+    // N-2: thread the accountant-configurable per-container margin cap so the
+    // engine's advisory flag respects business_config (defaults to 15k/ตู้).
+    const marginCapPerContainerThb = await getBusinessConfig<number>(
+      "freight.margin_cap_thb",
+      FREIGHT_MARGIN_CAP_PER_CONTAINER,
+    );
+
     // Price from the real rate cards (pure, no IO) + the looked-up China cost.
     const quote = composeFreightQuote({
       mode:          d.mode,
@@ -324,6 +331,7 @@ export async function adminComposeQuoteFromRateCard(
       kgm:           d.kgm,
       containers:    d.containers,
       chinaFreightCostThb: chinaFreightCostThb ?? undefined,
+      marginCapPerContainerThb,
     });
     if (quote.lines.length === 0) {
       return { ok: false, error: "rate_card_produced_no_lines" };

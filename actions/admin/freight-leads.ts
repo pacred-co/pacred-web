@@ -28,6 +28,8 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { composeFreightQuote } from "@/lib/freight/rate-engine";
+import { FREIGHT_MARGIN_CAP_PER_CONTAINER } from "@/lib/freight/rate-model";
+import { getBusinessConfig } from "@/lib/business-config";
 import {
   computeQuoteTotals,
   type TransportMode,
@@ -392,12 +394,18 @@ export async function convertLeadToQuote(
     let linesAdded = 0;
     if (incoterm && (lead.cbm || lead.weight_kg)) {
       try {
+        // N-2: respect the configured per-container margin cap in the advisory flag.
+        const marginCapPerContainerThb = await getBusinessConfig<number>(
+          "freight.margin_cap_thb",
+          FREIGHT_MARGIN_CAP_PER_CONTAINER,
+        );
         const quote = composeFreightQuote({
           mode:     transportMode,
           incoterm,
           tier:     "regular",
           cbm:      lead.cbm ?? undefined,
           kgm:      lead.weight_kg ?? undefined,
+          marginCapPerContainerThb,
         });
         if (quote.lines.length > 0) {
           const rows = quote.lines.map((l, i) => ({
