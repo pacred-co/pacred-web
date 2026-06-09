@@ -5,7 +5,9 @@
 
 ---
 
-## 🔢 NEXT FREE NUMBER = **0167**
+## 🔢 NEXT FREE NUMBER = **0168**
+
+> ⏳ **2026-06-09 (เดฟ · W6 freight commission ledger): 0167** = `freight_commission_ledger` — NEW freight-prefixed staff-commission system (4 tables: `freight_commission_tiers` · `freight_commission_accruals` · `freight_commission_withdrawals` · `freight_commission_withdrawal_items`). 💰 **MONEY-CRITICAL · ships DORMANT** behind a NEW `business_config commission.freight_enabled` flag (seeded `{"enabled": false}` · mirror of `tax_invoice.shop_yuan_enabled`). NOT a reuse of the 0054 `commission_*` tables (those were TOMBSTONED for CARGO per ADR-0026 → freight-prefixed avoids re-animating the dead cargo twin / §0e trap). Rates live as EDITABLE DATA in `freight_commission_tiers` (seeded AX-JOB values: freight 1% · customs 5% · doc 5% − 3% WHT · flat 20฿/shipment EK·AIR · all `is_owner_confirmed=false`). Accruals idempotent (partial-UNIQUE `(source_kind, source_ref, earner_admin_id)`). Withdrawals `pending→approved→paid` — NO auto-pay (paid = super-only + slip). RLS `is_admin([super,accounting,sales_admin,pricing,interpreter,freight roles])` + service-role bypass. Pure DDL + seeds · idempotent. **⏳ NOT applied prod** — owner applies via `scripts/apply-migration-dryrun.mjs` (dry-run → `--apply`). The owner flips `commission.freight_enabled` ON only AFTER reviewing/confirming the seeded tier rates (`is_owner_confirmed=true`).
 
 > ⏳ **2026-06-09 (เดฟ · W2 review defensive fix): 0166** = `customs_declarations_rls_roles` — broaden the `customs_declarations` / `_lines` / `_seq` admin RLS from `['super','accounting']` → `['super','accounting','freight_import_doc','pricing']` to align with the action role sets. **NOT a live-bug fix** (admin surfaces use the service-role client which bypasses RLS · the W2 adversarial review flagged it but createAdminClient bypasses RLS); this future-proofs any user-session access by the 2 roles that legitimately work customs (freight Docs + cargo Pricing). Customer self-read policy untouched. Idempotent (drop+recreate). **⏳ NOT applied prod** — owner applies via `scripts/apply-migration-dryrun.mjs`.
 

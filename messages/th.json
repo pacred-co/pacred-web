@@ -3350,6 +3350,9 @@
     "freightOps": {
       "title": "Freight Operations (AX JOB)"
     },
+    "freightCommission": {
+      "title": "ค่าคอม Freight"
+    },
     "settingsCargo": {
       "title": "ตั้งค่าระบบ Cargo",
       "general": "ทั่วไป",

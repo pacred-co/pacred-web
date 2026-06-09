@@ -351,6 +351,22 @@ const itemFreightOperations: MenuItem = {
   icon: "Kanban",
 };
 
+/** 2026-06-09 (W6 · freight commission ledger) — the FREIGHT staff-commission
+ *  accrual + withdrawal queue (/admin/commission/freight · migration 0167). 💰
+ *  Ships DORMANT behind business_config commission.freight_enabled (default OFF)
+ *  — while OFF the page shows a "รอ owner ยืนยัน rate + เปิดใช้" banner + accrual
+ *  no-ops. Surfaces the commission ledger + the approval/pay queue + the seeded
+ *  rate tiers (PENDING owner confirm). The page + actions gate RBAC themselves
+ *  (super/accounting/sales_admin + the freight roles); the PAID flip is super-only.
+ *  phase: 2 → super sees it in the sidebar; accounting reaches it here + the page
+ *  gates the full role set. */
+const itemFreightCommission: MenuItem = {
+  labelKey: "freightCommission.title",
+  href: "/admin/commission/freight",
+  icon: "BadgePercent",
+  phase: 2,
+};
+
 /** legacy pcs-admin menu L162-167 — "อัปเดตฝากนำเข้า" (top-level group)
  *  Combines BOTH Wave 17 P1 streams into the single legacy parent:
  *   - P1-1+2 — MOMO + CargoCenter (manualUpdate sub-page only · Phase B
@@ -847,6 +863,9 @@ const menuSuper: MenuSection[] = [
       itemFreightCostRates,
       // 2026-06-09 (เดฟ · tax-invoice P3) — CARGO ใบขนรวม (consolidated customs decl).
       itemCargoDeclarations,
+      // 2026-06-09 (W6 · freight commission ledger) — accrual + withdrawal queue
+      // (DORMANT behind commission.freight_enabled).
+      itemFreightCommission,
       blockApiForwarderUpdate,
       // 2026-05-21 ภูม flagged — /admin/drivers had no direct super sidebar
       // entry · only reachable via the /admin/forwarders top-menubar
@@ -935,6 +954,8 @@ const menuManager: MenuSection[] = [
       itemFreightLeads,
       // 2026-06-09 (W4 · freight ops cockpit) — AX-JOB PRICING→SALES→DOC→ACC board.
       itemFreightOperations,
+      // 2026-06-09 (W6 · freight commission ledger · DORMANT).
+      itemFreightCommission,
       blockApiForwarderUpdate,
       { labelKey: "forwarder.assignDriver", href: "/admin/drivers", icon: "Truck", badge: "driverItems" },
       { labelKey: "forwarder.driverWork", href: "/admin/drivers/work", icon: "Smartphone" },
@@ -1040,6 +1061,9 @@ const menuAccounting: MenuSection[] = [
       // 2026-06-09 (W4 · freight ops cockpit) — accounting owns the ACC stage
       // (P&L close) on the AX-JOB board.
       itemFreightOperations,
+      // 2026-06-09 (W6 · freight commission ledger) — accounting approves/pays the
+      // commission withdrawals (DORMANT behind commission.freight_enabled).
+      itemFreightCommission,
     ],
   },
   { header: "Settings", items: [blockSettingsCargo] },
