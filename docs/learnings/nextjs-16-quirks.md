@@ -1162,3 +1162,14 @@ evaporate the instant Slick initialises, so its track/arrows/dots are untouched.
 **Verify:** force the pre-init state in Chrome (`$(el).slick('unslick')`) and
 assert `visibleChildCount === 1` + height ≈ initialised height; then a fresh load
 should show CLS ≈ 0.
+
+## 2026-06-09 — broken-image icon "in many places" = a STATIC asset wired in code but never placed in `public/` (the code was right; the file was missing)
+
+Owner: *"ทำไม QR code … รูปยังไม่ขึ้น … ยังไม่ได้อัพไปใส่ไว้หรอ … เห็นหลายที่แล้ว … ไล่เช็คให้หมดทุกที่."* The payment QR (every pay-modal) rendered a broken-image icon. **Root cause was NOT code** — `lib/promptpay.ts` was correctly converted to a static QR: `STATIC_PAYMENT_QR_PATH = "/images/payment/pacred-qr.png"` + `loadStaticQrDataUrl()` reads `public/images/payment/pacred-qr.png`, base64-encodes it, and on `catch` (file absent) **returns the public path itself** (so it 404s as a small broken icon rather than an empty-`src` re-download). All pay modals route through `getForwarderPaymentQr` → `buildPromptPayQrDataUrl` → that path. **The file was simply never uploaded.** Fix = place the file (no code change): the owner gave a `.jpg`; the code base64-tags `data:image/png`, so convert JPG→PNG at the exact path (`sharp` absent in the worktree → Windows `System.Drawing` via PowerShell: `[Image]::FromFile(jpg).Save(png, ImageFormat::Png)`; resize to ~720px to keep the inline-base64 light for mobile).
+
+**The systemic sweep (the owner's "ไล่เช็คให้หมด"):** broken images come from static `src` literals pointing at files missing from `public/`. Audit ALL of them in one pass:
+```bash
+grep -rhoE '"/[A-Za-z0-9_./ -]+\.(png|jpg|jpeg|svg|webp|gif|ico)"' app/ components/ | tr -d '"' | sort -u \
+  | while read -r p; do [ -f "public$p" ] || echo "MISSING: $p"; done
+```
+This found 7 more (besides the QR): 5 unuploaded hero banners (`hero-client.tsx` `TAB_IMAGES` — repointed to existing Pacred service banners) + 2 admin default placeholders (`/legacy/pcs/admin/images/shops/default.png` — code referenced an `/admin/` path the file didn't live at; + `forwarder-default.png` — no placeholder existed → copied an existing default). **Rules:** (a) when a static asset is "wired but blank," suspect a missing `public/` file BEFORE suspecting code; (b) run the grep-vs-`public/` audit periodically — `pnpm build`/`verify` do NOT catch a missing static image (Next serves `/public` at request time, no build check); (c) for a referenced-but-not-yet-supplied marketing asset, point at an EXISTING image now + note the intended path so the owner can drop the real file later (Next serves it instantly, no rebuild).

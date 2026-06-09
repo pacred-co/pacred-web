@@ -3,6 +3,23 @@
 
 ---
 
+# 🛠 2026-06-09 LATE-NIGHT — เดฟ: 3 URGENT prod-bug fixes + remaining roadmap waves W6-W11 → ALL ON MAIN · read FIRST
+
+> **main = dave-pacred = Poom-pacred = InwPond007 = `32589732`** (all 0/0 · deployed prod) · `pnpm verify` + prod build EXIT 0 · **8 migrations applied+verified prod this session-half (0161-0167 + 0169-0171 · NEXT FREE = 0172)** · prod Supabase = `yzljakczhwrpbxflnmco` (owner-confirmed · lozntl=ภูม dev).
+>
+> **🔧 3 URGENT owner-reported prod bugs — FIXED + DEPLOYED first:** (1) **payment QR broken in every pay-modal** — the static company QR (`lib/promptpay.ts` `STATIC_PAYMENT_QR_PATH=/images/payment/pacred-qr.png`) was never UPLOADED (code was right; file missing → broken-image). Placed the owner's K-Shop QR (JPG→PNG · resized 720px · no code change · fixes all modals). (2) **ฝากนำเข้า create-order silent-blocked** — P1 doc-picker auto-defaulted to ใบกำกับ for juristic → required billing fields blocked submit when tb_corporate incomplete → `CartTaxDocPref` gained `defaultMode`; ฝากนำเข้า passes `'none'` (order-entry no longer forces a tax doc · cart unchanged). (3) **เพิ่มที่อยู่ใหม่ 404** — `/addresses/add` now redirects to `/addresses` (add is a modal there). **+ systemic broken-image sweep** (`grep static img-src vs public/`): fixed 7 more (5 unuploaded hero banners → existing service banners · 2 admin default placeholders). Learning: `docs/learnings/nextjs-16-quirks.md` (broken-image = missing public/ file).
+>
+> **🚀 Remaining roadmap waves BUILT + integrated (mechanism-first · owner-inputs gated/deferred · adversarially reviewed):**
+> - **W6 — Freight commission ledger** (`freight_commission_*` ×4 · mig 0167) — 💰 **ships DORMANT** behind `business_config commission.freight_enabled` (=`{"enabled":false}`) + rates as EDITABLE seeded tiers (`is_owner_confirmed=false` · 0 confirmed) · idempotent accrual · NO auto-pay. **🔴 owner: confirm the rate tiers + flip the flag to go live.**
+> - **W9 — Tax-invoice P4: CARGO tax-doc 4-role workspace** (`/admin/pricing/taxdoc-workspace` · CS→Pricing→Docs→Account over tb_cargo_taxdoc_job · 3 numbers + 4 status pills · ACC gated on cs+pricing · no schema) + PEAK 3-number rollup + shop/yuan etax read. Issuance stays gated.
+> - **W10 — Warehouse worker-app** (`/admin/warehouse/worker/*` intake/measure/sack/ship/follow · mig 0169-0171 · isolated audit tables · no money write · respects fcabinet_locked). **🔴 owner/China-team: confirm `warehouse` role assignment.**
+> - **W11 — Customs doc-kit** (`/admin/accounting/customs-doc-kit` · DO-LOI per carrier + 45-day/POA/amend/lost-doc letters + Form-E/ACFTA eligibility + HS-assist + port codes · advisory/PDF only). **🔴 NETBAY e-filing DEFERRED (no creds · manual filing).**
+> - Built by 5 worktree agents (W6 + W9/W10/W11 batch) → I integrated serially (4 merges · the persistent ภูม receipt-PDF race · the conflict-marker trap + a lint/type cascade — all caught by my gate · learning `parallel-agent-sprints.md` L-PAS-08).
+>
+> **🔴 OWNER ACTION ITEMS (carryover · all the DORMANT/gated levers):** flip `commission.freight_enabled` (after confirming W6 tier rates) · flip `tax_invoice.shop_yuan_enabled` (ใบกำกับ ฝากสั่ง/โอน · after money-test + ใบขน VAT sign-off) · enable `pricing`/`warehouse`/`freight_import_doc` roles for staff at `/admin/admins/[id]/edit` · ใบขน VAT-base sign-off (gates issuance) · PEAK GL codes (accountant) · NETBAY creds · rotate the dev DB password ภูม committed · confirm juristic-signup fix · test customer login (unblocks the §0c authed-click-test of all the new admin surfaces — gated+reviewed but NOT browser-tested). ⚠️ **CLAUDE.md >2000 lines — archive overdue (§12).**
+
+---
+
 # 🌏 2026-06-09 NIGHT — เดฟ: DEEP-SOURCE BUILD (cargo+freight) + full team-integrate → ALL ON MAIN · read FIRST
 
 > **main = dave-pacred = Poom-pacred = InwPond007 = `7287bfd9`** (all 0/0 · pushed main per owner "ตรวจงานน้องๆ → รวม → push main ทีเดียว · อย่าทำงานน้องหาย" · Vercel deploying prod) · `pnpm verify` + prod build EXIT 0 every save-point · **6 migrations applied+verified prod (0161-0166) · NEXT FREE = 0167.**
