@@ -13,8 +13,14 @@ export const COLORS = {
   primaryDk:  "#7A0000",   // darker variant
   foreground: "#111827",   // gray-900
   muted:      "#6B7280",   // gray-500
+  mutedLt:    "#9CA3AF",   // gray-400
   border:     "#E5E7EB",   // gray-200
+  borderDk:   "#D1D5DB",   // gray-300
   surfaceAlt: "#F9FAFB",   // gray-50
+  surfaceTotal: "#F3F4F6", // gray-100 — totals row highlight
+  accent:     "#FFF7ED",   // orange-50 — Peak notes block tint
+  accentBorder: "#FED7AA", // orange-200
+  accentText: "#C2410C",   // orange-700
 } as const;
 
 export const styles = StyleSheet.create({
@@ -362,3 +368,344 @@ export function fmtBaht(n: number): string {
     maximumFractionDigits: 2,
   });
 }
+
+/**
+ * Peak-style v2 (2026-06-09 · ภูม flag round 2).
+ *
+ * v1 used boxes/cards everywhere → looked เละ. Peak is borderless — every
+ * section is just a row separated by a single 1px gray divider. No card
+ * chrome around issuer/customer/totals/payment. Only the meta box (top-right
+ * 3-row card) and the items table itself have borders.
+ *
+ * Peak palette (sampled from the screenshot):
+ *   - body white background, no shadows
+ *   - section dividers = 1px solid #e5e7eb (COLORS.border)
+ *   - orange accent only for the brand wordmark + meta-box tint
+ *   - body text #111827, secondary #6b7280, danger #DC2626 (totals only)
+ *
+ * Typography:
+ *   - body 9pt
+ *   - section labels 10pt bold
+ *   - amount numbers 11pt bold
+ */
+export const peakStyles = StyleSheet.create({
+  // ── Top band: brand wordmark left · copy badge right ────────────────
+  peakTopBand: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 8,
+  },
+  peakBrandWord: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: COLORS.accentText, // Pacred orange wordmark
+    letterSpacing: 0.5,
+  },
+  peakCopyLabel: {
+    fontSize: 9,
+    color: COLORS.muted,
+  },
+  peakDocTitleRight: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: COLORS.foreground,
+    marginTop: 2,
+    textAlign: "right",
+  },
+  peakDocTitleEnRight: {
+    fontSize: 7,
+    color: COLORS.muted,
+    letterSpacing: 1.2,
+    textAlign: "right",
+  },
+
+  // ── Section divider (full-width 1px line) ────────────────────────────
+  peakDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    borderBottomStyle: "solid",
+    marginVertical: 6,
+  },
+
+  // ── Section row (issuer block, customer block — borderless stacked) ─
+  peakSectionRow: {
+    flexDirection: "row",
+    marginBottom: 4,
+  },
+  peakSectionMain: {
+    flex: 3,
+    paddingRight: 8,
+  },
+  peakSectionSide: {
+    flex: 2,
+    alignItems: "flex-end",
+  },
+  peakRoleLabel: {
+    fontSize: 8,
+    color: COLORS.muted,
+    marginBottom: 1,
+  },
+  peakRoleName: {
+    fontSize: 10.5,
+    fontWeight: "bold",
+    color: COLORS.foreground,
+    marginBottom: 2,
+  },
+  peakContactLine: {
+    fontSize: 8.5,
+    color: COLORS.foreground,
+    lineHeight: 1.4,
+  },
+  peakContactInline: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 1,
+  },
+  peakContactItem: {
+    fontSize: 8,
+    color: COLORS.muted,
+    marginRight: 10,
+  },
+
+  // ── Right-aligned meta card (เลขที่ · วันที่ · อ้างอิง) — keeps a border ─
+  peakMetaCard: {
+    borderWidth: 0.5,
+    borderColor: COLORS.borderDk,
+    borderStyle: "solid",
+    borderRadius: 2,
+    width: 180,
+    backgroundColor: COLORS.surfaceAlt,
+  },
+  peakMetaRow: {
+    flexDirection: "row",
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.border,
+    borderBottomStyle: "solid",
+  },
+  peakMetaRowLast: {
+    borderBottomWidth: 0,
+  },
+  peakMetaLabel: {
+    width: 60,
+    fontSize: 8,
+    color: COLORS.muted,
+  },
+  peakMetaValue: {
+    flex: 1,
+    fontSize: 8.5,
+    color: COLORS.foreground,
+    textAlign: "right",
+  },
+
+  // ── Items table (Pacred 7-col — only the table itself has thin borders) ─
+  peakTable: {
+    marginVertical: 4,
+    borderTopWidth: 0.5,
+    borderTopColor: COLORS.borderDk,
+    borderTopStyle: "solid",
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.borderDk,
+    borderBottomStyle: "solid",
+  },
+  peakTableHead: {
+    flexDirection: "row",
+    backgroundColor: COLORS.surfaceAlt,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.border,
+    borderBottomStyle: "solid",
+  },
+  peakTableHeadCell: {
+    fontSize: 8,
+    fontWeight: "bold",
+    color: COLORS.muted,
+  },
+  peakTableRow: {
+    flexDirection: "row",
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.border,
+    borderBottomStyle: "solid",
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+  },
+  peakTableRowLast: {
+    borderBottomWidth: 0,
+  },
+  peakTableCell: {
+    fontSize: 8.5,
+    color: COLORS.foreground,
+  },
+  peakTableCellRight: {
+    textAlign: "right",
+  },
+  peakTableCellCenter: {
+    textAlign: "center",
+  },
+
+  // ── Section heading (📋/💳/📝/✍ inline icon + bold label) ──────────────
+  peakSectionHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+    marginBottom: 3,
+  },
+  peakSectionHeadLabel: {
+    fontSize: 10,
+    fontWeight: "bold",
+    color: COLORS.foreground,
+  },
+
+  // ── Totals: RIGHT-aligned text rows (NO box, NO border) ───────────────
+  peakTotalsWrap: {
+    alignItems: "flex-end",
+    marginBottom: 4,
+  },
+  peakTotalsRow: {
+    flexDirection: "row",
+    paddingVertical: 1.5,
+    minWidth: 220,
+    justifyContent: "flex-end",
+  },
+  peakTotalsLabel: {
+    fontSize: 9,
+    color: COLORS.muted,
+    textAlign: "right",
+    marginRight: 14,
+  },
+  peakTotalsValue: {
+    width: 80,
+    fontSize: 9,
+    color: COLORS.foreground,
+    textAlign: "right",
+  },
+  peakTotalsGrandRow: {
+    flexDirection: "row",
+    paddingTop: 4,
+    paddingBottom: 4,
+    marginTop: 2,
+    minWidth: 260,
+    justifyContent: "flex-end",
+    borderTopWidth: 0.5,
+    borderTopColor: COLORS.borderDk,
+    borderTopStyle: "solid",
+  },
+  peakTotalsGrandLabel: {
+    fontSize: 11,
+    fontWeight: "bold",
+    color: COLORS.foreground,
+    textAlign: "right",
+    marginRight: 14,
+  },
+  peakTotalsGrandValue: {
+    width: 80,
+    fontSize: 11,
+    fontWeight: "bold",
+    color: COLORS.foreground,
+    textAlign: "right",
+  },
+  peakAmountInWords: {
+    fontSize: 8,
+    color: COLORS.muted,
+    marginTop: 2,
+  },
+  peakTotalsAccent: {
+    color: "#DC2626",
+  },
+
+  // ── Payment section: left ชำระโดย inline · right bank stacked ─────────
+  peakPaymentRow: {
+    flexDirection: "row",
+    marginVertical: 3,
+  },
+  peakPaymentLeft: {
+    flex: 1,
+    paddingRight: 10,
+    borderRightWidth: 0.5,
+    borderRightColor: COLORS.border,
+    borderRightStyle: "solid",
+  },
+  peakPaymentRight: {
+    flex: 1,
+    paddingLeft: 10,
+  },
+  peakPaymentLine: {
+    fontSize: 8.5,
+    color: COLORS.foreground,
+    lineHeight: 1.5,
+  },
+  peakPaymentLineMuted: {
+    fontSize: 8,
+    color: COLORS.muted,
+    lineHeight: 1.5,
+  },
+
+  // ── Signature mini-boxes (~80pt wide each, single thin line at bottom) ─
+  peakSigRow: {
+    flexDirection: "row",
+    marginTop: 6,
+  },
+  peakQrSmall: {
+    width: 60,
+    alignItems: "center",
+    marginRight: 6,
+  },
+  peakQrSmallBox: {
+    width: 50,
+    height: 50,
+    backgroundColor: COLORS.surfaceAlt,
+    borderWidth: 0.5,
+    borderColor: COLORS.borderDk,
+    borderStyle: "solid",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  peakQrSmallText: {
+    fontSize: 6,
+    color: COLORS.mutedLt,
+    textAlign: "center",
+    lineHeight: 1.2,
+  },
+  peakQrSmallLabel: {
+    fontSize: 6.5,
+    color: COLORS.muted,
+    marginTop: 1,
+    textAlign: "center",
+  },
+  peakSigBox: {
+    flex: 1,
+    paddingHorizontal: 4,
+    paddingTop: 2,
+    marginRight: 4,
+    alignItems: "center",
+  },
+  peakSigBoxLast: {
+    marginRight: 0,
+  },
+  peakSigContent: {
+    height: 30,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  peakSigLine: {
+    width: "100%",
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.foreground,
+    borderBottomStyle: "solid",
+    marginBottom: 2,
+  },
+  peakSigRoleLabel: {
+    fontSize: 7.5,
+    color: COLORS.foreground,
+    textAlign: "center",
+  },
+  peakSigDateLabel: {
+    fontSize: 6.5,
+    color: COLORS.muted,
+    textAlign: "center",
+    marginTop: 1,
+  },
+});

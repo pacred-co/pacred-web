@@ -400,9 +400,20 @@ export default async function AdminFreightShipmentDetailPage({
             )}
           </p>
         </div>
-        <span className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_BADGE[header.status]}`}>
-          {FREIGHT_SHIPMENT_STATUS_LABEL[header.status]}
-        </span>
+        <div className="flex items-center gap-2">
+          {/* W5 — internal P&L dashboard (super/accounting/freight only · advisory) */}
+          {isSuperOrAccounting && (
+            <Link
+              href={`/admin/freight/shipments/${header.id}/p-and-l`}
+              className="rounded-lg border border-border px-3 py-1 text-xs font-medium hover:bg-surface-alt"
+            >
+              📈 P&amp;L
+            </Link>
+          )}
+          <span className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_BADGE[header.status]}`}>
+            {FREIGHT_SHIPMENT_STATUS_LABEL[header.status]}
+          </span>
+        </div>
       </div>
 
       {/* Customer */}
@@ -481,12 +492,21 @@ export default async function AdminFreightShipmentDetailPage({
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h2 className="font-bold text-sm">📋 ใบขนสินค้า (V-E11)</h2>
-          {!activeCd && header.status !== "cancelled" && (
-            <DeclarationCreateButton
-              shipmentId={header.id}
-              allowedToCreate={isSuperOrAccounting}
-            />
-          )}
+          <div className="flex items-center gap-2">
+            {/* W11 — generate DO-release LOI / customs letters for this shipment. */}
+            <Link
+              href={`/admin/accounting/customs-doc-kit?shipment=${header.id}`}
+              className="rounded-lg border border-border bg-white px-2.5 py-1 text-[11px] hover:bg-surface-alt"
+            >
+              ✉️ ออกจดหมาย D/O / ศุลกากร
+            </Link>
+            {!activeCd && header.status !== "cancelled" && (
+              <DeclarationCreateButton
+                shipmentId={header.id}
+                allowedToCreate={isSuperOrAccounting}
+              />
+            )}
+          </div>
         </div>
         {cdRows.length === 0 ? (
           <p className="text-xs text-muted">

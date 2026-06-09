@@ -7,13 +7,18 @@ import { HeroTabs } from "@/components/ui/hero-tabs";
 
 const Y = "#FDE047";
 
+// 2026-06-09 (broken-image fix) — 5 of these 6 hero banners were never uploaded
+// (heropay/leac/saofire/shipbanner/sulakabanner.png missing → broken-image icons
+// on the homepage hero). Repointed to the EXISTING Pacred service banners so the
+// hero renders real content. ⚠️ Owner: to use specific marketing banners, drop
+// PNGs at the original paths above + restore those names here.
 const TAB_IMAGES = [
-  "/images/hero-section/banner/shipbanner.png",
-  "/images/hero-section/banner/leac.png",
+  "/images/hero-section/banner/ship.png",
+  "/images/hero-section/banner/exchange.png",
   "/images/hero-section/banner/airbanner.png",
-  "/images/hero-section/banner/sulakabanner.png",
-  "/images/hero-section/banner/saofire.png",
-  "/images/hero-section/banner/heropay.png",
+  "/images/hero-section/banner/shop.png",
+  "/images/hero-section/banner/customs.png",
+  "/images/hero-section/banner/car.png",
 ];
 
 const TAB_KEYS: { title1: string; title2: string; sub: string }[] = [

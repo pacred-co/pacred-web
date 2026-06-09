@@ -58,7 +58,27 @@ export type FreightLineResult = {
   unitSell: number;
   cost: number;
   sell: number;
+  /** W5 — commission bucket % applied to this line's sell (0 for non-commissionable scopes). */
+  commissionPct: number;
+  /** W5 — line-level commission = sell × commissionPct/100 (pre-WHT). */
+  commissionThb: number;
 };
+
+/**
+ * W5 — the commission rate (%) for a line's scope. Mirrors the job-level split
+ * (freight 1% · thai_customs 5% · origin/doc 5%); all other scopes = 0. The
+ * WHT (3%) is applied job-level on the gross, NOT per line.
+ *
+ * ⚠️ These rate constants are owner-confirmable (the source xlsx is binary) —
+ * they live in FREIGHT_COMMISSION (rate-model.ts) and persist as a snapshot, so
+ * a later rate change does not silently re-write historical quote line items.
+ */
+export function commissionPctForScope(scope: ScopeCategory): number {
+  if (scope === "freight") return FREIGHT_COMMISSION.salesFreightPct;
+  if (scope === "thai_customs") return FREIGHT_COMMISSION.salesCustomsPct;
+  if (scope === "origin") return FREIGHT_COMMISSION.salesDocPct;
+  return 0;
+}
 
 export type FreightQuoteResult = {
   lines: FreightLineResult[];
@@ -115,6 +135,7 @@ export function composeFreightQuote(spec: FreightQuoteSpec): FreightQuoteResult 
       key: l.key, labelTh: l.labelTh, scope: l.scope,
       qty: 1, unit: "SET", unitCost: l.cost, unitSell,
       cost: l.cost, sell: unitSell,
+      commissionPct: 0, commissionThb: 0, // filled below
     });
   }
 
@@ -134,7 +155,14 @@ export function composeFreightQuote(spec: FreightQuoteSpec): FreightQuoteResult 
       key: l.key, labelTh: l.labelTh, scope: l.scope,
       qty, unit, unitCost, unitSell,
       cost: round2(unitCost * qty), sell: round2(unitSell * qty),
+      commissionPct: 0, commissionThb: 0, // filled below
     });
+  }
+
+  // W5 — per-line commission (snapshot-friendly): scope % × the line's sell.
+  for (const l of lines) {
+    l.commissionPct = commissionPctForScope(l.scope);
+    l.commissionThb = round2((l.sell * l.commissionPct) / 100);
   }
 
   const localCost = round2(lines.reduce((s, l) => s + l.cost, 0));

@@ -203,6 +203,28 @@ const itemBarcodeRecordIntakeFlat: MenuItem = {
   icon: "ScanLine",
 };
 
+/** 2026-06-09 (W10 · Theme 7 Phase 1) — China-warehouse worker-app block.
+ *  The scanner-first ops app over the cargo spine (tb_forwarder /
+ *  tb_forwarder_item / warehouse_sack): receive → measure → sack → load →
+ *  depart → arrive → follow. Reference:
+ *  docs/research/cargothai-warehouse-ops-blueprint-2026-06-01.md.
+ *  Reachable for super/warehouse/ops/manager (the actions themselves
+ *  re-gate every fstatus flip via the G5 transition matrix). 🔒 WHO holds
+ *  the warehouse role = China-team RBAC sign-off (owner-blocked); the menu +
+ *  pages ship built and role-gated. */
+const blockWarehouseWorker: MenuItem = {
+  labelKey: "warehouseWorker.title",
+  icon: "Boxes",
+  children: [
+    { labelKey: "warehouseWorker.dashboard", href: "/admin/warehouse/worker",          icon: "LayoutDashboard" },
+    { labelKey: "warehouseWorker.intake",    href: "/admin/warehouse/worker/intake",   icon: "ScanLine" },
+    { labelKey: "warehouseWorker.measure",   href: "/admin/warehouse/worker/measure",  icon: "Calculator" },
+    { labelKey: "warehouseWorker.sacks",     href: "/admin/warehouse/worker/sacks",    icon: "Boxes" },
+    { labelKey: "warehouseWorker.shipping",  href: "/admin/warehouse/worker/shipping", icon: "Truck" },
+    { labelKey: "warehouseWorker.follow",    href: "/admin/warehouse/worker/follow",   icon: "PackageCheck" },
+  ],
+};
+
 /** legacy OOP/Cargo/menu-barcode.php — สแกนบาร์โค้ด (nested)
  *
  *  2026-05-20 ค่ำ (Wave 2D · Option A) — Phase 4 tags removed; barcode is
@@ -322,6 +344,76 @@ const itemFreightCostRates: MenuItem = {
   labelKey: "accFreight.costRates",
   href: "/admin/freight/rates",
   icon: "HandCoins",
+};
+
+/** 2026-06-09 (เดฟ · tax-invoice P3) — the CARGO ใบขนรวม (consolidated customs
+ *  declaration) Docs surface. A cargo import (ฝากสั่งซื้อ / ฝากนำเข้า) is a
+ *  Freight-LCL job where Pacred issues ONE ใบขนรวม under the shipping-company
+ *  name; this surface lists cargo declarations + arrived-in-TH forwarders that
+ *  need one, and lets the Docs role review/adjust the per-line มูลค่าสำแดง
+ *  (defaults from cost · mig 0158/0161/0162). Reuses the same customs_declarations
+ *  model as Freight. Single leaf · super/accounting/freight_import_doc(Docs)/
+ *  pricing — the page + actions gate RBAC themselves. P3 = capture/surface only
+ *  (no issuance / money / comms). */
+const itemCargoDeclarations: MenuItem = {
+  labelKey: "accFreight.cargoDeclarations",
+  href: "/admin/accounting/cargo-declarations",
+  icon: "ClipboardList",
+};
+
+/** 2026-06-09 (W4 · freight ops cockpit) — the AX-JOB unified
+ *  PRICING→SALES→DOC→ACC Kanban board (/admin/freight/operations). A
+ *  read-mostly layer over the existing freight spine (freight_shipments);
+ *  manages per-stage status + section assignment + checklist + an operator
+ *  P&L snapshot. The page + actions gate RBAC themselves (super + freight
+ *  section roles + ops/accounting/sales_admin/pricing). NO money mutation. */
+const itemFreightOperations: MenuItem = {
+  labelKey: "freightOps.title",
+  href: "/admin/freight/operations",
+  icon: "Kanban",
+};
+
+/** 2026-06-09 (W6 · freight commission ledger) — the FREIGHT staff-commission
+ *  accrual + withdrawal queue (/admin/commission/freight · migration 0167). 💰
+ *  Ships DORMANT behind business_config commission.freight_enabled (default OFF)
+ *  — while OFF the page shows a "รอ owner ยืนยัน rate + เปิดใช้" banner + accrual
+ *  no-ops. Surfaces the commission ledger + the approval/pay queue + the seeded
+ *  rate tiers (PENDING owner confirm). The page + actions gate RBAC themselves
+ *  (super/accounting/sales_admin + the freight roles); the PAID flip is super-only.
+ *  phase: 2 → super sees it in the sidebar; accounting reaches it here + the page
+ *  gates the full role set. */
+const itemFreightCommission: MenuItem = {
+  labelKey: "freightCommission.title",
+  href: "/admin/commission/freight",
+  icon: "BadgePercent",
+  phase: 2,
+};
+
+/** 2026-06-09 (W9 · tax-invoice P4) — the CARGO tax-doc 4-role WORKSPACE
+ *  (/admin/pricing/taxdoc-workspace). Carries the THREE numbers
+ *  (SELLING ≠ COST ≠ DECLARED) through the FOUR roles (CS → Pricing → Docs →
+ *  Account) over the tb_cargo_taxdoc_job spine (mig 0161). Read + advance
+ *  workflow only — NO money / issuance / comms. Account stage gated on
+ *  CS + Pricing done. The page + actions gate RBAC themselves
+ *  (super + sales/pricing/freight_import_doc/accounting/ops). */
+const itemTaxdocWorkspace: MenuItem = {
+  labelKey: "taxdocWorkspace.title",
+  href: "/admin/pricing/taxdoc-workspace",
+  icon: "ReceiptText",
+};
+
+/** 2026-06-09 (W11 · customs doc-kit) — the customs-brokerage document toolkit
+ *  (/admin/accounting/customs-doc-kit). DOC-GENERATION + advisory only:
+ *  DO-release LOI per carrier (ZIM/RCL/COSCO/HEDE/FUJIT/UPS/...) + ZIM Split-DO
+ *  + the customs-letter kit (45-day waiver · POA · amend · lost-doc) →
+ *  stateless PDF generator · Form-E/ACFTA eligibility (advisory) · HS-code
+ *  AI-assist (stub unless endpoint set). 🔒 NETBAY e-filing HARD-BLOCKED (no
+ *  creds) — manual filing until then. NO money / NO auto-filing. The page +
+ *  actions gate RBAC themselves (super/accounting/freight_*_doc/pricing). */
+const itemCustomsDocKit: MenuItem = {
+  labelKey: "customsDocKit.title",
+  href: "/admin/accounting/customs-doc-kit",
+  icon: "FileSignature",
 };
 
 /** legacy pcs-admin menu L162-167 — "อัปเดตฝากนำเข้า" (top-level group)
@@ -814,8 +906,19 @@ const menuSuper: MenuSection[] = [
       blockForwarderImport,
       // 2026-06-08 (เดฟ · freight revenue unlock) — inbound Freight RFQ inbox.
       itemFreightLeads,
+      // 2026-06-09 (W4 · freight ops cockpit) — AX-JOB PRICING→SALES→DOC→ACC board.
+      itemFreightOperations,
       // 2026-06-09 (เดฟ · freight net-margin unlock) — China freight cost rates.
       itemFreightCostRates,
+      // 2026-06-09 (เดฟ · tax-invoice P3) — CARGO ใบขนรวม (consolidated customs decl).
+      itemCargoDeclarations,
+      // 2026-06-09 (W6 · freight commission ledger) — accrual + withdrawal queue
+      // (DORMANT behind commission.freight_enabled).
+      itemFreightCommission,
+      // 2026-06-09 (W9 · tax-invoice P4) — CARGO tax-doc 4-role workspace (3 numbers).
+      itemTaxdocWorkspace,
+      // 2026-06-09 (W11 · customs doc-kit) — DO-LOI/Form-E/HS-assist toolkit.
+      itemCustomsDocKit,
       blockApiForwarderUpdate,
       // 2026-05-21 ภูม flagged — /admin/drivers had no direct super sidebar
       // entry · only reachable via the /admin/forwarders top-menubar
@@ -833,6 +936,8 @@ const menuSuper: MenuSection[] = [
       // top-level flat, matching legacy menu-barcode.php line 10. The
       // deeper blockBarcode toolbox stays as the comprehensive nested menu.
       itemBarcodeRecordIntakeFlat,
+      // 2026-06-09 (W10 · Theme 7 P1) — China-warehouse worker app (super peek).
+      blockWarehouseWorker,
       // re-sweep A2 #8/#17 — print all box labels for a scanned cabinet
       // (faithful port of legacy `printAll.php`).
       { labelKey: "warehouse.printLabels", href: "/admin/printAll", icon: "Printer" },
@@ -902,12 +1007,18 @@ const menuManager: MenuSection[] = [
       blockForwarderImport,
       // 2026-06-08 (เดฟ · freight revenue unlock) — inbound Freight RFQ inbox.
       itemFreightLeads,
+      // 2026-06-09 (W4 · freight ops cockpit) — AX-JOB PRICING→SALES→DOC→ACC board.
+      itemFreightOperations,
+      // 2026-06-09 (W6 · freight commission ledger · DORMANT).
+      itemFreightCommission,
       blockApiForwarderUpdate,
       { labelKey: "forwarder.assignDriver", href: "/admin/drivers", icon: "Truck", badge: "driverItems" },
       { labelKey: "forwarder.driverWork", href: "/admin/drivers/work", icon: "Smartphone" },
       // 2026-05-30 (Wave 29 #5 · Agent A) — flat barcode-intake shortcut.
       // Matches the menuSuper / menuWarehouse / menuDriver placement.
       itemBarcodeRecordIntakeFlat,
+      // 2026-06-09 (W10 · Theme 7 P1) — China-warehouse worker app.
+      blockWarehouseWorker,
       // re-sweep A2 #8/#17 — print all box labels for a scanned cabinet
       // (faithful port of legacy `printAll.php`).
       { labelKey: "warehouse.printLabels", href: "/admin/printAll", icon: "Printer" },
@@ -967,9 +1078,13 @@ const menuOps: MenuSection[] = [
       blockForwarderImport,
       // 2026-06-08 (เดฟ · freight revenue unlock) — inbound Freight RFQ inbox.
       itemFreightLeads,
+      // 2026-06-09 (W4 · freight ops cockpit) — AX-JOB PRICING→SALES→DOC→ACC board.
+      itemFreightOperations,
       // 2026-06-09 (เดฟ · freight net-margin unlock) — China freight cost rates.
       itemFreightCostRates,
       blockApiForwarderUpdate,
+      // 2026-06-09 (W10 · Theme 7 P1) — China-warehouse worker app (ops oversee).
+      blockWarehouseWorker,
       blockPayment,
       // Phase 2 — driver-runs sales-only side not yet live.
       { labelKey: "report.titleDriver", href: "/admin/driver-runs", icon: "BarChart3", phase: 2 },
@@ -999,6 +1114,21 @@ const menuAccounting: MenuSection[] = [
       // to the China freight cost rates (RLS: super/ops/accounting read · the page
       // disables write controls for non-super/ops roles).
       itemFreightCostRates,
+      // 2026-06-09 (เดฟ · tax-invoice P3) — CARGO ใบขนรวม (accounting reviews the
+      // declared/duty/VAT before PEAK + ใบกำกับ issuance).
+      itemCargoDeclarations,
+      // 2026-06-09 (W9 · tax-invoice P4) — accounting owns the ACCOUNT (close-out)
+      // stage of the CARGO tax-doc 4-role workspace (PEAK + ใบกำกับ readiness).
+      itemTaxdocWorkspace,
+      // 2026-06-09 (W11 · customs doc-kit) — accounting/Docs generate DO-LOI +
+      // customs letters + Form-E/HS advisory.
+      itemCustomsDocKit,
+      // 2026-06-09 (W4 · freight ops cockpit) — accounting owns the ACC stage
+      // (P&L close) on the AX-JOB board.
+      itemFreightOperations,
+      // 2026-06-09 (W6 · freight commission ledger) — accounting approves/pays the
+      // commission withdrawals (DORMANT behind commission.freight_enabled).
+      itemFreightCommission,
     ],
   },
   { header: "Settings", items: [blockSettingsCargo] },
@@ -1058,6 +1188,9 @@ const menuSalesAdmin: MenuSection[] = [
       itemWalletAll,
       itemPurchasingAll,
       { ...itemReportsAll, labelKey: "report.titleSales" },
+      // 2026-06-09 (W9 · tax-invoice P4) — CS owns the CS (selling) stage of
+      // the CARGO tax-doc 4-role workspace (choose doc-mode · confirm selling).
+      itemTaxdocWorkspace,
       // Phase 2 — Marketing/broadcasts/bookings post-launch features per 2026-05-20 brief.
       { labelKey: "broadcasts.title", href: "/admin/broadcasts", icon: "BellRing",      phase: 2 },
       { labelKey: "bookings.title",   href: "/admin/bookings",   icon: "CalendarCheck", badge: "bookingsPending", phase: 2 },
@@ -1104,6 +1237,9 @@ const menuWarehouse: MenuSection[] = [
         ],
       },
       blockApiForwarderUpdate,
+      // 2026-06-09 (W10 · Theme 7 P1) — China-warehouse worker app. THE
+      // daily ops tool for warehouse staff (receive/measure/sack/load/track).
+      blockWarehouseWorker,
       // Option C (ภูม 2026-05-20 ค่ำ) — point at the faithful port of legacy
       // `report-cnt.php`. Spine page at `/admin/warehouse/containers` retired
       // (tombstoned · redirects to /admin/report-cnt).
@@ -1303,6 +1439,7 @@ const menuFreightSalesManager: MenuSection[] = [
       // 2026-06-08 (เดฟ · freight revenue unlock) — inbound RFQ leads inbox is
       // the freight sales team's primary acquisition surface.
       itemFreightLeads,
+      itemFreightOperations,
       { labelKey: "manageCustomers.freightAll", href: "/admin/customers?segment=freight", icon: "Users" },
       { labelKey: "accFreight.title",           href: "/admin/accounting/freight",        icon: "Landmark" },
       { ...itemReportsAll, labelKey: "report.titleSales" },
@@ -1322,6 +1459,7 @@ const menuFreightSales: MenuSection[] = [
     items: [
       // 2026-06-08 (เดฟ · freight revenue unlock) — inbound RFQ leads inbox.
       itemFreightLeads,
+      itemFreightOperations,
       { labelKey: "manageCustomers.freightAll", href: "/admin/customers?segment=freight", icon: "Users" },
     ],
   },
@@ -1338,6 +1476,7 @@ const menuFreightExportManager: MenuSection[] = [
   {
     header: "Freight - Export",
     items: [
+      itemFreightOperations,
       // TODO: needs menu enumeration · doc says [Full Export Operations Access]
       { labelKey: "freightExportOps.placeholder", href: "/admin/forwarders?segment=freight-export", icon: "Truck" },
       { labelKey: "manageCustomers.freightAll", href: "/admin/customers?segment=freight", icon: "Users" },
@@ -1356,6 +1495,7 @@ const menuFreightExportCs: MenuSection[] = [
   {
     header: "Freight - Export",
     items: [
+      itemFreightOperations,
       // TODO: needs menu enumeration · doc says [Export CS Operations]
       { labelKey: "freightExportOps.csPlaceholder", href: "/admin/forwarders?segment=freight-export&role=cs", icon: "Truck" },
     ],
@@ -1380,8 +1520,13 @@ const menuFreightExportDoc: MenuSection[] = [
   {
     header: "Freight - Export",
     items: [
+      // W4 — the ops cockpit (DOC is a core stage owner).
+      itemFreightOperations,
       // Primary workspace — customs declarations (V-E11 · ใบขนสินค้า).
       { labelKey: "accFreight.declarations", href: "/admin/freight/declarations", icon: "ClipboardCheck" },
+      // 2026-06-09 (W11 · customs doc-kit) — DO-LOI per carrier + customs letters
+      // + Form-E/HS advisory (Docs role owns issuance of these draft documents).
+      itemCustomsDocKit,
       // Freight shipments — Doc pivots from a shipment to create its declaration.
       { labelKey: "freightExportOps.placeholder", href: "/admin/freight/shipments", icon: "Truck" },
       // Customer lookup — find the shipment owner / cabinet context.
@@ -1423,6 +1568,7 @@ const menuFreightClearanceBoth: MenuSection[] = [
   {
     header: "Freight",
     items: [
+      itemFreightOperations,
       // TODO: needs menu enumeration · doc says [Both Import & Export Clearance Access]
       { labelKey: "freightClearance.bothPlaceholder", href: "/admin/forwarders?segment=freight", icon: "ClipboardCheck" },
     ],
@@ -1456,6 +1602,7 @@ const menuFreightImportManager: MenuSection[] = [
   {
     header: "Freight - Import",
     items: [
+      itemFreightOperations,
       // TODO: needs menu enumeration · doc says [Full Import Operations Access]
       { labelKey: "freightImportOps.placeholder", href: "/admin/forwarders?segment=freight-import", icon: "Truck" },
       { labelKey: "manageCustomers.freightAll", href: "/admin/customers?segment=freight", icon: "Users" },
@@ -1474,6 +1621,7 @@ const menuFreightImportCs: MenuSection[] = [
   {
     header: "Freight - Import",
     items: [
+      itemFreightOperations,
       // TODO: needs menu enumeration · doc says [Import CS Operations]
       { labelKey: "freightImportOps.csPlaceholder", href: "/admin/forwarders?segment=freight-import&role=cs", icon: "Truck" },
     ],
@@ -1494,8 +1642,19 @@ const menuFreightImportDoc: MenuSection[] = [
   {
     header: "Freight - Import",
     items: [
+      // W4 — the ops cockpit (DOC is a core stage owner).
+      itemFreightOperations,
       // Primary workspace — customs declarations (V-E11 · ใบขนสินค้า).
       { labelKey: "accFreight.declarations", href: "/admin/freight/declarations", icon: "ClipboardCheck" },
+      // 2026-06-09 (เดฟ · tax-invoice P3) — CARGO ใบขนรวม (the Docs role owns
+      // the consolidated cargo declaration + per-line มูลค่าสำแดง).
+      itemCargoDeclarations,
+      // 2026-06-09 (W9 · tax-invoice P4) — Docs owns the DOCS (declared/ใบขน)
+      // stage of the CARGO tax-doc 4-role workspace.
+      itemTaxdocWorkspace,
+      // 2026-06-09 (W11 · customs doc-kit) — DO-LOI per carrier + customs letters
+      // + Form-E/HS advisory (Docs role generates these draft documents).
+      itemCustomsDocKit,
       // Freight shipments — Doc pivots from a shipment to create its declaration.
       { labelKey: "freightImportOps.placeholder", href: "/admin/freight/shipments", icon: "Truck" },
       // Customer lookup — find the shipment owner / cabinet context.
@@ -1574,8 +1733,14 @@ const menuPricing: MenuSection[] = [
   {
     header: "Cargo & Freight",
     items: [
+      // 2026-06-09 (W9 · tax-invoice P4) — the 4-role workspace lands FIRST
+      // (the Pricing role's daily home: capture COST + advance the job).
+      itemTaxdocWorkspace,
       { labelKey: "forwarderImport.title", href: "/admin/forwarders",    icon: "Package" },
       { labelKey: "purchasing.title",      href: "/admin/service-orders", icon: "ShoppingCart" },
+      // 2026-06-09 (เดฟ · tax-invoice P3) — pricing captures COST + DECLARED;
+      // the cargo ใบขนรวม surfaces the per-line declared value (defaults from cost).
+      itemCargoDeclarations,
     ],
   },
   learningSection,

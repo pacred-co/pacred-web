@@ -47,6 +47,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { isFreightShipmentQaPassed } from "./qa-inspections";
+import { adminAccrueFreightCommission } from "./freight-commission";
 import {
   createFreightInvoiceSchema, type CreateFreightInvoiceInput,
   addInvoiceLineSchema,       type AddInvoiceLineInput,
@@ -486,10 +487,76 @@ export async function adminIssueFreightInvoice(
       commercial_value_thb: Number(shipment.commercial_value_thb),
     });
 
+    // WAVE 6 — best-effort FREIGHT commission accrual (mig 0167). DORMANT-SAFE:
+    // adminAccrueFreightCommission NO-OPs when business_config
+    // commission.freight_enabled is OFF, so this records NOTHING until the owner
+    // confirms the rates + flips the flag. NEVER fails issuance (the invoice flip
+    // already committed) — wrapped + voided. The accrual is a LEDGER row, not a
+    // money move. Earner = the shipment's creator; per-scope bases come from the
+    // source quote's line items (commission_scope persisted by the W5 compose).
+    void accrueFreightInvoiceCommission(invoice.freight_shipment_id, invoiceNo, shipment.job_no);
+
     revalidatePath("/admin/freight/shipments");
     revalidatePath(`/admin/freight/shipments/${invoice.freight_shipment_id}`);
     return { ok: true, data: { invoice_no: invoiceNo } };
   });
+}
+
+/**
+ * Best-effort: accrue freight commission for an issued invoice. Self-contained
+ * (own admin client + try/catch) so it can be `void`-fired without ever
+ * affecting the issuance result. NO-OPs entirely when the dormant flag is OFF
+ * (the accrual action checks the flag). Derives the per-scope revenue bases from
+ * the source quote's line items (grouped by commission_scope) + the earner from
+ * the shipment's created_by_admin_id.
+ */
+async function accrueFreightInvoiceCommission(
+  shipmentId: string,
+  invoiceNo: string,
+  jobNo: string,
+): Promise<void> {
+  try {
+    const admin = createAdminClient();
+    const { data: ship, error: shipErr } = await admin
+      .from("freight_shipments")
+      .select("source_quote_id, created_by_admin_id")
+      .eq("id", shipmentId)
+      .maybeSingle<{ source_quote_id: string | null; created_by_admin_id: string | null }>();
+    if (shipErr || !ship?.created_by_admin_id || !ship.source_quote_id) return; // no earner / no quote → nothing to accrue
+
+    // Group the source quote's line items by commission_scope → per-scope revenue.
+    const { data: items, error: itemsErr } = await admin
+      .from("freight_quote_items")
+      .select("commission_scope, line_total_thb")
+      .eq("freight_quote_id", ship.source_quote_id);
+    if (itemsErr) return;
+    const bases: { freightThb: number; customsThb: number; docThb: number; shipmentCount: number } = {
+      freightThb: 0, customsThb: 0, docThb: 0, shipmentCount: 1,
+    };
+    for (const it of (items ?? []) as Array<{ commission_scope: string | null; line_total_thb: number | string | null }>) {
+      const amt = Number(it.line_total_thb ?? 0);
+      switch (it.commission_scope) {
+        case "freight":        bases.freightThb += amt; break;
+        case "thai_customs":   bases.customsThb += amt; break;
+        case "origin":         bases.docThb     += amt; break; // origin/doc revenue → doc commission bucket
+        default: break;                                        // thai_transport / import_tax → no commission
+      }
+    }
+    if (bases.freightThb <= 0 && bases.customsThb <= 0 && bases.docThb <= 0) return;
+
+    await adminAccrueFreightCommission({
+      sourceKind: "freight_invoice",
+      sourceRef: invoiceNo,
+      earnerAdminId: ship.created_by_admin_id,
+      bases,
+      notes: `auto-accrue on freight invoice ${invoiceNo} (job ${jobNo})`,
+    });
+  } catch (e) {
+    console.error(`[freight-invoice accrue commission] failed (non-fatal)`, {
+      invoice_no: invoiceNo,
+      message: e instanceof Error ? e.message : String(e),
+    });
+  }
 }
 
 // ────────────────────────────────────────────────────────────

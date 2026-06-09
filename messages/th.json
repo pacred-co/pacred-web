@@ -3345,7 +3345,20 @@
       "wht": "ภาษีหัก ณ ที่จ่าย",
       "overview": "ภาพรวมรายงาน",
       "declarations": "ใบขนสินค้า",
-      "costRates": "ต้นทุนเฟรทจีน (Cost Rates)"
+      "costRates": "ต้นทุนเฟรทจีน (Cost Rates)",
+      "cargoDeclarations": "ใบขนรวม (CARGO)"
+    },
+    "freightOps": {
+      "title": "Freight Operations (AX JOB)"
+    },
+    "freightCommission": {
+      "title": "ค่าคอม Freight"
+    },
+    "taxdocWorkspace": {
+      "title": "Tax-doc Workspace (3 ราคา)"
+    },
+    "customsDocKit": {
+      "title": "ชุดเอกสารศุลกากร (Doc-kit)"
     },
     "settingsCargo": {
       "title": "ตั้งค่าระบบ Cargo",
@@ -3446,6 +3459,15 @@
       "bulletin": "บุลเลตินตู้รายวัน",
       "qaInspect": "ตรวจสอบคุณภาพ (QA)",
       "csvImports": "ปรับรายการอัตโนมัติ (CSV)"
+    },
+    "warehouseWorker": {
+      "title": "แอปพนักงานคลัง (จีน)",
+      "dashboard": "ภาพรวมคลัง",
+      "intake": "รับสินค้าเข้าโกดัง",
+      "measure": "ชั่ง / วัดขนาด",
+      "sacks": "งานกระสอบ",
+      "shipping": "ใส่ตู้ / ออกของ",
+      "follow": "ติดตามสินค้า"
     },
     "driver": {
       "work": "งานวันนี้ (มือถือ)",
@@ -5178,6 +5200,8 @@
     "codeHelpFooter": "มีคำถามเรื่องพัสดุ? <chat>ทักแชทไลน์ {lineId}</chat> หรือโทร <call>{phone}</call>",
     "notFoundTitle": "ไม่พบเลขพัสดุนี้",
     "notFoundBody": "ลองตรวจสอบเลข <codeTag>{code}</codeTag> อีกครั้ง หรือเลขอาจยังไม่เข้าระบบ (โดยปกติใช้เวลา 1–2 วันหลังร้านค้าจีนส่งของเข้าโกดัง)",
+    "rateLimitedTitle": "ขออภัย ตรวจสอบบ่อยเกินไป",
+    "rateLimitedBody": "คุณค้นหาบ่อยเกินกำหนดชั่วคราว กรุณารอสักครู่แล้วลองใหม่อีกครั้ง หากต้องการความช่วยเหลือ ทักแชทไลน์ทีมงานได้เลย",
     "trackingNumberLabel": "เลขพัสดุ",
     "originWarehouse": "โกดังต้นทาง: <value>{warehouse}</value>",
     "currentStatusBadge": "สถานะปัจจุบัน",

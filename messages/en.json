@@ -3345,7 +3345,20 @@
       "wht": "Withholding tax",
       "overview": "Reports overview",
       "declarations": "Customs declarations",
-      "costRates": "China freight cost rates"
+      "costRates": "China freight cost rates",
+      "cargoDeclarations": "Consolidated cargo declaration"
+    },
+    "freightOps": {
+      "title": "Freight Operations (AX JOB)"
+    },
+    "freightCommission": {
+      "title": "Freight commission"
+    },
+    "taxdocWorkspace": {
+      "title": "Tax-doc Workspace (3 numbers)"
+    },
+    "customsDocKit": {
+      "title": "Customs doc-kit"
     },
     "settingsCargo": {
       "title": "Cargo system settings",
@@ -3446,6 +3459,15 @@
       "bulletin": "Daily container bulletin",
       "qaInspect": "QA inspections",
       "csvImports": "Bulk CSV import"
+    },
+    "warehouseWorker": {
+      "title": "Warehouse worker app (CN)",
+      "dashboard": "Warehouse overview",
+      "intake": "Receive goods",
+      "measure": "Weigh / measure",
+      "sacks": "Sacks",
+      "shipping": "Load / depart",
+      "follow": "Follow product"
     },
     "driver": {
       "work": "Today's jobs (mobile)",
@@ -5178,6 +5200,8 @@
     "codeHelpFooter": "Questions about your parcel? <chat>Chat with us on LINE {lineId}</chat> or call <call>{phone}</call>",
     "notFoundTitle": "This parcel number was not found",
     "notFoundBody": "Try checking the number <codeTag>{code}</codeTag> again, or it may not be in the system yet (this usually takes 1–2 days after the China store ships the item to the warehouse)",
+    "rateLimitedTitle": "Too many lookups",
+    "rateLimitedBody": "You've checked too many times in a short period. Please wait a moment and try again. Need help? Chat with our team on LINE anytime.",
     "trackingNumberLabel": "Parcel number",
     "originWarehouse": "Origin warehouse: <value>{warehouse}</value>",
     "currentStatusBadge": "Current status",

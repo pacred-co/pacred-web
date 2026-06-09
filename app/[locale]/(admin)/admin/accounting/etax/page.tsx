@@ -3,7 +3,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
-import { getEtaxBundle } from "@/actions/admin/etax-export";
+import { getEtaxBundle, getShopEtaxBundle } from "@/actions/admin/etax-export";
 import { buildEtaxXml } from "@/lib/etax/build-xml";
 import { EtaxRowDownloads } from "./etax-row-downloads";
 import { EtaxBulkDownload } from "./etax-bulk-download";
@@ -62,7 +62,10 @@ export default async function AdminEtaxPage({
   const dateFrom = sp.date_from && /^\d{4}-\d{2}-\d{2}$/.test(sp.date_from) ? sp.date_from : defaults.from;
   const dateTo   = sp.date_to   && /^\d{4}-\d{2}-\d{2}$/.test(sp.date_to)   ? sp.date_to   : defaults.to;
 
-  const bundle = await getEtaxBundle({ dateFrom, dateTo });
+  const [bundle, shopBundle] = await Promise.all([
+    getEtaxBundle({ dateFrom, dateTo }),
+    getShopEtaxBundle({ dateFrom, dateTo }),
+  ]);
 
   // CSV rows — flatten the per-class buckets so accounting can pivot in Excel
   const csvRows: CsvRow[] = bundle.rows.map((r) => ({
@@ -214,6 +217,89 @@ export default async function AdminEtaxPage({
                           serialNo={r.serial_no ?? `TI-${r.id}`}
                           xml={xmlByInvoiceId.get(r.id) ?? ""}
                         />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {/* W9 — shop/yuan tax-invoice store (DORMANT · read-only) */}
+        <section className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
+          <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-2 flex-wrap">
+            <h2 className="font-bold text-sm">
+              🧾 ใบกำกับ ฝากสั่งซื้อ / ฝากโอน ({shopBundle.rows.length.toLocaleString("th-TH")})
+            </h2>
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-[10px] border ${
+                shopBundle.enabled
+                  ? "bg-green-50 text-green-700 border-green-200"
+                  : "bg-amber-50 text-amber-700 border-amber-200"
+              }`}
+            >
+              {shopBundle.enabled ? "เปิดออกเอกสารแล้ว" : "ยังไม่เปิด (DORMANT)"}
+            </span>
+          </div>
+          <div className="px-5 py-3 border-b border-border text-[11px] text-muted space-y-1">
+            <p>
+              📊 อ่านจาก <code className="bg-surface-alt px-1 rounded">tb_shop_tax_invoice</code> (migration 0152 ·
+              service_type = shop / yuan). การออกเอกสารถูกล็อกด้วย flag{" "}
+              <code className="bg-surface-alt px-1 rounded">tax_invoice.shop_yuan_enabled</code>{" "}
+              (default OFF) → store ว่างจนกว่า owner จะเปิด หลังทดสอบ money-loop + บัญชี sign-off ฐาน VAT ใบขน.
+            </p>
+            {shopBundle.rows.length > 0 && (
+              <p>
+                ออกแล้ว {shopBundle.total.count.toLocaleString("th-TH")} · VAT รวม ฿{thb(shopBundle.total.vat)} · รับสุทธิรวม ฿{thb(shopBundle.total.net)}
+              </p>
+            )}
+          </div>
+          {shopBundle.rows.length === 0 ? (
+            <p className="p-8 text-center text-sm text-muted">
+              {shopBundle.enabled
+                ? "ยังไม่มีใบกำกับ ฝากสั่งซื้อ/ฝากโอน ในช่วงที่เลือก"
+                : "ยังไม่เปิดการออกเอกสาร ฝากสั่งซื้อ/ฝากโอน — store ว่างตามที่ตั้งใจ (DORMANT)"}
+            </p>
+          ) : (
+            <div className="overflow-x-auto scrollbar-x-visible">
+              <table className="w-full min-w-[800px] text-sm">
+                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                  <tr>
+                    <th className="px-3 py-2">เลข</th>
+                    <th className="px-3 py-2">ประเภท</th>
+                    <th className="px-3 py-2">ผู้ซื้อ</th>
+                    <th className="px-3 py-2 text-right">ฐานรวม</th>
+                    <th className="px-3 py-2 text-right">VAT</th>
+                    <th className="px-3 py-2 text-right">รับสุทธิ</th>
+                    <th className="px-3 py-2 text-center">สถานะ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {shopBundle.rows.map((r) => (
+                    <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
+                      <td className="px-3 py-2 font-mono text-xs">{r.serial_no ?? `S-${r.id}`}</td>
+                      <td className="px-3 py-2 text-[11px]">
+                        {r.service_type === "shop" ? "ฝากสั่งซื้อ" : "ฝากโอน"}
+                        <span className="block text-[9px] text-muted">{r.doc_mode === "customs" ? "ใบขน" : "ใบกำกับ"}</span>
+                      </td>
+                      <td className="px-3 py-2 text-xs">
+                        <div className="font-medium">{r.buyer_name || r.userid}</div>
+                        <div className="text-[10px] text-muted font-mono">
+                          {r.buyer_tax_id || "—"} · {r.is_juristic ? "นิติบุคคล" : "ทั่วไป"}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono text-xs">฿{thb(r.base_total)}</td>
+                      <td className="px-3 py-2 text-right font-mono text-xs">฿{thb(r.vat_amount)}</td>
+                      <td className="px-3 py-2 text-right font-mono text-xs font-bold text-primary-700">฿{thb(r.net_payable)}</td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] border ${
+                          r.status === "issued"
+                            ? "bg-green-50 text-green-700 border-green-200"
+                            : "bg-red-50 text-red-700 border-red-200"
+                        }`}>
+                          {r.status === "issued" ? "ออกแล้ว" : "ยกเลิก"}
+                        </span>
                       </td>
                     </tr>
                   ))}

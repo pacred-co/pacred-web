@@ -18,14 +18,18 @@
  *   - On any error or no-match it returns `{ found: false }` (a friendly
  *     not-found) — it never 500s and never reveals whether a code exists.
  *
- * 🛈 RATE-LIMIT: lookups are by an exact 50-char courier number (not
- *   enumerable), so scrape risk is low, but a hard rate-limit (Upstash — env
- *   already present) is เดฟ's call before this is linked from ads. Flagged.
+ * 🛈 RATE-LIMIT (wired W8 2026-06-09): lookups are now capped at 100/hour/IP
+ *   (RATE_LIMITS.publicTrack · Upstash-backed, in-memory fallback). The page is
+ *   ad-linked, so this tolerates a real visitor checking a handful of parcels
+ *   while blocking a script enumerating the 50-char courier numbers. Over the
+ *   cap → a friendly `{ found: false, rateLimited: true }` (never 500).
  *
  * `tb_*` is RLS-locked to service_role → this reads through the admin client.
  */
 
+import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { rateLimit, getClientIpFromHeaders } from "@/lib/rate-limit";
 import type { PublicTrackResult } from "./track-types";
 
 // The 7-stage flow (tb_forwarder.fstatus). Step 5 is deliberately NEUTRAL in
@@ -78,6 +82,23 @@ export async function getPublicTrackStatus(
   // Require a plausible courier number — guards against scraping the table
   // with short/blank inputs and against an empty `.eq` query.
   if (code.length < 4) return { found: false };
+
+  // IP rate-limit — the ad-linked safety gate (100/hour/IP). Best-effort: any
+  // failure inside the limiter falls back to in-memory (lib/rate-limit), and we
+  // never let it 500 the public page — on an unexpected throw we proceed.
+  try {
+    const ip = getClientIpFromHeaders(await headers());
+    const rl = await rateLimit("publicTrack", ip);
+    if (!rl.success) {
+      console.warn("[getPublicTrackStatus] rate-limited", { ip, reset: rl.reset });
+      return { found: false, rateLimited: true };
+    }
+  } catch (err) {
+    console.error("[getPublicTrackStatus] rate-limit check threw", {
+      message: err instanceof Error ? err.message : String(err),
+    });
+    // fall through — availability over strict limiting
+  }
 
   try {
     const admin = createAdminClient();

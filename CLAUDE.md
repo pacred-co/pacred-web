@@ -3,6 +3,43 @@
 
 ---
 
+# 🛠 2026-06-09 LATE-NIGHT — เดฟ: 3 URGENT prod-bug fixes + remaining roadmap waves W6-W11 → ALL ON MAIN · read FIRST
+
+> **main = dave-pacred = Poom-pacred = InwPond007 = `32589732`** (all 0/0 · deployed prod) · `pnpm verify` + prod build EXIT 0 · **8 migrations applied+verified prod this session-half (0161-0167 + 0169-0171 · NEXT FREE = 0172)** · prod Supabase = `yzljakczhwrpbxflnmco` (owner-confirmed · lozntl=ภูม dev).
+>
+> **🔧 3 URGENT owner-reported prod bugs — FIXED + DEPLOYED first:** (1) **payment QR broken in every pay-modal** — the static company QR (`lib/promptpay.ts` `STATIC_PAYMENT_QR_PATH=/images/payment/pacred-qr.png`) was never UPLOADED (code was right; file missing → broken-image). Placed the owner's K-Shop QR (JPG→PNG · resized 720px · no code change · fixes all modals). (2) **ฝากนำเข้า create-order silent-blocked** — P1 doc-picker auto-defaulted to ใบกำกับ for juristic → required billing fields blocked submit when tb_corporate incomplete → `CartTaxDocPref` gained `defaultMode`; ฝากนำเข้า passes `'none'` (order-entry no longer forces a tax doc · cart unchanged). (3) **เพิ่มที่อยู่ใหม่ 404** — `/addresses/add` now redirects to `/addresses` (add is a modal there). **+ systemic broken-image sweep** (`grep static img-src vs public/`): fixed 7 more (5 unuploaded hero banners → existing service banners · 2 admin default placeholders). Learning: `docs/learnings/nextjs-16-quirks.md` (broken-image = missing public/ file).
+>
+> **🚀 Remaining roadmap waves BUILT + integrated (mechanism-first · owner-inputs gated/deferred · adversarially reviewed):**
+> - **W6 — Freight commission ledger** (`freight_commission_*` ×4 · mig 0167) — 💰 **ships DORMANT** behind `business_config commission.freight_enabled` (=`{"enabled":false}`) + rates as EDITABLE seeded tiers (`is_owner_confirmed=false` · 0 confirmed) · idempotent accrual · NO auto-pay. **🔴 owner: confirm the rate tiers + flip the flag to go live.**
+> - **W9 — Tax-invoice P4: CARGO tax-doc 4-role workspace** (`/admin/pricing/taxdoc-workspace` · CS→Pricing→Docs→Account over tb_cargo_taxdoc_job · 3 numbers + 4 status pills · ACC gated on cs+pricing · no schema) + PEAK 3-number rollup + shop/yuan etax read. Issuance stays gated.
+> - **W10 — Warehouse worker-app** (`/admin/warehouse/worker/*` intake/measure/sack/ship/follow · mig 0169-0171 · isolated audit tables · no money write · respects fcabinet_locked). **🔴 owner/China-team: confirm `warehouse` role assignment.**
+> - **W11 — Customs doc-kit** (`/admin/accounting/customs-doc-kit` · DO-LOI per carrier + 45-day/POA/amend/lost-doc letters + Form-E/ACFTA eligibility + HS-assist + port codes · advisory/PDF only). **🔴 NETBAY e-filing DEFERRED (no creds · manual filing).**
+> - Built by 5 worktree agents (W6 + W9/W10/W11 batch) → I integrated serially (4 merges · the persistent ภูม receipt-PDF race · the conflict-marker trap + a lint/type cascade — all caught by my gate · learning `parallel-agent-sprints.md` L-PAS-08).
+>
+> **🔴 OWNER ACTION ITEMS (carryover · all the DORMANT/gated levers):** flip `commission.freight_enabled` (after confirming W6 tier rates) · flip `tax_invoice.shop_yuan_enabled` (ใบกำกับ ฝากสั่ง/โอน · after money-test + ใบขน VAT sign-off) · enable `pricing`/`warehouse`/`freight_import_doc` roles for staff at `/admin/admins/[id]/edit` · ใบขน VAT-base sign-off (gates issuance) · PEAK GL codes (accountant) · NETBAY creds · rotate the dev DB password ภูม committed · confirm juristic-signup fix · test customer login (unblocks the §0c authed-click-test of all the new admin surfaces — gated+reviewed but NOT browser-tested). ⚠️ **CLAUDE.md >2000 lines — archive overdue (§12).**
+
+---
+
+# 🌏 2026-06-09 NIGHT — เดฟ: DEEP-SOURCE BUILD (cargo+freight) + full team-integrate → ALL ON MAIN · read FIRST
+
+> **main = dave-pacred = Poom-pacred = InwPond007 = `7287bfd9`** (all 0/0 · pushed main per owner "ตรวจงานน้องๆ → รวม → push main ทีเดียว · อย่าทำงานน้องหาย" · Vercel deploying prod) · `pnpm verify` + prod build EXIT 0 every save-point · **6 migrations applied+verified prod (0161-0166) · NEXT FREE = 0167.**
+>
+> **🔴 CRITICAL FACT (owner-confirmed · was a near-miss):** **prod Supabase = `yzljakczhwrpbxflnmco`** · **`lozntlidlqqzzcaathnm` = ภูม's DEV project (NOT prod).** ภูม's `docs/briefs/HANDOFF-FOR-DAVE-GOT-2026-06-09.md` mistook dev-for-prod + instructed switching the prod Vercel `SUPABASE_DB_PASSWORD` to the DEV password (would break prod) — **เดฟ corrected/neutralized the doc.** All เดฟ migrations target the right prod (`yzljakczhwrpbxflnmco`). 🔐 **Owner: rotate the dev DB password ภูม committed** (scrubbed from git going forward; still in Poom-pacred history).
+>
+> **🌏 The deep-source build (owner gave `olddata dev` cargo+freight + "พัฒนาส่วนที่ขาดทั้งหมด · ทำเลินนิ่ง" · ultracode workflow-orchestrated):** mine+audit (9+6 agents) → `docs/research/build-backlog-2026-06-09.md` (11 waves) + learnings `docs/learnings/freight-erp-model.md` + `customs-brokerage-kit.md`. **Headline: the freight stack is ~80% already scaffolded** (freight_quotes/shipments/invoices/customs_declarations/tb_freight_rate exist) — real gaps = cockpit/commission/ใบขน-Docs/P&L. Then built (each gated + adversarially reviewed):
+> - **W2 — Tax-invoice P3: ใบขนรวม** (cargo customs declarations + Docs surface) — `cargo-declarations.ts` + `/admin/accounting/cargo-declarations` · reuses customs_declarations · มูลค่าสำแดง defaults from COST (3-number model · never from selling) · **mig 0161 (tb_cargo_taxdoc_job) + 0162 (customs_decl cargo-link)**.
+> - **W4 — Freight ops cockpit (AX JOB Kanban)** PRICING→SALES→DOC→ACC — `/admin/freight/operations` + `freight-ops-cockpit.ts` · **mig 0163 + 0164** · adversarial review: **money-isolation CLEAN** (P&L snapshot display-only, never touches spine/invoices · ACC gated on pricing+sales).
+> - **W5 — Freight P&L + margin-guard** — persisted cost/margin/commission + `/admin/freight/shipments/[id]/p-and-l` + FX-refresh control · ≤15k cap = ADVISORY · **mig 0165**. (adminConvertQuoteToShipment confirmed REAL, not stub.)
+> - **W8 — BI cockpit drill-down** (profit/margin/SLA per carrier/warehouse/sales-rep · no schema) + finished W1 (freight leads — was already built) · W3 (customs accounting edit-page) · W7 (public /track rate-limit).
+> - **0166** defensive customs RLS broadening (super/accounting/freight_import_doc/pricing).
+> - **Build-bugs caught by MY gate** (agents can't gate): freight-cockpit optional-`res.data` (5 TS errors) · `FREIGHT_FX_KEY` "use server" const-export (13 Turbopack errors · the documented gotcha).
+>
+> **🔀 Integrated ALL teammates (nothing lost · owner directive):** **ภูม 7 commits** (sticky top-menubar across admin · forwarders UX · **fShipBy P0** PCS-pickup-wins-over-Flash · address-link 404 fix · driver/heartbeat already on main) · **ปอน 2 commits** (customer sidebar redesign + unified service-import tabs) → restored `/my-issues` link ปอน's redesign dropped (§0d). Migration collision (ภูม 0158/0159 ↔ เดฟ 0158) resolved earlier (ภูม→0159/0160).
+>
+> **🔴 REMAINING BACKLOG = owner-input-blocked (paused per owner "พักไว้"):** **W6 commission ledger** (needs the rates confirmed in writing: เฟรท 1%/customs 5%/doc 5%/−3% WHT/flat 20฿/WHT 15%>5k) · **W9 P4 4-role workspace+PEAK** (VAT-base sign-off + PEAK GL codes + flip `shop_yuan_enabled` + test login) · **W10 warehouse worker-app** (China-team RBAC sign-off) · **W11 customs generators + NETBAY** (NETBAY creds · external). ⚠️ **admin surfaces gated+reviewed but NOT authed-click-tested** (no test login). Standing owner items carry over (flip ใบกำกับ flag · enable `pricing` role for a staffer · confirm juristic-fix · Supabase refresh-token · Vercel env). ⚠️ **CLAUDE.md >2000 lines — archive overdue (§12).**
+
+---
+
 # 🧾 2026-06-09 EVE — เดฟ: tax-invoice platform P1+P2 SHIPPED + ภูม chase integrated → ALL ON MAIN · read FIRST
 
 > **main = dave-pacred = Poom-pacred = InwPond007 = `8a5d6c1f`** (all synced 0/0 · pushed to main per owner "ขึ้น main เลย" · Vercel deploying prod) · `pnpm verify` + prod build (direct-node) EXIT 0 every save-point · **5 migrations applied prod today (0157 hs-idx · 0158 cargo_3number · 0159 driver-completed-at · 0160 heartbeat-lock) · NEXT FREE = 0161.**

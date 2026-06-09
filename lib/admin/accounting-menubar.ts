@@ -194,6 +194,14 @@ export const CARGO_MENUBAR: MenubarItem[] = [
           { label: "ยกเลิก",          href: "/admin/accounting/customs-declarations?status=cancelled" },
         ],
       },
+      // 2026-06-09 (เดฟ · tax-invoice P3): ใบขนรวม CARGO — ฝากสั่งซื้อ/ฝากนำเข้า
+      // = งาน Freight-LCL ที่ออกใบขนรวมใบเดียวในชื่อบริษัทขนส่ง. ใช้โมเดล
+      // customs_declarations ตัวเดียวกับ Freight (bridge mig 0162). มูลค่าสำแดง
+      // ตั้งจากต้นทุน (mig 0158) · Docs ปรับลด. P3 = capture/surface เท่านั้น.
+      {
+        label: "ใบขนรวม (CARGO)",
+        href: "/admin/accounting/cargo-declarations",
+      },
       { label: "ใบลดหนี้",                              children: notesStatuses("credit-note") },
       { label: "ใบเพิ่มหนี้",                            children: notesStatuses("debit-note") },
       // 2026-06-03 (R-2 · เดฟ): ใบวางบิล wired to the live billing-run port

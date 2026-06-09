@@ -190,7 +190,7 @@ export function ServiceImportAddFields({
             {t("sectionAddress")}
           </h2>
           <Link
-            href="/addresses/add"
+            href="/addresses"
             target="_blank"
             className="inline-flex items-center gap-1 text-[13px] font-medium text-primary-600 hover:text-primary-700"
           >
@@ -231,7 +231,7 @@ export function ServiceImportAddFields({
             {t.rich("noAddressNote", {
               link: (chunks) => (
                 <Link
-                  href="/addresses/add"
+                  href="/addresses"
                   target="_blank"
                   className="text-primary-600 hover:underline"
                 >
@@ -314,7 +314,7 @@ export function ServiceImportAddFields({
           createLegacyForwarder — a SELECTION only (issuance is downstream +
           still gated). Only the full-page add passes taxDocDefaults; the
           list-view quick-add modal omits it → order stays ไม่รับเอกสาร. */}
-      {taxDocDefaults && <CartTaxDocPref defaults={taxDocDefaults} />}
+      {taxDocDefaults && <CartTaxDocPref defaults={taxDocDefaults} defaultMode="none" />}
     </>
   );
 

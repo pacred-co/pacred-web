@@ -398,14 +398,18 @@ export async function convertLeadToQuote(
         });
         if (quote.lines.length > 0) {
           const rows = quote.lines.map((l, i) => ({
-            freight_quote_id: newQuoteId,
-            position:         i + 1,
-            description:      l.labelTh,
-            quantity:         l.qty,
-            unit:             RATE_UNIT_MAP[l.unit] ?? "JOB",
-            unit_price_thb:   Math.round(l.unitSell * 100) / 100,
-            line_total_thb:   Math.round(l.sell * 100) / 100,
-            note:             null as string | null,
+            freight_quote_id:      newQuoteId,
+            position:              i + 1,
+            description:           l.labelTh,
+            quantity:              l.qty,
+            unit:                  RATE_UNIT_MAP[l.unit] ?? "JOB",
+            unit_price_thb:        Math.round(l.unitSell * 100) / 100,
+            line_total_thb:        Math.round(l.sell * 100) / 100,
+            note:                  null as string | null,
+            // W5 (0165) — per-line commission snapshot (display/analytics only).
+            commission_scope:      l.scope,
+            commission_pct:        l.commissionPct,
+            commission_amount_thb: l.commissionThb,
           }));
           const { error: itemsErr } = await admin.from("freight_quote_items").insert(rows);
           if (itemsErr) {
@@ -424,6 +428,14 @@ export async function convertLeadToQuote(
                 subtotal:   totals.subtotal,
                 vat_amount: totals.vat_amount,
                 total:      totals.total,
+                // W5 (0165) — persist the P&L/margin snapshot for the P&L dashboard.
+                profit_margin_thb:       quote.profit,
+                margin_exceeds_cap:      quote.marginExceedsCap,
+                china_cost_lookup_error: quote.chinaCostPending,
+                commission_calc_status:  quote.chinaCostPending ? "gross_only" : "computed",
+                cost_china_freight_thb:  quote.chinaFreightCostThb,
+                cost_local_thb:          Math.round((quote.subtotalCost - quote.chinaFreightCostThb) * 100) / 100,
+                cost_total_thb:          quote.subtotalCost,
               })
               .eq("id", newQuoteId)
               .eq("status", "draft");

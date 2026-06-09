@@ -1212,7 +1212,7 @@ export default async function ForwarderTablePage({
                     <label className="form-control-label" htmlFor="fAmount">
                       {t("deliveryAddressLabel")}{" "}
                       <Link
-                        href="/addresses/add"
+                        href="/addresses"
                         target="_blank"
                         className="text-info font-10"
                       >
