@@ -88,7 +88,7 @@ function yyyymmRange(yyyymm: string): { fromIso: string; toIso: string } {
  * list of CloseSnapshot rows ready to insert into period_close_event.
  *
  * Snapshot scope per table:
- *   tax_invoices            — status IN ('issued') · sum total_thb     · keyed on issued_at
+ *   ใบกำกับภาษีขาย (tb_*)   — tb_forwarder_tax_invoice ∪ tb_shop_tax_invoice · status 'issued' · sum gross_before_wht · keyed on issued_at
  *   freight_invoices        — status IN ('issued') · sum commercial_value_thb · keyed on issued_at
  *   freight_invoice_payments — status='recorded'   · sum amount_thb    · keyed on paid_at
  *   wallet_transactions     — status='completed'   · sum amount        · keyed on created_at
@@ -105,34 +105,45 @@ async function buildCloseSnapshots(
   const { fromIso, toIso } = yyyymmRange(yyyymm);
   const out: CloseSnapshot[] = [];
 
-  // ── tax_invoices ────────────────────────────────────────────
-  // ⚠️ AUDIT 2026-06-09 — DEAD-TWIN READ (do NOT trust this snapshot number).
-  // `tax_invoices` (World-A · migration 0034) is a 0-row table with NO live
-  // producer; every real ใบกำกับภาษี is issued into tb_forwarder_tax_invoice /
-  // tb_shop_tax_invoice (serial_no-keyed · gross_before_wht = VAT-inclusive total).
-  // So this snapshot has frozen row_count=0 / sum=0 into IMMUTABLE
-  // period_close_event rows while real invoices live elsewhere.
-  // The forward-fix (union the two tb_* stores, sum gross_before_wht where
-  // status='issued') is held PENDING an accountant decision — changing what
-  // future closes record + a backfill call for already-closed periods is a
-  // book-keeping policy choice, not an engineering one. Do not silently repoint
-  // this read. (Tracked: the 2026-06-09 dead-twin-reader follow-up.)
+  // ── ใบกำกับภาษีขาย — forward-fixed to the LIVE tb_* stores (2026-06-10) ──
+  // Sourced from tb_forwarder_tax_invoice + tb_shop_tax_invoice (serial_no-keyed ·
+  // status 'issued' · gross_before_wht = base_total + VAT = the VAT-inclusive face
+  // total). The old read hit the 0-row World-A `tax_invoices` twin (no live producer)
+  // and froze 0 into the snapshot. `table_name` stays "tax_invoices" — it is the
+  // LOGICAL ใบกำกับขาย line the periods page keys on (an id, not the physical table).
+  //
+  // Sign-off 2026-06-10: prod had ZERO closed periods (period_close_event 0-row), so
+  // no historical snapshot needed backfilling — this forward-fix makes the FIRST and
+  // every future close read real data. ⚠️ Separate gap for the accountant: the
+  // period-freeze trigger protects the OLD tables, NOT tb_forwarder/shop_tax_invoice,
+  // so post-close mutations of the real invoices aren't yet blocked (needs a freeze
+  // migration + policy call — out of scope here).
   {
-    const { data, error } = await admin
-      .from("tax_invoices")
-      .select("total_thb")
-      .eq("status", "issued")
-      .gte("issued_at", fromIso)
-      .lt("issued_at", toIso);
-    if (error) {
-      console.error(`[tax_invoices list] failed`, { code: error.code, message: error.message });
-    }
-    const rows = (data ?? []) as Array<{ total_thb: number }>;
+    const readStore = async (
+      table: "tb_forwarder_tax_invoice" | "tb_shop_tax_invoice",
+    ): Promise<Array<{ gross_before_wht: number | string | null }>> => {
+      const { data, error } = await admin
+        .from(table)
+        .select("gross_before_wht")
+        .eq("status", "issued")
+        .gte("issued_at", fromIso)
+        .lt("issued_at", toIso);
+      if (error) {
+        console.error(`[${table} period snapshot] failed`, { code: error.code, message: error.message });
+        return [];
+      }
+      return (data ?? []) as Array<{ gross_before_wht: number | string | null }>;
+    };
+    const [fwdRows, shopRows] = await Promise.all([
+      readStore("tb_forwarder_tax_invoice"),
+      readStore("tb_shop_tax_invoice"),
+    ]);
+    const rows = [...fwdRows, ...shopRows];
     out.push({
       table_name: "tax_invoices",
       row_count:  rows.length,
-      sum_thb:    sumNumeric(rows.map((r) => r.total_thb)),
-      sum_label:  "total_thb",
+      sum_thb:    sumNumeric(rows.map((r) => Number(r.gross_before_wht ?? 0))),
+      sum_label:  "gross_before_wht (tb_forwarder + tb_shop)",
     });
   }
 
