@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { getFreightRates } from "@/actions/admin/freight-rates";
+import { getFreightRates, getFreightFxRate } from "@/actions/admin/freight-rates";
 import { FreightRatesClient } from "./freight-rates-client";
+import { FreightFxControl } from "./freight-fx-control";
 
 /**
  * /admin/freight/rates — China-side freight COST-rate maintenance.
@@ -27,7 +28,10 @@ export default async function AdminFreightRatesPage() {
   // Write-capable = super OR ops (mirror the table write RLS). accounting = read-only.
   const canWrite = roles.includes("super") || roles.includes("ops");
 
-  const { rows, loadFailed } = await getFreightRates();
+  const [{ rows, loadFailed }, fxRate] = await Promise.all([
+    getFreightRates(),
+    getFreightFxRate(),
+  ]);
 
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
@@ -40,6 +44,8 @@ export default async function AdminFreightRatesPage() {
           ของแต่ละโหมดขนส่ง; ช่อง POL/POD/ผู้ขนส่ง เป็นข้อมูลอ้างอิง (ยังไม่ใช้จับคู่ราคารายเส้นทาง — จะเพิ่มภายหลัง).
         </p>
       </header>
+
+      <FreightFxControl fxRate={fxRate} canWrite={canWrite} />
 
       <FreightRatesClient rows={rows} canWrite={canWrite} loadFailed={loadFailed} />
     </main>

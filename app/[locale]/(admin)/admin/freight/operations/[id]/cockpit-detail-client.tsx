@@ -173,6 +173,12 @@ export function CockpitDetailClient({
           </div>
           <div className="flex items-center gap-2">
             <Link
+              href={`/admin/freight/shipments/${shipmentId}/p-and-l`}
+              className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-surface-alt"
+            >
+              📈 P&amp;L
+            </Link>
+            <Link
               href={`/admin/freight/shipments/${shipmentId}`}
               className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-surface-alt"
             >

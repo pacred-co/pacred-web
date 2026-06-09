@@ -40,6 +40,7 @@ import {
 } from "@/lib/validators/freight-quote";
 import { composeFreightQuote } from "@/lib/freight/rate-engine";
 import { lookupChinaFreightCostThb } from "@/lib/freight/rate-lookup";
+import { getBusinessConfig } from "@/lib/business-config";
 
 const ROLES_CREATE  = ["super", "ops", "sales_admin", "accounting"] as const;
 const ROLES_APPROVE = ["super"] as const;
@@ -270,6 +271,8 @@ type ComposeResult = {
   marginExceedsCap: boolean;
   /** true → `profit` is GROSS (China freight/origin cost not modelled yet). */
   freightCostPending: boolean;
+  /** W5 — true → no tb_freight_rate matched → cost lookup failed (gross-only · yellow banner). */
+  chinaCostLookupError: boolean;
 };
 
 export async function adminComposeQuoteFromRateCard(
@@ -301,6 +304,9 @@ export async function adminComposeQuoteFromRateCard(
     const chinaFreightCostThb = await lookupChinaFreightCostThb(d.mode, {
       cbm: d.cbm, kgm: d.kgm, containers: d.containers,
     });
+    // W5 — when the China-side scope is billed but no cost rate matched, profit is
+    // GROSS only → flag it so the UI shows a "ก่อนหักต้นทุนเฟรทจีน" yellow banner.
+    const chinaCostLookupError = chinaFreightCostThb == null;
 
     // Price from the real rate cards (pure, no IO) + the looked-up China cost.
     const quote = composeFreightQuote({
@@ -343,14 +349,18 @@ export async function adminComposeQuoteFromRateCard(
     }
 
     const rows = quote.lines.map((l, i) => ({
-      freight_quote_id: d.freight_quote_id,
-      position:         basePos + i + 1,
-      description:      l.labelTh,
-      quantity:         l.qty,
-      unit:             RATE_UNIT_MAP[l.unit] ?? "JOB",
-      unit_price_thb:   Math.round(l.unitSell * 100) / 100,
-      line_total_thb:   Math.round(l.sell * 100) / 100,
-      note:             null as string | null,
+      freight_quote_id:      d.freight_quote_id,
+      position:              basePos + i + 1,
+      description:           l.labelTh,
+      quantity:              l.qty,
+      unit:                  RATE_UNIT_MAP[l.unit] ?? "JOB",
+      unit_price_thb:        Math.round(l.unitSell * 100) / 100,
+      line_total_thb:        Math.round(l.sell * 100) / 100,
+      note:                  null as string | null,
+      // W5 (0165) — per-line commission snapshot (display/analytics only).
+      commission_scope:      l.scope,
+      commission_pct:        l.commissionPct,
+      commission_amount_thb: l.commissionThb,
     }));
 
     const { error: insErr } = await admin
@@ -358,13 +368,22 @@ export async function adminComposeQuoteFromRateCard(
       .insert(rows);
     if (insErr) return { ok: false, error: `insert_failed: ${insErr.message}` };
 
-    // Align the header to the spec (draft-only — guarded above).
+    // Align the header to the spec + persist the W5 P&L/margin flags (draft-only —
+    // guarded above). These are DISPLAY/ANALYTICS snapshots — they never touch the
+    // money path. `marginExceedsCap` is ADVISORY (the save is never blocked).
     await admin
       .from("freight_quotes")
       .update({
-        transport_mode: d.mode,
-        incoterm:       d.incoterm,
-        vat_pct:        quote.vatPct,
+        transport_mode:          d.mode,
+        incoterm:                d.incoterm,
+        vat_pct:                 quote.vatPct,
+        profit_margin_thb:       quote.profit,
+        margin_exceeds_cap:      quote.marginExceedsCap,
+        china_cost_lookup_error: chinaCostLookupError,
+        commission_calc_status:  quote.chinaCostPending ? "gross_only" : "computed",
+        cost_china_freight_thb:  quote.chinaFreightCostThb,
+        cost_local_thb:          Math.round((quote.subtotalCost - quote.chinaFreightCostThb) * 100) / 100,
+        cost_total_thb:          quote.subtotalCost,
       })
       .eq("id", d.freight_quote_id)
       .eq("status", "draft");
@@ -382,22 +401,27 @@ export async function adminComposeQuoteFromRateCard(
       containers:         d.containers ?? null,
       replaced:           d.replaceExisting,
       lines_added:        rows.length,
-      subtotal_sell:      quote.subtotalSell,
-      profit:             quote.profit,
-      margin_exceeds_cap: quote.marginExceedsCap,
-      china_cost_pending: quote.chinaCostPending,
+      subtotal_sell:        quote.subtotalSell,
+      profit:               quote.profit,
+      margin_cap_thb:       quote.marginCapThb,
+      margin_exceeds_cap:   quote.marginExceedsCap,
+      china_cost_pending:   quote.chinaCostPending,
+      china_cost_lookup_error: chinaCostLookupError,
+      commission_gross:     quote.commission.gross,
+      commission_net:       quote.commission.net,
     });
 
     revalidateOne(d.freight_quote_id);
     return {
       ok: true,
       data: {
-        count:              rows.length,
-        subtotalSell:       quote.subtotalSell,
-        profit:             quote.profit,
-        marginCapThb:       quote.marginCapThb,
-        marginExceedsCap:   quote.marginExceedsCap,
-        freightCostPending: quote.chinaCostPending,
+        count:                rows.length,
+        subtotalSell:         quote.subtotalSell,
+        profit:               quote.profit,
+        marginCapThb:         quote.marginCapThb,
+        marginExceedsCap:     quote.marginExceedsCap,
+        freightCostPending:   quote.chinaCostPending,
+        chinaCostLookupError,
       },
     };
   });
@@ -744,7 +768,7 @@ export async function adminConvertQuoteToShipment(
 
     const { data: quote, error: quoteErr } = await admin
       .from("freight_quotes")
-      .select("id, quote_no, status, profile_id, buyer_name_snapshot, buyer_contact_snapshot, transport_mode, port_loading, port_discharge, place_delivery, incoterm, converted_to_shipment_id, notes")
+      .select("id, quote_no, status, profile_id, buyer_name_snapshot, buyer_contact_snapshot, transport_mode, port_loading, port_discharge, place_delivery, incoterm, converted_to_shipment_id, notes, cost_china_freight_thb, cost_local_thb, cost_total_thb, profit_margin_thb, margin_exceeds_cap")
       .eq("id", input.id)
       .maybeSingle<{
         id: string; quote_no: string; status: string;
@@ -755,6 +779,12 @@ export async function adminConvertQuoteToShipment(
         incoterm: string | null;
         converted_to_shipment_id: string | null;
         notes: string | null;
+        // W5 (0165) — cost/margin snapshot the compose action persisted onto the quote.
+        cost_china_freight_thb: number | null;
+        cost_local_thb: number | null;
+        cost_total_thb: number | null;
+        profit_margin_thb: number | null;
+        margin_exceeds_cap: boolean | null;
       }>();
     if (quoteErr) {
       console.error(`[freight_quotes mutation lookup] failed`, { code: quoteErr.code, message: quoteErr.message });
@@ -772,6 +802,10 @@ export async function adminConvertQuoteToShipment(
     if (serialErr || typeof jobNo !== "string") {
       return { ok: false, error: `serial_reserve_failed: ${serialErr?.message ?? "rpc"}` };
     }
+
+    // W5 (0165) — the policy margin cap snapshot (business_config · default 15k).
+    // ADVISORY ONLY — convert is NEVER blocked by the cap (owner decides hard-gate).
+    const marginCapThb = await getBusinessConfig<number>("freight.margin_cap_thb", 15_000);
 
     // Combine buyer + contact into a notes blob for the shipment so the
     // info isn't lost. Parties (shipper/consignee) need to be filled
@@ -798,6 +832,15 @@ export async function adminConvertQuoteToShipment(
         notes:               initialNotes,
         job_no:              jobNo,
         created_by_admin_id: adminId,
+        // W5 (0165) — freeze the quote's cost/margin block onto the shipment.
+        // DISPLAY/ANALYTICS snapshot — never a money-path value. Null-safe (a
+        // cold/manually-built quote that was never composed leaves these NULL).
+        cost_china_freight_thb:           quote.cost_china_freight_thb,
+        cost_local_thb:                   quote.cost_local_thb,
+        cost_total_thb:                   quote.cost_total_thb,
+        profit_margin_thb:                quote.profit_margin_thb,
+        margin_exceeds_cap_at_conversion: quote.margin_exceeds_cap,
+        margin_cap_thb:                   marginCapThb,
       })
       .select("id")
       .maybeSingle<{ id: string }>();
@@ -843,9 +886,14 @@ export async function adminConvertQuoteToShipment(
     }
 
     await logAdminAction(adminId, "freight_quote.convert", "freight_quote", quote.id, {
-      quote_no:    quote.quote_no,
-      job_no:      jobNo,
-      shipment_id: inserted.id,
+      quote_no:               quote.quote_no,
+      job_no:                 jobNo,
+      shipment_id:            inserted.id,
+      // W5 — record the snapshot copied onto the shipment.
+      cost_total_thb:         quote.cost_total_thb,
+      profit_margin_thb:      quote.profit_margin_thb,
+      margin_exceeds_cap:     quote.margin_exceeds_cap,
+      margin_cap_thb:         marginCapThb,
     });
 
     revalidatePath(`/admin/freight/quotes/${quote.id}`);

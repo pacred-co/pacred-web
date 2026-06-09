@@ -400,9 +400,20 @@ export default async function AdminFreightShipmentDetailPage({
             )}
           </p>
         </div>
-        <span className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_BADGE[header.status]}`}>
-          {FREIGHT_SHIPMENT_STATUS_LABEL[header.status]}
-        </span>
+        <div className="flex items-center gap-2">
+          {/* W5 — internal P&L dashboard (super/accounting/freight only · advisory) */}
+          {isSuperOrAccounting && (
+            <Link
+              href={`/admin/freight/shipments/${header.id}/p-and-l`}
+              className="rounded-lg border border-border px-3 py-1 text-xs font-medium hover:bg-surface-alt"
+            >
+              📈 P&amp;L
+            </Link>
+          )}
+          <span className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_BADGE[header.status]}`}>
+            {FREIGHT_SHIPMENT_STATUS_LABEL[header.status]}
+          </span>
+        </div>
       </div>
 
       {/* Customer */}

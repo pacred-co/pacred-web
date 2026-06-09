@@ -35,6 +35,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { getBusinessConfig, setBusinessConfig } from "@/lib/business-config";
 
 // Roles allowed to MUTATE (mirror tb_freight_rate_admin_write RLS).
 const ROLES_WRITE = ["super", "ops"] as const;
@@ -318,5 +319,62 @@ export async function adminDeleteFreightRate(
     });
     revalidatePath("/admin/freight/rates");
     return { ok: true };
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════
+// W5 — Monthly FX-rate refresh control (`business_config freight.fx_rate_thb_per_usd`).
+// ════════════════════════════════════════════════════════════════════
+// The China-freight cost is FX-dependent (≈35฿/USD) + monthly. There is NO FX
+// API — ops/accounting refresh it MANUALLY each month from customs.go.th. This
+// is the DEFAULT FX shown on the rate-card form (per-row fx_thb_per_usd still
+// overrides on each cost row). Seeded by migration 0145; read via getBusinessConfig.
+// Read = super/ops/accounting · write = super/ops (mirror the rate table RLS).
+
+export const FREIGHT_FX_KEY = "freight.fx_rate_thb_per_usd";
+const FREIGHT_FX_DEFAULT = 35;
+
+/** Read the current monthly default FX (THB per USD). Read-gated super/ops/accounting. */
+export async function getFreightFxRate(): Promise<number> {
+  return withAdmin([...ROLES_READ], async () => {
+    const fx = await getBusinessConfig<number>(FREIGHT_FX_KEY, FREIGHT_FX_DEFAULT);
+    return { ok: true as const, data: Number(fx) || FREIGHT_FX_DEFAULT };
+  }).then((res) => (res.ok && res.data ? res.data : FREIGHT_FX_DEFAULT));
+}
+
+const fxUpdateSchema = z.object({
+  fx_thb_per_usd: z.coerce.number().positive("เรท FX ต้องมากกว่า 0").max(99999),
+});
+export type AdminUpdateFreightFxInput = z.input<typeof fxUpdateSchema>;
+
+/**
+ * Update the monthly default FX. Write-gated super/ops. NOT a money mutation —
+ * it only changes the DEFAULT FX the rate-card form pre-fills + the convert-time
+ * cost lookup falls back to. Existing rate rows snapshot their own fx_thb_per_usd,
+ * so a change here does not retro-edit any stored cost. Audit-logged before/after.
+ */
+export async function adminUpdateFreightFxRate(
+  input: AdminUpdateFreightFxInput,
+): Promise<AdminActionResult> {
+  const parsed = fxUpdateSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { fx_thb_per_usd } = parsed.data;
+
+  return withAdmin([...ROLES_WRITE], async ({ adminId }) => {
+    try {
+      const { before } = await setBusinessConfig(FREIGHT_FX_KEY, fx_thb_per_usd, adminId);
+      await logAdminAction(adminId, "freight.fx_rate.update", "business_config", FREIGHT_FX_KEY, {
+        before: before ?? null,
+        after: fx_thb_per_usd,
+      });
+      revalidatePath("/admin/freight/rates");
+      return { ok: true };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(`[freight-rates fx update] failed`, { message: msg });
+      return { ok: false, error: msg };
+    }
   });
 }
