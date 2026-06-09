@@ -1043,20 +1043,22 @@ export default async function ForwarderInvoicePrintPage({
       */}
       <style>{`
         @media print {
-          /* 2026-06-09 ภูม flag round 5: receipt was floating in the middle
-             of A4 with ~3cm whitespace on every side — because @page had no
-             margin but .receipt-page added 1.5cm padding AND subpage already
-             has 10mm/12mm padding (stacked 2.7cm).
+          /* 2026-06-09 ภูม flag round 6: receipt content stopped halfway
+             down page 1 with the bottom ~150mm blank. Round-5 had
+             min-height:auto on .receipt-page that overrode the inline
+             minHeight:277mm — so the page collapsed to content height
+             and the flex:1 spacer (between table and summary) had no room
+             to grow. Solution: drop that override + give .receipt-page an
+             explicit print height = the A4 printable area minus the @page
+             safe margin (297mm − 2*8mm = 281mm). The flex:1 spacer then
+             pushes the summary/payment/cert block to the bottom of the
+             page as designed.
 
-             Fix: @page carries the safe-area margin (8mm) and .receipt-page
-             goes to zero padding so the content fills the A4 page edge-to-
-             edge minus the printer-safe margin. Subpage's internal padding
-             provides the typographic gutter.
-
-             Sidebar is print:hidden via the layout (one place fixes every
-             admin print page). The Chrome browser header/footer (datetime ·
-             URL · "1/4") is dialog-controlled — staff must toggle
-             "Headers and footers: off" in the print dialog. */
+             @page margin = 8mm (printer-safe edge, single layer — no
+             padding stacking with .subpage's internal 10mm/12mm gutter).
+             Chrome's datetime/URL/page-# header/footer is dialog-only
+             ("Headers and footers: off"). Sidebar is print:hidden via the
+             admin layout. */
           @page { size: A4 portrait; margin: 8mm; }
           html, body {
             background: white !important;
@@ -1071,13 +1073,20 @@ export default async function ForwarderInvoicePrintPage({
             padding: 0 !important;
             max-width: none !important;
             width: 100% !important;
-            min-height: auto !important;
+            /* A4 portrait inner area = 297mm − 2×8mm @page margin = 281mm.
+               Use both height and min-height so the flex:1 spacer has a
+               concrete target to grow into. */
+            height: 281mm !important;
+            min-height: 281mm !important;
             page-break-after: always;
+            page-break-inside: avoid;
           }
           .receipt-page:last-child { page-break-after: auto; }
-          /* Make the inner subpage stretch to fill the print page edge-to-edge */
+          /* Inner subpage takes the full receipt-page height and zeros its
+             own padding (the @page margin is the safe edge). */
           .receipt-page .subpage {
             padding: 0 !important;
+            height: 100% !important;
             min-height: 100% !important;
           }
         }
