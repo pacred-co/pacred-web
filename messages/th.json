@@ -3353,6 +3353,9 @@
     "freightCommission": {
       "title": "ค่าคอม Freight"
     },
+    "taxdocWorkspace": {
+      "title": "Tax-doc Workspace (3 ราคา)"
+    },
     "settingsCargo": {
       "title": "ตั้งค่าระบบ Cargo",
       "general": "ทั่วไป",

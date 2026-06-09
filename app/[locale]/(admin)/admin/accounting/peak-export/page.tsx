@@ -100,10 +100,33 @@ export default async function AdminPeakExportPage({
   const saleBatchCsv        = batchToCsv(bundle.saleBatches, "Sales rep");
   const interpreterBatchCsv = batchToCsv(bundle.interpreterBatches, "ล่าม");
 
+  // W9 — CARGO tax-doc 3-number rollup (SELLING / COST / DECLARED) CSV.
+  const taxDocCsv: CsvRow[] = bundle.taxDocRollup.map((t) => ({
+    "งาน (Job ID)":           t.jobId,
+    "ประเภท":                  t.source === "forwarder" ? "ฝากนำเข้า" : "ฝากสั่งซื้อ",
+    "ออเดอร์":                 t.orderRef,
+    "รหัสลูกค้า":              t.userid,
+    "ตู้":                     t.cabinetNo,
+    "โหมดเอกสาร":             t.docMode,
+    "ราคาขาย SELLING (บาท)":   t.selling,
+    "บัญชี GL (ขาย)":          t.glSelling || "(รอนักบัญชี)",
+    "ต้นทุน COST (บาท)":       t.cost,
+    "บัญชี GL (ต้นทุน)":       t.glCost || "(รอนักบัญชี)",
+    "สำแดง DECLARED (บาท)":    t.declared,
+    "บัญชี GL (สำแดง · memo)": t.glDeclared || "(memo)",
+    "กำไรขั้นต้น (บาท)":       t.grossProfit,
+    "สถานะ CS":               t.csStatus || "—",
+    "สถานะ Pricing":          t.pricingStatus || "—",
+    "สถานะ Docs":             t.docsStatus || "—",
+    "สถานะ Account":          t.accountStatus || "—",
+  }));
+
   // ── Headline summary totals ──
   const receiptSum = bundle.receipts.reduce((s, r) => s + r.ramount, 0);
   const saleSum    = bundle.saleBatches.reduce((s, b) => s + b.amount, 0);
   const interpSum  = bundle.interpreterBatches.reduce((s, b) => s + b.amount, 0);
+  const taxDocSelling = bundle.taxDocRollup.reduce((s, t) => s + t.selling, 0);
+  const taxDocCost    = bundle.taxDocRollup.reduce((s, t) => s + t.cost, 0);
 
   return (
     <>
@@ -195,6 +218,42 @@ export default async function AdminPeakExportPage({
           />
         </div>
 
+        {/* W9 — CARGO tax-doc 3-number rollup (PEAK · SELLING/COST/DECLARED) */}
+        <section className="space-y-2">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <h2 className="font-bold text-sm">CARGO 3-ราคา รายงาน (ใบกำกับ/ใบขน · PEAK)</h2>
+            <CsvButton
+              rows={taxDocCsv}
+              cols={Object.keys(taxDocCsv[0] ?? {
+                "งาน (Job ID)": "", "ประเภท": "", "ออเดอร์": "", "รหัสลูกค้า": "", "ตู้": "",
+                "โหมดเอกสาร": "", "ราคาขาย SELLING (บาท)": "", "บัญชี GL (ขาย)": "",
+                "ต้นทุน COST (บาท)": "", "บัญชี GL (ต้นทุน)": "", "สำแดง DECLARED (บาท)": "",
+                "บัญชี GL (สำแดง · memo)": "", "กำไรขั้นต้น (บาท)": "", "สถานะ CS": "",
+                "สถานะ Pricing": "", "สถานะ Docs": "", "สถานะ Account": "",
+              }).map((k) => ({ key: k, label: k }))}
+              filename={`pacred-cargo-3number-${dateFrom}-to-${dateTo}.csv`}
+            />
+          </div>
+          <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <RollupStat label="งานในช่วงนี้" value={bundle.taxDocRollup.length.toLocaleString("th-TH")} />
+            <RollupStat label="ราคาขายรวม (SELLING)" value={`฿${thb(taxDocSelling)}`} tone="blue" />
+            <RollupStat label="ต้นทุนรวม (COST)" value={`฿${thb(taxDocCost)}`} tone="emerald" />
+            <RollupStat label="กำไรขั้นต้น" value={`฿${thb(taxDocSelling - taxDocCost)}`} tone="green" />
+          </div>
+          {bundle.glAccounts.pending && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-[11px] text-amber-800">
+              ⚠️ รหัสบัญชี GL (chart-of-accounts) ยังเป็นค่าว่าง — รอ นักบัญชี (NAT) ใส่ที่{" "}
+              <code className="bg-white/60 px-1 rounded">business_config &gt; peak.gl_accounts</code>{" "}
+              (selling / cost · declared = memo เฉยๆ ไม่มี GL posting). โครงสร้าง CSV พร้อมแล้ว — เติมรหัสแล้วใช้ได้ทันที.
+            </div>
+          )}
+          <p className="text-[10px] text-muted">
+            3 ราคาแยกกันเสมอ: ขาย (→ รายได้/AR + ใบกำกับ) ≠ ต้นทุน (→ COGS/stock-in) ≠ สำแดง (→ ใบขนรวม · memo).
+            รายงานนี้สรุปต่องาน (tb_cargo_taxdoc_job) — ดูงานที่{" "}
+            <Link href="/admin/pricing/taxdoc-workspace" className="text-primary-600 hover:underline">Tax-doc Workspace</Link>.
+          </p>
+        </section>
+
         <section className="rounded-2xl border border-border bg-amber-50 dark:bg-amber-950/20 p-4 text-xs space-y-2">
           <p className="font-medium">📌 หมายเหตุ Phase-C extensions (ยังไม่เปิด):</p>
           <ul className="list-disc list-inside text-muted space-y-1">
@@ -245,6 +304,17 @@ function ExportCard({
           filename={filename}
         />
       </div>
+    </div>
+  );
+}
+
+function RollupStat({ label, value, tone }: { label: string; value: string; tone?: "blue" | "emerald" | "green" }) {
+  const cls =
+    tone === "blue" ? "text-blue-700" : tone === "emerald" ? "text-emerald-700" : tone === "green" ? "text-green-700" : "text-foreground";
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-wide text-muted">{label}</p>
+      <p className={`mt-0.5 font-bold tabular-nums text-lg ${cls}`}>{value}</p>
     </div>
   );
 }
