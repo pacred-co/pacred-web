@@ -2,40 +2,22 @@
  * Admin > "ใบเสร็จรับเงิน" — print page (FAITHFUL PORT)
  *
  * Wave 29 P0 #3 · 2026-05-29.
+ * v3 — 2026-06-09 ภูม flag round 3: literal port of Peak Account HTML structure.
  *
- * Replaces the prior generic "พิมพ์ใบแจ้งหนี้" surface with a 1:1 port of
- * legacy `pcs-admin/printReceipt.php` (the mPDF receipt). Two pages render:
- *   - Page 1 = ต้นฉบับ (Original)
- *   - Page 2 = สำเนา (Copy)
- * Per legacy convention. Browser `window.print()` produces both pages in
- * one go via CSS `page-break-after: always`.
+ * Two pages render:
+ *   - Page 1 = ต้นฉบับ (Original) — orange title #FFA30A
+ *   - Page 2 = สำเนา (Copy) — gray title #5F5D5A
  *
- * Workflow stolen from legacy printReceipt.php, polished with Tailwind chrome
- * (AGENTS.md §0a — workflow logic faithful · UI is our design). Element-by-
- * element parity with the PHP HTML table:
- *
- *   ✅ Pacred logo (top-left band)
- *   ✅ บริษัท แพคเรด (ประเทศไทย) จำกัด + Pacred (Thailand) Co., Ltd.
- *   ✅ ใบเสร็จรับเงิน (#8BC34A green)
- *   ✅ (ไม่ใช่ใบกำกับภาษี) red — mandatory disclaimer per Thai tax rules
- *   ✅ เลขที่ {rid}
- *   ✅ ต้นฉบับ / สำเนา stamp top-right per page
- *   ✅ Issuer block (Pacred · TaxID + address · tel — from components/seo/site.ts)
- *   ✅ Customer block (name + corporateNumber + corporateAddress)
- *   ✅ 7-col items table (ลำดับ · เลขที่ออเดอร์ · Tracking · กล่อง · น้ำหนัก · ปริมาตร · จำนวนเงิน)
- *   ✅ Footer summary 6-line (Total · Delivery CHN · Delivery TH · Other · Discount · WHT 1% conditional)
- *   ✅ WHT 1% — auto-shown only if isCorporate AND totalbeforewithholding ≥ 1000
- *      (legacy `printReceipt.php:385-399` logic)
- *   ✅ Thai-word grand total — readThaiBaht()
- *   ✅ 4 signature boxes (ผู้ออก · ผู้อนุมัติ · ตราประทับ + sin-wandee.jpg · ผู้รับ)
- *   ✅ On print: flip tb_receipt.statusprint='1' + stamp adminidprint + rdateprint
- *
- * BRANDING (2026-06-01 · owner GO/NO-GO = GO): the receipt issuer is now
- * Pacred (Thailand) Co., Ltd. — name / TaxID / address / phone / bank all
- * pulled from components/seo/site.ts (the single source of truth, AGENTS.md
- * §7). The legacy PCS Cargo issuer identity + the 2025-03-20 PCS address
- * cutover were retired. Doc-number format (FRC/FRG), WHT 1% logic, and the
- * 2-page ต้นฉบับ/สำเนา layout are unchanged — only the issuer identity swapped.
+ * Layout matches Peak's id="paperTransaction" structure exactly:
+ *   1. headerFormatOne — logo LEFT · (ต้นฉบับ) label + orange title RIGHT
+ *   2. d-inline-flex info row — issuer+customer LEFT stacked · meta-box RIGHT
+ *      (each issuer/customer block has TEXT col + CONTACT icon col)
+ *   3. items table — OUR 7-col Pacred cargo table (kept verbatim)
+ *   4. big spacer (height:563px equivalent) pushing summary to bottom
+ *   5. summary 2-col — amountInfo LEFT · big amount box RIGHT
+ *   6. payment 2-col — date+total LEFT · bank+WHT RIGHT
+ *   7. remark
+ *   8. certified 6 boxes — QR·ผู้ออก·ผู้อนุมัติ·ตราประทับ(ผู้ขาย)·ผู้รับ·ตราประทับ(ลูกค้า)
  */
 
 import { Link } from "@/i18n/navigation";
@@ -185,29 +167,32 @@ function composeMainAddress(row: RawAddressJoin | null | undefined): string {
 }
 
 /**
- * One full-bleed receipt page (ต้นฉบับ OR สำเนา). The whole document is two
- * of these stacked with `page-break-after: always` between them — mirrors
- * legacy mPDF AddPageByArray that pushed 2 PDF pages.
+ * One full-bleed receipt page (ต้นฉบับ OR สำเนา).
  *
- * 2026-06-09 ภูม flag round 2 — v2 redesign to match Peak Account's actual
- * borderless layout (v1's card-everywhere look was rejected: "ดูเละกว่า
- * peak อีก"). Key changes from v1:
- *   - NO card chrome around issuer/customer — stacked rows + thin gray dividers
- *   - Meta card top-right (3 rows: เลขที่ / วันที่ / อ้างอิง) — orange-tinted
- *   - Section headings inline with tiny icon + bold label, full-width gray rule
- *   - Items table — KEPT VERBATIM (7 Pacred-specific cargo columns)
- *   - Totals — RIGHT-aligned text rows (NO border box)
- *   - Payment — split L/R with thin vertical divider
- *   - Signatures — tiny (~80px), thin single underline (no thick boxes)
+ * v3 — 2026-06-09 ภูม flag round 3: literal port of Peak Account HTML.
+ * Layout follows id="paperTransaction" > .subpage structure exactly:
  *
- * Two-page output (ต้นฉบับ + สำเนา) preserved per legacy printReceipt.php.
+ *   [headerFormatOne]  logo LEFT · (ต้นฉบับ/สำเนา) label + title RIGHT
+ *   [info row]         issuer+customer LEFT · meta-box RIGHT (same flex row)
+ *                      each block = TEXT col + CONTACT col side-by-side
+ *   [items table]      OUR Pacred 7-col cargo table (verbatim — do not change)
+ *   [spacer]           flex:1 fills remaining space, pushes summary to bottom
+ *   [summary 2-col]    amountInfo LEFT (สรุป + Thai words) · amount box RIGHT
+ *   [payment 2-col]    date+total LEFT · bank+WHT RIGHT
+ *   [remark]           one-line note
+ *   [certified 6 box]  QR · ผู้ออก · ผู้อนุมัติ · ตราประทับ(ผู้ขาย) · ผู้รับ · ตราประทับ(ลูกค้า)
  *
- * Per ภูม: "ภูมิเอาแค่ตารางที่เป็นของเรา แต่ส่วนอื่นการจัดวางเอาแบบ peak เลย"
+ * Peak palette:
+ *   orange title (ต้นฉบับ): #FFA30A
+ *   gray title (สำเนา):    #5F5D5A
+ *   orange tint bg:        rgba(255, 163, 10, 0.165) → #FFF0CC approximation
+ *   gray tint bg (สำเนา):  rgba(95, 93, 90, 0.165)  → #EBEBEA approximation
+ *   body:                  #111827 · secondary: #6b7280
  */
 function ReceiptPage({
-  label,             // "ต้นฉบับ" | "สำเนา"
+  label,
   rid,
-  issuerAddress,     // address line for the Pacred issuer band
+  issuerAddress,
   issueDate,
   rDateCreate,
   customerName,
@@ -257,335 +242,496 @@ function ReceiptPage({
   pageNumber:          number;
   pageCount:           number;
 }) {
-  // Peak totals math: pre-tax baseline before WHT/VAT — used in the
-  // "มูลค่าไม่รวมภาษีมูลค่าเพิ่ม" row at the top of the summary block.
+  const isOriginal = label === "ต้นฉบับ";
+  // Peak: orange #FFA30A on ต้นฉบับ, gray #5F5D5A on สำเนา
+  const titleColor   = isOriginal ? "#FFA30A" : "#5F5D5A";
+  // Peak orange tint bg: rgba(255,163,10,0.165) ≈ #FFF0CC; gray tint ≈ #EBEBEA
+  const tintBg       = isOriginal ? "rgba(255,163,10,0.165)" : "rgba(95,93,90,0.165)";
+
   const preTax = totals.fTotal + totals.fTransportCHNTHB + totals.fTransport +
                  totals.priceOther - totals.fDiscount;
-  const amountPaid = grandTotal - (showWht ? whtAmount : 0);
-
-  // Peak palette (sampled from the owner's screenshot):
-  //   issuer/customer roles labels  → text-gray-500 (#6b7280)
-  //   role names                    → font-bold text-gray-900 (#111827)
-  //   addresses + tax-id            → text-gray-700
-  //   section dividers              → border-gray-200 (#e5e7eb)
-  //   section heading icons         → text-gray-700
-  //   meta card background          → bg-orange-50/40 (very pale tint)
-  //   totals accent (paid+overdue)  → text-red-600 (#dc2626)
-  //   grand total label/value       → text-gray-900 + 1px top rule
+  // amount the customer actually pays (grand total minus WHT if applicable)
+  const netPaid = grandTotal - (showWht ? whtAmount : 0);
 
   return (
-    <div className="receipt-page bg-white text-black mx-auto" style={{ width: "210mm", minHeight: "267mm" }}>
-      <div style={{ padding: "10mm 12mm" }}>
-        {/* ─────────────── Top band: orange Pacred wordmark · doc title right ─────────────── */}
-        <div className="flex items-start justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <Image
-              src="/images/pacred-logo-red.png"
-              alt={SITE_LEGAL_NAME}
-              width={48}
-              height={48}
-              unoptimized
-              style={{ width: "12mm", height: "auto", flexShrink: 0 }}
-            />
-            <div className="text-2xl font-bold tracking-wide" style={{ color: "#C2410C" /* Pacred orange */ }}>
-              Pacred
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="text-[10px] text-gray-500">({label})</div>
-            <div className="text-lg font-bold text-gray-900">ใบเสร็จรับเงิน</div>
-            <div className="text-[9px] text-gray-500 tracking-widest">RECEIPT</div>
-            <div className="text-[9px] text-red-600 mt-0.5">(ไม่ใช่ใบกำกับภาษี)</div>
-          </div>
-        </div>
+    <div
+      id="paperTransaction"
+      className="receipt-page bg-white text-black mx-auto"
+      style={{ width: "210mm", minHeight: "277mm", display: "flex", flexDirection: "column" }}
+    >
+      <div className="paperTransaction subpage" style={{ padding: "10mm 12mm", flex: 1, display: "flex", flexDirection: "column" }}>
 
-        {/* ─────────────── Issuer row: address + contact LEFT · meta card RIGHT ─────────────── */}
-        <div className="flex items-start gap-4 mt-1">
-          <div className="flex-1 min-w-0 text-[11px] leading-snug">
-            <div className="text-[10px] text-gray-500">ผู้ขาย / Issuer</div>
-            <div className="text-sm font-bold text-gray-900">{SITE_LEGAL_NAME_TH}</div>
-            <div className="text-gray-700 mt-0.5">{issuerAddress}</div>
-            <div className="text-gray-700">
-              เลขประจำตัวผู้เสียภาษี: <span className="font-mono">{TAX_ID}</span> <span className="text-gray-500">(สำนักงานใหญ่)</span>
+        {/* ── headerFormatOne: logo LEFT · (label) + title RIGHT ─────────── */}
+        <div id="headerFormatOne" style={{ marginBottom: "4mm" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            {/* LEFT: merchant logo */}
+            <div id="merchantLogo" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <Image
+                src="/images/pacred-logo-red.png"
+                alt={SITE_LEGAL_NAME}
+                width={48}
+                height={48}
+                unoptimized
+                style={{ width: "11mm", height: "auto" }}
+              />
+              <span style={{ fontSize: "22px", fontWeight: "bold", color: "#C2410C", letterSpacing: "0.5px" }}>
+                Pacred
+              </span>
             </div>
-            <div className="text-[10px] text-gray-500 mt-0.5">
-              <span className="mr-3">โทร {CONTACT.phoneCompanyDisplay}</span>
-              <span>อีเมล {CONTACT.emailAcc}</span>
-            </div>
-          </div>
-          <div className="text-[10px] flex-shrink-0">
-            <div className="border border-gray-300 rounded" style={{ minWidth: "62mm", backgroundColor: "#FFF7ED" }}>
-              <div className="flex justify-between px-2 py-1 border-b border-gray-200">
-                <span className="text-gray-500">เลขที่</span>
-                <span className="font-mono text-gray-900">{rid}</span>
-              </div>
-              <div className="flex justify-between px-2 py-1 border-b border-gray-200">
-                <span className="text-gray-500">วันที่ออก</span>
-                <span className="text-gray-900">{issueDate}</span>
-              </div>
-              <div className="flex justify-between px-2 py-1">
-                <span className="text-gray-500">อ้างอิง</span>
-                <span className="font-mono text-gray-900">{rid}</span>
+
+            {/* RIGHT: (ต้นฉบับ) label ABOVE title */}
+            <div id="etaxWording" style={{ textAlign: "right" }}>
+              <div style={{ fontSize: "10px", color: "#6b7280" }}>({label})</div>
+              <div id="documentName">
+                <h2 style={{ margin: 0, fontSize: "20px", fontWeight: "bold", color: titleColor }}>
+                  <span>ใบเสร็จรับเงิน</span>
+                </h2>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Divider */}
-        <div className="border-b border-gray-200 my-2"></div>
+        {/* ── INFO ROW: issuer+customer LEFT · meta-box RIGHT ─────────────── */}
+        <div style={{ display: "flex", gap: "8mm", marginBottom: "3mm" }}>
 
-        {/* ─────────────── Customer row ─────────────── */}
-        <div className="text-[11px] leading-snug">
-          <div className="text-[10px] text-gray-500">ลูกค้า / Customer</div>
-          <div className="text-sm font-bold text-gray-900">{customerName}</div>
-          <div className="text-gray-700 mt-0.5" style={{ minHeight: "10mm" }}>{customerAddress || "-"}</div>
-          {customerTaxId && customerTaxId !== "-" && (
-            <div className="text-gray-700">
-              เลขประจำตัวผู้เสียภาษี: <span className="font-mono">{customerTaxId}</span> <span className="text-gray-500">(สำนักงานใหญ่)</span>
+          {/* LEFT PAIR: issuer on top, customer below */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+
+            {/* ISSUER BLOCK */}
+            <div id="merchantInfo" style={{ marginBottom: "3mm" }}>
+              <div style={{ display: "flex", gap: "6mm" }}>
+                {/* TEXT column */}
+                <div className="merchentInfo" style={{ flex: 1 }}>
+                  <div style={{ display: "flex", gap: "3px", marginBottom: "1px" }}>
+                    <div style={{ minWidth: "30px" }}>
+                      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>ผู้ขาย :</p>
+                    </div>
+                    <div>
+                      <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827" }}>
+                        {SITE_LEGAL_NAME_TH}
+                      </p>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: "3px", marginBottom: "1px" }}>
+                    <div style={{ minWidth: "30px" }}>
+                      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>ที่อยู่ :</p>
+                    </div>
+                    <div>
+                      <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>{issuerAddress}</p>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: "3px" }}>
+                    <div style={{ minWidth: "30px" }}>
+                      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>เลขที่ภาษี :</p>
+                    </div>
+                    <div>
+                      <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>{TAX_ID} (สำนักงานใหญ่)</p>
+                    </div>
+                  </div>
+                </div>
+                {/* CONTACT column */}
+                <div className="merchentContact" style={{ minWidth: "38mm" }}>
+                  <div style={{ display: "flex", gap: "3px", alignItems: "center", marginBottom: "1px" }}>
+                    <div style={{ minWidth: "14px", color: "#6b7280", fontSize: "9px" }}>📞</div>
+                    <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>{CONTACT.phoneCompanyDisplay}</p>
+                  </div>
+                  <div style={{ display: "flex", gap: "3px", alignItems: "center", marginBottom: "1px" }}>
+                    <div style={{ minWidth: "14px", color: "#6b7280", fontSize: "9px" }}>✉</div>
+                    <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>{CONTACT.emailAcc}</p>
+                  </div>
+                  <div style={{ display: "flex", gap: "3px", alignItems: "center" }}>
+                    <div style={{ minWidth: "14px", color: "#6b7280", fontSize: "9px" }}>🌐</div>
+                    <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>pacred.co.th</p>
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
-        </div>
 
-        {/* Divider */}
-        <div className="border-b border-gray-200 my-2"></div>
-
-        {/* ─────────────── Items table — KEPT VERBATIM (Pacred unique 7 cols) ─────────────── */}
-        <table className="w-full border-collapse text-sm" style={{ tableLayout: "fixed" }}>
-          <thead>
-            <tr className="bg-gray-100 text-center">
-              <th className="border border-gray-400 px-1 py-1" style={{ width: "7%" }}>
-                ลำดับ<br /><span className="text-[10px] font-normal text-gray-500">No.</span>
-              </th>
-              <th className="border border-gray-400 px-1 py-1" style={{ width: "11%" }}>
-                เลขที่ออเดอร์<br /><span className="text-[10px] font-normal text-gray-500">Order No.</span>
-              </th>
-              <th className="border border-gray-400 px-1 py-1" style={{ width: "39%" }}>
-                รหัสพัสดุ<br /><span className="text-[10px] font-normal text-gray-500">Tracking</span>
-              </th>
-              <th className="border border-gray-400 px-1 py-1" style={{ width: "7%" }}>
-                จำนวน<br /><span className="text-[10px] font-normal text-gray-500">Box</span>
-              </th>
-              <th className="border border-gray-400 px-1 py-1" style={{ width: "10%" }}>
-                น้ำหนัก<br /><span className="text-[10px] font-normal text-gray-500">Wt./kg</span>
-              </th>
-              <th className="border border-gray-400 px-1 py-1" style={{ width: "11%" }}>
-                ปริมาตร<br /><span className="text-[10px] font-normal text-gray-500">Vol./CBM</span>
-              </th>
-              <th className="border border-gray-400 px-1 py-1" style={{ width: "15%" }}>
-                ค่าขนส่ง<br /><span className="text-[10px] font-normal text-gray-500">Amount</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="border border-gray-400 px-2 py-3 text-center text-gray-500">
-                  ไม่พบรายการ
-                </td>
-              </tr>
-            ) : (
-              items.map((row) => (
-                <tr key={`${pageNumber}-${row.no}`}>
-                  <td className="border border-gray-400 px-2 py-1 text-center">{row.no}</td>
-                  <td className="border border-gray-400 px-2 py-1 text-center font-mono text-xs">#{row.fid}</td>
-                  <td className="border border-gray-400 px-2 py-1 break-all font-mono text-xs">{row.tracking}</td>
-                  <td className="border border-gray-400 px-2 py-1 text-right font-mono">{fmt0(row.famount)}</td>
-                  <td className="border border-gray-400 px-2 py-1 text-right font-mono">{fmt2(row.fweight)}</td>
-                  <td className="border border-gray-400 px-2 py-1 text-right font-mono">{fmt5(row.fvolume)}</td>
-                  <td className="border border-gray-400 px-2 py-1 text-right font-mono">{fmt2(row.ftotalprice)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-
-        {/* ─────────────── Footer block (last page only) — Peak v2 borderless ─────────────── */}
-        {pageNumber === pageCount && (
-          <div className="mt-3 text-[11px]">
-            {/* ─── Section: สรุป (Summary) — right-aligned text rows, NO box ─── */}
-            <div className="flex items-center gap-1.5 mt-2 mb-1">
-              <span className="text-gray-700">📋</span>
-              <span className="font-bold text-gray-900">สรุป  Summary</span>
+            {/* CUSTOMER BLOCK */}
+            <div id="contactInfo">
+              <div style={{ display: "flex", gap: "6mm" }}>
+                {/* TEXT column */}
+                <div className="contactInfo" style={{ flex: 1 }}>
+                  <div style={{ display: "flex", gap: "3px", marginBottom: "1px" }}>
+                    <div style={{ minWidth: "30px" }}>
+                      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>ลูกค้า :</p>
+                    </div>
+                    <div>
+                      <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827" }}>
+                        {customerName}
+                      </p>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: "3px", marginBottom: "1px" }}>
+                    <div style={{ minWidth: "30px" }}>
+                      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>ที่อยู่ :</p>
+                    </div>
+                    <div>
+                      <p style={{ margin: 0, fontSize: "10px", color: "#374151", whiteSpace: "pre-wrap" }}>
+                        {customerAddress || "-"}
+                      </p>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: "3px", marginBottom: "1px" }}>
+                    <div style={{ minWidth: "30px" }}>
+                      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>เลขที่ภาษี :</p>
+                    </div>
+                    <div>
+                      <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>{customerTaxId || "-"}</p>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: "3px" }}>
+                    <div style={{ minWidth: "30px" }}>
+                      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>เรียน :</p>
+                    </div>
+                    <div>
+                      <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>-</p>
+                    </div>
+                  </div>
+                </div>
+                {/* CONTACT column (customer — typically empty) */}
+                <div className="contactContact" style={{ minWidth: "38mm" }}>
+                  <div style={{ display: "flex", gap: "3px", alignItems: "center", marginBottom: "1px" }}>
+                    <div style={{ minWidth: "14px", color: "#6b7280", fontSize: "9px" }}>📞</div>
+                    <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>-</p>
+                  </div>
+                  <div style={{ display: "flex", gap: "3px", alignItems: "center", marginBottom: "1px" }}>
+                    <div style={{ minWidth: "14px", color: "#6b7280", fontSize: "9px" }}>✉</div>
+                    <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>-</p>
+                  </div>
+                  <div style={{ display: "flex", gap: "3px", alignItems: "center" }}>
+                    <div style={{ minWidth: "14px", color: "#6b7280", fontSize: "9px" }}>🌐</div>
+                    <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>-</p>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="flex justify-end">
-              <table className="text-right">
+
+          </div>{/* end LEFT PAIR */}
+
+          {/* RIGHT: meta-box (เลขที่/วันที่/อ้างอิง) */}
+          <div>
+            <div id="documentInfo">
+              <div style={{ background: tintBg, borderRadius: "2px", minWidth: "55mm" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 8px", marginBottom: "2px" }}>
+                  <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>เลขที่เอกสาร :</p>
+                  <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{rid}</p>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 8px", marginBottom: "2px" }}>
+                  <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>วันที่ออก :</p>
+                  <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{issueDate}</p>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 8px" }}>
+                  <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>อ้างอิง :</p>
+                  <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{rid}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>{/* end INFO ROW */}
+
+        {/* ── ITEMS TABLE — Pacred 7-col cargo table (verbatim — do not modify) ── */}
+        <div className="detail" style={{ height: "182px", overflow: "visible" }}>
+          <div id="product">
+            {/* Header row with orange tint bg */}
+            <div id="headerItemColumn">
+              <table style={{ width: "100%", borderCollapse: "collapse", background: tintBg }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: "left", padding: "4px 4px", width: "7%", fontSize: "10px", fontWeight: "bold", color: "#374151" }}>
+                      ลำดับ<br /><span style={{ fontSize: "9px", fontWeight: "normal", color: "#6b7280" }}>No.</span>
+                    </th>
+                    <th style={{ textAlign: "left", padding: "4px 4px", width: "11%", fontSize: "10px", fontWeight: "bold", color: "#374151" }}>
+                      เลขที่ออเดอร์<br /><span style={{ fontSize: "9px", fontWeight: "normal", color: "#6b7280" }}>Order No.</span>
+                    </th>
+                    <th style={{ textAlign: "left", padding: "4px 4px", width: "39%", fontSize: "10px", fontWeight: "bold", color: "#374151" }}>
+                      รหัสพัสดุ<br /><span style={{ fontSize: "9px", fontWeight: "normal", color: "#6b7280" }}>Tracking</span>
+                    </th>
+                    <th style={{ textAlign: "right", padding: "4px 4px", width: "7%", fontSize: "10px", fontWeight: "bold", color: "#374151" }}>
+                      จำนวน<br /><span style={{ fontSize: "9px", fontWeight: "normal", color: "#6b7280" }}>Box</span>
+                    </th>
+                    <th style={{ textAlign: "right", padding: "4px 4px", width: "10%", fontSize: "10px", fontWeight: "bold", color: "#374151" }}>
+                      น้ำหนัก<br /><span style={{ fontSize: "9px", fontWeight: "normal", color: "#6b7280" }}>Wt./kg</span>
+                    </th>
+                    <th style={{ textAlign: "right", padding: "4px 4px", width: "11%", fontSize: "10px", fontWeight: "bold", color: "#374151" }}>
+                      ปริมาตร<br /><span style={{ fontSize: "9px", fontWeight: "normal", color: "#6b7280" }}>Vol./CBM</span>
+                    </th>
+                    <th style={{ textAlign: "right", padding: "4px 4px", width: "15%", fontSize: "10px", fontWeight: "bold", color: "#374151" }}>
+                      ค่าขนส่ง<br /><span style={{ fontSize: "9px", fontWeight: "normal", color: "#6b7280" }}>Amount</span>
+                    </th>
+                  </tr>
+                </thead>
                 <tbody>
-                  <tr>
-                    <td className="px-2 py-0.5 text-gray-500">มูลค่าไม่รวมภาษีมูลค่าเพิ่ม</td>
-                    <td className="px-2 py-0.5 font-mono w-[28mm] text-gray-900">{fmt2(preTax)}</td>
-                  </tr>
-                  <tr>
-                    <td className="px-2 py-0.5 text-gray-500">ภาษีมูลค่าเพิ่ม 7%</td>
-                    <td className="px-2 py-0.5 font-mono text-gray-500">0.00</td>
-                  </tr>
-                  <tr>
-                    <td className="px-2 pt-1.5 pb-0.5 text-gray-700 font-bold border-t border-gray-300 text-base">
-                      จำนวนเงินทั้งสิ้น
-                    </td>
-                    <td className="px-2 pt-1.5 pb-0.5 font-mono font-bold text-gray-900 border-t border-gray-300 text-base">
-                      {fmt2(grandTotal)}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td colSpan={2} className="px-2 pb-1.5 text-[10px] text-gray-500 italic">
-                      ({grandTotalThaiWord})
-                    </td>
-                  </tr>
-                  {showWht && (
+                  {items.length === 0 ? (
                     <tr>
-                      <td className="px-2 py-0.5 text-gray-500">หัก ภาษี ณ ที่จ่าย 1%</td>
-                      <td className="px-2 py-0.5 font-mono">{fmt2(whtAmount)}</td>
+                      <td colSpan={7} style={{ padding: "8px 4px", textAlign: "center", fontSize: "10px", color: "#6b7280", background: "#fff" }}>
+                        ไม่พบรายการ
+                      </td>
                     </tr>
+                  ) : (
+                    items.map((row) => (
+                      <tr key={`${pageNumber}-${row.no}`} style={{ background: "#fff" }}>
+                        <td style={{ padding: "3px 4px", fontSize: "10px", textAlign: "center", borderTop: "0.5px solid #e5e7eb" }}>{row.no}</td>
+                        <td style={{ padding: "3px 4px", fontSize: "9px", textAlign: "center", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>#{row.fid}</td>
+                        <td style={{ padding: "3px 4px", fontSize: "9px", wordBreak: "break-all", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>{row.tracking}</td>
+                        <td style={{ padding: "3px 4px", fontSize: "10px", textAlign: "right", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>{fmt0(row.famount)}</td>
+                        <td style={{ padding: "3px 4px", fontSize: "10px", textAlign: "right", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>{fmt2(row.fweight)}</td>
+                        <td style={{ padding: "3px 4px", fontSize: "10px", textAlign: "right", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>{fmt5(row.fvolume)}</td>
+                        <td style={{ padding: "3px 4px", fontSize: "10px", textAlign: "right", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>{fmt2(row.ftotalprice)}</td>
+                      </tr>
+                    ))
                   )}
-                  <tr>
-                    <td className="px-2 py-0.5 text-gray-500">จำนวนเงินที่ชำระ</td>
-                    <td className="px-2 py-0.5 font-mono text-red-600 font-semibold">
-                      {fmt2(amountPaid)}
-                    </td>
-                  </tr>
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
 
-            {/* Optional breakdown drawer (small, gray) — Pacred's per-leg details */}
-            <div className="flex justify-end mt-0.5 text-[10px] text-gray-500">
-              <div className="grid grid-cols-2 gap-x-3 gap-y-0" style={{ width: "65mm" }}>
-                <span>ค่าขนส่งจีน-ไทย:</span><span className="text-right font-mono">{fmt2(totals.fTransportCHNTHB)}</span>
-                <span>ค่าขนส่งในไทย:</span><span className="text-right font-mono">{fmt2(totals.fTransport)}</span>
-                <span>ค่าใช้จ่ายอื่น:</span><span className="text-right font-mono">{fmt2(totals.priceOther)}</span>
-                <span>ส่วนลด:</span><span className="text-right font-mono">{fmt2(totals.fDiscount)}</span>
-              </div>
-            </div>
+        {/* ── SPACER: flex:1 pushes summary to bottom of the page ─────────── */}
+        <div style={{ flex: 1 }} />
 
-            {/* Divider */}
-            <div className="border-b border-gray-200 my-2"></div>
-
-            {/* ─── Section: ชำระเงิน (Payment) — split L/R, thin vertical divider ─── */}
-            <div className="flex items-center gap-1.5 mt-1 mb-1">
-              <span className="text-gray-700">💳</span>
-              <span className="font-bold text-gray-900">ชำระเงิน  Payment</span>
-            </div>
-            <div className="flex">
-              <div className="flex-1 pr-3 border-r border-gray-200 leading-relaxed">
-                <div className="text-gray-700">
-                  วันที่ชำระ: <span className="text-gray-900">{issueDate}</span>
-                </div>
-                <div className="text-gray-700">
-                  วิธีชำระ: <span className="text-gray-900">โอนผ่านธนาคาร</span>
-                </div>
-                <div className="text-gray-700">
-                  จำนวนเงินรวม: <span className="font-bold text-gray-900">{fmt2(grandTotal)} บาท</span>
-                </div>
-              </div>
-              <div className="flex-1 pl-3 leading-relaxed">
-                <div className="text-gray-900">{BANK.name}</div>
-                <div className="text-gray-700">เลขที่บัญชี <span className="font-mono font-semibold">{BANK.accountNumber}</span></div>
-                <div className="text-gray-700">ชื่อบัญชี {BANK.accountName}</div>
-              </div>
-            </div>
-
-            {/* Divider */}
-            <div className="border-b border-gray-200 my-2"></div>
-
-            {/* ─── Section: หมายเหตุ (Notes) — borderless paragraph ─── */}
-            <div className="flex items-center gap-1.5 mt-1 mb-1">
-              <span className="text-gray-700">📝</span>
-              <span className="font-bold text-gray-900">หมายเหตุ  Notes</span>
-            </div>
-            <div className="text-gray-700 leading-relaxed">
-              *ใบเสร็จรับเงินฉบับนี้จะสมบูรณ์ เมื่อได้รับเงินเรียบร้อยแล้ว
-            </div>
-
-            {/* Divider */}
-            <div className="border-b border-gray-200 my-2"></div>
-
-            {/* ─── Section: รับรอง (Authorisation) — QR + 4 tiny thin-line sigs ─── */}
-            <div className="flex items-center gap-1.5 mt-1 mb-1">
-              <span className="text-gray-700">✍</span>
-              <span className="font-bold text-gray-900">รับรอง  Authorisation</span>
-            </div>
-            <div className="flex items-end gap-3 mt-1">
-              {/* QR — small, no border around the label */}
-              <div className="text-center" style={{ width: "22mm" }}>
-                <div
-                  className="mx-auto bg-gray-50 border border-gray-300 flex items-center justify-center"
-                  style={{ width: "20mm", height: "20mm" }}
-                >
-                  <span className="text-[8px] text-gray-400 px-1 text-center leading-tight">
-                    QR<br/>PromptPay
-                  </span>
-                </div>
-                <div className="text-[8px] text-gray-500 mt-0.5">ชำระสะดวก</div>
-              </div>
-              {/* 4 mini signature boxes — single thin gray line at bottom */}
-              <div className="flex-1 grid grid-cols-4 gap-2 text-[10px]">
-                <div className="text-center">
-                  <div className="flex items-center justify-center" style={{ height: "12mm" }}>
-                    <Image
-                      src="/legacy/pcs/assets/images/theme/sin-wandee.jpg"
-                      alt="ลายมือชื่อ"
-                      width={70}
-                      height={28}
-                      unoptimized
-                      style={{ width: "16mm", height: "auto", display: "inline-block" }}
-                    />
+        {/* ── SUMMARY + PAYMENT + REMARK + CERTIFIED (last page only) ─────── */}
+        {pageNumber === pageCount && (
+          <div>
+            {/* SUMMARY — 2 columns: amountInfo LEFT · big amount box RIGHT */}
+            <div style={{ display: "flex", gap: "6mm", marginBottom: "3mm" }}>
+              {/* LEFT: สรุป + Thai words */}
+              <div id="amountInfo" style={{ flex: 1 }}>
+                <div style={{ display: "flex", gap: "4mm" }}>
+                  <div>
+                    <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827" }}>สรุป</p>
                   </div>
-                  <div className="border-b border-gray-700 mx-1"></div>
-                  <div className="mt-0.5 text-gray-900">ผู้ออกเอกสาร</div>
-                  <div className="text-[9px] text-gray-500">{rDateCreate}</div>
-                </div>
-                <div className="text-center">
-                  <div className="flex items-center justify-center" style={{ height: "12mm" }}>
-                    <Image
-                      src="/legacy/pcs/assets/images/theme/sin-wandee.jpg"
-                      alt="ลายมือชื่อ"
-                      width={70}
-                      height={28}
-                      unoptimized
-                      style={{ width: "16mm", height: "auto", display: "inline-block" }}
-                    />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>มูลค่าไม่มีหรือยกเว้นภาษี</p>
+                      <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{fmt2(preTax)} บาท</p>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", borderTop: "0.5px solid #e5e7eb", paddingTop: "2px" }}>
+                      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>จำนวนเงินทั้งสิ้น</p>
+                      <p style={{ margin: 0, fontSize: "10px", color: "#111827", maxWidth: "55mm", textAlign: "right" }}>
+                        {grandTotalThaiWord}บาทถ้วน
+                      </p>
+                    </div>
                   </div>
-                  <div className="border-b border-gray-700 mx-1"></div>
-                  <div className="mt-0.5 text-gray-900">ผู้อนุมัติเอกสาร</div>
-                  <div className="text-[9px] text-gray-500">{rDateCreate}</div>
                 </div>
-                <div className="text-center">
-                  <div className="flex items-center justify-center" style={{ height: "12mm" }}>
-                    <Image
-                      src="/legacy/pcs/assets/images/theme/stamp.png"
-                      alt="ตราประทับ"
-                      width={48}
-                      height={48}
-                      unoptimized
-                      style={{ width: "12mm", height: "auto", display: "inline-block" }}
-                    />
+              </div>
+
+              {/* RIGHT: big amount box + WHT rows */}
+              <div id="summary">
+                <div>
+                  {/* Big orange-tint amount box */}
+                  <div style={{ background: tintBg, borderRadius: "2px", padding: "4px 8px", marginBottom: "2px", textAlign: "center" }}>
+                    <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>จำนวนเงินทั้งสิ้น</p>
+                    <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "bold", color: "#111827" }}>
+                      {fmt2(grandTotal)} <span style={{ fontSize: "12px" }}>บาท</span>
+                    </h3>
                   </div>
-                  <div className="border-b border-gray-700 mx-1"></div>
-                  <div className="mt-0.5 text-gray-900">ตราประทับ</div>
-                  <div className="text-[9px] text-gray-500">(ผู้ขาย)</div>
-                </div>
-                <div className="text-center">
-                  <div style={{ height: "12mm" }}></div>
-                  <div className="border-b border-gray-700 mx-1"></div>
-                  <div className="mt-0.5 text-gray-900">ผู้รับ</div>
-                  <div className="text-[9px] text-gray-500">(ลูกค้า)</div>
+                  {/* WHT + net rows below the box */}
+                  <div className="withholding">
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "1px" }}>
+                      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280", textAlign: "right" }}>
+                        จำนวนเงินที่ถูกหัก ณ ที่จ่าย
+                      </p>
+                      <p style={{ margin: 0, fontSize: "10px", color: "#111827", minWidth: "22mm", textAlign: "right" }}>
+                        {fmt2(showWht ? whtAmount : 0)} บาท
+                      </p>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280", textAlign: "right" }}>
+                        จำนวนเงินที่ชำระ
+                      </p>
+                      <p style={{ margin: 0, fontSize: "10px", color: "#111827", minWidth: "22mm", textAlign: "right" }}>
+                        {fmt2(netPaid)} บาท
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Quietly carry the per-staff stamp info that v1 had (issuer/approver
-                names + page number). Tiny, far-bottom — does not crowd the layout. */}
-            <div className="flex justify-between items-center mt-3 text-[9px] text-gray-400">
+            {/* PAYMENT — 2 columns inside paymentGroupShort */}
+            <div style={{ display: "flex", gap: "6mm", marginBottom: "3mm", minHeight: "20mm" }}>
+              <div id="payment" style={{ flex: 1 }}>
+                <div id="paymentGroupShort">
+                  <div className="paymentGroup" style={{ display: "flex", gap: "4mm" }}>
+                    {/* Heading */}
+                    <div>
+                      <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827" }}>ชำระเงิน</p>
+                    </div>
+                    <div className="contentPayment" style={{ flex: 1, display: "flex", gap: "6mm" }}>
+                      {/* LEFT: date + total */}
+                      <div className="total" style={{ minWidth: "40mm" }}>
+                        <div style={{ display: "flex", gap: "3px", marginBottom: "1px" }}>
+                          <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>วันที่ชำระ :</p>
+                          <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{issueDate}</p>
+                        </div>
+                        <div style={{ display: "flex", gap: "3px" }}>
+                          <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>จำนวนเงินรวม :</p>
+                          <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{fmt2(grandTotal)} บาท</p>
+                        </div>
+                      </div>
+                      {/* RIGHT: bank + WHT */}
+                      <div className="detail" style={{ flex: 1 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "1px" }}>
+                          <div style={{ display: "flex", gap: "4px", alignItems: "flex-start" }}>
+                            <div className="bankNumber">
+                              <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>ธ.กสิกรไทย</p>
+                              <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#111827" }}>
+                                ออมทรัพย์ {BANK.accountNumber}
+                              </p>
+                              <p style={{ margin: 0, fontSize: "10px", color: "#6b7280" }}>{BANK.accountName}</p>
+                            </div>
+                          </div>
+                          <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{fmt2(netPaid)} บาท</p>
+                        </div>
+                        {/* WHT row */}
+                        {showWht && (
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <div>
+                              <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>ภาษีหัก ณ ที่จ่าย</p>
+                            </div>
+                            <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{fmt2(whtAmount)} บาท</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* REMARK */}
+            <div style={{ display: "flex", gap: "4mm", marginBottom: "3mm" }}>
+              <div id="remark">
+                <div style={{ display: "flex", gap: "4mm" }}>
+                  <div>
+                    <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827" }}>หมายเหตุ</p>
+                  </div>
+                  <div>
+                    <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>
+                      *ใบเสร็จรับเงินฉบับนี้จะสมบูรณ์ เมื่อได้รับเงินเรียบร้อยแล้ว
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* CERTIFIED — 6 boxes in one row */}
+            <div style={{ display: "flex", gap: "4mm" }}>
+              <div id="certified" style={{ flex: 1 }}>
+                <div style={{ display: "flex", gap: "2mm" }}>
+
+                  {/* Heading */}
+                  <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", minWidth: "14mm" }}>
+                    <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827" }}>รับรอง</p>
+                  </div>
+
+                  {/* Box 1: QR */}
+                  <div className="certifiedBox qrCode" style={{ flex: 1, textAlign: "center" }}>
+                    <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>
+                      สแกนเพื่อเปิดด้วยเว็บไซต์
+                    </p>
+                    <div className="image" style={{ display: "flex", justifyContent: "center", height: "18mm", alignItems: "center" }}>
+                      <div style={{ width: "18mm", height: "18mm", background: "#f9fafb", border: "0.5px solid #d1d5db", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <span style={{ fontSize: "7px", color: "#9ca3af", textAlign: "center" }}>QR</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Box 2: ผู้ออกเอกสาร (ผู้ขาย) */}
+                  <div className="certifiedBox userCreate" style={{ flex: 1, textAlign: "center" }}>
+                    <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ผู้ออกเอกสาร (ผู้ขาย)</p>
+                    <div className="image" style={{ display: "flex", justifyContent: "center", height: "18mm", alignItems: "flex-end" }}>
+                      <Image
+                        src="/legacy/pcs/assets/images/theme/sin-wandee.jpg"
+                        alt="ลายมือชื่อ"
+                        width={70}
+                        height={28}
+                        unoptimized
+                        style={{ width: "20mm", height: "auto" }}
+                      />
+                    </div>
+                    <div className="detail" style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
+                      <p style={{ margin: 0, fontSize: "9px", fontWeight: "bold", color: "#111827" }}>{documentIssuer}</p>
+                      <p style={{ margin: 0, fontSize: "8px", color: "#6b7280" }}>{rDateCreate}</p>
+                    </div>
+                  </div>
+
+                  {/* Box 3: ผู้อนุมัติเอกสาร (ผู้ขาย) */}
+                  <div className="certifiedBox userApprove" style={{ flex: 1, textAlign: "center" }}>
+                    <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ผู้อนุมัติเอกสาร (ผู้ขาย)</p>
+                    <div className="image" style={{ display: "flex", justifyContent: "center", height: "18mm", alignItems: "flex-end" }}>
+                      <Image
+                        src="/legacy/pcs/assets/images/theme/sin-wandee.jpg"
+                        alt="ลายมือชื่อ"
+                        width={70}
+                        height={28}
+                        unoptimized
+                        style={{ width: "20mm", height: "auto" }}
+                      />
+                    </div>
+                    <div className="detail" style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
+                      <p style={{ margin: 0, fontSize: "9px", fontWeight: "bold", color: "#111827" }}>
+                        {documentApprover || documentIssuer}
+                      </p>
+                      <p style={{ margin: 0, fontSize: "8px", color: "#6b7280" }}>{rDateCreate}</p>
+                    </div>
+                  </div>
+
+                  {/* Box 4: ตราประทับ (ผู้ขาย) */}
+                  <div className="certifiedBox merchantStamp" style={{ flex: 1, textAlign: "center" }}>
+                    <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ตราประทับ (ผู้ขาย)</p>
+                    <div className="image" style={{ display: "flex", justifyContent: "center", height: "18mm", alignItems: "center" }}>
+                      <Image
+                        src="/images/pacred-stamp.png"
+                        alt="ตราประทับ"
+                        width={48}
+                        height={48}
+                        unoptimized
+                        style={{ width: "14mm", height: "auto" }}
+                      />
+                    </div>
+                    <div style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
+                      <p style={{ margin: 0, fontSize: "8px", color: "#6b7280" }}>&nbsp;</p>
+                    </div>
+                  </div>
+
+                  {/* Box 5: ผู้รับเอกสาร (ลูกค้า) */}
+                  <div className="certifiedBox received" style={{ flex: 1, textAlign: "center" }}>
+                    <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ผู้รับเอกสาร (ลูกค้า)</p>
+                    <div className="emptyBoxRemainingSignature" style={{ height: "18mm", border: "0.5px solid #d1d5db" }}></div>
+                    <div style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
+                      <p style={{ margin: 0, fontSize: "9px", fontWeight: "bold", color: "#111827" }}>{customerName}</p>
+                    </div>
+                  </div>
+
+                  {/* Box 6: ตราประทับ (ลูกค้า) */}
+                  <div className="certifiedBox stamp" style={{ flex: 1, textAlign: "center" }}>
+                    <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ตราประทับ (ลูกค้า)</p>
+                    <div className="stampBox" style={{ height: "18mm", border: "0.5px solid #d1d5db" }}></div>
+                    <div style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
+                      <p style={{ margin: 0, fontSize: "8px", color: "#6b7280" }}>&nbsp;</p>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            {/* Page stamp (tiny) */}
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4mm", fontSize: "8px", color: "#9ca3af" }}>
               <div>
-                ผู้ออก: <span className="text-gray-600">{documentIssuer}</span>
+                ผู้ออก: <span style={{ color: "#6b7280" }}>{documentIssuer}</span>
                 {documentApprover && (
-                  <> · ผู้อนุมัติ: <span className="text-gray-600">{documentApprover}</span></>
+                  <> · ผู้อนุมัติ: <span style={{ color: "#6b7280" }}>{documentApprover}</span></>
                 )}
               </div>
               <div>หน้า {pageNumber} / {pageCount}</div>
             </div>
           </div>
         )}
+
       </div>
     </div>
   );
@@ -893,25 +1039,30 @@ export default async function ForwarderInvoicePrintPage({
   return (
     <>
       {/*
-        Print stylesheet — Tailwind @media print classes plus a few custom
-        rules. A4 portrait, 1.5cm margins, hide admin chrome, force a page
-        break between the ต้นฉบับ side and the สำเนา side.
+        Print stylesheet — A4 portrait · 1.5cm margins · two-page output
+        (ต้นฉบับ + สำเนา). Peak uses a single paperTransaction wrapper per page;
+        we replicate that with page-break-after between ReceiptPage instances.
+        flex column on .subpage ensures the spacer pushes content to the bottom.
       */}
       <style>{`
         @media print {
           @page { size: A4 portrait; margin: 1.5cm; }
           body { background: white !important; }
           .no-print { display: none !important; }
+          #paperTransaction {
+            box-shadow: none !important;
+            border: none !important;
+            margin: 0 !important;
+            page-break-after: always;
+          }
+          #paperTransaction:last-child { page-break-after: auto; }
           .receipt-page {
             box-shadow: none !important;
             border: none !important;
             margin: 0 !important;
             padding: 0 !important;
             max-width: 100% !important;
-            page-break-after: always;
-            page-break-inside: auto;
           }
-          .receipt-page:last-child { page-break-after: auto; }
         }
         @media screen {
           .receipt-page {
@@ -920,6 +1071,11 @@ export default async function ForwarderInvoicePrintPage({
             border: 1px solid #e5e7eb;
             border-radius: 4px;
           }
+        }
+        /* ensure flex column inside subpage so spacer works on screen too */
+        .subpage {
+          display: flex;
+          flex-direction: column;
         }
       `}</style>
 
