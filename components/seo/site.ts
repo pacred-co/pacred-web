@@ -95,10 +95,11 @@ export const ADDRESSES = {
     province:      "สมุทรสาคร",
     postcode:      "74130",
     full:          "48/3 หมู่ 12 ตำบลอ้อมน้อย อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74130",
-    lat:           13.710939,
-    lng:           100.324049,
-    mapUrl:        "https://maps.app.goo.gl/iAfY8MNXrW1Wa9iE8",
-    mapEmbedUrl:   "https://www.google.com/maps/embed?pb=!1m16!1m12!1m3!1d410.7037162530852!2d100.32392984361519!3d13.710919092991068!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!2m1!1zNDgvMyDguKvguKHguLnguYggMTIg4LiV4Liz4Lia4Lil4Lit4LmJ4Lit4Lih4LiZ4LmJ4Lit4LiiIOC4reC4s-C5gOC4oOC4reC4geC4o-C4sOC4l-C4uOC5iOC4oeC5geC4muC4mSDguIjguLHguIfguKvguKfguLHguJTguKrguKHguLjguJfguKPguKrguLLguITguKMgNzQxMzAg4LiE4LmI4Liw!5e1!3m2!1sth!2sth!4v1779612609948!5m2!1sth!2sth",
+    lat:           13.71125,
+    lng:           100.3240556,
+    // Precise warehouse pin (ปอน 2026-06-08 "แก้ google map โกดัง 118 ให้หมด").
+    mapUrl:        "https://www.google.com/maps/place/13%C2%B042'40.5%22N+100%C2%B019'26.6%22E/@13.7112396,100.3237324,211m/data=!3m1!1e3!4m4!3m3!8m2!3d13.71125!4d100.3240556?entry=ttu&g_ep=EgoyMDI2MDYwMS4wIKXMDSoASAFQAw%3D%3D",
+    mapEmbedUrl:   "https://www.google.com/maps?q=13.71125,100.3240556&hl=th&z=17&output=embed",
   },
 } as const;
 

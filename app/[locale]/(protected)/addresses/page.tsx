@@ -9,6 +9,7 @@ import { DeleteAddressButton } from "./delete-address-button";
 import { SetMainAddressButton } from "./set-main-address-button";
 import { AddressBook, type Warehouse } from "./address-book";
 import { AddressFlash } from "./address-flash";
+import { Link } from "@/i18n/navigation";
 
 /**
  * Customer Thai delivery-address screen — ported from the legacy PCS Cargo
@@ -213,6 +214,18 @@ export default async function AddressesPage({
         {/* Success/error feedback for the add/edit/delete/set-main actions
             (the faithful stand-in for the legacy SweetAlert popups). */}
         <AddressFlash saved={saved === "1"} error={error} />
+
+        {/* /map (legacy address.php Google-Maps pin) — reachable utility link
+            (§0d · was orphan). The legacy address-add pin-drop was dropped in
+            the port; this exposes the standalone map tool for finding coords. */}
+        <div className="mb-3">
+          <Link
+            href="/map"
+            className="inline-flex items-center gap-1.5 text-[13px] text-primary-600 hover:text-primary-700 hover:underline"
+          >
+            📍 เปิดแผนที่ค้นหาพิกัด
+          </Link>
+        </div>
 
         {/* Tab switcher: "ที่อยู่จัดส่งในไทย" (the list below, passed as
             children) ↔ "ที่อยู่โกดังจีน" (the China warehouse table). The

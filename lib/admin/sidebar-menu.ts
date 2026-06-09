@@ -297,6 +297,33 @@ const blockForwarderImport: MenuItem = {
   badge: "forwarderArrived",
 };
 
+/** 2026-06-08 (เดฟ · freight revenue unlock) — the inbound Freight RFQ
+ *  leads-inbox (/admin/freight/leads). The public /freight-quote wizard writes
+ *  RFQ leads to the singular `freight_quote` table; this is the staff surface
+ *  that views/triages/converts them (was orphaned — only a CRM head-count proxy
+ *  read them). Single leaf · sales-funnel ownership (super/ops/sales_admin +
+ *  freight sales). Phase 1 — the page + actions gate RBAC themselves. */
+const itemFreightLeads: MenuItem = {
+  labelKey: "accFreight.leads",
+  href: "/admin/freight/leads",
+  icon: "Inbox",
+};
+
+/** 2026-06-09 (เดฟ · freight net-margin unlock) — the China-side freight COST
+ *  table maintenance (/admin/freight/rates → migration 0145 `tb_freight_rate`).
+ *  The rate engine (lib/freight/rate-engine.ts + lib/freight/rate-lookup.ts)
+ *  reads this admin-maintained cost so EXW/CFR quotes show TRUE net margin
+ *  instead of only "กำไรขั้นต้น" (gross). The table was empty on prod because
+ *  there was no write-path — this leaf + actions/admin/freight-rates.ts is it.
+ *  Single leaf · super/ops write · accounting read (the page + actions gate
+ *  RBAC themselves; the table RLS mirrors super/ops write, super/ops/accounting
+ *  read). */
+const itemFreightCostRates: MenuItem = {
+  labelKey: "accFreight.costRates",
+  href: "/admin/freight/rates",
+  icon: "HandCoins",
+};
+
 /** legacy pcs-admin menu L162-167 — "อัปเดตฝากนำเข้า" (top-level group)
  *  Combines BOTH Wave 17 P1 streams into the single legacy parent:
  *   - P1-1+2 — MOMO + CargoCenter (manualUpdate sub-page only · Phase B
@@ -452,6 +479,11 @@ const blockSettingsCargo: MenuItem = {
         // orphan (no inbound link · URL-only). Page gates super/ops/accounting/
         // sales_admin — placed under super's Settings→tools toolbox.
         { labelKey: "settingsCargo.globalSearch", href: "/admin/search",                icon: "Search" },
+        // 2026-06-09 (goldmine activation) — China product-category / search-demand
+        // lookup over tb_api_china_hs (~77k rows: keyword + 1688/taobao/tmall links
+        // + resolved category names). Was a pure dead table — nothing read it.
+        // READ-ONLY reference tool. Page gates super/ops/sales_admin/sales.
+        { labelKey: "settingsCargo.chinaCategory", href: "/admin/tools/china-category", icon: "Boxes" },
         { labelKey: "settingsCargo.orgEmail",    href: "/admin/organization-email",    icon: "MessageCircle" },
         { labelKey: "settingsCargo.orgChannels", href: "/admin/organization-channels", icon: "Smartphone" },
         // 2026-06-04 (reachability audit §0d) — org_contacts CRUD (V-G5 · feeds
@@ -657,6 +689,17 @@ const blockExtKpi: MenuItem = {
 const blockExtCockpit: MenuItem = {
   labelKey: "extension.cockpit", href: "/admin/reports/cockpit", icon: "Gauge", phase: 2,
 };
+// 2026-06-09 (เดฟ · marketing/CRM North-Star) — lead-source attribution
+// dashboard (แหล่งที่มาของลูกค้า · which acquisition channel drives leads →
+// orders → revenue, all from LIVE tb_users.userregisterwith/userrecom ⨝
+// tb_forwarder). The data was captured but no page surfaced it → marketing
+// was blind. Lives in the Extension drawer next to the exec cockpit (same
+// exec/marketing-analytics family). phase: 2 → super sees it in the sidebar;
+// finance roles also reach it via the reports-hub "BI / ผู้บริหาร" menubar.
+// The page gates RBAC to super/accounting itself.
+const blockExtLeadSource: MenuItem = {
+  labelKey: "extension.leadSource", href: "/admin/reports/lead-source", icon: "Megaphone", phase: 2,
+};
 const blockExtContactMessages: MenuItem = {
   labelKey: "extension.contactMessages", href: "/admin/contact-messages",
   icon: "MessageSquare", badge: "contactMessages", phase: 2,
@@ -769,6 +812,10 @@ const menuSuper: MenuSection[] = [
       itemWalletAll,
       itemPurchasingAll,
       blockForwarderImport,
+      // 2026-06-08 (เดฟ · freight revenue unlock) — inbound Freight RFQ inbox.
+      itemFreightLeads,
+      // 2026-06-09 (เดฟ · freight net-margin unlock) — China freight cost rates.
+      itemFreightCostRates,
       blockApiForwarderUpdate,
       // 2026-05-21 ภูม flagged — /admin/drivers had no direct super sidebar
       // entry · only reachable via the /admin/forwarders top-menubar
@@ -803,6 +850,7 @@ const menuSuper: MenuSection[] = [
   extensionSection([
     blockExtKpi,
     blockExtCockpit,
+    blockExtLeadSource,
     blockExtWorkboard,
     blockExtInbox,
     blockExtLeads,
@@ -852,6 +900,8 @@ const menuManager: MenuSection[] = [
       itemWalletAll,
       itemPurchasingAll,
       blockForwarderImport,
+      // 2026-06-08 (เดฟ · freight revenue unlock) — inbound Freight RFQ inbox.
+      itemFreightLeads,
       blockApiForwarderUpdate,
       { labelKey: "forwarder.assignDriver", href: "/admin/drivers", icon: "Truck", badge: "driverItems" },
       { labelKey: "forwarder.driverWork", href: "/admin/drivers/work", icon: "Smartphone" },
@@ -872,6 +922,7 @@ const menuManager: MenuSection[] = [
   extensionSection([
     blockExtKpi,
     blockExtCockpit,
+    blockExtLeadSource,
     blockExtWorkboard,
     blockExtInbox,
     blockExtLeads,
@@ -914,6 +965,10 @@ const menuOps: MenuSection[] = [
       itemWalletAll,
       itemPurchasingAll,
       blockForwarderImport,
+      // 2026-06-08 (เดฟ · freight revenue unlock) — inbound Freight RFQ inbox.
+      itemFreightLeads,
+      // 2026-06-09 (เดฟ · freight net-margin unlock) — China freight cost rates.
+      itemFreightCostRates,
       blockApiForwarderUpdate,
       blockPayment,
       // Phase 2 — driver-runs sales-only side not yet live.
@@ -934,13 +989,23 @@ const menuAccounting: MenuSection[] = [
     // Section merged 2026-05-20 ค่ำ (see menuSuper comment). Second
     // batch (same date) consolidated wallet + report to single leaves.
     header: "Cargo & Freight",
-    items: [blockWithdrawalList, itemWalletAll, blockPayment, itemReportsAll, blockAccounting],
+    items: [
+      blockWithdrawalList,
+      itemWalletAll,
+      blockPayment,
+      itemReportsAll,
+      blockAccounting,
+      // 2026-06-09 (เดฟ · freight net-margin unlock) — accounting has read access
+      // to the China freight cost rates (RLS: super/ops/accounting read · the page
+      // disables write controls for non-super/ops roles).
+      itemFreightCostRates,
+    ],
   },
   { header: "Settings", items: [blockSettingsCargo] },
   learningSection,
   // 2026-06-01 (เดฟ · Wave C BI) — accounting gets the exec cockpit (finance
   // headline: MTD revenue/profit · AR · wallet liability). phase:2 in-sidebar.
-  extensionSection([blockExtCockpit, blockExtJuristic, blockExtIncidents]),
+  extensionSection([blockExtCockpit, blockExtLeadSource, blockExtJuristic, blockExtIncidents]),
 ];
 
 /**
@@ -1235,6 +1300,9 @@ const menuFreightSalesManager: MenuSection[] = [
   {
     header: "Freight",
     items: [
+      // 2026-06-08 (เดฟ · freight revenue unlock) — inbound RFQ leads inbox is
+      // the freight sales team's primary acquisition surface.
+      itemFreightLeads,
       { labelKey: "manageCustomers.freightAll", href: "/admin/customers?segment=freight", icon: "Users" },
       { labelKey: "accFreight.title",           href: "/admin/accounting/freight",        icon: "Landmark" },
       { ...itemReportsAll, labelKey: "report.titleSales" },
@@ -1252,6 +1320,8 @@ const menuFreightSales: MenuSection[] = [
   {
     header: "Freight",
     items: [
+      // 2026-06-08 (เดฟ · freight revenue unlock) — inbound RFQ leads inbox.
+      itemFreightLeads,
       { labelKey: "manageCustomers.freightAll", href: "/admin/customers?segment=freight", icon: "Users" },
     ],
   },

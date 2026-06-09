@@ -5,7 +5,9 @@
 
 ---
 
-## 🔢 NEXT FREE NUMBER = **0151**
+## 🔢 NEXT FREE NUMBER = **0157**
+
+> ✅ **2026-06-08 (เดฟ · round 3 build batch): 0151 (freight_quote triage) · 0152 (shop_yuan_tax_invoice + `tax_invoice.shop_yuan_enabled` flag = DEFAULT OFF / dormant) · 0154 (customer_tag) · 0155 (customer_note) · 0156 (tb_forwarder.courier_tracking_url) — ALL APPLIED TO PROD** (dry-run → `--apply` via `scripts/apply-migration-dryrun.mjs` + `apply-migration-generic.mjs`). 0153 NOT used (shop+yuan share 0152's store via `service_type`). ⚠️ **0152 ships DORMANT** — the ใบกำกับ/ใบขน issuance for ฝากสั่ง/ฝากโอน stays OFF until the owner flips `tax_invoice.shop_yuan_enabled` after (1) a money-loop browser test on a TEST order + (2) accounting sign-off on the ใบขน VAT base (`lib/tax/tax-doc-mode.ts` L187).
 
 > ✅ **2026-06-08 (เดฟ · integration round): migrations 0148 + 0149 + 0150 are ALL APPLIED TO PROD** (dry-run → `--apply` via `scripts/apply-0148-rls-dryrun.mjs` · `scripts/apply-migration-0149.mjs` · `scripts/apply-migration-0150.mjs` · COMMITTED 0148 407ms / 0149 359ms / 0150 380ms · verified post-state). Supersedes the "⏳ NOT applied" markers in the notes/table below for these three.
 

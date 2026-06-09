@@ -1,4 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  isShopOrderAutoExpireEligible,
+  type ShopOrderExpireHeader,
+} from "./auto-expire-eligibility";
+
+export { isShopOrderAutoExpireEligible, type ShopOrderExpireHeader };
 
 /**
  * Auto-expire an overdue ฝากสั่งซื้อ order on open — faithful port of legacy
@@ -12,20 +18,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *   re-quote). Recoverable — the /edit page lets staff re-quote a 6 back to 2.
  * - The Date.now()/new Date() calls live HERE (a plain lib fn), NOT in the
  *   page render, to avoid the `react-hooks/purity` lint (AGENTS.md learning).
+ * - The pure eligibility check is `isShopOrderAutoExpireEligible` (unit-tested).
  *
  * Returns true if it flipped (the caller should then treat status as '6').
  */
-export async function autoExpireOverdueShopOrder(header: {
-  id: number;
-  hstatus: string | null;
-  hdatepayment: string | null;
-}): Promise<boolean> {
-  if (header.hstatus !== "2") return false;
-  const raw = header.hdatepayment;
-  if (!raw) return false;
-
-  const due = new Date(raw).getTime();
-  if (!Number.isFinite(due) || due >= Date.now()) return false;
+export async function autoExpireOverdueShopOrder(
+  header: ShopOrderExpireHeader,
+): Promise<boolean> {
+  if (!isShopOrderAutoExpireEligible(header)) return false;
 
   const admin = createAdminClient();
   const { error } = await admin

@@ -7,10 +7,15 @@ import {
   getCrmFunnel,
   getCustomer360,
 } from "@/actions/admin/crm";
+import { getTags } from "@/actions/admin/customer-tags";
+import { getCustomerActivity } from "@/actions/admin/customer-activity";
 // Thread reader lives in the existing line-inbox action (we build ON TOP of it).
 import { getLineCustomerThread } from "@/actions/admin/line-inbox";
 import { CRM_CHANNELS, type CrmChannel } from "@/lib/admin/crm-types";
 import type { LineMessage } from "@/lib/admin/line-inbox-types";
+import type { ActivityEntry } from "@/actions/admin/customer-activity-types";
+import { TagChips } from "@/components/admin/tag-chips";
+import { CustomerActivityTimeline } from "@/components/admin/customer-activity-timeline";
 import { RepRouting } from "./rep-routing";
 import { RepFilter } from "./rep-filter";
 import {
@@ -101,6 +106,19 @@ export default async function AdminCrmPage({
   const messages = threadData?.messages ?? [];
   const selectedConv = conversations.find((c) => c.id === selectedId) ?? null;
   const c360 = c360Res?.ok ? (c360Res.data ?? null) : null;
+
+  // CRM depth (2026-06-08) — tags + activity timeline for the linked customer.
+  // Depends on the resolved userid, so it runs after the initial Promise.all.
+  let custTags: string[] = [];
+  let custActivity: ActivityEntry[] = [];
+  if (c360?.linked && c360.userid) {
+    const [tagsRes, actRes] = await Promise.all([
+      getTags(c360.userid),
+      getCustomerActivity(c360.userid),
+    ]);
+    custTags = tagsRes.ok ? (tagsRes.data ?? []).map((t) => t.tag) : [];
+    custActivity = actRes.ok ? (actRes.data ?? []) : [];
+  }
 
   return (
     <main className="p-4 sm:p-6 lg:p-8 space-y-5">
@@ -198,6 +216,8 @@ export default async function AdminCrmPage({
                     reps={reps}
                     repGateNote={repGateNote}
                     canRoute={canRoute}
+                    tags={custTags}
+                    activity={custActivity}
                   />
                 ) : (
                   <div className="rounded-2xl border border-dashed border-border bg-white/60 dark:bg-surface/60 p-6 text-center text-xs text-muted">
@@ -459,12 +479,16 @@ function Customer360Panel({
   reps,
   repGateNote,
   canRoute,
+  tags,
+  activity,
 }: {
   conversationId: string;
   c360: import("@/lib/admin/crm-types").Customer360 | null;
   reps: import("@/lib/admin/crm-types").CrmRep[];
   repGateNote: string | null;
   canRoute: boolean;
+  tags: string[];
+  activity: ActivityEntry[];
 }) {
   if (!c360 || !c360.linked || !c360.userid) {
     return (
@@ -554,6 +578,18 @@ function Customer360Panel({
           gateNote={repGateNote}
           canEdit={canRoute}
         />
+      </div>
+
+      {/* Tags (CRM depth · 2026-06-08) */}
+      <div className="pt-3 border-t border-border space-y-1.5">
+        <p className="text-[11px] font-medium text-muted">แท็กลูกค้า</p>
+        <TagChips userid={c360.userid} initialTags={tags} />
+      </div>
+
+      {/* Activity timeline (CRM depth · 2026-06-08) */}
+      <div className="pt-3 border-t border-border space-y-1.5">
+        <p className="text-[11px] font-medium text-muted">กิจกรรม / โน้ต</p>
+        <CustomerActivityTimeline userid={c360.userid} initialEntries={activity} />
       </div>
 
       {/* Deep links */}

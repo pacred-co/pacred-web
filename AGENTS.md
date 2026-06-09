@@ -229,7 +229,7 @@ The `.claude/skills/` directory contains 16 skills (see [`.claude/skills/INDEX.m
 - `copyist-unlimited` — clone templates at scale (N variants)
 - `legacy-php-sweep` — port from `/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/public_html/` (canonical 2026-05-24 extract, ~25GB) to Pacred Next.js
 - `qa-flow-simulator` — agent simulates a user journey end-to-end, asserts the real outcome (not just a 200)
-- `branch-integrate-loop` — consolidate teammate branches into `dave` safely (integrate → verify → distribute)
+- `branch-integrate-loop` — consolidate teammate branches into `dave-pacred` safely (integrate → verify → distribute)
 - `mobile-first-verify` — render a customer surface at 360/390px + assert it's mobile-clean before pushing
 - `legacy-fidelity-check` — audit a D1 port screen against its legacy PCS original before shipping (the owner's "copy 100% first" gate)
 - `landing-conversion-audit` — pre-flight a landing page for conversion + tracking + Quality-Score before ads point at it
@@ -258,16 +258,16 @@ Every time you learn something tricky — a Next 16 gotcha, a Vercel surprise, a
 - **One canonical home per fact — no duplication.** Information lives in exactly ONE file; everywhere else links to it. When you edit a doc and spot the same content duplicated elsewhere, delete the copy and leave a link. Dedup what you touch.
 - Detail in [`docs/conventions.md`](docs/conventions.md) §13.
 
-## 13. Worktree base is stale — resync to `dave` before trusting it
+## 13. Worktree base is stale — resync to `dave-pacred` before trusting it
 
-A `git worktree` (including the `.claude/worktrees/*` one a session or a spawned `isolation: "worktree"` agent runs in) is **cut from a point-in-time snapshot, and `origin/HEAD` points at `origin/main`** — the *held* production branch, which on this team lags the live integration branch `dave` by dozens of commits. Acting on a stale base re-derives fixes that already exist, fails task premises ("file X is missing" when X is on `dave`), and sets up merge conflicts.
+A `git worktree` (including the `.claude/worktrees/*` one a session or a spawned `isolation: "worktree"` agent runs in) is **cut from a point-in-time snapshot, and `origin/HEAD` points at `origin/main`** — the *held* production branch, which on this team lags the live integration branch `dave-pacred` by dozens of commits. Acting on a stale base re-derives fixes that already exist, fails task premises ("file X is missing" when X is on `dave-pacred`), and sets up merge conflicts.
 
 **Rule — at session start (this is §1's `git fetch` step) and in every spawn prompt for a worktree agent:**
 ```bash
-git fetch origin && git merge origin/dave --no-edit && git log --oneline -3
+git fetch origin && git merge origin/dave-pacred --no-edit && git log --oneline -3
 ```
-- If a task says "X is broken/missing on `dave`" but `ls`/`find` can't see X → **stop and reconcile branch ages**, don't "fix" a phantom. `git worktree list` → the `[dave]` line is the live checkout; inspect THAT, or `git show dave:<file>`.
-- When you spawn a worktree-isolation agent, the spawn prompt MUST tell it to resync to `dave` first — otherwise it surveys `origin/main` and reports a stale picture.
+- If a task says "X is broken/missing on `dave-pacred`" but `ls`/`find` can't see X → **stop and reconcile branch ages**, don't "fix" a phantom. `git show origin/dave-pacred:<file>` to inspect the live trunk.
+- When you spawn a worktree-isolation agent, the spawn prompt MUST tell it to resync to `dave-pacred` first — otherwise it surveys `origin/main` and reports a stale picture.
 
 Three separate sessions lost time to this; full detail + recovery steps in [`docs/learnings/ci-and-deploy-gotchas.md`](docs/learnings/ci-and-deploy-gotchas.md).
 

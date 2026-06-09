@@ -5,7 +5,8 @@ import { calPriceForwarderSumCompany } from "@/lib/forwarder/calc-company-total"
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { Search, Truck, Ship, Plane, Check, Home, Anchor, FileText, PackageCheck, Box, ChevronRight } from "lucide-react";
+import { Search, Truck, Ship, Plane, Check, Home, Anchor, FileText, PackageCheck, Box, ChevronRight, RefreshCw } from "lucide-react";
+import { relativeTimeTh, freshnessClass } from "@/lib/utils/relative-time";
 import { type ForwarderRow } from "../forwarder-row-view";
 
 // ── Pure helpers (server-safe duplicates of the ones in forwarder-row-view,
@@ -182,6 +183,64 @@ export default async function TrackingPage({
     promoid: null,
   }));
 
+  // ── Tracking freshness (U1-7) — "ข้อมูลอัปเดตล่าสุด" ─────────────
+  // #1 chat complaint: customers distrust whether tracking data is fresh.
+  // The LIVE freshness source is the MOMO isolated sync (the */5 cron at
+  // /api/cron/momo-sync writes momo_import_tracks.last_synced_at per
+  // tracking number, and one momo_sync_logs row per run).
+  //
+  // We surface the MAX last_synced_at across THIS customer's tracking
+  // numbers (most relevant — "when did we last hear about YOUR parcels").
+  // Fallback: the global last successful MOMO sync run (momo_sync_logs),
+  // so we still show something honest when none of the customer's
+  // tracking numbers have a momo_import_tracks row yet. If both are empty
+  // the badge renders the static "อัปเดตทุก 5 นาที" cron note.
+  const trackingNos = Array.from(
+    new Set(
+      rows
+        .flatMap((r) => [r.ftrackingchn, r.ftrackingchn2])
+        .map((s) => (s ?? "").trim())
+        .filter((s) => s !== ""),
+    ),
+  ).slice(0, 1000); // cap the IN() list
+
+  let lastSyncedAt: string | null = null;
+  if (trackingNos.length > 0) {
+    const { data: freshRows, error: freshErr } = await admin
+      .from("momo_import_tracks")
+      .select("last_synced_at")
+      .in("momo_tracking_no", trackingNos)
+      .order("last_synced_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<{ last_synced_at: string | null }>();
+    if (freshErr) {
+      // Soft-fail — freshness is a decorative signal; never block the page.
+      console.error(
+        `[service-import/_tracking freshness] member=${memberCode} mode=${mode}`,
+        { code: freshErr.code, message: freshErr.message },
+      );
+    } else {
+      lastSyncedAt = freshRows?.last_synced_at ?? null;
+    }
+  }
+  if (!lastSyncedAt) {
+    // Global fallback — last successful MOMO sync run.
+    const { data: lastRun, error: lastRunErr } = await admin
+      .from("momo_sync_logs")
+      .select("created_at")
+      .eq("status", "success")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<{ created_at: string | null }>();
+    if (lastRunErr) {
+      console.error(`[service-import/_tracking freshness fallback]`, {
+        code: lastRunErr.code, message: lastRunErr.message,
+      });
+    } else {
+      lastSyncedAt = lastRun?.created_at ?? null;
+    }
+  }
+
   // Count rows per fstatus (1..7) — for the clickable step-chip badges.
   // Counts use ALL mode-scoped rows (before the ?step filter so the chip
   // numbers stay stable as the user clicks through filters).
@@ -298,6 +357,7 @@ export default async function TrackingPage({
               {t(`modeLabel.${mode}`)}
             </span>
             <span className="text-xs text-muted">{t("cabinetPrefix")} <span className="font-mono font-bold">{meta.prefix}</span></span>
+            <FreshnessBadge lastSyncedAt={lastSyncedAt} t={t} />
           </div>
           <ModeSwitcher current={mode} />
         </div>
@@ -427,6 +487,53 @@ export default async function TrackingPage({
         )}
       </main>
     </div>
+  );
+}
+
+/* ── Freshness badge (U1-7) ────────────────────────────────────────── */
+//
+// Shows "ข้อมูลอัปเดตล่าสุด: <relative time>" so customers can instantly
+// judge whether tracking data is fresh. Colour follows freshnessClass():
+//   fresh (<1h) → green · recent (<24h) → muted · stale (1-7d) → amber ·
+//   very-old (>7d) → red. When no timestamp is resolvable, falls back to
+//   the static cron cadence note ("อัปเดตทุก 5 นาที").
+
+const FRESHNESS_TONE: Record<string, string> = {
+  fresh:      "bg-emerald-50 text-emerald-700 border-emerald-200",
+  recent:     "bg-surface-alt text-muted border-border",
+  stale:      "bg-amber-50 text-amber-700 border-amber-200",
+  "very-old": "bg-red-50 text-red-700 border-red-200",
+  unknown:    "bg-surface-alt text-muted border-border",
+};
+
+function FreshnessBadge({
+  lastSyncedAt,
+  t,
+}: {
+  lastSyncedAt: string | null;
+  t: TFn;
+}) {
+  if (!lastSyncedAt) {
+    // No timestamp available — show the honest cron cadence note.
+    return (
+      <span
+        title={t("freshnessHint")}
+        className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-alt px-2.5 py-0.5 text-[11px] font-medium text-muted"
+      >
+        <RefreshCw className="h-3 w-3" />
+        {t("freshnessEvery5Min")}
+      </span>
+    );
+  }
+  const tone = FRESHNESS_TONE[freshnessClass(lastSyncedAt)] ?? FRESHNESS_TONE.unknown;
+  return (
+    <span
+      title={t("freshnessHint")}
+      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${tone}`}
+    >
+      <RefreshCw className="h-3 w-3" />
+      {t("freshnessLabel")} <span className="font-semibold notranslate">{relativeTimeTh(lastSyncedAt)}</span>
+    </span>
   );
 }
 

@@ -30,6 +30,8 @@ import {
 } from "lucide-react";
 import { BatchCountdown } from "./batch-countdown";
 import { BatchActions } from "./batch-actions";
+import { CourierUrlInput } from "./courier-url-input";
+import { TruckBookingCopyBox } from "./truck-booking-copy-box";
 
 export const dynamic = "force-dynamic";
 
@@ -94,6 +96,7 @@ type Forwarder = {
   fpallet:                  string | null;
   fnote:                    string | null;
   fphotoend:                string | null;
+  fcabinetnumber:           string | null;
   userid:                   string | null;
   faddressname:             string | null;
   faddresslastname:         string | null;
@@ -106,6 +109,7 @@ type Forwarder = {
   faddresstel2:             string | null;
   faddresslatitude:         number | null;
   faddresslongitude:        number | null;
+  courier_tracking_url:     string | null;
 };
 
 export default async function AdminDriverBatchDetailPage({
@@ -170,7 +174,7 @@ export default async function AdminDriverBatchDetailPage({
       .from("tb_forwarder")
       .select(
         "id, fidorco, fstatus, ftrackingchn, fshipby, famount, fweight, fvolume, " +
-        "fpallet, fnote, fphotoend, userid, " +
+        "fpallet, fnote, fphotoend, fcabinetnumber, userid, courier_tracking_url, " +
         "faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
         "faddressdistrict, faddressprovince, faddresszipcode, " +
         "faddresstel, faddresstel2, faddresslatitude, faddresslongitude",
@@ -279,6 +283,62 @@ export default async function AdminDriverBatchDetailPage({
 
   const fdstatus = (batch.fdstatus ?? "1") as FdStatus;
 
+  // ── จองรถ (external-truck) LINE-paste block (2026-06-08 gap analysis #3) ──
+  // Build ONE copyable text block from the batch's stops so ops can paste
+  // straight into the truck-vendor LINE chat. Per-stop fields: SHIPMENT
+  // (f-no list) · ตู้# · CBM · cartons · KG · POD (recipient) · delivery
+  // address · Google-maps link · phones.
+  const fmt2 = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const stopBlocks = stops.map((stop, idx) => {
+    const f = stop.forwarder;
+    const fNos = stop.items
+      .map(({ forwarder }) => forwarder.fidorco ?? `#${forwarder.id}`)
+      .join(", ");
+    const cabinets = Array.from(
+      new Set(stop.items.map(({ forwarder }) => (forwarder.fcabinetnumber ?? "").trim()).filter(Boolean)),
+    ).join(", ");
+    const recipient = `คุณ${f.faddressname ?? ""} ${f.faddresslastname ?? ""}`.trim();
+    const address = [
+      f.faddressno, f.faddresssubdistrict && `ต.${f.faddresssubdistrict}`,
+      f.faddressdistrict && `อ.${f.faddressdistrict}`,
+      f.faddressprovince && `จ.${f.faddressprovince}`, f.faddresszipcode,
+    ].filter(Boolean).join(" ");
+    const mapsUrl = (f.faddresslatitude && f.faddresslongitude)
+      ? `https://www.google.com/maps/search/${f.faddresslatitude},${f.faddresslongitude}`
+      : address
+        ? `https://www.google.com/maps/search/${encodeURIComponent(address)}`
+        : "-";
+    const phones = Array.from(
+      new Set(
+        [f.faddresstel, f.faddresstel2]
+          .map((p) => (p ?? "").trim())
+          .filter((p) => p !== "" && p !== "-"),
+      ),
+    ).join(" / ") || "-";
+    return [
+      `จุดที่ ${idx + 1}`,
+      `SHIPMENT: ${fNos || "-"}`,
+      `ตู้#: ${cabinets || "-"}`,
+      `CBM: ${fmt2(stop.totalVolume)} · กล่อง: ${stop.totalBoxes} · KG: ${fmt2(stop.totalWeight)}`,
+      `POD: ${recipient || "-"}`,
+      `ที่อยู่: ${address || "-"}`,
+      `แผนที่: ${mapsUrl}`,
+      `เบอร์โทร: ${phones}`,
+    ].join("\n");
+  });
+  const totalCbmAll = stops.reduce((s, st) => s + st.totalVolume, 0);
+  const totalWeightAll = stops.reduce((s, st) => s + st.totalWeight, 0);
+  const truckBookingText = [
+    `🚚 จองรถ — รอบ #${batch.id}${batch.fdname ? ` (${batch.fdname})` : ""}`,
+    `ต้นทาง: โกดัง Pacred (สมุทรสาคร)`,
+    `รวม ${stops.length} จุดส่ง · ${totalBoxes} กล่อง · ${fmt2(totalCbmAll)} CBM · ${fmt2(totalWeightAll)} KG`,
+    batch.endtime ? `ส่งก่อนเวลา: ${new Date(batch.endtime).toLocaleString("th-TH")}` : "",
+    "",
+    ...stopBlocks,
+    "",
+    googleMapsHref ? `นำทางทุกจุด: ${googleMapsHref}` : "",
+  ].filter((l) => l !== undefined && l !== null).join("\n");
+
   return (
     <main className="p-4 sm:p-6 lg:p-8 space-y-5">
       {/* Breadcrumb */}
@@ -386,6 +446,27 @@ export default async function AdminDriverBatchDetailPage({
           )}
         </div>
       </section>
+
+      {/* จองรถ (external-truck) LINE-paste block — ops/super only.
+          2026-06-08 gap analysis #3. Collapsed by default. */}
+      {isOpsOverride && stops.length > 0 && (
+        <details className="rounded-2xl border border-border bg-white shadow-sm">
+          <summary className="cursor-pointer select-none px-5 py-3 text-sm font-semibold flex items-center gap-2">
+            <Truck className="h-4 w-4" />
+            จองรถภายนอก — คัดลอกข้อความส่ง LINE คนขับรถ
+            <span className="ml-auto text-xs font-normal text-muted">
+              {stops.length} จุด · {totalBoxes} กล่อง
+            </span>
+          </summary>
+          <div className="px-5 pb-5 pt-1">
+            <p className="mb-2 text-xs text-muted">
+              คัดลอกบล็อกนี้แล้ว paste ลงแชต LINE ของรถเหมา/ขนส่งภายนอก — มี SHIPMENT · ตู้ ·
+              CBM · กล่อง · KG · ผู้รับ · ที่อยู่ · ลิงก์แผนที่ · เบอร์โทร ครบทุกจุด
+            </p>
+            <TruckBookingCopyBox text={truckBookingText} />
+          </div>
+        </details>
+      )}
 
       {/* Stops list */}
       {stopsWithPhotos.length === 0 ? (
@@ -537,6 +618,21 @@ export default async function AdminDriverBatchDetailPage({
                   → ดูใน work-list คนขับ
                 </Link>
               </div>
+
+              {/* External-courier tracking URL — ops/super only. One input
+                  per forwarder row in this stop (the customer sees the link
+                  on /service-import/[fNo]). 2026-06-08 gap analysis #2. */}
+              {isOpsOverride && (
+                <div className="space-y-1.5">
+                  {stop.items.map(({ forwarder }) => (
+                    <CourierUrlInput
+                      key={`courier-${forwarder.id}`}
+                      forwarderId={forwarder.id}
+                      initialUrl={forwarder.courier_tracking_url}
+                    />
+                  ))}
+                </div>
+              )}
             </li>
           ))}
         </ol>

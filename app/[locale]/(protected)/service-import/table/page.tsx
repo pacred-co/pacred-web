@@ -8,8 +8,17 @@ import { legacyMemberUrl } from "@/lib/legacy-image";
 import { ServiceImportAddForm } from "../add/service-import-add-form";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
-import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { type CsvRow } from "@/components/admin/csv-button";
 import { CollapseSidebar } from "./collapse-sidebar";
+import {
+  TableSelectionProvider,
+  RowCheckbox,
+  SelectAllHeaderCheckbox,
+  TablePayBar,
+  ExportToolbar,
+  TableQuickSearch,
+} from "./table-interactive";
+import { type ForwarderRow as PayModalRow } from "../forwarder-row-view";
 
 /**
  * Import-forwarder list — TABLE VIEW. A FAITHFUL 1:1 TRANSCRIPTION of
@@ -120,7 +129,7 @@ function statusForwarderAll4(
   if (!chip) return null;
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap ${chip.cls}`}
+      className={`inline-flex items-center rounded-full border px-1.5 md:px-2.5 py-0.5 text-[9px] md:text-[11px] font-semibold leading-tight whitespace-nowrap ${chip.cls}`}
     >
       {t(chip.labelKey)}
     </span>
@@ -200,6 +209,8 @@ type ForwarderRow = {
   ftrackingchn: string | null;
   ftrackingchn2: string | null;
   ftransporttype: string | null;
+  fshipby: string | null;
+  fcredit: string | null;
   fdetail: string | null;
   fcover: string | null;
   famount: number | null;
@@ -242,6 +253,18 @@ export default async function ForwarderTablePage({
 
   const admin = createAdminClient();
   const memberCode = profile.member_code ?? "";
+
+  // getListPayForwarder.php L23 — userCompany drives the pay-modal's 1% WHT
+  // line + the KBank block (juristic only). Read the legacy flag.
+  const { data: userRow, error: userRowErr } = await admin
+    .from("tb_users")
+    .select("userCompany")
+    .eq("userID", memberCode)
+    .maybeSingle<{ userCompany: string | number | null }>();
+  if (userRowErr) {
+    console.error(`[tb_users table] failed`, { code: userRowErr.code, message: userRowErr.message });
+  }
+  const isJuristic = String(userRow?.userCompany ?? "") === "1";
 
   const sp = await searchParams;
   // forwarder-table.php sanitises ?fTrackingCHN — strips whitespace/tabs.
@@ -323,7 +346,7 @@ export default async function ForwarderTablePage({
   let tableQuery = admin
     .from("tb_forwarder")
     .select(
-      "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftransporttype, fdetail, fcover, famount, fweight, fvolume, fwidth, fheight, flength, fproductstype, fcabinetnumber, ftotalprice, ftransportprice, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, reforder, fdatestatus2, fdatestatus3, fdatestatus4",
+      "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftransporttype, fshipby, fcredit, fdetail, fcover, famount, fweight, fvolume, fwidth, fheight, flength, fproductstype, fcabinetnumber, ftotalprice, ftransportprice, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, reforder, fdatestatus2, fdatestatus3, fdatestatus4",
     )
     .eq("userid", memberCode);
 
@@ -363,6 +386,8 @@ export default async function ForwarderTablePage({
       ftrackingchn: (row.ftrackingchn as string) ?? null,
       ftrackingchn2: (row.ftrackingchn2 as string) ?? null,
       ftransporttype: (row.ftransporttype as string) ?? null,
+      fshipby: (row.fshipby as string) ?? null,
+      fcredit: (row.fcredit as string) ?? null,
       fdetail: (row.fdetail as string) ?? null,
       fcover: (row.fcover as string) ?? null,
       famount: row.famount == null ? null : Number(row.famount),
@@ -419,6 +444,21 @@ export default async function ForwarderTablePage({
       row.priceother ?? 0,
     );
     rowNet.set(row.id, net);
+  }
+
+  // ── Summary-row column totals (legacy DataTables footer-callback,
+  //    forwarder-table.php) — สรุปยอด over the FULL filtered set: ลัง · หนัก ·
+  //    คิว · ราคา. The legacy filled .t7/.t8/.t12/.t19 client-side; computed
+  //    server-side here so they render immediately (ปอน 2026-06-08 "ยอดไม่นับ").
+  let sumBoxes = 0,
+    sumWeight = 0,
+    sumVolume = 0,
+    sumNetPrice = 0;
+  for (const row of rows) {
+    sumBoxes += Number(row.famount ?? 0);
+    sumWeight += Number(row.fweight ?? 0);
+    sumVolume += Number(row.fvolume ?? 0);
+    sumNetPrice += rowNet.get(row.id) ?? 0;
   }
 
   // ── CSV export rows (ปอน 2026-06-08: "port ออกมาเป็นไฟล์ แบบเขา") ──
@@ -489,6 +529,53 @@ export default async function ForwarderTablePage({
   const page = parsePage(sp.page);
   const offset = (page - 1) * DEFAULT_PAGE_SIZE;
   const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
+
+  // ── Payable rows (legacy: fStatus=5 get a checkbox; `.d-none2` hides it on
+  //    the rest) → the row-select checkboxes + live pay-bar total + pay modal.
+  //    Default-selected, mirroring the legacy DataTables `initComplete`. ──
+  const payableRows = pageRows.filter((r) => r.fstatus === "5");
+  const payablePayload = payableRows.map((r) => ({
+    id: r.id,
+    net: rowNet.get(r.id) ?? 0,
+  }));
+  // The pay-modal row shape (forwarder-row-view `ForwarderRow`). Only the
+  // fields the modal reads (price math + PCSF/credit/WHT) carry real values;
+  // the rest are null/0 placeholders the modal never touches.
+  const payModalRows: PayModalRow[] = payableRows.map((r) => ({
+    id: r.id,
+    fdate: r.fdate,
+    fstatus: r.fstatus,
+    ftrackingchn: r.ftrackingchn,
+    ftrackingchn2: r.ftrackingchn2,
+    ftrackingth: null,
+    ftransporttype: r.ftransporttype,
+    fshipby: r.fshipby,
+    fdetail: r.fdetail,
+    fcover: r.fcover,
+    famount: r.famount ?? 0,
+    fweight: r.fweight ?? 0,
+    fvolume: r.fvolume ?? 0,
+    ftotalprice: r.ftotalprice ?? 0,
+    ftransportprice: r.ftransportprice ?? 0,
+    fpriceupdate: r.fpriceupdate ?? 0,
+    fdiscount: r.fdiscount ?? 0,
+    fshippingservice: r.fshippingservice ?? 0,
+    pricecrate: r.pricecrate ?? 0,
+    ftransportpricechnthb: r.ftransportpricechnthb ?? 0,
+    priceother: r.priceother ?? 0,
+    fusercompany: r.fusercompany,
+    fcredit: r.fcredit,
+    fcreditdate: null,
+    fdatestatus5: null,
+    fdatetothai: null,
+    fcabinetnumber: r.fcabinetnumber,
+    fdatecontainerclose: null,
+    fnote: null,
+    fnoteuser: null,
+    reforder: r.reforder,
+    adminidcreator: null,
+    promoid: null,
+  }));
 
   // ── the add-forwarder modal address <select> (L1149-1167) ──
   // The main address (tb_address ⋈ tb_address_main) first, then every
@@ -582,10 +669,16 @@ export default async function ForwarderTablePage({
       <link rel="stylesheet" href="/legacy/pcs/service-import.css" />
       <link rel="stylesheet" href="/legacy/pcs/forwarder-table.css" />
 
+      {/* Selection context — the row-select checkboxes + select-all + live
+          pay-bar all read/write one client store; the <table> below stays
+          server-rendered and its checkbox cells hydrate as consumers. */}
+      <TableSelectionProvider payable={payablePayload} payRows={payModalRows}>
       {/* Page content — Tailwind rebuild matching /service-import page.tsx.
           Wrapped in `.pcs-content-pad` so the (protected) layout's desktop
-          padding (sidebar clearance + FloatingTabs clearance) kicks in. */}
-      <div className="pcs-content-pad w-full px-3 md:px-6 py-3 md:py-6">
+          padding (sidebar clearance + FloatingTabs clearance) kicks in. The
+          big mobile `pb` clears the fixed pay-bar + bottom-nav so the last
+          table rows aren't hidden once the page scrolls (mobile flow layout). */}
+      <div className="pcs-content-pad w-full px-3 md:px-6 pt-3 pb-[180px] md:py-6">
         {/* The whole card is a bounded flex column: the header (tabs +
             unified search/status frame) stays pinned and ONLY the table
             body scrolls inside it — so ตัวค้นหา + สถานะ + หัวตาราง ล็อคไว้
@@ -593,27 +686,37 @@ export default async function ForwarderTablePage({
             ไม่ให้ขยับ"). max-h reserves room for the top chrome (NavBar 56px
             + SearchBar) and the bottom pay-bar / FloatingTabs; svh tracks the
             mobile browser UI. Tuned in-browser §0c. */}
-        <section className="flex max-h-[calc(100svh-18.5rem)] flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-sm dark:bg-surface md:max-h-[calc(100svh-15.5rem)]">
+        {/* DESKTOP: a fixed-height card — the header stays locked while only the
+            table body scrolls inside (ปอน 2026-05-29 "ล็อคไว้ไม่ให้ขยับ").
+            MOBILE: NO height cap — the whole page scrolls (legacy mobile feel),
+            so the table flows at full height instead of being squeezed into a
+            tiny window behind the tall stacked header (ปอน 2026-06-08
+            "แสดงผลพอดีจอ … เห็นรายการเต็มๆ"). */}
+        <section className="flex flex-col rounded-2xl border border-border bg-white shadow-sm dark:bg-surface md:max-h-[calc(100svh-15.5rem)] md:overflow-hidden">
           {/* ═══ LOCKED HEADER — stays put while the table body scrolls ═══ */}
           <div className="flex shrink-0 flex-col">
           {/* ── Tab strip — legacy `nav nav-tabs nav-underline` markup
               (forwarder-table.php L734-746): big H3 headings, active =
               red underline. ปอน 2026-05-28 sent legacy HTML to copy. */}
+          {/* View tabs — on MOBILE they stack as 2 full-width segmented rows
+              (ปอน 2026-06-08 "ทำให้เป็น 2 แถวสวยๆ ในมือถือ"): active = red fill,
+              inactive = grey. On DESKTOP they revert to the legacy inline
+              underline tabs (red text + red underline on the active one). */}
           <div className="border-b border-border px-3 pt-3 md:px-4 md:pt-4">
-            <ul className="flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden gap-0">
-              <li>
+            <ul className="flex flex-col gap-1.5 md:flex-row md:gap-0 md:overflow-x-auto md:[scrollbar-width:none] md:[&::-webkit-scrollbar]:hidden">
+              <li className="md:shrink-0">
                 <Link
                   href="/service-import"
-                  className="shrink-0 inline-flex items-end gap-2 px-4 pb-2.5 text-base md:text-xl font-medium text-muted hover:text-foreground border-b-[3px] border-transparent hover:border-border whitespace-nowrap transition-colors"
+                  className="w-full md:w-auto inline-flex items-center md:items-end justify-center md:justify-start gap-2 rounded-lg md:rounded-none border md:border-0 md:border-b-[3px] border-border md:border-transparent bg-surface-alt/60 md:bg-transparent px-4 py-2.5 md:pb-2.5 text-sm md:text-xl font-medium text-muted hover:text-foreground md:hover:border-border whitespace-nowrap transition-colors"
                 >
                   <span aria-hidden className="ft-box" />
                   {t("tabFullView")}
                 </Link>
               </li>
-              <li>
+              <li className="md:shrink-0">
                 <Link
                   href="/service-import/table"
-                  className="shrink-0 inline-flex items-end gap-2 px-4 pb-2.5 text-base md:text-xl font-bold text-red-600 border-b-[3px] border-red-600 whitespace-nowrap"
+                  className="w-full md:w-auto inline-flex items-center md:items-end justify-center md:justify-start gap-2 rounded-lg md:rounded-none border md:border-0 md:border-b-[3px] border-[#cc3333] bg-[#cc3333] md:bg-transparent px-4 py-2.5 md:pb-2.5 text-sm md:text-xl font-bold text-white md:text-[#cc3333] whitespace-nowrap"
                 >
                   <span aria-hidden className="fas fa-table" />
                   {t("tabTableView")}
@@ -629,19 +732,29 @@ export default async function ForwarderTablePage({
               search row is a 2-col grid (inputs row 1, buttons row 2); md+
               it's a single flex row. */}
           <div className="px-3 py-3 md:px-4 md:py-3">
+            {/* Compact + balanced search row (ปอน 2026-06-08 "ปรับให้สมดุล
+                ลดขนาดเล็กลง ทั้งคอม-มือถือ"): every control is one consistent
+                `h-9` height so the 2 inputs + 2 buttons line up evenly. The
+                `text-[13px]` on the form drives the input/select/button text
+                size (cart.css forces `.pcs-legacy input/button/select{font-size:
+                inherit}`, so they take the parent's size). */}
             <form
-              className="grid grid-cols-2 items-start gap-2 md:flex md:flex-row md:items-end md:gap-3"
+              className="grid grid-cols-2 items-start gap-x-2 gap-y-2.5 text-[13px] md:flex md:flex-row md:items-end md:gap-2.5"
               id="search"
               method="GET"
               action="/service-import/table"
               autoComplete="off"
             >
-              <div className="min-w-0 md:flex-1">
-                <label className="block text-xs font-medium text-muted mb-1" htmlFor="fTrackingCHN">
+              <div className="min-w-0 md:flex-1 flex flex-col gap-1">
+                <label className="block text-[11px] font-medium text-muted" htmlFor="fTrackingCHN">
                   {t("searchTrackingLabel")}
                 </label>
                 <input
-                  className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-colors"
+                  // forwarder-table.css forces `#fTrackingCHN{margin-bottom:.8rem}`
+                  // (legacy) — neutralise it inline so this cell matches the
+                  // select cell's height (else the label misaligns / overlaps).
+                  style={{ marginBottom: 0 }}
+                  className="h-9 w-full rounded-lg border border-border bg-white dark:bg-surface px-2.5 text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-colors"
                   name="fTrackingCHN"
                   id="fTrackingCHN"
                   type="text"
@@ -649,12 +762,12 @@ export default async function ForwarderTablePage({
                   defaultValue={fTrackingCHNRaw}
                 />
               </div>
-              <div className="min-w-0 md:flex-1">
-                <label className="block text-xs font-medium text-muted mb-1" htmlFor="fCabinetNumber">
+              <div className="min-w-0 md:flex-1 flex flex-col gap-1">
+                <label className="block text-[11px] font-medium text-muted" htmlFor="fCabinetNumber">
                   {t("lotLabel")}
                 </label>
                 <select
-                  className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-colors"
+                  className="h-9 w-full rounded-lg border border-border bg-white dark:bg-surface px-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-colors"
                   name="fCabinetNumber"
                   id="fCabinetNumber"
                   defaultValue={fCabinetNumberRaw || "all"}
@@ -669,16 +782,16 @@ export default async function ForwarderTablePage({
               </div>
               <button
                 type="submit"
-                className="inline-flex w-full md:w-auto items-center justify-center rounded-lg bg-red-600 text-white px-5 py-2 text-sm font-bold shadow-sm hover:bg-red-700 active:scale-[0.98] transition-all whitespace-nowrap"
+                className="h-9 inline-flex w-full md:w-auto items-center justify-center rounded-lg bg-red-600 text-white px-4 font-bold shadow-sm hover:bg-red-700 active:scale-[0.98] transition-all whitespace-nowrap"
                 name="search"
               >
                 {t("searchButton")}
               </button>
               <Link
                 href="/service-import/add"
-                className="inline-flex w-full md:w-auto items-center gap-2 justify-center md:justify-start rounded-full bg-emerald-600 text-white pl-1.5 pr-4 py-1.5 text-sm font-bold shadow-md shadow-emerald-600/25 hover:bg-emerald-700 active:scale-[0.98] transition-all whitespace-nowrap"
+                className="h-9 inline-flex w-full md:w-auto items-center gap-1.5 justify-center rounded-lg bg-emerald-600 text-white pl-1 pr-3 font-bold shadow-sm hover:bg-emerald-700 active:scale-[0.98] transition-all whitespace-nowrap"
               >
-                <span className="inline-flex w-7 h-7 items-center justify-center rounded-full bg-white text-emerald-600 font-black text-lg leading-none shadow-sm" aria-hidden>
+                <span className="inline-flex w-6 h-6 items-center justify-center rounded-full bg-white text-emerald-600 font-black text-base leading-none" aria-hidden>
                   +
                 </span>
                 <span>{t("addImportItem")}</span>
@@ -713,8 +826,8 @@ export default async function ForwarderTablePage({
                       href={chip.href}
                       className={`inline-flex items-center gap-1.5 px-3 md:px-4 py-2 text-sm md:text-base font-medium whitespace-nowrap transition-colors border-x border-t -mb-px ${
                         active
-                          ? "bg-red-100/60 text-red-700 border-red-600 border-b-white rounded-t-md"
-                          : "bg-transparent text-foreground hover:text-red-600 border-transparent"
+                          ? "bg-[#ff8989]/[0.192] text-[#cc3333] border-[#cc3333] border-b-white rounded-t-md"
+                          : "bg-transparent text-foreground hover:text-[#cc3333] border-transparent"
                       }`}
                     >
                       <span>{chip.label}</span>
@@ -733,12 +846,20 @@ export default async function ForwarderTablePage({
               })}
             </ul>
 
-            {/* Download toolbar — CSV export of the FULL filtered set, like the
-                legacy DataTables export (ปอน 2026-06-08: "port ออกมาเป็นไฟล์
-                แบบเขา"). Exports every row matching the current ค้นหา/สถานะ
-                filter, not just the page. */}
-            <div className="mt-3 flex items-center gap-2">
-              <CsvButton
+            {/* DataTables toolbar — legacy `dom:'lBfrtip'`: export buttons
+                (Copy/CSV/Excel/Print) on the LEFT, the "ค้นหา:" live-filter box
+                on the RIGHT, one row above the table (forwarder-table.php). The
+                export operates over the FULL filtered set; the search box filters
+                the rendered rows client-side. */}
+            {/* `text-[11px]` on the wrapper shrinks the buttons + search box:
+                cart.css forces `.pcs-legacy button/input/select { font-size:
+                inherit }`, so the controls take their size from THIS parent
+                (ปอน 2026-06-08 "ลดขนาดให้เล็กลง"). */}
+            {/* Search box LEFT, export buttons RIGHT (ปอน 2026-06-08 "สลับ
+                ตำแหน่ง"). */}
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 text-[11px]">
+              <TableQuickSearch />
+              <ExportToolbar
                 rows={csvRows}
                 cols={CSV_COLS}
                 filename={`รายการฝากนำเข้า-${memberCode}.csv`}
@@ -763,7 +884,10 @@ export default async function ForwarderTablePage({
               attaches to `#myTable`, live pay-recalc JS reads/writes
               `.countPay` + `.price-all`. */}
           <form id="frm-example2" className="flex min-h-0 flex-1 flex-col">
-              <div className="table-responsive2 scrollbar-clean min-h-0 flex-1 overflow-auto">
+              {/* MOBILE: only x-auto (the 7 cols already fit, so no scroll fires)
+                  — the page scrolls vertically. DESKTOP: full inner-scroll so the
+                  locked header stays put while rows scroll. */}
+              <div className="table-responsive2 scrollbar-clean min-h-0 flex-1 overflow-x-auto md:overflow-auto">
                 {/* ── ONE responsive table for desktop AND mobile (ปอน
                     2026-06-08: "อยากได้แบบตาราง ทั้งคอมและมือถือ อิงจาก legacy").
                     Replaces the old md:hidden card list — the "แบบตาราง" view is
@@ -774,7 +898,25 @@ export default async function ForwarderTablePage({
                 <div className="min-w-full">
                 <table
                   id="myTable"
-                  className="dataTable w-full text-xs md:text-sm border-collapse"
+                  className={
+                    "dataTable w-full text-[13px] md:text-sm text-black dark:text-foreground " +
+                    // legacy `.table-bordered` — full 1px #dee2e6 grid on every
+                    // th + td (table-level arbitrary variants so no per-cell edit).
+                    "[&_th]:border [&_th]:border-[#dee2e6] [&_td]:border [&_td]:border-[#dee2e6] " +
+                    "dark:[&_th]:border-border dark:[&_td]:border-border " +
+                    // legacy `.table-striped` — zebra on even body rows (the
+                    // `.no-sort` summary is row 1/odd, so it keeps its gradient).
+                    "[&_tbody_tr:nth-of-type(even)]:bg-black/[0.035] dark:[&_tbody_tr:nth-of-type(even)]:bg-white/[0.035] " +
+                    // legacy compact density (.table td .15rem/.3rem · th .25rem) +
+                    // legacy header row is centered (.text-center on the <tr>).
+                    // Mobile is ULTRA-compact so the 7 core columns fit a phone
+                    // with NO horizontal scroll (ปอน 2026-06-08 "พอดีจอ ไม่ต้องเลื่อน")
+                    // — desktop relaxes back to the legacy density.
+                    "[&_tbody_td]:px-1 [&_tbody_td]:py-0.5 md:[&_tbody_td]:px-1.5 md:[&_tbody_td]:py-1 " +
+                    "[&_tbody_td]:text-[10.5px] md:[&_tbody_td]:text-[13px] " +
+                    "[&_thead_th]:px-1 [&_thead_th]:py-1.5 md:[&_thead_th]:px-2 md:[&_thead_th]:py-2 " +
+                    "[&_thead_th]:text-[10px] md:[&_thead_th]:text-xs [&_thead_th]:text-center [&_thead_th]:align-middle"
+                  }
                 >
                   {/* Header — single gradient `#ce35a1 → #ee7411` matching
                       legacy `.bg-danger2` (forwarder-table.php L597 inline
@@ -783,34 +925,36 @@ export default async function ForwarderTablePage({
                       overrides cart.css's `.pcs-legacy thead { display: none }`
                       leak. */}
                   <thead
-                    style={{
-                      display: "table-header-group",
-                      position: "sticky",
-                      top: 0,
-                      zIndex: 20,
-                    }}
+                    // `display:table-header-group` overrides cart.css's
+                    // `.pcs-legacy thead{display:none}` leak. Sticky only on
+                    // DESKTOP (the inner-scroll window) — on mobile the page
+                    // scrolls so the header rides along like the legacy.
+                    style={{ display: "table-header-group" }}
+                    className="z-20 md:sticky md:top-0"
                   >
-                    <tr className="text-center bg-gradient-to-r from-[#f59e0b] to-[#dc2626]">
-                      <th className="all add-text-all px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colTrackingChn")}</th>
-                      <th className="all add-text-all hidden xl:table-cell px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colPurchaseOrder")}</th>
-                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colLotSeq")}</th>
-                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colDetail")}</th>
-                      <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colBoxes")}</th>
-                      <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colWeight")}</th>
-                      <th className="all add-text-all hidden xl:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colWidth")}</th>
-                      <th className="all add-text-all hidden xl:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colHeight")}</th>
-                      <th className="all add-text-all hidden xl:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colLength")}</th>
-                      <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colVolume")}</th>
-                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colType")}</th>
-                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colCratePrice")}</th>
-                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colChinaTransport")}</th>
-                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colOther")}</th>
-                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colThaiTransport")}</th>
-                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colEnterChinaWarehouse")}</th>
-                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colLeaveChinaWarehouse")}</th>
-                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colArriveThaiWarehouse")}</th>
-                      <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/20">{t("colPrice")}</th>
-                      <th className="all add-text-all px-3 py-3 text-center text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap">{t("colStatus")}</th>
+                    <tr className="text-center bg-gradient-to-r from-[#ce35a1] to-[#ee7411]">
+                      <th className="px-2 py-3 text-center align-middle border-r border-white/20"><SelectAllHeaderCheckbox /></th>
+                      <th className="hidden min-[1200px]:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colCreatedDate")}</th>
+                      <th className="all add-text-all px-3 py-3 text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colTrackingChn")}</th>
+                      <th className="all add-text-all hidden min-[1200px]:table-cell px-3 py-3 text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colPurchaseOrder")}</th>
+                      <th className="all add-text-all hidden min-[578px]:table-cell px-3 py-3 text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colLotSeq")}</th>
+                      <th className="all add-text-all hidden min-[578px]:table-cell px-3 py-3 text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colDetail")}</th>
+                      <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colBoxes")}</th>
+                      <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colWeight")}</th>
+                      <th className="all add-text-all hidden min-[1200px]:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colWidth")}</th>
+                      <th className="all add-text-all hidden min-[1200px]:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colHeight")}</th>
+                      <th className="all add-text-all hidden min-[1200px]:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colLength")}</th>
+                      <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colVolume")}</th>
+                      <th className="all add-text-all hidden min-[578px]:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colType")}</th>
+                      <th className="all add-text-all hidden min-[578px]:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colCratePrice")}</th>
+                      <th className="all add-text-all hidden min-[578px]:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colChinaTransport")}</th>
+                      <th className="all add-text-all hidden min-[578px]:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colOther")}</th>
+                      <th className="all add-text-all hidden min-[578px]:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colThaiTransport")}</th>
+                      <th className="all add-text-all hidden min-[578px]:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colEnterChinaWarehouse")}</th>
+                      <th className="all add-text-all hidden min-[578px]:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colLeaveChinaWarehouse")}</th>
+                      <th className="all add-text-all hidden min-[578px]:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colArriveThaiWarehouse")}</th>
+                      <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colPrice")}</th>
+                      <th className="all add-text-all px-3 py-3 text-center text-xs md:text-sm font-bold text-white whitespace-nowrap">{t("colStatus")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -825,31 +969,33 @@ export default async function ForwarderTablePage({
                                           `.bg-color` (forwarder-table.php
                                           inline CSS): same pink→orange
                                           gradient as the thead + white text. */}
-                                      <tr className="bg-gradient-to-r from-[#f59e0b] to-[#dc2626] text-white no-sort">
+                                      <tr className="bg-gradient-to-r from-[#ce35a1] to-[#ee7411] text-white no-sort">
+                                        <td className="px-2 py-1.5 border-b border-border"></td>
+                                        <td className="t2 hidden min-[1200px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
                                         <td className="t3 px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
-                                        <td className="t4 hidden xl:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
-                                        <td className="t5 hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
-                                        <td className="t6 text-right hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-bold text-white">{t("summaryTotal")}</td>
-                                        <td className="t7 text-right px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums font-mono"></td>
-                                        <td className="t8 text-right px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums font-mono"></td>
-                                        <td className="t9 hidden xl:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums font-mono"></td>
-                                        <td className="t10 hidden xl:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums font-mono"></td>
-                                        <td className="t11 hidden xl:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums font-mono"></td>
-                                        <td className="t12 text-right px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums font-mono"></td>
-                                        <td className="t13 hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
-                                        <td className="t14 hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums font-mono"></td>
-                                        <td className="t15 hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums font-mono"></td>
-                                        <td className="t15-1 hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums font-mono"></td>
-                                        <td className="t15-2 hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums font-mono"></td>
-                                        <td className="t15-3 hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums font-mono"></td>
-                                        <td className="t16 hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
-                                        <td className="t17 hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
-                                        <td className="t19 text-right px-2 py-1.5 border-b border-border text-xs font-bold text-white tabular-nums font-mono"></td>
+                                        <td className="t4 hidden min-[1200px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
+                                        <td className="t5 hidden min-[578px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
+                                        <td className="t6 text-right hidden min-[578px]:table-cell px-2 py-1.5 border-b border-border text-xs font-bold text-white">{t("summaryTotal")}</td>
+                                        <td className="t7 text-right px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums">{sumBoxes > 0 ? sumBoxes : ""}</td>
+                                        <td className="t8 text-right px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums">{sumWeight > 0 ? numberFormat(sumWeight, 2) : ""}</td>
+                                        <td className="t9 hidden min-[1200px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums"></td>
+                                        <td className="t10 hidden min-[1200px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums"></td>
+                                        <td className="t11 hidden min-[1200px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums"></td>
+                                        <td className="t12 text-right px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums">{sumVolume > 0 ? numberFormat(sumVolume, 3) : ""}</td>
+                                        <td className="t13 hidden min-[578px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
+                                        <td className="t14 hidden min-[578px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums"></td>
+                                        <td className="t15 hidden min-[578px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums"></td>
+                                        <td className="t15-1 hidden min-[578px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums"></td>
+                                        <td className="t15-2 hidden min-[578px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums"></td>
+                                        <td className="t15-3 hidden min-[578px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums"></td>
+                                        <td className="t16 hidden min-[578px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
+                                        <td className="t17 hidden min-[578px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
+                                        <td className="t19 text-right px-2 py-1.5 border-b border-border text-xs font-bold text-white tabular-nums">{numberFormat(sumNetPrice, 2)}</td>
                                         <td className="t18 px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
                                       </tr>
                                       {pageRows.length === 0 && (
                                         <tr>
-                                          <td colSpan={20} className="px-3 py-10 text-center text-sm text-muted">
+                                          <td colSpan={22} className="px-3 py-10 text-center text-sm text-muted">
                                             {t("noItems")}
                                           </td>
                                         </tr>
@@ -869,28 +1015,40 @@ export default async function ForwarderTablePage({
                                             }
                                             {...(isAnchor ? { id: `F${row.id}` } : {})}
                                           >
-                                            <td className="px-2 py-1.5 text-xs md:text-sm text-foreground whitespace-nowrap">
-                                              <Link
-                                                className="text-red-600 hover:underline font-mono"
-                                                href={`/service-import/${row.id}`}
-                                              >
-                                                {row.ftrackingchn2
-                                                  ? row.ftrackingchn2
-                                                  : row.ftrackingchn}
-                                              </Link>
-                                              <a
-                                                className="image-popup-vertical-fit el-link"
-                                                href={cover}
-                                              >
-                                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                <img
-                                                  src={cover}
-                                                  alt=""
-                                                  className="w-6 h-6 rounded object-cover border border-border inline-block ml-1"
-                                                />
-                                              </a>
+                                            <td className="px-2 py-1.5 text-center align-middle">
+                                              <RowCheckbox id={row.id} />
                                             </td>
-                                            <td className="hidden xl:table-cell px-2 py-1.5 text-xs md:text-sm text-foreground">
+                                            <td className="hidden min-[1200px]:table-cell px-2 py-1.5 text-center text-xs text-foreground whitespace-nowrap">
+                                              {fmtDate(row.fdate)}
+                                            </td>
+                                            {/* Tracking — number on top, thumbnail
+                                                stacked below (legacy `<br/>`); the
+                                                number wraps so the column stays narrow
+                                                enough to fit a phone with no scroll. */}
+                                            <td className="text-[10.5px] md:text-sm text-foreground align-top">
+                                              <div className="flex flex-col items-start gap-0.5">
+                                                <Link
+                                                  className="text-red-600 hover:underline font-mono break-all leading-tight"
+                                                  href={`/service-import/${row.id}`}
+                                                >
+                                                  {row.ftrackingchn2
+                                                    ? row.ftrackingchn2
+                                                    : row.ftrackingchn}
+                                                </Link>
+                                                <a
+                                                  className="image-popup-vertical-fit el-link"
+                                                  href={cover}
+                                                >
+                                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                  <img
+                                                    src={cover}
+                                                    alt=""
+                                                    className="w-5 h-5 md:w-6 md:h-6 rounded object-cover border border-border"
+                                                  />
+                                                </a>
+                                              </div>
+                                            </td>
+                                            <td className="hidden min-[1200px]:table-cell px-2 py-1.5 text-xs md:text-sm text-foreground">
                                               {row.reforder ? (
                                                 <Link
                                                   href={`/service-order/${row.reforder}`}
@@ -900,7 +1058,7 @@ export default async function ForwarderTablePage({
                                                 </Link>
                                               ) : null}
                                             </td>
-                                            <td className="hidden sm:table-cell px-2 py-1.5 text-xs md:text-sm text-foreground whitespace-nowrap">
+                                            <td className="hidden min-[578px]:table-cell px-2 py-1.5 text-xs md:text-sm text-foreground whitespace-nowrap">
                                               {row.ftransporttype === "1" ? t("transportTruckColon") : t("transportSeaColon")}
                                               {countText(
                                                 (row.fcabinetnumber ?? "")
@@ -916,7 +1074,7 @@ export default async function ForwarderTablePage({
                                                 {row.id}
                                               </Link>
                                             </td>
-                                            <td className="hidden sm:table-cell px-2 py-1.5 text-xs md:text-sm text-foreground">
+                                            <td className="hidden min-[578px]:table-cell px-2 py-1.5 text-xs md:text-sm text-foreground">
                                               <Link
                                                 className="text-red-600 hover:underline"
                                                 href={`/service-import/${row.id}`}
@@ -926,67 +1084,67 @@ export default async function ForwarderTablePage({
                                                   : countText(row.fdetail, 12)}
                                               </Link>
                                             </td>
-                                            <td className="px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums font-mono">
+                                            <td className="px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums">
                                               {(row.famount ?? 0) > 0 ? row.famount : ""}
                                             </td>
-                                            <td className="px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums font-mono">
+                                            <td className="px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums">
                                               {(row.fweight ?? 0) > 0
                                                 ? numberFormat(row.fweight!, 2)
                                                 : ""}
                                             </td>
-                                            <td className="hidden xl:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums font-mono">
+                                            <td className="hidden min-[1200px]:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums">
                                               {(row.fwidth ?? 0) > 0
                                                 ? numberFormat(row.fwidth!, 2)
                                                 : "-"}
                                             </td>
-                                            <td className="hidden xl:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums font-mono">
+                                            <td className="hidden min-[1200px]:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums">
                                               {(row.fheight ?? 0) > 0
                                                 ? numberFormat(row.fheight!, 2)
                                                 : "-"}
                                             </td>
-                                            <td className="hidden xl:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums font-mono">
+                                            <td className="hidden min-[1200px]:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums">
                                               {(row.flength ?? 0) > 0
                                                 ? numberFormat(row.flength!, 2)
                                                 : "-"}
                                             </td>
-                                            <td className="px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums font-mono">
+                                            <td className="px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums">
                                               {(row.fvolume ?? 0) > 0
                                                 ? numberFormat(row.fvolume!, 3)
                                                 : "-"}
                                             </td>
-                                            <td className="hidden sm:table-cell px-2 py-1.5 text-center text-xs md:text-sm text-foreground">
+                                            <td className="hidden min-[578px]:table-cell px-2 py-1.5 text-center text-xs md:text-sm text-foreground">
                                               {nameProductsType2(row.fproductstype, t)}
                                             </td>
-                                            <td className="hidden sm:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums font-mono">
+                                            <td className="hidden min-[578px]:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums">
                                               {Number(row.fstatus) > 4
                                                 ? numberFormat(row.pricecrate ?? 0, 2)
                                                 : "-"}
                                             </td>
-                                            <td className="hidden sm:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums font-mono">
+                                            <td className="hidden min-[578px]:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums">
                                               {Number(row.fstatus) > 4
                                                 ? numberFormat(row.ftransportpricechnthb ?? 0, 2)
                                                 : "-"}
                                             </td>
-                                            <td className="hidden sm:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums font-mono">
+                                            <td className="hidden min-[578px]:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums">
                                               {Number(row.fstatus) > 4
                                                 ? numberFormat(row.priceother ?? 0, 2)
                                                 : "-"}
                                             </td>
-                                            <td className="hidden sm:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums font-mono">
+                                            <td className="hidden min-[578px]:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums">
                                               {Number(row.fstatus) > 4
                                                 ? numberFormat(row.ftransportprice ?? 0, 2)
                                                 : "-"}
                                             </td>
-                                            <td className="hidden sm:table-cell px-2 py-1.5 text-center text-xs text-foreground">
+                                            <td className="hidden min-[578px]:table-cell px-2 py-1.5 text-center text-xs text-foreground">
                                               {fmtDate(row.fdatestatus2)}
                                             </td>
-                                            <td className="hidden sm:table-cell px-2 py-1.5 text-center text-xs text-foreground">
+                                            <td className="hidden min-[578px]:table-cell px-2 py-1.5 text-center text-xs text-foreground">
                                               {fmtDate(row.fdatestatus3)}
                                             </td>
-                                            <td className="hidden sm:table-cell px-2 py-1.5 text-center text-xs text-foreground">
+                                            <td className="hidden min-[578px]:table-cell px-2 py-1.5 text-center text-xs text-foreground">
                                               {fmtDate(row.fdatestatus4)}
                                             </td>
-                                            <td className="px-2 py-1.5 text-right text-xs md:text-sm tabular-nums font-mono">
+                                            <td className="px-2 py-1.5 text-right text-xs md:text-sm tabular-nums">
                                               <span className="text-red-600 font-semibold">
                                                 {numberFormat(net, 2)}
                                               </span>
@@ -1018,48 +1176,13 @@ export default async function ForwarderTablePage({
         />
       </div>
 
-      {/* ── Bottom pay-bar — Tailwind rebuild matching forwarder-interactivity.tsx.
-            ·  Mobile: bottom-24 to clear FloatingTabs bottom-nav; rounded top
-               corners + backdrop-blur for floating-card look.
-            ·  Desktop: `md:bottom-0` flush to viewport bottom edge.
-            ·  Kept `id="select"` for the legacy pay handler, kept the
-               `check-all c6` + `countPay` + `price-all` classes that
-               the legacy DataTables JS reads/writes. */}
-      {arrStatus[5] > 0 && (
-        <div className="fixed left-2 right-2 md:left-0 md:right-0 z-[55] bottom-[92px] md:bottom-0 bg-white/95 dark:bg-surface/95 backdrop-blur-md border border-border md:border-0 md:border-t rounded-2xl md:rounded-none shadow-lg overflow-hidden">
-          <div className="flex items-center gap-2 md:gap-3 px-3 py-2 md:px-6 md:py-3 md:pl-[280px] md:pr-[88px]">
-            <label className="flex items-center gap-1.5 shrink-0 cursor-pointer">
-              <input
-                type="checkbox"
-                className="dt-checkboxes check-all c6 w-4 h-4 rounded border-border accent-red-600 cursor-pointer"
-                defaultChecked
-              />
-              <span className="text-[10.5px] md:text-xs text-muted whitespace-nowrap">{t("tabAll")}</span>
-            </label>
-
-            <div className="flex-1 min-w-0 leading-tight">
-              <div className="text-[10px] md:text-xs text-muted">
-                {t("payBarCountPrefix")} <span className="countPay font-bold text-foreground notranslate">-</span> {t("payBarCountSuffix")}
-              </div>
-              <div className="font-bold text-foreground text-xs md:text-sm">
-                {t("summaryTotal")}{" "}
-                <span className="notranslate price-all text-red-600 text-base md:text-lg">
-                  0.00
-                </span>{" "}
-                <span className="text-[10px] md:text-xs text-muted font-normal">{t("bahtUnit")}</span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              id="select"
-              className="shrink-0 inline-flex items-center justify-center gap-1 rounded-full bg-red-600 text-white px-4 md:px-6 py-2 md:py-2.5 text-sm md:text-base font-bold hover:bg-red-700 active:scale-[0.98] shadow-md shadow-red-600/30 animate__animated animate__infinite animate__headShake transition-all"
-            >
-              {t("payButton")}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* ── Bottom pay-bar — legacy `.b-pay` fixed bar (forwarder-table.php
+            L1064-1083). Now driven by the selection context: เลือกทั้งหมด ·
+            จำนวนรายการ · live ยอดชำระรวม (Σ selected net) · ชำระเงิน opens the
+            shared multi-bill ForwarderPayModal with the selected rows. Renders
+            only when the page has payable (fStatus=5) rows. */}
+      <TablePayBar isJuristic={isJuristic} />
+      </TableSelectionProvider>
 
       {/* ── the add-forwarder modal — forwarder-table.php L1105-1181 ──
           Verbatim BS4 markup. The legacy modal POSTs to forwarder/ with

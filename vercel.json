@@ -57,6 +57,14 @@
     {
       "path": "/api/cron/sync-container-cost-sheet",
       "schedule": "*/20 * * * *"
+    },
+    {
+      "path": "/api/cron/wallet-reconcile",
+      "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/container-bulletin",
+      "schedule": "0 0 * * *"
     }
   ]
 }

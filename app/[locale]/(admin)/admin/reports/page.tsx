@@ -71,6 +71,11 @@ const REPORTS_MENUBAR: MenubarItem[] = [
     children: [
       { label: "🧭 แดชบอร์ดผู้บริหาร", href: "/admin/reports/cockpit" },
       { label: "💰 ลูกหนี้การค้า (AR-aging)", href: "/admin/accounting/ar-aging" },
+      // 2026-06-09 (เดฟ · marketing/CRM North-Star · §0d) — lead-source
+      // attribution: which acquisition channel drives leads→orders→revenue.
+      // The data (tb_users.userregisterwith/userrecom) was captured but no page
+      // surfaced it. ≤3 clicks: sidebar ออกรายงาน → BI → แหล่งที่มาของลูกค้า.
+      { label: "📣 แหล่งที่มาของลูกค้า (Lead Source)", href: "/admin/reports/lead-source" },
     ],
   },
   {

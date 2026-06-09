@@ -233,3 +233,41 @@ When a write path correctly identifies the right table BUT writes the wrong VALU
 - [`docs/audit/service-orders-fidelity-2026-05-30-evening.md`](../audit/service-orders-fidelity-2026-05-30-evening.md)
 - [`docs/audit/yuan-payments-fidelity-2026-05-30-evening.md`](../audit/yuan-payments-fidelity-2026-05-30-evening.md)
 - AGENTS.md §0c (verify-deep-flow · "HTTP 200 ≠ working")
+
+---
+
+## [2026-06-09] Potemkin placeholders + verify an audit's FRAMING before a risky fix
+
+Two compounding lessons from the `/service-order` bulk-pay nav-fix:
+
+**1. A "placeholder" UI is a Potemkin even when it doesn't error.** ปอน's primary
+`/service-order` page rendered a `<PaymentBar>` that *looked* like a pay affordance
+but its button only `<Link href="/service-order?q=2">` (filter to unpaid) — it never
+paid. The real wired multi-select pay (`<BulkPayBar>` → `payServiceOrderFromWallet`)
+lived only on `/service-order/add`, which no primary nav linked to. So the page
+passed every gate (200, build, tsc) and even "worked" (no crash) while a headline
+action silently did nothing. **§0e dead-write traps have a UI cousin: dead-NAV
+placeholders.** When auditing a list/detail page, for every action affordance ask
+"does this button call a server action, or just navigate / no-op?" — a `<Link>` where
+the user expects a mutation is the tell.
+
+**2. An audit agent's FRAMING can be milder/different than the code — verify before
+a risky cross-lane money change.** The spawned-task framing said customers "get
+pay/cancel buttons that silently do nothing." Reading the actual code showed it was
+narrower: per-order pay (→ detail `?pay=true`) AND cancel (→ detail `CancelButton`)
+both *worked*; only the list-level *multi-select* bar was a placeholder. Had I acted
+on the framing (rip out + redirect + delete `/add`) I'd have risked the cart/search
+paste-search flows `/add` carries. The right move: read the 4 real files (both pages
++ the islands + the actions), confirm the true gap, then make the *minimal* fix
+(reuse the unchanged proven islands on the primary page; defer the `/add` redirect
+because its nav-flows weren't traced). **Rule: when a finding triggers a money/cross-
+lane change, re-derive the actual state from source — don't act on the summary.**
+
+**Sibling pattern (freight, same session): plumbing without a write-path is dead.**
+`tb_freight_rate` + `lookupChinaFreightCostThb` shipped (migration 0145) but NO admin
+UI populated the table → it stayed 0-row on prod → every freight quote silently fell
+back to gross "กำไรขั้นต้น" (no net margin). A table + a reader is not a feature until
+something WRITES it. Also caught: the reader ordered `pol ASC` so the `''` default row
+always beat a newer specific route (`effective_from DESC` is the deterministic fix).
+When you ship a lookup against a table, verify the table has a populate path AND that
+the ORDER BY picks the row you intend.

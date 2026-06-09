@@ -34,7 +34,11 @@ export async function generateMetadata({
 }
 
 const ADDRESS_TH = "48/3 หมู่ 12 ตำบลอ้อมน้อย อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74130";
-const ADDRESS_EN_QUERY = "48/3+Moo+12+Om+Noi+Krathum+Baen+Samut+Sakhon+74130";
+// Precise warehouse pin (lat/lng 13.71125, 100.3240556) — ปอน 2026-06-08
+// "แก้ google map โกดัง 118 ให้เป็นอันนี้ให้หมด".
+const MAP_PLACE_URL =
+  "https://www.google.com/maps/place/13%C2%B042'40.5%22N+100%C2%B019'26.6%22E/@13.7112396,100.3237324,211m/data=!3m1!1e3!4m4!3m3!8m2!3d13.71125!4d100.3240556?entry=ttu&g_ep=EgoyMDI2MDYwMS4wIKXMDSoASAFQAw%3D%3D";
+const MAP_COORDS = "13.71125,100.3240556";
 
 const HIGHLIGHT_ICONS = [Boxes, ShieldCheck, Truck, Clock];
 
@@ -147,7 +151,7 @@ export default async function Page({
 
                     <div className="mt-4 flex flex-wrap items-center gap-2">
                       <a
-                        href={`https://www.google.com/maps/search/?api=1&query=${ADDRESS_EN_QUERY}`}
+                        href={MAP_PLACE_URL}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1.5 h-9 md:h-10 px-3.5 md:px-4 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[12px] md:text-[12.5px] font-black hover:shadow-[0_8px_18px_rgba(179,0,0,0.30)] transition-shadow"
@@ -192,7 +196,7 @@ export default async function Page({
               {/* Map */}
               <div className="relative aspect-[4/3] lg:aspect-auto lg:min-h-[420px] overflow-hidden rounded-2xl md:rounded-3xl border border-border shadow-[0_10px_28px_rgba(15,23,42,0.08)] bg-surface">
                 <iframe
-                  src={`https://www.google.com/maps?q=${ADDRESS_EN_QUERY}&hl=th&z=15&output=embed`}
+                  src={`https://www.google.com/maps?q=${MAP_COORDS}&hl=th&z=17&output=embed`}
                   loading="lazy"
                   referrerPolicy="no-referrer-when-downgrade"
                   title={t("mapTitle")}

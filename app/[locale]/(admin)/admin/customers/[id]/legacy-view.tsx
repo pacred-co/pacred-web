@@ -33,6 +33,11 @@ import { getCustomerMarginSummary } from "@/actions/admin/customer-margin";
 import { CustomerRateEditor } from "./rate-editor";
 import { CustomerMarginPanel } from "./customer-margin-panel";
 import { HardDeletePanel } from "./hard-delete-panel";
+// CRM depth (2026-06-08) — tags + activity timeline panels.
+import { getTags } from "@/actions/admin/customer-tags";
+import { getCustomerActivity } from "@/actions/admin/customer-activity";
+import { TagChips } from "@/components/admin/tag-chips";
+import { CustomerActivityTimeline } from "@/components/admin/customer-activity-timeline";
 import {
   StatCards,
   IdentityEditor,
@@ -296,15 +301,20 @@ export async function renderLegacyCustomerView(id: string) {
   // is fetched here in parallel with the other profile sub-readers. Best-
   // effort — never throws (the loader degrades to "0 delivered ตู้" empty
   // state if tb_forwarder query fails).
-  const [rateMatrix, statCounts, salesAdminsRes, csAdminsRes, marginSummary] = await Promise.all([
+  const [rateMatrix, statCounts, salesAdminsRes, csAdminsRes, marginSummary, tagsRes, activityRes] = await Promise.all([
     getCustomerRateMatrix(u.userID),
     getCustomerStatCounts(u.userID),
     listSalesAdmins(),
     listCsAdmins(),
     getCustomerMarginSummary(u.userID),
+    // CRM depth (2026-06-08) — best-effort: degrade to empty on error.
+    getTags(u.userID),
+    getCustomerActivity(u.userID),
   ]);
   const salesAdmins = salesAdminsRes.ok ? salesAdminsRes.data?.rows ?? [] : [];
   const csAdmins = csAdminsRes.ok ? csAdminsRes.data?.rows ?? [] : [];
+  const customerTags = tagsRes.ok ? (tagsRes.data ?? []).map((t) => t.tag) : [];
+  const customerActivity = activityRes.ok ? (activityRes.data ?? []) : [];
   const walletBalance = Number(wallet?.wallettotal ?? 0);
 
   // Pricing-segment state (ค่าเทียบ + เครดิต) for the in-profile editors.
@@ -464,6 +474,20 @@ export async function renderLegacyCustomerView(id: string) {
 
       {/* Inline note editor (tb_users.userNote) — เดฟ 2026-05-30 */}
       <NoteEditor userid={u.userID} initialNote={u.userNote} />
+
+      {/* CRM depth (2026-06-08) — tags + activity timeline. Tags double as the
+          AXELRA-vs-PCS lead-source marker; the timeline merges call-log +
+          manual notes so the next rep can pick up the thread. */}
+      <div className="grid lg:grid-cols-2 gap-5">
+        <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3">
+          <h2 className="text-sm font-semibold">แท็กลูกค้า</h2>
+          <TagChips userid={u.userID} initialTags={customerTags} />
+        </div>
+        <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3">
+          <h2 className="text-sm font-semibold">กิจกรรม / โน้ต</h2>
+          <CustomerActivityTimeline userid={u.userID} initialEntries={customerActivity} />
+        </div>
+      </div>
 
       {/* Juristic company info (tb_corporate) — editable in-place (UPDATE-
           only, file upload deferred). Only render for นิติบุคคล customers. */}

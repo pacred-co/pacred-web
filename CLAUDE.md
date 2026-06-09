@@ -3,11 +3,50 @@
 
 ---
 
-# 🔭 2026-06-08 — เดฟ: gap analysis + reachability + 🚨URGENT juristic-signup fix + ปอน-merge → PUSHED main · read FIRST
+# 🧾 2026-06-09 PM — เดฟ: CARGO ใบกำกับภาษี form delivered + platform build-plan + team-model clarified · SESSION CLOSE · read FIRST
+
+> **All on `dave-pacred` (+ this close-out pushed to all branches once, then dave-pacred-only going forward).** Built the **CARGO tax-invoice (ใบกำกับภาษี) Excel form** from the AXELRA template + olddata-dev chats — adds the missing **Pricing (cost) section** (file `/Users/dev/Downloads/PACRED-ใบกำกับภาษี-form-v2-pricing.xlsx`, script `scripts/tax-invoice-form-build.py`, 0 formula errors, functional-tested).
+>
+> **⭐ The insight PCS+ไอแต้ม missed (now the spec):** CARGO import = a Freight-LCL job where Pacred issues a **ใบขนรวม under the shipping-co name** → customer sees only the tax invoice. **THREE distinct prices, three roles** — never conflate: **SELLING** (CS → invoice + VAT 7%) · **COST** (Pricing → PEAK stock + profit) · **มูลค่าสำแดง/DECLARED** (Docs → ใบขน, defaults to cost but engineered-down, audited). 4-role flow CS→Pricing→Docs(NETBAY/Form-E)→Account(PEAK). Learning: [`docs/learnings/pacred-cargo-tax-invoice-flow.md`](docs/learnings/pacred-cargo-tax-invoice-flow.md).
+>
+> **🏗 Platform build-plan (grounded by a 4-agent audit · [`docs/research/tax-invoice-platform-build-plan-2026-06-09.md`](docs/research/tax-invoice-platform-build-plan-2026-06-09.md)):** the SELLING+VAT+WHT+issuance layer is **already built** (`tax-doc-mode.ts` · `tb_forwarder_tax_invoice` LIVE / `tb_shop_tax_invoice` DORMANT · `customs_declarations` freight-only · PEAK CSV). The whole gap = platform captures ONE price (selling); **no COST field, no DECLARED field, no `pricing` role.** Build = the upstream cost/declared/Pricing layer (do NOT rebuild). **P1 = doc-mode toggle at ฝากนำเข้า order entry (no schema · the recommended next slice)** → P2 cost (mig 0158 + `pricing` role) → P3 declared/Docs → P4 4-role workspace+PEAK → P5 NETBAY. **NEXT-FREE migration = 0158** (ledger stale); ADR-0027 stale.
+>
+> **👥 Team model clarified + corrected in docs** (`docs/team.md` §0): **4 contributors only** — เดฟ=`dave-pacred` (lead/integrator, on the owner's behalf) · ภูม=`Poom-pacred` · ปอน=`InwPond007` · ก๊อต=`main` review + delegated. The **owner (CEO) sets direction but does not commit code**. Fixed stale branch names across team.md / CLAUDE.md TL;DR / AGENTS.md §13 (resync → `dave-pacred`) / `branch-integrate-loop` skill.
+>
+> **🔧 Push policy going forward (owner directive):** finish a big wave → push **only `dave-pacred`**. Do **NOT** push `main` unless the owner says so, and **do NOT push teammate branches** routinely (they already have the updates). This close-out is the one-time all-branch distribution.
+
+---
+
+# 🌊 2026-06-09 — เดฟ: 5-wave autonomous code sprint + nav-fix + phone-dedupe + self-audit harden · ALL on main · read FIRST
+
+> **main = dave-pacred = Poom-pacred = InwPond007 = `423d17cb`** (all synced) · `pnpm verify` + `pnpm build` EXIT 0 every save-point · migration **0157** applied prod (NEXT FREE = **0158**). Owner: "เอางาน code ล้วนมาแยกร่าง เคลียเป็น phase เล็ก→ใหญ่ run long" → ran 5 worktree-agent waves (3 agents/wave · serial-merge + gate + push-per-wave · every wave merged clean). Then "เก็บงานให้ดีก่อนไปต่อ" → self-audit + fixed the gaps.
+
+**Shipped (each gated + pushed main):**
+1. **PR112/PR10584 dup-merge** (retire empty dup `userStatus='0'`) + **root-cause phone-dedupe guard** in `adminCreateNew` (refuse phone already in tb_users · `allow_existing_phone` override) + detection tool `scripts/find-cross-system-phone-dups.mjs` (37 dups = review backlog) · learning [`duplicate-identity-cross-system.md`].
+2. **W1:** services-catalogue UI fixes (ส่งออก→soon · soon-cards non-nav · +consignment/bill-payment) · auto-cancel cron repoint `service_orders`(0-row)→`tb_header_order` (reuse `autoExpireOverdueShopOrder`) · public freight wizard → `composeFreightQuote` (customer-safe SELL-only).
+3. **W2:** **admin CRUD `/admin/freight/rates`** → `tb_freight_rate` (0145 · confirm-gated · unblocks net-margin) · wallet-reconcile cron (read-only drift/overdraft) · `/admin/reports/lead-source` attribution dashboard.
+4. **W3:** `/admin/tools/china-category` lookup (77k rows · **0157** GIN) · freight cost-loop verified complete (consumer already wired).
+5. **W4:** daily container-bulletin cron (Phase-B's last un-built item) · **local Code128 barcode** (`lib/barcode.ts` bwip-js · drop external `pcscargo.co.th/barcode.php` · §3-safe) · 98 test assertions (freight money-safety).
+6. **W5:** 30 assertions on forwarder NET-total + WHT · −966 LOC orphan cleanup.
+7. **nav-split fix:** primary `/service-order` page now has the REAL `<BulkPayBar>` multi-select pay-from-wallet (was a Potemkin placeholder linking `?q=2`) — reuses the proven `/add` islands + `payServiceOrderFromWallet`; ปอน's design kept. (`/add` redirect deferred — it has paste-search + cart/search nav.)
+8. **Self-audit harden** (`423d17cb`): 4-auditor sweep (§0c/§0d/§0e/§0f/i18n/money) → **all money + customer-safety CLEAN**; fixed 1 🔴 (freight-wizard raw-i18n-key leak — `freightQuoteWizard.service.*` was missing both locales · the gate misses template-literal keys) + 4 🟠 (freight rate-lookup ordering · getFreightRates loadFailed banner · stale cron desc · lead-source RBAC↔hub mismatch).
+
+**🟠 Flagged (not done):** 3c `/service-order/add` dedup redirect (spawn_task · needs cart/search flow-trace) · the 37 phone-dup review backlog.
+**🔴 NEXT TIER = owner-blocked** (run-long stopped here — building blind = wrong): FX yuan-rate source (price-sensitive) · slip-OCR · PEAK 2-way · CargoThai producer · the 8 TBD catalogue services (product specs) · freight P&L ledger (needs rate data). Plus the 2026-06-08 owner items below (flip `shop_yuan_enabled`, juristic-signup confirm, prod-data confirm, env).
+
+---
+
+# 🏁 2026-06-08 SESSION CLOSE — เดฟ: URGENT juristic fix + full team-merge + freight inbox + cargo/CRM/ใบกำกับ builds → ALL on main · ย้ายคอมกลับบ้าน · read FIRST
+
+> **🏁 SESSION CLOSE (เดฟ · machine-move home).** Resume on the home machine: `git fetch origin && git pull origin main` — **everything today is on main = dave-pacred = Poom-pacred = InwPond007 (synced at close)**. `pnpm verify` + prod build (direct-node) EXIT 0 at every save-point. **9 migrations applied prod (0148–0156 · NEXT FREE = 0157).**
+> **🔴 OWNER ACTION ITEMS (pending):** (1) **flip `tax_invoice.shop_yuan_enabled`** at `/admin/settings/business-config` — the ใบกำกับ ฝากสั่ง/ฝากโอน issuance ships **DORMANT**; turn ON only after a money-loop TEST-order test (shop+yuan) **+ accounting sign-off on the ใบขน VAT base** (`lib/tax/tax-doc-mode.ts` L187). (2) **Confirm the urgent juristic-signup fix** — have the waiting customer/staff do one real นิติบุคคล signup with a big phone photo. (3) **Confirm prod-data** — transactional tables near-empty (`tb_forwarder=50` · `tb_header_order/tb_order/tb_payment/tb_wallet_hs/tb_cnt=0`); read as early-business (migrated customer list + few orders · the "47k/104k" figures = dev/legacy) — confirm expected. (4) Carryover: Supabase refresh-token-reuse-interval · Vercel env (TAMIT-2026 · Sentry-client DSN · FB tokens) · staff photos · employee_code numbers.
+> **➡️ NEXT SESSION = Freight ERP cockpit (AX JOB.html PRICING→SALES→DOC→ACC) + customs-brokerage automation (NETBAY / Form-E / HS-AI) — the big Phase-C build.** Specs ready: `docs/research/freight-knowledge-2026-06-01/_MASTER-FREIGHT-PLAN.md` + `docs/research/full-scope-gap-2026-06-08.md`. Also: ภูม keeps pushing warehouse-RBAC (the chase) — re-survey Poom-pacred on resume.
 
 **🔥 PUSHED TO MAIN (`5f344b8f..6c789c87` · Vercel auto-deploying · main=dave-pacred=InwPond007 all == `6c789c87`).** 5 commits: reachability (5 orphans wired) · leads→CS handoff · gap-analysis docs · **merged ปอน InwPond007** (import table-view + pay-modal UI redesign + i18n · server action untouched) · **🚨 URGENT FIX juristic (นิติบุคคล) signup "An unexpected response was received from the server"** = `UploadField` had NO client-side size guard → a doc-photo >12mb hit Next `bodySizeLimit` → platform-rejected BEFORE the action's 10MB check → cryptic error. Fix = in-browser image compress (≤2400px/q0.82/EXIF-correct/fallback-safe) + size-guard, client-only, proven upload path untouched (`app/[locale]/(auth)/register/register-client.tsx`). **Gate REAL: `VERIFY_EXIT=0` + `REAL_BUILD_EXIT=0` (direct-node — ⚠️ `pnpm build` FAILS on this Windows box: the script's inline `NODE_OPTIONS=` isn't cmd.exe-compatible → ALWAYS build via `NODE_OPTIONS=--max-old-space-size=8192 node node_modules/next/dist/bin/next build`; the notification/pipe exit code LIES) + `/register` prod-smoke 200.** ⚠️ NOT large-file-E2E-tested (would pollute the prod-pointed DB) → **have the waiting customer/staff do one real juristic signup w/ a big phone photo to confirm.**
 
-**✅ ภูม batch INTEGRATED + APPLIED + PUSHED (2026-06-08 round 2 · owner "ลุยต่อเลย"):** merged Poom-pacred into main — **auto-merged 0-conflict** (ภูม's branch already had ปอน's pay-modal redesign → money-path file identical both sides; my reachability+leads+register-fix all survived, grep-verified). **3 migrations 0148/0149/0150 dry-run→`--apply` to prod** (additive/idempotent · COMMITTED · ledger updated). Fixed 1 verify break (audit:env undeclared `SUPABASE_URL` fallback in `scripts/probe-rls-policies.mjs`) + added `scripts/apply-migration-0149.mjs`. Gate REAL: verify=0 + build=0. Pushed main+dave-pacred+Poom-pacred+InwPond007. **🟦 prod-data note (CONFIRM):** prod (`yzljakczhwrpbxflnmco`, both pooler+REST agree) has `tb_users=8,940` but `tb_forwarder=50 · tb_header_order/tb_order/tb_payment/tb_wallet_hs/tb_cnt=0` — read as the early-stage business state (migrated customer list for acquisition + few real orders; the "47k orders/104k wallet" figures are dev/legacy, NOT live prod) — owner to confirm. NEXT FREE migration = **0151**. ⟦superseded note below⟧
+**✅ ภูม batch INTEGRATED + APPLIED + PUSHED (2026-06-08 round 2 · owner "ลุยต่อเลย"):** merged Poom-pacred into main — **auto-merged 0-conflict** (ภูม's branch already had ปอน's pay-modal redesign → money-path file identical both sides; my reachability+leads+register-fix all survived, grep-verified). **3 migrations 0148/0149/0150 dry-run→`--apply` to prod** (additive/idempotent · COMMITTED · ledger updated). Fixed 1 verify break (audit:env undeclared `SUPABASE_URL` fallback in `scripts/probe-rls-policies.mjs`) + added `scripts/apply-migration-0149.mjs`. Gate REAL: verify=0 + build=0. Pushed main+dave-pacred+Poom-pacred+InwPond007. **🟦 prod-data note (CONFIRM):** prod (`yzljakczhwrpbxflnmco`, both pooler+REST agree) has `tb_users=8,940` but `tb_forwarder=50 · tb_header_order/tb_order/tb_payment/tb_wallet_hs/tb_cnt=0` — read as the early-stage business state (migrated customer list for acquisition + few real orders; the "47k orders/104k wallet" figures are dev/legacy, NOT live prod) — owner to confirm. NEXT FREE migration = **0157** (after round 3). ⟦superseded note below⟧
+
+**✅ ROUND 3 (2026-06-08 · owner "1 เสร็จก่อน แล้วแยกร่าง 2/3/4"): freight inbox + 3 parallel agent builds — ALL PUSHED main + migrations applied prod.** (1) **Freight RFQ leads-inbox** `/admin/freight/leads` + convert-to-draft-quote (revenue unlock · 0151) — public RFQ leads were orphaned (no admin triage); now viewable/triageable/convertible. (2) **cargo fixes** (customer tracking-freshness badge · courier/Lalamove URL field 0156 · จองรถ external-truck LINE block · customer "ของไม่ครบ" report→work_items). (3) **🔴 ใบกำกับ ฝากสั่ง/ฝากโอน** (shop+yuan tax-invoice issuance · 0152 · **FLAG-GATED `tax_invoice.shop_yuan_enabled` = DEFAULT-OFF → ships DORMANT** · owner flips ONLY after a money-loop TEST-order browser test + accounting sign-off on the ใบขน VAT base `lib/tax/tax-doc-mode.ts` L187). (4) **CRM depth** (customer tags 0154 · activity timeline 0155 · lead-pipeline kanban). 4 build agents (1 freight + 3 parallel-disjoint), each merged 0-conflict, verify=0 + build=0 (build-only "another build running" lock false-alarm cleared via rm .next), all 5 migrations dry-run→applied prod. 🟡 Poom-pacred has newer ภูม commits (the chase) = next integration round.
 **🟡 ภูม batch (pre-integration survey · now done — kept for trail):** `origin/Poom-pacred` = 2-ahead/7-behind main · `f02cd59e` "5-lane: Doc PDF RLS + delivery feedback + dead-write tombstone + shop-order surgical + cabinet lock" (54 files). 🔴 carries **3 migrations `0148_freight_doc_rls`/`0149_delivery_feedback`/`0150_tb_forwarder_cabinet_locked` NOT-applied-prod** (ledger confirms 0148 ⏳ → migration-prod-gate: can't push to main until applied via ภูม's `scripts/apply-0148-rls-dryrun.mjs`+`apply-migration-0150.mjs`, dry-run first) + **money-path conflict** (`forwarder-pay-modal.tsx` — ปอน's redesign now in main vs ภูม's edit). Distribute: InwPond007 FF'd ✅; Poom-pacred FF-rejected (ภูม pushed mid-round) — re-survey done, work safe on his branch. **⚠️ migration-number collision risk:** my STAGED freight-inbox/tax-invoice gap-doc says "next free 0148" — but ภูม now owns 0148-0150 → my future work starts at 0151.
 
 **Earlier this session (all in the push above):** Owner gave the complete `olddata dev` data (cargo+freight · 3.8GB) + "ทำหมด". Ran a **5-agent customer reachability audit** + a **4-agent full-scope gap analysis**. **🟢 Headline: platform ~90% built — gaps are last-mile wiring, not from-scratch.** Full file-level roadmap per stream + gates → **[`docs/research/full-scope-gap-2026-06-08.md`](docs/research/full-scope-gap-2026-06-08.md)**.
@@ -709,19 +748,20 @@ app/[locale]/(protected)/         # หลังบ้าน (ลูกค้า
 > ⚠️ **CANONICAL doc moved to [`docs/team.md`](docs/team.md)** — full role/branch/merge policy + daily workflow + safety rules
 > ห้าม duplicate รายละเอียดที่นี่ — อ่านที่ `docs/team.md` ครั้งเดียว ที่เดียว
 
-**TL;DR:**
+**TL;DR — four contributors; the owner sets direction but does not commit code:**
 
-| คน | บทบาท | Branch | Push to main |
+| คน | บทบาท | Branch | Release to main |
 |---|---|---|---|
-| **ก๊อต** | Senior Advisor | (review only) | ✅ |
-| **เดฟ** | Project Lead | `dave` | ✅ |
-| **ปอน** | Frontend & SEO | `podeng` | ❌ (own branch) |
-| **ภูม** | Backend & Cargo Port | `Poom` | ❌ (own branch) |
+| **เดฟ** (dave) | Project Lead / Integrator (works on the owner's behalf) | `dave-pacred` (the integration trunk) | ✅ release gate, on owner's go |
+| **ภูม** (Poom) | Backend / Admin / Accounting | `Poom-pacred` | ❌ own branch → เดฟ integrates |
+| **ปอน** (podeng) | Frontend / UI / SEO | `InwPond007` | ❌ own branch → เดฟ integrates |
+| **ก๊อต** (got) | Senior Advisor / Production Watcher | `main` review + assigned | ✅ release gate with เดฟ |
+
+`dave-pacred` is the one integration branch; ภูม + ปอน push their own branch and เดฟ merges both in, gates, and (on the owner's go) promotes to `main`. The owner is the CEO — not a code contributor; เดฟ is his counterpart on the codebase. Full model in [`docs/team.md`](docs/team.md) §0.
 
 **Daily sync (every morning):**
 ```bash
-git checkout main && git pull origin main
-git checkout <my-branch> && git merge main && git push origin <my-branch>
+git fetch origin && git merge origin/dave-pacred   # everyone bases on dave-pacred (the trunk)
 ```
 
 **Conflict / safety:** อย่าใช้ `--force` / `reset --hard` ถ้าไม่แน่ใจ — full safety rules ใน [`docs/team.md`](docs/team.md) §5

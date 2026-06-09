@@ -27,6 +27,20 @@ import { createClient } from "@/lib/supabase/server";
 import { notifyStaffGroup } from "@/lib/notifications/staff-group";
 import { checkRateLimit, getClientIpFromHeaders } from "@/lib/rate-limit";
 import { freightRfqSchema, type FreightRfqInput } from "@/lib/validators/freight-rfq";
+import {
+  buildPublicFreightEstimate,
+  type PublicFreightEstimateInput,
+  type PublicFreightEstimateLine,
+  type PublicFreightEstimateResult,
+} from "@/lib/freight/public-estimate";
+
+// Re-export the customer-safe estimate types so existing importers of this
+// action module keep working (the pure logic now lives in lib/freight).
+export type {
+  PublicFreightEstimateInput,
+  PublicFreightEstimateLine,
+  PublicFreightEstimateResult,
+};
 
 export type FreightQuoteResult =
   | { ok: true; ref: string }
@@ -149,12 +163,52 @@ export async function submitFreightQuote(
       d.contactPref === "call" ? "⚡ ลูกค้าขอให้โทรกลับด่วน" : null,
     ].filter(Boolean) as string[];
 
-    // No /admin RFQ page yet → title-only Flex card (no deep-link button).
-    // When the leads inbox ships, pass { url: `/admin/freight/leads/${ref}` }.
-    await notifyStaffGroup(lines.join("\n"), { title: "ขอราคา Freight ใหม่ 📦" });
+    // 2026-06-08 — the RFQ leads inbox shipped (/admin/freight/leads). Deep-link
+    // staff straight to the lead so they can triage/convert in one tap.
+    await notifyStaffGroup(lines.join("\n"), {
+      title: "ขอราคา Freight ใหม่ 📦",
+      url: `/admin/freight/leads/${ref}`,
+    });
   } catch {
     /* swallow — lead is saved; sales sees it on next dashboard load */
   }
 
   return { ok: true, ref };
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Public, CUSTOMER-SAFE freight estimate — wraps the verified rate engine.
+// ────────────────────────────────────────────────────────────────────────────
+/**
+ * The public `/freight-quote` wizard used to show a HARDCODED client-side
+ * estimate (`FreightQuoteWizard.estimate()`) whose numbers did NOT match the
+ * AXELRA rate engine (`lib/freight/rate-engine.composeFreightQuote`) that staff
+ * quotes are built from — customers saw prices that diverged from the real
+ * quotation. This action repoints the displayed estimate to the SAME engine, so
+ * the customer sees the engine's customer-facing total.
+ *
+ * ⚠️ CUSTOMER-SAFE — it returns ONLY the customer-facing figures (per-line SELL
+ * + the VAT-inclusive total). It MUST NOT leak any internal: cost (`unitCost`,
+ * `cost`, `subtotalCost`, `chinaFreightCostThb`), `profit`, the CEO margin cap
+ * (`marginCapThb`, `marginExceedsCap`), the commission split, or the
+ * `chinaCostPending` gross/net internal — those are admin-only.
+ *
+ * When the engine can't price the request faithfully (a service it doesn't
+ * model — standalone customs/clearance/non-doc/export — truck mode which has no
+ * modelled freight rate, an incoterm/mode it can't scope, or a missing volume
+ * driver), it degrades gracefully: `precise:false` + empty lines so the wizard
+ * shows "ติดต่อทีมเพื่อราคาแม่นยำ" instead of inventing a misleading number.
+ */
+
+/**
+ * Server-action entry point. The input→engine-spec mapping + the customer-safe
+ * stripping are DB-free and live in `lib/freight/public-estimate.ts`
+ * (`buildPublicFreightEstimate`) so they can be unit-tested without next/headers
+ * or a Supabase client. This wrapper exists only to satisfy "use server" (the
+ * client wizard calls it as an action). Behaviour is unchanged.
+ */
+export async function getPublicFreightEstimate(
+  input: PublicFreightEstimateInput,
+): Promise<PublicFreightEstimateResult> {
+  return buildPublicFreightEstimate(input);
 }

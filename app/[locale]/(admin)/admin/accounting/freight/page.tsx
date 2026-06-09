@@ -150,6 +150,12 @@ const FREIGHT_MENUBAR: MenubarItem[] = [
 
 const HUB_CARDS = [
   {
+    title: "RFQ ขอราคา Freight (Leads)",
+    desc: "คำขอราคาที่ลูกค้าส่งผ่านหน้า /freight-quote — ติดตาม · ปิดการขาย · แปลงเป็นใบเสนอราคา",
+    href: "/admin/freight/leads",
+    badge: "live",
+  },
+  {
     title: "ใบเสนอราคา (Freight Quotes)",
     desc: "ใบเสนอราคาฝั่งฟอร์เวอร์เดอร์ — สร้าง / ค้นหา / จัดการสถานะ",
     href: "/admin/freight/quotes",
