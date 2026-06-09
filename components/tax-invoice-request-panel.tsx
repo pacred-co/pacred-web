@@ -107,7 +107,10 @@ export function TaxInvoiceRequestPanel({ orderType, orderId, defaults, existing,
 
   // ── Existing invoice — show status card ──
   if (existing) {
-    return <ExistingInvoiceCard existing={existing} />;
+    // The PDF download route reads the LIVE tb_* store discriminated by ?store=.
+    // forwarder → tb_forwarder_tax_invoice · shop/yuan → tb_shop_tax_invoice.
+    const store = orderType === "forwarder" ? "forwarder" : "shop";
+    return <ExistingInvoiceCard existing={existing} store={store} />;
   }
 
   // ── Customer not eligible — hint + don't show form ──
@@ -225,7 +228,7 @@ export function TaxInvoiceRequestPanel({ orderType, orderId, defaults, existing,
   );
 }
 
-function ExistingInvoiceCard({ existing }: { existing: CustomerTaxInvoiceSummary }) {
+function ExistingInvoiceCard({ existing, store }: { existing: CustomerTaxInvoiceSummary; store: "forwarder" | "shop" }) {
   const t = useTranslations("taxInvoiceRequest");
   const isIssued    = existing.status === "issued";
   const isPending   = existing.status === "pending";
@@ -264,7 +267,7 @@ function ExistingInvoiceCard({ existing }: { existing: CustomerTaxInvoiceSummary
           </span>
           {isIssued && (
             <a
-              href={`/api/tax-invoice/${existing.id}`}
+              href={`/api/tax-invoice/${existing.id}?store=${store}`}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-700"
