@@ -81,6 +81,16 @@ export default async function FreightOperationsBoardPage({
     );
   }
 
+  if (!res.data) {
+    return (
+      <main className="p-6 lg:p-8 space-y-4 max-w-7xl">
+        <h1 className="text-2xl font-bold">Freight Operations</h1>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+          ไม่มีข้อมูล
+        </div>
+      </main>
+    );
+  }
   const { cards, stats } = res.data;
 
   // Group cards by board column for the columns layout.

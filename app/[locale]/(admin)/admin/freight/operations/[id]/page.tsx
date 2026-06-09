@@ -44,6 +44,14 @@ export default async function FreightOperationDetailPage({
       </main>
     );
   }
+  if (!res.data) {
+    return (
+      <main className="p-6 lg:p-8 max-w-4xl space-y-4">
+        <Link href="/admin/freight/operations" className="text-sm text-primary-600 hover:underline">← กลับสู่ Freight Operations</Link>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">ไม่พบงานนี้</div>
+      </main>
+    );
+  }
   const detail = res.data;
 
   // Active admin roster for the assignment dropdowns (page-side fetch).
