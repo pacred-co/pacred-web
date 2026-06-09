@@ -316,8 +316,12 @@ export default async function AdminTaxInvoiceDetailPage({
                 )}
               </p>
             </div>
+            {/* This page reads the World-A `tax_invoices` store; the PDF route
+                now reads the LIVE tb_* stores. Pass the route's default store
+                (forwarder) — World-A ids won't resolve there, so the link 404s
+                cleanly until this admin LIST page is repointed to tb_* (separate task). */}
             <a
-              href={`/api/tax-invoice/${header.id}`}
+              href={`/api/tax-invoice/${header.id}?store=forwarder`}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-lg bg-primary-600 px-4 py-2 text-xs font-bold text-white hover:bg-primary-700"
@@ -348,7 +352,7 @@ export default async function AdminTaxInvoiceDetailPage({
             )}
           </div>
           <a
-            href={`/api/tax-invoice/${header.id}`}
+            href={`/api/tax-invoice/${header.id}?store=forwarder`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-block rounded-lg border border-border bg-white dark:bg-surface px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
