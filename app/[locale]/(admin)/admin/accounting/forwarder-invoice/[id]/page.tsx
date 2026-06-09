@@ -1043,13 +1043,21 @@ export default async function ForwarderInvoicePrintPage({
       */}
       <style>{`
         @media print {
-          /* 2026-06-09 ภูม flag round 4: admin chrome bled into the print
-             output. Sidebar is now print:hidden via the layout (one place
-             fixes every admin print page). Below resets margins + page so
-             the receipt fills A4 cleanly. The Chrome browser header/footer
-             (datetime · URL · "1/4") is dialog-controlled — staff must
-             toggle "Headers and footers: off" in the print dialog. */
-          @page { size: A4 portrait; margin: 0; }
+          /* 2026-06-09 ภูม flag round 5: receipt was floating in the middle
+             of A4 with ~3cm whitespace on every side — because @page had no
+             margin but .receipt-page added 1.5cm padding AND subpage already
+             has 10mm/12mm padding (stacked 2.7cm).
+
+             Fix: @page carries the safe-area margin (8mm) and .receipt-page
+             goes to zero padding so the content fills the A4 page edge-to-
+             edge minus the printer-safe margin. Subpage's internal padding
+             provides the typographic gutter.
+
+             Sidebar is print:hidden via the layout (one place fixes every
+             admin print page). The Chrome browser header/footer (datetime ·
+             URL · "1/4") is dialog-controlled — staff must toggle
+             "Headers and footers: off" in the print dialog. */
+          @page { size: A4 portrait; margin: 8mm; }
           html, body {
             background: white !important;
             margin: 0 !important;
@@ -1059,12 +1067,19 @@ export default async function ForwarderInvoicePrintPage({
           .receipt-page {
             box-shadow: none !important;
             border: none !important;
-            margin: 0 auto !important;
-            padding: 1.5cm !important;
-            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            max-width: none !important;
+            width: 100% !important;
+            min-height: auto !important;
             page-break-after: always;
           }
           .receipt-page:last-child { page-break-after: auto; }
+          /* Make the inner subpage stretch to fill the print page edge-to-edge */
+          .receipt-page .subpage {
+            padding: 0 !important;
+            min-height: 100% !important;
+          }
         }
         @media screen {
           .receipt-page {
