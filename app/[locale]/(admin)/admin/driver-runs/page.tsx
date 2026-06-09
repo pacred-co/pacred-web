@@ -4,16 +4,24 @@
  * out delivering right now + what just got delivered" so they can pay
  * driver commission, reconcile COD, and track on-the-road revenue.
  *
- * 2026-06-09 (ภูม pre-handoff §0e fix · this rewrite): the previous file
- * read the REBUILT `forwarder_driver` table — empty on prod (0 rows) —
+ * 2026-06-09 (ภูม pre-handoff §0e fix · agent A schema-swap): the previous
+ * file read the REBUILT `forwarder_driver` table — empty on prod (0 rows) —
  * filtered by `profile_id = user.id` and rendered driver-self action
  * buttons. Sales/accounting users saw "no work" forever even though the
  * live `tb_forwarder_driver_item` has 29,782 rows.
  *
+ * 2026-06-09 (this edit · ภูม follow-up #3): replaced the batch.fddate
+ * proxy in the "เสร็จล่าสุด" section with the precise per-item
+ * `fdicompletedat` column (added by migration 0158 · written by the
+ * deliver action in actions/admin/driver-work.ts). Items delivered
+ * BEFORE 0158 was applied have fdicompletedat = NULL — for those rows
+ * the page falls back to the batch.fddate proxy so they still render
+ * (see doneCards filter below for the COALESCE pattern).
+ *
  * This rewrite mirrors `/admin/drivers/work` (the canonical schema-swap
  * pattern) against live `tb_*`:
  *   - `tb_forwarder_driver`        batches (id, fddate, fdname, fdadminid, fdstatus)
- *   - `tb_forwarder_driver_item`   items (id, fdid→batch, fid→forwarder, fdistatus)
+ *   - `tb_forwarder_driver_item`   items (id, fdid→batch, fid→forwarder, fdistatus, fdicompletedat)
  *   - `tb_forwarder`               shipment row (address, total, ตู้, fno)
  *   - `tb_users`                   driver display (userName, userLastName, userTel)
  *
@@ -25,11 +33,9 @@
  *
  * AUDIENCE — sales/accounting OVERSIGHT (not the driver self-view):
  *   - "งานที่ต้องทำ" = items with fdistatus '' or '1' (open work)
- *   - "เสร็จล่าสุด"   = items with fdistatus '2' (delivered) on batches
- *                       opened in the last 7 days (best proxy without a
- *                       per-item completed-at timestamp — the legacy schema
- *                       doesn't carry one; only the batch has fddate +
- *                       endtime)
+ *   - "เสร็จล่าสุด"   = items with fdistatus '2' (delivered) whose
+ *                       fdicompletedat (or batch.fddate fallback for
+ *                       pre-0158 rows) is within the last 7 days.
  *
  * NO action buttons here — those write the dead rebuilt `forwarder_driver`
  * twin. The driver self-view at `/admin/drivers/work` already exists for
@@ -66,10 +72,14 @@ const F_STATUS_LABEL: Record<string, string> = {
 };
 
 type Item = {
-  id:        number;
-  fdid:      number;
-  fid:       number;
-  fdistatus: string;
+  id:             number;
+  fdid:           number;
+  fid:            number;
+  fdistatus:      string;
+  // Per-item delivered-at (migration 0158 · 2026-06-09).
+  // NULL = either still pending OR delivered pre-migration · the
+  // doneCards filter below falls back to batch.fddate proxy for NULL.
+  fdicompletedat: string | null;
 };
 
 type Batch = {
@@ -142,7 +152,7 @@ export default async function DriverRunsPage({
   //    responsive for the sales view (this is oversight, not exhaustive).
   let openQ = admin
     .from("tb_forwarder_driver_item")
-    .select("id, fdid, fid, fdistatus")
+    .select("id, fdid, fid, fdistatus, fdicompletedat")
     .or("fdistatus.eq.,fdistatus.is.null,fdistatus.eq.1")
     .order("id", { ascending: false })
     .limit(200);
@@ -155,16 +165,21 @@ export default async function DriverRunsPage({
   }
   const openRows = (openItems ?? []) as Item[];
 
-  // 3. Recently completed — items with fdistatus '2' (delivered). Without
-  //    a per-item completed-at column we proxy "recent" via batch.fddate
-  //    (last 7 days). The simplest correct query: pull most-recent 200
-  //    delivered items then hydrate, then filter to those whose batch
-  //    fddate is within 7 days. Real volume is small enough (deliveries
-  //    happen per-batch in clusters) that 200-window covers a week easily.
+  // 3. Recently completed — items with fdistatus '2' (delivered).
+  //    Sort by fdicompletedat DESC (NULLS LAST per the partial index from
+  //    migration 0158 · 2026-06-09) so post-migration deliveries surface
+  //    first by precise time. The 7-day window check happens client-side
+  //    (in the doneCards filter below) because the column is nullable for
+  //    pre-migration rows — for NULL fdicompletedat we fall back to
+  //    batch.fddate, so the filter must hydrate batches first.
+  //
+  //    Limit 200 covers a week of activity comfortably (deliveries cluster
+  //    per batch — historic max ~30 items/day · 7d ≈ 200).
   let doneQ = admin
     .from("tb_forwarder_driver_item")
-    .select("id, fdid, fid, fdistatus")
+    .select("id, fdid, fid, fdistatus, fdicompletedat")
     .eq("fdistatus", "2")
+    .order("fdicompletedat", { ascending: false, nullsFirst: false })
     .order("id", { ascending: false })
     .limit(200);
   if (driverBatchIds) doneQ = doneQ.in("fdid", driverBatchIds);
@@ -256,24 +271,38 @@ export default async function DriverRunsPage({
       return bd - ad;
     });
 
-  // For "เสร็จล่าสุด" — only keep deliveries on batches within the last 7 days.
+  // For "เสร็จล่าสุด" — only keep deliveries within the last 7 days.
+  //
+  // Filter precedence (added 2026-06-09 with migration 0158):
+  //   1. PREFER `item.fdicompletedat` — the precise per-item delivered-at
+  //      timestamp the deliver action writes on the fdistatus 1→2 flip.
+  //      An item delivered today on a batch opened 10 days ago now correctly
+  //      lands in the window (the previous batch.fddate-only proxy would
+  //      have missed it — the bug ภูม flagged).
+  //   2. FALLBACK to `batch.fddate` when fdicompletedat IS NULL — happens
+  //      for items delivered BEFORE 0158 was applied (we did NOT backfill —
+  //      batch.fddate ≠ per-item delivered-at, backfilling would invent
+  //      false precision · see 0158 SQL header). Without this fallback
+  //      pre-migration deliveries would silently disappear from the
+  //      window for ~7 days post-deploy.
+  //
   // Use `new Date()` (not `Date.now()`) — React 19 purity-lint only flags
   // the latter even though both are equally request-scoped here (async
   // server component runs once per request, computed value isn't passed
   // through render tree).
   const sevenDaysAgoMs = new Date().getTime() - 7 * 24 * 60 * 60 * 1000;
+  const completedAtMs = (r: Row): number => {
+    if (r.item.fdicompletedat) return Date.parse(r.item.fdicompletedat);
+    if (r.batch.fddate)        return Date.parse(r.batch.fddate);
+    return 0;
+  };
   const doneCards = doneRows
     .map(stitch)
     .filter((r): r is Row => {
       if (!r) return false;
-      const t = r.batch.fddate ? Date.parse(r.batch.fddate) : 0;
-      return t >= sevenDaysAgoMs;
+      return completedAtMs(r) >= sevenDaysAgoMs;
     })
-    .sort((a, b) => {
-      const ad = a.batch.fddate ? Date.parse(a.batch.fddate) : 0;
-      const bd = b.batch.fddate ? Date.parse(b.batch.fddate) : 0;
-      return bd - ad;
-    })
+    .sort((a, b) => completedAtMs(b) - completedAtMs(a))
     .slice(0, 50);
 
   // 7. Driver picker — distinct fdadminid from recent batches, joined to
@@ -389,9 +418,16 @@ export default async function DriverRunsPage({
                     <p className="font-mono text-red-700 font-bold">
                       ฿{Number(r.forwarder.ftotalprice ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                     </p>
-                    <p className="text-[10px] text-muted">
-                      รอบ {r.batch.fddate ? new Date(r.batch.fddate).toLocaleDateString("th-TH") : "—"}
-                    </p>
+                    {/* Prefer the precise per-item delivered-at (0158); fall back to batch date for pre-migration rows. */}
+                    {r.item.fdicompletedat ? (
+                      <p className="text-[10px] text-muted">
+                        ส่ง {new Date(r.item.fdicompletedat).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-muted">
+                        รอบ {r.batch.fddate ? new Date(r.batch.fddate).toLocaleDateString("th-TH") : "—"}
+                      </p>
+                    )}
                   </div>
                 </li>
               ))}

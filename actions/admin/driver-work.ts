@@ -210,10 +210,28 @@ async function transitionItemStatus(
       uploadedFilename = up.filename;
     }
 
-    // ── (b) Status flip + (optional) photo write in one UPDATE.
+    // ── (b) Status flip + (optional) photo write + (deliver-only) per-item
+    //         delivered-at timestamp in one UPDATE.
+    //
+    //   fdicompletedat (migration 0158 · 2026-06-09): the legacy schema
+    //   has NO per-item completed-at column · /admin/driver-runs had to
+    //   proxy "delivered last 7 days" via batch.fddate (= batch creation
+    //   date), which misses items delivered today on an old batch. Now
+    //   the deliver flip captures the precise instant in the SAME UPDATE
+    //   so the disbursement filter is exact.
+    //
+    //   Only the "deliver" action writes it. The "load" path (→ '1') and
+    //   the "fail" path (→ '3' · separate function below) intentionally
+    //   do NOT touch this column. `new Date().toISOString()` is fine in
+    //   a server action — Next 16's purity rule only blocks `new Date()`
+    //   / `Date.now()` in render-body, not in async server actions
+    //   (cf. CLAUDE_TECHNICAL.md notes on this).
     const updatePayload: Record<string, string> = { fdistatus: nextStatus };
     if (uploadedFilename) {
       updatePayload[action === "load" ? "fdipictureon" : "fdipictureoff"] = uploadedFilename;
+    }
+    if (action === "deliver") {
+      updatePayload.fdicompletedat = new Date().toISOString();
     }
     const { error } = await admin
       .from("tb_forwarder_driver_item")
