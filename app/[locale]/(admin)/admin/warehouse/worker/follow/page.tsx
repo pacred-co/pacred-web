@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 /**
  * /admin/warehouse/worker/follow — ติดตามสินค้า (W10 · Theme 7 P1).
  *

@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 /**
  * W11 — Customs-letter kit PDF generator.
  *

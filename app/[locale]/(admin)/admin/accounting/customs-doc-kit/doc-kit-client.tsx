@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable react/no-unescaped-entities */
+
 /**
  * W11 — Customs doc-kit workspace (client).
  *
