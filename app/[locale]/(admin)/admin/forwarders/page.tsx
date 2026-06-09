@@ -487,10 +487,10 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
         })}
       </div>
 
-      {/* Advanced search */}
-      <Suspense>
-        <ForwardersSearchBar />
-      </Suspense>
+      {/* 2026-06-09 (ภูม flag) — Advanced search MOVED DOWN to the same row
+          as the CSV-export buttons (see the wrapper around <CsvButton> below).
+          One row: search on the left, "CSV หน้านี้" + "CSV ทั้งหมด" on the
+          right. Staff scan + filter + export in one glance. */}
 
       {forwarderErr && (
         <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -662,8 +662,15 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
           status + mode + date window + service + container + keyword). The
           single biggest cargo surface; accounting + ops download per-status
           slices to hand to warehouse / driver / PEAK. Money cols always
-          present (page-level gate already enforces super/ops/accounting). */}
-      <div className="flex justify-end">
+          present (page-level gate already enforces super/ops/accounting).
+          2026-06-09 (ภูม flag) — paired with the Advanced search bar in one
+          row so staff have search + export in a single glance. */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex-1 min-w-[280px]">
+          <Suspense>
+            <ForwardersSearchBar />
+          </Suspense>
+        </div>
         <CsvButton
           rows={rows.map((r): CsvRow => ({
             id: r.id,
