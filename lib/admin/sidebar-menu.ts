@@ -203,6 +203,28 @@ const itemBarcodeRecordIntakeFlat: MenuItem = {
   icon: "ScanLine",
 };
 
+/** 2026-06-09 (W10 · Theme 7 Phase 1) — China-warehouse worker-app block.
+ *  The scanner-first ops app over the cargo spine (tb_forwarder /
+ *  tb_forwarder_item / warehouse_sack): receive → measure → sack → load →
+ *  depart → arrive → follow. Reference:
+ *  docs/research/cargothai-warehouse-ops-blueprint-2026-06-01.md.
+ *  Reachable for super/warehouse/ops/manager (the actions themselves
+ *  re-gate every fstatus flip via the G5 transition matrix). 🔒 WHO holds
+ *  the warehouse role = China-team RBAC sign-off (owner-blocked); the menu +
+ *  pages ship built and role-gated. */
+const blockWarehouseWorker: MenuItem = {
+  labelKey: "warehouseWorker.title",
+  icon: "Boxes",
+  children: [
+    { labelKey: "warehouseWorker.dashboard", href: "/admin/warehouse/worker",          icon: "LayoutDashboard" },
+    { labelKey: "warehouseWorker.intake",    href: "/admin/warehouse/worker/intake",   icon: "ScanLine" },
+    { labelKey: "warehouseWorker.measure",   href: "/admin/warehouse/worker/measure",  icon: "Calculator" },
+    { labelKey: "warehouseWorker.sacks",     href: "/admin/warehouse/worker/sacks",    icon: "Boxes" },
+    { labelKey: "warehouseWorker.shipping",  href: "/admin/warehouse/worker/shipping", icon: "Truck" },
+    { labelKey: "warehouseWorker.follow",    href: "/admin/warehouse/worker/follow",   icon: "PackageCheck" },
+  ],
+};
+
 /** legacy OOP/Cargo/menu-barcode.php — สแกนบาร์โค้ด (nested)
  *
  *  2026-05-20 ค่ำ (Wave 2D · Option A) — Phase 4 tags removed; barcode is
@@ -898,6 +920,8 @@ const menuSuper: MenuSection[] = [
       // top-level flat, matching legacy menu-barcode.php line 10. The
       // deeper blockBarcode toolbox stays as the comprehensive nested menu.
       itemBarcodeRecordIntakeFlat,
+      // 2026-06-09 (W10 · Theme 7 P1) — China-warehouse worker app (super peek).
+      blockWarehouseWorker,
       // re-sweep A2 #8/#17 — print all box labels for a scanned cabinet
       // (faithful port of legacy `printAll.php`).
       { labelKey: "warehouse.printLabels", href: "/admin/printAll", icon: "Printer" },
@@ -977,6 +1001,8 @@ const menuManager: MenuSection[] = [
       // 2026-05-30 (Wave 29 #5 · Agent A) — flat barcode-intake shortcut.
       // Matches the menuSuper / menuWarehouse / menuDriver placement.
       itemBarcodeRecordIntakeFlat,
+      // 2026-06-09 (W10 · Theme 7 P1) — China-warehouse worker app.
+      blockWarehouseWorker,
       // re-sweep A2 #8/#17 — print all box labels for a scanned cabinet
       // (faithful port of legacy `printAll.php`).
       { labelKey: "warehouse.printLabels", href: "/admin/printAll", icon: "Printer" },
@@ -1041,6 +1067,8 @@ const menuOps: MenuSection[] = [
       // 2026-06-09 (เดฟ · freight net-margin unlock) — China freight cost rates.
       itemFreightCostRates,
       blockApiForwarderUpdate,
+      // 2026-06-09 (W10 · Theme 7 P1) — China-warehouse worker app (ops oversee).
+      blockWarehouseWorker,
       blockPayment,
       // Phase 2 — driver-runs sales-only side not yet live.
       { labelKey: "report.titleDriver", href: "/admin/driver-runs", icon: "BarChart3", phase: 2 },
@@ -1190,6 +1218,9 @@ const menuWarehouse: MenuSection[] = [
         ],
       },
       blockApiForwarderUpdate,
+      // 2026-06-09 (W10 · Theme 7 P1) — China-warehouse worker app. THE
+      // daily ops tool for warehouse staff (receive/measure/sack/load/track).
+      blockWarehouseWorker,
       // Option C (ภูม 2026-05-20 ค่ำ) — point at the faithful port of legacy
       // `report-cnt.php`. Spine page at `/admin/warehouse/containers` retired
       // (tombstoned · redirects to /admin/report-cnt).
