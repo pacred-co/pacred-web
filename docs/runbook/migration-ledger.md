@@ -5,7 +5,9 @@
 
 ---
 
-## 🔢 NEXT FREE NUMBER = **0166**
+## 🔢 NEXT FREE NUMBER = **0167**
+
+> ⏳ **2026-06-09 (เดฟ · W2 review defensive fix): 0166** = `customs_declarations_rls_roles` — broaden the `customs_declarations` / `_lines` / `_seq` admin RLS from `['super','accounting']` → `['super','accounting','freight_import_doc','pricing']` to align with the action role sets. **NOT a live-bug fix** (admin surfaces use the service-role client which bypasses RLS · the W2 adversarial review flagged it but createAdminClient bypasses RLS); this future-proofs any user-session access by the 2 roles that legitimately work customs (freight Docs + cargo Pricing). Customer self-read policy untouched. Idempotent (drop+recreate). **⏳ NOT applied prod** — owner applies via `scripts/apply-migration-dryrun.mjs`.
 
 > ⏳ **2026-06-09 (เดฟ · W5 freight P&L): 0165** = `freight_pnl_margin` — persist the rate-engine cost/margin/commission so the freight P&L dashboard + cockpit can surface profitability. **ADD COLUMN IF NOT EXISTS only · all nullable · idempotent · NO money mutation, NO backfill.** (1) `freight_quotes +=` `profit_margin_thb` · `margin_exceeds_cap` (advisory · never blocks) · `china_cost_lookup_error` · `commission_calc_status` · `cost_china_freight_thb` · `cost_local_thb` · `cost_total_thb`. (2) `freight_quote_items +=` `commission_scope` · `commission_pct` · `commission_amount_thb` (per-line split snapshot). (3) `freight_shipments +=` `cost_china_freight_thb` · `cost_local_thb` · `cost_total_thb` · `profit_margin_thb` · `margin_exceeds_cap_at_conversion` · `margin_cap_thb` (snapshot frozen at quote→convert). FX key `freight.fx_rate_thb_per_usd` + cap key `freight.margin_cap_thb` already seeded by 0145 (NOT re-seeded). **⏳ NOT applied prod** — owner applies via `scripts/apply-migration-dryrun.mjs` (dry-run → `--apply`).
 

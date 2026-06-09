@@ -331,7 +331,10 @@ export async function adminDeleteFreightRate(
 // overrides on each cost row). Seeded by migration 0145; read via getBusinessConfig.
 // Read = super/ops/accounting · write = super/ops (mirror the rate table RLS).
 
-export const FREIGHT_FX_KEY = "freight.fx_rate_thb_per_usd";
+// NOT exported — a "use server" file may only export async functions (Pacred
+// gotcha · CLAUDE_TECHNICAL.md). FREIGHT_FX_KEY is module-local; the FX control
+// reads/writes via the exported async getFreightFxRate/adminUpdateFreightFxRate.
+const FREIGHT_FX_KEY = "freight.fx_rate_thb_per_usd";
 const FREIGHT_FX_DEFAULT = 35;
 
 /** Read the current monthly default FX (THB per USD). Read-gated super/ops/accounting. */
