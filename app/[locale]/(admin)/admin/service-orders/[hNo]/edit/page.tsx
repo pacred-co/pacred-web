@@ -59,6 +59,9 @@ import { MarkPaidTbForm } from "../mark-paid-tb-form";
 import { OrderInlineEdits, OrderRateInlineEdit } from "../inline-edits";
 import { autoExpireOverdueShopOrder } from "@/lib/service-order/auto-expire";
 import { OrderAddressPanel, type SavedAddress } from "../order-address-panel";
+import { createClient } from "@/lib/supabase/server";
+import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
+import { HeartbeatLock } from "./heartbeat-lock";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +71,34 @@ function roundUp2(v: number): number {
   const eps = 1e-9 * Math.max(1, Math.abs(v * 100));
   const r = Math.ceil(v * 100 - eps) / 100;
   return r === 0 ? 0 : r;
+}
+
+// Resolve the current admin's legacy adminID for the heartbeat-lock banner.
+// Mirrors the helper in actions/admin/service-orders-lock.ts so the page can
+// pass `currentAdminId` to <HeartbeatLock> without a client round-trip.
+async function resolveCurrentLegacyAdminId(): Promise<string> {
+  const supabase = await createClient();
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr) {
+    console.error(`[service-orders/edit resolveCurrentLegacyAdminId auth] failed`, {
+      code: authErr.code, message: authErr.message,
+    });
+  }
+  const email = user?.email ?? null;
+  if (!email) return "system";
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("tb_admin")
+    .select("adminID")
+    .eq("adminEmail", email)
+    .maybeSingle<{ adminID: string | null }>();
+  if (error) {
+    console.error(`[service-orders/edit resolveCurrentLegacyAdminId tb_admin] failed`, {
+      code: error.code, message: error.message,
+    });
+  }
+  if (data?.adminID) return data.adminID;
+  return (email.split("@")[0] || "system").slice(0, 50);
 }
 // ── status taxonomy (legacy '1'..'6') — mirrors legacy-view.tsx ──
 // 2026-06-04 (ภูม flag): step bar เปลี่ยนจาก "เลข 1-5 ในวงกลม" → "icon + label"
@@ -287,6 +318,12 @@ export default async function AdminServiceOrderEditPage({
   const status = autoExpired ? "6" : (r.hstatus ?? "1");
   const customerName = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || "—";
 
+  // 2026-06-09 E4 — heartbeat lock (legacy updateLock.php · faithful port). The
+  // current admin's legacy adminID drives the banner copy + the per-admin grant
+  // check inside lockServiceOrder. safeLegacyAdminId clips to 50 chars to match
+  // the new tb_header_order.hlockedby varchar(50) column (migration 0159).
+  const currentAdminId = safeLegacyAdminId(await resolveCurrentLegacyAdminId(), 50);
+
   // Price breakdown (legacy update.php L277-292) — for the read-only summary
   // shown when items are locked (status 3/4/5).
   const chn      = Number(r.htotalpricechn ?? 0);
@@ -308,6 +345,13 @@ export default async function AdminServiceOrderEditPage({
 
   return (
     <main className="p-4 sm:p-6 lg:p-8 space-y-5 max-w-6xl mx-auto">
+      {/* ── 0. Heartbeat lock banner (legacy updateLock.php · E4 · 2026-06-09) ──
+          Mounted first so the "กำลังถูกแก้ไขโดย admin XYZ" warning is the FIRST
+          thing the second admin sees before they start typing into any of the
+          inline edits below. Pure UI/courtesy guard — server-side mutation
+          blocks are deferred (see actions/admin/service-orders-lock.ts). */}
+      <HeartbeatLock hNo={r.hno} currentAdminId={currentAdminId} />
+
       {/* ── 1. Breadcrumb ── */}
       <nav className="text-xs text-muted flex flex-wrap items-center gap-1.5">
         <Link href="/admin" className="hover:text-primary-600">หน้าแรก</Link>

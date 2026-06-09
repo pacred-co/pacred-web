@@ -41,6 +41,7 @@ type Ctx = {
   toggle: (hNo: string) => void;
   totals: Map<string, number>;          // hno → price for the b-pay sum
   payableHNos: string[];                // hStatus='2' rows in display order
+  cancelableHNos: string[];             // hStatus '1' OR '2' rows in display order (2026-06-09 E10)
 };
 
 const SelectCtx = createContext<Ctx | null>(null);
@@ -52,16 +53,35 @@ function useSelectCtx() {
 }
 
 /**
+ * Exported variant of useSelectCtx for sibling islands (e.g. the E10
+ * combined bar in ../service-order-bulk-pay-bar.tsx). Returns the same
+ * shape; gives access to selection/totals/payable/cancelable without
+ * re-implementing the context.
+ */
+export function useBulkSelection() {
+  return useSelectCtx();
+}
+
+/**
  * Provider — wraps the legacy form. Owns the row-selection set + caches
  * per-row totals (cached upfront so the b-pay running total doesn't have
  * to re-derive from server state when the customer toggles a checkbox).
+ *
+ * 2026-06-09 E10 — accepts `cancelableHNos` (hstatus '1' OR '2') so the
+ * combined <ServiceOrderBulkActionsBar> can render a "ยกเลิก N รายการ"
+ * action alongside the pay button. When the caller doesn't pass it (older
+ * call-sites on `/add`), it defaults to the payable subset — the existing
+ * cancel-button on `/service-order` already shows only on cancelable rows.
  */
 export function BulkActionsProvider({
   payableHNos,
+  cancelableHNos,
   totals,
   children,
 }: {
   payableHNos: string[];
+  /** hstatus '1' OR '2' — bulk-cancel acts on this superset (legacy hStatus<=2 guard). */
+  cancelableHNos?: string[];
   totals: Map<string, number>;
   children: ReactNode;
 }) {
@@ -80,9 +100,11 @@ export function BulkActionsProvider({
       return next;
     });
   }, []);
+  // Default: cancelable = payable (back-compat for /add).
+  const effectiveCancelable = cancelableHNos ?? payableHNos;
   const value = useMemo<Ctx>(
-    () => ({ selected, toggle, totals, payableHNos }),
-    [selected, toggle, totals, payableHNos],
+    () => ({ selected, toggle, totals, payableHNos, cancelableHNos: effectiveCancelable }),
+    [selected, toggle, totals, payableHNos, effectiveCancelable],
   );
   return <SelectCtx.Provider value={value}>{children}</SelectCtx.Provider>;
 }

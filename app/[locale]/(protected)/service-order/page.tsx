@@ -10,9 +10,12 @@ import {
 } from "@/lib/payment/shop-order-total";
 import {
   BulkActionsProvider,
-  BulkPayBar,
   RowCheckbox,
 } from "./add/service-order-bulk-actions";
+// 2026-06-09 E10 — combined bulk-cancel + bulk-pay floating bar (legacy
+// member/include/pages/shops/getList.php modal). Supersedes the standalone
+// <BulkPayBar> on this page; /add keeps its own pay-only bar.
+import { ServiceOrderBulkActionsBar } from "./service-order-bulk-pay-bar";
 import { Link } from "@/i18n/navigation";
 import { legacyMemberUrl } from "@/lib/legacy-image";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
@@ -298,14 +301,23 @@ export default async function ServiceOrderPage({
     }
   }
 
-  // ── Multi-select bulk-pay (wired islands shared with /add) ──
-  // Per-row totals + the payable set + wallet balance feed <BulkPayBar>.
-  // payServiceOrderFromWallet re-verifies ownership/balance/idempotency per
-  // row server-side, so these numbers are display-only (not the boundary).
+  // ── Multi-select bulk-actions (wired islands shared with /add) ──
+  // Per-row totals + the payable + cancelable sets + wallet balance feed
+  // <ServiceOrderBulkActionsBar> (E10 unified bulk-cancel + bulk-pay).
+  // Each server action (cancelServiceOrder + payServiceOrderFromWallet)
+  // re-verifies ownership/status/idempotency per row, so these numbers
+  // are display-only (not the money boundary).
   const totalsMap = new Map<string, number>(
     rows.map((r) => [r.hno, computeShopOrderPayableThb(r)]),
   );
   const payableHNos = rows.filter((r) => isShopOrderPayable(r.hstatus)).map((r) => r.hno);
+  // 2026-06-09 E10: bulk-cancel acts on hstatus '1' OR '2' (legacy hStatus<=2).
+  const cancelableHNos = rows
+    .filter((r) => {
+      const s = (r.hstatus ?? "").trim();
+      return s === "1" || s === "2";
+    })
+    .map((r) => r.hno);
   const supabaseRLS = await createClient();
   const walletBalance =
     (await getWalletAvailableBalance(supabaseRLS, data.user.id)) ?? 0;
@@ -354,7 +366,11 @@ export default async function ServiceOrderPage({
             </p>
           </div>
         ) : (
-          <BulkActionsProvider payableHNos={payableHNos} totals={totalsMap}>
+          <BulkActionsProvider
+            payableHNos={payableHNos}
+            cancelableHNos={cancelableHNos}
+            totals={totalsMap}
+          >
             {/* ── Status tabs — horizontal scrollable pills ── */}
             <div className="mb-4">
               <p className="text-[12px] font-semibold uppercase tracking-wider text-muted mb-2 flex items-center gap-1.5" role="heading" aria-level={2}>
@@ -419,6 +435,7 @@ export default async function ServiceOrderPage({
                       labels={{
                         pay: tp("pay"),
                         selectToPay: tp("selectToPay"),
+                        selectRow: tp("selectRow"),
                         viewDetail: tp("viewDetail"),
                         printReceipt: tp("printReceipt"),
                         printInvoice: tp("printInvoice"),
@@ -442,14 +459,16 @@ export default async function ServiceOrderPage({
               </>
             )}
 
-            {/* shops.php L1059-1081 — b-pay fixed bottom bar. Multi-select
-                pay-from-wallet, shown when there are unpaid orders on q=2 / q=""
-                tabs. Wired to actions/service-order.ts via the shared
-                <BulkPayBar> island (replaces the former static placeholder);
-                payServiceOrderFromWallet re-verifies each row server-side. */}
-            {countShops2 > 0 && (q === "" || q === "2") && (
-              <BulkPayBar walletBalance={walletBalance} />
-            )}
+            {/* shops.php L1059-1081 + member/include/pages/shops/getList.php
+                — combined fixed bottom bar (E10 · 2026-06-09). Multi-select
+                ยกเลิก (hstatus 1 OR 2) + ชำระเงิน (hstatus 2). Shows whenever
+                the current view contains any actionable row on the "all" /
+                "รอดำเนินการ" / "รอชำระเงิน" tabs. Each per-row server action
+                re-verifies ownership/status/idempotency so this is UX only. */}
+            {(cancelableHNos.length > 0 || payableHNos.length > 0) &&
+              (q === "" || q === "1" || q === "2") && (
+                <ServiceOrderBulkActionsBar walletBalance={walletBalance} />
+              )}
           </BulkActionsProvider>
         )}
       </div>
@@ -479,6 +498,7 @@ function OrderCard({
   labels: {
     pay: string;
     selectToPay: string;
+    selectRow: string;
     viewDetail: string;
     printReceipt: string;
     printInvoice: string;
@@ -595,11 +615,15 @@ function OrderCard({
 
         {/* Action buttons — right column on desktop, full row beneath on mobile */}
         <div className="col-span-2 md:col-span-1 flex flex-wrap md:flex-col items-end justify-end gap-1.5">
-          {/* เลือกชำระแบบหลายรายการ — ติ๊กเพื่อรวมจ่ายจากแถบล่าง (<BulkPayBar>). */}
-          {row.hstatus === "2" && (
+          {/* เลือกรายการ — ติ๊กเพื่อรวมยกเลิก/ชำระจากแถบล่าง
+              (<ServiceOrderBulkActionsBar>). 2026-06-09 E10: checkbox visible
+              for hstatus 1 OR 2 (was hstatus=2 only) so power users with many
+              hstatus=1 orders can bulk-cancel them too. Pay-only label kept
+              for hstatus=2 (the column where pay is also available). */}
+          {(row.hstatus === "1" || row.hstatus === "2") && (
             <label className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-bold text-sky-700 cursor-pointer">
               <RowCheckbox hNo={row.hno} selectable />
-              {labels.selectToPay}
+              {row.hstatus === "2" ? labels.selectToPay : labels.selectRow}
             </label>
           )}
           {/* ชำระเงิน — เด่น, โชว์เฉพาะออเดอร์รอชำระเงิน (status 2) → จ่ายจาก
