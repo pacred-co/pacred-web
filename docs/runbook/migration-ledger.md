@@ -5,7 +5,9 @@
 
 ---
 
-## 🔢 NEXT FREE NUMBER = **0172**
+## 🔢 NEXT FREE NUMBER = **0173**
+
+> ✅ **2026-06-10 (เดฟ · accounting-period freeze extension): 0172** = `tax_invoice_period_freeze` — extends the V-E9 period-freeze (mig 0056) to the LIVE tb_* ใบกำกับ stores. `create or replace`s `accounting_period_freeze_check()` with two added branches (`tb_forwarder_tax_invoice` + `tb_shop_tax_invoice`, effective date = `coalesce(issued_at, created_at)`) + attaches `*_period_freeze` BEFORE UPDATE/DELETE triggers to both. Closes the gap the snapshot forward-fix surfaced: real issued invoices were UPDATE/DELETE-able after a period closed (only the dead World-A `tax_invoices` was frozen). HEADER tables only (matches 0056 precedent — _wht_entry children stay mutable for the 50-ทวิ cert chase). ZERO blast radius (0 closed periods + 0 invoices on prod · trigger fires only on UPDATE/DELETE in a closed period). NO new tables/function · idempotent. ✅ **APPLIED + VERIFIED PROD 2026-06-10** (`yzljakczhwrpbxflnmco` · 154ms · dry-run→`--apply` via `scripts/apply-migration-dryrun.mjs` · both triggers confirmed via `pg_trigger` + function carries both branches).
 
 > ✅ **APPLIED-PROD CORRECTION (2026-06-09 · เดฟ).** Migrations **0161-0167 + 0169-0171 ARE applied + live on prod** (`yzljakczhwrpbxflnmco`) — verified by direct prod table-probe (`tb_cargo_taxdoc_job`, `freight_commission_ledger`, `customs_declarations.cargo_forwarder_id` all EXIST) + the 2026-06-09 LATE-NIGHT CLAUDE.md save-point. The individual "⏳ NOT applied prod" marks in the entries below are **STALE** (the ledger wasn't updated when they were applied). 0168 = intentionally-unused gap. NEXT FREE = 0172.
 
