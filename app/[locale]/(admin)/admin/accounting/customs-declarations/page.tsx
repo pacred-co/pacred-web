@@ -127,6 +127,9 @@ export default async function AdminCustomsDeclarationsPage({
     const { count, error } = await admin
       .from("customs_declarations")
       .select("id", { count: "exact", head: true })
+      // 2026-06-09 (tax-invoice P3) — freight-only (CARGO ใบขนรวม has its own hub
+      // at /admin/accounting/cargo-declarations · cargo_forwarder_id set · mig 0162).
+      .not("freight_shipment_id", "is", null)
       .eq("status", s);
     if (error) {
       console.error("[customs-declarations status count]", { status: s, code: error.code, message: error.message });
@@ -145,6 +148,8 @@ export default async function AdminCustomsDeclarationsPage({
       "total_declared_value_thb, total_duty_thb, total_vat_thb, total_other_taxes_thb, " +
       "freight_shipment_id, created_at",
     )
+    // 2026-06-09 (tax-invoice P3) — freight-only (CARGO ใบขนรวม has its own hub).
+    .not("freight_shipment_id", "is", null)
     .gte("created_at", `${dateFrom}T00:00:00`)
     .lte("created_at", `${dateTo}T23:59:59`)
     .order("created_at", { ascending: false })

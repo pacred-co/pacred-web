@@ -137,6 +137,8 @@ export async function exportFreightDeclarationsAll(
   let query = admin
     .from("customs_declarations")
     .select(SELECT)
+    // 2026-06-09 (tax-invoice P3) — freight-only (CARGO ใบขนรวม has its own surface).
+    .not("freight_shipment_id", "is", null)
     .order("created_at", { ascending: false })
     .range(0, EXPORT_CAP); // 0..EXPORT_CAP = up to EXPORT_CAP+1 rows
   if (status) query = query.eq("status", status);
