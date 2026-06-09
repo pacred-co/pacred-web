@@ -3350,6 +3350,9 @@
     "freightOps": {
       "title": "Freight Operations (AX JOB)"
     },
+    "customsDocKit": {
+      "title": "Customs doc-kit"
+    },
     "settingsCargo": {
       "title": "Cargo system settings",
       "general": "General",

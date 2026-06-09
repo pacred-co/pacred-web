@@ -3350,6 +3350,9 @@
     "freightOps": {
       "title": "Freight Operations (AX JOB)"
     },
+    "customsDocKit": {
+      "title": "ชุดเอกสารศุลกากร (Doc-kit)"
+    },
     "settingsCargo": {
       "title": "ตั้งค่าระบบ Cargo",
       "general": "ทั่วไป",

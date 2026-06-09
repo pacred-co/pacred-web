@@ -34,7 +34,7 @@ import {
   Printer, Calculator, BadgeCheck, ShieldAlert, UserCheck, Wand2, RefreshCw,
   Banknote, KanbanSquare, Smartphone, Save,
   Ban, AlertCircle, Database, DatabaseZap, Send, Contact, Gauge, PhoneCall, Megaphone, Handshake,
-  ClipboardList,
+  ClipboardList, FileSignature,
   ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
@@ -128,6 +128,9 @@ const ICONS: Record<string, LucideIcon> = {
   // 2026-06-09 (เดฟ · tax-invoice P3) — CARGO ใบขนรวม leaf
   // (accFreight.cargoDeclarations · /admin/accounting/cargo-declarations).
   ClipboardList,
+  // 2026-06-09 (W11 · customs doc-kit) — customs-letter/Form-E/HS-assist leaf
+  // (customsDocKit.title · /admin/accounting/customs-doc-kit).
+  FileSignature,
 };
 
 function Icon({ name, active }: { name?: string; active: boolean }) {
