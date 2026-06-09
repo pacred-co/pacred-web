@@ -3,9 +3,10 @@
 
 ---
 
-# 🛠 2026-06-09 LATE-NIGHT — เดฟ: 3 URGENT prod-bug fixes + remaining roadmap waves W6-W11 → ALL ON MAIN · read FIRST
+# 🛠 2026-06-09 LATE-NIGHT — เดฟ: 3 URGENT prod-bug fixes + roadmap waves W6-W11 + ปอน mobile-polish → ALL ON MAIN · SESSION CLOSE (ย้ายคอม) · read FIRST
 
-> **main = dave-pacred = Poom-pacred = InwPond007 = `32589732`** (all 0/0 · deployed prod) · `pnpm verify` + prod build EXIT 0 · **8 migrations applied+verified prod this session-half (0161-0167 + 0169-0171 · NEXT FREE = 0172)** · prod Supabase = `yzljakczhwrpbxflnmco` (owner-confirmed · lozntl=ภูม dev).
+> **🏁 SESSION CLOSE (machine move).** Resume on the next machine: `git fetch origin && git pull origin main` — **everything is on main = dave-pacred = Poom-pacred = InwPond007 = `42116bc3`** (all synced 0/0 · deployed prod). ⚠️ the next machine needs `.env.local` first (prod keys don't travel · memory `local-dev-env-and-legacy-path` · prod Supabase = `yzljakczhwrpbxflnmco`).
+> **State:** `pnpm verify` + prod build EXIT 0 every save-point · **8 migrations applied+verified prod (0161-0167 + 0169-0171 · NEXT FREE = 0172)** · ปอน's final commit = mobile-first service-import polish (single-row cards · icon-rail sidebar · view-tab cleanup · clean FF, all เดฟ fixes verified-intact).
 >
 > **🔧 3 URGENT owner-reported prod bugs — FIXED + DEPLOYED first:** (1) **payment QR broken in every pay-modal** — the static company QR (`lib/promptpay.ts` `STATIC_PAYMENT_QR_PATH=/images/payment/pacred-qr.png`) was never UPLOADED (code was right; file missing → broken-image). Placed the owner's K-Shop QR (JPG→PNG · resized 720px · no code change · fixes all modals). (2) **ฝากนำเข้า create-order silent-blocked** — P1 doc-picker auto-defaulted to ใบกำกับ for juristic → required billing fields blocked submit when tb_corporate incomplete → `CartTaxDocPref` gained `defaultMode`; ฝากนำเข้า passes `'none'` (order-entry no longer forces a tax doc · cart unchanged). (3) **เพิ่มที่อยู่ใหม่ 404** — `/addresses/add` now redirects to `/addresses` (add is a modal there). **+ systemic broken-image sweep** (`grep static img-src vs public/`): fixed 7 more (5 unuploaded hero banners → existing service banners · 2 admin default placeholders). Learning: `docs/learnings/nextjs-16-quirks.md` (broken-image = missing public/ file).
 >

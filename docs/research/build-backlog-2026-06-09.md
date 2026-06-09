@@ -4,7 +4,7 @@
 >
 > **Read first:** [`docs/research/tax-invoice-platform-build-plan-2026-06-09.md`](tax-invoice-platform-build-plan-2026-06-09.md) (the canonical tax-invoice 5-phase plan) · [`docs/learnings/pacred-cargo-tax-invoice-flow.md`](../learnings/pacred-cargo-tax-invoice-flow.md) (the 3-number model) · NEW [`docs/learnings/freight-erp-model.md`](../learnings/freight-erp-model.md) + [`docs/learnings/customs-brokerage-kit.md`](../learnings/customs-brokerage-kit.md) (domain knowledge mined this session).
 >
-> **State as of this doc:** tax-invoice **P1 + P2** SHIPPED earlier (mig 0158). **NEXT FREE migration = 0167.** Build on `dave-pacred`.
+> **State as of this doc:** tax-invoice **P1 + P2** SHIPPED earlier (mig 0158). **ALL backlog waves W1-W11 now BUILT + on main (2026-06-09).** **NEXT FREE migration = 0172.**
 >
 > ## ✅ SHIPPED 2026-06-09 EVE (deep-source build · dave-pacred · migrations applied+verified prod)
 > - **W1** Freight RFQ leads triage — verified **already built** (page + `[ref]` + convert-to-quote + deep-link); no rebuild.
@@ -16,7 +16,13 @@
 > - **W8** BI cockpit drill-down (per-carrier/warehouse/sales-rep profit + SLA dwell-time) — extends `/admin/reports/cockpit`, no schema.
 > - **0166** defensive RLS broadening on customs_declarations (super/accounting/freight_import_doc/pricing).
 >
-> **Remaining waves are OWNER-INPUT-BLOCKED** (W6 commission rates · W9 P4 VAT/GL/flag/login · W10 China-team RBAC · W11 NETBAY creds) — see the per-wave sections + the decision list at the session report.
+> ## ✅ SHIPPED 2026-06-09 NIGHT (roadmap waves W6-W11 · dave-pacred → main · migrations applied+verified prod)
+> - **W6** Freight commission ledger (`freight_commission_*` ×4 · **mig 0167**) — 💰 DORMANT behind `commission.freight_enabled` (OFF · 0/4 tiers confirmed) · idempotent accrual · NO auto-pay.
+> - **W9** Tax-invoice P4: CARGO tax-doc 4-role workspace (`/admin/pricing/taxdoc-workspace` · CS→Pricing→Docs→Account over tb_cargo_taxdoc_job · 3 numbers + 4 pills · ACC-gated on cs+pricing) + PEAK 3-number rollup + shop/yuan etax read · no schema.
+> - **W10** Warehouse worker-app (`/admin/warehouse/worker/*` intake/measure/sack/ship/follow · **mig 0169-0171** · isolated audit tables · no money write · respects fcabinet_locked).
+> - **W11** Customs doc-kit (`/admin/accounting/customs-doc-kit` · DO-LOI per carrier + 45-day/POA/amend/lost-doc letters + Form-E/ACFTA + HS-assist + port codes · advisory/PDF · NETBAY deferred).
+>
+> **ALL backlog waves W1-W11 are BUILT + on main.** The owner-inputs now gate ACTIVATION (not the build): flip `commission.freight_enabled` (after confirming W6 tier rates) · flip `tax_invoice.shop_yuan_enabled` · assign `pricing`/`warehouse`/`freight_import_doc` roles to staff · ใบขน VAT-base sign-off (gates issuance) · PEAK GL codes (accountant) · NETBAY creds. ⚠️ the new admin surfaces are gated+reviewed but NOT authed-click-tested (needs a test customer/admin login).
 
 ---
 
