@@ -5153,6 +5153,8 @@
     "codeHelpFooter": "มีคำถามเรื่องพัสดุ? <chat>ทักแชทไลน์ {lineId}</chat> หรือโทร <call>{phone}</call>",
     "notFoundTitle": "ไม่พบเลขพัสดุนี้",
     "notFoundBody": "ลองตรวจสอบเลข <codeTag>{code}</codeTag> อีกครั้ง หรือเลขอาจยังไม่เข้าระบบ (โดยปกติใช้เวลา 1–2 วันหลังร้านค้าจีนส่งของเข้าโกดัง)",
+    "rateLimitedTitle": "ขออภัย ตรวจสอบบ่อยเกินไป",
+    "rateLimitedBody": "คุณค้นหาบ่อยเกินกำหนดชั่วคราว กรุณารอสักครู่แล้วลองใหม่อีกครั้ง หากต้องการความช่วยเหลือ ทักแชทไลน์ทีมงานได้เลย",
     "trackingNumberLabel": "เลขพัสดุ",
     "originWarehouse": "โกดังต้นทาง: <value>{warehouse}</value>",
     "currentStatusBadge": "สถานะปัจจุบัน",

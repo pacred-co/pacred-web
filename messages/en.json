@@ -5153,6 +5153,8 @@
     "codeHelpFooter": "Questions about your parcel? <chat>Chat with us on LINE {lineId}</chat> or call <call>{phone}</call>",
     "notFoundTitle": "This parcel number was not found",
     "notFoundBody": "Try checking the number <codeTag>{code}</codeTag> again, or it may not be in the system yet (this usually takes 1–2 days after the China store ships the item to the warehouse)",
+    "rateLimitedTitle": "Too many lookups",
+    "rateLimitedBody": "You've checked too many times in a short period. Please wait a moment and try again. Need help? Chat with our team on LINE anytime.",
     "trackingNumberLabel": "Parcel number",
     "originWarehouse": "Origin warehouse: <value>{warehouse}</value>",
     "currentStatusBadge": "Current status",

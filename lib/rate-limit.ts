@@ -53,6 +53,11 @@ export const RATE_LIMITS = {
   otpRequest:    { limit: 12, windowMs: 3_600_000 },   // 12 / hour
   /** Contact form per IP — anti-spam. */
   contact:       { limit: 5,  windowMs: 3_600_000 },   // 5 / hour
+  /** Public no-login parcel tracking per IP — the GTM "ไม่ต้องโทรถาม" page is
+   *  ad-linked, so it must tolerate a real visitor checking a few parcels while
+   *  blocking a script enumerating the 50-char courier numbers. 100/hour/IP is
+   *  generous for a human (one parcel check ≈ 1 request) yet caps scraping. */
+  publicTrack:   { limit: 100, windowMs: 3_600_000 },  // 100 / hour
   /** Generic API endpoint default (calls without their own bucket). */
   generic:       { limit: 30, windowMs: 60_000 },      // 30 / minute
 } as const;

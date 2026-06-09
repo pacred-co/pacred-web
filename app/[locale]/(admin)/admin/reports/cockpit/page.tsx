@@ -17,7 +17,12 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getCockpitReport } from "@/actions/admin/reports-cockpit";
-import type { FunnelStage, VolumeRow } from "@/actions/admin/reports-cockpit-types";
+import type {
+  FunnelStage,
+  VolumeRow,
+  CockpitProfitRow,
+  CockpitSlaSummary,
+} from "@/actions/admin/reports-cockpit-types";
 import { thb, intTh, decTh } from "@/lib/admin/reports/types";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +45,19 @@ export default async function ExecCockpitPage() {
         openLeads: 0,
         topCarriers: [],
         topWarehouses: [],
+        profitByCarrier: [],
+        profitByWarehouse: [],
+        profitBySalesRep: [],
+        sla: {
+          cycleAvgDays: 0,
+          cycleP90Days: 0,
+          slowestStage: "",
+          slowestStageLabel: "",
+          slowestAvgDays: 0,
+          stuckTotal: 0,
+          stuckThresholdDays: 7,
+          failed: true,
+        } as CockpitSlaSummary,
         marginOverCount: 0,
         marginOverProfit: 0,
         marginCapThb: 15000,
@@ -146,6 +164,41 @@ export default async function ExecCockpitPage() {
         />
       </section>
 
+      {/* SLA dwell-time summary (derived from tb_forwarder fdatestatus2..7) */}
+      <SlaSummary sla={r.sla} okEmpty={res.ok} />
+
+      {/* Profit drill-down — by carrier / warehouse / sales-rep (MTD) */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-sm font-bold">เจาะลึกกำไร &amp; มาร์จิ้น (MTD)</h2>
+        <Link
+          href="/admin/reports/profit-analytics"
+          className="text-xs text-primary-600 hover:underline"
+        >
+          ดูรายงานกำไรเต็มรูปแบบ (เลือกช่วงเวลา/CSV) →
+        </Link>
+      </div>
+      <section className="grid lg:grid-cols-2 gap-4">
+        <ProfitTable
+          title="กำไรตามขนส่งไทย (carrier)"
+          firstColLabel="ขนส่ง"
+          rows={r.profitByCarrier}
+          okEmpty={res.ok}
+        />
+        <ProfitTable
+          title="กำไรตามโกดังจีน (warehouse)"
+          firstColLabel="โกดัง"
+          rows={r.profitByWarehouse}
+          okEmpty={res.ok}
+        />
+      </section>
+      <ProfitTable
+        title="กำไรตามเซลล์ผู้ดูแล (sales rep · จากเซลล์ที่ลูกค้าถูก assign)"
+        firstColLabel="เซลล์"
+        rows={r.profitBySalesRep}
+        okEmpty={res.ok}
+        repNote
+      />
+
       <p className="text-[11px] text-muted">
         MTD = ตั้งแต่ต้นเดือนถึงปัจจุบัน · รายได้ = ยอดขาย+ค่าขนส่ง+ปรับราคา ·
         กำไร = fprofittotal (หรือ ยอดขาย−ส่วนลด−ต้นทุน) · funnel = นับออเดอร์ทุกสถานะ
@@ -218,6 +271,125 @@ function FunnelBar({ f, max }: { f: FunnelStage; max: number }) {
       </div>
       {pct < 18 && <span className="w-12 shrink-0 text-right font-mono text-xs">{intTh(f.count)}</span>}
     </div>
+  );
+}
+
+/** Margin-% tone: green ≥15%, amber 0–15%, red < 0 (loss). */
+function marginTone(pct: number): string {
+  if (pct < 0) return "text-red-600";
+  if (pct < 15) return "text-amber-600";
+  return "text-emerald-600";
+}
+
+function SlaSummary({ sla, okEmpty }: { sla: CockpitSlaSummary; okEmpty: boolean }) {
+  const hasData = !sla.failed && (sla.cycleAvgDays > 0 || sla.slowestStage !== "" || sla.stuckTotal > 0);
+  return (
+    <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
+      <div className="border-b border-border px-4 py-3 flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">เวลาดำเนินงาน (SLA · MTD)</h2>
+        <Link href="/admin/reports/sla-cycle-time" className="text-xs text-primary-600 hover:underline">
+          ดู SLA เต็ม + ออเดอร์ค้างสเตจ →
+        </Link>
+      </div>
+      <div className="p-4">
+        {!hasData ? (
+          <p className="py-6 text-center text-sm text-muted">
+            {okEmpty ? (sla.failed ? "โหลดข้อมูล SLA ไม่สำเร็จ" : "ยังไม่มีข้อมูลรอบเดือนนี้") : "—"}
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <Stat label="รอบงานเฉลี่ย (สร้าง→ส่ง)" value={`${decTh(sla.cycleAvgDays, 1)} วัน`} />
+            <Stat label="รอบงาน p90 (ช้าสุด 10%)" value={`${decTh(sla.cycleP90Days, 1)} วัน`} valueClass={sla.cycleP90Days > sla.cycleAvgDays * 2 ? "text-amber-600" : undefined} />
+            <Stat
+              label="สเตจที่ช้าที่สุด"
+              value={sla.slowestStage ? sla.slowestStageLabel : "—"}
+              sub={sla.slowestStage ? `เฉลี่ย ${decTh(sla.slowestAvgDays, 1)} วัน` : undefined}
+              small
+            />
+            <Stat
+              label={`ค้างเกิน ${sla.stuckThresholdDays} วัน`}
+              value={intTh(sla.stuckTotal)}
+              valueClass={sla.stuckTotal > 0 ? "text-red-600" : "text-emerald-600"}
+              link="/admin/reports/sla-cycle-time"
+              sub="ออเดอร์ค้างสเตจ"
+            />
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ProfitTable({
+  title,
+  firstColLabel,
+  rows,
+  okEmpty,
+  repNote,
+}: {
+  title: string;
+  firstColLabel: string;
+  rows: CockpitProfitRow[];
+  okEmpty: boolean;
+  repNote?: boolean;
+}) {
+  const maxProfit = Math.max(0, ...rows.map((x) => x.profit));
+  return (
+    <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
+      <div className="border-b border-border px-4 py-3">
+        <h2 className="text-sm font-semibold">{title}</h2>
+      </div>
+      <div className="overflow-x-auto scrollbar-x-visible">
+        <table className="w-full text-sm">
+          <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[10px] text-muted">
+            <tr>
+              <th className="px-3 py-2.5">{firstColLabel}</th>
+              <th className="px-3 py-2.5 text-right">ออเดอร์</th>
+              <th className="px-3 py-2.5 text-right">ยอดขาย</th>
+              <th className="px-3 py-2.5 text-right">กำไร</th>
+              <th className="px-3 py-2.5 text-right">มาร์จิ้น</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="p-8 text-center text-muted">
+                  {okEmpty ? "ไม่มีรายการในเดือนนี้" : "—"}
+                </td>
+              </tr>
+            ) : (
+              rows.map((x) => {
+                const pct = maxProfit > 0 ? Math.max(0, (x.profit / maxProfit) * 100) : 0;
+                return (
+                  <tr key={x.key} className="border-t border-border">
+                    <td className="px-3 py-2">
+                      <div className="font-medium">{x.label}</div>
+                      <div className="mt-1 h-1.5 w-full max-w-[140px] rounded-full bg-surface-alt overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${x.profit < 0 ? "bg-red-400" : "bg-primary-500"}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono">{intTh(x.count)}</td>
+                    <td className="px-3 py-2 text-right font-mono">{thb(x.revenue)}</td>
+                    <td className="px-3 py-2 text-right font-mono font-semibold">{thb(x.profit)}</td>
+                    <td className={`px-3 py-2 text-right font-mono ${marginTone(x.margin_pct)}`}>
+                      {decTh(x.margin_pct, 1)}%
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+      {repNote && (
+        <p className="px-4 py-2 text-[10px] text-muted border-t border-border">
+          เซลล์ = เซลล์ที่ลูกค้าถูก assign (tb_users.adminIDSale) · ออเดอร์ที่ลูกค้ายังไม่มีเซลล์รวมอยู่ใน &quot;(ไม่มีเซลล์)&quot;
+        </p>
+      )}
+    </section>
   );
 }
 

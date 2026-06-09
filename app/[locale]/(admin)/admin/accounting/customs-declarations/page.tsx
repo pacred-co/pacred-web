@@ -206,12 +206,12 @@ export default async function AdminCustomsDeclarationsPage({
           </p>
         </header>
 
-        {/* MVP banner — accounting policy still pending */}
+        {/* Edit-UI now wired (W8 2026-06-09); VAT-base policy still pending sign-off */}
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 space-y-1">
-          <p className="font-semibold">🚧 MVP read-only — admin mutate UI ตามมาในรอบหน้า</p>
+          <p className="font-semibold">✏️ แก้ไขได้แล้ว — กดที่เลขที่ใบขน (หรือปุ่ม &quot;แก้ไข&quot;) เพื่อเข้าหน้าแก้ไข/เดินสถานะ</p>
           <p>
-            Backend actions ครบแล้ว (`actions/admin/customs-declarations.ts` · ครีเอท/อัปเดต/ส่ง/รับ/ปล่อย/ยกเลิก)
-            แต่ VAT-base policy ยังรอ accounting sign-off ก่อน live (per CLAUDE.md 2026-06-04 pending list).
+            Backend actions ครบ (`actions/admin/customs-declarations.ts` · ครีเอท/อัปเดต/ส่ง/รับ/ปล่อย/ยกเลิก) ·
+            หน้าแก้ไขใช้ฟอร์มเดียวกับฝั่ง freight · <strong>VAT-base policy ยังรอ accounting sign-off ก่อน live</strong> (per CLAUDE.md 2026-06-04 pending list).
           </p>
         </div>
 
@@ -333,16 +333,20 @@ export default async function AdminCustomsDeclarationsPage({
                     <th className="px-3 py-2 text-right">อากร</th>
                     <th className="px-3 py-2 text-right">VAT</th>
                     <th className="px-3 py-2">วันที่สร้าง</th>
-                    <th className="px-3 py-2 text-center">PDF</th>
+                    <th className="px-3 py-2 text-center">จัดการ</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
                       <td className="px-3 py-2 whitespace-nowrap">
-                        <div className="font-mono text-xs font-bold">
-                          {r.declaration_no ?? <span className="text-muted italic">(draft)</span>}
-                        </div>
+                        <Link
+                          href={`/admin/accounting/customs-declarations/${r.id}`}
+                          className="font-mono text-xs font-bold text-primary-600 hover:underline"
+                          title="เปิดดู/แก้ไขใบขน"
+                        >
+                          {r.declaration_no ?? <span className="italic">(draft)</span>}
+                        </Link>
                         {r.customs_control_no && (
                           <div className="text-[10px] text-muted font-mono">
                             control: {r.customs_control_no}
@@ -380,16 +384,25 @@ export default async function AdminCustomsDeclarationsPage({
                       </td>
                       <td className="px-3 py-2 text-xs whitespace-nowrap">{fmtDate(r.created_at)}</td>
                       <td className="px-3 py-2 text-center">
-                        <a
-                          href={`/api/customs-declaration/${r.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 rounded-lg border border-primary-300 bg-primary-50 px-2 py-1 text-[10px] text-primary-700 hover:bg-primary-100"
-                          title="เปิดดู PDF"
-                        >
-                          <FileText className="h-3 w-3" />
-                          PDF
-                        </a>
+                        <div className="inline-flex items-center gap-1">
+                          <Link
+                            href={`/admin/accounting/customs-declarations/${r.id}`}
+                            className="inline-flex items-center gap-1 rounded-lg border border-border bg-white px-2 py-1 text-[10px] text-foreground hover:bg-surface-alt"
+                            title="เปิดดู/แก้ไข"
+                          >
+                            <FileText className="h-3 w-3" />
+                            แก้ไข
+                          </Link>
+                          <a
+                            href={`/api/customs-declaration/${r.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 rounded-lg border border-primary-300 bg-primary-50 px-2 py-1 text-[10px] text-primary-700 hover:bg-primary-100"
+                            title="เปิดดู PDF"
+                          >
+                            PDF
+                          </a>
+                        </div>
                       </td>
                     </tr>
                   ))}
