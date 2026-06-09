@@ -912,7 +912,6 @@ const menuSuper: MenuSection[] = [
       itemFreightCostRates,
       // 2026-06-09 (เดฟ · tax-invoice P3) — CARGO ใบขนรวม (consolidated customs decl).
       itemCargoDeclarations,
-<<<<<<< HEAD
       // 2026-06-09 (W6 · freight commission ledger) — accrual + withdrawal queue
       // (DORMANT behind commission.freight_enabled).
       itemFreightCommission,
@@ -1118,7 +1117,6 @@ const menuAccounting: MenuSection[] = [
       // 2026-06-09 (เดฟ · tax-invoice P3) — CARGO ใบขนรวม (accounting reviews the
       // declared/duty/VAT before PEAK + ใบกำกับ issuance).
       itemCargoDeclarations,
-<<<<<<< HEAD
       // 2026-06-09 (W9 · tax-invoice P4) — accounting owns the ACCOUNT (close-out)
       // stage of the CARGO tax-doc 4-role workspace (PEAK + ใบกำกับ readiness).
       itemTaxdocWorkspace,
@@ -1651,7 +1649,6 @@ const menuFreightImportDoc: MenuSection[] = [
       // 2026-06-09 (เดฟ · tax-invoice P3) — CARGO ใบขนรวม (the Docs role owns
       // the consolidated cargo declaration + per-line มูลค่าสำแดง).
       itemCargoDeclarations,
-<<<<<<< HEAD
       // 2026-06-09 (W9 · tax-invoice P4) — Docs owns the DOCS (declared/ใบขน)
       // stage of the CARGO tax-doc 4-role workspace.
       itemTaxdocWorkspace,
