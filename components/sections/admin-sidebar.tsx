@@ -34,7 +34,7 @@ import {
   Printer, Calculator, BadgeCheck, ShieldAlert, UserCheck, Wand2, RefreshCw,
   Banknote, KanbanSquare, Smartphone, Save,
   Ban, AlertCircle, Database, DatabaseZap, Send, Contact, Gauge, PhoneCall, Megaphone, Handshake,
-  ClipboardList, ReceiptText,
+  ClipboardList, ReceiptText, FileSignature,
   ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
@@ -131,6 +131,9 @@ const ICONS: Record<string, LucideIcon> = {
   // 2026-06-09 (W9 · tax-invoice P4) — the CARGO tax-doc 4-role workspace leaf
   // (taxdocWorkspace.title · /admin/pricing/taxdoc-workspace).
   ReceiptText,
+  // 2026-06-09 (W11 · customs doc-kit) — customs-letter/Form-E/HS-assist leaf
+  // (customsDocKit.title · /admin/accounting/customs-doc-kit).
+  FileSignature,
 };
 
 function Icon({ name, active }: { name?: string; active: boolean }) {

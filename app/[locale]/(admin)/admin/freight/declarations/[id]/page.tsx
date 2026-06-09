@@ -218,6 +218,14 @@ export default async function AdminCustomsDeclarationDetailPage({
         >
           ↗ ไปหน้างาน (shipment)
         </Link>
+        {/* W11 — jump to the customs doc-kit pre-seeded with this shipment so the
+            Docs role can generate the DO-release LOI / customs letters. */}
+        <Link
+          href={`/admin/accounting/customs-doc-kit?shipment=${header.freight_shipment_id}`}
+          className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:bg-surface-alt"
+        >
+          ✉️ ออกจดหมาย D/O / ศุลกากร
+        </Link>
       </div>
 
       {/* Customer + shipment summary */}

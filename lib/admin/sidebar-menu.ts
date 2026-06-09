@@ -402,6 +402,20 @@ const itemTaxdocWorkspace: MenuItem = {
   icon: "ReceiptText",
 };
 
+/** 2026-06-09 (W11 · customs doc-kit) — the customs-brokerage document toolkit
+ *  (/admin/accounting/customs-doc-kit). DOC-GENERATION + advisory only:
+ *  DO-release LOI per carrier (ZIM/RCL/COSCO/HEDE/FUJIT/UPS/...) + ZIM Split-DO
+ *  + the customs-letter kit (45-day waiver · POA · amend · lost-doc) →
+ *  stateless PDF generator · Form-E/ACFTA eligibility (advisory) · HS-code
+ *  AI-assist (stub unless endpoint set). 🔒 NETBAY e-filing HARD-BLOCKED (no
+ *  creds) — manual filing until then. NO money / NO auto-filing. The page +
+ *  actions gate RBAC themselves (super/accounting/freight_*_doc/pricing). */
+const itemCustomsDocKit: MenuItem = {
+  labelKey: "customsDocKit.title",
+  href: "/admin/accounting/customs-doc-kit",
+  icon: "FileSignature",
+};
+
 /** legacy pcs-admin menu L162-167 — "อัปเดตฝากนำเข้า" (top-level group)
  *  Combines BOTH Wave 17 P1 streams into the single legacy parent:
  *   - P1-1+2 — MOMO + CargoCenter (manualUpdate sub-page only · Phase B
@@ -898,11 +912,14 @@ const menuSuper: MenuSection[] = [
       itemFreightCostRates,
       // 2026-06-09 (เดฟ · tax-invoice P3) — CARGO ใบขนรวม (consolidated customs decl).
       itemCargoDeclarations,
+<<<<<<< HEAD
       // 2026-06-09 (W6 · freight commission ledger) — accrual + withdrawal queue
       // (DORMANT behind commission.freight_enabled).
       itemFreightCommission,
       // 2026-06-09 (W9 · tax-invoice P4) — CARGO tax-doc 4-role workspace (3 numbers).
       itemTaxdocWorkspace,
+      // 2026-06-09 (W11 · customs doc-kit) — DO-LOI/Form-E/HS-assist toolkit.
+      itemCustomsDocKit,
       blockApiForwarderUpdate,
       // 2026-05-21 ภูม flagged — /admin/drivers had no direct super sidebar
       // entry · only reachable via the /admin/forwarders top-menubar
@@ -1101,9 +1118,13 @@ const menuAccounting: MenuSection[] = [
       // 2026-06-09 (เดฟ · tax-invoice P3) — CARGO ใบขนรวม (accounting reviews the
       // declared/duty/VAT before PEAK + ใบกำกับ issuance).
       itemCargoDeclarations,
+<<<<<<< HEAD
       // 2026-06-09 (W9 · tax-invoice P4) — accounting owns the ACCOUNT (close-out)
       // stage of the CARGO tax-doc 4-role workspace (PEAK + ใบกำกับ readiness).
       itemTaxdocWorkspace,
+      // 2026-06-09 (W11 · customs doc-kit) — accounting/Docs generate DO-LOI +
+      // customs letters + Form-E/HS advisory.
+      itemCustomsDocKit,
       // 2026-06-09 (W4 · freight ops cockpit) — accounting owns the ACC stage
       // (P&L close) on the AX-JOB board.
       itemFreightOperations,
@@ -1505,6 +1526,9 @@ const menuFreightExportDoc: MenuSection[] = [
       itemFreightOperations,
       // Primary workspace — customs declarations (V-E11 · ใบขนสินค้า).
       { labelKey: "accFreight.declarations", href: "/admin/freight/declarations", icon: "ClipboardCheck" },
+      // 2026-06-09 (W11 · customs doc-kit) — DO-LOI per carrier + customs letters
+      // + Form-E/HS advisory (Docs role owns issuance of these draft documents).
+      itemCustomsDocKit,
       // Freight shipments — Doc pivots from a shipment to create its declaration.
       { labelKey: "freightExportOps.placeholder", href: "/admin/freight/shipments", icon: "Truck" },
       // Customer lookup — find the shipment owner / cabinet context.
@@ -1627,9 +1651,13 @@ const menuFreightImportDoc: MenuSection[] = [
       // 2026-06-09 (เดฟ · tax-invoice P3) — CARGO ใบขนรวม (the Docs role owns
       // the consolidated cargo declaration + per-line มูลค่าสำแดง).
       itemCargoDeclarations,
+<<<<<<< HEAD
       // 2026-06-09 (W9 · tax-invoice P4) — Docs owns the DOCS (declared/ใบขน)
       // stage of the CARGO tax-doc 4-role workspace.
       itemTaxdocWorkspace,
+      // 2026-06-09 (W11 · customs doc-kit) — DO-LOI per carrier + customs letters
+      // + Form-E/HS advisory (Docs role generates these draft documents).
+      itemCustomsDocKit,
       // Freight shipments — Doc pivots from a shipment to create its declaration.
       { labelKey: "freightImportOps.placeholder", href: "/admin/freight/shipments", icon: "Truck" },
       // Customer lookup — find the shipment owner / cabinet context.

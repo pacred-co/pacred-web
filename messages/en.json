@@ -3356,6 +3356,9 @@
     "taxdocWorkspace": {
       "title": "Tax-doc Workspace (3 numbers)"
     },
+    "customsDocKit": {
+      "title": "Customs doc-kit"
+    },
     "settingsCargo": {
       "title": "Cargo system settings",
       "general": "General",
