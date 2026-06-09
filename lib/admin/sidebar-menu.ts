@@ -1741,6 +1741,9 @@ const menuPricing: MenuSection[] = [
       // 2026-06-09 (เดฟ · tax-invoice P3) — pricing captures COST + DECLARED;
       // the cargo ใบขนรวม surfaces the per-line declared value (defaults from cost).
       itemCargoDeclarations,
+      // 2026-06-09 (audit S3) — the customs doc-kit page/action/PDF already grant
+      // `pricing`; without this leaf a pricing-only user could only reach it by URL.
+      itemCustomsDocKit,
     ],
   },
   learningSection,

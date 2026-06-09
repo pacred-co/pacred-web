@@ -170,7 +170,11 @@ async function readShopNumbers(
   const lineCostThb = list.reduce((s, it) => {
     const qty = Math.max(0, n(it.orderqty));
     const rate = n(it.cost_rate_cny);
-    return s + n(it.cost_unit_cny) * (qty > 0 ? qty : 1) * (rate > 0 ? rate : 1);
+    const cost = n(it.cost_unit_cny);
+    // ¥→THB needs the cost-side rate. If Pricing entered a ¥ cost but left the
+    // rate blank, the line is INCOMPLETE → contribute 0 (don't silently use
+    // rate=1, which would land a ¥ figure as THB ~4.9× understated). audit S1.
+    return s + (cost > 0 && rate > 0 ? cost * (qty > 0 ? qty : 1) * rate : 0);
   }, 0);
   const declaredSum = list.reduce((s, it) => s + n(it.declared_value_thb), 0);
 
@@ -513,6 +517,42 @@ export async function adminListCargoTaxdocJobs(): Promise<AdminActionResult<Taxd
         declarationId: null,
         selling: round2(n(c.ftotalprice)),
         cost: round2(n(c.fcosttotalprice)),
+        declared: 0,
+      });
+    }
+
+    // 3) Candidate shop orders (ฝากสั่งซื้อ) — paid (hstatus 3-5) with a doc-mode
+    //    pref but no job row yet. audit S4: the hno path (ensureJobRow /
+    //    readShopNumbers / OpenTaxdocJobButton) was built but had no candidate
+    //    entry, so shop orders were unreachable from the workspace.
+    const hnosWithJob = new Set(jobRows.filter((j) => j.hno != null).map((j) => j.hno!));
+    const { data: shopRaw, error: shopErr } = await admin
+      .from("tb_header_order")
+      .select("hno, userid, tax_doc_pref, htotalpriceuser, htotalpricechn")
+      .in("hstatus", ["3", "4", "5"])
+      .in("tax_doc_pref", ["tax_invoice", "customs"])
+      .order("hno", { ascending: false })
+      .limit(150);
+    if (shopErr) {
+      console.error("[taxdoc-workspace shop candidates]", { code: shopErr.code, message: shopErr.message });
+    }
+    for (const c of ((shopRaw ?? []) as Array<{ hno: string; userid: string | null; tax_doc_pref: string | null; htotalpriceuser: number | string | null; htotalpricechn: number | string | null }>)) {
+      if (hnosWithJob.has(c.hno)) continue;
+      candidates.push({
+        jobId: null,
+        fid: null,
+        hno: c.hno,
+        source: "shop",
+        userid: c.userid,
+        cabinetNo: null,
+        docMode: (c.tax_doc_pref ?? "none").trim() || "none",
+        csStatus: "",
+        pricingStatus: "",
+        docsStatus: "",
+        accountStatus: "",
+        declarationId: null,
+        selling: round2(n(c.htotalpriceuser)),
+        cost: round2(n(c.htotalpricechn)),
         declared: 0,
       });
     }

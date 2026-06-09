@@ -142,7 +142,7 @@ export default async function TaxdocWorkspacePage() {
       <section className="space-y-2">
         <h2 className="font-bold text-sm">🚢 ออเดอร์เลือกเอกสารแล้ว · ยังไม่เปิดงาน ({candidates.length})</h2>
         <p className="text-[11px] text-muted">
-          ฝากนำเข้า fstatus 4-6 (ถึงไทย/รอชำระ/เตรียมส่ง) ที่ลูกค้าเลือก ใบกำกับ/ใบขน — กด &quot;เปิดงาน&quot; เพื่อเริ่ม workflow 4 บทบาท.
+          ฝากนำเข้า (fstatus 4-6 · ถึงไทย/รอชำระ/เตรียมส่ง) + ฝากสั่งซื้อ (hstatus 3-5 · ชำระแล้ว) ที่ลูกค้าเลือก ใบกำกับ/ใบขน — กด &quot;เปิดงาน&quot; เพื่อเริ่ม workflow 4 บทบาท.
         </p>
         <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
           {candidates.length === 0 ? (

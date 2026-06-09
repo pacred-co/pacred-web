@@ -74,8 +74,12 @@ async function loadActiveTiers(
     console.error(`[freight-commission tiers] failed`, { code: error.code, message: error.message });
     return [];
   }
-  const rows = (data ?? []) as TierRow[];
-  // Keep only the newest active row per service_kind.
+  // Keep only the newest OWNER-CONFIRMED active row per service_kind. Filtering
+  // confirmed FIRST (before the newest-per-scope pick) is load-bearing: a newer
+  // *unconfirmed* tier must not shadow an older *confirmed* one — otherwise that
+  // scope silently stops accruing real money (audit S2). Only confirmed tiers
+  // accrue; this loader feeds the minting path exclusively.
+  const rows = (data ?? []).filter((r) => (r as TierRow).is_owner_confirmed) as TierRow[];
   const seen = new Set<string>();
   const latest: TierRow[] = [];
   for (const r of rows) {

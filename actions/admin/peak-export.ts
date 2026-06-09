@@ -398,7 +398,9 @@ async function loadTaxDocRollup(
       const cur = shopLineSums.get(o.hno) ?? { lineCost: 0, declared: 0 };
       const qty = Math.max(0, num(o.orderqty));
       const rate = num(o.cost_rate_cny);
-      cur.lineCost += num(o.cost_unit_cny) * (qty > 0 ? qty : 1) * (rate > 0 ? rate : 1);
+      const cost = num(o.cost_unit_cny);
+      // ¥ cost without a cost-rate = incomplete → 0, never silent rate=1 (audit S1).
+      cur.lineCost += cost > 0 && rate > 0 ? cost * (qty > 0 ? qty : 1) * rate : 0;
       cur.declared += num(o.declared_value_thb);
       shopLineSums.set(o.hno, cur);
     }
