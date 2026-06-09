@@ -601,7 +601,7 @@ export default async function ProfilePage() {
                               </span>{" "}
                               <Link
                                 className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:underline"
-                                href="/addresses/add"
+                                href="/addresses"
                               >
                                 <i className="ft-plus"></i> {t("addAddress")}
                               </Link>

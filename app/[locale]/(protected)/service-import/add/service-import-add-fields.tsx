@@ -190,7 +190,7 @@ export function ServiceImportAddFields({
             {t("sectionAddress")}
           </h2>
           <Link
-            href="/addresses/add"
+            href="/addresses"
             target="_blank"
             className="inline-flex items-center gap-1 text-[13px] font-medium text-primary-600 hover:text-primary-700"
           >
@@ -231,7 +231,7 @@ export function ServiceImportAddFields({
             {t.rich("noAddressNote", {
               link: (chunks) => (
                 <Link
-                  href="/addresses/add"
+                  href="/addresses"
                   target="_blank"
                   className="text-primary-600 hover:underline"
                 >
