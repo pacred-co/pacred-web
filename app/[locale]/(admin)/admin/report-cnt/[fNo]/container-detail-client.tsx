@@ -603,19 +603,10 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                         </span>
                       );
                     })()}
-                    {/* 2026-06-09 status-gate (ภูม) — when bulk-check is active,
-                        flag rows whose fstatus is below the QA-eligibility floor
-                        so staff can SEE why the checkbox is disabled. */}
-                    {canBulkCheck && !cabinetIsPaid && !r.inCheckQueue && !isRowEligibleForAddCheck(r.fstatus) && (
-                      <div className="mt-1">
-                        <span
-                          className="inline-block rounded-full bg-slate-200 text-slate-700 border border-slate-400 text-[9px] px-1.5 py-0.5"
-                          title={`รอของถึงโกดังก่อน · ตรวจสอบได้เมื่อสถานะถึง "${FSTATUS_LABEL[REPORT_CNT_ADD_CHECK_MIN_FSTATUS]}"`}
-                        >
-                          ยังถึงไม่ได้
-                        </span>
-                      </div>
-                    )}
+                    {/* 2026-06-09 ภูม: badge "ยังถึงไม่ได้" removed — row tint
+                        (pink/rose for notYetWarehouse) + status pill already
+                        signal it visually; the extra chip was redundant clutter.
+                        Checkbox disable + tooltip still active (sufficient). */}
                     {r.fcredit && r.fcredit !== "" && (
                       <div className="mt-1">
                         {/* ภูม #5 2026-05-29: same path-fix as tracking link above. */}
