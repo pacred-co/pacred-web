@@ -44,6 +44,9 @@ import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
 import { autoExpireOverdueShopOrder } from "@/lib/service-order/auto-expire";
 import type { EditorItem } from "./items-editor";
 import { OrderNoteForm, OrderDangerZone } from "./order-actions";
+// 2026-06-09 (P2 · tax-invoice platform): per-line COST + DECLARED capture
+// (the `pricing` role) — isolated from the selling-price/quote flow.
+import { ShopOrderCostSection } from "./shop-cost-section";
 
 // ── inline-edits labels mirrored here for read-only display (the editor in
 // inline-edits.tsx owns the canonical maps; we duplicate the 3 small ones
@@ -427,6 +430,12 @@ export async function renderLegacyServiceOrderView(hno: string) {
           spawn, refund, or settle from wallet → click "แก้ไข/อัปเดต" สีแดง
           มุมขวาบนของหน้า · top-of-page CTA cover นี้แล้ว) ── */}
       <ItemSummary items={editorItems} completed={status === "5"} />
+
+      {/* 2026-06-09 (P2 · tax-invoice platform) — per-line COST + DECLARED
+          capture (Pricing role). Separate control · calls ONLY the cost action
+          (setShopOrderItemCost) · does NOT touch selling price / hStatus /
+          notifications (AGENTS.md §0e). */}
+      <ShopOrderCostSection hno={r.hno} />
 
       {/* 2026-06-05 (ภูม flag) — amber signpost "ไปหน้าแก้ไข/อัปเดต" ลบออก
           เพราะซ้ำกับปุ่ม "แก้ไข/อัปเดต" สีแดงมุมขวาบน (เด่นกว่าอยู่แล้ว ·

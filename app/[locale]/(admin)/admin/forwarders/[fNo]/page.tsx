@@ -6,6 +6,9 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 // 2026-06-05 PM (ภูม flag): ForwarderItemsTable replaced by combined
 // FreightBreakdownTable (per-item rows ¥ + freight breakdown row ฿).
 import { FreightBreakdownTable } from "./edit/freight-breakdown-table";
+// 2026-06-09 (P2 · tax-invoice platform): per-line COST + DECLARED capture
+// (the `pricing` role) — isolated from the selling-price/payment flow.
+import { ForwarderCostSection } from "./forwarder-cost-section";
 import {
   User as UserIcon,
   Package,
@@ -623,6 +626,12 @@ async function tryRenderTbForwarder(
             r={r}
             isJuristic={u?.userCompany === "1" || r.fusercompany === "1"}
           />
+
+          {/* 2026-06-09 (P2 · tax-invoice platform) — per-line COST + DECLARED
+              capture (Pricing role). Separate control · calls ONLY the cost
+              action · does NOT touch selling price / status / notifications
+              (AGENTS.md §0e). */}
+          <ForwarderCostSection fId={r.id} reforder={r.reforder} />
 
           {/* Note */}
           {r.fnote && r.fnote.trim() !== "" && (

@@ -562,7 +562,13 @@ export function ForwardersTable({
         {rows.length === 0 ? (
           <p className="p-12 text-center text-sm text-muted">ไม่มีรายการที่ตรงกัน</p>
         ) : (
-          <div className="overflow-x-auto">
+          // 2026-06-08 (ภูม round 5 · S1 audit finding): the 12+ col table
+          // at typical 1366px Windows Chrome — default overflow-x scrollbar
+          // is invisible there, so staff don't realise they can scroll +
+          // think the rightmost "จัดการ" column is missing (Wave 18 PR10899
+          // repro). The `scrollbar-x-visible` class (globals.css L155)
+          // forces a visible horizontal scrollbar so staff always see it.
+          <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full text-[11px]">
               <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
                 <tr>

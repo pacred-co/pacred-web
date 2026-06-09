@@ -115,6 +115,46 @@ export default async function ServiceImportAddPage() {
   }
   others.sort((a, b) => Number(a.addressid) - Number(b.addressid));
 
+  // ── P1 (tax-doc at order entry · 2026-06-09) — defaults for the doc-mode
+  // picker, mirrored from cart/page.tsx: prefill juristic customers' 13-digit
+  // tax id + company name + address from tb_corporate so the selector can
+  // default to 'tax_invoice'. NOTE: tb_users is camelCase on prod (the
+  // 2026-05-27 rename — userID/userCompany), tb_corporate stays lowercase. ──
+  const [userRowRes, juristicRes] = await Promise.all([
+    admin
+      .from("tb_users")
+      .select('"userCompany"')
+      .eq("userID", memberCode)
+      .maybeSingle<{ userCompany: string | null }>(),
+    admin
+      .from("tb_corporate")
+      .select("corporatenumber, corporatename, corporateaddress")
+      .eq("userid", memberCode)
+      .maybeSingle<{
+        corporatenumber: string | null;
+        corporatename: string | null;
+        corporateaddress: string | null;
+      }>(),
+  ]);
+  if (userRowRes.error) {
+    console.error(`[service-import/add tb_users tax-doc default] failed`, {
+      code: userRowRes.error.code,
+      message: userRowRes.error.message,
+    });
+  }
+  if (juristicRes.error) {
+    console.error(`[service-import/add tb_corporate tax-doc default] failed`, {
+      code: juristicRes.error.code,
+      message: juristicRes.error.message,
+    });
+  }
+  const taxDocDefaults = {
+    isJuristic: userRowRes.data?.userCompany === "1",
+    taxId: juristicRes.data?.corporatenumber ?? "",
+    companyName: juristicRes.data?.corporatename ?? "",
+    companyAddress: juristicRes.data?.corporateaddress ?? "",
+  };
+
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-5 sm:py-6">
       {/* Breadcrumb */}
@@ -171,6 +211,7 @@ export default async function ServiceImportAddPage() {
             addressid: a.addressid,
             full: addressFull(a),
           }))}
+          taxDocDefaults={taxDocDefaults}
         />
       </ServiceImportAddForm>
     </div>

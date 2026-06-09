@@ -32,6 +32,11 @@ import { sendNotification } from "@/lib/notifications";
 import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
 import { resolveProfileIdForLegacyUserid } from "@/lib/auth/tb-users-resolver";
 import { logger } from "@/lib/logger";
+import {
+  evaluateReportCntAddCheckStatus,
+  REPORT_CNT_ADD_CHECK_MIN_FSTATUS,
+  FSTATUS_LABEL,
+} from "@/lib/admin/report-cnt-add-check-gate";
 
 // ─────────────────────────────────────────────────────────────────────
 // Schema — the 4-rate payload from the modal form.
@@ -353,6 +358,21 @@ export async function adminReportCntResetRate(fCabinetNumber: string): Promise<A
 // adminReportCntAddCheck — report-cnt.php L1916 "เพิ่มในรายการตรวจสอบแล้ว"
 //   INSERT INTO tb_check_forwarder (cfstatus, fid, date, adminid)
 //   for each selected fID. Skips IDs that already have a row.
+//
+// 2026-06-09 (ภูม-reported bug fix) — STATUS GATE.
+//   The legacy POST handler accepted any fID the admin checked, which
+//   meant a row whose physical goods were still in transit (fstatus '1'/
+//   '2'/'3' / not yet at the TH warehouse) could land in the QA queue
+//   and be "ตรวจสอบ"-ed against nothing. New gate: reject the WHOLE
+//   request when ANY selected fID has fstatus < REPORT_CNT_ADD_CHECK_MIN_FSTATUS.
+//   All-or-nothing (better UX than silent partial: the staff fix the
+//   selection, retry, and KNOW which rows were rejected).
+//
+//   NULL fstatus is treated as "<min" → rejected (defensive · a row
+//   with no status string predates the workflow and shouldn't be queued).
+//   fstatus '7' (ส่งแล้ว = delivered) is also accepted — a delivered
+//   row CAN go back into QA if there's a customer dispute / damage claim,
+//   the legacy let it (no upper bound), and we keep that behaviour.
 // ─────────────────────────────────────────────────────────────────────
 
 // INTERNAL — `"use server"` files may only export async functions.
@@ -373,6 +393,57 @@ export async function adminReportCntAddCheck(fIDs: number[]): Promise<AdminActio
 
   return withAdmin<{ inserted: number; skipped: number }>(["super", "ops", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
+
+    // ── STATUS GATE (2026-06-09 bug fix) ──
+    // Fetch fstatus + fidorco for every selected fID, then reject the
+    // whole batch if ANY row hasn't reached the TH-warehouse stage.
+    const { data: statusRows, error: statusErr } = await admin
+      .from("tb_forwarder")
+      .select("id, fstatus, fidorco")
+      .in("id", parsed.data.fIDs);
+    if (statusErr) {
+      console.error(`[tb_forwarder status-gate] failed`, { code: statusErr.code, message: statusErr.message });
+      return { ok: false, error: "โหลดสถานะรายการไม่สำเร็จ — กรุณาลองใหม่" };
+    }
+
+    const fetched = (statusRows ?? []) as Array<{ id: number; fstatus: string | null; fidorco: string | null }>;
+
+    // Reject IDs that don't exist in tb_forwarder at all (defensive · they
+    // can't be "QA-checked" if the goods row was deleted between page-render
+    // and click). Treat missing as "blocked".
+    const fetchedIds = new Set(fetched.map((r) => Number(r.id)));
+    const missing = parsed.data.fIDs.filter((id) => !fetchedIds.has(id));
+    if (missing.length > 0) {
+      await logAdminAction(adminId, "report_cnt.add_check_rejected", "tb_forwarder", missing.slice(0, 5).join(","), {
+        reason:  "rows_not_found",
+        missing: missing.slice(0, 20),
+        attempted: parsed.data.fIDs.length,
+      });
+      return {
+        ok:    false,
+        error: `ไม่พบรายการบางรายการ (อาจถูกลบไปแล้ว) — รายการ ${missing.slice(0, 5).map((n) => `#${n}`).join(", ")}${missing.length > 5 ? ` (อีก ${missing.length - 5} รายการ)` : ""}`,
+      };
+    }
+
+    const gate = evaluateReportCntAddCheckStatus(fetched);
+    if (!gate.ok) {
+      await logAdminAction(adminId, "report_cnt.add_check_rejected", "tb_forwarder", gate.blockedFidorcos.join(","), {
+        reason:           "fstatus_too_low",
+        min_fstatus:      REPORT_CNT_ADD_CHECK_MIN_FSTATUS,
+        blocked_count:    gate.blockedCount,
+        blocked_sample:   gate.blockedFidorcos,
+        sample_statuses:  gate.sampleStatuses,
+        attempted_total:  parsed.data.fIDs.length,
+      });
+      const moreSuffix = gate.blockedCount > gate.blockedFidorcos.length
+        ? ` (และอีก ${gate.blockedCount - gate.blockedFidorcos.length} รายการ)`
+        : "";
+      const minLabel = FSTATUS_LABEL[REPORT_CNT_ADD_CHECK_MIN_FSTATUS] ?? REPORT_CNT_ADD_CHECK_MIN_FSTATUS;
+      return {
+        ok:    false,
+        error: `บางรายการยังไม่ถึงโกดังไทย — รอ MOMO sync update สถานะถึง "${minLabel}" ก่อน (รายการ ${gate.blockedFidorcos.join(", ")})${moreSuffix}`,
+      };
+    }
 
     // Skip rows that already exist (legacy doesn't guard — leaves a dup
     // row when an admin clicks twice. We guard for cleanliness; the

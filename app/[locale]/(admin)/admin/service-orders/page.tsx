@@ -48,6 +48,11 @@ import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportServiceOrdersAll } from "@/actions/admin/export/service-orders";
 import { ServiceOrdersTable, type ServiceOrderRow } from "./service-orders-table";
+import {
+  looksLikeTrackingOrShipping,
+  sanitizeSearchTerm,
+  SEARCH_AXES_HINT,
+} from "@/lib/admin/service-order-search";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +82,7 @@ const PURCHASING_MENUBAR: MenubarItem[] = [
       { label: "cart",                  href: "/admin/service-orders/cart" },
       { label: "เพิ่มสินค้าใน cart",     href: "/admin/service-orders/cart/add" },
       { label: "หมายเหตุฝากสั่ง",       href: "/admin/service-orders/notes" },
+      { label: "ประวัติคืนเงิน",          href: "/admin/service-orders/refunds" },
     ],
   },
 ];
@@ -255,13 +261,57 @@ export default async function AdminServiceOrdersPage({
   if (effectiveFrom) q = q.gte("hdate", effectiveFrom);
   if (effectiveTo) q = q.lte("hdate", effectiveTo + "T23:59:59");
 
-  // Keyword search — push down to PostgREST when possible
-  // (matches hno OR htitle OR userid via the .or() predicate).
+  // Keyword search — multi-axis (E5 · legacy `pcs-admin/shop-search.php`).
+  // Cheap path: hno/htitle/userid ilike on `tb_header_order` (1 query).
+  // Expanded path: when the term looks like a tracking/shipping number
+  // ALSO query `tb_order.(ctrackingnumber,cshippingnumber)` for matching
+  // hno values and UNION the result (legacy `?keyType=all` semantics).
+  // Heuristic + escape live in lib/admin/service-order-search.ts.
   if (keyword) {
-    const escaped = keyword.replace(/[%,*()]/g, ""); // keep simple
-    q = q.or(
-      `hno.ilike.%${escaped}%,htitle.ilike.%${escaped}%,userid.ilike.%${escaped}%`,
-    );
+    const escaped = sanitizeSearchTerm(keyword);
+
+    // Pre-resolve tracking/shipping hno hits when the term shape warrants
+    // it. This is one extra indexed ilike per page-load — the cost is
+    // bounded by `range(0, 199)` cap so even a wide match doesn't blow up.
+    let trackingHnos: string[] = [];
+    if (looksLikeTrackingOrShipping(keyword)) {
+      const { data: trackRows, error: trackErr } = await admin
+        .from("tb_order")
+        .select("hno")
+        .or(`ctrackingnumber.ilike.%${escaped}%,cshippingnumber.ilike.%${escaped}%`)
+        .limit(200);
+      if (trackErr) {
+        console.error("[/admin/service-orders] tb_order tracking scan failed", {
+          code: trackErr.code,
+          message: trackErr.message,
+        });
+      }
+      // Dedup hnos — one tracking number may map to several rows in the
+      // same order; we only need the hno set.
+      trackingHnos = Array.from(
+        new Set(
+          ((trackRows ?? []) as Array<{ hno: string | null }>)
+            .map((r) => r.hno)
+            .filter((h): h is string => !!h),
+        ),
+      );
+    }
+
+    // Build the OR predicate: header text axes + (optional) hno-in-list.
+    // PostgREST .or() supports `hno.in.(a,b,c)` directly when the list
+    // is non-empty. When the list is empty we just match header axes.
+    const axes = [
+      `hno.ilike.%${escaped}%`,
+      `htitle.ilike.%${escaped}%`,
+      `userid.ilike.%${escaped}%`,
+    ];
+    if (trackingHnos.length > 0) {
+      // Escape commas inside hno values for the .in.() syntax (the legacy
+      // hno format is `P` + digits so commas can't occur — defensive).
+      const safeHnos = trackingHnos.map((h) => h.replace(/[(),]/g, "")).join(",");
+      axes.push(`hno.in.(${safeHnos})`);
+    }
+    q = q.or(axes.join(","));
   }
 
   const { data: headerRows, error: headerErr, count: totalFiltered } = await q;
@@ -553,13 +603,18 @@ export default async function AdminServiceOrdersPage({
             action="/admin/service-orders"
             className="flex items-center gap-2 flex-wrap"
           >
-            <input
-              type="text"
-              name="search"
-              defaultValue={keyword ?? ""}
-              placeholder="ค้นหา hno · userid · สินค้า..."
-              className="rounded-lg border border-border bg-white dark:bg-surface px-3 py-1.5 text-sm flex-1 min-w-[200px] focus:outline-none focus:ring-2 focus:ring-primary-500/30"
-            />
+            <div className="flex-1 min-w-[200px]">
+              <input
+                type="text"
+                name="search"
+                defaultValue={keyword ?? ""}
+                placeholder={SEARCH_AXES_HINT}
+                className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+              />
+              <p className="text-[10px] text-muted mt-0.5">
+                {SEARCH_AXES_HINT}
+              </p>
+            </div>
             {/* Preserve other filters via hidden inputs */}
             {statusFilter && <input type="hidden" name="q" value={statusFilter} />}
             {sp.date_from && <input type="hidden" name="date_from" value={sp.date_from} />}

@@ -12,7 +12,17 @@
  *   3. raw.user_group + raw.user_code → derive `guessedUserId` (e.g.
  *      "PR032"); MUST exist in tb_users.userID. If we can't find a
  *      matching customer, we DON'T guess — admin verifies at /review.
- *   4. Sane defaults applied:
+ *   4. raw.user_group MUST match tb_users.userCompany class — PR group
+ *      (individual) ↔ userCompany!="1"; AIGA (company) ↔ userCompany="1".
+ *      A mismatch means MOMO mis-tagged the row → skip → admin reviews.
+ *   5. No live tb_forwarder row already exists with this tracking
+ *      (any non-zero fstatus) — prevents duplicates from a parallel
+ *      manual /review commit landing the same tracking.
+ *   6. Customer hasn't hit the per-day auto-commit cap (default 30 rows)
+ *      — a spike for one customer is usually MOMO mis-tagging a batch.
+ *   7. Raw metrics are within plausibility caps (weight ≤ 10,000kg ·
+ *      cbm ≤ 200) — anything beyond signals unit confusion in partner data.
+ *   8. Sane defaults applied:
  *      - fShipBy = "PCS"  (pickup at PCS warehouse — safe default)
  *      - fProductsType = "1" (ทั่วไป — same as legacy default)
  *
@@ -28,8 +38,18 @@
  *     legacy-faithful workflow (PCS เก่าใช้ updateAPI → manualUpdate ทั้ง
  *     2 steps manual — Pacred just adds an automation layer on top).
  *
- * @see actions/admin/momo-commit.ts — the canonical commit action
+ * Safety-net layering (see docs/runbook/momo-autocommit-activation.md):
+ *   - Predicates 4-7 live as PURE functions in `auto-commit-momo-safety.ts`
+ *     (unit-tested · stable reason codes for audit + LINE alerts).
+ *   - When per-run rejection-rate exceeds 50% (and sample ≥ 10), the cron
+ *     pings the staff LINE group + logs WARN — signal that MOMO data
+ *     quality dropped, admin should sample /review before next cron tick.
+ *
+ * @see actions/admin/momo-commit.ts        — the canonical commit action
+ * @see lib/admin/auto-commit-momo-safety.ts — pure safety predicates
+ * @see lib/admin/commit-momo-row-core.ts   — auth-agnostic commit body
  * @see docs/research/legacy-accounting-reality-2026-05-30.md §4
+ * @see docs/runbook/momo-autocommit-activation.md
  *
  * ✅ RESOLVED in Wave 30.5 (was a KNOWN LIMITATION in Wave 30 #2):
  *
@@ -56,28 +76,73 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { commitMomoRowSystem } from "@/lib/admin/commit-momo-row-core";
+import { extractMetricsFromMomoRaw } from "@/lib/admin/momo-raw-helpers";
+import {
+  checkUserGroupMatchesCompany,
+  checkNotDuplicateTracking,
+  checkUnderDailyPerUserCap,
+  checkPlausibleMetrics,
+  shouldAlertOnRejectionRate,
+  todayIsoDateUtc,
+  type SafetyReason,
+  type SafetyDecision,
+} from "@/lib/admin/auto-commit-momo-safety";
+import { notifyStaffGroup } from "@/lib/notifications/staff-group";
+import { logger } from "@/lib/logger";
+
+const SCOPE = "auto-commit-momo";
+
+export type AutoCommitOutcome =
+  | "committed"
+  | "skipped_no_userid"
+  | "skipped_unknown_user"
+  | "skipped_user_company_mismatch"
+  | "skipped_duplicate_tracking"
+  | "skipped_daily_per_user_cap"
+  | "skipped_implausible_weight"
+  | "skipped_implausible_volume"
+  | "failed";
 
 export type AutoCommitMomoResult = {
   /** Total uncommitted rows scanned. */
   scanned: number;
-  /** Eligible rows attempted (passed guessedUserId + tb_users check). */
+  /** Eligible rows attempted (passed ALL safety predicates). */
   attempted: number;
   /** Successfully committed → tb_forwarder rows. */
   succeeded: number;
   /** Failed despite being eligible (DB error / unique-constraint / etc.). */
   failed: number;
-  /** Skipped — no guessedUserId OR not in tb_users (admin needs to review). */
+  /** Skipped by ANY safety predicate (admin needs to review). */
   skipped: number;
+  /** Rejection-rate (skipped+failed)/scanned for this run, 0..1. */
+  rejectionRate: number;
+  /** True when shouldAlertOnRejectionRate fired (LINE staff ping sent). */
+  alerted: boolean;
   /** Per-row outcomes — for the cron's summary log. */
   perRow: Array<{
     rowId: string;
     momoTrackingNo: string | null;
     guessedUserId: string | null;
-    outcome: "committed" | "skipped_no_userid" | "skipped_unknown_user" | "failed";
+    outcome: AutoCommitOutcome;
+    reason?: SafetyReason;
     forwarderId?: number;
     error?: string;
   }>;
 };
+
+/** Map a SafetyDecision (failure) → the AutoCommitOutcome it triggers. */
+function outcomeForReason(reason: SafetyReason): AutoCommitOutcome {
+  switch (reason) {
+    case "no_guessed_userid":          return "skipped_no_userid";
+    case "unknown_user":               return "skipped_unknown_user";
+    case "user_company_mismatch":      return "skipped_user_company_mismatch";
+    case "duplicate_tracking":         return "skipped_duplicate_tracking";
+    case "duplicate_already_committed": return "skipped_duplicate_tracking";
+    case "daily_per_user_cap":         return "skipped_daily_per_user_cap";
+    case "implausible_weight":         return "skipped_implausible_weight";
+    case "implausible_volume":         return "skipped_implausible_volume";
+  }
+}
 
 /**
  * Scan uncommitted momo_import_tracks + auto-commit eligible rows.
@@ -90,12 +155,14 @@ export async function autoCommitEligibleMomoRows(
   maxRows: number = 100,
 ): Promise<AutoCommitMomoResult> {
   const result: AutoCommitMomoResult = {
-    scanned:   0,
-    attempted: 0,
-    succeeded: 0,
-    failed:    0,
-    skipped:   0,
-    perRow:    [],
+    scanned:       0,
+    attempted:     0,
+    succeeded:     0,
+    failed:        0,
+    skipped:       0,
+    rejectionRate: 0,
+    alerted:       false,
+    perRow:        [],
   };
 
   // 1. Fetch uncommitted rows (limit to maxRows)
@@ -118,13 +185,17 @@ export async function autoCommitEligibleMomoRows(
   result.scanned = uncommitted?.length ?? 0;
   if (result.scanned === 0) return result;
 
-  // 2. Collect all candidate userIds in one batch → minimise tb_users
-  //    round-trips. Build a Set of valid userIDs that exist on prod.
-  const candidates: Array<{
-    rowId: string;
+  // 2. Collect candidates with raw, user_group, weight/cbm — these feed
+  //    the per-row safety predicates below. One pass through the rows.
+  type Candidate = {
+    rowId:          string;
     momoTrackingNo: string | null;
-    guessedUserId: string | null;
-  }> = [];
+    guessedUserId:  string | null;
+    userGroup:      string | null;
+    weightKg:       number;
+    cbm:            number;
+  };
+  const candidates: Candidate[] = [];
   for (const row of uncommitted ?? []) {
     const raw = row.raw as Record<string, unknown> | null;
     const userGroup =
@@ -137,22 +208,27 @@ export async function autoCommitEligibleMomoRows(
         : (row.momo_user_code ?? null);
     const guessedUserId =
       userGroup && userCode ? `${userGroup}${userCode}` : null;
+    const metrics = extractMetricsFromMomoRaw(raw);
     candidates.push({
-      rowId: row.id as string,
+      rowId:          row.id as string,
       momoTrackingNo: row.momo_tracking_no ?? null,
       guessedUserId,
+      userGroup,
+      weightKg:       metrics.weight,
+      cbm:            metrics.cbm,
     });
   }
 
-  // Distinct userIds to verify in tb_users.
+  // 3. Batch-fetch tb_users (userID, userCompany) for guessed ids — one
+  //    round-trip instead of N. Map for O(1) lookup.
   const userIds = [
     ...new Set(candidates.map((c) => c.guessedUserId).filter((u): u is string => !!u)),
   ];
-  let validUserIds = new Set<string>();
+  const userCompanyByUserId = new Map<string, string | null>();
   if (userIds.length > 0) {
     const { data: validRows, error: usrErr } = await admin
       .from("tb_users")
-      .select("userID")
+      .select("userID, userCompany")
       .in("userID", userIds);
     if (usrErr) {
       console.error("[autoCommitEligibleMomoRows] tb_users lookup failed", {
@@ -160,32 +236,116 @@ export async function autoCommitEligibleMomoRows(
         message: usrErr.message,
       });
     } else {
-      validUserIds = new Set(
-        (validRows ?? []).map((r) => (r as { userID: string }).userID),
-      );
+      for (const r of (validRows ?? []) as Array<{ userID: string; userCompany: string | null }>) {
+        userCompanyByUserId.set(r.userID, r.userCompany);
+      }
     }
   }
 
-  // 3. For each row, decide outcome
-  for (const c of candidates) {
-    if (!c.guessedUserId) {
-      result.skipped++;
-      result.perRow.push({
-        rowId: c.rowId,
-        momoTrackingNo: c.momoTrackingNo,
-        guessedUserId: null,
-        outcome: "skipped_no_userid",
+  // 4. Batch-fetch existing tb_forwarder rows with these tracking-nos —
+  //    duplicate-prevention. Map tracking_no → fstatus.
+  const trackingNos = [
+    ...new Set(candidates.map((c) => c.momoTrackingNo).filter((t): t is string => !!t)),
+  ];
+  const existingForwarderByTracking = new Map<string, string | null>();
+  if (trackingNos.length > 0) {
+    const { data: fwdRows, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("ftrackingchn, fstatus")
+      .in("ftrackingchn", trackingNos);
+    if (fwdErr) {
+      console.error("[autoCommitEligibleMomoRows] tb_forwarder dup-lookup failed", {
+        code: fwdErr.code,
+        message: fwdErr.message,
       });
-      continue;
+    } else {
+      for (const r of (fwdRows ?? []) as Array<{ ftrackingchn: string | null; fstatus: string | null }>) {
+        if (r.ftrackingchn) {
+          // If multiple rows exist, keep the highest non-zero fstatus
+          // (the "most-live" row) for the duplicate decision.
+          const prev = existingForwarderByTracking.get(r.ftrackingchn);
+          const next = r.fstatus ?? null;
+          if (prev == null || prev === "0" || prev === "") {
+            existingForwarderByTracking.set(r.ftrackingchn, next);
+          }
+        }
+      }
     }
-    if (!validUserIds.has(c.guessedUserId)) {
-      result.skipped++;
-      result.perRow.push({
-        rowId: c.rowId,
-        momoTrackingNo: c.momoTrackingNo,
-        guessedUserId: c.guessedUserId,
-        outcome: "skipped_unknown_user",
+  }
+
+  // 5. Batch-fetch today's auto-commit count per candidate user — daily
+  //    per-user cap. Cron-created rows are stamped adminid="momo-cron"
+  //    (see commit-momo-row-core.ts → commitMomoRowSystem).
+  const todayDate = todayIsoDateUtc();
+  const todayCommitsByUserId = new Map<string, number>();
+  if (userIds.length > 0) {
+    // `gte("fdate", todayDate)` covers anything stamped today UTC. fdate
+    // is written as a timestamptz (nowIso) so this is a half-open range
+    // [todayDate, ∞) — fine for a daily cap because tomorrow's cron uses
+    // tomorrow's todayDate.
+    const { data: todayRows, error: todayErr } = await admin
+      .from("tb_forwarder")
+      .select("userid")
+      .eq("adminid", "momo-cron")
+      .gte("fdate", todayDate)
+      .in("userid", userIds);
+    if (todayErr) {
+      console.error("[autoCommitEligibleMomoRows] daily-cap lookup failed", {
+        code: todayErr.code,
+        message: todayErr.message,
       });
+    } else {
+      for (const r of (todayRows ?? []) as Array<{ userid: string | null }>) {
+        if (r.userid) {
+          todayCommitsByUserId.set(r.userid, (todayCommitsByUserId.get(r.userid) ?? 0) + 1);
+        }
+      }
+    }
+  }
+
+  /** Run all safety predicates for one candidate; return ok or first failure. */
+  function evaluate(c: Candidate): SafetyDecision {
+    if (!c.guessedUserId) {
+      return { ok: false, reason: "no_guessed_userid" };
+    }
+    if (!userCompanyByUserId.has(c.guessedUserId)) {
+      return { ok: false, reason: "unknown_user" };
+    }
+    const groupCheck = checkUserGroupMatchesCompany(
+      c.userGroup,
+      userCompanyByUserId.get(c.guessedUserId) ?? null,
+    );
+    if (!groupCheck.ok) return groupCheck;
+    const dupCheck = checkNotDuplicateTracking(
+      c.momoTrackingNo ? existingForwarderByTracking.get(c.momoTrackingNo) ?? null : null,
+    );
+    if (!dupCheck.ok) return dupCheck;
+    const capCheck = checkUnderDailyPerUserCap(
+      todayCommitsByUserId.get(c.guessedUserId) ?? 0,
+    );
+    if (!capCheck.ok) return capCheck;
+    const metricsCheck = checkPlausibleMetrics(c.weightKg, c.cbm);
+    if (!metricsCheck.ok) return metricsCheck;
+    return { ok: true };
+  }
+
+  // 6. For each row, decide outcome
+  for (const c of candidates) {
+    const decision = evaluate(c);
+    if (!decision.ok) {
+      result.skipped++;
+      const outcome = outcomeForReason(decision.reason);
+      result.perRow.push({
+        rowId:          c.rowId,
+        momoTrackingNo: c.momoTrackingNo,
+        guessedUserId:  c.guessedUserId,
+        outcome,
+        reason:         decision.reason,
+        error:          decision.detail,
+      });
+      // Optimistic per-user cap update — if we proceeded to commit one for
+      // this user later in the same batch, count it against today's cap.
+      // (Skips don't increment.)
       continue;
     }
 
@@ -200,28 +360,37 @@ export async function autoCommitEligibleMomoRows(
     result.attempted++;
     try {
       const res = await commitMomoRowSystem({
-        rowId: c.rowId,
-        userID: c.guessedUserId,
-        fShipBy: "PCS",
+        rowId:         c.rowId,
+        userID:        c.guessedUserId as string,
+        fShipBy:       "PCS",
         fProductsType: "1",
       });
       if (res.ok) {
         result.succeeded++;
         result.perRow.push({
-          rowId: c.rowId,
+          rowId:          c.rowId,
           momoTrackingNo: c.momoTrackingNo,
-          guessedUserId: c.guessedUserId,
-          outcome: "committed",
-          forwarderId: res.data?.forwarderId,
+          guessedUserId:  c.guessedUserId,
+          outcome:        "committed",
+          forwarderId:    res.data?.forwarderId,
         });
+        // Update the per-user counter so further rows in THIS batch
+        // hit the cap correctly (otherwise a batch could over-commit
+        // one user above the cap before the next cron tick).
+        if (c.guessedUserId) {
+          todayCommitsByUserId.set(
+            c.guessedUserId,
+            (todayCommitsByUserId.get(c.guessedUserId) ?? 0) + 1,
+          );
+        }
       } else {
         result.failed++;
         result.perRow.push({
-          rowId: c.rowId,
+          rowId:          c.rowId,
           momoTrackingNo: c.momoTrackingNo,
-          guessedUserId: c.guessedUserId,
-          outcome: "failed",
-          error: res.error,
+          guessedUserId:  c.guessedUserId,
+          outcome:        "failed",
+          error:          res.error,
         });
       }
     } catch (err) {
@@ -230,13 +399,40 @@ export async function autoCommitEligibleMomoRows(
       // investigate. We don't crash the cron — every row is independent.
       result.failed++;
       result.perRow.push({
-        rowId: c.rowId,
+        rowId:          c.rowId,
         momoTrackingNo: c.momoTrackingNo,
-        guessedUserId: c.guessedUserId,
-        outcome: "failed",
-        error: err instanceof Error ? err.message : "unknown",
+        guessedUserId:  c.guessedUserId,
+        outcome:        "failed",
+        error:          err instanceof Error ? err.message : "unknown",
       });
     }
+  }
+
+  // 7. Compute rejection-rate + maybe alert.
+  const rejected      = result.skipped + result.failed;
+  result.rejectionRate = result.scanned > 0 ? Math.min(1, rejected / result.scanned) : 0;
+  if (shouldAlertOnRejectionRate(result.scanned, result.skipped, result.failed)) {
+    logger.warn(SCOPE, "high rejection rate — MOMO data quality may have dropped", {
+      scanned:       result.scanned,
+      skipped:       result.skipped,
+      failed:        result.failed,
+      rejectionRate: result.rejectionRate,
+    });
+    // Best-effort LINE ping to staff — never throws, no-op when group/token
+    // is unconfigured. The cron summary (admin/system/crons) is the
+    // durable record; the LINE ping is the "look at /review NOW" nudge.
+    const pct = Math.round(result.rejectionRate * 100);
+    void notifyStaffGroup(
+      `⚠️ MOMO auto-commit rejection rate สูงผิดปกติ\n` +
+      `รอบนี้ ${rejected}/${result.scanned} rows ถูกข้าม (${pct}%)\n` +
+      `ตรวจสอบ /admin/api-forwarder-momo/review เพื่อหาสาเหตุ`,
+      {
+        url:      "/admin/api-forwarder-momo/review",
+        urlLabel: "ดู review queue",
+        title:    "MOMO auto-commit — health alert",
+      },
+    );
+    result.alerted = true;
   }
 
   return result;
