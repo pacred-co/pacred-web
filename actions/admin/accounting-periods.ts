@@ -106,6 +106,17 @@ async function buildCloseSnapshots(
   const out: CloseSnapshot[] = [];
 
   // ── tax_invoices ────────────────────────────────────────────
+  // ⚠️ AUDIT 2026-06-09 — DEAD-TWIN READ (do NOT trust this snapshot number).
+  // `tax_invoices` (World-A · migration 0034) is a 0-row table with NO live
+  // producer; every real ใบกำกับภาษี is issued into tb_forwarder_tax_invoice /
+  // tb_shop_tax_invoice (serial_no-keyed · gross_before_wht = VAT-inclusive total).
+  // So this snapshot has frozen row_count=0 / sum=0 into IMMUTABLE
+  // period_close_event rows while real invoices live elsewhere.
+  // The forward-fix (union the two tb_* stores, sum gross_before_wht where
+  // status='issued') is held PENDING an accountant decision — changing what
+  // future closes record + a backfill call for already-closed periods is a
+  // book-keeping policy choice, not an engineering one. Do not silently repoint
+  // this read. (Tracked: the 2026-06-09 dead-twin-reader follow-up.)
   {
     const { data, error } = await admin
       .from("tax_invoices")

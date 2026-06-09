@@ -65,19 +65,38 @@ export default async function AdminDocumentsLifecyclePage() {
   const receiptCount = receipts.length;
   const receiptSum   = receipts.reduce((s, r) => s + Number(r.ramount ?? 0), 0);
 
-  // ── Tax invoices current month — count + Σ total_thb (issued only) ──
-  const { data: taxRows, error: taxErr } = await admin
-    .from("tax_invoices")
-    .select("total_thb")
-    .gte("issued_at", ymStart)
-    .lte("issued_at", ymEnd)
-    .eq("status", "issued");
-  if (taxErr) {
-    console.error("[tax_invoices month] failed", { code: taxErr.code, message: taxErr.message });
+  // ── Tax invoices current month — count + Σ (issued) + cancelled count ──
+  // Real ใบกำกับภาษี live in the tb_* stores (tb_forwarder_tax_invoice +
+  // tb_shop_tax_invoice), NOT the 0-row World-A `tax_invoices` twin (which had no
+  // live producer). `gross_before_wht` = base_total + VAT (the VAT-inclusive
+  // invoice total — mirrors the old tax_invoices.total_thb). status is only
+  // 'issued' | 'cancelled' (issuance is immediate — there is NO 'pending' approval
+  // queue in the tb_* model), so the old "รออนุมัติ" stat is replaced by a
+  // cancelled-this-month count (anomaly glance · the dashboard's stated purpose).
+  type TaxAggRow = { gross_before_wht: number | string | null; status: string | null };
+  async function readTaxStoreMonth(
+    table: "tb_forwarder_tax_invoice" | "tb_shop_tax_invoice",
+  ): Promise<TaxAggRow[]> {
+    const { data, error } = await admin
+      .from(table)
+      .select("gross_before_wht, status")
+      .gte("issued_at", ymStart)
+      .lte("issued_at", ymEnd);
+    if (error) {
+      console.error(`[${table} month] failed`, { code: error.code, message: error.message });
+      return [];
+    }
+    return (data ?? []) as TaxAggRow[];
   }
-  const taxs = (taxRows ?? []) as Array<{ total_thb: number | string | null }>;
-  const taxCount = taxs.length;
-  const taxSum   = taxs.reduce((s, r) => s + Number(r.total_thb ?? 0), 0);
+  const [fwdTaxRows, shopTaxRows] = await Promise.all([
+    readTaxStoreMonth("tb_forwarder_tax_invoice"),
+    readTaxStoreMonth("tb_shop_tax_invoice"),
+  ]);
+  const taxRowsAll = [...fwdTaxRows, ...shopTaxRows];
+  const issuedTaxRows = taxRowsAll.filter((r) => r.status === "issued");
+  const taxCount = issuedTaxRows.length;
+  const taxSum   = issuedTaxRows.reduce((s, r) => s + Number(r.gross_before_wht ?? 0), 0);
+  const cancelledTaxCount = taxRowsAll.filter((r) => r.status === "cancelled").length;
 
   // ── Combine-bill (tb_bill) current month — count ──
   const { count: billCount, error: billErr } = await admin
@@ -85,15 +104,6 @@ export default async function AdminDocumentsLifecyclePage() {
     .select("id", { count: "exact", head: true });
   if (billErr) {
     console.error("[tb_bill count] failed", { code: billErr.code, message: billErr.message });
-  }
-
-  // ── Pending tax-invoice queue (any month) ──
-  const { count: pendingTaxCount, error: pendingErr } = await admin
-    .from("tax_invoices")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "pending");
-  if (pendingErr) {
-    console.error("[tax_invoices pending] failed", { code: pendingErr.code, message: pendingErr.message });
   }
 
   const monthLabel = now.toLocaleDateString("th-TH", { year: "numeric", month: "long" });
@@ -126,7 +136,7 @@ export default async function AdminDocumentsLifecyclePage() {
     {
       title: "ใบกำกับภาษีขาย",
       desc:  "Tax Invoice · RD Code 86",
-      href:  "/admin/tax-invoices",
+      href:  "/admin/accounting/etax",
       badge: "live",
       stat: {
         label: monthLabel,
@@ -161,7 +171,7 @@ export default async function AdminDocumentsLifecyclePage() {
         <section className="grid sm:grid-cols-4 gap-3">
           <Stat label={`ใบเสร็จเดือนนี้ (${monthLabel})`} value={receiptCount.toLocaleString("th-TH")} sub={thb(receiptSum)} />
           <Stat label={`ใบกำกับขายเดือนนี้`} value={taxCount.toLocaleString("th-TH")} sub={thb(taxSum)} />
-          <Stat label="ใบกำกับรออนุมัติ" value={(pendingTaxCount ?? 0).toLocaleString("th-TH")} sub="คิวงาน accounting" />
+          <Stat label="ใบกำกับยกเลิกเดือนนี้" value={cancelledTaxCount.toLocaleString("th-TH")} sub="ตรวจ anomaly" />
           <Stat label="ใบรวมบิล (Combine Bill)" value={(billCount ?? 0).toLocaleString("th-TH")} sub="tb_bill total" />
         </section>
 
@@ -189,10 +199,10 @@ export default async function AdminDocumentsLifecyclePage() {
               <span className="text-muted ml-2">— PEAK 7-tab ใบเสร็จ explorer</span>
             </li>
             <li>
-              <Link href="/admin/tax-invoices" className="text-primary-600 hover:underline">
-                /admin/tax-invoices
+              <Link href="/admin/accounting/etax" className="text-primary-600 hover:underline">
+                /admin/accounting/etax
               </Link>
-              <span className="text-muted ml-2">— ใบกำกับขาย (RD-86)</span>
+              <span className="text-muted ml-2">— ใบกำกับขาย (RD-86 · tb_* จริง)</span>
             </li>
             <li>
               <Link href="/admin/accounting/forwarder-invoice" className="text-primary-600 hover:underline">

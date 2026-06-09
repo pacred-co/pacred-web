@@ -11,7 +11,7 @@ import { Search } from "lucide-react";
  *   - forwarders    (f_no, cabinet_number)
  *   - service_orders (h_no)
  *   - freight_shipments (job_no)
- *   - tax_invoices  (invoice_no)
+ *   - tb_forwarder_tax_invoice + tb_shop_tax_invoice (serial_no · the live tb_* stores)
  *   - refund_requests (request_no)
  *   - freight_quotes (quote_no)
  *
@@ -49,7 +49,7 @@ type Profile = {
 type Forwarder    = { id: string; f_no: string; status: string; profile_id: string; total_price: number | null; cabinet_number: string | null; created_at: string };
 type ServiceOrder = { id: string; h_no: string; status: string; profile_id: string; total_thb: number | null; created_at: string };
 type FreightShip  = { id: string; job_no: string | null; status: string; profile_id: string; created_at: string };
-type TaxInvoice   = { id: string; invoice_no: string | null; profile_id: string; total_thb: number | null; issued_at: string | null };
+type TaxInvoice   = { id: number; serial_no: string | null; userid: string | null; gross_before_wht: number | string | null; issued_at: string | null; store: "forwarder" | "shop" };
 type RefundReq    = { id: string; request_no: string | null; status: string; profile_id: string; amount_thb: number; created_at: string };
 type FreightQuote = { id: string; quote_no: string | null; status: string; profile_id: string | null; created_at: string };
 
@@ -145,17 +145,34 @@ export default async function AdminGlobalSearchPage({
     }
     freightShips = (fsData ?? []) as FreightShip[];
 
-    // Tax invoices
-    const { data: tiData, error: tiDataErr } = await admin
-      .from("tax_invoices")
-      .select("id, invoice_no, profile_id, total_thb, issued_at")
-      .ilike("invoice_no", ilike)
-      .order("issued_at", { ascending: false, nullsFirst: false })
-      .limit(PER_ENTITY_LIMIT);
-    if (tiDataErr) {
-      console.error(`[tax_invoices list] failed`, { code: tiDataErr.code, message: tiDataErr.message });
+    // Tax invoices — search `serial_no` across the LIVE tb_* stores
+    // (tb_forwarder_tax_invoice + tb_shop_tax_invoice). The World-A `tax_invoices`
+    // twin is 0-row AND has no `invoice_no` column (it used serial_no), so the old
+    // query was doubly dead. Each row carries a `store` tag so the drill-down (the
+    // PDF route /api/tax-invoice/[id]?store=…) resolves the right bigserial id.
+    async function searchTaxStore(
+      table: "tb_forwarder_tax_invoice" | "tb_shop_tax_invoice",
+      store: "forwarder" | "shop",
+    ): Promise<TaxInvoice[]> {
+      const { data, error } = await admin
+        .from(table)
+        .select("id, serial_no, userid, gross_before_wht, issued_at")
+        .ilike("serial_no", ilike)
+        .order("issued_at", { ascending: false, nullsFirst: false })
+        .limit(PER_ENTITY_LIMIT);
+      if (error) {
+        console.error(`[${table} search] failed`, { code: error.code, message: error.message });
+        return [];
+      }
+      return ((data ?? []) as Omit<TaxInvoice, "store">[]).map((r) => ({ ...r, store }));
     }
-    taxInvoices = (tiData ?? []) as TaxInvoice[];
+    const [fwdTi, shopTi] = await Promise.all([
+      searchTaxStore("tb_forwarder_tax_invoice", "forwarder"),
+      searchTaxStore("tb_shop_tax_invoice", "shop"),
+    ]);
+    taxInvoices = [...fwdTi, ...shopTi]
+      .sort((a, b) => (b.issued_at ?? "").localeCompare(a.issued_at ?? ""))
+      .slice(0, PER_ENTITY_LIMIT);
 
     // Container search now folds into forwarders.cabinet_number above
     // (Wave 3: cargo_containers retired). For the grouped container view,
@@ -300,15 +317,23 @@ export default async function AdminGlobalSearchPage({
       )}
 
       {willRun && taxInvoices.length > 0 && (
-        <Section title="ใบกำกับภาษี (tax invoices)" count={taxInvoices.length} moreHref={`/admin/tax-invoices?q=${encodeURIComponent(q)}`}>
+        <Section title="ใบกำกับภาษี (tax invoices)" count={taxInvoices.length} moreHref="/admin/accounting/etax">
           {taxInvoices.map((ti) => (
-            <Link key={ti.id} href={`/admin/tax-invoices/${ti.id}`} className="block px-4 py-2 hover:bg-surface-alt/50 border-t border-border">
+            // Drill-down = the issued-doc PDF (admin-gated, store-discriminated).
+            // The World-A detail page was retired; the live id space is tb_*.
+            <a
+              key={`${ti.store}-${ti.id}`}
+              href={`/api/tax-invoice/${ti.id}?store=${ti.store}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block px-4 py-2 hover:bg-surface-alt/50 border-t border-border"
+            >
               <div className="flex items-center justify-between gap-3 flex-wrap text-xs">
-                <span className="font-mono font-medium text-primary-700">{ti.invoice_no ?? "(no number)"}</span>
-                <span className="font-mono">{thb(ti.total_thb)}</span>
+                <span className="font-mono font-medium text-primary-700">{ti.serial_no ?? "(ยังไม่มีเลข)"}</span>
+                <span className="font-mono">{thb(Number(ti.gross_before_wht ?? 0))}</span>
                 <span className="text-muted">{ti.issued_at ? new Date(ti.issued_at).toLocaleDateString("th-TH") : "ยังไม่ออก"}</span>
               </div>
-            </Link>
+            </a>
           ))}
         </Section>
       )}
