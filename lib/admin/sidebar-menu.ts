@@ -1531,8 +1531,10 @@ const menuFreightExportDoc: MenuSection[] = [
       { labelKey: "freightExportOps.placeholder", href: "/admin/freight/shipments", icon: "Truck" },
       // Customer lookup — find the shipment owner / cabinet context.
       { labelKey: "userCargo.searchTop", href: "/admin/customers?focus=search", icon: "Search" },
-      // Tax documents — issuance is part of Doc workflow.
-      { labelKey: "extension.taxInvoices", href: "/admin/tax-invoices", icon: "FileText" },
+      // Tax documents — issuance is part of Doc workflow. 2026-06-09: points at
+      // the live tb_* e-Tax hub (was /admin/tax-invoices, the retired World-A
+      // dead-twin read; the etax gate now includes the Doc roles so reach holds).
+      { labelKey: "extension.taxInvoices", href: "/admin/accounting/etax", icon: "FileText" },
       // Receipts (ใบเสร็จ) explorer — Doc references after payment.
       { labelKey: "accounting.forwarderInvoice", href: "/admin/accounting/receipts", icon: "Receipt" },
       // Billing run (ใบวางบิล) — Doc creates the bill doc; mark-paid stays accounting-only.
@@ -1659,8 +1661,10 @@ const menuFreightImportDoc: MenuSection[] = [
       { labelKey: "freightImportOps.placeholder", href: "/admin/freight/shipments", icon: "Truck" },
       // Customer lookup — find the shipment owner / cabinet context.
       { labelKey: "userCargo.searchTop", href: "/admin/customers?focus=search", icon: "Search" },
-      // Tax documents — issuance is part of Doc workflow.
-      { labelKey: "extension.taxInvoices", href: "/admin/tax-invoices", icon: "FileText" },
+      // Tax documents — issuance is part of Doc workflow. 2026-06-09: points at
+      // the live tb_* e-Tax hub (was /admin/tax-invoices, the retired World-A
+      // dead-twin read; the etax gate now includes the Doc roles so reach holds).
+      { labelKey: "extension.taxInvoices", href: "/admin/accounting/etax", icon: "FileText" },
       // Receipts (ใบเสร็จ) explorer — Doc references after payment.
       { labelKey: "accounting.forwarderInvoice", href: "/admin/accounting/receipts", icon: "Receipt" },
       // Billing run (ใบวางบิล) — Doc creates the bill doc; mark-paid stays accounting-only.

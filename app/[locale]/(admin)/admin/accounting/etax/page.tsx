@@ -56,7 +56,13 @@ export default async function AdminEtaxPage({
 }: {
   searchParams: Promise<{ date_from?: string; date_to?: string }>;
 }) {
-  await requireAdmin(["super", "accounting"]);
+  // Roles per ADR-0006 §1.4: super | accounting. The Doc roles
+  // (freight_export_doc / freight_import_doc) are included because the
+  // World-A /admin/tax-invoices management surface — which the 2026-06-05
+  // ops-workflow audit granted them — was consolidated into this live tb_*
+  // hub (2026-06-09): /admin/tax-invoices now redirects here, so the Doc
+  // roles must retain reach (§0d) to the issued ใบกำกับภาษี they document.
+  await requireAdmin(["super", "accounting", "freight_export_doc", "freight_import_doc"]);
   const sp = await searchParams;
   const defaults = defaultDateRange();
   const dateFrom = sp.date_from && /^\d{4}-\d{2}-\d{2}$/.test(sp.date_from) ? sp.date_from : defaults.from;

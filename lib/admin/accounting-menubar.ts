@@ -169,14 +169,16 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       // 0034 L47). NEXT PHASE: also add "ใบกำกับภาษีซื้อ" under "รายจ่าย"
       // (ภูม Q3 "phase ถัดไปก็ได้").
       {
+        // 2026-06-09 — consolidated onto the live tb_* e-Tax hub. The old
+        // /admin/tax-invoices read the 0-row World-A `tax_invoices` twin; real
+        // issued ใบกำกับภาษี live in tb_forwarder_tax_invoice / tb_shop_tax_invoice
+        // (both surfaced at /admin/accounting/etax). The dead-twin status tabs
+        // (รออนุมัติ/ออกแล้ว/ยกเลิก) were on that twin, so they are dropped.
         label: "ใบกำกับภาษีขาย",
-        href: "/admin/tax-invoices",
+        href: "/admin/accounting/etax",
         children: [
-          { label: "สร้าง (จากใบเสร็จ)",  href: "/admin/accounting/receipts" }, // customer requests from /service-* — admin issues from row
-          { label: "รออนุมัติ",            href: "/admin/tax-invoices?tab=pending" },
-          { label: "ออกแล้ว",              href: "/admin/tax-invoices?tab=issued" },
-          { label: "ยกเลิก",               href: "/admin/tax-invoices?tab=cancelled" },
-          { label: "ดูทั้งหมด",             href: "/admin/tax-invoices?tab=all" },
+          { label: "สร้าง (จากใบเสร็จ)", href: "/admin/accounting/receipts" }, // customer requests from /service-* — admin issues from row
+          { label: "ออกแล้ว (e-Tax)",    href: "/admin/accounting/etax" },     // live tb_* — forwarder + shop/yuan lanes
         ],
       },
       // 2026-06-05 (ภูม D7 · CEO 3-tax-doc trio LAST LEG): ใบขนสินค้า
