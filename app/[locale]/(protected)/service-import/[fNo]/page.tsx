@@ -6,6 +6,7 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { legacyMemberUrl } from "@/lib/legacy-image";
 import { code128SvgDataUrl } from "@/lib/barcode";
+import { ADDRESSES, CONTACT } from "@/components/seo/site";
 import { ServiceImportEditShipByForm } from "./service-import-edit-ship-by-form";
 import { ServiceImportEditAddressForm } from "./service-import-edit-address-form";
 import { ServiceImportPayButton } from "./service-import-pay-button";
@@ -723,6 +724,39 @@ export default async function ServiceImportDetailPage({
   // Normalised row aliases.
   const fStatusValue = row.fstatus ?? "";
   const fShipBy = row.fshipby ?? "";
+
+  // Self-pickup (fShipBy='PCS' = "รับเองที่โกดัง") always shows Pacred's TH
+  // receiving warehouse (สมุทรสาคร — ADDRESSES.warehouseTh) from the SOT
+  // constant, never the stored faddress* snapshot. The write paths already
+  // write Pacred (actions/forwarder-legacy.ts + cart.ts), but pre-rebrand /
+  // legacy-PHP-era rows still carry the old Bangkok "โกดัง PCS · เพชรเกษม 77"
+  // address baked into the columns. Self-pickup is a FIXED company address
+  // (the inline edit is even blocked for it), so overriding at display keeps
+  // old + new orders uniform on Pacred — no prod-data migration needed.
+  const isSelfPickup = fShipBy === "PCS";
+  const displayAddress = isSelfPickup
+    ? {
+        name: "รับที่โกดัง Pacred",
+        lastname: "",
+        no: ADDRESSES.warehouseTh.line,
+        subdistrict: ADDRESSES.warehouseTh.subDistrict,
+        district: ADDRESSES.warehouseTh.district,
+        province: ADDRESSES.warehouseTh.province,
+        zipcode: ADDRESSES.warehouseTh.postcode,
+        tel: CONTACT.phoneCompanyDisplay,
+        tel2: "",
+      }
+    : {
+        name: row.faddressname,
+        lastname: row.faddresslastname,
+        no: row.faddressno,
+        subdistrict: row.faddresssubdistrict,
+        district: row.faddressdistrict,
+        province: row.faddressprovince,
+        zipcode: row.faddresszipcode,
+        tel: row.faddresstel,
+        tel2: row.faddresstel2,
+      };
   const fAmount = row.famount;
   const fWeight = Number(row.fweight ?? 0);
   const fVolume = Number(row.fvolume ?? 0);
@@ -987,7 +1021,7 @@ export default async function ServiceImportDetailPage({
               Legacy tab hooks (role / aria-controls / data-toggle) preserved. */}
           <div className="mt-4">
             <ul
-              className="grid grid-cols-4 gap-x-1 gap-y-4 md:grid-cols-8"
+              className="mx-auto grid max-w-md grid-cols-4 gap-x-1 gap-y-6 md:max-w-5xl md:grid-cols-8"
               role="tablist"
             >
               {STEPS.map((step, i) => {
@@ -1014,7 +1048,7 @@ export default async function ServiceImportDetailPage({
                     {i !== 0 && (
                       <span
                         aria-hidden
-                        className={`absolute top-5 right-1/2 left-[-50%] h-0.5 ${
+                        className={`absolute top-8 right-1/2 left-[-50%] h-0.5 md:top-10 ${
                           i === 4 ? "hidden md:block" : ""
                         } ${done || active ? "bg-red-500" : "bg-border"}`}
                       />
@@ -1027,27 +1061,25 @@ export default async function ServiceImportDetailPage({
                     >
                       <i
                         aria-hidden="true"
-                        className={`flex h-10 w-10 items-center justify-center rounded-full border-2 ${
+                        className={`flex h-16 w-16 md:h-20 md:w-20 items-center justify-center rounded-full border-2 ${
                           active
-                            ? "border-red-600 bg-red-600"
+                            ? "border-red-600 bg-red-50 ring-2 ring-red-200"
                             : done
                               ? "border-red-500 bg-red-50"
-                              : "border-border bg-white dark:bg-surface"
+                              : "border-gray-300 bg-white dark:bg-surface"
                         } ${innerIconClass}`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          className={
-                            step.ctrl === "step62"
-                              ? "img-fluid p-img-icon p-0 h-5 w-5 object-contain"
-                              : "img-fluid p-img-icon h-5 w-5 object-contain"
-                          }
+                          className={`img-fluid p-img-icon object-contain h-11 w-11 md:h-14 md:w-14 ${
+                            step.ctrl === "step62" ? "p-0 " : ""
+                          }${done || active ? "" : "grayscale opacity-70"}`}
                           src={`${ICON_BASE}${step.icon}`}
                           alt=""
                         />
                       </i>
                       <p
-                        className={`mt-1.5 text-[11px] leading-tight ${
+                        className={`mt-2 text-xs leading-tight ${
                           active
                             ? "font-bold text-red-600"
                             : done
@@ -1105,14 +1137,16 @@ export default async function ServiceImportDetailPage({
                             <div className="text-sm">
                               <b className="font-semibold text-foreground">{t("deliveryAddressLabel")} : </b>
                               <div className="mt-1 text-foreground leading-relaxed">
-                                {/* forwarder.php L1663 — CONCAT 'คุณ' addressName … */}
-                                {t("addressNamePrefix")}{row.faddressname} {row.faddresslastname}
+                                {/* forwarder.php L1663 — CONCAT 'คุณ' addressName …
+                                    Self-pickup (PCS) → Pacred warehouse from SOT
+                                    (see displayAddress above), else stored snapshot. */}
+                                {t("addressNamePrefix")}{displayAddress.name} {displayAddress.lastname}
                                 <br />
-                                {row.faddressno} {t("addressSubdistrict")} {row.faddresssubdistrict}
-                                <br /> {t("addressDistrict")} {row.faddressdistrict} {t("addressProvince")}{" "}
-                                {row.faddressprovince} {row.faddresszipcode}
+                                {displayAddress.no} {t("addressSubdistrict")} {displayAddress.subdistrict}
+                                <br /> {t("addressDistrict")} {displayAddress.district} {t("addressProvince")}{" "}
+                                {displayAddress.province} {displayAddress.zipcode}
                                 <br />
-                                {t("telPrefix")} {row.faddresstel}, {row.faddresstel2}
+                                {t("telPrefix")} {displayAddress.tel}, {displayAddress.tel2}
                                 <ServiceImportEditAddressForm
                                   forwarderId={row.id}
                                   options={addressOptions}
@@ -1331,8 +1365,7 @@ export default async function ServiceImportDetailPage({
                             {/* Desktop: full 14/15-column cost table. */}
                             <div className="mt-3 hidden md:block overflow-x-auto rounded-xl border border-border">
                               <table
-                                id="myTable"
-                                className="dataTable w-full text-sm border-collapse"
+                                className="dataTable pcs-detail-table w-full text-sm border-collapse"
                               >
                                 <thead>
                                   <tr className="text-center bg-surface-alt">
@@ -1451,8 +1484,7 @@ export default async function ServiceImportDetailPage({
                             {/* Desktop: 5-column item table. */}
                             <div className="mt-3 hidden md:block overflow-x-auto rounded-xl border border-border">
                               <table
-                                id="myTable"
-                                className="dataTable w-full text-sm border-collapse"
+                                className="dataTable pcs-detail-table w-full text-sm border-collapse"
                               >
                                 <thead>
                                   <tr className="text-center bg-surface-alt">

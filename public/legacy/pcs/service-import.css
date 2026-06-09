@@ -344,6 +344,15 @@
   vertical-align: bottom;
   border-bottom: 2px solid #e3ebf3;
 }
+/* cart.css globally sets `.pcs-legacy thead { display: none }` (a legacy
+   DataTables-responsive holdover that leaks onto every protected page).
+   Restore the header for the static cost / item tables on the forwarder
+   detail page — higher specificity (.pcs-legacy .pcs-detail-table thead =
+   0,2,2) beats the cart.css rule (.pcs-legacy thead = 0,1,1). The header
+   then scrolls horizontally with the body inside the .overflow-x-auto wrap. */
+.pcs-legacy .pcs-detail-table thead {
+  display: table-header-group;
+}
 .pcs-legacy .table-bordered,
 .pcs-legacy .table-bordered th,
 .pcs-legacy .table-bordered td { border: 1px solid #e3ebf3; }

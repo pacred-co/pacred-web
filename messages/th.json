@@ -4583,6 +4583,10 @@
     "maoMaoGet": "รับโปรโมชัน เหมา ๆ",
     "addressFormat": "{name} {lastname} {no} ตำบล/แขวง {subdistrict} อำเภอ/เขต {district} จังหวัด {province} {zipcode}"
   },
+  "importViewTabs": {
+    "fullView": "ฝากนำเข้าสินค้าแบบเต็ม",
+    "tableView": "ฝากนำเข้าสินค้าแบบตาราง"
+  },
   "serviceImportTable": {
     "statusWaitChinaWarehouse": "รอเข้าโกดังจีน",
     "statusAtChinaWarehouse": "ถึงโกดังจีนแล้ว",
@@ -5196,7 +5200,7 @@
     "customerServiceDept": "ฝ่ายบริการลูกค้า (CS)",
     "home": "หน้าแรก",
     "memberSystem": "ระบบสมาชิก",
-    "orderService": "บริการฝากสั่งสินค้า",
+    "orderService": "บริการสั่งสินค้า",
     "allOrders": "รายการสั่งสินค้าทั้งหมด",
     "pendingPayment": "รอชำระเงิน",
     "cart": "รถเข็นสินค้า",
@@ -5218,7 +5222,7 @@
     "addExport": "เพิ่มรายการส่งออก",
     "estimateExport": "ประเมินราคาส่งออก",
     "exportHistory": "ประวัติการส่งออก",
-    "paymentService": "บริการฝากชำระสินค้า",
+    "paymentService": "บริการชำระสินค้า",
     "paymentList": "รายการฝากชำระ",
     "addPayment": "เพิ่มรายการฝากชำระ",
     "paymentDue": "รายการที่ต้องชำระ",
@@ -5233,7 +5237,22 @@
     "allTransactionHistory": "ประวัติรายการทั้งหมด",
     "withdrawalHistory": "ประวัติการเบิกเงิน",
     "makeWithdrawal": "ทำรายการเบิกเงิน",
-    "shippingAddresses": "ที่อยู่จัดส่งสินค้า"
+    "shippingAddresses": "ที่อยู่จัดส่งสินค้า",
+    "sectionMainServices": "บริการหลัก",
+    "sectionOtherMenus": "เมนูอื่นๆ",
+    "customerServiceCenter": "ศูนย์บริการลูกค้า",
+    "cardAllTitle": "บริการ",
+    "cardAllSub": "รวมบริการทั้งหมด",
+    "cardTransferTitle": "โอน",
+    "cardTransferSub": "โอนเงิน / ฝากโอน",
+    "cardOrderTitle": "สั่ง",
+    "cardOrderSub": "สั่งซื้อสินค้า",
+    "cardImportTitle": "นำเข้า",
+    "cardImportSub": "บริการนำเข้า",
+    "cardExportTitle": "ส่งออก",
+    "cardExportSub": "บริการส่งออก",
+    "cardCustomsTitle": "เคลียร์",
+    "cardCustomsSub": "พิธีการศุลกากร"
   },
   "homeRelatedTags": {
     "eyebrow": "RELATED TOPICS · หัวข้อยอดนิยม",
