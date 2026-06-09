@@ -95,10 +95,26 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
 
   // W-1 (gap-admin H-2): page-level role gate. The (admin) layout only
   // proves "some admin" — driver/warehouse roles legitimately reach
-  // floor-ops pages, but this dashboard exposes company-wide revenue +
-  // total wallet balance + pending payouts via createAdminClient
-  // (RLS-bypass). Office roles only; super implicit.
-  await requireAdmin(["ops", "accounting", "sales_admin"]);
+  // floor-ops pages (they're redirected above), but this dashboard
+  // exposes company-wide revenue + total wallet balance + pending payouts
+  // via createAdminClient (RLS-bypass). Office roles only; super implicit.
+  //
+  // 2026-06-08 (ภูม pre-handoff round 5 · proactive role-coverage):
+  // Expanded from ["ops","accounting","sales_admin"] to include "sales"
+  // (Cargo Sales Staff #30 · legacy doc lines 792-870 — same operational
+  // dashboard as sales_admin minus approval rights) + "qa" (QA & QC staff
+  // #5) + "manager" (Cargo Manager — added 0118 · super-without-grants).
+  // Without these, a freshly-provisioned non-super staff in these 3 roles
+  // would 404 on /admin (same warehouse pattern caught round 4 with the
+  // live test-account login). All 3 are office roles that ops/accounting
+  // legitimately collaborate with — same data sensitivity tier.
+  //
+  // NOT included: interpreter (legitimately has its own landing — TODO
+  // when interpreter portal lands; for now they 404 + need a redirect like
+  // warehouse/driver got) and freight_* roles (Theme 8 not live yet).
+  await requireAdmin([
+    "ops", "accounting", "sales_admin", "sales", "qa", "manager",
+  ]);
 
   const sp = await searchParams;
   const admin = createAdminClient();
