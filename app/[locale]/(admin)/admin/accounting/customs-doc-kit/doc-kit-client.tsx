@@ -209,7 +209,10 @@ function LetterGenerator({ initialShipmentId }: { initialShipmentId?: string }) 
     if (autoPrefilled.current) return;
     if (!initialShipmentId) return;
     autoPrefilled.current = true;
-    prefill();
+    // Defer out of the effect body (prefill setStates) so we don't trigger a
+    // synchronous setState-in-effect (react-hooks/set-state-in-effect). Runs the
+    // one-time deep-link prefill on the next microtask — imperceptible.
+    queueMicrotask(prefill);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialShipmentId]);
 
