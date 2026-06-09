@@ -3346,6 +3346,9 @@
       "declarations": "Customs declarations",
       "costRates": "China freight cost rates"
     },
+    "freightOps": {
+      "title": "Freight Operations (AX JOB)"
+    },
     "settingsCargo": {
       "title": "Cargo system settings",
       "general": "General",
