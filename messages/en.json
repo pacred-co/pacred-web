@@ -3450,6 +3450,15 @@
       "qaInspect": "QA inspections",
       "csvImports": "Bulk CSV import"
     },
+    "warehouseWorker": {
+      "title": "Warehouse worker app (CN)",
+      "dashboard": "Warehouse overview",
+      "intake": "Receive goods",
+      "measure": "Weigh / measure",
+      "sacks": "Sacks",
+      "shipping": "Load / depart",
+      "follow": "Follow product"
+    },
     "driver": {
       "work": "Today's jobs (mobile)",
       "toDeliver": "Jobs to deliver",
