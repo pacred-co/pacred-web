@@ -13,7 +13,7 @@
 
 The CTT warehouse partner maintains a Google Sheet (`CTT-New` tab in spreadsheet `15g49hwP…` — Pacred provisions its own copy via ก๊อต) where their warehouse staff types in cabinet codes + arrival dates + free-text status as boxes physically arrive. Customer-facing Pacred dashboards lag behind that sheet by hours/days unless we propagate it back into `tb_forwarder`.
 
-Legacy PCS Cargo had an admin-per-row commit page (`pcs-admin/api-sheets-ctt.php`) where staff manually pasted each row in — a high-touch process that lost rows when staff got busy. Pacred ports the **match-and-update** path instead: the cron pulls the sheet hourly, matches each row to an existing `tb_forwarder` by tracking number, and applies **forward-only** writes. New rows (no existing `tb_forwarder`) still go through the manual entry form at [`/admin/api-sheets-ctt`](../../app/[locale]/(admin)/admin/api-sheets-ctt/page.tsx) — that part is unchanged.
+Legacy PCS Cargo had an admin-per-row commit page (`pcs-admin/api-sheets-ctt.php`) where staff manually pasted each row in — a high-touch process that lost rows when staff got busy. Pacred ports the **match-and-update** path instead: the cron pulls the sheet hourly, matches each row to an existing `tb_forwarder` by tracking number, and applies **forward-only** writes. New rows (no existing `tb_forwarder`) still go through the manual entry form at `/admin/api-sheets-ctt` (file: `app/[locale]/(admin)/admin/api-sheets-ctt/page.tsx`) — that part is unchanged.
 
 The propagation pattern is byte-identical to the proven MOMO writer ([`lib/integrations/momo-isolated/propagate.ts`](../../lib/integrations/momo-isolated/propagate.ts)) — same safety rules, same forward-only discipline, same `fcabinet_locked` respect.
 
@@ -106,6 +106,6 @@ Rollback is safe because **every write is forward-only + idempotent**. Re-runnin
 
 - **The MOMO pattern this mirrors:** [`lib/integrations/momo-isolated/propagate.ts`](../../lib/integrations/momo-isolated/propagate.ts) (same safety rules, same forward-only writes).
 - **The legacy intake paths catalogue:** [`docs/research/legacy-deep-dive/01-tb-forwarder-intake-paths.md`](../research/legacy-deep-dive/01-tb-forwarder-intake-paths.md) §5 (the CTT sheet is intake path #7).
-- **Admin manual CTT form** (out-of-scope for this cron — handles NEW rows): [`/admin/api-sheets-ctt`](../../app/[locale]/(admin)/admin/api-sheets-ctt/page.tsx).
+- **Admin manual CTT form** (out-of-scope for this cron — handles NEW rows): `/admin/api-sheets-ctt` (file: `app/[locale]/(admin)/admin/api-sheets-ctt/page.tsx`).
 - **Schema:** `tb_forwarder` (migration `0081_pcs_legacy_schema`) + `tb_forwarder.fcabinet_locked` (migration `0150_tb_forwarder_cabinet_locked`).
 - **Cron registry:** [`lib/cron/registry.ts`](../../lib/cron/registry.ts) — schedule + label + description.
