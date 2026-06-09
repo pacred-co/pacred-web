@@ -3350,6 +3350,9 @@
     "freightOps": {
       "title": "Freight Operations (AX JOB)"
     },
+    "freightCommission": {
+      "title": "Freight commission"
+    },
     "settingsCargo": {
       "title": "Cargo system settings",
       "general": "General",
