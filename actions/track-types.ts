@@ -29,4 +29,12 @@ export type PublicTrackFound = {
   stages: PublicTrackStage[];
 };
 
-export type PublicTrackResult = { found: false } | PublicTrackFound;
+/**
+ * The not-found / blocked branch. `rateLimited: true` is set when the caller's
+ * IP exceeded the public-track rate limit (the page shows a friendly
+ * "try again later" instead of a "not found"). Absent/false = a genuine
+ * no-match or a swallowed error.
+ */
+export type PublicTrackNotFound = { found: false; rateLimited?: boolean };
+
+export type PublicTrackResult = PublicTrackNotFound | PublicTrackFound;

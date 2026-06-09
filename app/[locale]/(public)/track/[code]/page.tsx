@@ -57,6 +57,24 @@ export default async function TrackCodePage({
   const result = await getPublicTrackStatus(code);
   const t = await getTranslations("publicTrackStatus");
 
+  // ── Rate-limited → friendly "try again later" (never leak, never 500) ──
+  if (!result.found && result.rateLimited) {
+    return (
+      <main className="mx-auto w-full max-w-2xl px-4 py-10 sm:py-14">
+        <div className="rounded-2xl border border-border bg-white p-6 text-center shadow-sm dark:bg-surface sm:p-8">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-500">
+            <AlertCircle className="h-7 w-7" />
+          </div>
+          <h1 className="mt-4 text-xl font-bold text-foreground">{t("rateLimitedTitle")}</h1>
+          <p className="mx-auto mt-2 max-w-sm text-[15px] leading-relaxed text-muted">
+            {t("rateLimitedBody")}
+          </p>
+        </div>
+        <HelpFooter />
+      </main>
+    );
+  }
+
   // ── Not found / error → friendly state (never leak, never 500) ──
   if (!result.found) {
     return (
