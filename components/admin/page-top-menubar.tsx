@@ -102,7 +102,19 @@ export function PageTopMenubar({ items, activeHref }: PageTopMenubarProps) {
       // to match the customer-side brand (per podeng). The legacy doc
       // commentary "purple bar" is historic — we kept the cascading-dropdown
       // behaviour, only the colours changed.
-      className="rounded-xl shadow-md bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800 text-white"
+      //
+      // 2026-06-09 (ภูม flag) — sticky-top so staff can navigate without
+      // scrolling back up on long admin pages. z-30 sits below the floating
+      // pay/LINE widgets (z-44+) but above table content (z-0). Applies to
+      // all ~25 admin pages that mount <PageTopMenubar> (forwarders ·
+      // service-orders · refunds · driver-runs · reports · leads ·
+      // accounting/freight · billing-run · accounting/customs-declarations ·
+      // wallet · wallet/withdrawals · shop-payouts · shop-disbursement/
+      // history · sales-payouts · customers · customers/comparison ·
+      // customers/credit · commissions · accounting/wht-certs ·
+      // accounting/quote-compare · api-forwarder-momo ·
+      // accounting/near-churn · reports/shops-profit-pay).
+      className="sticky top-0 z-30 rounded-xl shadow-md bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800 text-white"
     >
       {/* Desktop · md+ — full cascading menubar */}
       <ul className="hidden md:flex flex-wrap items-stretch">
