@@ -16,15 +16,17 @@
 
 ### #1 Update `SUPABASE_DB_PASSWORD` in Vercel (พี่เดฟ หรือ พี่ก๊อต ทำ)
 
-**Issue:** Password DB ใน Vercel ปัจจุบันอาจเป็นรหัสเก่า (`Jirayus40x.` ของ project Supabase เก่า `yzljakczhwrpbxflnmco`) · ถ้าไม่อัพเดต บาง direct-DB call จาก server-side scripts / migrations / cron จะ fail (REST API ผ่าน anon/service-role key ไม่กระทบ).
+**Issue:** Password DB ใน Vercel ปัจจุบันอาจเป็นรหัสเก่า (`<old-pw-redacted>` ของ project Supabase เก่า `yzljakczhwrpbxflnmco`) · ถ้าไม่อัพเดต บาง direct-DB call จาก server-side scripts / migrations / cron จะ fail (REST API ผ่าน anon/service-role key ไม่กระทบ).
 
 **Project:** Pacred main (Vercel dashboard → pacred-web → Settings → Environment Variables → `SUPABASE_DB_PASSWORD`)
 
 **ค่าที่ต้องใส่ (พี่ก๊อตให้รหัสมา · ภูม verify แล้ว 2026-06-09):**
 
 ```
-SUPABASE_DB_PASSWORD=n61OKDy28QcrB1ZJ
+SUPABASE_DB_PASSWORD=<new value — ask ภูม / secure channel · scrubbed from git for security>
 ```
+> 🔐 เดฟ scrubbed the literal password from this doc 2026-06-09 (committing a prod DB password to git = security risk; it's in `.env.local` which is gitignored). ⚠️ **Owner: rotate this DB password** — it was committed to `Poom-pacred` git history before this scrub.
+> ⚠️ **CRITICAL — prod Supabase project mismatch (needs owner confirm):** this doc names prod as `lozntlidlqqzzcaathnm`, but the session `.env.local` + CLAUDE.md + the migration ledger + ALL of เดฟ's migrations (0158–0166) target `yzljakczhwrpbxflnmco`. **Which project does Vercel prod actually point at?** If Vercel `NEXT_PUBLIC_SUPABASE_URL` = `yzljakczhwrpbxflnmco`, the deep-source build is correct + safe to deploy. If it = `lozntlidlqqzzcaathnm`, เดฟ's migrations must be re-applied there before main deploy. **Confirm before pushing to main.**
 
 ✅ ทดสอบ connect prod DB (`lozntlidlqqzzcaathnm` · port 5432 · user `postgres`) ผ่านทันที 2026-06-09 PM.
 
