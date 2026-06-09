@@ -45,6 +45,7 @@ import {
   TRANSPORT_TYPE_LABEL,
   SHIP_BY_LABEL,
   marginPct,
+  forwarderRowProfit,
 } from "./reports-profit-types";
 
 type Ok<T> = { ok: true; data: T };
@@ -72,15 +73,8 @@ function emptyAcc(): Acc {
   return { count: 0, revenue: 0, cost: 0, profit: 0 };
 }
 
-/** Per-row profit (precomputed fprofittotal wins, else compute). */
-function rowProfit(r: FwRaw): { revenue: number; cost: number; profit: number } {
-  const revenue = Number(r.ftotalprice ?? 0);
-  const cost = Number(r.fcosttotalprice ?? 0);
-  const discount = Number(r.fdiscount ?? 0);
-  const pre = Number(r.fprofittotal ?? 0);
-  const profit = pre !== 0 ? pre : revenue - discount - cost;
-  return { revenue, cost, profit };
-}
+/** Per-row profit — shared canonical derivation (audit SF-4 · forwarderRowProfit). */
+const rowProfit = forwarderRowProfit;
 
 /** Finalize a bucket map into sorted ProfitGroupRow[] (by profit desc). */
 function finalize(

@@ -30,7 +30,7 @@ import {
 import { getArAgingReport } from "./reports-ar";
 import { getForwarderSlaReport } from "./reports-sla";
 import { MARGIN_CAP_PER_CONTAINER_THB } from "@/lib/pricing/margin-advisory";
-import { marginPct } from "./reports-profit-types";
+import { marginPct, forwarderRowProfit } from "./reports-profit-types";
 import type {
   CockpitReport,
   CockpitProfitRow,
@@ -193,15 +193,11 @@ export async function getCockpitReport(): Promise<Result<CockpitReport>> {
       const rows = (mtdData ?? []) as MtdRow[];
       capped = rows.length >= LIMIT;
       for (const r of rows) {
-        // revenue = ftotalprice ONLY — align with the canonical profit report
-        // (actions/admin/reports-profit.ts rowProfit) so the cockpit margin %
-        // reconciles with the "ดูรายงานกำไรเต็มรูปแบบ" report it links to. Adding
-        // ftransportprice/fpriceupdate here made the cockpit margin systematically
-        // lower than the report → BI-trust mismatch. (audit SF-4)
-        const revenue = Number(r.ftotalprice ?? 0);
-        const cost = Number(r.fcosttotalprice ?? 0);
-        const pre = Number(r.fprofittotal ?? 0);
-        const profit = pre !== 0 ? pre : revenue - Number(r.fdiscount ?? 0) - cost;
+        // revenue = ftotalprice ONLY — shared `forwarderRowProfit` derivation so
+        // the cockpit margin % reconciles with the "ดูรายงานกำไรเต็มรูปแบบ" report it
+        // links to. Adding ftransportprice/fpriceupdate here made the cockpit margin
+        // systematically lower than the report → BI-trust mismatch. (audit SF-4)
+        const { revenue, cost, profit } = forwarderRowProfit(r);
         mtdRevenue += revenue;
         mtdProfit += profit;
         mtdOrders += 1;

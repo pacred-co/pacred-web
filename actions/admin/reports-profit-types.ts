@@ -103,3 +103,38 @@ export function marginPct(profit: number, revenue: number): number {
   const pct = (profit / revenue) * 100;
   return Number.isFinite(pct) ? pct : 0;
 }
+
+/** The four tb_forwarder money columns the profit derivation reads. */
+export type ForwarderProfitCols = {
+  ftotalprice:     number | string | null;
+  fcosttotalprice: number | string | null;
+  fdiscount:       number | string | null;
+  fprofittotal:    number | string | null;
+};
+
+/**
+ * Canonical per-forwarder-row profit derivation — the SINGLE source of truth
+ * shared by the full profit report (reports-profit.ts) AND the exec cockpit
+ * (reports-cockpit.ts) so their margins reconcile (audit SF-4).
+ *
+ *   revenue = ftotalprice                          (NOT + ftransport/fpriceupdate)
+ *   cost    = fcosttotalprice
+ *   profit  = fprofittotal when non-zero (admin's after-discount edit wins),
+ *             else  ftotalprice − fdiscount − fcosttotalprice
+ *
+ * Pure — no IO. `fprofittotal !== 0` (not "> 0") so a genuine negative
+ * precomputed profit is respected; only an unset/zero field triggers the
+ * fallback compute.
+ */
+export function forwarderRowProfit(r: ForwarderProfitCols): {
+  revenue: number;
+  cost: number;
+  profit: number;
+} {
+  const revenue = Number(r.ftotalprice ?? 0);
+  const cost = Number(r.fcosttotalprice ?? 0);
+  const discount = Number(r.fdiscount ?? 0);
+  const pre = Number(r.fprofittotal ?? 0);
+  const profit = pre !== 0 ? pre : revenue - discount - cost;
+  return { revenue, cost, profit };
+}

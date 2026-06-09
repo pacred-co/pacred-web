@@ -27,6 +27,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { uploadToBucket } from "@/lib/storage/upload";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { isFreightCommissionEnabled } from "@/lib/freight-commission/flag";
+import { selectActiveConfirmedTiers } from "@/lib/freight/commission-tier-select";
 import {
   computeFreightCommission,
   computeFreightWithdrawalNumbers,
@@ -78,16 +79,9 @@ async function loadActiveTiers(
   // confirmed FIRST (before the newest-per-scope pick) is load-bearing: a newer
   // *unconfirmed* tier must not shadow an older *confirmed* one — otherwise that
   // scope silently stops accruing real money (audit S2). Only confirmed tiers
-  // accrue; this loader feeds the minting path exclusively.
-  const rows = (data ?? []).filter((r) => (r as TierRow).is_owner_confirmed) as TierRow[];
-  const seen = new Set<string>();
-  const latest: TierRow[] = [];
-  for (const r of rows) {
-    if (seen.has(r.service_kind)) continue;
-    seen.add(r.service_kind);
-    latest.push(r);
-  }
-  return latest;
+  // accrue; this loader feeds the minting path exclusively. The pick logic is
+  // the pure, tested `selectActiveConfirmedTiers` (lib/freight/commission-tier-select).
+  return selectActiveConfirmedTiers((data ?? []) as TierRow[]);
 }
 
 function toCalcTier(r: TierRow): FreightCommissionTier {
