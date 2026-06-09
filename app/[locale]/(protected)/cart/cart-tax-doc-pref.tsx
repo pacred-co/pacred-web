@@ -45,10 +45,21 @@ const MODE_ICON: Record<TaxDocMode, ReactNode> = {
   none: <Receipt className="w-4 h-4" />,
 };
 
-export function CartTaxDocPref({ defaults }: { defaults: TaxDocDefaults }) {
+export function CartTaxDocPref({
+  defaults,
+  defaultMode,
+}: {
+  defaults: TaxDocDefaults;
+  /** 2026-06-09 (create-order fix) — force the initial doc mode. The ฝากนำเข้า
+   *  order-entry form passes "none" so creating an order never hard-blocks on
+   *  the auto-tax_invoice billing fields (a juristic customer with incomplete
+   *  tb_corporate could not submit); the customer opts INTO ใบกำกับ/ใบขน. The
+   *  cart omits this → keeps the juristic auto-default. */
+  defaultMode?: TaxDocMode;
+}) {
   const t = useTranslations("cartPage");
   const [mode, setMode] = useState<TaxDocMode>(
-    defaults.isJuristic && defaults.taxId ? "tax_invoice" : "none",
+    defaultMode ?? (defaults.isJuristic && defaults.taxId ? "tax_invoice" : "none"),
   );
 
   // The persisted column value ('tax_invoice' | 'customs' | 'receipt').

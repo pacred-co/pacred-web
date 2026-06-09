@@ -314,7 +314,7 @@ export function ServiceImportAddFields({
           createLegacyForwarder — a SELECTION only (issuance is downstream +
           still gated). Only the full-page add passes taxDocDefaults; the
           list-view quick-add modal omits it → order stays ไม่รับเอกสาร. */}
-      {taxDocDefaults && <CartTaxDocPref defaults={taxDocDefaults} />}
+      {taxDocDefaults && <CartTaxDocPref defaults={taxDocDefaults} defaultMode="none" />}
     </>
   );
 
