@@ -7,6 +7,7 @@ import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
 import { ADDRESSES } from "@/components/seo/site";
+import { modeFromPref, prefFromMode, modeRequiresBillingSnapshot } from "@/lib/tax/tax-doc-mode";
 
 /**
  * Legacy `tb_forwarder` writers — D1 / ADR-0017 faithful 1:1 ports of
@@ -67,6 +68,16 @@ const createForwarderLegacySchema = z.object({
   hShipBy:        z.string().trim().max(10).optional().or(z.literal("").transform(() => undefined)),
   pro:            z.string().trim().max(10).optional().or(z.literal("").transform(() => undefined)),
   crate:          z.string().trim().max(2).optional().or(z.literal("").transform(() => undefined)),
+  // P1 (tax-doc at ฝากนำเข้า order entry · 2026-06-09) — the customer's doc-mode
+  // pick from <CartTaxDocPref> (same field names as the cart). Persisted to
+  // tb_forwarder's 0127 tax_doc_* columns. ALL optional: the /service-import
+  // list-view quick-add modal omits the picker → defaults to 'receipt'
+  // (ไม่รับเอกสาร), i.e. today's unchanged behaviour. This is a SELECTION only —
+  // issuance is downstream + still gated (no money move at create).
+  taxDocPref:        z.string().trim().max(20).optional(),
+  taxDocTaxId:       z.string().trim().max(20).optional(),
+  taxDocBillingName: z.string().trim().max(300).optional(),
+  taxDocAddress:     z.string().trim().max(500).optional(),
 });
 export type CreateForwarderLegacyInput = z.infer<typeof createForwarderLegacySchema>;
 
@@ -88,6 +99,21 @@ export async function createLegacyForwarder(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
   const d = parsed.data;
+
+  // P1 — tax-doc mode for THIS import order (mirror actions/cart.ts exactly).
+  // Normalise pref → mode → pref; ใบกำกับ + ใบขน need the buyer snapshot,
+  // ไม่รับเอกสาร needs nothing. Stored on tb_forwarder.tax_doc_* (mig 0127).
+  const taxDocMode = modeFromPref(d.taxDocPref);
+  const taxDocPref = prefFromMode(taxDocMode);            // 'tax_invoice' | 'customs' | 'receipt'
+  const taxDocTaxId = (d.taxDocTaxId ?? "").trim();
+  const taxDocBillingName = (d.taxDocBillingName ?? "").trim();
+  const taxDocAddress = (d.taxDocAddress ?? "").trim();
+  const needsBilling = modeRequiresBillingSnapshot(taxDocMode);
+  if (needsBilling) {
+    if (!/^\d{13}$/.test(taxDocTaxId)) return { ok: false, error: "tax_id_invalid — เลขผู้เสียภาษีต้องมี 13 หลัก" };
+    if (taxDocBillingName === "") return { ok: false, error: "tax_billing_name_required — กรอกชื่อบริษัท/ผู้เสียภาษี" };
+    if (taxDocAddress === "") return { ok: false, error: "tax_address_required — กรอกที่อยู่สำหรับออกเอกสาร" };
+  }
 
   const session = await getCurrentUserWithProfile();
   if (!session?.profile) return { ok: false, error: "not_signed_in" };
@@ -215,6 +241,10 @@ export async function createLegacyForwarder(
     paymethod,
     crate:               d.crate ?? "2",
     fshippingservice:    0,
+    // P1 — tax-doc selection (mig 0127 columns · same shape as cart.ts).
+    tax_doc_pref:        taxDocPref,
+    tax_doc_tax_id:      needsBilling ? taxDocTaxId : null,
+    tax_doc_address:     needsBilling ? `${taxDocBillingName} · ${taxDocAddress}` : null,
     // NOT NULL columns the legacy leaves to MySQL defaults (Postgres
     // strict mode requires explicit values — match the 0081 defaults).
     fstatuscaradminon:   "",

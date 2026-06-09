@@ -2,6 +2,7 @@ import { BadgePercent, Box, MapPin, Plus, Ship } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { ServiceImportShipBySelect } from "./service-import-shipby-select";
+import { CartTaxDocPref, type TaxDocDefaults } from "../../cart/cart-tax-doc-pref";
 
 /**
  * The four form-field sections of the "เพิ่มรายการนำเข้า" (forwarder add)
@@ -37,10 +38,18 @@ export function ServiceImportAddFields({
   mainAddr,
   others,
   compact = false,
+  taxDocDefaults,
 }: {
   mainAddr: AddrOption | null;
   others: AddrOption[];
   compact?: boolean;
+  /**
+   * P1 (2026-06-09) — when provided, render the doc-mode picker
+   * (<CartTaxDocPref>) so the customer chooses ใบกำกับ / ใบขน / ไม่รับเอกสาร
+   * at order entry. Only the full-page /service-import/add passes this; the
+   * list-view quick-add modal omits it (order defaults to ไม่รับเอกสาร).
+   */
+  taxDocDefaults?: TaxDocDefaults;
 }) {
   const t = useTranslations("serviceImportAdd");
   const hasAddress = Boolean(mainAddr) || others.length > 0;
@@ -297,6 +306,15 @@ export function ServiceImportAddFields({
           {t("promoFootnote")}
         </p>
       </section>
+
+      {/* ── 5. เอกสารภาษี (P1 — doc-mode at order entry · 2026-06-09) ──
+          Reuses <CartTaxDocPref> (cartPage i18n · same input names) so the
+          customer picks ใบกำกับภาษี / ใบขนสินค้า / ไม่รับเอกสาร for THIS import
+          order. The choice persists to tb_forwarder.tax_doc_* (mig 0127) via
+          createLegacyForwarder — a SELECTION only (issuance is downstream +
+          still gated). Only the full-page add passes taxDocDefaults; the
+          list-view quick-add modal omits it → order stays ไม่รับเอกสาร. */}
+      {taxDocDefaults && <CartTaxDocPref defaults={taxDocDefaults} />}
     </>
   );
 
