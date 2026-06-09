@@ -34,13 +34,17 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { Store, Save, ExternalLink, CheckCircle2, Truck, Coins } from "lucide-react";
+import { Store, Save, ExternalLink, CheckCircle2, Truck, Coins, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   adminMarkShopOrderOrdered,
   adminUpdateShopTracking,
 } from "@/actions/admin/service-orders-shop-workflow";
-import { adminUpdateCartItemPriceUpdate } from "@/actions/admin/service-orders-line-edits";
+import {
+  adminUpdateCartItemPriceUpdate,
+  adminUpdateCartItemShippingNumber,
+  adminUpdateCartItemCTracking,
+} from "@/actions/admin/service-orders-line-edits";
 
 export type ShopFieldsItem = {
   id: number;
@@ -244,51 +248,72 @@ export function ShopFieldsBoard({
                     sits between the shop header and the items table so the
                     admin sees them right next to the items they belong to. */}
                 <div className="px-3 py-2.5 bg-amber-50/40 border-b border-border grid sm:grid-cols-2 gap-2">
-                  {/* cshippingnumber — editable at status 3 · locked at 4/5 */}
-                  <label className="block space-y-1">
-                    <span className="text-[11px] font-semibold text-muted flex items-center gap-1">
-                      เลขออเดอร์ร้านจีน{" "}
-                      {isStatus3 && <span className="text-red-500">*</span>}
-                    </span>
-                    <input
-                      type="text"
-                      value={d.cshippingnumber}
-                      onChange={(e) => setField(sh.cnameshop, "cshippingnumber", e.target.value)}
-                      disabled={!isStatus3 || pending}
-                      placeholder="เช่น 5119114033176034116"
-                      className={inputCls}
-                    />
-                  </label>
+                  {/* cshippingnumber — editable at status 3 (initial save
+                      via the bottom bulk submit · adminMarkShopOrderOrdered).
+                      Locked at 4/5 — but the inline "แก้คำผิด" sub-form
+                      below opens the typo-fix path (E3.5 ·
+                      adminUpdateCartItemShippingNumber). */}
+                  <div className="space-y-1">
+                    <label className="block space-y-1">
+                      <span className="text-[11px] font-semibold text-muted flex items-center gap-1">
+                        เลขออเดอร์ร้านจีน{" "}
+                        {isStatus3 && <span className="text-red-500">*</span>}
+                      </span>
+                      <input
+                        type="text"
+                        value={d.cshippingnumber}
+                        onChange={(e) => setField(sh.cnameshop, "cshippingnumber", e.target.value)}
+                        disabled={!isStatus3 || pending}
+                        placeholder="เช่น 5119114033176034116"
+                        className={inputCls}
+                      />
+                    </label>
+                    {(isStatus4 || isStatus5) && (
+                      <ShippingNumberTypoFixer
+                        hNo={hNo}
+                        cNameShop={sh.cnameshop}
+                        currentShippingNumber={sh.cshippingnumber}
+                        onSaved={() => router.refresh()}
+                      />
+                    )}
+                  </div>
 
                   {/* ctrackingnumber — editable at status 4 · readonly at 5
                       · placeholder cell at status 3 (so the grid keeps shape) */}
                   {(isStatus4 || isStatus5) ? (
-                    <label className="block space-y-1">
-                      <span className="text-[11px] font-semibold text-muted flex items-center gap-1">
-                        <Truck className="h-3 w-3" /> เลข Tracking จีน
-                        {isStatus4 && <span className="text-muted/70 font-normal">(หลายเลข ใส่ , คั่น)</span>}
-                      </span>
-                      <div className="flex gap-2 items-center">
-                        <input
-                          type="text"
-                          value={d.ctrackingnumber}
-                          onChange={(e) => setField(sh.cnameshop, "ctrackingnumber", e.target.value)}
-                          disabled={!isStatus4 || pending}
-                          placeholder="เลข Tracking จีน"
-                          className={inputCls}
-                        />
-                        {shopFwdSearchHref && (
-                          <Link
-                            href={shopFwdSearchHref}
-                            className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-primary-300 bg-primary-50 px-2.5 py-2 text-[11px] font-medium text-primary-700 hover:bg-primary-100"
-                            title="ค้นหารายการฝากนำเข้าตามเลข tracking นี้"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                            ตรวจสอบ
-                          </Link>
-                        )}
-                      </div>
-                    </label>
+                    <div className="space-y-1">
+                      <label className="block space-y-1">
+                        <span className="text-[11px] font-semibold text-muted flex items-center gap-1">
+                          <Truck className="h-3 w-3" /> เลข Tracking จีน
+                          {isStatus4 && <span className="text-muted/70 font-normal">(หลายเลข ใส่ , คั่น)</span>}
+                        </span>
+                        <div className="flex gap-2 items-center">
+                          <input
+                            type="text"
+                            value={d.ctrackingnumber}
+                            onChange={(e) => setField(sh.cnameshop, "ctrackingnumber", e.target.value)}
+                            disabled={!isStatus4 || pending}
+                            placeholder="เลข Tracking จีน"
+                            className={inputCls}
+                          />
+                          {shopFwdSearchHref && (
+                            <Link
+                              href={shopFwdSearchHref}
+                              className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-primary-300 bg-primary-50 px-2.5 py-2 text-[11px] font-medium text-primary-700 hover:bg-primary-100"
+                              title="ค้นหารายการฝากนำเข้าตามเลข tracking นี้"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              ตรวจสอบ
+                            </Link>
+                          )}
+                        </div>
+                      </label>
+                      <TrackingTypoFixer
+                        hNo={hNo}
+                        currentBag={sh.ctrackingnumber}
+                        onSaved={() => router.refresh()}
+                      />
+                    </div>
                   ) : (
                     <div className="hidden sm:block" />
                   )}
@@ -498,6 +523,226 @@ function InlinePriceUpdateCell({
         )}
       </div>
       {rowErr && <span className="text-[10px] text-red-600">{rowErr}</span>}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// ShippingNumberTypoFixer — toggles a "แก้คำผิด" inline form so an
+// admin can correct a typo in the per-shop cshippingnumber AFTER
+// status 4/5 was reached. Calls adminUpdateCartItemShippingNumber
+// which is gated server-side to hstatus IN {3,4,5}.
+// confirm-before-mutate (§0f · native dialog).
+// Task #228 · E3.5 (legacy shops.php L1793-1805).
+// ────────────────────────────────────────────────────────────
+function ShippingNumberTypoFixer({
+  hNo,
+  cNameShop,
+  currentShippingNumber,
+  onSaved,
+}: {
+  hNo: string;
+  cNameShop: string;
+  currentShippingNumber: string;
+  onSaved: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [val, setVal] = useState(currentShippingNumber);
+  const [pending, startTransition] = useTransition();
+  const [rowErr, setRowErr] = useState<string | null>(null);
+
+  function save() {
+    setRowErr(null);
+    const next = val.trim();
+    if (next === (currentShippingNumber ?? "").trim()) {
+      setRowErr("ไม่มีการเปลี่ยนแปลง");
+      return;
+    }
+    if (!confirm(
+      `แก้คำผิดเลขออเดอร์ร้านจีน "${cNameShop}"?\n\n` +
+      `เดิม: ${currentShippingNumber || "(ว่าง)"}\n` +
+      `ใหม่: ${next || "(ว่าง — จะล้างค่า)"}`,
+    )) return;
+    startTransition(async () => {
+      const res = await adminUpdateCartItemShippingNumber({
+        h_no: hNo, c_name_shop: cNameShop, c_shipping_number: next,
+      });
+      if (res.ok) {
+        setOpen(false);
+        onSaved();
+      } else {
+        setRowErr(res.error);
+      }
+    });
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => { setOpen(true); setVal(currentShippingNumber); setRowErr(null); }}
+        className="inline-flex items-center gap-0.5 text-[10px] text-primary-600 hover:underline"
+        title="แก้คำผิดเลขออเดอร์ร้านจีน (E3.5)"
+      >
+        <Pencil className="h-3 w-3" /> แก้คำผิด
+      </button>
+    );
+  }
+  return (
+    <div className="space-y-1 rounded border border-amber-300 bg-amber-50 p-2">
+      <input
+        type="text"
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        disabled={pending}
+        placeholder="เลขออเดอร์ร้านจีนใหม่"
+        className={inputCls}
+      />
+      <div className="flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          onClick={save}
+          disabled={pending}
+          className="rounded border border-primary-300 bg-primary-500 text-white px-2.5 py-1 text-[11px] hover:bg-primary-600 disabled:opacity-50"
+        >
+          {pending ? "บันทึก..." : "บันทึกแก้คำผิด"}
+        </button>
+        <button
+          type="button"
+          onClick={() => { setOpen(false); setRowErr(null); }}
+          disabled={pending}
+          className="rounded border border-border bg-white px-2.5 py-1 text-[11px] hover:bg-surface-alt disabled:opacity-50"
+        >
+          ยกเลิก
+        </button>
+      </div>
+      {rowErr && <p className="text-[10px] text-red-600">{rowErr}</p>}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// TrackingTypoFixer — opens an inline OLD→NEW swap form for a single
+// tracking number inside the per-shop comma-separated ctrackingnumber
+// bag. Calls adminUpdateCartItemCTracking which (a) bag-replaces the
+// exact token across all matching tb_order rows, (b) cascades the
+// rename into tb_forwarder.ftrackingchn, (c) notifies the customer.
+// Server gate: hstatus IN {4,5}.
+// Task #228 · E3.17 (legacy shops.php L776-815 + detail.php L260,288).
+// ────────────────────────────────────────────────────────────
+function TrackingTypoFixer({
+  hNo,
+  currentBag,
+  onSaved,
+}: {
+  hNo: string;
+  currentBag: string;
+  onSaved: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [oldTok, setOldTok] = useState("");
+  const [newTok, setNewTok] = useState("");
+  const [pending, startTransition] = useTransition();
+  const [rowErr, setRowErr] = useState<string | null>(null);
+
+  // Suggest the first token from the current bag so the admin doesn't
+  // re-type a long string.
+  const suggestions = currentBag
+    .split(",")
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+
+  function save() {
+    setRowErr(null);
+    const o = oldTok.trim();
+    const n = newTok.trim();
+    if (!o) { setRowErr("ระบุเลข tracking เดิม"); return; }
+    if (!n) { setRowErr("ระบุเลข tracking ใหม่"); return; }
+    if (o === n) { setRowErr("เลข tracking ใหม่เหมือนเดิม"); return; }
+    if (!confirm(
+      `แก้คำผิดเลข tracking?\n\n` +
+      `เดิม: ${o}\n` +
+      `ใหม่: ${n}\n\n` +
+      `จะอัพเดททุก tb_order ของออเดอร์นี้ + cascade ไป tb_forwarder + แจ้งลูกค้า`,
+    )) return;
+    startTransition(async () => {
+      const res = await adminUpdateCartItemCTracking({
+        h_no: hNo,
+        c_tracking_number_old: o,
+        c_tracking_number_new: n,
+      });
+      if (res.ok) {
+        setOpen(false);
+        setOldTok("");
+        setNewTok("");
+        onSaved();
+      } else {
+        setRowErr(res.error);
+      }
+    });
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => { setOpen(true); setRowErr(null); }}
+        className="inline-flex items-center gap-0.5 text-[10px] text-primary-600 hover:underline"
+        title="แก้คำผิดเลข tracking (E3.17)"
+      >
+        <Pencil className="h-3 w-3" /> แก้คำผิด
+      </button>
+    );
+  }
+  return (
+    <div className="space-y-1.5 rounded border border-amber-300 bg-amber-50 p-2">
+      <label className="block space-y-0.5">
+        <span className="text-[10px] font-semibold text-muted">เลข tracking เดิม (ที่ผิด)</span>
+        <input
+          type="text"
+          list={`trk-sugg-${hNo}`}
+          value={oldTok}
+          onChange={(e) => setOldTok(e.target.value)}
+          disabled={pending}
+          placeholder={suggestions[0] || "เลข tracking เดิม"}
+          className={inputCls}
+        />
+        {suggestions.length > 0 && (
+          <datalist id={`trk-sugg-${hNo}`}>
+            {suggestions.map((s) => (<option key={s} value={s} />))}
+          </datalist>
+        )}
+      </label>
+      <label className="block space-y-0.5">
+        <span className="text-[10px] font-semibold text-muted">เลข tracking ใหม่ (ถูกต้อง)</span>
+        <input
+          type="text"
+          value={newTok}
+          onChange={(e) => setNewTok(e.target.value)}
+          disabled={pending}
+          placeholder="เลข tracking ใหม่"
+          className={inputCls}
+        />
+      </label>
+      <div className="flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          onClick={save}
+          disabled={pending}
+          className="rounded border border-primary-300 bg-primary-500 text-white px-2.5 py-1 text-[11px] hover:bg-primary-600 disabled:opacity-50"
+        >
+          {pending ? "บันทึก..." : "บันทึกแก้คำผิด + แจ้งลูกค้า"}
+        </button>
+        <button
+          type="button"
+          onClick={() => { setOpen(false); setRowErr(null); }}
+          disabled={pending}
+          className="rounded border border-border bg-white px-2.5 py-1 text-[11px] hover:bg-surface-alt disabled:opacity-50"
+        >
+          ยกเลิก
+        </button>
+      </div>
+      {rowErr && <p className="text-[10px] text-red-600">{rowErr}</p>}
     </div>
   );
 }

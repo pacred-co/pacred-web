@@ -55,10 +55,24 @@
  *     (L1825-1830) — faithful first. NOT a SUM-from-scratch (which
  *     would be more robust to historical drift but diverge from PHP).
  *
- * Notification: none of the three writers send LINE/SMS. The legacy
- * `saveHistory()` audit-log calls (L1803 for shipping, none for price
- * or tracking) are replaced by `logAdminAction()` — Pacred has a
- * stronger audit primitive (target + payload `before`/`after`).
+ * Notification: only `adminUpdateCartItemCTracking` (E3.17) pings the
+ * customer (best-effort, in-app + LINE OA + email · matches legacy
+ * detail.php L800-810 where a fixed tracking notifies the customer
+ * because they trust that number for package tracking). The other two
+ * (E3.5 cshippingnumber + E3.14 cpriceupdate) stay silent — legacy
+ * doesn't notify, and the customer-visible state doesn't change in a
+ * way they'd care to be told. The legacy `saveHistory()` audit-log
+ * calls (L1803 for shipping, none for price or tracking) are replaced
+ * by `logAdminAction()` — Pacred has a stronger audit primitive
+ * (target + payload `before`/`after`).
+ *
+ * Status gates (Task #228 · 2026-06-09 — was missing pre-task):
+ *   - E3.5 / E3.14 → hstatus IN {3,4,5}  (lineEditStatusGate)
+ *   - E3.17        → hstatus IN {4,5}    (trackingEditStatusGate)
+ *   - Status '6' (cancelled) + '1'/'2' (pre-quote · items still in
+ *     ShopItemsEditor) always rejected. Helpers live in
+ *     lib/service-order/line-edit-gates.ts (importable by the test
+ *     file — "use server" modules can't export non-async functions).
  */
 
 import { revalidatePath } from "next/cache";
@@ -67,6 +81,18 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
+import { sendNotification } from "@/lib/notifications";
+import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
+import { logger, redactId } from "@/lib/logger";
+import {
+  lineEditStatusGate,
+  trackingEditStatusGate,
+} from "@/lib/service-order/line-edit-gates";
+
+// Status-gate helpers live in lib/service-order/line-edit-gates.ts —
+// they're pure, exported, and importable by the test file without
+// crossing the "use server" boundary (Next 16 forbids non-async
+// exports from "use server" modules · AGENTS.md §11).
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — local helper (same shape as
@@ -201,17 +227,19 @@ export async function adminUpdateCartItemPriceUpdate(
         };
       }
 
-      // 2. Load parent header — need current hpriceupdate for delta.
+      // 2. Load parent header — need current hpriceupdate for delta +
+      //    hstatus for the gate.
       const { data: header, error: headerErr } = await admin
         .from("tb_header_order")
-        .select("id, hno, hpriceupdate")
+        .select("id, hno, hstatus, hpriceupdate")
         .eq("hno", itemRow.hno)
         .maybeSingle<{
           id: number;
           hno: string;
+          hstatus: string | null;
           hpriceupdate: number | string | null;
         }>() as unknown as {
-          data: { id: number; hno: string; hpriceupdate: number | string | null } | null;
+          data: { id: number; hno: string; hstatus: string | null; hpriceupdate: number | string | null } | null;
           error: { code?: string; message?: string } | null;
         };
       if (headerErr) {
@@ -223,6 +251,12 @@ export async function adminUpdateCartItemPriceUpdate(
       if (!header) {
         return { ok: false, error: `ไม่พบใบฝากสั่งซื้อแม่ (hno=${itemRow.hno})` };
       }
+
+      // Status gate (Task #228 spawn brief E3.14) — order must be
+      // post-Mark-Ordered (3/4/5). Pre-quote ('1','2') items live in
+      // ShopItemsEditor; cancel ('6') refuses all line edits.
+      const gate = lineEditStatusGate(header.hstatus);
+      if (!gate.ok) return { ok: false, error: gate.error };
 
       const beforeHpriceupdate = Number(header.hpriceupdate ?? 0);
       const beforeHpriceupdateFinite = Number.isFinite(beforeHpriceupdate)
@@ -390,6 +424,32 @@ export async function adminUpdateCartItemCTracking(
     async ({ adminId }) => {
       const admin = createAdminClient();
       const legacyAdminId = safeLegacyAdminId(await resolveLegacyAdminId(), 10);
+
+      // 0. Load parent header for the status gate + customer notify
+      //    target (userid → profile_id).
+      const { data: header, error: headerErr } = await admin
+        .from("tb_header_order")
+        .select("id, hno, hstatus, userid")
+        .eq("hno", d.h_no)
+        .maybeSingle<{
+          id: number;
+          hno: string;
+          hstatus: string | null;
+          userid: string;
+        }>();
+      if (headerErr) {
+        console.error(`[tb_header_order header lookup (ctracking)] failed`, {
+          code: headerErr.code, message: headerErr.message,
+        });
+        return { ok: false, error: `db_error:${headerErr.code ?? "unknown"}` };
+      }
+      if (!header) {
+        return { ok: false, error: `ไม่พบใบฝากสั่งซื้อ ${d.h_no}` };
+      }
+
+      // Status gate (Task #228 spawn brief E3.17) — only after Mark-Ordered.
+      const gate = trackingEditStatusGate(header.hstatus);
+      if (!gate.ok) return { ok: false, error: gate.error };
 
       // 1. Find every tb_order row in this hno whose ctrackingnumber
       //    bag contains the old token. Legacy uses LIKE '%old%' which
@@ -619,6 +679,39 @@ export async function adminUpdateCartItemCTracking(
         },
       );
 
+      // 7. Customer notify (Task #228 spawn brief — ONLY E3.17 notifies;
+      //    legacy detail.php L800-810 also pings the customer when a
+      //    tracking is fixed because the customer trusts that number for
+      //    package tracking). Best-effort: profileId may be null if the
+      //    customer hasn't activated their profile; we log + continue.
+      try {
+        const map = await resolveProfileIdsForLegacyUserids([header.userid]);
+        const profileId = map.get(header.userid) ?? null;
+        if (profileId) {
+          await sendNotification(profileId, {
+            category:       "order",
+            severity:       "info",
+            title:          `ฝากสั่ง ${d.h_no} — แก้ไขเลข Tracking จีน`,
+            body:
+              `แอดมินแก้เลข tracking ของออเดอร์ของคุณ\n` +
+              `เดิม: ${d.c_tracking_number_old}\n` +
+              `ใหม่: ${d.c_tracking_number_new}`,
+            link_href:      `/service-order/${d.h_no}`,
+            reference_type: "service_order",
+            reference_id:   d.h_no,
+          });
+        } else {
+          logger.warn("service-orders-line-edits", "ctracking notify — no profileId for userid", {
+            userid: redactId(header.userid), hno: d.h_no,
+          });
+        }
+      } catch (notifyErr) {
+        logger.warn("service-orders-line-edits", "ctracking notify dispatch failed (non-fatal)", {
+          hno: d.h_no,
+          error: notifyErr instanceof Error ? notifyErr.message : String(notifyErr),
+        });
+      }
+
       revalidatePath("/admin/service-orders");
       revalidatePath(`/admin/service-orders/${d.h_no}`);
       revalidatePath("/admin/forwarders");
@@ -677,6 +770,25 @@ export async function adminUpdateCartItemShippingNumber(
     async ({ adminId }) => {
       const admin = createAdminClient();
       const legacyAdminId = safeLegacyAdminId(await resolveLegacyAdminId(), 10);
+
+      // 0. Load header for status gate (Task #228 spawn brief E3.5 — must
+      //    be post-Mark-Ordered 3/4/5). For status 3 the initial-save path
+      //    is `adminMarkShopOrderOrdered`; this action is the typo-fix
+      //    path so it's also valid at 4/5.
+      const { data: header, error: headerErr } = await admin
+        .from("tb_header_order")
+        .select("id, hno, hstatus")
+        .eq("hno", d.h_no)
+        .maybeSingle<{ id: number; hno: string; hstatus: string | null }>();
+      if (headerErr) {
+        console.error(`[tb_header_order header lookup (cshipping)] failed`, {
+          code: headerErr.code, message: headerErr.message,
+        });
+        return { ok: false, error: `db_error:${headerErr.code ?? "unknown"}` };
+      }
+      if (!header) return { ok: false, error: `ไม่พบใบฝากสั่งซื้อ ${d.h_no}` };
+      const gate = lineEditStatusGate(header.hstatus);
+      if (!gate.ok) return { ok: false, error: gate.error };
 
       // 1. Pre-read for audit (before/after delta + refund guard).
       const { data: before, error: beforeErr } = await admin
