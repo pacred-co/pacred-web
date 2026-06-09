@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { legacyMemberUrl } from "@/lib/legacy-image";
 import { ServiceImportAddForm } from "../add/service-import-add-form";
+import { ImportViewTabs } from "../import-view-tabs";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { type CsvRow } from "@/components/admin/csv-button";
@@ -695,35 +696,8 @@ export default async function ForwarderTablePage({
         <section className="flex flex-col rounded-2xl border border-border bg-white shadow-sm dark:bg-surface md:max-h-[calc(100svh-15.5rem)] md:overflow-hidden">
           {/* ═══ LOCKED HEADER — stays put while the table body scrolls ═══ */}
           <div className="flex shrink-0 flex-col">
-          {/* ── Tab strip — legacy `nav nav-tabs nav-underline` markup
-              (forwarder-table.php L734-746): big H3 headings, active =
-              red underline. ปอน 2026-05-28 sent legacy HTML to copy. */}
-          {/* View tabs — on MOBILE they stack as 2 full-width segmented rows
-              (ปอน 2026-06-08 "ทำให้เป็น 2 แถวสวยๆ ในมือถือ"): active = red fill,
-              inactive = grey. On DESKTOP they revert to the legacy inline
-              underline tabs (red text + red underline on the active one). */}
-          <div className="border-b border-border px-3 pt-3 md:px-4 md:pt-4">
-            <ul className="flex flex-col gap-1.5 md:flex-row md:gap-0 md:overflow-x-auto md:[scrollbar-width:none] md:[&::-webkit-scrollbar]:hidden">
-              <li className="md:shrink-0">
-                <Link
-                  href="/service-import"
-                  className="w-full md:w-auto inline-flex items-center md:items-end justify-center md:justify-start gap-2 rounded-lg md:rounded-none border md:border-0 md:border-b-[3px] border-border md:border-transparent bg-surface-alt/60 md:bg-transparent px-4 py-2.5 md:pb-2.5 text-sm md:text-xl font-medium text-muted hover:text-foreground md:hover:border-border whitespace-nowrap transition-colors"
-                >
-                  <span aria-hidden className="ft-box" />
-                  {t("tabFullView")}
-                </Link>
-              </li>
-              <li className="md:shrink-0">
-                <Link
-                  href="/service-import/table"
-                  className="w-full md:w-auto inline-flex items-center md:items-end justify-center md:justify-start gap-2 rounded-lg md:rounded-none border md:border-0 md:border-b-[3px] border-[#cc3333] bg-[#cc3333] md:bg-transparent px-4 py-2.5 md:pb-2.5 text-sm md:text-xl font-bold text-white md:text-[#cc3333] whitespace-nowrap"
-                >
-                  <span aria-hidden className="fas fa-table" />
-                  {t("tabTableView")}
-                </Link>
-              </li>
-            </ul>
-          </div>
+          {/* ── Tab strip (shared component — identical on both views) ── */}
+          <ImportViewTabs active="table" />
 
           {/* ── UNIFIED FRAME — ค้นหา + สถานะ อยู่ในกรอบเดียวกัน (ปอน
               2026-05-29 "ทำให้เป็นกรอบเดียวกัน"). Search row (Tracking + Lot
@@ -932,7 +906,7 @@ export default async function ForwarderTablePage({
                     style={{ display: "table-header-group" }}
                     className="z-20 md:sticky md:top-0"
                   >
-                    <tr className="text-center bg-gradient-to-r from-[#ce35a1] to-[#ee7411]">
+                    <tr className="text-center bg-gradient-to-r from-[#cc3333] to-[#b30000]">
                       <th className="px-2 py-3 text-center align-middle border-r border-white/20"><SelectAllHeaderCheckbox /></th>
                       <th className="hidden min-[1200px]:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colCreatedDate")}</th>
                       <th className="all add-text-all px-3 py-3 text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colTrackingChn")}</th>
@@ -969,7 +943,7 @@ export default async function ForwarderTablePage({
                                           `.bg-color` (forwarder-table.php
                                           inline CSS): same pink→orange
                                           gradient as the thead + white text. */}
-                                      <tr className="bg-gradient-to-r from-[#ce35a1] to-[#ee7411] text-white no-sort">
+                                      <tr className="bg-gradient-to-r from-[#cc3333] to-[#b30000] text-white no-sort">
                                         <td className="px-2 py-1.5 border-b border-border"></td>
                                         <td className="t2 hidden min-[1200px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
                                         <td className="t3 px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>

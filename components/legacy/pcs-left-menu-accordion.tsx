@@ -14,11 +14,13 @@ import { ChevronDown, ChevronRight } from "lucide-react";
  * this context. With no provider present the accordion falls back to its own
  * local state (backward-compatible).
  */
-type AccordionGroupCtx = {
+export type AccordionGroupCtx = {
   openId: string | null;
   toggle: (id: string) => void;
 };
-const AccordionGroup = createContext<AccordionGroupCtx | null>(null);
+/** Exported so the redesigned card/row components (pcs-left-menu-cards.tsx)
+ *  share the SAME "only one open at a time" group as the legacy accordions. */
+export const AccordionGroup = createContext<AccordionGroupCtx | null>(null);
 
 export function PcsLeftMenuAccordionGroup({ children }: { children: ReactNode }) {
   const [openId, setOpenId] = useState<string | null>(null);

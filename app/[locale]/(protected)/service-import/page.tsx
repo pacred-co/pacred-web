@@ -5,6 +5,7 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getActivePromoBanners } from "@/lib/promo/banners";
 import { ForwarderInteractivity } from "./forwarder-interactivity";
+import { ImportViewTabs } from "./import-view-tabs";
 import { type ForwarderRow } from "./forwarder-row-view";
 import { AddForwarderModal } from "./add/add-forwarder-modal";
 
@@ -482,27 +483,8 @@ export default async function ServiceImportPage({
           </div>
         ) : (
           <section className="bg-white dark:bg-surface border border-border rounded-2xl shadow-sm overflow-hidden">
-            {/* ── Tab strip + add CTA ── */}
-            <div className="border-b border-border px-3 py-2.5 md:px-4 md:py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2.5">
-              {/* View tabs (เต็ม / ตาราง). Active tab = red underline. */}
-              <div className="flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-1 px-1">
-                <Link
-                  href="/service-import"
-                  className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-sm md:text-base font-bold text-red-600 border-b-2 border-red-600 whitespace-nowrap"
-                >
-                  <span aria-hidden className="ft-box" />
-                  {t("tabFullList")}
-                </Link>
-                <Link
-                  href="/service-import/table"
-                  className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-sm md:text-base font-medium text-muted hover:text-foreground border-b-2 border-transparent hover:border-border whitespace-nowrap transition-colors"
-                >
-                  <span aria-hidden className="fas fa-table" />
-                  {t("tabTableList")}
-                </Link>
-              </div>
-
-            </div>
+            {/* ── Tab strip (shared component — identical on both views) ── */}
+            <ImportViewTabs active="full" />
 
             {/* ── Status filter chips + content ── */}
             <div className="px-3 py-3 md:px-4 md:py-4">

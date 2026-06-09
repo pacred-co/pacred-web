@@ -4593,6 +4593,10 @@
     "maoMaoGet": "Claim bulk promotion",
     "addressFormat": "{name} {lastname} {no} Sub-district {subdistrict} District {district} Province {province} {zipcode}"
   },
+  "importViewTabs": {
+    "fullView": "Import — full view",
+    "tableView": "Import — table view"
+  },
   "serviceImportTable": {
     "statusWaitChinaWarehouse": "Waiting for China warehouse",
     "statusAtChinaWarehouse": "Arrived at China warehouse",
@@ -5245,7 +5249,22 @@
     "allTransactionHistory": "All transaction history",
     "withdrawalHistory": "Withdrawal history",
     "makeWithdrawal": "Make a withdrawal",
-    "shippingAddresses": "Shipping addresses"
+    "shippingAddresses": "Shipping addresses",
+    "sectionMainServices": "Main services",
+    "sectionOtherMenus": "Other menus",
+    "customerServiceCenter": "Customer service",
+    "cardAllTitle": "Services",
+    "cardAllSub": "All Pacred services",
+    "cardTransferTitle": "Transfer",
+    "cardTransferSub": "Yuan transfer / Alipay",
+    "cardOrderTitle": "Order",
+    "cardOrderSub": "Shop from China",
+    "cardImportTitle": "Import",
+    "cardImportSub": "Import service",
+    "cardExportTitle": "Export",
+    "cardExportSub": "Export service",
+    "cardCustomsTitle": "Customs",
+    "cardCustomsSub": "Customs clearance"
   },
   "homeRelatedTags": {
     "eyebrow": "RELATED TOPICS · POPULAR",

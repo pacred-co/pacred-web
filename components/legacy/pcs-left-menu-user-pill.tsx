@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useState } from "react";
-import { ChevronDown, LifeBuoy, LogOut, Settings, User } from "lucide-react";
+import { ChevronDown, LogOut, Settings, User } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { signOutAction } from "@/actions/auth";
 
@@ -17,9 +17,11 @@ import { signOutAction } from "@/actions/auth";
 export function PcsLeftMenuUserPill({
   userID,
   userPicture,
+  fullName,
 }: {
   userID: string;
   userPicture: string;
+  fullName?: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -34,11 +36,16 @@ export function PcsLeftMenuUserPill({
         <img
           src={userPicture}
           alt=""
-          className="h-10 w-10 rounded-full object-cover"
+          className="h-11 w-11 rounded-full object-cover ring-2 ring-red-100"
         />
-        <span className="text-sm font-semibold text-foreground">{userID}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-foreground">{userID}</span>
+          {fullName ? (
+            <span className="block truncate text-[12px] text-muted">{fullName}</span>
+          ) : null}
+        </span>
         <ChevronDown
-          className={`ml-auto h-4 w-4 text-muted transition-transform ${
+          className={`h-4 w-4 shrink-0 text-muted transition-transform ${
             open ? "rotate-180" : ""
           }`}
         />
@@ -58,13 +65,6 @@ export function PcsLeftMenuUserPill({
           >
             <Settings className="h-4 w-4" />
             <span>ตั้งค่าบัญชีผู้ใช้งาน</span>
-          </Link>
-          <Link
-            href="/my-issues"
-            className="flex items-center gap-3 px-6 py-2 text-[13px] text-muted hover:bg-gray-100 hover:text-foreground"
-          >
-            <LifeBuoy className="h-4 w-4" />
-            <span>ปัญหาที่ฉันแจ้ง</span>
           </Link>
           <form action={signOutAction}>
             <button

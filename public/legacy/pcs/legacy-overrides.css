@@ -169,6 +169,13 @@ nav.nav-footer-pcs { display: none !important; }
     height: calc(100vh - 56px) !important;
     z-index: 45 !important;
     overflow-y: auto !important;
+    /* Reserve clearance at the bottom so the last menu items can scroll up
+       ABOVE the fixed pay-bar (z-55, ~69px tall) that overlays the sidebar's
+       bottom on pages like /service-import. Without this the last item
+       (ที่อยู่จัดส่งสินค้า) stays hidden behind the pay-bar no matter how far
+       you scroll (owner 2026-06-09 "เลื่อนไม่ได้ โดนทับ"). Harmless on pages
+       with no pay-bar — just empty space below the last item. */
+    padding-bottom: 96px !important;
     background: #ffffff !important;
     border-right: 1px solid rgba(0, 0, 0, 0.06);
     /* Hide the scrollbar entirely (ปอน 2026-05-24). The sidebar still
