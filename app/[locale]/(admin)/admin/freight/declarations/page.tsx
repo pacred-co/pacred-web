@@ -90,6 +90,10 @@ export default async function AdminCustomsDeclarationsListPage({
         profile:profiles!profile_id ( member_code, first_name, last_name, company_name )
       )
     `, { count: "exact" })
+    // 2026-06-09 (tax-invoice P3) — freight-only. CARGO ใบขนรวม (cargo_forwarder_id
+    // set · freight_shipment_id NULL · mig 0162) has its own surface at
+    // /admin/accounting/cargo-declarations; exclude them from the freight list.
+    .not("freight_shipment_id", "is", null)
     .order("created_at", { ascending: false })
     .range(from, to);
   if (status) query = query.eq("status", status);
@@ -123,7 +127,8 @@ export default async function AdminCustomsDeclarationsListPage({
   for (const s of CUSTOMS_DECLARATION_STATUSES) counts[s] = 0;
   const { data: countRows, error: countRowsErr } = await admin
     .from("customs_declarations")
-    .select("status");
+    .select("status")
+    .not("freight_shipment_id", "is", null); // freight-only (cargo has its own surface)
   if (countRowsErr) {
     console.error(`[customs_declarations list] failed`, { code: countRowsErr.code, message: countRowsErr.message });
   }

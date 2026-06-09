@@ -324,6 +324,21 @@ const itemFreightCostRates: MenuItem = {
   icon: "HandCoins",
 };
 
+/** 2026-06-09 (เดฟ · tax-invoice P3) — the CARGO ใบขนรวม (consolidated customs
+ *  declaration) Docs surface. A cargo import (ฝากสั่งซื้อ / ฝากนำเข้า) is a
+ *  Freight-LCL job where Pacred issues ONE ใบขนรวม under the shipping-company
+ *  name; this surface lists cargo declarations + arrived-in-TH forwarders that
+ *  need one, and lets the Docs role review/adjust the per-line มูลค่าสำแดง
+ *  (defaults from cost · mig 0158/0161/0162). Reuses the same customs_declarations
+ *  model as Freight. Single leaf · super/accounting/freight_import_doc(Docs)/
+ *  pricing — the page + actions gate RBAC themselves. P3 = capture/surface only
+ *  (no issuance / money / comms). */
+const itemCargoDeclarations: MenuItem = {
+  labelKey: "accFreight.cargoDeclarations",
+  href: "/admin/accounting/cargo-declarations",
+  icon: "ClipboardList",
+};
+
 /** legacy pcs-admin menu L162-167 — "อัปเดตฝากนำเข้า" (top-level group)
  *  Combines BOTH Wave 17 P1 streams into the single legacy parent:
  *   - P1-1+2 — MOMO + CargoCenter (manualUpdate sub-page only · Phase B
@@ -816,6 +831,8 @@ const menuSuper: MenuSection[] = [
       itemFreightLeads,
       // 2026-06-09 (เดฟ · freight net-margin unlock) — China freight cost rates.
       itemFreightCostRates,
+      // 2026-06-09 (เดฟ · tax-invoice P3) — CARGO ใบขนรวม (consolidated customs decl).
+      itemCargoDeclarations,
       blockApiForwarderUpdate,
       // 2026-05-21 ภูม flagged — /admin/drivers had no direct super sidebar
       // entry · only reachable via the /admin/forwarders top-menubar
@@ -999,6 +1016,9 @@ const menuAccounting: MenuSection[] = [
       // to the China freight cost rates (RLS: super/ops/accounting read · the page
       // disables write controls for non-super/ops roles).
       itemFreightCostRates,
+      // 2026-06-09 (เดฟ · tax-invoice P3) — CARGO ใบขนรวม (accounting reviews the
+      // declared/duty/VAT before PEAK + ใบกำกับ issuance).
+      itemCargoDeclarations,
     ],
   },
   { header: "Settings", items: [blockSettingsCargo] },
@@ -1496,6 +1516,9 @@ const menuFreightImportDoc: MenuSection[] = [
     items: [
       // Primary workspace — customs declarations (V-E11 · ใบขนสินค้า).
       { labelKey: "accFreight.declarations", href: "/admin/freight/declarations", icon: "ClipboardCheck" },
+      // 2026-06-09 (เดฟ · tax-invoice P3) — CARGO ใบขนรวม (the Docs role owns
+      // the consolidated cargo declaration + per-line มูลค่าสำแดง).
+      itemCargoDeclarations,
       // Freight shipments — Doc pivots from a shipment to create its declaration.
       { labelKey: "freightImportOps.placeholder", href: "/admin/freight/shipments", icon: "Truck" },
       // Customer lookup — find the shipment owner / cabinet context.
@@ -1576,6 +1599,9 @@ const menuPricing: MenuSection[] = [
     items: [
       { labelKey: "forwarderImport.title", href: "/admin/forwarders",    icon: "Package" },
       { labelKey: "purchasing.title",      href: "/admin/service-orders", icon: "ShoppingCart" },
+      // 2026-06-09 (เดฟ · tax-invoice P3) — pricing captures COST + DECLARED;
+      // the cargo ใบขนรวม surfaces the per-line declared value (defaults from cost).
+      itemCargoDeclarations,
     ],
   },
   learningSection,

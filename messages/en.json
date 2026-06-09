@@ -3344,7 +3344,8 @@
       "wht": "Withholding tax",
       "overview": "Reports overview",
       "declarations": "Customs declarations",
-      "costRates": "China freight cost rates"
+      "costRates": "China freight cost rates",
+      "cargoDeclarations": "Consolidated cargo declaration"
     },
     "settingsCargo": {
       "title": "Cargo system settings",
