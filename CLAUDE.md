@@ -3,6 +3,26 @@
 
 ---
 
+# 🌏 2026-06-09 NIGHT — เดฟ: DEEP-SOURCE BUILD (cargo+freight) + full team-integrate → ALL ON MAIN · read FIRST
+
+> **main = dave-pacred = Poom-pacred = InwPond007 = `7287bfd9`** (all 0/0 · pushed main per owner "ตรวจงานน้องๆ → รวม → push main ทีเดียว · อย่าทำงานน้องหาย" · Vercel deploying prod) · `pnpm verify` + prod build EXIT 0 every save-point · **6 migrations applied+verified prod (0161-0166) · NEXT FREE = 0167.**
+>
+> **🔴 CRITICAL FACT (owner-confirmed · was a near-miss):** **prod Supabase = `yzljakczhwrpbxflnmco`** · **`lozntlidlqqzzcaathnm` = ภูม's DEV project (NOT prod).** ภูม's `docs/briefs/HANDOFF-FOR-DAVE-GOT-2026-06-09.md` mistook dev-for-prod + instructed switching the prod Vercel `SUPABASE_DB_PASSWORD` to the DEV password (would break prod) — **เดฟ corrected/neutralized the doc.** All เดฟ migrations target the right prod (`yzljakczhwrpbxflnmco`). 🔐 **Owner: rotate the dev DB password ภูม committed** (scrubbed from git going forward; still in Poom-pacred history).
+>
+> **🌏 The deep-source build (owner gave `olddata dev` cargo+freight + "พัฒนาส่วนที่ขาดทั้งหมด · ทำเลินนิ่ง" · ultracode workflow-orchestrated):** mine+audit (9+6 agents) → `docs/research/build-backlog-2026-06-09.md` (11 waves) + learnings `docs/learnings/freight-erp-model.md` + `customs-brokerage-kit.md`. **Headline: the freight stack is ~80% already scaffolded** (freight_quotes/shipments/invoices/customs_declarations/tb_freight_rate exist) — real gaps = cockpit/commission/ใบขน-Docs/P&L. Then built (each gated + adversarially reviewed):
+> - **W2 — Tax-invoice P3: ใบขนรวม** (cargo customs declarations + Docs surface) — `cargo-declarations.ts` + `/admin/accounting/cargo-declarations` · reuses customs_declarations · มูลค่าสำแดง defaults from COST (3-number model · never from selling) · **mig 0161 (tb_cargo_taxdoc_job) + 0162 (customs_decl cargo-link)**.
+> - **W4 — Freight ops cockpit (AX JOB Kanban)** PRICING→SALES→DOC→ACC — `/admin/freight/operations` + `freight-ops-cockpit.ts` · **mig 0163 + 0164** · adversarial review: **money-isolation CLEAN** (P&L snapshot display-only, never touches spine/invoices · ACC gated on pricing+sales).
+> - **W5 — Freight P&L + margin-guard** — persisted cost/margin/commission + `/admin/freight/shipments/[id]/p-and-l` + FX-refresh control · ≤15k cap = ADVISORY · **mig 0165**. (adminConvertQuoteToShipment confirmed REAL, not stub.)
+> - **W8 — BI cockpit drill-down** (profit/margin/SLA per carrier/warehouse/sales-rep · no schema) + finished W1 (freight leads — was already built) · W3 (customs accounting edit-page) · W7 (public /track rate-limit).
+> - **0166** defensive customs RLS broadening (super/accounting/freight_import_doc/pricing).
+> - **Build-bugs caught by MY gate** (agents can't gate): freight-cockpit optional-`res.data` (5 TS errors) · `FREIGHT_FX_KEY` "use server" const-export (13 Turbopack errors · the documented gotcha).
+>
+> **🔀 Integrated ALL teammates (nothing lost · owner directive):** **ภูม 7 commits** (sticky top-menubar across admin · forwarders UX · **fShipBy P0** PCS-pickup-wins-over-Flash · address-link 404 fix · driver/heartbeat already on main) · **ปอน 2 commits** (customer sidebar redesign + unified service-import tabs) → restored `/my-issues` link ปอน's redesign dropped (§0d). Migration collision (ภูม 0158/0159 ↔ เดฟ 0158) resolved earlier (ภูม→0159/0160).
+>
+> **🔴 REMAINING BACKLOG = owner-input-blocked (paused per owner "พักไว้"):** **W6 commission ledger** (needs the rates confirmed in writing: เฟรท 1%/customs 5%/doc 5%/−3% WHT/flat 20฿/WHT 15%>5k) · **W9 P4 4-role workspace+PEAK** (VAT-base sign-off + PEAK GL codes + flip `shop_yuan_enabled` + test login) · **W10 warehouse worker-app** (China-team RBAC sign-off) · **W11 customs generators + NETBAY** (NETBAY creds · external). ⚠️ **admin surfaces gated+reviewed but NOT authed-click-tested** (no test login). Standing owner items carry over (flip ใบกำกับ flag · enable `pricing` role for a staffer · confirm juristic-fix · Supabase refresh-token · Vercel env). ⚠️ **CLAUDE.md >2000 lines — archive overdue (§12).**
+
+---
+
 # 🧾 2026-06-09 EVE — เดฟ: tax-invoice platform P1+P2 SHIPPED + ภูม chase integrated → ALL ON MAIN · read FIRST
 
 > **main = dave-pacred = Poom-pacred = InwPond007 = `8a5d6c1f`** (all synced 0/0 · pushed to main per owner "ขึ้น main เลย" · Vercel deploying prod) · `pnpm verify` + prod build (direct-node) EXIT 0 every save-point · **5 migrations applied prod today (0157 hs-idx · 0158 cargo_3number · 0159 driver-completed-at · 0160 heartbeat-lock) · NEXT FREE = 0161.**
