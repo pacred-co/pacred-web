@@ -4,7 +4,19 @@
 >
 > **Read first:** [`docs/research/tax-invoice-platform-build-plan-2026-06-09.md`](tax-invoice-platform-build-plan-2026-06-09.md) (the canonical tax-invoice 5-phase plan) · [`docs/learnings/pacred-cargo-tax-invoice-flow.md`](../learnings/pacred-cargo-tax-invoice-flow.md) (the 3-number model) · NEW [`docs/learnings/freight-erp-model.md`](../learnings/freight-erp-model.md) + [`docs/learnings/customs-brokerage-kit.md`](../learnings/customs-brokerage-kit.md) (domain knowledge mined this session).
 >
-> **State as of this doc:** tax-invoice **P1 (doc-mode toggle @ฝากนำเข้า) + P2 (per-line COST/DECLARED capture + `pricing` role)** are **SHIPPED** (mig 0158 applied prod). Migrations **0158/0159/0160 applied + verified prod**. **NEXT FREE migration = 0161.** Build on `dave-pacred`.
+> **State as of this doc:** tax-invoice **P1 + P2** SHIPPED earlier (mig 0158). **NEXT FREE migration = 0167.** Build on `dave-pacred`.
+>
+> ## ✅ SHIPPED 2026-06-09 EVE (deep-source build · dave-pacred · migrations applied+verified prod)
+> - **W1** Freight RFQ leads triage — verified **already built** (page + `[ref]` + convert-to-quote + deep-link); no rebuild.
+> - **W2** Tax-invoice P3 ใบขนรวม (cargo customs declarations + Docs surface) — `cargo-declarations.ts` + `/admin/accounting/cargo-declarations` · reuses customs_declarations · declared defaults from COST (3-number model) · **mig 0161 (tb_cargo_taxdoc_job) + 0162 (customs_decl cargo-link)**.
+> - **W3** Customs accounting edit-page — wrapper over the existing `DeclarationDetailClient` (done in W8).
+> - **W4** Freight ops cockpit (AX JOB Kanban PRICING→SALES→DOC→ACC) — `/admin/freight/operations` + `freight-ops-cockpit.ts` · **mig 0163 (freight_job_operations) + 0164 (freight_stage_checklists)** · adversarial review: **money-isolation CLEAN**.
+> - **W5** Freight P&L + margin-guard — persisted cost/margin/commission + `/admin/freight/shipments/[id]/p-and-l` + FX-refresh control · ≤15k cap = ADVISORY · **mig 0165 (freight_pnl_margin)**.
+> - **W7** Public /track rate-limit (ad-linking gate) — wrapped `getPublicTrackStatus` (done in W8).
+> - **W8** BI cockpit drill-down (per-carrier/warehouse/sales-rep profit + SLA dwell-time) — extends `/admin/reports/cockpit`, no schema.
+> - **0166** defensive RLS broadening on customs_declarations (super/accounting/freight_import_doc/pricing).
+>
+> **Remaining waves are OWNER-INPUT-BLOCKED** (W6 commission rates · W9 P4 VAT/GL/flag/login · W10 China-team RBAC · W11 NETBAY creds) — see the per-wave sections + the decision list at the session report.
 
 ---
 
