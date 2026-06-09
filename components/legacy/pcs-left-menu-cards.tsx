@@ -278,8 +278,10 @@ export function MenuRow({
     </>
   );
 
+  // `pcs-menu-row` is the hook legacy-overrides.css uses to collapse each row
+  // to an icon-only rail under `body.pcs-sidebar-rail` (the wide table view).
   const rowClass =
-    "flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 active:bg-gray-100";
+    "pcs-menu-row flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 active:bg-gray-100";
 
   // coming-soon → greyed, non-navigating (no chevron)
   if (comingSoon) {
@@ -310,7 +312,7 @@ export function MenuRow({
           />
         </button>
         <div
-          className={`grid transition-[grid-template-rows] duration-300 ease-out ${
+          className={`pcs-rail-submenu grid transition-[grid-template-rows] duration-300 ease-out ${
             open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
           }`}
         >

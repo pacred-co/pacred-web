@@ -331,7 +331,7 @@ const STEPS = [
   { ctrl: "step3", labelKey: "stepShippingToThailand", icon: "forwarder-3.png" },
   { ctrl: "step4", labelKey: "stepArrivedThailand", icon: "forwarder-4.png" },
   { ctrl: "step5", labelKey: "stepWaitPayment", icon: "forwarder-5.png" },
-  { ctrl: "step6", labelKey: "stepPreparing", icon: "forwarder-6.png" },
+  { ctrl: "step6", labelKey: "stepPreparing", icon: "/images/home/iconfloating/pcs-cart.png" },
   { ctrl: "step62", labelKey: "stepDelivering", icon: "forwarder-6.1.png" },
   { ctrl: "step7", labelKey: "stepDelivered", icon: "forwarder-7.png" },
 ];
@@ -812,6 +812,7 @@ export default async function ServiceImportDetailPage({
     reforder:               row.reforder ?? null,
     adminidcreator:         null,
     promoid:                promoIdStr,
+    fproductstype:          row.fproductstype,
   };
 
   // forwarder.php L1678 — total price with WHT adjustment for tax-exempt customers.
@@ -1074,7 +1075,7 @@ export default async function ServiceImportDetailPage({
                           className={`img-fluid p-img-icon object-contain h-11 w-11 md:h-14 md:w-14 ${
                             step.ctrl === "step62" ? "p-0 " : ""
                           }${done || active ? "" : "grayscale opacity-70"}`}
-                          src={`${ICON_BASE}${step.icon}`}
+                          src={step.icon.startsWith("/") ? step.icon : `${ICON_BASE}${step.icon}`}
                           alt=""
                         />
                       </i>

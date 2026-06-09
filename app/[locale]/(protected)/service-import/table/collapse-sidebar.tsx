@@ -3,27 +3,26 @@
 import { useEffect } from "react";
 
 /**
- * Collapse the desktop left sidebar WHILE this page is mounted (ปอน 2026-06-08:
- * "ในคอมให้พับแถบซ้ายไปเลย" — the แบบตาราง view is wide, so it should reclaim
- * the sidebar's width to show the full table without horizontal scroll).
+ * Shrink the desktop left sidebar to an ICON RAIL WHILE this page is mounted
+ * (ปอน 2026-06-09: "ไม่หุบสมบูรณ์ ให้เห็นไอคอนซ้าย" — the แบบตาราง view is wide,
+ * so the sidebar collapses to a 60px icon rail to reclaim width while the menu
+ * icons stay visible/clickable).
  *
- * Adds `body.pcs-sidebar-peek` on mount and removes it on unmount, so the
+ * Adds `body.pcs-sidebar-rail` on mount and removes it on unmount, so the
  * effect is scoped to this route only — every other protected page keeps the
- * sidebar EXPANDED by default (ปอน 2026-06-08 "กางค้างไว้ พอกดหน้าตารางให้หุบ").
- * legacy-overrides.css wires the peek mode: the sidebar tucks to a thin left
- * rail (translateX(calc(-100% + 16px))) and drops the 280px left-padding from
- * `.pcs-content-pad` so content fills edge-to-edge; moving the mouse over the
- * rail slides the full menu back out as an overlay (`:hover` → translateX(0))
- * and it tucks away again on mouse-leave. Desktop @media only — on mobile the
- * sidebar is `display:none` already, so the class is a no-op there.
+ * sidebar EXPANDED by default. legacy-overrides.css wires the rail mode: the
+ * sidebar shrinks to 60px showing only the menu icons (`.pcs-rail-hide` /
+ * `.pcs-menu-row` hooks), `.pcs-content-pad` keeps a 68px gutter; moving the
+ * mouse over the rail slides the full 260px menu out as an overlay (`:hover`)
+ * and it tucks back to the rail on mouse-leave. Desktop @media only — on mobile
+ * the sidebar is `display:none` already, so the class is a no-op there.
  */
 export function CollapseSidebar({ hasPayBar = false }: { hasPayBar?: boolean }) {
   useEffect(() => {
-    // `pcs-sidebar-peek` (not `-collapsed`): the sidebar tucks to a thin left
-    // rail and slides back out on hover, tucking away on mouse-leave (ปอน
-    // 2026-06-08 "หุบไว้ แต่เอาเมาส์ชี้ๆ แล้วออกมาได้"). legacy-overrides.css
-    // wires the peek + :hover overlay; content still gets full width.
-    document.body.classList.add("pcs-sidebar-peek");
+    // `pcs-sidebar-rail` (not `-collapsed` / `-peek`): the sidebar shrinks to a
+    // 60px icon rail and slides the full menu back out on hover, tucking away
+    // on mouse-leave (ปอน 2026-06-09 "เห็นไอคอน เอาเมาส์ชี้แล้วกางเต็ม").
+    document.body.classList.add("pcs-sidebar-rail");
     // When the sticky pay-bar is on screen, flag the body so the global
     // FloatingTabs lifts its LINE bubble ABOVE the pay-bar (globals.css
     // `body.has-import-paybar .pacred-line-bubble`) — without this the green
@@ -32,7 +31,7 @@ export function CollapseSidebar({ hasPayBar = false }: { hasPayBar?: boolean }) 
     // on /service-import.
     if (hasPayBar) document.body.classList.add("has-import-paybar");
     return () => {
-      document.body.classList.remove("pcs-sidebar-peek");
+      document.body.classList.remove("pcs-sidebar-rail");
       document.body.classList.remove("has-import-paybar");
     };
   }, [hasPayBar]);

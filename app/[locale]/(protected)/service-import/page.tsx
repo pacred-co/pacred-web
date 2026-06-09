@@ -254,7 +254,7 @@ export default async function ServiceImportPage({
   let listQuery = admin
     .from("tb_forwarder")
     .select(
-      "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftrackingth, ftransporttype, fshipby, fdetail, fcover, famount, fweight, fvolume, ftotalprice, ftransportprice, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, fcredit, fcreditdate, fdatestatus5, fdatetothai, fcabinetnumber, fdatecontainerclose, fnote, fnoteuser, reforder, adminidcreator",
+      "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftrackingth, ftransporttype, fshipby, fdetail, fcover, famount, fweight, fvolume, ftotalprice, ftransportprice, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, fcredit, fcreditdate, fdatestatus5, fdatetothai, fcabinetnumber, fdatecontainerclose, fnote, fnoteuser, reforder, adminidcreator, fproductstype",
     )
     .eq("userid", memberCode);
   switch (q) {
@@ -337,6 +337,7 @@ export default async function ServiceImportPage({
       reforder: (r.reforder as string) ?? null,
       adminidcreator: (r.adminidcreator as string) ?? null,
       promoid: promoByFid.get(Number(r.id)) ?? null,
+      fproductstype: (r.fproductstype as string) ?? null,
     }),
   );
   if (q === "6") {
@@ -483,8 +484,14 @@ export default async function ServiceImportPage({
           </div>
         ) : (
           <section className="bg-white dark:bg-surface border border-border rounded-2xl shadow-sm overflow-hidden">
-            {/* ── Tab strip (shared component — identical on both views) ── */}
-            <ImportViewTabs active="full" />
+            {/* ── Tab strip (shared component — identical on both views) ── ·
+                with the "+ เพิ่มรายการนำเข้า" CTA on the right of the tab row,
+                matching /service-import/table (ปอน 2026-06-09 "ขยับขึ้นไปแถว
+                tabs · จัดให้เป็นระเบียบ"). */}
+            <ImportViewTabs
+              active="full"
+              action={<AddForwarderModal mainAddr={mainAddress} others={otherAddresses} />}
+            />
 
             {/* ── Status filter chips + content ── */}
             <div className="px-3 py-3 md:px-4 md:py-4">
@@ -492,10 +499,6 @@ export default async function ServiceImportPage({
                 {t("statusListHeading")}
               </h4>
               <div className="flex flex-wrap gap-2">
-                {/* Add-forwarder CTA — compact pill sitting in the status row
-                    (slightly bigger than the filter chips). Opens the shared
-                    add form over the list (address options handed down as props). */}
-                <AddForwarderModal mainAddr={mainAddress} others={otherAddresses} compact />
                 {statusChips.map((chip) => {
                   const isActive =
                     chip.href === "/service-import"

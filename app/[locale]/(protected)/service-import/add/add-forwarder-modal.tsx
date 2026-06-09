@@ -75,7 +75,16 @@ export function AddForwarderModal({
             <Plus className="h-4 w-4" strokeWidth={3} />
           </span>
         )}
-        <span>{t("addButton")}</span>
+        {/* mobile = short "เพิ่มรายการ" · sm+ = full "เพิ่มรายการนำเข้า" (ปอน
+            2026-06-09 "มือถือเขียนสั้นๆ ว่าเพิ่มรายการ"). */}
+        {compact ? (
+          <span>{t("addButton")}</span>
+        ) : (
+          <>
+            <span className="sm:hidden">{t("addButtonShort")}</span>
+            <span className="hidden sm:inline">{t("addButton")}</span>
+          </>
+        )}
       </button>
 
       {open &&

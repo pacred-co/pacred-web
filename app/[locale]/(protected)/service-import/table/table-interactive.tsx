@@ -358,8 +358,9 @@ export function TableQuickSearch() {
         placeholder={t("dtSearchPlaceholder")}
         // No `dataTables_filter` class — forwarder-table.css forces
         // `.dataTables_filter{width:50%}` which would clamp the box; Tailwind
-        // controls the width instead (w-32 mobile · w-80 desktop).
-        className="w-32 md:w-80 rounded-md border border-border bg-white dark:bg-surface px-2.5 py-1 text-xs text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-colors"
+        // controls the width instead — wider bar (ปอน 2026-06-09 "ขยาย search
+        // ให้ยาวขึ้น"): w-44 mobile · w-[28rem] desktop.
+        className="w-44 md:w-[28rem] rounded-md border border-border bg-white dark:bg-surface px-2.5 py-1 text-xs text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-colors"
       />
     </label>
   );

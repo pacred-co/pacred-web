@@ -271,6 +271,12 @@ export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = 
                         alt={t(s.altKey)}
                         fill
                         sizes="72px"
+                        /* eager: the cards sit in a horizontal-scroll carousel,
+                           so off-screen reps' lazy images never trigger their
+                           IntersectionObserver and stay blank (owner 2026-06-09
+                           "ภาพเซลล์หาย"). Now the source avatars are small
+                           (~50KB, resized from 1.5MB) eager-loading all is cheap. */
+                        loading="eager"
                         className={s.useContain ? "object-contain p-2" : "object-cover"}
                       />
                     </div>

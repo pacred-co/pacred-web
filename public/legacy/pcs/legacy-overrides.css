@@ -208,23 +208,24 @@ nav.nav-footer-pcs { display: none !important; }
     padding-right: 88px;
     transition: padding 0.3s ease-out;
   }
-  body.pcs-legacy-body:not(.pcs-sidebar-collapsed):not(.pcs-sidebar-peek) .pcs-content-pad {
+  body.pcs-legacy-body:not(.pcs-sidebar-collapsed):not(.pcs-sidebar-peek):not(.pcs-sidebar-rail) .pcs-content-pad {
     padding-left: 280px;
   }
-  /* `pcs-sidebar-peek` (auto-collapse on the wide table view): the content
-     reclaims the sidebar's width but keeps a 28px left gutter so the 16px hover
-     rail never sits ON TOP of the table's first column — content + rail relate
-     instead of overlapping (ปอน 2026-06-08 "ทำให้สัมพันธ์กับ side left bar"). */
+  /* `pcs-sidebar-peek` (legacy auto-collapse — kept for back-compat): the
+     content reclaims the sidebar's width but keeps a 28px left gutter so the
+     16px hover rail never sits ON TOP of the table's first column. */
   body.pcs-legacy-body.pcs-sidebar-peek .pcs-content-pad {
     padding-left: 28px;
   }
-  /* …and when the rail is HOVERED OUT, the content shifts right to make room for
-     the full 260px menu — it RESPONDS to the sidebar's size instead of being
-     overlaid (ปอน 2026-06-08 "หน้าไม่ตอบรับ ขนาดกัน"). `:has()` lets the content
-     react to the sibling sidebar's :hover; the `.pcs-content-pad` padding
-     transition (above) animates the shift smoothly. */
   body.pcs-legacy-body.pcs-sidebar-peek:has(#pcs-left-menu.main-menu:hover) .pcs-content-pad {
     padding-left: 280px;
+  }
+  /* `pcs-sidebar-rail` (icon-rail on the wide table view — ปอน 2026-06-09 "ไม่
+     หุบสมบูรณ์ ให้เห็นไอคอนซ้าย"): content gets a 68px gutter for the 60px icon
+     rail (+8px gap). On hover the rail slides the FULL menu out as an overlay,
+     so the content does NOT shift. */
+  body.pcs-legacy-body.pcs-sidebar-rail .pcs-content-pad {
+    padding-left: 68px;
   }
 
   /* Collapsed state — toggled by <PcsSidebarToggle> (ปอน 2026-05-24).
@@ -250,6 +251,61 @@ nav.nav-footer-pcs { display: none !important; }
     transform: translateX(0);
     box-shadow: 6px 0 28px rgba(0, 0, 0, 0.18);
     z-index: 1050;
+  }
+
+  /* ── Icon-rail mode (`pcs-sidebar-rail`, used on the wide table view via
+     <CollapseSidebar>) — the sidebar shrinks to a 60px rail showing ONLY the
+     menu icons (NOT fully hidden — ปอน 2026-06-09 "ไม่หุบสมบูรณ์ เห็นไอคอนซ้าย").
+     Moving the mouse over the rail slides the full 260px menu out as an
+     overlay, tucking back to the rail on mouse-leave. ── */
+  body.pcs-sidebar-rail.vertical-layout > #pcs-left-menu.main-menu {
+    width: 60px !important;
+    transform: translateX(0);
+    overflow-x: hidden;
+    box-shadow: 2px 0 6px rgba(0, 0, 0, 0.08);
+    transition: width 0.25s ease-out, box-shadow 0.25s ease-out;
+  }
+  /* Rail: hide the non-icon blocks (user pill · CS card · section labels ·
+     expandable sub-menus). */
+  body.pcs-sidebar-rail #pcs-left-menu .pcs-rail-hide,
+  body.pcs-sidebar-rail #pcs-left-menu .pcs-rail-submenu {
+    display: none;
+  }
+  /* Rail: each row becomes an icon-only centered button (label + badge +
+     chevron hidden). The icon (img.pcs-icon / non-chevron lucide svg) stays. */
+  body.pcs-sidebar-rail #pcs-left-menu .pcs-menu-row {
+    justify-content: center;
+    gap: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  body.pcs-sidebar-rail #pcs-left-menu .pcs-menu-row > span,
+  body.pcs-sidebar-rail #pcs-left-menu .pcs-menu-row > svg.lucide-chevron-right,
+  body.pcs-sidebar-rail #pcs-left-menu .pcs-menu-row > svg.lucide-chevron-down {
+    display: none;
+  }
+  /* Rail HOVER → full 260px overlay menu, everything restored. */
+  body.pcs-sidebar-rail.vertical-layout > #pcs-left-menu.main-menu:hover {
+    width: 260px !important;
+    box-shadow: 6px 0 28px rgba(0, 0, 0, 0.18);
+    z-index: 1050;
+  }
+  body.pcs-sidebar-rail #pcs-left-menu.main-menu:hover .pcs-rail-hide {
+    display: revert;
+  }
+  body.pcs-sidebar-rail #pcs-left-menu.main-menu:hover .pcs-rail-submenu {
+    display: grid;
+  }
+  body.pcs-sidebar-rail #pcs-left-menu.main-menu:hover .pcs-menu-row {
+    justify-content: flex-start;
+    gap: 0.75rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  body.pcs-sidebar-rail #pcs-left-menu.main-menu:hover .pcs-menu-row > span,
+  body.pcs-sidebar-rail #pcs-left-menu.main-menu:hover .pcs-menu-row > svg.lucide-chevron-right,
+  body.pcs-sidebar-rail #pcs-left-menu.main-menu:hover .pcs-menu-row > svg.lucide-chevron-down {
+    display: revert;
   }
 }
 /* Mobile: hide the sidebar entirely (legacy theme would slide it in via

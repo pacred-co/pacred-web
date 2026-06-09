@@ -73,7 +73,7 @@ export function StatusForwarderAll2({
   const chip = STATUS_CHIP[key];
   if (!chip) return null;
   return (
-    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${chip.cls}`}>
+    <span className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${chip.cls}`}>
       {t(`status.${key}`)}
     </span>
   );
@@ -274,6 +274,9 @@ export type ForwarderRow = {
   reforder: string | null;
   adminidcreator: string | null;
   promoid: string | null;
+  /** Product type code (1=ทั่วไป 2=มอก. 3=อย. 4=พิเศษ). Optional — only the
+   *  pay-modal feeders populate it; other ForwarderRow builders may omit it. */
+  fproductstype?: string | null;
 };
 
 // ────────────────────────────────────────────────────────────────────
@@ -411,49 +414,39 @@ export function ForwarderRowView({
     dmy(row.fdatecontainerclose) !== "" &&
     row.fdatecontainerclose !== "0000-00-00";
 
-  return (
-    <article className="rounded-2xl bg-white dark:bg-surface border border-border shadow-sm overflow-hidden">
-      {/* Header — checkbox · ID + promo · status · date */}
-      <header className="flex items-start justify-between gap-2 px-3 py-2 md:px-4 md:py-3 border-b border-border bg-surface-alt/40">
-        <div className="flex items-center gap-2 min-w-0">
-          {selectable && (
-            <input
-              type="checkbox"
-              className="dt-checkboxes w-4 h-4 rounded border-border accent-red-600 cursor-pointer shrink-0"
-              name="ID[]"
-              value={row.id}
-              checked={checked}
-              onChange={(e) => onToggleCheck?.(row.id, e.target.checked)}
-            />
-          )}
-          <a
-            href={`/service-import/${row.id}`}
-            className="font-mono text-sm md:text-lg font-bold text-red-600 hover:underline"
-          >
-            #{row.id}
-          </a>
-          <TagPro id={row.promoid} />
-        </div>
-        <div className="text-right shrink-0">
-          <StatusForwarderAll2 fStatus={row.fstatus} fStatusDriver={fStatusDriver} />
-          <div className="mt-0.5 text-[10px] md:text-xs text-muted notranslate">
-            {dmy(row.fdate)} · {hms(row.fdate)}
-          </div>
-        </div>
-      </header>
+  // Ship-by / pickup carrier (legacy "เลขพัสดุไทย" column shows the carrier
+  // name or the self-pickup warehouse). "ไม่พบข้อมูล" = empty → hide the line.
+  const shipByName = row.fshipby ? nameShipBy(row.fshipby) : "";
+  const shipByValid = shipByName !== "" && shipByName !== "ไม่พบข้อมูล";
 
-      {/* Body — thumbnail + compact details (track + รายละเอียด on one row,
-          a small muted meta row below — clean, not sparse). */}
-      <div className="flex gap-2.5 p-2.5 md:gap-4 md:p-4">
-        {/* Thumbnail (image-popup-vertical-fit class kept so legacy
-            magnific-popup vendor JS binds to it on hydration). */}
+  return (
+    <article className="rounded-xl bg-white dark:bg-surface border border-border shadow-sm overflow-hidden">
+      {/* ONE compact row — checkbox · thumbnail · info (id/status/track/meta)
+          · price + actions (owner 2026-06-09 "ทำให้เป็นแถวเดียว คอนเทนต์บวมไป").
+          Was a stacked header-band / body / footer-band card. */}
+      <div className="flex flex-col gap-2.5 p-2.5 md:flex-row md:items-center md:gap-3 md:p-3">
+        {/* Left group — checkbox · thumbnail · info */}
+        <div className="flex min-w-0 items-center gap-2.5 md:flex-1">
+        {selectable && (
+          <input
+            type="checkbox"
+            className="dt-checkboxes w-4 h-4 rounded border-border accent-red-600 cursor-pointer shrink-0"
+            name="ID[]"
+            value={row.id}
+            checked={checked}
+            onChange={(e) => onToggleCheck?.(row.id, e.target.checked)}
+          />
+        )}
+
+        {/* Thumbnail — smaller (image-popup-vertical-fit kept for the legacy
+            magnific-popup vendor JS). */}
         <a
           className="image-popup-vertical-fit shrink-0 block"
           href={convertIMGCHN(row.fcover, "")}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            className="h-16 w-16 md:h-28 md:w-28 object-cover rounded-lg border border-border bg-surface-alt"
+            className="h-12 w-12 md:h-16 md:w-16 object-cover rounded-lg border border-border bg-surface-alt"
             src={convertIMGCHN(row.fcover, "_80x80.jpg")}
             width={80}
             height={80}
@@ -461,66 +454,72 @@ export function ForwarderRowView({
           />
         </a>
 
-        {/* Details — condensed */}
-        <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 md:gap-1.5 text-xs md:text-base">
-          {/* Track + รายละเอียด — one row, truncated */}
-          <div className="flex min-w-0 items-baseline gap-1.5">
-            {trackingChn && (
-              <a
-                href={`/service-import/${row.id}`}
-                className="shrink-0 font-mono text-red-600 hover:underline"
-              >
-                🇨🇳 {trackingChn}
-              </a>
-            )}
-            {row.fdetail && (
-              <a
-                href={`/service-import/${row.id}`}
-                className="truncate text-foreground/90 hover:underline"
-              >
-                {trackingChn ? "· " : ""}
-                {row.fdetail}
-              </a>
-            )}
-          </div>
-          {/* Secondary meta — TH track · ตู้ · ETA — one small muted row */}
-          {((row.ftrackingth && row.ftrackingth !== "-") ||
-            (!grouped && row.fcabinetnumber) ||
-            fDateToThaiValid) && (
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] md:text-[13px] text-muted">
-              {row.ftrackingth && row.ftrackingth !== "-" && (
-                <span className="font-mono">🇹🇭 {row.ftrackingth}</span>
-              )}
-              {!grouped && row.fcabinetnumber && (
-                <span>
-                  {t("cabinet")}{" "}
-                  <span className="font-mono text-foreground">{row.fcabinetnumber}</span>
-                  {containerCloseValid && <> · {dmy(row.fdatecontainerclose)}</>}
-                </span>
-              )}
-              {fDateToThaiValid && (
-                <span>
-                  {t("arriveThai")} ~{" "}
-                  <span className="font-medium text-sky-600">
-                    {toThaiShow}–{toThaiShow2}
-                  </span>
-                </span>
-              )}
-            </div>
+        {/* Middle — data arranged to mirror the legacy forwarder-table.php
+            columns (ปอน 2026-06-09 "เรียงข้อมูลตาม html · ยึดตู้เป็นหลัก"):
+            #id/สถานะ/วันที่ → 🇨🇳tracking·ขนส่ง·กล่อง → รายละเอียด →
+            🇹🇭พัสดุไทย·วิธีจัดส่ง → ETA·ป้ายกำกับ. (ค่าขนส่ง+น้ำหนัก+CBM ย้ายไป
+            คอลัมน์ราคาด้านขวา = legacy "ค่าขนส่ง" column · ตู้ = หัวกลุ่ม.) */}
+        {/* ONE single row — #id · สถานะ · meta(tracking·ขนส่ง·กล่อง·จัดส่ง·ETA·
+            ป้าย) · [สร้างเมื่อ วันที่·เวลา ชิดขวา] (ปอน 2026-06-09 "ที่ซ้อนกัน ทำ
+            เป็นแถวเดียว · บอกด้วยว่าวันที่/เวลาคืออะไร"). Was two stacked lines. */}
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1">
+          <a
+            href={`/service-import/${row.id}`}
+            className="shrink-0 font-mono text-sm md:text-base font-bold text-red-600 hover:underline"
+          >
+            #{row.id}
+          </a>
+          <TagPro id={row.promoid} />
+          <StatusForwarderAll2 fStatus={row.fstatus} fStatusDriver={fStatusDriver} />
+          {trackingChn && (
+            <a
+              href={`/service-import/${row.id}`}
+              className="shrink-0 font-mono text-[11px] md:text-xs font-medium text-red-600 hover:underline"
+            >
+              🇨🇳 {trackingChn}
+            </a>
           )}
-        </div>
-      </div>
-
-      {/* Tags row — admin / ref order */}
-      {(row.adminidcreator !== "" && (!row.reforder || row.reforder === "")) ||
-      (row.reforder && row.reforder !== "") ? (
-        <div className="px-3 -mt-1 pb-2 flex flex-wrap gap-1.5">
-          {row.adminidcreator !== "" &&
-            (!row.reforder || row.reforder === "") && (
-              <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[10px] font-semibold border border-amber-200">
-                {t("importedByAdmin")}
+          <span className="text-[11px] md:text-xs text-muted">
+            · {nameTransportType(row.ftransporttype)}
+            {row.famount > 0 && <> · {row.famount} {t("boxes")}</>}
+          </span>
+          {row.fdetail && (
+            <a
+              href={`/service-import/${row.id}`}
+              className="max-w-[12rem] truncate text-[11px] md:text-xs text-foreground/80 hover:underline"
+            >
+              · {row.fdetail}
+            </a>
+          )}
+          {shipByValid && (
+            <span className="text-[11px] md:text-xs text-muted">
+              · {t("shipByLabel")}:{" "}
+              <span className="font-medium text-foreground">{shipByName}</span>
+            </span>
+          )}
+          {row.ftrackingth && row.ftrackingth !== "-" && (
+            <span className="font-mono text-[11px] md:text-xs text-muted">· 🇹🇭 {row.ftrackingth}</span>
+          )}
+          {fDateToThaiValid && (
+            <span className="text-[11px] md:text-xs text-muted">
+              · {t("arriveThai")} ~{" "}
+              <span className="font-medium text-sky-600">
+                {toThaiShow}–{toThaiShow2}
               </span>
-            )}
+            </span>
+          )}
+          {!grouped && row.fcabinetnumber && (
+            <span className="text-[11px] md:text-xs text-muted">
+              · {t("cabinet")}{" "}
+              <span className="font-mono text-foreground">{row.fcabinetnumber}</span>
+              {containerCloseValid && <> · {dmy(row.fdatecontainerclose)}</>}
+            </span>
+          )}
+          {row.adminidcreator !== "" && (!row.reforder || row.reforder === "") && (
+            <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[10px] font-semibold border border-amber-200">
+              {t("importedByAdmin")}
+            </span>
+          )}
           {row.reforder && row.reforder !== "" && (
             <a href={`/service-order/${row.reforder}/`}>
               <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-700 px-2 py-0.5 text-[10px] font-semibold border border-sky-200 hover:bg-sky-200">
@@ -529,68 +528,61 @@ export function ForwarderRowView({
             </a>
           )}
         </div>
-      ) : null}
+        </div>
 
-      {/* Red note */}
+        {/* Right — price + actions, kept on ONE horizontal line (ปอน 2026-06-09
+            "เรียงเป็นบรรทัดเดียว"): price unit + buttons side-by-side on desktop
+            (no longer stacked). On mobile it sits below the info, price-left /
+            buttons-right. */}
+        <div className="flex items-center justify-between gap-3 border-t border-border pt-2.5 md:w-auto md:justify-end md:gap-3 md:border-0 md:pt-0">
+          {/* ค่าขนส่ง — รวมราคา + น้ำหนัก + CBM (legacy "ค่าขนส่ง" column). */}
+          {(totalPriceNet > 0 || row.fweight > 0 || row.fvolume > 0) && (
+            <div className="text-right leading-tight">
+              {totalPriceNet > 0 && (
+                <>
+                  <span className="text-[9px] md:text-[10px] text-muted uppercase tracking-wide">{t("total")}</span>
+                  <span className="block text-sm md:text-lg font-bold text-red-600 notranslate">
+                    {numberFormat2(totalPriceNet)} {t("baht")}
+                  </span>
+                </>
+              )}
+              {(row.fweight > 0 || row.fvolume > 0) && (
+                <span className="block text-[10px] md:text-[11px] text-muted notranslate">
+                  {row.fweight > 0 && `${row.fweight} kg`}
+                  {row.fweight > 0 && row.fvolume > 0 && " · "}
+                  {row.fvolume > 0 && `${numberFormat2(row.fvolume)} CBM`}
+                </span>
+              )}
+            </div>
+          )}
+          <div className="flex items-center gap-1.5">
+            {row.fstatus === "1" && (!row.reforder || row.reforder === "") && (
+              <CancelForwarderButton id={row.id} />
+            )}
+            <a
+              href={`/service-import/${row.id}`}
+              className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-300 px-3 py-1.5 text-xs font-bold hover:bg-emerald-100 active:scale-[0.98] transition-all whitespace-nowrap"
+            >
+              {t("viewDetails")}
+            </a>
+            {(row.fstatus === "5" || row.fcredit === "1") && (
+              <a
+                href={`/service-import/${row.id}?pay=true`}
+                className="inline-flex items-center gap-1 rounded-full bg-red-600 text-white px-3 py-1.5 text-xs font-bold hover:bg-red-700 active:scale-[0.98] transition-all shadow-sm whitespace-nowrap"
+              >
+                ✓ {t("pay")}
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Red note — full width below the row */}
       {row.fnoteuser === "2" && row.fnote && row.fnote !== "" && (
-        <div className="mx-3 mb-2 px-2.5 py-1.5 bg-red-600 text-white text-xs rounded-md">
+        <div className="mx-2.5 mb-2.5 -mt-1 px-2.5 py-1.5 bg-red-600 text-white text-xs rounded-md">
           {t("note")}: {row.fnote}
         </div>
       )}
-
-      {/* Footer — meta · price · action buttons */}
-      <footer className="border-t border-border bg-surface-alt/30 px-3 py-2 md:px-4 md:py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        {/* Left — meta + price */}
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Transport + amount */}
-          <div className="text-[11px] md:text-[13px] text-muted">
-            {nameTransportType(row.ftransporttype)}
-            {row.famount > 0 && (
-              <span className="ml-1">· {row.famount} {t("boxes")}</span>
-            )}
-            {row.fweight > 0 && (
-              <span className="ml-1">· {row.fweight} kg</span>
-            )}
-            {row.fvolume > 0 && (
-              <span className="ml-1">· {numberFormat2(row.fvolume)} CBM</span>
-            )}
-          </div>
-          {/* Net price — only when > 0 */}
-          {totalPriceNet > 0 && (
-            <div className="leading-none">
-              <span className="text-[10px] md:text-xs text-muted uppercase tracking-wide">{t("total")}</span>{" "}
-              <span className="text-base md:text-xl font-bold text-red-600 notranslate">
-                {numberFormat2(totalPriceNet)} {t("baht")}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Right — actions */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {/* Cancel — only on status=1 and not from order ref (legacy
-              deleteForwarder.php gate). P1-19 — calls cancelOwnForwarder. */}
-          {row.fstatus === "1" && (!row.reforder || row.reforder === "") && (
-            <CancelForwarderButton id={row.id} />
-          )}
-          {/* View details */}
-          <a
-            href={`/service-import/${row.id}`}
-            className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-300 px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm font-bold hover:bg-emerald-100 active:scale-[0.98] transition-all"
-          >
-            {t("viewDetails")}
-          </a>
-          {/* Pay — only when status=5 or credit=1 */}
-          {(row.fstatus === "5" || row.fcredit === "1") && (
-            <a
-              href={`/service-import/${row.id}?pay=true`}
-              className="inline-flex items-center gap-1 rounded-full bg-red-600 text-white px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm font-bold hover:bg-red-700 active:scale-[0.98] transition-all shadow-sm"
-            >
-              ✓ {t("pay")}
-            </a>
-          )}
-        </div>
-      </footer>
 
       {/* Credit dates — only on q=='c' */}
       {q === "c" && (

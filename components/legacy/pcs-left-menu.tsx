@@ -37,7 +37,7 @@ function SubLabel({ label, n }: { label: string; n: number }) {
 /** Section heading — red vertical bar + bold label (reference "▎บริการหลัก"). */
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="px-4 pb-1.5 pt-4">
+    <div className="pcs-rail-hide px-4 pb-1.5 pt-4">
       <span className="flex items-center gap-2 text-[13px] font-bold text-foreground">
         <span className="h-3.5 w-1 rounded-full bg-red-600" />
         {children}
@@ -75,15 +75,17 @@ export async function PcsLeftMenu({ data }: { data: PcsChromeData }) {
       className="notranslate main-menu bg-white text-foreground"
     >
       {/* 1. User pill / dropdown — avatar + member code + name */}
-      <PcsLeftMenuUserPill
-        userID={data.userID}
-        userPicture={data.userPicture}
-        fullName={`${data.userName} ${data.userLastName}`.trim()}
-      />
+      <div className="pcs-rail-hide">
+        <PcsLeftMenuUserPill
+          userID={data.userID}
+          userPicture={data.userPicture}
+          fullName={`${data.userName} ${data.userLastName}`.trim()}
+        />
+      </div>
 
       {/* 2. ศูนย์บริการลูกค้า — assigned เซล (adminIDSale) + CS (adminIDCS).
           No call buttons (owner 2026-06-09); tel stays a plain text link. */}
-      <div className="border-b border-border px-3 py-3">
+      <div className="pcs-rail-hide border-b border-border px-3 py-3">
         <div className="rounded-2xl border border-border bg-gradient-to-br from-red-50 to-white p-3">
           <div className="mb-2 flex items-center gap-1.5 text-[12px] font-bold text-red-700">
             <Headset className="h-4 w-4" aria-hidden />
@@ -138,19 +140,18 @@ export async function PcsLeftMenu({ data }: { data: PcsChromeData }) {
 
       {/* Only ONE section is open at a time across both card groups. */}
       <PcsLeftMenuAccordionGroup>
+        {/* หน้าแรก — pinned at the very top (owner 2026-06-09) */}
+        <nav className="pb-1 pt-1">
+          <MenuRow iconKey="home" label={t("home")} href="/" />
+        </nav>
+
         {/* 3. บริการหลัก — same compact list pattern as เมนูอื่นๆ (owner
             2026-06-09: การ์ดใหญ่ "บวมไป"), with a per-service colored icon to
             keep the service hierarchy. Cards-with-sub-pages expand (preserves
             §0d reachability for the sidebar-only routes). */}
         <SectionLabel>{t("sectionMainServices")}</SectionLabel>
         <nav className="pb-1">
-          {/* โอน — ฝากโอน / yuan transfer (expandable) */}
-          <MenuRow iconImg="/images/home/iconfloating/pcs-payment.png" label={t("paymentService")}>
-            <CardSubLink href="/service-payment">{t("paymentList")}</CardSubLink>
-            <CardSubLink href="/service-payment/add">{t("addPayment")}</CardSubLink>
-          </MenuRow>
-
-          {/* สั่ง — ฝากสั่งซื้อ (expandable) */}
+          {/* สั่ง — ฝากสั่งซื้อ (expandable · owner 2026-06-09 "สั่งซื้อขึ้นบน") */}
           <MenuRow
             iconImg="/images/home/iconfloating/pcs-cart.png"
             label={t("orderService")}
@@ -164,6 +165,12 @@ export async function PcsLeftMenu({ data }: { data: PcsChromeData }) {
               <SubLabel label={t("cart")} n={data.countCart} />
             </CardSubLink>
             <CardSubLink href="/cart/add">{t("addToCart")}</CardSubLink>
+          </MenuRow>
+
+          {/* โอน — ฝากโอน / yuan transfer (expandable) */}
+          <MenuRow iconImg="/images/home/iconfloating/pcs-payment.png" label={t("paymentService")}>
+            <CardSubLink href="/service-payment">{t("paymentList")}</CardSubLink>
+            <CardSubLink href="/service-payment/add">{t("addPayment")}</CardSubLink>
           </MenuRow>
 
           {/* นำเข้า — import (expandable · holds the sidebar-only routes) */}
@@ -183,36 +190,25 @@ export async function PcsLeftMenu({ data }: { data: PcsChromeData }) {
             <CardSubLink href="/shipments">{t("shipmentTracking")}</CardSubLink>
           </MenuRow>
 
-          {/* ส่งออก — coming soon */}
+          {/* ส่งออก — clickable → coming-soon page (owner 2026-06-09 ·
+              "เร็วๆนี้" badge removed) */}
           <MenuRow
             iconImg="/images/home/iconfloating/export.png"
             label={t("exportService")}
-            comingSoon
-            badge={
-              <span className="ml-auto rounded-full bg-gray-200 px-2 text-[10px] font-medium leading-[18px] text-gray-500">
-                {t("comingSoon")}
-              </span>
-            }
+            href="/coming-soon?service=export"
           />
 
-          {/* เคลียร์ — พิธีการศุลกากร (coming soon · owner 2026-06-09) */}
+          {/* พิธีการศุลกากร — clickable → coming-soon page */}
           <MenuRow
             iconImg="/images/home/iconfloating/checklistred.png"
             label={t("cardCustomsSub")}
-            comingSoon
-            badge={
-              <span className="ml-auto rounded-full bg-gray-200 px-2 text-[10px] font-medium leading-[18px] text-gray-500">
-                {t("comingSoon")}
-              </span>
-            }
+            href="/coming-soon?service=customs"
           />
         </nav>
 
         {/* 4. เมนูอื่นๆ — utility list */}
         <SectionLabel>{t("sectionOtherMenus")}</SectionLabel>
         <nav className="pb-2">
-          <MenuRow iconKey="home" label={t("home")} href="/" />
-
           <MenuRow
             iconKey="receipt"
             label={t("paymentDue")}

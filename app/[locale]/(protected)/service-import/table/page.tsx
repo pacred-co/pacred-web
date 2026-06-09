@@ -157,6 +157,17 @@ function nameProductsType2(
   }
 }
 
+// ── Legacy helper: nameRefPrice($refPrice) — function.php L615-623 ──
+// The "คิดราคาตาม" basis: 1 = by weight (kg), 2 = by volume (CBM).
+function nameRefPrice2(
+  refPrice: string | null,
+  t: (key: string) => string,
+): string {
+  if (refPrice === "1") return t("refPriceWeight");
+  if (refPrice === "2") return t("refPriceVolume");
+  return "-";
+}
+
 // ── Legacy helper: countText($text,$num) ──
 // member/include/function.php L14-23. UTF-8-aware truncation: counts
 // real characters (not bytes) and appends "..." past `num`.
@@ -221,6 +232,8 @@ type ForwarderRow = {
   fheight: number | null;
   flength: number | null;
   fproductstype: string | null;
+  frefprice: string | null;
+  frefrate: number | null;
   fcabinetnumber: string | null;
   ftotalprice: number | null;
   ftransportprice: number | null;
@@ -328,26 +341,11 @@ export default async function ForwarderTablePage({
   }
   const countAll = arrStatus.reduce((a, b) => a + b, 0);
 
-  // ── the ล๊อตสินค้า cabinet <select> options (L829-836) ──
-  // SELECT fCabinetNumber FROM tb_forwarder
-  //   WHERE userID=$userID AND fCabinetNumber<>'' GROUP BY <unique>
-  const cabinetRes = await admin
-    .from("tb_forwarder")
-    .select("fcabinetnumber")
-    .eq("userid", memberCode)
-    .neq("fcabinetnumber", "");
-  const cabinetSet = new Set<string>();
-  for (const r of cabinetRes.data ?? []) {
-    const c = (r as { fcabinetnumber: string | null }).fcabinetnumber;
-    if (c) cabinetSet.add(c);
-  }
-  const cabinetOptions = Array.from(cabinetSet);
-
   // ── the main table query (L743-746 + the ?q / search filters) ──
   let tableQuery = admin
     .from("tb_forwarder")
     .select(
-      "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftransporttype, fshipby, fcredit, fdetail, fcover, famount, fweight, fvolume, fwidth, fheight, flength, fproductstype, fcabinetnumber, ftotalprice, ftransportprice, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, reforder, fdatestatus2, fdatestatus3, fdatestatus4",
+      "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftransporttype, fshipby, fcredit, fdetail, fcover, famount, fweight, fvolume, fwidth, fheight, flength, fproductstype, frefprice, frefrate, fcabinetnumber, ftotalprice, ftransportprice, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, reforder, fdatestatus2, fdatestatus3, fdatestatus4",
     )
     .eq("userid", memberCode);
 
@@ -398,6 +396,8 @@ export default async function ForwarderTablePage({
       fheight: row.fheight == null ? null : Number(row.fheight),
       flength: row.flength == null ? null : Number(row.flength),
       fproductstype: (row.fproductstype as string) ?? null,
+      frefprice: (row.frefprice as string) ?? null,
+      frefrate: row.frefrate == null ? null : Number(row.frefrate),
       fcabinetnumber: (row.fcabinetnumber as string) ?? null,
       ftotalprice: row.ftotalprice == null ? null : Number(row.ftotalprice),
       ftransportprice: row.ftransportprice == null ? null : Number(row.ftransportprice),
@@ -468,7 +468,6 @@ export default async function ForwarderTablePage({
   // display), so the CSV covers ALL rows — columns mirror the on-screen table.
   const CSV_COLS = [
     { key: "tracking",       label: t("colTrackingChn") },
-    { key: "purchaseOrder",  label: t("colPurchaseOrder") },
     { key: "lotSeq",         label: t("colLotSeq") },
     { key: "detail",         label: t("colDetail") },
     { key: "boxes",          label: t("colBoxes") },
@@ -477,6 +476,8 @@ export default async function ForwarderTablePage({
     { key: "height",         label: t("colHeight") },
     { key: "length",         label: t("colLength") },
     { key: "volume",         label: t("colVolume") },
+    { key: "pricedBy",       label: t("colPricedBy") },
+    { key: "importRate",     label: t("colImportRate") },
     { key: "type",           label: t("colType") },
     { key: "crate",          label: t("colCratePrice") },
     { key: "chinaTransport", label: t("colChinaTransport") },
@@ -499,7 +500,6 @@ export default async function ForwarderTablePage({
     const paid = Number(row.fstatus) > 4;
     return {
       tracking:       row.ftrackingchn2 || row.ftrackingchn || `#${row.id}`,
-      purchaseOrder:  row.reforder ?? "",
       lotSeq:         (row.ftransporttype === "1" ? t("transportTruckColon") : t("transportSeaColon"))
                         + (row.fcabinetnumber ?? "").replace(/รถ /g, "").replace(/大/g, "") + "/" + row.id,
       detail:         row.fdetail ?? "",
@@ -509,6 +509,8 @@ export default async function ForwarderTablePage({
       height:         (row.fheight ?? 0) > 0 ? numberFormat(row.fheight!, 2) : "",
       length:         (row.flength ?? 0) > 0 ? numberFormat(row.flength!, 2) : "",
       volume:         (row.fvolume ?? 0) > 0 ? numberFormat(row.fvolume!, 3) : "",
+      pricedBy:       nameRefPrice2(row.frefprice, t),
+      importRate:     (row.frefrate ?? 0) > 0 ? numberFormat(row.frefrate!, 2) : "",
       type:           nameProductsType2(row.fproductstype, t),
       crate:          paid ? numberFormat(row.pricecrate ?? 0, 2) : "",
       chinaTransport: paid ? numberFormat(row.ftransportpricechnthb ?? 0, 2) : "",
@@ -696,8 +698,25 @@ export default async function ForwarderTablePage({
         <section className="flex flex-col rounded-2xl border border-border bg-white shadow-sm dark:bg-surface md:max-h-[calc(100svh-15.5rem)] md:overflow-hidden">
           {/* ═══ LOCKED HEADER — stays put while the table body scrolls ═══ */}
           <div className="flex shrink-0 flex-col">
-          {/* ── Tab strip (shared component — identical on both views) ── */}
-          <ImportViewTabs active="table" />
+          {/* ── Tab strip (shared component — identical on both views) ── ·
+              with the "+ เพิ่มรายการนำเข้า" CTA on the right of the tab row
+              (ปอน 2026-06-09 "ขยับปุ่มขึ้นไปแถว tabs"). */}
+          <ImportViewTabs
+            active="table"
+            action={
+              <Link
+                href="/service-import/add"
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 pl-1 pr-3 text-sm font-bold text-white shadow-sm transition-all hover:bg-emerald-700 active:scale-[0.98] whitespace-nowrap"
+              >
+                <span className="inline-flex w-6 h-6 items-center justify-center rounded-full bg-white text-emerald-600 font-black text-base leading-none" aria-hidden>
+                  +
+                </span>
+                {/* mobile = short "เพิ่มรายการ" · sm+ = full label (ปอน 2026-06-09) */}
+                <span className="sm:hidden">{t("addImportItemShort")}</span>
+                <span className="hidden sm:inline">{t("addImportItem")}</span>
+              </Link>
+            }
+          />
 
           {/* ── UNIFIED FRAME — ค้นหา + สถานะ อยู่ในกรอบเดียวกัน (ปอน
               2026-05-29 "ทำให้เป็นกรอบเดียวกัน"). Search row (Tracking + Lot
@@ -712,83 +731,16 @@ export default async function ForwarderTablePage({
                 `text-[13px]` on the form drives the input/select/button text
                 size (cart.css forces `.pcs-legacy input/button/select{font-size:
                 inherit}`, so they take the parent's size). */}
-            <form
-              className="grid grid-cols-2 items-start gap-x-2 gap-y-2.5 text-[13px] md:flex md:flex-row md:items-end md:gap-2.5"
-              id="search"
-              method="GET"
-              action="/service-import/table"
-              autoComplete="off"
-            >
-              <div className="min-w-0 md:flex-1 flex flex-col gap-1">
-                <label className="block text-[11px] font-medium text-muted" htmlFor="fTrackingCHN">
-                  {t("searchTrackingLabel")}
-                </label>
-                <input
-                  // forwarder-table.css forces `#fTrackingCHN{margin-bottom:.8rem}`
-                  // (legacy) — neutralise it inline so this cell matches the
-                  // select cell's height (else the label misaligns / overlaps).
-                  style={{ marginBottom: 0 }}
-                  className="h-9 w-full rounded-lg border border-border bg-white dark:bg-surface px-2.5 text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-colors"
-                  name="fTrackingCHN"
-                  id="fTrackingCHN"
-                  type="text"
-                  placeholder={t("trackingPlaceholder")}
-                  defaultValue={fTrackingCHNRaw}
-                />
-              </div>
-              <div className="min-w-0 md:flex-1 flex flex-col gap-1">
-                <label className="block text-[11px] font-medium text-muted" htmlFor="fCabinetNumber">
-                  {t("lotLabel")}
-                </label>
-                <select
-                  className="h-9 w-full rounded-lg border border-border bg-white dark:bg-surface px-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-colors"
-                  name="fCabinetNumber"
-                  id="fCabinetNumber"
-                  defaultValue={fCabinetNumberRaw || "all"}
-                >
-                  <option value="all">{t("tabAll")}</option>
-                  {cabinetOptions.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <button
-                type="submit"
-                className="h-9 inline-flex w-full md:w-auto items-center justify-center rounded-lg bg-red-600 text-white px-4 font-bold shadow-sm hover:bg-red-700 active:scale-[0.98] transition-all whitespace-nowrap"
-                name="search"
-              >
-                {t("searchButton")}
-              </button>
-              <Link
-                href="/service-import/add"
-                className="h-9 inline-flex w-full md:w-auto items-center gap-1.5 justify-center rounded-lg bg-emerald-600 text-white pl-1 pr-3 font-bold shadow-sm hover:bg-emerald-700 active:scale-[0.98] transition-all whitespace-nowrap"
-              >
-                <span className="inline-flex w-6 h-6 items-center justify-center rounded-full bg-white text-emerald-600 font-black text-base leading-none" aria-hidden>
-                  +
-                </span>
-                <span>{t("addImportItem")}</span>
-              </Link>
-            </form>
-            {sp.fTrackingCHN !== undefined && (
-              <div className="text-xs text-red-600 mt-2">
-                {t("searchResultsBy")}{" "}
-                {sp.fTrackingCHN ? <>{t("searchResultTracking", { value: sp.fTrackingCHN })}</> : null}
-                {sp.fCabinetNumber ? <> {t("searchResultLot", { value: sp.fCabinetNumber })}</> : null}
-              </div>
-            )}
-
-            {/* dashed divider inside the unified frame — separates the
-                search row from the status-tab filter (same กรอบ). */}
-            <hr className="my-3 border-t border-dashed border-border" />
-
-            {/* ── Status filter — legacy `nav nav-tabs nav-underline pcs-tabs`
-                (forwarder-table.php L795-830): plain nav-link buttons in a
-                row, active = light-pink bg + red text + red borders. */}
+            {/* สถานะรายการ heading. The "+ เพิ่มรายการนำเข้า" CTA moved up to the
+                view-tab row (ปอน 2026-06-09 "ขยับขึ้นไปแถว tabs"). */}
             <h4 className="mb-2.5 text-sm font-bold text-foreground md:text-lg">
               {t("statusHeading")}
             </h4>
+
+            {/* Search form (Tracking + ล๊อตตู้ + ค้นหารายการ) removed (ปอน
+                2026-06-09: "เอา 3 ปุ่มนี้ออก"). The DataTables live-search +
+                export toolbar below the status tabs are kept. */}
+
             <ul className="flex flex-wrap items-end gap-0 border-b border-border">
               {statusChips.map((chip) => {
                 const active = isQActive(
@@ -820,18 +772,13 @@ export default async function ForwarderTablePage({
               })}
             </ul>
 
-            {/* DataTables toolbar — legacy `dom:'lBfrtip'`: export buttons
-                (Copy/CSV/Excel/Print) on the LEFT, the "ค้นหา:" live-filter box
-                on the RIGHT, one row above the table (forwarder-table.php). The
-                export operates over the FULL filtered set; the search box filters
-                the rendered rows client-side. */}
-            {/* `text-[11px]` on the wrapper shrinks the buttons + search box:
-                cart.css forces `.pcs-legacy button/input/select { font-size:
-                inherit }`, so the controls take their size from THIS parent
-                (ปอน 2026-06-08 "ลดขนาดให้เล็กลง"). */}
-            {/* Search box LEFT, export buttons RIGHT (ปอน 2026-06-08 "สลับ
-                ตำแหน่ง"). */}
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 text-[11px]">
+            {/* DataTables toolbar — live "ค้นหา:" filter (left) + export
+                buttons คัดลอก/CSV/Excel/พิมพ์ (right), one row above the table
+                (ปอน 2026-06-09: เอ้า search+export กลับมา). The live search box
+                filters the rendered rows client-side; export covers the FULL
+                filtered set. `text-[11px]` shrinks the controls (cart.css forces
+                `.pcs-legacy button/input { font-size: inherit }`). */}
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px]">
               <TableQuickSearch />
               <ExportToolbar
                 rows={csvRows}
@@ -861,7 +808,7 @@ export default async function ForwarderTablePage({
               {/* MOBILE: only x-auto (the 7 cols already fit, so no scroll fires)
                   — the page scrolls vertically. DESKTOP: full inner-scroll so the
                   locked header stays put while rows scroll. */}
-              <div className="table-responsive2 scrollbar-clean min-h-0 flex-1 overflow-x-auto md:overflow-auto">
+              <div className="table-responsive2 scrollbar-clean min-h-0 flex-1 overflow-x-auto rounded-t-xl border border-border md:overflow-auto">
                 {/* ── ONE responsive table for desktop AND mobile (ปอน
                     2026-06-08: "อยากได้แบบตาราง ทั้งคอมและมือถือ อิงจาก legacy").
                     Replaces the old md:hidden card list — the "แบบตาราง" view is
@@ -908,9 +855,7 @@ export default async function ForwarderTablePage({
                   >
                     <tr className="text-center bg-gradient-to-r from-[#cc3333] to-[#b30000]">
                       <th className="px-2 py-3 text-center align-middle border-r border-white/20"><SelectAllHeaderCheckbox /></th>
-                      <th className="hidden min-[1200px]:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colCreatedDate")}</th>
                       <th className="all add-text-all px-3 py-3 text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colTrackingChn")}</th>
-                      <th className="all add-text-all hidden min-[1200px]:table-cell px-3 py-3 text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colPurchaseOrder")}</th>
                       <th className="all add-text-all hidden min-[578px]:table-cell px-3 py-3 text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colLotSeq")}</th>
                       <th className="all add-text-all hidden min-[578px]:table-cell px-3 py-3 text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colDetail")}</th>
                       <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colBoxes")}</th>
@@ -919,6 +864,8 @@ export default async function ForwarderTablePage({
                       <th className="all add-text-all hidden min-[1200px]:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colHeight")}</th>
                       <th className="all add-text-all hidden min-[1200px]:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colLength")}</th>
                       <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colVolume")}</th>
+                      <th className="all add-text-all hidden min-[578px]:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colPricedBy")}</th>
+                      <th className="all add-text-all hidden min-[578px]:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colImportRate")}</th>
                       <th className="all add-text-all hidden min-[578px]:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colType")}</th>
                       <th className="all add-text-all hidden min-[578px]:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colCratePrice")}</th>
                       <th className="all add-text-all hidden min-[578px]:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white whitespace-nowrap border-r border-white/20">{t("colChinaTransport")}</th>
@@ -945,9 +892,7 @@ export default async function ForwarderTablePage({
                                           gradient as the thead + white text. */}
                                       <tr className="bg-gradient-to-r from-[#cc3333] to-[#b30000] text-white no-sort">
                                         <td className="px-2 py-1.5 border-b border-border"></td>
-                                        <td className="t2 hidden min-[1200px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
                                         <td className="t3 px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
-                                        <td className="t4 hidden min-[1200px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
                                         <td className="t5 hidden min-[578px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
                                         <td className="t6 text-right hidden min-[578px]:table-cell px-2 py-1.5 border-b border-border text-xs font-bold text-white">{t("summaryTotal")}</td>
                                         <td className="t7 text-right px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums">{sumBoxes > 0 ? sumBoxes : ""}</td>
@@ -956,6 +901,8 @@ export default async function ForwarderTablePage({
                                         <td className="t10 hidden min-[1200px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums"></td>
                                         <td className="t11 hidden min-[1200px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums"></td>
                                         <td className="t12 text-right px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums">{sumVolume > 0 ? numberFormat(sumVolume, 3) : ""}</td>
+                                        <td className="t-refprice hidden min-[578px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
+                                        <td className="t-refrate hidden min-[578px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
                                         <td className="t13 hidden min-[578px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white"></td>
                                         <td className="t14 hidden min-[578px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums"></td>
                                         <td className="t15 hidden min-[578px]:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-white tabular-nums"></td>
@@ -992,9 +939,6 @@ export default async function ForwarderTablePage({
                                             <td className="px-2 py-1.5 text-center align-middle">
                                               <RowCheckbox id={row.id} />
                                             </td>
-                                            <td className="hidden min-[1200px]:table-cell px-2 py-1.5 text-center text-xs text-foreground whitespace-nowrap">
-                                              {fmtDate(row.fdate)}
-                                            </td>
                                             {/* Tracking — number on top, thumbnail
                                                 stacked below (legacy `<br/>`); the
                                                 number wraps so the column stays narrow
@@ -1021,16 +965,6 @@ export default async function ForwarderTablePage({
                                                   />
                                                 </a>
                                               </div>
-                                            </td>
-                                            <td className="hidden min-[1200px]:table-cell px-2 py-1.5 text-xs md:text-sm text-foreground">
-                                              {row.reforder ? (
-                                                <Link
-                                                  href={`/service-order/${row.reforder}`}
-                                                  className="text-sky-600 hover:underline text-xs"
-                                                >
-                                                  {row.reforder}
-                                                </Link>
-                                              ) : null}
                                             </td>
                                             <td className="hidden min-[578px]:table-cell px-2 py-1.5 text-xs md:text-sm text-foreground whitespace-nowrap">
                                               {row.ftransporttype === "1" ? t("transportTruckColon") : t("transportSeaColon")}
@@ -1085,6 +1019,14 @@ export default async function ForwarderTablePage({
                                               {(row.fvolume ?? 0) > 0
                                                 ? numberFormat(row.fvolume!, 3)
                                                 : "-"}
+                                            </td>
+                                            {/* คิดราคาตาม (frefprice: 1=น้ำหนัก 2=ปริมาตร) */}
+                                            <td className="hidden min-[578px]:table-cell px-2 py-1.5 text-center text-xs md:text-sm text-foreground whitespace-nowrap">
+                                              {nameRefPrice2(row.frefprice, t)}
+                                            </td>
+                                            {/* เรทนำเข้า (frefrate ฿ ต่อหน่วย) */}
+                                            <td className="hidden min-[578px]:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums">
+                                              {(row.frefrate ?? 0) > 0 ? numberFormat(row.frefrate!, 2) : "-"}
                                             </td>
                                             <td className="hidden min-[578px]:table-cell px-2 py-1.5 text-center text-xs md:text-sm text-foreground">
                                               {nameProductsType2(row.fproductstype, t)}

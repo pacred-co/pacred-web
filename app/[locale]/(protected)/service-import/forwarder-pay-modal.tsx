@@ -73,6 +73,32 @@ function perRowTotal(row: ForwarderRow): number {
   );
 }
 
+// All non-import, non-discount charges rolled into one "ค่าอื่นๆ" column
+// (TH transport · price-adjust · shipping service · crate · CHN→TH transport ·
+// other). `ftotalprice` (the import rate) and `fdiscount` get their own columns.
+function otherCharges(row: ForwarderRow): number {
+  return (
+    row.ftransportprice +
+    row.fpriceupdate +
+    row.fshippingservice +
+    row.pricecrate +
+    row.ftransportpricechnthb +
+    row.priceother
+  );
+}
+
+// Product-type code → i18n key (forwarder.php nameProductsType: 1=ทั่วไป
+// 2=มอก. 3=อย. 4=พิเศษ). Unknown/empty → null (no label shown).
+function productTypeKey(v: string | null | undefined): string | null {
+  switch (v) {
+    case "1": return "productGeneral";
+    case "2": return "productTisi";
+    case "3": return "productFda";
+    case "4": return "productSpecial";
+    default:  return null;
+  }
+}
+
 export type ForwarderPayModalProps = {
   /** Selected forwarder rows. */
   rows: ForwarderRow[];
@@ -223,7 +249,7 @@ export function ForwarderPayModal({
         aria-labelledby="list-payment2-title"
       >
         <div
-          className="relative w-full max-w-[640px] bg-white dark:bg-surface rounded-2xl shadow-2xl border border-border overflow-hidden"
+          className="relative w-full max-w-3xl bg-white dark:bg-surface rounded-2xl shadow-2xl border border-border overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
@@ -291,59 +317,116 @@ export function ForwarderPayModal({
                   </div>
                 )}
 
-                {/* Itemized invoice table — one compact row per order
-                    (ออเดอร์/Track · ส่วนลด · ราคาบริการ), reads like a bill
-                    (ปอน 2026-06-08: "อยากได้เป็นแถวๆ อ่านง่ายๆ เหมือนตาราง
-                    แบบใบแจ้งหนี้"). Was a tall per-order price-breakdown stack;
-                    now each order is a single line and the prices sum down to
-                    the grand total below. */}
-                <div className="overflow-hidden rounded-xl border border-border">
-                  {/* Column header */}
-                  <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 md:gap-3 bg-surface-alt/60 px-3 py-2 text-[10.5px] font-bold uppercase tracking-wide text-muted">
-                    <span>{t("colOrderTrack")}</span>
-                    <span className="text-right">{t("lineDiscount")}</span>
-                    <span className="text-right">{t("colServicePrice")}</span>
-                  </div>
-                  {rows.map((row) => {
-                    const rowTotal = perRowTotal(row);
-                    const trackingChn =
-                      row.ftrackingchn2 && row.ftrackingchn2 !== ""
-                        ? row.ftrackingchn2
-                        : row.ftrackingchn;
-                    return (
-                      <div
-                        key={row.id}
-                        className={`grid grid-cols-[1fr_auto_auto] items-center gap-2 md:gap-3 border-t border-border px-3 py-2 ${
-                          row.fcredit === "1" ? "bg-red-50/50" : ""
-                        }`}
-                      >
-                        {/* Order no. + tracking */}
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[13px] font-bold text-red-600 notranslate">
-                              #{row.id}
-                            </span>
-                            {row.fcredit === "1" && (
-                              <span className="inline-flex shrink-0 items-center rounded-full bg-red-100 text-red-700 text-[9px] font-bold px-1.5 py-0.5">
-                                {t("creditItem")}
+                {/* Itemized invoice table — per-order detail breakdown. ONE
+                    responsive table: abbreviated headers on mobile
+                    (CTN/KG/CBM/Rate/Other/Disc/Price) so all columns stay as a
+                    table, full Thai headers on desktop (ปอน 2026-06-09: "ในมือถือ
+                    ให้เป็นตัวย่อจะได้แสดงเป็นตาราง"). Wrapped in overflow-x-auto +
+                    min-width so very narrow phones scroll the money columns into
+                    view rather than wrapping them. */}
+                <div className="overflow-x-auto scrollbar-x-visible rounded-xl border border-border">
+                  <div className="min-w-[460px]">
+                    {/* Column header — abbreviated (mobile) / full (desktop) */}
+                    <div className="grid grid-cols-[1.3fr_repeat(7,minmax(0,1fr))] items-center gap-x-1.5 bg-surface-alt/60 px-3 py-2 text-[9px] md:text-[10px] font-bold uppercase tracking-wide text-muted md:gap-x-2">
+                      <span>{t("colOrderTrack")}</span>
+                      <span className="text-right">
+                        <span className="md:hidden">CTN</span>
+                        <span className="hidden md:inline">{t("colBoxes")}</span>
+                      </span>
+                      <span className="text-right">
+                        <span className="md:hidden">KG</span>
+                        <span className="hidden md:inline">{t("colWeight")}</span>
+                      </span>
+                      <span className="text-right">
+                        <span className="md:hidden">CBM</span>
+                        <span className="hidden md:inline">{t("colVolume")}</span>
+                      </span>
+                      <span className="text-right">
+                        <span className="md:hidden">Rate</span>
+                        <span className="hidden md:inline">{t("colImportRate")}</span>
+                      </span>
+                      <span className="text-right">
+                        <span className="md:hidden">Other</span>
+                        <span className="hidden md:inline">{t("colOtherCharges")}</span>
+                      </span>
+                      <span className="text-right">
+                        <span className="md:hidden">Disc</span>
+                        <span className="hidden md:inline">{t("lineDiscount")}</span>
+                      </span>
+                      <span className="text-right">
+                        <span className="md:hidden">Price</span>
+                        <span className="hidden md:inline">{t("colServicePrice")}</span>
+                      </span>
+                    </div>
+                    {rows.map((row) => {
+                      const rowTotal = perRowTotal(row);
+                      const other = otherCharges(row);
+                      const ptKey = productTypeKey(row.fproductstype);
+                      const ptLabel = ptKey ? t(ptKey) : null;
+                      const trackingChn =
+                        row.ftrackingchn2 && row.ftrackingchn2 !== ""
+                          ? row.ftrackingchn2
+                          : row.ftrackingchn;
+                      return (
+                        <div
+                          key={row.id}
+                          className={`grid grid-cols-[1.3fr_repeat(7,minmax(0,1fr))] items-center gap-x-1.5 border-t border-border px-3 py-2 md:gap-x-2 ${
+                            row.fcredit === "1" ? "bg-red-50/50" : ""
+                          }`}
+                        >
+                          {/* Order no. + tracking + product type */}
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1">
+                              <span className="text-[12px] md:text-[13px] font-bold text-red-600 notranslate">
+                                #{row.id}
                               </span>
-                            )}
+                              {row.fcredit === "1" && (
+                                <span className="inline-flex shrink-0 items-center rounded-full bg-red-100 text-red-700 text-[9px] font-bold px-1.5 py-0.5">
+                                  {t("creditItem")}
+                                </span>
+                              )}
+                              {ptLabel && (
+                                <span className="inline-flex shrink-0 items-center rounded-full border border-border bg-surface-alt text-muted text-[9px] font-semibold px-1.5 py-0.5">
+                                  {ptLabel}
+                                </span>
+                              )}
+                            </div>
+                            <div className="truncate font-mono text-[10px] text-muted md:text-[10.5px]">
+                              {trackingChn}
+                            </div>
                           </div>
-                          <div className="truncate font-mono text-[10.5px] text-muted">
-                            {trackingChn}
+                          {/* CTN — จำนวนกล่อง */}
+                          <div className="text-right text-[10px] tabular-nums text-foreground/80 md:text-[11px]">
+                            {row.famount > 0 ? row.famount : "—"}
+                          </div>
+                          {/* KG — น้ำหนัก */}
+                          <div className="text-right text-[10px] tabular-nums text-foreground/80 md:text-[11px]">
+                            {row.fweight > 0 ? numberFormat2(row.fweight) : "—"}
+                          </div>
+                          {/* CBM — ปริมาตรรวม */}
+                          <div className="text-right text-[10px] tabular-nums text-foreground/80 md:text-[11px]">
+                            {row.fvolume > 0 ? numberFormat2(row.fvolume) : "—"}
+                          </div>
+                          {/* Rate — เรทนำเข้า */}
+                          <div className="text-right text-[10px] tabular-nums text-muted md:text-[11px]">
+                            {row.ftotalprice > 0 ? numberFormat2(row.ftotalprice) : "—"}
+                          </div>
+                          {/* Other — ค่าอื่นๆ */}
+                          <div className="text-right text-[10px] tabular-nums text-muted md:text-[11px]">
+                            {other > 0 ? numberFormat2(other) : "—"}
+                          </div>
+                          {/* Disc — ส่วนลด */}
+                          <div className="text-right text-[10px] tabular-nums text-muted md:text-[11px]">
+                            {row.fdiscount > 0 ? `-${numberFormat2(row.fdiscount)}` : "—"}
+                          </div>
+                          {/* Price — ราคา (per-order net, sums to grand total) */}
+                          <div className="text-right text-[11px] font-black tabular-nums text-red-600 md:text-[12px]">
+                            {numberFormat2(rowTotal)}
                           </div>
                         </div>
-                        {/* Discount */}
-                        <div className="whitespace-nowrap text-right text-[12px] tabular-nums text-muted">
-                          {row.fdiscount > 0 ? `-${numberFormat2(row.fdiscount)}` : "—"}
-                        </div>
-                        {/* Service price — per-order net (sums to grand total) */}
-                        <div className="whitespace-nowrap text-right text-[13px] font-black tabular-nums text-red-600">
-                          {numberFormat2(rowTotal)}
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Summary bar — RED invoice summary (ปอน 2026-06-08): สรุปยอด →
