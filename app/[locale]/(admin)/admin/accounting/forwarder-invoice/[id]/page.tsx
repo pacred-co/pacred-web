@@ -264,15 +264,15 @@ function ReceiptPage({
         {/* ── headerFormatOne: logo LEFT · (label) + title RIGHT ─────────── */}
         <div id="headerFormatOne" style={{ marginBottom: "4mm" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            {/* LEFT: merchant logo — single wordmark image, no duplicate text (ภูม flag round 4) */}
+            {/* LEFT: merchant logo — single wordmark image, Peak-sized (ภูม flag round 7) */}
             <div id="merchantLogo" style={{ display: "flex", alignItems: "center" }}>
               <Image
                 src="/images/pacred-logo-red.png"
                 alt={SITE_LEGAL_NAME}
-                width={200}
-                height={60}
+                width={300}
+                height={90}
                 unoptimized
-                style={{ width: "auto", height: "14mm", display: "block" }}
+                style={{ width: "auto", height: "22mm", display: "block" }}
               />
             </div>
 
