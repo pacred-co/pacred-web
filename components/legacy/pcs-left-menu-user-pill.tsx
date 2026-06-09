@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useState } from "react";
-import { ChevronDown, LogOut, Settings, User } from "lucide-react";
+import { ChevronDown, LifeBuoy, LogOut, Settings, User } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { signOutAction } from "@/actions/auth";
 
@@ -65,6 +65,13 @@ export function PcsLeftMenuUserPill({
           >
             <Settings className="h-4 w-4" />
             <span>ตั้งค่าบัญชีผู้ใช้งาน</span>
+          </Link>
+          <Link
+            href="/my-issues"
+            className="flex items-center gap-3 px-6 py-2 text-[13px] text-muted hover:bg-gray-100 hover:text-foreground"
+          >
+            <LifeBuoy className="h-4 w-4" />
+            <span>รายการแจ้งปัญหา</span>
           </Link>
           <form action={signOutAction}>
             <button
