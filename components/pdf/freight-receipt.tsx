@@ -1,35 +1,9 @@
 /**
- * Freight receipt (ใบเสร็จรับเงิน / ใบกำกับภาษี) — Pacred PDF template
- * per Thai Revenue Department Code 86.
+ * Freight receipt (ใบเสร็จรับเงิน) — Pacred PDF template.
  *
- * V-E7 — the receipt-side document for a freight invoice (migration
- * 0051 `freight_invoices`). Server-rendered via `@react-pdf/renderer`
- * from the download route `app/api/freight-receipt/[id]/route.tsx`.
- *
- * Mirrors `components/pdf/tax-invoice.tsx` (RD Code 86) closely — same
- * seller block, line table, totals, bank block, signatures, watermark.
- *
- * Required RD Code 86 fields covered (per ADR-0006 §2):
- *   ✓ Document title — "ใบกำกับภาษี / ใบเสร็จรับเงิน"
- *   ✓ Document number — the freight invoice_no (FI{YYMMDD}-{NNNN})
- *   ✓ Issue date (Thai พ.ศ. format)
- *   ✓ Seller: Pacred legal name, address, tax ID, branch (สำนักงานใหญ่)
- *   ✓ Buyer: consignee name, address, tax ID, branch — snapshot from
- *     freight_invoices at issuance (immutable per RD Code 86)
- *   ✓ Line items: description, qty, unit, amount
- *   ✓ VAT 7% — explicit row
- *   ✓ Grand total + readThaiBaht spell-out
- *   ✓ Payment ledger (method / date / amount per partial payment)
- *   ✓ Authorised signature footer
- *
- * State display:
- *   - payment_status='paid'|'overpaid' → "ได้รับเงินแล้ว" green stamp +
- *     the latest payment date; title reads as a RECEIPT.
- *   - payment_status='unpaid'|'partial' → title reads as INVOICE; the
- *     outstanding amount is printed.
- *   - document status='cancelled' → diagonal "ยกเลิก / CANCELLED"
- *     watermark (mirror tax-invoice §7 immutability — re-render, never
- *     edit the stored original).
+ * v3 — 2026-06-09 ภูม flag round 3: literal port of Peak Account HTML.
+ * Layout follows the same structure as the on-page HTML preview in
+ * app/[locale]/(admin)/admin/accounting/forwarder-invoice/[id]/page.tsx.
  *
  * Server-only: imports from `./styles` which the route registers fonts for.
  */
@@ -41,7 +15,6 @@ import {
   CONTACT,
   ADDRESSES,
   SITE_LEGAL_NAME_TH,
-  SITE_LEGAL_NAME,
   TAX_ID,
   BANK,
 } from "@/components/seo/site";
@@ -119,36 +92,21 @@ export function FreightReceipt({ data }: { data: FreightReceiptData }) {
   const isPaid      = data.payment_status === "paid" || data.payment_status === "overpaid";
   const issueDate   = data.issued_at ?? data.created_at;
 
-  // The latest recorded payment date drives the "ได้รับเงินแล้ว" stamp.
   const latestPaymentIso = data.payments.length > 0
-    ? data.payments
-        .map((p) => p.paid_at)
-        .sort()
-        .at(-1) ?? null
+    ? data.payments.map((p) => p.paid_at).sort().at(-1) ?? null
     : null;
 
-  // RD Code 86 combined doc: title reads as a RECEIPT once fully paid,
-  // otherwise as an INVOICE awaiting payment.
-  const titleTh = isPaid
-    ? "ใบกำกับภาษี / ใบเสร็จรับเงิน"
-    : "ใบกำกับภาษี / ใบแจ้งหนี้";
-  const titleEn = isPaid ? "TAX INVOICE / RECEIPT" : "TAX INVOICE";
-
-  // Two-page output (ต้นฉบับ + สำเนา) — Peak's pattern (ภูม screenshot 4).
-  // Each page renders the same body via PeakFreightReceiptPage with the
-  // copy-label differing.
+  // Two-page output: ต้นฉบับ then สำเนา — same structure, different label + tint color.
   return (
     <Document
-      title={`Pacred Freight Receipt ${data.invoice_no ?? "DRAFT"}`}
+      title={`Pacred ใบเสร็จรับเงิน ${data.invoice_no ?? "DRAFT"}`}
       author="Pacred"
-      subject={`Freight receipt ${data.invoice_no ?? "draft"}`}
+      subject={`ใบเสร็จรับเงิน ${data.invoice_no ?? "draft"}`}
       creator="Pacred Web (Next.js)"
     >
       <PeakFreightReceiptPage
         data={data}
-        copyLabel="ต้นฉบับ / ORIGINAL"
-        titleTh={titleTh}
-        titleEn={titleEn}
+        copyLabel="ต้นฉบับ"
         issueDate={issueDate}
         latestPaymentIso={latestPaymentIso}
         isPaid={isPaid}
@@ -156,9 +114,7 @@ export function FreightReceipt({ data }: { data: FreightReceiptData }) {
       />
       <PeakFreightReceiptPage
         data={data}
-        copyLabel="สำเนา / COPY"
-        titleTh={titleTh}
-        titleEn={titleEn}
+        copyLabel="สำเนา"
         issueDate={issueDate}
         latestPaymentIso={latestPaymentIso}
         isPaid={isPaid}
@@ -169,14 +125,23 @@ export function FreightReceipt({ data }: { data: FreightReceiptData }) {
 }
 
 /**
- * One A4 page in the Peak format. Rendered TWICE per document — once for
- * ต้นฉบับ, once for สำเนา (only the copy-label differs).
+ * One A4 page — literal port of Peak Account HTML.
+ * (ต้นฉบับ): orange title #FFA30A · tint bg rgba(255,163,10,0.165) → PDF flat #FFE7C2
+ * (สำเนา):   gray title #5F5D5A  · tint bg rgba(95,93,90,0.165)   → PDF flat #E5E4E3
+ *
+ * Structure (matches HTML preview exactly):
+ *   1. headerFormatOne — logo LEFT · (label) ABOVE title RIGHT
+ *   2. info row — [issuer+customer stacked LEFT, each with text+contact cols] · meta-box RIGHT
+ *   3. items table (Pacred 7-col — kept verbatim)
+ *   4. spacer View (flex:1) pushes summary to bottom
+ *   5. summary 2-col — amountInfo LEFT · big amount box RIGHT
+ *   6. payment 2-col — date+total LEFT · bank RIGHT
+ *   7. remark
+ *   8. certified 6 boxes — QR · ผู้ออก · ผู้อนุมัติ · ตราประทับผู้ขาย · ผู้รับลูกค้า · ตราประทับลูกค้า
  */
 function PeakFreightReceiptPage({
   data,
   copyLabel,
-  titleTh,
-  titleEn,
   issueDate,
   latestPaymentIso,
   isPaid,
@@ -184,83 +149,148 @@ function PeakFreightReceiptPage({
 }: {
   data: FreightReceiptData;
   copyLabel: string;
-  titleTh: string;
-  titleEn: string;
   issueDate: string;
   latestPaymentIso: string | null;
   isPaid: boolean;
   isCancelled: boolean;
 }) {
-  const preTax = Number(data.subtotal_thb) + Number(data.duty_thb);
+  const isOriginal  = copyLabel === "ต้นฉบับ";
+  // PDF: flatten the alpha-transparent colors to solid equivalents (no rgba in react-pdf)
+  const tintBg      = isOriginal ? "#FFE7C2" : "#E5E4E3";  // rgba(255,163,10,0.165) / rgba(95,93,90,0.165)
+  const titleColor  = isOriginal ? "#FFA30A" : "#5F5D5A";
+
+  const grandTotal = Number(data.total_thb);
+  const preTax     = Number(data.subtotal_thb) + Number(data.duty_thb);
+  // Freight receipts: WHT not applied here (buyer-driven, handled upstream).
+  const showWht    = false;
+  const whtAmount  = 0;
+  const netPaid    = grandTotal - whtAmount;
 
   return (
-    <Page size="A4" style={styles.page}>
-      {/* ── Peak top header: brand left · doc badge right ── */}
-      <View style={peakStyles.peakHeader}>
-        <View style={peakStyles.peakBrandBlock}>
-          <Text style={peakStyles.peakBrandName}>Pacred</Text>
-          <Text style={peakStyles.peakBrandLegal}>{SITE_LEGAL_NAME_TH}</Text>
-          <Text style={peakStyles.peakBrandLegalEn}>{SITE_LEGAL_NAME}</Text>
-        </View>
-        <View style={peakStyles.peakDocMeta}>
-          <Text style={peakStyles.peakDocTitle}>{titleTh}</Text>
-          <Text style={peakStyles.peakDocTitleEn}>{titleEn}</Text>
-          <Text style={peakStyles.peakCopyBadge}>{copyLabel}</Text>
-        </View>
-      </View>
+    <Page size="A4" style={[styles.page, { paddingBottom: 60 }]}>
 
-      {/* ── Two-card info row: issuer | customer ── */}
-      <View style={peakStyles.peakInfoRow}>
-        <View style={peakStyles.peakInfoCard}>
-          <Text style={peakStyles.peakInfoLabel}>ผู้ออก / ISSUER</Text>
-          <Text style={peakStyles.peakInfoName}>{SITE_LEGAL_NAME_TH}</Text>
-          <Text style={peakStyles.peakInfoLine}>
-            เลขผู้เสียภาษี: {formatTaxId(TAX_ID)} (สำนักงานใหญ่)
+      {/* ── 1. headerFormatOne: Pacred wordmark LEFT · (label) ABOVE title RIGHT ── */}
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+        <View>
+          <Text style={[peakStyles.peakBrandWord]}>Pacred</Text>
+        </View>
+        <View style={{ alignItems: "flex-end" }}>
+          <Text style={{ fontSize: 8, color: COLORS.muted }}>({copyLabel})</Text>
+          <Text style={{ fontSize: 16, fontWeight: "bold", color: titleColor, marginTop: 2 }}>
+            ใบเสร็จรับเงิน
           </Text>
-          <Text style={peakStyles.peakInfoLine}>{ADDRESSES.office.full}</Text>
-          <Text style={peakStyles.peakInfoLine}>
-            โทร {CONTACT.phoneCompanyDisplay}
-          </Text>
-          <Text style={peakStyles.peakInfoLineMuted}>{CONTACT.emailAcc}</Text>
-        </View>
-        <View style={[peakStyles.peakInfoCard, peakStyles.peakInfoCardLast]}>
-          <Text style={peakStyles.peakInfoLabel}>ผู้รับ / CUSTOMER</Text>
-          <Text style={peakStyles.peakInfoName}>{data.buyer_name}</Text>
-          {data.buyer_tax_id && (
-            <Text style={peakStyles.peakInfoLine}>
-              เลขผู้เสียภาษี: {formatTaxId(data.buyer_tax_id)}
-              {data.buyer_branch ? ` · สาขา: ${data.buyer_branch}` : ""}
-            </Text>
-          )}
-          <Text style={peakStyles.peakInfoLine}>{data.buyer_address}</Text>
         </View>
       </View>
 
-      {/* ── Right-aligned key:value meta box (เลขที่ · วันที่ · ผู้ขาย · เครดิต) ── */}
-      <View style={peakStyles.peakMetaWrap}>
-        <View style={peakStyles.peakMetaBox}>
-          <View style={peakStyles.peakMetaRow}>
-            <Text style={peakStyles.peakMetaLabel}>เลขที่</Text>
-            <Text style={peakStyles.peakMetaValue}>{data.invoice_no ?? "(รอออก)"}</Text>
+      {/* ── 2. Info row: [issuer+customer LEFT] · meta-box RIGHT ── */}
+      <View style={{ flexDirection: "row", marginBottom: 6 }}>
+
+        {/* LEFT: issuer on top, customer below */}
+        <View style={{ flex: 1, marginRight: 10 }}>
+
+          {/* ISSUER */}
+          <View style={{ marginBottom: 6 }}>
+            <View style={{ flexDirection: "row" }}>
+              {/* TEXT column */}
+              <View style={{ flex: 1, marginRight: 6 }}>
+                <View style={{ flexDirection: "row", marginBottom: 1 }}>
+                  <Text style={{ fontSize: 8, fontWeight: "bold", color: COLORS.muted, width: 30 }}>ผู้ขาย :</Text>
+                  <Text style={{ fontSize: 9, fontWeight: "bold", color: COLORS.foreground, flex: 1 }}>{SITE_LEGAL_NAME_TH}</Text>
+                </View>
+                <View style={{ flexDirection: "row", marginBottom: 1 }}>
+                  <Text style={{ fontSize: 8, fontWeight: "bold", color: COLORS.muted, width: 30 }}>ที่อยู่ :</Text>
+                  <Text style={{ fontSize: 8, color: COLORS.foreground, flex: 1 }}>{ADDRESSES.office.full}</Text>
+                </View>
+                <View style={{ flexDirection: "row" }}>
+                  <Text style={{ fontSize: 8, fontWeight: "bold", color: COLORS.muted, width: 30 }}>เลขที่ภาษี :</Text>
+                  <Text style={{ fontSize: 8, color: COLORS.foreground, flex: 1 }}>{TAX_ID} (สำนักงานใหญ่)</Text>
+                </View>
+              </View>
+              {/* CONTACT column */}
+              <View style={{ width: 90 }}>
+                <View style={{ flexDirection: "row", marginBottom: 2 }}>
+                  <Text style={{ fontSize: 8, color: COLORS.muted, width: 10 }}>T:</Text>
+                  <Text style={{ fontSize: 8, color: COLORS.foreground }}>{CONTACT.phoneCompanyDisplay}</Text>
+                </View>
+                <View style={{ flexDirection: "row", marginBottom: 2 }}>
+                  <Text style={{ fontSize: 8, color: COLORS.muted, width: 10 }}>E:</Text>
+                  <Text style={{ fontSize: 8, color: COLORS.foreground }}>{CONTACT.emailAcc}</Text>
+                </View>
+                <View style={{ flexDirection: "row" }}>
+                  <Text style={{ fontSize: 8, color: COLORS.muted, width: 10 }}>W:</Text>
+                  <Text style={{ fontSize: 8, color: COLORS.foreground }}>pacred.co.th</Text>
+                </View>
+              </View>
+            </View>
           </View>
-          <View style={peakStyles.peakMetaRow}>
-            <Text style={peakStyles.peakMetaLabel}>วันที่</Text>
-            <Text style={peakStyles.peakMetaValue}>{formatDateThaiBE(issueDate)}</Text>
+
+          {/* CUSTOMER */}
+          <View>
+            <View style={{ flexDirection: "row" }}>
+              {/* TEXT column */}
+              <View style={{ flex: 1, marginRight: 6 }}>
+                <View style={{ flexDirection: "row", marginBottom: 1 }}>
+                  <Text style={{ fontSize: 8, fontWeight: "bold", color: COLORS.muted, width: 30 }}>ลูกค้า :</Text>
+                  <Text style={{ fontSize: 9, fontWeight: "bold", color: COLORS.foreground, flex: 1 }}>{data.buyer_name}</Text>
+                </View>
+                <View style={{ flexDirection: "row", marginBottom: 1 }}>
+                  <Text style={{ fontSize: 8, fontWeight: "bold", color: COLORS.muted, width: 30 }}>ที่อยู่ :</Text>
+                  <Text style={{ fontSize: 8, color: COLORS.foreground, flex: 1 }}>{data.buyer_address || "-"}</Text>
+                </View>
+                <View style={{ flexDirection: "row", marginBottom: 1 }}>
+                  <Text style={{ fontSize: 8, fontWeight: "bold", color: COLORS.muted, width: 30 }}>เลขที่ภาษี :</Text>
+                  <Text style={{ fontSize: 8, color: COLORS.foreground, flex: 1 }}>
+                    {data.buyer_tax_id ? formatTaxId(data.buyer_tax_id) : "-"}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: "row" }}>
+                  <Text style={{ fontSize: 8, fontWeight: "bold", color: COLORS.muted, width: 30 }}>เรียน :</Text>
+                  <Text style={{ fontSize: 8, color: COLORS.foreground, flex: 1 }}>-</Text>
+                </View>
+              </View>
+              {/* CONTACT column (customer — blank) */}
+              <View style={{ width: 90 }}>
+                <View style={{ flexDirection: "row", marginBottom: 2 }}>
+                  <Text style={{ fontSize: 8, color: COLORS.muted, width: 10 }}>T:</Text>
+                  <Text style={{ fontSize: 8, color: COLORS.foreground }}>-</Text>
+                </View>
+                <View style={{ flexDirection: "row", marginBottom: 2 }}>
+                  <Text style={{ fontSize: 8, color: COLORS.muted, width: 10 }}>E:</Text>
+                  <Text style={{ fontSize: 8, color: COLORS.foreground }}>-</Text>
+                </View>
+                <View style={{ flexDirection: "row" }}>
+                  <Text style={{ fontSize: 8, color: COLORS.muted, width: 10 }}>W:</Text>
+                  <Text style={{ fontSize: 8, color: COLORS.foreground }}>-</Text>
+                </View>
+              </View>
+            </View>
           </View>
-          <View style={peakStyles.peakMetaRow}>
-            <Text style={peakStyles.peakMetaLabel}>อ้างอิงงาน</Text>
-            <Text style={peakStyles.peakMetaValue}>{data.job_no ?? "—"}</Text>
-          </View>
-          <View style={[peakStyles.peakMetaRow, peakStyles.peakMetaRowLast]}>
-            <Text style={peakStyles.peakMetaLabel}>สถานะชำระ</Text>
-            <Text style={peakStyles.peakMetaValue}>{paymentStatusLabel(data.payment_status)}</Text>
+
+        </View>{/* end LEFT */}
+
+        {/* RIGHT: meta-box */}
+        <View style={{ width: 130 }}>
+          <View style={{ backgroundColor: tintBg, borderRadius: 2 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", padding: 4, marginBottom: 1 }}>
+              <Text style={{ fontSize: 8, fontWeight: "bold", color: COLORS.muted }}>เลขที่เอกสาร :</Text>
+              <Text style={{ fontSize: 8, color: COLORS.foreground }}>{data.invoice_no ?? "(รอออก)"}</Text>
+            </View>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", padding: 4, marginBottom: 1 }}>
+              <Text style={{ fontSize: 8, fontWeight: "bold", color: COLORS.muted }}>วันที่ออก :</Text>
+              <Text style={{ fontSize: 8, color: COLORS.foreground }}>{formatDateThaiBE(issueDate)}</Text>
+            </View>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", padding: 4 }}>
+              <Text style={{ fontSize: 8, fontWeight: "bold", color: COLORS.muted }}>อ้างอิง :</Text>
+              <Text style={{ fontSize: 8, color: COLORS.foreground }}>{data.job_no ?? "—"}</Text>
+            </View>
           </View>
         </View>
-      </View>
 
-      {/* ── Items table — kept as freight description/qty/unit/amount ── */}
-      <View style={peakStyles.peakTable}>
-        <View style={peakStyles.peakTableHead}>
+      </View>{/* end info row */}
+
+      {/* ── 3. Items table — Pacred freight lines (description/qty/unit/amount) ── */}
+      <View style={[peakStyles.peakTable, { backgroundColor: tintBg }]}>
+        <View style={[peakStyles.peakTableHead, { backgroundColor: tintBg }]}>
           <Text style={[peakStyles.peakTableHeadCell, { flex: 0.6, textAlign: "center" }]}>ลำดับ</Text>
           <Text style={[peakStyles.peakTableHeadCell, { flex: 5 }]}>รายละเอียด</Text>
           <Text style={[peakStyles.peakTableHeadCell, { flex: 0.9, textAlign: "right" }]}>จำนวน</Text>
@@ -268,7 +298,7 @@ function PeakFreightReceiptPage({
           <Text style={[peakStyles.peakTableHeadCell, { flex: 1.4, textAlign: "right" }]}>จำนวนเงิน (บาท)</Text>
         </View>
         {data.lines.length === 0 ? (
-          <View style={peakStyles.peakTableRow}>
+          <View style={[peakStyles.peakTableRow, peakStyles.peakTableRowLast, { backgroundColor: "#fff" }]}>
             <Text style={[peakStyles.peakTableCell, { flex: 9, textAlign: "center", color: COLORS.muted }]}>
               ไม่มีรายการ
             </Text>
@@ -279,19 +309,16 @@ function PeakFreightReceiptPage({
               key={`${it.position}-${i}`}
               style={[
                 peakStyles.peakTableRow,
+                { backgroundColor: "#fff" },
                 i === data.lines.length - 1 ? peakStyles.peakTableRowLast : {},
               ]}
             >
-              <Text style={[peakStyles.peakTableCell, { flex: 0.6, textAlign: "center" }]}>
-                {it.position}
-              </Text>
+              <Text style={[peakStyles.peakTableCell, { flex: 0.6, textAlign: "center" }]}>{it.position}</Text>
               <Text style={[peakStyles.peakTableCell, { flex: 5 }]}>{it.description}</Text>
               <Text style={[peakStyles.peakTableCell, peakStyles.peakTableCellRight, { flex: 0.9 }]}>
                 {Number(it.qty).toLocaleString("en-US")}
               </Text>
-              <Text style={[peakStyles.peakTableCell, { flex: 0.9, textAlign: "center" }]}>
-                {it.unit}
-              </Text>
+              <Text style={[peakStyles.peakTableCell, { flex: 0.9, textAlign: "center" }]}>{it.unit}</Text>
               <Text style={[peakStyles.peakTableCell, peakStyles.peakTableCellRight, { flex: 1.4 }]}>
                 {fmtBaht(Number(it.amount_thb))}
               </Text>
@@ -300,125 +327,155 @@ function PeakFreightReceiptPage({
         )}
       </View>
 
-      {/* ── Bottom row: orange notes block (left) + totals stack (right) ── */}
-      <View style={peakStyles.peakBottomRow}>
-        <View style={peakStyles.peakNotesBlock}>
-          <Text style={peakStyles.peakNotesLabel}>หมายเหตุ / NOTES</Text>
-          <Text style={peakStyles.peakNotesText}>
-            PCS# {data.invoice_no ?? "—"}
-            {"\n"}INVOICE: {data.invoice_no ?? "—"}
-            {data.job_no && `\nอ้างอิงงานขนส่ง: ${data.job_no}`}
-            {"\n"}ภาษีมูลค่าเพิ่มแยกต่างหาก 7%
-            {"\n"}({readThaiBaht(Number(data.total_thb))})
-          </Text>
-        </View>
-        <View style={peakStyles.peakTotalsBlock}>
-          <View style={peakStyles.peakTotalsRow}>
-            <Text style={peakStyles.peakTotalsLabel}>มูลค่าก่อนหักภาษีฯ</Text>
-            <Text style={peakStyles.peakTotalsValue}>{fmtBaht(preTax)}</Text>
-          </View>
-          {Number(data.duty_thb) > 0 && (
-            <View style={peakStyles.peakTotalsRow}>
-              <Text style={peakStyles.peakTotalsLabel}>อากรขาเข้า</Text>
-              <Text style={peakStyles.peakTotalsValue}>{fmtBaht(Number(data.duty_thb))}</Text>
+      {/* ── 4. Spacer — pushes summary to the bottom of the page ── */}
+      <View style={{ flex: 1 }} />
+
+      {/* ── 5. Summary — 2 columns: words LEFT · big amount box RIGHT ── */}
+      <View style={{ flexDirection: "row", marginBottom: 6 }}>
+        {/* LEFT: สรุป + Thai words */}
+        <View style={{ flex: 1, marginRight: 8 }}>
+          <View style={{ flexDirection: "row" }}>
+            <Text style={{ fontSize: 10, fontWeight: "bold", color: COLORS.foreground, width: 28 }}>สรุป</Text>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
+                <Text style={{ fontSize: 8, fontWeight: "bold", color: COLORS.muted }}>มูลค่าไม่มีหรือยกเว้นภาษี</Text>
+                <Text style={{ fontSize: 8, color: COLORS.foreground }}>{fmtBaht(preTax)} บาท</Text>
+              </View>
+              {Number(data.duty_thb) > 0 && (
+                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
+                  <Text style={{ fontSize: 8, fontWeight: "bold", color: COLORS.muted }}>อากรขาเข้า</Text>
+                  <Text style={{ fontSize: 8, color: COLORS.foreground }}>{fmtBaht(Number(data.duty_thb))} บาท</Text>
+                </View>
+              )}
+              <View style={{ flexDirection: "row", justifyContent: "space-between", borderTopWidth: 0.5, borderTopColor: COLORS.border, paddingTop: 2 }}>
+                <Text style={{ fontSize: 8, fontWeight: "bold", color: COLORS.muted }}>จำนวนเงินทั้งสิ้น</Text>
+                <Text style={{ fontSize: 8, color: COLORS.foreground, flex: 1, textAlign: "right" }}>
+                  {readThaiBaht(grandTotal)}บาทถ้วน
+                </Text>
+              </View>
             </View>
-          )}
-          <View style={peakStyles.peakTotalsRow}>
-            <Text style={peakStyles.peakTotalsLabel}>ภาษีมูลค่าเพิ่ม 7%</Text>
-            <Text style={peakStyles.peakTotalsValue}>{fmtBaht(Number(data.vat_thb))}</Text>
           </View>
-          <View style={[peakStyles.peakTotalsRow, peakStyles.peakTotalsRowLast]}>
-            <Text style={[peakStyles.peakTotalsLabel, peakStyles.peakTotalsLabelBold]}>ภาษีคงเหลือ</Text>
-            <Text style={[peakStyles.peakTotalsValue, peakStyles.peakTotalsValueBold]}>
-              {fmtBaht(Number(data.total_thb))}
+        </View>
+        {/* RIGHT: big amount box */}
+        <View style={{ width: 130 }}>
+          <View style={{ backgroundColor: tintBg, borderRadius: 2, padding: 6, alignItems: "center", marginBottom: 3 }}>
+            <Text style={{ fontSize: 8, fontWeight: "bold", color: COLORS.muted }}>จำนวนเงินทั้งสิ้น</Text>
+            <Text style={{ fontSize: 14, fontWeight: "bold", color: COLORS.foreground, marginTop: 2 }}>
+              {fmtBaht(grandTotal)} บาท
             </Text>
           </View>
-          {Number(data.outstanding_thb) > 0 && (
-            <View style={peakStyles.peakTotalsRow}>
-              <Text style={peakStyles.peakTotalsLabel}>คงค้างชำระ</Text>
-              <Text style={[peakStyles.peakTotalsValue, { color: COLORS.primary }]}>
-                {fmtBaht(Number(data.outstanding_thb))}
-              </Text>
-            </View>
-          )}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 1 }}>
+            <Text style={{ fontSize: 8, fontWeight: "bold", color: COLORS.muted }}>จำนวนเงินที่ถูกหัก ณ ที่จ่าย</Text>
+            <Text style={{ fontSize: 8, color: COLORS.foreground }}>{fmtBaht(showWht ? whtAmount : 0)} บาท</Text>
+          </View>
+          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            <Text style={{ fontSize: 8, fontWeight: "bold", color: COLORS.muted }}>จำนวนเงินที่ชำระ</Text>
+            <Text style={{ fontSize: 8, color: COLORS.foreground }}>{fmtBaht(netPaid)} บาท</Text>
+          </View>
         </View>
       </View>
 
-      {/* ── Compact "ชำระโดย" strip ── */}
-      <View style={peakStyles.peakPayStrip}>
-        <Text style={peakStyles.peakPayLabel}>ชำระโดย</Text>
-        <Text style={peakStyles.peakPayItem}>☐ เงินสด</Text>
-        <Text style={peakStyles.peakPayItem}>☐ เช็ค</Text>
-        <Text style={peakStyles.peakPayItem}>
-          ☑ โอน {BANK.name} {BANK.accountNumber}
+      {/* ── 6. Payment — ชำระเงิน heading + 2-col content ── */}
+      <View style={{ flexDirection: "row", marginBottom: 6 }}>
+        <Text style={{ fontSize: 10, fontWeight: "bold", color: COLORS.foreground, width: 28 }}>ชำระเงิน</Text>
+        <View style={{ flex: 1, flexDirection: "row" }}>
+          {/* LEFT: date + total */}
+          <View style={{ flex: 1, marginRight: 8 }}>
+            <View style={{ flexDirection: "row", marginBottom: 2 }}>
+              <Text style={{ fontSize: 8, fontWeight: "bold", color: COLORS.muted, width: 50 }}>วันที่ชำระ :</Text>
+              <Text style={{ fontSize: 8, color: COLORS.foreground }}>
+                {latestPaymentIso ? formatDateThaiBE(latestPaymentIso) : issueDate ? formatDateThaiBE(issueDate) : "—"}
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row" }}>
+              <Text style={{ fontSize: 8, fontWeight: "bold", color: COLORS.muted, width: 50 }}>จำนวนเงินรวม :</Text>
+              <Text style={{ fontSize: 8, color: COLORS.foreground }}>{fmtBaht(grandTotal)} บาท</Text>
+            </View>
+          </View>
+          {/* RIGHT: bank detail + WHT row */}
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
+              <View>
+                <Text style={{ fontSize: 8, color: COLORS.foreground }}>ธ.กสิกรไทย</Text>
+                <Text style={{ fontSize: 8, fontWeight: "bold", color: COLORS.foreground }}>
+                  ออมทรัพย์ {BANK.accountNumber}
+                </Text>
+                <Text style={{ fontSize: 8, color: COLORS.muted }}>{BANK.accountName}</Text>
+              </View>
+              <Text style={{ fontSize: 8, color: COLORS.foreground }}>{fmtBaht(netPaid)} บาท</Text>
+            </View>
+            {showWht && (
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <Text style={{ fontSize: 8, color: COLORS.foreground }}>ภาษีหัก ณ ที่จ่าย</Text>
+                <Text style={{ fontSize: 8, color: COLORS.foreground }}>{fmtBaht(whtAmount)} บาท</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </View>
+
+      {/* ── 7. หมายเหตุ ── */}
+      <View style={{ flexDirection: "row", marginBottom: 6 }}>
+        <Text style={{ fontSize: 10, fontWeight: "bold", color: COLORS.foreground, width: 28 }}>หมายเหตุ</Text>
+        <Text style={{ fontSize: 8, color: COLORS.foreground, flex: 1 }}>
+          {data.job_no ? `อ้างอิงงานขนส่ง: ${data.job_no}` : ""}
+          {"\n"}สถานะการชำระเงิน: {paymentStatusLabel(data.payment_status)}
         </Text>
       </View>
 
-      {/* ── Payment ledger (if any) ── */}
-      {data.payments.length > 0 && (
-        <View style={peakStyles.peakTable}>
-          <View style={peakStyles.peakTableHead}>
-            <Text style={[peakStyles.peakTableHeadCell, { flex: 2 }]}>วันที่ชำระ</Text>
-            <Text style={[peakStyles.peakTableHeadCell, { flex: 2 }]}>วิธีชำระ</Text>
-            <Text style={[peakStyles.peakTableHeadCell, { flex: 2.5 }]}>อ้างอิง</Text>
-            <Text style={[peakStyles.peakTableHeadCell, { flex: 1.8, textAlign: "right" }]}>
-              จำนวนเงิน (บาท)
-            </Text>
-          </View>
-          {data.payments.map((p, i) => (
-            <View
-              key={`pay-${i}`}
-              style={[
-                peakStyles.peakTableRow,
-                i === data.payments.length - 1 ? peakStyles.peakTableRowLast : {},
-              ]}
-            >
-              <Text style={[peakStyles.peakTableCell, { flex: 2 }]}>{formatDateThaiBE(p.paid_at)}</Text>
-              <Text style={[peakStyles.peakTableCell, { flex: 2 }]}>{p.method}</Text>
-              <Text style={[peakStyles.peakTableCell, { flex: 2.5 }]}>{p.bank_ref ?? "—"}</Text>
-              <Text style={[peakStyles.peakTableCell, peakStyles.peakTableCellRight, { flex: 1.8 }]}>
-                {fmtBaht(Number(p.amount_thb))}
-              </Text>
-            </View>
-          ))}
+      {/* ── 8. Certified — 6 boxes (QR · ผู้ออก · ผู้อนุมัติ · ตราประทับผู้ขาย · ผู้รับลูกค้า · ตราประทับลูกค้า) ── */}
+      <View style={{ flexDirection: "row" }}>
+        {/* heading */}
+        <View style={{ justifyContent: "flex-end", width: 28 }}>
+          <Text style={{ fontSize: 10, fontWeight: "bold", color: COLORS.foreground }}>รับรอง</Text>
         </View>
-      )}
-
-      {/* ── Bottom: QR + 4 signature mini-boxes (Peak format) ── */}
-      <View style={peakStyles.peakBottomFooter}>
-        <View style={peakStyles.peakQrBox}>
-          <Text style={peakStyles.peakQrLabel}>QR Code</Text>
-          <View style={peakStyles.peakQrPlaceholder}>
-            <Text style={peakStyles.peakQrPlaceholderText}>
-              PromptPay{"\n"}{fmtBaht(Number(data.outstanding_thb))} ฿
-            </Text>
+        {/* Box 1: QR */}
+        <View style={{ flex: 1, alignItems: "center", marginRight: 3 }}>
+          <Text style={{ fontSize: 7, fontWeight: "bold", color: COLORS.foreground, marginBottom: 2 }}>สแกนเพื่อเปิดด้วยเว็บไซต์</Text>
+          <View style={[peakStyles.peakQrSmallBox, { marginBottom: 2 }]}>
+            <Text style={peakStyles.peakQrSmallText}>QR</Text>
           </View>
-          <Text style={peakStyles.peakQrCaption}>ชำระผ่าน PromptPay</Text>
         </View>
-        <View style={peakStyles.peakSigGroup}>
-          <View style={peakStyles.peakSigBox}>
-            <Text style={peakStyles.peakSigLabel}>ผู้รับเงิน</Text>
-            <Text style={peakStyles.peakSigName}>_____________</Text>
-            <Text style={peakStyles.peakSigDate}>__/__/____</Text>
-          </View>
-          <View style={peakStyles.peakSigBox}>
-            <Text style={peakStyles.peakSigLabel}>ผู้มีอำนาจ</Text>
-            <Text style={peakStyles.peakSigName}>_____________</Text>
-            <Text style={peakStyles.peakSigDate}>__/__/____</Text>
-          </View>
-          <View style={peakStyles.peakSigBox}>
-            <Text style={peakStyles.peakSigLabel}>ตราประทับ</Text>
-            <Text style={peakStyles.peakSigName}>(ผู้ขาย)</Text>
-          </View>
-          <View style={[peakStyles.peakSigBox, peakStyles.peakSigBoxLast]}>
-            <Text style={peakStyles.peakSigLabel}>ผู้รับเอกสาร</Text>
-            <Text style={peakStyles.peakSigName}>_____________</Text>
-            <Text style={peakStyles.peakSigDate}>__/__/____</Text>
-          </View>
+        {/* Box 2: ผู้ออกเอกสาร */}
+        <View style={{ flex: 1, alignItems: "center", marginRight: 3 }}>
+          <Text style={{ fontSize: 7, fontWeight: "bold", color: COLORS.foreground, marginBottom: 2 }}>ผู้ออกเอกสาร (ผู้ขาย)</Text>
+          <View style={peakStyles.peakSigContent} />
+          <View style={peakStyles.peakSigLine} />
+          <Text style={peakStyles.peakSigRoleLabel}>{" "}</Text>
+          <Text style={peakStyles.peakSigDateLabel}>{formatDateThaiBE(issueDate)}</Text>
+        </View>
+        {/* Box 3: ผู้อนุมัติเอกสาร */}
+        <View style={{ flex: 1, alignItems: "center", marginRight: 3 }}>
+          <Text style={{ fontSize: 7, fontWeight: "bold", color: COLORS.foreground, marginBottom: 2 }}>ผู้อนุมัติเอกสาร (ผู้ขาย)</Text>
+          <View style={peakStyles.peakSigContent} />
+          <View style={peakStyles.peakSigLine} />
+          <Text style={peakStyles.peakSigRoleLabel}>{" "}</Text>
+          <Text style={peakStyles.peakSigDateLabel}>{formatDateThaiBE(issueDate)}</Text>
+        </View>
+        {/* Box 4: ตราประทับ (ผู้ขาย) */}
+        <View style={{ flex: 1, alignItems: "center", marginRight: 3 }}>
+          <Text style={{ fontSize: 7, fontWeight: "bold", color: COLORS.foreground, marginBottom: 2 }}>ตราประทับ (ผู้ขาย)</Text>
+          <View style={peakStyles.peakSigContent} />
+          <View style={peakStyles.peakSigLine} />
+          <Text style={peakStyles.peakSigDateLabel}>{" "}</Text>
+        </View>
+        {/* Box 5: ผู้รับเอกสาร (ลูกค้า) */}
+        <View style={{ flex: 1, alignItems: "center", marginRight: 3 }}>
+          <Text style={{ fontSize: 7, fontWeight: "bold", color: COLORS.foreground, marginBottom: 2 }}>ผู้รับเอกสาร (ลูกค้า)</Text>
+          <View style={{ flex: 1, borderWidth: 0.5, borderColor: COLORS.border, width: "100%", marginBottom: 2 }} />
+          <View style={peakStyles.peakSigLine} />
+          <Text style={peakStyles.peakSigDateLabel}>{data.buyer_name}</Text>
+        </View>
+        {/* Box 6: ตราประทับ (ลูกค้า) */}
+        <View style={{ flex: 1, alignItems: "center" }}>
+          <Text style={{ fontSize: 7, fontWeight: "bold", color: COLORS.foreground, marginBottom: 2 }}>ตราประทับ (ลูกค้า)</Text>
+          <View style={{ flex: 1, borderWidth: 0.5, borderColor: COLORS.border, width: "100%", marginBottom: 2 }} />
+          <View style={peakStyles.peakSigLine} />
+          <Text style={peakStyles.peakSigDateLabel}>{" "}</Text>
         </View>
       </View>
 
-      {/* "ได้รับเงินแล้ว" stamp — drawn when fully paid (not cancelled). */}
+      {/* "ได้รับเงินแล้ว" watermark when fully paid */}
       {isPaid && !isCancelled && (
         <View style={styles.cancelledOverlay} fixed>
           <Text style={[styles.cancelledText, { color: COLORS.muted }]}>
@@ -426,8 +483,6 @@ function PeakFreightReceiptPage({
           </Text>
         </View>
       )}
-
-      {/* Cancelled watermark — drawn LAST so it sits on top of everything. */}
       {isCancelled && (
         <View style={styles.cancelledOverlay} fixed>
           <Text style={styles.cancelledText}>ยกเลิก / CANCELLED</Text>
