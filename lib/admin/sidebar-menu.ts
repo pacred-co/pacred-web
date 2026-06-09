@@ -351,6 +351,19 @@ const itemFreightOperations: MenuItem = {
   icon: "Kanban",
 };
 
+/** 2026-06-09 (W9 · tax-invoice P4) — the CARGO tax-doc 4-role WORKSPACE
+ *  (/admin/pricing/taxdoc-workspace). Carries the THREE numbers
+ *  (SELLING ≠ COST ≠ DECLARED) through the FOUR roles (CS → Pricing → Docs →
+ *  Account) over the tb_cargo_taxdoc_job spine (mig 0161). Read + advance
+ *  workflow only — NO money / issuance / comms. Account stage gated on
+ *  CS + Pricing done. The page + actions gate RBAC themselves
+ *  (super + sales/pricing/freight_import_doc/accounting/ops). */
+const itemTaxdocWorkspace: MenuItem = {
+  labelKey: "taxdocWorkspace.title",
+  href: "/admin/pricing/taxdoc-workspace",
+  icon: "ReceiptText",
+};
+
 /** legacy pcs-admin menu L162-167 — "อัปเดตฝากนำเข้า" (top-level group)
  *  Combines BOTH Wave 17 P1 streams into the single legacy parent:
  *   - P1-1+2 — MOMO + CargoCenter (manualUpdate sub-page only · Phase B
@@ -847,6 +860,8 @@ const menuSuper: MenuSection[] = [
       itemFreightCostRates,
       // 2026-06-09 (เดฟ · tax-invoice P3) — CARGO ใบขนรวม (consolidated customs decl).
       itemCargoDeclarations,
+      // 2026-06-09 (W9 · tax-invoice P4) — CARGO tax-doc 4-role workspace (3 numbers).
+      itemTaxdocWorkspace,
       blockApiForwarderUpdate,
       // 2026-05-21 ภูม flagged — /admin/drivers had no direct super sidebar
       // entry · only reachable via the /admin/forwarders top-menubar
@@ -1037,6 +1052,9 @@ const menuAccounting: MenuSection[] = [
       // 2026-06-09 (เดฟ · tax-invoice P3) — CARGO ใบขนรวม (accounting reviews the
       // declared/duty/VAT before PEAK + ใบกำกับ issuance).
       itemCargoDeclarations,
+      // 2026-06-09 (W9 · tax-invoice P4) — accounting owns the ACCOUNT (close-out)
+      // stage of the CARGO tax-doc 4-role workspace (PEAK + ใบกำกับ readiness).
+      itemTaxdocWorkspace,
       // 2026-06-09 (W4 · freight ops cockpit) — accounting owns the ACC stage
       // (P&L close) on the AX-JOB board.
       itemFreightOperations,
@@ -1099,6 +1117,9 @@ const menuSalesAdmin: MenuSection[] = [
       itemWalletAll,
       itemPurchasingAll,
       { ...itemReportsAll, labelKey: "report.titleSales" },
+      // 2026-06-09 (W9 · tax-invoice P4) — CS owns the CS (selling) stage of
+      // the CARGO tax-doc 4-role workspace (choose doc-mode · confirm selling).
+      itemTaxdocWorkspace,
       // Phase 2 — Marketing/broadcasts/bookings post-launch features per 2026-05-20 brief.
       { labelKey: "broadcasts.title", href: "/admin/broadcasts", icon: "BellRing",      phase: 2 },
       { labelKey: "bookings.title",   href: "/admin/bookings",   icon: "CalendarCheck", badge: "bookingsPending", phase: 2 },
@@ -1551,6 +1572,9 @@ const menuFreightImportDoc: MenuSection[] = [
       // 2026-06-09 (เดฟ · tax-invoice P3) — CARGO ใบขนรวม (the Docs role owns
       // the consolidated cargo declaration + per-line มูลค่าสำแดง).
       itemCargoDeclarations,
+      // 2026-06-09 (W9 · tax-invoice P4) — Docs owns the DOCS (declared/ใบขน)
+      // stage of the CARGO tax-doc 4-role workspace.
+      itemTaxdocWorkspace,
       // Freight shipments — Doc pivots from a shipment to create its declaration.
       { labelKey: "freightImportOps.placeholder", href: "/admin/freight/shipments", icon: "Truck" },
       // Customer lookup — find the shipment owner / cabinet context.
@@ -1629,6 +1653,9 @@ const menuPricing: MenuSection[] = [
   {
     header: "Cargo & Freight",
     items: [
+      // 2026-06-09 (W9 · tax-invoice P4) — the 4-role workspace lands FIRST
+      // (the Pricing role's daily home: capture COST + advance the job).
+      itemTaxdocWorkspace,
       { labelKey: "forwarderImport.title", href: "/admin/forwarders",    icon: "Package" },
       { labelKey: "purchasing.title",      href: "/admin/service-orders", icon: "ShoppingCart" },
       // 2026-06-09 (เดฟ · tax-invoice P3) — pricing captures COST + DECLARED;

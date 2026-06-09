@@ -27,6 +27,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getBusinessConfig } from "@/lib/business-config";
 
 // ────────────────────────────────────────────────────────────────────────
 // Types
@@ -69,6 +70,37 @@ export type EtaxBundle = {
   rows:       EtaxInvoiceRow[];
   totalCount: number;
   totalIssued:{ count: number; vat: number; wht: number; net: number };
+};
+
+// ── W9 (tax-invoice P4) — shop/yuan tax-invoice store READ ───────────────
+// The tb_shop_tax_invoice store (mig 0152) is built DORMANT behind the
+// business_config flag `tax_invoice.shop_yuan_enabled` (= OFF). Issuance is
+// owner-gated; this is a READ-ONLY admin view so accounting can see the store
+// + verify it's empty (or, once the owner flips the flag, monitor issuance).
+export type ShopEtaxRow = {
+  id:           number;
+  service_type: "shop" | "yuan";
+  serial_no:    string | null;
+  userid:       string;
+  buyer_name:   string;
+  buyer_tax_id: string;
+  is_juristic:  boolean;
+  doc_mode:     "tax_invoice" | "customs";
+  base_total:   number;
+  vat_amount:   number;
+  wht_total:    number;
+  net_payable:  number;
+  status:       "issued" | "cancelled";
+  issued_at:    string;
+  issued_by:    string;
+  hno:          string | null;
+  payment_id:   number | null;
+};
+
+export type ShopEtaxBundle = {
+  rows:    ShopEtaxRow[];
+  enabled: boolean;   // the live-gate flag state (false = store dormant)
+  total:   { count: number; vat: number; net: number };
 };
 
 // ────────────────────────────────────────────────────────────────────────
@@ -182,3 +214,70 @@ export async function getEtaxBundle(range: EtaxRange): Promise<EtaxBundle> {
 // module-evaluation — same trap that bit ar-aging via AGING_BUCKETS).
 // The pure XML builder lives at `lib/etax/build-xml.ts` for that reason;
 // the page Server Component imports it directly.
+
+// ────────────────────────────────────────────────────────────────────────
+// 3. W9 — shop/yuan tax-invoice store READ (the dormant tb_shop_tax_invoice).
+// ────────────────────────────────────────────────────────────────────────
+
+export async function getShopEtaxBundle(range: EtaxRange): Promise<ShopEtaxBundle> {
+  const admin = createAdminClient();
+  const gte = `${range.dateFrom}T00:00:00`;
+  const lte = `${range.dateTo}T23:59:59`;
+
+  // The live-gate flag — false = the shop/yuan issuance path is OFF (store stays
+  // empty in prod). We surface its state so accounting knows why rows are empty.
+  const flag = await getBusinessConfig<{ enabled: boolean }>("tax_invoice.shop_yuan_enabled", { enabled: false });
+
+  type Raw = {
+    id: number; service_type: "shop" | "yuan"; serial_no: string | null;
+    userid: string; buyer_name: string; buyer_tax_id: string; is_juristic: boolean;
+    doc_mode: "tax_invoice" | "customs";
+    base_total: number | string | null; vat_amount: number | string | null;
+    wht_total: number | string | null; net_payable: number | string | null;
+    status: "issued" | "cancelled"; issued_at: string; issued_by: string;
+    hno: string | null; payment_id: number | null;
+  };
+  const { data: raw, error } = await admin
+    .from("tb_shop_tax_invoice")
+    .select(
+      "id, service_type, serial_no, userid, buyer_name, buyer_tax_id, is_juristic, doc_mode, " +
+      "base_total, vat_amount, wht_total, net_payable, status, issued_at, issued_by, hno, payment_id",
+    )
+    .gte("issued_at", gte)
+    .lte("issued_at", lte)
+    .order("issued_at", { ascending: false })
+    .limit(5000);
+  if (error) {
+    console.error("[etax-export tb_shop_tax_invoice] failed", { code: error.code, message: error.message });
+  }
+  const rows: ShopEtaxRow[] = ((raw ?? []) as unknown as Raw[]).map((r) => ({
+    id:           r.id,
+    service_type: r.service_type,
+    serial_no:    r.serial_no,
+    userid:       r.userid,
+    buyer_name:   r.buyer_name,
+    buyer_tax_id: r.buyer_tax_id,
+    is_juristic:  r.is_juristic,
+    doc_mode:     r.doc_mode,
+    base_total:   Number(r.base_total  ?? 0),
+    vat_amount:   Number(r.vat_amount  ?? 0),
+    wht_total:    Number(r.wht_total   ?? 0),
+    net_payable:  Number(r.net_payable ?? 0),
+    status:       r.status,
+    issued_at:    r.issued_at,
+    issued_by:    r.issued_by,
+    hno:          r.hno,
+    payment_id:   r.payment_id,
+  }));
+
+  const issued = rows.filter((r) => r.status === "issued");
+  return {
+    rows,
+    enabled: flag.enabled === true,
+    total: {
+      count: issued.length,
+      vat:   issued.reduce((s, r) => s + r.vat_amount, 0),
+      net:   issued.reduce((s, r) => s + r.net_payable, 0),
+    },
+  };
+}
