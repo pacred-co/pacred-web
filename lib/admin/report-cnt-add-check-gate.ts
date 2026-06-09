@@ -16,18 +16,20 @@
  * import action modules. Mirror-vs-import would silently drift; a real
  * shared module + a real import here keeps the action + test in lock-step.
  *
- * Threshold: REPORT_CNT_ADD_CHECK_MIN_FSTATUS = "6" (per the 2026-06-09
- * bug-fix spec). Legacy label per lib/admin/forwarder-status.ts:
- *   "4" = "ถึงไทยแล้ว" (physical arrival)
- *   "5" = "รอชำระเงิน"
- *   "6" = "เตรียมส่ง"   ← current min
- *   "7" = "ส่งแล้ว"      (also accepted — a delivered row CAN re-enter QA
+ * Threshold: REPORT_CNT_ADD_CHECK_MIN_FSTATUS = "4" (= "ถึงไทยแล้ว" =
+ * physical arrival at the TH warehouse). The 2026-06-09 spec said "6"
+ * but that's wrong — per lib/admin/forwarder-status.ts:
+ *   "4" = "ถึงไทยแล้ว"  ← THIS is when QA inspection becomes meaningful
+ *   "5" = "รอชำระเงิน"   (still in TH, just waiting for customer to pay)
+ *   "6" = "เตรียมส่ง"    (already past QA, preparing for delivery)
+ *   "7" = "ส่งแล้ว"       (also accepted — a delivered row CAN re-enter QA
  *                          for a dispute/damage claim)
- * If ภูม wants to accept rows from physical arrival ('4') onwards, lower
- * the constant — the only change point.
+ * ภูม screenshot 2026-06-09 showed rows ticked at fstatus=4 ("ถึงโกดัง
+ * ไทยแล้ว") which SHOULD pass — that's exactly the case this gate exists
+ * to enable. The constant is the only change point if policy shifts.
  */
 
-export const REPORT_CNT_ADD_CHECK_MIN_FSTATUS = "6";
+export const REPORT_CNT_ADD_CHECK_MIN_FSTATUS = "4";
 
 /** Mirror of `FSTATUS_CFG` labels (lib/admin/forwarder-status.ts) — kept
  *  duplicated here so the gate stays import-light (no React/Tailwind
@@ -61,7 +63,7 @@ export type ReportCntAddCheckGateResult =
  * Decide whether the batch may proceed.
  *
  * Returns `{ ok: true }` only when every row's `fstatus >= minFstatus`
- * (legacy single-char-digit string compare — '6' < '7' < '8'…).
+ * (legacy single-char-digit string compare — '4' < '5' < '6'…).
  *
  * Otherwise returns `{ ok: false, … }` with a sample of blocked rows
  * for the staff-facing error message (capped at 5 identifiers — use the
@@ -73,7 +75,7 @@ export type ReportCntAddCheckGateResult =
  *   - `fstatus === null` or `""` → rejected (treated as "<min").
  *   - `fstatus === "7"` (ส่งแล้ว / delivered) → accepted (legacy had no
  *     upper bound; a delivered row CAN re-enter QA for dispute/damage).
- *   - `fstatus` exactly equal to `minFstatus` ("6") → accepted (boundary).
+ *   - `fstatus` exactly equal to `minFstatus` ("4") → accepted (boundary).
  */
 export function evaluateReportCntAddCheckStatus(
   rows: ReportCntAddCheckRow[],
