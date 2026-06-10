@@ -229,6 +229,7 @@ type RawForwarderRow = {
   fstatuscaroff: string | null;       // "1" = ลงรถ
   fdatetothai: string | null;         // ETA base date · transport-type adds offset (±2/±4d)
   fpallet: string | null;             // warehouse pallet location code (e.g. "A-3")
+  fcabinet_locked: boolean | null;    // #259 Option B — cabinet manual-lock flag
 };
 
 type RawUserRow = {
@@ -295,6 +296,9 @@ export type Row = {
   car_off: boolean;            // legacy fstatuscaroff='1' → ลงรถ
   eta_base: string | null;     // legacy fdatetothai · ETA range computed in client
   pallet: string | null;       // legacy fpallet · warehouse location chip
+  /** #259 Option B — true when admin has manually locked the cabinet number.
+   * Partner syncs (MOMO/CTT) will not overwrite it while locked. */
+  cabinet_locked: boolean;
   customer: {
     userid: string;
     name: string;
@@ -849,7 +853,9 @@ export async function fetchForwarderList(
       // Wave 18-B — 7-col fidelity backfill (print badges · car on/off ·
       // ETA base date · pallet code · all from legacy forwarder.php L575-653).
       "printstatus1,printstatus2,printstatus3,printstatus4," +
-      "fstatuscaron,fstatuscaroff,fdatetothai,fpallet",
+      "fstatuscaron,fstatuscaroff,fdatetothai,fpallet," +
+      // #259 Option B — cabinet lock flag (mig 0150)
+      "fcabinet_locked",
       // count:exact only on the common path (no post-fetch shrink) so the
       // pager total matches the rendered rows; the search/6.1 views compute
       // total from the JS-filtered length instead.
@@ -1113,6 +1119,7 @@ export async function fetchForwarderList(
       car_off: r.fstatuscaroff === "1",
       eta_base: eta,
       pallet,
+      cabinet_locked: r.fcabinet_locked === true,
       customer: user
         ? {
             userid: user.userID,

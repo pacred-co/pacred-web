@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState, useTransition, type ChangeEvent } from "react";
+import { Fragment, useMemo, useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { ArrowUpDown } from "lucide-react";
+import { ArrowUpDown, Lock } from "lucide-react";
 import {
   adminBulkUpdateForwarderTbStatus,
   markForwarderPrinted,
@@ -90,6 +90,8 @@ export type Row = {
   car_off: boolean;          // legacy fstatuscaroff='1' → ลงรถ
   eta_base: string | null;   // legacy fdatetothai · ETA range computed in cell
   pallet: string | null;     // legacy fpallet · warehouse location chip
+  /** #259 Option B — true when admin has manually locked the cabinet number. */
+  cabinet_locked: boolean;
   customer: {
     userid: string;
     name: string;
@@ -297,6 +299,89 @@ function isMomoRoutingBatch(cab: string | null | undefined): boolean {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// 2026-06-10 (ภูม flag) — sibling China-tracking grouping (DISPLAY ONLY).
+// MOMO splits one consignment into N tracking numbers with a numeric
+// suffix (base "1779955936" + "1779955936-2" … "-5" = 5 boxes of one
+// shipment, same customer + cabinet) and the MOMO sync commits ONE
+// tb_forwarder row per tracking — so the list showed 5 near-identical
+// rows. Rows on the CURRENT page sharing (baseTracking, userid) collapse
+// into one main row (Σ aggregates + 📦 badge + chevron) with an
+// expandable member sub-table. No DB / sync / server-action change —
+// every tracking stays its own tb_forwarder row.
+//
+// Pagination caveat (accepted limitation): grouping only sees rows on the
+// current page. Siblings are committed together with adjacent ids so they
+// near-always land on the same page; a set straddling a page boundary
+// simply groups what each page has. Pagination itself is untouched.
+// ─────────────────────────────────────────────────────────────────────
+
+/** Strip ONE trailing sibling suffix so box-siblings collapse to a base:
+ *    "1779955936-3"      → "1779955936"   (the "-N" form)
+ *    "302098539663-1/7"  → "302098539663" (the "-N/M" box-of-boxes form · ภูม
+ *                                          flag round 10 — was NOT stripped, so
+ *                                          a 7-box parcel never grouped)
+ *  A value with no suffix keeps itself. Empty/null/"-" never groups. */
+function baseTracking(tracking: string | null): string | null {
+  if (!tracking) return null;
+  const t = tracking.trim();
+  if (!t || t === "-") return null;
+  return t.replace(/-\d+(?:\/\d+)?$/, "");
+}
+
+/** Numeric sibling suffix (the box number) · no suffix → 0 so the base row
+ *  sorts first (= preferred main row), then 1, 2, … Ties broken by id.
+ *  Handles both "-3" and "-3/7" (captures the box number 3). */
+function trackingSuffix(tracking: string | null): number {
+  const m = (tracking ?? "").trim().match(/-(\d+)(?:\/\d+)?$/);
+  return m ? Number(m[1]) : 0;
+}
+
+type DisplayUnit =
+  | { kind: "single"; row: Row }
+  | { kind: "group"; key: string; main: Row; members: Row[] };
+
+/**
+ * Collapse the page's rows into display units, preserving input order.
+ * A group forms only when ≥2 rows share (baseTracking, userid); the group
+ * unit is emitted at the MAIN row's original position and the sibling
+ * members disappear from the normal flow (they render in the sub-table).
+ * Main row = the member with no suffix if present, else lowest suffix.
+ */
+function buildDisplayUnits(rows: Row[]): DisplayUnit[] {
+  const byKey = new Map<string, Row[]>();
+  for (const r of rows) {
+    const base = baseTracking(r.tracking_chn);
+    if (!base) continue; // empty/null tracking never groups
+    const key = `${base}::${r.customer?.userid ?? ""}`;
+    const list = byKey.get(key);
+    if (list) list.push(r);
+    else byKey.set(key, [r]);
+  }
+  const groupOf = new Map<number, { key: string; main: Row; members: Row[] }>();
+  for (const [key, members] of byKey) {
+    if (members.length < 2) continue;
+    const sorted = [...members].sort(
+      (a, b) =>
+        trackingSuffix(a.tracking_chn) - trackingSuffix(b.tracking_chn) ||
+        a.id - b.id,
+    );
+    const g = { key, main: sorted[0]!, members: sorted };
+    for (const m of sorted) groupOf.set(m.id, g);
+  }
+  const units: DisplayUnit[] = [];
+  for (const r of rows) {
+    const g = groupOf.get(r.id);
+    if (!g) {
+      units.push({ kind: "single", row: r });
+    } else if (g.main.id === r.id) {
+      units.push({ kind: "group", key: g.key, main: g.main, members: g.members });
+    }
+    // non-main group members: skipped — rendered inside the sub-table only
+  }
+  return units;
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Lane C 2026-06-02 — sortable column headers (per ภูม flag #3).
 // Module-level component per the cnt-hs-table.tsx pattern (Next 16
 // react-hooks/static-components rule: never define a child component
@@ -400,18 +485,33 @@ export function ForwardersTable({
     if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(k); setSortDir("desc"); }
   };
-  const viewRows = useMemo(() => {
-    if (!sortKey) return rows;
+  // 2026-06-10 (ภูม flag) — sibling-tracking grouping: rows collapse into
+  // display units (single row OR group). Sorting compares the group's MAIN
+  // row value, so a group sorts exactly where its main row would.
+  const viewUnits = useMemo(() => {
+    const units = buildDisplayUnits(rows);
+    if (!sortKey) return units;
     const dir = sortDir === "asc" ? 1 : -1;
-    const out = [...rows].sort((a, b) => {
-      const av = fwSortValue(a, sortKey);
-      const bv = fwSortValue(b, sortKey);
+    return [...units].sort((a, b) => {
+      const ar = a.kind === "group" ? a.main : a.row;
+      const br = b.kind === "group" ? b.main : b.row;
+      const av = fwSortValue(ar, sortKey);
+      const bv = fwSortValue(br, sortKey);
       if (av < bv) return -1 * dir;
       if (av > bv) return 1 * dir;
       return 0;
     });
-    return out;
   }, [rows, sortKey, sortDir]);
+  // Expanded sibling groups, keyed by the group key (base::userid).
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const toggleGroupExpand = (key: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
   // Wave 23 (2026-05-27 ภูม flag): cabinet input in bulk-bar so admin can
   // assign a container (เลขตู้ "GZE-2026-001" etc) to a batch of orders in
   // one shot. Optional — left blank = don't touch fcabinetnumber on the
@@ -426,6 +526,20 @@ export function ForwardersTable({
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  };
+
+  // Group checkbox semantics (2026-06-10 ภูม flag): the main row's checkbox
+  // selects/deselects ALL member ids of the sibling group — the bulk bar +
+  // bulk actions keep working untouched because they already operate on the
+  // individual row ids in `selected`.
+  const toggleGroup = (memberIds: number[]) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const allOn = memberIds.every((id) => next.has(id));
+      if (allOn) memberIds.forEach((id) => next.delete(id));
+      else memberIds.forEach((id) => next.add(id));
       return next;
     });
   };
@@ -558,7 +672,11 @@ export function ForwardersTable({
   const someChecked = selected.size > 0 && selected.size < rows.length;
 
   return (
-    <div className="space-y-3">
+    // 2026-06-10 ภูม flag: when the fixed-bottom bulk bar is up it covered the
+    // last table rows — the checkbox on the bottom row was unreachable. Pad the
+    // page bottom by the bar's height while ≥1 row is selected so the list can
+    // scroll fully clear of the bar.
+    <div className={selected.size > 0 ? "space-y-3 pb-16" : "space-y-3"}>
       <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
         {rows.length === 0 ? (
           <p className="p-12 text-center text-sm text-muted">ไม่มีรายการที่ตรงกัน</p>
@@ -600,13 +718,47 @@ export function ForwardersTable({
                 </tr>
               </thead>
               <tbody>
-                {viewRows.map((r) => {
+                {viewUnits.map((unit) => {
+                  // Sibling-group unit: render the MAIN row in the normal
+                  // position with Σ aggregates; members render only inside
+                  // the expandable sub-table row below.
+                  const r = unit.kind === "group" ? unit.main : unit.row;
+                  const group = unit.kind === "group" ? unit : null;
+                  const memberIds = group ? group.members.map((m) => m.id) : null;
+                  const selCount = memberIds
+                    ? memberIds.filter((id) => selected.has(id)).length
+                    : 0;
+                  const groupAllOn = !!memberIds && selCount === memberIds.length;
+                  const groupSomeOn = !!memberIds && selCount > 0 && selCount < memberIds.length;
+                  const isExpanded = group ? expandedGroups.has(group.key) : false;
+                  const groupBase = group ? baseTracking(r.tracking_chn) : null;
+                  const sameStatus = group
+                    ? group.members.every((m) => m.status === r.status)
+                    : true;
+                  const agg = group
+                    ? {
+                        boxes: group.members.reduce((s, m) => s + (m.amount_count || 0), 0),
+                        weight: group.members.reduce((s, m) => s + (m.weight_kg || 0), 0),
+                        // mirror the single-row display semantics: CBM cell
+                        // shows volume_cbm × box count per row.
+                        cbm: group.members.reduce(
+                          (s, m) => s + (m.volume_cbm || 0) * (m.amount_count || 1),
+                          0,
+                        ),
+                        outstanding: group.members.reduce(
+                          (s, m) => s + (m.outstanding_thb || 0),
+                          0,
+                        ),
+                        allPaid: group.members.every((m) => m.paydeposit === "1"),
+                      }
+                    : null;
+
                   const statusKey = r.status;
                   const badgeCls = STATUS_BADGE[r.status] ?? "bg-gray-50 text-gray-600 border-gray-200";
                   const sLabel = r.fcredit === "1"
                     ? `เครติด · ${statusLabel[r.status] ?? r.status}`
                     : statusLabel[statusKey] ?? statusKey;
-                  const isOn = selected.has(r.id);
+                  const isOn = group ? groupAllOn : selected.has(r.id);
                   // Wave 19 BUG #2 fix — port forwarder.php L623-624 logic
                   // EXACTLY (ภูม catch · "ฝากนำเข้า : ระบบ" wording was wrong ·
                   // legacy refOrder-set = "ฝากสั่งซื้อ : <hNo>" link to shops).
@@ -633,17 +785,32 @@ export function ForwardersTable({
                     : "bg-gray-50 text-gray-600 border-gray-200";
 
                   return (
+                    <Fragment key={group ? `g-${group.key}` : r.id}>
                     <tr
-                      key={r.id}
                       className={`border-t border-border hover:bg-surface-alt/30 ${isOn ? "bg-primary-50/40" : ""}`}
                     >
                       <td className="px-2 py-2.5 w-8">
-                        <input
-                          type="checkbox"
-                          checked={isOn}
-                          onChange={() => toggleRow(r.id)}
-                          aria-label={`เลือก ออเดอร์ #${r.id}`}
-                        />
+                        {group && memberIds ? (
+                          // Main-row checkbox = whole group. Indeterminate
+                          // when only some members are individually checked
+                          // (inside the expanded sub-table).
+                          <input
+                            type="checkbox"
+                            checked={groupAllOn}
+                            ref={(el) => {
+                              if (el) el.indeterminate = groupSomeOn;
+                            }}
+                            onChange={() => toggleGroup(memberIds)}
+                            aria-label={`เลือกกลุ่มพัสดุ ${groupBase ?? ""} ทั้ง ${memberIds.length} รายการ`}
+                          />
+                        ) : (
+                          <input
+                            type="checkbox"
+                            checked={isOn}
+                            onChange={() => toggleRow(r.id)}
+                            aria-label={`เลือก ออเดอร์ #${r.id}`}
+                          />
+                        )}
                       </td>
                       <td className="px-2 py-2.5 font-mono whitespace-nowrap">{r.id}</td>
                       <td className="px-2 py-2.5 whitespace-nowrap text-muted">
@@ -836,27 +1003,58 @@ export function ForwardersTable({
                             rows fall to 0 so they don't distract). Weight + CBM
                             + measurer's admin-id stack below for the same
                             money-chasing context as the legacy layout. */}
-                        {r.outstanding_thb > 0 ? (
-                          <div className="font-mono font-semibold text-red-700">
-                            ฿{r.outstanding_thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                          </div>
-                        ) : r.paydeposit === "1" ? (
-                          <div className="font-mono text-[11px] font-medium text-green-600">
-                            ชำระแล้ว
-                          </div>
+                        {agg ? (
+                          // Sibling group: Σ across all members (each keeps
+                          // its own row in tb_forwarder — display sum only).
+                          <>
+                            {agg.outstanding > 0 ? (
+                              <div className="font-mono font-semibold text-red-700">
+                                ฿{agg.outstanding.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                              </div>
+                            ) : agg.allPaid ? (
+                              <div className="font-mono text-[11px] font-medium text-green-600">
+                                ชำระแล้ว
+                              </div>
+                            ) : (
+                              <div className="font-mono text-muted text-[11px]">—</div>
+                            )}
+                            <div className="text-muted text-[10px] mt-0.5">
+                              Σ {agg.boxes} กล่อง
+                              {agg.weight > 0 && (
+                                <> · {agg.weight.toLocaleString("th-TH", { maximumFractionDigits: 2 })} Kg</>
+                              )}
+                            </div>
+                            {agg.cbm > 0 && (
+                              <div className="text-muted text-[10px]">
+                                Σ {agg.cbm.toLocaleString("th-TH", { maximumFractionDigits: 4 })} CBM
+                              </div>
+                            )}
+                          </>
                         ) : (
-                          <div className="font-mono text-muted text-[11px]">—</div>
-                        )}
-                        <div className="text-muted text-[10px] mt-0.5">
-                          {r.amount_count} กล่อง
-                          {r.weight_kg > 0 && (
-                            <> · {r.weight_kg.toLocaleString("th-TH", { maximumFractionDigits: 2 })} Kg</>
-                          )}
-                        </div>
-                        {r.volume_cbm > 0 && (
-                          <div className="text-muted text-[10px]">
-                            {(r.volume_cbm * (r.amount_count || 1)).toLocaleString("th-TH", { maximumFractionDigits: 4 })} CBM
-                          </div>
+                          <>
+                            {r.outstanding_thb > 0 ? (
+                              <div className="font-mono font-semibold text-red-700">
+                                ฿{r.outstanding_thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                              </div>
+                            ) : r.paydeposit === "1" ? (
+                              <div className="font-mono text-[11px] font-medium text-green-600">
+                                ชำระแล้ว
+                              </div>
+                            ) : (
+                              <div className="font-mono text-muted text-[11px]">—</div>
+                            )}
+                            <div className="text-muted text-[10px] mt-0.5">
+                              {r.amount_count} กล่อง
+                              {r.weight_kg > 0 && (
+                                <> · {r.weight_kg.toLocaleString("th-TH", { maximumFractionDigits: 2 })} Kg</>
+                              )}
+                            </div>
+                            {r.volume_cbm > 0 && (
+                              <div className="text-muted text-[10px]">
+                                {(r.volume_cbm * (r.amount_count || 1)).toLocaleString("th-TH", { maximumFractionDigits: 4 })} CBM
+                              </div>
+                            )}
+                          </>
                         )}
                         {r.measured_by_admin && (
                           <div className="text-[9px] text-muted/70 font-mono mt-0.5" title="แอดมินที่วัดขนาด/ชั่งน้ำหนัก">
@@ -865,7 +1063,45 @@ export function ForwardersTable({
                         )}
                       </td>
                       <td className="px-2 py-2.5">
-                        {r.tracking_chn && r.tracking_chn !== "-" ? (
+                        {group && groupBase ? (
+                          // Sibling group: BASE number + chevron + 📦 badge.
+                          // Both the chevron and the badge toggle the
+                          // expanded member sub-table.
+                          <>
+                            {/* 2026-06-10 ภูม flag: the chevron was a bare ▸
+                                glyph — staff couldn't tell it expands. Make it
+                                a clear pill button (blue bg + border + label). */}
+                            <button
+                              type="button"
+                              onClick={() => toggleGroupExpand(group.key)}
+                              aria-expanded={isExpanded}
+                              title={isExpanded ? "ซ่อนเลขพัสดุในกลุ่ม" : "แสดงเลขพัสดุในกลุ่ม"}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-blue-50 px-1.5 py-1 font-mono text-[10px] text-blue-800 hover:bg-blue-100 transition-colors"
+                            >
+                              <span
+                                aria-hidden
+                                className={`inline-block text-[11px] leading-none transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                              >
+                                ▸
+                              </span>
+                              <span className="font-semibold">{groupBase}</span>
+                            </button>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => toggleGroupExpand(group.key)}
+                                className="inline-flex items-center gap-1 rounded-full bg-blue-600 text-white px-1.5 py-0.5 text-[9px] font-medium hover:bg-blue-700"
+                                title={`พัสดุกลุ่มเดียวกัน ${group.members.length} เลข (MOMO แตกกล่อง) — คลิกดูรายเลข`}
+                              >
+                                📦 {group.members.length} เลขพัสดุ
+                                <span aria-hidden>{isExpanded ? "▲" : "▼"}</span>
+                              </button>
+                              <span className="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[9px]">
+                                {modeLabel[r.transport_type] ?? r.transport_type}
+                              </span>
+                            </div>
+                          </>
+                        ) : r.tracking_chn && r.tracking_chn !== "-" ? (
                           <>
                             <div className="font-mono text-[10px]">{r.tracking_chn}</div>
                             <div className="mt-0.5">
@@ -894,12 +1130,22 @@ export function ForwardersTable({
                                 รอปิดตู้
                               </span>
                             ) : (
-                              <Link
-                                href={`/admin/report-cnt/${encodeURIComponent(r.cabinet_number)}`}
-                                className="font-mono text-primary-600 hover:underline"
-                              >
-                                {r.cabinet_number}
-                              </Link>
+                              <>
+                                <Link
+                                  href={`/admin/report-cnt/${encodeURIComponent(r.cabinet_number)}`}
+                                  className="font-mono text-primary-600 hover:underline"
+                                >
+                                  {r.cabinet_number}
+                                </Link>
+                                {r.cabinet_locked && (
+                                  <span
+                                    className="inline-block ml-1 align-middle"
+                                    title="เลขตู้ถูกล็อก — partner sync จะไม่ทับค่านี้"
+                                  >
+                                    <Lock className="text-amber-500" size={10} aria-hidden />
+                                  </span>
+                                )}
+                              </>
                             )}
                           </div>
                         )}
@@ -932,6 +1178,14 @@ export function ForwardersTable({
                         <span className={`rounded-full border px-2 py-0.5 text-[9px] font-medium whitespace-nowrap ${badgeCls}`}>
                           {sLabel}
                         </span>
+                        {/* Sibling group with mixed member statuses: show the
+                            main row's pill + a hint so the operator expands
+                            to see the per-member states. */}
+                        {group && !sameStatus && (
+                          <div className="mt-0.5 text-[9px] text-gray-500 whitespace-nowrap">
+                            (สถานะต่างกัน)
+                          </div>
+                        )}
                         {r.cabinet_number && (
                           isMomoRoutingBatch(r.cabinet_number) ? (
                             <div
@@ -990,6 +1244,119 @@ export function ForwardersTable({
                         </div>
                       </td>
                     </tr>
+                    {/* Expanded sibling-group detail — full-width row with a
+                        compact sub-table, one line per member (incl. main).
+                        1688-shop-order-item-table style: light gray bg ·
+                        small text · indented. */}
+                    {group && isExpanded && (
+                      <tr className="border-t border-border bg-slate-50">
+                        <td colSpan={14} className="px-3 py-2">
+                          <div className="pl-8">
+                            <div className="mb-1.5 text-[10px] font-medium text-slate-600">
+                              พัสดุในกลุ่ม <span className="font-mono">{groupBase}</span> ·{" "}
+                              {group.members.length} เลข · ลูกค้า{" "}
+                              <span className="font-mono">{r.customer?.userid ?? "—"}</span>
+                            </div>
+                            <table className="w-full max-w-4xl text-[10px]">
+                              <thead>
+                                <tr className="text-left text-[9px] uppercase tracking-wide text-slate-500">
+                                  <th className="px-2 py-1 w-8" aria-label="เลือก" />
+                                  <th className="px-2 py-1 w-8">#</th>
+                                  <th className="px-2 py-1">เลขพัสดุ (จีน)</th>
+                                  <th className="px-2 py-1 text-right">กล่อง</th>
+                                  <th className="px-2 py-1 text-right">น้ำหนัก</th>
+                                  <th className="px-2 py-1 text-right">CBM</th>
+                                  <th className="px-2 py-1">สถานะ</th>
+                                  <th className="px-2 py-1 text-right">ยอดค้าง</th>
+                                  <th className="px-2 py-1">ตัวเลือก</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {group.members.map((m, idx) => {
+                                  const mBadge = STATUS_BADGE[m.status] ?? "bg-gray-50 text-gray-600 border-gray-200";
+                                  const mOn = selected.has(m.id);
+                                  return (
+                                    <tr
+                                      key={m.id}
+                                      className={`border-t border-slate-200 ${mOn ? "bg-primary-50/40" : ""}`}
+                                    >
+                                      <td className="px-2 py-1.5 w-8">
+                                        <input
+                                          type="checkbox"
+                                          checked={mOn}
+                                          onChange={() => toggleRow(m.id)}
+                                          aria-label={`เลือก ออเดอร์ #${m.id}`}
+                                        />
+                                      </td>
+                                      <td className="px-2 py-1.5 text-slate-500">{idx + 1}</td>
+                                      <td className="px-2 py-1.5 font-mono">
+                                        {m.tracking_chn}
+                                        {m.id === r.id && (
+                                          <span className="ml-1 text-[9px] text-blue-600">(หลัก)</span>
+                                        )}
+                                        {/* #259 Option B — lock icon on member row when cabinet is locked */}
+                                        {m.cabinet_locked && m.cabinet_number && (
+                                          <span
+                                            className="inline-block ml-1 align-middle"
+                                            title="เลขตู้ถูกล็อก — partner sync จะไม่ทับค่านี้"
+                                          >
+                                            <Lock className="inline-block text-amber-500" size={9} aria-hidden />
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td className="px-2 py-1.5 text-right">{m.amount_count}</td>
+                                      <td className="px-2 py-1.5 text-right">
+                                        {m.weight_kg > 0
+                                          ? `${m.weight_kg.toLocaleString("th-TH", { maximumFractionDigits: 2 })} Kg`
+                                          : "—"}
+                                      </td>
+                                      <td className="px-2 py-1.5 text-right">
+                                        {m.volume_cbm > 0
+                                          ? (m.volume_cbm * (m.amount_count || 1)).toLocaleString("th-TH", { maximumFractionDigits: 4 })
+                                          : "—"}
+                                      </td>
+                                      <td className="px-2 py-1.5">
+                                        <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-medium whitespace-nowrap ${mBadge}`}>
+                                          {statusLabel[m.status] ?? m.status}
+                                        </span>
+                                      </td>
+                                      <td className="px-2 py-1.5 text-right font-mono">
+                                        {m.outstanding_thb > 0 ? (
+                                          <span className="text-red-700">
+                                            ฿{m.outstanding_thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                                          </span>
+                                        ) : m.paydeposit === "1" ? (
+                                          <span className="text-green-600">ชำระแล้ว</span>
+                                        ) : (
+                                          <span className="text-slate-400">—</span>
+                                        )}
+                                      </td>
+                                      <td className="px-2 py-1.5">
+                                        <div className="flex flex-wrap gap-1">
+                                          <Link
+                                            href={`/admin/forwarders/${m.id}`}
+                                            className="rounded border border-green-500 bg-green-50 text-green-700 text-[9px] px-1.5 py-0.5 hover:bg-green-100 whitespace-nowrap"
+                                          >
+                                            ดูข้อมูล
+                                          </Link>
+                                          <Link
+                                            href={`/admin/forwarders/${m.id}`}
+                                            className="rounded border border-orange-500 bg-orange-50 text-orange-700 text-[9px] px-1.5 py-0.5 hover:bg-orange-100 whitespace-nowrap"
+                                          >
+                                            อัปเดต
+                                          </Link>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -1017,38 +1384,38 @@ export function ForwardersTable({
           aria-label="บาร์เปลี่ยนสถานะกลุ่ม"
           className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white dark:bg-surface shadow-[0_-2px_10px_rgba(0,0,0,0.06)] pcs-safe-area-bottom"
         >
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3 lg:px-8">
-            <span className="text-sm font-medium">
-              เลือกแล้ว <b className="text-primary-600">{selected.size}</b> รายการ
+          {/* 2026-06-10 ภูม flag: the bar was 2 rows tall (flex-wrap) and
+              covered the bottom of the list. Compact single row — smaller
+              paddings, shorter labels, narrower cabinet input. Long titles
+              stay discoverable via the title= tooltips. */}
+          <div className="mx-auto flex max-w-7xl flex-nowrap items-center gap-2 overflow-x-auto px-3 py-1.5 lg:px-6">
+            <span className="shrink-0 text-xs font-medium whitespace-nowrap">
+              เลือก <b className="text-primary-600">{selected.size}</b>
             </span>
-            <label className="flex items-center gap-2 text-sm">
-              <span className="text-muted">เปลี่ยนสถานะเป็น</span>
-              <select
-                value={bulkStatus}
-                onChange={(e) => setBulkStatus(e.target.value as BulkStatusValue)}
-                disabled={pending}
-                className="rounded-md border border-border bg-white px-2 py-1.5 text-sm"
-              >
-                {BULK_STATUS_OPTIONS.map((o) => (
-                  <option key={o.v} value={o.v}>{o.l}</option>
-                ))}
-              </select>
-            </label>
+            <select
+              value={bulkStatus}
+              onChange={(e) => setBulkStatus(e.target.value as BulkStatusValue)}
+              disabled={pending}
+              aria-label="เปลี่ยนสถานะเป็น"
+              className="shrink-0 rounded-md border border-border bg-white px-2 py-1 text-xs"
+            >
+              {BULK_STATUS_OPTIONS.map((o) => (
+                <option key={o.v} value={o.v}>{o.l}</option>
+              ))}
+            </select>
             {/* Cabinet input — Wave 23 ภูม flag: assign เลขตู้ (GZE/GZS) to
                 the selected batch in one shot. Blank = don't touch. */}
-            <label className="flex items-center gap-2 text-sm">
-              <span className="text-muted whitespace-nowrap">เลขตู้</span>
-              <input
-                type="text"
-                value={bulkCabinet}
-                onChange={(e) => setBulkCabinet(e.target.value)}
-                disabled={pending}
-                maxLength={300}
-                placeholder="GZE-2026-001 (เว้นว่าง = ไม่เปลี่ยน)"
-                className="rounded-md border border-border bg-white px-2 py-1.5 text-sm font-mono w-56"
-              />
-            </label>
-            <div className="ml-auto flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              value={bulkCabinet}
+              onChange={(e) => setBulkCabinet(e.target.value)}
+              disabled={pending}
+              maxLength={300}
+              placeholder="เลขตู้ (เว้นว่าง = ไม่เปลี่ยน)"
+              title="กำหนดเลขตู้ GZE/GZS ให้รายการที่เลือก — เว้นว่างถ้าไม่ต้องการเปลี่ยน"
+              className="shrink-0 rounded-md border border-border bg-white px-2 py-1 text-xs font-mono w-44"
+            />
+            <div className="ml-auto flex flex-nowrap items-center gap-1.5">
               {/* Faithful port of legacy printAll.php bottom-left trio.
                   Print buttons open the 100×75mm label sheet in a new tab and
                   do NOT clear the selection (so the operator can print both
@@ -1057,19 +1424,19 @@ export function ForwardersTable({
                 type="button"
                 onClick={() => onPrintLabels(1)}
                 disabled={pending}
-                className="rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                className="shrink-0 rounded-md border border-blue-300 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50 whitespace-nowrap"
                 title="พิมพ์ป้ายติดหน้ากล่อง (100×75mm) — รหัสลูกค้า + QR + น้ำหนัก/ปริมาตร"
               >
-                🖨 พิมพ์จากหน้ากล่อง
+                🖨 ป้ายกล่อง
               </button>
               <button
                 type="button"
                 onClick={() => onPrintLabels(4)}
                 disabled={pending}
-                className="rounded-md border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50"
+                className="shrink-0 rounded-md border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50 whitespace-nowrap"
                 title="พิมพ์ป้ายที่อยู่ส่งสินค้า (100×75mm) — ชื่อ + ที่อยู่ + บริษัทขนส่ง"
               >
-                🏷 พิมพ์ที่อยู่ส่งสินค้า
+                🏷 ป้ายที่อยู่
               </button>
               <button
                 type="button"
@@ -1077,8 +1444,8 @@ export function ForwardersTable({
                 disabled={pending}
                 className={
                   inSpecialLane
-                    ? "rounded-md border border-gray-300 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50"
-                    : "rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                    ? "shrink-0 rounded-md border border-gray-300 bg-gray-50 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50 whitespace-nowrap"
+                    : "shrink-0 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50 whitespace-nowrap"
                 }
                 title={
                   inSpecialLane
@@ -1086,14 +1453,14 @@ export function ForwardersTable({
                     : "เพิ่มรายการที่เลือกไปยังสถานะพิเศษ (พิเศษ / 99)"
                 }
               >
-                {inSpecialLane ? "↩ ย้ายกลับสถานะปกติ" : "⭐ เพิ่มไปสถานะพิเศษ"}
+                {inSpecialLane ? "↩ กลับสถานะปกติ" : "⭐ สถานะพิเศษ"}
               </button>
-              <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+              <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
               <button
                 type="button"
                 onClick={clearSelection}
                 disabled={pending}
-                className="rounded-md border border-border bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface-alt disabled:opacity-50"
+                className="shrink-0 rounded-md border border-border bg-white px-2 py-1 text-xs font-medium hover:bg-surface-alt disabled:opacity-50 whitespace-nowrap"
               >
                 ยกเลิก
               </button>
@@ -1101,9 +1468,9 @@ export function ForwardersTable({
                 type="button"
                 onClick={onBulkSubmit}
                 disabled={pending}
-                className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                className="shrink-0 rounded-md bg-primary-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed whitespace-nowrap"
               >
-                {pending ? "กำลังอัพเดต..." : `อัพเดตสถานะ ${selected.size} รายการ`}
+                {pending ? "กำลังอัพเดต..." : `อัพเดต ${selected.size} รายการ`}
               </button>
             </div>
             {/* V-G1 — driver-assign + cancel bulk actions (faithful

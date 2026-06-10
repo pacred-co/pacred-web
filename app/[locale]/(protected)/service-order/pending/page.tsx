@@ -1,13 +1,37 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { listServiceOrders } from "@/actions/service-order";
+import { createClient } from "@/lib/supabase/server";
+import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 import { ServiceOrderList } from "../service-order-list";
+
+// Reads cookies/auth (listServiceOrders + wallet balance) → must be dynamic.
+export const dynamic = "force-dynamic";
 
 export default async function ServiceOrderPendingPage() {
   const t = await getTranslations("serviceOrder");
   // Legacy hstatus codes: '1' = รอดำเนินการ, '2' = รอชำระเงิน.
   const res = await listServiceOrders({ status: ["2", "1"], limit: 100 });
   const items = res.ok ? (res.data ?? []) : [];
+
+  // Wallet balance feeds the bulk pay-from-wallet pre-check in <ServiceOrderList>
+  // (same source the main /service-order list + the detail page use). The
+  // server action re-verifies balance per row, so this is a display-only gate.
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authErr,
+  } = await supabase.auth.getUser();
+  if (authErr) {
+    // Non-fatal — fall through to a 0 balance so the bulk-pay button stays
+    // disabled (the server action is the real money gate). Log for visibility.
+    console.error(`[service-order/pending] auth.getUser failed`, {
+      code: authErr.code, message: authErr.message,
+    });
+  }
+  const walletBalance = user
+    ? (await getWalletAvailableBalance(supabase, user.id)) ?? 0
+    : 0;
 
   return (
     <>
@@ -26,7 +50,7 @@ export default async function ServiceOrderPendingPage() {
           </Link>
         </div>
 
-        <ServiceOrderList items={items} />
+        <ServiceOrderList items={items} walletBalance={walletBalance} />
       </main>
     </>
   );

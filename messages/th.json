@@ -5222,6 +5222,20 @@
     "footerRed": "• <b>แดง = ทีม Pacred แก้ไขอยู่</b> — คาดว่าจะแก้ไขเสร็จภายในไม่กี่นาที",
     "footerEmergency": "• แจ้งปัญหาฉุกเฉิน LINE OA <chat>{lineId}</chat> หรือโทร <call>{phone}</call>"
   },
+  "publicReceipt": {
+    "title": "ใบเสร็จรับเงิน",
+    "heading": "ใบเสร็จรับเงิน",
+    "manageDoc": "จัดการเอกสาร",
+    "fullScreen": "เต็มจอ",
+    "paperView": "มุมมองกระดาษ",
+    "login": "เข้าสู่ระบบ",
+    "print": "พิมพ์",
+    "downloadPdf": "ดาวน์โหลด PDF",
+    "downloadPdfHint": "ในหน้าต่างพิมพ์ เลือกปลายทางเป็น \"บันทึกเป็น PDF\"",
+    "englishVersion": "English Version",
+    "thaiVersion": "เวอร์ชันภาษาไทย",
+    "close": "ปิด"
+  },
   "pcsTopMenu": {
     "followUsOn": "ติดตามเราบน",
     "depositRate": "ฝากสั่ง",

@@ -119,6 +119,162 @@ export async function fetchUsersByCoid(
 }
 
 // ────────────────────────────────────────────────────────────
+// searchCustomers — direct customer search across ALL coIDs.
+// ภูม flag round 9 (2026-06-10): the coID-first cascade can't reach the
+// majority of customers — most have coID="PR", which is NOT a selectable
+// tb_co row (the dropdown lists OOAEOM.VIP/PCS/PRO3.15/VIP1-5/… but never
+// "PR"), so picking any tier never lists them. This searches tb_users by
+// PR-code / name / phone with NO coID gate, returning each match's coID so
+// the form can fill the tier from the customer it found.
+// ────────────────────────────────────────────────────────────
+
+export type CustomerSearchResult = CustomerOption & { coID: string | null };
+
+export async function searchCustomers(
+  query: string,
+): Promise<AdminActionResult<{ customers: CustomerSearchResult[] }>> {
+  return withAdmin<{ customers: CustomerSearchResult[] }>(
+    ["ops", "accounting", "super"],
+    async () => {
+      // Sanitize before it goes into the PostgREST `.or()` filter string:
+      // strip the chars that would break that syntax / inject extra clauses
+      // ( , ( ) * % \ ) and cap the length. (Admin-gated, but keep it clean.)
+      const raw = query.replace(/[(),*%\\]/g, " ").trim().slice(0, 40);
+      if (raw.length < 2) return { ok: true, data: { customers: [] } };
+
+      const admin = createAdminClient();
+      const code = raw.toUpperCase();
+
+      const { data, error } = await admin
+        .from("tb_users")
+        .select("userID, userName, userLastName, userTel, coID")
+        .or(
+          `userID.ilike.%${code}%,userName.ilike.%${raw}%,userLastName.ilike.%${raw}%,userTel.ilike.%${raw}%`,
+        )
+        .eq("userStatus", "1")
+        .order("userID", { ascending: true })
+        .limit(30);
+
+      if (error) return { ok: false, error: error.message };
+      return {
+        ok: true,
+        data: { customers: (data ?? []) as unknown as CustomerSearchResult[] },
+      };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// fetchUsersByGroup — list customers by the SAME clean member-type
+// categories /admin/customers uses (its "ตามประเภท" menu), so the
+// create-order form's tier dropdown shows ลูกค้าทั่วไป / VIP / SVIP /
+// นิติบุคคล / เครดิต / คิดค่าเทียบ instead of the raw tb_co junk rows
+// (OOAEOM.VIP / SALE.PEPO / SWAN / …). ภูม flag round 10 (รูป 2).
+//
+// Mirrors /admin/customers/page.tsx exactly:
+//   - corporate/credit/comparison → hard DB flag (userCompany/userCredit/
+//     userComparison = '1'), the same three varchar(1) segment flags.
+//   - general → the default coID tier (coID in "", "PCS", "GENERAL").
+//   - vip → any NON-default coID (= isVipCoid). PostgREST `.not(col,in,…)`
+//     quoting with an empty-string member is fragile, so we fetch the
+//     coID-bearing rows and filter in JS with the same isVipCoid predicate
+//     /admin/customers uses — guaranteed identical buckets.
+//   - svip → best-effort coID prefix "SVIP%" (no dedicated SVIP flag in
+//     tb_users; the direct search backstops if it returns nothing).
+//   - freight → tb_users has NO freight flag (freight customers live in
+//     freight_quotes/freight_shipments, keyed by profile, not a tb_users
+//     column) → return empty + ok:true; the universal search covers them.
+// ────────────────────────────────────────────────────────────
+
+export type CustomerGroup =
+  | "general"
+  | "vip"
+  | "svip"
+  | "corporate"
+  | "credit"
+  | "comparison"
+  | "freight";
+
+// "" / "PCS" / "GENERAL" all = ลูกค้าทั่วไป (the default tier). Anything else
+// = a non-default VIP-style coID. Same predicate as /admin/customers isVipCoid.
+const GENERAL_COIDS = ["", "PCS", "GENERAL"] as const;
+function isVipCoidValue(coid: string | null | undefined): boolean {
+  if (!coid) return false;
+  const v = coid.trim().toUpperCase();
+  return v !== "" && v !== "PCS" && v !== "GENERAL";
+}
+
+export async function fetchUsersByGroup(
+  group: CustomerGroup,
+): Promise<AdminActionResult<{ users: CustomerSearchResult[] }>> {
+  return withAdmin<{ users: CustomerSearchResult[] }>(
+    ["ops", "accounting", "super"],
+    async () => {
+      const admin = createAdminClient();
+      const SELECT = "userID, userName, userLastName, userTel, coID";
+
+      // freight — no tb_users flag exists; the universal search backstops.
+      if (group === "freight") {
+        return { ok: true, data: { users: [] } };
+      }
+
+      // vip — fetch the active customers + filter to non-default coID in JS
+      // (exact isVipCoid parity, avoids the awkward PostgREST `.not(in)`).
+      if (group === "vip") {
+        const { data, error } = await admin
+          .from("tb_users")
+          .select(SELECT)
+          .eq("userStatus", "1")
+          .not("coID", "in", `(${GENERAL_COIDS.map((c) => `"${c}"`).join(",")})`)
+          .order("userID", { ascending: true })
+          .limit(500);
+        if (error) {
+          // Fallback: some PostgREST builds reject the quoted empty-string
+          // member in `.not(in)`. Fetch the page and filter in JS instead.
+          const { data: all, error: allErr } = await admin
+            .from("tb_users")
+            .select(SELECT)
+            .eq("userStatus", "1")
+            .order("userID", { ascending: true })
+            .limit(2000);
+          if (allErr) return { ok: false, error: allErr.message };
+          const vips = ((all ?? []) as unknown as CustomerSearchResult[])
+            .filter((u) => isVipCoidValue(u.coID))
+            .slice(0, 500);
+          return { ok: true, data: { users: vips } };
+        }
+        return {
+          ok: true,
+          data: { users: (data ?? []) as unknown as CustomerSearchResult[] },
+        };
+      }
+
+      // The remaining groups map to a single .eq / .in DB filter.
+      let q = admin
+        .from("tb_users")
+        .select(SELECT)
+        .eq("userStatus", "1");
+
+      if (group === "corporate")        q = q.eq("userCompany", "1");
+      else if (group === "credit")      q = q.eq("userCredit", "1");
+      else if (group === "comparison")  q = q.eq("userComparison", "1");
+      else if (group === "general")     q = q.in("coID", [...GENERAL_COIDS]);
+      else if (group === "svip")        q = q.ilike("coID", "SVIP%");
+
+      const { data, error } = await q
+        .order("userID", { ascending: true })
+        .limit(500);
+
+      if (error) return { ok: false, error: error.message };
+      return {
+        ok: true,
+        data: { users: (data ?? []) as unknown as CustomerSearchResult[] },
+      };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────
 // fetchAddressesByUserid — used by client form after a user is picked.
 // Returns the customer's tb_address rows + a flag marking which one is
 // the "main" address (joined via tb_address_main).

@@ -23,13 +23,15 @@
  * tb_address rows (or hardcoded to PCS pickup when fShipBy='PCS').
  *
  * Server fetch (this page):
- *   - tb_co list (all member tiers — small table)
  *   - tb_settings.freeShipping flag (controls whether "PCSF · เหมาๆ 50บ." appears)
  *   - Optional preset user from ?q=PR1234 (also fetch their coid + addresses
  *     so the form opens at the right step).
  *
- * Cascading lookups happen client-side via server actions defined in
- * actions/admin/forwarders-new.ts (fetchUsersByCoid + fetchAddressesByUserid).
+ * Member-type group + cascading lookups happen client-side via server actions
+ * in actions/admin/forwarders-new.ts (fetchUsersByGroup + fetchAddressesByUserid).
+ * The member-type dropdown now lists the SAME clean categories /admin/customers
+ * uses (ลูกค้าทั่วไป · VIP · SVIP · นิติบุคคล · เครดิต · คิดค่าเทียบ · Freight) —
+ * the raw tb_co table is no longer fetched here (ภูม flag round 10).
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
@@ -45,9 +47,6 @@ export const dynamic = "force-dynamic";
 
 type SP = { q?: string };
 
-type CoidOption = { coid: string; coname: string };
-type CoidRow = { coID: string; coName: string };
-
 export default async function AdminForwarderNewPage({
   searchParams,
 }: {
@@ -57,21 +56,6 @@ export default async function AdminForwarderNewPage({
 
   const sp = await searchParams;
   const admin = createAdminClient();
-
-  // ─── tb_co (member tiers) ────────────────────────────────────────────
-  const { data: coRaw, error: coRawErr } = await admin
-    .from("tb_co")
-    .select("coID, coName")
-    .eq("coStatus", "1")
-    .order("coID", { ascending: true })
-    .limit(100);
-  if (coRawErr) {
-    console.error(`[tb_co list] failed`, { code: coRawErr.code, message: coRawErr.message });
-  }
-  const coidList: CoidOption[] = ((coRaw ?? []) as unknown as CoidRow[]).map((c) => ({
-    coid: c.coID,
-    coname: c.coName,
-  }));
 
   // ─── tb_settings.freeShipping ───────────────────────────────────────
   // Legacy `optionHShipByCart()` prepends the "PCSF · เหมาๆ 50บ." option
@@ -189,7 +173,6 @@ export default async function AdminForwarderNewPage({
       </div>
 
       <AdminForwarderNewForm
-        coidList={coidList}
         freeShipping={freeShipping}
         presetUser={presetUser}
         presetCoid={presetCoid}

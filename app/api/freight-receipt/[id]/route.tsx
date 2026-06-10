@@ -38,9 +38,11 @@
 
 import { NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
+import QRCode from "qrcode";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { registerPdfFonts } from "@/lib/pdf/register-fonts";
+import { SITE_URL } from "@/components/seo/site";
 import { FreightReceipt, type FreightReceiptData } from "@/components/pdf/freight-receipt";
 import { getFreightReceiptGate } from "@/actions/admin/freight-invoice-payments";
 import {
@@ -221,6 +223,17 @@ export async function GET(
     console.error(`[freight_shipments list] failed`, { code: shipmentErr.code, message: shipmentErr.message });
   }
   data.job_no = shipment?.job_no ?? null;
+
+  // Peak "สแกนเพื่อเปิดด้วยเว็บไซต์" QR — scanning the printed receipt opens
+  // the customer-facing print view of this document on the web.
+  try {
+    data.qr_data_url = await QRCode.toDataURL(
+      `${SITE_URL}/freight/receipts/print/${id}`,
+      { width: 160, margin: 0, color: { dark: "#111827", light: "#FFFFFF" } },
+    );
+  } catch (e) {
+    console.error("[freight-receipt qr] generation failed — falling back to placeholder", e);
+  }
 
   const filename = `pacred-freight-${invoice.invoice_no ?? id}.pdf`;
   const buffer = await renderToBuffer(<FreightReceipt data={data} />);

@@ -518,11 +518,8 @@ export default async function AdminServiceOrdersPage({
             ✅ 7 status tabs with counts · date range filter · sort arrows · action button cluster ·
             cover image · VIP/นิติ/sale badges · bulk-print bar · keyword search ·
             page-size dropdown · &ldquo;ผ่านมา&rdquo; relative time ·{" "}
-            <span className="opacity-75">
-              ⏳ พิมพ์ใบเสร็จ/แจ้งหนี้ links to /service-order/print which pins to the
-              logged-in customer&apos;s userID (admin-side print needs a separate
-              route with admin auth · deferred — flagged for next session)
-            </span>
+            ✅ พิมพ์ใบเสร็จ/แจ้งหนี้ → admin-auth print route /admin/service-orders/print
+            (no customer-userID pin · staff print any order · row + bulk + detail links wired)
           </div>
         </div>
 

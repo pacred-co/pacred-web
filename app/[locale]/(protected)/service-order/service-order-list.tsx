@@ -5,8 +5,19 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import type { ServiceOrderSummary } from "@/actions/service-order";
-import { cancelServiceOrder } from "@/actions/service-order";
+import {
+  cancelServiceOrder,
+  payServiceOrderFromWallet,
+} from "@/actions/service-order";
 import { confirm } from "@/components/ui/confirm";
+// Shared, unit-tested bulk-pay helpers — same module the proven E10
+// <ServiceOrderBulkActionsBar> on the main /service-order list uses, so the
+// wallet pre-check + the loop summary can never drift between the two surfaces.
+import {
+  canCoverBulkPay,
+  summariseLoopResults,
+  type LoopOutcome,
+} from "@/lib/service-order/bulk-eligibility";
 import { Eye, Package, Printer, FileText, XCircle, Wallet } from "lucide-react";
 
 // D1 Phase-B Wave 2: rows carry the legacy tb_header_order.hstatus code
@@ -43,14 +54,23 @@ const INVOICEABLE: ServiceOrderSummary["status"][] = ["2", "3", "4", "5"];
 export function ServiceOrderList({
   items,
   activeFilter = "all",
+  walletBalance = 0,
 }: {
   items: ServiceOrderSummary[];
   activeFilter?: string;
+  /** Available wallet balance (THB) — gates the bulk pay-from-wallet button.
+   *  The server action re-verifies balance per row, so this is display-only. */
+  walletBalance?: number;
 }) {
   const t = useTranslations("serviceOrder");
   const tp = useTranslations("pcsOrder");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  // Which bulk loop is in flight — drives the per-button spinner label so a
+  // bulk-cancel doesn't show "กำลังชำระเงิน…" and vice-versa.
+  const [bulkMode, setBulkMode] = useState<"idle" | "cancel" | "pay">("idle");
+  // Result banner for the bulk pay-from-wallet loop (success / stopped-at).
+  const [payBanner, setPayBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
   // Selection drives the legacy bulk-cancel button + the sticky pay bar.
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -71,6 +91,12 @@ export function ServiceOrderList({
   const payTotal = useMemo(
     () => selectedPayable.reduce((s, o) => s + Number(o.total_thb), 0),
     [selectedPayable],
+  );
+  // Wallet pre-check — same helper the E10 bar uses. Disables the pay button +
+  // drives the shortfall hint when the selection exceeds the wallet balance.
+  const coverage = useMemo(
+    () => canCoverBulkPay({ walletBalance, totalRequired: payTotal }),
+    [walletBalance, payTotal],
   );
 
   function toggle(hNo: string) {
@@ -93,12 +119,85 @@ export function ServiceOrderList({
   }
 
   async function onBulkCancel() {
+    if (pending) return;
     const targets = selectedCancellable.map((o) => o.h_no).filter(Boolean) as string[];
     if (targets.length === 0) return;
     if (!(await confirm(tp("bulkCancelConfirm", { count: targets.length })))) return;
+    setBulkMode("cancel");
     startTransition(async () => {
       await Promise.all(targets.map((hNo) => cancelServiceOrder(hNo)));
       setSelected(new Set());
+      setBulkMode("idle");
+      router.refresh();
+    });
+  }
+
+  // ── BULK PAY-FROM-WALLET — parity with the proven E10
+  // <ServiceOrderBulkActionsBar>: sequential `for...of` that STOPS ON FIRST
+  // FAILURE (AGENTS.md §0e — never keep draining the wallet on a partial
+  // failure), confirm-before-mutate (§0f), wallet pre-check, result banner.
+  // ZERO new money logic — each row delegates to the existing
+  // payServiceOrderFromWallet action, which re-verifies ownership / status /
+  // balance / idempotency server-side per row.
+  async function onBulkPay() {
+    if (pending) return;
+    const targets = selectedPayable.map((o) => o.h_no).filter(Boolean) as string[];
+    if (targets.length === 0) return;
+    if (!coverage.ok) {
+      setPayBanner({
+        kind: "err",
+        text: t("walletInsufficient", {
+          have: walletBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 }),
+          need: payTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 }),
+          short: coverage.shortfall.toLocaleString("th-TH", { minimumFractionDigits: 2 }),
+        }),
+      });
+      return;
+    }
+    if (
+      !(await confirm(
+        t("bulkPayConfirm", {
+          count: targets.length,
+          total: payTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 }),
+        }),
+      ))
+    )
+      return;
+    setPayBanner(null);
+    setBulkMode("pay");
+    startTransition(async () => {
+      const out: LoopOutcome[] = [];
+      let stoppedAt: string | null = null;
+      let stopReason: string | null = null;
+      for (const hNo of targets) {
+        const res = await payServiceOrderFromWallet(hNo);
+        if (res.ok) {
+          out.push({ ok: true, hno: hNo });
+        } else {
+          out.push({ ok: false, hno: hNo, error: res.error });
+          stoppedAt = hNo;
+          stopReason = res.error;
+          break; // STOP — protect the wallet from continuing failures
+        }
+      }
+      const summary = summariseLoopResults(out);
+      if (summary.failed === 0) {
+        setPayBanner({ kind: "ok", text: t("bulkPaySuccess", { count: summary.total }) });
+        setSelected(new Set());
+        setTimeout(() => setPayBanner(null), 4000);
+      } else {
+        setPayBanner({
+          kind: "err",
+          text: t("bulkPayStoppedAt", {
+            hno: stoppedAt ?? "",
+            reason: stopReason ?? "",
+            ok: summary.ok,
+            total: targets.length,
+          }),
+        });
+      }
+      setBulkMode("idle");
+      // Refresh either way so successfully-paid rows leave the รอชำระเงิน view.
       router.refresh();
     });
   }
@@ -137,7 +236,8 @@ export function ServiceOrderList({
             disabled={pending}
             className="inline-flex items-center gap-1.5 rounded-full bg-red-600 text-white px-3 py-1.5 text-xs font-semibold hover:bg-red-700 disabled:opacity-50"
           >
-            <XCircle className="w-3.5 h-3.5" /> {tp("bulkCancel")}
+            <XCircle className="w-3.5 h-3.5" />{" "}
+            {pending && bulkMode === "cancel" ? t("cancelling") : tp("bulkCancel")}
           </button>
         </div>
       )}
@@ -289,17 +389,19 @@ export function ServiceOrderList({
         </div>
       </div>
 
-      {/* Sticky "ชำระเงิน" bar — legacy .b-pay fixed bottom bar */}
+      {/* Sticky "ชำระเงิน" bar — legacy .b-pay fixed bottom bar. Real bulk
+          pay-from-wallet (multi-select → one debit per order, stop on first
+          failure) — parity with the E10 bar on the main /service-order list. */}
       {payableRows.length > 0 && (
         <div className="sticky bottom-3 z-30 mx-auto max-w-[680px]">
           <div className="rounded-2xl border border-primary-200 bg-white dark:bg-surface shadow-sm shadow-primary-900/10 px-4 py-3">
             <div className="flex items-center justify-between gap-3 flex-wrap">
-              <label className="flex items-center gap-2 text-xs sm:text-sm">
+              <label className="flex items-center gap-2 text-xs sm:text-sm min-h-[44px] cursor-pointer">
                 <input
                   type="checkbox"
                   checked={payableRows.every((o) => o.h_no && selected.has(o.h_no))}
                   onChange={toggleAllPayable}
-                  className="accent-primary-600"
+                  className="h-5 w-5 accent-primary-600"
                 />
                 <span className="text-muted">{t("selectAll", { selected: selectedPayable.length, total: payableRows.length })}</span>
               </label>
@@ -311,22 +413,43 @@ export function ServiceOrderList({
                   ฿{payTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                 </span>
               </div>
-              {selectedPayable.length === 1 && selectedPayable[0].h_no ? (
-                <Link
-                  href={`/service-order/${selectedPayable[0].h_no}`}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-primary-500 to-primary-700 text-white px-4 py-2 text-xs sm:text-sm font-bold shadow-sm hover:shadow-md"
-                >
-                  <Wallet className="w-4 h-4" /> {tp("pay")}
-                </Link>
-              ) : (
-                <span
-                  className="inline-flex items-center gap-1.5 rounded-full bg-surface-alt text-muted px-4 py-2 text-xs sm:text-sm font-semibold cursor-default"
-                  title={tp("payOneHint")}
-                >
-                  <Wallet className="w-4 h-4" /> {tp("pay")}
-                </span>
-              )}
+              <button
+                type="button"
+                onClick={onBulkPay}
+                disabled={pending || selectedPayable.length === 0 || !coverage.ok}
+                title={
+                  !coverage.ok && selectedPayable.length > 0
+                    ? t("walletShortfallHint", {
+                        short: coverage.shortfall.toLocaleString("th-TH", { minimumFractionDigits: 2 }),
+                      })
+                    : undefined
+                }
+                className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-primary-500 to-primary-700 text-white px-4 py-2 min-h-[44px] text-xs sm:text-sm font-bold shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-shadow"
+              >
+                <Wallet className="w-4 h-4" />{" "}
+                {pending && bulkMode === "pay" ? t("paying") : tp("pay")}
+              </button>
             </div>
+            {/* Wallet shortfall hint — mirrors the E10 bar. */}
+            {!coverage.ok && selectedPayable.length > 0 && (
+              <p className="mt-2 text-[11px] text-rose-600">
+                {t("walletShortfallHint", {
+                  short: coverage.shortfall.toLocaleString("th-TH", { minimumFractionDigits: 2 }),
+                })}
+              </p>
+            )}
+            {/* Result banner (success / stopped-at). */}
+            {payBanner && (
+              <div
+                className={
+                  "rounded-md text-xs px-2 py-1.5 mt-2 text-white " +
+                  (payBanner.kind === "ok" ? "bg-emerald-600" : "bg-red-600")
+                }
+                role="status"
+              >
+                {payBanner.text}
+              </div>
+            )}
           </div>
         </div>
       )}
