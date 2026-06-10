@@ -38,6 +38,8 @@ import {
   adminBulkUpdateForwarderCostSheet,
   adminApplyContainerCostFromSheet,
 } from "@/actions/admin/report-cnt-cost-update";
+// V-D2 — canonical product-type labels (extended 1-5 incl. ควบคุมพิเศษ).
+import { RATE_PRODUCT_LABEL_EXT } from "@/lib/warehouse/rate-dimensions";
 import type { DetailRow } from "./container-detail-client";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -73,9 +75,7 @@ export type CostUpdateViewProps = {
   paidCntId?: number | null;
 };
 
-const PRODUCT_TYPE_LABEL: Record<string, string> = {
-  "1": "ทั่วไป", "2": "มอก.", "3": "อย.", "4": "พิเศษ", "5": "ควบคุมพิเศษ",
-};
+const PRODUCT_TYPE_LABEL: Record<string, string> = RATE_PRODUCT_LABEL_EXT;
 
 // ─────────────────────────────────────────────────────────────────────
 // CSV parser — tiny, handles only the format we expect:
