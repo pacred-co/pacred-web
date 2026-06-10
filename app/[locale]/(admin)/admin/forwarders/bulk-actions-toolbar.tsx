@@ -32,11 +32,12 @@ import { searchDriversByQuery, type DriverSearchHit } from "@/actions/admin/forw
  * `selectedFNos` prop is now stringified `tb_forwarder.id` values (not
  * `f_no`/UUID); parent components pass `Array.from(Set<number>).map(String)`.
  *
- * NOTE on reachability (AGENTS.md §0d): this component is currently NOT
- * mounted anywhere — the live /admin/forwarders page uses an inline
- * bulk-bar inside `forwarders-table.tsx`. Once the inline bar is migrated
- * to this component, the wiring will land. The retarget here is so the
- * action wiring is correct when that happens.
+ * REACHABILITY (AGENTS.md §0d · V-G1 2026-06-10): now MOUNTED in the live
+ * /admin/forwarders bulk bar (`forwarders-table.tsx`) with
+ * `actions={["driver","cancel"]} hideHeader` — the inline bulk-bar above it
+ * still owns status+cabinet+print, this toolbar adds the driver-assignment
+ * and cancel actions it lacked. The `actions` prop lets a standalone mount
+ * render all three (default).
  */
 
 type Props = {
@@ -47,6 +48,16 @@ type Props = {
    */
   selectedFNos: string[];
   onClearSelection: () => void;
+  /**
+   * Which action buttons to render. Defaults to all three. The live
+   * /admin/forwarders page already has an inline status+cabinet bulk row,
+   * so it mounts this with `["driver","cancel"]` to avoid a duplicate
+   * status path (the inline one also carries the เลขตู้ field this toolbar
+   * lacks). A standalone mount can pass nothing to get all three.
+   */
+  actions?: ("status" | "driver" | "cancel")[];
+  /** Hide the "เลือก N รายการ" header (when the parent already shows it). */
+  hideHeader?: boolean;
 };
 
 // Legacy fstatus matrix — matches `tb_forwarder.fstatus` (varchar(2) NOT NULL,
@@ -70,7 +81,15 @@ type Outcome = {
   failed: { fNo: string; error: string }[];
 } | null;
 
-export function BulkActionsToolbar({ selectedFNos, onClearSelection }: Props) {
+export function BulkActionsToolbar({
+  selectedFNos,
+  onClearSelection,
+  actions = ["status", "driver", "cancel"],
+  hideHeader = false,
+}: Props) {
+  const showStatus = actions.includes("status");
+  const showDriver = actions.includes("driver");
+  const showCancel = actions.includes("cancel");
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("idle");
   const [pending, startTransition] = useTransition();
@@ -179,37 +198,45 @@ export function BulkActionsToolbar({ selectedFNos, onClearSelection }: Props) {
   return (
     <div className="rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 space-y-3">
       <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-sm font-medium text-primary-700">
-          เลือก {selectedFNos.length} รายการ
-        </span>
+        {!hideHeader && (
+          <span className="text-sm font-medium text-primary-700">
+            เลือก {selectedFNos.length} รายการ
+          </span>
+        )}
         <div className="flex items-center gap-1.5 flex-wrap">
-          <button
-            type="button"
-            onClick={() => { reset(); setMode("status"); }}
-            className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
-              mode === "status" ? "bg-primary-500 text-white border-primary-500" : "bg-white border-border hover:bg-surface-alt"
-            }`}
-          >
-            เปลี่ยน status
-          </button>
-          <button
-            type="button"
-            onClick={() => { reset(); setMode("driver"); }}
-            className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
-              mode === "driver" ? "bg-primary-500 text-white border-primary-500" : "bg-white border-border hover:bg-surface-alt"
-            }`}
-          >
-            มอบหมายคนขับ
-          </button>
-          <button
-            type="button"
-            onClick={() => { reset(); setMode("cancel"); }}
-            className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
-              mode === "cancel" ? "bg-red-500 text-white border-red-500" : "bg-white border-border hover:bg-surface-alt"
-            }`}
-          >
-            ยกเลิก
-          </button>
+          {showStatus && (
+            <button
+              type="button"
+              onClick={() => { reset(); setMode("status"); }}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
+                mode === "status" ? "bg-primary-500 text-white border-primary-500" : "bg-white border-border hover:bg-surface-alt"
+              }`}
+            >
+              เปลี่ยน status
+            </button>
+          )}
+          {showDriver && (
+            <button
+              type="button"
+              onClick={() => { reset(); setMode("driver"); }}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
+                mode === "driver" ? "bg-primary-500 text-white border-primary-500" : "bg-white border-border hover:bg-surface-alt"
+              }`}
+            >
+              มอบหมายคนขับ
+            </button>
+          )}
+          {showCancel && (
+            <button
+              type="button"
+              onClick={() => { reset(); setMode("cancel"); }}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
+                mode === "cancel" ? "bg-red-500 text-white border-red-500" : "bg-white border-border hover:bg-surface-alt"
+              }`}
+            >
+              ยกเลิก
+            </button>
+          )}
         </div>
         <button
           type="button"
