@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition, type ChangeEvent } from "react";
+import { Fragment, useMemo, useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { ArrowUpDown } from "lucide-react";
@@ -296,6 +296,84 @@ function isMomoRoutingBatch(cab: string | null | undefined): boolean {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// 2026-06-10 (ภูม flag) — sibling China-tracking grouping (DISPLAY ONLY).
+// MOMO splits one consignment into N tracking numbers with a numeric
+// suffix (base "1779955936" + "1779955936-2" … "-5" = 5 boxes of one
+// shipment, same customer + cabinet) and the MOMO sync commits ONE
+// tb_forwarder row per tracking — so the list showed 5 near-identical
+// rows. Rows on the CURRENT page sharing (baseTracking, userid) collapse
+// into one main row (Σ aggregates + 📦 badge + chevron) with an
+// expandable member sub-table. No DB / sync / server-action change —
+// every tracking stays its own tb_forwarder row.
+//
+// Pagination caveat (accepted limitation): grouping only sees rows on the
+// current page. Siblings are committed together with adjacent ids so they
+// near-always land on the same page; a set straddling a page boundary
+// simply groups what each page has. Pagination itself is untouched.
+// ─────────────────────────────────────────────────────────────────────
+
+/** Strip ONE trailing "-<digits>" suffix: "1779955936-3" → "1779955936".
+ *  A value with no suffix keeps itself. Empty/null/"-" never groups. */
+function baseTracking(tracking: string | null): string | null {
+  if (!tracking) return null;
+  const t = tracking.trim();
+  if (!t || t === "-") return null;
+  return t.replace(/-\d+$/, "");
+}
+
+/** Numeric sibling suffix · no suffix → 0 so the base row sorts first
+ *  (= preferred main row), then -2, -3, … Ties broken by id. */
+function trackingSuffix(tracking: string | null): number {
+  const m = (tracking ?? "").trim().match(/-(\d+)$/);
+  return m ? Number(m[1]) : 0;
+}
+
+type DisplayUnit =
+  | { kind: "single"; row: Row }
+  | { kind: "group"; key: string; main: Row; members: Row[] };
+
+/**
+ * Collapse the page's rows into display units, preserving input order.
+ * A group forms only when ≥2 rows share (baseTracking, userid); the group
+ * unit is emitted at the MAIN row's original position and the sibling
+ * members disappear from the normal flow (they render in the sub-table).
+ * Main row = the member with no suffix if present, else lowest suffix.
+ */
+function buildDisplayUnits(rows: Row[]): DisplayUnit[] {
+  const byKey = new Map<string, Row[]>();
+  for (const r of rows) {
+    const base = baseTracking(r.tracking_chn);
+    if (!base) continue; // empty/null tracking never groups
+    const key = `${base}::${r.customer?.userid ?? ""}`;
+    const list = byKey.get(key);
+    if (list) list.push(r);
+    else byKey.set(key, [r]);
+  }
+  const groupOf = new Map<number, { key: string; main: Row; members: Row[] }>();
+  for (const [key, members] of byKey) {
+    if (members.length < 2) continue;
+    const sorted = [...members].sort(
+      (a, b) =>
+        trackingSuffix(a.tracking_chn) - trackingSuffix(b.tracking_chn) ||
+        a.id - b.id,
+    );
+    const g = { key, main: sorted[0]!, members: sorted };
+    for (const m of sorted) groupOf.set(m.id, g);
+  }
+  const units: DisplayUnit[] = [];
+  for (const r of rows) {
+    const g = groupOf.get(r.id);
+    if (!g) {
+      units.push({ kind: "single", row: r });
+    } else if (g.main.id === r.id) {
+      units.push({ kind: "group", key: g.key, main: g.main, members: g.members });
+    }
+    // non-main group members: skipped — rendered inside the sub-table only
+  }
+  return units;
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Lane C 2026-06-02 — sortable column headers (per ภูม flag #3).
 // Module-level component per the cnt-hs-table.tsx pattern (Next 16
 // react-hooks/static-components rule: never define a child component
@@ -399,18 +477,33 @@ export function ForwardersTable({
     if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(k); setSortDir("desc"); }
   };
-  const viewRows = useMemo(() => {
-    if (!sortKey) return rows;
+  // 2026-06-10 (ภูม flag) — sibling-tracking grouping: rows collapse into
+  // display units (single row OR group). Sorting compares the group's MAIN
+  // row value, so a group sorts exactly where its main row would.
+  const viewUnits = useMemo(() => {
+    const units = buildDisplayUnits(rows);
+    if (!sortKey) return units;
     const dir = sortDir === "asc" ? 1 : -1;
-    const out = [...rows].sort((a, b) => {
-      const av = fwSortValue(a, sortKey);
-      const bv = fwSortValue(b, sortKey);
+    return [...units].sort((a, b) => {
+      const ar = a.kind === "group" ? a.main : a.row;
+      const br = b.kind === "group" ? b.main : b.row;
+      const av = fwSortValue(ar, sortKey);
+      const bv = fwSortValue(br, sortKey);
       if (av < bv) return -1 * dir;
       if (av > bv) return 1 * dir;
       return 0;
     });
-    return out;
   }, [rows, sortKey, sortDir]);
+  // Expanded sibling groups, keyed by the group key (base::userid).
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const toggleGroupExpand = (key: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
   // Wave 23 (2026-05-27 ภูม flag): cabinet input in bulk-bar so admin can
   // assign a container (เลขตู้ "GZE-2026-001" etc) to a batch of orders in
   // one shot. Optional — left blank = don't touch fcabinetnumber on the
@@ -425,6 +518,20 @@ export function ForwardersTable({
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  };
+
+  // Group checkbox semantics (2026-06-10 ภูม flag): the main row's checkbox
+  // selects/deselects ALL member ids of the sibling group — the bulk bar +
+  // bulk actions keep working untouched because they already operate on the
+  // individual row ids in `selected`.
+  const toggleGroup = (memberIds: number[]) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const allOn = memberIds.every((id) => next.has(id));
+      if (allOn) memberIds.forEach((id) => next.delete(id));
+      else memberIds.forEach((id) => next.add(id));
       return next;
     });
   };
@@ -603,13 +710,47 @@ export function ForwardersTable({
                 </tr>
               </thead>
               <tbody>
-                {viewRows.map((r) => {
+                {viewUnits.map((unit) => {
+                  // Sibling-group unit: render the MAIN row in the normal
+                  // position with Σ aggregates; members render only inside
+                  // the expandable sub-table row below.
+                  const r = unit.kind === "group" ? unit.main : unit.row;
+                  const group = unit.kind === "group" ? unit : null;
+                  const memberIds = group ? group.members.map((m) => m.id) : null;
+                  const selCount = memberIds
+                    ? memberIds.filter((id) => selected.has(id)).length
+                    : 0;
+                  const groupAllOn = !!memberIds && selCount === memberIds.length;
+                  const groupSomeOn = !!memberIds && selCount > 0 && selCount < memberIds.length;
+                  const isExpanded = group ? expandedGroups.has(group.key) : false;
+                  const groupBase = group ? baseTracking(r.tracking_chn) : null;
+                  const sameStatus = group
+                    ? group.members.every((m) => m.status === r.status)
+                    : true;
+                  const agg = group
+                    ? {
+                        boxes: group.members.reduce((s, m) => s + (m.amount_count || 0), 0),
+                        weight: group.members.reduce((s, m) => s + (m.weight_kg || 0), 0),
+                        // mirror the single-row display semantics: CBM cell
+                        // shows volume_cbm × box count per row.
+                        cbm: group.members.reduce(
+                          (s, m) => s + (m.volume_cbm || 0) * (m.amount_count || 1),
+                          0,
+                        ),
+                        outstanding: group.members.reduce(
+                          (s, m) => s + (m.outstanding_thb || 0),
+                          0,
+                        ),
+                        allPaid: group.members.every((m) => m.paydeposit === "1"),
+                      }
+                    : null;
+
                   const statusKey = r.status;
                   const badgeCls = STATUS_BADGE[r.status] ?? "bg-gray-50 text-gray-600 border-gray-200";
                   const sLabel = r.fcredit === "1"
                     ? `เครติด · ${statusLabel[r.status] ?? r.status}`
                     : statusLabel[statusKey] ?? statusKey;
-                  const isOn = selected.has(r.id);
+                  const isOn = group ? groupAllOn : selected.has(r.id);
                   // Wave 19 BUG #2 fix — port forwarder.php L623-624 logic
                   // EXACTLY (ภูม catch · "ฝากนำเข้า : ระบบ" wording was wrong ·
                   // legacy refOrder-set = "ฝากสั่งซื้อ : <hNo>" link to shops).
@@ -636,17 +777,32 @@ export function ForwardersTable({
                     : "bg-gray-50 text-gray-600 border-gray-200";
 
                   return (
+                    <Fragment key={group ? `g-${group.key}` : r.id}>
                     <tr
-                      key={r.id}
                       className={`border-t border-border hover:bg-surface-alt/30 ${isOn ? "bg-primary-50/40" : ""}`}
                     >
                       <td className="px-2 py-2.5 w-8">
-                        <input
-                          type="checkbox"
-                          checked={isOn}
-                          onChange={() => toggleRow(r.id)}
-                          aria-label={`เลือก ออเดอร์ #${r.id}`}
-                        />
+                        {group && memberIds ? (
+                          // Main-row checkbox = whole group. Indeterminate
+                          // when only some members are individually checked
+                          // (inside the expanded sub-table).
+                          <input
+                            type="checkbox"
+                            checked={groupAllOn}
+                            ref={(el) => {
+                              if (el) el.indeterminate = groupSomeOn;
+                            }}
+                            onChange={() => toggleGroup(memberIds)}
+                            aria-label={`เลือกกลุ่มพัสดุ ${groupBase ?? ""} ทั้ง ${memberIds.length} รายการ`}
+                          />
+                        ) : (
+                          <input
+                            type="checkbox"
+                            checked={isOn}
+                            onChange={() => toggleRow(r.id)}
+                            aria-label={`เลือก ออเดอร์ #${r.id}`}
+                          />
+                        )}
                       </td>
                       <td className="px-2 py-2.5 font-mono whitespace-nowrap">{r.id}</td>
                       <td className="px-2 py-2.5 whitespace-nowrap text-muted">
@@ -839,27 +995,58 @@ export function ForwardersTable({
                             rows fall to 0 so they don't distract). Weight + CBM
                             + measurer's admin-id stack below for the same
                             money-chasing context as the legacy layout. */}
-                        {r.outstanding_thb > 0 ? (
-                          <div className="font-mono font-semibold text-red-700">
-                            ฿{r.outstanding_thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                          </div>
-                        ) : r.paydeposit === "1" ? (
-                          <div className="font-mono text-[11px] font-medium text-green-600">
-                            ชำระแล้ว
-                          </div>
+                        {agg ? (
+                          // Sibling group: Σ across all members (each keeps
+                          // its own row in tb_forwarder — display sum only).
+                          <>
+                            {agg.outstanding > 0 ? (
+                              <div className="font-mono font-semibold text-red-700">
+                                ฿{agg.outstanding.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                              </div>
+                            ) : agg.allPaid ? (
+                              <div className="font-mono text-[11px] font-medium text-green-600">
+                                ชำระแล้ว
+                              </div>
+                            ) : (
+                              <div className="font-mono text-muted text-[11px]">—</div>
+                            )}
+                            <div className="text-muted text-[10px] mt-0.5">
+                              Σ {agg.boxes} กล่อง
+                              {agg.weight > 0 && (
+                                <> · {agg.weight.toLocaleString("th-TH", { maximumFractionDigits: 2 })} Kg</>
+                              )}
+                            </div>
+                            {agg.cbm > 0 && (
+                              <div className="text-muted text-[10px]">
+                                Σ {agg.cbm.toLocaleString("th-TH", { maximumFractionDigits: 4 })} CBM
+                              </div>
+                            )}
+                          </>
                         ) : (
-                          <div className="font-mono text-muted text-[11px]">—</div>
-                        )}
-                        <div className="text-muted text-[10px] mt-0.5">
-                          {r.amount_count} กล่อง
-                          {r.weight_kg > 0 && (
-                            <> · {r.weight_kg.toLocaleString("th-TH", { maximumFractionDigits: 2 })} Kg</>
-                          )}
-                        </div>
-                        {r.volume_cbm > 0 && (
-                          <div className="text-muted text-[10px]">
-                            {(r.volume_cbm * (r.amount_count || 1)).toLocaleString("th-TH", { maximumFractionDigits: 4 })} CBM
-                          </div>
+                          <>
+                            {r.outstanding_thb > 0 ? (
+                              <div className="font-mono font-semibold text-red-700">
+                                ฿{r.outstanding_thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                              </div>
+                            ) : r.paydeposit === "1" ? (
+                              <div className="font-mono text-[11px] font-medium text-green-600">
+                                ชำระแล้ว
+                              </div>
+                            ) : (
+                              <div className="font-mono text-muted text-[11px]">—</div>
+                            )}
+                            <div className="text-muted text-[10px] mt-0.5">
+                              {r.amount_count} กล่อง
+                              {r.weight_kg > 0 && (
+                                <> · {r.weight_kg.toLocaleString("th-TH", { maximumFractionDigits: 2 })} Kg</>
+                              )}
+                            </div>
+                            {r.volume_cbm > 0 && (
+                              <div className="text-muted text-[10px]">
+                                {(r.volume_cbm * (r.amount_count || 1)).toLocaleString("th-TH", { maximumFractionDigits: 4 })} CBM
+                              </div>
+                            )}
+                          </>
                         )}
                         {r.measured_by_admin && (
                           <div className="text-[9px] text-muted/70 font-mono mt-0.5" title="แอดมินที่วัดขนาด/ชั่งน้ำหนัก">
@@ -868,7 +1055,36 @@ export function ForwardersTable({
                         )}
                       </td>
                       <td className="px-2 py-2.5">
-                        {r.tracking_chn && r.tracking_chn !== "-" ? (
+                        {group && groupBase ? (
+                          // Sibling group: BASE number + chevron + 📦 badge.
+                          // Both the chevron and the badge toggle the
+                          // expanded member sub-table.
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => toggleGroupExpand(group.key)}
+                              aria-expanded={isExpanded}
+                              title={isExpanded ? "ซ่อนเลขพัสดุในกลุ่ม" : "แสดงเลขพัสดุในกลุ่ม"}
+                              className="inline-flex items-center gap-1 font-mono text-[10px] hover:text-primary-700"
+                            >
+                              <span aria-hidden>{isExpanded ? "▾" : "▸"}</span>
+                              <span>{groupBase}</span>
+                            </button>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => toggleGroupExpand(group.key)}
+                                className="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[9px] font-medium hover:bg-blue-100"
+                                title={`พัสดุกลุ่มเดียวกัน ${group.members.length} เลข (MOMO แตกกล่อง) — คลิกดูรายเลข`}
+                              >
+                                📦 {group.members.length} เลขพัสดุ
+                              </button>
+                              <span className="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[9px]">
+                                {modeLabel[r.transport_type] ?? r.transport_type}
+                              </span>
+                            </div>
+                          </>
+                        ) : r.tracking_chn && r.tracking_chn !== "-" ? (
                           <>
                             <div className="font-mono text-[10px]">{r.tracking_chn}</div>
                             <div className="mt-0.5">
@@ -935,6 +1151,14 @@ export function ForwardersTable({
                         <span className={`rounded-full border px-2 py-0.5 text-[9px] font-medium whitespace-nowrap ${badgeCls}`}>
                           {sLabel}
                         </span>
+                        {/* Sibling group with mixed member statuses: show the
+                            main row's pill + a hint so the operator expands
+                            to see the per-member states. */}
+                        {group && !sameStatus && (
+                          <div className="mt-0.5 text-[9px] text-gray-500 whitespace-nowrap">
+                            (สถานะต่างกัน)
+                          </div>
+                        )}
                         {r.cabinet_number && (
                           isMomoRoutingBatch(r.cabinet_number) ? (
                             <div
@@ -993,6 +1217,110 @@ export function ForwardersTable({
                         </div>
                       </td>
                     </tr>
+                    {/* Expanded sibling-group detail — full-width row with a
+                        compact sub-table, one line per member (incl. main).
+                        1688-shop-order-item-table style: light gray bg ·
+                        small text · indented. */}
+                    {group && isExpanded && (
+                      <tr className="border-t border-border bg-slate-50">
+                        <td colSpan={14} className="px-3 py-2">
+                          <div className="pl-8">
+                            <div className="mb-1.5 text-[10px] font-medium text-slate-600">
+                              พัสดุในกลุ่ม <span className="font-mono">{groupBase}</span> ·{" "}
+                              {group.members.length} เลข · ลูกค้า{" "}
+                              <span className="font-mono">{r.customer?.userid ?? "—"}</span>
+                            </div>
+                            <table className="w-full max-w-4xl text-[10px]">
+                              <thead>
+                                <tr className="text-left text-[9px] uppercase tracking-wide text-slate-500">
+                                  <th className="px-2 py-1 w-8" aria-label="เลือก" />
+                                  <th className="px-2 py-1 w-8">#</th>
+                                  <th className="px-2 py-1">เลขพัสดุ (จีน)</th>
+                                  <th className="px-2 py-1 text-right">กล่อง</th>
+                                  <th className="px-2 py-1 text-right">น้ำหนัก</th>
+                                  <th className="px-2 py-1 text-right">CBM</th>
+                                  <th className="px-2 py-1">สถานะ</th>
+                                  <th className="px-2 py-1 text-right">ยอดค้าง</th>
+                                  <th className="px-2 py-1">ตัวเลือก</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {group.members.map((m, idx) => {
+                                  const mBadge = STATUS_BADGE[m.status] ?? "bg-gray-50 text-gray-600 border-gray-200";
+                                  const mOn = selected.has(m.id);
+                                  return (
+                                    <tr
+                                      key={m.id}
+                                      className={`border-t border-slate-200 ${mOn ? "bg-primary-50/40" : ""}`}
+                                    >
+                                      <td className="px-2 py-1.5 w-8">
+                                        <input
+                                          type="checkbox"
+                                          checked={mOn}
+                                          onChange={() => toggleRow(m.id)}
+                                          aria-label={`เลือก ออเดอร์ #${m.id}`}
+                                        />
+                                      </td>
+                                      <td className="px-2 py-1.5 text-slate-500">{idx + 1}</td>
+                                      <td className="px-2 py-1.5 font-mono">
+                                        {m.tracking_chn}
+                                        {m.id === r.id && (
+                                          <span className="ml-1 text-[9px] text-blue-600">(หลัก)</span>
+                                        )}
+                                      </td>
+                                      <td className="px-2 py-1.5 text-right">{m.amount_count}</td>
+                                      <td className="px-2 py-1.5 text-right">
+                                        {m.weight_kg > 0
+                                          ? `${m.weight_kg.toLocaleString("th-TH", { maximumFractionDigits: 2 })} Kg`
+                                          : "—"}
+                                      </td>
+                                      <td className="px-2 py-1.5 text-right">
+                                        {m.volume_cbm > 0
+                                          ? (m.volume_cbm * (m.amount_count || 1)).toLocaleString("th-TH", { maximumFractionDigits: 4 })
+                                          : "—"}
+                                      </td>
+                                      <td className="px-2 py-1.5">
+                                        <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-medium whitespace-nowrap ${mBadge}`}>
+                                          {statusLabel[m.status] ?? m.status}
+                                        </span>
+                                      </td>
+                                      <td className="px-2 py-1.5 text-right font-mono">
+                                        {m.outstanding_thb > 0 ? (
+                                          <span className="text-red-700">
+                                            ฿{m.outstanding_thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                                          </span>
+                                        ) : m.paydeposit === "1" ? (
+                                          <span className="text-green-600">ชำระแล้ว</span>
+                                        ) : (
+                                          <span className="text-slate-400">—</span>
+                                        )}
+                                      </td>
+                                      <td className="px-2 py-1.5">
+                                        <div className="flex flex-wrap gap-1">
+                                          <Link
+                                            href={`/admin/forwarders/${m.id}`}
+                                            className="rounded border border-green-500 bg-green-50 text-green-700 text-[9px] px-1.5 py-0.5 hover:bg-green-100 whitespace-nowrap"
+                                          >
+                                            ดูข้อมูล
+                                          </Link>
+                                          <Link
+                                            href={`/admin/forwarders/${m.id}`}
+                                            className="rounded border border-orange-500 bg-orange-50 text-orange-700 text-[9px] px-1.5 py-0.5 hover:bg-orange-100 whitespace-nowrap"
+                                          >
+                                            อัปเดต
+                                          </Link>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   );
                 })}
               </tbody>
