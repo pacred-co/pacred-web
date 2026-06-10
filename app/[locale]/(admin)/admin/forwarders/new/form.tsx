@@ -11,9 +11,11 @@
  *   - Legacy = workflow source (field list · cascade order · INSERT shape)
  *   - Pacred = UI source (Tailwind cards · combobox · live preview · friendly errors)
  *
- * Cascade order:
- *   coID picked → fetchUsersByCoid → user list refreshed
- *   user picked → fetchAddressesByUserid → address list refreshed
+ * Cascade order (ภูม flag round 10 — member-type group replaces the raw
+ * tb_co dropdown · same clean categories /admin/customers uses):
+ *   member-type group picked → fetchUsersByGroup → user list refreshed
+ *     (OR no group → universal direct search across all coIDs · round 9)
+ *   user picked → adopt the customer's own coID + fetchAddressesByUserid
  *   fShipBy='PCS' → hide address picker (use hardcoded PCS pickup)
  */
 
@@ -21,15 +23,28 @@ import { useState, useTransition, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   adminCreateForwarder,
-  fetchUsersByCoid,
+  fetchUsersByGroup,
   fetchAddressesByUserid,
   searchCustomers,
   type CustomerOption,
   type CustomerSearchResult,
+  type CustomerGroup,
   type AddressOption,
 } from "@/actions/admin/forwarders-new";
 
-type CoidOption = { coid: string; coname: string };
+// Clean member-type categories — same 7 buckets /admin/customers uses in its
+// "ตามประเภท" menu (ภูม flag round 10). Replaces the raw tb_co dropdown which
+// listed junk coID rows (OOAEOM.VIP / SALE.PEPO / SWAN / …). Picking one
+// filters the customer picker to that type.
+const CUSTOMER_GROUP_OPTIONS: { value: string; label: string }[] = [
+  { value: "general",    label: "ลูกค้าทั่วไป" },
+  { value: "vip",        label: "VIP" },
+  { value: "svip",       label: "SVIP" },
+  { value: "corporate",  label: "นิติบุคคล" },
+  { value: "credit",     label: "เครดิต" },
+  { value: "comparison", label: "คิดค่าเทียบ (CPS)" },
+  { value: "freight",    label: "ลูกค้า Freight" },
+];
 
 // Legacy `optionHShipByCart()` from pcs-admin/include/function.php L411-464.
 // Hardcoded list — same values/labels as legacy. "PCSF" is gated by the
@@ -147,13 +162,11 @@ function addressFullLine(a: AddressOption): string {
 }
 
 export function AdminForwarderNewForm({
-  coidList,
   freeShipping,
   presetUser,
   presetCoid,
   presetAddresses,
 }: {
-  coidList:        CoidOption[];
   freeShipping:    boolean;
   presetUser:      CustomerOption | null;
   presetCoid:      string | null;
@@ -162,10 +175,20 @@ export function AdminForwarderNewForm({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  // ─── coID + user cascade ─────────────────────────────────────────
+  // ─── member-type group + user cascade ────────────────────────────
+  // `group` drives the clean member-type filter (general/vip/svip/corporate/
+  // credit/comparison/freight). `coid` is still the field the create action
+  // validates + audits — it's filled from the CHOSEN customer's own coID in
+  // onUserPick, so the order keys off real data regardless of which group (or
+  // the universal search) was used to find them.
+  const [group, setGroup]             = useState<string>("");
   const [coid, setCoid]               = useState<string>(presetCoid ?? "");
-  const [users, setUsers]             = useState<CustomerOption[]>(
-    presetUser ? [presetUser] : [],
+  // group-loaded customers carry their own coID (CustomerSearchResult) so
+  // onUserPick can adopt the picked customer's tier — same shape the direct
+  // search returns. The preset (from ?q=) has no coID handy here; presetCoid
+  // is passed separately and onUserPick's pickedCoid is optional.
+  const [users, setUsers]             = useState<CustomerSearchResult[]>(
+    presetUser ? [{ ...presetUser, coID: presetCoid ?? null }] : [],
   );
   const [usersLoading, setUsersLoading] = useState(false);
   const [userid, setUserid]           = useState<string>(presetUser?.userID ?? "");
@@ -353,19 +376,18 @@ export function AdminForwarderNewForm({
       cancelled = true;
       clearTimeout(timer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trackingChn]);
 
-  // ─── direct customer search (no coID needed) — ภูม flag round 9 ──
-  // Runs only when NO coID tier is chosen (the cascade path filters its own
-  // loaded list client-side). All setState lives INSIDE the timer callback —
-  // React 19's `react-hooks/set-state-in-effect` forbids setState in the body.
+  // ─── direct customer search (no group needed) — ภูม flag round 9 ──
+  // Runs only when NO member-type group is chosen (the group path filters its
+  // own loaded list client-side). All setState lives INSIDE the timer callback
+  // — React 19's `react-hooks/set-state-in-effect` forbids setState in the body.
   useEffect(() => {
     const q = userFilter.trim();
     let cancelled = false;
     const timer = setTimeout(async () => {
       if (cancelled) return;
-      if (coid || q.length < 2) {
+      if (group || q.length < 2) {
         setSearchResults([]);
         setSearchLoading(false);
         return;
@@ -377,24 +399,26 @@ export function AdminForwarderNewForm({
       setSearchLoading(false);
     }, 300);
     return () => { cancelled = true; clearTimeout(timer); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userFilter, coid]);
+  }, [userFilter, group]);
 
-  // ─── when coID changes → fetch users for that tier ─────────────
-  async function onCoidChange(next: string) {
-    setCoid(next);
+  // ─── when member-type group changes → fetch users for that group ──
+  async function onGroupChange(next: string) {
+    setGroup(next);
     setUserid("");
     setUserFilter("");
+    setCoid("");
+    setPickedCustomer(null);
     setAddresses([]);
     setAddressId(null);
-    setFieldErrors((p) => { const n = new Set(p); n.delete("coid"); return n; });
+    setSearchResults([]);
+    setFieldErrors((p) => { const n = new Set(p); n.delete("coid"); n.delete("userid"); return n; });
 
     if (!next) {
       setUsers([]);
       return;
     }
     setUsersLoading(true);
-    const res = await fetchUsersByCoid(next);
+    const res = await fetchUsersByGroup(next as CustomerGroup);
     setUsersLoading(false);
     if (res.ok) {
       setUsers(res.data?.users ?? []);
@@ -480,8 +504,11 @@ export function AdminForwarderNewForm({
   }
 
   function resetForm() {
+    setGroup("");
     setCoid("");
     setUsers([]);
+    setSearchResults([]);
+    setPickedCustomer(null);
     setUserid("");
     setUserFilter("");
     setTrackingChn("");
@@ -583,23 +610,20 @@ export function AdminForwarderNewForm({
         </h2>
 
         <div className="grid gap-4 md:grid-cols-2">
-          {/* coID */}
+          {/* member-type group (clean categories · same as /admin/customers) */}
           <div>
             <label className="block text-xs font-medium text-muted mb-1">
-              ประเภทสมาชิก (coID) <span className="text-muted">· ไม่บังคับ</span>
+              ประเภทสมาชิก <span className="text-muted">· ไม่บังคับ</span>
             </label>
             <select
-              value={coid}
-              onChange={(e) => onCoidChange(e.target.value)}
+              value={group}
+              onChange={(e) => onGroupChange(e.target.value)}
               disabled={pending}
               className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ${errCls("coid")}`}
-              required
             >
               <option value="">— กรุณาเลือก —</option>
-              {coidList.map((c) => (
-                <option key={c.coid} value={c.coid}>
-                  {c.coid}{c.coname && c.coname !== c.coid ? ` · ${c.coname}` : ""}
-                </option>
+              {CUSTOMER_GROUP_OPTIONS.map((g) => (
+                <option key={g.value} value={g.value}>{g.label}</option>
               ))}
             </select>
             <p className="mt-1 text-[11px] text-muted">เลือกเพื่อกรองตามกลุ่ม — หรือพิมพ์ค้นหาลูกค้าทางขวาได้เลย (ทุกกลุ่ม)</p>
@@ -624,9 +648,10 @@ export function AdminForwarderNewForm({
                   type="button"
                   onClick={() => {
                     // Full reset back to the universal search (don't strand the
-                    // admin inside the auto-filled coID group from a prior pick).
+                    // admin inside the member-type group from a prior pick).
                     setUserid("");
                     setUserFilter("");
+                    setGroup("");
                     setCoid("");
                     setPickedCustomer(null);
                     setUsers([]);
@@ -649,7 +674,7 @@ export function AdminForwarderNewForm({
                   onChange={(e) => { setUserFilter(e.target.value); setUserPickerOpen(true); }}
                   onFocus={() => setUserPickerOpen(true)}
                   placeholder={
-                    coid
+                    group
                       ? (usersLoading ? "กำลังโหลด..." : `ค้นหาในกลุ่มนี้ · PR1234 · ชื่อ · เบอร์ (${users.length} คน)`)
                       : "พิมพ์ค้นหาลูกค้า · PR1234 · ชื่อ · เบอร์ — ทุกกลุ่ม"
                   }
@@ -657,10 +682,10 @@ export function AdminForwarderNewForm({
                   disabled={pending}
                   autoComplete="off"
                 />
-                {userPickerOpen && (coid ? !usersLoading : userFilter.trim().length >= 1) && (
+                {userPickerOpen && (group ? !usersLoading : userFilter.trim().length >= 1) && (
                   <div className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-border bg-white shadow-lg">
-                    {coid ? (
-                      /* ── tier cascade: filter the coID-loaded list ── */
+                    {group ? (
+                      /* ── group filter: pick from the group-loaded list ── */
                       filteredUsers.length === 0 ? (
                         <div className="px-4 py-3 text-sm text-muted">ไม่พบสมาชิกในกลุ่มนี้</div>
                       ) : (
@@ -668,7 +693,7 @@ export function AdminForwarderNewForm({
                           <button
                             key={u.userID}
                             type="button"
-                            onClick={() => onUserPick(u)}
+                            onClick={() => onUserPick(u, u.coID)}
                             className="block w-full px-3 py-2 text-left text-sm hover:bg-surface-alt"
                           >
                             <span className="font-mono text-primary-600">{u.userID}</span>
