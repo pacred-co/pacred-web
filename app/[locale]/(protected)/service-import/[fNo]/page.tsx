@@ -977,24 +977,44 @@ export default async function ServiceImportDetailPage({
                   {statusForwarderBadge(fStatusValue, t)}
                 </p>
               )}
-              <div>
+              <div className="flex flex-col items-start gap-2 md:items-end">
                 {/* L1788-1804 — receipt link (only when rID is set
                     AND fStatus>=6, per the legacy `$row['fStatus']<6`
                     branch which renders nothing). */}
                 {rID && Number(fStatusValue) >= 6 && (
-                  /* Legacy linked to pcscargo.co.th/member/printReceiptF.php
-                     — rewritten to the internal Pacred print route
-                     /freight/receipts/print/{rID} so the customer
-                     stays inside Pacred (no bounce to legacy site). */
-                  <a
-                    href={`/freight/receipts/print/${rID}?type=1`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 active:scale-[0.98] transition-all"
-                  >
-                    <i className="mdi mdi-check-circle-outline"></i>{" "}
-                    {t("receiptLink")}
-                  </a>
+                  <>
+                    {/* Legacy linked to pcscargo.co.th/member/printReceiptF.php
+                       — rewritten to the internal Pacred print route
+                       /freight/receipts/print/{rID} so the customer
+                       stays inside Pacred (no bounce to legacy site). */}
+                    <a
+                      href={`/freight/receipts/print/${rID}?type=1`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 active:scale-[0.98] transition-all"
+                    >
+                      <i className="mdi mdi-check-circle-outline"></i>{" "}
+                      {t("receiptLink")}
+                    </a>
+                    {/* invoiceF.php URL mirror — customer self-serve
+                       standalone invoice PDF for the forwarder order.
+                       Closes the 2026-05-22 gap audit §1 finding
+                       ("Customer-side standalone invoice PDF for
+                       forwarder orders … no customer download
+                       endpoint"). Legacy URL is invoiceF.php?id=<rID>;
+                       Pacred mirrors it at /invoiceF?id=<rID> which
+                       forwards to the existing /freight/invoice/[id]
+                       1:1 transcription. */}
+                    <a
+                      href={`/invoiceF?id=${encodeURIComponent(rID)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-emerald-600 bg-white px-4 py-2 text-sm font-semibold text-emerald-700 shadow-sm hover:bg-emerald-50 active:scale-[0.98] transition-all"
+                    >
+                      <i className="mdi mdi-file-document-outline"></i>{" "}
+                      ใบเสร็จรับเงิน (พิมพ์ / บันทึก PDF)
+                    </a>
+                  </>
                 )}
               </div>
               <p className="mt-1 text-xs text-muted">
