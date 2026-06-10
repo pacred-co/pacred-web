@@ -557,7 +557,11 @@ export function ForwardersTable({
   const someChecked = selected.size > 0 && selected.size < rows.length;
 
   return (
-    <div className="space-y-3">
+    // 2026-06-10 ภูม flag: when the fixed-bottom bulk bar is up it covered the
+    // last table rows — the checkbox on the bottom row was unreachable. Pad the
+    // page bottom by the bar's height while ≥1 row is selected so the list can
+    // scroll fully clear of the bar.
+    <div className={selected.size > 0 ? "space-y-3 pb-16" : "space-y-3"}>
       <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
         {rows.length === 0 ? (
           <p className="p-12 text-center text-sm text-muted">ไม่มีรายการที่ตรงกัน</p>
@@ -1016,38 +1020,38 @@ export function ForwardersTable({
           aria-label="บาร์เปลี่ยนสถานะกลุ่ม"
           className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white dark:bg-surface shadow-[0_-2px_10px_rgba(0,0,0,0.06)] pcs-safe-area-bottom"
         >
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3 lg:px-8">
-            <span className="text-sm font-medium">
-              เลือกแล้ว <b className="text-primary-600">{selected.size}</b> รายการ
+          {/* 2026-06-10 ภูม flag: the bar was 2 rows tall (flex-wrap) and
+              covered the bottom of the list. Compact single row — smaller
+              paddings, shorter labels, narrower cabinet input. Long titles
+              stay discoverable via the title= tooltips. */}
+          <div className="mx-auto flex max-w-7xl flex-nowrap items-center gap-2 overflow-x-auto px-3 py-1.5 lg:px-6">
+            <span className="shrink-0 text-xs font-medium whitespace-nowrap">
+              เลือก <b className="text-primary-600">{selected.size}</b>
             </span>
-            <label className="flex items-center gap-2 text-sm">
-              <span className="text-muted">เปลี่ยนสถานะเป็น</span>
-              <select
-                value={bulkStatus}
-                onChange={(e) => setBulkStatus(e.target.value as BulkStatusValue)}
-                disabled={pending}
-                className="rounded-md border border-border bg-white px-2 py-1.5 text-sm"
-              >
-                {BULK_STATUS_OPTIONS.map((o) => (
-                  <option key={o.v} value={o.v}>{o.l}</option>
-                ))}
-              </select>
-            </label>
+            <select
+              value={bulkStatus}
+              onChange={(e) => setBulkStatus(e.target.value as BulkStatusValue)}
+              disabled={pending}
+              aria-label="เปลี่ยนสถานะเป็น"
+              className="shrink-0 rounded-md border border-border bg-white px-2 py-1 text-xs"
+            >
+              {BULK_STATUS_OPTIONS.map((o) => (
+                <option key={o.v} value={o.v}>{o.l}</option>
+              ))}
+            </select>
             {/* Cabinet input — Wave 23 ภูม flag: assign เลขตู้ (GZE/GZS) to
                 the selected batch in one shot. Blank = don't touch. */}
-            <label className="flex items-center gap-2 text-sm">
-              <span className="text-muted whitespace-nowrap">เลขตู้</span>
-              <input
-                type="text"
-                value={bulkCabinet}
-                onChange={(e) => setBulkCabinet(e.target.value)}
-                disabled={pending}
-                maxLength={300}
-                placeholder="GZE-2026-001 (เว้นว่าง = ไม่เปลี่ยน)"
-                className="rounded-md border border-border bg-white px-2 py-1.5 text-sm font-mono w-56"
-              />
-            </label>
-            <div className="ml-auto flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              value={bulkCabinet}
+              onChange={(e) => setBulkCabinet(e.target.value)}
+              disabled={pending}
+              maxLength={300}
+              placeholder="เลขตู้ (เว้นว่าง = ไม่เปลี่ยน)"
+              title="กำหนดเลขตู้ GZE/GZS ให้รายการที่เลือก — เว้นว่างถ้าไม่ต้องการเปลี่ยน"
+              className="shrink-0 rounded-md border border-border bg-white px-2 py-1 text-xs font-mono w-44"
+            />
+            <div className="ml-auto flex flex-nowrap items-center gap-1.5">
               {/* Faithful port of legacy printAll.php bottom-left trio.
                   Print buttons open the 100×75mm label sheet in a new tab and
                   do NOT clear the selection (so the operator can print both
@@ -1056,19 +1060,19 @@ export function ForwardersTable({
                 type="button"
                 onClick={() => onPrintLabels(1)}
                 disabled={pending}
-                className="rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                className="shrink-0 rounded-md border border-blue-300 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50 whitespace-nowrap"
                 title="พิมพ์ป้ายติดหน้ากล่อง (100×75mm) — รหัสลูกค้า + QR + น้ำหนัก/ปริมาตร"
               >
-                🖨 พิมพ์จากหน้ากล่อง
+                🖨 ป้ายกล่อง
               </button>
               <button
                 type="button"
                 onClick={() => onPrintLabels(4)}
                 disabled={pending}
-                className="rounded-md border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50"
+                className="shrink-0 rounded-md border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50 whitespace-nowrap"
                 title="พิมพ์ป้ายที่อยู่ส่งสินค้า (100×75mm) — ชื่อ + ที่อยู่ + บริษัทขนส่ง"
               >
-                🏷 พิมพ์ที่อยู่ส่งสินค้า
+                🏷 ป้ายที่อยู่
               </button>
               <button
                 type="button"
@@ -1076,8 +1080,8 @@ export function ForwardersTable({
                 disabled={pending}
                 className={
                   inSpecialLane
-                    ? "rounded-md border border-gray-300 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50"
-                    : "rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                    ? "shrink-0 rounded-md border border-gray-300 bg-gray-50 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50 whitespace-nowrap"
+                    : "shrink-0 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50 whitespace-nowrap"
                 }
                 title={
                   inSpecialLane
@@ -1085,14 +1089,14 @@ export function ForwardersTable({
                     : "เพิ่มรายการที่เลือกไปยังสถานะพิเศษ (พิเศษ / 99)"
                 }
               >
-                {inSpecialLane ? "↩ ย้ายกลับสถานะปกติ" : "⭐ เพิ่มไปสถานะพิเศษ"}
+                {inSpecialLane ? "↩ กลับสถานะปกติ" : "⭐ สถานะพิเศษ"}
               </button>
-              <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+              <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
               <button
                 type="button"
                 onClick={clearSelection}
                 disabled={pending}
-                className="rounded-md border border-border bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface-alt disabled:opacity-50"
+                className="shrink-0 rounded-md border border-border bg-white px-2 py-1 text-xs font-medium hover:bg-surface-alt disabled:opacity-50 whitespace-nowrap"
               >
                 ยกเลิก
               </button>
@@ -1100,9 +1104,9 @@ export function ForwardersTable({
                 type="button"
                 onClick={onBulkSubmit}
                 disabled={pending}
-                className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                className="shrink-0 rounded-md bg-primary-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed whitespace-nowrap"
               >
-                {pending ? "กำลังอัพเดต..." : `อัพเดตสถานะ ${selected.size} รายการ`}
+                {pending ? "กำลังอัพเดต..." : `อัพเดต ${selected.size} รายการ`}
               </button>
             </div>
           </div>
