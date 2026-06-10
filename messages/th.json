@@ -5263,6 +5263,7 @@
     "estimateImport": "ประเมินราคานำเข้า",
     "importHistory": "ประวัติการนำเข้า",
     "importReceiptHistory": "ประวัติใบเสร็จนำเข้า",
+    "billingRunNav": "ใบวางบิลของฉัน",
     "shipmentTracking": "ติดตามสถานะตู้/พัสดุ",
     "refundStatus": "สถานะการคืนเงิน",
     "shopWallet": "กระเป๋าร้านค้า (Affiliate)",

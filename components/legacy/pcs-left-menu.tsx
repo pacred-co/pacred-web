@@ -187,6 +187,7 @@ export async function PcsLeftMenu({ data }: { data: PcsChromeData }) {
             <CardSubLink href="/service-import/estimate">{t("estimateImport")}</CardSubLink>
             <CardSubLink href="/service-import?q=7">{t("importHistory")}</CardSubLink>
             <CardSubLink href="/service-import/receipts">{t("importReceiptHistory")}</CardSubLink>
+            <CardSubLink href="/billing-run">{t("billingRunNav")}</CardSubLink>
             <CardSubLink href="/shipments">{t("shipmentTracking")}</CardSubLink>
           </MenuRow>
 
@@ -221,6 +222,7 @@ export async function PcsLeftMenu({ data }: { data: PcsChromeData }) {
             <CardSubLink href="/wallet">{t("accountStatement")}</CardSubLink>
             <CardSubLink href="/wallet/deposit">{t("deposit")}</CardSubLink>
             <CardSubLink href="/wallet/withdraw">{t("withdraw")}</CardSubLink>
+            <CardSubLink href="/pay">{t("scanPay")}</CardSubLink>
             <CardSubLink href="/refunds">{t("refundStatus")}</CardSubLink>
             <CardSubLink href="/wallet-shop">{t("shopWallet")}</CardSubLink>
           </MenuRow>
