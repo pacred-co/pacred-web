@@ -33,7 +33,9 @@ import {
   CONTACT,
   ADDRESSES,
   BANK,
+  SITE_URL,
 } from "@/components/seo/site";
+import QRCode from "qrcode";
 import { Printer } from "lucide-react";
 import PrintButton from "./print-button";
 import BackfillItemsButton from "./backfill-items-button";
@@ -208,6 +210,7 @@ function ReceiptPage({
   documentApprover,
   pageNumber,
   pageCount,
+  qrDataUrl,
 }: {
   label:               string;
   rid:                 string;
@@ -241,6 +244,7 @@ function ReceiptPage({
   documentApprover:    string;
   pageNumber:          number;
   pageCount:           number;
+  qrDataUrl:           string;
 }) {
   const isOriginal = label === "ต้นฉบับ";
   // Peak: orange #FFA30A on ต้นฉบับ, gray #5F5D5A on สำเนา
@@ -630,9 +634,14 @@ function ReceiptPage({
                       สแกนเพื่อเปิดด้วยเว็บไซต์
                     </p>
                     <div className="image" style={{ display: "flex", justifyContent: "center", height: "18mm", alignItems: "center" }}>
-                      <div style={{ width: "18mm", height: "18mm", background: "#f9fafb", border: "0.5px solid #d1d5db", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <span style={{ fontSize: "7px", color: "#9ca3af", textAlign: "center" }}>QR</span>
-                      </div>
+                      <Image
+                        src={qrDataUrl}
+                        alt={`QR เปิดใบเสร็จ ${rid}`}
+                        width={120}
+                        height={120}
+                        unoptimized
+                        style={{ width: "18mm", height: "18mm", display: "block" }}
+                      />
                     </div>
                   </div>
 
@@ -1015,6 +1024,17 @@ export default async function ForwarderInvoicePrintPage({
   const documentIssuer   = receipt.documentissuer  || receipt.adminid || "-";
   const documentApprover = receipt.documentapprover || "";
 
+  // Peak's "สแกนเพื่อเปิดด้วยเว็บไซต์" QR — encodes the receipt's URL so a
+  // scan from the printed paper opens this page (admin-gated; staff land on
+  // login first, then the doc). 2026-06-10 ภูม flag: the placeholder box never
+  // rendered an actual QR — generate one server-side with the `qrcode` lib.
+  const receiptUrl = `${SITE_URL}/admin/accounting/forwarder-invoice/${receipt.id}`;
+  const qrDataUrl  = await QRCode.toDataURL(receiptUrl, {
+    width:  160,
+    margin: 0,
+    color:  { dark: "#111827", light: "#FFFFFF" },
+  });
+
   const commonProps = {
     rid:                 receipt.rid,
     issuerAddress,
@@ -1031,6 +1051,7 @@ export default async function ForwarderInvoicePrintPage({
     documentIssuer,
     documentApprover,
     pageCount,
+    qrDataUrl,
   };
 
   return (
