@@ -27,11 +27,16 @@
 import bwipjs from "bwip-js/node";
 
 /**
- * The legacy gated the barcode behind `preg_match('/^[a-zA-Z0-9-]+$/i', text)`
- * — only emit a barcode for plain alphanumeric/hyphen tracking codes. Mirror it
- * so callers can guard identically.
+ * Which tracking strings get a barcode. The legacy gated on
+ * `preg_match('/^[a-zA-Z0-9-]+$/i', text)` (alphanumeric/hyphen only) — but
+ * many real PCS tracking codes carry a per-shipment split marker like
+ * `DPK301890160035-1/2` (the `/` = part 2-of-2), which the legacy silently
+ * dropped (ปอน 2026-06-10). Code128 subset B encodes `/` and `.` fine, so we
+ * widen the gate to also allow `/` and `.` — the barcode now renders for those
+ * codes and still scans to the exact value. Anything outside this set (spaces,
+ * Thai text, …) is still skipped (renders as text only).
  */
-export const CODE128_SAFE = /^[a-zA-Z0-9-]+$/;
+export const CODE128_SAFE = /^[a-zA-Z0-9\-/.]+$/;
 
 /**
  * Render `text` as a Code128 barcode and return an inline `data:image/svg+xml`

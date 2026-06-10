@@ -3102,6 +3102,37 @@
     "statusInlineLabel": "สถานะ"
   },
   "pcsAdminNav": {
+    "classNav": {
+      "hr": "Human Resources",
+      "acc": "Accounting & Finance",
+      "marketing": "Marketing",
+      "dev": "Developer",
+      "warehouse": "Logistics"
+    },
+    "serviceNav": {
+      "importList": "นำเข้า",
+      "freightExport": "บริการส่งออก",
+      "customs": "พิธีการศุลกากร & เอกสาร",
+      "combinedDecl": "ใบขนพ่วง"
+    },
+    "marketingNav": {
+      "sales": "Sales",
+      "customerService": "Customer Services",
+      "pricing": "Pricing",
+      "marketing": "Extensions"
+    },
+    "additionalServices": {
+      "title": "บริการเสริม",
+      "taxInvoice": "เปิดใบกำกับภาษี",
+      "domesticShipping": "ขนส่งภายในประเทศ"
+    },
+    "logisticsNav": {
+      "docFreight": "Doc Freight",
+      "docShipping": "Doc Shipping",
+      "warehouse": "Warehouse",
+      "transport": "Transport"
+    },
+    "comingSoon": "เร็วๆนี้",
     "wallet": {
       "title": "กระเป๋าเงิน"
     },
@@ -3362,7 +3393,7 @@
     },
     "settingsCargo": {
       "title": "ตั้งค่าระบบ Cargo",
-      "general": "ทั่วไป",
+      "general": "ปรับเรทหยวน",
       "homeNotice": "ประกาศหน้าแรก",
       "popup": "Popup ประกาศลูกค้า",
       "promos": "แบนเนอร์โปรโมชัน",
@@ -3373,7 +3404,7 @@
       "rateCustomHs": "เรท Custom-HS",
       "vipTiers": "ประเภทสมาชิก VIP",
       "system": "ระบบ",
-      "crons": "Cron jobs",
+      "crons": "System Health",
       "systemNotifs": "การแจ้งเตือนระบบ",
       "notifyDispatch": "สถานะการส่งแจ้งเตือน",
       "pcsSync": "PCS ↔ Pacred Sync",
