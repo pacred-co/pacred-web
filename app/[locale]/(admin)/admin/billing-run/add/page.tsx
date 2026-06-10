@@ -9,8 +9,9 @@
  *   5. Submit → INSERT tb_forwarder_invoice + items → redirect to /[id]
  *
  * The legacy was print-only — no DB persistence. R-2 adds tb_forwarder_invoice
- * (migration 0138). Customer-side juristic-credit-line awareness preserved
- * (date_due defaults to today + tb_users.userCreditValue).
+ * (migration 0138). date_due defaults to today + 7 days (legacy has no per-customer
+ * credit-DAYS column — the term lives per-order on tb_forwarder.fcreditdate, ADR-0023;
+ * userCreditValue is the baht LIMIT, not a day count — so 7d is the intentional default).
  *
  * UI = pure Tailwind (Pacred design philosophy §0a — match legacy WORKFLOW,
  * not legacy chrome).
