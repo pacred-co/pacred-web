@@ -203,7 +203,7 @@ export function ReceiptPage({
                 width={268}
                 height={72}
                 unoptimized
-                style={{ width: "auto", height: "17mm", display: "block" }}
+                style={{ width: "auto", height: "14mm", display: "block" }}
               />
             </div>
 
@@ -676,17 +676,11 @@ export function ReceiptPage({
                 </div>
               </div>
             </div>
-
-            {/* Page stamp (tiny) */}
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4mm", fontSize: "8px", color: "#9ca3af" }}>
-              <div>
-                ผู้ออก: <span style={{ color: "#6b7280" }}>{documentIssuer}</span>
-                {documentApprover && (
-                  <> · ผู้อนุมัติ: <span style={{ color: "#6b7280" }}>{documentApprover}</span></>
-                )}
-              </div>
-              <div>หน้า {pageNumber} / {pageCount}</div>
-            </div>
+            {/* ภูม flag round 9 (point 2): removed the tiny "ผู้ออก/ผู้อนุมัติ ·
+                หน้า X/N" footer strip — its marginTop pushed each side past the
+                281mm page box, spilling a near-empty 2nd page (so a 2-page
+                receipt printed as 4). The issuer/approver already appear in the
+                certified boxes above, so nothing is lost. */}
           </div>
         )}
 
