@@ -277,8 +277,14 @@ async function ensureLegacyStaff(
 ): Promise<void> {
   const admin = createAdminClient();
 
-  // profiles (member_code auto-assigned by trigger). Phone omitted to dodge the
-  // customer-phone-collision trap; the real number stays on tb_admin.adminTel.
+  // profiles. Staff must NOT get a customer PR member_code: the trigger
+  // `generate_member_code` (migration 0174) skips PR assignment when
+  // employee_code is non-empty, so we set a legacy-staff employee_code here
+  // (the LGCY- prefix keeps it distinct from office 690xxx codes and unique per
+  // legacy adminID → satisfies profiles.employee_code's partial unique index).
+  // → staff keep member_code NULL, out of the customer numbering range.
+  // Phone omitted to dodge the customer-phone-collision trap; the real number
+  // stays on tb_admin.adminTel.
   const { data: existingProfile, error: existingErr } = await admin
     .from("profiles")
     .select("id")
@@ -293,6 +299,7 @@ async function ensureLegacyStaff(
       email: row.adminEmail || null,
       first_name: row.adminName,
       last_name: row.adminLastName,
+      employee_code: row.adminID ? `LGCY-${row.adminID}` : `LGCY-${authUserId.replace(/-/g, "").slice(0, 12)}`,
       account_type: "personal",
       status: "active",
       is_active: true,

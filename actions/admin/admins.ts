@@ -819,11 +819,18 @@ export async function adminCreateNew(
       // ── 2-4. Profile + admins + extras (rollback on failure) ──
       try {
         // 2. profiles row.
-        // - member_code: omitted → trigger `generate_member_code` assigns PR<n>
+        // - member_code: omitted. The trigger `generate_member_code` skips
+        //   customer-PR assignment for staff because employee_code is set
+        //   (migration 0174) → staff keep member_code NULL, out of the customer
+        //   numbering range. employee_code MUST be non-empty for that gate to
+        //   fire, so we fall back to a STAFF- placeholder when the operator
+        //   left it blank (an empty employee_code would re-trigger the old bug).
         // - status: 'active' so the admin can sign in immediately
         // - is_active: true (gates the customer-side `active` filter)
         // - account_type: 'personal' (admins are individuals — juristic
         //   would force company-fields; not applicable here)
+        const staffEmployeeCode =
+          d.employee_code?.trim() || `STAFF-${profileId.replace(/-/g, "").slice(0, 12)}`;
         const { error: profErr } = await admin.from("profiles").insert({
           id:            profileId,
           email:         d.email,
@@ -833,7 +840,7 @@ export async function adminCreateNew(
           avatar_url:    d.avatar_url ?? null,
           birthday:      d.birthday ?? null,
           sex:           d.sex ?? null,
-          employee_code: d.employee_code ?? null,
+          employee_code: staffEmployeeCode,
           account_type:  "personal",
           status:        "active",
           is_active:     true,

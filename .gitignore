@@ -55,4 +55,4 @@ scripts/backfill/.progress/
 .pcs-sync-token-*.txt
 
 # customer-code swap backups (PII — never commit)
-swap-*-backup.json
+*-backup.json
