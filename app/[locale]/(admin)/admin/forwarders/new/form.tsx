@@ -23,7 +23,9 @@ import {
   adminCreateForwarder,
   fetchUsersByCoid,
   fetchAddressesByUserid,
+  searchCustomers,
   type CustomerOption,
+  type CustomerSearchResult,
   type AddressOption,
 } from "@/actions/admin/forwarders-new";
 
@@ -170,6 +172,15 @@ export function AdminForwarderNewForm({
   const [userFilter, setUserFilter]   = useState<string>("");
   const [userPickerOpen, setUserPickerOpen] = useState(false);
   const userPickerRef = useRef<HTMLDivElement | null>(null);
+  // Direct customer search (ภูม flag round 9) — used when NO coID tier is
+  // picked. Lets staff find ANY customer by PR-code / name / phone, bypassing
+  // the coID-first cascade (which can't reach the "PR"-coid majority).
+  const [searchResults, setSearchResults] = useState<CustomerSearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  // The chosen customer object — needed for the "✓ selected" chip when the
+  // pick came from the direct search (that customer isn't in the coid-loaded
+  // `users` list).
+  const [pickedCustomer, setPickedCustomer] = useState<CustomerOption | null>(presetUser ?? null);
 
   // ─── tracking · detail · amount · cover ─────────────────────────
   const [trackingChn, setTrackingChn] = useState<string>("");
@@ -345,6 +356,30 @@ export function AdminForwarderNewForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trackingChn]);
 
+  // ─── direct customer search (no coID needed) — ภูม flag round 9 ──
+  // Runs only when NO coID tier is chosen (the cascade path filters its own
+  // loaded list client-side). All setState lives INSIDE the timer callback —
+  // React 19's `react-hooks/set-state-in-effect` forbids setState in the body.
+  useEffect(() => {
+    const q = userFilter.trim();
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+      if (coid || q.length < 2) {
+        setSearchResults([]);
+        setSearchLoading(false);
+        return;
+      }
+      setSearchLoading(true);
+      const res = await searchCustomers(q);
+      if (cancelled) return;
+      setSearchResults(res.ok ? (res.data?.customers ?? []) : []);
+      setSearchLoading(false);
+    }, 300);
+    return () => { cancelled = true; clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userFilter, coid]);
+
   // ─── when coID changes → fetch users for that tier ─────────────
   async function onCoidChange(next: string) {
     setCoid(next);
@@ -370,11 +405,22 @@ export function AdminForwarderNewForm({
   }
 
   // ─── when user picked → fetch their addresses ─────────────────
-  async function onUserPick(picked: CustomerOption) {
+  // pickedCoid is supplied by the direct-search path (the customer's own
+  // coID) so the tier/validation/audit stay consistent without the staff
+  // having to know which tb_co bucket they live in.
+  async function onUserPick(picked: CustomerOption, pickedCoid?: string | null) {
     setUserid(picked.userID);
+    setPickedCustomer(picked);
+    if (pickedCoid !== undefined) {
+      // adopt the customer's own coID (fallback "-" for the rare null — the
+      // field is only the tier label + audit log; the order keys off userID,
+      // which adminCreateForwarder re-verifies server-side).
+      const c = (pickedCoid ?? "").trim().slice(0, 10) || "-";
+      setCoid(c);
+    }
     setUserFilter("");
     setUserPickerOpen(false);
-    setFieldErrors((p) => { const n = new Set(p); n.delete("userid"); return n; });
+    setFieldErrors((p) => { const n = new Set(p); n.delete("userid"); n.delete("coid"); return n; });
 
     setAddressesLoading(true);
     const res = await fetchAddressesByUserid(picked.userID);
@@ -401,8 +447,11 @@ export function AdminForwarderNewForm({
   }, [userFilter, users]);
 
   const selectedUser = useMemo(
-    () => users.find((u) => u.userID === userid) ?? (presetUser?.userID === userid ? presetUser : null),
-    [userid, users, presetUser],
+    () =>
+      (pickedCustomer && pickedCustomer.userID === userid ? pickedCustomer : null) ??
+      users.find((u) => u.userID === userid) ??
+      (presetUser?.userID === userid ? presetUser : null),
+    [userid, users, presetUser, pickedCustomer],
   );
 
   const selectedAddress = useMemo(
@@ -537,7 +586,7 @@ export function AdminForwarderNewForm({
           {/* coID */}
           <div>
             <label className="block text-xs font-medium text-muted mb-1">
-              ประเภทสมาชิก (coID) <span className="text-red-500">*</span>
+              ประเภทสมาชิก (coID) <span className="text-muted">· ไม่บังคับ</span>
             </label>
             <select
               value={coid}
@@ -553,7 +602,7 @@ export function AdminForwarderNewForm({
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-[11px] text-muted">เลือกก่อน → รายชื่อสมาชิกจะกรองตาม</p>
+            <p className="mt-1 text-[11px] text-muted">เลือกเพื่อกรองตามกลุ่ม — หรือพิมพ์ค้นหาลูกค้าทางขวาได้เลย (ทุกกลุ่ม)</p>
           </div>
 
           {/* userID (cascaded) */}
@@ -573,7 +622,19 @@ export function AdminForwarderNewForm({
                 </div>
                 <button
                   type="button"
-                  onClick={() => { setUserid(""); setUserFilter(""); setAddresses([]); setAddressId(null); setUserPickerOpen(true); }}
+                  onClick={() => {
+                    // Full reset back to the universal search (don't strand the
+                    // admin inside the auto-filled coID group from a prior pick).
+                    setUserid("");
+                    setUserFilter("");
+                    setCoid("");
+                    setPickedCustomer(null);
+                    setUsers([]);
+                    setSearchResults([]);
+                    setAddresses([]);
+                    setAddressId(null);
+                    setUserPickerOpen(true);
+                  }}
                   className="rounded-md border border-green-300 bg-white px-2.5 py-1 text-xs text-green-700 hover:bg-green-100"
                   disabled={pending}
                 >
@@ -588,34 +649,59 @@ export function AdminForwarderNewForm({
                   onChange={(e) => { setUserFilter(e.target.value); setUserPickerOpen(true); }}
                   onFocus={() => setUserPickerOpen(true)}
                   placeholder={
-                    !coid
-                      ? "เลือก coID ก่อน..."
-                      : usersLoading
-                      ? "กำลังโหลด..."
-                      : `ค้นหา · PR1234 · ชื่อ · เบอร์ (${users.length} คน)`
+                    coid
+                      ? (usersLoading ? "กำลังโหลด..." : `ค้นหาในกลุ่มนี้ · PR1234 · ชื่อ · เบอร์ (${users.length} คน)`)
+                      : "พิมพ์ค้นหาลูกค้า · PR1234 · ชื่อ · เบอร์ — ทุกกลุ่ม"
                   }
                   className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ${errCls("userid")}`}
-                  disabled={pending || !coid || usersLoading}
+                  disabled={pending}
                   autoComplete="off"
                 />
-                {userPickerOpen && coid && !usersLoading && (
+                {userPickerOpen && (coid ? !usersLoading : userFilter.trim().length >= 1) && (
                   <div className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-border bg-white shadow-lg">
-                    {filteredUsers.length === 0 ? (
-                      <div className="px-4 py-3 text-sm text-muted">ไม่พบสมาชิกใน coID นี้</div>
+                    {coid ? (
+                      /* ── tier cascade: filter the coID-loaded list ── */
+                      filteredUsers.length === 0 ? (
+                        <div className="px-4 py-3 text-sm text-muted">ไม่พบสมาชิกในกลุ่มนี้</div>
+                      ) : (
+                        filteredUsers.map((u) => (
+                          <button
+                            key={u.userID}
+                            type="button"
+                            onClick={() => onUserPick(u)}
+                            className="block w-full px-3 py-2 text-left text-sm hover:bg-surface-alt"
+                          >
+                            <span className="font-mono text-primary-600">{u.userID}</span>
+                            <span className="mx-1.5 text-muted">·</span>
+                            <span>{`${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "(ไม่มีชื่อ)"}</span>
+                            {u.userTel && <span className="ml-2 text-xs text-muted">{u.userTel}</span>}
+                          </button>
+                        ))
+                      )
                     ) : (
-                      filteredUsers.map((u) => (
-                        <button
-                          key={u.userID}
-                          type="button"
-                          onClick={() => onUserPick(u)}
-                          className="block w-full px-3 py-2 text-left text-sm hover:bg-surface-alt"
-                        >
-                          <span className="font-mono text-primary-600">{u.userID}</span>
-                          <span className="mx-1.5 text-muted">·</span>
-                          <span>{`${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "(ไม่มีชื่อ)"}</span>
-                          {u.userTel && <span className="ml-2 text-xs text-muted">{u.userTel}</span>}
-                        </button>
-                      ))
+                      /* ── direct search across ALL coIDs (ภูม flag round 9) ── */
+                      searchLoading ? (
+                        <div className="px-4 py-3 text-sm text-muted">กำลังค้นหา...</div>
+                      ) : userFilter.trim().length < 2 ? (
+                        <div className="px-4 py-3 text-sm text-muted">พิมพ์อย่างน้อย 2 ตัวอักษร</div>
+                      ) : searchResults.length === 0 ? (
+                        <div className="px-4 py-3 text-sm text-muted">ไม่พบลูกค้า &ldquo;{userFilter.trim()}&rdquo;</div>
+                      ) : (
+                        searchResults.map((u) => (
+                          <button
+                            key={u.userID}
+                            type="button"
+                            onClick={() => onUserPick(u, u.coID)}
+                            className="block w-full px-3 py-2 text-left text-sm hover:bg-surface-alt"
+                          >
+                            <span className="font-mono text-primary-600">{u.userID}</span>
+                            <span className="mx-1.5 text-muted">·</span>
+                            <span>{`${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "(ไม่มีชื่อ)"}</span>
+                            {u.userTel && <span className="ml-2 text-xs text-muted">{u.userTel}</span>}
+                            {u.coID && <span className="ml-2 rounded bg-surface-alt px-1.5 text-[10px] text-muted">{u.coID}</span>}
+                          </button>
+                        ))
+                      )
                     )}
                   </div>
                 )}

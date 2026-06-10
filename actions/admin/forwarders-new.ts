@@ -119,6 +119,52 @@ export async function fetchUsersByCoid(
 }
 
 // ────────────────────────────────────────────────────────────
+// searchCustomers — direct customer search across ALL coIDs.
+// ภูม flag round 9 (2026-06-10): the coID-first cascade can't reach the
+// majority of customers — most have coID="PR", which is NOT a selectable
+// tb_co row (the dropdown lists OOAEOM.VIP/PCS/PRO3.15/VIP1-5/… but never
+// "PR"), so picking any tier never lists them. This searches tb_users by
+// PR-code / name / phone with NO coID gate, returning each match's coID so
+// the form can fill the tier from the customer it found.
+// ────────────────────────────────────────────────────────────
+
+export type CustomerSearchResult = CustomerOption & { coID: string | null };
+
+export async function searchCustomers(
+  query: string,
+): Promise<AdminActionResult<{ customers: CustomerSearchResult[] }>> {
+  return withAdmin<{ customers: CustomerSearchResult[] }>(
+    ["ops", "accounting", "super"],
+    async () => {
+      // Sanitize before it goes into the PostgREST `.or()` filter string:
+      // strip the chars that would break that syntax / inject extra clauses
+      // ( , ( ) * % \ ) and cap the length. (Admin-gated, but keep it clean.)
+      const raw = query.replace(/[(),*%\\]/g, " ").trim().slice(0, 40);
+      if (raw.length < 2) return { ok: true, data: { customers: [] } };
+
+      const admin = createAdminClient();
+      const code = raw.toUpperCase();
+
+      const { data, error } = await admin
+        .from("tb_users")
+        .select("userID, userName, userLastName, userTel, coID")
+        .or(
+          `userID.ilike.%${code}%,userName.ilike.%${raw}%,userLastName.ilike.%${raw}%,userTel.ilike.%${raw}%`,
+        )
+        .eq("userStatus", "1")
+        .order("userID", { ascending: true })
+        .limit(30);
+
+      if (error) return { ok: false, error: error.message };
+      return {
+        ok: true,
+        data: { customers: (data ?? []) as unknown as CustomerSearchResult[] },
+      };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────
 // fetchAddressesByUserid — used by client form after a user is picked.
 // Returns the customer's tb_address rows + a flag marking which one is
 // the "main" address (joined via tb_address_main).
