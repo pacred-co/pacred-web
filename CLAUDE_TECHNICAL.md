@@ -234,7 +234,7 @@ often wins and hits `$ is not defined`.
 | Company constants | `components/seo/site.ts` |
 | Legacy auth bridge | `lib/auth/pcs-legacy-bridge.ts` |
 | Admin phase gate | `lib/admin/phase-access.ts` |
-| DB migrations | `supabase/migrations/` — through 0172 applied prod (0065 + 0168 are intentional gaps; next free per the `supabase/migrations/` ledger — currently 0174, with 0173 pending-apply) |
+| DB migrations | `supabase/migrations/` — through 0174 applied prod (0065 + 0168 are intentional gaps; 0173 = count_forwarder_by_owner RPC, 0174 = generate_member_code staff-skip; **next free = 0175**) |
 | PromptPay QR | `lib/promptpay.ts` |
 | Protected layout chrome | `lib/legacy/pcs-chrome.ts` |
 | Theme provider | `components/theme-provider.tsx` |
