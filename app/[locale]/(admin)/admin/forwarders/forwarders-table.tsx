@@ -3,7 +3,7 @@
 import { Fragment, useMemo, useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { ArrowUpDown } from "lucide-react";
+import { ArrowUpDown, Lock } from "lucide-react";
 import {
   adminBulkUpdateForwarderTbStatus,
   markForwarderPrinted,
@@ -89,6 +89,8 @@ export type Row = {
   car_off: boolean;          // legacy fstatuscaroff='1' → ลงรถ
   eta_base: string | null;   // legacy fdatetothai · ETA range computed in cell
   pallet: string | null;     // legacy fpallet · warehouse location chip
+  /** #259 Option B — true when admin has manually locked the cabinet number. */
+  cabinet_locked: boolean;
   customer: {
     userid: string;
     name: string;
@@ -1122,12 +1124,22 @@ export function ForwardersTable({
                                 รอปิดตู้
                               </span>
                             ) : (
-                              <Link
-                                href={`/admin/report-cnt/${encodeURIComponent(r.cabinet_number)}`}
-                                className="font-mono text-primary-600 hover:underline"
-                              >
-                                {r.cabinet_number}
-                              </Link>
+                              <>
+                                <Link
+                                  href={`/admin/report-cnt/${encodeURIComponent(r.cabinet_number)}`}
+                                  className="font-mono text-primary-600 hover:underline"
+                                >
+                                  {r.cabinet_number}
+                                </Link>
+                                {r.cabinet_locked && (
+                                  <span
+                                    className="inline-block ml-1 align-middle"
+                                    title="เลขตู้ถูกล็อก — partner sync จะไม่ทับค่านี้"
+                                  >
+                                    <Lock className="text-amber-500" size={10} aria-hidden />
+                                  </span>
+                                )}
+                              </>
                             )}
                           </div>
                         )}
@@ -1275,6 +1287,15 @@ export function ForwardersTable({
                                         {m.tracking_chn}
                                         {m.id === r.id && (
                                           <span className="ml-1 text-[9px] text-blue-600">(หลัก)</span>
+                                        )}
+                                        {/* #259 Option B — lock icon on member row when cabinet is locked */}
+                                        {m.cabinet_locked && m.cabinet_number && (
+                                          <span
+                                            className="inline-block ml-1 align-middle"
+                                            title="เลขตู้ถูกล็อก — partner sync จะไม่ทับค่านี้"
+                                          >
+                                            <Lock className="inline-block text-amber-500" size={9} aria-hidden />
+                                          </span>
                                         )}
                                       </td>
                                       <td className="px-2 py-1.5 text-right">{m.amount_count}</td>
