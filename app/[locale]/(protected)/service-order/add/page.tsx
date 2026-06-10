@@ -72,11 +72,13 @@ import { LinkPasteSearch } from "./link-paste-search";
  * auto-expires every order whose `hdatepayment < NOW()` to `hstatus='6'`
  * — that is a side-effect on page view. Per the runbook a Server
  * Component render MUST be a pure read, so that mutation is NOT
- * reproduced here. TODO(server-action): port the auto-expire to a cron
- * + the three POST handlers to `actions/orders.ts`:
- *   - addOrder      (L8-244)   → actions/orders.ts::createServiceOrder
- *   - paymentOrder  (L246-438) → actions/orders.ts::payServiceOrders
- *   - orderCancelAll(L440-460) → actions/orders.ts::cancelServiceOrders
+ * reproduced here. The legacy POST handlers are now wired thus:
+ *   - the auto-expire side-effect → the auto-cancel cron
+ *     (`autoExpireOverdueShopOrder` over tb_header_order)
+ *   - addOrder / paymentOrder / orderCancelAll → the client shims in
+ *     `service-order-bulk-actions.tsx` (see INTERACTIONS below)
+ *   (NB: the pre-D1 `actions/orders.ts` demo was deleted 2026-06-10 — it
+ *    wrote the 0-row rebuilt `orders` table, never these handlers.)
  *
  * ── INTERACTIONS (wired via "use client" shims) ──────────────
  * The legacy page is heavily jQuery + DataTables driven; the equivalent

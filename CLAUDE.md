@@ -472,7 +472,7 @@ git fetch origin && git merge origin/dave-pacred   # everyone bases on dave-pacr
 5. i18n: add keys in [messages/th.json](messages/th.json) + [messages/en.json](messages/en.json) namespace
 6. (optional) Realtime: subscribe via `supabase.channel(...)` in `"use client"` component
 
-→ See [actions/orders.ts](actions/orders.ts) + [app/[locale]/(protected)/orders/](app/[locale]/(protected)/orders/) as a working reference
+→ See [lib/validators/refund.ts](lib/validators/refund.ts) + [actions/refunds.ts](actions/refunds.ts) + [app/[locale]/(protected)/refunds/](app/[locale]/(protected)/refunds/) as a working reference (the pre-D1 `/orders` demo this used to point at was deleted 2026-06-10)
 
 ### Common edits
 - Locale string → both `messages/th.json` + `messages/en.json`

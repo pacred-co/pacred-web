@@ -1,8 +1,12 @@
 /**
- * Unit tests for smaller validator schemas — contact, security, orders.
+ * Unit tests for smaller validator schemas — contact, security.
  *
  * Batched into one file because each schema is small (3-8 fields).
  * Pattern matches lib/validators/auth.test.ts.
+ *
+ * (The `orders` validator + its tests were removed 2026-06-10 with the dead
+ * pre-D1 `/orders` demo stack — the rebuilt `orders` table is 0-row on prod;
+ * live customer orders = tb_header_order / tb_forwarder via /service-order.)
  */
 
 import { contactMessageSchema } from "./contact";
@@ -11,7 +15,6 @@ import {
   requestPhoneChangeSchema,
   confirmPhoneChangeSchema,
 } from "./security";
-import { createOrderSchema, SERVICE_TYPES, ORDER_STATUSES } from "./orders";
 
 let pass = 0;
 let fail = 0;
@@ -109,42 +112,6 @@ section("confirmPhoneChangeSchema — phone + OTP");
 assertOk  ("happy path",                     confirmPhoneChangeSchema, { newPhone: "0812345678", otp: "123456" });
 assertFail("missing otp",                    confirmPhoneChangeSchema, { newPhone: "0812345678", otp: "" });
 assertFail("missing newPhone",               confirmPhoneChangeSchema, { otp: "123456" });
-
-// ════════════════════════════════════════════════════════════════════
-// ORDERS — generic service-type order (separate from cart/forwarder)
-// ════════════════════════════════════════════════════════════════════
-
-// ────────────────────────────────────────────────────────────
-section("createOrderSchema — serviceType enum + description");
-// ────────────────────────────────────────────────────────────
-
-const validOrderCreate = {
-  serviceType: "import" as const,
-  description: "นำเข้าสินค้าจากจีน — รายละเอียดเพิ่มเติม",
-};
-
-assertOk  ("happy path import",              createOrderSchema, validOrderCreate);
-assertOk  ("serviceType=export",             createOrderSchema, { ...validOrderCreate, serviceType: "export" });
-assertOk  ("serviceType=clear",              createOrderSchema, { ...validOrderCreate, serviceType: "clear" });
-assertOk  ("serviceType=customs",            createOrderSchema, { ...validOrderCreate, serviceType: "customs" });
-assertOk  ("serviceType=order",              createOrderSchema, { ...validOrderCreate, serviceType: "order" });
-assertOk  ("serviceType=payment",            createOrderSchema, { ...validOrderCreate, serviceType: "payment" });
-assertOk  ("with origin/destination",        createOrderSchema, { ...validOrderCreate, origin: "Guangzhou", destination: "Bangkok" });
-assertOk  ("origin null allowed",            createOrderSchema, { ...validOrderCreate, origin: null });
-
-assertFail("serviceType invalid 'unknown'",  createOrderSchema, { ...validOrderCreate, serviceType: "unknown" });
-assertFail("missing description",            createOrderSchema, { ...validOrderCreate, description: "" });
-assertFail("description > 2000 chars",       createOrderSchema, { ...validOrderCreate, description: "x".repeat(2001) });
-
-// ────────────────────────────────────────────────────────────
-section("SERVICE_TYPES + ORDER_STATUSES constants");
-// ────────────────────────────────────────────────────────────
-
-if (SERVICE_TYPES.length === 6) { pass++; console.log("  ✓ SERVICE_TYPES has 6 entries (import/export/clear/customs/order/payment)"); }
-else { fail++; console.error(`  ✗ SERVICE_TYPES length mismatch — got ${SERVICE_TYPES.length}, expected 6`); }
-
-if (ORDER_STATUSES.length === 5) { pass++; console.log("  ✓ ORDER_STATUSES has 5 entries (pending/processing/shipped/delivered/cancelled)"); }
-else { fail++; console.error(`  ✗ ORDER_STATUSES length mismatch — got ${ORDER_STATUSES.length}, expected 5`); }
 
 // ────────────────────────────────────────────────────────────
 console.log(`\n  ${pass} pass · ${fail} fail`);

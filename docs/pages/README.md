@@ -88,8 +88,6 @@ Auto-derived from code on **2026-06-02**. Folder mirrors the route tree (route g
 | [`/map`](map.md) | แผนที่/ที่ตั้งสำนักงาน-โกดัง | 0 | 0 |
 | [`/my-issues`](my-issues.md) | เคส/ปัญหาที่ลูกค้าแจ้งไว้ | 0 | 1 |
 | [`/notifications`](notifications.md) | การแจ้งเตือนของลูกค้า | 2 | 1 |
-| [`/orders`](orders.md) | รายการคำสั่งซื้อของลูกค้า | 1 | 0 |
-| [`/orders/new`](orders/new.md) | สร้างคำสั่งซื้อใหม่ | 1 | 0 |
 | [`/pay`](pay.md) | หน้าชำระเงิน (รวม) | 0 | 0 |
 | [`/payment-due`](payment-due.md) | รายการที่รอชำระ (ค้างจ่าย) | 4 | 0 |
 | [`/profile`](profile.md) | โปรไฟล์ลูกค้า | 8 | 0 |

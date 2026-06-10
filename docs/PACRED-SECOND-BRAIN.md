@@ -177,8 +177,8 @@ pacred-web/
 | `/register` | `app/[locale]/(auth)/register/page.tsx` | ✅ wired (personal + juristic 3-step) | requireGuest |
 | `/dashboard` | `app/[locale]/(protected)/dashboard/page.tsx` | ✅ placeholder | requireAuth |
 | `/complete-profile` | `app/[locale]/complete-profile/page.tsx` | ✅ placeholder | requireAuth (allowIncomplete) |
-| `/orders` | `app/[locale]/(protected)/orders/page.tsx` | ✅ demo pattern | requireAuth |
-| `/orders/new` | `app/[locale]/(protected)/orders/new/page.tsx` | ✅ demo pattern | requireAuth |
+| ~~`/orders`~~ | _(deleted 2026-06-10)_ | 🗑️ removed — pre-D1 demo over the 0-row rebuilt `orders` table; live list = `/service-order` | — |
+| ~~`/orders/new`~~ | _(deleted 2026-06-10)_ | 🗑️ removed — live create = `/service-order/add` | — |
 | `/auth/callback` | `app/auth/callback/route.ts` | ✅ OAuth handler | — |
 | `/auth/signout` | `app/auth/signout/route.ts` | ✅ POST handler | — |
 
