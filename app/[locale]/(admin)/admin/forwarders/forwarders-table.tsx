@@ -314,19 +314,24 @@ function isMomoRoutingBatch(cab: string | null | undefined): boolean {
 // simply groups what each page has. Pagination itself is untouched.
 // ─────────────────────────────────────────────────────────────────────
 
-/** Strip ONE trailing "-<digits>" suffix: "1779955936-3" → "1779955936".
+/** Strip ONE trailing sibling suffix so box-siblings collapse to a base:
+ *    "1779955936-3"      → "1779955936"   (the "-N" form)
+ *    "302098539663-1/7"  → "302098539663" (the "-N/M" box-of-boxes form · ภูม
+ *                                          flag round 10 — was NOT stripped, so
+ *                                          a 7-box parcel never grouped)
  *  A value with no suffix keeps itself. Empty/null/"-" never groups. */
 function baseTracking(tracking: string | null): string | null {
   if (!tracking) return null;
   const t = tracking.trim();
   if (!t || t === "-") return null;
-  return t.replace(/-\d+$/, "");
+  return t.replace(/-\d+(?:\/\d+)?$/, "");
 }
 
-/** Numeric sibling suffix · no suffix → 0 so the base row sorts first
- *  (= preferred main row), then -2, -3, … Ties broken by id. */
+/** Numeric sibling suffix (the box number) · no suffix → 0 so the base row
+ *  sorts first (= preferred main row), then 1, 2, … Ties broken by id.
+ *  Handles both "-3" and "-3/7" (captures the box number 3). */
 function trackingSuffix(tracking: string | null): number {
-  const m = (tracking ?? "").trim().match(/-(\d+)$/);
+  const m = (tracking ?? "").trim().match(/-(\d+)(?:\/\d+)?$/);
   return m ? Number(m[1]) : 0;
 }
 
