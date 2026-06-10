@@ -1060,24 +1060,33 @@ export function ForwardersTable({
                           // Both the chevron and the badge toggle the
                           // expanded member sub-table.
                           <>
+                            {/* 2026-06-10 ภูม flag: the chevron was a bare ▸
+                                glyph — staff couldn't tell it expands. Make it
+                                a clear pill button (blue bg + border + label). */}
                             <button
                               type="button"
                               onClick={() => toggleGroupExpand(group.key)}
                               aria-expanded={isExpanded}
                               title={isExpanded ? "ซ่อนเลขพัสดุในกลุ่ม" : "แสดงเลขพัสดุในกลุ่ม"}
-                              className="inline-flex items-center gap-1 font-mono text-[10px] hover:text-primary-700"
+                              className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-blue-50 px-1.5 py-1 font-mono text-[10px] text-blue-800 hover:bg-blue-100 transition-colors"
                             >
-                              <span aria-hidden>{isExpanded ? "▾" : "▸"}</span>
-                              <span>{groupBase}</span>
+                              <span
+                                aria-hidden
+                                className={`inline-block text-[11px] leading-none transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                              >
+                                ▸
+                              </span>
+                              <span className="font-semibold">{groupBase}</span>
                             </button>
                             <div className="mt-0.5 flex flex-wrap items-center gap-1">
                               <button
                                 type="button"
                                 onClick={() => toggleGroupExpand(group.key)}
-                                className="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[9px] font-medium hover:bg-blue-100"
+                                className="inline-flex items-center gap-1 rounded-full bg-blue-600 text-white px-1.5 py-0.5 text-[9px] font-medium hover:bg-blue-700"
                                 title={`พัสดุกลุ่มเดียวกัน ${group.members.length} เลข (MOMO แตกกล่อง) — คลิกดูรายเลข`}
                               >
                                 📦 {group.members.length} เลขพัสดุ
+                                <span aria-hidden>{isExpanded ? "▲" : "▼"}</span>
                               </button>
                               <span className="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[9px]">
                                 {modeLabel[r.transport_type] ?? r.transport_type}

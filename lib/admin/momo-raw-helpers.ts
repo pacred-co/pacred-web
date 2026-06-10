@@ -46,6 +46,48 @@ export type MomoMetrics = {
   qty:    number;
 };
 
+/** Warehouse-phase dates lifted from a MOMO raw blob's `status_date`. */
+export type MomoWarehouseDates = {
+  /** เข้าโกดังจีน — when the parcel arrived at the China warehouse. status_date.kodang */
+  kodang:   string | null;
+  /** ออกจากโกดังจีน — when the parcel left the China warehouse (shipped out).
+   *  status_date.exported, falling back to status_date.prepare_export. Null
+   *  while the parcel is still sitting in the China warehouse. */
+  exported: string | null;
+};
+
+/**
+ * Extract the warehouse-IN / warehouse-OUT dates from a MOMO raw blob.
+ *
+ * 2026-06-10 ภูม flag — the commit used to write the SAME date
+ * (momo_updated_at = latest phase) into BOTH fdatestatus2 (เข้าโกดัง) and
+ * fdatestatus3 (ออกโกดัง), so they always rendered identical. MOMO's raw
+ * actually carries distinct phase timestamps under `status_date`:
+ *   waiting → kodang → mergebox → wooden_create → prepare_export → exported
+ * We map:
+ *   fdatestatus2 (เข้าโกดังจีน)   ← status_date.kodang
+ *   fdatestatus3 (ออกจากโกดังจีน) ← status_date.exported || prepare_export
+ *
+ * Empty strings / null / non-object → null for that phase. A null raw yields
+ * both-null (the caller then falls back to its own manifest date for kodang).
+ */
+export function extractWarehouseDatesFromMomoRaw(raw: unknown): MomoWarehouseDates {
+  const empty: MomoWarehouseDates = { kodang: null, exported: null };
+  if (!raw || typeof raw !== "object") return empty;
+  const sd = (raw as Record<string, unknown>).status_date;
+  if (!sd || typeof sd !== "object") return empty;
+  const s = sd as Record<string, unknown>;
+  const pick = (v: unknown): string | null => {
+    if (typeof v !== "string") return null;
+    const t = v.trim();
+    return t.length > 0 ? t : null;
+  };
+  return {
+    kodang:   pick(s.kodang),
+    exported: pick(s.exported) ?? pick(s.prepare_export),
+  };
+}
+
 /**
  * Extract package metrics (kg, cbm, w/l/h, qty) from a MOMO raw blob.
  *

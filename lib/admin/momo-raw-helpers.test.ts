@@ -13,6 +13,7 @@
 import {
   deriveTransportTypeFromMomoRaw,
   extractMetricsFromMomoRaw,
+  extractWarehouseDatesFromMomoRaw,
 } from "./momo-raw-helpers";
 
 let pass = 0;
@@ -88,6 +89,56 @@ check("quantity 2.4 → qty 2 (round down)", extractMetricsFromMomoRaw({ quantit
 check("quantity 2.6 → qty 3 (round up)", extractMetricsFromMomoRaw({ quantity: 2.6 }).qty === 3);
 check("quantity missing → qty 1", extractMetricsFromMomoRaw({ kg: 9 }).qty === 1);
 check('quantity "abc" → qty 1 (NaN→0→floor 1)', extractMetricsFromMomoRaw({ quantity: "abc" }).qty === 1);
+
+// ── extractWarehouseDatesFromMomoRaw (ภูม flag 2026-06-10) ──────────
+// null / non-object / no status_date → both null
+{
+  const w = extractWarehouseDatesFromMomoRaw(null);
+  check("warehouseDates null → {kodang:null, exported:null}", w.kodang === null && w.exported === null);
+}
+check("warehouseDates string → both null", (() => { const w = extractWarehouseDatesFromMomoRaw("x"); return w.kodang === null && w.exported === null; })());
+check("warehouseDates no status_date → both null", (() => { const w = extractWarehouseDatesFromMomoRaw({ kg: 5 }); return w.kodang === null && w.exported === null; })());
+
+// kodang present, exported empty → exported falls back to prepare_export
+{
+  const w = extractWarehouseDatesFromMomoRaw({
+    status_date: { waiting: "2026-06-01", kodang: "2026-06-02", prepare_export: "2026-06-05", exported: "" },
+  });
+  check("kodang → 2026-06-02", w.kodang === "2026-06-02");
+  check("exported empty → falls back to prepare_export 2026-06-05", w.exported === "2026-06-05");
+}
+
+// exported present → wins over prepare_export
+{
+  const w = extractWarehouseDatesFromMomoRaw({
+    status_date: { kodang: "2026-06-02", prepare_export: "2026-06-05", exported: "2026-06-07" },
+  });
+  check("exported present → 2026-06-07 (wins over prepare_export)", w.exported === "2026-06-07");
+}
+
+// both kodang + exported empty → both null (parcel not yet in/out)
+{
+  const w = extractWarehouseDatesFromMomoRaw({ status_date: { kodang: "", exported: "", prepare_export: "" } });
+  check("all empty status_date → both null", w.kodang === null && w.exported === null);
+}
+
+// whitespace-only values coerce to null
+{
+  const w = extractWarehouseDatesFromMomoRaw({ status_date: { kodang: "   ", exported: "  " } });
+  check("whitespace-only → null", w.kodang === null && w.exported === null);
+}
+
+// the ภูม example (status 7, exported empty, prepare_export set)
+{
+  const w = extractWarehouseDatesFromMomoRaw({
+    status_date: {
+      waiting: "2026-06-09 17:14:36", kodang: "2026-06-09 17:14:36", morgbox: "",
+      wooden_create: "", prepare_export: "2026-06-09 17:27:47", exported: "",
+    },
+  });
+  check("ภูม example: kodang = 2026-06-09 17:14:36", w.kodang === "2026-06-09 17:14:36");
+  check("ภูม example: exported→prepare_export = 2026-06-09 17:27:47", w.exported === "2026-06-09 17:27:47");
+}
 
 console.log(`\n${pass} pass, ${fail} fail`);
 if (fail > 0) process.exit(1);

@@ -42,6 +42,7 @@ import { logAdminAction, type AdminActionResult } from "@/actions/admin/common";
 import {
   deriveTransportTypeFromMomoRaw,
   extractMetricsFromMomoRaw,
+  extractWarehouseDatesFromMomoRaw,
 } from "@/lib/admin/momo-raw-helpers";
 import { ADDRESSES } from "@/components/seo/site";
 
@@ -381,7 +382,6 @@ export async function commitMomoRowCore(
   let fDateToThai: string | null = null;
   let fDateContainerClose: string | null = null;
   let fCabinetNumber = "";
-  const fDateStatus3 = hasContainer ? manifestDate : null;
   if (hasContainer) {
     const daysAhead = fTransportType === "1" ? 7 : 14;
     const eta = new Date(`${manifestDate}T00:00:00Z`);
@@ -390,7 +390,23 @@ export async function commitMomoRowCore(
     fDateContainerClose = manifestDate;
     fCabinetNumber = cabinetForDisplay;
   }
-  const fDateStatus2 = cleanDate(manifestDate);
+
+  // ── Warehouse-IN / warehouse-OUT dates (ภูม flag 2026-06-10) ──
+  // The list shows two distinct columns — เข้าโกดัง (fdatestatus2) and
+  // ออกโกดัง (fdatestatus3). The old code wrote `manifestDate` into BOTH,
+  // so they always rendered identical (28/05 == 28/05 in ภูม's screenshot).
+  // MOMO's raw carries the real per-phase timestamps under `status_date`:
+  //   fdatestatus2 (เข้าโกดังจีน)   ← status_date.kodang
+  //   fdatestatus3 (ออกจากโกดังจีน) ← status_date.exported || prepare_export
+  // fdatestatus3 stays null while the parcel is still in the China warehouse
+  // (not yet exported) — the column then correctly shows "—".
+  const warehouseDates = extractWarehouseDatesFromMomoRaw(srcRow.raw);
+  // เข้าโกดัง: prefer the real kodang timestamp; fall back to the manifest
+  // reference only when MOMO didn't supply it (older payloads).
+  const fDateStatus2 = cleanDate(warehouseDates.kodang) ?? cleanDate(manifestDate);
+  // ออกโกดัง: ONLY the real exported/prepare_export timestamp — never the
+  // manifest fallback (an un-exported parcel must show no out-date).
+  const fDateStatus3 = cleanDate(warehouseDates.exported);
 
   // fIDorCO — legacy uses 'CC'+productID. For MOMO Status Sync rows,
   // productID isn't in scope; use 'MO' (MOMO marker) + tracking suffix
