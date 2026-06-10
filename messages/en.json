@@ -5222,6 +5222,20 @@
     "footerRed": "• <b>Red = the Pacred team is fixing it</b> — expected to be resolved within a few minutes",
     "footerEmergency": "• Report an emergency via LINE OA <chat>{lineId}</chat> or call <call>{phone}</call>"
   },
+  "publicReceipt": {
+    "title": "Receipt — Pacred",
+    "heading": "Receipt",
+    "manageDoc": "Manage document",
+    "fullScreen": "Fit to screen",
+    "paperView": "Paper view",
+    "login": "Sign in",
+    "print": "Print",
+    "downloadPdf": "Download PDF",
+    "downloadPdfHint": "In the print dialog, choose \"Save as PDF\" as the destination",
+    "englishVersion": "English Version",
+    "thaiVersion": "Thai version",
+    "close": "Close"
+  },
   "pcsTopMenu": {
     "followUsOn": "Follow us on",
     "depositRate": "Order rate",

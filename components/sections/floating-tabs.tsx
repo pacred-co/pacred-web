@@ -118,9 +118,14 @@ export function FloatingTabs({
   // fit one viewport, so the bottom nav + its 64px body-padding clearance
   // both need to go away. Pattern matches `/<route>` AND `/<locale>/<route>`.
   // Per ภูม + เดฟ confirm 2026-05-16 evening; auth-hide per ปอน 2026-05-19.
+  // `/r/<token>` = the login-free public RECEIPT page (a money document). It
+  // has its own "จัดการเอกสาร" toolbar (incl. its own mobile bottom bar), and
+  // the marketing CTA / LINE bubble would clutter a tax doc + collide with that
+  // bar — so the floating tabs are hidden there too (same treatment as /admin).
   const isHidden =
     !!pathname &&
     (/^(?:\/[a-z]{2})?\/admin(?:\/|$)/.test(pathname) ||
+      /^(?:\/[a-z]{2})?\/r\/[^/]+$/.test(pathname) ||
       /^(?:\/[a-z]{2})?\/(?:login|register|forgot-password)(?:\/|$)/.test(pathname));
 
   // Hide just the "เมนู" tab on the mobile launchpad (/m/dashboard) — the
