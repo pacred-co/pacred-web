@@ -29,6 +29,7 @@ export const dynamic = "force-dynamic";
 const LEADS_MENUBAR: MenubarItem[] = [
   { label: "ลูกค้าที่ต้องโทรตาม (Cold)", href: "/admin/leads?segment=cold" },
   { label: "ลูกค้า PCS รายใหญ่", href: "/admin/leads?segment=big-pcs" },
+  { label: "นัดโทรกลับ (ถึงคิว)", href: "/admin/leads?segment=callback" },
   { label: "ทั้งหมด", href: "/admin/leads?segment=all" },
   {
     label: "กรองตามสถานะ",
@@ -46,6 +47,7 @@ const LEADS_MENUBAR: MenubarItem[] = [
 const SEGMENTS: { key: LeadSegment; label: string; hint: string }[] = [
   { key: "cold", label: "ลูกค้าที่ต้องโทรตาม", hint: "ยังไม่เคยติดต่อ (มีเบอร์โทร)" },
   { key: "big-pcs", label: "PCS รายใหญ่", hint: "ลูกค้าที่สั่งนำเข้าบ่อยที่สุด" },
+  { key: "callback", label: "นัดโทรกลับ", hint: "ถึงคิวโทรกลับ · ค้างนานสุดก่อน" },
   { key: "all", label: "ทั้งหมด", hint: "ทุกลูกค้าที่มีเบอร์โทร" },
 ];
 
@@ -70,7 +72,9 @@ export default async function AdminLeadsPage({
 
   const sp = await searchParams;
   const segment: LeadSegment =
-    sp.segment === "big-pcs" || sp.segment === "all" ? sp.segment : "cold";
+    sp.segment === "big-pcs" || sp.segment === "all" || sp.segment === "callback"
+      ? sp.segment
+      : "cold";
   const statusFilter: LeadCallStatus | "all" = isStatusFilter(sp.status) ? sp.status : "all";
   const q = typeof sp.q === "string" ? sp.q : "";
   const page = Math.max(1, Number(sp.page ?? "1") || 1);
@@ -213,6 +217,7 @@ export default async function AdminLeadsPage({
                 userid:     r.userid,
                 orderCount: r.orderCount,
                 rep:        r.rep ?? "",
+                cs:         r.cs ?? "",
                 lastCall:   r.lastCall ?? "",
                 callStatus: r.callStatus,
                 registered: r.registered ?? "",
@@ -229,6 +234,7 @@ export default async function AdminLeadsPage({
                 { key: "userid",     label: "รหัสลูกค้า" },
                 { key: "orderCount", label: "จำนวนนำเข้า" },
                 { key: "rep",        label: "เซลล์ผู้ดูแล" },
+                { key: "cs",         label: "CS ผู้ดูแล" },
                 { key: "lastCall",   label: "โทรล่าสุด" },
                 { key: "callStatus", label: "สถานะโทร" },
                 { key: "registered", label: "ลงทะเบียน" },
@@ -238,10 +244,17 @@ export default async function AdminLeadsPage({
           </div>
         </div>
 
-        {/* Big-PCS ranking note (flagged: recent-slice, not full-base) */}
+        {/* Big-PCS ranking note (full-base via RPC 0173 count_forwarder_by_owner) */}
         {segment === "big-pcs" ? (
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-            จัดอันดับจากจำนวนรายการนำเข้าล่าสุด — โทรหาลูกค้ารายใหญ่ก่อน (top-down)
+            จัดอันดับจากจำนวนรายการนำเข้าสะสมทั้งหมดในระบบ — โทรหาลูกค้ารายใหญ่ก่อน (top-down)
+          </p>
+        ) : null}
+
+        {/* Callback due-queue note (no scheduled-date column — due = age) */}
+        {segment === "callback" ? (
+          <p className="rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-[11px] text-purple-800">
+            ลูกค้าที่ผลโทรล่าสุดคือ “นัดโทรกลับ” — เรียงจากนัดที่ค้างนานที่สุดขึ้นก่อน
           </p>
         ) : null}
 
@@ -258,7 +271,7 @@ export default async function AdminLeadsPage({
           <LeadKanban rows={rows} tagsByUser={tagsByUser} />
         ) : (
           <div className="overflow-x-auto scrollbar-x-visible rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
-            <table className="w-full min-w-[900px] text-sm">
+            <table className="w-full min-w-[1000px] text-sm">
               <thead className="bg-surface-alt text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-3 py-2.5">เบอร์โทร</th>
@@ -267,6 +280,7 @@ export default async function AdminLeadsPage({
                   <th className="px-3 py-2.5 text-right">นำเข้า</th>
                   <th className="px-3 py-2.5">แท็ก</th>
                   <th className="px-3 py-2.5">เซลล์ผู้ดูแล</th>
+                  <th className="px-3 py-2.5">CS ผู้ดูแล</th>
                   <th className="px-3 py-2.5">โทรล่าสุด</th>
                   <th className="px-3 py-2.5">สถานะ</th>
                   <th className="px-3 py-2.5">ลงทะเบียน</th>
@@ -296,6 +310,7 @@ export default async function AdminLeadsPage({
                       <TagChips userid={r.userid} initialTags={tagsByUser[r.userid] ?? []} compact />
                     </td>
                     <td className="px-3 py-2.5 text-xs">{r.rep || <span className="text-muted">—</span>}</td>
+                    <td className="px-3 py-2.5 text-xs">{r.cs || <span className="text-muted">—</span>}</td>
                     <td className="px-3 py-2.5 text-xs whitespace-nowrap">{fmtDate(r.lastCall)}</td>
                     <td className="px-3 py-2.5"><CallStatusBadge status={r.callStatus} /></td>
                     <td className="px-3 py-2.5 text-xs whitespace-nowrap">{fmtDate(r.registered)}</td>

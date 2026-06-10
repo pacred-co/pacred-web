@@ -78,6 +78,10 @@ export type Customer360 = {
   repLegacyId: string | null;
   /** Resolved rep display name (from admins/admin_contact_extras), or null. */
   repName: string | null;
+  /** tb_users.adminIDCS — the owning CS's tb_admin.adminID (0141), or null. */
+  csLegacyId: string | null;
+  /** Resolved CS display name (from tb_admin), or null. */
+  csName: string | null;
 
   /** Lifetime tb_forwarder order count for this userid. */
   orderCount: number;
@@ -114,6 +118,32 @@ export type CrmRepsResult = {
    * (ADR-0022) hasn't happened — surfaced to the UI so the operator knows
    * routing is gated on data, not broken.
    */
+  gateNote: string | null;
+};
+
+// ── CS routing (mirror of sales-rep routing · tb_users.adminIDCS) ──────────
+/**
+ * One assignable CS — the LEGACY pool (tb_admin adminStatusA='1' AND
+ * adminStatusCS='1' · migration 0141), the same pool `pickLeastLoadedCsRep`
+ * auto-assigns from on logLeadCall('closed'). Unlike CrmRep there is no
+ * Pacred-bridge (admin_contact_extras) equivalent for CS — the CS flag lives
+ * only on tb_admin.
+ */
+export type CrmCsRep = {
+  /** tb_admin.adminID — the value tb_users.adminIDCS stores. */
+  adminID: string;
+  /** Display name (adminName + adminLastName, fallback adminID). */
+  name: string;
+  /** tb_admin.adminNickname, or null. */
+  nickname: string | null;
+  /** Count of active customers currently owned (tb_users.adminIDCS = adminID). */
+  ownedCount: number;
+};
+
+/** Result of `getCrmCsReps` — the CS pool + a gate note when empty. */
+export type CrmCsRepsResult = {
+  reps: CrmCsRep[];
+  /** Set when no active CS exists in tb_admin (adminStatusA + adminStatusCS). */
   gateNote: string | null;
 };
 

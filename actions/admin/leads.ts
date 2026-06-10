@@ -51,12 +51,17 @@ const PAGE_SIZE = 200;
 // `truncated` so the operator knows to narrow the filter.
 const EXPORT_CAP = 10000;
 
-// Bound for the big-PCS ranking scan. True full-base ranking over the 47,636
-// tb_forwarder orders needs an aggregate RPC (a follow-up); for the day-1
-// call-queue we rank the most-recent slice — recent big owners are exactly who
-// Sales wants to call first. The orchestrator can swap this for an RPC later.
+// Big-PCS ranking is FULL-BASE via the 0173 RPC `count_forwarder_by_owner()`
+// (GROUP BY userid over ALL tb_forwarder rows, top-N by lifetime count).
+// BIG_PCS_SCAN remains only as the FALLBACK slice bound for when the RPC
+// isn't installed yet (deploy-before-migration safety — same RPC+fallback
+// pattern as actions/admin/export/report-cnt.ts).
 const BIG_PCS_SCAN = 8000;
 const BIG_PCS_TOP = 200;
+// Bounded `.in()` load for the callback segment (PostgREST URL-length safety).
+// Oldest-due callbacks win the cap; a callback queue larger than this is
+// pathological — narrow it by working the queue.
+const CALLBACK_LOAD_CAP = 500;
 
 type TbUserRow = {
   userID: string;
@@ -65,6 +70,7 @@ type TbUserRow = {
   userTel: string | null;
   userActive: string | null;
   adminIDSale: string | null;
+  adminIDCS: string | null;
   userRegistered: string | null;
 };
 
@@ -90,6 +96,7 @@ function toRow(
     name: `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—",
     tel: (u.userTel ?? "").trim(),
     rep: (u.adminIDSale ?? "").trim(),
+    cs: (u.adminIDCS ?? "").trim(),
     registered: u.userRegistered,
     orderCount,
     callStatus,
@@ -99,9 +106,13 @@ function toRow(
 
 /**
  * The call-queue. segment:
- *   - 'cold'    → tb_users.userActive='' (never-contacted lead) WITH a phone.
- *   - 'big-pcs' → top forwarder-order owners (most-recent slice ranked by count).
- *   - 'all'     → every customer with a phone (most-recently registered first).
+ *   - 'cold'     → tb_users.userActive='' (never-contacted lead) WITH a phone.
+ *   - 'big-pcs'  → top forwarder-order owners — FULL-BASE ranking via the 0173
+ *                  RPC count_forwarder_by_owner() (legacy recent-slice scan as
+ *                  the deploy-before-migration fallback).
+ *   - 'all'      → every customer with a phone (most-recently registered first).
+ *   - 'callback' → นัดโทรกลับ due-queue — latest call-state = 'callback',
+ *                  oldest first (most overdue on top).
  *
  * For each visible lead we attach: lifetime forwarder order count + the latest
  * lead_call_log status. The `status` filter then narrows to a call-state.
@@ -123,29 +134,50 @@ export async function getLeadQueue(
     const orderCountByUser = new Map<string, number>();
 
     const userSelect =
-      "userID, userName, userLastName, userTel, userActive, adminIDSale, userRegistered";
+      "userID, userName, userLastName, userTel, userActive, adminIDSale, adminIDCS, userRegistered";
 
     if (segment === "big-pcs") {
-      // 1) Rank owners by forwarder order count over a recent slice.
-      const { data: fwd, error: fwdErr } = await admin
-        .from("tb_forwarder")
-        .select("userid")
-        .order("id", { ascending: false })
-        .limit(BIG_PCS_SCAN);
-      if (fwdErr) {
-        console.error(`[tb_forwarder big-pcs scan] failed`, { code: fwdErr.code, message: fwdErr.message });
-        return { ok: false, error: `query_failed: ${fwdErr.message}` };
+      // 1) FULL-BASE ranking via the 0173 RPC (GROUP BY userid over ALL
+      //    tb_forwarder rows, top-N by lifetime count) — closes the old
+      //    recent-slice approximation. Falls back to the legacy slice scan
+      //    when the RPC isn't installed yet (deploy-before-migration safety).
+      let ranked: string[] = [];
+      const { data: rankedRows, error: rpcErr } = await admin.rpc(
+        "count_forwarder_by_owner",
+        { p_top: BIG_PCS_TOP },
+      );
+      if (!rpcErr && rankedRows) {
+        for (const r of rankedRows as { userid: string | null; order_count: number | string | null }[]) {
+          const uid = (r.userid ?? "").trim();
+          if (!uid) continue;
+          orderCountByUser.set(uid, Number(r.order_count ?? 0));
+          ranked.push(uid);
+        }
+      } else {
+        console.error(
+          `[count_forwarder_by_owner rpc] failed — falling back to recent-slice scan`,
+          { code: rpcErr?.code, message: rpcErr?.message },
+        );
+        const { data: fwd, error: fwdErr } = await admin
+          .from("tb_forwarder")
+          .select("userid")
+          .order("id", { ascending: false })
+          .limit(BIG_PCS_SCAN);
+        if (fwdErr) {
+          console.error(`[tb_forwarder big-pcs scan] failed`, { code: fwdErr.code, message: fwdErr.message });
+          return { ok: false, error: `query_failed: ${fwdErr.message}` };
+        }
+        for (const r of (fwd ?? []) as { userid: string | null }[]) {
+          const uid = (r.userid ?? "").trim();
+          if (!uid) continue;
+          orderCountByUser.set(uid, (orderCountByUser.get(uid) ?? 0) + 1);
+        }
+        // Top N owners by count (slice-scan path only — the RPC already ranks).
+        ranked = [...orderCountByUser.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, BIG_PCS_TOP)
+          .map(([uid]) => uid);
       }
-      for (const r of (fwd ?? []) as { userid: string | null }[]) {
-        const uid = (r.userid ?? "").trim();
-        if (!uid) continue;
-        orderCountByUser.set(uid, (orderCountByUser.get(uid) ?? 0) + 1);
-      }
-      // 2) Top N owners by count.
-      let ranked = [...orderCountByUser.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, BIG_PCS_TOP)
-        .map(([uid]) => uid);
 
       // 3) Load their tb_users rows.
       const usersById = new Map<string, TbUserRow>();
@@ -177,13 +209,92 @@ export async function getLeadQueue(
         .map((uid) => usersById.get(uid))
         .filter((u): u is TbUserRow => Boolean(u));
       users = orderedUsers.slice(from, to);
+    } else if (segment === "callback") {
+      // 'callback' — นัดโทรกลับ due-queue: leads whose LATEST call outcome is
+      // 'callback', oldest promise first (most overdue on top). lead_call_log
+      // has no scheduled-date column (0133), so "due" = the age of the
+      // callback note. Scan newest-first + first-row-wins = the latest
+      // call-state per userid (same dedup idiom as the visible-page join
+      // below / getCrmFunnel's bounded scan).
+      const { data: calls, error: callsErr } = await admin
+        .from("lead_call_log")
+        .select("userid, status, called_at")
+        .order("called_at", { ascending: false })
+        .limit(20000);
+      if (callsErr) {
+        console.error(`[lead_call_log callback scan] failed`, { code: callsErr.code, message: callsErr.message });
+        return { ok: false, error: `query_failed: ${callsErr.message}` };
+      }
+      const latest = new Map<string, { status: string | null; called_at: string | null }>();
+      for (const c of (calls ?? []) as { userid: string; status: string | null; called_at: string | null }[]) {
+        if (!latest.has(c.userid)) latest.set(c.userid, { status: c.status, called_at: c.called_at });
+      }
+      const due = [...latest.entries()]
+        .filter(([, v]) => v.status === "callback")
+        .sort((a, b) => (a[1].called_at ?? "").localeCompare(b[1].called_at ?? ""))
+        .slice(0, CALLBACK_LOAD_CAP)
+        .map(([uid]) => uid);
+
+      // Load their tb_users rows (bounded .in() — capped above).
+      const usersById = new Map<string, TbUserRow>();
+      if (due.length > 0) {
+        const { data: us, error: usErr } = await admin
+          .from("tb_users")
+          .select(userSelect)
+          .in("userID", due);
+        if (usErr) {
+          console.error(`[tb_users callback load] failed`, { code: usErr.code, message: usErr.message });
+          return { ok: false, error: `query_failed: ${usErr.message}` };
+        }
+        for (const u of (us ?? []) as unknown as TbUserRow[]) usersById.set(u.userID, u);
+      }
+
+      // Optional free-text narrow (in memory, same as big-pcs).
+      let ordered = due;
+      if (filter.q && filter.q.trim()) {
+        const term = filter.q.trim().toLowerCase();
+        ordered = ordered.filter((uid) => {
+          const u = usersById.get(uid);
+          if (!u) return false;
+          const hay = `${u.userID} ${u.userTel ?? ""} ${u.userName ?? ""} ${u.userLastName ?? ""}`.toLowerCase();
+          return hay.includes(term);
+        });
+      }
+
+      // Preserve due order; take one extra row so the shared hasMore/trim
+      // block below can detect a next page.
+      const orderedUsers = ordered
+        .map((uid) => usersById.get(uid))
+        .filter((u): u is TbUserRow => Boolean(u));
+      users = orderedUsers.slice(from, to + 1);
+
+      // Order counts for the visible page only (bounded .in() — display).
+      const ids = users.map((u) => u.userID);
+      if (ids.length > 0) {
+        const { data: fwd, error: fwdErr } = await admin
+          .from("tb_forwarder")
+          .select("userid")
+          .in("userid", ids);
+        if (fwdErr) {
+          console.error(`[tb_forwarder callback page counts] failed`, { code: fwdErr.code, message: fwdErr.message });
+        }
+        for (const r of (fwd ?? []) as { userid: string | null }[]) {
+          const uid = (r.userid ?? "").trim();
+          if (!uid) continue;
+          orderCountByUser.set(uid, (orderCountByUser.get(uid) ?? 0) + 1);
+        }
+      }
     } else {
       // 'cold' | 'all' — page tb_users directly.
+      // ⚠️ range end is INCLUSIVE: (from, to) fetches pageSize+1 rows — the
+      // one extra the hasMore/trim block below needs. (Was `to - 1` = exactly
+      // pageSize rows, so hasMore could never become true → the "ถัดไป" link
+      // never rendered. Fixed 2026-06-10.)
       let q = admin
         .from("tb_users")
         .select(userSelect)
         .order("userRegistered", { ascending: false })
-        .range(from, to - 1);
+        .range(from, to);
 
       if (segment === "cold") {
         // never-contacted lead (legacy '' sentinel) WITH a phone to call.
@@ -225,8 +336,9 @@ export async function getLeadQueue(
       }
     }
 
-    // hasMore + trim the extra row (only for the direct-paged segments;
-    // big-pcs already sliced exactly to pageSize above).
+    // hasMore + trim the extra row (cold/all fetch one extra via .range, the
+    // callback segment slices one extra above; big-pcs already sliced exactly
+    // to pageSize so it never trips this).
     let hasMore = false;
     if (segment !== "big-pcs" && users.length > pageSize) {
       hasMore = true;
@@ -289,6 +401,7 @@ export async function exportLeadsAll(
     userid: r.userid,
     orderCount: r.orderCount,
     rep: r.rep ?? "",
+    cs: r.cs ?? "",
     lastCall: r.lastCall ?? "",
     callStatus: r.callStatus,
     registered: r.registered ?? "",
