@@ -2,6 +2,18 @@
 
 Last reviewed: 2026-05-16
 
+> ⚠️ **NEWER ORG MODEL SUPERSEDES THE ROLE COUNT BELOW (note added 2026-06-10).**
+> The CEO **department chart** in [`docs/research/ceo-directives-2026-06-01.md`](../research/ceo-directives-2026-06-01.md) §1
+> + [`docs/research/global-trade-group-2026-06-04.md`](../research/global-trade-group-2026-06-04.md) §8
+> (org chart + per-service workflow chains) is the **newer org model** and the
+> authoritative one for RBAC design. This doc's **14-role / 24-position** model
+> predates it (2026-05-16) and is kept here for the per-role responsibility/
+> permission detail — but the **RBAC remap to the new CEO chart (departments →
+> positions → admin workspaces) is PENDING** (the "13-admin recreate" + role→chart
+> mapping called for in ceo-directives §1). Where the two disagree on
+> role/department naming, the CEO chart wins; treat the sections below as the
+> per-role detail to fold into it, not as the final department list.
+
 > **For system designers** — ก๊อต, เดฟ, ภูม consult this when designing admin
 > workspaces, RBAC, or workflows for STAFF. **Not** for daily coding rhythm
 > (use [`got.md`](got.md) / [`dave.md`](dave.md) / [`poom.md`](poom.md) /
