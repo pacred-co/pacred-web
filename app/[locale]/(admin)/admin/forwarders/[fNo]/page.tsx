@@ -6,25 +6,37 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 // 2026-06-10 (ปอน) — Code128 tracking barcode, same local SVG generator the
 // customer page /service-import/[fNo] uses (copy the header 1:1).
 import { code128SvgDataUrl } from "@/lib/barcode";
-// 2026-06-05 PM (ภูม flag): ForwarderItemsTable replaced by combined
-// FreightBreakdownTable (per-item rows ¥ + freight breakdown row ฿).
-import { FreightBreakdownTable } from "./edit/freight-breakdown-table";
+// 2026-06-10 (ปอน · owner "ลอกอันนี้มาเลย ข้อมูลตามจริง"): the legacy update-page
+// items table = the clean 16-col single-฿-row layout (NOT the ¥ + breakdown
+// combo that /edit's FreightBreakdownTable shows). New Pacred component renders
+// that 1:1 from the real tb_forwarder header values.
+import { ForwarderImportItemsTable } from "./forwarder-import-items-table";
+// 2026-06-10 (ปอน) — legacy "ลบการสั่งซื้อถาวร" (destructive · guarded · 2-step confirm).
+import { ForwarderDeleteButton } from "./forwarder-delete-button";
+// 2026-06-10 (ปอน) — full legacy admin update.php on the detail page: the
+// status-update + note form (proven panel from /edit · props all from `r`).
+import { TbForwarderActionPanel } from "./tb-action-panel";
 // 2026-06-10 (ปอน) — PCS-1:1 inline edits ON the detail page (each field shows
 // value + [แก้ไข] → inline form · บันทึก/ยกเลิก · same page). These are the SAME
 // client components /edit mounts; they call the SAME existing server actions
 // (no backend change). The detail page already loads every field they need.
 import {
+  EditUserIdField,
   EditTransportTypeField,
   EditShipByField,
   EditPayMethodField,
   EditCrateField,
+  EditAmountCountField,
+  EditPalletField,
   EditTrackingChnField,
   EditDateCloseField,
 } from "./forwarder-inline-edits";
 import {
+  User as UserIcon,
   Pencil,
   ArrowLeft,
   ExternalLink,
+  PackageCheck,
 } from "lucide-react";
 
 // W-1: requireAdmin reads auth cookies; a page under a dynamic [fNo]
@@ -329,6 +341,7 @@ async function tryRenderTbForwarder(
   const coverHref = r.fcover && r.fcover.trim() !== ""
     ? (r.fcover.startsWith("http") ? r.fcover : await resolveLegacyUrl(r.fcover, "cover"))
     : null;
+  const customerAvatar = await resolveLegacyUrl(u?.userPicture ?? null, "profile-thumb");
 
   const STATUS_LABEL: Record<string, string> = {
     "1":"รอเข้าโกดังจีน","2":"ถึงโกดังจีนแล้ว","3":"กำลังส่งมาไทย","4":"ถึงไทยแล้ว",
@@ -355,13 +368,18 @@ async function tryRenderTbForwarder(
   // 2026-06-10 (ปอน) — image step-icons copied from the customer page
   // (/service-import/[fNo]) so the admin tracker matches it 1:1.
   const STEP_ICON_BASE = "/legacy/pcs/assets/images/icon/forwarder/";
-  const TIMELINE: Array<{ key: number; rank: number; label: string; date: string | null; img: string }> = [
+  // 2026-06-10 (ปอน · owner "แก้เป็น Pacred ให้หมดเลย"): the เตรียมส่ง step icon
+  // (forwarder-6.png) is a hand-truck carrying a crate stamped "PCS cargo" — a
+  // competitor brand baked into the PNG. img=null → render a clean Lucide
+  // <PackageCheck> instead (brand-neutral · Pacred). Swap in a Pacred-branded
+  // PNG here later if design wants the illustration style back.
+  const TIMELINE: Array<{ key: number; rank: number; label: string; date: string | null; img: string | null }> = [
     { key: 1, rank: 1,   label: "เข้าโกดังจีน",  date: r.fdate ?? null,         img: `${STEP_ICON_BASE}forwarder-1.png` },
     { key: 2, rank: 2,   label: "อยู่โกดังจีน",  date: r.fdatestatus2 ?? null,  img: `${STEP_ICON_BASE}forwarder-2.png` },
     { key: 3, rank: 3,   label: "ส่งมาไทย",      date: r.fdatestatus3 ?? null,  img: `${STEP_ICON_BASE}forwarder-3.png` },
     { key: 4, rank: 4,   label: "ถึงไทย",         date: r.fdatestatus4 ?? null,  img: `${STEP_ICON_BASE}forwarder-4.png` },
     { key: 5, rank: 5,   label: "รอชำระเงิน",    date: r.fdatestatus5 ?? null,  img: `${STEP_ICON_BASE}forwarder-5.png` },
-    { key: 6, rank: 6,   label: "เตรียมส่ง",     date: r.fdatestatus6 ?? null,  img: `${STEP_ICON_BASE}forwarder-6.png` },
+    { key: 6, rank: 6,   label: "เตรียมส่ง",     date: r.fdatestatus6 ?? null,  img: null },
     { key: 7, rank: 6.5, label: "กำลังจัดส่ง",   date: r.fdatestatus6 ?? null,  img: `${STEP_ICON_BASE}forwarder-6.1.png` },
     { key: 8, rank: 8,   label: "ส่งแล้ว",        date: r.fdatestatus7 ?? null,  img: `${STEP_ICON_BASE}forwarder-7.png` },
   ];
@@ -371,15 +389,6 @@ async function tryRenderTbForwarder(
     : r.adminidcreator && r.adminidcreator !== ""
       ? { label: `ฝากนำเข้า : ${r.adminidcreator}`, cls: "bg-amber-50 text-amber-700 border-amber-200" }
       : { label: "ฝากนำเข้าจาก : users", cls: "bg-gray-50 text-gray-600 border-gray-200" };
-
-  // 2026-06-08 ภูม flag (URL 404 bug · 21,694 rows on prod = 45%):
-  // tb_forwarder.fidorco often contains literal `/` (e.g. "MODPK301890160035-1/2"
-  // · "รถ 790A/116" · per-shipment split markers). Using fidorco verbatim in
-  // the URL turns the path into 2 segments and the dynamic [fNo] route 404s.
-  // r.id is numeric · safe in URLs · the detail + edit pages already accept
-  // BOTH numeric id AND fidorco (see edit/page.tsx L175-176 · this/L264-265).
-  // We keep fidorco for DISPLAY but route on the numeric id.
-  const slugForLink = String(r.id);
 
   // 2026-06-10 (ปอน) — header copied 1:1 from /service-import/[fNo]:
   // Code128 tracking barcode + ETA range (fdatetothai → +2d truck / +4d sea·air).
@@ -505,12 +514,20 @@ async function tryRenderTbForwarder(
                         : "border-gray-300 bg-white dark:bg-surface"
                   }`}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={step.img}
-                    alt={step.label}
-                    className={`object-contain h-11 w-11 md:h-14 md:w-14 ${reached ? "" : "grayscale opacity-70"}`}
-                  />
+                  {step.img ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={step.img}
+                      alt={step.label}
+                      className={`object-contain h-11 w-11 md:h-14 md:w-14 ${reached ? "" : "grayscale opacity-70"}`}
+                    />
+                  ) : (
+                    // เตรียมส่ง — Pacred Lucide icon (legacy PNG had a "PCS cargo" crate).
+                    <PackageCheck
+                      strokeWidth={1.5}
+                      className={`h-10 w-10 md:h-12 md:w-12 ${reached ? "text-red-600" : "text-gray-400"}`}
+                    />
+                  )}
                 </span>
                 <p className={`mt-2 text-[11px] md:text-xs font-medium ${isActive ? "text-red-700" : isFuture ? "text-muted" : "text-foreground"}`}>
                   {step.label}
@@ -530,11 +547,31 @@ async function tryRenderTbForwarder(
            point-by-point. ปอน 2026-06-10. */}
         <hr className="my-4 border-t border-dashed border-border" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 text-sm">
-          {/* LEFT */}
+          {/* LEFT — legacy admin order: วันที่สร้าง · จาก(ลูกค้า) · รหัสสมาชิก ·
+             อีเมล · โทร · location · ตีลัง · เก็บเงิน · บริษัทขนส่ง · ที่อยู่ ·
+             เลขพัสดุไทย. (ปอน 2026-06-10 — admin-only block added back per owner.) */}
           <div className="space-y-2.5">
             <p className="text-foreground"><b className="font-semibold">วันที่สร้าง : </b>{r.fdate ? new Date(r.fdate).toLocaleString("th-TH") : "—"}</p>
-            <EditShipByField fId={r.id} fshipby={r.fshipby} />
+            {/* จาก : ลูกค้า (avatar + ชื่อ + ลิงก์โปรไฟล์) */}
+            <div className="text-foreground">
+              <b className="font-semibold">จาก : </b>
+              <Link href={`/admin/customers/${r.userid}`} className="inline-flex items-center gap-1.5 align-middle text-sky-600 hover:underline">
+                {customerAvatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={customerAvatar} alt={u?.userName ?? r.userid} className="h-6 w-6 rounded-full object-cover border border-border" />
+                ) : (
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-surface-alt text-muted"><UserIcon className="h-3.5 w-3.5" /></span>
+                )}
+                คุณ{u?.userName ?? ""} {u?.userLastName ?? ""}
+              </Link>
+            </div>
+            <EditUserIdField fId={r.id} userid={r.userid} />
+            <p className="text-foreground"><b className="font-semibold">อีเมล : </b>{u?.userEmail ? <a href={`mailto:${u.userEmail}`} className="text-sky-600 hover:underline break-all">{u.userEmail}</a> : "—"}</p>
+            <p className="text-foreground"><b className="font-semibold">โทร. : </b>{u?.userTel ? <a href={`tel:${u.userTel}`} className="text-sky-600 hover:underline">{u.userTel}</a> : "—"}</p>
+            <EditPalletField fId={r.id} fpallet={r.fpallet} />
+            <EditCrateField fId={r.id} crate={r.crate} pricecrate={r.pricecrate} />
             <EditPayMethodField fId={r.id} paymethod={r.paymethod} />
+            <EditShipByField fId={r.id} fshipby={r.fshipby} />
             <div className="text-foreground">
               <b className="font-semibold">ที่อยู่จัดส่งสินค้า : </b>
               <div className="mt-1 leading-relaxed">
@@ -550,7 +587,6 @@ async function tryRenderTbForwarder(
           <div className="space-y-2.5 md:text-right">
             <EditTrackingChnField fId={r.id} ftrackingchn={r.ftrackingchn} fstatus={r.fstatus} />
             <EditTransportTypeField fId={r.id} ftransporttype={r.ftransporttype} />
-            <EditCrateField fId={r.id} crate={r.crate} pricecrate={r.pricecrate} />
             <p className="text-foreground"><b className="font-semibold">โกดังประเทศจีน : </b>{(r.fwarehousename && WAREHOUSE_LABEL[r.fwarehousename]) || (r.fwarehousename && r.fwarehousename.trim()) || "—"}</p>
             <p className="text-foreground">
               <b className="font-semibold">{r.fcabinet_locked === true ? "เลขที่ตู้ 🔒 : " : "เลขที่ตู้ : "}</b>
@@ -560,51 +596,63 @@ async function tryRenderTbForwarder(
             </p>
             <EditDateCloseField fId={r.id} fdatecontainerclose={r.fdatecontainerclose} />
             <p className="text-foreground"><b className="font-semibold">จำนวน : </b>{r.famount ?? 0} กล่อง</p>
+            <EditAmountCountField fId={r.id} famountcount={r.famountcount} famount={r.famount} />
             <p className="text-foreground"><b className="font-semibold">ประเภทสินค้า : </b>{PRODUCT_TYPE_LABEL[r.fproductstype ?? ""] ?? "—"}</p>
-            {coverHref && (
-              <div className="rounded-lg border border-border bg-surface-alt/40 p-3 md:text-left">
-                {r.fdetail && r.fdetail.trim() !== "" && r.fdetail !== "..." && (
-                  <p className="whitespace-pre-wrap mb-2">{r.fdetail}</p>
-                )}
-                <a href={coverHref} target="_blank" rel="noopener noreferrer" className="inline-block">
+            {/* รายละเอียดสินค้า (ชื่อสินค้า + รูปปก) — ต่อจากประเภทสินค้า ตาม legacy admin */}
+            <div className="pt-1">
+              <p className="font-bold text-red-600">รายละเอียดสินค้า</p>
+              {r.fdetail && r.fdetail.trim() !== "" && r.fdetail !== "..." ? (
+                <p className="mt-0.5 whitespace-pre-wrap text-muted">{r.fdetail}</p>
+              ) : (
+                <p className="mt-0.5 text-muted">—</p>
+              )}
+              {coverHref && (
+                <a href={coverHref} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={coverHref} alt="cover" className="w-full max-w-[200px] rounded-lg border border-border object-cover" />
+                  <img src={coverHref} alt="cover" className="w-full max-w-[200px] rounded-lg border border-border object-cover md:ml-auto" />
                 </a>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 
-        {/* ── รายละเอียดสินค้า (items breakdown) — customer page heading + the
-           shared FreightBreakdownTable. The admin action button sits where the
-           customer page's "ชำระเงิน" button is. ── */}
+        {/* ── รายการสินค้า (breakdown table) ── */}
         <hr className="my-4 border-t border-dashed border-border" />
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <h4 className="text-base md:text-lg font-bold text-red-600">
-            รายละเอียดสินค้า
-            {r.reforder && r.reforder !== "" && (
-              <Link
-                href={`/admin/service-orders/${r.reforder}`}
-                className="ml-2 text-xs font-normal text-sky-600 hover:underline inline-flex items-center gap-1"
-              >
-                ดูออเดอร์ต้นทาง {r.reforder} <ExternalLink className="h-3 w-3" />
-              </Link>
-            )}
-          </h4>
-          <Link
-            href={`/admin/forwarders/${slugForLink}/edit`}
-            className="inline-flex w-full md:w-auto items-center justify-center gap-1.5 rounded-full bg-primary-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-primary-700"
-          >
-            <Pencil className="h-4 w-4" /> สถานะ / ชำระเงิน / คนขับ
-          </Link>
-        </div>
+        <h4 className="text-base md:text-lg font-bold text-red-600">
+          รายการสินค้า
+          {r.reforder && r.reforder !== "" && (
+            <Link
+              href={`/admin/service-orders/${r.reforder}`}
+              className="ml-2 text-xs font-normal text-sky-600 hover:underline inline-flex items-center gap-1"
+            >
+              ดูออเดอร์ต้นทาง {r.reforder} <ExternalLink className="h-3 w-3" />
+            </Link>
+          )}
+        </h4>
         <div className="mt-3">
-          <FreightBreakdownTable r={r} isJuristic={u?.userCompany === "1" || r.fusercompany === "1"} />
+          <ForwarderImportItemsTable r={r} />
         </div>
 
-        {/* ── back button (1:1 customer ย้อนกลับ) ── */}
+        {/* ── อัปเดตสถานะรายการ + หมายเหตุ — legacy admin update form (proven
+           TbForwarderActionPanel from /edit · status + ตู้ + Tracking-TH + note ·
+           props all come from `r`). ปอน 2026-06-10. ── */}
+        <hr className="my-4 border-t border-dashed border-border" />
+        <h4 className="text-base md:text-lg font-bold text-red-600 mb-3">อัปเดตสถานะรายการ · หมายเหตุ</h4>
+        <TbForwarderActionPanel
+          fId={r.id}
+          fNo={String(r.id)}
+          currentStatus={(r.fstatus as "1" | "2" | "3" | "4" | "5" | "6" | "7" | "99") || "1"}
+          currentCabinet={r.fcabinetnumber ?? ""}
+          currentTrackingTh={r.ftrackingth ?? ""}
+          currentNote={r.fnote ?? ""}
+          currentCabinetLocked={r.fcabinet_locked === true}
+        />
+
+        {/* ── footer: ลบการสั่งซื้อถาวร (left · destructive · guarded) +
+           ย้อนกลับ (right) — legacy update.php footer, 1:1. ── */}
         <hr className="my-4 border-t border-border" />
-        <div className="md:text-right">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <ForwarderDeleteButton id={r.id} fNoLabel={String(r.fidorco ?? r.id)} />
           <Link
             href="/admin/forwarders"
             className="inline-flex w-full md:w-auto items-center justify-center gap-1.5 rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-600"
