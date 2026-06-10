@@ -282,19 +282,27 @@ export default async function AdminReportCntDetailPage({
     }
   }
 
-  // ── 6) tb_forwarder_import2 — flags "ยิงเข้าโกดังไทยแล้ว" rows ──
+  // ── 6) tb_forwarder_import2 — flags "ยิงเข้าโกดังไทยแล้ว" rows +
+  //       V-D4 per-row received box count (fi2amount = boxes scanned in at
+  //       the TH warehouse). receivedByFid sums fi2amount per fid so the
+  //       detail table can show "received N of M" per parcel (split-receipt
+  //       aware · the legacy app only recorded a binary received flag). A
+  //       forwarder may have >1 import2 row (re-link edge cases) → sum them.
   const fIds = cntRows.map((r) => r.id);
   const shippedSet = new Set<number>();
+  const receivedByFid = new Map<number, number>();
   if (fIds.length > 0) {
     const { data: imp2, error: imp2Err } = await admin
       .from("tb_forwarder_import2")
-      .select("fid")
+      .select("fid, fi2amount")
       .in("fid", fIds);
     if (imp2Err) {
       console.error(`[tb_forwarder_import2 list] failed`, { code: imp2Err.code, message: imp2Err.message });
     }
-    for (const r of (imp2 ?? []) as Array<{ fid: number }>) {
-      shippedSet.add(Number(r.fid));
+    for (const r of (imp2 ?? []) as Array<{ fid: number; fi2amount: number | null }>) {
+      const fid = Number(r.fid);
+      shippedSet.add(fid);
+      receivedByFid.set(fid, (receivedByFid.get(fid) ?? 0) + Math.max(0, Number(r.fi2amount ?? 0)));
     }
   }
 
@@ -387,7 +395,9 @@ export default async function AdminReportCntDetailPage({
       fdetail: r.fdetail,
       fcover: r.fcover,
       famount: Number(r.famount ?? 0) || null,
-      famountfi: null, // tb_forwarder_import2 amount not surfaced in this row — skipped for P0-1
+      // V-D4 — boxes actually received at TH warehouse (sum of fi2amount).
+      // null when the parcel has no import2 scan row yet (shows "-/M").
+      famountfi: receivedByFid.has(Number(r.id)) ? receivedByFid.get(Number(r.id))! : null,
       fvolume: Number(r.fvolume ?? 0),
       fweight: Number(r.fweight ?? 0),
       fproductstype: pType || null,

@@ -342,7 +342,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
               <Th k="ftrackingchn"  onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="left">เลขแทรคกิ้ง</Th>
               <Th k="userid"        onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="left">รหัส</Th>
               <th className="px-2 py-2 text-left">รายละเอียดสินค้า</th>
-              <Th k="famount"       onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ลัง</Th>
+              <Th k="famount"       onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ลัง (รับ/คาด)</Th>
               <Th k="fvolume"       onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ปริมาตร (CBM)</Th>
               <Th k="fweight"       onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">หนัก (Kg)</Th>
               <Th k="fproductstype" onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="left">ประเภท</Th>
@@ -503,7 +503,22 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                     </div>
                   </td>
                   <td className="px-2 py-2 text-right">
-                    {fmtN(r.famountfi)}/{fmtN(r.famount)}
+                    {/* V-D4 split-receipt: received / expected. Amber when a
+                        scan exists but is short of expected (partial receipt);
+                        red has no extra state — over-receipt is informational. */}
+                    {(() => {
+                      const exp = r.famount ?? 0;
+                      const got = r.famountfi;
+                      const isShort = got != null && exp > 0 && got < exp;
+                      return (
+                        <span
+                          className={isShort ? "text-amber-600 font-semibold" : ""}
+                          title={isShort ? `รับเข้าไม่ครบ: ${got}/${exp} ลัง (ขาด ${exp - got})` : "จำนวนลังที่รับเข้าโกดังไทย / จำนวนที่คาดไว้"}
+                        >
+                          {fmtN(r.famountfi)}/{fmtN(r.famount)}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-2 py-2 text-right">{fmt(r.fvolume, 2)}</td>
                   <td className="px-2 py-2 text-right">{fmt(r.fweight, 2)}</td>
