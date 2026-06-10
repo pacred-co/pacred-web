@@ -5263,6 +5263,7 @@
     "estimateImport": "Estimate import cost",
     "importHistory": "Import history",
     "importReceiptHistory": "Import receipt history",
+    "billingRunNav": "My billing invoices",
     "shipmentTracking": "Track shipment",
     "refundStatus": "Refund status",
     "shopWallet": "Shop wallet (Affiliate)",
