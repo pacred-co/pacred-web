@@ -1,32 +1,16 @@
 # เดฟ — Project Lead / Integrator / Customer-backend 1:1
 
-Last reviewed: 2026-05-24 (strategy reset — V3 unlocked, faithful-port branch deleted, ก๊อต takes admin lane)
-Branch: **`dave-pacred`** → merges to `main` (ก๊อต gates) · Authority: second-tier owner
+Last reviewed: 2026-06-10 (docs-refresh wave — pickup list regenerated from the CLAUDE.md save-points)
+Branch: **`dave-pacred`** (the integration trunk) → เดฟ promotes to `main` on the owner's go (ก๊อต reviews `main`) · Authority: second-tier owner · Team model SOT: [`team.md`](../team.md) §0
 
-> ## 🎯 2026-05-30 MASTER GAP AUDIT — your lane (read FIRST)
-> Full audit (17 agents · 23 P0 + 31 P1): **[`docs/research/legacy-gap-2026-05-30/_MASTER.md`](../research/legacy-gap-2026-05-30/_MASTER.md)** §6 (your 13 tasks) + §7 sprint sequence. Headline: "Potemkin village" — read surfaces faithful, many WRITE surfaces silently write rebuilt empty tables (green toast, 0 real rows).
->
-> **🔴 Your #1 task = the gate for everything money:** make the **WALLET-SOT decision** (with ก๊อต) — declare `tb_wallet`+`tb_wallet_hs` canonical + write `docs/decisions/0018-wallet-sot.md` + a settle-contract. Nobody touches wallet writes until this lands. Then: flip OTP bypass off (`actions/otp.ts:42`) · unify cart+order→`tb_header_order` (P0-3/4/5) · yuan money-hole (P0-2) · withdraw (P0-7, co-ship ภูม) · MS-1 top-up approval (P0-9) · register inversion · commission architecture pick · adm-08 identity/juristic · pay-on-behalf.
-> **Reachability (AGENTS.md §0d):** every task ships its entry point — the faithful `submitCartOrder` is currently orphaned (`/cart` has no nav). Done = clickable ≤3 clicks, not just curl-200.
+> ## ✅ 2026-05-30 MASTER GAP AUDIT — lane CLOSED (kept for trail)
+> Full audit (17 agents · 23 P0 + 31 P1): **[`docs/research/legacy-gap-2026-05-30/_MASTER.md`](../research/legacy-gap-2026-05-30/_MASTER.md)**. The headline P0s from that audit have since shipped: **WALLET-SOT decided** ([`docs/decisions/0018-wallet-sot.md`](../decisions/0018-wallet-sot.md) exists — `tb_wallet`+`tb_wallet_hs` canonical), the dead-write "Potemkin" surfaces were repointed across the big-audit + June sessions, and the tax-invoice SOT landed as ADR-0027 (+ the 2026-06-10 dead-twin retirement). The **reachability rule (AGENTS.md §0d)** remains standing law: every task ships its entry point, ≤3 clicks.
 
-> ## 🚨 2026-05-24 STRATEGY RESET (READ FIRST)
+> ## ⟦superseded⟧ 2026-05-24 STRATEGY RESET (historical — branch model has moved on)
 >
-> Owner cleaned up branch model and unlocked V3 for parallel work. New lane split:
+> The 2026-05-24 lane split (ก๊อต takes an admin 1:1 lane · ปอน on `podeng`) did **not** become the working model. **Current model ([`team.md`](../team.md) §0, clarified 2026-06-09):** เดฟ = `dave-pacred` trunk/integrator (works on the owner's behalf) · ภูม = `Poom-pacred` · ปอน = **`InwPond007`** · ก๊อต = `main` review + delegated. `faithful-port` + stale `claude/*` remotes were deleted 2026-05-24 (still true).
 >
-> | Role | Lane | Branch |
-> |---|---|---|
-> | **เดฟ (you)** | 1:1 **customer-backend** portal — `(protected)/*` screens + Server Actions onto `tb_*` · integrate ปอน frontend | `dave-pacred` |
-> | **ก๊อต** | **1:1 admin back-office** lane (NEW — was ภูม pre-reset) · 187 `pcs-admin/*.php` files | (own commits) |
-> | **ปอน** | Customer-facing frontend + brand-asset swap | `podeng` |
-> | **ภูม** | **V3 backend continuation (UNLOCKED)** — DPX ERP enhancements; merges *after* 1:1 ships | `Poom-pacred` |
->
-> **Deleted 2026-05-24:** `faithful-port` (direct-to-main pattern now) · all stale `claude/*` remotes · `hotfix/auth-unblock` (cherry-picked).
->
-> **Just merged into `dave-pacred`:** `podeng` (4 commits — home polish + (protected) chrome rebuild in Tailwind + dropped legacy CSS leak). Verify before pushing main.
->
-> **READ FIRST:**
-> - [`docs/research/d1-deep-audit-2026-05-24.md`](../research/d1-deep-audit-2026-05-24.md) — 10 critical gaps from the deep audit (Google Sheets, JMF/TTP/CN APIs, LINE Notify, TAMIT, MOMO LCL, etc.)
-> - [`docs/runbook/faithful-port-plan.md`](../runbook/faithful-port-plan.md) — updated branch model + work-split
+> Still-useful reference: [`docs/research/d1-deep-audit-2026-05-24.md`](../research/d1-deep-audit-2026-05-24.md) (the 10-gap deep audit — most gaps since closed; Google-Sheets sync still waits on ก๊อต creds).
 
 ## 🎯 Direction — D1: Pacred is a faithful PCS Cargo port
 
@@ -58,9 +42,9 @@ enhancements (the old Tier roadmap, *deferred not cancelled*).
   not yet element-by-element fidelity-verified.
 - ⚪ **Phase C** — deferred (Tier roadmap · ads/marketing · 8-specialist R&D).
 
-## 🧭 Your lane (post-2026-05-24)
+## 🧭 Your lane (refreshed 2026-06-10)
 
-You're the **1:1 customer-backend lead + ปอน integrator**. ก๊อต takes the admin 1:1 lane. ภูม keeps V3 alive on Poom-pacred (UNLOCKED 2026-05-24). Concretely you:
+You're the **integrator + customer-backend lead + cross-cutting builder** — in practice (June 2026) you also drive the big build waves (tax-invoice platform · freight ERP · warehouse · customs) via worktree agents and gate every merge. ภูม = admin/accounting backend on `Poom-pacred`; ปอน = frontend/UI on `InwPond007`; ก๊อต = `main` review + delegated (NOT a separate admin build lane — that 2026-05-24 idea was superseded). Concretely you:
 
 - **Own customer-portal `(protected)/*` 1:1 fidelity** — 15/24 screens transcribed; ~9 remaining (login/register fidelity check, forgot-password, regis-tam, line-notify, etc.). Drive these to done.
 - ~~**Wire missing customer-side integrations**~~ ✅ Gaps #3 (LINE Notify → LIFF + Messaging API replacement) + #5 (TAMIT was DBD lookup misroute — switched to internal `/api/dbd/[taxId]`) both closed 2026-05-27. Gap #1 (Google Sheets sync) foundation also shipped — CTT pilot DRY-RUN + Sheets v4 client + migration `0112` + cron `/api/cron/sheets-sync-ctt`; ก๊อต provisions credentials + sheet column mapping to go live.
@@ -68,15 +52,16 @@ You're the **1:1 customer-backend lead + ปอน integrator**. ก๊อต ta
 - **Coordinate with ก๊อต** on the admin lane — agree on which routes are 1:1-ported (ก๊อต) vs V3-enhanced (ภูม merges later from Poom-pacred).
 - ~~**Phase A close-out**~~ ✅ Phase A DONE — Pro upgrade done, 3 log tables backfilled, customer images uploaded to Supabase S3 prod by ภูม 2026-05-24, REALSHITDATAPCS.rar extracted. Only remaining: resolve prod table-naming conflicts (rebuilt-era vs `tb_*` — joint with ภูม).
 
-## 🟡 Your pickup list (priority order, post-reset)
+## 🟡 Your pickup list (priority order — regenerated 2026-06-10)
 
-1. **Verify the just-merged podeng work** on `dave-pacred` — `pnpm lint && pnpm build`, smoke `/dashboard` + `/wallet` + `/service-order` for the chrome rebuild side-effects, then push to main if clean. (Just merged: `d7b1758` containing `5097a2b` home polish + `fbb63fe` chrome rebuild in Tailwind.)
-2. ~~**Gap #5 — TAMIT integration stub**~~ ✅ **CLOSED 2026-05-27.** The "TAMIT" label was a misnomer — `regis-tam.php` is the Thai juristic (นิติบุคคล) registration flow, already shipped as Pacred's `/register` juristic tab + `actions/auth.ts registerJuristicStep1/saveJuristicStep2/...`. The real residual gap was the **DBD tax-ID lookup was hitting `opendata.dbd.go.th/api/v1/*` directly from the client** — those endpoints were retired 2026-05-17 so every juristic signup landed in the "unavailable" branch + filled manually. Fixed by switching `register-client.tsx fetchCompany()` to call Pacred's own `/api/dbd/[taxId]` route handler, which uses the CURRENT CKAN 2.10 `datastore_search` endpoint with the WAF-bypass User-Agent + Thai-field-name encoding. Personal accounts collect no Thai national ID (legacy didn't either) — no separate ID-verification flow to port.
-3. ~~**Gap #3 — LINE Notify per-user OAuth**~~ ✅ **CLOSED via replacement** — LINE Notify service EOL'd 2025-03-31 (notify-bot.line.me end-of-service). Original port shipped then reverted (`6e852795`/`67fc018e`); replaced by **LIFF + LINE Messaging API per-user** in `af4bebe9` (task L). Live surfaces: `/line-settings` page (LIFF connect) + `actions/line-settings.ts` (linkLineAccount/disconnectLineAccount) + push via `lib/notifications/sendNotification`. Customer flow: add Pacred LINE OA friend → /line-settings → LIFF auth → `profiles.line_user_id` set → Messaging API push. Orphaned `profiles.line_notify_*` columns (migration 0101) + `notifications.delivered_line_notify_at` (0106) safe to drop in a future cleanup migration (low priority — no code reads them).
-4. **Customer screens still NOT 1:1 transcribed** — login/register fidelity check (need post-OTP-emergency verification), forgot-password, wallet-normal/wallet-credit split if owner wants legacy two-page UX.
-5. **Coordinate ก๊อต admin lane kickoff** — pick from `poom-save-point-2026-05-19-night.md` §10 top-5 admin pilots (index.php dashboard, users-search, forwarder.php, wallet family).
-6. **Resolve prod table-naming conflicts** (internal cleanup) — rebuilt-era vs legacy `tb_*` schemas on `yzljakczhwrpbxflnmco` need a coexistence/cleanup plan. Joint with ภูม. *(Replaces the old Phase-A close-out item — Phase A is now DONE.)*
-7. **Retire pre-D1 scaffolding** — `0067_pcs_customer_migration.sql` + `actions/admin/pcs-migration.ts` + `u2-1-pcs-customer-migration.md` superseded by Phase A. Decide when rebuilt `profiles`-era schema retires.
+> Live session state = the dated save-points at the top of [`CLAUDE.md`](../../CLAUDE.md) (canonical). Shipped-vs-pending snapshot = [`STRATEGY.md`](../STRATEGY.md) §9.
+
+1. **Relay the owner action items** (the dormant/gated levers — carried in every save-point): flip `commission.freight_enabled` (after W6 tier-rate confirmation) · flip `tax_invoice.shop_yuan_enabled` (after money-loop test + ใบขน VAT sign-off) · enable `pricing`/`warehouse`/`freight_*_doc` roles for staff · PEAK GL codes · NETBAY creds · rotate the dev DB password · **get a test-customer login** (unblocks the §0c authed click-test backlog + the tax-invoice money-doc browser-verify).
+2. **Customer screens still NOT 1:1 transcribed (~9 remaining)** — login/register fidelity check, forgot-password, wallet-normal/wallet-credit split if owner wants the legacy two-page UX, regis-tam residue. (15/24 screens transcribed as of the last count — re-verify the count before planning.)
+3. **Resolve prod table-naming conflicts** (internal cleanup) — rebuilt-era vs legacy `tb_*` schemas on prod (`yzljakczhwrpbxflnmco`) still coexist; need the retirement plan for the rebuilt `profiles`-era twins. Joint with ภูม. (The tax-invoice twin was retired 2026-06-10 — ADR-0027 addendum; the pattern generalizes.)
+4. **Retire pre-D1 scaffolding** — `0067_pcs_customer_migration.sql` + `actions/admin/pcs-migration.ts` + `u2-1-pcs-customer-migration.md` superseded by Phase A. Decide when the rebuilt `profiles`-era schema retires.
+5. **Google-Sheets sync go-live** — CTT pilot DRY-RUN + Sheets v4 client + mig `0112` + cron `/api/cron/sheets-sync-ctt` all shipped; **waiting on ก๊อต to provision credentials + sheet column mapping.**
+6. ~~Gap #5 TAMIT / regis-tam~~ ✅ CLOSED 2026-05-27 (DBD lookup re-routed to `/api/dbd/[taxId]`) · ~~Gap #3 LINE Notify~~ ✅ CLOSED via LIFF + Messaging API (`/line-settings`) · ~~WALLET-SOT~~ ✅ ADR-0018 · ~~verify podeng `d7b1758`~~ ✅ long-shipped · ~~ก๊อต admin-lane kickoff~~ ⟦superseded — ก๊อต = `main` review, not an admin build lane⟧.
 
 ## ✋ Non-collision rule
 
@@ -101,34 +86,36 @@ taking a fresh surface coordinates through you first.
 
 ## Who you are
 
-**Project Lead + Integrator.** You operate from `dave`. You consolidate ปอน +
-ภูม work into `dave`, drive Phase A to完成, spawn + sequence the Phase-B waves,
-hold the deploy gate with ก๊อต, and cover ปอน + ภูม when blocked. Hand the
+**Project Lead + Integrator.** You operate from **`dave-pacred`** (the trunk).
+You consolidate ปอน (`InwPond007`) + ภูม (`Poom-pacred`) work into it, spawn +
+sequence the build waves, hold the `dave-pacred → main` release gate (on the
+owner's go; ก๊อต reviews), and cover ปอน + ภูม when blocked. Hand the
 decision-heavy / partner / security items to ก๊อต — don't do everything yourself.
 
 ## Blockers + alternatives
 
 | Blocked on | Alternative work |
 |---|---|
-| ก๊อต hasn't started admin 1:1 lane yet | Spawn the next Phase-B customer wave agent; advance gap #5 TAMIT regis-tam port; sequence the next wave from the gap maps |
-| ภูม busy on Poom-pacred V3 — no V3 PR to integrate | Phase-B customer-portal 1:1 transcription (the ~9 remaining screens); fidelity-verify wave 1 |
-| No teammate push to integrate | Spawn the next Phase-B wave agent; retire the superseded `0067` scaffolding; resolve the prod table-naming conflict |
+| No test-customer login (owner) — blocks §0c authed click-tests + tax-invoice money-doc verify | Spawn the next build/audit wave; advance the ~9 remaining 1:1 customer screens |
+| Owner activation gates (dormant flags · tier rates · PEAK GL · NETBAY) | Build mechanism-first behind flags (the W6 pattern); harden + test-cover what's shipped |
+| No teammate push to integrate | Retire the superseded `0067` scaffolding; advance the prod table-naming (rebuilt-vs-`tb_*`) cleanup plan |
 
 **Note back to ก๊อต when:** the owner sends creds, a partner needs a decision,
 or a security concern surfaces.
 
 ## Hand-offs
 
-**IN** — ก๊อต ADRs + external creds (you action) · ปอน `podeng` frontend PRs
-(you merge) · ภูม `Poom` backend PRs (you merge) · owner ad-hoc requests (you
-triage). **OUT** — Phase-B wave specs → ปอน + ภูม · merged `dave` → ก๊อต
-reviews + merges to `main`.
+**IN** — ก๊อต ADRs + external creds (you action) · ปอน `InwPond007` frontend
+work (you merge) · ภูม `Poom-pacred` backend work (you merge) · owner ad-hoc
+requests (you triage). **OUT** — wave specs → ปอน + ภูม · merged `dave-pacred`
+→ `main` on the owner's go (ก๊อต reviews).
 
-## Push discipline (per memory `push_frequency_strict`)
+## Push discipline (per memory `push_frequency_strict` + team.md §3.0)
 
-Commit local freely; **push to `origin/dave` only at save-points** (end of
-session / before sleep / machine change / big batch done). 1 push max per
-session. All 4 teammates follow the same discipline.
+Commit local freely; **push to `origin/dave-pacred` only at save-points** (end
+of session / before sleep / machine change / big batch done). Do NOT push
+`main` unless the owner says so; do NOT routinely push teammate branches
+(owner directive 2026-06-09 — see CLAUDE.md push-policy note).
 
 ## Cross-links
 

@@ -345,3 +345,13 @@ The Pacred logo lives at `public/images/pacred-logo-red.png` (+ `-white`).
 a 1:1 placeholder (under `public/legacy/pcs/`). **ปอน owns the swap** — sweep
 every placeholder spot and replace with the official `PR` brand asset; until
 then the legacy asset keeps the screen faithful. Flagged, non-blocking.
+
+> **⚠️ Standing rule (L-PAS-06 · threaded 2026-06-10):** ปอน refreshes
+> brand-asset image files **in place** under `public/` (any folder, including
+> `public/legacy/pcs/`) — same filename, new binary content. Other lanes MUST
+> NOT move, rename, or swap any image filename ปอน has touched recently
+> (check her latest commits first — `git log origin/InwPond007 -10 --stat`).
+> Brand-leak scrubs are **code-level only** (rewriting
+> `https://pcscargo.co.th/...` URLs in JSX) — never relocate a `public/` file
+> ปอน owns; a legacy-named file may already CONTAIN refreshed Pacred art.
+> Full lesson: [`docs/learnings/parallel-agent-sprints.md`](../learnings/parallel-agent-sprints.md) L-PAS-06.

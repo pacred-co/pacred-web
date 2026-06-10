@@ -1,7 +1,7 @@
 # ปอน — Frontend / Customer Portal UI / Landing / SEO
 
-Last reviewed: 2026-05-24 (strategy reset — faithful-port deleted, your work flows direct → dave-pacred → main)
-Branch: `podeng` — push to own branch only; เดฟ merges `podeng` → `dave-pacred` → `main`
+Last reviewed: 2026-06-10 (docs-refresh — branch + standing brand-asset rule synced)
+Branch: **`InwPond007`** (primary since 2026-05-28; `podeng` = older sub-task branch) — push to own branch only; เดฟ merges `InwPond007` → `dave-pacred` → `main`
 
 > ## 🎯 2026-05-30 MASTER GAP AUDIT — your lane (read FIRST)
 > Full audit: **[`docs/research/legacy-gap-2026-05-30/_MASTER.md`](../research/legacy-gap-2026-05-30/_MASTER.md)** §6 (your 6 tasks) + §8 reachability. **Your lane = customer FRONTEND + data-analysis/monitoring/sync-platform/dashboards. NO write-path / `tb_*`-mutation work** (that's เดฟ/ภูม) — all your tasks are parallel-safe, frontend/read-only.
@@ -44,6 +44,14 @@ Branch: `podeng` — push to own branch only; เดฟ merges `podeng` → `dav
 > asset.** Until a `PR` asset exists the legacy one stays (keeps the screen 1:1);
 > your job is to make the list shrink. Flag anything where no `PR` equivalent
 > exists so เดฟ/owner can source it.
+>
+> **⚠️ Standing rule for EVERYONE ELSE (L-PAS-06 · threaded 2026-06-10):** ปอน
+> refreshes brand-asset image files **in place** — same filename, new binary
+> content, even under `public/legacy/pcs/`. Other lanes MUST NOT move, rename,
+> or swap any image path ปอน has touched (check her latest commits first).
+> Brand-leak scrubs are code-level URL rewrites only — never relocate a
+> `public/` file she owns. Full lesson:
+> [`docs/learnings/parallel-agent-sprints.md`](../learnings/parallel-agent-sprints.md) L-PAS-06.
 
 ## 🎯 Direction — D1: Pacred is a faithful PCS Cargo port
 
