@@ -1,5 +1,23 @@
 # 🔭 Full-scope gap analysis + buildable roadmap — cargo + freight (2026-06-08 · เดฟ)
 
+> ## ✅ CLOSURE STATUS — updated 2026-06-10 (read this before the body below)
+>
+> Most of the STAGED deltas below have since **shipped** (2026-06-08 → 2026-06-10).
+> The original header said "Not pushed / next free 0148 / Build-A mig 0148" — all
+> **stale**: the work was pushed to `main`, the shop/yuan tax-invoice store landed
+> as **mig `0152`** (not 0148), and the **next free migration is now `0174`**
+> (0173 = count_forwarder_by_owner RPC, pending-apply; 0065/0168 are intentional gaps).
+>
+> | § | Stream | Status (2026-06-10) |
+> |---|---|---|
+> | **§1** | ใบกำกับ ฝากสั่ง/ฝากโอน (shop/yuan tax-invoice) | ✅ **BUILT — ships DORMANT.** mig `0152_shop_yuan_tax_invoice.sql`; live stores `tb_shop_tax_invoice` (+`_item`) + yuan. 🚦 GATE = owner flips `tax_invoice.shop_yuan_enabled` **after** the ใบขน VAT-base sign-off + a TEST-order money-loop. (Build-A "mig 0148" in the body = the as-shipped `0152`.) |
+> | **§2** | Acquisition leads + CRM depth | ✅ Build 2 (CS routing in customer-360 · `admin/crm/cs-routing.tsx`) + Build 6 (`count_forwarder_by_owner` RPC · mig `0173`) **SHIPPED 2026-06-10 this wave.** Build 3 tags (mig `0154`) · Build 4 timeline (mig `0155`) · Build 5 kanban shipped earlier (2026-06-08). |
+> | **§3** | Freight (AXELRA) — RFQ leads triage + ops | ✅ **SHIPPED.** `/admin/freight/leads` triage = mig `0151_freight_quote_triage.sql`; freight ops cockpit (W4 · mig `0163`/`0164`), P&L (W5 · mig `0165`), commission ledger (W6 · mig `0167` DORMANT). |
+> | **§4** | Cargo chat fixes | ✅ **SHIPPED** (Lalamove URL `0156`, missing-item report, container bulletin, ตัดตู้ lock V-C3, etc.). ⚠️ build on `lib/integrations/momo-isolated/` (live */5), NOT `momo-jmf/` (dead stub → writes the retired `cargo_*` spine). |
+>
+> The body below is the **original 2026-06-08 audit**, kept for history. Where it
+> says "Not pushed", "next free 0148", or "Build A migration 0148" → see this header.
+
 Owner handed the complete `olddata dev` data (cargo + freight) + said "ทำหมด" (do all: ใบกำกับ ฝากสั่ง/ฝากโอน + acquisition/CRM + reachability + freight + cargo-chat). Ran a **5-agent customer reachability audit** then a **4-agent full-scope gap analysis** (read-only, vs legacy PHP + the 2026-06-01 freight synthesis). **Headline: the platform is ~90% built; the gaps are precise last-mile wiring + a few small missing pieces — NOT a from-scratch build.**
 
 Branch: `claude/beautiful-swartz-7cde53` (off `dave-pacred`/`main` @ `5f344b8f`). 2 verified commits this session (see §SHIPPED). `pnpm verify` / `pnpm typecheck` EXIT 0. **Not pushed** (customer-facing nav unverified-when-authed — no test login; owner to OK the deploy or provide a login).
