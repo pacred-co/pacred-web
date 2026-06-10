@@ -13,8 +13,10 @@
  * acquisition call-queue — DONE) or actions/admin/customers.ts (identity
  * editor). It reuses the SAME underlying tables but owns its OWN actions:
  *   - getCrmReps         — the assignable sales-rep list (+ ownership counts)
+ *   - getCrmCsReps       — the assignable CS list (tb_admin pool · 0141)
  *   - getCustomer360     — the read-only 360 snapshot for a LINE contact / userid
- *   - setCustomerSalesRep — the ONE mutation: write tb_users.adminIDSale
+ *   - setCustomerSalesRep — mutation: write tb_users.adminIDSale
+ *   - setCustomerCsRep   — mutation: write tb_users.adminIDCS (CS mirror)
  *   - getCrmFunnel       — the new→contacted→quoted→won funnel counts
  *
  * ── Tables (⚠️ casing) ──
@@ -36,9 +38,12 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
+import { bustCustomerChrome } from "@/lib/cache/revalidate-chrome";
 import type {
   CrmRep,
   CrmRepsResult,
+  CrmCsRep,
+  CrmCsRepsResult,
   Customer360,
   CrmFunnel,
   CrmConversation,
@@ -167,6 +172,87 @@ export async function getCrmReps(): Promise<AdminActionResult<CrmRepsResult>> {
 }
 
 // ════════════════════════════════════════════════════════════════════════
+// getCrmCsReps — the assignable CS list (+ how many customers each owns)
+// ════════════════════════════════════════════════════════════════════════
+//
+// CS twin of getCrmReps, over the LEGACY pool: tb_admin WHERE adminStatusA='1'
+// (active) AND adminStatusCS='1' (flagged CS · migration 0141) — exactly the
+// pool `pickLeastLoadedCsRep` auto-assigns from on logLeadCall('closed').
+// There is NO Pacred-bridge equivalent for CS (the flag lives only on
+// tb_admin), so this reads tb_admin directly — populated on prod today.
+export async function getCrmCsReps(): Promise<AdminActionResult<CrmCsRepsResult>> {
+  return withAdmin<CrmCsRepsResult>([...CRM_ROLES], async () => {
+    const admin = createAdminClient();
+
+    // 1) Active CS pool.
+    const { data, error } = await admin
+      .from("tb_admin")
+      .select("adminID, adminName, adminLastName, adminNickname")
+      .eq("adminStatusA", "1")
+      .eq("adminStatusCS", "1")
+      .order("adminNickname", { ascending: true })
+      .limit(500);
+    if (error) {
+      console.error("[crm csReps:tb_admin] failed", { code: error.code, message: error.message });
+      return { ok: false, error: `query_failed: ${error.message}` };
+    }
+    type Raw = {
+      adminID: string | null;
+      adminName: string | null;
+      adminLastName: string | null;
+      adminNickname: string | null;
+    };
+    const reps: CrmCsRep[] = [];
+    const csIds: string[] = [];
+    for (const r of (data ?? []) as unknown as Raw[]) {
+      const id = (r.adminID ?? "").trim();
+      if (!id) continue;
+      reps.push({
+        adminID: id,
+        name: `${r.adminName ?? ""} ${r.adminLastName ?? ""}`.trim() || id,
+        nickname: r.adminNickname?.trim() || null,
+        ownedCount: 0,
+      });
+      csIds.push(id);
+    }
+
+    if (reps.length === 0) {
+      return {
+        ok: true,
+        data: {
+          reps: [],
+          gateNote:
+            "ยังไม่มี CS ที่ใช้งานอยู่ในระบบ (tb_admin.adminStatusCS='1') — เปิดสิทธิ์ CS ที่โปรไฟล์แอดมินก่อนจึงจะมอบหมายได้",
+        },
+      };
+    }
+
+    // 2) Owned-count per CS (active customers only · mirror getCrmReps).
+    const { data: owned, error: ownedErr } = await admin
+      .from("tb_users")
+      .select("adminIDCS")
+      .in("adminIDCS", csIds)
+      .eq("userActive", "1");
+    if (ownedErr) {
+      console.error("[crm csReps:owned] failed", { code: ownedErr.code, message: ownedErr.message });
+      // soft-fail: counts stay 0 rather than failing the whole CS list
+    } else {
+      const counts = new Map<string, number>();
+      for (const r of (owned ?? []) as { adminIDCS: string | null }[]) {
+        const id = (r.adminIDCS ?? "").trim();
+        if (!id) continue;
+        counts.set(id, (counts.get(id) ?? 0) + 1);
+      }
+      for (const rep of reps) rep.ownedCount = counts.get(rep.adminID) ?? 0;
+    }
+
+    // Sort: fewest-owned first (who has capacity), then name (mirror getCrmReps).
+    reps.sort((a, b) => a.ownedCount - b.ownedCount || a.name.localeCompare(b.name, "th"));
+    return { ok: true, data: { reps, gateNote: null } };
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════
 // getCustomer360 — read-only snapshot for a selected conversation/customer
 // ════════════════════════════════════════════════════════════════════════
 //
@@ -247,7 +333,7 @@ export async function getCustomer360(input: {
     // ── Load the tb_users identity ──
     const { data: user, error: userErr } = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName, userTel, userCompany, adminIDSale, userActive")
+      .select("userID, userName, userLastName, userTel, userCompany, adminIDSale, adminIDCS, userActive")
       .eq("userID", userid)
       .maybeSingle<{
         userID: string;
@@ -256,6 +342,7 @@ export async function getCustomer360(input: {
         userTel: string | null;
         userCompany: string | null;
         adminIDSale: string | null;
+        adminIDCS: string | null;
         userActive: string | null;
       }>();
     if (userErr) {
@@ -268,9 +355,10 @@ export async function getCustomer360(input: {
     }
 
     const repLegacyId = (user.adminIDSale ?? "").trim() || null;
+    const csLegacyId = (user.adminIDCS ?? "").trim() || null;
 
-    // ── Parallel: order count · wallet balance · latest call · rep name ──
-    const [ordersRes, walletRes, callRes, repNameRes] = await Promise.all([
+    // ── Parallel: order count · wallet balance · latest call · rep/CS names ──
+    const [ordersRes, walletRes, callRes, repNameRes, csNameRes] = await Promise.all([
       admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("userid", userid),
       admin
         .from("tb_wallet")
@@ -291,6 +379,19 @@ export async function getCustomer360(input: {
             .eq("legacy_admin_id", repLegacyId)
             .maybeSingle<{ display_name: string | null }>()
         : Promise.resolve({ data: null, error: null }),
+      // CS name comes from the LEGACY tb_admin (the CS pool · 0141) — there's
+      // no admin_contact_extras bridge for CS.
+      csLegacyId
+        ? admin
+            .from("tb_admin")
+            .select("adminName, adminLastName, adminNickname")
+            .eq("adminID", csLegacyId)
+            .maybeSingle<{
+              adminName: string | null;
+              adminLastName: string | null;
+              adminNickname: string | null;
+            }>()
+        : Promise.resolve({ data: null, error: null }),
     ]);
 
     if (ordersRes.error) {
@@ -305,10 +406,16 @@ export async function getCustomer360(input: {
     if (repNameRes.error) {
       console.error("[crm 360:repName] failed", { code: repNameRes.error.code, message: repNameRes.error.message });
     }
+    if (csNameRes.error) {
+      console.error("[crm 360:csName] failed", { code: csNameRes.error.code, message: csNameRes.error.message });
+    }
 
     const walletRaw = walletRes.data?.wallettotal;
     const walletBalance =
       walletRaw === null || walletRaw === undefined ? null : Number(walletRaw);
+
+    const csFullName =
+      `${csNameRes.data?.adminName ?? ""} ${csNameRes.data?.adminLastName ?? ""}`.trim();
 
     return {
       ok: true,
@@ -321,6 +428,10 @@ export async function getCustomer360(input: {
         isCompany: (user.userCompany ?? "").trim() === "1",
         repLegacyId,
         repName: repNameRes.data?.display_name?.trim() || (repLegacyId ?? null),
+        csLegacyId,
+        csName: csLegacyId
+          ? csFullName || csNameRes.data?.adminNickname?.trim() || csLegacyId
+          : null,
         orderCount: ordersRes.count ?? 0,
         walletBalance: walletBalance !== null && Number.isNaN(walletBalance) ? null : walletBalance,
         leadStatus: callRes.data?.status ?? null,
@@ -341,6 +452,8 @@ function emptyCustomer360(): Customer360 {
     isCompany: false,
     repLegacyId: null,
     repName: null,
+    csLegacyId: null,
+    csName: null,
     orderCount: 0,
     walletBalance: null,
     leadStatus: null,
@@ -476,7 +589,94 @@ export async function setCustomerSalesRep(input: {
     });
 
     revalidatePath("/admin/crm");
+    // The customer sidebar "ผู้ดูแล" card renders the rep contact via
+    // lib/legacy/pcs-chrome.ts (unstable_cache 60s) — bust it so the change is
+    // visible immediately (precedent: adminUpdateUserSaleRep, 2026-06-08).
+    bustCustomerChrome();
     return { ok: true, data: { userid, legacyId } };
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// setCustomerCsRep — the CS mirror: assign / change / clear a customer's CS
+// ════════════════════════════════════════════════════════════════════════
+//
+// Writes tb_users.adminIDCS = the chosen tb_admin.adminID (migration 0141 —
+// same contract as lib/admin/assign-cs-rep.ts auto-assign and
+// actions/admin/customer-profile.ts adminUpdateUserCsRep). Pass adminID=''
+// to clear: CEO brief — sale/CS ownership is flexible (a CS can run a job
+// solo; sales can take the CS role), so manual clear/reassign must work.
+// This control is the MANUAL OVERRIDE of the logLeadCall('closed') →
+// pickLeastLoadedCsRep auto-handoff (which only fills an EMPTY slot).
+//
+// Validation = the LEGACY model only: tb_admin adminStatusA='1' AND
+// adminStatusCS='1'. The CS flag exists ONLY on tb_admin (0141) — there is no
+// admin_contact_extras bridge equivalent, so no two-path check à la
+// setCustomerSalesRep. Logged via admin_audit_log (crm.set_cs_rep).
+export async function setCustomerCsRep(input: {
+  userid: string;
+  /** Target CS's tb_admin.adminID; "" to unassign. */
+  adminID: string;
+}): Promise<AdminActionResult<{ userid: string; adminID: string }>> {
+  const userid = (input?.userid ?? "").trim().toUpperCase();
+  const adminID = (input?.adminID ?? "").trim();
+  if (!userid) return { ok: false, error: "missing_userid" };
+
+  return withAdmin([...ROUTING_ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    // Verify the customer exists (and we get a clean error if not).
+    const { data: customer, error: custErr } = await admin
+      .from("tb_users")
+      .select("userID, adminIDCS")
+      .eq("userID", userid)
+      .maybeSingle<{ userID: string; adminIDCS: string | null }>();
+    if (custErr) {
+      console.error("[crm setCs:customer] failed", { code: custErr.code, message: custErr.message, userid });
+      return { ok: false, error: `query_failed: ${custErr.message}` };
+    }
+    if (!customer) return { ok: false, error: "customer_not_found" };
+
+    // When assigning (not clearing), validate the target is a real, active CS.
+    if (adminID) {
+      const { data: rep, error: repErr } = await admin
+        .from("tb_admin")
+        .select("adminID, adminStatusA, adminStatusCS")
+        .eq("adminID", adminID)
+        .maybeSingle<{ adminID: string; adminStatusA: string | null; adminStatusCS: string | null }>();
+      if (repErr) {
+        console.error("[crm setCs:rep lookup] failed", { code: repErr.code, message: repErr.message, adminID });
+        return { ok: false, error: `query_failed: ${repErr.message}` };
+      }
+      if (!rep || rep.adminStatusA !== "1" || rep.adminStatusCS !== "1") {
+        return { ok: false, error: "invalid_cs" };
+      }
+    }
+
+    // Write. Empty string clears ownership (0141 default '' = "no CS").
+    const { error: updErr } = await admin
+      .from("tb_users")
+      .update({ adminIDCS: adminID })
+      .eq("userID", userid);
+    if (updErr) {
+      console.error("[crm setCs:update] failed", { code: updErr.code, message: updErr.message, userid });
+      return { ok: false, error: `update_failed: ${updErr.message}` };
+    }
+
+    // Audit — best-effort (resolve the acting admin's legacy code for context).
+    const actorLegacy = (await getAdminLegacyId(adminId)) ?? adminId;
+    void logAdminAction(adminId, "crm.set_cs_rep", "tb_users", userid, {
+      from: customer.adminIDCS ?? null,
+      to: adminID || null,
+      actor_legacy_id: actorLegacy,
+    });
+
+    revalidatePath("/admin/crm");
+    // The customer sidebar "ผู้ดูแล" card renders the CS contact via
+    // resolveCsRep (lib/legacy/pcs-chrome.ts · unstable_cache 60s) — bust it
+    // so the change is visible immediately (precedent: adminUpdateUserCsRep).
+    bustCustomerChrome();
+    return { ok: true, data: { userid, adminID } };
   });
 }
 

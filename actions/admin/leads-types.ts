@@ -17,8 +17,16 @@ export const LEAD_CALL_STATUSES = [
 ] as const;
 export type LeadCallStatus = (typeof LEAD_CALL_STATUSES)[number];
 
-/** Which lead pool the queue shows. */
-export type LeadSegment = "cold" | "big-pcs" | "all";
+/**
+ * Which lead pool the queue shows.
+ *   cold     → never-contacted leads with a phone.
+ *   big-pcs  → top forwarder-order owners (full-base ranking · RPC 0173).
+ *   all      → every customer with a phone.
+ *   callback → นัดโทรกลับ due-queue: leads whose LATEST call outcome is
+ *              'callback', oldest promise first (lead_call_log has no
+ *              scheduled-date column, so "due" = age of the callback note).
+ */
+export type LeadSegment = "cold" | "big-pcs" | "all" | "callback";
 
 /** One row in the call-queue table. */
 export type LeadQueueRow = {
@@ -30,6 +38,8 @@ export type LeadQueueRow = {
   tel: string;
   /** Assigned sales rep legacy id (tb_users.adminIDSale), or "". */
   rep: string;
+  /** Assigned CS legacy id (tb_users.adminIDCS · migration 0141), or "". */
+  cs: string;
   /** Registration date (tb_users.userRegistered) ISO/string, or null. */
   registered: string | null;
   /** Lifetime forwarder order count (big-PCS ranking signal); 0 if none. */
@@ -50,8 +60,9 @@ export type LeadQueueFilter = {
   /** 1-based page (200 rows/page). */
   page?: number;
   /**
-   * When true, ignore pagination and return up to the export cap (5,000) in a
-   * single result — for the "export all filtered" CSV. Same filters/joins as
+   * When true, ignore pagination and return up to the export cap (10,000 —
+   * EXPORT_CAP in leads.ts) in a single result — for the "export all filtered"
+   * CSV. Same filters/joins as
    * the paged path, so the export can never drift from the on-screen view.
    */
   exportAll?: boolean;

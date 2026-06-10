@@ -2,15 +2,18 @@
 
 > **Purpose:** ทุกคน (เดฟ · ก๊อต · ปอน · ภูม · พี่ป๊อป) เปิดไฟล์เดียวจบ → เข้าใจ where we are, where we go, how each piece fits. ทุก brief / ADR / plan ย่อยลง 1 เอกสาร master นี้ + cross-link ลึกต่อ.
 
-Last reviewed: 2026-05-19 night (D1 — **direction shifted PM to 1:1 PHP→Next transcription**)
+Last reviewed: 2026-06-10 (docs-refresh wave — §5/§7/§8/§9/§15 synced to the CLAUDE.md save-points)
 Living doc — update each save-point. **Keep under 800 lines** (single-read budget).
 
-> ## 🚨 2026-05-19 EVENING — Direction shift
+> ## ⟦superseded⟧ 🚨 2026-05-19 EVENING — Direction shift (historical)
 >
 > Team pivoted from V3 (`main → dave → Poom` loop) to **literal 1:1 transcription**
-> of legacy PHP → Next.js per owner's "100% sameness FIRST" rule. **New branch
-> loop:** `Poom-pacred` (ภูม admin) + `dave-pacred` (เดฟ customer) + `podeng`
-> (ปอน) → `faithful-port` → ก๊อต gate → `main`. V3 work preserved + frozen.
+> of legacy PHP → Next.js per owner's "100% sameness FIRST" rule. The branch
+> loop described then (`… → faithful-port → main`) is **superseded** — the
+> `faithful-port` branch was deleted 2026-05-24. **Current model (see §5):**
+> ภูม `Poom-pacred` + ปอน `InwPond007` → เดฟ integrates on **`dave-pacred`**
+> (the trunk) → `main` on the owner's go. The 1:1-transcription *method* still
+> applies to Phase-B port work.
 >
 > Full handoff: [`research/poom-save-point-2026-05-19-night.md`](research/poom-save-point-2026-05-19-night.md).
 > Method: [`runbook/faithful-port-transcription.md`](runbook/faithful-port-transcription.md).
@@ -32,7 +35,9 @@ Living doc — update each save-point. **Keep under 800 lines** (single-read bud
 
 ---
 
-## 2. Current state (2026-05-19) — D1: the faithful PCS Cargo port
+## 2. Direction (D1, set 2026-05-18) — the faithful PCS Cargo port
+
+> ℹ️ This section records the **direction decision** (still canonical). For the **live shipped-vs-pending state**, see the 2026-06-10 snapshot at the top of §9.
 
 **On 2026-05-18 the owner rejected the rebuilt-from-scratch Pacred app.** Its UI *and* its workflow logic-loop look nothing like the legacy **PCS Cargo** system the business actually runs — and ~8,898 existing customers + every operating role would face a full retraining. The decision (**D1**, [ADR-0017](decisions/0017-pacred-faithful-pcs-port.md)):
 
@@ -124,16 +129,18 @@ This supersedes the "V2 = rebuilt owner-pleaser" framing of ADR-0010. The launch
 
 ## 5. People + branches (who works on what)
 
+> Branch model current as of 2026-06-09 (canonical: [`team.md`](team.md) §0 — four contributors; the owner is the CEO and does not commit code).
+
 | Role | Real-world job | Branch | Authority | Reads first |
 |---|---|---|---|---|
-| **เดฟ** | Project Lead · Integrator · covers landing with ปอน · preps backend for ภูม | `dave` (staging) | second-tier owner | [`briefs/dave.md`](briefs/dave.md) |
-| **ก๊อต** | Senior Advisor · ADRs · partner/tool/API picks · production gate · security audit | `main` (review-only) | second-tier owner | [`briefs/got.md`](briefs/got.md) |
-| **ภูม** | Backend · customer portal · admin back-office · cargo port · container model | `Poom` | own-branch | [`briefs/poom.md`](briefs/poom.md) |
-| **ปอน** | Frontend · landing · SEO · marketing research · WFH-friendly | `podeng` | own-branch | [`briefs/podeng.md`](briefs/podeng.md) |
+| **เดฟ** | Project Lead · Integrator — owns the integration trunk, merges everyone's work, gates the release to `main` (on the owner's go). Works on the owner's behalf. | **`dave-pacred`** (the integration trunk) | second-tier owner | [`briefs/dave.md`](briefs/dave.md) |
+| **ก๊อต** | Senior Advisor · ADRs · partner/tool/API picks · production gate · security audit | `main` review + delegated tasks | second-tier owner | [`briefs/got.md`](briefs/got.md) |
+| **ภูม** | Backend · admin back-office · accounting · cargo port | `Poom-pacred` | own-branch → เดฟ integrates | [`briefs/poom.md`](briefs/poom.md) |
+| **ปอน** | Frontend · UI · landing · SEO · marketing research | `InwPond007` | own-branch → เดฟ integrates | [`briefs/podeng.md`](briefs/podeng.md) |
 
-**Daily integration cycle:** [`team.md`](team.md) §10 (loop diagram + review checklist + emergency cadence override)
+**Daily sync:** everyone bases on `dave-pacred` (`git fetch origin && git merge origin/dave-pacred`). Push policy: save-points only; เดฟ pushes `main` only on the owner's go ([`team.md`](team.md) §3.0).
 
-📋 Full role + scope detail → [`team.md`](team.md) §1
+📋 Full role + scope detail → [`team.md`](team.md) §0–§1
 
 ---
 
@@ -160,9 +167,9 @@ This supersedes the "V2 = rebuilt owner-pleaser" framing of ADR-0010. The launch
 | DB + Auth + Storage | Supabase Cloud | 🟢 live | `NEXT_PUBLIC_SUPABASE_URL` + service-role |
 | SMS OTP | ThaiBulkSMS | 🟡 dev bypass (`OTP_BYPASS=true`) | `THAIBULKSMS_*` |
 | LINE Login + Messaging API | LINE Official Account | 🟢 channel set; 🟡 LIFF pending | `LINE_CHANNEL_*` + `NEXT_PUBLIC_LIFF_ID` |
-| Payment QR | PromptPay client-side | 🟡 pending owner bank acct | `PROMPTPAY_*` (none yet) |
-| China product search | TAM API (interim — ไอแต้ม) | 🟡 ADR-0003 Option F locked | `PACRED_TAMIT_*` |
-| Cargo container tracking (TH side) | MOMO JMF (partner) | 🟡 JWT captured; endpoints TBD | `MOMO_JMF_TOKEN` + `MOMO_JMF_BASE_URL` |
+| Payment QR | PromptPay (`lib/promptpay.ts` SOT) + static K-Shop QR image | 🟢 live — `PROMPTPAY_ID` set (Pacred tax-ID, K-Bank `225-2-91144-0`); broken pay-modal QR fixed 2026-06-09 (missing `public/images/payment/pacred-qr.png` uploaded) | `PROMPTPAY_ID` |
+| China product search | TAM API (interim — ไอแต้ม) | 🟢 live — prod outage fixed 2026-06-02 (stale Vercel TAMIT detail-URL var); ADR-0003 Option F | `PACRED_TAMIT_*` |
+| Cargo container tracking (TH side) | MOMO (partner) | 🟢 live — sync via `lib/integrations/momo-isolated/` + cron `/api/cron/momo-sync` (*/5 min). ⚠️ `lib/integrations/momo-jmf/` = dead stub, do NOT build on it | `MOMO_JMF_TOKEN` + `MOMO_JMF_BASE_URL` |
 | Error tracking | Sentry | 🟡 SDK wired; DSN pending | `SENTRY_DSN` |
 | Rate limit | Upstash Redis | 🟡 wired; creds pending | `UPSTASH_REDIS_REST_*` |
 | Bot prevention | hCaptcha | 🟡 wired; creds pending | `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` |
@@ -191,19 +198,39 @@ This supersedes the "V2 = rebuilt owner-pleaser" framing of ADR-0010. The launch
 | [0009](decisions/0009-erp-schema-sketch.md) | ERP schema sketch (M1..M14) | ✅ draft | New admin module schema |
 | [0010](decisions/0010-v2-v3-version-strategy.md) | V2 vs V3 version strategy — *V2's "rebuilt owner-pleaser" def superseded by ADR-0017; V3 (`pacred-DPX`) unaffected* | 🟡 partly superseded | When tempted to refactor mid-flight; V3 split |
 | [0014](decisions/0014-customer-self-service-state-transitions.md) | Customer self-service state transitions (verify-then-admin-client) | ✅ locked | Any customer-initiated state-machine action |
-| [0015](decisions/0015-withholding-tax-model.md) | Withholding-tax (หัก ณ ที่จ่าย) model | 🟡 DRAFT — ก๊อต to lock | V-A6 · juristic payments · receipt gating |
-| [0016](decisions/0016-freight-value-model.md) | Freight value model (commercial vs declared value · VAT plan) | 🟡 DRAFT — ก๊อต to lock | V-E2 · freight (FCL/LCL) invoicing |
+| [0015](decisions/0015-withholding-tax-model.md) | Withholding-tax (หัก ณ ที่จ่าย) model | ✅ **Accepted 2026-05-16** (ก๊อต locked; V-A6 shipped) | Juristic payments · WHT · receipt gating |
+| [0016](decisions/0016-freight-value-model.md) | Freight value model (commercial vs declared value · VAT plan) | ✅ **Accepted 2026-05-16** (ก๊อต locked; declared-value layer shipped — mig 0158 + cargo declarations) | Freight (FCL/LCL) invoicing · declared-value edits |
+| [0018](decisions/0018-wallet-sot.md) | Wallet SOT — `tb_wallet`/`tb_wallet_hs` canonical | ✅ accepted | Any wallet read/write |
+| [0019](decisions/0019-customer-backend-arch-decisions-2026-05-30.md) | Customer-backend architecture decisions | ✅ accepted | Customer-portal backend work |
+| [0020](decisions/0020-commission-sot.md) | Commission SOT | ✅ accepted | Commission reads/writes |
+| [0021](decisions/0021-corporate-sot.md) | Corporate (นิติบุคคล) SOT | ✅ accepted | Juristic data |
+| [0022](decisions/0022-staff-purge-and-reregister.md) | Staff purge + re-register (13-admin recreate) | ✅ accepted | Admin/RBAC provisioning |
+| [0023](decisions/0023-customer-credit-line-sot.md) | Customer credit-line SOT | ✅ accepted | Credit line |
+| [0024](decisions/0024-config-settings-sot.md) | Config/settings SOT (`business_config`) | ✅ accepted | Feature flags · settings |
+| [0025](decisions/0025-cashback-at-checkout.md) | Cashback at checkout | ✅ accepted | Checkout money path |
+| [0026](decisions/0026-commission-admin-surfaces-repoint.md) | Commission admin surfaces repoint | ✅ accepted | Commission admin UI |
+| [0027](decisions/0027-tax-invoice-sot.md) | Tax-invoice SOT — World-B `tb_*` canonical (+ 2026-06-10 addendum: World-A dead twin retired · mig 0172 period-freeze) | ✅ accepted | Any ใบกำกับภาษี work |
+| [0028](decisions/0028-shop-order-qr-slip-payment-wallet-as-discount.md) | Shop-order QR/slip payment + wallet-as-discount | ✅ accepted | Shop-order pay path |
 
-**Pending ADRs** (ก๊อต P2):
-- 0011 ERP RBAC granular roles per module
-- 0012 ERP frontend shell (same app vs separate `erp.pacred.co`)
-- 0013 ERP V2→V3 migration strategy
-- **0015 needs ก๊อต lock** — answer the 4 open questions, flip Status → Accepted (unblocks V-A6)
-- **0016 needs ก๊อต lock** — answer the 5 open questions, flip Status → Accepted (unblocks V-E2)
+**Draft ADRs** (deferred — V3 territory):
+- 0011 ERP RBAC granular roles per module · 0012 ERP frontend shell · 0013 ERP V2→V3 migration strategy (all DRAFT, deferred)
 
 ---
 
 ## 9. What's shipped vs pending (D1 snapshot)
+
+> ### 🟦 LIVE SNAPSHOT — 2026-06-10 (the current state; subsections below are the launch-era history)
+>
+> **main = dave-pacred = `60607c65`** (teammate branches 0-ahead) · `pnpm verify` EXIT 0 at every save-point · **migrations applied prod through 0172** (0065/0153/0168 intentional gaps · NEXT FREE per [`runbook/migration-ledger.md`](runbook/migration-ledger.md) — 0173+ reserved by an in-flight 2026-06-10 wave, check the ledger). Detailed session history = the dated save-points at the top of [`CLAUDE.md`](../CLAUDE.md) (canonical — this snapshot summarizes, doesn't duplicate).
+>
+> **Shipped (June 2026 arc):**
+> - **Build-backlog waves W1–W11 ALL BUILT + on main** ([`research/build-backlog-2026-06-09.md`](research/build-backlog-2026-06-09.md)): freight RFQ leads triage · tax-invoice P1–P4 (doc-mode toggle · cost/Pricing capture mig 0158 · ใบขนรวม cargo declarations mig 0161/0162 · 4-role taxdoc workspace) · freight ops cockpit (mig 0163/0164) · freight P&L + margin-guard (mig 0165) · **W6 freight commission ledger (mig 0167 — 💰 DORMANT** behind `business_config commission.freight_enabled` = OFF, 0 tiers owner-confirmed) · W10 warehouse worker-app (mig 0169–0171) · "W11" customs doc-kit (= build-backlog WAVE 12; the doc's WAVE 11 partner-portal remains unbuilt/owner-blocked) · BI cockpit drill-down · public /track rate-limit.
+> - **Tax-invoice dead-twin integrity arc CLOSED 2026-06-10:** World-A `tax_invoices` (mig 0034) = retired dead twin; **live stores = `tb_forwarder_tax_invoice` + `tb_shop_tax_invoice`** (ADR-0027 + addendum); all 6 dead-twin readers consolidated/redirected to the live `/admin/accounting/etax` hub; **mig 0172** freezes the live tb_* stores on period close (extends the 0056 trigger).
+> - **W1-W11 audit-harden + ~95 test assertions** (money-safety CONFIRMED-CLEAN: declared≠selling · no commission double-accrual · dormant flags fail-closed · FX correct · cap advisory) · CSV export across ~72 admin surfaces (2026-06-07) · i18n leak-kill + guard (`scripts/i18n-key-audit.mjs`) · 3 urgent prod-bug fixes 2026-06-09 (pay-modal QR · ฝากนำเข้า create-order block · address-add 404).
+>
+> **Dormant / gated (built, awaiting owner activation):** `tax_invoice.shop_yuan_enabled` (ใบกำกับ ฝากสั่ง/ฝากโอน — after money-loop test + ใบขน VAT sign-off) · `commission.freight_enabled` (after W6 tier-rate confirmation) · `pricing`/`warehouse`/`freight_*_doc` role assignment for staff · PEAK GL codes · NETBAY creds.
+>
+> **Standing blockers:** no test-customer login (blocks §0c authed click-tests + the tax-invoice money-doc browser-verify) · every tb_* tax-invoice surface renders 0/empty on prod until issuance goes live (0 issued invoices — correct-for-the-future) · rotate the dev DB password.
 
 **Read this section through the D1 lens (§2).** The rebuilt-Pacred app *was* launched to production 2026-05-17 and that code still exists — but on 2026-05-18 the owner rejected the rebuilt direction. So "shipped" below means **"code that exists"**, not "the agreed direction". Under D1 the forward work is **Phase A → B → C**, and most of the rebuilt feature set will be reworked in Phase B to match the legacy PCS workflow.
 
@@ -356,26 +383,26 @@ Future agents (and devs) read these BEFORE searching the web again. Compound kno
 ## 15. The handshake (when devs join a new session)
 
 ```bash
-# 1. Sync — น้อง pull dave (NOT main — main lags). เดฟ also resyncs to dave.
+# 1. Sync — everyone bases on dave-pacred (the live integration trunk; main can lag it).
 git fetch origin
-git checkout <my-branch>       # podeng / Poom / dave
-git merge origin/dave          # the live integration branch
+git checkout <my-branch>             # InwPond007 / Poom-pacred / dave-pacred
+git merge origin/dave-pacred         # the live integration trunk
 
 # 2. Read the few things you really must
 cat docs/briefs/<your-name>.md
 cat docs/STRATEGY.md                              # this file — full context once-per-session
 cat docs/decisions/0017-pacred-faithful-pcs-port.md  # D1 — the current direction
-# (UPGRADE_PLAN.md now describes Phase-C work — read for later, not "what's next")
+# (CLAUDE.md top save-points = the freshest session state)
 
 # 3. (Recommended) check what changed since you last looked
-git log --oneline -20 origin/dave
+git log --oneline -20 origin/dave-pacred
 cat docs/learnings/_index.md   # any new gotchas captured by other agents?
 
-# 4. Open your priority-1 task from your brief (D1 Phase A / Phase B work)
+# 4. Open your priority-1 task from your brief
 # 5. Work. Commit local often. Push at save-point.
 ```
 
-That's the loop. ทุกคนทำซ้ำๆ ทุกวัน. เดฟ integrate 1-2× ต่อวัน (see the `branch-integrate-loop` skill). ก๊อต approves async + gates `dave→main`.
+That's the loop. ทุกคนทำซ้ำๆ ทุกวัน. เดฟ integrates (see the `branch-integrate-loop` skill) and promotes `dave-pacred → main` on the owner's go; ก๊อต reviews `main`.
 
 ---
 
