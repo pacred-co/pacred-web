@@ -504,7 +504,14 @@ export default async function BillingRunListPage({
                         <div className="text-xs text-muted">{r.userid}</div>
                       </td>
                       <td className="px-3 py-2.5 text-right">{r.item_count}</td>
-                      <td className="px-3 py-2.5 text-right font-medium">{thbFmt(r.total_thb)}</td>
+                      <td className="px-3 py-2.5 text-right font-medium">
+                        {thbFmt(r.total_thb)}
+                        {r.wht_amount > 0 && (
+                          <div className="text-xs font-normal text-emerald-700" title="ยอดชำระสุทธิหลังหัก ณ ที่จ่าย 1%">
+                            สุทธิ ฿{thbFmt(r.net_payable)}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5 text-center text-xs">{r.date_issued}</td>
                       <td className="px-3 py-2.5 text-center text-xs">{r.date_due}</td>
                       <td className="px-3 py-2.5 text-center">{statusBadge(r.status, r.is_overdue)}</td>

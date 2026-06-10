@@ -92,13 +92,25 @@ export default async function BillingRunDetailPage({
       <section className="rounded-2xl border border-border bg-gradient-to-br from-white to-amber-50/20 dark:from-surface dark:to-surface p-5 shadow-sm">
         <div className="flex flex-wrap items-baseline gap-3">
           <div className="flex-1 min-w-[200px]">
-            <div className="text-xs text-muted">ยอดรวมทั้งสิ้น</div>
-            <div className="text-3xl font-bold text-amber-700">฿{thbFmt(header.total_thb)}</div>
+            <div className="text-xs text-muted">
+              {header.wht_amount > 0 ? "ยอดชำระสุทธิ (หลังหัก ณ ที่จ่าย)" : "ยอดรวมทั้งสิ้น"}
+            </div>
+            <div className="text-3xl font-bold text-amber-700">
+              ฿{thbFmt(header.wht_amount > 0 ? header.net_payable : header.total_thb)}
+            </div>
+            {header.wht_amount > 0 && (
+              <div className="text-xs text-muted mt-1">
+                รวม ฿{thbFmt(header.total_thb)} <span className="text-red-600">− หัก ณ ที่จ่าย 1% ฿{thbFmt(header.wht_amount)}</span>
+              </div>
+            )}
           </div>
           <div className="text-xs text-muted text-right">
             <div>Subtotal ฿{thbFmt(header.subtotal_thb)}</div>
             <div>+ CHN ฿{thbFmt(header.delivery_chn_thb)} + TH ฿{thbFmt(header.delivery_th_thb)} + อื่นๆ ฿{thbFmt(header.other_thb)}</div>
             <div>− ส่วนลด ฿{thbFmt(header.discount_thb)}</div>
+            {header.wht_amount > 0 && (
+              <div className="text-red-600">− WHT 1% ฿{thbFmt(header.wht_amount)}</div>
+            )}
           </div>
         </div>
       </section>

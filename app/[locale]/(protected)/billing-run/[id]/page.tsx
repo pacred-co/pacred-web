@@ -16,6 +16,7 @@ import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { computeBillWht } from "@/lib/billing/wht";
 
 export const dynamic = "force-dynamic";
 
@@ -129,6 +130,7 @@ export default async function CustomerBillingRunDetailPage({
   }
 
   const isOverdue = hdrRaw.status === "issued" && hdrRaw.date_due < isoToday();
+  const wht = computeBillWht(hdrRaw.is_juristic, Number(hdrRaw.total_thb));
   const t = await getTranslations("billingRunDetail");
 
   return (
@@ -184,8 +186,8 @@ export default async function CustomerBillingRunDetailPage({
             <div className="text-2xl font-bold font-mono">{hdrRaw.doc_no}</div>
           </div>
           <div className="text-right">
-            <div className="text-xs text-muted">{t("amountLabel")}</div>
-            <div className="text-2xl font-bold text-amber-700">฿{thbFmt(Number(hdrRaw.total_thb))}</div>
+            <div className="text-xs text-muted">{wht.wht_amount > 0 ? t("summaryNetPayable") : t("amountLabel")}</div>
+            <div className="text-2xl font-bold text-amber-700">฿{thbFmt(wht.wht_amount > 0 ? wht.net_payable : Number(hdrRaw.total_thb))}</div>
           </div>
         </div>
 
@@ -247,11 +249,31 @@ export default async function CustomerBillingRunDetailPage({
           {Number(hdrRaw.other_thb) > 0 && <div className="flex justify-between"><span className="text-muted">{t("summaryOther")}</span><span>฿{thbFmt(Number(hdrRaw.other_thb))}</span></div>}
           {Number(hdrRaw.discount_thb) > 0 && <div className="flex justify-between text-red-600"><span>{t("summaryDiscount")}</span><span>−฿{thbFmt(Number(hdrRaw.discount_thb))}</span></div>}
           <hr className="border-border my-2" />
-          <div className="flex justify-between font-bold text-base">
-            <span>{t("summaryGrandTotal")}</span>
-            <span className="text-amber-700">฿{thbFmt(Number(hdrRaw.total_thb))}</span>
-          </div>
+          {wht.wht_amount > 0 ? (
+            <>
+              <div className="flex justify-between font-medium">
+                <span>{t("summaryGrandTotal")}</span>
+                <span>฿{thbFmt(Number(hdrRaw.total_thb))}</span>
+              </div>
+              <div className="flex justify-between text-red-600">
+                <span>{t("summaryWht")}</span>
+                <span>−฿{thbFmt(wht.wht_amount)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-base">
+                <span>{t("summaryNetPayable")}</span>
+                <span className="text-amber-700">฿{thbFmt(wht.net_payable)}</span>
+              </div>
+            </>
+          ) : (
+            <div className="flex justify-between font-bold text-base">
+              <span>{t("summaryGrandTotal")}</span>
+              <span className="text-amber-700">฿{thbFmt(Number(hdrRaw.total_thb))}</span>
+            </div>
+          )}
         </div>
+        {wht.wht_amount > 0 && (
+          <p className="text-xs text-muted mt-3">* {t("whtNote")}</p>
+        )}
       </section>
 
       {/* Note */}

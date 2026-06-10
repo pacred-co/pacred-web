@@ -30,6 +30,7 @@ import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { mintForwarderInvoiceDocNo } from "@/lib/admin/mint-receipt-doc-no";
+import { computeBillWht } from "@/lib/billing/wht";
 import { sendNotification } from "@/lib/notifications";
 import {
   createBillingRunInvoiceSchema,
@@ -81,6 +82,9 @@ export type BillingRunInvoiceRow = {
   item_count: number;
   /** Computed: status='issued' AND date_due < today. */
   is_overdue: boolean;
+  /** WHT 1% (หัก ณ ที่จ่าย) + ยอดชำระสุทธิ — juristic & total ≥ 1,000 only. */
+  wht_amount: number;
+  net_payable: number;
 };
 
 export type BillingRunInvoiceDetail = {
@@ -115,6 +119,11 @@ export type BillingRunInvoiceDetail = {
     created_at: string;
     updated_at: string;
     is_overdue: boolean;
+    /** WHT 1% — หัก ณ ที่จ่าย. Computed from is_juristic + total_thb. */
+    wht_rate: number;
+    wht_amount: number;
+    /** ยอดชำระสุทธิ = total_thb − wht_amount (what the customer remits). */
+    net_payable: number;
   };
   items: Array<{
     id: number;
@@ -170,6 +179,10 @@ function isOverdue(dateDue: string, status: string): boolean {
   if (status !== "issued") return false;
   return dateDue < isoToday();
 }
+
+// WHT 1% (หัก ณ ที่จ่าย) — rule lives in lib/billing/wht.ts (a plain module, so
+// it can be shared with the customer-side billing-run pages + the print route;
+// a "use server" file may only export async functions). Mirrors the ใบเสร็จ.
 
 // ────────────────────────────────────────────────────────────────────────
 // 1. LIST eligible customers — for the add-form dropdown
@@ -360,7 +373,6 @@ export async function listEligibleForwarders(
       }
 
       // (b) already-billed-on-issued-invoice check
-      type ItemRow = { forwarder_id: number; invoice_id: number };
       const fids = fwd.map((f) => f.id);
       const { data: billed, error: billedErr } = await admin
         .from("tb_forwarder_invoice_item")
@@ -493,20 +505,26 @@ export async function getInvoiceList(
         }
       }
 
-      const rows: BillingRunInvoiceRow[] = raw.map((r) => ({
-        id:           r.id,
-        doc_no:       r.doc_no,
-        userid:       r.userid,
-        buyer_name:   r.buyer_name,
-        is_juristic:  r.is_juristic,
-        date_issued:  r.date_issued,
-        date_due:     r.date_due,
-        total_thb:    Number(r.total_thb),
-        status:       r.status,
-        paid_at:      r.paid_at,
-        item_count:   countsByInvoice.get(r.id) ?? 0,
-        is_overdue:   isOverdue(r.date_due, r.status),
-      }));
+      const rows: BillingRunInvoiceRow[] = raw.map((r) => {
+        const total = Number(r.total_thb);
+        const wht = computeBillWht(r.is_juristic, total);
+        return {
+          id:           r.id,
+          doc_no:       r.doc_no,
+          userid:       r.userid,
+          buyer_name:   r.buyer_name,
+          is_juristic:  r.is_juristic,
+          date_issued:  r.date_issued,
+          date_due:     r.date_due,
+          total_thb:    total,
+          status:       r.status,
+          paid_at:      r.paid_at,
+          item_count:   countsByInvoice.get(r.id) ?? 0,
+          is_overdue:   isOverdue(r.date_due, r.status),
+          wht_amount:   wht.wht_amount,
+          net_payable:  wht.net_payable,
+        };
+      });
 
       return { ok: true, data: { rows, totalCount: count ?? rows.length } };
     },
@@ -651,6 +669,7 @@ export async function getInvoiceDetail(
             created_at:         hdrRaw.created_at,
             updated_at:         hdrRaw.updated_at,
             is_overdue:         isOverdue(hdrRaw.date_due, hdrRaw.status),
+            ...computeBillWht(hdrRaw.is_juristic, Number(hdrRaw.total_thb)),
           },
           items: items.map((i) => {
             const f = fwdByID.get(i.forwarder_id) ?? null;

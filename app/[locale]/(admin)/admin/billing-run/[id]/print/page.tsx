@@ -147,7 +147,7 @@ export default async function BillingRunPrintPage({
 
         {/* Totals */}
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "12px" }}>
-          <table className="totals" style={{ width: "auto", minWidth: "260px" }}>
+          <table className="totals" style={{ width: "auto", minWidth: "280px" }}>
             <tbody>
               <tr><td>ค่าขนส่งรายการ</td><td className="right">{thbFmt(header.subtotal_thb)}</td></tr>
               <tr><td>+ ค่าขนส่งจีน</td><td className="right">{thbFmt(header.delivery_chn_thb)}</td></tr>
@@ -156,10 +156,30 @@ export default async function BillingRunPrintPage({
               {header.discount_thb > 0 && (
                 <tr><td>− ส่วนลด</td><td className="right">−{thbFmt(header.discount_thb)}</td></tr>
               )}
-              <tr className="grand"><td>รวมทั้งสิ้น (Total)</td><td className="right">฿{thbFmt(header.total_thb)}</td></tr>
+              {header.wht_amount > 0 ? (
+                <>
+                  <tr><td>รวมทั้งสิ้น (Total)</td><td className="right">{thbFmt(header.total_thb)}</td></tr>
+                  <tr style={{ color: "#b91c1c" }}>
+                    <td>หัก ณ ที่จ่าย 1% (ค่าขนส่ง)</td>
+                    <td className="right">−{thbFmt(header.wht_amount)}</td>
+                  </tr>
+                  <tr className="grand"><td>ยอดชำระสุทธิ (Net payable)</td><td className="right">฿{thbFmt(header.net_payable)}</td></tr>
+                </>
+              ) : (
+                <tr className="grand"><td>รวมทั้งสิ้น (Total)</td><td className="right">฿{thbFmt(header.total_thb)}</td></tr>
+              )}
             </tbody>
           </table>
         </div>
+
+        {/* WHT 50-ทวิ note — only when the juristic buyer withholds */}
+        {header.wht_amount > 0 && (
+          <div style={{ marginTop: "10px", fontSize: "10px", color: "#444", lineHeight: 1.5 }}>
+            * ลูกค้าหักภาษี ณ ที่จ่าย 1% (ค่าขนส่ง) จำนวน ฿{thbFmt(header.wht_amount)} —
+            กรุณาออกหนังสือรับรองการหักภาษี ณ ที่จ่าย (50 ทวิ) ในนาม{" "}
+            <strong>{SITE_LEGAL_NAME_TH}</strong> เลขประจำตัวผู้เสียภาษี {TAX_ID}
+          </div>
+        )}
 
         {/* Note */}
         {header.note_for_customer && (
