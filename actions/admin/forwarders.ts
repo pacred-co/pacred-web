@@ -477,6 +477,44 @@ export async function adminBulkUpdateForwarderTbStatus(
       fcabinet_locked: boolean | null;
     }>;
 
+    // ── V-C3 — "ตัดตู้" enforce + explain (2026-06-10) ─────────────────────
+    // Forensics C3 (docs/audit/cargo-ops-forensics-2026-05-16.md §C): assigning
+    // parcels to a container that's already been cut/locked failed SILENTLY in
+    // legacy ("ค้นหาไม่เจอ"). The model here: fcabinet_locked=true means staff
+    // deliberately locked the cabinet (migration 0150 — protects a manual
+    // correction from partner-sync overwrite). Until now that lock only fenced
+    // out MOMO/partner sync — an admin's OWN bulk-bar cabinet-assign would
+    // silently CLOBBER a locked cabinet. Block it instead, with a clear Thai
+    // message naming the locked rows, so the operator unlocks deliberately
+    // first. Only fires when the caller is actually CHANGING the cabinet on a
+    // locked row → unlocked rows + lock-toggle-only calls are unaffected
+    // (backward-safe: prod has 0 locked rows until staff lock one).
+    if (cabinet_number !== undefined && cabinet_number.trim() !== "") {
+      const newCabinet = cabinet_number.trim();
+      const lockedConflicts = beforeRows.filter(
+        (r) =>
+          r.fcabinet_locked === true &&
+          (r.fcabinetnumber ?? "").trim() !== "" &&
+          (r.fcabinetnumber ?? "").trim() !== newCabinet,
+      );
+      if (lockedConflicts.length > 0) {
+        const sample = lockedConflicts
+          .slice(0, 5)
+          .map((r) => `#${r.id} (ตู้เดิม ${r.fcabinetnumber})`)
+          .join(", ");
+        const more =
+          lockedConflicts.length > 5
+            ? ` และอีก ${lockedConflicts.length - 5} รายการ`
+            : "";
+        return {
+          ok: false,
+          error:
+            `cabinet_locked: รายการต่อไปนี้ถูกล็อกเลขตู้ไว้ (กันการเขียนทับ) — ${sample}${more}. ` +
+            `กรุณาปลดล็อกตู้ของรายการนั้นก่อน ถ้าต้องการย้ายไปตู้ "${newCabinet}" จริง ๆ`,
+        };
+      }
+    }
+
     // 2026-06-05 (ภูม flag — "ถ้าใส่เลขตู้ ก็เปลี่ยนสถานะให้เลยงี้ได้มั้ย"):
     // forward-only fstatus auto-advance based on which fields the caller
     // actually populated. Mirrors the MOMO partner-sync rule
