@@ -21,6 +21,9 @@ import { useRouter } from "next/navigation";
 import { Save, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { adminUpdateVipRateCells } from "@/actions/admin/rate-edits";
+// V-D2 — product-type labels are canonical (lib/warehouse/rate-dimensions.ts);
+// warehouse/transport keep their local "(English)" display variants here.
+import { RATE_PRODUCT_LABEL } from "@/lib/warehouse/rate-dimensions";
 
 // Warehouse encoding (legacy + price engine truth): 1=กวางโจว, 2=อี้อู.
 // (Was labelled BACKWARDS here → admin edited the wrong warehouse's VIP rate.
@@ -34,12 +37,7 @@ const TRANSPORT_LABEL: Record<string, string> = {
   "2": "🚢 เรือ",
   "3": "✈️ เครื่องบิน",
 };
-const PRODUCT_LABEL: Record<string, string> = {
-  "1": "ทั่วไป",
-  "2": "มอก.",
-  "3": "อย.",
-  "4": "พิเศษ",
-};
+const PRODUCT_LABEL: Record<string, string> = RATE_PRODUCT_LABEL;
 
 type Wh = "1" | "2";
 type Tt = "1" | "2" | "3";

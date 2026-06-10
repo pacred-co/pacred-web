@@ -19,6 +19,8 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
+// V-D2 — canonical product-type labels (extended 1-5 · legacy nameProductsType).
+import { RATE_PRODUCT_LABEL_EXT } from "@/lib/warehouse/rate-dimensions";
 // next/image not used — Taobao/alicdn thumbnails arrive as plain HTTP
 // URLs and don't need optimisation here · plain <img> keeps it simple.
 
@@ -70,14 +72,9 @@ type Props = {
   isJuristic: boolean;
 };
 
-// Legacy nameProductsType — function.php L1196-1208
-const PRODUCT_TYPE_LABEL: Record<string, string> = {
-  "1": "ทั่วไป",
-  "2": "มอก.",
-  "3": "อย.",
-  "4": "พิเศษ",
-  "5": "ควบคุมพิเศษ",
-};
+// Legacy nameProductsType (function.php L640-650) — canonical in
+// lib/warehouse/rate-dimensions.ts (extended 1-5 incl. Pacred's ควบคุมพิเศษ).
+const PRODUCT_TYPE_LABEL: Record<string, string> = RATE_PRODUCT_LABEL_EXT;
 
 // Legacy nameRefPrice — value matches what /edit form writes
 const REF_PRICE_LABEL: Record<string, string> = {
