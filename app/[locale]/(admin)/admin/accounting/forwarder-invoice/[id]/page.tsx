@@ -91,6 +91,9 @@ type RawForwarder = {
   ftransportpricechnthb: number | string | null;
   priceother:            number | string | null;
   fdiscount:             number | string | null;
+  ftransporttype:        string | null;   // '1'=รถ(EK) · '2'=เรือ(SEA)
+  frefprice:             string | null;   // '1'=คิดตาม KG · '2'=คิดตาม CBM
+  frefrate:              number | string | null;  // เรทนำเข้า ฿/หน่วย
 };
 
 type RawUser = {
@@ -224,6 +227,10 @@ function ReceiptPage({
     no:           number;
     fid:          string;
     tracking:     string;
+    cabinet:      string;
+    transport:    string;
+    rateBasis:    string;
+    rate:         number;
     famount:      number;
     fweight:      number;
     fvolume:      number;
@@ -252,10 +259,16 @@ function ReceiptPage({
   // Peak orange tint bg: rgba(255,163,10,0.165) ≈ #FFF0CC; gray tint ≈ #EBEBEA
   const tintBg       = isOriginal ? "rgba(255,163,10,0.165)" : "rgba(95,93,90,0.165)";
 
+  // preTax = sum of every charge leg − discount = the PRE-WHT grand total
+  // (= totalLineSum upstream). For cargo freight there's no VAT, so this is
+  // also the VAT-exempt value shown on the left.
   const preTax = totals.fTotal + totals.fTransportCHNTHB + totals.fTransport +
                  totals.priceOther - totals.fDiscount;
-  // amount the customer actually pays (grand total minus WHT if applicable)
-  const netPaid = grandTotal - (showWht ? whtAmount : 0);
+  // netPaid = the real amount the customer settles. `grandTotal` is ALREADY
+  // net of WHT upstream (grandTotal = totalLineSum − whtAmount), so netPaid IS
+  // grandTotal — do NOT subtract WHT again (that double-counted it). This is
+  // the figure ภูม wants highlighted (point 6: "ยอดจริงที่ลูกค้าต้องชำระ").
+  const netPaid = grandTotal;
 
   return (
     <div
@@ -268,23 +281,27 @@ function ReceiptPage({
         {/* ── headerFormatOne: logo LEFT · (label) + title RIGHT ─────────── */}
         <div id="headerFormatOne" style={{ marginBottom: "4mm" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            {/* LEFT: merchant logo — single wordmark image, Peak-sized (ภูม flag round 7) */}
+            {/* LEFT: merchant logo — TIGHT-cropped wordmark (whitespace trimmed
+                so it renders ~3× larger at the same height). ภูม flag round 8:
+                the square 140×140 PNG had ~75% vertical whitespace, so a 22mm
+                box only showed a ~6mm-tall wordmark. The tight 134×36 asset
+                fills its box → height 17mm = a genuine Peak-scale wordmark. */}
             <div id="merchantLogo" style={{ display: "flex", alignItems: "center" }}>
               <Image
-                src="/images/pacred-logo-red.png"
+                src="/images/pacred-logo-tight.png"
                 alt={SITE_LEGAL_NAME}
-                width={300}
-                height={90}
+                width={268}
+                height={72}
                 unoptimized
-                style={{ width: "auto", height: "22mm", display: "block" }}
+                style={{ width: "auto", height: "17mm", display: "block" }}
               />
             </div>
 
-            {/* RIGHT: (ต้นฉบับ) label ABOVE title */}
+            {/* RIGHT: (ต้นฉบับ) label ABOVE title — Peak-scale 28px title */}
             <div id="etaxWording" style={{ textAlign: "right" }}>
-              <div style={{ fontSize: "10px", color: "#6b7280" }}>({label})</div>
+              <div style={{ fontSize: "11px", color: "#6b7280" }}>({label})</div>
               <div id="documentName">
-                <h2 style={{ margin: 0, fontSize: "20px", fontWeight: "bold", color: titleColor }}>
+                <h2 style={{ margin: 0, fontSize: "28px", fontWeight: "bold", color: titleColor, lineHeight: 1.1 }}>
                   <span>ใบเสร็จรับเงิน</span>
                 </h2>
               </div>
@@ -437,49 +454,69 @@ function ReceiptPage({
           <div id="product">
             {/* Header row with orange tint bg */}
             <div id="headerItemColumn">
-              <table style={{ width: "100%", borderCollapse: "collapse", background: tintBg }}>
+              {/* ภูม flag round 8: extended 11-col cargo table — added เลขตู้
+                  (cabinet GZE/GZS) · ขนส่ง (EK/SEA) · คิดตาม (KG/CBM basis) ·
+                  เรท (฿/unit) between Tracking and Amount. Fonts 9/8px + tuned
+                  width% so the wider table still fits A4 portrait. */}
+              <table style={{ width: "100%", borderCollapse: "collapse", background: tintBg, tableLayout: "fixed" }}>
                 <thead>
                   <tr>
-                    <th style={{ textAlign: "left", padding: "4px 4px", width: "7%", fontSize: "10px", fontWeight: "bold", color: "#374151" }}>
-                      ลำดับ<br /><span style={{ fontSize: "9px", fontWeight: "normal", color: "#6b7280" }}>No.</span>
+                    <th style={{ textAlign: "left", padding: "4px 3px", width: "4%", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>
+                      ลำดับ<br /><span style={{ fontSize: "8px", fontWeight: "normal", color: "#6b7280" }}>No.</span>
                     </th>
-                    <th style={{ textAlign: "left", padding: "4px 4px", width: "11%", fontSize: "10px", fontWeight: "bold", color: "#374151" }}>
-                      เลขที่ออเดอร์<br /><span style={{ fontSize: "9px", fontWeight: "normal", color: "#6b7280" }}>Order No.</span>
+                    <th style={{ textAlign: "left", padding: "4px 3px", width: "8%", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>
+                      ออเดอร์<br /><span style={{ fontSize: "8px", fontWeight: "normal", color: "#6b7280" }}>Order</span>
                     </th>
-                    <th style={{ textAlign: "left", padding: "4px 4px", width: "39%", fontSize: "10px", fontWeight: "bold", color: "#374151" }}>
-                      รหัสพัสดุ<br /><span style={{ fontSize: "9px", fontWeight: "normal", color: "#6b7280" }}>Tracking</span>
+                    <th style={{ textAlign: "left", padding: "4px 3px", width: "17%", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>
+                      รหัสพัสดุ<br /><span style={{ fontSize: "8px", fontWeight: "normal", color: "#6b7280" }}>Tracking</span>
                     </th>
-                    <th style={{ textAlign: "right", padding: "4px 4px", width: "7%", fontSize: "10px", fontWeight: "bold", color: "#374151" }}>
-                      จำนวน<br /><span style={{ fontSize: "9px", fontWeight: "normal", color: "#6b7280" }}>Box</span>
+                    <th style={{ textAlign: "left", padding: "4px 3px", width: "13%", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>
+                      เลขตู้<br /><span style={{ fontSize: "8px", fontWeight: "normal", color: "#6b7280" }}>Cabinet</span>
                     </th>
-                    <th style={{ textAlign: "right", padding: "4px 4px", width: "10%", fontSize: "10px", fontWeight: "bold", color: "#374151" }}>
-                      น้ำหนัก<br /><span style={{ fontSize: "9px", fontWeight: "normal", color: "#6b7280" }}>Wt./kg</span>
+                    <th style={{ textAlign: "center", padding: "4px 3px", width: "6%", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>
+                      ขนส่ง<br /><span style={{ fontSize: "8px", fontWeight: "normal", color: "#6b7280" }}>Ship</span>
                     </th>
-                    <th style={{ textAlign: "right", padding: "4px 4px", width: "11%", fontSize: "10px", fontWeight: "bold", color: "#374151" }}>
-                      ปริมาตร<br /><span style={{ fontSize: "9px", fontWeight: "normal", color: "#6b7280" }}>Vol./CBM</span>
+                    <th style={{ textAlign: "right", padding: "4px 3px", width: "5%", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>
+                      ลัง<br /><span style={{ fontSize: "8px", fontWeight: "normal", color: "#6b7280" }}>Box</span>
                     </th>
-                    <th style={{ textAlign: "right", padding: "4px 4px", width: "15%", fontSize: "10px", fontWeight: "bold", color: "#374151" }}>
-                      ค่าขนส่ง<br /><span style={{ fontSize: "9px", fontWeight: "normal", color: "#6b7280" }}>Amount</span>
+                    <th style={{ textAlign: "right", padding: "4px 3px", width: "8%", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>
+                      น้ำหนัก<br /><span style={{ fontSize: "8px", fontWeight: "normal", color: "#6b7280" }}>Kg</span>
+                    </th>
+                    <th style={{ textAlign: "right", padding: "4px 3px", width: "9%", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>
+                      ปริมาตร<br /><span style={{ fontSize: "8px", fontWeight: "normal", color: "#6b7280" }}>CBM</span>
+                    </th>
+                    <th style={{ textAlign: "center", padding: "4px 3px", width: "7%", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>
+                      คิดตาม<br /><span style={{ fontSize: "8px", fontWeight: "normal", color: "#6b7280" }}>Basis</span>
+                    </th>
+                    <th style={{ textAlign: "right", padding: "4px 3px", width: "9%", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>
+                      เรท<br /><span style={{ fontSize: "8px", fontWeight: "normal", color: "#6b7280" }}>Rate ฿</span>
+                    </th>
+                    <th style={{ textAlign: "right", padding: "4px 3px", width: "14%", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>
+                      ค่าขนส่ง<br /><span style={{ fontSize: "8px", fontWeight: "normal", color: "#6b7280" }}>Amount</span>
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.length === 0 ? (
                     <tr>
-                      <td colSpan={7} style={{ padding: "8px 4px", textAlign: "center", fontSize: "10px", color: "#6b7280", background: "#fff" }}>
+                      <td colSpan={11} style={{ padding: "8px 4px", textAlign: "center", fontSize: "10px", color: "#6b7280", background: "#fff" }}>
                         ไม่พบรายการ
                       </td>
                     </tr>
                   ) : (
                     items.map((row) => (
                       <tr key={`${pageNumber}-${row.no}`} style={{ background: "#fff" }}>
-                        <td style={{ padding: "3px 4px", fontSize: "10px", textAlign: "center", borderTop: "0.5px solid #e5e7eb" }}>{row.no}</td>
-                        <td style={{ padding: "3px 4px", fontSize: "9px", textAlign: "center", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>#{row.fid}</td>
-                        <td style={{ padding: "3px 4px", fontSize: "9px", wordBreak: "break-all", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>{row.tracking}</td>
-                        <td style={{ padding: "3px 4px", fontSize: "10px", textAlign: "right", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>{fmt0(row.famount)}</td>
-                        <td style={{ padding: "3px 4px", fontSize: "10px", textAlign: "right", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>{fmt2(row.fweight)}</td>
-                        <td style={{ padding: "3px 4px", fontSize: "10px", textAlign: "right", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>{fmt5(row.fvolume)}</td>
-                        <td style={{ padding: "3px 4px", fontSize: "10px", textAlign: "right", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>{fmt2(row.ftotalprice)}</td>
+                        <td style={{ padding: "3px 3px", fontSize: "9px", textAlign: "center", borderTop: "0.5px solid #e5e7eb" }}>{row.no}</td>
+                        <td style={{ padding: "3px 3px", fontSize: "8px", textAlign: "center", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>#{row.fid}</td>
+                        <td style={{ padding: "3px 3px", fontSize: "8px", wordBreak: "break-all", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>{row.tracking}</td>
+                        <td style={{ padding: "3px 3px", fontSize: "8px", wordBreak: "break-all", fontFamily: "monospace", color: "#374151", borderTop: "0.5px solid #e5e7eb" }}>{row.cabinet || "—"}</td>
+                        <td style={{ padding: "3px 3px", fontSize: "8px", textAlign: "center", fontWeight: "bold", color: row.transport === "SEA" ? "#1d4ed8" : "#b45309", borderTop: "0.5px solid #e5e7eb" }}>{row.transport || "—"}</td>
+                        <td style={{ padding: "3px 3px", fontSize: "9px", textAlign: "right", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>{fmt0(row.famount)}</td>
+                        <td style={{ padding: "3px 3px", fontSize: "9px", textAlign: "right", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>{fmt2(row.fweight)}</td>
+                        <td style={{ padding: "3px 3px", fontSize: "9px", textAlign: "right", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>{fmt5(row.fvolume)}</td>
+                        <td style={{ padding: "3px 3px", fontSize: "8px", textAlign: "center", color: "#374151", borderTop: "0.5px solid #e5e7eb" }}>{row.rateBasis || "—"}</td>
+                        <td style={{ padding: "3px 3px", fontSize: "9px", textAlign: "right", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>{row.rate > 0 ? fmt2(row.rate) : "—"}</td>
+                        <td style={{ padding: "3px 3px", fontSize: "9px", textAlign: "right", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>{fmt2(row.ftotalprice)}</td>
                       </tr>
                     ))
                   )}
@@ -518,34 +555,39 @@ function ReceiptPage({
                 </div>
               </div>
 
-              {/* RIGHT: big amount box + WHT rows */}
+              {/* RIGHT: total + WHT rows · big highlight box on จำนวนเงินที่ชำระ
+                  (ภูม flag round 8: the orange highlight moved from grandTotal
+                  to NET-PAID — that's the real amount the customer settles, so
+                  it's the figure that must stand out). */}
               <div id="summary">
                 <div>
-                  {/* Big orange-tint amount box */}
-                  <div style={{ background: tintBg, borderRadius: "2px", padding: "4px 8px", marginBottom: "2px", textAlign: "center" }}>
-                    <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>จำนวนเงินทั้งสิ้น</p>
-                    <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "bold", color: "#111827" }}>
-                      {fmt2(grandTotal)} <span style={{ fontSize: "12px" }}>บาท</span>
-                    </h3>
-                  </div>
-                  {/* WHT + net rows below the box */}
-                  <div className="withholding">
+                  {/* Plain rows: total + WHT (no highlight) */}
+                  <div className="withholding" style={{ marginBottom: "2px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "1px" }}>
                       <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280", textAlign: "right" }}>
-                        จำนวนเงินที่ถูกหัก ณ ที่จ่าย
+                        จำนวนเงินทั้งสิ้น
                       </p>
-                      <p style={{ margin: 0, fontSize: "10px", color: "#111827", minWidth: "22mm", textAlign: "right" }}>
-                        {fmt2(showWht ? whtAmount : 0)} บาท
+                      {/* PRE-WHT total (preTax) — so the breakdown reads
+                          total − WHT = net paid (the highlighted box below). */}
+                      <p style={{ margin: 0, fontSize: "10px", color: "#111827", minWidth: "26mm", textAlign: "right" }}>
+                        {fmt2(preTax)} บาท
                       </p>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280", textAlign: "right" }}>
-                        จำนวนเงินที่ชำระ
+                        จำนวนเงินที่ถูกหัก ณ ที่จ่าย
                       </p>
-                      <p style={{ margin: 0, fontSize: "10px", color: "#111827", minWidth: "22mm", textAlign: "right" }}>
-                        {fmt2(netPaid)} บาท
+                      <p style={{ margin: 0, fontSize: "10px", color: "#111827", minWidth: "26mm", textAlign: "right" }}>
+                        {fmt2(showWht ? whtAmount : 0)} บาท
                       </p>
                     </div>
+                  </div>
+                  {/* Big orange-tint highlight box → NET PAID (the real figure) */}
+                  <div style={{ background: tintBg, borderRadius: "2px", padding: "5px 10px", textAlign: "center" }}>
+                    <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>จำนวนเงินที่ชำระ</p>
+                    <h3 style={{ margin: 0, fontSize: "18px", fontWeight: "bold", color: "#111827" }}>
+                      {fmt2(netPaid)} <span style={{ fontSize: "12px" }}>บาท</span>
+                    </h3>
                   </div>
                 </div>
               </div>
@@ -690,12 +732,12 @@ function ReceiptPage({
                     <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ตราประทับ (ผู้ขาย)</p>
                     <div className="image" style={{ display: "flex", justifyContent: "center", height: "18mm", alignItems: "center" }}>
                       <Image
-                        src="/images/pacred-stamp.png"
+                        src="/images/pacred-stamp-tight.png"
                         alt="ตราประทับ"
-                        width={48}
-                        height={48}
+                        width={106}
+                        height={58}
                         unoptimized
-                        style={{ width: "14mm", height: "auto" }}
+                        style={{ width: "auto", height: "18mm" }}
                       />
                     </div>
                     <div style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
@@ -804,7 +846,12 @@ export default async function ForwarderInvoicePrintPage({
       .select(
         "id, userid, ftrackingchn, fcabinetnumber, famount, fweight, fvolume, fdate, " +
           "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
-          "pricecrate, ftransportpricechnthb, priceother, fdiscount",
+          "pricecrate, ftransportpricechnthb, priceother, fdiscount, " +
+          // ภูม flag round 8 — extra cols the /service-import table already shows:
+          //   ftransporttype  '1'=รถ(EK) '2'=เรือ(SEA)
+          //   frefprice       '1'=คิดตามน้ำหนัก(KG) '2'=คิดตามปริมาตร(CBM)
+          //   frefrate        เรทนำเข้า ฿ ต่อหน่วย
+          "ftransporttype, frefprice, frefrate",
       )
       .in("id", fids);
     if (fwdErr) {
@@ -902,6 +949,12 @@ export default async function ForwarderInvoicePrintPage({
         no:           idx + 1,
         fid:          f.fid ?? String(f.id),
         tracking:     f.ftrackingchn ?? "",
+        cabinet:      f.fcabinetnumber ?? "",
+        // ขนส่ง: '1'=EK(รถ) · '2'=SEA(เรือ) — short code for the column
+        transport:    f.ftransporttype === "2" ? "SEA" : f.ftransporttype === "1" ? "EK" : "",
+        // คิดราคาตาม: '1'=KG · '2'=CBM
+        rateBasis:    f.frefprice === "2" ? "CBM" : f.frefprice === "1" ? "KG" : "",
+        rate:         toNumber(f.frefrate),
         famount:      toNumber(f.famount),
         fweight:      toNumber(f.fweight),
         fvolume:      toNumber(f.fvolume),
@@ -1112,10 +1165,13 @@ export default async function ForwarderInvoicePrintPage({
           }
         }
         @media screen {
+          /* ภูม flag round 8 (point 3): drop the hard 1px outline — it boxed
+             the receipt like a table. Keep ONLY the soft drop-shadow so the
+             page still floats as white "paper" on the gray bg (the Peak look),
+             with no visible border line. */
           .receipt-page {
             margin: 16px auto;
             box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.06);
-            border: 1px solid #e5e7eb;
             border-radius: 4px;
           }
         }
