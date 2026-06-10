@@ -185,6 +185,31 @@ export default async function AdminReportCntDetailPage({
   const fWarehouseChina = String(firstRow.fwarehousechina ?? "");
   const fTransportType = String(firstRow.ftransporttype ?? "1");
 
+  // ── 1b) V-D3 — carrier physical container number ──
+  // The Pacred cabinet code (fcabinetnumber = GZS260525-2) is what staff and
+  // customers see. The carrier's real B/L container number (e.g. JXLU6157980)
+  // already arrives via MOMO: momo_container_closed.container_batch_no = the
+  // cabinet code, .real_container_no = the carrier number (migrations 0119/
+  // 0130). It was never surfaced — pull it here keyed on the cabinet code and
+  // show it in the header. NULL = not a MOMO-synced container (manual / other
+  // carrier) → the field simply doesn't render.
+  let carrierContainerNo: string | null = null;
+  {
+    const { data: momoClosed, error: momoClosedErr } = await admin
+      .from("momo_container_closed")
+      .select("real_container_no")
+      .eq("container_batch_no", fCabinetNumber)
+      .not("real_container_no", "is", null)
+      .limit(1)
+      .maybeSingle<{ real_container_no: string | null }>();
+    if (momoClosedErr) {
+      console.error(`[momo_container_closed carrier-no] failed`, {
+        code: momoClosedErr.code, message: momoClosedErr.message, cabinet: fCabinetNumber,
+      });
+    }
+    carrierContainerNo = momoClosed?.real_container_no?.trim() || null;
+  }
+
   // ── 2) Container payment status ── (tb_cnt_item row presence)
   const { data: cntItemRow, error: cntItemRowErr } = await admin
     .from("tb_cnt_item")
@@ -510,6 +535,16 @@ export default async function AdminReportCntDetailPage({
               </h1>
               <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-y-1 text-sm">
                 <div>โกดังจีน: <span className="font-medium">{warehouseLabel}</span> ({warehouseChinaLabel})</div>
+                {/* V-D3 — carrier physical container number (from MOMO). Only
+                    shows when known; the Pacred code is in the title above. */}
+                {carrierContainerNo && (
+                  <div>
+                    เลขตู้สายเรือ (carrier):{" "}
+                    <span className="font-mono font-medium" title="เลขตู้คอนเทนเนอร์จริงของสายเรือ/ผู้ขนส่ง (จาก B/L)">
+                      {carrierContainerNo}
+                    </span>
+                  </div>
+                )}
                 <div>
                   สถานะตู้สินค้า:{" "}
                   {cabinetIsPaid ? (
