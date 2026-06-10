@@ -147,7 +147,7 @@ function BillingRunPage({
         </div>
 
         {/* ── ITEMS TABLE — Pacred 11-col cargo table (same as the receipt) ── */}
-        <div style={{ height: "182px", overflow: "visible" }}>
+        <div style={{ height: "182px", overflow: "visible", borderTop: "1px solid #d8dade", paddingTop: "1.5mm" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", background: tintBg, tableLayout: "fixed" }}>
             <thead>
               <tr>
@@ -196,9 +196,11 @@ function BillingRunPage({
         <div style={{ flex: 1 }} />
 
         {/* ── SUMMARY + PAYMENT + REMARK + CERTIFIED ─────── */}
-        <div>
+        {/* Peak section dividers (ภูม flag): thin full-width rules separate each
+            band — สรุป · การชำระเงิน · หมายเหตุ · รับรอง — like the ใบเสร็จ. */}
+        <div style={{ borderTop: "1px solid #d8dade" }}>
           {/* SUMMARY 2-col */}
-          <div style={{ display: "flex", gap: "6mm", marginBottom: "1.5mm" }}>
+          <div style={{ display: "flex", gap: "6mm", marginBottom: "1.5mm", paddingTop: "2mm" }}>
             {/* LEFT: charge breakdown + Thai words */}
             <div style={{ flex: 1 }}>
               <div style={{ display: "flex", gap: "4mm" }}>
@@ -243,7 +245,7 @@ function BillingRunPage({
           </div>
 
           {/* PAYMENT box — bank + ชำระภายใน */}
-          <div style={{ display: "flex", gap: "6mm", marginBottom: "1.5mm", minHeight: "13mm" }}>
+          <div style={{ display: "flex", gap: "6mm", marginBottom: "1.5mm", minHeight: "13mm", borderTop: "1px solid #e5e7eb", paddingTop: "2mm" }}>
             <div style={{ flex: 1 }}>
               <div style={{ display: "flex", gap: "4mm" }}>
                 <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827" }}>การชำระเงิน</p>
@@ -269,7 +271,7 @@ function BillingRunPage({
           </div>
 
           {/* REMARK — staff note + 50-ทวิ instruction */}
-          <div style={{ display: "flex", gap: "4mm", marginBottom: "1.5mm" }}>
+          <div style={{ display: "flex", gap: "4mm", marginBottom: "1.5mm", borderTop: "1px solid #e5e7eb", paddingTop: "2mm" }}>
             <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827", minWidth: "14mm" }}>หมายเหตุ</p>
             <div style={{ flex: 1 }}>
               {p.note && <p style={{ margin: 0, fontSize: "10px", color: "#374151", whiteSpace: "pre-wrap" }}>{p.note}</p>}
@@ -283,7 +285,7 @@ function BillingRunPage({
           </div>
 
           {/* CERTIFIED — 4 boxes: QR · ผู้วางบิล · ตราประทับ · ผู้รับวางบิล */}
-          <div style={{ display: "flex", gap: "2mm" }}>
+          <div style={{ display: "flex", gap: "2mm", borderTop: "1px solid #e5e7eb", paddingTop: "2mm" }}>
             <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", minWidth: "14mm" }}>
               <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827" }}>รับรอง</p>
             </div>

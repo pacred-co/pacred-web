@@ -486,12 +486,28 @@ export function CntListTable({
           {!isWaiting && (
             <>
               <span className="mx-1 hidden sm:inline-block w-px h-6 bg-border" aria-hidden />
+              {/* ภูม flag 2026-06-10: pass the ticked container(s) so /add pre-fills
+                  the customer + their billable forwarders (was a bare nav → blank
+                  form). Single-customer container → form opens ready to confirm. */}
               <Link
-                href="/admin/billing-run/add"
+                href={
+                  selected.size > 0
+                    ? `/admin/billing-run/add?cabinet=${encodeURIComponent(Array.from(selected).join(","))}`
+                    : "/admin/billing-run/add"
+                }
                 className="rounded-full bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 text-xs font-semibold shadow-lg inline-flex items-center gap-1.5"
-                title="สร้างใบวางบิล (R-2 · formal invoice) — เก็บเงินลูกค้าเป็นรายตู้/รายลูกค้า"
+                title={
+                  selected.size > 0
+                    ? `สร้างใบวางบิลจากตู้ที่เลือก (${selected.size}) — เลือกลูกค้า + รายการให้อัตโนมัติ`
+                    : "สร้างใบวางบิล (R-2 · formal invoice) — เก็บเงินลูกค้าเป็นรายตู้/รายลูกค้า"
+                }
               >
                 📄 ทำใบวางบิล
+                {selected.size > 0 && (
+                  <span className="inline-flex items-center justify-center bg-white text-emerald-600 text-[10px] font-bold rounded-full h-5 min-w-[20px] px-1.5">
+                    {selected.size}
+                  </span>
+                )}
               </Link>
               <Link
                 href="/admin/forwarder-check?page=succeed"

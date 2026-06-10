@@ -24,6 +24,11 @@ import {
 
 type Props = {
   customers: EligibleCustomerRow[];
+  /** ภูม flag 2026-06-10 — when opened from the "ตู้พร้อมวางบิล" ทำใบวางบิล button
+   *  (?cabinet=...), pre-select this customer + tick these forwarders so the form
+   *  opens ready to confirm. */
+  preselectUserid?: string;
+  preselectForwarderIds?: number[];
 };
 
 function isoToday(): string {
@@ -49,12 +54,12 @@ const inputCls =
 
 const labelCls = "block text-xs font-medium text-muted mb-1";
 
-export function BillingRunAddClient({ customers }: Props) {
+export function BillingRunAddClient({ customers, preselectUserid = "", preselectForwarderIds = [] }: Props) {
   const router = useRouter();
-  const [selectedUserid, setSelectedUserid] = useState<string>("");
+  const [selectedUserid, setSelectedUserid] = useState<string>(preselectUserid);
   const [eligible, setEligible] = useState<EligibleForwarderRow[] | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [loadingFwd, setLoadingFwd] = useState(false);
+  const [loadingFwd, setLoadingFwd] = useState(!!preselectUserid);
   // 2026-06-03 ภูม flag — round-1 swallowed listEligibleForwarders errors
   // and just showed "ลูกค้านี้ไม่มีรายการ". Surface the real action error here
   // so the next schema/column issue doesn't masquerade as an empty state.
@@ -116,15 +121,23 @@ export function BillingRunAddClient({ customers }: Props) {
       if (res.ok) {
         setEligible(res.data!.rows);
         setFwdErr(null);
-        // Default selection: tick all unbilled rows
-        setSelectedIds(new Set(res.data!.rows.filter((r) => !r.already_billed).map((r) => r.id)));
+        // Default selection: tick all unbilled rows — EXCEPT when this is the
+        // cabinet-preselected customer, in which case tick only the container's
+        // forwarders (ภูม flag · "ทำใบวางบิล" from the ตู้พร้อมวางบิล bar).
+        const unbilled = res.data!.rows.filter((r) => !r.already_billed);
+        const usePreselect =
+          !!preselectUserid && selectedUserid === preselectUserid && preselectForwarderIds.length > 0;
+        const tick = usePreselect
+          ? unbilled.filter((r) => preselectForwarderIds.includes(r.id))
+          : unbilled;
+        setSelectedIds(new Set(tick.map((r) => r.id)));
       } else {
         setEligible([]);
         setFwdErr(res.error);
       }
     });
     return () => { cancelled = true; };
-  }, [selectedUserid]);
+  }, [selectedUserid, preselectUserid, preselectForwarderIds]);
 
   function onCustomerChange(uid: string) {
     setSelectedUserid(uid);

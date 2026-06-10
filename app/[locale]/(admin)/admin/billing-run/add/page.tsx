@@ -19,12 +19,16 @@
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
-import { listEligibleCustomers } from "@/actions/admin/billing-run";
+import { listEligibleCustomers, resolveCabinetBillingTarget } from "@/actions/admin/billing-run";
 import { BillingRunAddClient } from "./billing-run-add-client";
 
 export const dynamic = "force-dynamic";
 
-export default async function BillingRunAddPage() {
+export default async function BillingRunAddPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ cabinet?: string }>;
+}) {
   // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles create the
   // billing doc (mark-paid stays accounting-only).
   // `docs/research/ops-workflow-audit-2026-06-05.md` §28.
@@ -32,6 +36,30 @@ export default async function BillingRunAddPage() {
 
   const res = await listEligibleCustomers();
   const customers = res.ok ? res.data!.rows : [];
+
+  // ภูม flag 2026-06-10 — when arrived from the "ตู้พร้อมวางบิล" ทำใบวางบิล button
+  // (?cabinet=...), pre-fill the customer + their billable forwarders so the form
+  // opens ready to confirm (not a blank page).
+  let preselectUserid = "";
+  let preselectForwarderIds: number[] = [];
+  let preselectNote: string | null = null;
+  const cabinetParam = (await searchParams).cabinet;
+  if (cabinetParam) {
+    const cabinets = cabinetParam.split(",").map((c) => c.trim()).filter(Boolean);
+    const t = await resolveCabinetBillingTarget(cabinets);
+    if (t.ok && t.data) {
+      const cabLabel = cabinets.join(", ");
+      if (t.data.userid && t.data.customerCount === 1) {
+        preselectUserid = t.data.userid;
+        preselectForwarderIds = t.data.forwarderIds;
+        preselectNote = `📦 ตู้ ${cabLabel} — เลือกลูกค้า + ${t.data.forwarderIds.length} รายการให้อัตโนมัติแล้ว · ตรวจสอบแล้วกด "สร้างใบวางบิล"`;
+      } else if (t.data.customerCount > 1) {
+        preselectNote = `📦 ตู้ ${cabLabel} มี ${t.data.customerCount} ลูกค้า — เลือกลูกค้าทีละราย (ใบวางบิล = 1 ใบต่อ 1 ลูกค้า)`;
+      } else {
+        preselectNote = `📦 ตู้ ${cabLabel} ยังไม่มีรายการสถานะ "รอชำระเงิน (fStatus=5)" — เลือกลูกค้าจากรายการด้านล่าง`;
+      }
+    }
+  }
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
@@ -64,8 +92,18 @@ export default async function BillingRunAddPage() {
         </div>
       )}
 
+      {preselectNote && (
+        <div className="rounded-2xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-800">
+          {preselectNote}
+        </div>
+      )}
+
       {res.ok && customers.length > 0 && (
-        <BillingRunAddClient customers={customers} />
+        <BillingRunAddClient
+          customers={customers}
+          preselectUserid={preselectUserid}
+          preselectForwarderIds={preselectForwarderIds}
+        />
       )}
     </main>
   );

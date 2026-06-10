@@ -429,6 +429,65 @@ export async function listEligibleForwarders(
 }
 
 // ────────────────────────────────────────────────────────────────────────
+// 2b. RESOLVE a container → its billing target (ภูม flag 2026-06-10)
+// ────────────────────────────────────────────────────────────────────────
+//
+// The "ตู้พร้อมวางบิล" list + the ทำใบวางบิล button pass the ticked cabinet(s)
+// here so /admin/billing-run/add can PRE-FILL instead of opening a blank form.
+// Returns the single customer (+ their fStatus=5 forwarder ids in those cabinets)
+// when the container is single-customer; else userid=null + customerCount so the
+// form falls back to manual pick.
+
+export async function resolveCabinetBillingTarget(
+  cabinets: string[],
+): Promise<AdminActionResult<{ userid: string | null; forwarderIds: number[]; customerCount: number }>> {
+  return withAdmin<{ userid: string | null; forwarderIds: number[]; customerCount: number }>(
+    ["super", "accounting", "ops", "freight_export_doc", "freight_import_doc"],
+    async () => {
+      const admin = createAdminClient();
+      const clean = Array.from(
+        new Set(cabinets.map((c) => c.trim()).filter((c) => c && c !== "0")),
+      ).slice(0, 50);
+      if (clean.length === 0) {
+        return { ok: true, data: { userid: null, forwarderIds: [], customerCount: 0 } };
+      }
+
+      const { data, error } = await admin
+        .from("tb_forwarder")
+        .select("id, userid")
+        .in("fcabinetnumber", clean)
+        .eq("fstatus", "5")
+        .limit(2000);
+      if (error) {
+        console.error("[resolveCabinetBillingTarget tb_forwarder] failed", {
+          code: error.code, message: error.message,
+        });
+        return { ok: false, error: error.message };
+      }
+
+      const rows = (data ?? []) as Array<{ id: number; userid: string | null }>;
+      const byUser = new Map<string, number[]>();
+      for (const r of rows) {
+        if (!r.userid) continue;
+        const arr = byUser.get(r.userid) ?? [];
+        arr.push(r.id);
+        byUser.set(r.userid, arr);
+      }
+
+      if (byUser.size === 1) {
+        const [userid, ids] = Array.from(byUser.entries())[0];
+        return { ok: true, data: { userid, forwarderIds: ids, customerCount: 1 } };
+      }
+      // 0 customers (no fStatus=5 in the cabinet) or many → no single preselect.
+      return {
+        ok: true,
+        data: { userid: null, forwarderIds: rows.map((r) => r.id), customerCount: byUser.size },
+      };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
 // 3. LIST invoices — admin list page (with filters)
 // ────────────────────────────────────────────────────────────────────────
 
