@@ -5237,6 +5237,7 @@
     "downloadPdfHint": "In the print dialog, choose \"Save as PDF\" as the destination",
     "englishVersion": "English Version",
     "thaiVersion": "Thai version",
+    "printLocked": "Upload the 50-Tavi certificate and wait for admin approval before printing/downloading",
     "close": "Close"
   },
   "pcsTopMenu": {

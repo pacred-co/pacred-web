@@ -48,6 +48,11 @@ type RawReceipt = {
   recompaddress:          string | null;
   documentissuer:         string | null;
   documentapprover:       string | null;
+  // 50-ทวิ print gate (migration 0173 · ภูม 2026-06-10)
+  wht_cert_status:        string | null;
+  wht_cert_path:          string | null;
+  wht_cert_no:            string | null;
+  wht_cert_uploaded_at:   string | null;
 };
 
 type RawReceiptItem = {
@@ -152,6 +157,15 @@ export type ReceiptDocument = {
   commonProps: ReceiptCommonProps;
   pages:       ReceiptPageData[];
   itemsMissing: boolean;
+  /** 50-ทวิ print gate (migration 0173 · ภูม 2026-06-10). `locked` = the customer
+   *  cannot print/download on /r/<token> until the cert is approved/waived. */
+  whtCert: {
+    status:     "none" | "pending" | "approved" | "waived";
+    locked:     boolean;
+    certNo:     string | null;
+    path:       string | null;
+    uploadedAt: string | null;
+  };
 };
 
 /**
@@ -169,7 +183,8 @@ export async function loadReceiptDocument(
     .select(
       "id, rid, refid, rdate, rdatecreate, issuedate, ramount, totalbeforewithholding, " +
         "rstatus, userid, adminid, statusprint, adminidprint, rdateprint, corporatetype, " +
-        "recompnumber, recompname, recompaddress, documentissuer, documentapprover",
+        "recompnumber, recompname, recompaddress, documentissuer, documentapprover, " +
+        "wht_cert_status, wht_cert_path, wht_cert_no, wht_cert_uploaded_at",
     )
     .eq("id", receiptId)
     .maybeSingle<RawReceipt>();
@@ -459,6 +474,17 @@ export async function loadReceiptDocument(
     pageCount,
   };
 
+  // ── 10. 50-ทวิ print gate (migration 0173 · ภูม 2026-06-10) ──
+  // A corporate receipt that withholds WHT cannot be printed/downloaded by the
+  // CUSTOMER (on /r/<token>) until the 50-ทวิ cert is uploaded AND admin-approved
+  // (or admin-waived). Admin reprint is never gated. `receiptShowsWht` already
+  // implies corporate (showWht = isCorporate && total ≥ 1000).
+  const whtCertStatus = (receipt.wht_cert_status ?? "none") as
+    "none" | "pending" | "approved" | "waived";
+  const receiptShowsWht = showWht || (itemsMissing && whtAmount > 0);
+  const printLocked =
+    receiptShowsWht && whtCertStatus !== "approved" && whtCertStatus !== "waived";
+
   return {
     receipt: {
       id:           receipt.id,
@@ -470,5 +496,12 @@ export async function loadReceiptDocument(
     commonProps,
     pages,
     itemsMissing,
+    whtCert: {
+      status:     whtCertStatus,
+      locked:     printLocked,
+      certNo:     receipt.wht_cert_no ?? null,
+      path:       receipt.wht_cert_path ?? null,
+      uploadedAt: receipt.wht_cert_uploaded_at ?? null,
+    },
   };
 }

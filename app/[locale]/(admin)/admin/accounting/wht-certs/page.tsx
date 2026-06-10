@@ -3,9 +3,11 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
 import { getWhtCertQueue } from "@/actions/admin/wht-cert";
+import { getReceiptCertQueue } from "@/actions/receipt-wht-cert";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportWhtCertsAll } from "@/actions/admin/export/acc-wht-certs";
 import { WhtCertRowActions } from "./wht-cert-row-actions";
+import { ReceiptCertRowActions } from "./receipt-cert-row-actions";
 
 /**
  * /admin/accounting/wht-certs — 50-ทวิ certificate tracking queue.
@@ -60,6 +62,9 @@ export default async function AdminWhtCertsPage({
   const userid = (sp.userid ?? "").trim() || undefined;
 
   const queue = await getWhtCertQueue({ status: status === "all" ? "all" : status, userid, limit: 500 });
+  // ภูม flag 2026-06-10 — receipts whose customer uploaded a 50-ทวิ and is
+  // waiting for admin approval (the print-gate queue · migration 0173).
+  const receiptCertQueue = await getReceiptCertQueue();
   const totalEntries = queue.pending.length + queue.received.length + queue.waived.length;
   const pendingAmountTotal = queue.byCustomer.reduce((s, c) => s + c.pendingAmount, 0);
 
@@ -110,6 +115,43 @@ export default async function AdminWhtCertsPage({
             แอดมินกดยืนยันรับ cert (status pending→received) หรือ waive (รับไม่ได้แล้ว · ลูกค้าตัวเล็ก)
           </p>
         </header>
+
+        {/* ใบเสร็จรออนุมัติ 50 ทวิ (ภูม flag 2026-06-10) — the customer uploaded a
+            cert on /r/<token> and is BLOCKED from printing until an admin approves.
+            High-priority queue surfaced above the chase list. */}
+        {receiptCertQueue.length > 0 && (
+          <section className="rounded-2xl border-2 border-emerald-300 bg-emerald-50/40 dark:bg-emerald-950/10 overflow-hidden">
+            <div className="px-5 py-3 border-b border-emerald-200 bg-emerald-100/50">
+              <h2 className="font-bold text-sm">🔓 ใบเสร็จรออนุมัติ 50 ทวิ ({receiptCertQueue.length}) — ลูกค้าแนบแล้ว · รอกดอนุมัติเพื่อปลดล็อกการพิมพ์</h2>
+            </div>
+            <div className="overflow-x-auto scrollbar-x-visible bg-white dark:bg-surface">
+              <table className="w-full min-w-[640px] text-sm">
+                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                  <tr>
+                    <th className="px-3 py-2">เลขที่ใบเสร็จ</th>
+                    <th className="px-3 py-2">ลูกค้า</th>
+                    <th className="px-3 py-2">เลขที่ 50 ทวิ</th>
+                    <th className="px-3 py-2">แนบเมื่อ</th>
+                    <th className="px-3 py-2 text-right">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {receiptCertQueue.map((r) => (
+                    <tr key={r.id} className="border-t border-emerald-100 dark:border-emerald-900/30">
+                      <td className="px-3 py-2 font-mono text-xs">{r.rid}</td>
+                      <td className="px-3 py-2 font-mono text-xs">
+                        <Link href={`/admin/customers/${r.userid}`} className="text-primary-600 hover:underline">{r.userid}</Link>
+                      </td>
+                      <td className="px-3 py-2 font-mono text-[11px] text-muted">{r.certNo || "—"}</td>
+                      <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">{fmtDate(r.uploadedAt)}</td>
+                      <td className="px-3 py-2"><ReceiptCertRowActions receiptId={r.id} certNo={r.certNo} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
         {/* Summary cards */}
         <section className="grid sm:grid-cols-4 gap-3">

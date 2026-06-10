@@ -20,6 +20,7 @@ import { ReceiptPaper } from "@/components/receipt/receipt-paper";
 import { loadReceiptDocument } from "@/lib/receipt/load-receipt-document";
 import { verifyReceiptToken } from "@/lib/receipt/receipt-token";
 import PublicReceiptToolbar from "./public-receipt-toolbar";
+import ReceiptWhtCertGate from "./receipt-wht-cert-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -51,8 +52,18 @@ export default async function PublicReceiptPage({
     color:  { dark: "#111827", light: "#FFFFFF" },
   });
 
+  // 50-ทวิ print gate (migration 0173 · ภูม 2026-06-10): a corporate receipt that
+  // withholds WHT is locked from customer print/download until the cert is
+  // uploaded AND admin-approved.
+  const certLocked = doc.whtCert.locked;
+  const certStatus = doc.whtCert.status === "pending" ? "pending" : "none";
+
   return (
     <div className="min-h-screen bg-slate-100 print:bg-white">
+      <div className="px-2 pt-4 sm:px-4">
+        {certLocked && <ReceiptWhtCertGate token={token} status={certStatus} />}
+      </div>
+
       {/* `id` is the toggle target for the toolbar's เต็มจอ/กระดาษ (.receipt-fit).
           Ships WITH `receipt-fit` so the A4 paper fits a phone on first paint
           (no horizontal scroll, no flash) — the toolbar toggles it off for
@@ -61,7 +72,7 @@ export default async function PublicReceiptPage({
         <ReceiptPaper pages={doc.pages} qrDataUrl={qrDataUrl} {...doc.commonProps} />
       </div>
 
-      <PublicReceiptToolbar />
+      <PublicReceiptToolbar printLocked={certLocked} />
     </div>
   );
 }

@@ -5237,6 +5237,7 @@
     "downloadPdfHint": "ในหน้าต่างพิมพ์ เลือกปลายทางเป็น \"บันทึกเป็น PDF\"",
     "englishVersion": "English Version",
     "thaiVersion": "เวอร์ชันภาษาไทย",
+    "printLocked": "ต้องแนบใบ 50 ทวิ และรอแอดมินอนุมัติก่อน จึงจะพิมพ์/ดาวน์โหลดได้",
     "close": "ปิด"
   },
   "pcsTopMenu": {

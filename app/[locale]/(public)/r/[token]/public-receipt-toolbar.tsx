@@ -44,7 +44,13 @@ import {
 /** Toggle the `.receipt-fit` class on the receipt wrapper container. */
 const FIT_TARGET_ID = "publicReceiptDoc";
 
-export default function PublicReceiptToolbar() {
+export default function PublicReceiptToolbar({
+  printLocked = false,
+}: {
+  /** ภูม flag 2026-06-10 — corporate+WHT receipt is locked until the 50-ทวิ cert
+   *  is uploaded + admin-approved. Disables พิมพ์ / ดาวน์โหลด. */
+  printLocked?: boolean;
+}) {
   const t = useTranslations("publicReceipt");
   const locale = useLocale();
   const pathname = usePathname();
@@ -70,8 +76,9 @@ export default function PublicReceiptToolbar() {
   const otherLocale = locale === "th" ? "en" : "th";
 
   const handlePrint = useCallback(() => {
+    if (printLocked) return; // 50-ทวิ gate — cert must be approved first
     window.print();
-  }, []);
+  }, [printLocked]);
 
   const switchLocale = useCallback(() => {
     // Push the SAME path under the other locale; `token` is already in pathname.
@@ -120,28 +127,39 @@ export default function PublicReceiptToolbar() {
               <span>{fit ? t("paperView") : t("fullScreen")}</span>
             </button>
 
-            {/* พิมพ์ */}
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="flex min-h-[44px] items-center gap-3 rounded-xl px-3 py-2 text-left text-base text-foreground hover:bg-slate-100 dark:hover:bg-white/5"
-            >
-              <Printer className="h-5 w-5 text-primary-600" />
-              <span>{t("print")}</span>
-            </button>
+            {printLocked ? (
+              /* 50-ทวิ gate (ภูม 2026-06-10) — print/download blocked until the
+                 cert is uploaded + admin-approved. */
+              <div className="flex items-start gap-3 rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-800 dark:bg-red-950/30 dark:text-red-300">
+                <Printer className="h-5 w-5 shrink-0 text-red-500" />
+                <span>🔒 {t("printLocked")}</span>
+              </div>
+            ) : (
+              <>
+                {/* พิมพ์ */}
+                <button
+                  type="button"
+                  onClick={handlePrint}
+                  className="flex min-h-[44px] items-center gap-3 rounded-xl px-3 py-2 text-left text-base text-foreground hover:bg-slate-100 dark:hover:bg-white/5"
+                >
+                  <Printer className="h-5 w-5 text-primary-600" />
+                  <span>{t("print")}</span>
+                </button>
 
-            {/* ดาวน์โหลด PDF (+ hint) */}
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="flex min-h-[44px] flex-col items-start gap-0.5 rounded-xl px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-white/5"
-            >
-              <span className="flex items-center gap-3 text-base text-foreground">
-                <Download className="h-5 w-5 text-primary-600" />
-                {t("downloadPdf")}
-              </span>
-              <span className="pl-8 text-xs leading-snug text-muted">{t("downloadPdfHint")}</span>
-            </button>
+                {/* ดาวน์โหลด PDF (+ hint) */}
+                <button
+                  type="button"
+                  onClick={handlePrint}
+                  className="flex min-h-[44px] flex-col items-start gap-0.5 rounded-xl px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-white/5"
+                >
+                  <span className="flex items-center gap-3 text-base text-foreground">
+                    <Download className="h-5 w-5 text-primary-600" />
+                    {t("downloadPdf")}
+                  </span>
+                  <span className="pl-8 text-xs leading-snug text-muted">{t("downloadPdfHint")}</span>
+                </button>
+              </>
+            )}
 
             {/* English / ไทย */}
             <button
