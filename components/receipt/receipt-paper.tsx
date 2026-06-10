@@ -189,7 +189,7 @@ export function ReceiptPage({
       <div className="paperTransaction subpage" style={{ padding: "10mm 12mm", flex: 1, display: "flex", flexDirection: "column" }}>
 
         {/* ── headerFormatOne: logo LEFT · (label) + title RIGHT ─────────── */}
-        <div id="headerFormatOne" style={{ marginBottom: "4mm" }}>
+        <div id="headerFormatOne" style={{ marginBottom: "2mm" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             {/* LEFT: merchant logo — TIGHT-cropped wordmark (whitespace trimmed
                 so it renders ~3× larger at the same height). ภูม flag round 8:
@@ -220,13 +220,13 @@ export function ReceiptPage({
         </div>
 
         {/* ── INFO ROW: issuer+customer LEFT · meta-box RIGHT ─────────────── */}
-        <div style={{ display: "flex", gap: "8mm", marginBottom: "3mm" }}>
+        <div style={{ display: "flex", gap: "8mm", marginBottom: "1.5mm" }}>
 
           {/* LEFT PAIR: issuer on top, customer below */}
           <div style={{ flex: 1, minWidth: 0 }}>
 
             {/* ISSUER BLOCK */}
-            <div id="merchantInfo" style={{ marginBottom: "3mm" }}>
+            <div id="merchantInfo" style={{ marginBottom: "1.5mm" }}>
               <div style={{ display: "flex", gap: "6mm" }}>
                 {/* TEXT column */}
                 <div className="merchentInfo" style={{ flex: 1 }}>
@@ -443,7 +443,7 @@ export function ReceiptPage({
         {pageNumber === pageCount && (
           <div>
             {/* SUMMARY — 2 columns: amountInfo LEFT · big amount box RIGHT */}
-            <div style={{ display: "flex", gap: "6mm", marginBottom: "3mm" }}>
+            <div style={{ display: "flex", gap: "6mm", marginBottom: "1.5mm" }}>
               {/* LEFT: สรุป + Thai words */}
               <div id="amountInfo" style={{ flex: 1 }}>
                 <div style={{ display: "flex", gap: "4mm" }}>
@@ -504,7 +504,7 @@ export function ReceiptPage({
             </div>
 
             {/* PAYMENT — 2 columns inside paymentGroupShort */}
-            <div style={{ display: "flex", gap: "6mm", marginBottom: "3mm", minHeight: "20mm" }}>
+            <div style={{ display: "flex", gap: "6mm", marginBottom: "1.5mm", minHeight: "13mm" }}>
               <div id="payment" style={{ flex: 1 }}>
                 <div id="paymentGroupShort">
                   <div className="paymentGroup" style={{ display: "flex", gap: "4mm" }}>
@@ -555,7 +555,7 @@ export function ReceiptPage({
             </div>
 
             {/* REMARK */}
-            <div style={{ display: "flex", gap: "4mm", marginBottom: "3mm" }}>
+            <div style={{ display: "flex", gap: "4mm", marginBottom: "1.5mm" }}>
               <div id="remark">
                 <div style={{ display: "flex", gap: "4mm" }}>
                   <div>
@@ -725,7 +725,7 @@ export function ReceiptPaper({ pages, qrDataUrl, ...common }: ReceiptPaperProps)
              Chrome's datetime/URL/page-# header/footer is dialog-only
              ("Headers and footers: off"). Sidebar is print:hidden via the
              admin layout. */
-          @page { size: A4 portrait; margin: 8mm; }
+          @page { size: A4 portrait; margin: 5mm; }
           html, body {
             background: white !important;
             margin: 0 !important;
@@ -742,8 +742,8 @@ export function ReceiptPaper({ pages, qrDataUrl, ...common }: ReceiptPaperProps)
             /* A4 portrait inner area = 297mm − 2×8mm @page margin = 281mm.
                Use both height and min-height so the flex:1 spacer has a
                concrete target to grow into. */
-            height: 281mm !important;
-            min-height: 281mm !important;
+            height: 287mm !important;
+            min-height: 287mm !important;
             page-break-after: always;
             page-break-inside: avoid;
           }
