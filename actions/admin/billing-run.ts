@@ -129,7 +129,10 @@ export type BillingRunInvoiceDetail = {
     id: number;
     forwarder_id: number;
     amount_thb: number;
-    /** Hydrated forwarder data — joined post-fetch (no embed FK). */
+    /** Hydrated forwarder data — joined post-fetch (no embed FK). The cabinet /
+     *  transport / rate_basis / rate mirror the ใบเสร็จ's 11-col cargo table
+     *  (lib/receipt/load-receipt-document.ts) so the Peak ใบวางบิล renders the
+     *  SAME columns. */
     forwarder: {
       ftrackingchn: string;
       famount: number | null;
@@ -137,6 +140,12 @@ export type BillingRunInvoiceDetail = {
       fvolume: number | null;
       fdate: string | null;
       fstatus: string | null;
+      cabinet: string;
+      /** "EK" (รถ) | "SEA" (เรือ) | "" */
+      transport: string;
+      /** "KG" | "CBM" | "" */
+      rate_basis: string;
+      rate: number;
     } | null;
   }>;
 };
@@ -618,12 +627,16 @@ export async function getInvoiceDetail(
         fvolume: number | string | null;
         fdate: string | null;
         fstatus: string | null;
+        fcabinetnumber: string | null;
+        ftransporttype: string | null;
+        frefprice: string | null;
+        frefrate: number | string | null;
       };
       const fwdByID = new Map<number, FwdHydRow>();
       if (fids.length > 0) {
         const { data: fwdRaw, error: fwdErr } = await admin
           .from("tb_forwarder")
-          .select("id, ftrackingchn, famount, fweight, fvolume, fdate, fstatus")
+          .select("id, ftrackingchn, famount, fweight, fvolume, fdate, fstatus, fcabinetnumber, ftransporttype, frefprice, frefrate")
           .in("id", fids);
         if (fwdErr) {
           console.error("[getInvoiceDetail tb_forwarder hydrate] failed", {
@@ -685,6 +698,12 @@ export async function getInvoiceDetail(
                     fvolume:         f.fvolume != null ? Number(f.fvolume) : null,
                     fdate:        f.fdate,
                     fstatus:      f.fstatus,
+                    cabinet:      f.fcabinetnumber ?? "",
+                    // ขนส่ง: '1'=EK(รถ) · '2'=SEA(เรือ) — mirrors load-receipt-document.ts
+                    transport:    f.ftransporttype === "2" ? "SEA" : f.ftransporttype === "1" ? "EK" : "",
+                    // คิดราคาตาม: '1'=KG · '2'=CBM
+                    rate_basis:   f.frefprice === "2" ? "CBM" : f.frefprice === "1" ? "KG" : "",
+                    rate:         f.frefrate != null ? Number(f.frefrate) : 0,
                   }
                 : null,
             };
