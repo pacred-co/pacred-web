@@ -219,6 +219,20 @@ body {
   background: #64748b;
 }
 
+/* Fully hidden scrollbar — the container still scrolls via wheel/touch/keyboard
+   (ปอน 2026-06-10: admin sidebar "ไม่มี scroll bar แต่ให้เลื่อนๆได้").
+   Use ONLY where the content's scrollability is obvious without a bar
+   (e.g. a nav menu); wide data tables should keep .scrollbar-x-visible. */
+.scrollbar-hidden {
+  scrollbar-width: none;                  /* Firefox */
+  -ms-overflow-style: none;               /* legacy Edge/IE */
+}
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;                          /* Chrome/Safari/Edge */
+  width: 0;
+  height: 0;
+}
+
 /* Google Translate browser-extension widget suppression. We ship our own
    i18n (next-intl th/en) and set `translate="no"` + meta notranslate on
    <html>, but if a user manually picks "Translate" in Chrome anyway, the

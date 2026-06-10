@@ -34,7 +34,7 @@ import {
   Printer, Calculator, BadgeCheck, ShieldAlert, UserCheck, Wand2, RefreshCw,
   Banknote, KanbanSquare, Smartphone, Save,
   Ban, AlertCircle, Database, DatabaseZap, Send, Contact, Gauge, PhoneCall, Megaphone, Handshake,
-  ClipboardList, ReceiptText, FileSignature,
+  ClipboardList, ReceiptText, FileSignature, Ship,
   ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
@@ -134,6 +134,8 @@ const ICONS: Record<string, LucideIcon> = {
   // 2026-06-09 (W11 · customs doc-kit) — customs-letter/Form-E/HS-assist leaf
   // (customsDocKit.title · /admin/accounting/customs-doc-kit).
   FileSignature,
+  // 2026-06-10 (ปอน · sidebar IA regroup) — บริการ → ส่งออก/Freight wrapper.
+  Ship,
 };
 
 function Icon({ name, active }: { name?: string; active: boolean }) {
@@ -279,12 +281,30 @@ function MenuRow({
 
   const badgeVal = item.badge ? counts[item.badge] ?? 0 : 0;
   // Indentation grows with depth (legacy nested <ul> visual nesting).
-  const padLeft = depth === 0 ? "pl-3" : depth === 1 ? "pl-7" : "pl-10";
+  // depth ≥ 3 happens under the CLASS wrappers (e.g. ACC → รายการเบิกเงิน →
+  // Pacred → leaves) — one more step so tier 3/4 don't share an indent.
+  const padLeft =
+    depth === 0 ? "pl-3" : depth === 1 ? "pl-7" : depth === 2 ? "pl-10" : "pl-[52px]";
   const rowClasses = `group flex items-center gap-2.5 rounded-md ${padLeft} pr-2 py-2 text-[13px] transition-colors ${
     active
       ? "bg-primary-600 text-white font-semibold shadow-sm"
       : "text-foreground/75 hover:bg-primary-50 hover:text-primary-700"
   }`;
+
+  // Coming-soon placeholder — a named group scaffold with no destination yet
+  // (ปอน 2026-06-10 · Logistics taxonomy). Muted, non-clickable, tagged
+  // "เร็วๆนี้" so the future structure is visible without a dead link (§0d).
+  if (item.comingSoon) {
+    return (
+      <li>
+        <div className={`flex items-center gap-2.5 rounded-md ${padLeft} pr-2 py-2 text-[13px] text-muted/50 cursor-default select-none`}>
+          <Icon name={item.icon} active={false} />
+          <span className="truncate">{t(item.labelKey)}</span>
+          <span className="ml-auto text-[10px] text-muted/60 font-medium">{t("comingSoon")}</span>
+        </div>
+      </li>
+    );
+  }
 
   // Accordion parent (no own href, or a parent with children).
   if (hasChildren) {
@@ -497,7 +517,7 @@ export function AdminSidebar({
         brand cue carries through.
       */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col transition-transform lg:translate-x-0
+        className={`fixed top-14 bottom-0 left-0 z-50 w-64 flex flex-col transition-transform lg:translate-x-0
           bg-white text-foreground border-r border-border shadow-[2px_0_8px_-2px_rgba(0,0,0,0.06)]
           ${openMobile ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
       >
@@ -521,7 +541,7 @@ export function AdminSidebar({
           worker never sees a Freight divider with nothing under it.
         */}
         <AdminAccordionCtx.Provider value={accordionGroup}>
-        <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-3">
+        <nav className="flex-1 overflow-y-auto scrollbar-hidden px-2.5 py-3 space-y-3">
           {sections.filter((sec) => sec.items.length > 0).map((sec, si) => (
             <div key={sec.header || `sec-${si}`} className="space-y-0.5">
               {sec.header && (

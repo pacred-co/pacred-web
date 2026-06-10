@@ -139,6 +139,9 @@ export type MenuItem = {
   badge?: BadgeKey;
   /** Phase gate. Undefined = 1 (visible to all). 2/3/4 = super only. */
   phase?: Phase;
+  /** Coming-soon placeholder — a named group scaffold with no destination
+   *  yet. Renders muted + non-clickable + tagged "เร็วๆนี้" (no dead link). */
+  comingSoon?: boolean;
   /** Nested sub-menu (legacy nested <ul>). */
   children?: MenuItem[];
 };
@@ -554,7 +557,8 @@ const blockSettingsCargo: MenuItem = {
         // (failed/pending pushes + one-click retry · companion to systemNotifs
         // above). Was orphan (no inbound link · URL-only). Page gates super/ops.
         { labelKey: "settingsCargo.notifyDispatch", href: "/admin/notifications/dispatch", icon: "Send" },
-        { labelKey: "settingsCargo.pcsSync",      href: "/admin/system/pcs-sync",      icon: "Database" },
+        // 2026-06-10 (ปอน) — "PCS ↔ Pacred Sync" removed from the sidebar (the
+        // page /admin/system/pcs-sync still exists, just no nav entry).
         // 2026-06-04 (reachability audit §0d) — PCS→Pacred customer migration
         // (one-shot launch-week backfill tool · super-only). Was orphan
         // (no inbound link · URL-only).
@@ -576,15 +580,9 @@ const blockSettingsCargo: MenuItem = {
         // + resolved category names). Was a pure dead table — nothing read it.
         // READ-ONLY reference tool. Page gates super/ops/sales_admin/sales.
         { labelKey: "settingsCargo.chinaCategory", href: "/admin/tools/china-category", icon: "Boxes" },
-        { labelKey: "settingsCargo.orgEmail",    href: "/admin/organization-email",    icon: "MessageCircle" },
-        { labelKey: "settingsCargo.orgChannels", href: "/admin/organization-channels", icon: "Smartphone" },
-        // 2026-06-04 (reachability audit §0d) — org_contacts CRUD (V-G5 · feeds
-        // the public /contact page). Was orphan (no inbound link · URL-only ·
-        // only referenced in code comments). Same org-config family as orgEmail
-        // / orgChannels above. Page gates super/accounting/sales_admin.
-        { labelKey: "settingsCargo.orgContacts", href: "/admin/settings/contacts",     icon: "Contact" },
-        { labelKey: "settingsCargo.adminUsers",  href: "/admin/admins",                icon: "UserCog" },
-        { labelKey: "settingsCargo.partners",    href: "/admin/partners",              icon: "Handshake" },
+        // 2026-06-10 (ปอน) — org-info + partner items (orgEmail · orgChannels ·
+        // orgContacts · partners) + adminUsers moved to the Human Resources
+        // wrapper (super sidebar); removed from the shared Settings tools block.
       ],
     },
   ],
@@ -873,109 +871,281 @@ function extensionSection(items: MenuItem[]): MenuSection {
 // PER-ROLE MENUS — each === one legacy per-role .php file.
 // ════════════════════════════════════════════════════════════════
 
-/**
- * `super` — the CEO sidebar (legacy CargoAndFreight/CEO/CEO.php), the
- * fullest menu. Canonical fixed section order.
- */
-const menuSuper: MenuSection[] = [
-  { header: "", items: [itemDashboard] },
-  {
-    // 2026-05-20 ค่ำ ภูม brief: Pacred = 1 company (not the legacy
-    // 3-company split). Merged the prior "Cargo & Freight" + "Cargo"
-    // sections into a single section. Cross-shared items (HR/QA/
-    // จัดการลูกค้า/รายการเบิกเงิน) come first, then operational
-    // (wallet/purchasing/forwarder/payment/report/accounting).
-    //
-    // 2026-05-20 ค่ำ second batch: 6 sections consolidated — the deep
-    // dropdowns (wallet · purchasing · forwarder · report · QA · HR) were
-    // flattened to single-leaves (or 2-level Cargo/Freight × mode for
-    // forwarder, 2-level for HR) so the sidebar stays scannable; the
-    // deeper operational items moved to each page's top-menubar.
-    header: "Cargo & Freight",
-    items: [
-      blockHr,
-      itemQAAll,
-      // 2026-05-21 ภูม flagged — QA module rebuild (P0 #2) landed but had
-      // no super sidebar entry. menuWarehouse + menuQa already include it
-      // (L650 + L766). super now reaches it via this leaf too.
-      { labelKey: "warehouse.qaInspect", href: "/admin/warehouse/qa-inspections", icon: "ClipboardCheck" },
-      itemCustomersAll,
-      blockWithdrawalList,
-      itemWalletAll,
-      itemPurchasingAll,
-      blockForwarderImport,
-      // 2026-06-08 (เดฟ · freight revenue unlock) — inbound Freight RFQ inbox.
-      itemFreightLeads,
-      // 2026-06-09 (W4 · freight ops cockpit) — AX-JOB PRICING→SALES→DOC→ACC board.
-      itemFreightOperations,
-      // 2026-06-09 (เดฟ · freight net-margin unlock) — China freight cost rates.
-      itemFreightCostRates,
-      // 2026-06-09 (เดฟ · tax-invoice P3) — CARGO ใบขนรวม (consolidated customs decl).
-      itemCargoDeclarations,
-      // 2026-06-09 (W6 · freight commission ledger) — accrual + withdrawal queue
-      // (DORMANT behind commission.freight_enabled).
-      itemFreightCommission,
-      // 2026-06-09 (W9 · tax-invoice P4) — CARGO tax-doc 4-role workspace (3 numbers).
-      itemTaxdocWorkspace,
-      // 2026-06-09 (W11 · customs doc-kit) — DO-LOI/Form-E/HS-assist toolkit.
-      itemCustomsDocKit,
-      blockApiForwarderUpdate,
-      // 2026-05-21 ภูม flagged — /admin/drivers had no direct super sidebar
-      // entry · only reachable via the /admin/forwarders top-menubar
-      // "งาน → มอบงานคนขับ". Added as a top-level leaf so super can land
-      // on the driver-assignment queue in one click. Re-uses the existing
-      // driverItems badge.
-      { labelKey: "forwarder.assignDriver", href: "/admin/drivers", icon: "Truck", badge: "driverItems" },
-      // 2026-05-23 (Wave 10 · Agent C) — driver mobile work-list /admin/drivers/work
-      // for super/ops to peek into any driver's mobile view (driver role auto-
-      // filters to self · ?driver=<userid> param for oversight). Useful when a
-      // dispatcher needs to see what a specific driver has on their phone today.
-      { labelKey: "forwarder.driverWork", href: "/admin/drivers/work", icon: "Smartphone" },
-      // 2026-05-30 (Wave 29 #5 · Agent A) — promote the daily-most-used
-      // barcode screen (USB scanner intake = `barcode-d-import.php`) to
-      // top-level flat, matching legacy menu-barcode.php line 10. The
-      // deeper blockBarcode toolbox stays as the comprehensive nested menu.
-      itemBarcodeRecordIntakeFlat,
-      // 2026-06-09 (W10 · Theme 7 P1) — China-warehouse worker app (super peek).
-      blockWarehouseWorker,
-      // re-sweep A2 #8/#17 — print all box labels for a scanned cabinet
-      // (faithful port of legacy `printAll.php`).
-      { labelKey: "warehouse.printLabels", href: "/admin/printAll", icon: "Printer" },
-      blockPayment,
-      itemReportsAll,
-      blockAccounting,
-    ],
-  },
-  { header: "Settings", items: [blockSettingsCargo] },
-  learningSection,
-  // 2026-05-21 — Extension section expanded with 6 Phase 2 orphans
-  // (ภูม flagged · audit doc orphan-pages-audit-2026-05-21.md):
-  // kpi · workboard · inbox · contactMessages · broadcasts · taxInvoices ·
-  // withdrawalsAll. All phase: 2 — non-super doesn't see them.
-  extensionSection([
-    blockExtKpi,
-    blockExtCockpit,
-    blockExtLeadSource,
-    blockExtWorkboard,
-    blockExtInbox,
-    blockExtLeads,
-    blockExtCrm,
-    blockExtContactMessages,
-    blockExtLineInbox,
-    blockExtBroadcasts,
-    // 2026-05-31 sitting-H-fix #5 (ภูม): blockExtTaxInvoices removed from
-    // the sidebar Extension section. PEAK structure places ใบกำกับภาษีขาย
-    // under "รายรับ" headmenu (CARGO_MENUBAR · accounting-menubar.ts) — the
-    // sidebar entry was a parallel orphan. The page itself
-    // (/admin/tax-invoices) stays live and reachable via the menubar +
-    // /admin/accounting accounting-dashboard Stat-card link.
-    blockExtWithdrawalsAll,
-    blockExtJuristic,
-    blockExtThaiTransport,
+// ════════════════════════════════════════════════════════════════
+// CLASS / บริการ wrappers — 2026-06-10 (ปอน · sidebar IA regroup): the
+// super sidebar mirrors the customer-side sidebar grouping —
+//   Dashboard → CLASS (แผนก: HR · ACC · MKT · DEV · WAREHOUSE) →
+//   บริการ (ฝากสั่ง · ฝากโอน · นำเข้า · ส่งออก/Freight · พิธีการศุลกากร)
+// VISUAL regrouping ONLY: every wrapper references the SAME shared item
+// constants the per-role menus use (no href / badge / phase / RBAC change,
+// no shared-block mutation). The old flat "Cargo & Freight" + "Settings" +
+// "Extension" super sections are fully redistributed — every item retained
+// (§0d reachability). Other role menus keep their legacy-faithful shape.
+// ════════════════════════════════════════════════════════════════
+
+/** CLASS → HR — blockHr's children + the meeting-room booking tool
+ *  (phase 4 · formerly in the Extension drawer; it routes into HR
+ *  attendance). `blockHr` itself stays untouched for other consumers. */
+const wrapClassHr: MenuItem = {
+  labelKey: "classNav.hr",
+  icon: "UserCheck",
+  children: [
+    ...(blockHr.children ?? []),
     blockExtMeetingRoom,
+    // 2026-06-10 (ปอน) — KPI dashboard moved here from Accounting & Finance.
+    blockExtKpi,
+    // 2026-06-10 (ปอน) — admin-staff + org-info management moved here from Developer/tools.
+    { labelKey: "settingsCargo.adminUsers", href: "/admin/admins", icon: "UserCog" },
+    { labelKey: "settingsCargo.orgEmail", href: "/admin/organization-email", icon: "MessageCircle" },
+    { labelKey: "settingsCargo.orgChannels", href: "/admin/organization-channels", icon: "Smartphone" },
+    { labelKey: "settingsCargo.orgContacts", href: "/admin/settings/contacts", icon: "Contact" },
+    { labelKey: "settingsCargo.partners", href: "/admin/partners", icon: "Handshake" },
+  ],
+};
+
+/** CLASS → ACC — the money back-office family (accounting hub · wallet ·
+ *  withdrawal queues · reports · exec BI dashboards). */
+const wrapClassAcc: MenuItem = {
+  labelKey: "classNav.acc",
+  icon: "Landmark",
+  badge: "withdrawalAll",
+  children: [
+    blockAccounting,
+    itemWalletAll,
+    blockWithdrawalList,
+    blockExtWithdrawalsAll,
+  ],
+};
+
+// 2026-06-10 (ปอน) — the Settings block is split across the super sidebar's depts:
+//   Marketing/Pricing ← ทั่วไป · อัตราค่าขนส่ง · VIP   (pricing levers)
+//   Marketing (flat)  ← ประกาศหน้าแรก · Popup · แบนเนอร์โปรโมชัน  (content)
+//   Developer         ← ระบบ · เครื่องมือ  (infra config)
+// blockSettingsCargo ITSELF is untouched — menuAccounting's Settings section
+// still renders the full set (it references the block directly).
+const SETTINGS_TO_MARKETING = [
+  "settingsCargo.general",
+  "settingsCargo.homeNotice",
+  "settingsCargo.popup",
+  "settingsCargo.promos",
+  "settingsCargo.rates",
+  "settingsCargo.vipTiers",
+];
+const settingsByKey = (key: string): MenuItem =>
+  blockSettingsCargo.children!.find((c) => c.labelKey === key)!;
+const settingsDevChildren = (blockSettingsCargo.children ?? []).filter(
+  (c) => !SETTINGS_TO_MARKETING.includes(c.labelKey),
+);
+
+// The shared CRM/comms toolset — both the Sales and Customer Services
+// sub-teams work the same queues (ปอน 2026-06-10).
+const marketingCrmTools: MenuItem[] = [
+  blockExtLeads,
+  blockExtCrm,
+  blockExtContactMessages,
+  blockExtLineInbox,
+];
+
+/** CLASS → MARKETING — grouped into Sales · Customer Services · Pricing
+ *  sub-teams (ปอน 2026-06-10), with the content/analytics/QA items kept flat
+ *  below (not yet categorised). ลูกค้าทั้งหมด (itemCustomersAll) lives at the
+ *  top of the Services section instead. */
+const wrapClassMarketing: MenuItem = {
+  labelKey: "classNav.marketing",
+  icon: "Megaphone",
+  children: [
+    {
+      labelKey: "marketingNav.sales",
+      icon: "UserPlus",
+      children: [blockExtJuristic, ...marketingCrmTools],
+    },
+    {
+      labelKey: "marketingNav.customerService",
+      icon: "MessageSquare",
+      children: [...marketingCrmTools],
+    },
+    {
+      labelKey: "marketingNav.pricing",
+      icon: "Coins",
+      children: [
+        settingsByKey("settingsCargo.general"),
+        settingsByKey("settingsCargo.rates"),
+        settingsByKey("settingsCargo.vipTiers"),
+      ],
+    },
+    {
+      // 2026-06-10 (ปอน) — the remaining flat items grouped under a "Marketing"
+      // sub-team (advertising / comms / content / analytics + QA).
+      labelKey: "marketingNav.marketing",
+      icon: "Megaphone",
+      children: [
+        blockExtBroadcasts,
+        blockExtLeadSource,
+        itemReportsAll,
+        settingsByKey("settingsCargo.homeNotice"),
+        settingsByKey("settingsCargo.popup"),
+        settingsByKey("settingsCargo.promos"),
+        itemQAAll,
+        { labelKey: "warehouse.qaInspect", href: "/admin/warehouse/qa-inspections", icon: "ClipboardCheck" },
+      ],
+    },
+  ],
+};
+
+/** CLASS → DEV — system config + internal tooling. `blockSettingsCargo`'s
+ *  children are spread flat (the "ตั้งค่าระบบ" wrapper level is redundant
+ *  under a DEV parent); the block itself is untouched — menuAccounting
+ *  still renders it under its own Settings section. */
+const wrapClassDev: MenuItem = {
+  labelKey: "classNav.dev",
+  icon: "Settings",
+  children: [
+    ...settingsDevChildren,
+    blockExtWorkboard,
     blockExtHistory,
     blockExtIncidents,
-  ]),
+  ],
+};
+
+/** OPERATIONS → Logistics — 2026-06-10 (ปอน): a 5-sub-group taxonomy
+ *  (Doc Freight · Doc Shipping · Warehouse · Transport · Messenger & Driver).
+ *  For now EVERY existing item lands under "Warehouse"; the other 4 are
+ *  placeholder scaffolds (`comingSoon` · muted, non-clickable, no dead link)
+ *  to be populated next. The label "classNav.warehouse" = "Logistics". */
+const wrapClassWarehouse: MenuItem = {
+  labelKey: "classNav.warehouse",
+  icon: "Boxes",
+  badge: "driverItems",
+  children: [
+    { labelKey: "logisticsNav.docFreight",  icon: "FileText", comingSoon: true },
+    { labelKey: "logisticsNav.docShipping", icon: "FileText", comingSoon: true },
+    {
+      labelKey: "logisticsNav.warehouse",
+      icon: "Boxes",
+      children: [
+        blockWarehouseWorker,
+        itemBarcodeRecordIntakeFlat,
+        // re-sweep A2 #8/#17 — print all box labels for a scanned cabinet
+        // (faithful port of legacy `printAll.php`).
+        { labelKey: "warehouse.printLabels", href: "/admin/printAll", icon: "Printer" },
+      ],
+    },
+    {
+      // 2026-06-10 (ปอน) — Transport: driver dispatch + Thai-carrier mgmt.
+      labelKey: "logisticsNav.transport",
+      icon: "Truck",
+      badge: "driverItems",
+      children: [
+        { labelKey: "forwarder.assignDriver", href: "/admin/drivers", icon: "Truck", badge: "driverItems" },
+        { labelKey: "forwarder.driverWork", href: "/admin/drivers/work", icon: "Smartphone" },
+        blockExtThaiTransport,
+      ],
+    },
+  ],
+};
+
+/** บริการ → ส่งออก / Freight — the international freight stack (RFQ leads ·
+ *  AX-JOB cockpit · China cost rates · commission ledger). */
+const wrapServiceFreight: MenuItem = {
+  labelKey: "serviceNav.freightExport",
+  icon: "Ship",
+  children: [
+    itemFreightLeads,
+    itemFreightOperations,
+    itemFreightCostRates,
+    itemFreightCommission,
+  ],
+};
+
+/** บริการ → บริการนำเข้า — the import list + the carrier-update toolbox
+ *  grouped under one accordion (ปอน 2026-06-10). `blockForwarderImport`
+ *  itself stays untouched for the other role menus; the "นำเข้า" leaf here
+ *  carries the same href + badge. */
+const wrapServiceImport: MenuItem = {
+  labelKey: "forwarderImport.title",
+  icon: "Package",
+  badge: "forwarderArrived",
+  children: [
+    { labelKey: "serviceNav.importList", href: "/admin/forwarders", icon: "Package", badge: "forwarderArrived" },
+    blockApiForwarderUpdate,
+  ],
+};
+
+/** บริการ → พิธีการศุลกากร & เอกสาร — customs / tax-doc surfaces (ใบขนรวม ·
+ *  4-role tax-doc workspace · DO-LOI/Form-E doc-kit). */
+const wrapServiceCustoms: MenuItem = {
+  labelKey: "serviceNav.customs",
+  icon: "ClipboardCheck",
+  children: [
+    itemCargoDeclarations,
+    itemTaxdocWorkspace,
+    itemCustomsDocKit,
+    // 2026-06-10 (ปอน) — "ใบขนพ่วง" (combined/attached customs declaration ·
+    // ตั๋วพ่วง). No page yet → coming-soon stub (no dead link · §0d).
+    { labelKey: "serviceNav.combinedDecl", icon: "ClipboardList", comingSoon: true },
+  ],
+};
+
+/**
+ * `super` — the CEO sidebar (legacy CargoAndFreight/CEO/CEO.php), the
+ * fullest menu.
+ *
+ * 2026-06-10 (ปอน · sidebar IA regroup): sections now mirror the customer-
+ * side sidebar — Dashboard → CLASS (departments) → บริการ (services) →
+ * Learning. Every item from the previous flat "Cargo & Freight" +
+ * "Settings" + "Extension" sections is retained inside the wrappers above
+ * — relocated, never removed. The QA pair (hub + inspections) lives inside
+ * the Marketing wrapper (ปอน 2026-06-10).
+ */
+const menuSuper: MenuSection[] = [
+  // 2026-06-10 (ปอน) — "แดชบอร์ดผู้บริหาร" + "Inbox งานของฉัน" promoted to
+  // top-level next to Dashboard (cockpit above inbox).
+  { header: "", items: [itemDashboard, blockExtCockpit, blockExtInbox] },
+  {
+    header: "Holding",
+    items: [
+      wrapClassHr,
+      wrapClassAcc,
+      wrapClassMarketing,
+      wrapClassDev,
+    ],
+  },
+  {
+    // 2026-06-10 (ปอน) — Warehouse split out of Management into its own
+    // Operations section (the floor-ops dept, distinct from back-office mgmt).
+    header: "Operations",
+    items: [
+      wrapClassWarehouse,
+    ],
+  },
+  {
+    header: "Services",
+    items: [
+      itemCustomersAll,
+      itemPurchasingAll,
+      blockPayment,
+      wrapServiceImport,
+      wrapServiceFreight,
+      wrapServiceCustoms,
+    ],
+  },
+  {
+    // 2026-06-10 (ปอน) — "Additional Services" section: a "บริการเสริม" dropdown
+    // whose leaves (เปิดใบกำกับภาษี · ขนส่งภายในประเทศ) have no pages yet, so
+    // they're stubbed coming-soon (no dead link · §0d).
+    header: "Additional Services",
+    items: [
+      {
+        labelKey: "additionalServices.title",
+        icon: "PackagePlus",
+        children: [
+          { labelKey: "additionalServices.taxInvoice", icon: "ReceiptText", comingSoon: true },
+          { labelKey: "additionalServices.domesticShipping", icon: "Truck", comingSoon: true },
+        ],
+      },
+    ],
+  },
+  learningSection,
 ];
 
 /**

@@ -97,24 +97,28 @@ function EditableRow({
   compact?: boolean;
 }) {
   if (compact) {
+    // 2026-06-10 (ปอน) — customer-page 1:1 format: "<b>label : </b>value [แก้ไข]"
+    // (the same shape as /service-import/[fNo]). The แก้ไข link is sky-blue like
+    // the customer page; the inline form is always left-aligned even when the
+    // row sits in a md:text-right column.
     return (
-      <div className="space-y-1">
-        <div className="flex items-baseline gap-2 text-sm">
-          <span className="text-muted text-xs flex-shrink-0">{label}:</span>
+      <div className="text-sm text-foreground">
+        <p>
+          <b className="font-semibold">{label} : </b>
           {editing ? null : (
             <>
-              <span className="flex-1 break-words">{display}</span>
+              <span className="break-words">{display}</span>
               <button
                 type="button"
                 onClick={() => setEditing(true)}
-                className="inline-flex items-center gap-0.5 text-[11px] text-primary-600 hover:underline flex-shrink-0"
+                className="ml-1.5 text-xs font-medium text-sky-600 hover:underline"
               >
-                <Pencil className="h-3 w-3" /> แก้ไข
+                แก้ไข
               </button>
             </>
           )}
-        </div>
-        {editing && <div className="space-y-2">{children(() => setEditing(false))}</div>}
+        </p>
+        {editing && <div className="mt-2 space-y-2 text-left">{children(() => setEditing(false))}</div>}
       </div>
     );
   }
