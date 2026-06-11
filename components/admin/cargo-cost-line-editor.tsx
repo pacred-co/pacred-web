@@ -251,11 +251,11 @@ function CostEditorBody({
               placeholder="0.00"
               className={inputCls}
             />
-            {/* SHOP cost-unit auto seeds from ¥ SELLING price (cprice) — flag it so
-                staff replace it with the real supplier cost, not bank the sell price. */}
+            {/* SHOP cost-unit auto = ราคาซื้อจริงทั้งหมด (hcostall) ÷ Σqty — the
+                confirmed real cost averaged per unit. Editable per line. */}
             {costUnitOnAuto && costUnitIsCny && (
-              <span className="block text-[9px] text-amber-600">
-                ⚠ จากราคาขาย ¥ — แก้เป็นต้นทุนจริงที่จ่ายซัพพลายเออร์
+              <span className="block text-[9px] text-sky-600">
+                เฉลี่ยจากราคาซื้อจริงทั้งหมด (จาก Pricing) ÷ จำนวน — แก้ต่อรายการได้
               </span>
             )}
           </label>

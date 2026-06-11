@@ -119,7 +119,10 @@ export async function ForwarderCostSection({
   const usingShop = isShopSpawn && shopItems.length > 0;
   const lineCount = usingShop ? shopItems.length : fwdItems.length;
 
-  // GAP 1 auto-fill — the cost yuan-rate seed (tb_settings is single-row).
+  // AUTO-FILL seeds (owner correction 2026-06-12) — job-by-job CONFIRMED real
+  // numbers, not a global default. The cost yuan-rate default is the settings
+  // fallback; the SHOP-spawn path overrides it with the source order's real
+  // numbers (read below).
   const { data: settings, error: setErr } = await admin
     .from("tb_settings")
     .select("hratecostdefault")
@@ -128,10 +131,26 @@ export async function ForwarderCostSection({
   if (setErr) {
     console.error(`[ForwarderCostSection tb_settings]`, { code: setErr.code, message: setErr.message });
   }
-  const costRate = Number(settings?.hratecostdefault ?? 0) || 0;
+  const rateDefault = Number(settings?.hratecostdefault ?? 0) || 0;
   // Σqty across the direct-forwarder lines — the prorate denominator for the
   // declared-value auto-seed (header cost split by each line's quantity share).
   const fwdTotalQty = fwdItems.reduce((sum, it) => sum + (Number(it.productqty ?? 0) || 0), 0);
+
+  // SHOP-spawn path: pull the SOURCE order's ราคาซื้อจริงทั้งหมด (hcostall) +
+  // อัตราแลกเปลี่ยนจริง (hratecost) so cost/unit ¥ + rate seed from the confirmed
+  // real purchase, job-by-job (mirrors the shop-cost-section).
+  let shopRealCostUnit = 0;
+  let shopJobRate = rateDefault;
+  if (usingShop) {
+    const { data: hdr, error: hdrErr } = await admin
+      .from("tb_header_order").select("hcostall, hratecost").eq("hno", reforder!.trim())
+      .maybeSingle<{ hcostall: number | string | null; hratecost: number | string | null }>();
+    if (hdrErr) console.error(`[ForwarderCostSection source tb_header_order]`, { code: hdrErr.code, message: hdrErr.message, hno: reforder });
+    const realCostAll = Number(hdr?.hcostall ?? 0) || 0;
+    shopJobRate = Number(hdr?.hratecost ?? 0) || rateDefault;
+    const shopQty = shopItems.reduce((s, it) => s + (Number(it.camount ?? 0) || 0), 0);
+    shopRealCostUnit = shopQty > 0 ? realCostAll / shopQty : 0;
+  }
 
   // Resolve shop thumbnails (only the shop source has images).
   const thumbs: Record<number, string | null> = {};
@@ -193,6 +212,9 @@ export async function ForwarderCostSection({
       );
     }
   }
+  // DIRECT-forwarder (THB cost) cost/unit seed = the header cost total ÷ Σqty
+  // (fcosttotalprice is now resolved). Owner correction 2026-06-12.
+  const fwdRealCostUnit = fwdTotalQty > 0 ? fCostTotal / fwdTotalQty : 0;
 
   return (
     <section className="rounded-2xl border-2 border-emerald-300 bg-emerald-50/20 dark:bg-emerald-950/10 shadow-sm overflow-hidden">
@@ -254,10 +276,10 @@ export async function ForwarderCostSection({
                     costRateCny={it.cost_rate_cny}
                     declaredValueThb={it.declared_value_thb}
                     hsCode={it.hs_code}
-                    autoCostUnit={autoOrNull(Number(it.cprice ?? 0))}
-                    autoCostRate={autoOrNull(costRate)}
+                    autoCostUnit={autoOrNull(shopRealCostUnit)}
+                    autoCostRate={autoOrNull(shopJobRate)}
                     autoDeclared={autoOrNull(
-                      shopAutoDeclaredThb(it.cprice, costRate, it.camount),
+                      shopAutoDeclaredThb(shopRealCostUnit, shopJobRate, it.camount),
                     )}
                   />
                 ) : (
@@ -286,7 +308,8 @@ export async function ForwarderCostSection({
                     costRateCny={it.cost_rate_cny}
                     declaredValueThb={it.declared_value_thb}
                     hsCode={it.hs_code}
-                    autoCostRate={autoOrNull(costRate)}
+                    autoCostUnit={autoOrNull(fwdRealCostUnit)}
+                    autoCostRate={autoOrNull(rateDefault)}
                     autoDeclared={autoOrNull(
                       importAutoDeclaredThb(fCostTotal, it.productqty, fwdTotalQty),
                     )}

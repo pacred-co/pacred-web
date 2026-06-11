@@ -58,16 +58,32 @@ export async function ShopOrderCostSection({ hno }: { hno: string }) {
   }
   const items = ((data ?? []) as unknown) as ShopCostItem[];
 
-  // GAP 1 auto-fill — the cost yuan-rate seed (tb_settings is single-row).
-  const { data: settings, error: setErr } = await admin
-    .from("tb_settings")
-    .select("hratecostdefault")
-    .limit(1)
-    .maybeSingle<{ hratecostdefault: number | string | null }>();
-  if (setErr) {
-    console.error(`[ShopOrderCostSection tb_settings]`, { code: setErr.code, message: setErr.message });
-  }
-  const costRate = Number(settings?.hratecostdefault ?? 0) || 0;
+  // ── AUTO-FILL seeds (owner correction 2026-06-12) — derive from the JOB's
+  // CONFIRMED real numbers, not the selling price / a global default:
+  //   • ต้นทุน/หน่วย ¥ ← ราคาซื้อจริงทั้งหมด (tb_header_order.hcostall) ÷ Σqty
+  //                      — what Pricing actually paid + confirmed, job-by-job.
+  //   • เรทหยวนต้นทุน  ← อัตราแลกเปลี่ยนจริง (tb_header_order.hratecost), job-by-job
+  //                      (fallback to tb_settings.hratecostdefault if unset).
+  //   • มูลค่าสำแดง ใบขน ← seeded from the REAL cost (not the selling price).
+  //     [⚠ USD customs-rate refinement is a follow-up — owner asked for a
+  //      monthly กรมศุล USD rate + editable per-job; pending that, declared
+  //      defaults from the real cost basis, which is already correct-direction.]
+  const [settingsRes, headerRes] = await Promise.all([
+    admin.from("tb_settings").select("hratecostdefault").limit(1)
+      .maybeSingle<{ hratecostdefault: number | string | null }>(),
+    admin.from("tb_header_order").select("hcostall, hratecost").eq("hno", hno)
+      .maybeSingle<{ hcostall: number | string | null; hratecost: number | string | null }>(),
+  ]);
+  if (settingsRes.error) console.error(`[ShopOrderCostSection tb_settings]`, { code: settingsRes.error.code, message: settingsRes.error.message });
+  if (headerRes.error) console.error(`[ShopOrderCostSection tb_header_order]`, { code: headerRes.error.code, message: headerRes.error.message, hno });
+
+  const rateDefault = Number(settingsRes.data?.hratecostdefault ?? 0) || 0;
+  const realCostAll = Number(headerRes.data?.hcostall ?? 0) || 0;          // ราคาซื้อจริงทั้งหมด ¥
+  const jobRate     = Number(headerRes.data?.hratecost ?? 0) || rateDefault; // อัตราแลกเปลี่ยนจริง
+  const totalQty    = items.reduce((s, it) => s + (Number(it.camount ?? 0) || 0), 0);
+  const realCostUnit = totalQty > 0 ? realCostAll / totalQty : 0;          // ต้นทุน/หน่วย ¥ (เฉลี่ยจากของจริง)
+  // The seed rate used downstream (declared = realCostUnit × jobRate × qty).
+  const costRate = jobRate;
 
   // Resolve thumbnails in parallel.
   const thumbs: Record<number, string | null> = {};
@@ -138,10 +154,10 @@ export async function ShopOrderCostSection({ hno }: { hno: string }) {
                 costRateCny={it.cost_rate_cny}
                 declaredValueThb={it.declared_value_thb}
                 hsCode={it.hs_code}
-                autoCostUnit={autoOrNull(Number(it.cprice ?? 0))}
+                autoCostUnit={autoOrNull(realCostUnit)}
                 autoCostRate={autoOrNull(costRate)}
                 autoDeclared={autoOrNull(
-                  shopAutoDeclaredThb(it.cprice, costRate, it.camount),
+                  shopAutoDeclaredThb(realCostUnit, costRate, it.camount),
                 )}
               />
             ) : (
