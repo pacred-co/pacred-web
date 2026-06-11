@@ -17,6 +17,10 @@ import {
   momoRawDisplay,
   flattenMomoRaw,
   collectMomoRawColumns,
+  momoSpreadRow,
+  collectMomoSpreadColumns,
+  formatMomoSpreadValue,
+  MOMO_FIELD_TH,
 } from "./momo-raw-helpers";
 
 let pass = 0;
@@ -241,6 +245,45 @@ check("import_track: isContainer false", momoRawDisplay({ tracking: "1779955936"
   check("collectColumns: union preserves first-seen order",
     JSON.stringify(cols) === JSON.stringify(["tracking", "kg", "cbm", "fid", "total_kg"]));
   check("collectColumns: no duplicate keys", new Set(cols).size === cols.length);
+}
+
+// ── momoSpreadRow / formatMomoSpreadValue · readable spread (พี่ป๊อป 2026-06-11) ──
+{
+  const sr = momoSpreadRow({ user_code: "107", user_group: "PR", tracking: "1779", ship_by: "ship" });
+  const m = Object.fromEntries(sr);
+  check("spread: merges user_group+user_code → member_code PR107", m.member_code === "PR107");
+  check("spread: drops raw user_code", !("user_code" in m));
+  check("spread: drops raw user_group", !("user_group" in m));
+  check("spread: member_code lands at first user position (before tracking)",
+    sr.findIndex(([k]) => k === "member_code") < sr.findIndex(([k]) => k === "tracking"));
+  check("spread: non-user fields pass through", m.tracking === "1779" && m.ship_by === "ship");
+  // a container row has no user_* → no member_code synthesised
+  check("spread: no member_code when no user fields",
+    !momoSpreadRow({ fid: "PR-1", total_kg: 9 }).some(([k]) => k === "member_code"));
+
+  const scols = collectMomoSpreadColumns([
+    { user_group: "PR", user_code: "1", tracking: "a" },
+    { fid: "PR-1", total_kg: 9 },
+  ]);
+  check("spreadColumns: union with merged member_code",
+    JSON.stringify(scols) === JSON.stringify(["member_code", "tracking", "fid", "total_kg"]));
+
+  // value formatter: ship_by → Thai, true/false → ใช่/ไม่
+  check("format: ship_by ship → เรือ", formatMomoSpreadValue("ship_by", "ship") === "เรือ");
+  check("format: ship_by car → รถ", formatMomoSpreadValue("ship_by", "car") === "รถ");
+  check("format: ship_by air → เครื่องบิน", formatMomoSpreadValue("ship_by", "air") === "เครื่องบิน");
+  check("format: unknown ship_by passes through", formatMomoSpreadValue("ship_by", "boat") === "boat");
+  check("format: true → ใช่", formatMomoSpreadValue("closed", "true") === "ใช่");
+  check("format: false → ไม่", formatMomoSpreadValue("wooden_create", "false") === "ไม่");
+  check("format: non-bool non-ship value untouched", formatMomoSpreadValue("kg", "869.5") === "869.5");
+  check("format: empty stays empty", formatMomoSpreadValue("note", "") === "");
+
+  // Thai dictionary covers the date keys พี่ป๊อป couldn't read
+  check("dict: status_date.kodang has Thai", (MOMO_FIELD_TH["status_date.kodang"] ?? "").includes("เข้าโกดังจีน"));
+  check("dict: status_date.exported has Thai", (MOMO_FIELD_TH["status_date.exported"] ?? "").includes("ออกจากจีน"));
+  check("dict: created_date + updated_date have Thai",
+    !!MOMO_FIELD_TH["created_date"] && !!MOMO_FIELD_TH["updated_date"]);
+  check("dict: member_code labelled ลูกค้า", (MOMO_FIELD_TH["member_code"] ?? "").includes("ลูกค้า"));
 }
 
 console.log(`\n${pass} pass, ${fail} fail`);

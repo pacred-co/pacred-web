@@ -29,8 +29,10 @@ import {
 // field MOMO sends into its own column) to audit MOMO's inconsistent keying.
 import {
   momoRawDisplay,
-  flattenMomoRawMap,
-  collectMomoRawColumns,
+  momoSpreadRowMap,
+  collectMomoSpreadColumns,
+  formatMomoSpreadValue,
+  MOMO_FIELD_TH,
   type MomoRawDisplay,
 } from "@/lib/admin/momo-raw-helpers";
 
@@ -628,24 +630,30 @@ function PreviewTable({
 function RawSpreadTable({ title, rows }: { title: string; rows: MomoInternalAdminRecord[] }) {
   if (!rows || rows.length === 0) return null;
   const raws = rows.map((r) => r.raw);
-  const cols = collectMomoRawColumns(raws);
-  const maps = raws.map((raw) => flattenMomoRawMap(raw));
+  const cols = collectMomoSpreadColumns(raws);
+  const maps = raws.map((raw) => momoSpreadRowMap(raw));
   return (
     <div>
       <h4 className="text-xs font-bold mb-1">
         {title} · ดิบทั้งหมด ({rows.length} แถว · {cols.length} field)
       </h4>
       <p className="text-[10px] text-muted mb-1">
-        ⇆ เลื่อนซ้าย-ขวา · ช่องว่าง (<span className="text-slate-300">·</span>) = MOMO ไม่ได้คีย์ field นั้นมาในแถวนี้ · array/ออบเจกต์ย่อยแสดงเป็น JSON (ชี้เมาส์เพื่อดูเต็ม)
+        ⇆ เลื่อนซ้าย-ขวา · หัวคอลัมน์เป็นไทย (ชื่อ field ดิบของ MOMO อยู่บรรทัดล่าง) · ช่องว่าง (<span className="text-slate-300">·</span>) = MOMO ไม่ได้คีย์ field นั้นมาในแถวนี้ · array/ออบเจกต์ย่อยแสดงเป็น JSON (ชี้เมาส์เพื่อดูเต็ม)
       </p>
       <div className="overflow-x-auto scrollbar-x-visible rounded-lg border border-border">
         <table className="text-[11px] border-collapse">
           <thead className="bg-surface-alt">
-            <tr className="whitespace-nowrap">
+            <tr className="whitespace-nowrap align-bottom">
               <th className="sticky left-0 z-10 bg-surface-alt border-b border-r px-2 py-1 text-left">#</th>
-              {cols.map((c) => (
-                <th key={c} className="border-b px-2 py-1 text-left font-mono font-semibold">{c}</th>
-              ))}
+              {cols.map((c) => {
+                const th = MOMO_FIELD_TH[c];
+                return (
+                  <th key={c} className="border-b px-2 py-1 text-left">
+                    <div className="font-semibold">{th ?? c}</div>
+                    {th && <div className="text-[9px] font-mono font-normal text-slate-400">{c}</div>}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
@@ -653,7 +661,7 @@ function RawSpreadTable({ title, rows }: { title: string; rows: MomoInternalAdmi
               <tr key={i} className="border-b align-top whitespace-nowrap">
                 <td className="sticky left-0 z-10 bg-white border-r px-2 py-1 text-muted">{i + 1}</td>
                 {cols.map((c) => {
-                  const v = m[c] ?? "";
+                  const v = formatMomoSpreadValue(c, m[c] ?? "");
                   return (
                     <td key={c} className="px-2 py-1 font-mono">
                       {v === "" ? (
