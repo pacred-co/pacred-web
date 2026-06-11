@@ -43,15 +43,15 @@ const PRODUCT_TYPE_OPTIONS: { value: ProductType; label: string; sub: string }[]
 ];
 
 const REF_PRICE_OPTIONS: { value: RefPrice; label: string; sub: string }[] = [
-  { value: "1", label: "คิดตามน้ำหนัก", sub: "ราคา = น้ำหนัก × เรท/กก." },
-  { value: "2", label: "คิดตามปริมาตร", sub: "ราคา = CBM × เรท/cbm" },
+  { value: "1", label: "kgs", sub: "ราคา = น้ำหนัก × เรท/กก." },
+  { value: "2", label: "cbm", sub: "ราคา = CBM × เรท/cbm" },
 ];
 
 // Match legacy optionWarehouse() (member/pcs-admin/include/function.php L1823-1833)
 // + nameWarehouseChina() (L1049). Order matches the legacy dropdown.
 const WAREHOUSE_CHINA_OPTIONS: { value: WarehouseChina; label: string }[] = [
-  { value: "1", label: "กวางโจว (Guangzhou)" },
-  { value: "2", label: "อี้อู (Yiwu)" },
+  { value: "1", label: "กวางโจว" },
+  { value: "2", label: "อี้อู" },
 ];
 const WAREHOUSE_TH_OPTIONS: { value: WarehouseTh; label: string }[] = [
   { value: "1", label: "แสง" },
@@ -292,6 +292,15 @@ export function AdminForwarderEditForm({
     });
   }
 
+  // 2026-06-11 (ปอน · owner "ทำให้เหมือน excel เป็นแถวๆตารางๆ") — cell styles for the
+  // horizontal input TABLE (header columns + one editable row · scrolls sideways),
+  // mirroring the read-only รายการสินค้า table. Same inputs/handlers/calc as before;
+  // only the layout changed from a wrapping grid to a table.
+  const CELL_TH = "whitespace-nowrap px-2 py-2 text-center text-[10px] md:text-[11px] font-semibold text-muted";
+  const CELL_NUM = "w-full min-w-[84px] rounded-md border border-border px-2 py-1.5 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200 disabled:opacity-60";
+  const CELL_SEL = "w-full min-w-[120px] rounded-md border border-border bg-white px-2 py-1.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200 disabled:opacity-60";
+  const CELL_RO = "w-full min-w-[88px] rounded-md border border-red-200 bg-red-50/30 px-2 py-1.5 text-sm font-mono tabular-nums text-right text-red-700";
+
   return (
     <form onSubmit={onSubmit} className="space-y-5">
       {/* ─── Toast ─────────────────────────────────────────────── */}
@@ -350,168 +359,100 @@ export function AdminForwarderEditForm({
           </div>
         </div>
 
-        {/* ── ROW 1: warehouse × 2 · product type · tracking · note · weight ── */}
-        <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 mb-3">
-          <label className="block">
-            <span className="text-[11px] font-medium text-muted">โกดังต้นทาง (จีน)</span>
-            <select
-              value={fWarehouseChina}
-              onChange={(e) => setFWarehouseChina(e.target.value as WarehouseChina)}
-              disabled={pending}
-              className="mt-0.5 w-full rounded-md border border-border bg-white px-2 py-1.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
-            >
-              {WAREHOUSE_CHINA_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-[11px] font-medium text-muted">โกดังที่รับ (ไทย)</span>
-            <select
-              value={fWarehouseName}
-              onChange={(e) => setFWarehouseName(e.target.value as WarehouseTh)}
-              disabled={pending}
-              className="mt-0.5 w-full rounded-md border border-border bg-white px-2 py-1.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
-            >
-              {WAREHOUSE_TH_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-[11px] font-medium text-muted">ประเภทสินค้า</span>
-            <select
-              value={productType}
-              onChange={(e) => setProductType(e.target.value as ProductType)}
-              disabled={pending}
-              className="mt-0.5 w-full rounded-md border border-border bg-white px-2 py-1.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
-            >
-              {PRODUCT_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-[11px] font-medium text-muted">คิดเรทตาม</span>
-            <select
-              value={refPrice}
-              onChange={(e) => setRefPrice(e.target.value as RefPrice)}
-              disabled={pending}
-              className="mt-0.5 w-full rounded-md border border-border bg-white px-2 py-1.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
-            >
-              {REF_PRICE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </label>
-          {customRate === "1" ? (
-            <label className="block">
-              <span className="text-[11px] font-medium text-muted">เรท/น้ำหนัก (฿/kg)</span>
-              <input
-                type="number" min={0} step="0.01" value={customRateKg}
-                onChange={(e) => setCustomRateKg(e.target.value)} disabled={pending}
-                className="mt-0.5 w-full rounded-md border border-border px-2 py-1.5 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
-                placeholder="40"
-              />
-            </label>
-          ) : (
-            <div /> /* spacer */
-          )}
-          <label className="block">
-            <span className="text-[11px] font-medium text-muted">น้ำหนัก (Kg)</span>
-            <input
-              type="number" min={0} step="0.01" value={weight}
-              onChange={(e) => setWeight(e.target.value)} disabled={pending}
-              className="mt-0.5 w-full rounded-md border border-border px-2 py-1.5 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
-              placeholder="0.00"
-            />
-          </label>
-        </div>
-
-        {/* ── ROW 2: dimensions (gw, gy, gs) + CBM auto + custom-rate cbm when toggle ── */}
-        <div className={`grid gap-2 grid-cols-2 sm:grid-cols-4 ${customRate === "1" ? "lg:grid-cols-5" : ""} mb-3`}>
-          <label className="block">
-            <span className="text-[11px] font-medium text-muted">ความกว้าง (cm.)</span>
-            <input
-              type="number" min={0} step="0.01" value={width}
-              onChange={(e) => setWidth(e.target.value)} disabled={pending}
-              className="mt-0.5 w-full rounded-md border border-border px-2 py-1.5 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
-              placeholder="0.00"
-            />
-          </label>
-          <label className="block">
-            <span className="text-[11px] font-medium text-muted">ความยาว (cm.)</span>
-            <input
-              type="number" min={0} step="0.01" value={length}
-              onChange={(e) => setLength(e.target.value)} disabled={pending}
-              className="mt-0.5 w-full rounded-md border border-border px-2 py-1.5 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
-              placeholder="0.00"
-            />
-          </label>
-          <label className="block">
-            <span className="text-[11px] font-medium text-muted">ความสูง (cm.)</span>
-            <input
-              type="number" min={0} step="0.01" value={height}
-              onChange={(e) => setHeight(e.target.value)} disabled={pending}
-              className="mt-0.5 w-full rounded-md border border-border px-2 py-1.5 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
-              placeholder="0.00"
-            />
-          </label>
-          <label className="block">
-            <span className="text-[11px] font-medium text-red-600">ปริมาตรรวม CBM (auto)</span>
-            <input
-              type="text" readOnly value={parsed.cbm.toFixed(5)}
-              className="mt-0.5 w-full rounded-md border border-red-200 bg-red-50/30 px-2 py-1.5 text-sm font-mono tabular-nums text-right text-red-700"
-            />
-          </label>
-          {customRate === "1" && (
-            <label className="block">
-              <span className="text-[11px] font-medium text-muted">เรท/ปริมาตร (฿/CBM)</span>
-              <input
-                type="number" min={0} step="0.01" value={customRateCbm}
-                onChange={(e) => setCustomRateCbm(e.target.value)} disabled={pending}
-                className="mt-0.5 w-full rounded-md border border-border px-2 py-1.5 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
-                placeholder="7500"
-              />
-            </label>
-          )}
-        </div>
-
-        {/* ── ROW 3: cost adders + crate sum readonly + count ── */}
-        <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 mb-3">
-          {([
-            { label: "ค่าขนส่งในไทย", value: fTransportPrice,       set: setFTransportPrice,       red: true },
-            { label: "ส่วนลด",          value: fDiscount,             set: setFDiscount,             red: false },
-            { label: "ค่าจีน+ ภายหลัง", value: fTransportPriceChnThb, set: setFTransportPriceChnThb, red: false },
-          ] as const).map((f) => (
-            <label key={f.label} className="block">
-              <span className={`text-[11px] font-medium ${f.red ? "text-red-600" : "text-muted"}`}>{f.label}</span>
-              <input
-                type="number" min={0} step="0.01" value={f.value}
-                onChange={(e) => f.set(e.target.value)} disabled={pending}
-                className="mt-0.5 w-full rounded-md border border-border px-2 py-1.5 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
-                placeholder="0.00"
-              />
-            </label>
-          ))}
-          <label className="block">
-            <span className="text-[11px] font-medium text-red-600">ค่าตีลังไม้ (sum)</span>
-            <input
-              type="text" readOnly
-              value={crateSummary.totalFee.toFixed(2)}
-              className="mt-0.5 w-full rounded-md border border-red-200 bg-red-50/30 px-2 py-1.5 text-sm font-mono tabular-nums text-right text-red-700"
-            />
-          </label>
-          <label className="block">
-            <span className="text-[11px] font-medium text-muted">ค่าอื่นๆ</span>
-            <input
-              type="number" min={0} step="0.01" value={priceOther}
-              onChange={(e) => setPriceOther(e.target.value)} disabled={pending}
-              className="mt-0.5 w-full rounded-md border border-border px-2 py-1.5 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
-              placeholder="0.00"
-            />
-          </label>
-          <label className="block">
-            <span className="text-[11px] font-medium text-muted">ค่าบริการ</span>
-            <input
-              type="number" min={0} step="0.01" value={fShippingService}
-              onChange={(e) => setFShippingService(e.target.value)} disabled={pending}
-              className="mt-0.5 w-full rounded-md border border-border px-2 py-1.5 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
-              placeholder="0.00"
-            />
-          </label>
+        {/* ── 📊 ตารางกรอกข้อมูล (แบบ Excel · หัวตารางเป็นคอลัมน์ + แถวกรอก 1 แถว ·
+             เลื่อนแนวนอนได้) — owner 2026-06-11 "ทำให้เหมือน excel เป็นแถวๆตารางๆ" ·
+             ให้เหมือนตาราง รายการสินค้า ด้านล่าง. input/handler/calc เหมือนเดิมทุกตัว. ── */}
+        <div className="overflow-x-auto scrollbar-x-visible rounded-xl border border-border mb-3">
+          <table className="w-full text-sm">
+            <thead className="bg-surface-alt/50 uppercase tracking-wide">
+              <tr>
+                <th className={CELL_TH}>โกดังต้นทาง (จีน)</th>
+                <th className={CELL_TH}>โกดังที่รับ (ไทย)</th>
+                <th className={CELL_TH}>ประเภทสินค้า</th>
+                <th className={CELL_TH}>คิดเรทตาม</th>
+                {customRate === "1" && <th className={CELL_TH}>เรท/กก. (฿)</th>}
+                <th className={CELL_TH}>น้ำหนัก (Kg)</th>
+                <th className={CELL_TH}>กว้าง (cm)</th>
+                <th className={CELL_TH}>ยาว (cm)</th>
+                <th className={CELL_TH}>สูง (cm)</th>
+                <th className={`${CELL_TH} text-red-600`}>CBM (auto)</th>
+                {customRate === "1" && <th className={CELL_TH}>เรท/CBM (฿)</th>}
+                <th className={`${CELL_TH} text-red-600`}>ค่าขนส่งในไทย</th>
+                <th className={CELL_TH}>ส่วนลด</th>
+                <th className={CELL_TH}>ค่าจีน+ ภายหลัง</th>
+                <th className={`${CELL_TH} text-red-600`}>ค่าตีลัง (รวม)</th>
+                <th className={CELL_TH}>ค่าอื่นๆ</th>
+                <th className={CELL_TH}>ค่าบริการ</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-t border-border align-top [&>td]:px-1.5 [&>td]:py-1.5">
+                <td>
+                  <select value={fWarehouseChina} onChange={(e) => setFWarehouseChina(e.target.value as WarehouseChina)} disabled={pending} className={CELL_SEL}>
+                    {WAREHOUSE_CHINA_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </td>
+                <td>
+                  <select value={fWarehouseName} onChange={(e) => setFWarehouseName(e.target.value as WarehouseTh)} disabled={pending} className={CELL_SEL}>
+                    {WAREHOUSE_TH_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </td>
+                <td>
+                  <select value={productType} onChange={(e) => setProductType(e.target.value as ProductType)} disabled={pending} className={CELL_SEL}>
+                    {PRODUCT_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </td>
+                <td>
+                  <select value={refPrice} onChange={(e) => setRefPrice(e.target.value as RefPrice)} disabled={pending} className={CELL_SEL}>
+                    {REF_PRICE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </td>
+                {customRate === "1" && (
+                  <td>
+                    <input type="number" min={0} step="0.01" value={customRateKg} onChange={(e) => setCustomRateKg(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="40" />
+                  </td>
+                )}
+                <td>
+                  <input type="number" min={0} step="0.01" value={weight} onChange={(e) => setWeight(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="0.00" />
+                </td>
+                <td>
+                  <input type="number" min={0} step="0.01" value={width} onChange={(e) => setWidth(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="0.00" />
+                </td>
+                <td>
+                  <input type="number" min={0} step="0.01" value={length} onChange={(e) => setLength(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="0.00" />
+                </td>
+                <td>
+                  <input type="number" min={0} step="0.01" value={height} onChange={(e) => setHeight(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="0.00" />
+                </td>
+                <td>
+                  <input type="text" readOnly value={parsed.cbm.toFixed(5)} className={CELL_RO} />
+                </td>
+                {customRate === "1" && (
+                  <td>
+                    <input type="number" min={0} step="0.01" value={customRateCbm} onChange={(e) => setCustomRateCbm(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="7500" />
+                  </td>
+                )}
+                <td>
+                  <input type="number" min={0} step="0.01" value={fTransportPrice} onChange={(e) => setFTransportPrice(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="0.00" />
+                </td>
+                <td>
+                  <input type="number" min={0} step="0.01" value={fDiscount} onChange={(e) => setFDiscount(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="0.00" />
+                </td>
+                <td>
+                  <input type="number" min={0} step="0.01" value={fTransportPriceChnThb} onChange={(e) => setFTransportPriceChnThb(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="0.00" />
+                </td>
+                <td>
+                  <input type="text" readOnly value={crateSummary.totalFee.toFixed(2)} className={CELL_RO} />
+                </td>
+                <td>
+                  <input type="number" min={0} step="0.01" value={priceOther} onChange={(e) => setPriceOther(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="0.00" />
+                </td>
+                <td>
+                  <input type="number" min={0} step="0.01" value={fShippingService} onChange={(e) => setFShippingService(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="0.00" />
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
         {/* ── Info text (1 บรรทัด) ── */}
