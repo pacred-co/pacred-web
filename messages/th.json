@@ -5215,6 +5215,9 @@
     "summaryOther": "+ อื่นๆ",
     "summaryDiscount": "− ส่วนลด",
     "summaryGrandTotal": "รวมทั้งสิ้น",
+    "summaryWht": "หัก ณ ที่จ่าย 1% (ค่าขนส่ง)",
+    "summaryNetPayable": "ยอดชำระสุทธิ",
+    "whtNote": "กรุณาออกหนังสือรับรองการหักภาษี ณ ที่จ่าย (50 ทวิ) ในนามบริษัท แพคเรด (ประเทศไทย) จำกัด",
     "noteHeading": "หมายเหตุจากบริษัท"
   },
   "publicTrackStatus": {
@@ -5265,6 +5268,7 @@
     "downloadPdfHint": "ในหน้าต่างพิมพ์ เลือกปลายทางเป็น \"บันทึกเป็น PDF\"",
     "englishVersion": "English Version",
     "thaiVersion": "เวอร์ชันภาษาไทย",
+    "printLocked": "ต้องแนบใบ 50 ทวิ และรอแอดมินอนุมัติก่อน จึงจะพิมพ์/ดาวน์โหลดได้",
     "close": "ปิด"
   },
   "pcsTopMenu": {

@@ -50,7 +50,10 @@ export const createBillingRunInvoiceSchema = z.object({
     .transform((ids) => Array.from(new Set(ids))),
   /** วันที่ออกเอกสาร — default today on the page. Stored as DATE. */
   dateIssued: isoDate,
-  /** วันที่ครบกำหนดจ่าย — default today + tb_users.userCreditValue days.
+  /** วันที่ครบกำหนดจ่าย — the add-form defaults to today + 7 days. (Legacy has
+   *  NO per-customer credit-DAYS column; tb_users.userCreditValue is the credit
+   *  LIMIT in baht, the term lives per-order on tb_forwarder.fcreditdate — ADR-0023.
+   *  So the 7-day default is intentional; staff edits it for other terms.)
    *  MUST be ≥ dateIssued. */
   dateDue: isoDate,
   /** Money-summary fields. subtotal_thb auto-computed by the action from the

@@ -24,6 +24,11 @@ import {
 
 type Props = {
   customers: EligibleCustomerRow[];
+  /** ภูม flag 2026-06-10 — when opened from the "ตู้พร้อมวางบิล" ทำใบวางบิล button
+   *  (?cabinet=...), pre-select this customer + tick these forwarders so the form
+   *  opens ready to confirm. */
+  preselectUserid?: string;
+  preselectForwarderIds?: number[];
 };
 
 function isoToday(): string {
@@ -49,12 +54,12 @@ const inputCls =
 
 const labelCls = "block text-xs font-medium text-muted mb-1";
 
-export function BillingRunAddClient({ customers }: Props) {
+export function BillingRunAddClient({ customers, preselectUserid = "", preselectForwarderIds = [] }: Props) {
   const router = useRouter();
-  const [selectedUserid, setSelectedUserid] = useState<string>("");
+  const [selectedUserid, setSelectedUserid] = useState<string>(preselectUserid);
   const [eligible, setEligible] = useState<EligibleForwarderRow[] | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [loadingFwd, setLoadingFwd] = useState(false);
+  const [loadingFwd, setLoadingFwd] = useState(!!preselectUserid);
   // 2026-06-03 ภูม flag — round-1 swallowed listEligibleForwarders errors
   // and just showed "ลูกค้านี้ไม่มีรายการ". Surface the real action error here
   // so the next schema/column issue doesn't masquerade as an empty state.
@@ -116,15 +121,23 @@ export function BillingRunAddClient({ customers }: Props) {
       if (res.ok) {
         setEligible(res.data!.rows);
         setFwdErr(null);
-        // Default selection: tick all unbilled rows
-        setSelectedIds(new Set(res.data!.rows.filter((r) => !r.already_billed).map((r) => r.id)));
+        // Default selection: tick all unbilled rows — EXCEPT when this is the
+        // cabinet-preselected customer, in which case tick only the container's
+        // forwarders (ภูม flag · "ทำใบวางบิล" from the ตู้พร้อมวางบิล bar).
+        const unbilled = res.data!.rows.filter((r) => !r.already_billed);
+        const usePreselect =
+          !!preselectUserid && selectedUserid === preselectUserid && preselectForwarderIds.length > 0;
+        const tick = usePreselect
+          ? unbilled.filter((r) => preselectForwarderIds.includes(r.id))
+          : unbilled;
+        setSelectedIds(new Set(tick.map((r) => r.id)));
       } else {
         setEligible([]);
         setFwdErr(res.error);
       }
     });
     return () => { cancelled = true; };
-  }, [selectedUserid]);
+  }, [selectedUserid, preselectUserid, preselectForwarderIds]);
 
   function onCustomerChange(uid: string) {
     setSelectedUserid(uid);
@@ -151,6 +164,13 @@ export function BillingRunAddClient({ customers }: Props) {
   const numOther = Number(other) || 0;
   const numDiscount = Number(discount) || 0;
   const totalAmount = Math.max(0, subtotal + numChn + numTh + numOther - numDiscount);
+
+  // WHT 1% — mirrors the server rule (computeBillWht in billing-run.ts) + the
+  // ใบเสร็จ: a นิติบุคคล buyer withholds 1% on the transport fee when the bill
+  // total ≥ 1,000 THB. Display-only here; the print/detail recompute identically.
+  const showWht = !!selectedCustomer?.is_juristic && totalAmount >= 1000;
+  const whtAmount = showWht ? Math.round(totalAmount * 0.01 * 100) / 100 : 0;
+  const netPayable = Math.round((totalAmount - whtAmount) * 100) / 100;
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -394,10 +414,32 @@ export function BillingRunAddClient({ customers }: Props) {
               <span>฿{thbFmt(numDiscount)}</span>
             </div>
             <hr className="border-border" />
-            <div className="flex justify-between text-lg font-bold py-1 bg-amber-50/30 -mx-2 px-2 rounded">
-              <span>ยอดรวมทั้งสิ้น</span>
-              <span className="text-amber-700">฿{thbFmt(totalAmount)}</span>
-            </div>
+            {showWht ? (
+              <>
+                <div className="flex justify-between text-sm py-1">
+                  <span className="font-medium">ยอดรวมทั้งสิ้น</span>
+                  <span className="font-medium">฿{thbFmt(totalAmount)}</span>
+                </div>
+                <div className="flex justify-between text-sm py-1 text-red-600">
+                  <span>หัก ณ ที่จ่าย 1% (นิติบุคคล)</span>
+                  <span>−฿{thbFmt(whtAmount)}</span>
+                </div>
+                <div className="flex justify-between text-lg font-bold py-1 bg-amber-50/30 -mx-2 px-2 rounded">
+                  <span>ยอดชำระสุทธิ</span>
+                  <span className="text-amber-700">฿{thbFmt(netPayable)}</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between text-lg font-bold py-1 bg-amber-50/30 -mx-2 px-2 rounded">
+                  <span>ยอดรวมทั้งสิ้น</span>
+                  <span className="text-amber-700">฿{thbFmt(totalAmount)}</span>
+                </div>
+                {selectedCustomer?.is_juristic && totalAmount > 0 && totalAmount < 1000 && (
+                  <p className="text-xs text-muted">* ยอดน้อยกว่า ฿1,000 — ไม่หักภาษี ณ ที่จ่าย</p>
+                )}
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -434,7 +476,7 @@ export function BillingRunAddClient({ customers }: Props) {
           disabled={pending || selectedIds.size === 0 || !selectedUserid}
           className="rounded-lg bg-primary-600 px-6 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {pending ? "กำลังสร้าง..." : `สร้างใบวางบิล (${selectedIds.size} รายการ · ฿${thbFmt(totalAmount)})`}
+          {pending ? "กำลังสร้าง..." : `สร้างใบวางบิล (${selectedIds.size} รายการ · ฿${thbFmt(showWht ? netPayable : totalAmount)}${showWht ? " สุทธิ" : ""})`}
         </button>
       </div>
     </form>

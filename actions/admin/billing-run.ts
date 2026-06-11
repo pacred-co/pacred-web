@@ -30,6 +30,7 @@ import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { mintForwarderInvoiceDocNo } from "@/lib/admin/mint-receipt-doc-no";
+import { computeBillWht } from "@/lib/billing/wht";
 import { sendNotification } from "@/lib/notifications";
 import {
   createBillingRunInvoiceSchema,
@@ -81,6 +82,9 @@ export type BillingRunInvoiceRow = {
   item_count: number;
   /** Computed: status='issued' AND date_due < today. */
   is_overdue: boolean;
+  /** WHT 1% (หัก ณ ที่จ่าย) + ยอดชำระสุทธิ — juristic & total ≥ 1,000 only. */
+  wht_amount: number;
+  net_payable: number;
 };
 
 export type BillingRunInvoiceDetail = {
@@ -115,12 +119,20 @@ export type BillingRunInvoiceDetail = {
     created_at: string;
     updated_at: string;
     is_overdue: boolean;
+    /** WHT 1% — หัก ณ ที่จ่าย. Computed from is_juristic + total_thb. */
+    wht_rate: number;
+    wht_amount: number;
+    /** ยอดชำระสุทธิ = total_thb − wht_amount (what the customer remits). */
+    net_payable: number;
   };
   items: Array<{
     id: number;
     forwarder_id: number;
     amount_thb: number;
-    /** Hydrated forwarder data — joined post-fetch (no embed FK). */
+    /** Hydrated forwarder data — joined post-fetch (no embed FK). The cabinet /
+     *  transport / rate_basis / rate mirror the ใบเสร็จ's 11-col cargo table
+     *  (lib/receipt/load-receipt-document.ts) so the Peak ใบวางบิล renders the
+     *  SAME columns. */
     forwarder: {
       ftrackingchn: string;
       famount: number | null;
@@ -128,6 +140,12 @@ export type BillingRunInvoiceDetail = {
       fvolume: number | null;
       fdate: string | null;
       fstatus: string | null;
+      cabinet: string;
+      /** "EK" (รถ) | "SEA" (เรือ) | "" */
+      transport: string;
+      /** "KG" | "CBM" | "" */
+      rate_basis: string;
+      rate: number;
     } | null;
   }>;
 };
@@ -170,6 +188,10 @@ function isOverdue(dateDue: string, status: string): boolean {
   if (status !== "issued") return false;
   return dateDue < isoToday();
 }
+
+// WHT 1% (หัก ณ ที่จ่าย) — rule lives in lib/billing/wht.ts (a plain module, so
+// it can be shared with the customer-side billing-run pages + the print route;
+// a "use server" file may only export async functions). Mirrors the ใบเสร็จ.
 
 // ────────────────────────────────────────────────────────────────────────
 // 1. LIST eligible customers — for the add-form dropdown
@@ -360,7 +382,6 @@ export async function listEligibleForwarders(
       }
 
       // (b) already-billed-on-issued-invoice check
-      type ItemRow = { forwarder_id: number; invoice_id: number };
       const fids = fwd.map((f) => f.id);
       const { data: billed, error: billedErr } = await admin
         .from("tb_forwarder_invoice_item")
@@ -403,6 +424,65 @@ export async function listEligibleForwarders(
       }));
 
       return { ok: true, data: { rows } };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 2b. RESOLVE a container → its billing target (ภูม flag 2026-06-10)
+// ────────────────────────────────────────────────────────────────────────
+//
+// The "ตู้พร้อมวางบิล" list + the ทำใบวางบิล button pass the ticked cabinet(s)
+// here so /admin/billing-run/add can PRE-FILL instead of opening a blank form.
+// Returns the single customer (+ their fStatus=5 forwarder ids in those cabinets)
+// when the container is single-customer; else userid=null + customerCount so the
+// form falls back to manual pick.
+
+export async function resolveCabinetBillingTarget(
+  cabinets: string[],
+): Promise<AdminActionResult<{ userid: string | null; forwarderIds: number[]; customerCount: number }>> {
+  return withAdmin<{ userid: string | null; forwarderIds: number[]; customerCount: number }>(
+    ["super", "accounting", "ops", "freight_export_doc", "freight_import_doc"],
+    async () => {
+      const admin = createAdminClient();
+      const clean = Array.from(
+        new Set(cabinets.map((c) => c.trim()).filter((c) => c && c !== "0")),
+      ).slice(0, 50);
+      if (clean.length === 0) {
+        return { ok: true, data: { userid: null, forwarderIds: [], customerCount: 0 } };
+      }
+
+      const { data, error } = await admin
+        .from("tb_forwarder")
+        .select("id, userid")
+        .in("fcabinetnumber", clean)
+        .eq("fstatus", "5")
+        .limit(2000);
+      if (error) {
+        console.error("[resolveCabinetBillingTarget tb_forwarder] failed", {
+          code: error.code, message: error.message,
+        });
+        return { ok: false, error: error.message };
+      }
+
+      const rows = (data ?? []) as Array<{ id: number; userid: string | null }>;
+      const byUser = new Map<string, number[]>();
+      for (const r of rows) {
+        if (!r.userid) continue;
+        const arr = byUser.get(r.userid) ?? [];
+        arr.push(r.id);
+        byUser.set(r.userid, arr);
+      }
+
+      if (byUser.size === 1) {
+        const [userid, ids] = Array.from(byUser.entries())[0];
+        return { ok: true, data: { userid, forwarderIds: ids, customerCount: 1 } };
+      }
+      // 0 customers (no fStatus=5 in the cabinet) or many → no single preselect.
+      return {
+        ok: true,
+        data: { userid: null, forwarderIds: rows.map((r) => r.id), customerCount: byUser.size },
+      };
     },
   );
 }
@@ -493,20 +573,26 @@ export async function getInvoiceList(
         }
       }
 
-      const rows: BillingRunInvoiceRow[] = raw.map((r) => ({
-        id:           r.id,
-        doc_no:       r.doc_no,
-        userid:       r.userid,
-        buyer_name:   r.buyer_name,
-        is_juristic:  r.is_juristic,
-        date_issued:  r.date_issued,
-        date_due:     r.date_due,
-        total_thb:    Number(r.total_thb),
-        status:       r.status,
-        paid_at:      r.paid_at,
-        item_count:   countsByInvoice.get(r.id) ?? 0,
-        is_overdue:   isOverdue(r.date_due, r.status),
-      }));
+      const rows: BillingRunInvoiceRow[] = raw.map((r) => {
+        const total = Number(r.total_thb);
+        const wht = computeBillWht(r.is_juristic, total);
+        return {
+          id:           r.id,
+          doc_no:       r.doc_no,
+          userid:       r.userid,
+          buyer_name:   r.buyer_name,
+          is_juristic:  r.is_juristic,
+          date_issued:  r.date_issued,
+          date_due:     r.date_due,
+          total_thb:    total,
+          status:       r.status,
+          paid_at:      r.paid_at,
+          item_count:   countsByInvoice.get(r.id) ?? 0,
+          is_overdue:   isOverdue(r.date_due, r.status),
+          wht_amount:   wht.wht_amount,
+          net_payable:  wht.net_payable,
+        };
+      });
 
       return { ok: true, data: { rows, totalCount: count ?? rows.length } };
     },
@@ -600,12 +686,16 @@ export async function getInvoiceDetail(
         fvolume: number | string | null;
         fdate: string | null;
         fstatus: string | null;
+        fcabinetnumber: string | null;
+        ftransporttype: string | null;
+        frefprice: string | null;
+        frefrate: number | string | null;
       };
       const fwdByID = new Map<number, FwdHydRow>();
       if (fids.length > 0) {
         const { data: fwdRaw, error: fwdErr } = await admin
           .from("tb_forwarder")
-          .select("id, ftrackingchn, famount, fweight, fvolume, fdate, fstatus")
+          .select("id, ftrackingchn, famount, fweight, fvolume, fdate, fstatus, fcabinetnumber, ftransporttype, frefprice, frefrate")
           .in("id", fids);
         if (fwdErr) {
           console.error("[getInvoiceDetail tb_forwarder hydrate] failed", {
@@ -651,6 +741,7 @@ export async function getInvoiceDetail(
             created_at:         hdrRaw.created_at,
             updated_at:         hdrRaw.updated_at,
             is_overdue:         isOverdue(hdrRaw.date_due, hdrRaw.status),
+            ...computeBillWht(hdrRaw.is_juristic, Number(hdrRaw.total_thb)),
           },
           items: items.map((i) => {
             const f = fwdByID.get(i.forwarder_id) ?? null;
@@ -666,6 +757,12 @@ export async function getInvoiceDetail(
                     fvolume:         f.fvolume != null ? Number(f.fvolume) : null,
                     fdate:        f.fdate,
                     fstatus:      f.fstatus,
+                    cabinet:      f.fcabinetnumber ?? "",
+                    // ขนส่ง: '1'=EK(รถ) · '2'=SEA(เรือ) — mirrors load-receipt-document.ts
+                    transport:    f.ftransporttype === "2" ? "SEA" : f.ftransporttype === "1" ? "EK" : "",
+                    // คิดราคาตาม: '1'=KG · '2'=CBM
+                    rate_basis:   f.frefprice === "2" ? "CBM" : f.frefprice === "1" ? "KG" : "",
+                    rate:         f.frefrate != null ? Number(f.frefrate) : 0,
                   }
                 : null,
             };

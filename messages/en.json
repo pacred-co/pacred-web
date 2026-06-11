@@ -5215,6 +5215,9 @@
     "summaryOther": "+ Other",
     "summaryDiscount": "− Discount",
     "summaryGrandTotal": "Grand total",
+    "summaryWht": "Withholding tax 1% (transport)",
+    "summaryNetPayable": "Net payable",
+    "whtNote": "Please issue a withholding tax certificate (50 Tavi) in the name of Pacred (Thailand) Co., Ltd.",
     "noteHeading": "Note from the company"
   },
   "publicTrackStatus": {
@@ -5265,6 +5268,7 @@
     "downloadPdfHint": "In the print dialog, choose \"Save as PDF\" as the destination",
     "englishVersion": "English Version",
     "thaiVersion": "Thai version",
+    "printLocked": "Upload the 50-Tavi certificate and wait for admin approval before printing/downloading",
     "close": "Close"
   },
   "pcsTopMenu": {
