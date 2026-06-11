@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import Image from "next/image";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import {
   ThumbsUp,
   Star,
@@ -10,7 +10,14 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { Link } from "@/i18n/navigation";
-import { REVIEWS, type ServiceType, type Review } from "@/lib/reviews/catalog";
+import {
+  REVIEWS,
+  reviewSlug,
+  reviewProductLabel,
+  reviewHsCode,
+  type ServiceType,
+  type Review,
+} from "@/lib/reviews/catalog";
 
 const ICON_BASE = "/images/hero-section/icon-draf";
 
@@ -258,6 +265,11 @@ function ReviewsCarousel({ reviews, t, typeConfig }: { reviews: Review[]; t: Rev
 function ReviewCard({ review, index = 0, t, typeConfig }: { review: Review; index?: number; t: ReviewsT; typeConfig: TypeConfig }) {
   const cfg = typeConfig[review.type];
   const title = t(review.titleKey);
+  const locale = (useLocale() === "en" ? "en" : "th") as "th" | "en";
+  // SEO-pattern slug + product/HS-code tag (ปอน 2026-06-11 · owner ".csv url pattern + HS code")
+  const slug = reviewSlug(review, locale);
+  const productLabel = reviewProductLabel(review, locale);
+  const hsCode = reviewHsCode(review);
   const [liked, setLiked] = useState(false);
   const [popKey, setPopKey] = useState(0);
 
@@ -270,9 +282,9 @@ function ReviewCard({ review, index = 0, t, typeConfig }: { review: Review; inde
 
   return (
     <Link
-      href={`/our-work/${review.id}`}
+      href={`/our-work/${slug}`}
       data-review-card
-      aria-label={title}
+      aria-label={`${title} · ${productLabel} · HS ${hsCode}`}
       style={{ contain: "layout paint" }}
       className="group relative shrink-0 w-[calc(50vw-16px)] sm:w-[240px] md:w-[260px] aspect-[3/4] rounded-[22px] overflow-hidden bg-gradient-to-br from-gray-200 via-gray-400 to-gray-700 dark:from-surface-alt dark:via-surface dark:to-background shadow-[0_8px_22px_rgba(15,23,42,0.10)] hover:shadow-[0_22px_44px_rgba(15,23,42,0.22)] hover:-translate-y-1.5 transition-[transform,box-shadow,ring-color] duration-300 cursor-pointer ring-1 ring-black/5 hover:ring-primary-400/30 snap-start"
     >
@@ -417,6 +429,16 @@ function ReviewCard({ review, index = 0, t, typeConfig }: { review: Review; inde
           </div>
           <span className="text-white text-[10.5px] font-black tabular-nums" style={{ textShadow: "0 1px 3px rgba(0,0,0,0.6)" }}>
             {review.rating}.0
+          </span>
+        </div>
+
+        {/* Product + HS code (ปอน 2026-06-11 · owner "ติดแท็ก ติด hs code ให้เหมาะกับสินค้า") */}
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="inline-flex items-center min-w-0 px-1.5 py-0.5 rounded-md bg-white/95 text-[#111827] text-[9.5px] font-black shadow-[0_2px_4px_rgba(0,0,0,0.20)] backdrop-blur">
+            <span className="truncate">{productLabel}</span>
+          </span>
+          <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md bg-primary-600 text-white text-[9.5px] font-black tabular-nums shadow-[0_2px_4px_rgba(0,0,0,0.25)] tracking-wide">
+            HS {hsCode}
           </span>
         </div>
 

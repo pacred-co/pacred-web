@@ -26,8 +26,13 @@ import {
 import { SITE_URL } from "@/components/seo/site";
 import {
   REVIEWS,
-  getReviewById,
+  getReviewBySlugOrId,
   getRelatedReviews,
+  reviewSlug,
+  reviewCanonicalSlug,
+  reviewProductLabel,
+  reviewHsCode,
+  reviewRoute,
   type ServiceType,
 } from "@/lib/reviews/catalog";
 import { getReviewContent } from "@/lib/reviews/content";
@@ -49,7 +54,9 @@ const TYPE_LABEL_KEY: Record<ServiceType, "labelImport" | "labelExport" | "label
 };
 
 export function generateStaticParams() {
-  return REVIEWS.map((r) => ({ id: r.id }));
+  // SEO-pattern slug is the canonical URL; legacy short ids still resolve
+  // at request time via getReviewBySlugOrId (no 404 for old links).
+  return REVIEWS.map((r) => ({ id: reviewCanonicalSlug(r) }));
 }
 
 export async function generateMetadata({
@@ -58,12 +65,17 @@ export async function generateMetadata({
   params: Promise<{ locale: string; id: string }>;
 }): Promise<Metadata> {
   const { locale, id } = await params;
-  const review = getReviewById(id);
+  const review = getReviewBySlugOrId(id);
   if (!review) return { title: locale === "en" ? "Case not found" : "ไม่พบผลงาน" };
 
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const content = getReviewContent(review, typedLocale);
-  const canonical = `${typedLocale === "th" ? "" : `/${typedLocale}`}/our-work/${id}`;
+  // Canonical = the locale-correct SEO slug (not the raw param, which may be a
+  // legacy id or the other locale's slug) so duplicate URLs dedupe cleanly.
+  const thSlug = reviewSlug(review, "th");
+  const enSlug = reviewSlug(review, "en");
+  const localeSlug = typedLocale === "en" ? enSlug : thSlug;
+  const canonical = `${typedLocale === "th" ? "" : `/${typedLocale}`}/our-work/${localeSlug}`;
   const imageUrl = review.image ? `${SITE_URL}${review.image}` : undefined;
 
   return {
@@ -75,9 +87,9 @@ export async function generateMetadata({
     alternates: {
       canonical,
       languages: {
-        "th-TH": `/our-work/${id}`,
-        "en-US": `/en/our-work/${id}`,
-        "x-default": `/our-work/${id}`,
+        "th-TH": `/our-work/${thSlug}`,
+        "en-US": `/en/our-work/${enSlug}`,
+        "x-default": `/our-work/${thSlug}`,
       },
     },
     openGraph: {
@@ -102,16 +114,21 @@ export default async function ReviewLandingPage({
   params: Promise<{ locale: string; id: string }>;
 }) {
   const { locale, id } = await params;
-  const review = getReviewById(id);
+  const review = getReviewBySlugOrId(id);
   if (!review) notFound();
 
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const t = await getTranslations({ locale, namespace: "reviews" });
   const content = getReviewContent(review, typedLocale);
-  const related = getRelatedReviews(id, 6);
+  const related = getRelatedReviews(review.id, 6);
 
   const serviceTitle = t(review.titleKey);
   const typeLabel = t(TYPE_LABEL_KEY[review.type]);
+  // product / HS-code / route dimension (ปอน 2026-06-11 · owner ".csv pattern + HS code")
+  const localeSlug = reviewSlug(review, typedLocale);
+  const productLabel = reviewProductLabel(review, typedLocale);
+  const hsCode = reviewHsCode(review);
+  const routeLabel = reviewRoute(review, typedLocale);
 
   const ui =
     typedLocale === "th"
@@ -157,7 +174,7 @@ export default async function ReviewLandingPage({
             [
               { name: ui.home, path: "/" },
               { name: ui.reviews, path: "/our-work" },
-              { name: serviceTitle, path: `/our-work/${id}` },
+              { name: serviceTitle, path: `/our-work/${localeSlug}` },
             ],
             typedLocale,
           ),
@@ -214,6 +231,13 @@ export default async function ReviewLandingPage({
                   <span className="inline-flex items-center gap-1 text-[10.5px] font-black tracking-wider px-2.5 py-1 rounded-full border border-border text-muted">
                     {content.code}
                   </span>
+                  {/* product + HS code (ปอน 2026-06-11 · owner "ติด hs code ให้เหมาะกับสินค้า") */}
+                  <span className="inline-flex items-center gap-1 text-[10.5px] font-black tracking-wider px-2.5 py-1 rounded-full bg-gray-100 dark:bg-surface text-[#111827] dark:text-white border border-border">
+                    {productLabel}
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[10.5px] font-black tracking-wider px-2.5 py-1 rounded-full bg-primary-600 text-white border border-primary-600 tabular-nums">
+                    HS {hsCode}
+                  </span>
                   <span className="inline-flex items-center gap-1 text-[11px] md:text-[12px] text-primary-600 font-black">
                     <BadgeCheck className="w-3.5 h-3.5" strokeWidth={2.8} />
                     {ui.verified}
@@ -245,8 +269,11 @@ export default async function ReviewLandingPage({
                   </span>
                 </div>
 
-                {/* Tag chips */}
+                {/* Tag chips — route (ต้นทาง → ปลายทาง) leads, then mode/term tags */}
                 <div className="mt-3.5 flex items-center gap-1.5 flex-wrap">
+                  <span className="inline-flex items-center px-2 py-1 rounded-md bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 text-[11px] font-black border border-primary-100 dark:border-primary-900/40">
+                    {routeLabel}
+                  </span>
                   {review.tagKeys.map((tagKey) => (
                     <span
                       key={tagKey}
@@ -390,7 +417,7 @@ export default async function ReviewLandingPage({
                   {related.map((r) => (
                     <Link
                       key={r.id}
-                      href={`/our-work/${r.id}`}
+                      href={`/our-work/${reviewSlug(r, typedLocale)}`}
                       className="group relative flex flex-col bg-white dark:bg-surface rounded-xl md:rounded-2xl border border-border overflow-hidden shadow-[0_4px_14px_rgba(15,23,42,0.05)] hover:shadow-[0_16px_32px_rgba(179,0,0,0.10)] hover:border-primary-200 dark:hover:border-primary-900 hover:-translate-y-1 transition-all duration-300"
                     >
                       <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-gray-200 via-gray-400 to-gray-700 dark:from-surface-alt dark:via-surface dark:to-background">

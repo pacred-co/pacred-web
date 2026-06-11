@@ -262,3 +262,52 @@ body {
 body {
   top: 0 !important;
 }
+
+/* ── Admin sidebar ICON-RAIL (page-scoped via `body.admin-sidebar-rail`, added by
+   <CollapseAdminSidebar> on wide pages — ปอน 2026-06-11 · owner "พับ sidebar เหลือ
+   ไอคอน · hover แล้วกางออก เหมือนหน้าบ้านลูกค้า"). Desktop (lg+) only — on mobile the
+   admin sidebar is already an off-canvas drawer. Shrinks to a 64px icon rail
+   (labels/badges/headers hidden, icons kept); on hover the full 16rem menu slides
+   out AND the whole page content follows it (push, via :has) so the page "ขยับตาม"
+   the sidebar instead of being overlaid — owner 2026-06-11. */
+/* .admin-rail-only = the compact "PR" brand logo — shown ONLY while the rail is
+   collapsed (mirror of .admin-rail-hide). Hidden by default (full sidebar shows the
+   wide PRADMIN logo). owner 2026-06-11. */
+.admin-rail-only { display: none; }
+@media (min-width: 1024px) {
+  body.admin-sidebar-rail .admin-sidebar {
+    width: 4rem;
+    overflow-x: hidden;
+    transition: width 0.18s ease;
+  }
+  body.admin-sidebar-rail .admin-content {
+    margin-left: 4.5rem !important;
+    transition: margin-left 0.18s ease;
+  }
+  /* collapsed (not hovered) → hide every label / section header / badge / chevron
+     + the tagged out-of-nav text (brand "Admin" · header name · footer links). The
+     menu icons are <svg> (NOT spans) so they stay; CountBadge + labels are spans. */
+  body.admin-sidebar-rail .admin-sidebar:not(:hover) nav span,
+  body.admin-sidebar-rail .admin-sidebar:not(:hover) nav p,
+  body.admin-sidebar-rail .admin-sidebar:not(:hover) .admin-rail-hide,
+  body.admin-sidebar-rail .admin-sidebar:not(:hover) svg.lucide-chevron-right,
+  body.admin-sidebar-rail .admin-sidebar:not(:hover) svg.lucide-chevron-down {
+    display: none !important;
+  }
+  /* …and the compact "PR" logo (.admin-rail-only) appears while collapsed. */
+  body.admin-sidebar-rail .admin-sidebar:not(:hover) .admin-rail-only {
+    display: block;
+  }
+  /* hover → full 16rem menu slides out. */
+  body.admin-sidebar-rail .admin-sidebar:hover {
+    width: 16rem;
+    overflow-x: visible;
+    box-shadow: 6px 0 28px rgba(0, 0, 0, 0.18);
+    z-index: 1050;
+  }
+  /* …and the whole page content follows it (push, not overlay) so it "ขยับตาม"
+     the expanding sidebar — owner 2026-06-11. :has() = while the rail is hovered. */
+  body.admin-sidebar-rail:has(.admin-sidebar:hover) .admin-content {
+    margin-left: 16rem !important;
+  }
+}

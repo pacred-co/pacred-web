@@ -55,12 +55,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // a scroll context, which is what we want here.
   return (
     <div className="min-h-screen flex text-foreground">
-      {/* 2026-06-10 (ปอน) — slim full-width admin top bar. Spans the whole top
-          (over the sidebar's PR-ADMIN corner), carries ONLY the locale + theme
-          controls, and is `fixed` so it follows the scroll. z-[60] keeps it
-          above the sidebar rail (z-50); the sidebar's own mobile burger renders
-          later in the DOM at the same layer so it stays tappable on the bar's
-          left. Hidden on print so it doesn't bleed into receipts/invoices. */}
+      {/* 2026-06-10 (ปอน) — slim admin top bar, carries ONLY the locale + theme
+          controls (justify-end → right side), `fixed` so it follows the scroll.
+          2026-06-11 (owner "ยก sidebar ทับ nav bar"): the sidebar is now top-0
+          z-[70] and COVERS this bar's left corner — so the red shows only to the
+          RIGHT of the sidebar (the PR-ADMIN brand sits top-left). Hidden on print
+          so it doesn't bleed into receipts/invoices. */}
       <header className="print:hidden fixed top-0 inset-x-0 z-[60] h-14 bg-[#B91C1C] flex items-center justify-end gap-2 px-4 shadow-md">
         <LocaleSwitcher variant="on-primary" />
         <ThemeToggle variant="on-primary" />
@@ -71,7 +71,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <div className="print:hidden">
         <AdminSidebar roles={roles} counts={counts} adminLabel={adminLabel} adminAvatar={profile?.avatar_url ?? null} />
       </div>
-      <div className="flex-1 lg:ml-64 min-h-screen min-w-0 overflow-x-clip pt-14 print:pt-0 print:ml-0">
+      <div className="admin-content flex-1 lg:ml-64 min-h-screen min-w-0 overflow-x-clip pt-14 print:pt-0 print:ml-0">
         {children}
       </div>
     </div>

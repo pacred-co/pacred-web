@@ -26,7 +26,9 @@
  *                            update_forwarder5)
  *   เครดิต (credit)          → วันครบกำหนด + "ติดเครดิต" (legacy 'c' branch) —
  *                            REUSES adminMarkForwarderCredit
- *   หมายเหตุ (always)         → <NotePushForm> (adminSaveForwarderNote)
+ *
+ * 2026-06-11 (owner) — the main form is now STATUS-ONLY (สถานะใหม่ + บันทึก). เลขตู้
+ * ย้ายไปแก้ inline ในกล่องข้อมูล (<EditCabinetField>); หมายเหตุ (NotePushForm) ถูกถอดออก.
  *
  * EVERY sub-form calls an EXISTING server action — no backend change. The flat
  * <TbForwarderActionPanel> stays on /edit unchanged; this replaces it on the
@@ -35,12 +37,11 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Truck, Package, CreditCard, ClipboardCheck } from "lucide-react";
+import { Package, CreditCard, ClipboardCheck } from "lucide-react";
 import { adminBulkUpdateForwarderTbStatus } from "@/actions/admin/forwarders";
 import { adminMarkForwarderCredit } from "@/actions/admin/forwarders-field-edits";
 import { confirm } from "@/components/ui/confirm";
 import { AdminForwarderEditForm } from "./edit/edit-form";
-import { NotePushForm } from "./tb-action-panel";
 
 type Status = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "99";
 
@@ -88,12 +89,17 @@ type Props = {
   isCredit: boolean;
   amountEstimate: number;
   pricing: ForwarderPricingInit;
+  // รายการสินค้า (product list) — render ระหว่างฟอร์มสถานะ กับ ฟอร์มเงื่อนไข (pricing@4/…)
+  // owner 2026-06-11: "ฟอร์มสถานะอยู่บน · รายการสินค้าอยู่กลาง · ฟอร์มราคาต่อจากรายการสินค้า".
+  children?: React.ReactNode;
 };
 
+// h-10 (40px) on every control so the merged row lines up on ONE straight,
+// balanced baseline (owner 2026-06-11 "เรียงบรรทัดเดียว สมดุล ตรงๆ · ไม่เบี้ยว").
 const selectCls =
-  "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40 disabled:opacity-60";
+  "h-10 w-full rounded-lg border border-border bg-white dark:bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40 disabled:opacity-60";
 const inputCls =
-  "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500/40 disabled:opacity-60";
+  "h-10 w-full rounded-lg border border-border bg-white dark:bg-surface px-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500/40 disabled:opacity-60";
 
 function rank(s: string): number {
   if (s === "99") return 0;
@@ -106,8 +112,6 @@ export function ForwarderStatusWorkflow(p: Props) {
 
   // The dropdown selection — drives the conditional sub-forms (legacy #fStatus).
   const [selected, setSelected] = useState<string>(p.currentStatus);
-  const [cabinet, setCabinet] = useState<string>(p.currentCabinet);
-  const [cabinetLocked, setCabinetLocked] = useState<boolean>(p.currentCabinetLocked);
 
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -138,46 +142,33 @@ export function ForwarderStatusWorkflow(p: Props) {
   const showPricing = selected === "4"; // legacy showForm4()
   const showTracking = rank(selected) >= 6; // legacy showForm6()
 
-  // The main "บันทึกสถานะ" button advances fstatus (+ optional cabinet). It is
-  // NOT the path for credit (that has its own form) — hidden when credit is picked.
-  function dirtyStatus(): boolean {
-    return (
-      selected !== p.currentStatus ||
-      cabinet.trim() !== p.currentCabinet.trim() ||
-      cabinetLocked !== p.currentCabinetLocked
-    );
-  }
+  // owner 2026-06-11 "เอาเลขตู้ + หมายเหตุ ออกจากฟอร์มสถานะ": ฟอร์มนี้เปลี่ยน "สถานะ" อย่างเดียว
+  // (เลขตู้แก้ inline ในกล่องข้อมูลด้านบนแทน · โหมดเครดิตใช้ฟอร์ม "ติดเครดิต" ด้านล่าง).
+  const statusDirty = selected !== p.currentStatus;
+  const canSave = !isCreditSel && statusDirty;
 
-  async function onSaveStatus() {
+  async function onSaveAll() {
     setError(null);
     setSuccess(null);
-    if (!dirtyStatus()) {
-      setError("ไม่มีการเปลี่ยนแปลง — เลือกสถานะใหม่หรือแก้เลขตู้ก่อนบันทึก");
+    if (isCreditSel || !statusDirty) {
+      setError("ไม่มีการเปลี่ยนแปลง — เลือกสถานะใหม่ก่อนบันทึก");
       return;
     }
     const statusLabel = STATUS_LABEL[selected] ?? selected;
-    const lines: string[] = [];
-    if (selected !== p.currentStatus)
-      lines.push(`สถานะ: "${STATUS_LABEL[p.currentStatus] ?? p.currentStatus}" → "${statusLabel}"`);
-    if (cabinet.trim() !== p.currentCabinet.trim())
-      lines.push(`เลขตู้: "${p.currentCabinet || "—"}" → "${cabinet.trim() || "—"}"`);
-    if (cabinetLocked !== p.currentCabinetLocked)
-      lines.push(cabinetLocked ? "🔒 ล็อกเลขตู้: เปิด" : "🔓 ปลดล็อกเลขตู้");
-
-    if (!(await confirm(`บันทึก #${p.fNo} ?\n\n${lines.join("\n")}`))) return;
+    if (!(await confirm(
+      `เปลี่ยนสถานะ #${p.fNo}\n"${STATUS_LABEL[p.currentStatus] ?? p.currentStatus}" → "${statusLabel}" ?`,
+    ))) return;
 
     startTransition(async () => {
       const res = await adminBulkUpdateForwarderTbStatus({
         fids: [p.fId],
         fstatus: selected as Status,
-        ...(cabinet.trim() !== p.currentCabinet.trim() ? { cabinet_number: cabinet.trim() } : {}),
-        ...(cabinetLocked !== p.currentCabinetLocked ? { cabinet_locked: cabinetLocked } : {}),
       });
       if (!res.ok) {
-        setError(res.error ?? "บันทึกไม่สำเร็จ");
+        setError(res.error ?? "บันทึกสถานะไม่สำเร็จ");
         return;
       }
-      setSuccess(`บันทึกสถานะสำเร็จ — #${p.fNo}`);
+      setSuccess(`บันทึกสำเร็จ — #${p.fNo}`);
       router.refresh();
       setTimeout(() => setSuccess(null), 5000);
     });
@@ -185,22 +176,59 @@ export function ForwarderStatusWorkflow(p: Props) {
 
   return (
     <div className="space-y-4">
-      {/* ── ฟอร์มหลัก: เลือกสถานะ + ผูกตู้ (legacy main update form) ── */}
+      {/* ── owner 2026-06-11 "ปุ่มบันทึกปุ่มเดียว · ไม่ต้องแบ่ง section · มันคือเรื่องเดียวกัน":
+           สถานะ + หมายเหตุ = ฟอร์มเดียว ปุ่มบันทึกปุ่มเดียว — กดทีเดียวบันทึกทั้งสถานะ/เลขตู้
+           + หมายเหตุ (เรียก server action เท่าที่เปลี่ยน) · ตรงกับ legacy update.php ที่เป็นฟอร์มเดียว.
+           ฟอร์มเงื่อนไข pricing/tracking/credit ยังอยู่ด้านล่าง (คนละเรื่อง · เด้งตามสถานะ). ── */}
+      {/* owner 2026-06-11 "เอากรอบออก": ฟอร์มสถานะไม่มีกรอบการ์ด (border/rounded/shadow/accent)
+          แล้ว — วางแบนๆ ในเซกชัน เหลือแค่ระยะห่างแนวตั้ง. */}
       <form
-        onSubmit={(e) => { e.preventDefault(); if (!isCreditSel) onSaveStatus(); }}
-        className="space-y-3 rounded-2xl border border-border border-l-4 border-l-primary-500 bg-white dark:bg-surface shadow-sm p-4 md:p-5"
+        onSubmit={(e) => { e.preventDefault(); onSaveAll(); }}
+        className="space-y-3"
       >
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="rounded-full bg-primary-100 text-primary-700 px-2.5 py-0.5 text-[11px] font-semibold">
-            ขั้นถัดไป
-          </span>
-          <h3 className="text-sm font-semibold tracking-wide flex items-center gap-1.5">
-            <Truck className="h-3.5 w-3.5" /> อัปเดตสถานะรายการ
-          </h3>
-          <span className="ml-auto text-[11px] text-muted">
-            ปัจจุบัน: <b className="text-foreground">{STATUS_LABEL[p.currentStatus] ?? p.currentStatus}</b>
-          </span>
+        {/* ── owner 2026-06-11 "เอาเลขตู้ + หมายเหตุ ออก": ฟอร์มสถานะเหลือแค่ สถานะใหม่ + บันทึก
+            (เลขตู้แก้ inline ในกล่องข้อมูลด้านบนแทน). ── */}
+        <div className="flex flex-wrap items-end gap-3">
+          {/* สถานะ */}
+          <label className="flex-1 min-w-[180px]">
+            <span className="block text-[11px] font-medium text-muted mb-1 whitespace-nowrap">สถานะใหม่</span>
+            <select
+              id="fsw_status"
+              value={selected}
+              onChange={(e) => setSelected(e.target.value)}
+              disabled={pending}
+              className={selectCls}
+            >
+              {statusOptions.map((o) => (
+                <option key={o.v} value={o.v} disabled={o.disabled}>
+                  {o.v} · {o.label}
+                </option>
+              ))}
+              {canOfferCredit && <option value="credit">💳 ติดเครดิต (ให้เครดิตลูกค้า)</option>}
+              <option value="99">99 · {STATUS_LABEL["99"]}</option>
+            </select>
+          </label>
+
+          {/* บันทึก */}
+          <button
+            type="submit"
+            disabled={pending || !canSave}
+            className="shrink-0 h-10 rounded-lg bg-primary-600 text-white px-6 text-sm font-semibold hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {pending ? "กำลังบันทึก..." : "บันทึก"}
+          </button>
         </div>
+
+        {/* per-status helper — tells staff WHAT to do for the picked status */}
+        <p className="text-[11px] text-muted">
+          {showPricing
+            ? "📦 ของถึงไทยแล้ว — กรอกขนาด/น้ำหนัก/เรทราคาในฟอร์มด้านล่าง แล้วกด “บันทึกข้อมูล”"
+            : showTracking
+              ? "🚚 ใส่เลขพัสดุไทยในฟอร์มด้านล่างเพื่อปิดงาน “ส่งแล้ว”"
+              : isCreditSel
+                ? "💳 กรอกวันครบกำหนดชำระด้านล่าง แล้วกด “ติดเครดิต”"
+                : `ปัจจุบัน: ${STATUS_LABEL[p.currentStatus] ?? p.currentStatus} · เลือกสถานะใหม่แล้วกด “บันทึก” (เลขตู้แก้ที่กล่องข้อมูลด้านบน)`}
+        </p>
 
         {error && (
           <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">⚠ {error}</div>
@@ -208,82 +236,10 @@ export function ForwarderStatusWorkflow(p: Props) {
         {success && (
           <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">✓ {success}</div>
         )}
-
-        <div>
-          <label htmlFor="fsw_status" className="block text-xs font-medium text-muted mb-1">สถานะใหม่</label>
-          <select
-            id="fsw_status"
-            value={selected}
-            onChange={(e) => setSelected(e.target.value)}
-            disabled={pending}
-            className={selectCls}
-          >
-            {statusOptions.map((o) => (
-              <option key={o.v} value={o.v} disabled={o.disabled}>
-                {o.v} · {o.label}
-              </option>
-            ))}
-            {canOfferCredit && <option value="credit">💳 ติดเครดิต (ให้เครดิตลูกค้า)</option>}
-            <option value="99">99 · {STATUS_LABEL["99"]}</option>
-          </select>
-          {/* per-status helper — tells staff WHAT to do for the picked status */}
-          <p className="mt-1 text-[11px] text-muted">
-            {showPricing
-              ? "📦 ของถึงไทยแล้ว — กรอกขนาด/น้ำหนัก/เรทราคาในฟอร์มด้านล่าง แล้วกด “บันทึกข้อมูล” (ไม่ต้องกดปุ่มบันทึกสถานะนี้ถ้าต้องการแค่ปรับราคา)"
-              : showTracking
-                ? "🚚 ใส่เลขพัสดุไทยในฟอร์มด้านล่างเพื่อปิดงาน “ส่งแล้ว”"
-                : isCreditSel
-                  ? "💳 กรอกวันครบกำหนดชำระด้านล่าง แล้วกด “ติดเครดิต” (ตัดเป็นเครดิตแทนการชำระ)"
-                  : "เลือกสถานะถัดไปของรายการ · ใส่เลขตู้แล้วระบบจะเลื่อนเป็น “กำลังส่งมาไทย” ให้อัตโนมัติ"}
-          </p>
-        </div>
-
-        {/* เลขตู้ — เกี่ยวกับการเลื่อนสถานะ (auto → 3); ซ่อนเมื่อเลือกเครดิต */}
-        {!isCreditSel && (
-          <div>
-            <label htmlFor="fsw_cabinet" className="block text-xs font-medium text-muted mb-1">
-              เลขตู้ (GZE / GZS)
-              {cabinetLocked && (
-                <span className="ml-2 inline-flex items-center gap-0.5 rounded bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[10px] font-semibold">
-                  🔒 ล็อกแล้ว
-                </span>
-              )}
-            </label>
-            <input
-              id="fsw_cabinet"
-              type="text"
-              value={cabinet}
-              onChange={(e) => setCabinet(e.target.value)}
-              disabled={pending}
-              maxLength={300}
-              placeholder="GZE-2026-001 (เว้นว่าง = ยังไม่ผูกตู้)"
-              className={inputCls}
-            />
-            <label className="mt-2 flex items-start gap-2 cursor-pointer text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 hover:bg-amber-100">
-              <input
-                type="checkbox"
-                checked={cabinetLocked}
-                onChange={(e) => setCabinetLocked(e.target.checked)}
-                disabled={pending}
-                className="mt-0.5 accent-amber-600 cursor-pointer"
-              />
-              <span>
-                <strong>🔒 ล็อกเลขตู้นี้</strong> · กัน MOMO/partner sync เขียนทับ
-              </span>
-            </label>
-          </div>
-        )}
-
-        {!isCreditSel && (
-          <button
-            type="submit"
-            disabled={pending || !dirtyStatus()}
-            className="w-full rounded-lg bg-primary-600 text-white px-4 py-2.5 text-sm font-semibold hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {pending ? "กำลังบันทึก..." : "💾 บันทึกสถานะ"}
-          </button>
-        )}
       </form>
+
+      {/* ── รายการสินค้า (children) — คั่นกลางระหว่างฟอร์มสถานะ + ฟอร์มราคา (owner 2026-06-11) ── */}
+      {p.children}
 
       {/* ── #form4 — ฟอร์มราคา/ขนาด (เด้งเมื่อเลือกสถานะ 4 · ถึงไทยแล้ว) ── */}
       {showPricing && (
@@ -339,9 +295,6 @@ export function ForwarderStatusWorkflow(p: Props) {
           onDone={() => router.refresh()}
         />
       )}
-
-      {/* ── หมายเหตุ + แจ้งเตือน (always · legacy saveNote) ── */}
-      <NotePushForm fId={p.fId} fNo={p.fNo} currentNote={p.currentNote} />
     </div>
   );
 }

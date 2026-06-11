@@ -322,7 +322,19 @@ export function TbForwarderActionPanel(p: Props) {
 // tb_forwarder.fnote/fnoteuser/fnoteuserread/fnotedate.
 // ─────────────────────────────────────────────────────────────────────
 
-export function NotePushForm({ fId, fNo, currentNote }: { fId: number; fNo: string; currentNote: string }) {
+export function NotePushForm({
+  fId,
+  fNo,
+  currentNote,
+  variant = "card",
+}: {
+  fId: number;
+  fNo: string;
+  currentNote: string;
+  // "card" = standalone amber card (used on /edit) · "row" = borderless horizontal
+  // row inside the combined status+note box (owner 2026-06-11 "กล่องเดียว 2 แถว").
+  variant?: "card" | "row";
+}) {
   const router = useRouter();
   const [note, setNote] = useState<string>(currentNote);
   const [adminOnly, setAdminOnly] = useState<boolean>(true);
@@ -357,6 +369,55 @@ export function NotePushForm({ fId, fNo, currentNote }: { fId: number; fNo: stri
   // red brand. Kept a slim amber left-accent + amber pill so the "note/notify" action
   // still reads as distinct from the red status action, but the card body is now clean
   // white like the home StatsBar cards.
+  // ── owner 2026-06-11 "กล่องเดียว 2 แถว แบบตาราง": row variant — หมายเหตุ · แจ้งใคร ·
+  //    [บันทึก] เรียงแนวนอนแถวเดียว (ไม่มีกรอบการ์ด/หัวข้อ) เพื่อเป็น "แถวที่ 2" ในกล่องรวม. ──
+  if (variant === "row") {
+    return (
+      <form onSubmit={onSubmit} className="border-l-4 border-l-amber-400 p-3 md:p-4 space-y-2">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex-1 min-w-[200px]">
+            <span className="block text-[11px] font-medium text-muted mb-1">📝 หมายเหตุ</span>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              disabled={pending}
+              maxLength={5000}
+              rows={1}
+              placeholder="เว้นว่าง = แจ้ง 'แก้ไขเรียบร้อยแล้ว'"
+              className={INPUT_CLS}
+            />
+          </label>
+          <div className="shrink-0">
+            <span className="block text-[11px] font-medium text-muted mb-1">แจ้งเตือนถึง</span>
+            <div className="flex h-[38px] items-center gap-3 text-xs">
+              <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                <input type="radio" name={`noteuser-${fId}`} checked={adminOnly} onChange={() => setAdminOnly(true)} disabled={pending} />
+                <span>แอดมินเท่านั้น</span>
+              </label>
+              <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                <input type="radio" name={`noteuser-${fId}`} checked={!adminOnly} onChange={() => setAdminOnly(false)} disabled={pending} />
+                <span>แจ้งลูกค้า</span>
+              </label>
+            </div>
+          </div>
+          <button
+            type="submit"
+            disabled={pending}
+            className="shrink-0 rounded-lg bg-amber-600 text-white px-5 py-2 text-sm font-semibold hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {pending ? "กำลังบันทึก..." : "💾 บันทึก"}
+          </button>
+        </div>
+        {error && (
+          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">⚠ {error}</div>
+        )}
+        {success && (
+          <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">✓ {success}</div>
+        )}
+      </form>
+    );
+  }
+
   return (
     <form onSubmit={onSubmit} className="space-y-3 rounded-2xl border border-border border-l-4 border-l-amber-400 bg-white dark:bg-surface shadow-sm p-4 md:p-5">
       <div className="flex items-center gap-2 flex-wrap">
@@ -366,37 +427,44 @@ export function NotePushForm({ fId, fNo, currentNote }: { fId: number; fNo: stri
         <h3 className="text-sm font-semibold tracking-wide">📝 บันทึกหมายเหตุ (ไม่เปลี่ยนสถานะ)</h3>
       </div>
 
-      <textarea
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        disabled={pending}
-        maxLength={5000}
-        rows={2}
-        placeholder="หมายเหตุ (เว้นว่าง = แจ้ง 'แก้ไขเรียบร้อยแล้ว')"
-        className={INPUT_CLS}
-      />
-
-      <div className="flex items-center gap-4 text-xs">
-        <label className="inline-flex items-center gap-1.5 cursor-pointer">
-          <input
-            type="radio"
-            name={`noteuser-${fId}`}
-            checked={adminOnly}
-            onChange={() => setAdminOnly(true)}
-            disabled={pending}
-          />
-          <span>แอดมินเท่านั้น (ลูกค้าไม่เห็น)</span>
-        </label>
-        <label className="inline-flex items-center gap-1.5 cursor-pointer">
-          <input
-            type="radio"
-            name={`noteuser-${fId}`}
-            checked={!adminOnly}
-            onChange={() => setAdminOnly(false)}
-            disabled={pending}
-          />
-          <span>แจ้งลูกค้า</span>
-        </label>
+      {/* ── ตาราง Excel ง่ายๆ: หมายเหตุ + แจ้งเตือนถึง (owner 2026-06-11 "ทำเป็น
+          ตาราง excel ง่ายๆ ด้วย" · ให้สไตล์เดียวกับตารางราคา/สถานะ) ── */}
+      <div className="overflow-x-auto scrollbar-x-visible rounded-xl border border-border">
+        <table className="w-full text-sm">
+          <thead className="bg-surface-alt/50 uppercase tracking-wide">
+            <tr>
+              <th className="whitespace-nowrap px-2 py-2 text-center text-[10px] md:text-[11px] font-semibold text-muted">หมายเหตุ</th>
+              <th className="whitespace-nowrap px-2 py-2 text-center text-[10px] md:text-[11px] font-semibold text-muted">แจ้งเตือนถึง</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="border-t border-border align-top [&>td]:px-1.5 [&>td]:py-1.5">
+              <td>
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  disabled={pending}
+                  maxLength={5000}
+                  rows={2}
+                  placeholder="หมายเหตุ (เว้นว่าง = แจ้ง 'แก้ไขเรียบร้อยแล้ว')"
+                  className={`${INPUT_CLS} min-w-[180px]`}
+                />
+              </td>
+              <td>
+                <div className="flex min-w-[140px] flex-col gap-2 pt-1 text-xs">
+                  <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                    <input type="radio" name={`noteuser-${fId}`} checked={adminOnly} onChange={() => setAdminOnly(true)} disabled={pending} />
+                    <span>แอดมินเท่านั้น</span>
+                  </label>
+                  <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                    <input type="radio" name={`noteuser-${fId}`} checked={!adminOnly} onChange={() => setAdminOnly(false)} disabled={pending} />
+                    <span>แจ้งลูกค้า</span>
+                  </label>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       {error && (

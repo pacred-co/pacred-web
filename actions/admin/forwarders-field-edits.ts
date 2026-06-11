@@ -1171,6 +1171,60 @@ export async function adminUpdateForwarderTrackingChn(
   });
 }
 
+// ── เลขตู้ (fcabinetnumber) inline edit — owner 2026-06-11 "เพิ่มปุ่มแก้ไข · แก้เลขตู้ตรงนั้นได้เลย".
+//    Edits ONLY fcabinetnumber (NO status side-effect — unlike the status form's เลขตู้ field
+//    which auto-advances to "กำลังส่งมาไทย" when a cabinet is first set). For fixing typos /
+//    re-keying the container number from the read-detail info grid. Empty = clear. ──
+const cabinetSchema = z.object({
+  fId:     z.number().int().positive(),
+  cabinet: z.string().trim().max(300),
+});
+export type AdminUpdateForwarderCabinetInput = z.infer<typeof cabinetSchema>;
+
+export async function adminUpdateForwarderCabinet(
+  rawInput: AdminUpdateForwarderCabinetInput,
+): Promise<AdminActionResult> {
+  const parsed = cabinetSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+
+    const { data: fwd, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, fcabinetnumber")
+      .eq("id", d.fId)
+      .maybeSingle<{ id: number; fcabinetnumber: string | null }>();
+    if (fwdErr) {
+      console.error(`[adminUpdateForwarderCabinet read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
+      return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
+    }
+    if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+    if ((fwd.fcabinetnumber ?? "").trim() === d.cabinet) {
+      return { ok: false, error: "ไม่มีการเปลี่ยนแปลง (เลขตู้เดิม)" };
+    }
+
+    const { error: updErr } = await admin
+      .from("tb_forwarder")
+      .update({ fcabinetnumber: d.cabinet, adminidupdate: legacyAdminId })
+      .eq("id", d.fId);
+    if (updErr) {
+      console.error(`[adminUpdateForwarderCabinet update] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
+      return { ok: false, error: `บันทึกเลขตู้ไม่สำเร็จ: ${updErr.message}` };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder.update_cabinet", "tb_forwarder", String(d.fId), {
+      before: fwd.fcabinetnumber, after: d.cabinet,
+    });
+
+    revalidatePath(`/admin/forwarders/${d.fId}`);
+    revalidatePath("/admin/forwarders");
+    return { ok: true };
+  });
+}
+
 // ── update_fDateToThai — container-close + ETA-to-Thailand (forwarder.php L1541-1560)
 // Legacy: takes ONE input (the container-close date in dd/mm/yyyy), then writes
 // BOTH columns:
