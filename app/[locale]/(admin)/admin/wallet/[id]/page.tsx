@@ -41,7 +41,7 @@
  * Layout (top-to-bottom):
  *   1. TWO TOP CARDS  — left: this customer's wallet + cash-back balance
  *                       right: system-wide wallet + cash-back totals
- *                       Each has a "+ เติมเงินเข้ากระเป๋า" CTA → /admin/wallet/add
+ *                       Each has a "+ ชำระเงิน" CTA → /admin/wallet/add
  *   2. BREADCRUMB     — หน้าแรก / กระเป๋าสตางค์ / <type-label> / #<id>
  *   3. DETAIL CARD (2-col on md+):
  *      LEFT  — rich row info: timestamp, customer link, target bank,
@@ -50,7 +50,7 @@
  *              source/target reference list (paydeposit join):
  *                · For type 1/2: "เงินก้อนนี้ใช้จ่ายค่า: [F51201] [P22302] ..."
  *                · For type 4/6/7: "นี่คือการจ่ายค่า: [F51201] · สลิปอยู่ที่
- *                                    รายการเติมเงินคู่กัน [#105410 →]"
+ *                                    รายการชำระเงินคู่กัน [#105410 →]"
  *      RIGHT — status badge, "ดำเนินรายการแล้ว โดย <admin>" if completed,
  *              <ApproveRejectForm> if still pending (status='1'),
  *              SLIP IMAGE: own slip OR partner-topup slip OR
@@ -94,8 +94,8 @@ const STATUS_CLS: Record<string, string> = {
 // same handler for every type and just rendered a broken slip image —
 // we do better by labelling each type accurately).
 const TYPE_LABEL: Record<string, string> = {
-  "1": "เติมเงิน (ลูกค้าโอน)",
-  "2": "เติมเงิน (แอดมินเพิ่ม)",
+  "1": "ชำระเงิน (ลูกค้าโอน)",
+  "2": "ชำระเงิน (แอดมินเพิ่ม)",
   "3": "ถอนเงิน",
   "4": "จ่ายค่าฝากนำเข้า",
   "5": "ปรับยอดโดยแอดมิน",
@@ -423,7 +423,7 @@ export default async function AdminWalletDetail({
           {/* LEFT — info pane */}
           <div className="p-5 space-y-3 border-b md:border-b-0 md:border-r border-border">
             <h2 className="text-lg font-bold">
-              {/* Wave 19 BUG #4: type-aware title (was hard-coded "รายการเติมเงิน") */}
+              {/* Wave 19 BUG #4: type-aware title (was hard-coded "รายการชำระเงิน") */}
               รายการ{typeLabel}กระเป๋าสตางค์ <span className="font-mono">#{row.id}</span>
             </h2>
 
@@ -545,7 +545,7 @@ export default async function AdminWalletDetail({
                 </p>
                 {partnerTopupId !== null && (
                   <p>
-                    <span className="font-semibold">📎 สลิปอยู่ที่รายการเติมเงินคู่กัน: </span>
+                    <span className="font-semibold">📎 สลิปอยู่ที่รายการชำระเงินคู่กัน: </span>
                     <Link
                       href={`/admin/wallet/${partnerTopupId}`}
                       className="font-mono font-bold text-sky-700 hover:underline"
@@ -641,7 +641,7 @@ export default async function AdminWalletDetail({
               ) : partnerSlipUrl ? (
                 <div className="space-y-2">
                   <div className="rounded-md border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[11px] text-sky-800">
-                    💡 สลิปนี้มาจากรายการเติมเงินคู่กัน{" "}
+                    💡 สลิปนี้มาจากรายการชำระเงินคู่กัน{" "}
                     <Link
                       href={`/admin/wallet/${partnerTopupId}`}
                       className="font-mono font-bold text-sky-700 hover:underline"
@@ -784,7 +784,7 @@ function BalanceCard({
           href="/admin/wallet/add"
           className="inline-flex items-center gap-1 rounded-full bg-primary-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-600"
         >
-          <Plus className="h-3 w-3" /> เติมเงินเข้ากระเป๋า
+          <Plus className="h-3 w-3" /> ชำระเงิน
         </Link>
       </div>
     </div>

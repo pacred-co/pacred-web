@@ -7,7 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { LegacyDepositForm } from "./legacy-deposit-form";
 
 /**
- * Customer "เติมเงินเข้ากระเป๋า" (wallet deposit) screen — a FAITHFUL 1:1
+ * Customer "ชำระเงิน" (wallet deposit) screen — a FAITHFUL 1:1
  * TRANSCRIPTION of the legacy PCS Cargo `member/wallet.php` `?page=='add'`
  * branch (L3-596 — the default branch the .htaccess sends `wallet/add/`
  * to via `^wallet/(.*)/$ wallet.php?page=$1`) (D1 / ADR-0017 ·

@@ -1035,7 +1035,7 @@ export async function payServiceOrderFromWallet(
   if (!(currentBalance + ROUNDING_TOLERANCE_THB >= walletNeededPrecheck)) {
     return {
       ok: false,
-      error: `wallet_insufficient — มี ฿${currentBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ต้อง ฿${walletNeededPrecheck.toLocaleString("th-TH", { minimumFractionDigits: 2 })} เติมเงินก่อนชำระ`,
+      error: `wallet_insufficient — มี ฿${currentBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ต้อง ฿${walletNeededPrecheck.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ยอดในกระเป๋าไม่พอ`,
     };
   }
 

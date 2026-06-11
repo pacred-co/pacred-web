@@ -270,7 +270,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
 
   const tabDefs: { key: TabKey; label: string }[] = [
     { key: "inactiveCustomers", label: "ลูกค้าที่ยังไม่ได้ใช้งาน" },
-    { key: "topup",             label: "เติมเงิน" },
+    { key: "topup",             label: "ชำระเงิน" },
     // Wave 7.2 (ภูม audit): payShop reads rebuilt `sales_payouts` which is
     // empty on prod (Pacred-only feature · no legacy port yet · Phase C).
     // Badge always 0. Label suffixed so staff don't expect data here.

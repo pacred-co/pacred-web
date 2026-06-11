@@ -29,7 +29,7 @@ import { signOutAction } from "@/actions/auth";
  *   3 ประวัติใบเสร็จรายการนำเข้า  receipt-f-hs/     → /service-import/receipts
  *   4 ฝากชำระ/โอน               payment/          → /service-payment
  *   5 เป๋าตัง                    wallet/           → /wallet/history
- *   6 เติมเงิน                   wallet/add/       → /wallet/deposit
+ *   6 ชำระเงิน                   wallet/add/       → /wallet/deposit
  *   7 ถอนเงิน                    wallet/withdraw/  → /wallet/withdraw
  *   8 ที่อยู่จัดส่งสินค้า          address/          → /addresses
  *   9 ออกจากระบบ                 logout/           → signOutAction()

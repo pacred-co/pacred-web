@@ -994,7 +994,7 @@ export async function adminPayOrdersWithTopUp(
         date:            nowIso,
         amount:          topUpAmount,
         status:          "1",                 // PENDING — awaits admin approval
-        type:            "1",                 // เติมเงิน (deposit)
+        type:            "1",                 // ชำระเงิน (deposit)
         typenew:         "1",
         typeservice:     "1",
         paydeposit:      "1",
@@ -1002,7 +1002,7 @@ export async function adminPayOrdersWithTopUp(
         depositnamebank: PAYUSER_DEPOSIT_NAMEBANK,
         nameuserbank:    "",
         nouserbank:      "",
-        note:            `เติมเงินพร้อมชำระฝากสั่ง (เจ้าหน้าที่ทำรายการแทนลูกค้า)`,
+        note:            `ชำระเงินพร้อมชำระฝากสั่ง (เจ้าหน้าที่ทำรายการแทนลูกค้า)`,
         adminid:         legacyAdminId,
         adminidupdate:   legacyAdminId,
         session:         "admin-pay-onbehalf-topup",
@@ -1020,7 +1020,7 @@ export async function adminPayOrdersWithTopUp(
         await admin.from("tb_wallet").update({ wallettotal: oldBalance }).eq("userid", userId);
       }
       console.error(`[adminPayOrdersWithTopUp insert topup] failed`, { code: topErr?.code, message: topErr?.message, userId });
-      return { ok: false, error: `บันทึกรายการเติมเงินล้มเหลว · คืนยอดกระเป๋าแล้ว: ${topErr?.message ?? "no row"}` };
+      return { ok: false, error: `บันทึกรายการชำระเงินล้มเหลว · คืนยอดกระเป๋าแล้ว: ${topErr?.message ?? "no row"}` };
     }
     const whID = topup.id;
 
@@ -1154,7 +1154,7 @@ export async function adminPayOrdersWithTopUp(
     if (paid.length === 0) {
       return {
         ok: false,
-        error: `เติมเงินบันทึกแล้ว (เติม #${whID}) แต่ไม่มีออเดอร์ที่ทำรายการได้: ${skipped.map((s) => `${s.hno}: ${s.reason}`).join(" · ")}`,
+        error: `ชำระเงินบันทึกแล้ว (เติม #${whID}) แต่ไม่มีออเดอร์ที่ทำรายการได้: ${skipped.map((s) => `${s.hno}: ${s.reason}`).join(" · ")}`,
       };
     }
     return {
@@ -1316,7 +1316,7 @@ export async function adminPayForwardersWithTopUp(
         date:            nowIso,
         amount:          pricePayAll,
         status:          "1",                 // PENDING
-        type:            "1",                 // เติมเงิน
+        type:            "1",                 // ชำระเงิน
         typenew:         "6",                 // legacy L365 typeNew='6'
         typeservice:     "2",                 // legacy L365 typeService='2' (forwarder)
         paydeposit:      "1",
@@ -1324,7 +1324,7 @@ export async function adminPayForwardersWithTopUp(
         depositnamebank: PAYUSER_DEPOSIT_NAMEBANK,
         nameuserbank:    "",
         nouserbank:      "",
-        note:            `เติมเงินพร้อมชำระฝากนำเข้า (เจ้าหน้าที่ทำรายการแทนลูกค้า)`,
+        note:            `ชำระเงินพร้อมชำระฝากนำเข้า (เจ้าหน้าที่ทำรายการแทนลูกค้า)`,
         adminid:         legacyAdminId,
         adminidupdate:   legacyAdminId,
         session:         "admin-pay-onbehalf-topup",
@@ -1342,7 +1342,7 @@ export async function adminPayForwardersWithTopUp(
         await admin.from("tb_forwarder").update({ ftransportprice: 0 }).eq("id", Number(batch.pcsfTransportFixId)).eq("userid", userId);
       }
       console.error(`[adminPayForwardersWithTopUp insert topup] failed`, { code: topErr?.code, message: topErr?.message, userId });
-      return { ok: false, error: `บันทึกรายการเติมเงินล้มเหลว: ${topErr?.message ?? "no row"}` };
+      return { ok: false, error: `บันทึกรายการชำระเงินล้มเหลว: ${topErr?.message ?? "no row"}` };
     }
     const whID = topup.id;
 
@@ -1451,7 +1451,7 @@ export async function adminPayForwardersWithTopUp(
     if (paid.length === 0) {
       return {
         ok: false,
-        error: `เติมเงินบันทึกแล้ว (เติม #${whID}) แต่ไม่มีรายการที่ทำได้: ${skipped.map((s) => `${s.fid}: ${s.reason}`).join(" · ")}`,
+        error: `ชำระเงินบันทึกแล้ว (เติม #${whID}) แต่ไม่มีรายการที่ทำได้: ${skipped.map((s) => `${s.fid}: ${s.reason}`).join(" · ")}`,
       };
     }
     return {

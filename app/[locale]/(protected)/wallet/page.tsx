@@ -28,14 +28,14 @@ import { StyledFileInput } from "@/components/ui/styled-file-input";
  *        > .card > .card-content > .card-body
  *          a. .row > .col-md-6.offset-md-3 > .card-body.border-wallet
  *             — wallet balance card (name · "กระเป๋าสตางค์ (บาท)" ·
- *               tam-counter · logo · progress bar · "เติมเงิน" button)
+ *               tam-counter · logo · progress bar · "ชำระเงิน" button)
  *          b. .row.pt-3 > .col-12 > .card — the 4-tab panel
  *             - ul.nav.nav-tabs.customtab.tab-wallet — 4 tabs:
- *               รายการเดินบัญชี / รายการเติมเงิน /
+ *               รายการเดินบัญชี / รายการชำระเงิน /
  *               รายการชำระเงิน / รายการถอนเงิน
  *             - .tab-content — 4 .tab-pane (history / wallet-hs-add /
  *               wallet-payment / wallet-hs-withdraw)
- *     3. #wallet-add — the "เติมเงินเข้าเป๋าตัง" Bootstrap modal
+ *     3. #wallet-add — the "ชำระเงิน" Bootstrap modal
  *
  * Data — every `wallet.php` mysqli query transcribed 1:1 to the ported
  * legacy `tb_*` schema (Supabase). `tb_*` is RLS-locked to service_role,
@@ -298,7 +298,7 @@ export default async function WalletPage() {
             {/* gold accent bar — legacy progress band (purely decorative) */}
             <div className="mt-4 h-1.5 w-full bg-gradient-to-r from-[#ff7216] to-[#ffb07c]" />
 
-            {/* Wallet TOP-UP ("เติมเงิน") button hidden — owner 2026-06-07:
+            {/* Wallet TOP-UP ("ชำระเงิน") button hidden — owner 2026-06-07:
                 top-up is cancelled. The /wallet/deposit route is kept (still
                 used elsewhere) but the CTA is removed; the wallet only shows
                 balance + history now (cashback used as a discount at checkout).
@@ -397,7 +397,7 @@ export default async function WalletPage() {
                                     </div>
                                     <div id="load_data_message_wallet_hs"></div>
                                   </div>
-                                  {/* Tab 2 — รายการเติมเงิน (type='1,5') */}
+                                  {/* Tab 2 — รายการชำระเงิน (type='1,5') */}
                                   <div
                                     className="tab-pane"
                                     id="wallet-hs-add"

@@ -248,7 +248,7 @@ assertEq("idempotent → already_paid true", alreadyResult.ok && alreadyResult.d
 // Insufficient balance refusal (Thai message, no rows touched).
 const insufficientResult: Result = {
   ok: false,
-  error: "wallet_insufficient — มี ฿100.00 ต้อง ฿5,150.00 เติมเงินก่อนชำระ",
+  error: "wallet_insufficient — มี ฿100.00 ต้อง ฿5,150.00 ยอดในกระเป๋าไม่พอ",
 };
 assertEq("insufficient → ok false",
   insufficientResult.ok === false, true);

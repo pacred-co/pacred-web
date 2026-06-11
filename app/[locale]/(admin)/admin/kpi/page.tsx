@@ -179,7 +179,7 @@ export default async function AdminKpiPage() {
     admin.from("tb_users").select("ID", { count: "exact", head: true }).gte("userRegistered", prevMonthStart).lt("userRegistered", prevMonthEnd),
     admin.from("tb_users").select("ID", { count: "exact", head: true }),
 
-    // Wallet top-up volume — legacy tb_wallet_hs. type='1' (เติมเงิน) +
+    // Wallet top-up volume — legacy tb_wallet_hs. type='1' (ชำระเงิน) +
     // status='2' (สำเร็จ). Date column = `date` (the work date), matches
     // PHP report-wallet.php period filter.
     admin.from("tb_wallet_hs").select("amount").eq("type", "1").eq("status", "2").gte("date", monthStart),
@@ -263,7 +263,7 @@ export default async function AdminKpiPage() {
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · KPI</p>
           <h1 className="mt-1 text-2xl font-bold">KPI ภาพรวมธุรกิจ</h1>
           <p className="mt-1 text-sm text-muted">
-            ตัวเลขสำคัญของบริษัท — รายได้ · ออเดอร์ · ตู้ · ลูกค้าใหม่ · ยอดเติมเงิน · เทียบกับเดือน{prevMonthLabel}
+            ตัวเลขสำคัญของบริษัท — รายได้ · ออเดอร์ · ตู้ · ลูกค้าใหม่ · ยอดชำระเงิน · เทียบกับเดือน{prevMonthLabel}
           </p>
         </div>
         <Link href="/admin" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
@@ -292,7 +292,7 @@ export default async function AdminKpiPage() {
         <BigStat
           tone="success"
           icon={<WalletIcon className="h-5 w-5" />}
-          label="ยอดเติมเงิน · เดือนนี้"
+          label="ยอดชำระเงิน · เดือนนี้"
           value={thb(walletMonth)}
           sub={`ยอด wallet คงค้างรวม ${thb(walletHeld)}`}
           delta={pctDelta(walletMonth, walletPrev)}

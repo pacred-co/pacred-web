@@ -83,7 +83,7 @@ const useridSchema = z.string().trim().min(1).max(20);
 //   ฝากนำเข้า       = COUNT(tb_forwarder)    by userid
 //   ฝากชำระ/โอน     = COUNT(tb_payment)      by userid
 //   wallet balance  = SUM(tb_wallet.wallettotal)
-//   เติมเงิน        = COUNT(tb_wallet_hs WHERE type='1')
+//   ชำระเงิน        = COUNT(tb_wallet_hs WHERE type='1')
 //   ชำระเงิน        = COUNT(tb_wallet_hs WHERE type IN ('2','4','6','7'))
 //   ถอนเงิน         = COUNT(tb_wallet_hs WHERE type='3')
 //   Cash Back       = COUNT(tb_cash_back_hs) by userid

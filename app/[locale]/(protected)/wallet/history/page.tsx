@@ -99,7 +99,7 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
             <div className="h-full w-full rounded-full bg-white/80" />
           </div>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-            {/* Top-up ("เติมเงิน" → /wallet/deposit) CTA hidden — owner
+            {/* Top-up ("ชำระเงิน" → /wallet/deposit) CTA hidden — owner
                 2026-06-07: top-up is cancelled (route kept, button removed).
                 Withdraw stays. */}
             <Link

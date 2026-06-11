@@ -276,7 +276,7 @@ export function PayUserClient() {
             🧾 บันทึกเติม-แล้วจ่ายฝากสั่ง {orderTopUpResult.paid.length} รายการ · เติม {thb(orderTopUpResult.topup_amount)} (รออนุมัติสลิป)
           </p>
           <p className="mt-1 text-blue-800">
-            รายการเติมเงิน #{orderTopUpResult.topupWalletHsId} — ต้องให้ฝ่ายบัญชีอนุมัติสลิปก่อนจึงจะตัดเงินจริง
+            รายการชำระเงิน #{orderTopUpResult.topupWalletHsId} — ต้องให้ฝ่ายบัญชีอนุมัติสลิปก่อนจึงจะตัดเงินจริง
             {orderTopUpResult.wallet_consumed > 0 && ` · ใช้ยอดในกระเป๋าเดิม ${thb(orderTopUpResult.wallet_consumed)}`}
           </p>
           {orderTopUpResult.paid.length > 0 && (
@@ -298,7 +298,7 @@ export function PayUserClient() {
             🧾 บันทึกเติม-แล้วจ่ายฝากนำเข้า {fwdTopUpResult.paid.length} รายการ · เติม {thb(fwdTopUpResult.topup_amount)} (รออนุมัติสลิป)
           </p>
           <p className="mt-1 text-blue-800">
-            รายการเติมเงิน #{fwdTopUpResult.topupWalletHsId} — ต้องให้ฝ่ายบัญชีอนุมัติสลิปก่อนจึงจะตัดเงินจริง
+            รายการชำระเงิน #{fwdTopUpResult.topupWalletHsId} — ต้องให้ฝ่ายบัญชีอนุมัติสลิปก่อนจึงจะตัดเงินจริง
           </p>
           {fwdTopUpResult.paid.length > 0 && (
             <p className="mt-1 text-blue-800">รายการ: {fwdTopUpResult.paid.join(", ")}</p>
@@ -383,7 +383,7 @@ export function PayUserClient() {
               {ordersInsufficient && selOrders.size > 0 && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-3">
                   <p className="text-sm font-medium text-amber-800">
-                    ยอดเงินในกระเป๋าไม่พอ — แนบสลิปการโอนเพื่อเติมเงินแล้วชำระทันที (รออนุมัติสลิป)
+                    ยอดเงินในกระเป๋าไม่พอ — แนบสลิปการโอนเพื่อชำระเงินแล้วชำระทันที (รออนุมัติสลิป)
                   </p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
@@ -420,7 +420,7 @@ export function PayUserClient() {
                       disabled={payingOrders || !orderSlip}
                       className="rounded-lg bg-amber-600 px-6 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
                     >
-                      {payingOrders ? "กำลังบันทึก..." : "เติมเงิน + ชำระ (รออนุมัติสลิป)"}
+                      {payingOrders ? "กำลังบันทึก..." : "ชำระเงิน + ชำระ (รออนุมัติสลิป)"}
                     </button>
                   </div>
                 </div>
@@ -503,7 +503,7 @@ export function PayUserClient() {
                       disabled={payingFwds || !fwdSlip}
                       className="rounded-lg bg-amber-600 px-6 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
                     >
-                      {payingFwds ? "กำลังบันทึก..." : "เติมเงิน + ชำระ (รออนุมัติสลิป)"}
+                      {payingFwds ? "กำลังบันทึก..." : "ชำระเงิน + ชำระ (รออนุมัติสลิป)"}
                     </button>
                   </div>
                 </div>

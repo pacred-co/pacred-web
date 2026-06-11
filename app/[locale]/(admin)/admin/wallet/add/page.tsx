@@ -107,7 +107,7 @@ export default async function AdminWalletAddPage({
         <p className="font-medium mb-1.5">วิธีใช้</p>
         <ol className="list-decimal list-inside space-y-1 text-xs">
           <li>ใช้เมื่อ auto-verify จับสลิปลูกค้าไม่ได้ · หรือต้องการปรับยอดด้วยมือ</li>
-          <li>เลือกประเภท เติมเงิน / ถอนเงิน / ปรับยอด แล้วใส่จำนวนเงินที่ตรงกับสลิป</li>
+          <li>เลือกประเภท ชำระเงิน / ถอนเงิน / ปรับยอด แล้วใส่จำนวนเงินที่ตรงกับสลิป</li>
           <li>
             เมื่อบันทึกสำเร็จ ยอด{" "}
             <code className="rounded bg-white px-1 py-0.5">tb_wallet.wallettotal</code>{" "}

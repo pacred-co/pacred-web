@@ -1,5 +1,5 @@
 /**
- * /admin/reports/pending-payments — รอตรวจสลิปเติมเงิน (Wave 20 P0-4 swap)
+ * /admin/reports/pending-payments — รอตรวจสลิปชำระเงิน (Wave 20 P0-4 swap)
  *
  * **Wave 20 P0-4 (2026-05-26):** previously this page read the rebuilt
  * `forwarders` table filtered to `status='pending_payment'` — EMPTY on
@@ -47,13 +47,13 @@ const PAGE_SIZE = 200;
 // SLA labels — sidebar may route in with ?sla= for "เกิน X วัน" buckets.
 // Underlying query stays the same; surfaces as chip + banner.
 const SLA_CFG: Record<string, string> = {
-  "topup-1d":     "รอตรวจสลิปเติมเงินเกิน 1 วัน",
-  "topup-2d":     "รอตรวจสลิปเติมเงินเกิน 2 วัน",
+  "topup-1d":     "รอตรวจสลิปชำระเงินเกิน 1 วัน",
+  "topup-2d":     "รอตรวจสลิปชำระเงินเกิน 2 วัน",
 };
 
 // type → kind label (matches /admin/wallet/transactions-view.tsx)
 const TYPE_LABEL: Record<string, string> = {
-  "1": "เติมเงิน (ลูกค้า)",
+  "1": "ชำระเงิน (ลูกค้า)",
   "2": "เติม (manual)",
 };
 const TYPE_CLS: Record<string, string> = {
@@ -236,7 +236,7 @@ export default async function PendingPaymentsReport({
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · รีพอร์ตเฉพาะกิจ (V-B1)</p>
           <h1 className="mt-1 text-2xl font-bold">
-            รอตรวจสลิปเติมเงิน{slaLabel ? ` — ${slaLabel}` : ""}
+            รอตรวจสลิปชำระเงิน{slaLabel ? ` — ${slaLabel}` : ""}
           </h1>
           <p className="mt-1 text-sm text-muted">
             อ่านจาก <span className="font-mono">tb_wallet_hs</span> WHERE{" "}

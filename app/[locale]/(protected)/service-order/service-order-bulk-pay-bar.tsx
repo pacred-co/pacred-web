@@ -22,7 +22,7 @@
  *   AGENTS.md §6 mobile-first — bar works at 360px (single-row at desktop,
  *     stacked at mobile · sticky bottom, z-55 to clear the LINE bubble z-51)
  *   Wallet pre-check — when total payable > balance, disable pay button +
- *     show shortfall tooltip ("ยอดเกินกระเป๋า · กรุณาเติมเงินก่อน · ขาด ฿X")
+ *     show shortfall tooltip ("ยอดเกินกระเป๋า · กรุณาชำระเงินก่อน · ขาด ฿X")
  *
  * Pure helpers (lib/service-order/bulk-eligibility.ts) own:
  *   - getCancelableHNos / getPayableHNos (eligibility filters)

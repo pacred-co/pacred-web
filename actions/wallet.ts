@@ -104,7 +104,7 @@ export async function getWallet(): Promise<ActionResult<WalletBalance>> {
 //
 // Mapping (legacy `tb_wallet_hs.type` → rebuilt `kind`/sign · matches the
 // type-categorisation in actions/admin/customer-profile.ts L85-87):
-//   type 1 = เติมเงิน            → kind=deposit        · CREDIT (+)
+//   type 1 = ชำระเงิน            → kind=deposit        · CREDIT (+)
 //   type 2 = ชำระฝากสั่ง         → kind=order_payment   · DEBIT (−)
 //   type 3 = ถอนเงิน            → kind=withdraw        · DEBIT (−)
 //   type 4 = ชำระฝากนำเข้า       → kind=import_payment  · DEBIT (−)
@@ -491,7 +491,7 @@ export async function customerCancelPendingWalletTx(
 //     credit-history tab the legacy wallet-credit.php reads
 //     (load_wallet_hs.php `WHERE wUserCredit=1`).
 //   - In-app notification replaces LINE Notify (admin); customer
-//     also gets a "ส่งคำขอเติมเงิน" feed entry.
+//     also gets a "ส่งคำขอชำระเงิน" feed entry.
 //
 // Returns the freshly-inserted tb_wallet_hs.id so the UI can echo it
 // (legacy alerts a SweetAlert "successDeposit" without showing the

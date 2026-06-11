@@ -192,7 +192,7 @@ const TABS = [
   { key: "forwarder", label: "ฝากนำเข้า" },
   { key: "yuan",      label: "ฝากโอนหยวน" },
   { key: "shop",      label: "ฝากสั่งซื้อ" },
-  { key: "topup",     label: "เติมเงิน" },
+  { key: "topup",     label: "ชำระเงิน" },
   { key: "withdraw",  label: "ถอนเงิน" },
   { key: "refund",    label: "คืนเงิน" },
 ];
@@ -265,7 +265,7 @@ export default async function AdminAccountingPage({
         return q;
       })(),
       (() => {
-        // topup completed: tb_wallet_hs type='1' (เติมเงิน) status='2' (สำเร็จ)
+        // topup completed: tb_wallet_hs type='1' (ชำระเงิน) status='2' (สำเร็จ)
         let q = admin.from("tb_wallet_hs").select("amount").eq("type", "1").eq("status", "2");
         if (dateFrom) q = q.gte("date", dateFrom);
         if (dateTo)   q = q.lte("date", dateTo + "T23:59:59");
@@ -776,7 +776,7 @@ export default async function AdminAccountingPage({
               <SumCard label="ฝากนำเข้า (ส่งแล้ว)" value={sForwarder} tone="green" />
               <SumCard label="ฝากโอนหยวน (สำเร็จ)"  value={sYuan}      tone="green" />
               <SumCard label="ฝากสั่งซื้อ (สำเร็จ)"  value={sShop}      tone="green" />
-              <SumCard label="เติมเงินรวม (สำเร็จ)"  value={sTopup}     tone="blue" />
+              <SumCard label="ชำระเงินรวม (สำเร็จ)"  value={sTopup}     tone="blue" />
               <SumCard label="ถอนเงินรวม (จ่ายแล้ว)" value={sWithdraw}  tone="red" />
               <SumCard label="คืนเงินรวม (สำเร็จ)"    value={sRefund}    tone="red" />
             </div>
@@ -803,7 +803,7 @@ export default async function AdminAccountingPage({
             <div className="rounded-xl border border-border bg-white p-4 space-y-2">
               <p className="font-semibold text-muted uppercase tracking-wide text-[10px]">กระเป๋าเงิน</p>
               {[
-                ["/admin/wallet?kind=deposit&status=pending", "เติมเงินรอตรวจ"],
+                ["/admin/wallet?kind=deposit&status=pending", "ชำระเงินรอตรวจ"],
                 ["/admin/wallet?kind=withdraw&status=pending", "ถอนเงินรอจ่าย"],
               ].map(([href, label]) => (
                 <Link key={href} href={href} className="block text-primary-500 hover:underline">→ {label}</Link>

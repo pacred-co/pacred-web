@@ -127,7 +127,7 @@ export function LegacyDepositForm({ kind }: { kind: Kind }) {
         return;
       }
       // wallet.php L39 — `$sweetalert = 'successDeposit'` (the legacy
-      // SweetAlert reads "เติมเงินสำเร็จ รอเจ้าหน้าที่ตรวจสอบสลิป").
+      // SweetAlert reads "ชำระเงินสำเร็จ รอเจ้าหน้าที่ตรวจสอบสลิป").
       setMsg({
         tone: "ok",
         text: t("depositSuccessMsg", { id: res.data?.id ?? "" }),

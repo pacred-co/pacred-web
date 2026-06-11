@@ -24,7 +24,7 @@ function thb(n: number): string {
 }
 
 const WALLET_KIND_LABEL: Record<string, string> = {
-  deposit:        "เติมเงิน",
+  deposit:        "ชำระเงิน",
   withdraw:       "ถอนเงิน",
   refund:         "คืนเงิน",
   adjustment:     "ปรับยอด",
@@ -150,7 +150,7 @@ export const notify = {
     return {
       category:       "wallet",
       severity:       "info",
-      title:          "ส่งคำขอเติมเงิน",
+      title:          "ส่งคำขอชำระเงิน",
       body:           `จำนวน ${thb(opts.amount)} — รอเจ้าหน้าที่ตรวจสอบสลิป`,
       link_href:      "/wallet/history",
       reference_type: "wallet_transaction",

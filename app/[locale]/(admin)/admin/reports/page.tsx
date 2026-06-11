@@ -292,7 +292,7 @@ const TRANSPORT_LABEL: Record<string, string> = {
 //   5: ADMIN-MANUAL             6: SPEND-OTHER
 //   7: SPEND-OTHER-2
 const WALLET_TYPE_LABEL: Record<string, string> = {
-  "1": "เติมเงิน",
+  "1": "ชำระเงิน",
   "2": "เติม (admin)",
   "3": "ถอนเงิน",
   "4": "ชำระฝากนำเข้า",

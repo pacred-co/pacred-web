@@ -28,7 +28,7 @@ function labelCustomer(c: CustomerLite | null | undefined): string {
 }
 
 const KIND_OPTIONS = [
-  { value: "deposit",    label: "เติมเงิน (ยอด +)" },
+  { value: "deposit",    label: "ชำระเงิน (ยอด +)" },
   { value: "withdraw",   label: "ถอนเงิน (ยอด −)" },
   { value: "adjustment", label: "ปรับยอด (ใส่ +/− เอง)" },
 ] as const;

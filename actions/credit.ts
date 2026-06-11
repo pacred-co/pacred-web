@@ -238,7 +238,7 @@ export async function customerPayCreditFromWallet(
   if (available < amountToPay) {
     return {
       ok: false,
-      error: `wallet_insufficient — มี ฿${available.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ต้องการชำระ ฿${amountToPay.toLocaleString("th-TH", { minimumFractionDigits: 2 })}. ระบุยอดชำระบางส่วน หรือเติมเงินก่อน`,
+      error: `wallet_insufficient — มี ฿${available.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ต้องการชำระ ฿${amountToPay.toLocaleString("th-TH", { minimumFractionDigits: 2 })}. ระบุยอดชำระบางส่วนก่อน`,
     };
   }
 

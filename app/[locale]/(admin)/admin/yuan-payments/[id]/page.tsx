@@ -11,7 +11,7 @@
  *
  * Layout (top → bottom):
  *   1. TOP CARDS (grid md:2) — left: this customer's wallet + cash-back
- *      with "+ เติมเงินเข้ากระเป๋า" CTA → /admin/wallet/add?q=PR####;
+ *      with "+ ชำระเงิน" CTA → /admin/wallet/add?q=PR####;
  *      right: system-wide wallet + cash-back totals + same CTA.
  *      Modeled on /admin/wallet/[id]/page.tsx BalanceCard component.
  *   2. BREADCRUMB — หน้าแรก / ฝากโอนหยวน / #<id>
@@ -476,7 +476,7 @@ function BalanceCard({
           href={topupHref}
           className="inline-flex items-center gap-1 rounded-full bg-primary-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-600"
         >
-          <Plus className="h-3 w-3" /> เติมเงินเข้ากระเป๋า
+          <Plus className="h-3 w-3" /> ชำระเงิน
         </Link>
       </div>
     </div>

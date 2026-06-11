@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
 
 /**
- * Stub for the legacy `wallet/deposit/` sidebar item (รายการเติมเงิน ③).
+ * Stub for the legacy `wallet/deposit/` sidebar item (รายการชำระเงิน ③).
  *
  * D1 Phase-B Wave-A audit fix
  * (docs/research/sidebar-fidelity-audit/02-wallet-withdrawal-pattern.md
- *  §3 row "รายการเติมเงิน ③" + §5.1a): the previous redirect dropped to
+ *  §3 row "รายการชำระเงิน ③" + §5.1a): the previous redirect dropped to
  * the unfiltered /admin/wallet view, breaking the legacy "pending
  * deposits queue" workflow that staff click through the sidebar badge.
  * Preserve the kind+status filter so staff land directly on the pending

@@ -92,7 +92,7 @@ export type WalletBucket = "main" | "cashback" | "credit";
  * the sign of `amount` (which is always stored positive).
  *
  * Legacy `tb_wallet_hs.type` comment (0081 L6220):
- *   1 = รายการเติมเงิน           (deposit / credit)
+ *   1 = รายการชำระเงิน           (deposit / credit)
  *   2 = รายการชำระเงินฝากสั่ง     (shop-order pay · DEBIT)
  *   3 = รายการถอนเงิน            (withdraw · DEBIT)
  *   4 = รายการชำระเงินฝากนำเข้า   (forwarder-import pay · DEBIT)

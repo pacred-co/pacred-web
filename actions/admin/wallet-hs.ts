@@ -25,7 +25,7 @@
  * bulk-approve flow in tb-bulk.ts.
  *
  * Type convention (legacy schema comment 0081 L6220 + L6227 — VERIFIED):
- *   type '1' = เติมเงิน · '3' = ถอนเงิน · '7' = ชำระเงินรอตรวจสอบการเติม
+ *   type '1' = ชำระเงิน · '3' = ถอนเงิน · '7' = ชำระเงินรอตรวจสอบการเติม
  *   typenew '1' = deposit · '2' = refund · '3..7' = various pay
  *
  * P1-25 (ADR-0018 · 2026-05-30) — type='7' fix for the WITHDRAW kind:
@@ -400,7 +400,7 @@ export async function adminCreateWalletHsManual(
   let signedAmount: number;
   let delta: number;
   if (d.kind === "deposit") {
-    if (d.amount <= 0) return { ok: false, error: "เติมเงิน ต้องเป็นจำนวนบวก" };
+    if (d.amount <= 0) return { ok: false, error: "ชำระเงิน ต้องเป็นจำนวนบวก" };
     signedAmount = d.amount;
     delta = d.amount;
   } else if (d.kind === "withdraw") {
@@ -929,11 +929,91 @@ export async function adminApproveWalletDeposit(
         };
       }
 
+      // ──────────────────────────────────────────────
+      // 1c. DIRECT shop-order (ฝากสั่งซื้อ) slip-pay (type='8',
+      //     typeservice='1', reforder=<tb_header_order.hno>). ADR-0028:
+      //     the customer pays the order amount DIRECTLY by bank transfer +
+      //     uploads the slip (no more wallet top-up). delta=0 — NO balance
+      //     moves; approving the slip just marks the order PAID. The BULK path
+      //     (tb-bulk.ts L297-310) already settles these; this is the single-row
+      //     mirror of that exact contract. Before this branch a type='8' slip
+      //     hit the `type!=='1'` guard below → "ยืนยันทำการ" errored and the
+      //     order stayed at "รอชำระเงิน" (the bug the owner reported).
+      //       1. flip the slip status 1→2
+      //       2. mark tb_header_order paid: hstatus '2'→'3' + hdate3 + paydeposit
+      //          (idempotent via the hstatus='2' guard; best-effort + logged —
+      //           a flip failure never blocks the slip approval)
+      //     NO wallet debit (delta=0 · this is a direct payment, not a spend).
+      // ──────────────────────────────────────────────
+      if (rowRaw.type === "8" && rowRaw.typeservice === "1" && rowRaw.reforder) {
+        const userid = rowRaw.userid;
+        const cascadedRows: CascadedRow[] = [];
+
+        // (i) Flip the slip row 1→2.
+        const { error: updHsErr } = await admin
+          .from("tb_wallet_hs")
+          .update({ status: "2", adminid: legacyAdminId, adminidupdate: legacyAdminId })
+          .eq("id", id)
+          .eq("status", "1");
+        if (updHsErr) {
+          console.error(`[tb_wallet_hs mutation] failed`, { code: updHsErr.code, message: updHsErr.message });
+          return { ok: false, error: updHsErr.message };
+        }
+        cascadedRows.push({ table: "tb_wallet_hs", id: String(id), fromStatus: "1", toStatus: "2", note: "direct shop-order slip-pay (type=8)" });
+
+        // (ii) Mark the shop order PAID (hstatus '2'→'3'). Idempotent via the
+        //      hstatus='2' guard; best-effort (money/slip already settled).
+        const { error: shopFlipErr } = await admin
+          .from("tb_header_order")
+          .update({ hstatus: "3", hdate3: nowIso, hdateupdate: nowIso, paydeposit: "1" })
+          .eq("hno", rowRaw.reforder)
+          .eq("userid", userid)
+          .eq("hstatus", "2");
+        if (shopFlipErr) {
+          logger.warn("wallet-hs", "shop-order settle flip failed (non-fatal · slip approved)", {
+            wallet_hs_id: id, userid, hno: rowRaw.reforder, error: shopFlipErr.message,
+          });
+        }
+        cascadedRows.push({
+          table: "tb_header_order",
+          id: String(rowRaw.reforder),
+          fromStatus: "hstatus=2",
+          toStatus: "hstatus=3",
+          note: shopFlipErr ? `settle flip failed: ${shopFlipErr.message}` : "approve · shop-order paid (hStatus 2→3)",
+        });
+
+        await logAdminAction(adminId, "tb_wallet_hs.approve_deposit", "tb_wallet_hs", String(id), {
+          userid,
+          amount: Number(rowRaw.amount ?? 0),
+          directShopOrderSlip: true,
+          hno: rowRaw.reforder,
+          walletDelta: 0,
+          cascade: cascadedRows,
+        });
+
+        revalidatePath(`/admin/wallet/${id}`);
+        revalidatePath("/admin/wallet");
+        revalidatePath("/admin");
+        revalidatePath("/admin/service-orders");
+        bustAdminChrome();
+
+        return {
+          ok: true,
+          data: {
+            ok: true,
+            walletHsId: id,
+            customer: { userid, walletTotalBefore: NaN, walletTotalAfter: NaN },  // delta=0 · wallet untouched
+            cascadedRows,
+            hadPaydepositLinks: false,
+          },
+        };
+      }
+
       // The remaining cascade logic (link-driven topup-and-pay) only handles
       // the deposit (type='1') shape — withdraw approve (type='3') is a separate
       // function (adminApproveWithdraw). Reject anything else explicitly.
       if (rowRaw.type !== "1") {
-        return { ok: false, error: `ฟังก์ชันนี้รองรับรายการเติมเงิน (type='1') หรือสลิปจ่ายค่าฝากนำเข้า (type='4') · พบ type='${rowRaw.type ?? "null"}'` };
+        return { ok: false, error: `ฟังก์ชันนี้รองรับรายการชำระเงิน (type='1'), สลิปฝากนำเข้า (type='4'), สลิปฝากสั่งซื้อ (type='8') · พบ type='${rowRaw.type ?? "null"}'` };
       }
 
       const amount = Number(rowRaw.amount ?? 0);
@@ -1566,7 +1646,7 @@ export async function adminRejectWalletDeposit(
         return { ok: false, error: `รายการนี้สถานะไม่ใช่ 'รอตรวจสอบ' (status=${rowRaw.status ?? "null"})` };
       }
       if (rowRaw.type !== "1") {
-        return { ok: false, error: `ฟังก์ชันนี้รองรับเฉพาะรายการเติมเงิน (type='1') · พบ type='${rowRaw.type ?? "null"}'` };
+        return { ok: false, error: `ฟังก์ชันนี้รองรับเฉพาะรายการชำระเงิน (type='1') · พบ type='${rowRaw.type ?? "null"}'` };
       }
 
       const userid = rowRaw.userid;

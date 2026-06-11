@@ -112,7 +112,7 @@ console.log("\nwallet templates — severity logic + thb()");
   eq("wallet reference_type", p.reference_type, "wallet_transaction");
   eq("wallet reference_id", p.reference_id, "tx-1");
   truthy("wallet body formats THB via thb() helper", p.body.includes(thbExpected(1500)));
-  truthy("wallet title uses kind label เติมเงิน", p.title.includes("เติมเงิน"));
+  truthy("wallet title uses kind label ชำระเงิน", p.title.includes("ชำระเงิน"));
 }
 {
   const p = notify.walletTxStatusChanged({ kind: "withdraw", status: "failed", amount: 200, txId: "tx-2" });

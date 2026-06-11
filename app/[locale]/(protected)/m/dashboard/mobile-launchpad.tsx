@@ -69,7 +69,7 @@ const PRIMARY_SERVICES: readonly LaunchpadItem[] = [
 // ROW 2 — utility / account actions: address, wallet, history.
 // ออกจากระบบ moves to row 3 as a single end-of-session cell (rendered as a
 // <button> after this list because logout is a Server Action, not a link).
-// The "เติมเงิน" (top-up → /wallet/deposit) tile is hidden — owner 2026-06-07:
+// The "ชำระเงิน" (top-up → /wallet/deposit) tile is hidden — owner 2026-06-07:
 // top-up is cancelled. The /wallet/deposit route is kept; only the tile drops.
 const SECONDARY_ACTIONS: readonly LaunchpadItem[] = [
   { icon: `${ICON_BASE}/pcs-address.png`,                labelKey: "tileShipAddress", href: "/service-import/warehouse-addresses" },
@@ -251,7 +251,7 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
           <span className="shrink-0 text-[13px] font-bold text-orange-500/90">{t("baht")}</span>
         </div>
 
-        {/* Top-up ("เติมเงิน") CTA pill hidden — owner 2026-06-07: top-up is
+        {/* Top-up ("ชำระเงิน") CTA pill hidden — owner 2026-06-07: top-up is
             cancelled. The card now just links to /wallet to view balance +
             history (cashback used as a discount at checkout). */}
       </Link>
@@ -267,7 +267,7 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
               tile + 1 logout button). Layout intent (ปอน 2026-05-27):
                 Row 1 (services + roadmap): ฝากสั่งซื้อ · ฝากโอนชำระ · นำเข้า · ส่งออก[COMING SOON]
                 Row 2 (utility actions):    ที่อยู่จัดส่ง · กระเป๋าพักเงิน · ประวัติใบเสร็จ
-                (the "เติมเงิน" top-up tile was removed — owner 2026-06-07, top-up cancelled)
+                (the "ชำระเงิน" top-up tile was removed — owner 2026-06-07, top-up cancelled)
               ส่งออก sits next to นำเข้า — natural import↔export pair — but
               wears the disabled grayscale + COMING SOON badge because the
               export module isn't built yet. Active state on links = subtle

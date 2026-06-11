@@ -60,7 +60,7 @@ export function sumPayableTotals(args: {
  * Whether the wallet has enough balance to cover the selected payable rows.
  * The UI uses this to:
  *   - disable the "ชำระเงิน N รายการ" button when false
- *   - render the tooltip "ยอดเกินกระเป๋า · กรุณาเติมเงินก่อน"
+ *   - render the tooltip "ยอดเกินกระเป๋า · กรุณาชำระเงินก่อน"
  *
  * Returns `{ ok: true }` when affordable, `{ ok: false, shortfall }` otherwise.
  */

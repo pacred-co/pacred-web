@@ -73,7 +73,7 @@ export default async function AdminSettingsPage() {
           <div>
             <h2 className="text-sm font-bold text-primary-700">เรทหยวน CNY → THB (ปรับรายวัน)</h2>
             <p className="text-[11px] text-muted mt-0.5">
-              เรทจริงที่ระบบใช้กับ ฝากโอน / ฝากสั่ง / เติมเงิน — staff ปรับเองได้ มีผลทันที (ไม่ต้อง deploy)
+              เรทจริงที่ระบบใช้กับ ฝากโอน / ฝากสั่ง / ชำระเงิน — staff ปรับเองได้ มีผลทันที (ไม่ต้อง deploy)
             </p>
           </div>
           <Link

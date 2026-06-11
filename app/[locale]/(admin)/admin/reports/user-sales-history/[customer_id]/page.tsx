@@ -137,7 +137,7 @@ const P_STATUS_LABEL: Record<string, string> = {
 };
 
 const W_TYPE_LABEL: Record<string, string> = {
-  "1": "เติมเงิน",
+  "1": "ชำระเงิน",
   "2": "คืนเงิน",
   "3": "ชำระฝากสั่ง",
   "4": "ชำระฝากสั่งเติมเพิ่ม",

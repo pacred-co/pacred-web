@@ -54,7 +54,7 @@ const WALLET_MENUBAR: MenubarItem[] = [
     label: "กรองรายการ",
     children: [
       { label: "ทั้งหมด",    href: "/admin/wallet?view=tx" },
-      { label: "รอเติมเงิน", href: "/admin/wallet?view=tx&kind=topup&status=1" },
+      { label: "รอชำระเงิน", href: "/admin/wallet?view=tx&kind=topup&status=1" },
       { label: "รอถอน",      href: "/admin/wallet/withdrawals" },
       { label: "อนุมัติแล้ว", href: "/admin/wallet?view=tx&status=2" },
     ],

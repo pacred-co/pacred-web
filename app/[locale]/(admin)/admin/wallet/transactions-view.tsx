@@ -38,7 +38,7 @@ const STATUS_CLS: Record<string, string> = {
 // reachability bug). type='7' is "ชำระเงินรอตรวจสอบการเติม" (a top-up sibling),
 // NOT a withdraw — it was mislabeled "ถอนเงิน". Both corrected below.
 const TYPE_LABEL: Record<string, string> = {
-  "1": "เติมเงิน",
+  "1": "ชำระเงิน",
   "2": "เติม (manual)",
   "3": "ถอนเงิน",
   "4": "ชำระจากกระเป๋า",
@@ -54,7 +54,7 @@ const TYPE_CLS: Record<string, string> = {
 
 const KIND_TABS: { key: string | null; label: string; types: string[] | null }[] = [
   { key: null,       label: "ทั้งหมด", types: null },
-  { key: "topup",    label: "เติมเงิน (รอตรวจ + manual)", types: ["1", "2"] },
+  { key: "topup",    label: "ชำระเงิน (รอตรวจ + manual)", types: ["1", "2"] },
   { key: "withdraw", label: "ถอนเงิน", types: ["3"] },
   { key: "orderpay", label: "ชำระจากกระเป๋า", types: ["4"] },
   // ADR-0028 — ฝากสั่งซื้อ QR+slip payments (type='8', pending slip-verify).

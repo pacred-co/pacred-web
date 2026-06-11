@@ -396,7 +396,7 @@ export default async function WalletCreditPage() {
       </div>
 
       {/* ── Deposit / top-up modal REMOVED (owner directive 2026-06) ──
-          Wallet top-up is cancelled platform-wide — no "เติมเงิน" affordance
+          Wallet top-up is cancelled platform-wide — no "ชำระเงิน" affordance
           on the customer surface. Credit is paid by transferring to the
           company bank account (shown in the "ชำระเงินเครดิต" block above) +
           attaching a slip for staff to verify; there is NO dynamic /
