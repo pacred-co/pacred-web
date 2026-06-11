@@ -416,37 +416,92 @@ export async function seedLegacyWalletRows(
 }
 
 /**
- * Look up an existing legacy `tb_users` account by phone — used by the signup
- * guard (actions/auth.ts) to BLOCK a re-registration that would otherwise mint
- * a parallel orphan identity (profiles/corporate disconnected from the real
- * customer). Returns the existing `userID` (member code) or null.
+ * Look up an existing customer account by phone — used by the signup guard
+ * (actions/auth.ts) to BLOCK a re-registration that would otherwise mint a
+ * parallel orphan identity (profiles/corporate disconnected from the real
+ * customer). Returns the existing `member_code` (`PR<n>`) or null.
  *
- * The customer's phone is the stable key: `tb_users.userTel` carries a UNIQUE
- * index. We convert the signup's E.164 phone to the legacy 10-digit form before
- * the lookup. Fail-open on a transient read error (return null = allow signup)
- * so a DB hiccup never blocks a legitimate new customer.
+ * The customer's phone is the stable key. We check BOTH identity stores:
+ *   1. `tb_users.userTel` (legacy 10-digit form · UNIQUE index) — the primary
+ *      mirror for migrated + Pacred-native customers.
+ *   2. `profiles.phone` (E.164 form) — the AUTH store. A customer can exist in
+ *      profiles WITHOUT a tb_users mirror: profiles-only signups before the
+ *      bridge existed, a broken-link migrated row, or a synthetic-email
+ *      identity. Without this second check, re-registering such a customer
+ *      slips past the tb_users guard and mints a duplicate ghost — exactly the
+ *      orphan class this function exists to prevent (2026-06-11 hardening).
+ *
+ * Order: tb_users first (the canonical ops identity); fall back to profiles
+ * only when tb_users has no live match. Fail-open on a transient read error
+ * (return null = allow signup) so a DB hiccup never blocks a legitimate new
+ * customer.
  */
 export async function findLegacyUserIdByPhone(
   admin: SupabaseClient,
   phone: string,
 ): Promise<string | null> {
+  // ── 1. tb_users (legacy 10-digit usertel) ───────────────────────────────
   const legacyTel = e164ToLegacyThaiPhone(phone);
-  if (!legacyTel) return null;
-  const { data, error } = await admin
-    .from("tb_users")
-    .select("userID, userStatus")
-    .eq("userTel", legacyTel)
-    .maybeSingle<{ userID: string; userStatus: string | null }>();
-  if (error) {
-    logger.warn(SCOPE, "phone-existence pre-check failed — allowing signup (fail-open)", {
+  if (legacyTel) {
+    const { data, error } = await admin
+      .from("tb_users")
+      .select("userID, userStatus")
+      .eq("userTel", legacyTel)
+      .maybeSingle<{ userID: string; userStatus: string | null }>();
+    if (error) {
+      logger.warn(SCOPE, "tb_users phone pre-check failed — allowing signup (fail-open)", {
+        phone: redactPhone(phone),
+        reason: error.message,
+      });
+      return null;
+    }
+    // userStatus='0' = legacy soft-deleted account. A deleted legacy account
+    // should NOT block a fresh signup (the customer genuinely starts over).
+    if (data && data.userStatus !== "0") return data.userID;
+  }
+
+  // ── 2. profiles fallback (E.164 phone) ──────────────────────────────────
+  // No live tb_users match → check the AUTH store. This closes
+  // re-register-duplicate for profiles-only / broken-link-migrated /
+  // synthetic-email identities that never got a tb_users mirror.
+  //
+  // profiles.phone is stored E.164 (`+66...` · register actions normalize
+  // before insert) so we match the E.164 `phone` directly, then fall back to a
+  // last-9-digits comparison to tolerate any stored format drift. A
+  // `status='suspended'` profile is the soft-deleted / retired marker
+  // (profiles.status ∈ incomplete|active|suspended) — like userStatus='0', a
+  // suspended account must NOT block a fresh signup, so we exclude it.
+  const last9 = phone.replace(/\D/g, "").slice(-9);
+  if (last9.length < 9) return null;
+  // `like %last9` is a digits-only loose pre-filter (no special chars → safe
+  // in PostgREST); the exact last-9 match is re-asserted in code below. We
+  // deliberately avoid embedding the raw `+66…` E.164 value in an `.or()`
+  // filter string (the `+` / format can trip PostgREST parsing) — the last-9
+  // suffix uniquely identifies a Thai mobile across both stored formats.
+  const { data: profByPhone, error: profErr } = await admin
+    .from("profiles")
+    .select("member_code, phone, status")
+    .like("phone", `%${last9}`)
+    .neq("status", "suspended")
+    .limit(5);
+  if (profErr) {
+    logger.warn(SCOPE, "profiles phone pre-check failed — allowing signup (fail-open)", {
       phone: redactPhone(phone),
-      reason: error.message,
+      reason: profErr.message,
     });
     return null;
   }
-  // userStatus='0' = legacy soft-deleted account. A deleted legacy account
-  // should NOT block a fresh signup (the customer genuinely starts over).
-  if (data && data.userStatus !== "0") return data.userID;
+  if (profByPhone && profByPhone.length > 0) {
+    // Confirm the last-9-digits actually match (the `like %last9` is a loose
+    // pre-filter; the eq is exact). Prefer a row that carries a member_code.
+    const match = profByPhone.find(
+      (p) =>
+        p.member_code &&
+        typeof p.phone === "string" &&
+        p.phone.replace(/\D/g, "").slice(-9) === last9,
+    );
+    if (match?.member_code) return match.member_code;
+  }
   return null;
 }
 
