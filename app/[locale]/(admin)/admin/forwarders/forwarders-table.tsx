@@ -11,6 +11,8 @@ import {
 } from "@/actions/admin/forwarders";
 import { confirm } from "@/components/ui/confirm";
 import { BulkActionsToolbar } from "./bulk-actions-toolbar";
+// 2026-06-11 (Lane B · doc-choice visibility) — per-row tax-document badge.
+import { TaxDocBadge, JuristicWhtChip } from "@/components/admin/tax-doc-badge";
 
 /**
  * Forwarders table — Wave 11 fidelity port to legacy `forwarder.php`
@@ -92,6 +94,11 @@ export type Row = {
   pallet: string | null;     // legacy fpallet · warehouse location chip
   /** #259 Option B — true when admin has manually locked the cabinet number. */
   cabinet_locked: boolean;
+  /** Lane B (2026-06-11) — the customer's tax-document choice
+   * (tb_forwarder.tax_doc_pref · 'tax_invoice'|'customs'|'receipt'|null).
+   * Rendered as <TaxDocBadge> in the "เอกสาร" column so staff see VAT/no-VAT
+   * + which document to issue, per row. */
+  tax_doc_pref: string | null;
   customer: {
     userid: string;
     name: string;
@@ -713,6 +720,9 @@ export function ForwardersTable({
                   <FwSortableTh label="ออกโกดัง"      sortKey="date_status3"      activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
                   <FwSortableTh label="ถึงไทย"        sortKey="date_status4"      activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
                   <FwSortableTh label="สถานะ"         sortKey="status"            activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
+                  {/* 2026-06-11 (Lane B) — เอกสารภาษีที่ลูกค้าเลือก (ใบกำกับ/ใบขน/
+                      ไม่รับฯ) + นิติบุคคล/หัก ณ ที่จ่าย · staff scan VAT/no-VAT per row. */}
+                  <th className="px-2 py-3" title="เอกสารภาษีที่ลูกค้าเลือก (ใบกำกับ / ใบขน / ไม่รับเอกสาร)">เอกสาร</th>
                   <FwSortableTh label="อัปเดต"        sortKey="date_admin_status" activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
                   <th className="px-2 py-3">ตัวเลือก</th>
                 </tr>
@@ -1199,6 +1209,21 @@ export function ForwardersTable({
                           )
                         )}
                       </td>
+                      {/* 2026-06-11 (Lane B) — the customer's doc choice + juristic
+                          WHT signal, per row. A sibling group shares one customer +
+                          (near-always) one choice → show the main row's badge. */}
+                      <td className="px-2 py-2.5">
+                        <div className="flex flex-col items-start gap-1">
+                          <TaxDocBadge pref={r.tax_doc_pref} size="sm" showVat={false} />
+                          {r.customer && (
+                            <JuristicWhtChip
+                              isJuristic={r.customer.is_juristic || r.customer.is_corporate}
+                              totalThb={r.outstanding_thb > 0 ? r.outstanding_thb : r.total_price}
+                              size="sm"
+                            />
+                          )}
+                        </div>
+                      </td>
                       <td className="px-2 py-2.5 whitespace-nowrap">
                         {r.date_admin_status ? (
                           <>
@@ -1250,7 +1275,7 @@ export function ForwardersTable({
                         small text · indented. */}
                     {group && isExpanded && (
                       <tr className="border-t border-border bg-slate-50">
-                        <td colSpan={14} className="px-3 py-2">
+                        <td colSpan={15} className="px-3 py-2">
                           <div className="pl-8">
                             <div className="mb-1.5 text-[10px] font-medium text-slate-600">
                               พัสดุในกลุ่ม <span className="font-mono">{groupBase}</span> ·{" "}

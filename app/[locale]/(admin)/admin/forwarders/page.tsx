@@ -230,6 +230,7 @@ type RawForwarderRow = {
   fdatetothai: string | null;         // ETA base date · transport-type adds offset (±2/±4d)
   fpallet: string | null;             // warehouse pallet location code (e.g. "A-3")
   fcabinet_locked: boolean | null;    // #259 Option B — cabinet manual-lock flag
+  tax_doc_pref: string | null;        // Lane B — ใบกำกับ/ใบขน/ไม่รับเอกสาร (mig 0127)
 };
 
 type RawUserRow = {
@@ -299,6 +300,9 @@ export type Row = {
   /** #259 Option B — true when admin has manually locked the cabinet number.
    * Partner syncs (MOMO/CTT) will not overwrite it while locked. */
   cabinet_locked: boolean;
+  /** Lane B — the customer's tax-document choice (tb_forwarder.tax_doc_pref ·
+   * raw 'tax_invoice'|'customs'|'receipt'|null). Rendered as <TaxDocBadge>. */
+  tax_doc_pref: string | null;
   customer: {
     userid: string;
     name: string;
@@ -855,7 +859,10 @@ export async function fetchForwarderList(
       "printstatus1,printstatus2,printstatus3,printstatus4," +
       "fstatuscaron,fstatuscaroff,fdatetothai,fpallet," +
       // #259 Option B — cabinet lock flag (mig 0150)
-      "fcabinet_locked",
+      "fcabinet_locked," +
+      // 2026-06-11 (Lane B · doc-choice visibility) — the customer's tax-document
+      // choice for the new "เอกสาร" column (idx_tb_forwarder_tax_doc_pref · 0127).
+      "tax_doc_pref",
       // count:exact only on the common path (no post-fetch shrink) so the
       // pager total matches the rendered rows; the search/6.1 views compute
       // total from the JS-filtered length instead.
@@ -1120,6 +1127,7 @@ export async function fetchForwarderList(
       eta_base: eta,
       pallet,
       cabinet_locked: r.fcabinet_locked === true,
+      tax_doc_pref: r.tax_doc_pref,
       customer: user
         ? {
             userid: user.userID,

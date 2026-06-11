@@ -23,6 +23,7 @@ import {
   submitCartOrder,
 } from "@/actions/cart";
 import { confirm, alert } from "@/components/ui/confirm";
+import { ImportPriceEstimate } from "./import-price-estimate";
 
 /**
  * Client-side interactivity for /cart — Tailwind-rebuilt (ปอน 2026-05-26).
@@ -646,6 +647,13 @@ export function CartInteractivity({
 
       {/* ── China→Thailand shipping card (SSR JSX) ── */}
       {shippingCard}
+
+      {/* ── Live ADVISORY transport-price estimate (Workstream A · 2026-06-11) ──
+          Reacts to the รถ/เรือ + ตีลัง radios in <ShippingOptionsCard> above
+          (read via document change-listeners) and the customer's weight/CBM.
+          Reuses getCustomerImportEstimate (the live tb_rate_* engine). Does NOT
+          set the charge — admin prices the order after the warehouse weighs it. */}
+      <ImportPriceEstimate />
 
       {/* ── Promotion + order-summary card — cart.php L652-727 ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
