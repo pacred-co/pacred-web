@@ -40,15 +40,6 @@ export type RegisterResumeState = {
   companyAddress: string;
 };
 type ServiceId = "import" | "export" | "customs" | "order" | "payment";
-type SourceId = "line" | "fb" | "google" | "youtube" | "tiktok" | "ig" | "friend" | "ad";
-/**
- * Legacy `register.php` `<select name="shopUser">` values — the
- * "ซื้อไปใช้เอง" / "ซื้อไปขาย" question. Stored verbatim as the legacy
- * varchar(1) `"1"` / `"2"`; the server action maps "1"→shop_user=false
- * (use-self), "2"→shop_user=true (resell). Per the legacy column
- * comment in 0081_pcs_legacy_schema.sql: `'1=ซื้อไปใข้เอง'`.
- */
-type ShopUserId = "1" | "2";
 
 /* ─────────────────────────── CONSTANTS ─────────────────────────── */
 const ERR: Record<string, string> = {
@@ -107,92 +98,6 @@ const SERVICES: { id: ServiceId; label: string; sub?: string; icon: string }[] =
   { id: "payment", label: "ฝากโอนชำระสินค้า",                 icon: "/images/home/iconfloating/pcs-payment.png" },
 ];
 
-const SOURCES: { id: SourceId; label: string; icon: React.ReactNode }[] = [
-  {
-    id: "line",
-    label: "Line",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
-        <rect width="20" height="20" rx="4.5" fill="#06C755" />
-        <path fill="white" d="M16.2 9.3C16.2 6.1 13 3.5 9.1 3.5S2 6.1 2 9.3c0 2.9 2.6 5.4 6.1 5.8.24.05.56.16.64.37.07.2.05.5 0 .7l-.1.62c-.03.2-.15.77.67.42C10.5 16.8 14.7 14 16 12.2c.14-.22.2-.45.2-.7v-.06z" />
-        <path fill="#06C755" d="M7.8 10.7H6.5V7.8h-.7v-.6h2v.6H7.8zm2.3 0H9.4l-1.2-1.8v1.8h-.7V7.2h.75l1.15 1.75V7.2h.7zm1.7 0h-1.65V7.2h.7v2.9h.95zm2.1-2.3H12.8V8h1.1v.6h-1.1v.5H14v.6h-1.85V7.2H14z" />
-      </svg>
-    ),
-  },
-  {
-    id: "fb",
-    label: "Facebook",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
-        <rect width="20" height="20" rx="4.5" fill="#1877F2" />
-        <path fill="white" d="M11.2 17v-6.1h2l.3-2.4h-2.3V6.9c0-.7.19-1.18 1.2-1.18H13.6V3.2C13.24 3.14 12.38 3 11.38 3 9.3 3 7.9 4.25 7.9 6.6V8.5H6v2.4h1.9V17h3.3z" />
-      </svg>
-    ),
-  },
-  {
-    id: "google",
-    label: "Google",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
-        <rect width="20" height="20" rx="4.5" fill="white" stroke="#e0e0e0" strokeWidth="0.8" />
-        <path fill="#4285F4" d="M17 10.2c0-.48-.04-.94-.11-1.38H10v2.6h3.95c-.17.9-.7 1.66-1.48 2.17v1.8h2.4C16.1 14.05 17 12.27 17 10.2z" />
-        <path fill="#34A853" d="M10 17.5c1.96 0 3.6-.65 4.8-1.75l-2.4-1.8c-.65.44-1.48.7-2.4.7-1.83 0-3.38-1.24-3.93-2.9H3.55v1.84C4.75 15.83 7.2 17.5 10 17.5z" />
-        <path fill="#FBBC04" d="M6.07 12.06a4.2 4.2 0 010-2.62V7.6H3.55A7.47 7.47 0 003 10a7.4 7.4 0 00.55 2.41l2.52-1.85z" />
-        <path fill="#EA4335" d="M10 5.5c1.03 0 1.96.36 2.68 1.05l2.01-2C13.6 3.24 11.96 2.5 10 2.5a7.5 7.5 0 00-6.45 3.6l2.52 1.85C6.62 6.56 8.17 5.5 10 5.5z" />
-      </svg>
-    ),
-  },
-  {
-    id: "youtube",
-    label: "Youtube",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
-        <rect width="20" height="20" rx="4.5" fill="#FF0000" />
-        <path fill="white" d="M15.8 7.1s-.2-1.3-.8-1.84c-.76-.8-1.6-.81-2-.86C11.12 4.3 10 4.3 10 4.3h-.02s-1.12 0-3.14.1c-.36.05-1.2.06-1.97.86C4.28 5.8 4.07 7.1 4.07 7.1S3.87 8.48 3.87 9.87v1.27c0 1.38.2 2.77.2 2.77s.2 1.28.8 1.84c.76.8 1.76.77 2.2.85C8.5 16.83 10 16.8 10 16.8s1.13-.02 3.15-.22c.36-.05 1.2-.06 1.96-.86.6-.56.8-1.84.8-1.84s.2-1.38.2-2.77V9.87c0-1.4-.2-2.77-.2-2.77zm-8.5 5.64V7.3L13.2 10l-5.9 2.74z" />
-      </svg>
-    ),
-  },
-  {
-    id: "tiktok",
-    label: "TikTok",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
-        <rect width="20" height="20" rx="4.5" fill="#010101" />
-        <path fill="#00F2EA" d="M13 3.5v.1c.4 1.05 1.25 1.8 2.25 2.05v1.98c-.9-.08-1.7-.4-2.35-.9v4.57c0 1.97-1.55 3.55-3.47 3.55A3.48 3.48 0 016 11.3a3.48 3.48 0 013.47-3.55c.17 0 .33.02.5.04v2c-.17-.04-.33-.07-.5-.07-.85 0-1.55.7-1.55 1.58 0 .88.7 1.58 1.55 1.58s1.56-.7 1.56-1.58V3.5H13z" />
-        <path fill="#FF004F" d="M12.5 3.5v.1c.4 1.05 1.25 1.8 2.25 2.05v1.98c-.9-.08-1.7-.4-2.35-.9v4.57c0 1.97-1.55 3.55-3.47 3.55A3.48 3.48 0 015.5 11.3a3.48 3.48 0 013.47-3.55c.17 0 .33.02.5.04v2c-.17-.04-.33-.07-.5-.07-.85 0-1.55.7-1.55 1.58 0 .88.7 1.58 1.55 1.58s1.56-.7 1.56-1.58V3.5h2.47z" opacity="0.65" transform="translate(0.5 0)" />
-      </svg>
-    ),
-  },
-  {
-    id: "ig",
-    label: "Instagram",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
-        <defs>
-          <linearGradient id="ig-grad" x1="0%" y1="100%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#F58529" />
-            <stop offset="50%" stopColor="#DD2A7B" />
-            <stop offset="100%" stopColor="#515BD4" />
-          </linearGradient>
-        </defs>
-        <rect width="20" height="20" rx="4.5" fill="url(#ig-grad)" />
-        <rect x="4.5" y="4.5" width="11" height="11" rx="3" fill="none" stroke="white" strokeWidth="1.5" />
-        <circle cx="10" cy="10" r="2.9" fill="none" stroke="white" strokeWidth="1.5" />
-        <circle cx="14.2" cy="5.8" r="1" fill="white" />
-      </svg>
-    ),
-  },
-  {
-    id: "friend",
-    label: "เพื่อนแนะนำ",
-    icon: <span className="text-[18px] leading-none">👥</span>,
-  },
-  {
-    id: "ad",
-    label: "โฆษณา",
-    icon: <span className="text-[18px] leading-none">📢</span>,
-  },
-];
 
 /* ─────────────────────────── INPUT BASE STYLES (matches login/page.tsx) ─────────────────────────── */
 const INPUT_BASE =
@@ -322,10 +227,6 @@ function PersonalForm({ recom }: { recom: string | null }) {
   const [password, setPassword]   = useState("");
   const [showPwd, setShowPwd]     = useState(false);
   const [services, setServices]   = useState<ServiceId[]>([]);
-  const [source, setSource]       = useState<SourceId | null>(null);
-  // Legacy register.php <select name="shopUser"> — "ซื้อไปใช้เอง" / "ซื้อไปขาย".
-  // Required field per legacy; null means the customer has not picked yet.
-  const [shopUser, setShopUser]   = useState<ShopUserId | null>(null);
   const [email, setEmail]         = useState("");
   const [agreed, setAgreed]       = useState(false);
   const [error, setError]         = useState<string | null>(null);
@@ -360,9 +261,7 @@ function PersonalForm({ recom }: { recom: string | null }) {
     const res = await registerPersonal({
       firstName, lastName, phone, password,
       services,
-      howKnow: source ?? null,
       recom,
-      shopUser,
       email: email || "",
       otp,
       agreed,
@@ -388,7 +287,6 @@ function PersonalForm({ recom }: { recom: string | null }) {
 
   function handleRequestOtp(e: React.FormEvent) {
     e.preventDefault();
-    if (!shopUser) { setError("กรุณาเลือกประเภทการซื้อสินค้า"); return; }
     if (!agreed) { setError(ERR.must_agree); return; }
     setError(null);
     startTransition(async () => {
@@ -490,21 +388,11 @@ function PersonalForm({ recom }: { recom: string | null }) {
           placeholder="รหัสผ่าน 6-30 ตัวอักษร" />
       </FieldWrap>
 
-      {/* Services + How-know — side by side to keep the form compact */}
-      <div className="flex gap-3">
-        <FieldWrap label="บริการที่สนใจ">
-          <ServiceChips selected={services} onToggle={toggleService} />
-        </FieldWrap>
-        <FieldWrap label="รู้จักเราจากช่องทางใด">
-          <SourceChips selected={source} onSelect={setSource} />
-        </FieldWrap>
-      </div>
-
-      {/* Shop-user — legacy <select name="shopUser"> on register.php
-          "ซื้อไปใช้เอง / ซื้อไปขาย". Required field per legacy. Feeds
-          sales segmentation (profiles.shop_user boolean). */}
-      <FieldWrap label={<>ซื้อสินค้า <Req /></>}>
-        <ShopUserSelect selected={shopUser} onSelect={setShopUser} />
+      {/* Services only — owner 2026-06-11 removed "รู้จักเราจากช่องทางใด"
+          (how_know) + "ประเภทการซื้อสินค้า" (shop_user) from the signup form
+          to cut signup friction. Both columns nullable in the schema. */}
+      <FieldWrap label="บริการที่สนใจ">
+        <ServiceChips selected={services} onToggle={toggleService} />
       </FieldWrap>
 
       {/* Email (optional) */}
@@ -556,10 +444,6 @@ function JuristicForm({
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd]   = useState(false);
   const [services, setServices] = useState<ServiceId[]>([]);
-  const [source, setSource]     = useState<SourceId | null>(null);
-  // Legacy register.php <select name="shopUser"> — same as PersonalForm.
-  // Required for the new account; null means the customer has not picked yet.
-  const [shopUser, setShopUser] = useState<ShopUserId | null>(null);
 
   /* step 1 OTP phase (B1 — Sunday-night blocker) */
   const [step1Phase, setStep1Phase] = useState<"form" | "otp">("form");
@@ -698,9 +582,7 @@ function JuristicForm({
     const res = await registerJuristicStep1({
       phone, password,
       services,
-      howKnow: source ?? null,
       recom,
-      shopUser,
       otp,
       captchaToken,
     });
@@ -715,7 +597,6 @@ function JuristicForm({
   }
 
   function nextStep1() {
-    if (!shopUser) { setError("กรุณาเลือกประเภทการซื้อสินค้า"); return; }
     setError(null);
     startTransition(async () => {
       const req = await requestOtp(phone, "register");
@@ -869,21 +750,11 @@ function JuristicForm({
               placeholder="รหัสผ่าน 6-30 ตัวอักษร" />
           </FieldWrap>
 
-          <div className="flex gap-3">
-            <FieldWrap
-              label={<>บริการที่สนใจ <span className="ml-1 text-[11px] font-normal text-muted">(หลายอย่าง)</span></>}
-            >
-              <ServiceChips selected={services} onToggle={toggleService} />
-            </FieldWrap>
-            <FieldWrap label="รู้จักเราจากช่องทางใด">
-              <SourceChips selected={source} onSelect={setSource} />
-            </FieldWrap>
-          </div>
-
-          {/* Shop-user — legacy register.php <select name="shopUser">.
-              Required per legacy; feeds sales segmentation. */}
-          <FieldWrap label={<>ซื้อสินค้า <Req /></>}>
-            <ShopUserSelect selected={shopUser} onSelect={setShopUser} />
+          {/* Services only — owner 2026-06-11 removed how_know + shop_user. */}
+          <FieldWrap
+            label={<>บริการที่สนใจ <span className="ml-1 text-[11px] font-normal text-muted">(หลายอย่าง)</span></>}
+          >
+            <ServiceChips selected={services} onToggle={toggleService} />
           </FieldWrap>
 
           {error && <ErrorBox msg={error} />}
@@ -1166,56 +1037,6 @@ function ServiceChips({ selected, onToggle }: { selected: ServiceId[]; onToggle:
           })}
         </div>
       )}
-    </div>
-  );
-}
-
-/* ── SourceChips: single-select native dropdown (one input-row tall) ── */
-function SourceChips({ selected, onSelect }: { selected: SourceId | null; onSelect: (id: SourceId) => void }) {
-  return (
-    <div className="relative">
-      <select
-        value={selected ?? ""}
-        onChange={(e) => onSelect(e.target.value as SourceId)}
-        className={`${INPUT_BASE} appearance-none pr-9 cursor-pointer ${selected ? "text-foreground" : "text-muted"}`}
-      >
-        <option value="" disabled>เลือกช่องทาง</option>
-        {SOURCES.map((s) => (
-          <option key={s.id} value={s.id} className="text-foreground">
-            {s.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-    </div>
-  );
-}
-
-/**
- * ShopUserSelect — legacy `register.php` `<select name="shopUser">`.
- *
- *   Legacy options:
- *     value="1" — ซื้อไปใช้เอง  (use-self · default sales segment)
- *     value="2" — ซื้อไปขาย     (resell · reseller segment)
- *
- * Values stored in `tb_users.shopuser` / `tb_register.shopuser` as a
- * varchar(1) (column comment: `'1=ซื้อไปใข้เอง'`). The server action
- * maps `"1"`→`profiles.shop_user=false`, `"2"`→`true`. Per
- * d1-fidelity-customer.md §3.2.
- */
-function ShopUserSelect({ selected, onSelect }: { selected: ShopUserId | null; onSelect: (id: ShopUserId) => void }) {
-  return (
-    <div className="relative">
-      <select
-        value={selected ?? ""}
-        onChange={(e) => onSelect(e.target.value as ShopUserId)}
-        className={`${INPUT_BASE} appearance-none pr-9 cursor-pointer ${selected ? "text-foreground" : "text-muted"}`}
-      >
-        <option value="" disabled>เลือกประเภทการซื้อสินค้า</option>
-        <option value="1" className="text-foreground">ซื้อไปใช้เอง</option>
-        <option value="2" className="text-foreground">ซื้อไปขาย</option>
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
     </div>
   );
 }

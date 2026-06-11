@@ -57,3 +57,4 @@ scripts/backfill/.progress/
 # customer-code swap backups (PII — never commit)
 *-backup.json
 _backup-deleted-profiles.json
+_backup-dup-profiles.json
