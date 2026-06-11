@@ -17,7 +17,7 @@
 -- gate never triggers for them (no WHT line), so they print freely.
 --
 -- Storage reuses the existing private 'wht-certs' bucket (migration 0044).
--- Idempotent. Next free migration = 0174.
+-- Idempotent. Applied + verified prod 2026-06-11. Next free migration = 0179.
 -- ════════════════════════════════════════════════════════════
 
 alter table public.tb_receipt
