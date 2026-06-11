@@ -47,3 +47,25 @@ GAP 1 (★ auto-fill) shipped 2026-06-12 (commit `dafa481f` · `lib/forwarder/ca
 | **5** | GAP 10 (quick-add forwarder modal doc picker) | the quick-add modal | omits the doc picker → silent default. small. |
 
 **Cadence:** each wave = parallel build agents (worktree isolation) → integrate serially → `pnpm verify` → adversarial review workflow (money-isolation lens mandatory — these are cost/declared/VAT surfaces) → push dave-pacred + main at each gated wave (a save-point). The ★ wave-2 cluster is highest leverage (the audit's "auto-fill first" — profit/declared become real once cost is captured + visible).
+
+---
+
+## ✅ STATUS 2026-06-12 — 9 of 10 gaps SHIPPED (GAP 5 owner-deferred)
+
+All shipped to dave-pacred + main, each `pnpm verify` EXIT 0 + a 2-lens adversarial review = SHIP (money-isolation lens mandatory on every cost/declared/VAT surface):
+
+| Gap | Commit | What shipped |
+|---|---|---|
+| ★ GAP 1 cost/declared auto-fill | `dafa481f` | `lib/forwarder/cargo-cost-autofill.ts` + editor seeds (stored-wins · "ออโต้" chip · persist-on-Save) |
+| GAP 2 shop doc badge | `f420a299` | `<TaxDocBadge>`+`<JuristicWhtChip>` on the shop-order detail header |
+| GAP 9 forwarder profit panel | `f420a299` | `<ForwarderProfitPanel>` surfacing the dead-read `fcosttotalprice` (ขาย/ต้นทุน/กำไร) · GAP 9-shop already present |
+| GAP 8 marginVat | `f420a299` | wired the dead `computeMarginVat` into the profit panel |
+| GAP 3 yuan doc-choice | `a717110c` | `<CartTaxDocPref>` on `/service-payment/add` + `mapTaxDocColumns` → `tb_payment.tax_doc_*` (both slip + wallet) |
+| GAP 4 cost-save→handoff | `e647aeaa` | `markCargoPricingStarted` bumps `pricing_status ''→in_progress` on cost-save |
+| GAP 7 auto-enroll | `e647aeaa` | same — ensures the `tb_cargo_taxdoc_job` row (no more manual "เปิดงาน") |
+| GAP 10 quick-add doc picker | `35c40620` | เอกสารภาษี `<select>` on the admin quick-add forwarder → `tb_forwarder.tax_doc_pref` |
+| GAP 6 cargo ใบขนรวม PDF | `b14b5b70` | cargo branch on `/api/customs-declaration/[id]` (resolves from `tb_forwarder`+customer) + download button |
+
+**🟠 GAP 5 (CS HS-first) — DEFERRED, needs an owner decision** on the CS entry point: where/how does CS enter the HS code BEFORE Pricing costs (the ground-truth flow: CS asks the China warehouse → enters HS → Pricing costs)? Today HS lives only in the Pricing-gated cost editor. Once the owner picks the CS surface (a CS-gated HS field on the forwarder/shop detail, or a dedicated CS queue), it's a small build.
+
+**⚠️ Verify-state:** GAP 1/2/3/4/6/7/8/9/10 are all behind admin auth (cost editor / detail pages / quick-add / cargo PDF) — gated + unit-tested + tsc/lint-clean + adversarially-reviewed-SHIP, but NOT authed-click-tested (no test admin login · standing §0c blocker). The cargo PDF render in particular can't be browser-verified until a test login + a real cargo declaration exist.
