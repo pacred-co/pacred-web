@@ -36,8 +36,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Coins } from "lucide-react";
-import { setForwarderItemCost, setShopOrderItemCost } from "@/actions/admin/cargo-cost";
+import { Pencil, Coins, Receipt } from "lucide-react";
+import {
+  setForwarderItemCost,
+  setShopOrderItemCost,
+  setForwarderImportDuty,
+} from "@/actions/admin/cargo-cost";
+import { computeImportDutyVat, dutyThbFromPct } from "@/lib/forwarder/import-duty-vat";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 
 type ActionResult = { ok: true; data?: unknown } | { ok: false; error?: string };
@@ -360,6 +365,172 @@ export function CargoCostLineSummary({
         <SummaryRow label="มูลค่าสำแดง ใบขน (฿)" value={fmtNum(declaredValueThb)} />
         <SummaryRow label="HS Code" value={hsCode?.trim() || "—"} mono />
       </dl>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────
+// Forwarder HEADER · อากรขาเข้า (import duty) + VAT-inclusive roll-up
+// D-G2 (mig 0178). The xlsx SELL-block the owner reconciled in Excel, now
+// in-app: ราคาขายสุทธิ (+อากร) → รวมราคาก่อน Vat → +VAT 7% → ราคารวม Vat
+// (lib/forwarder/import-duty-vat.ts). ⚠️ COST-SHEET ONLY — writes import_duty_*
+// via setForwarderImportDuty; does NOT change the customer's binding charge.
+// ──────────────────────────────────────────────────────────────
+export function ForwarderImportDutyEditor({
+  id,
+  sellNet,
+  importDutyPct,
+  importDutyThb,
+  vatRatePct = 7,
+}: {
+  id: number;
+  /** ราคาขายสุทธิ — the forwarder NET selling total (base for the roll-up). */
+  sellNet: number;
+  importDutyPct: number | string | null;
+  importDutyThb: number | string | null;
+  vatRatePct?: number;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [editing, setEditing] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const { confirm, dialogs } = useConfirmDialogs();
+
+  const [pct, setPct] = useState<string>(
+    importDutyPct != null && Number(importDutyPct) !== 0 ? String(importDutyPct) : "",
+  );
+  const [thb, setThb] = useState<string>(
+    importDutyThb != null && Number(importDutyThb) !== 0 ? String(importDutyThb) : "",
+  );
+
+  // Live roll-up: draft baht while editing, else the saved value.
+  const dutyThbNum = editing ? parseFloat(thb) || 0 : Number(importDutyThb ?? 0);
+  const roll = computeImportDutyVat({ sellNet, importDutyThb: dutyThbNum, vatRatePct });
+
+  function resetDraft() {
+    setPct(importDutyPct != null && Number(importDutyPct) !== 0 ? String(importDutyPct) : "");
+    setThb(importDutyThb != null && Number(importDutyThb) !== 0 ? String(importDutyThb) : "");
+  }
+
+  // Typing a % seeds the baht from %×sell-net (mirrors the xlsx อากร(%)→อากร(บาท)
+  // columns). Baht stays editable + authoritative — staff confirms/overrides.
+  function onPctChange(v: string) {
+    setPct(v);
+    const p = parseFloat(v);
+    if (Number.isFinite(p) && p > 0) setThb(String(dutyThbFromPct(sellNet, p)));
+  }
+
+  async function onSave() {
+    setErr(null);
+    const ok = await confirm(
+      "บันทึกอากรขาเข้าของรายการนี้?\n" +
+        "⚠️ ข้อมูลภายใน (cost-sheet/ใบกำกับ) เท่านั้น — ไม่กระทบราคาที่ลูกค้าจ่าย · ไม่เปลี่ยนสถานะ · ไม่แจ้งเตือน",
+    );
+    if (!ok) return;
+    startTransition(async () => {
+      const res = await setForwarderImportDuty({
+        id: String(id),
+        importDutyPct: pct,
+        importDutyThb: thb,
+      });
+      if (res.ok) {
+        setEditing(false);
+        router.refresh();
+      } else {
+        setErr(res.error ?? "บันทึกไม่สำเร็จ");
+      }
+    });
+  }
+
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50/40 dark:bg-amber-950/10 p-2.5">
+      {dialogs}
+      <div className="flex items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800">
+          <Receipt className="h-3.5 w-3.5" /> อากรขาเข้า + ราคารวม VAT (ใบกำกับ)
+        </span>
+        {!editing && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="inline-flex items-center gap-0.5 text-[11px] text-amber-700 hover:underline"
+          >
+            <Pencil className="h-3 w-3" /> แก้ไข
+          </button>
+        )}
+      </div>
+
+      {err && (
+        <div className="mt-1.5 rounded border border-red-200 bg-red-50 p-1.5 text-[11px] text-red-700">⚠ {err}</div>
+      )}
+
+      {editing && (
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <label className="space-y-0.5">
+            <span className="block text-[10px] text-muted">อากรขาเข้า (%)</span>
+            <input
+              type="number"
+              min={0}
+              step="0.0001"
+              inputMode="decimal"
+              value={pct}
+              onChange={(e) => onPctChange(e.target.value)}
+              placeholder="0"
+              className={inputCls}
+            />
+          </label>
+          <label className="space-y-0.5">
+            <span className="block text-[10px] text-muted">อากรขาเข้า (บาท)</span>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              inputMode="decimal"
+              value={thb}
+              onChange={(e) => setThb(e.target.value)}
+              placeholder="0.00"
+              className={inputCls}
+            />
+          </label>
+        </div>
+      )}
+
+      {/* The roll-up — the figure the owner used Excel for (always visible) */}
+      <dl className="mt-2 space-y-0.5 rounded-md bg-white/60 dark:bg-surface/40 px-2.5 py-1.5 text-[11px]">
+        <SummaryRow label="ราคาขายสุทธิ (฿)" value={fmtNum(roll.sellNet)} />
+        <SummaryRow label="อากรขาเข้า (฿)" value={fmtNum(roll.importDutyThb)} />
+        <SummaryRow label="รวมราคาก่อน VAT (฿)" value={fmtNum(roll.preVatTotal)} />
+        <SummaryRow label={`VAT ${roll.vatRatePct}% (฿)`} value={fmtNum(roll.vatAmount)} />
+        <div className="flex items-baseline justify-between gap-2 border-t border-amber-200 pt-0.5 font-bold text-amber-900">
+          <dt>ราคารวม VAT (฿)</dt>
+          <dd className="tabular-nums">{fmtNum(roll.vatInclusiveTotal)}</dd>
+        </div>
+      </dl>
+
+      {editing && (
+        <div className="mt-2">
+          <p className="mb-1.5 text-[10px] text-amber-800/80">
+            ภายในเท่านั้น — ฐานอากรอ้างอิงนโยบาย/HS (กรอกเอง · ไม่กระทบราคาที่ลูกค้าจ่าย) · เว้นว่าง = 0
+          </p>
+          <div className="flex gap-2">
+            <button type="button" disabled={pending} className={btnSave} onClick={onSave}>
+              {pending ? "กำลังบันทึก…" : "บันทึกอากร"}
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              className={btnCancel}
+              onClick={() => {
+                resetDraft();
+                setErr(null);
+                setEditing(false);
+              }}
+            >
+              ยกเลิก
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

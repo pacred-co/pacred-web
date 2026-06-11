@@ -25,6 +25,7 @@ import {
   ForwarderItemCostEditor,
   ShopOrderItemCostEditor,
   CargoCostLineSummary,
+  ForwarderImportDutyEditor,
 } from "@/components/admin/cargo-cost-line-editor";
 
 type FwdCostItem = {
@@ -125,6 +126,35 @@ export async function ForwarderCostSection({
     );
   }
 
+  // D-G2 (mig 0178) · forwarder header for the อากร/VAT roll-up: the saved duty +
+  // the SELL net (7 sell buckets − discount, the xlsx "ราคาขายสุทธิ" base · pre-WHT).
+  let importDutyPct: number | string | null = null;
+  let importDutyThb: number | string | null = null;
+  let sellNet = 0;
+  {
+    const { data: hdr, error } = await admin
+      .from("tb_forwarder")
+      .select(
+        "import_duty_pct, import_duty_thb, ftotalprice, ftransportprice, fpriceupdate, " +
+          "fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount",
+      )
+      .eq("id", fId)
+      .maybeSingle();
+    if (error) {
+      console.error(`[ForwarderCostSection tb_forwarder header]`, { code: error.code, message: error.message, fid: fId });
+    } else if (hdr) {
+      importDutyPct = (hdr.import_duty_pct as number | string | null) ?? null;
+      importDutyThb = (hdr.import_duty_thb as number | string | null) ?? null;
+      const n = (v: unknown) => { const x = Number(v ?? 0); return Number.isFinite(x) ? x : 0; };
+      sellNet = Math.max(
+        0,
+        n(hdr.ftotalprice) + n(hdr.ftransportprice) + n(hdr.fpriceupdate) +
+          n(hdr.fshippingservice) + n(hdr.pricecrate) + n(hdr.ftransportpricechnthb) +
+          n(hdr.priceother) - n(hdr.fdiscount),
+      );
+    }
+  }
+
   return (
     <section className="rounded-2xl border-2 border-emerald-300 bg-emerald-50/20 dark:bg-emerald-950/10 shadow-sm overflow-hidden">
       <header className="bg-emerald-600 text-white px-4 py-2.5 flex items-center gap-2 flex-wrap">
@@ -143,6 +173,16 @@ export async function ForwarderCostSection({
           ข้อมูล <b>ภายในบริษัท</b> สำหรับ PEAK (ต้นทุน) + ใบขน (มูลค่าสำแดง) — 1 ใน 3 ตัวเลขของโมเดล
           ใบกำกับภาษี (ขาย · ต้นทุน · สำแดง). <b>ไม่กระทบราคาขายลูกค้า · ไม่เปลี่ยนสถานะ · ไม่แจ้งเตือนลูกค้า.</b>
         </p>
+
+        {/* D-G2 · อากรขาเข้า + ราคารวม VAT (the xlsx SELL-block, per shipment) */}
+        {canEdit && (
+          <ForwarderImportDutyEditor
+            id={fId}
+            sellNet={sellNet}
+            importDutyPct={importDutyPct}
+            importDutyThb={importDutyThb}
+          />
+        )}
 
         {lineCount === 0 && (
           <p className="rounded-lg border border-dashed border-border bg-surface-alt/30 px-3 py-6 text-center text-[11px] text-muted">

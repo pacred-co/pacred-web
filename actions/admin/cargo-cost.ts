@@ -92,6 +92,57 @@ export async function setForwarderItemCost(
 }
 
 // ────────────────────────────────────────────────────────────
+// Import-forwarder HEADER · อากรขาเข้า (import duty) — D-G2 (mig 0178).
+// The xlsx SELL-block roll-up the owner did in Excel: ราคาขายสุทธิ (+อากร) →
+// รวมราคาก่อน Vat → +VAT 7% → ราคารวม Vat (computed by
+// lib/forwarder/import-duty-vat.ts). Captured PER-SHIPMENT on tb_forwarder.
+// ⚠️ COST-SHEET ONLY (same isolation as the per-line editor above): writes ONLY
+// import_duty_pct/import_duty_thb · does NOT change fTotalPrice / the customer's
+// binding charge / pay-on-arrival total / status / notify. The duty BASE is
+// HS/policy-sensitive (ADR-0016) → staff-entered, never auto-guessed.
+// ────────────────────────────────────────────────────────────
+const forwarderImportDutySchema = z.object({
+  id:            z.coerce.number().int().positive(),  // tb_forwarder.id
+  importDutyPct: optNum,                              // อากรขาเข้า (%) — informational
+  importDutyThb: optNum,                              // อากรขาเข้า (บาท) — authoritative
+});
+
+export async function setForwarderImportDuty(
+  raw: Record<string, FormDataEntryValue | undefined>,
+): Promise<AdminActionResult> {
+  const parsed = forwarderImportDutySchema.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  return withAdmin([...ROLES_COST], async ({ adminId }) => {
+    const admin = createAdminClient();
+    // cols are NOT NULL DEFAULT 0 (mig 0178) → clearing maps to 0, not null.
+    const { error } = await admin
+      .from("tb_forwarder")
+      .update({
+        import_duty_pct: d.importDutyPct ?? 0,
+        import_duty_thb: d.importDutyThb ?? 0,
+      })
+      .eq("id", d.id);
+    if (error) {
+      console.error(`[cargo-cost setForwarderImportDuty] failed`, {
+        code: error.code, message: error.message, id: d.id,
+      });
+      return { ok: false, error: `บันทึกอากรขาเข้าไม่สำเร็จ: ${error.message}` };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder.set_import_duty", "tb_forwarder", String(d.id), {
+      import_duty_pct: d.importDutyPct, import_duty_thb: d.importDutyThb,
+    });
+
+    revalidatePath("/admin/forwarders");
+    return { ok: true };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
 // Shop-order line (tb_order · COST in CNY ¥) — gap #1: tb_order had only
 // `cprice` (SELLING); this captures what we paid the supplier (COST).
 // ────────────────────────────────────────────────────────────
