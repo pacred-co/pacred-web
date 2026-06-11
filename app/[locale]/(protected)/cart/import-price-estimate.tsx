@@ -141,7 +141,6 @@ export function ImportPriceEstimate() {
 
   // The mode that matches the customer's chosen transport radio (รถ/เรือ).
   const selected = modes?.find((m) => m.transport === transport) ?? null;
-  const SelectedIcon = MODE_ICON[transport] ?? Ship;
   const hasDims = weightKg > 0 || cbm > 0;
 
   const inputCls =
@@ -149,19 +148,25 @@ export function ImportPriceEstimate() {
   const labelCls = "mb-1 block text-xs font-semibold text-muted";
 
   return (
-    <div className="rounded-2xl border border-primary-100 bg-gradient-to-br from-rose-50/50 via-white to-white shadow-sm p-4 md:p-5">
-      <h3 className="flex items-center gap-2 text-[15px] md:text-[16px] font-bold text-foreground mb-1">
-        <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-primary-50 text-primary-600">
-          <Calculator className="w-4 h-4" strokeWidth={2.2} />
+    <div className="rounded-2xl border-2 border-primary-200 bg-gradient-to-br from-rose-50 via-white to-white shadow-md p-4 md:p-5">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="flex items-center gap-2 text-[15px] md:text-[17px] font-bold text-foreground">
+          <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-primary-600 text-white">
+            <Calculator className="w-4 h-4" strokeWidth={2.2} />
+          </span>
+          ค่าขนส่งจีน → ไทย (ประมาณการ)
+        </h3>
+        {/* Clarify the money model (owner-confirmed: keep legacy — goods now, freight on arrival) */}
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800">
+          💡 จ่ายตอนของถึงโกดังไทย
         </span>
-        ราคาขนส่งจีน → ไทย (ประมาณการ)
-      </h3>
+      </div>
       <p className="mb-3 flex items-start gap-1.5 text-[11.5px] leading-relaxed text-muted">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary-500" />
         <span>
-          กรอกน้ำหนัก/ปริมาตรเพื่อดูค่าขนส่งโดยประมาณตามโหมดที่เลือกด้านบน
-          (<b>ทางรถ/ทางเรือ</b> · <b>ตีลังไม้</b>). <b>ราคาจริงคิดหลังโกดังชั่งน้ำหนัก/วัดขนาดสินค้า</b> —
-          ตัวเลขนี้เป็นเพียงการประมาณการเพื่อช่วยวางแผน
+          ค่าขนส่งนี้ <b className="text-foreground">แยกจากค่าสินค้าในตะกร้า</b> — เลือก <b>ทางรถ/ทางเรือ</b> + <b>ตีลังไม้</b> ด้านบน
+          แล้วราคาจะเปลี่ยนตาม. <b>ราคาจริงคิดหลังโกดังชั่งน้ำหนัก/วัดขนาดจริง</b> และเรียกเก็บตอนของถึงโกดังไทย —
+          ตัวเลขนี้ช่วยให้ประเมินก่อนตัดสินใจ
         </span>
       </p>
 
@@ -207,73 +212,74 @@ export function ImportPriceEstimate() {
           </div>
         </div>
 
-        {/* ── Result (the price for the SELECTED transport mode) ── */}
+        {/* ── Result: prominent ทางรถ ↔ ทางเรือ comparison (both visible so the
+            toggle effect is obvious — the mode matching the cart radio is ring-lit) ── */}
         <div className="rounded-xl border border-border bg-white p-3.5">
           {!hasDims ? (
-            <div className="flex h-full min-h-[120px] items-center justify-center rounded-lg border border-dashed border-border bg-surface/40 px-4 py-6 text-center text-sm text-muted">
+            <div className="flex h-full min-h-[140px] items-center justify-center rounded-lg border border-dashed border-border bg-surface/40 px-4 py-6 text-center text-sm text-muted">
               กรอกน้ำหนัก (กก.) หรือ ปริมาตร (คิว) เพื่อดูราคาประเมิน
             </div>
           ) : error ? (
-            <div className="flex h-full min-h-[120px] items-center rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <div className="flex h-full min-h-[140px] items-center rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               {error}
             </div>
           ) : (
-            <div className={`space-y-2 transition-opacity ${pending ? "opacity-50" : ""}`}>
-              {/* The selected mode — big number */}
-              <div className="flex items-center gap-3 rounded-xl border border-primary-200 bg-primary-50/40 px-3 py-3">
-                <span className="inline-flex h-11 w-11 items-center justify-center rounded-lg bg-primary-100 text-primary-600">
-                  <SelectedIcon className="h-5 w-5" strokeWidth={2} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-bold text-foreground">
-                    {transport === "1" ? "ทางรถ (EK)" : "ทางเรือ (SEA)"}
-                    <span className="ml-1.5 text-[11px] font-normal text-muted">โหมดที่เลือก</span>
-                  </div>
-                  {selected && selected.hasRate ? (
-                    <div className="text-[11.5px] text-muted">
-                      คิดตาม{selected.basisUsed === "kg" ? "น้ำหนัก" : "ปริมาตร"} ·{" "}
-                      {fmt(selected.unitRate)} ฿/{selected.basisUsed === "kg" ? "กก." : "คิว"} ×{" "}
-                      {fmt(selected.billableValue)}{selected.basisUsed === "kg" ? " กก." : " คิว"}
-                      {selected.crateThb > 0 ? ` + ตีลัง ${fmt(selected.crateThb)} ฿` : ""}
-                    </div>
-                  ) : (
-                    <div className="text-[11.5px] text-amber-700">ยังไม่มีเรตสำหรับเส้นทางนี้ — ติดต่อทีมงานเพื่อขอราคา</div>
-                  )}
-                </div>
-                {selected && selected.hasRate && (
-                  <div className="text-right">
-                    <div className="text-lg font-black text-primary-600">฿{fmt(selected.grandTotal)}</div>
-                    <div className="text-[10px] text-muted">ประมาณการ</div>
-                  </div>
-                )}
-              </div>
-
-              {/* The other modes — compact compare row so the toggle effect is visible */}
-              <div className="grid grid-cols-1 gap-1.5">
+            <div className={`space-y-2.5 transition-opacity ${pending ? "opacity-50" : ""}`}>
+              {/* 2-up: ทางรถ + ทางเรือ side by side; the one matching the cart's
+                  hTransportType radio is highlighted ("เลือกอยู่"). */}
+              <div className="grid grid-cols-2 gap-2">
                 {(modes ?? [])
-                  .filter((m) => m.transport !== transport)
+                  .filter((m) => !m.comingSoon)
                   .map((m) => {
                     const Icon = MODE_ICON[m.transport] ?? Truck;
+                    const isSel = m.transport === transport;
                     return (
                       <div
                         key={m.transport}
-                        className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs ${
-                          m.comingSoon ? "border-border bg-surface/30 opacity-60" : "border-border bg-white"
+                        className={`rounded-xl border p-3 text-center transition-all ${
+                          isSel
+                            ? "border-primary-400 bg-primary-50 ring-2 ring-primary-200"
+                            : "border-border bg-surface/30"
                         }`}
                       >
-                        <Icon className="h-3.5 w-3.5 text-muted" strokeWidth={2} />
-                        <span className="flex-1 font-medium text-foreground">{m.label}</span>
-                        {m.comingSoon ? (
-                          <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-[10px] font-bold text-neutral-600">เร็วๆ นี้</span>
-                        ) : m.hasRate ? (
-                          <span className="font-bold text-foreground">฿{fmt(m.grandTotal)}</span>
+                        <div className="mb-1 flex items-center justify-center gap-1.5">
+                          <Icon className={`h-4 w-4 ${isSel ? "text-primary-600" : "text-muted"}`} strokeWidth={2.2} />
+                          <span className={`text-[13px] font-bold ${isSel ? "text-primary-700" : "text-foreground"}`}>{m.label}</span>
+                        </div>
+                        {m.hasRate ? (
+                          <div className={`text-xl font-black leading-tight ${isSel ? "text-primary-600" : "text-foreground"}`}>
+                            ฿{fmt(m.grandTotal)}
+                          </div>
                         ) : (
-                          <span className="text-[10px] text-amber-700">ไม่มีเรต</span>
+                          <div className="py-1 text-[11px] font-medium leading-tight text-amber-700">ยังไม่มีเรต<br />ติดต่อทีมงาน</div>
+                        )}
+                        {isSel && (
+                          <span className="mt-1.5 inline-block rounded-full bg-primary-600 px-2 py-0.5 text-[10px] font-bold text-white">เลือกอยู่</span>
                         )}
                       </div>
                     );
                   })}
               </div>
+
+              {/* Basis explainer for the selected mode (how the number was derived) */}
+              {selected && selected.hasRate && (
+                <div className="rounded-lg bg-surface/50 px-3 py-2 text-[11.5px] leading-relaxed text-muted">
+                  <b className="text-foreground">{selected.transport === "1" ? "ทางรถ (EK)" : "ทางเรือ (SEA)"}</b> คิดตาม
+                  {selected.basisUsed === "kg" ? "น้ำหนัก" : "ปริมาตร"} · {fmt(selected.unitRate)} ฿/
+                  {selected.basisUsed === "kg" ? "กก." : "คิว"} × {fmt(selected.billableValue)}
+                  {selected.basisUsed === "kg" ? " กก." : " คิว"}
+                  {selected.crateThb > 0 ? ` + ตีลัง ${fmt(selected.crateThb)} ฿` : ""}
+                  {" = "}<b className="text-primary-600">฿{fmt(selected.grandTotal)}</b>
+                </div>
+              )}
+
+              {/* ทางอากาศ — coming soon */}
+              {(modes ?? []).some((m) => m.comingSoon) && (
+                <div className="flex items-center justify-center gap-1.5 text-[11px] text-muted">
+                  <Plane className="h-3.5 w-3.5" strokeWidth={2} />
+                  ทางอากาศ — เปิดเร็วๆ นี้
+                </div>
+              )}
             </div>
           )}
         </div>
