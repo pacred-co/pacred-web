@@ -103,15 +103,17 @@ export function FloatingTabs({
   // pass an isAdmin prop without de-static-ing the marketing site.
   const [isAdmin, setIsAdmin] = useState(false);
   useEffect(() => {
+    let cancelled = false;
     if (!user) {
       lastKnownAdminUserId = null;
-      setIsAdmin(false);
-      return;
+      // queueMicrotask — defer the setState out of the synchronous effect body
+      // (react-hooks/set-state-in-effect · same pattern as the doc-kit fix).
+      queueMicrotask(() => { if (!cancelled) setIsAdmin(false); });
+      return () => { cancelled = true; };
     }
     // Optimistic seed: trust the memo ONLY when it was confirmed for THIS exact
     // user id — so a different (non-admin) identity never inherits a stale true.
-    setIsAdmin(lastKnownAdminUserId === user.id);
-    let cancelled = false;
+    queueMicrotask(() => { if (!cancelled) setIsAdmin(lastKnownAdminUserId === user.id); });
     const supabase = createClient();
     supabase
       .from("admins")
