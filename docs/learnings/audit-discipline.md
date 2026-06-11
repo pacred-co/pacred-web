@@ -103,3 +103,17 @@ The 2026-05-25 audit used 4 agents (legacy×2 split by domain + pacred×2 split)
 - [`docs/audit/cargo-flow-deep-audit-2026-05-25.md`](../audit/cargo-flow-deep-audit-2026-05-25.md) — the audit produced by the protocol
 - [`docs/learnings/pacred-design-philosophy.md`](pacred-design-philosophy.md) — sibling rule: legacy = workflow truth, our UI = our design
 - [`.claude/skills/legacy-fidelity-check/SKILL.md`](../../.claude/skills/legacy-fidelity-check/SKILL.md) — the executable form of these rules
+
+## [2026-06-11] Gap-map agents grep the feature NAME → find the orphan twin, miss the live `*-legacy` path
+
+**Context:** The cargo-pricing/accounting epic (`docs/research/cargo-acct-epic-2026-06-11/`) spawned 4 parallel audit agents. The **Workstream C** agent declared the entire order-time address→carrier→COD flow "🔴 NOT ported" (free-text carrier, no zone gating, split-brain at create).
+
+**Symptom:** Building C from that audit would have re-implemented ~6 features (carrier registry, zone resolver, COD coupling, PCSF, address picker) that **already exist and are live**.
+
+**Root cause:** The agent grepped `createForwarder` → found `actions/forwarder.ts` (the rebuilt-era **orphan**) + a stale doc reference to a `forwarder-form.tsx` that **no longer exists**. It never found the live twin **`actions/forwarder-legacy.ts`** (`createLegacyForwarder` → writes `tb_forwarder`) + the live add form `service-import/add/service-import-shipby-select.tsx` (zone-gated `getShipByOptions`). Pacred's D1 port routinely keeps **two same-domain actions**: a rebuilt-era `xxx` (orphan) and a faithful `xxxLegacy`/`*-legacy.ts` (live). Grepping the bare name lands on the orphan.
+
+**Fix / answer:** Before trusting any "not ported / split-brain" verdict, **find the WIRED path, not the first name match**: open the live route's component (`app/.../add/page.tsx` → which form → which action it `import`s + calls). Here the live `service-import-add-form.tsx` imports `createLegacyForwarder` (writes `tb_forwarder`), so C-1..C-6 + C-9 were all already done. Also re-grep `.from("forwarders")` to confirm a claimed split-brain write still exists — the orphan `createForwarder` had already been deleted a prior session (0 matches), so C-9 was a no-op.
+
+**Why this matters next time:** Any audit that says "feature X is missing / writes the wrong table" must name the **live entry point** (route → form → action) and show that path is broken — not just show that *an* orphan action with the name is broken. Two-table D1 ports + `*-legacy.ts` twins make the bare-name grep systematically land on the dead one. Cheapest guard: `grep "import.*<ActionName>"` to see if anyone calls it; 0 importers = orphan, not a live bug.
+
+**Cross-links:** `docs/research/cargo-acct-epic-2026-06-11/C-address-shipping-cod.md` (correction banner) · CLAUDE.md §0e (dead-write traps) · `actions/forwarder-legacy.ts` (the live twin)
