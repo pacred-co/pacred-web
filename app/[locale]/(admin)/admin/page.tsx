@@ -50,6 +50,7 @@ type TabKey =
   | "payShop"             // sales_payouts pending (Pacred-original — no legacy equivalent)
   | "shop1"               // tb_header_order hstatus='1' (รอดำเนินการ)
   | "shop2"               // tb_header_order hstatus='2' (รอชำระเงิน)
+  | "shop3"               // tb_header_order hstatus='3' (สั่งสินค้า · ชำระแล้ว · Pacred ต้องสั่งจีน)
   | "shop4"               // tb_header_order hstatus='4' (รอร้านจีนจัดส่ง)
   | "forwarder1"          // tb_forwarder fstatus='1' (รอเข้าโกดังจีน)
   | "forwarder5"          // tb_forwarder fstatus='5' (รอชำระเงิน)
@@ -149,7 +150,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     walletWithdrawsPending,
     salesPayoutsPending,
     yuanPending,
-    shop1Count, shop2Count, shop4Count,
+    shop1Count, shop2Count, shop3Count, shop4Count,
     forwarder1Count, forwarder5Count, forwarderCreditCount,
     forwarder6Count, forwarder62Count,
     containersInTransitRows,
@@ -194,6 +195,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     // ฝากสั่งซื้อ tabs.
     admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("hstatus", "1"),
     admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("hstatus", "2"),
+    admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("hstatus", "3"),
     admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("hstatus", "4"),
     // ฝากนำเข้า tabs — match Wave 3 forwarders rewrite + sidebar-counts.
     admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fstatus", "1"),
@@ -258,6 +260,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     payShop:            salesPayoutsPending.count ?? 0,
     shop1:              shop1Count.count ?? 0,
     shop2:              shop2Count.count ?? 0,
+    shop3:              shop3Count.count ?? 0,
     shop4:              shop4Count.count ?? 0,
     forwarder1:         forwarder1Count.count ?? 0,
     forwarder5:         forwarder5Count.count ?? 0,
@@ -278,6 +281,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     { key: "withdraw",          label: "ถอนเงิน" },
     { key: "shop1",             label: "สั่งซื้อรอดำเนินการ" },
     { key: "shop2",             label: "รอชำระเงินสินค้า" },
+    { key: "shop3",             label: "สั่งสินค้า (ชำระแล้ว)" },
     { key: "shop4",             label: "รอร้านจีนจัดส่ง" },
     { key: "forwarder1",        label: "รอเข้าโกดังจีน" },
     { key: "forwarder5",        label: "รอชำระเงินนำเข้า" },
@@ -522,8 +526,9 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
     // forwarder1 (label "รอเข้าโกดังจีน") = tb_forwarder fstatus='1' — handled below.
     case "shop1":
     case "shop2":
+    case "shop3":
     case "shop4": {
-      const statusMap: Record<string, string> = { shop1: "1", shop2: "2", shop4: "4" };
+      const statusMap: Record<string, string> = { shop1: "1", shop2: "2", shop3: "3", shop4: "4" };
       const { data, error } = await admin
         .from("tb_header_order")
         .select("id,hno,hstatus,htotalpriceuser,hdate,htitle,userid")
