@@ -175,5 +175,35 @@ check("warehouseDates no status_date → both null", (() => { const w = extractW
 check("display: car → รถ", momoRawDisplay({ ship_by: "car" }).shipByLabel === "รถ");
 check("display: unknown ship_by passes through", momoRawDisplay({ ship_by: "boat" }).shipByLabel === "boat");
 
+// ── momoRawDisplay · container_closed shape (ภูม flag 2026-06-11) ───
+// The container endpoint sends total_kg/total_cbm/total_parcel + cid_code/fid/
+// cid + container_details{} — NOT the per-parcel fields. The ภูม screenshot row.
+{
+  const c = momoRawDisplay({
+    _id: "6a167cda4375ce132ae0a792",
+    fid: "PR20260527-SEA01", cid: "GZS260525-2", cid_code: "JXLU6157980",
+    company: "69fda549349f205edba23ddd", ship_by: "ship",
+    total_kg: 5, total_cbm: 0.0216, total_parcel: 1, images: [],
+    container_details: {
+      ETD_CN_KODANG: "2026-05-27 13:16:37", ESTIMATE_DATE: "2026-06-10",
+      VESSEL_NO: "", BL_NO: "",
+    },
+  });
+  check("container: isContainer true", c.isContainer === true);
+  check("container: weight ← total_kg 5", c.weight === 5);
+  check("container: cbm ← total_cbm 0.0216", c.cbm === 0.0216);
+  check("container: qty ← total_parcel 1", c.qty === 1);
+  check("container: tracking ← cid_code", c.tracking === "JXLU6157980");
+  check("container: containerNo ← fid", c.containerNo === "PR20260527-SEA01");
+  check("container: cabinet ← cid", c.cabinet === "GZS260525-2");
+  check("container: realContainerNo ← cid_code", c.realContainerNo === "JXLU6157980");
+  check("container: etdCn ← ETD_CN_KODANG", c.etdCn === "2026-05-27 13:16:37");
+  check("container: etaThEstimate ← ESTIMATE_DATE", c.etaThEstimate === "2026-06-10");
+  check("container: shipByLabel เรือ", c.shipByLabel === "เรือ");
+  check("container: no productType / cgNo", c.productType === "" && c.cgNo === "");
+}
+// import_track row stays parcel-shaped (not a container)
+check("import_track: isContainer false", momoRawDisplay({ tracking: "1779955936", kg: 100, quantity: 2 }).isContainer === false);
+
 console.log(`\n${pass} pass, ${fail} fail`);
 if (fail > 0) process.exit(1);

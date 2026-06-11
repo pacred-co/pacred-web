@@ -413,6 +413,17 @@ function MomoDetail({ d, raw }: { d: MomoRawDisplay; raw: unknown }) {
     ["สร้างเมื่อ", d.createdDate || "—"],
     ["อัปเดตล่าสุด", d.updatedDate || "—"],
   ];
+  // Container-closed records carry container-only fields (ภูม flag 2026-06-11).
+  if (d.isContainer) {
+    kv.push(
+      ["ตู้จริง (cabinet)", d.cabinet || "—"],
+      ["เลขตู้เรือ (container)", d.realContainerNo || "—"],
+      ["ออกจากจีน (ETD)", d.etdCn || "—"],
+      ["ถึงไทย (ETA โดยประมาณ)", d.etaThEstimate || "—"],
+      ["เรือ (vessel)", d.vesselNo || "—"],
+      ["B/L", d.blNo || "—"],
+    );
+  }
   return (
     <div className="space-y-2">
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3 lg:grid-cols-4">
@@ -438,17 +449,19 @@ function MomoDetail({ d, raw }: { d: MomoRawDisplay; raw: unknown }) {
         </div>
       )}
 
-      <div>
-        <div className="text-[10px] text-muted mb-0.5">ไทม์ไลน์ของพัสดุ (status_date)</div>
-        <ol className="flex flex-wrap gap-x-4 gap-y-1">
-          {d.phases.map((p) => (
-            <li key={p.key} className="text-[11px]">
-              <span className={p.at ? "font-semibold text-emerald-700" : "text-muted"}>{p.label}</span>
-              <span className="text-muted"> · {p.at ?? "—"}</span>
-            </li>
-          ))}
-        </ol>
-      </div>
+      {!d.isContainer && (
+        <div>
+          <div className="text-[10px] text-muted mb-0.5">ไทม์ไลน์ของพัสดุ (status_date)</div>
+          <ol className="flex flex-wrap gap-x-4 gap-y-1">
+            {d.phases.map((p) => (
+              <li key={p.key} className="text-[11px]">
+                <span className={p.at ? "font-semibold text-emerald-700" : "text-muted"}>{p.label}</span>
+                <span className="text-muted"> · {p.at ?? "—"}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
 
       <button type="button" onClick={() => setRawOpen((v) => !v)}
         className="text-sky-600 underline text-[10px]">

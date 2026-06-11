@@ -89,6 +89,21 @@ export type MomoRawDisplay = {
   updatedDate:  string;       // MOMO updated_date
   /** Ordered lifecycle phases with their timestamps (null when not reached). */
   phases:       Array<{ key: string; label: string; at: string | null }>;
+
+  // ── Container-closed shape (ภูม flag 2026-06-11) ──
+  // The container_closed endpoint sends a DIFFERENT raw than import_track:
+  // aggregate `total_kg`/`total_cbm`/`total_parcel`, `cid_code`/`fid`/`cid`,
+  // and a `container_details{}` block — NO per-parcel tracking/kg/quantity/type/
+  // CG_NO/status_date. The fields below carry the container-only info; the
+  // shared metric fields (weight/cbm/qty/tracking/containerNo) fall back to the
+  // container values so the same columns populate for both shapes.
+  isContainer:     boolean;   // true = a container_closed record (aggregate)
+  cabinet:         string;    // container: raw.cid (real cabinet e.g. "GZS260525-2")
+  realContainerNo: string;    // container: raw.cid_code (vessel container "JXLU6157980")
+  etdCn:           string;    // container_details ETD from China
+  etaThEstimate:   string;    // container_details estimated arrival Thailand
+  vesselNo:        string;    // container_details vessel no
+  blNo:            string;    // container_details B/L no
 };
 
 /**
@@ -119,25 +134,43 @@ export function momoRawDisplay(raw: unknown): MomoRawDisplay {
 
   const images = Array.isArray(r.images) ? r.images.filter((x): x is string => typeof x === "string") : [];
 
+  // Container-closed records carry aggregate totals + a container_details block
+  // instead of per-parcel fields. Detect + read those so the shared columns
+  // (weight/cbm/qty/tracking/containerNo) populate for both shapes.
+  const isContainer = "total_kg" in r || "cid_code" in r || "container_details" in r;
+  const cd = (r.container_details && typeof r.container_details === "object"
+    ? r.container_details : {}) as Record<string, unknown>;
+  // container_details keys are UPPER_CASE in the raw (ETD_CN_KODANG …); read
+  // lowercase too in case a future payload normalises them.
+  const cdGet = (...keys: string[]): string => {
+    for (const k of keys) { const v = str(cd[k]).trim(); if (v) return v; }
+    return "";
+  };
+  const containerParcel = Math.round(numOr0(r.total_parcel));
+
   return {
     userCode,
     userGroup,
     memberCode:   userGroup && userCode ? `${userGroup}${userCode}` : userCode || userGroup,
     statusCode:   typeof r.status === "number" ? r.status : (str(r.status) ? Number(str(r.status)) : null),
-    tracking:     str(r.tracking),
+    // import_track: raw.tracking · container: raw.cid_code (the vessel container no)
+    tracking:     str(r.tracking) || str(r.cid_code),
     shipBy,
     shipByLabel:  MOMO_SHIP_BY_TH[shipBy] ?? (shipBy || "—"),
     productType:  str(r.type),
     cgNo:         str(r.CG_NO),
-    containerNo:  str(r.container_no),
+    // import_track: raw.container_no · container: raw.fid (the cabinet/รอบ code)
+    containerNo:  str(r.container_no) || str(r.fid),
     sackNo:       str(r.sack_no),
     sackSize:     str(r.sack_size),
-    weight:       metrics.weight,
-    cbm:          metrics.cbm,
+    // weight/cbm: import_track per-parcel · container aggregate total_*
+    weight:       metrics.weight || numOr0(r.total_kg),
+    cbm:          metrics.cbm    || numOr0(r.total_cbm),
     width:        metrics.width,
     length:       metrics.length,
     height:       metrics.height,
-    qty:          metrics.qty,
+    // qty: container total_parcel wins (metrics.qty floors to 1 when no `quantity`)
+    qty:          containerParcel > 0 ? containerParcel : metrics.qty,
     extraCost:    numOr0(r.extra_cost),
     woodenCreate: r.wooden_create === true,
     woodenInfo:   str(r.wooden_info),
@@ -145,6 +178,14 @@ export function momoRawDisplay(raw: unknown): MomoRawDisplay {
     createdDate:  str(r.created_date),
     updatedDate:  str(r.updated_date),
     phases,
+
+    isContainer,
+    cabinet:         str(r.cid),
+    realContainerNo: str(r.cid_code),
+    etdCn:         cdGet("ETD_CN_KODANG", "etd_cn_kodang"),
+    etaThEstimate: cdGet("ESTIMATE_DATE", "estimate_date", "eta_th_kodang", "ETA_TH_KODANG"),
+    vesselNo:      cdGet("VESSEL_NO", "vessel_no"),
+    blNo:          cdGet("BL_NO", "bl_no"),
   };
 }
 

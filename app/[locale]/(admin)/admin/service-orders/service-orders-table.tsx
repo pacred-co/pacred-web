@@ -1,7 +1,11 @@
 "use client";
 
-import { useState, type ChangeEvent } from "react";
+import { useState, useTransition, type ChangeEvent } from "react";
+import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
+import { confirm } from "@/components/ui/confirm";
+import { bulkUpdateShopOrderStatus } from "@/actions/admin/service-orders-bulk";
+import { SHOP_STATUSES, type ShopOrderStatus } from "@/actions/admin/service-orders-bulk-types";
 
 /**
  * Service-orders list table — ภูม flag 2026-05-30 evening.
@@ -175,7 +179,46 @@ export function ServiceOrdersTable({
     else setSelected(new Set());
   };
 
-  const clearSelection = () => setSelected(new Set());
+  const clearSelection = () => {
+    setSelected(new Set());
+    setStatusMode(false);
+    setOutcome(null);
+    setTopErr(null);
+  };
+
+  // ── Bulk manual status override (ภูม flag 2026-06-11) ──────────────────
+  // Mirrors the /admin/forwarders BulkActionsToolbar "เปลี่ยน status" path.
+  // Pure status write — the action does NOT run the happy-path side-effects
+  // (no auto-receipt / commission); see actions/admin/service-orders-bulk.ts.
+  const router = useRouter();
+  const [statusMode, setStatusMode] = useState(false);
+  const [targetStatus, setTargetStatus] = useState<ShopOrderStatus | "">("");
+  const [note, setNote] = useState("");
+  const [pending, startTransition] = useTransition();
+  const [outcome, setOutcome] = useState<{ ok: number; failed: { hno: string; error: string }[] } | null>(null);
+  const [topErr, setTopErr] = useState<string | null>(null);
+
+  const runStatusUpdate = async () => {
+    if (!targetStatus || selected.size === 0) return;
+    const label = STATUS_LABEL[targetStatus] ?? targetStatus;
+    const okConfirm = await confirm(
+      `ขยับ ${selected.size} ออเดอร์ → สถานะ “${label}” แบบแมนนวล?\n\n` +
+        `⚠️ เป็นการแก้สถานะตรงๆ — ไม่รันระบบปกติ (ไม่ออกใบเสร็จ / คอมมิชชั่นอัตโนมัติ)`,
+    );
+    if (!okConfirm) return;
+    setTopErr(null);
+    setOutcome(null);
+    startTransition(async () => {
+      const res = await bulkUpdateShopOrderStatus(Array.from(selected), targetStatus, note.trim() || undefined);
+      if (!res.ok) {
+        setTopErr(res.error);
+        return;
+      }
+      setOutcome({ ok: res.data?.succeeded.length ?? 0, failed: res.data?.failed ?? [] });
+      setStatusMode(false);
+      router.refresh();
+    });
+  };
 
   const allChecked = rows.length > 0 && selected.size === rows.length;
   const someChecked = selected.size > 0 && selected.size < rows.length;
@@ -520,44 +563,112 @@ export function ServiceOrdersTable({
       )}
 
       {/* Fixed-bottom bulk action bar — shows only when ≥1 row selected.
-          Legacy shops.php L548-553 has a fixed bar with "พิมพ์ใบแจ้งหนี้" +
-          (on q=5 only) "พิมพ์ใบเสร็จสินค้า". We render both unconditionally
-          since both are gated by status anyway. */}
+          Legacy shops.php L548-553 = พิมพ์ใบแจ้งหนี้/ใบเสร็จ. ภูม flag 2026-06-11
+          adds "อัปเดตสถานะ" — manual status override mirroring the
+          /admin/forwarders BulkActionsToolbar (pure status write · no money). */}
       {selected.size > 0 && (
         <div
           role="region"
-          aria-label="บาร์พิมพ์เอกสารกลุ่ม"
+          aria-label="บาร์จัดการรายการที่เลือก"
           className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white dark:bg-surface shadow-[0_-2px_10px_rgba(0,0,0,0.06)] pcs-safe-area-bottom"
         >
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3 lg:px-8">
-            <span className="text-sm font-medium">
-              เลือกแล้ว <b className="text-primary-600">{selected.size}</b> รายการ
-            </span>
-            <div className="ml-auto flex items-center gap-2">
-              <button
-                type="button"
-                onClick={clearSelection}
-                className="rounded-md border border-border bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
-              >
-                ยกเลิก
-              </button>
-              <a
-                href={bulkPrintInvoiceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
-              >
-                พิมพ์ใบแจ้งหนี้ ({selected.size})
-              </a>
-              <a
-                href={bulkPrintReceiptUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700"
-              >
-                พิมพ์ใบเสร็จ ({selected.size})
-              </a>
+          <div className="mx-auto max-w-7xl space-y-2 px-4 py-3 lg:px-8">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-sm font-medium">
+                เลือกแล้ว <b className="text-primary-600">{selected.size}</b> รายการ
+              </span>
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setStatusMode((v) => !v); setOutcome(null); setTopErr(null); }}
+                  className={`rounded-md border px-3 py-1.5 text-xs font-medium ${
+                    statusMode
+                      ? "border-orange-500 bg-orange-500 text-white"
+                      : "border-orange-400 bg-orange-50 text-orange-700 hover:bg-orange-100"
+                  }`}
+                >
+                  อัปเดตสถานะ
+                </button>
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  className="rounded-md border border-border bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
+                >
+                  ยกเลิก
+                </button>
+                <a
+                  href={bulkPrintInvoiceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+                >
+                  พิมพ์ใบแจ้งหนี้ ({selected.size})
+                </a>
+                <a
+                  href={bulkPrintReceiptUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700"
+                >
+                  พิมพ์ใบเสร็จ ({selected.size})
+                </a>
+              </div>
             </div>
+
+            {statusMode && (
+              <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2">
+                <span className="text-xs text-muted">ขยับเป็นสถานะ:</span>
+                <select
+                  value={targetStatus}
+                  onChange={(e) => setTargetStatus(e.target.value as ShopOrderStatus | "")}
+                  className="rounded-md border border-border bg-white px-3 py-1.5 text-sm"
+                >
+                  <option value="">— เลือกสถานะปลายทาง —</option>
+                  {SHOP_STATUSES.map((s) => (
+                    <option key={s} value={s}>{s} · {STATUS_LABEL[s] ?? s}</option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="หมายเหตุ (ถ้ามี · เก็บใน log)"
+                  className="min-w-[180px] flex-1 rounded-md border border-border bg-white px-3 py-1.5 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={runStatusUpdate}
+                  disabled={!targetStatus || pending}
+                  className="rounded-md bg-orange-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-orange-700 disabled:opacity-40"
+                >
+                  {pending ? "กำลังอัปเดต..." : `ยืนยัน (${selected.size})`}
+                </button>
+              </div>
+            )}
+
+            {topErr && (
+              <div className="rounded-md bg-red-100 px-2 py-1.5 text-xs text-red-800">{topErr}</div>
+            )}
+            {outcome && (
+              <div className="space-y-1">
+                {outcome.ok > 0 && (
+                  <div className="rounded-md bg-green-100 px-2 py-1.5 text-xs text-green-800">
+                    อัปเดตสถานะสำเร็จ {outcome.ok} รายการ
+                  </div>
+                )}
+                {outcome.failed.length > 0 && (
+                  <div className="space-y-0.5 rounded-md bg-yellow-100 px-2 py-1.5 text-xs text-yellow-900">
+                    <div className="font-medium">ล้มเหลว {outcome.failed.length} รายการ:</div>
+                    {outcome.failed.slice(0, 3).map((f) => (
+                      <div key={f.hno} className="font-mono">· {f.hno}: {f.error}</div>
+                    ))}
+                    {outcome.failed.length > 3 && (
+                      <div className="text-muted">+ อีก {outcome.failed.length - 3} รายการ</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
